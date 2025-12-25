@@ -81,21 +81,23 @@ func RebaseAbort(ctx context.Context) error {
 
 // IsRebaseInProgress checks if a rebase is currently in progress
 func IsRebaseInProgress(_ context.Context) bool {
-	// Check for .git/rebase-merge or .git/rebase-apply directories
-	// Use the working directory to construct paths
+	// Try using the configured working directory first
 	workingDir := GetWorkingDir()
-	if workingDir == "" {
-		return false
+	if workingDir != "" {
+		gitDir := filepath.Join(workingDir, ".git")
+		if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
+			return true
+		}
+		if _, err := os.Stat(filepath.Join(gitDir, "rebase-apply")); err == nil {
+			return true
+		}
 	}
 
-	gitDir := filepath.Join(workingDir, ".git")
-
-	// Check for interactive rebase
-	if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
+	// Fall back to current working directory
+	if _, err := os.Stat(".git/rebase-merge"); err == nil {
 		return true
 	}
-	// Check for non-interactive rebase
-	if _, err := os.Stat(filepath.Join(gitDir, "rebase-apply")); err == nil {
+	if _, err := os.Stat(".git/rebase-apply"); err == nil {
 		return true
 	}
 

@@ -241,9 +241,7 @@ func TestContinueCommand(t *testing.T) {
 		require.NoError(t, err)
 
 		// Run continue
-		cmd := exec.Command(binaryPath, "continue")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := testhelpers.RunCLICommand(t, binaryPath, scene.Dir, "continue")
 
 		// Should succeed and continue with branch2
 		if err != nil {
@@ -317,9 +315,7 @@ func TestContinueCommand(t *testing.T) {
 		require.NoError(t, err)
 
 		// Run continue
-		cmd := exec.Command(binaryPath, "continue")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := testhelpers.RunCLICommand(t, binaryPath, scene.Dir, "continue")
 
 		// Should succeed
 		if err == nil {
@@ -407,9 +403,7 @@ func TestContinueCommand(t *testing.T) {
 		require.NoError(t, err)
 
 		// Run continue
-		cmd := exec.Command(binaryPath, "continue")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := testhelpers.RunCLICommand(t, binaryPath, scene.Dir, "continue")
 
 		// If there's another conflict, continuation state should be persisted again
 		if err != nil {

@@ -123,10 +123,11 @@ func TestIsRebaseInProgress(t *testing.T) {
 		require.NoError(t, err)
 
 		// Start rebase (will conflict)
-		_, err = git.Rebase(context.Background(), "branch1", "main", forkPoint)
+		result, err := git.Rebase(context.Background(), "branch1", "main", forkPoint)
 		require.NoError(t, err)
+		require.Equal(t, git.RebaseConflict, result)
 
-		// Rebase should be in progress
+		// Rebase should be in progress due to conflicts
 		require.True(t, git.IsRebaseInProgress(context.Background()))
 	})
 }

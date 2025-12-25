@@ -13,6 +13,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"stackit.dev/stackit/internal/actions"
+	"stackit.dev/stackit/internal/actions/create"
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/config"
 	"stackit.dev/stackit/internal/engine"
@@ -418,4 +420,191 @@ func (s *Scenario) ExpectBranch(expected string) *Scenario {
 	require.NoError(s.T, err)
 	require.Equal(s.T, expected, actual)
 	return s
+}
+
+// =============================================================================
+// Direct Action API Methods (Option 2: Reduce CLI Binary Spawns)
+// These methods call the action functions directly instead of spawning CLI processes.
+// =============================================================================
+
+// CreateBranchWithAction creates a new branch using the create action directly.
+// This is faster than using RunCli("create ...") because it avoids spawning a process.
+// The file content is staged and committed as part of the branch creation.
+func (s *Scenario) CreateBranchWithAction(branchName, message string) *Scenario {
+	s.T.Helper()
+	if s.Engine == nil || s.Context == nil {
+		s.T.Fatal("Engine and Context must be initialized. Use NewScenario instead of NewScenarioParallel.")
+	}
+
+	// Create create.Options
+	createOpts := create.Options{
+		BranchName: branchName,
+		Message:    message,
+	}
+
+	// Get config for branch pattern
+	cfg, _ := config.LoadConfig(s.Scene.Dir)
+	branchPattern := cfg.GetBranchPattern()
+	createOpts.BranchPattern = branchPattern
+
+	// Call create action directly
+	err := create.Action(s.Context, createOpts)
+	require.NoError(s.T, err, "failed to create branch %s", branchName)
+
+	// Rebuild engine state after action
+	return s.Rebuild()
+}
+
+// StageChange creates a file change and stages it (for use before Modify or CreateBranchWithAction).
+func (s *Scenario) StageChange(filename, content string) *Scenario {
+	s.T.Helper()
+	err := s.Scene.Repo.CreateChange(content, filename, false) // false = staged
+	require.NoError(s.T, err, "failed to stage change in %s", filename)
+	return s
+}
+
+// Modify performs a modify operation (amend or create commit) using the modify action directly.
+// This is faster than using RunCli("modify ...") because it avoids spawning a process.
+func (s *Scenario) Modify(opts ...ModifyOption) *Scenario {
+	s.T.Helper()
+	if s.Engine == nil || s.Context == nil {
+		s.T.Fatal("Engine and Context must be initialized. Use NewScenario instead of NewScenarioParallel.")
+	}
+
+	modifyOpts := actions.ModifyOptions{
+		NoEdit: true, // Default to no-edit for tests
+	}
+
+	// Apply any additional options
+	for _, opt := range opts {
+		opt(&modifyOpts)
+	}
+
+	err := actions.ModifyAction(s.Context, modifyOpts)
+	require.NoError(s.T, err, "failed to modify branch")
+
+	// Rebuild engine state after action
+	return s.Rebuild()
+}
+
+// ModifyOption is a function type for configuring modify options
+type ModifyOption func(*actions.ModifyOptions)
+
+// ModifyWithMessage sets the commit message for modify
+func ModifyWithMessage(message string) ModifyOption {
+	return func(opts *actions.ModifyOptions) {
+		opts.Message = message
+		opts.NoEdit = true
+	}
+}
+
+// ModifyCreateCommit creates a new commit instead of amending
+func ModifyCreateCommit(create bool) ModifyOption {
+	return func(opts *actions.ModifyOptions) {
+		opts.CreateCommit = create
+	}
+}
+
+// ModifyWithAll stages all changes before modifying
+func ModifyWithAll(all bool) ModifyOption {
+	return func(opts *actions.ModifyOptions) {
+		opts.All = all
+	}
+}
+
+// Restack performs a restack operation using the restack action directly.
+// This is faster than using RunCli("restack ...") because it avoids spawning a process.
+func (s *Scenario) Restack(branchName string, scope engine.StackRange) *Scenario {
+	s.T.Helper()
+	if s.Engine == nil || s.Context == nil {
+		s.T.Fatal("Engine and Context must be initialized. Use NewScenario instead of NewScenarioParallel.")
+	}
+
+	restackOpts := actions.RestackOptions{
+		BranchName: branchName,
+		Scope:      scope,
+	}
+
+	err := actions.RestackAction(s.Context, restackOpts)
+	require.NoError(s.T, err, "failed to restack branch %s", branchName)
+
+	// Rebuild engine state after action
+	return s.Rebuild()
+}
+
+// RestackUpstack restacks all upstack branches from the current branch.
+func (s *Scenario) RestackUpstack() *Scenario {
+	s.T.Helper()
+	currentBranch := s.Engine.CurrentBranch()
+	if currentBranch == nil {
+		s.T.Fatal("not on a branch")
+	}
+	return s.Restack(currentBranch.Name, engine.StackRange{
+		RecursiveParents:  false,
+		IncludeCurrent:    false,
+		RecursiveChildren: true,
+	})
+}
+
+// RestackDownstack restacks all downstack branches from the current branch.
+func (s *Scenario) RestackDownstack() *Scenario {
+	s.T.Helper()
+	currentBranch := s.Engine.CurrentBranch()
+	if currentBranch == nil {
+		s.T.Fatal("not on a branch")
+	}
+	return s.Restack(currentBranch.Name, engine.StackRange{
+		RecursiveParents:  true,
+		IncludeCurrent:    false,
+		RecursiveChildren: false,
+	})
+}
+
+// RestackOnly restacks only the current branch.
+func (s *Scenario) RestackOnly() *Scenario {
+	s.T.Helper()
+	currentBranch := s.Engine.CurrentBranch()
+	if currentBranch == nil {
+		s.T.Fatal("not on a branch")
+	}
+	return s.Restack(currentBranch.Name, engine.StackRange{
+		RecursiveParents:  false,
+		IncludeCurrent:    true,
+		RecursiveChildren: false,
+	})
+}
+
+// Squash performs a squash operation using the squash action directly.
+// This is faster than using RunCli("squash ...") because it avoids spawning a process.
+func (s *Scenario) Squash(opts ...SquashOption) *Scenario {
+	s.T.Helper()
+	if s.Engine == nil || s.Context == nil {
+		s.T.Fatal("Engine and Context must be initialized. Use NewScenario instead of NewScenarioParallel.")
+	}
+
+	squashOpts := actions.SquashOptions{
+		NoEdit: true, // Default to no-edit for tests
+	}
+
+	// Apply any additional options
+	for _, opt := range opts {
+		opt(&squashOpts)
+	}
+
+	err := actions.SquashAction(s.Context, squashOpts)
+	require.NoError(s.T, err, "failed to squash branch")
+
+	// Rebuild engine state after action
+	return s.Rebuild()
+}
+
+// SquashOption is a function type for configuring squash options
+type SquashOption func(*actions.SquashOptions)
+
+// SquashWithMessage sets the commit message for squash
+func SquashWithMessage(message string) SquashOption {
+	return func(opts *actions.SquashOptions) {
+		opts.Message = message
+		opts.NoEdit = true
+	}
 }

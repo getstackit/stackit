@@ -2,6 +2,9 @@ package integration
 
 import (
 	"testing"
+
+	"stackit.dev/stackit/testhelpers"
+	"stackit.dev/stackit/testhelpers/scenario"
 )
 
 // =============================================================================
@@ -80,6 +83,61 @@ func TestStackWorkflow(t *testing.T) {
 
 		sh.HasBranches("feature-a", "feature-b", "feature-c", "main")
 		sh.Log("✓ Full workflow complete!")
+	})
+
+	// This test demonstrates Option 2: using direct API calls instead of CLI processes
+	// It should be significantly faster than the CLI-based version above.
+	t.Run("full stack workflow using direct API (faster)", func(t *testing.T) {
+		t.Parallel()
+		sc := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		// Build a stack: main -> feature-a -> feature-b -> feature-c
+		// Using direct API calls instead of CLI processes
+		sc.StageChange("feature_a", "feature a content").
+			CreateBranchWithAction("feature-a", "Add feature A").
+			ExpectBranch("feature-a")
+
+		sc.StageChange("feature_b", "feature b content").
+			CreateBranchWithAction("feature-b", "Add feature B").
+			ExpectBranch("feature-b")
+
+		sc.StageChange("feature_c", "feature c content").
+			CreateBranchWithAction("feature-c", "Add feature C").
+			ExpectBranch("feature-c")
+
+		// Verify stack structure
+		sc.ExpectStackStructure(map[string]string{
+			"feature-a": "main",
+			"feature-b": "feature-a",
+			"feature-c": "feature-b",
+		})
+
+		// Add commits and amend on feature-a
+		sc.Checkout("feature-a").
+			CommitChange("feature_a_extra", "additional work").
+			StageChange("feature_a_amended", "amended content").
+			Modify(scenario.ModifyWithMessage("amended content"))
+
+		// Restack to propagate changes
+		sc.RestackUpstack()
+
+		// Verify children are still valid
+		sc.Checkout("feature-b").
+			ExpectBranchFixed("feature-b")
+
+		sc.Checkout("feature-c").
+			ExpectBranchFixed("feature-c")
+
+		// Squash commits on feature-a
+		sc.Checkout("feature-a").
+			Squash(scenario.SquashWithMessage("Feature A complete"))
+
+		// Verify children survived the squash
+		sc.Checkout("feature-b").
+			ExpectBranchFixed("feature-b")
+
+		sc.Checkout("feature-c").
+			ExpectBranchFixed("feature-c")
 	})
 
 	t.Run("scope inheritance in stacked branches", func(t *testing.T) {

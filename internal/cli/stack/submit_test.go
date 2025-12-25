@@ -26,32 +26,24 @@ func TestSubmitCommand(t *testing.T) {
 		err := scene.Repo.CreateChangeAndCommit("initial", "init")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
+		// Initialize stackit
+		initOutput, err := testhelpers.RunCLICommand(t, binaryPath, scene.Dir, "init")
+		require.NoError(t, err, "init failed: %s", string(initOutput))
+
+		_, err = testhelpers.RunCLICommand(t, binaryPath, scene.Dir, "create", "branch-a")
 		require.NoError(t, err)
 
-		cmd = exec.Command(binaryPath, "create", "branch-a")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
+		_, err = testhelpers.RunCLICommand(t, binaryPath, scene.Dir, "create", "branch-b")
 		require.NoError(t, err)
 
-		cmd = exec.Command(binaryPath, "create", "branch-b")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch-c")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
+		_, err = testhelpers.RunCLICommand(t, binaryPath, scene.Dir, "create", "branch-c")
 		require.NoError(t, err)
 
 		err = scene.Repo.CheckoutBranch("branch-b")
 		require.NoError(t, err)
 
-		cmd = exec.Command(binaryPath, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		// Run submit command with --dry-run, --no-edit, and --draft to avoid interactive prompts
+		output, err := testhelpers.RunCLICommand(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft")
 		require.NoError(t, err, "submit failed: %s", string(output))
 
 		normalized := testhelpers.NormalizeOutput(string(output))

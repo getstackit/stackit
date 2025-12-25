@@ -2,6 +2,7 @@ package testhelpers
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -170,4 +171,45 @@ func (s *Scene) writeDefaultConfigs() error {
 // BasicSceneSetup is a setup function that creates a basic scene with a single commit.
 func BasicSceneSetup(scene *Scene) error {
 	return scene.Repo.CreateChangeAndCommit("1", "1")
+}
+
+// RunCLICommand runs a CLI command with proper isolation to prevent interference
+// with the real repository. It uses a clean environment and ensures the command
+// runs in the specified directory.
+func RunCLICommand(t *testing.T, binaryPath, dir string, args ...string) ([]byte, error) {
+	t.Helper()
+	cmd := exec.Command(binaryPath, args...)
+	cmd.Dir = dir
+	// Use clean environment to prevent interference with real repository
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + os.Getenv("HOME"),
+		"USER=" + os.Getenv("USER"),
+		"TMPDIR=" + os.Getenv("TMPDIR"),
+		"LANG=C", // Ensure consistent output
+		"LC_ALL=C",
+		"STACKIT_NON_INTERACTIVE=1", // Most tests need this
+	}
+	return cmd.CombinedOutput()
+}
+
+// RunCLICommandWithEnv runs a CLI command with additional environment variables
+// on top of the clean base environment.
+func RunCLICommandWithEnv(t *testing.T, binaryPath, dir string, env []string, args ...string) ([]byte, error) {
+	t.Helper()
+	cmd := exec.Command(binaryPath, args...)
+	cmd.Dir = dir
+	// Start with clean environment
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + os.Getenv("HOME"),
+		"USER=" + os.Getenv("USER"),
+		"TMPDIR=" + os.Getenv("TMPDIR"),
+		"LANG=C",
+		"LC_ALL=C",
+		"STACKIT_NON_INTERACTIVE=1",
+	}
+	// Add any additional environment variables
+	cmd.Env = append(cmd.Env, env...)
+	return cmd.CombinedOutput()
 }

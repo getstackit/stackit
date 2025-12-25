@@ -25,7 +25,7 @@ func TestIsMerged(t *testing.T) {
 		require.NoError(t, err)
 
 		// Initialize git repo
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		// Branch is not merged
@@ -52,7 +52,7 @@ func TestIsMerged(t *testing.T) {
 		require.NoError(t, err)
 
 		// Initialize git repo
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		// Branch should be merged

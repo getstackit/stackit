@@ -33,7 +33,7 @@ func TestFetchRemoteShas(t *testing.T) {
 
 		// Fetch remote SHAs (FetchRemoteShas runs git command in current dir which is scene.Dir)
 		git.SetWorkingDir(scene.Dir)
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		remoteShas, err := git.FetchRemoteShas("origin")
@@ -62,7 +62,7 @@ func TestFetchRemoteShas(t *testing.T) {
 
 		// Fetch remote SHAs - should be empty since nothing was pushed
 		git.SetWorkingDir(scene.Dir)
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		remoteShas, err := git.FetchRemoteShas("origin")
@@ -93,7 +93,7 @@ func TestFetchRemoteShas(t *testing.T) {
 
 		// Fetch remote SHAs
 		git.SetWorkingDir(scene.Dir)
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		remoteShas, err := git.FetchRemoteShas("origin")

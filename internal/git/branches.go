@@ -47,8 +47,10 @@ func InitDefaultRepoInDir(dir string) error {
 		if err != nil {
 			return err
 		}
+		SetWorkingDir(repoRoot) // Set the working directory for git commands
 	} else {
 		repoRoot = dir
+		SetWorkingDir(repoRoot) // Set the working directory for git commands
 	}
 
 	repo, err := OpenRepository(repoRoot)

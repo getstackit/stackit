@@ -162,7 +162,7 @@ func TestGetGitHubClient(t *testing.T) {
 		}
 
 		// Initialize git repo (should work since NewScene changes to scene.Dir)
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		if err != nil {
 			t.Skipf("Skipping test: failed to initialize git repo (may be sandbox restriction): %v", err)
 			return
@@ -208,7 +208,7 @@ func TestGetGitHubClient(t *testing.T) {
 		}
 
 		// Initialize git repo
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		if err != nil {
 			t.Skipf("Skipping test: failed to initialize git repo (may be sandbox restriction): %v", err)
 			return
@@ -254,7 +254,7 @@ func TestGetGitHubClient(t *testing.T) {
 		}
 
 		// Initialize git repo
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		if err != nil {
 			t.Skipf("Skipping test: failed to initialize git repo (may be sandbox restriction): %v", err)
 			return

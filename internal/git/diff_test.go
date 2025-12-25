@@ -17,7 +17,7 @@ func TestIsDiffEmpty(t *testing.T) {
 		})
 
 		// Initialize git repo
-		err := git.InitDefaultRepo()
+		err := git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		// Get main revision
@@ -36,7 +36,7 @@ func TestIsDiffEmpty(t *testing.T) {
 		})
 
 		// Initialize git repo
-		err := git.InitDefaultRepo()
+		err := git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		// Get main revision
@@ -61,7 +61,7 @@ func TestIsDiffEmpty(t *testing.T) {
 		})
 
 		// Initialize git repo
-		err := git.InitDefaultRepo()
+		err := git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		// Get main revision

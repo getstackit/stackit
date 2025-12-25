@@ -20,7 +20,7 @@ func TestWorktree(t *testing.T) {
 
 		// Initialize default repo for the runner
 		git.SetWorkingDir(scene.Repo.Dir)
-		err := git.InitDefaultRepo()
+		err := git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		// Create a branch to checkout in the worktree
@@ -65,7 +65,7 @@ func TestWorktree(t *testing.T) {
 
 		// Initialize default repo for the runner
 		git.SetWorkingDir(scene.Repo.Dir)
-		err := git.InitDefaultRepo()
+		err := git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		// Create a temporary directory for the worktree

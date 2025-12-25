@@ -213,7 +213,7 @@ func TestGetRebaseHead(t *testing.T) {
 
 		// Initialize default repo for GetRebaseHead
 		git.SetWorkingDir(scene.Repo.Dir)
-		err = git.InitDefaultRepo()
+		err = git.InitDefaultRepoInDir(scene.Dir)
 		require.NoError(t, err)
 
 		// Get rebase head

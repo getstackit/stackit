@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -79,19 +80,25 @@ func RebaseAbort(ctx context.Context) error {
 }
 
 // IsRebaseInProgress checks if a rebase is currently in progress
-func IsRebaseInProgress(ctx context.Context) bool {
-	output, err := RunGitCommandWithContext(ctx, "rev-parse", "--git-dir")
-	if err != nil {
+func IsRebaseInProgress(_ context.Context) bool {
+	// Check for .git/rebase-merge or .git/rebase-apply directories
+	// Use the working directory to construct paths
+	workingDir := GetWorkingDir()
+	if workingDir == "" {
 		return false
 	}
 
-	gitDir := strings.TrimSpace(output)
-	if _, err := os.Stat(gitDir + "/rebase-merge"); err == nil {
+	gitDir := filepath.Join(workingDir, ".git")
+
+	// Check for interactive rebase
+	if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
 		return true
 	}
-	if _, err := os.Stat(gitDir + "/rebase-apply"); err == nil {
+	// Check for non-interactive rebase
+	if _, err := os.Stat(filepath.Join(gitDir, "rebase-apply")); err == nil {
 		return true
 	}
+
 	return false
 }
 

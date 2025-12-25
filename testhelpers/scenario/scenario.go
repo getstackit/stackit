@@ -129,7 +129,7 @@ func (s *Scenario) CreateBranchQuiet(name string) *Scenario {
 func (s *Scenario) Rebuild() *Scenario {
 	s.T.Helper()
 	git.ResetDefaultRepo()
-	err := git.InitDefaultRepo()
+	err := git.InitDefaultRepoInDir(s.Scene.Dir)
 	require.NoError(s.T, err)
 	if s.Engine != nil {
 		err = s.Engine.Rebuild(s.Engine.Trunk().GetName())

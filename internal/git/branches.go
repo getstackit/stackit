@@ -17,6 +17,12 @@ var (
 
 // InitDefaultRepo initializes the default repository from the current directory
 func InitDefaultRepo() error {
+	return InitDefaultRepoInDir("")
+}
+
+// InitDefaultRepoInDir initializes the default repository from a specific directory.
+// If dir is empty, uses the current working directory.
+func InitDefaultRepoInDir(dir string) error {
 	// Fast path: check without write lock
 	defaultRepoMu.RLock()
 	if defaultRepo != nil {
@@ -34,9 +40,15 @@ func InitDefaultRepo() error {
 		return nil // Already initialized by another goroutine
 	}
 
-	repoRoot, err := GetRepoRoot()
-	if err != nil {
-		return err
+	var repoRoot string
+	var err error
+	if dir == "" {
+		repoRoot, err = GetRepoRoot()
+		if err != nil {
+			return err
+		}
+	} else {
+		repoRoot = dir
 	}
 
 	repo, err := OpenRepository(repoRoot)

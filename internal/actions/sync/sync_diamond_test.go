@@ -34,9 +34,6 @@ const (
 // This test verifies that the bug exists (test fails when bug is present).
 // Once fixed, this test should pass, ensuring correct behavior.
 func TestSyncDiamondStackParentPreservation(t *testing.T) {
-	// Set dummy GITHUB_TOKEN to avoid calling 'gh auth token' and triggering credentials prompts
-	t.Setenv("GITHUB_TOKEN", "dummy")
-
 	t.Run("BUG: sync incorrectly reparents branch when GitHub has stale base info", func(t *testing.T) {
 		// Setup scenario with diamond structure
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)

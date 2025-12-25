@@ -5,14 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"stackit.dev/stackit/internal/tui"
 )
 
 func TestReadFromStdin(t *testing.T) {
-	// Set to non-interactive mode
-	tui.SetInteractive(false)
-
 	oldStdin := os.Stdin
 	defer func() { os.Stdin = oldStdin }()
 

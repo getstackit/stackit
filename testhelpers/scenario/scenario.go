@@ -15,7 +15,6 @@ import (
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/git"
 	"stackit.dev/stackit/internal/runtime"
-	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/testhelpers"
 )
 
@@ -30,12 +29,9 @@ type Scenario struct {
 }
 
 // NewScenario creates a new Scenario with an optional setup function.
-// NOTE: This function is NOT safe for parallel tests as it uses NewScene.
+// NOTE: This function is NOT safe for parallel tests as it uses NewScene which changes directories.
 func NewScenario(t *testing.T, setup testhelpers.SceneSetup) *Scenario {
 	t.Helper()
-
-	// Force non-interactive mode for tests in the current process
-	tui.SetInteractive(false)
 
 	scene := testhelpers.NewScene(t, setup)
 	cfg, _ := config.LoadConfig(scene.Dir)

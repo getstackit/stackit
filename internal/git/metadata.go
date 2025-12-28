@@ -143,7 +143,7 @@ func WriteMetadataRefInDir(dir, branchName string, meta *Meta) error {
 		sha, err = RunGitCommandWithInput(string(jsonData), "hash-object", "-w", "--stdin")
 	} else {
 		// For hash-object with input, we need to use the runner approach
-		runner := NewRunner(dir)
+		runner := NewCommandRunner(dir)
 		sha, err = runner.runInternal(context.Background(), string(jsonData), true, "hash-object", "-w", "--stdin")
 	}
 	if err != nil {

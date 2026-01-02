@@ -324,7 +324,12 @@ func NewSelectModel(title string, options []SelectOption, defaultIndex int) tea.
 		items[i] = listItem{title: opt.Label, value: opt.Value}
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	d := list.NewDefaultDelegate()
+	d.ShowDescription = false
+	d.SetHeight(1)
+	d.SetSpacing(0)
+
+	l := list.New(items, d, 0, 0)
 	l.Title = title
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
@@ -377,7 +382,12 @@ func PromptSelect(title string, options []SelectOption, defaultIndex int) (strin
 		items[i] = listItem{title: opt.Label, value: opt.Value}
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	d := list.NewDefaultDelegate()
+	d.ShowDescription = false
+	d.SetHeight(1)
+	d.SetSpacing(0)
+
+	l := list.New(items, d, 0, 0)
 	l.Title = title
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)

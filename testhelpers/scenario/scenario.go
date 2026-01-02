@@ -539,7 +539,7 @@ func (s *Scenario) RestackUpstack() *Scenario {
 	if currentBranch == nil {
 		s.T.Fatal("not on a branch")
 	}
-	return s.Restack(currentBranch.Name, engine.StackRange{
+	return s.Restack(currentBranch.GetName(), engine.StackRange{
 		RecursiveParents:  false,
 		IncludeCurrent:    false,
 		RecursiveChildren: true,
@@ -553,7 +553,7 @@ func (s *Scenario) RestackDownstack() *Scenario {
 	if currentBranch == nil {
 		s.T.Fatal("not on a branch")
 	}
-	return s.Restack(currentBranch.Name, engine.StackRange{
+	return s.Restack(currentBranch.GetName(), engine.StackRange{
 		RecursiveParents:  true,
 		IncludeCurrent:    false,
 		RecursiveChildren: false,
@@ -567,7 +567,7 @@ func (s *Scenario) RestackOnly() *Scenario {
 	if currentBranch == nil {
 		s.T.Fatal("not on a branch")
 	}
-	return s.Restack(currentBranch.Name, engine.StackRange{
+	return s.Restack(currentBranch.GetName(), engine.StackRange{
 		RecursiveParents:  false,
 		IncludeCurrent:    true,
 		RecursiveChildren: false,

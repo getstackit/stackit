@@ -1,4 +1,4 @@
-package actions
+package actions_test
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"stackit.dev/stackit/internal/actions"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/testhelpers"
 	"stackit.dev/stackit/testhelpers/scenario"
@@ -25,13 +26,13 @@ func TestStackInfoAction(t *testing.T) {
 		s.Checkout("branch2")
 		s.Scene.Repo.CreateChangeAndCommit("c2", "f2.txt")
 
-		err := StackInfoAction(s.Context, StackInfoOptions{JSON: true})
+		err := actions.StackInfoAction(s.Context, actions.StackInfoOptions{JSON: true})
 		output := s.Output.String()
 
 		require.NoError(t, err)
 		require.NotEmpty(t, output)
 
-		var info []StackBranchInfo
+		var info []actions.StackBranchInfo
 		err = json.Unmarshal([]byte(output), &info)
 		require.NoError(t, err)
 
@@ -39,7 +40,7 @@ func TestStackInfoAction(t *testing.T) {
 		require.Len(t, info, 2)
 
 		// Map by name for easier checking
-		branchMap := make(map[string]StackBranchInfo)
+		branchMap := make(map[string]actions.StackBranchInfo)
 		for _, b := range info {
 			branchMap[b.Name] = b
 		}
@@ -63,7 +64,7 @@ func TestStackInfoAction(t *testing.T) {
 		// Detach HEAD
 		s.RunGit("checkout", "--detach", "main")
 
-		err := StackInfoAction(s.Context, StackInfoOptions{JSON: true})
+		err := actions.StackInfoAction(s.Context, actions.StackInfoOptions{JSON: true})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not on a branch")
 	})
@@ -75,7 +76,7 @@ func TestStackInfoAction(t *testing.T) {
 			})
 		s.Checkout("branch1")
 
-		err := StackInfoAction(s.Context, StackInfoOptions{JSON: false})
+		err := actions.StackInfoAction(s.Context, actions.StackInfoOptions{JSON: false})
 		output := s.Output.String()
 
 		require.NoError(t, err)
@@ -97,12 +98,12 @@ func TestStackInfoAction(t *testing.T) {
 		_, err = s.Engine.SetFrozen([]engine.Branch{branch1}, true)
 		require.NoError(t, err)
 
-		err = StackInfoAction(s.Context, StackInfoOptions{JSON: true})
+		err = actions.StackInfoAction(s.Context, actions.StackInfoOptions{JSON: true})
 		output := s.Output.String()
 
 		require.NoError(t, err)
 
-		var info []StackBranchInfo
+		var info []actions.StackBranchInfo
 		err = json.Unmarshal([]byte(output), &info)
 		require.NoError(t, err)
 		require.Len(t, info, 1)

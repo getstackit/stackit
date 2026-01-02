@@ -22,9 +22,11 @@ type ConsolidationResult struct {
 
 // ConsolidateMergeExecutor handles stack consolidation merging
 type ConsolidateMergeExecutor struct {
-	plan   *Plan
-	engine mergeExecuteEngine
-	ctx    *app.Context
+	plan              *Plan
+	engine            mergeExecuteEngine
+	ctx               *app.Context
+	consolidationPR   *github.PullRequestInfo // Set after consolidation PR is merged
+	consolidationUser string                  // GitHub username who performed the consolidation
 }
 
 // NewConsolidateMergeExecutor creates a new consolidation executor
@@ -76,6 +78,12 @@ func (c *ConsolidateMergeExecutor) Execute(ctx context.Context, opts ExecuteOpti
 
 	if err := c.waitForConsolidationMerge(ctx, consolidationBranch, pr); err != nil {
 		return nil, fmt.Errorf("consolidation merge failed: %w", err)
+	}
+
+	// Store consolidation info for footer updates
+	c.consolidationPR = pr
+	if userName, err := git.NewRunner().GetUserName(ctx); err == nil && userName != "" {
+		c.consolidationUser = userName
 	}
 
 	if err := c.postMergeCleanup(ctx); err != nil {
@@ -268,6 +276,20 @@ func (c *ConsolidateMergeExecutor) postMergeCleanup(ctx context.Context) error {
 
 func (c *ConsolidateMergeExecutor) updateIndividualPRs() {
 	splog := c.ctx.Splog
+	ctx := c.ctx.Context
+	githubClient := c.ctx.GitHubClient
+
+	// Skip if we don't have consolidation PR info
+	if c.consolidationPR == nil || c.consolidationPR.Number == 0 {
+		splog.Debug("No consolidation PR info available for footer updates")
+		return
+	}
+
+	repoOwner, repoName := githubClient.GetOwnerRepo()
+	if repoOwner == "" || repoName == "" {
+		splog.Debug("Could not get repo owner/name for PR updates")
+		return
+	}
 
 	affectedBranches := []string{}
 	for _, branchInfo := range c.plan.BranchesToMerge {
@@ -275,6 +297,32 @@ func (c *ConsolidateMergeExecutor) updateIndividualPRs() {
 		prInfo, err := branch.GetPrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil {
 			continue
+		}
+
+		// Get current PR body to append footer
+		existingPR, err := githubClient.GetPullRequest(ctx, repoOwner, repoName, *prInfo.Number())
+		if err != nil {
+			splog.Debug("Failed to get PR #%d for %s: %v", *prInfo.Number(), branchInfo.BranchName, err)
+			continue
+		}
+
+		// Build footer
+		footer := fmt.Sprintf("\n\n---\n*Merged via consolidation into #%d", c.consolidationPR.Number)
+		if c.consolidationUser != "" {
+			footer += fmt.Sprintf(" by %s", c.consolidationUser)
+		}
+		footer += "*"
+
+		// Append footer to existing body
+		newBody := existingPR.Body + footer
+		updateOpts := github.UpdatePROptions{
+			Body: &newBody,
+		}
+
+		if err := githubClient.UpdatePullRequest(ctx, repoOwner, repoName, *prInfo.Number(), updateOpts); err != nil {
+			splog.Debug("Failed to update PR #%d body: %v", *prInfo.Number(), err)
+		} else {
+			splog.Debug("Updated PR #%d with consolidation footer", *prInfo.Number())
 		}
 
 		// Keep the consolidation PR number so the footer knows it was consolidated

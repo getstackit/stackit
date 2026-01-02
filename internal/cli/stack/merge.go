@@ -20,12 +20,13 @@ import (
 // NewMergeCmd creates the merge command
 func NewMergeCmd() *cobra.Command {
 	var (
-		dryRun   bool
-		yes      bool
-		force    bool
-		strategy string
-		worktree bool
-		scope    string
+		dryRun      bool
+		yes         bool
+		force       bool
+		strategy    string
+		worktree    bool
+		scope       string
+		consolidate bool
 	)
 
 	cmd := &cobra.Command{
@@ -48,11 +49,14 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 				// Determine if we should run in interactive mode
 				// Interactive if no flags are provided (except dry-run and scope which are always allowed)
 				// Respect global interactive flag
-				interactive := ctx.Interactive && strategy == "" && !yes && !force && scope == "" && len(args) == 0
+				interactive := ctx.Interactive && strategy == "" && !consolidate && !yes && !force && scope == "" && len(args) == 0
 
 				// Parse strategy
 				var mergeStrategy merge.Strategy
-				if strategy != "" {
+				if consolidate {
+					// --consolidate flag takes precedence
+					mergeStrategy = merge.StrategyConsolidate
+				} else if strategy != "" {
 					switch strings.ToLower(strategy) {
 					case "bottom-up", "bottomup":
 						mergeStrategy = merge.StrategyBottomUp
@@ -108,6 +112,7 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show merge plan without executing")
 	cmd.Flags().BoolVar(&worktree, "worktree", false, "Execute the merge and restack in a temporary worktree to avoid interfering with current branch")
 	cmd.Flags().StringVar(&scope, "scope", "", "Bulk-merge all branches within the specified scope")
+	cmd.Flags().BoolVarP(&consolidate, "consolidate", "c", false, "Use consolidate strategy (shortcut for --strategy=consolidate)")
 
 	return cmd
 }
@@ -147,6 +152,30 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 	})
 	if err != nil {
 		return err
+	}
+
+	// Mid-stack detection: if not using --scope, check if there are branches above
+	// the current branch in the same scope that won't be merged
+	if scope == "" && len(plan.BranchesToMerge) > 0 {
+		currentBranch := eng.GetBranch(plan.CurrentBranch)
+		currentScope := eng.GetScope(currentBranch)
+		if !currentScope.IsEmpty() {
+			// Check if any upstack branches are in the same scope
+			upstackInScope := []string{}
+			for _, upstackName := range plan.UpstackBranches {
+				upstackBranch := eng.GetBranch(upstackName)
+				upstackScope := eng.GetScope(upstackBranch)
+				if upstackScope.String() == currentScope.String() {
+					upstackInScope = append(upstackInScope, upstackName)
+				}
+			}
+			if len(upstackInScope) > 0 {
+				splog.Warn("⚠️  You're mid-stack in scope [%s]", currentScope.String())
+				splog.Warn("   Branches above in the same scope won't be merged: %s", strings.Join(upstackInScope, ", "))
+				splog.Info("   💡 To merge the entire scope, use: stackit merge --scope=%s", currentScope.String())
+				splog.Newline()
+			}
+		}
 	}
 
 	// Display current state using stack tree
@@ -238,13 +267,29 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 		splog.Newline()
 	} else {
 		// Prompt for strategy using interactive selector
-		strategyOptions := []tui.SelectOption{
-			{Label: "🔄 Bottom-up — Merge PRs one at a time from bottom (recommended)", Value: "bottom-up"},
-			{Label: "📦 Top-down — Squash all changes into one PR, merge once", Value: "top-down"},
-			{Label: "🔀 Consolidate — Create single PR with all stack commits for atomic merge", Value: "consolidate"},
+		// Pre-select consolidate for larger stacks (3+), bottom-up for smaller
+		var strategyOptions []tui.SelectOption
+		var defaultIndex int
+
+		if len(plan.BranchesToMerge) >= 3 {
+			// For 3+ branches, recommend consolidate
+			strategyOptions = []tui.SelectOption{
+				{Label: "🔀 Consolidate — Create single PR with all stack commits for atomic merge (recommended)", Value: "consolidate"},
+				{Label: "🔄 Bottom-up — Merge PRs one at a time from bottom", Value: "bottom-up"},
+				{Label: "📦 Top-down — Squash all changes into one PR, merge once", Value: "top-down"},
+			}
+			defaultIndex = 0 // Consolidate
+		} else {
+			// For 2 branches, recommend bottom-up
+			strategyOptions = []tui.SelectOption{
+				{Label: "🔄 Bottom-up — Merge PRs one at a time from bottom (recommended)", Value: "bottom-up"},
+				{Label: "📦 Top-down — Squash all changes into one PR, merge once", Value: "top-down"},
+				{Label: "🔀 Consolidate — Create single PR with all stack commits for atomic merge", Value: "consolidate"},
+			}
+			defaultIndex = 0 // Bottom-up
 		}
 
-		selectedStrategy, err := tui.PromptSelect("Select merge strategy:", strategyOptions, 0)
+		selectedStrategy, err := tui.PromptSelect("Select merge strategy:", strategyOptions, defaultIndex)
 		if err != nil {
 			return fmt.Errorf("strategy selection canceled: %w", err)
 		}
@@ -310,10 +355,19 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 		// We don't fail here because the executor will try again and handle it properly
 	}
 
-	// Ask about worktree if not specified by flag
-	useWorktree, err := tui.PromptConfirm("Execute merge in a temporary worktree? (allows you to continue working here)", true)
-	if err != nil {
-		return fmt.Errorf("worktree confirmation canceled: %w", err)
+	// Determine worktree usage:
+	// - Consolidate strategy always uses worktree (no prompt)
+	// - Other strategies prompt the user
+	var useWorktree bool
+	if mergeStrategy == merge.StrategyConsolidate {
+		useWorktree = true
+		splog.Info("Using temporary worktree for consolidate merge...")
+	} else {
+		var err error
+		useWorktree, err = tui.PromptConfirm("Execute merge in a temporary worktree? (allows you to continue working here)", true)
+		if err != nil {
+			return fmt.Errorf("worktree confirmation canceled: %w", err)
+		}
 	}
 
 	// Get config values

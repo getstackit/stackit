@@ -249,7 +249,33 @@ func (m MergeTUIModel) View() string {
 
 	var b strings.Builder
 	b.WriteString("\n")
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render("Merge Progress:"))
+
+	// Calculate overall progress
+	completedGroups := 0
+	totalGroups := len(m.groups)
+	currentGroupIdx := -1
+	for i, group := range m.groups {
+		allDone := true
+		for _, idx := range group.StepIndices {
+			if m.steps[idx].Status != mergeStatusDone {
+				allDone = false
+				break
+			}
+		}
+		if allDone {
+			completedGroups++
+		} else if currentGroupIdx == -1 {
+			currentGroupIdx = i
+		}
+	}
+
+	// Header with progress indicator
+	header := lipgloss.NewStyle().Bold(true).Render("Merge Progress")
+	progressIndicator := m.styles.dimStyle.Render(fmt.Sprintf("  Step %d of %d", completedGroups+1, totalGroups))
+	if m.done {
+		progressIndicator = m.styles.doneStyle.Render(fmt.Sprintf("  %d of %d complete", completedGroups, totalGroups))
+	}
+	b.WriteString(header + progressIndicator)
 	b.WriteString("\n\n")
 
 	for i, group := range m.groups {

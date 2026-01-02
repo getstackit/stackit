@@ -681,6 +681,11 @@ func (r *StackTreeRenderer) formatAnnotation(annotation BranchAnnotation, _ bool
 func (r *StackTreeRenderer) FormatAnnotationColored(annotation BranchAnnotation) string {
 	var parts []string
 
+	// PR number (colored by state)
+	if annotation.PRNumber != nil {
+		parts = append(parts, style.ColorPRNumberByState(*annotation.PRNumber, annotation.PRState, annotation.IsDraft))
+	}
+
 	if annotation.Scope != "" {
 		parts = append(parts, style.ColorScope(annotation.Scope))
 	}

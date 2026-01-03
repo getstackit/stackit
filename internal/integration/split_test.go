@@ -17,7 +17,6 @@ import (
 
 func TestSplitWorkflow(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("split mid-stack branch with multiple children restacks all descendants", func(t *testing.T) {
 		t.Parallel()
@@ -41,10 +40,7 @@ func TestSplitWorkflow(t *testing.T) {
 		//          /     \
 		//      child-1  child-2
 
-		sh := NewTestShell(t, binaryPath)
-
-		// Initialize stackit
-		sh.Run("init")
+		sh := NewTestShellInProcess(t)
 
 		// Create feature-a with multiple files
 		sh.Write("config", "config content").
@@ -111,10 +107,7 @@ func TestSplitWorkflow(t *testing.T) {
 		// Note: The extracted files (file1) are moved to the split branch and REMOVED from feature-a
 		//       So feature-b and feature-c won't have file1 - that's by design
 
-		sh := NewTestShell(t, binaryPath)
-
-		// Initialize stackit
-		sh.Run("init")
+		sh := NewTestShellInProcess(t)
 
 		// Create feature-a with multiple files
 		sh.Write("file1", "file1 from feature-a").
@@ -161,10 +154,7 @@ func TestSplitWorkflow(t *testing.T) {
 	t.Run("split preserves commit history correctly", func(t *testing.T) {
 		t.Parallel()
 
-		sh := NewTestShell(t, binaryPath)
-
-		// Initialize stackit
-		sh.Run("init")
+		sh := NewTestShellInProcess(t)
 
 		// Create feature with two files
 		sh.Write("extract", "content to extract").
@@ -184,10 +174,7 @@ func TestSplitWorkflow(t *testing.T) {
 	t.Run("split --by-commit accepts the flag and shows interactive prompt", func(t *testing.T) {
 		t.Parallel()
 
-		sh := NewTestShell(t, binaryPath)
-
-		// Initialize stackit
-		sh.Run("init")
+		sh := NewTestShellInProcess(t)
 
 		// Create a feature branch with multiple commits on the same branch
 		sh.Write("file1", "commit 1 content").
@@ -201,25 +188,15 @@ func TestSplitWorkflow(t *testing.T) {
 
 		// Attempt to run split --by-commit
 		// This will fail because it requires interactive input for commit selection
-		// But we can verify that the flag is accepted and the command starts
-		cmd := exec.Command(binaryPath, "split", "--by-commit", "--no-interactive")
-		cmd.Dir = sh.Dir()
-		output, err := cmd.CombinedOutput()
-
-		// The command should fail due to interactive prompts, but we can verify
-		// that it recognizes the --by-commit flag and attempts to split by commit
-		require.Error(t, err, "split --by-commit should fail in non-interactive mode due to required user input")
-		outputStr := string(output)
-		require.Contains(t, outputStr, "Splitting the commits", "should show commit splitting message")
+		// But we can verify that the command starts and recognizes the flag
+		sh.RunExpectError("split --by-commit").
+			OutputContains("Splitting the commits")
 	})
 
 	t.Run("split --by-commit validates branch has commits to split", func(t *testing.T) {
 		t.Parallel()
 
-		sh := NewTestShell(t, binaryPath)
-
-		// Initialize stackit
-		sh.Run("init")
+		sh := NewTestShellInProcess(t)
 
 		// Create a feature branch with only one commit
 		sh.Write("file1", "single commit content").
@@ -227,27 +204,19 @@ func TestSplitWorkflow(t *testing.T) {
 
 		// Attempt to run split --by-commit on a branch with minimal commits
 		// The logic should detect this and potentially default to hunk mode or show appropriate message
-		cmd := exec.Command(binaryPath, "split", "--by-commit", "--no-interactive")
-		cmd.Dir = sh.Dir()
-		output, err := cmd.CombinedOutput()
-
-		// Should either fail due to lack of commits to split or require interaction
-		require.Error(t, err, "should fail when there are no commits to split interactively")
-		_ = output // Use output for verification if needed
+		sh.RunExpectError("split --by-commit")
 	})
 }
 
 func TestSplitUndo(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("undo split --by-file restores original branch and removes split branch", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// 1. Setup
-		sh.Run("init").
-			Write("file1", "content1").
+		sh.Write("file1", "content1").
 			Write("file2", "content2").
 			Run("create feature -m 'Add feature'")
 
@@ -269,11 +238,10 @@ func TestSplitUndo(t *testing.T) {
 
 	t.Run("undo split --by-commit restores original branch", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Setup: feature branch with 2 commits
-		sh.Run("init").
-			Write("file1", "c1").
+		sh.Write("file1", "c1").
 			Run("create feature -m 'Commit 1'")
 
 		// We need to use a non-interactive way or just verify the snapshot exists

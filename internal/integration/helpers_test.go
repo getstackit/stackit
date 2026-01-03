@@ -9,8 +9,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"stackit.dev/stackit/internal/utils"
 	"stackit.dev/stackit/testhelpers"
+	"stackit.dev/stackit/testhelpers/inprocess"
+	"stackit.dev/stackit/testhelpers/scenario"
 )
+
+func init() {
+	scenario.GlobalInProcessRunner = func(workDir string, args ...string) (string, error) {
+		runner := inprocess.NewInProcessCLI()
+		res := runner.Run(workDir, args...)
+		return res.Output, res.Err
+	}
+}
 
 // =============================================================================
 // Test Shell - A helper to make integration tests read like terminal sessions
@@ -23,7 +34,7 @@ type TestShell struct {
 	scene        *testhelpers.Scene
 	binaryPath   string
 	lastOutput   string
-	inProcessCLI *InProcessCLI // if set, use in-process execution
+	inProcessCLI *inprocess.CLI // if set, use in-process execution
 }
 
 // NewTestShell creates a shell-like test environment with an initialized repo.
@@ -43,11 +54,17 @@ func NewTestShellInProcess(t *testing.T) *TestShell {
 	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 		return s.Repo.CreateChangeAndCommit("initial", "init")
 	})
-	return &TestShell{
+	sh := &TestShell{
 		t:            t,
 		scene:        scene,
-		inProcessCLI: NewInProcessCLI(),
+		inProcessCLI: inprocess.NewInProcessCLI(),
 	}
+	// Force non-interactive mode for in-process execution to match behavior
+	// of spawning binary with --no-interactive
+	utils.SetInteractive(false)
+	// Pre-init config for in-process
+	sh.Run("init").Run("config tips false")
+	return sh
 }
 
 // NewTestShellWithRemote creates a shell-like test environment with a local bare repo as "origin".
@@ -61,11 +78,15 @@ func NewTestShellWithRemote(t *testing.T, binaryPath string) *TestShell {
 // as "origin", using in-process CLI execution for faster tests.
 func NewTestShellWithRemoteInProcess(t *testing.T) *TestShell {
 	t.Helper()
-	return newTestShellWithRemote(t, "", NewInProcessCLI())
+	sh := newTestShellWithRemote(t, "", inprocess.NewInProcessCLI())
+	// Force non-interactive mode for in-process execution
+	utils.SetInteractive(false)
+	sh.Run("init").Run("config tips false")
+	return sh
 }
 
 // newTestShellWithRemote is the shared implementation for creating shells with remotes.
-func newTestShellWithRemote(t *testing.T, binaryPath string, inProcessCLI *InProcessCLI) *TestShell {
+func newTestShellWithRemote(t *testing.T, binaryPath string, inProcessCLI *inprocess.CLI) *TestShell {
 	t.Helper()
 
 	// Create a bare repository to act as the remote
@@ -120,6 +141,9 @@ func (s *TestShell) Run(args string) *TestShell {
 	if s.inProcessCLI != nil {
 		result := s.inProcessCLI.Run(s.scene.Dir, parts...)
 		s.lastOutput = result.Output
+		if result.Err != nil {
+			s.t.Logf("In-process CLI output: %s", s.lastOutput)
+		}
 		require.NoError(s.t, result.Err, "$ stackit %s\n%s", args, s.lastOutput)
 		return s
 	}

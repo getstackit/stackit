@@ -1,8 +1,6 @@
 package navigation
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"stackit.dev/stackit/internal/app"
@@ -39,7 +37,7 @@ branches depend on the current branch.`,
 
 				// Print children
 				for _, child := range children {
-					fmt.Println(child.GetName())
+					ctx.Splog.Info("%s", child.GetName())
 				}
 				return nil
 			})

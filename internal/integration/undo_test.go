@@ -12,16 +12,14 @@ import (
 
 func TestUndoCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("undo after create command", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create initial commit
 		sh.Log("Setting up repository...")
 		sh.Write("file1", "content1").
-			Run("init").
 			Commit("file1", "initial commit")
 
 		// Create a branch (this should create a snapshot)
@@ -50,10 +48,9 @@ func TestUndoCommand(t *testing.T) {
 
 	t.Run("undo shows no history message when empty", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		sh.Write("file1", "content1").
-			Run("init").
 			Commit("file1", "initial commit")
 
 		// Run undo with no history
@@ -63,12 +60,11 @@ func TestUndoCommand(t *testing.T) {
 
 	t.Run("undo after move command", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Set up stack
 		sh.Log("Setting up stack...")
 		sh.Write("file1", "content1").
-			Run("init").
 			Commit("file1", "initial commit").
 			Write("file2", "content2").
 			Run("create feature1 -m 'Add feature1'").

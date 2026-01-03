@@ -2,6 +2,8 @@ package engine
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"sync"
 
 	"stackit.dev/stackit/internal/git"
@@ -23,6 +25,7 @@ type engineImpl struct {
 	localModified     map[string]bool      // branches with local changes not yet pushed
 	maxUndoStackDepth int
 	git               git.Runner
+	writer            io.Writer
 	mu                sync.RWMutex
 }
 
@@ -50,6 +53,11 @@ func NewEngine(opts Options) (Engine, error) {
 		maxDepth = DefaultMaxUndoStackDepth
 	}
 
+	writer := opts.Writer
+	if writer == nil {
+		writer = os.Stderr
+	}
+
 	e := &engineImpl{
 		repoRoot:          opts.RepoRoot,
 		trunk:             opts.Trunk,
@@ -63,6 +71,7 @@ func NewEngine(opts Options) (Engine, error) {
 		localModified:     make(map[string]bool),
 		maxUndoStackDepth: maxDepth,
 		git:               g,
+		writer:            writer,
 	}
 
 	currentBranch, err := g.GetCurrentBranch()

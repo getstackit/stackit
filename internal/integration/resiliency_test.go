@@ -5,8 +5,7 @@ import (
 )
 
 func TestResiliencyStaleParentSHA(t *testing.T) {
-	binaryPath := getStackitBinary(t)
-	shell := NewTestShell(t, binaryPath)
+	shell := NewTestShellInProcess(t)
 
 	// 1. Create a stack: main -> branch-a -> branch-b
 	shell.Log("Creating stack: main -> branch-a -> branch-b")

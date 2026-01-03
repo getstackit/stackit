@@ -13,11 +13,10 @@ import (
 
 func TestConflictResolution(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("continue through cascading conflicts in stack", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// 1. Build stack: main → branch-a → branch-b → branch-c
 		//    where each branch modifies the SAME file (to create conflicts)
@@ -100,7 +99,7 @@ func TestConflictResolution(t *testing.T) {
 
 	t.Run("continue preserves stack structure after mid-stack conflict", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// 1. Build stack: main → a → b → c → d
 		sh.Log("Building stack: main -> a -> b -> c -> d")
@@ -145,7 +144,7 @@ func TestConflictResolution(t *testing.T) {
 
 	t.Run("continue handles branching stack conflict", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// 1. Build branching stack: main → branch-a → [branch-b, branch-c]
 		sh.Log("Building branching stack: main -> branch-a -> [branch-b, branch-c]")

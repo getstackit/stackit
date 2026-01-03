@@ -8,11 +8,10 @@ import (
 
 func TestFrozenIntegration(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("freeze and unfreeze recursive behavior", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		// Create a stack: main -> a -> b -> c
 		s.Run("create a -m 'feat a'")
@@ -42,7 +41,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("frozen branch blocks modifications", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		s.Run("create a -m 'feat a'")
 		s.Run("freeze a")
@@ -64,7 +63,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("locked and frozen branch shows combined error", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShellWithRemote(t, binaryPath)
+		s := NewTestShellWithRemoteInProcess(t)
 
 		s.Run("create a -m 'feat a'")
 		s.Run("freeze a")
@@ -77,7 +76,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("passthrough git commands are blocked", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		s.Run("create a -m 'feat a'")
 		s.Run("freeze a")
@@ -89,7 +88,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("freeze fails on trunk branch", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		s.RunExpectError("freeze main").
 			OutputContains("cannot freeze trunk branch")
@@ -97,7 +96,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("freeze fails on untracked branch", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		// Create an untracked branch using git directly
 		s.Git("checkout -b untracked").
@@ -111,7 +110,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("unfreeze fails on untracked branch", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		// Create an untracked branch using git directly
 		s.Git("checkout -b untracked").
@@ -125,7 +124,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("frozen branch blocks rename", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		s.Run("create feature-a").
 			WriteFile("a", "content").
@@ -139,7 +138,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("frozen branch blocks split", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		// Create a branch with multiple commits to split
 		s.Run("create feature-a").
@@ -157,7 +156,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("frozen branch in stack blocks reorder", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		// Create a stack
 		s.Run("create feature-a").
@@ -178,7 +177,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("frozen status persists after checkout", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		s.Run("create feature-a -m 'feat a'")
 		s.Run("freeze feature-a")
@@ -196,7 +195,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("frozen status persists after creating child branch", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		s.Run("create feature-a -m 'feat a'")
 		s.Run("freeze feature-a")
@@ -213,7 +212,7 @@ func TestFrozenIntegration(t *testing.T) {
 
 	t.Run("unfreeze allows modifications", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShell(t, binaryPath)
+		s := NewTestShellInProcess(t)
 
 		s.Run("create feature-a").
 			WriteFile("a", "content").

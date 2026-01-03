@@ -12,8 +12,7 @@ import (
 
 func TestRenameBasic(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
-	sh := NewTestShell(t, binaryPath)
+	sh := NewTestShellInProcess(t)
 
 	sh.Write("a", "content a").Run("create branch-a -m 'feat: a'")
 	sh.OnBranch("branch-a")
@@ -26,8 +25,7 @@ func TestRenameBasic(t *testing.T) {
 
 func TestRenameWithChildren(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
-	sh := NewTestShell(t, binaryPath)
+	sh := NewTestShellInProcess(t)
 
 	sh.Write("a", "content a").Run("create branch-a -m 'feat: a'")
 	sh.Write("b", "content b").Run("create branch-b -m 'feat: b'")
@@ -42,8 +40,7 @@ func TestRenameWithChildren(t *testing.T) {
 
 func TestRenameWithPR(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
-	sh := NewTestShell(t, binaryPath)
+	sh := NewTestShellInProcess(t)
 
 	sh.Write("a", "content a").Run("create branch-a -m 'feat: a'")
 

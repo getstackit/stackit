@@ -17,11 +17,11 @@ import (
 )
 
 // NewForeachHandler creates the appropriate handler based on TTY availability
-func NewForeachHandler(splog *tui.Splog) foreach.Handler {
+func NewForeachHandler(splog *tui.Splog, parallel bool) foreach.Handler {
 	if tui.IsTTY() {
 		return NewInteractiveForeachHandler(splog)
 	}
-	return NewSimpleForeachHandler(splog)
+	return NewSimpleForeachHandler(splog, parallel)
 }
 
 // SimpleForeachHandler implements foreach.Handler with line-by-line output
@@ -32,6 +32,7 @@ type SimpleForeachHandler struct {
 	mu            sync.Mutex
 	started       bool
 	currentBranch string
+	parallel      bool
 }
 
 type foreachBranchItem struct {
@@ -39,11 +40,12 @@ type foreachBranchItem struct {
 }
 
 // NewSimpleForeachHandler creates a new simple foreach handler
-func NewSimpleForeachHandler(splog *tui.Splog) *SimpleForeachHandler {
+func NewSimpleForeachHandler(splog *tui.Splog, parallel bool) *SimpleForeachHandler {
 	return &SimpleForeachHandler{
-		splog: splog,
-		out:   os.Stdout,
-		items: make(map[string]*foreachBranchItem),
+		splog:    splog,
+		out:      os.Stdout,
+		items:    make(map[string]*foreachBranchItem),
+		parallel: parallel,
 	}
 }
 
@@ -65,8 +67,20 @@ func (h *SimpleForeachHandler) OnEvent(e foreach.Event) {
 				name: branch.Name,
 			}
 		}
+		if h.parallel {
+			h.splog.Page("Executing in parallel: ")
+		}
 
 	case foreach.BranchProgressEvent:
+		// In parallel mode, we show progress as dots to maintain some visual feedback
+		// while keeping the output deterministic for the final summary.
+		if h.parallel {
+			if ev.Status == foreach.StatusDone || ev.Status == foreach.StatusError {
+				h.splog.Page(".")
+			}
+			return
+		}
+
 		item := h.items[ev.BranchName]
 		if item == nil {
 			return
@@ -79,34 +93,22 @@ func (h *SimpleForeachHandler) OnEvent(e foreach.Event) {
 			h.splog.Info("\nRunning on branch %s...", style.ColorBranchName(ev.BranchName, isCurrent))
 
 		case foreach.StatusDone:
-			// Check if we have output - if so, this might be parallel mode format
-			if ev.Output != "" {
-				// Parallel mode format: "Branch: name" then output then success
-				h.splog.Info("\nBranch: %s", style.ColorBranchName(ev.BranchName, isCurrent))
-				output := strings.TrimSpace(ev.Output)
-				if len(output) > 0 {
-					h.splog.Info("%s", strings.TrimSuffix(output, "\n"))
-				}
-				h.splog.Info("✓ Command succeeded")
-			} else {
-				// Sequential mode
-				h.splog.Info("✓ Command succeeded on branch %s", style.ColorBranchName(ev.BranchName, isCurrent))
+			// In sequential mode, we've already printed "Running on branch..."
+			// Just show the output and completion status.
+			output := strings.TrimSpace(ev.Output)
+			if len(output) > 0 {
+				h.splog.Info("%s", strings.TrimSuffix(output, "\n"))
 			}
+			h.splog.Info("✓ Command succeeded on branch %s", style.ColorBranchName(ev.BranchName, isCurrent))
 
 		case foreach.StatusError:
-			// Check if we have output - if so, this might be parallel mode format
-			if ev.Output != "" {
-				// Parallel mode format: "Branch: name" then output then failure
-				h.splog.Info("\nBranch: %s", style.ColorBranchName(ev.BranchName, isCurrent))
-				output := strings.TrimSpace(ev.Output)
-				if len(output) > 0 {
-					h.splog.Info("%s", strings.TrimSuffix(output, "\n"))
-				}
-				h.splog.Error("✗ Command failed: %v", ev.Error)
-			} else {
-				// Sequential mode
-				h.splog.Error("✗ Command failed on branch %s: %v", style.ColorBranchName(ev.BranchName, isCurrent), ev.Error)
+			// In sequential mode, we've already printed "Running on branch..."
+			// Just show the output and error status.
+			output := strings.TrimSpace(ev.Output)
+			if len(output) > 0 {
+				h.splog.Info("%s", strings.TrimSuffix(output, "\n"))
 			}
+			h.splog.Error("✗ Command failed on branch %s: %v", style.ColorBranchName(ev.BranchName, isCurrent), ev.Error)
 		}
 
 	case foreach.CompletionEvent:

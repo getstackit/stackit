@@ -60,7 +60,10 @@ func TestSubmitCommand(t *testing.T) {
 Stack to submit:
   branch-a
 ● branch-b
-
+⚠️  The following branches have no changes:
+⚠️  ▸ branch-a
+⚠️  ▸ branch-b
+⚠️  Are you sure you want to submit them?
   ▸ branch-a → create
   ▸ branch-b (current) → create
 `)
@@ -110,7 +113,11 @@ Stack to submit:
   branch1
 ● branch2
   branch3
-
+⚠️  The following branches have no changes:
+⚠️  ▸ branch1
+⚠️  ▸ branch2
+⚠️  ▸ branch3
+⚠️  Are you sure you want to submit them?
   ▸ branch1 → create
   ▸ branch2 (current) → create
   ▸ branch3 → create
@@ -161,7 +168,11 @@ Stack to submit:
   branch1
 ● branch2
   branch3
-
+⚠️  The following branches have no changes:
+⚠️  ▸ branch1
+⚠️  ▸ branch2
+⚠️  ▸ branch3
+⚠️  Are you sure you want to submit them?
   ▸ branch1 → create
   ▸ branch2 (current) → create
   ▸ branch3 → create

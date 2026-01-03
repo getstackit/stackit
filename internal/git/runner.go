@@ -476,14 +476,14 @@ func (r *runner) GetCommitRange(base, head, format string) ([]string, error) {
 	goGitMu.Lock()
 	defer goGitMu.Unlock()
 
-	headHash, err := resolveRefHashInternal(repo, head)
+	headHash, err := r.resolveRefHashInternal(repo, head)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve head: %w", err)
 	}
 
 	var baseHash plumbing.Hash
 	if base != "" {
-		baseHash, err = resolveRefHashInternal(repo, base)
+		baseHash, err = r.resolveRefHashInternal(repo, base)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve base: %w", err)
 		}
@@ -546,7 +546,7 @@ func (r *runner) GetCommitSHA(branchName string, offset int) (string, error) {
 	defer goGitMu.Unlock()
 
 	// Resolve branch reference
-	hash, err := resolveRefHashInternal(repo, branchName)
+	hash, err := r.resolveRefHashInternal(repo, branchName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get branch reference: %w", err)
 	}
@@ -753,7 +753,7 @@ func (r *runner) GetParentCommitSHA(commitSHA string) (string, error) {
 		return "", err
 	}
 
-	hash, err := resolveRefHash(repo, commitSHA)
+	hash, err := r.resolveRefHash(repo, commitSHA)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve commit: %w", err)
 	}

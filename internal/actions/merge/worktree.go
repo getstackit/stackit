@@ -65,7 +65,14 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	if err != nil {
 		splog.Debug("Failed to pull trunk in worktree: %v", err)
 	} else if pullResult == engine.PullConflict {
-		return fmt.Errorf("trunk could not be fast-forwarded in worktree (conflict)")
+		if opts.Force {
+			splog.Info("Trunk diverged from remote. Force-resetting trunk to match remote...")
+			if err := worktreeEng.ResetTrunkToRemote(ctx.Context); err != nil {
+				return fmt.Errorf("failed to auto-reset diverged trunk: %w", err)
+			}
+		} else {
+			return fmt.Errorf("trunk could not be fast-forwarded (diverged from remote). This usually happens when local trunk has commits not on remote. To fix:\n  1. Sync your trunk: git checkout %s && git pull\n  2. Or use --force to overwrite local trunk changes", trunk.GetName())
+		}
 	}
 
 	// 6. Create or Validate the plan

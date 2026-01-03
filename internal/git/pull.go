@@ -46,26 +46,33 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 		return PullUnneeded, nil
 	}
 
-	// Check if it's a fast-forward
-	isAncestor, err := r.IsAncestor(oldRev, remoteRev)
-	if err != nil || !isAncestor {
-		return PullConflict, nil //nolint:nilerr
+	// Check if it's a fast-forward (remote is ahead of local)
+	isRemoteAhead, err := r.IsAncestor(oldRev, remoteRev)
+	if err == nil && isRemoteAhead {
+		// Update the local branch reference to the remote commit (fast-forward)
+		_, err = r.RunGitCommandWithContext(ctx, "update-ref", "refs/heads/"+branchName, remoteRev)
+		if err != nil {
+			return PullConflict, fmt.Errorf("failed to update local branch %s to %s: %w", branchName, remoteRev, err)
+		}
+
+		// If we are currently ON this branch in this worktree, we need to update HEAD
+		if currentBranch == branchName {
+			_ = r.CheckoutBranch(ctx, branchName)
+		} else if currentRev != "" {
+			_ = r.CheckoutDetached(ctx, currentRev)
+		}
+
+		return PullDone, nil
 	}
 
-	// Update the local branch reference to the remote commit (fast-forward)
-	_, err = r.RunGitCommandWithContext(ctx, "update-ref", "refs/heads/"+branchName, remoteRev)
-	if err != nil {
-		return PullConflict, fmt.Errorf("failed to update local branch %s to %s: %w", branchName, remoteRev, err)
+	// Check if local is already ahead of remote
+	isLocalAhead, _ := r.IsAncestor(remoteRev, oldRev)
+	if isLocalAhead {
+		return PullUnneeded, nil
 	}
 
-	// If we are currently ON this branch in this worktree, we need to update HEAD
-	if currentBranch == branchName {
-		_ = r.CheckoutBranch(ctx, branchName)
-	} else if currentRev != "" {
-		_ = r.CheckoutDetached(ctx, currentRev)
-	}
-
-	return PullDone, nil
+	// Otherwise they have diverged
+	return PullConflict, nil
 }
 
 func (r *runner) Fetch(ctx context.Context, remote, branch string) error {

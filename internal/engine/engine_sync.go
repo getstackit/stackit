@@ -51,6 +51,17 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 	// Get remote SHA
 	remoteSha, err := e.git.GetRemoteSha(remote, trunk)
 	if err != nil {
+		// Fallback: try to get it from ls-remote if the tracking branch is missing
+		remoteShas, fetchErr := e.git.FetchRemoteShas(remote)
+		if fetchErr == nil {
+			if sha, ok := remoteShas[trunk]; ok {
+				remoteSha = sha
+				err = nil
+			}
+		}
+	}
+
+	if err != nil {
 		return fmt.Errorf("failed to get remote SHA: %w", err)
 	}
 

@@ -1,21 +1,35 @@
 package git
 
 import (
+	"context"
 	"fmt"
-
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
-func (r *runner) getRemoteSha(repo *Repository, remote, branchName string) (string, error) {
-	// Synchronize go-git operations to prevent concurrent packfile access
-	goGitMu.Lock()
-	defer goGitMu.Unlock()
-
-	refName := plumbing.ReferenceName(fmt.Sprintf("refs/remotes/%s/%s", remote, branchName))
-	ref, err := repo.Reference(refName, true)
+func (r *runner) ResetMerge(ctx context.Context, revision string) error {
+	_, err := r.runGitCommandWithContextInternal(ctx, "reset", "--merge", revision)
 	if err != nil {
-		return "", fmt.Errorf("failed to get remote SHA for %s/%s: %w", remote, branchName, err)
+		return fmt.Errorf("failed to reset --merge to %s: %w", revision, err)
 	}
+	return nil
+}
 
-	return ref.Hash().String(), nil
+func (r *runner) HardReset(ctx context.Context, revision string) error {
+	_, err := r.runGitCommandWithContextInternal(ctx, "reset", "--hard", revision)
+	if err != nil {
+		return fmt.Errorf("failed to hard reset to %s: %w", revision, err)
+	}
+	return nil
+}
+
+func (r *runner) SoftReset(ctx context.Context, revision string) error {
+	_, err := r.runGitCommandWithContextInternal(ctx, "reset", "-q", "--soft", revision)
+	if err != nil {
+		return fmt.Errorf("failed to soft reset to %s: %w", revision, err)
+	}
+	return nil
+}
+
+func (r *runner) MixedReset(ctx context.Context, revision string) error {
+	_, err := r.runGitCommandWithContextInternal(ctx, "reset", revision)
+	return err
 }

@@ -1,130 +1,79 @@
 package cli_test
 
 import (
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"stackit.dev/stackit/testhelpers"
+	"stackit.dev/stackit/testhelpers/scenario"
 )
 
 func TestUntrackCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("untrack current branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		_, err := cmd.CombinedOutput()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
+			return sc.Repo.CreateChangeAndCommit("initial", "init")
+		}).WithInProcess(true)
 
 		// Create a tracked branch
-		cmd = exec.Command(binaryPath, "create", "a", "-m", "Add a")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
+		s.RunCli("create", "a", "-m", "Add a")
 
 		// Untrack current branch (a)
-		cmd = exec.Command(binaryPath, "untrack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "untrack command failed: %s", string(output))
-		require.Contains(t, string(output), "Stopped tracking a")
+		output, err := s.RunCliAndGetOutput("untrack")
+		require.NoError(t, err, "untrack command failed: %s", output)
+		require.Contains(t, output, "Stopped tracking a")
 
 		// Verify branch is no longer tracked
-		cmd = exec.Command(binaryPath, "parent")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = s.RunCliAndGetOutput("parent")
 		require.NoError(t, err)
-		require.Contains(t, string(output), "has no parent (untracked branch)")
+		require.Contains(t, output, "has no parent (untracked branch)")
 	})
 
 	t.Run("untrack specified branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		_, err := cmd.CombinedOutput()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
+			return sc.Repo.CreateChangeAndCommit("initial", "init")
+		}).WithInProcess(true)
 
 		// Create tracked branches
-		cmd = exec.Command(binaryPath, "create", "a", "-m", "Add a")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "b", "-m", "Add b")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
+		s.RunCli("create", "a", "-m", "Add a")
+		s.RunCli("create", "b", "-m", "Add b")
 
 		// Untrack branch a while on branch b
-		cmd = exec.Command(binaryPath, "untrack", "a", "--force")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "untrack command failed: %s", string(output))
-		require.Contains(t, string(output), "Stopped tracking a")
-		require.Contains(t, string(output), "Stopped tracking b")
+		output, err := s.RunCliAndGetOutput("untrack", "a", "--force")
+		require.NoError(t, err, "untrack command failed: %s", output)
+		require.Contains(t, output, "Stopped tracking a")
+		require.Contains(t, output, "Stopped tracking b")
 
 		// Verify branch a is no longer tracked
-		// Let's use checkout instead
-
-		cmd = exec.Command(binaryPath, "checkout", "a")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
+		s.RunCli("checkout", "a")
+		output, err = s.RunCliAndGetOutput("parent")
 		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "parent")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-		require.Contains(t, string(output), "has no parent (untracked branch)")
+		require.Contains(t, output, "has no parent (untracked branch)")
 
 		// Verify branch b is also no longer tracked (it was a child of a)
-		cmd = exec.Command(binaryPath, "checkout", "b")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
+		s.RunCli("checkout", "b")
+		output, err = s.RunCliAndGetOutput("parent")
 		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "parent")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-		require.Contains(t, string(output), "has no parent (untracked branch)")
+		require.Contains(t, output, "has no parent (untracked branch)")
 	})
 
 	t.Run("untrack fails for untracked branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		_, err := cmd.CombinedOutput()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
+			return sc.Repo.CreateChangeAndCommit("initial", "init")
+		}).WithInProcess(true)
 
 		// Create an untracked branch
-		err = scene.Repo.CreateAndCheckoutBranch("untracked")
+		err := s.Scene.Repo.CreateAndCheckoutBranch("untracked")
 		require.NoError(t, err)
 
 		// Try to untrack it
-		cmd = exec.Command(binaryPath, "untrack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("untrack")
 		require.Error(t, err)
-		require.Contains(t, string(output), "branch untracked is not tracked")
+		require.Contains(t, output, "branch untracked is not tracked")
 	})
 }

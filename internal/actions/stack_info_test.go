@@ -1,10 +1,7 @@
 package actions
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,19 +25,8 @@ func TestStackInfoAction(t *testing.T) {
 		s.Checkout("branch2")
 		s.Scene.Repo.CreateChangeAndCommit("c2", "f2.txt")
 
-		// Capture stdout
-		old := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		err := StackInfoAction(s.Context, StackInfoOptions{JSON: true})
-
-		w.Close()
-		os.Stdout = old
-
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		output := buf.String()
+		output := s.Output.String()
 
 		require.NoError(t, err)
 		require.NotEmpty(t, output)
@@ -89,19 +75,8 @@ func TestStackInfoAction(t *testing.T) {
 			})
 		s.Checkout("branch1")
 
-		// Capture stdout
-		old := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		err := StackInfoAction(s.Context, StackInfoOptions{JSON: false})
-
-		w.Close()
-		os.Stdout = old
-
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		output := buf.String()
+		output := s.Output.String()
 
 		require.NoError(t, err)
 		require.Contains(t, output, "branch1")
@@ -122,19 +97,8 @@ func TestStackInfoAction(t *testing.T) {
 		_, err = s.Engine.SetFrozen([]engine.Branch{branch1}, true)
 		require.NoError(t, err)
 
-		// Capture stdout
-		old := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		err = StackInfoAction(s.Context, StackInfoOptions{JSON: true})
-
-		w.Close()
-		os.Stdout = old
-
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		output := buf.String()
+		output := s.Output.String()
 
 		require.NoError(t, err)
 

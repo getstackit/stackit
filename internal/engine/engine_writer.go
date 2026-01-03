@@ -174,14 +174,12 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 
 	// Delete metadata
 	if err := e.git.DeleteMetadata(branchName); err != nil {
-		splog := fmt.Sprintf("Warning: failed to delete metadata ref for %s: %v", branchName, err)
-		fmt.Println(splog)
+		_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete metadata ref for %s: %v\n", branchName, err)
 	}
 
 	// Delete local metadata
 	if err := e.git.DeleteRef(fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, branchName)); err != nil {
-		splog := fmt.Sprintf("Warning: failed to delete local metadata ref for %s: %v", branchName, err)
-		fmt.Println(splog)
+		_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete local metadata ref for %s: %v\n", branchName, err)
 	}
 
 	// Update children to point to parent
@@ -473,7 +471,7 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 	// Rename metadata ref
 	if err := e.git.RenameMetadata(oldName, newName); err != nil {
 		// Log but continue if metadata rename fails
-		fmt.Printf("Warning: failed to rename metadata ref: %v\n", err)
+		_, _ = fmt.Fprintf(e.writer, "Warning: failed to rename metadata ref: %v\n", err)
 	}
 
 	// Rename local metadata ref
@@ -482,10 +480,10 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 	if sha, err := e.git.GetRef(oldLocalRef); err == nil {
 		if err := e.git.UpdateRef(newLocalRef, sha); err == nil {
 			if err := e.git.DeleteRef(oldLocalRef); err != nil {
-				fmt.Printf("Warning: failed to delete old local metadata ref: %v\n", err)
+				_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete old local metadata ref: %v\n", err)
 			}
 		} else {
-			fmt.Printf("Warning: failed to update new local metadata ref: %v\n", err)
+			_, _ = fmt.Fprintf(e.writer, "Warning: failed to update new local metadata ref: %v\n", err)
 		}
 	}
 

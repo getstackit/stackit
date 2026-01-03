@@ -1,8 +1,6 @@
 package navigation
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"stackit.dev/stackit/internal/app"
@@ -44,7 +42,7 @@ and seeing which branch the current branch is based on.`,
 				}
 
 				// Print parent
-				fmt.Println(parent.GetName())
+				ctx.Splog.Info("%s", parent.GetName())
 				return nil
 			})
 		},

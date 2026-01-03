@@ -3,9 +3,6 @@
 package cli
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"stackit.dev/stackit/internal/cli/branch"
@@ -40,12 +37,6 @@ Version: ` + version + `
 Commit:  ` + commit + `
 		Date:    ` + date,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-			if cwd != "" {
-				if err := os.Chdir(cwd); err != nil {
-					return fmt.Errorf("failed to change directory: %w", err)
-				}
-			}
-
 			if noInteractive {
 				interactive = false
 			}

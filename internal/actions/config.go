@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"stackit.dev/stackit/internal/config"
@@ -10,8 +11,8 @@ import (
 )
 
 // ConfigListAction prints all configuration values in a formatted way
-func ConfigListAction(repoRoot string) error {
-	splog := tui.NewSplog()
+func ConfigListAction(repoRoot string, writer io.Writer) error {
+	splog := tui.NewSplogToWriter(writer)
 
 	cfg, err := config.LoadConfig(repoRoot)
 	if err != nil {

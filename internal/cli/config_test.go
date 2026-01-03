@@ -1,305 +1,176 @@
 package cli_test
 
 import (
-	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"stackit.dev/stackit/testhelpers"
+	"stackit.dev/stackit/testhelpers/scenario"
 )
 
 func TestConfigCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("config get returns default pattern when not set", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Get branch.pattern (should return default)
-		cmd = exec.Command(binaryPath, "config", "get", "branch.pattern")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "config get command failed: %s", string(output))
+		output, err := s.RunCliAndGetOutput("config", "get", "branch.pattern")
+		require.NoError(t, err, "config get command failed: %s", output)
 
 		// Should return default pattern
-		require.Equal(t, "{username}/{date}/{message}", strings.TrimSpace(string(output)))
+		require.Equal(t, "{username}/{date}/{message}", strings.TrimSpace(output))
 	})
 
 	t.Run("config set and get branch.pattern", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Set a custom pattern
 		pattern := "{username}/{date}/{message}"
-		cmd = exec.Command(binaryPath, "config", "set", "branch.pattern", pattern)
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "config set command failed: %s", string(output))
-		require.Contains(t, string(output), "Set branch.pattern to:")
+		output, err := s.RunCliAndGetOutput("config", "set", "branch.pattern", pattern)
+		require.NoError(t, err, "config set command failed: %s", output)
+		require.Contains(t, output, "Set branch.pattern to:")
 
 		// Get the pattern back
-		cmd = exec.Command(binaryPath, "config", "get", "branch.pattern")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
-		require.NoError(t, err, "config get command failed: %s", string(output))
-		require.Equal(t, pattern, strings.TrimSpace(string(output)))
+		output, err = s.RunCliAndGetOutput("config", "get", "branch.pattern")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, pattern, strings.TrimSpace(output))
 	})
 
 	t.Run("config set rejects pattern without message placeholder", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Try to set a pattern without {message}
-		cmd = exec.Command(binaryPath, "config", "set", "branch.pattern", "{username}/{date}")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("config", "set", "branch.pattern", "{username}/{date}")
 		require.Error(t, err, "config set should fail without {message} placeholder")
-		require.Contains(t, string(output), "must contain {message}")
+		require.Contains(t, output, "must contain {message}")
 
 		// Verify pattern was not set (should still be default)
-		cmd = exec.Command(binaryPath, "config", "get", "branch.pattern")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = s.RunCliAndGetOutput("config", "get", "branch.pattern")
 		require.NoError(t, err)
-		require.Equal(t, "{username}/{date}/{message}", strings.TrimSpace(string(output)))
+		require.Equal(t, "{username}/{date}/{message}", strings.TrimSpace(output))
 	})
 
 	t.Run("config set accepts pattern with only message placeholder", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Set pattern with only {message}
 		pattern := "{message}"
-		cmd = exec.Command(binaryPath, "config", "set", "branch.pattern", pattern)
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "config set command failed: %s", string(output))
+		output, err := s.RunCliAndGetOutput("config", "set", "branch.pattern", pattern)
+		require.NoError(t, err, "config set command failed: %s", output)
 
 		// Verify it was set
-		cmd = exec.Command(binaryPath, "config", "get", "branch.pattern")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = s.RunCliAndGetOutput("config", "get", "branch.pattern")
 		require.NoError(t, err)
-		require.Equal(t, pattern, strings.TrimSpace(string(output)))
+		require.Equal(t, pattern, strings.TrimSpace(output))
 	})
 
 	t.Run("config get fails for unknown key", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Try to get unknown key
-		cmd = exec.Command(binaryPath, "config", "get", "unknown-key")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("config", "get", "unknown-key")
 		require.Error(t, err, "config get should fail for unknown key")
-		require.Contains(t, string(output), "unknown configuration key")
+		require.Contains(t, output, "unknown configuration key")
 	})
 
 	t.Run("config set fails for unknown key", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Try to set unknown key
-		cmd = exec.Command(binaryPath, "config", "set", "unknown-key", "value")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("config", "set", "unknown-key", "value")
 		require.Error(t, err, "config set should fail for unknown key")
-		require.Contains(t, string(output), "unknown configuration key")
+		require.Contains(t, output, "unknown configuration key")
 	})
 
 	t.Run("config get fails when not in git repository", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
+		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
+		s.Scene.Dir = tmpDir // Use empty dir instead of the one with git repo
 
 		// Don't initialize git or stackit - just try to run config get
-		cmd := exec.Command(binaryPath, "config", "get", "branch.pattern")
-		cmd.Dir = tmpDir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("config", "get", "branch.pattern")
 		require.Error(t, err, "config get should fail when not in git repository")
-		require.Contains(t, string(output), "not a git repository")
+		require.Contains(t, output, "not a git repository")
 	})
 
 	t.Run("config set fails when not in git repository", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
+		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
+		s.Scene.Dir = tmpDir // Use empty dir instead of the one with git repo
 
 		// Don't initialize git or stackit - just try to run config set
-		cmd := exec.Command(binaryPath, "config", "set", "branch.pattern", "{message}")
-		cmd.Dir = tmpDir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("config", "set", "branch.pattern", "{message}")
 		require.Error(t, err, "config set should fail when not in git repository")
-		require.Contains(t, string(output), "not a git repository")
+		require.Contains(t, output, "not a git repository")
 	})
 
 	t.Run("config set persists pattern across commands", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Set a custom pattern
 		pattern := "{username}/dev/{date}/{message}"
-		cmd = exec.Command(binaryPath, "config", "set", "branch.pattern", pattern)
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
+		s.RunCli("config", "set", "branch.pattern", pattern)
 
 		// Get it back
-		cmd = exec.Command(binaryPath, "config", "get", "branch.pattern")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("config", "get", "branch.pattern")
 		require.NoError(t, err)
-		require.Equal(t, pattern, strings.TrimSpace(string(output)))
+		require.Equal(t, pattern, strings.TrimSpace(output))
 
 		// Set a different pattern
 		pattern2 := "{date}/{message}"
-		cmd = exec.Command(binaryPath, "config", "set", "branch.pattern", pattern2)
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
+		s.RunCli("config", "set", "branch.pattern", pattern2)
 
 		// Verify it changed
-		cmd = exec.Command(binaryPath, "config", "get", "branch.pattern")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = s.RunCliAndGetOutput("config", "get", "branch.pattern")
 		require.NoError(t, err)
-		require.Equal(t, pattern2, strings.TrimSpace(string(output)))
+		require.Equal(t, pattern2, strings.TrimSpace(output))
 	})
 
 	t.Run("config get submit.footer returns true by default", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Get submit.footer (should return true by default)
-		cmd = exec.Command(binaryPath, "config", "get", "submit.footer")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "config get command failed: %s", string(output))
+		output, err := s.RunCliAndGetOutput("config", "get", "submit.footer")
+		require.NoError(t, err, "config get command failed: %s", output)
 
 		// Should return true
-		require.Equal(t, "true", strings.TrimSpace(string(output)))
+		require.Equal(t, "true", strings.TrimSpace(output))
 	})
 
 	t.Run("config set and get submit.footer", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		// Initialize stackit
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		err = cmd.Run()
-		require.NoError(t, err)
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Set submit.footer to false
-		cmd = exec.Command(binaryPath, "config", "set", "submit.footer", "false")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "config set command failed: %s", string(output))
-		require.Contains(t, string(output), "Set submit.footer to:")
+		output, err := s.RunCliAndGetOutput("config", "set", "submit.footer", "false")
+		require.NoError(t, err, "config set command failed: %s", output)
+		require.Contains(t, output, "Set submit.footer to:")
 
 		// Get submit.footer back
-		cmd = exec.Command(binaryPath, "config", "get", "submit.footer")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
-		require.NoError(t, err, "config get command failed: %s", string(output))
-		require.Equal(t, "false", strings.TrimSpace(string(output)))
+		output, err = s.RunCliAndGetOutput("config", "get", "submit.footer")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "false", strings.TrimSpace(output))
 
 		// Set submit.footer to true
-		cmd = exec.Command(binaryPath, "config", "set", "submit.footer", "true")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
-		require.NoError(t, err, "config set command failed: %s", string(output))
+		output, err = s.RunCliAndGetOutput("config", "set", "submit.footer", "true")
+		require.NoError(t, err, "config set command failed: %s", output)
 
 		// Get submit.footer back
-		cmd = exec.Command(binaryPath, "config", "get", "submit.footer")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
-		require.NoError(t, err, "config get command failed: %s", string(output))
-		require.Equal(t, "true", strings.TrimSpace(string(output)))
+		output, err = s.RunCliAndGetOutput("config", "get", "submit.footer")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "true", strings.TrimSpace(output))
 	})
 }

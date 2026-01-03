@@ -3,6 +3,7 @@ package integrations
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,9 +54,13 @@ This will create:
 These files contain instructions for AI agents on how to use stackit commands
 to manage stacked branches, create commits, submit PRs, and more.`,
 		SilenceUsage: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, _ := cmd.Flags().GetString("cwd")
 			runner := git.NewRunner()
-			return runAgentInstall(runner, local, force)
+			if cwd != "" {
+				runner = git.NewRunnerWithPath(cwd)
+			}
+			return runAgentInstall(runner, local, force, cmd.OutOrStdout())
 		},
 	}
 
@@ -65,7 +70,7 @@ to manage stacked branches, create commits, submit PRs, and more.`,
 	return cmd
 }
 
-func runAgentInstall(runner git.Runner, local, force bool) error {
+func runAgentInstall(runner git.Runner, local, force bool, out io.Writer) error {
 	var baseDir string
 	var err error
 
@@ -87,7 +92,7 @@ func runAgentInstall(runner git.Runner, local, force bool) error {
 
 	// Check for existing installation and version
 	if !force {
-		if err := checkExistingInstallation(baseDir); err != nil {
+		if err := checkExistingInstallation(baseDir, out); err != nil {
 			return err
 		}
 	}
@@ -257,50 +262,50 @@ func runAgentInstall(runner git.Runner, local, force bool) error {
 		installType = "locally"
 	}
 
-	fmt.Printf("✓ Installed agent files %s (version %s)\n\n", installType, TemplateVersion)
-	fmt.Println("Claude Code integration:")
-	fmt.Printf("✓ Created %s/.claude/skills/stackit/SKILL.md\n", getDisplayPath(baseDir, local))
-	fmt.Printf("✓ Created %s/.claude/skills/stackit/reference.md\n", getDisplayPath(baseDir, local))
-	fmt.Printf("✓ Created %s/.claude/skills/stackit/commands/ (4 reference files)\n", getDisplayPath(baseDir, local))
-	fmt.Printf("✓ Created %s/.claude/skills/stackit/workflows/ (4 workflow guides)\n", getDisplayPath(baseDir, local))
-	fmt.Printf("✓ Created %s/.claude/skills/stackit/scripts/ (2 utility scripts)\n", getDisplayPath(baseDir, local))
-	fmt.Println()
-	fmt.Println("Slash commands:")
-	fmt.Printf("✓ Created %s/.claude/commands/stack-*.md (8 commands)\n", getDisplayPath(baseDir, local))
-	fmt.Println()
-	fmt.Println("Cursor integration:")
-	fmt.Printf("✓ Created %s/.cursor/rules/stackit.md\n", getDisplayPath(baseDir, local))
+	_, _ = fmt.Fprintf(out, "✓ Installed agent files %s (version %s)\n\n", installType, TemplateVersion)
+	_, _ = fmt.Fprintln(out, "Claude Code integration:")
+	_, _ = fmt.Fprintf(out, "✓ Created %s/.claude/skills/stackit/SKILL.md\n", getDisplayPath(baseDir, local))
+	_, _ = fmt.Fprintf(out, "✓ Created %s/.claude/skills/stackit/reference.md\n", getDisplayPath(baseDir, local))
+	_, _ = fmt.Fprintf(out, "✓ Created %s/.claude/skills/stackit/commands/ (4 reference files)\n", getDisplayPath(baseDir, local))
+	_, _ = fmt.Fprintf(out, "✓ Created %s/.claude/skills/stackit/workflows/ (4 workflow guides)\n", getDisplayPath(baseDir, local))
+	_, _ = fmt.Fprintf(out, "✓ Created %s/.claude/skills/stackit/scripts/ (2 utility scripts)\n", getDisplayPath(baseDir, local))
+	_, _ = fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out, "Slash commands:")
+	_, _ = fmt.Fprintf(out, "✓ Created %s/.claude/commands/stack-*.md (8 commands)\n", getDisplayPath(baseDir, local))
+	_, _ = fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out, "Cursor integration:")
+	_, _ = fmt.Fprintf(out, "✓ Created %s/.cursor/rules/stackit.md\n", getDisplayPath(baseDir, local))
 
-	fmt.Println()
-	fmt.Println("Available Claude Code commands:")
-	fmt.Println("  /stack-absorb  - Intelligently absorb changes into commits")
-	fmt.Println("  /stack-create  - Create branch with auto-naming")
-	fmt.Println("  /stack-fix     - Diagnose and fix stack issues")
-	fmt.Println("  /stack-fold    - Fold granular branches into parents")
-	fmt.Println("  /stack-restack - Rebase all branches in stack")
-	fmt.Println("  /stack-status  - View stack state and health")
-	fmt.Println("  /stack-submit  - Submit PRs with generated descriptions")
-	fmt.Println("  /stack-sync    - Sync with trunk and cleanup")
+	_, _ = fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out, "Available Claude Code commands:")
+	_, _ = fmt.Fprintln(out, "  /stack-absorb  - Intelligently absorb changes into commits")
+	_, _ = fmt.Fprintln(out, "  /stack-create  - Create branch with auto-naming")
+	_, _ = fmt.Fprintln(out, "  /stack-fix     - Diagnose and fix stack issues")
+	_, _ = fmt.Fprintln(out, "  /stack-fold    - Fold granular branches into parents")
+	_, _ = fmt.Fprintln(out, "  /stack-restack - Rebase all branches in stack")
+	_, _ = fmt.Fprintln(out, "  /stack-status  - View stack state and health")
+	_, _ = fmt.Fprintln(out, "  /stack-submit  - Submit PRs with generated descriptions")
+	_, _ = fmt.Fprintln(out, "  /stack-sync    - Sync with trunk and cleanup")
 
 	if !local {
-		fmt.Println()
-		fmt.Println("Tip: Use 'stackit agent install --local' to install files in a specific repository")
+		_, _ = fmt.Fprintln(out)
+		_, _ = fmt.Fprintln(out, "Tip: Use 'stackit agent install --local' to install files in a specific repository")
 	}
 
 	return nil
 }
 
-func checkExistingInstallation(baseDir string) error {
+func checkExistingInstallation(baseDir string, out io.Writer) error {
 	// Check if SKILL.md exists and has version info
 	skillPath := filepath.Join(baseDir, ".claude", "skills", "stackit", "SKILL.md")
 	if content, err := os.ReadFile(skillPath); err == nil {
 		// File exists, check version
 		existingVersion := extractVersion(string(content))
 		if existingVersion != "" && existingVersion != TemplateVersion {
-			fmt.Printf("Found existing installation (version %s)\n", existingVersion)
-			fmt.Printf("New version available: %s\n", TemplateVersion)
-			fmt.Println()
-			fmt.Println("Run with --force to update")
+			_, _ = fmt.Fprintf(out, "Found existing installation (version %s)\n", existingVersion)
+			_, _ = fmt.Fprintf(out, "New version available: %s\n", TemplateVersion)
+			_, _ = fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out, "Run with --force to update")
 			return fmt.Errorf("existing installation found")
 		}
 	}

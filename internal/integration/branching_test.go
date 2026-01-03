@@ -6,8 +6,7 @@ import (
 
 func TestBranchingStackSquash(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
-	sh := NewTestShell(t, binaryPath)
+	sh := NewTestShellInProcess(t)
 
 	// Create a branching stack:
 	//        main
@@ -61,8 +60,7 @@ func TestBranchingStackSquash(t *testing.T) {
 
 func TestBranchingStackMove(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
-	sh := NewTestShell(t, binaryPath)
+	sh := NewTestShellInProcess(t)
 
 	// Structure:
 	// main
@@ -103,8 +101,7 @@ func TestBranchingStackMove(t *testing.T) {
 
 func TestBranchingStackModify(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
-	sh := NewTestShell(t, binaryPath)
+	sh := NewTestShellInProcess(t)
 
 	// Create a branching stack:
 	//        main
@@ -146,8 +143,7 @@ func TestBranchingStackModify(t *testing.T) {
 }
 func TestMoveIntoBranchingStackComplex(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
-	sh := NewTestShell(t, binaryPath)
+	sh := NewTestShellInProcess(t)
 
 	// Structure:
 	// main

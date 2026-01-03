@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -101,12 +102,21 @@ func (r *runner) GetRebaseHead() (string, error) {
 }
 
 func (r *runner) IsRebaseInProgress(ctx context.Context) bool {
-	output, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--git-dir")
+	output, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--absolute-git-dir")
 	if err != nil {
-		return false
+		// Fallback to non-absolute if absolute-git-dir fails (older git versions)
+		output, err = r.RunGitCommandWithContext(ctx, "rev-parse", "--git-dir")
+		if err != nil {
+			return false
+		}
 	}
 
 	gitDir := strings.TrimSpace(output)
+	// If gitDir is relative and we have repoRoot, make it absolute
+	if !filepath.IsAbs(gitDir) && r.repoRoot != "" {
+		gitDir = filepath.Join(r.repoRoot, gitDir)
+	}
+
 	if _, err := os.Stat(gitDir + "/rebase-merge"); err == nil {
 		return true
 	}

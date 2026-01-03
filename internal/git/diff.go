@@ -16,12 +16,12 @@ func (r *runner) IsDiffEmpty(ctx context.Context, branchName, base string) (bool
 		return true, nil
 	}
 
-	_, err = r.runGitCommandWithContextInternal(ctx, "diff", "--quiet", base, branchRev)
+	_, err = r.RunGitCommandWithContext(ctx, "diff", "--quiet", base, branchRev)
 	return err == nil, nil
 }
 
 func (r *runner) GetChangedFiles(ctx context.Context, base, head string) ([]string, error) {
-	output, err := r.runGitCommandWithContextInternal(ctx, "diff", "--name-only", base, head)
+	output, err := r.RunGitCommandWithContext(ctx, "diff", "--name-only", base, head)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get changed files: %w", err)
 	}
@@ -37,7 +37,7 @@ func (r *runner) ShowDiff(ctx context.Context, left, right string, stat bool) (s
 		args = append(args, "--stat")
 	}
 	args = append(args, left, right, "--")
-	return r.runGitCommandWithContextInternal(ctx, args...)
+	return r.RunGitCommandWithContext(ctx, args...)
 }
 
 func (r *runner) ShowCommits(ctx context.Context, base, head string, patch, stat bool) (string, error) {
@@ -58,7 +58,7 @@ func (r *runner) ShowCommits(ctx context.Context, base, head string, patch, stat
 	}
 	args = append(args, fmt.Sprintf("%s..%s", baseRef, head))
 	args = append(args, "--")
-	return r.runGitCommandWithContextInternal(ctx, args...)
+	return r.RunGitCommandWithContext(ctx, args...)
 }
 
 func (r *runner) GetStagedDiff(ctx context.Context, files ...string) (string, error) {
@@ -67,7 +67,7 @@ func (r *runner) GetStagedDiff(ctx context.Context, files ...string) (string, er
 		args = append(args, "--")
 		args = append(args, files...)
 	}
-	return r.runGitCommandRawWithContextInternal(ctx, args...)
+	return r.RunGitCommandRawWithContext(ctx, args...)
 }
 
 func (r *runner) GetUnstagedDiff(ctx context.Context, files ...string) (string, error) {
@@ -76,5 +76,5 @@ func (r *runner) GetUnstagedDiff(ctx context.Context, files ...string) (string, 
 		args = append(args, "--")
 		args = append(args, files...)
 	}
-	return r.runGitCommandRawWithContextInternal(ctx, args...)
+	return r.RunGitCommandRawWithContext(ctx, args...)
 }

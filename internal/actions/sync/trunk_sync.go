@@ -9,10 +9,11 @@ import (
 
 // syncTrunk handles pulling the trunk and resolving any conflicts
 func syncTrunk(ctx *app.Context, opts *Options, handler Handler, summary *Summary) error {
-	eng := ctx.Engine
+	eng := ctx.Sync()
+	nav := ctx.Navigator()
 	splog := ctx.Splog
 	gctx := ctx.Context
-	trunk := eng.Trunk()
+	trunk := nav.Trunk()
 	trunkName := trunk.GetName()
 
 	pullResult, err := eng.PullTrunk(gctx)
@@ -22,7 +23,7 @@ func syncTrunk(ctx *app.Context, opts *Options, handler Handler, summary *Summar
 
 	switch pullResult {
 	case engine.PullDone:
-		trunk := eng.Trunk()
+		trunk := nav.Trunk()
 		rev, _ := trunk.GetRevision()
 		revShort := rev
 		if len(rev) > 7 {
@@ -55,7 +56,7 @@ func syncTrunk(ctx *app.Context, opts *Options, handler Handler, summary *Summar
 			if err := eng.ResetTrunkToRemote(gctx); err != nil {
 				return fmt.Errorf("failed to reset trunk: %w", err)
 			}
-			trunk := eng.Trunk()
+			trunk := nav.Trunk()
 			rev, _ := trunk.GetRevision()
 			revShort := rev
 			if len(rev) > 7 {

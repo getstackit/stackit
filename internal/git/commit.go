@@ -49,7 +49,7 @@ func (r *runner) CommitWithOptions(opts CommitOptions) error {
 	// If we're in non-interactive mode, or if we have a message and aren't explicitly editing,
 	// use the non-interactive runner.
 	if !utils.IsInteractive() || (opts.Message != "" && !opts.Edit) || (opts.Amend && opts.NoEdit) {
-		_, err := r.runGitCommandWithContextInternal(context.Background(), args...)
+		_, err := r.RunGitCommandWithContext(context.Background(), args...)
 		return err
 	}
 
@@ -65,6 +65,6 @@ func (r *runner) Commit(message string, verbose int, noVerify bool) error {
 }
 
 func (r *runner) CommitAmendNoEdit(ctx context.Context) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "commit", "-a", "--amend", "--no-edit", "--no-verify")
+	_, err := r.RunGitCommandWithContext(ctx, "commit", "-a", "--amend", "--no-edit", "--no-verify")
 	return err
 }

@@ -42,6 +42,39 @@ func (c *Context) Git() git.Runner {
 	return c.Engine.Git()
 }
 
+// Navigator returns the stack navigator from the engine.
+func (c *Context) Navigator() engine.StackNavigator { return c.Engine }
+
+// Status returns the branch status provider from the engine.
+func (c *Context) Status() engine.BranchStatus { return c.Engine }
+
+// Info returns the branch info provider from the engine.
+func (c *Context) Info() engine.BranchInfo { return c.Engine }
+
+// Reader returns the branch reader from the engine.
+func (c *Context) Reader() engine.BranchReader { return c.Engine }
+
+// Writer returns the branch writer from the engine.
+func (c *Context) Writer() engine.BranchWriter { return c.Engine }
+
+// Sync returns the sync manager from the engine.
+func (c *Context) Sync() engine.SyncManager { return c.Engine }
+
+// PR returns the PR manager from the engine.
+func (c *Context) PR() engine.PRManager { return c.Engine }
+
+// History returns the history rewriter from the engine.
+func (c *Context) History() engine.StackRewriter { return c.Engine }
+
+// Absorb returns the absorb manager from the engine.
+func (c *Context) Absorb() engine.Absorber { return c.Engine }
+
+// Undo returns the undo manager from the engine.
+func (c *Context) Undo() engine.UndoManager { return c.Engine }
+
+// RemoteMetadata returns the remote metadata manager from the engine.
+func (c *Context) RemoteMetadata() engine.RemoteMetadataManager { return c.Engine }
+
 // GlobalOptions holds settings from global flags
 type GlobalOptions struct {
 	Interactive bool

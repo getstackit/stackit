@@ -17,7 +17,7 @@ import (
 type splitByCommitEngine interface {
 	engine.BranchReader
 	engine.PRManager
-	engine.SplitManager
+	engine.StackRewriter
 }
 
 // splitByCommit splits a branch by selecting commit points.

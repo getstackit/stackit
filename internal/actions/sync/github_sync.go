@@ -12,25 +12,26 @@ import (
 
 // syncGitHubInfo synchronizes PR information from GitHub and updates local parents
 func syncGitHubInfo(ctx *app.Context, branchesToRestack *[]string, handler Handler, _ *Summary) error {
-	eng := ctx.Engine
+	eng := ctx.PR()
+	nav := ctx.Navigator()
 	splog := ctx.Splog
 	gctx := ctx.Context
 
 	// Sync PR info
-	allBranches := eng.AllBranches()
+	allBranches := nav.AllBranches()
 	branchNames := make([]string, len(allBranches))
 	for i, b := range allBranches {
 		branchNames[i] = b.GetName()
 	}
 
-	repoOwner, repoName, err := ctx.Git().GetRepoInfo(gctx)
+	repoOwner, repoName, err := nav.GetRepoInfo(gctx)
 	if err != nil {
 		return fmt.Errorf("failed to get repository info: %w", err)
 	}
 	if repoOwner != "" && repoName != "" {
 		prsUpdated := 0
 		if err := github.SyncPrInfo(gctx, ctx.Git(), branchNames, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) {
-			branch := eng.GetBranch(name)
+			branch := nav.GetBranch(name)
 
 			// Try to preserve existing locked status
 			lockReason := engine.LockReasonNone
@@ -85,7 +86,7 @@ func syncGitHubInfo(ctx *app.Context, branchesToRestack *[]string, handler Handl
 		for _, branchName := range syncResult.BranchesReparented {
 			*branchesToRestack = append(*branchesToRestack, branchName)
 			// Also add descendants
-			branch := eng.GetBranch(branchName)
+			branch := nav.GetBranch(branchName)
 			upstack := branch.GetRelativeStackUpstack()
 			for _, b := range upstack {
 				*branchesToRestack = append(*branchesToRestack, b.GetName())
@@ -96,14 +97,9 @@ func syncGitHubInfo(ctx *app.Context, branchesToRestack *[]string, handler Handl
 	return nil
 }
 
-// ParentsResult contains the result of synchronizing parents from GitHub
-type ParentsResult struct {
-	BranchesReparented []string
-}
-
 // ParentsFromGitHubBase synchronizes local parents with GitHub PR base branches
 func ParentsFromGitHubBase(ctx *app.Context) (*ParentsResult, error) {
-	eng := ctx.Engine
+	eng := ctx.Engine // Using Engine here because it needs multiple interfaces (Status, Navigator, Differ, Tracking)
 	splog := ctx.Splog
 	gctx := ctx.Context
 
@@ -146,8 +142,7 @@ func ParentsFromGitHubBase(ctx *app.Context) (*ParentsResult, error) {
 				if err == nil && isAncestor {
 					// If GitHub base is an ancestor, it's a "downgrade" in specificity.
 					// We only skip reparenting if the branch is EMPTY relative to its current parent.
-					// This handles the "stale PR" bug in diamond structures where 'submit'
-					// skips updating the PR base because the branch is empty.
+					// This handles the "submit" bug in diamond structures.
 					isEmpty, err := eng.IsBranchEmpty(gctx, branch.GetName())
 					if err == nil && isEmpty {
 						splog.Debug("GitHub PR for %s has base %s, which is an ancestor of local parent %s. "+

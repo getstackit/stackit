@@ -19,7 +19,7 @@ type splitByHunkEngine interface {
 	engine.BranchReader
 	engine.BranchWriter
 	engine.PRManager
-	engine.SplitManager
+	engine.StackRewriter
 }
 
 // splitByHunk splits a branch by interactively staging hunks.

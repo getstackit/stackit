@@ -111,8 +111,10 @@ func GetReviewersWithPrompt(reviewersFlag string) ([]string, []string, error) {
 }
 
 // PreparePRMetadata prepares PR metadata for a branch
-func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, eng engine.Engine, ctx *app.Context) (*PRMetadata, error) {
+func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Context) (*PRMetadata, error) {
 	prInfo, _ := branch.GetPrInfo()
+	nav := ctx.Navigator()
+	pr := ctx.PR()
 
 	metadata := &PRMetadata{
 		Title:   getStringValue(prInfo, "Title"),
@@ -139,7 +141,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, eng engine.En
 		}
 	}
 
-	scope := eng.GetScope(branch)
+	scope := nav.GetScope(branch)
 
 	// Handle Title
 	if shouldEditTitle || metadata.Title == "" {
@@ -187,7 +189,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, eng engine.En
 	}
 
 	// Save metadata to engine in case command fails
-	if err := eng.UpsertPrInfo(branch, engine.NewPrInfo(
+	if err := pr.UpsertPrInfo(branch, engine.NewPrInfo(
 		nil,
 		metadata.Title,
 		metadata.Body,

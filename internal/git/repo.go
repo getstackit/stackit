@@ -67,7 +67,7 @@ func (r *runner) listRefs(repo *Repository, prefix string) (map[string]string, e
 
 func (r *runner) GetRepoInfo(ctx context.Context) (string, string, error) {
 	// Get remote URL
-	url, _ := r.runGitCommandWithContextInternal(ctx, "config", "--get", "remote.origin.url")
+	url, _ := r.RunGitCommandWithContext(ctx, "config", "--get", "remote.origin.url")
 	// url will be empty if there's an error (e.g. remote.origin.url not set)
 	// This happens in many tests and is not a fatal error for most operations.
 	if url == "" {

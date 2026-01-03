@@ -16,7 +16,7 @@ const (
 )
 
 // CreatePRBodyFooter creates a PR body footer with dependency tree
-func CreatePRBodyFooter(branch string, eng engine.Engine) string {
+func CreatePRBodyFooter(branch string, eng engine.BranchReader) string {
 	terminalParentName := findTerminalParent(branch, eng)
 	terminalParent := eng.GetBranch(terminalParentName)
 
@@ -121,7 +121,7 @@ func findTerminalParent(currentBranch string, eng engine.BranchReader) string {
 }
 
 // buildLeaf builds a single leaf in the tree
-func buildLeaf(eng engine.Engine, branchName string, depth int, prBranch string) string {
+func buildLeaf(eng engine.BranchReader, branchName string, depth int, prBranch string) string {
 	branch := eng.GetBranch(branchName)
 	prInfo, err := branch.GetPrInfo()
 	if err != nil || prInfo == nil || prInfo.Number() == nil {

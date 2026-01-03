@@ -24,10 +24,16 @@ type StackNavigator interface {
 	SortBranchesTopologically(branches []Branch) []Branch
 	FindBranchForCommit(commitSHA string) (string, error)
 	ValidateOnBranch() (string, error)
+	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
+	GetScope(branch Branch) Scope
+	GetRemote() string
+	GetRepoInfo(ctx context.Context) (string, string, error)
+	IsInsideRepo() bool
 }
 
 // BranchStatus provides branch state information
 type BranchStatus interface {
+	GetBranch(branchName string) Branch
 	IsTrunk(branch Branch) bool
 	IsTracked(branch Branch) bool
 	IsUpToDate(branch Branch) bool
@@ -43,6 +49,8 @@ type BranchStatus interface {
 	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)
 	GetBranchRemoteDifference(branchName string) (string, error)
+	BranchMatchesRemote(branchName string) (bool, error)
+	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
 }
 
 // BranchInfo provides commit and diff metadata
@@ -55,6 +63,8 @@ type BranchInfo interface {
 	GetAllCommits(branch Branch, format CommitFormat) ([]string, error)
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
+	GetRevisionForName(branchName string) (string, error)
+	BatchGetRevisions(branchNames []string) (map[string]string, []error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
 }
@@ -63,6 +73,7 @@ type BranchInfo interface {
 type GitDiffer interface {
 	GetMergeBase(rev1, rev2 string) (string, error)
 	GetChangedFiles(ctx context.Context, base, head string) ([]string, error)
+	IsDiffEmpty(ctx context.Context, base, head string) (bool, error)
 	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
 	ShowCommits(ctx context.Context, base, head string, patch, stat bool) (string, error)
 	IsAncestor(ancestor, descendant string) (bool, error)
@@ -79,6 +90,8 @@ type WorkingTree interface {
 	ParseStagedHunks(ctx context.Context) ([]git.Hunk, error)
 	ListWorktrees(ctx context.Context) ([]string, error)
 	IsRebaseInProgress(ctx context.Context) bool
+	GetRebaseHead() (string, error)
+	HasUncommittedChanges(ctx context.Context) bool
 	CheckoutPaths(ctx context.Context, branch string, pathspecs []string) error
 	RemovePaths(ctx context.Context, pathspecs []string) error
 	StashList(ctx context.Context) (string, error)

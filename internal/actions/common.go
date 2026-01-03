@@ -198,7 +198,7 @@ func Pluralize(word string, count int) string {
 }
 
 // ShouldDeleteBranch checks if a branch should be deleted
-func ShouldDeleteBranch(ctx context.Context, branchName string, eng engine.Engine, force bool) (bool, string) {
+func ShouldDeleteBranch(ctx context.Context, branchName string, eng engine.BranchStatus, force bool) (bool, string) {
 	status, err := eng.GetDeletionStatus(ctx, branchName)
 	if err != nil {
 		return false, ""
@@ -216,8 +216,14 @@ func ShouldDeleteBranch(ctx context.Context, branchName string, eng engine.Engin
 	return false, ""
 }
 
+type deleteBranchCachedEngine interface {
+	engine.StackNavigator
+	engine.BranchInfo
+	engine.GitDiffer
+}
+
 // ShouldDeleteBranchCached checks if a branch should be deleted using pre-fetched metadata and revisions
-func ShouldDeleteBranchCached(ctx context.Context, branchName string, eng engine.Engine, force bool, meta *git.Meta, revisions map[string]string, mergedBranches map[string]bool) (bool, string) {
+func ShouldDeleteBranchCached(ctx context.Context, branchName string, eng deleteBranchCachedEngine, force bool, meta *git.Meta, revisions map[string]string, mergedBranches map[string]bool) (bool, string) {
 	// 1. Check PR info from cached metadata
 	if meta != nil && meta.PrInfo != nil {
 		const (
@@ -257,20 +263,20 @@ func ShouldDeleteBranchCached(ctx context.Context, branchName string, eng engine
 		parentName = parent.GetName()
 	}
 
-	// Use cached revisions to avoid eng.git.GetRevision calls
+	// Use cached revisions to avoid eng.Git().GetRevision calls
 	if rev, ok := revisions[parentName]; ok {
 		parentRev = rev
 	} else {
 		// Fallback
-		rev, err := eng.Git().GetRevision(parentName)
+		rev, err := eng.GetRevisionForName(parentName)
 		if err == nil {
 			parentRev = rev
 		}
 	}
 
 	if parentRev != "" {
-		empty, err := eng.Git().IsDiffEmpty(ctx, branchName, parentRev)
-		if err == nil && empty {
+		empty, err := eng.IsDiffEmpty(ctx, branchName, parentRev)
+		if err == nil && empty { // IsDiffEmpty returns true if no diff
 			// Only delete empty branches if they have a PR
 			if meta != nil && meta.PrInfo != nil && meta.PrInfo.Number != nil && *meta.PrInfo.Number != 0 {
 				return true, fmt.Sprintf("%s is empty", branchName)
@@ -344,7 +350,7 @@ func WithFlagValue(flag string, value string) SnapshotOption {
 
 // PrintConflictStatus displays conflict information and instructions to the user
 func PrintConflictStatus(ctx *app.Context, branchName string) error {
-	runner := ctx.Engine.Git()
+	reader := ctx.Reader()
 	splog := ctx.Splog
 
 	msg := style.ColorRed(fmt.Sprintf("Hit conflict restacking %s", branchName))
@@ -352,7 +358,7 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 	splog.Newline()
 
 	// Get unmerged files
-	unmergedFiles, err := runner.GetUnmergedFiles(ctx.Context)
+	unmergedFiles, err := reader.GetUnmergedFiles(ctx.Context)
 	if err == nil && len(unmergedFiles) > 0 {
 		splog.Info("%s", style.ColorYellow("Unmerged files:"))
 		for _, file := range unmergedFiles {
@@ -362,7 +368,7 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 	}
 
 	// Get rebase head
-	rebaseHead, err := runner.GetRebaseHead()
+	rebaseHead, err := reader.GetRebaseHead()
 	if err == nil && rebaseHead != "" {
 		rebaseHeadShort := rebaseHead
 		if len(rebaseHead) > 7 {

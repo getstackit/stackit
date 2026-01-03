@@ -32,12 +32,12 @@ const DefaultCommandTimeout = 5 * time.Minute
 var ErrStaleRemoteInfo = errors.New("stale info")
 
 func (r *runner) UpdateRefWithLog(ctx context.Context, refName, sha, message string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "update-ref", "-m", message, refName, sha)
+	_, err := r.RunGitCommandWithContext(ctx, "update-ref", "-m", message, refName, sha)
 	return err
 }
 
 func (r *runner) VerifyRef(ctx context.Context, refName string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "rev-parse", "--verify", refName)
+	_, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--verify", refName)
 	return err
 }
 
@@ -45,11 +45,11 @@ func (r *runner) RunGitCommandWithEnv(ctx context.Context, env []string, args ..
 	return r.runGitInternal(ctx, "", env, true, args...)
 }
 
-func (r *runner) runGitCommandWithContextInternal(ctx context.Context, args ...string) (string, error) {
+func (r *runner) RunGitCommandWithContext(ctx context.Context, args ...string) (string, error) {
 	return r.runGitInternal(ctx, "", nil, true, args...)
 }
 
-func (r *runner) runGitCommandRawWithContextInternal(ctx context.Context, args ...string) (string, error) {
+func (r *runner) RunGitCommandRawWithContext(ctx context.Context, args ...string) (string, error) {
 	return r.runGitInternal(ctx, "", nil, false, args...)
 }
 
@@ -213,6 +213,8 @@ type Runner interface {
 	MetadataOperations
 
 	// Raw command execution
+	RunGitCommandWithContext(ctx context.Context, args ...string) (string, error)
+	RunGitCommandRawWithContext(ctx context.Context, args ...string) (string, error)
 	RunGitCommandWithEnv(ctx context.Context, env []string, args ...string) (string, error)
 	RunGitCommandInteractive(args ...string) error
 	RunGHCommandWithContext(ctx context.Context, args ...string) (string, error)
@@ -338,7 +340,7 @@ func (r *runner) GetRepoRoot() string {
 }
 
 func (r *runner) GetUserName(ctx context.Context) (string, error) {
-	return r.runGitCommandWithContextInternal(ctx, "config", "user.name")
+	return r.RunGitCommandWithContext(ctx, "config", "user.name")
 }
 
 func (r *runner) EnsureMetadataRefspecConfigured() error {
@@ -363,7 +365,7 @@ func (r *runner) EnsureMetadataRefspecConfigured() error {
 func (r *runner) FindRemoteBranch(ctx context.Context, remote string) (string, error) {
 	// Get all branch configs that have this remote
 	// Format: "branch.<name>.remote <remote>"
-	output, err := r.runGitCommandWithContextInternal(ctx, "config", "--get-regexp", "^branch\\..*\\.remote$")
+	output, err := r.RunGitCommandWithContext(ctx, "config", "--get-regexp", "^branch\\..*\\.remote$")
 	if err != nil {
 		return "", nil //nolint:nilerr // git config returns 1 if no branches match
 	}
@@ -401,7 +403,7 @@ func (r *runner) GetRemoteRevision(branchName string) (string, error) {
 }
 
 func (r *runner) GetCurrentRevision(ctx context.Context) (string, error) {
-	return r.runGitCommandWithContextInternal(ctx, "rev-parse", "HEAD")
+	return r.RunGitCommandWithContext(ctx, "rev-parse", "HEAD")
 }
 
 func (r *runner) GetRevision(branchName string) (string, error) {
@@ -572,7 +574,7 @@ func (r *runner) GetCommitSHA(branchName string, offset int) (string, error) {
 func (r *runner) CheckoutPaths(ctx context.Context, branch string, paths []string) error {
 	args := []string{"checkout", branch, "--"}
 	args = append(args, paths...)
-	_, err := r.runGitCommandWithContextInternal(ctx, args...)
+	_, err := r.RunGitCommandWithContext(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to checkout paths from %s: %w", branch, err)
 	}
@@ -582,7 +584,7 @@ func (r *runner) CheckoutPaths(ctx context.Context, branch string, paths []strin
 func (r *runner) RemovePaths(ctx context.Context, paths []string) error {
 	args := []string{"rm"}
 	args = append(args, paths...)
-	_, err := r.runGitCommandWithContextInternal(ctx, args...)
+	_, err := r.RunGitCommandWithContext(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to remove paths: %w", err)
 	}
@@ -594,7 +596,7 @@ func (r *runner) GetReflog(ctx context.Context, count int, format string) (strin
 	if format != "" {
 		args = append(args, fmt.Sprintf("--format=%s", format))
 	}
-	return r.runGitCommandWithContextInternal(ctx, args...)
+	return r.RunGitCommandWithContext(ctx, args...)
 }
 
 func (r *runner) GetDiffNumstat(base, head string) (string, error) {
@@ -606,11 +608,11 @@ func (r *runner) GetCommitLog(sha, format string) (string, error) {
 }
 
 func (r *runner) GetStatusPorcelain(ctx context.Context) (string, error) {
-	return r.runGitCommandWithContextInternal(ctx, "status", "--porcelain")
+	return r.RunGitCommandWithContext(ctx, "status", "--porcelain")
 }
 
 func (r *runner) GetCommitTemplate(ctx context.Context) (string, error) {
-	status, err := r.runGitCommandWithContextInternal(ctx, "status")
+	status, err := r.RunGitCommandWithContext(ctx, "status")
 	if err != nil {
 		return "", fmt.Errorf("failed to get git status: %w", err)
 	}
@@ -631,7 +633,7 @@ func (r *runner) GetCommitTemplate(ctx context.Context) (string, error) {
 }
 
 func (r *runner) runGitCommandInternal(args ...string) (string, error) {
-	return r.runGitCommandWithContextInternal(context.Background(), args...)
+	return r.RunGitCommandWithContext(context.Background(), args...)
 }
 
 func (r *runner) GetRef(name string) (string, error) {
@@ -816,12 +818,12 @@ func (r *runner) ApplyPatch(ctx context.Context, patchFile string, threeWay bool
 		args = append(args, "--3way")
 	}
 	args = append(args, patchFile)
-	_, err := r.runGitCommandWithContextInternal(ctx, args...)
+	_, err := r.RunGitCommandWithContext(ctx, args...)
 	return err
 }
 
 func (r *runner) HasUncommittedChanges(ctx context.Context) bool {
-	output, err := r.runGitCommandWithContextInternal(ctx, "status", "--porcelain")
+	output, err := r.RunGitCommandWithContext(ctx, "status", "--porcelain")
 	if err != nil {
 		return false
 	}

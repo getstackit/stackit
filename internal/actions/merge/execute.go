@@ -21,7 +21,7 @@ type mergeExecuteEngine interface {
 	engine.BranchReader
 	engine.BranchWriter
 	engine.SyncManager
-	engine.SplitManager
+	engine.StackRewriter
 	engine.RemoteMetadataManager
 	Git() git.Runner
 }

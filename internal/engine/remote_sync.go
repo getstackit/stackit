@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -380,4 +381,21 @@ func (e *engineImpl) DeleteLocalMetadataHash(branchName string) error {
 
 	local.LocalOnlyHash = nil
 	return e.git.WriteMetadata(branchName, local)
+}
+
+// DeleteMetadata deletes the metadata ref for a branch
+func (e *engineImpl) DeleteMetadata(_ context.Context, branchName string) error {
+	return e.git.DeleteMetadata(branchName)
+}
+
+// FetchRemoteMetadata fetches metadata refs from origin
+func (e *engineImpl) FetchRemoteMetadata(ctx context.Context) error {
+	_, err := e.git.RunGitCommandWithContext(ctx, "fetch", "origin", "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")
+	return err
+}
+
+// ConfigureRemoteMetadataSync adds the metadata refspec to origin
+func (e *engineImpl) ConfigureRemoteMetadataSync(ctx context.Context) error {
+	_, err := e.git.RunGitCommandWithContext(ctx, "config", "--add", "remote.origin.fetch", "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")
+	return err
 }

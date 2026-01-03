@@ -195,7 +195,7 @@ func parseEditorContent(content string, originalBranches []string) ([]string, er
 }
 
 // updateParentRelationships updates the parent of each branch in the new order
-func updateParentRelationships(ctx context.Context, eng engine.Engine, newOrder []string) error {
+func updateParentRelationships(ctx context.Context, eng reorderUpdateEngine, newOrder []string) error {
 	// Set parent of first branch to trunk
 	trunk := eng.Trunk()
 	if len(newOrder) > 0 {
@@ -214,8 +214,13 @@ func updateParentRelationships(ctx context.Context, eng engine.Engine, newOrder 
 	return nil
 }
 
+type reorderUpdateEngine interface {
+	engine.StackNavigator
+	engine.BranchTracking
+}
+
 // findFirstAffectedBranch finds the first branch that moved or changed parent
-func findFirstAffectedBranch(eng engine.Engine, originalOrder, newOrder []string) string {
+func findFirstAffectedBranch(eng engine.StackNavigator, originalOrder, newOrder []string) string {
 	trunk := eng.Trunk().GetName()
 	// Create a map of original positions
 	originalPos := make(map[string]int)

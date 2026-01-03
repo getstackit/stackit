@@ -14,11 +14,14 @@ var (
 	sharedBinaryPath string
 	binaryOnce       sync.Once
 	binaryErr        error
+	binaryMu         sync.RWMutex
 )
 
 // SetSharedBinaryPath sets the shared binary path for tests.
 // This is called by TestMain in cli_test package.
 func SetSharedBinaryPath(path string) {
+	binaryMu.Lock()
+	defer binaryMu.Unlock()
 	sharedBinaryPath = path
 }
 
@@ -27,21 +30,34 @@ func SetSharedBinaryPath(path string) {
 // lazily on first access if it hasn't been set via SetSharedBinaryPath.
 func GetSharedBinaryPath() string {
 	binaryOnce.Do(func() {
-		if sharedBinaryPath == "" {
+		binaryMu.RLock()
+		path := sharedBinaryPath
+		binaryMu.RUnlock()
+
+		if path == "" {
 			// Build the binary lazily
-			path, err := buildBinary()
+			builtPath, err := buildBinary()
 			if err != nil {
+				binaryMu.Lock()
 				binaryErr = err
+				binaryMu.Unlock()
 				return
 			}
-			sharedBinaryPath = path
+			binaryMu.Lock()
+			sharedBinaryPath = builtPath
+			binaryMu.Unlock()
 		}
 	})
+
+	binaryMu.RLock()
+	defer binaryMu.RUnlock()
 	return sharedBinaryPath
 }
 
 // GetBinaryError returns any error that occurred during binary building.
 func GetBinaryError() error {
+	binaryMu.RLock()
+	defer binaryMu.RUnlock()
 	return binaryErr
 }
 

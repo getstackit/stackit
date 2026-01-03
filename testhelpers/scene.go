@@ -12,34 +12,48 @@ var (
 	minimalTemplateDir  string
 	minimalTemplateErr  error
 	minimalTemplateOnce sync.Once
+	minimalTemplateMu    sync.RWMutex
 
 	basicTemplateDir  string
 	basicTemplateErr  error
 	basicTemplateOnce sync.Once
+	basicTemplateMu    sync.RWMutex
 )
 
 func getMinimalTemplate(t *testing.T) string {
 	minimalTemplateOnce.Do(func() {
 		dir, err := os.MkdirTemp("", "stackit-test-minimal-template-*")
 		if err != nil {
+			minimalTemplateMu.Lock()
 			minimalTemplateErr = fmt.Errorf("failed to create minimal template dir: %w", err)
+			minimalTemplateMu.Unlock()
 			return
 		}
-		minimalTemplateDir = dir
 
 		// Initialize the minimal repo
-		_, err = NewGitRepo(minimalTemplateDir)
+		_, err = NewGitRepo(dir)
 		if err != nil {
+			minimalTemplateMu.Lock()
 			minimalTemplateErr = fmt.Errorf("failed to init minimal template repo: %w", err)
+			minimalTemplateMu.Unlock()
 			return
 		}
+
+		minimalTemplateMu.Lock()
+		minimalTemplateDir = dir
+		minimalTemplateMu.Unlock()
 	})
 
-	if minimalTemplateErr != nil {
-		t.Fatalf("Minimal template initialization failed: %v", minimalTemplateErr)
+	minimalTemplateMu.RLock()
+	err := minimalTemplateErr
+	dir := minimalTemplateDir
+	minimalTemplateMu.RUnlock()
+
+	if err != nil {
+		t.Fatalf("Minimal template initialization failed: %v", err)
 	}
 
-	return minimalTemplateDir
+	return dir
 }
 
 func getBasicTemplate(t *testing.T) string {
@@ -48,30 +62,44 @@ func getBasicTemplate(t *testing.T) string {
 
 		dir, err := os.MkdirTemp("", "stackit-test-basic-template-*")
 		if err != nil {
+			basicTemplateMu.Lock()
 			basicTemplateErr = fmt.Errorf("failed to create basic template dir: %w", err)
+			basicTemplateMu.Unlock()
 			return
 		}
-		basicTemplateDir = dir
 
 		// Clone from minimal
-		repo, err := NewGitRepoFromTemplate(basicTemplateDir, minimalDir)
+		repo, err := NewGitRepoFromTemplate(dir, minimalDir)
 		if err != nil {
+			basicTemplateMu.Lock()
 			basicTemplateErr = fmt.Errorf("failed to init basic template repo: %w", err)
+			basicTemplateMu.Unlock()
 			return
 		}
 
 		// Apply BasicSceneSetup
-		if err := BasicSceneSetup(&Scene{Repo: repo, Dir: basicTemplateDir}); err != nil {
+		if err := BasicSceneSetup(&Scene{Repo: repo, Dir: dir}); err != nil {
+			basicTemplateMu.Lock()
 			basicTemplateErr = fmt.Errorf("failed to run basic setup on template: %w", err)
+			basicTemplateMu.Unlock()
 			return
 		}
+
+		basicTemplateMu.Lock()
+		basicTemplateDir = dir
+		basicTemplateMu.Unlock()
 	})
 
-	if basicTemplateErr != nil {
-		t.Fatalf("Basic template initialization failed: %v", basicTemplateErr)
+	basicTemplateMu.RLock()
+	err := basicTemplateErr
+	dir := basicTemplateDir
+	basicTemplateMu.RUnlock()
+
+	if err != nil {
+		t.Fatalf("Basic template initialization failed: %v", err)
 	}
 
-	return basicTemplateDir
+	return dir
 }
 
 // Scene represents a test scene with a temporary directory and Git repository.

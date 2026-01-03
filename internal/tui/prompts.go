@@ -375,8 +375,7 @@ func (m selectionModel) Init() tea.Cmd {
 }
 
 func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch {
 		case key.Matches(msg, defaultSelectionKeys.Up):
 			if m.cursor > 0 {

@@ -41,7 +41,12 @@ type mergeExecuteEngine interface {
 // ExecuteOptions contains options for executing a merge plan
 type ExecuteOptions struct {
 	Plan                    *Plan
+	Strategy                Strategy
 	Force                   bool
+	DryRun                  bool
+	Confirm                 bool
+	Scope                   string
+	TargetBranch            string
 	Reporter                ProgressReporter           // Optional progress reporter
 	UndoStackDepth          int                        // Maximum undo stack depth (from config)
 	ConsolidationResultFunc func(*ConsolidationResult) // Callback for consolidation results
@@ -131,14 +136,9 @@ func Execute(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions) erro
 func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions) (err error) {
 	splog := ctx.Splog
 
-	// If using TUI, show a brief message about the worktree
-	if tui.IsTTY() {
-		splog.Debug("🔨 Creating temporary worktree for merge execution...")
-	} else {
-		splog.Info("🔨 Creating temporary worktree for merge execution...")
-	}
-
 	// Create temporary worktree via engine
+	// We use detached HEAD at the current revision to avoid "already used by worktree" errors
+	// and to ensure we don't accidentally move any main workspace branch refs.
 	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, "HEAD", "stackit-merge-*")
 	if err != nil {
 		return err
@@ -146,43 +146,12 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 
 	splog.Debug("📁 Worktree: %s", worktreePath)
 
-	trunk := eng.Trunk()
-
-	// Ensure we clean up on exit (unless there's a conflict)
+	// Ensure we clean up on exit
 	cleanupWorktree := true
 	defer func() {
 		if cleanupWorktree {
 			splog.Debug("Cleaning up worktree at %s", worktreePath)
 			cleanup()
-		}
-
-		// If the merge succeeded, refresh the main workspace state
-		if err == nil {
-			// After cleanup, we are back in the main workspace.
-			// Check if the branch we were on was merged/deleted, or if it just needs a worktree refresh.
-			currentBranchObj := eng.CurrentBranch()
-			if currentBranchObj != nil {
-				currentBranchName := currentBranchObj.GetName()
-				wasMerged := false
-				for _, b := range opts.Plan.BranchesToMerge {
-					if b.BranchName == currentBranchName {
-						wasMerged = true
-						break
-					}
-				}
-
-				if wasMerged {
-					splog.Newline()
-					splog.Info("💡 Branch %s was merged and deleted. Switching main workspace to %s...", currentBranchName, trunk.GetName())
-					if checkoutErr := eng.CheckoutBranch(ctx.Context, trunk); checkoutErr != nil {
-						splog.Debug("Failed to checkout trunk in main workspace: %v", checkoutErr)
-					}
-				} else {
-					// Refresh the worktree in case the branch ref was moved (e.g. restacked or trunk pulled)
-					// We use git reset --merge HEAD to safely refresh the worktree without losing local changes.
-					_ = eng.ResetMerge(ctx.Context, "HEAD")
-				}
-			}
 		}
 	}()
 
@@ -191,6 +160,10 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	if maxUndoDepth <= 0 {
 		maxUndoDepth = engine.DefaultMaxUndoStackDepth
 	}
+
+	// We need to know the trunk name for the new engine.
+	// Since we are currently in the main engine, we can get it from there.
+	trunk := eng.Trunk()
 
 	worktreeEng, err := engine.NewEngine(engine.Options{
 		RepoRoot:          worktreePath,
@@ -206,7 +179,93 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	worktreeCtx.Engine = worktreeEng
 	worktreeCtx.RepoRoot = worktreePath
 
-	// 5. Execute the plan in the worktree
+	// 5. Pre-flight operations in the worktree
+	// Populate remote SHAs so we can accurately check if branches match remote
+	if err := worktreeEng.PopulateRemoteShas(); err != nil {
+		splog.Debug("Failed to populate remote SHAs in worktree: %v", err)
+	}
+
+	// Pull trunk in the worktree to ensure we have latest changes
+	pullResult, err := worktreeEng.PullTrunk(ctx.Context)
+	if err != nil {
+		splog.Debug("Failed to pull trunk in worktree: %v", err)
+	} else if pullResult == engine.PullConflict {
+		return fmt.Errorf("trunk could not be fast-forwarded in worktree (conflict)")
+	}
+
+	// 6. Create or Validate the plan
+	plan := opts.Plan
+	var validation *PlanValidation
+
+	if plan == nil {
+		// Create plan in worktree
+		plan, validation, err = CreateMergePlan(ctx.Context, worktreeEng, splog, ctx.GitHubClient, CreatePlanOptions{
+			Strategy:     opts.Strategy,
+			Force:        opts.Force,
+			Scope:        opts.Scope,
+			TargetBranch: opts.TargetBranch,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Update opts with the new plan
+		opts.Plan = plan
+
+		// Display validation results
+		if !validation.Valid {
+			splog.Warn("Cannot proceed with merge due to validation errors:")
+			for _, errMsg := range validation.Errors {
+				splog.Warn("  ✗ %s", errMsg)
+			}
+			if !opts.DryRun && !opts.Force {
+				return fmt.Errorf("validation failed (use --force to override)")
+			}
+		}
+
+		if len(validation.Warnings) > 0 {
+			splog.Warn("Warnings:")
+			for _, warn := range validation.Warnings {
+				splog.Warn("  %s", warn)
+			}
+			splog.Newline()
+			if !opts.DryRun && !opts.Force {
+				return fmt.Errorf("merge blocked due to warnings (use --force to override)")
+			}
+		}
+
+		if len(validation.Infos) > 0 {
+			splog.Info("Information:")
+			for _, info := range validation.Infos {
+				splog.Info("  • %s", info)
+			}
+			splog.Newline()
+		}
+	}
+
+	// 7. Handle Dry Run or Confirmation
+	if opts.DryRun {
+		planText := FormatMergePlan(plan, validation)
+		splog.Page(planText)
+		splog.Info("Dry-run mode: plan displayed above. No changes were made.")
+		return nil
+	}
+
+	if opts.Confirm {
+		planText := FormatMergePlan(plan, validation)
+		splog.Page(planText)
+
+		confirmed, err := tui.PromptConfirm("Proceed with merge?", false)
+		if err != nil {
+			return fmt.Errorf("confirmation canceled: %w", err)
+		}
+		if !confirmed {
+			splog.Info("Merge canceled")
+			return nil
+		}
+	}
+
+	// 8. Execute the plan in the worktree
 	err = Execute(&worktreeCtx, worktreeEng, opts)
 
 	if err != nil {
@@ -214,26 +273,27 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 		if isConflictError(err) {
 			cleanupWorktree = false
 			splog.Warn("Conflict detected during merge execution in worktree.")
-			splog.Info("The worktree has been preserved for manual resolution:")
-			splog.Info("  Path: %s", worktreePath)
+			splog.Info("The worktree has been preserved for manual resolution.")
+			splog.Info("Your main workspace has been left untouched.")
 			splog.Newline()
 			splog.Info("To resolve the conflict and continue:")
 			splog.Info("  1. cd %s", worktreePath)
 			splog.Info("  2. Resolve the conflicts and git add the files.")
-			splog.Info("  3. Run 'stackit continue' to finish the restack.")
-			splog.Info("  4. Once finished, return to your main workspace and run 'stackit merge' again.")
+			splog.Info("  3. Run 'stackit continue' to finish the merge/restack.")
+			splog.Info("  4. Once finished, return to your main workspace.")
 			return err
 		}
 
 		// For other errors (like CI failure), we still want to give instructions
 		// but we can clean up the worktree.
 		splog.Warn("Merge execution failed in worktree.")
+		splog.Info("Your main workspace remains untouched.")
+		splog.Newline()
 		if isCIFailure(err) {
 			splog.Info("CI checks failed. Please:")
-			splog.Info("  1. Stay in your main workspace.")
-			splog.Info("  2. Fix the issues on the failing branch.")
-			splog.Info("  3. Run 'stackit modify' and 'stackit submit'.")
-			splog.Info("  4. Run 'stackit merge' again once CI passes.")
+			splog.Info("  1. Fix the issues in your main workspace.")
+			splog.Info("  2. Run 'stackit submit' to update PRs.")
+			splog.Info("  3. Run 'stackit merge' again once CI passes.")
 		} else {
 			splog.Info("To resolve:")
 			splog.Info("  1. Fix the underlying issue in your main workspace.")
@@ -825,7 +885,17 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 				// CI checks failed
 				return fmt.Errorf("CI checks failed on PR #%d (%s)", prNumber, step.BranchName)
 			}
-			if !status.Pending {
+
+			// If we expect checks but none have appeared yet, treat as pending
+			isReallyPending := status.Pending
+			if step.ExpectChecks && len(status.Checks) == 0 {
+				isReallyPending = true
+				if now.Sub(startTime) > 5*time.Second {
+					splog.Debug("No checks found yet for PR #%d, still waiting...", prNumber)
+				}
+			}
+
+			if !isReallyPending {
 				// All checks passed and none are pending
 				elapsed := time.Since(startTime)
 

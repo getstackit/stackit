@@ -71,11 +71,12 @@ type BranchMergeInfo struct {
 
 // PlanStep represents a single step in the merge plan
 type PlanStep struct {
-	StepType    StepType
-	BranchName  string
-	PRNumber    int
-	Description string        // Human-readable description for display
-	WaitTimeout time.Duration // Timeout for waiting steps (e.g., CI checks)
+	StepType     StepType
+	BranchName   string
+	PRNumber     int
+	Description  string        // Human-readable description for display
+	WaitTimeout  time.Duration // Timeout for waiting steps (e.g., CI checks)
+	ExpectChecks bool          // Whether we expect CI checks to be present
 }
 
 // Plan is the complete plan for a merge operation
@@ -397,11 +398,12 @@ func buildBottomUpSteps(branchesToMerge []BranchMergeInfo, upstackBranches []str
 
 	for i, branchInfo := range branchesToMerge {
 		steps = append(steps, PlanStep{
-			StepType:    StepWaitCI,
-			BranchName:  branchInfo.BranchName,
-			PRNumber:    branchInfo.PRNumber,
-			Description: fmt.Sprintf("Wait for CI checks on PR #%d (%s)", branchInfo.PRNumber, branchInfo.BranchName),
-			WaitTimeout: defaultTimeout,
+			StepType:     StepWaitCI,
+			BranchName:   branchInfo.BranchName,
+			PRNumber:     branchInfo.PRNumber,
+			Description:  fmt.Sprintf("Wait for CI checks on PR #%d (%s)", branchInfo.PRNumber, branchInfo.BranchName),
+			WaitTimeout:  defaultTimeout,
+			ExpectChecks: branchInfo.ChecksStatus != ChecksNone,
 		})
 
 		steps = append(steps, PlanStep{
@@ -474,11 +476,12 @@ func buildTopDownSteps(branchesToMerge []BranchMergeInfo, currentBranch string, 
 	})
 
 	steps = append(steps, PlanStep{
-		StepType:    StepWaitCI,
-		BranchName:  currentBranch,
-		PRNumber:    currentBranchInfo.PRNumber,
-		Description: fmt.Sprintf("Wait for CI checks on PR #%d (%s)", currentBranchInfo.PRNumber, currentBranch),
-		WaitTimeout: 10 * time.Minute,
+		StepType:     StepWaitCI,
+		BranchName:   currentBranch,
+		PRNumber:     currentBranchInfo.PRNumber,
+		Description:  fmt.Sprintf("Wait for CI checks on PR #%d (%s)", currentBranchInfo.PRNumber, currentBranch),
+		WaitTimeout:  10 * time.Minute,
+		ExpectChecks: currentBranchInfo.ChecksStatus != ChecksNone,
 	})
 
 	steps = append(steps, PlanStep{

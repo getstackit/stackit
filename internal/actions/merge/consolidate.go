@@ -207,6 +207,21 @@ func (c *ConsolidateMergeExecutor) waitForConsolidationCI(ctx context.Context, b
 	startTime := time.Now()
 	deadline := startTime.Add(timeout)
 
+	// Determine if we expect checks based on whether any constituent branches had them
+	expectChecks := false
+	for _, b := range c.plan.BranchesToMerge {
+		if b.ChecksStatus != ChecksNone {
+			expectChecks = true
+			break
+		}
+	}
+
+	if expectChecks {
+		splog.Info("   Waiting for CI checks to register...")
+		// Give GitHub a moment to register the PR and start CI
+		time.Sleep(5 * time.Second)
+	}
+
 	splog.Info("   Waiting for CI checks (timeout: %v)...", timeout)
 
 	for {
@@ -221,7 +236,15 @@ func (c *ConsolidateMergeExecutor) waitForConsolidationCI(ctx context.Context, b
 			if !status.Passing {
 				return fmt.Errorf("CI checks failed on consolidation PR #%d", prNumber)
 			}
-			if !status.Pending {
+
+			// If we expect checks but none have appeared yet, treat as pending
+			isReallyPending := status.Pending
+			if expectChecks && len(status.Checks) == 0 {
+				isReallyPending = true
+				splog.Debug("No checks found yet for PR #%d, still waiting...", prNumber)
+			}
+
+			if !isReallyPending {
 				elapsed := time.Since(startTime)
 				splog.Info("✅ CI checks passed on consolidation PR #%d after %v", prNumber, elapsed.Round(time.Second))
 				return nil

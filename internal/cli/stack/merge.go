@@ -2,16 +2,20 @@
 package stack
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"stackit.dev/stackit/internal/actions"
 	"stackit.dev/stackit/internal/actions/merge"
+	"stackit.dev/stackit/internal/actions/sync"
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/cli/common"
 	"stackit.dev/stackit/internal/config"
 	"stackit.dev/stackit/internal/engine"
+	sterrors "stackit.dev/stackit/internal/errors"
 	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/internal/tui/components/tree"
 	"stackit.dev/stackit/internal/tui/style"
@@ -24,7 +28,6 @@ func NewMergeCmd() *cobra.Command {
 		yes         bool
 		force       bool
 		strategy    string
-		worktree    bool
 		scope       string
 		consolidate bool
 	)
@@ -98,7 +101,7 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 					Confirm:        !yes && ctx.Interactive, // If --yes or --no-interactive is set, don't confirm
 					Strategy:       mergeStrategy,
 					Force:          force,
-					UseWorktree:    worktree,
+					Scope:          scope,
 					Plan:           plan,
 					UndoStackDepth: undoStackDepth,
 				})
@@ -110,7 +113,6 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation prompt")
 	cmd.Flags().BoolVar(&force, "force", false, "Skip validation checks (draft PRs, failing CI)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show merge plan without executing")
-	cmd.Flags().BoolVar(&worktree, "worktree", false, "Execute the merge and restack in a temporary worktree to avoid interfering with current branch")
 	cmd.Flags().StringVar(&scope, "scope", "", "Bulk-merge all branches within the specified scope")
 	cmd.Flags().BoolVarP(&consolidate, "consolidate", "c", false, "Use consolidate strategy (shortcut for --strategy=consolidate)")
 
@@ -126,14 +128,6 @@ func runInteractiveMergeWizard(ctx *app.Context, dryRun bool, forceFlag bool, sc
 func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag bool, scope string, targetBranchName string) error {
 	eng := ctx.Engine
 	splog := ctx.Splog
-
-	// Start pulling trunk in background to save time during analysis
-	trunkPullDone := make(chan struct{})
-	var trunkPullErr error
-	go func() {
-		_, trunkPullErr = eng.PullTrunk(ctx.Context)
-		close(trunkPullDone)
-	}()
 
 	splog.Info("🔍 Analyzing stack...")
 	splog.Newline()
@@ -363,27 +357,8 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 		return nil
 	}
 
-	// Wait for background trunk pull to complete
-	<-trunkPullDone
-	if trunkPullErr != nil {
-		splog.Warn("Background trunk pull failed: %v", trunkPullErr)
-		// We don't fail here because the executor will try again and handle it properly
-	}
-
 	// Determine worktree usage:
-	// - Consolidate strategy always uses worktree (no prompt)
-	// - Other strategies prompt the user
-	var useWorktree bool
-	if mergeStrategy == merge.StrategyConsolidate {
-		useWorktree = true
-		splog.Info("Using temporary worktree for consolidate merge...")
-	} else {
-		var err error
-		useWorktree, err = tui.PromptConfirm("Execute merge in a temporary worktree? (allows you to continue working here)", true)
-		if err != nil {
-			return fmt.Errorf("worktree confirmation canceled: %w", err)
-		}
-	}
+	// All merges now use worktrees by default.
 
 	// Get config values
 	cfg, _ := config.LoadConfig(ctx.RepoRoot)
@@ -395,7 +370,8 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 		Confirm:        false, // Already confirmed
 		Strategy:       mergeStrategy,
 		Force:          forceFlag,
-		UseWorktree:    useWorktree,
+		Scope:          scope,
+		TargetBranch:   targetBranchName,
 		Plan:           plan,
 		UndoStackDepth: undoStackDepth,
 	}
@@ -404,6 +380,46 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 		return fmt.Errorf("merge action failed: %w", err)
 	}
 
+	if !dryRun && ctx.Interactive {
+		return handlePostMergeFollowUp(ctx)
+	}
+
+	return nil
+}
+
+func handlePostMergeFollowUp(ctx *app.Context) error {
+	splog := ctx.Splog
+	splog.Newline()
+	splog.Info("🎉 Merge completed successfully in the temporary worktree!")
+	splog.Info("Your main workspace remains untouched.")
+
+	options := []tui.SelectOption{
+		{Label: "🔄 Switch to trunk and sync (" + ctx.Engine.Trunk().GetName() + ")", Value: "trunk-sync"},
+		{Label: "Done", Value: "done"},
+	}
+
+	selected, err := tui.PromptSelect("What would you like to do in your main workspace?", options, 0)
+	if err != nil {
+		if errors.Is(err, sterrors.ErrCanceled) {
+			return nil
+		}
+		return err
+	}
+	if selected == "done" {
+		return nil
+	}
+
+	if selected == "trunk-sync" {
+		if err := actions.CheckoutAction(ctx, actions.CheckoutOptions{
+			CheckoutTrunk: true,
+		}); err != nil {
+			return err
+		}
+		handler := NewSyncHandler(ctx.Splog)
+		return sync.Action(ctx, sync.Options{
+			Restack: true,
+		}, handler)
+	}
 	return nil
 }
 

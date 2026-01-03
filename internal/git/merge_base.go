@@ -9,12 +9,12 @@ func (r *runner) getMergeBase(repo *Repository, branch1, branch2 string) (string
 }
 
 func (r *runner) getMergeBaseByRef(repo *Repository, ref1Name, ref2Name string) (string, error) {
-	hash1, err := resolveRefHash(repo, ref1Name)
+	hash1, err := r.resolveRefHash(repo, ref1Name)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve ref1: %w", err)
 	}
 
-	hash2, err := resolveRefHash(repo, ref2Name)
+	hash2, err := r.resolveRefHash(repo, ref2Name)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve ref2: %w", err)
 	}
@@ -47,12 +47,12 @@ func (r *runner) getMergeBaseByRef(repo *Repository, ref1Name, ref2Name string) 
 }
 
 func (r *runner) isAncestor(repo *Repository, ancestor, descendant string) (bool, error) {
-	ancestorHash, err := resolveRefHash(repo, ancestor)
+	ancestorHash, err := r.resolveRefHash(repo, ancestor)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve ancestor ref: %w", err)
 	}
 
-	descendantHash, err := resolveRefHash(repo, descendant)
+	descendantHash, err := r.resolveRefHash(repo, descendant)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve descendant ref: %w", err)
 	}

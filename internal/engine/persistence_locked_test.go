@@ -68,7 +68,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 		prInfo, _ := branch.GetPrInfo()
 		parentBranch := eng.Trunk().GetName()
 		baseChanged := prInfo.Base() != parentBranch
-		remoteStatus, _ := eng.GetBranchRemoteStatus(branch.GetName())
+		remoteStatus, _ := eng.GetBranchRemoteStatus(branch)
 		branchChanged := !remoteStatus.Matches()
 		t.Logf("baseChanged: %v, branchChanged: %v, prInfo.IsLocked: %v, branch.IsLocked: %v", baseChanged, branchChanged, prInfo.IsLocked(), branch.IsLocked())
 	}

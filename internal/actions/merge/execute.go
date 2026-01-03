@@ -207,7 +207,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		case engine.RestackDone:
 			// Success - now push the rebased branch and update PR base
 			// Force push is required since we rebased
-			if err := eng.PushBranch(ctx.Context, step.BranchName, eng.GetRemote(), git.PushOptions{
+			if err := eng.PushBranch(ctx.Context, eng.GetBranch(step.BranchName), eng.GetRemote(), git.PushOptions{
 				Force:    true,
 				NoVerify: true, // Internal restack usually shouldn't run hooks
 			}); err != nil {
@@ -239,7 +239,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		case engine.RestackUnneeded:
 			// Already up to date, but still need to ensure PR base is correct
 			// Push in case local is ahead of remote
-			if err := eng.PushBranch(ctx.Context, step.BranchName, eng.GetRemote(), git.PushOptions{
+			if err := eng.PushBranch(ctx.Context, eng.GetBranch(step.BranchName), eng.GetRemote(), git.PushOptions{
 				Force:    true,
 				NoVerify: true,
 			}); err != nil {

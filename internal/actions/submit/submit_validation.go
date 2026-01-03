@@ -91,7 +91,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 			}
 		default:
 			// Parent is not in submission list
-			status, err := eng.GetBranchRemoteStatus(parentBranchName)
+			status, err := eng.GetBranchRemoteStatus(parentBranch)
 			if err != nil {
 				return fmt.Errorf("failed to check if parent branch matches remote: %w", err)
 			}

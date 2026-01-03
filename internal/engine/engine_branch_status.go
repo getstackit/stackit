@@ -122,7 +122,8 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 }
 
 // GetBranchRemoteStatus returns the relationship between a local branch and its remote
-func (e *engineImpl) GetBranchRemoteStatus(branchName string) (BranchRemoteStatus, error) {
+func (e *engineImpl) GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error) {
+	branchName := branch.GetName()
 	e.mu.RLock()
 	remoteSha, hasCachedRemote := e.remoteShas[branchName]
 	e.mu.RUnlock()
@@ -246,7 +247,8 @@ func (e *engineImpl) GetRemote() string {
 
 // GetBranchRemoteDifference returns a string describing the difference between local and remote branch
 func (e *engineImpl) GetBranchRemoteDifference(branchName string) (string, error) {
-	status, err := e.GetBranchRemoteStatus(branchName)
+	branch := e.GetBranch(branchName)
+	status, err := e.GetBranchRemoteStatus(branch)
 	if err != nil {
 		return "", err
 	}

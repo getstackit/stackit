@@ -47,8 +47,8 @@ func (e *engineImpl) InteractiveRebase(ctx context.Context, onto string) error {
 }
 
 // PushBranch pushes a branch to the remote
-func (e *engineImpl) PushBranch(ctx context.Context, branchName string, remote string, opts git.PushOptions) error {
-	return e.git.PushBranch(ctx, branchName, remote, opts)
+func (e *engineImpl) PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error {
+	return e.git.PushBranch(ctx, branch.GetName(), remote, opts)
 }
 
 // TrackBranch tracks a branch with a parent branch

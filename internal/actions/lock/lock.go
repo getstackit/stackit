@@ -40,7 +40,7 @@ func Action(ctx *app.Context, branchName string) error {
 			if b.IsTrunk() {
 				continue
 			}
-			status, err := eng.GetBranchRemoteStatus(b.GetName())
+			status, err := eng.GetBranchRemoteStatus(b)
 			if err == nil && !status.Matches() {
 				if status.Ahead() || status.MissingRemote() || status.Diverged() {
 					unpushedBranches = append(unpushedBranches, b.GetName())

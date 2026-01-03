@@ -96,7 +96,7 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 				}
 
 				// Run merge action
-				return merge.Action(ctx, merge.Options{
+				opts := merge.Options{
 					DryRun:         dryRun,
 					Confirm:        !yes && ctx.Interactive, // If --yes or --no-interactive is set, don't confirm
 					Strategy:       mergeStrategy,
@@ -104,7 +104,43 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 					Scope:          scope,
 					Plan:           plan,
 					UndoStackDepth: undoStackDepth,
-				})
+					Handler:        NewMergeHandler(ctx),
+				}
+
+				if opts.Confirm {
+					// If we need confirmation, we need a plan first
+					if opts.Plan == nil {
+						p, validation, err := merge.CreateMergePlan(ctx.Context, ctx.Engine, ctx.Splog, ctx.GitHubClient, merge.CreatePlanOptions{
+							Strategy: opts.Strategy,
+							Force:    opts.Force,
+							Scope:    opts.Scope,
+						})
+						if err != nil {
+							return err
+						}
+						opts.Plan = p
+
+						// Show plan and confirm
+						planText := merge.FormatMergePlan(p, validation)
+						ctx.Splog.Page(planText)
+
+						if !validation.Valid && !opts.Force {
+							return fmt.Errorf("validation failed (use --force to override)")
+						}
+
+						confirmed, err := tui.PromptConfirm("Proceed with merge?", false)
+						if err != nil {
+							return fmt.Errorf("confirmation canceled: %w", err)
+						}
+						if !confirmed {
+							ctx.Splog.Info("Merge canceled")
+							return nil
+						}
+						opts.Confirm = false // Already confirmed
+					}
+				}
+
+				return merge.Action(ctx, opts)
 			})
 		},
 	}
@@ -374,6 +410,7 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 		TargetBranch:   targetBranchName,
 		Plan:           plan,
 		UndoStackDepth: undoStackDepth,
+		Handler:        NewMergeHandler(ctx),
 	}
 
 	if err := merge.Action(ctx, mergeOpts); err != nil {

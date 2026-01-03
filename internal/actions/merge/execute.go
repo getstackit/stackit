@@ -18,15 +18,6 @@ const (
 	prStateOpen = "OPEN"
 )
 
-// ProgressReporter is an interface for reporting merge progress
-type ProgressReporter interface {
-	StepStarted(stepIndex int, description string)
-	StepCompleted(stepIndex int)
-	StepFailed(stepIndex int, err error)
-	StepWaiting(stepIndex int, elapsed, timeout time.Duration, checks []github.CheckDetail)
-	SetEstimatedDuration(duration time.Duration)
-}
-
 // mergeExecuteEngine is a minimal interface needed for executing a merge plan
 type mergeExecuteEngine interface {
 	engine.PRManager
@@ -38,6 +29,30 @@ type mergeExecuteEngine interface {
 	Git() git.Runner
 }
 
+// NullHandler is a no-op handler for testing or when output is not needed
+type NullHandler struct{}
+
+// Start implements Handler.
+func (h *NullHandler) Start(_ *Plan) {}
+
+// StepStarted implements Handler.
+func (h *NullHandler) StepStarted(_ int, _ string) {}
+
+// StepCompleted implements Handler.
+func (h *NullHandler) StepCompleted(_ int) {}
+
+// StepFailed implements Handler.
+func (h *NullHandler) StepFailed(_ int, _ error) {}
+
+// StepWaiting implements Handler.
+func (h *NullHandler) StepWaiting(_ int, _, _ time.Duration, _ []github.CheckDetail) {}
+
+// SetEstimatedDuration implements Handler.
+func (h *NullHandler) SetEstimatedDuration(_ time.Duration) {}
+
+// Complete implements Handler.
+func (h *NullHandler) Complete(_ *ConsolidationResult) {}
+
 // ExecuteOptions contains options for executing a merge plan
 type ExecuteOptions struct {
 	Plan                    *Plan
@@ -47,7 +62,7 @@ type ExecuteOptions struct {
 	Confirm                 bool
 	Scope                   string
 	TargetBranch            string
-	Reporter                ProgressReporter           // Optional progress reporter
+	Handler                 Handler                    // Optional progress handler
 	UndoStackDepth          int                        // Maximum undo stack depth (from config)
 	ConsolidationResultFunc func(*ConsolidationResult) // Callback for consolidation results
 }
@@ -58,78 +73,37 @@ func Execute(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions) erro
 	githubClient := ctx.GitHubClient
 	splog := ctx.Splog
 
-	// Calculate initial estimate if possible
-	var initialEstimate time.Duration
-	if githubClient != nil {
-		initialEstimate = calculateBaselineEstimate(ctx.Context, plan, githubClient, splog)
+	// Use null handler if none provided
+	if opts.Handler == nil {
+		opts.Handler = &NullHandler{}
 	}
 
-	// If no reporter provided and we're in a TTY, use TUI
-	if opts.Reporter == nil && tui.IsTTY() {
-		reporter := tui.NewChannelMergeProgressReporter()
+	opts.Handler.Start(plan)
 
-		// Calculate groups for the TUI
-		groups := calculateGroups(plan)
-
-		// Extract step descriptions
-		stepDescriptions := make([]string, len(plan.Steps))
-		for i, step := range plan.Steps {
-			stepDescriptions[i] = step.Description
+	// Calculate initial estimate if possible
+	if githubClient != nil {
+		initialEstimate := calculateBaselineEstimate(ctx.Context, plan, githubClient, splog)
+		if initialEstimate > 0 {
+			opts.Handler.SetEstimatedDuration(initialEstimate)
 		}
+	}
 
-		// Suppress splog output during TUI execution to prevent console interference
-		splog.SetQuiet(true)
-		defer splog.SetQuiet(false) // Ensure we restore logging even if there's an error
-
-		// Start TUI in a goroutine
-		done := make(chan bool, 1)
-		tuiErr := make(chan error, 1)
-		go func() {
-			err := tui.RunMergeTUI(groups, stepDescriptions, reporter.Updates(), done)
-			if err != nil {
-				tuiErr <- err
-			}
-		}()
-
-		// Update opts to use the reporter
-		opts.Reporter = reporter
-
-		// Set up callback to collect consolidation results
-		var consolidationResult *ConsolidationResult
+	// Set up callback to collect consolidation results if not already set
+	var consolidationResult *ConsolidationResult
+	if opts.ConsolidationResultFunc == nil {
 		opts.ConsolidationResultFunc = func(result *ConsolidationResult) {
 			consolidationResult = result
 		}
-
-		if initialEstimate > 0 {
-			reporter.SetEstimatedDuration(initialEstimate)
-		}
-
-		// Execute plan (this will send updates to the reporter)
-		err := executeSteps(ctx, eng, opts)
-
-		// Close reporter to signal TUI to finish
-		reporter.Close()
-
-		// Wait for TUI to finish or error
-		select {
-		case <-done:
-			// TUI finished normally
-		case err := <-tuiErr:
-			if err != nil {
-				splog.Debug("TUI error: %v", err)
-			}
-		}
-
-		// Display consolidation result if available
-		if consolidationResult != nil {
-			splog.Info("✅ Created consolidation PR #%d: %s", consolidationResult.PRNumber, consolidationResult.PRURL)
-		}
-
-		return err
 	}
 
-	// Execute without TUI
-	return executeSteps(ctx, eng, opts)
+	// Execute plan (this will send updates to the handler)
+	err := executeSteps(ctx, eng, opts)
+
+	if err == nil {
+		opts.Handler.Complete(consolidationResult)
+	}
+
+	return err
 }
 
 // ExecuteInWorktree executes the merge plan in a temporary worktree
@@ -195,11 +169,10 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 
 	// 6. Create or Validate the plan
 	plan := opts.Plan
-	var validation *PlanValidation
-
 	if plan == nil {
 		// Create plan in worktree
-		plan, validation, err = CreateMergePlan(ctx.Context, worktreeEng, splog, ctx.GitHubClient, CreatePlanOptions{
+		var err error
+		plan, _, err = CreateMergePlan(ctx.Context, worktreeEng, splog, ctx.GitHubClient, CreatePlanOptions{
 			Strategy:     opts.Strategy,
 			Force:        opts.Force,
 			Scope:        opts.Scope,
@@ -211,58 +184,6 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 
 		// Update opts with the new plan
 		opts.Plan = plan
-
-		// Display validation results
-		if !validation.Valid {
-			splog.Warn("Cannot proceed with merge due to validation errors:")
-			for _, errMsg := range validation.Errors {
-				splog.Warn("  ✗ %s", errMsg)
-			}
-			if !opts.DryRun && !opts.Force {
-				return fmt.Errorf("validation failed (use --force to override)")
-			}
-		}
-
-		if len(validation.Warnings) > 0 {
-			splog.Warn("Warnings:")
-			for _, warn := range validation.Warnings {
-				splog.Warn("  %s", warn)
-			}
-			splog.Newline()
-			if !opts.DryRun && !opts.Force {
-				return fmt.Errorf("merge blocked due to warnings (use --force to override)")
-			}
-		}
-
-		if len(validation.Infos) > 0 {
-			splog.Info("Information:")
-			for _, info := range validation.Infos {
-				splog.Info("  • %s", info)
-			}
-			splog.Newline()
-		}
-	}
-
-	// 7. Handle Dry Run or Confirmation
-	if opts.DryRun {
-		planText := FormatMergePlan(plan, validation)
-		splog.Page(planText)
-		splog.Info("Dry-run mode: plan displayed above. No changes were made.")
-		return nil
-	}
-
-	if opts.Confirm {
-		planText := FormatMergePlan(plan, validation)
-		splog.Page(planText)
-
-		confirmed, err := tui.PromptConfirm("Proceed with merge?", false)
-		if err != nil {
-			return fmt.Errorf("confirmation canceled: %w", err)
-		}
-		if !confirmed {
-			splog.Info("Merge canceled")
-			return nil
-		}
 	}
 
 	// 8. Execute the plan in the worktree
@@ -360,85 +281,20 @@ func isCIFailure(err error) bool {
 	return strings.Contains(errStr, "CI checks failed") || strings.Contains(errStr, "failing CI checks") || strings.Contains(errStr, "pending CI checks")
 }
 
-func calculateGroups(plan *Plan) []tui.MergeGroup {
-	var groups []tui.MergeGroup
-	assigned := make(map[int]bool)
-
-	// 1. Create groups for each branch being merged
-	for _, branchInfo := range plan.BranchesToMerge {
-		var indices []int
-		for i, step := range plan.Steps {
-			if step.BranchName == branchInfo.BranchName {
-				indices = append(indices, i)
-				assigned[i] = true
-			}
-		}
-		if len(indices) > 0 {
-			groups = append(groups, tui.MergeGroup{
-				Label:       fmt.Sprintf("PR #%d (%s)", branchInfo.PRNumber, branchInfo.BranchName),
-				StepIndices: indices,
-			})
-		}
-	}
-
-	// 2. Create group for upstack branches
-	if len(plan.UpstackBranches) > 0 {
-		var indices []int
-		for i, step := range plan.Steps {
-			if assigned[i] {
-				continue
-			}
-			for _, ub := range plan.UpstackBranches {
-				if step.BranchName == ub {
-					indices = append(indices, i)
-					assigned[i] = true
-					break
-				}
-			}
-		}
-		if len(indices) > 0 {
-			groups = append(groups, tui.MergeGroup{
-				Label:       "Restack upstack branches",
-				StepIndices: indices,
-			})
-		}
-	}
-
-	// 3. Remaining steps (like PullTrunk)
-	for i := 0; i < len(plan.Steps); i++ {
-		if assigned[i] {
-			continue
-		}
-
-		label := plan.Steps[i].Description
-		if plan.Steps[i].StepType == StepPullTrunk {
-			label = "Sync trunk"
-		}
-
-		groups = append(groups, tui.MergeGroup{
-			Label:       label,
-			StepIndices: []int{i},
-		})
-		assigned[i] = true
-	}
-
-	return groups
-}
-
 // executeSteps executes the merge plan steps
 func executeSteps(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions) error {
 	plan := opts.Plan
 
 	for i, step := range plan.Steps {
 		// Report step started
-		if opts.Reporter != nil {
-			opts.Reporter.StepStarted(i, step.Description)
+		if opts.Handler != nil {
+			opts.Handler.StepStarted(i, step.Description)
 		}
 
 		// 1. Re-validate preconditions for this step
 		if err := validateStepPreconditions(ctx.Context, step, eng, ctx.GitHubClient, opts); err != nil {
-			if opts.Reporter != nil {
-				opts.Reporter.StepFailed(i, err)
+			if opts.Handler != nil {
+				opts.Handler.StepFailed(i, err)
 			}
 			return fmt.Errorf("step %d (%s) failed precondition: %w", i+1, step.Description, err)
 		}
@@ -446,20 +302,15 @@ func executeSteps(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions)
 		// 2. Execute the step (with progress reporting for wait steps)
 		if err := executeStepWithProgress(ctx, step, i, eng, opts); err != nil {
 			ctx.Splog.Debug("Step %d (%s) failed: %v", i+1, step.Description, err)
-			if opts.Reporter != nil {
-				opts.Reporter.StepFailed(i, err)
+			if opts.Handler != nil {
+				opts.Handler.StepFailed(i, err)
 			}
 			return fmt.Errorf("step %d (%s) failed: %w", i+1, step.Description, err)
 		}
 
 		// 3. Report step completed
-		if opts.Reporter != nil {
-			opts.Reporter.StepCompleted(i)
-		}
-
-		// 4. Log progress (if no reporter, use simple logging)
-		if opts.Reporter == nil {
-			ctx.Splog.Info("✓ %s", step.Description)
+		if opts.Handler != nil {
+			opts.Handler.StepCompleted(i)
 		}
 	}
 
@@ -819,11 +670,6 @@ func executeConsolidation(ctx *app.Context, eng mergeExecuteEngine, opts Execute
 		return nil, err
 	}
 
-	// In non-TUI mode, display the result immediately
-	if opts.Reporter == nil {
-		ctx.Splog.Info("✅ Created consolidation PR #%d: %s", result.PRNumber, result.PRURL)
-	}
-
 	return result, nil
 }
 
@@ -858,10 +704,6 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 		prNumber = *prInfo.Number()
 	}
 
-	if opts.Reporter == nil {
-		splog.Info("Waiting for CI checks on PR #%d (%s)...", prNumber, step.BranchName)
-	}
-
 	for {
 		// Check if we've exceeded the timeout
 		if time.Now().After(deadline) {
@@ -871,9 +713,9 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 		// Report progress periodically
 		now := time.Now()
 		status, err := githubClient.GetPRChecksStatus(ctx.Context, step.BranchName)
-		if err == nil && status != nil && opts.Reporter != nil && now.Sub(lastProgressReport) >= progressInterval {
+		if err == nil && status != nil && opts.Handler != nil && now.Sub(lastProgressReport) >= progressInterval {
 			elapsed := now.Sub(startTime)
-			opts.Reporter.StepWaiting(stepIndex, elapsed, timeout, status.Checks)
+			opts.Handler.StepWaiting(stepIndex, elapsed, timeout, status.Checks)
 			lastProgressReport = now
 		}
 
@@ -897,10 +739,7 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 
 			if !isReallyPending {
 				// All checks passed and none are pending
-				elapsed := time.Since(startTime)
-
-				// If we don't have an estimate yet, this successful PR can be our baseline
-				if opts.Reporter != nil {
+				if opts.Handler != nil {
 					var maxDuration time.Duration
 					for _, check := range status.Checks {
 						if !check.FinishedAt.IsZero() && !check.StartedAt.IsZero() {
@@ -911,13 +750,10 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 						}
 					}
 					if maxDuration > 0 {
-						opts.Reporter.SetEstimatedDuration(maxDuration)
+						opts.Handler.SetEstimatedDuration(maxDuration)
 					}
 				}
 
-				if opts.Reporter == nil {
-					splog.Info("CI checks passed on PR #%d (%s) after %v", prNumber, step.BranchName, elapsed.Round(time.Second))
-				}
 				return nil
 			}
 		}

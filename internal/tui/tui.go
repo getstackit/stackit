@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"stackit.dev/stackit/internal/tui/components/submit"
 	"stackit.dev/stackit/internal/tui/style"
@@ -275,4 +276,7 @@ func IsTTY() bool {
 // Re-export from utils for backward compatibility.
 func SetInteractive(interactive bool) {
 	utils.SetInteractive(interactive)
+	if !interactive {
+		lipgloss.SetColorProfile(termenv.Ascii)
+	}
 }

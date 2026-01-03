@@ -1,6 +1,7 @@
 package stack_test
 
 import (
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,14 +25,26 @@ func TestForeachCommand(t *testing.T) {
 			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
 				return err
 			}
-			return s.Repo.RunCliCommand([]string{"create", "branch1", "-m", "branch1 change"})
+			return runCliCommand(binaryPath, s.Dir, "create", "branch1", "-m", "branch1 change")
 		})
 
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "touch", "touched"})
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "foreach", "echo", "hi")
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.NoError(t, err, "foreach command failed: %s", output)
-		require.Contains(t, output, "Running on branch branch1", "should mention branch1")
-		require.FileExists(t, scene.Dir+"/touched", "file should be created")
+		expected := testhelpers.NormalizeOutput(`
+Running on branch branch1 (current)...
+hi
+✓ Command succeeded on branch branch1 (current)
+
+Summary:
+  ✓ branch1 (current)
+    hi
+
+All branches completed successfully (1 total)
+`)
+
+		require.Equal(t, expected, normalized)
+		require.FileExists(t, scene.Dir+"/.git/HEAD", "git should still be valid")
 	})
 
 	t.Run("foreach on multiple branches (upstack)", func(t *testing.T) {
@@ -42,7 +55,7 @@ func TestForeachCommand(t *testing.T) {
 			}
 			// branch1 -> branch2 -> branch3
 			for _, b := range []string{"branch1", "branch2", "branch3"} {
-				if err := s.Repo.RunCliCommand([]string{"create", b, "-m", b + " change"}); err != nil {
+				if err := runCliCommand(binaryPath, s.Dir, "create", b, "-m", b+" change"); err != nil {
 					return err
 				}
 			}
@@ -50,13 +63,34 @@ func TestForeachCommand(t *testing.T) {
 			return s.Repo.CheckoutBranch("branch1")
 		})
 
-		// Test that STACKIT_BRANCH is exported
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "echo", "branch is $STACKIT_BRANCH"})
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "foreach", "echo", "branch is $STACKIT_BRANCH")
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.NoError(t, err, "foreach command failed: %s", output)
-		require.Contains(t, output, "branch is branch1")
-		require.Contains(t, output, "branch is branch2")
-		require.Contains(t, output, "branch is branch3")
+		expected := testhelpers.NormalizeOutput(`
+Running on branch branch1 (current)...
+branch is branch1
+✓ Command succeeded on branch branch1 (current)
+
+Running on branch branch2...
+branch is branch2
+✓ Command succeeded on branch branch2
+
+Running on branch branch3...
+branch is branch3
+✓ Command succeeded on branch branch3
+
+Summary:
+  ✓ branch1 (current)
+    branch is branch1
+  ✓ branch2
+    branch is branch2
+  ✓ branch3
+    branch is branch3
+
+All branches completed successfully (3 total)
+`)
+
+		require.Equal(t, expected, normalized)
 	})
 
 	t.Run("foreach --stack", func(t *testing.T) {
@@ -67,7 +101,7 @@ func TestForeachCommand(t *testing.T) {
 			}
 			// branch1 -> branch2 -> branch3
 			for _, b := range []string{"branch1", "branch2", "branch3"} {
-				if err := s.Repo.RunCliCommand([]string{"create", b, "-m", b + " change"}); err != nil {
+				if err := runCliCommand(binaryPath, s.Dir, "create", b, "-m", b+" change"); err != nil {
 					return err
 				}
 			}
@@ -75,13 +109,34 @@ func TestForeachCommand(t *testing.T) {
 			return s.Repo.CheckoutBranch("branch2")
 		})
 
-		// --stack should run on branch1, branch2, branch3
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "--stack", "echo", "hello"})
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "foreach", "--stack", "echo", "hello")
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.NoError(t, err, "foreach command failed: %s", output)
-		require.Contains(t, output, "Running on branch branch1")
-		require.Contains(t, output, "Running on branch branch2")
-		require.Contains(t, output, "Running on branch branch3")
+		expected := testhelpers.NormalizeOutput(`
+Running on branch branch1...
+hello
+✓ Command succeeded on branch branch1
+
+Running on branch branch2 (current)...
+hello
+✓ Command succeeded on branch branch2 (current)
+
+Running on branch branch3...
+hello
+✓ Command succeeded on branch branch3
+
+Summary:
+  ✓ branch1
+    hello
+  ✓ branch2 (current)
+    hello
+  ✓ branch3
+    hello
+
+All branches completed successfully (3 total)
+`)
+
+		require.Equal(t, expected, normalized)
 	})
 
 	t.Run("foreach --downstack", func(t *testing.T) {
@@ -92,7 +147,7 @@ func TestForeachCommand(t *testing.T) {
 			}
 			// branch1 -> branch2 -> branch3
 			for _, b := range []string{"branch1", "branch2", "branch3"} {
-				if err := s.Repo.RunCliCommand([]string{"create", b, "-m", b + " change"}); err != nil {
+				if err := runCliCommand(binaryPath, s.Dir, "create", b, "-m", b+" change"); err != nil {
 					return err
 				}
 			}
@@ -100,13 +155,28 @@ func TestForeachCommand(t *testing.T) {
 			return s.Repo.CheckoutBranch("branch2")
 		})
 
-		// --downstack should run on branch1, branch2
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "--downstack", "echo", "hello"})
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "foreach", "--downstack", "echo", "hello")
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.NoError(t, err, "foreach command failed: %s", output)
-		require.Contains(t, output, "Running on branch branch1")
-		require.Contains(t, output, "Running on branch branch2")
-		require.NotContains(t, output, "Running on branch branch3")
+		expected := testhelpers.NormalizeOutput(`
+Running on branch branch1...
+hello
+✓ Command succeeded on branch branch1
+
+Running on branch branch2 (current)...
+hello
+✓ Command succeeded on branch branch2 (current)
+
+Summary:
+  ✓ branch1
+    hello
+  ✓ branch2 (current)
+    hello
+
+All branches completed successfully (2 total)
+`)
+
+		require.Equal(t, expected, normalized)
 	})
 
 	t.Run("foreach fail-fast", func(t *testing.T) {
@@ -117,19 +187,32 @@ func TestForeachCommand(t *testing.T) {
 			}
 			// branch1 -> branch2
 			for _, b := range []string{"branch1", "branch2"} {
-				if err := s.Repo.RunCliCommand([]string{"create", b, "-m", b + " change"}); err != nil {
+				if err := runCliCommand(binaryPath, s.Dir, "create", b, "-m", b+" change"); err != nil {
 					return err
 				}
 			}
 			return s.Repo.CheckoutBranch("branch1")
 		})
 
-		// fail-fast (default) should stop at branch1
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "false"})
+		cmd := exec.Command(binaryPath, "foreach", "false")
+		cmd.Dir = scene.Dir
+		outputBytes, _ := cmd.CombinedOutput()
+		output := string(outputBytes)
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.Error(t, err)
-		require.Contains(t, output, "Running on branch branch1")
-		require.NotContains(t, output, "Running on branch branch2")
+		expected := testhelpers.NormalizeOutput(`
+Running on branch branch1 (current)...
+❌ ✗ Command failed on branch branch1 (current): exit status 1
+
+Summary:
+❌   ✗ branch1 (current)
+❌     Error: exit status 1
+
+Completed: 0 succeeded, 1 failed
+Error: command failed on branch branch1: exit status 1
+`)
+
+		require.Equal(t, expected, normalized)
 	})
 
 	t.Run("foreach --no-fail-fast", func(t *testing.T) {
@@ -140,20 +223,33 @@ func TestForeachCommand(t *testing.T) {
 			}
 			// branch1 -> branch2
 			for _, b := range []string{"branch1", "branch2"} {
-				if err := s.Repo.RunCliCommand([]string{"create", b, "-m", b + " change"}); err != nil {
+				if err := runCliCommand(binaryPath, s.Dir, "create", b, "-m", b+" change"); err != nil {
 					return err
 				}
 			}
 			return s.Repo.CheckoutBranch("branch1")
 		})
 
-		// --no-fail-fast should continue to branch2 even if branch1 fails
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "--no-fail-fast", "false"})
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "foreach", "--no-fail-fast", "false")
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.NoError(t, err) // Returns nil if --no-fail-fast is used
+		expected := testhelpers.NormalizeOutput(`
+Running on branch branch1 (current)...
+❌ ✗ Command failed on branch branch1 (current): exit status 1
 
-		require.Contains(t, output, "Running on branch branch1")
-		require.Contains(t, output, "Running on branch branch2")
+Running on branch branch2...
+❌ ✗ Command failed on branch branch2: exit status 1
+
+Summary:
+❌   ✗ branch1 (current)
+❌     Error: exit status 1
+❌   ✗ branch2
+❌     Error: exit status 1
+
+Completed: 0 succeeded, 2 failed
+`)
+
+		require.Equal(t, expected, normalized)
 	})
 
 	t.Run("foreach on trunk", func(t *testing.T) {
@@ -163,19 +259,29 @@ func TestForeachCommand(t *testing.T) {
 				return err
 			}
 			// branch1
-			if err := s.Repo.RunCliCommand([]string{"create", "branch1", "-m", "branch1 change"}); err != nil {
+			if err := runCliCommand(binaryPath, s.Dir, "create", "branch1", "-m", "branch1 change"); err != nil {
 				return err
 			}
 			// Checkout main
 			return s.Repo.CheckoutBranch("main")
 		})
 
-		// Running on main should skip main and run on descendants if upstack (default)
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "echo", "hello"})
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "foreach", "echo", "hello")
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.NoError(t, err, "foreach command failed: %s", output)
-		require.NotContains(t, output, "Running on branch main")
-		require.Contains(t, output, "Running on branch branch1")
+		expected := testhelpers.NormalizeOutput(`
+Running on branch branch1...
+hello
+✓ Command succeeded on branch branch1
+
+Summary:
+  ✓ branch1
+    hello
+
+All branches completed successfully (1 total)
+`)
+
+		require.Equal(t, expected, normalized)
 	})
 
 	t.Run("foreach --parallel", func(t *testing.T) {
@@ -186,21 +292,31 @@ func TestForeachCommand(t *testing.T) {
 			}
 			// branch1 -> branch2 -> branch3
 			for _, b := range []string{"branch1", "branch2", "branch3"} {
-				if err := s.Repo.RunCliCommand([]string{"create", b, "-m", b + " change"}); err != nil {
+				if err := runCliCommand(binaryPath, s.Dir, "create", b, "-m", b+" change"); err != nil {
 					return err
 				}
 			}
 			return s.Repo.CheckoutBranch("branch1")
 		})
 
-		// --parallel should run on all 3 branches
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "--parallel", "echo", "hi"})
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "foreach", "--parallel", "echo", "hi")
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.NoError(t, err, "foreach --parallel command failed: %s", output)
-		require.Contains(t, output, "Branch: branch1")
-		require.Contains(t, output, "Branch: branch2")
-		require.Contains(t, output, "Branch: branch3")
-		require.Contains(t, output, "hi")
+		// In parallel mode, we show dots for progress.
+		expected := testhelpers.NormalizeOutput(`
+Executing in parallel: ...
+Summary:
+  ✓ branch1 (current)
+    hi
+  ✓ branch2
+    hi
+  ✓ branch3
+    hi
+
+All branches completed successfully (3 total)
+`)
+
+		require.Equal(t, expected, normalized)
 	})
 
 	t.Run("foreach --parallel --jobs", func(t *testing.T) {
@@ -210,17 +326,42 @@ func TestForeachCommand(t *testing.T) {
 				return err
 			}
 			for _, b := range []string{"branch1", "branch2"} {
-				if err := s.Repo.RunCliCommand([]string{"create", b, "-m", b + " change"}); err != nil {
+				if err := runCliCommand(binaryPath, s.Dir, "create", b, "-m", b+" change"); err != nil {
 					return err
 				}
 			}
 			return s.Repo.CheckoutBranch("branch1")
 		})
 
-		output, err := scene.Repo.RunCliCommandAndGetOutput([]string{"foreach", "--parallel", "--jobs", "1", "echo", "hi"})
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "foreach", "--parallel", "--jobs", "1", "echo", "hi")
+		normalized := testhelpers.NormalizeOutput(output)
 
-		require.NoError(t, err, "foreach --parallel --jobs command failed: %s", output)
-		require.Contains(t, output, "Branch: branch1")
-		require.Contains(t, output, "Branch: branch2")
+		expected := testhelpers.NormalizeOutput(`
+Executing in parallel: ..
+Summary:
+  ✓ branch1 (current)
+    hi
+  ✓ branch2
+    hi
+
+All branches completed successfully (2 total)
+`)
+
+		require.Equal(t, expected, normalized)
 	})
+}
+
+func runCliCommand(binaryPath, dir string, args ...string) error {
+	cmd := exec.Command(binaryPath, args...)
+	cmd.Dir = dir
+	return cmd.Run()
+}
+
+func runCliCommandSuccess(t *testing.T, binaryPath, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command(binaryPath, args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "command failed: %s %v\nOutput: %s", binaryPath, args, string(output))
+	return string(output)
 }

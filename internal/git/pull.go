@@ -23,20 +23,20 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 	var currentRev string
 	if err != nil {
 		currentBranch = ""
-		currentRev, _ = r.runGitCommandWithContextInternal(ctx, "rev-parse", "HEAD")
+		currentRev, _ = r.RunGitCommandWithContext(ctx, "rev-parse", "HEAD")
 	}
 
 	// Get the SHA of the local branch
-	oldRev, err := r.runGitCommandWithContextInternal(ctx, "rev-parse", branchName)
+	oldRev, err := r.RunGitCommandWithContext(ctx, "rev-parse", branchName)
 	if err != nil {
 		return PullConflict, fmt.Errorf("failed to get local revision for %s: %w", branchName, err)
 	}
 
 	// Fetch first
-	_, _ = r.runGitCommandWithContextInternal(ctx, "fetch", remote, branchName)
+	_, _ = r.RunGitCommandWithContext(ctx, "fetch", remote, branchName)
 
 	// Get the SHA of the remote branch
-	remoteRev, err := r.runGitCommandWithContextInternal(ctx, "rev-parse", fmt.Sprintf("%s/%s", remote, branchName))
+	remoteRev, err := r.RunGitCommandWithContext(ctx, "rev-parse", fmt.Sprintf("%s/%s", remote, branchName))
 	if err != nil {
 		// If we can't get remote rev, we can't pull, but it might just be because there's no remote
 		return PullUnneeded, nil //nolint:nilerr
@@ -53,7 +53,7 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 	}
 
 	// Update the local branch reference to the remote commit (fast-forward)
-	_, err = r.runGitCommandWithContextInternal(ctx, "update-ref", "refs/heads/"+branchName, remoteRev)
+	_, err = r.RunGitCommandWithContext(ctx, "update-ref", "refs/heads/"+branchName, remoteRev)
 	if err != nil {
 		return PullConflict, fmt.Errorf("failed to update local branch %s to %s: %w", branchName, remoteRev, err)
 	}
@@ -69,7 +69,7 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 }
 
 func (r *runner) Fetch(ctx context.Context, remote, branch string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "fetch", remote, branch)
+	_, err := r.RunGitCommandWithContext(ctx, "fetch", remote, branch)
 	if err != nil {
 		return fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 	}

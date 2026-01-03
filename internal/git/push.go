@@ -28,7 +28,7 @@ func (r *runner) PushBranch(ctx context.Context, branchName, remote string, opts
 
 	args = append(args, branchName)
 
-	_, err := r.runGitCommandWithContextInternal(ctx, args...)
+	_, err := r.RunGitCommandWithContext(ctx, args...)
 	if err != nil {
 		if strings.Contains(err.Error(), "stale info") || strings.Contains(err.Error(), "forced update") {
 			return fmt.Errorf("%w: force-with-lease push of %s failed due to external changes to the remote branch", ErrStaleRemoteInfo, branchName)

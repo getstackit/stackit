@@ -16,12 +16,12 @@ type SquashOptions struct {
 
 // SquashAction performs the squash operation
 func SquashAction(ctx *app.Context, opts SquashOptions) error {
-	eng := ctx.Engine
+	eng := ctx.History()
 	splog := ctx.Splog
 	context := ctx.Context
 
 	// Get current branch
-	currentBranch := eng.CurrentBranch()
+	currentBranch := ctx.Navigator().CurrentBranch()
 	if currentBranch == nil {
 		return fmt.Errorf("not on a branch")
 	}
@@ -35,7 +35,7 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 		WithFlagValue("-m", opts.Message),
 		WithFlag(opts.NoEdit, "--no-edit"),
 	)
-	if err := eng.TakeSnapshot(snapshotOpts); err != nil {
+	if err := ctx.Undo().TakeSnapshot(snapshotOpts); err != nil {
 		// Log but don't fail - snapshot is best effort
 		splog.Debug("Failed to take snapshot: %v", err)
 	}

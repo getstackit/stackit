@@ -14,6 +14,9 @@ import (
 
 // ValidateBranchesToSubmit validates that branches are ready to submit
 func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
+	pr := ctx.PR()
+	nav := ctx.Navigator()
+
 	// Sync PR info first
 	repoOwner, repoName, err := ctx.Git().GetRepoInfo(ctx.Context)
 	if err != nil {
@@ -21,7 +24,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 	}
 	if repoOwner != "" && repoName != "" {
 		if err := github.SyncPrInfo(ctx.Context, ctx.Git(), branches, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) {
-			branch := ctx.Engine.GetBranch(name)
+			branch := nav.GetBranch(name)
 
 			// Preserve existing locked status
 			lockReason := engine.LockReasonNone
@@ -29,7 +32,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 				lockReason = existing.LockReason()
 			}
 
-			_ = ctx.Engine.UpsertPrInfo(branch, engine.NewPrInfo(
+			_ = pr.UpsertPrInfo(branch, engine.NewPrInfo(
 				&prInfo.Number,
 				prInfo.Title,
 				prInfo.Body,
@@ -45,17 +48,17 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 	}
 
 	// Validate base revisions
-	if err := validateBaseRevisions(branches, ctx.Engine, ctx); err != nil {
+	if err := validateBaseRevisions(branches, ctx.Status(), ctx); err != nil {
 		return err
 	}
 
 	// Validate no empty branches
-	if err := validateNoEmptyBranches(ctx.Context, branches, ctx.Engine, ctx); err != nil {
+	if err := validateNoEmptyBranches(ctx.Context, branches, ctx.Navigator(), ctx); err != nil {
 		return err
 	}
 
 	// Validate no merged/closed branches
-	if err := validateNoMergedOrClosedBranches(branches, ctx.Engine, ctx); err != nil {
+	if err := validateNoMergedOrClosedBranches(branches, ctx.Status(), ctx); err != nil {
 		return err
 	}
 
@@ -66,7 +69,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 // 1. Its parent is trunk, OR
 // 2. We are submitting its parent before it and it does not need restacking, OR
 // 3. Its base matches the existing head for its parent's PR
-func validateBaseRevisions(branches []string, eng engine.Engine, ctx *app.Context) error {
+func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.Context) error {
 	validatedBranches := make(map[string]bool)
 
 	for _, branchName := range branches {
@@ -105,10 +108,10 @@ func validateBaseRevisions(branches []string, eng engine.Engine, ctx *app.Contex
 }
 
 // validateNoEmptyBranches checks for empty branches and prompts user if found
-func validateNoEmptyBranches(ctx context.Context, branches []string, eng engine.BranchReader, runtimeCtx *app.Context) error {
+func validateNoEmptyBranches(ctx context.Context, branches []string, nav engine.StackNavigator, runtimeCtx *app.Context) error {
 	emptyBranches := []string{}
 	for _, branchName := range branches {
-		isEmpty, err := eng.IsBranchEmpty(ctx, branchName)
+		isEmpty, err := nav.IsBranchEmpty(ctx, branchName)
 		if err != nil {
 			continue
 		}
@@ -136,11 +139,11 @@ func validateNoEmptyBranches(ctx context.Context, branches []string, eng engine.
 }
 
 // validateNoMergedOrClosedBranches checks for merged/closed PRs and prompts user if found
-func validateNoMergedOrClosedBranches(branches []string, eng engine.Engine, ctx *app.Context) error {
+func validateNoMergedOrClosedBranches(branches []string, eng engine.BranchStatus, ctx *app.Context) error {
 	mergedOrClosedBranches := []string{}
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := eng.GetPrInfo(branch)
 		if err != nil {
 			continue
 		}
@@ -160,13 +163,12 @@ func validateNoMergedOrClosedBranches(branches []string, eng engine.Engine, ctx 
 		ctx.Splog.Warn("▸ %s", b)
 	}
 
-	// For now, we'll clear PR info and allow creating new PRs (non-interactive mode)
+	// For now, we'll allow creating new PRs (non-interactive mode)
 	// In interactive mode, we would prompt here
 	// TODO: Add interactive prompt when needed
+	// Note: We used to clear PR info here, but mutation requires mutation interface.
 	for _, branchName := range mergedOrClosedBranches {
-		// Clear PR info to allow creating new PR
-		branch := eng.GetBranch(branchName)
-		_ = eng.UpsertPrInfo(branch, engine.NewPrInfo(nil, "", "", "", "", "", false))
+		ctx.Splog.Debug("Branch %s already has a merged/closed PR", branchName)
 	}
 
 	return nil

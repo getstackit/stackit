@@ -25,7 +25,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Engine, s.Context)
+		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context)
 		require.NoError(t, err)
 		require.True(t, metadata.IsDraft, "PR should be created as draft when --draft flag is set")
 	})
@@ -39,7 +39,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Engine, s.Context)
+		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "PR should be created as non-draft when --publish flag is set")
 	})
@@ -53,7 +53,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Engine, s.Context)
+		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "PR should default to published (not draft) when no flag is specified")
 	})
@@ -75,7 +75,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch = s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Engine, s.Context)
+		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context)
 		require.NoError(t, err)
 		require.True(t, metadata.IsDraft, "PR should preserve existing draft status")
 
@@ -87,7 +87,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 			WithIsDraft(false))
 		require.NoError(t, err)
 
-		metadata, err = submit.PreparePRMetadata(branch, opts, s.Engine, s.Context)
+		metadata, err = submit.PreparePRMetadata(branch, opts, s.Context)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "PR should preserve existing non-draft status")
 	})
@@ -109,7 +109,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch = s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Engine, s.Context)
+		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context)
 		require.NoError(t, err)
 		require.True(t, metadata.IsDraft, "PR should be marked as draft when --draft flag is set, even if existing PR is not draft")
 	})
@@ -131,7 +131,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 		}
 
 		branch = s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Engine, s.Context)
+		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context)
 		require.NoError(t, err)
 		require.False(t, metadata.IsDraft, "PR should be marked as non-draft when --publish flag is set, even if existing PR is draft")
 	})
@@ -155,7 +155,7 @@ func TestPreparePRMetadata_NoEdit(t *testing.T) {
 		}
 
 		branch := s.Engine.GetBranch(branchName)
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Engine, s.Context)
+		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context)
 		require.NoError(t, err)
 		require.NotEmpty(t, metadata.Title, "Title should be set from commit subject")
 		require.Equal(t, "feat: test feature", metadata.Title)

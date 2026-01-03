@@ -16,7 +16,7 @@ func (r *runner) AddWorktree(ctx context.Context, path string, branch string, de
 		args = append(args, branch)
 	}
 
-	_, err := r.runGitCommandWithContextInternal(ctx, args...)
+	_, err := r.RunGitCommandWithContext(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to add worktree at %s: %w", path, err)
 	}
@@ -24,7 +24,7 @@ func (r *runner) AddWorktree(ctx context.Context, path string, branch string, de
 }
 
 func (r *runner) RemoveWorktree(ctx context.Context, path string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "worktree", "remove", "--force", path)
+	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", path)
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}
@@ -32,7 +32,7 @@ func (r *runner) RemoveWorktree(ctx context.Context, path string) error {
 }
 
 func (r *runner) ListWorktrees(ctx context.Context) ([]string, error) {
-	output, err := r.runGitCommandWithContextInternal(ctx, "worktree", "list", "--porcelain")
+	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}

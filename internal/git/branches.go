@@ -23,7 +23,7 @@ func (r *runner) GetAllBranchNames() ([]string, error) {
 }
 
 func (r *runner) CheckoutBranch(ctx context.Context, branchName string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "checkout", branchName)
+	_, err := r.RunGitCommandWithContext(ctx, "checkout", branchName)
 	if err != nil {
 		return fmt.Errorf("failed to checkout branch %s: %w", branchName, err)
 	}
@@ -31,12 +31,12 @@ func (r *runner) CheckoutBranch(ctx context.Context, branchName string) error {
 }
 
 func (r *runner) CheckoutBranchForce(ctx context.Context, branchName string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "checkout", "-f", branchName)
+	_, err := r.RunGitCommandWithContext(ctx, "checkout", "-f", branchName)
 	return err
 }
 
 func (r *runner) CreateAndCheckoutBranch(ctx context.Context, branchName string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "checkout", "-b", branchName)
+	_, err := r.RunGitCommandWithContext(ctx, "checkout", "-b", branchName)
 	if err != nil {
 		return fmt.Errorf("failed to create and checkout branch %s: %w", branchName, err)
 	}
@@ -44,7 +44,7 @@ func (r *runner) CreateAndCheckoutBranch(ctx context.Context, branchName string)
 }
 
 func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "branch", "-D", branchName)
+	_, err := r.RunGitCommandWithContext(ctx, "branch", "-D", branchName)
 	if err != nil {
 		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
 	}
@@ -52,7 +52,7 @@ func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
 }
 
 func (r *runner) RenameBranch(ctx context.Context, oldName, newName string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "branch", "-m", oldName, newName)
+	_, err := r.RunGitCommandWithContext(ctx, "branch", "-m", oldName, newName)
 	if err != nil {
 		return fmt.Errorf("failed to rename branch %s to %s: %w", oldName, newName, err)
 	}
@@ -60,7 +60,7 @@ func (r *runner) RenameBranch(ctx context.Context, oldName, newName string) erro
 }
 
 func (r *runner) CreateBranch(ctx context.Context, branchName, startPoint string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "branch", branchName, startPoint)
+	_, err := r.RunGitCommandWithContext(ctx, "branch", branchName, startPoint)
 	if err != nil {
 		return fmt.Errorf("failed to create branch %s from %s: %w", branchName, startPoint, err)
 	}
@@ -68,12 +68,12 @@ func (r *runner) CreateBranch(ctx context.Context, branchName, startPoint string
 }
 
 func (r *runner) CreateBranchForce(ctx context.Context, branchName, revision string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "branch", "-f", branchName, revision)
+	_, err := r.RunGitCommandWithContext(ctx, "branch", "-f", branchName, revision)
 	return err
 }
 
 func (r *runner) CheckoutDetached(ctx context.Context, revision string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "checkout", "--detach", revision)
+	_, err := r.RunGitCommandWithContext(ctx, "checkout", "--detach", revision)
 	if err != nil {
 		return fmt.Errorf("failed to checkout %s in detached state: %w", revision, err)
 	}
@@ -81,7 +81,7 @@ func (r *runner) CheckoutDetached(ctx context.Context, revision string) error {
 }
 
 func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision string) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "update-ref", "refs/heads/"+branchName, revision)
+	_, err := r.RunGitCommandWithContext(ctx, "update-ref", "refs/heads/"+branchName, revision)
 	if err != nil {
 		return fmt.Errorf("failed to update branch ref: %w", err)
 	}
@@ -89,7 +89,7 @@ func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision strin
 }
 
 func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
-	branch, err := r.runGitCommandWithContextInternal(ctx, "rev-parse", "--abbrev-ref", "HEAD")
+	branch, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--abbrev-ref", "HEAD")
 	if err == nil && branch != "HEAD" {
 		return branch, nil
 	}
@@ -97,7 +97,7 @@ func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
 }
 
 func (r *runner) GetMergedBranches(ctx context.Context, target string) (map[string]bool, error) {
-	out, err := r.runGitCommandWithContextInternal(ctx, "branch", "--merged", target)
+	out, err := r.RunGitCommandWithContext(ctx, "branch", "--merged", target)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get merged branches: %w", err)
 	}

@@ -20,13 +20,13 @@ const (
 func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RebaseResult, error) {
 	// Use detached HEAD to avoid "already used by worktree" errors
 	// We use branchName~0 to force a detached checkout of the branch tip
-	_, err := r.runGitCommandWithContextInternal(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
+	_, err := r.RunGitCommandWithContext(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
 	if err != nil {
 		if r.IsRebaseInProgress(ctx) {
 			return RebaseConflict, nil
 		}
 		// Abort rebase if it failed for other reasons
-		_, _ = r.runGitCommandWithContextInternal(ctx, "rebase", "--abort")
+		_, _ = r.RunGitCommandWithContext(ctx, "rebase", "--abort")
 
 		return RebaseConflict, err
 	}
@@ -68,7 +68,7 @@ func (r *runner) RebaseContinue(ctx context.Context) (RebaseResult, error) {
 }
 
 func (r *runner) RebaseAbort(ctx context.Context) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "rebase", "--abort")
+	_, err := r.RunGitCommandWithContext(ctx, "rebase", "--abort")
 	if err != nil {
 		return fmt.Errorf("rebase abort failed: %w", err)
 	}
@@ -101,7 +101,7 @@ func (r *runner) GetRebaseHead() (string, error) {
 }
 
 func (r *runner) IsRebaseInProgress(ctx context.Context) bool {
-	output, err := r.runGitCommandWithContextInternal(ctx, "rev-parse", "--git-dir")
+	output, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--git-dir")
 	if err != nil {
 		return false
 	}

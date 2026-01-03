@@ -461,6 +461,14 @@ func (d *demoGitRunner) RunGHCommandWithContext(_ context.Context, _ ...string) 
 	return "", nil
 }
 
+func (d *demoGitRunner) RunGitCommandWithContext(_ context.Context, _ ...string) (string, error) {
+	return "", nil
+}
+
+func (d *demoGitRunner) RunGitCommandRawWithContext(_ context.Context, _ ...string) (string, error) {
+	return "", nil
+}
+
 func (d *demoGitRunner) RunGitCommandInteractive(_ ...string) error {
 	return nil
 }

@@ -38,7 +38,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Check for uncommitted changes
-	if ctx.Git().HasUncommittedChanges(gctx) {
+	if ctx.Reader().HasUncommittedChanges(gctx) {
 		return fmt.Errorf("you have uncommitted changes. Please commit or stash them before syncing")
 	}
 
@@ -46,7 +46,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	totalOps := 1 // trunk sync
 	if opts.Restack {
 		// Estimate based on tracked branches
-		totalOps += len(eng.AllBranches())
+		totalOps += len(ctx.Navigator().AllBranches())
 	}
 	handler.Start(totalOps)
 
@@ -179,6 +179,11 @@ type Summary struct {
 	BranchesSkipped   int      // Number of branches skipped (due to conflicts)
 	ConflictBranches  []string // Names of branches that conflicted
 	UpToDate          bool     // Everything was already current
+}
+
+// ParentsResult contains the result of synchronizing parents from GitHub
+type ParentsResult struct {
+	BranchesReparented []string
 }
 
 // HasChanges returns true if any operations were performed

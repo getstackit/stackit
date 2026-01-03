@@ -10,10 +10,10 @@ import (
 
 // restackBranches handles restacking branches after sync operations
 func restackBranches(ctx *app.Context, branchesToRestack []string, handler Handler, summary *Summary) error {
-	eng := ctx.Engine
+	nav := ctx.Navigator()
 
 	// Add current branch stack to restack list
-	currentBranch := eng.CurrentBranch()
+	currentBranch := nav.CurrentBranch()
 	if currentBranch != nil {
 		if currentBranch.IsTracked() {
 			// Get full stack (up to trunk)
@@ -37,7 +37,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, handler Handl
 	for _, branchName := range branchesToRestack {
 		if !seen[branchName] {
 			seen[branchName] = true
-			branch := eng.GetBranch(branchName)
+			branch := nav.GetBranch(branchName)
 			// Only include branches that exist and are tracked
 			if branch.IsTracked() {
 				uniqueBranches = append(uniqueBranches, branch)
@@ -46,12 +46,12 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, handler Handl
 	}
 
 	// Sort branches topologically (parents before children) for correct restack order
-	sortedBranches := eng.SortBranchesTopologically(uniqueBranches)
+	sortedBranches := nav.SortBranchesTopologically(uniqueBranches)
 
 	// Restack branches with handler for progress
 	if len(sortedBranches) > 0 {
 		if err := actions.RestackBranchesWithHandler(ctx, sortedBranches, func(branchName string, result engine.RestackResult, newRev string, _ bool, lockReason engine.LockReason, frozen bool) {
-			prNumber := getPRNumber(eng, branchName)
+			prNumber := getPRNumber(ctx.Status(), branchName)
 
 			switch result {
 			case engine.RestackDone:
@@ -96,9 +96,9 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, handler Handl
 }
 
 // getPRNumber returns the PR number for a branch if it has one
-func getPRNumber(eng engine.Engine, branchName string) *int {
+func getPRNumber(eng engine.BranchStatus, branchName string) *int {
 	branch := eng.GetBranch(branchName)
-	prInfo, err := branch.GetPrInfo()
+	prInfo, err := eng.GetPrInfo(branch)
 	if err != nil || prInfo == nil {
 		return nil
 	}

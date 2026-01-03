@@ -23,16 +23,14 @@ import (
 // Thread-safe: All methods are safe for concurrent use
 type PRManager interface {
 	UpsertPrInfo(branch Branch, prInfo *PrInfo) error
+	BranchMatchesRemote(branchName string) (bool, error)
+	PopulateRemoteShas() error
+	PushBranch(ctx context.Context, branchName string, remote string, opts git.PushOptions) error
 }
 
 // SyncManager provides operations for syncing and restacking branches
 // Thread-safe: All methods are safe for concurrent use
 type SyncManager interface {
-	// Remote operations
-	BranchMatchesRemote(branchName string) (bool, error)
-	PopulateRemoteShas() error
-	PushBranch(ctx context.Context, branchName string, remote string, opts git.PushOptions) error
-
 	// Sync operations
 	PullTrunk(ctx context.Context) (PullResult, error)
 	ResetTrunkToRemote(ctx context.Context) error
@@ -41,15 +39,12 @@ type SyncManager interface {
 	Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RestackResult, error)
 }
 
-// SquashManager provides operations for squashing commits
+// StackRewriter provides operations for modifying commit history and branch structure
 // Thread-safe: All methods are safe for concurrent use
-type SquashManager interface {
+type StackRewriter interface {
+	// SquashCurrentBranch squashes commits on the current branch
 	SquashCurrentBranch(ctx context.Context, opts SquashOptions) error
-}
 
-// SplitManager provides operations for splitting branches
-// Thread-safe: All methods are safe for concurrent use
-type SplitManager interface {
 	// ApplySplitToCommits creates branches at specified commit points
 	ApplySplitToCommits(ctx context.Context, opts ApplySplitOptions) error
 
@@ -78,6 +73,9 @@ type RemoteMetadataManager interface {
 	HasLocalModifications(branch string) bool
 	FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)
 	DeleteLocalMetadataHash(branchName string) error
+	DeleteMetadata(ctx context.Context, branchName string) error
+	FetchRemoteMetadata(ctx context.Context) error
+	ConfigureRemoteMetadataSync(ctx context.Context) error
 }
 
 // ApplySplitOptions contains options for applying a split
@@ -113,7 +111,7 @@ type UndoManager interface {
 }
 
 // Engine is the core interface for branch state management
-// It composes BranchReader, BranchWriter, PRManager, SyncManager, SquashManager, SplitManager, and UndoManager
+// It composes BranchReader, BranchWriter, PRManager, SyncManager, HistoryRewriter, and UndoManager
 // for backward compatibility. New code should prefer using the smaller interfaces.
 // Thread-safe: All methods are safe for concurrent use
 type Engine interface {
@@ -121,8 +119,7 @@ type Engine interface {
 	BranchWriter
 	PRManager
 	SyncManager
-	SquashManager
-	SplitManager
+	StackRewriter
 	Absorber
 	UndoManager
 	RemoteMetadataManager

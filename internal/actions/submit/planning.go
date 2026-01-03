@@ -10,6 +10,7 @@ import (
 // prepareBranchesForSubmit prepares submission info for each branch, emitting events via handler
 func prepareBranchesForSubmit(ctx *app.Context, branches []engine.Branch, opts Options, currentBranch string, handler Handler) ([]Info, error) {
 	submissionInfos := make([]Info, 0, len(branches))
+	nav := ctx.Navigator()
 
 	for _, branch := range branches {
 		branchName := branch.GetName()
@@ -76,7 +77,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches []engine.Branch, opts O
 			ReviewersPrompt:   opts.Reviewers == "" && opts.Edit,
 		}
 
-		metadata, err := PreparePRMetadata(branch, metadataOpts, ctx.Engine, ctx)
+		metadata, err := PreparePRMetadata(branch, metadataOpts, ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to prepare metadata for %s: %w", branchName, err)
 		}
@@ -84,7 +85,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches []engine.Branch, opts O
 		// Get SHAs
 		headSHA, _ := branch.GetRevision()
 		parentBranchName := branch.GetParentPrecondition()
-		parentBranch := ctx.Engine.GetBranch(parentBranchName)
+		parentBranch := nav.GetBranch(parentBranchName)
 		baseSHA, _ := parentBranch.GetRevision()
 
 		submissionInfo := Info{
@@ -113,23 +114,25 @@ func prepareBranchesForSubmit(ctx *app.Context, branches []engine.Branch, opts O
 
 // getBranchesToSubmit returns the list of branches to submit based on options
 func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
+	nav := ctx.Navigator()
+
 	// Get branch scope
 	branchName := opts.Branch
 	if branchName == "" {
-		currentBranch := ctx.Engine.CurrentBranch()
+		currentBranch := nav.CurrentBranch()
 		if currentBranch == nil {
 			return nil, fmt.Errorf("not on a branch and no branch specified")
 		}
 		branchName = currentBranch.GetName()
 	}
 
-	branch := ctx.Engine.GetBranch(branchName)
+	branch := nav.GetBranch(branchName)
 	stackRange := opts.StackRange
 	// Default to downstack if StackRange is zero value (all fields false)
 	if !stackRange.RecursiveParents && !stackRange.IncludeCurrent && !stackRange.RecursiveChildren {
 		stackRange = StackRangeDownstack()
 	}
-	stackBranches := ctx.Engine.GetRelativeStack(branch, stackRange)
+	stackBranches := nav.GetRelativeStack(branch, stackRange)
 	allBranches := make([]string, len(stackBranches))
 	for i, b := range stackBranches {
 		allBranches[i] = b.GetName()
@@ -139,7 +142,7 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 	branches := []string{}
 	branchSet := make(map[string]bool)
 	for _, b := range allBranches {
-		branchObj := ctx.Engine.GetBranch(b)
+		branchObj := nav.GetBranch(b)
 		if !branchObj.IsTrunk() && !branchSet[b] {
 			branches = append(branches, b)
 			branchSet[b] = true

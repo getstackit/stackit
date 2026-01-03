@@ -13,17 +13,17 @@ import (
 
 // syncRemoteMetadata fetches and processes remote metadata
 func syncRemoteMetadata(ctx *app.Context, opts *Options) error {
-	eng := ctx.Engine
+	eng := ctx.RemoteMetadata()
 	splog := ctx.Splog
 
 	// Fetch remote metadata refs
-	if err := eng.Git().FetchMetadataRefs(); err != nil {
+	if err := eng.FetchRemoteMetadata(ctx.Context); err != nil {
 		// Non-fatal: remote may not have metadata yet
 		splog.Debug("No remote metadata to fetch: %v", err)
 	}
 
 	// Configure refspec so future git fetch commands also fetch metadata
-	if err := eng.Git().EnsureMetadataRefspecConfigured(); err != nil {
+	if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
 		splog.Debug("Failed to configure metadata refspec: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options) error {
 		if info.Action == engine.OrphanedActionDelete {
 			// No local changes - silently remove sync state or delete ref if branch is gone
 			if !info.ExistsLocally {
-				if err := eng.Git().DeleteMetadata(info.BranchName); err != nil {
+				if err := eng.DeleteMetadata(ctx.Context, info.BranchName); err != nil {
 					splog.Debug("Failed to delete orphaned metadata ref for %s: %v", info.BranchName, err)
 				}
 			} else if err := eng.DeleteLocalMetadataHash(info.BranchName); err != nil {
@@ -173,7 +173,7 @@ func printMetadataDiffs(diffs []*engine.MetadataDiff, splog interface{ Info(stri
 
 // promptAndResolveConflict prompts the user to accept or reject remote metadata
 func promptAndResolveConflict(ctx *app.Context, diff *engine.MetadataDiff) error {
-	eng := ctx.Engine
+	eng := ctx.RemoteMetadata()
 	splog := ctx.Splog
 
 	// Display field-level diff

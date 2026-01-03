@@ -24,7 +24,7 @@ func (r *runner) Merge(ctx context.Context, branchName string, opts MergeOptions
 	}
 	args = append(args, branchName)
 
-	_, err := r.runGitCommandWithContextInternal(ctx, args...)
+	_, err := r.RunGitCommandWithContext(ctx, args...)
 	if err != nil {
 		return fmt.Errorf("failed to merge %s: %w", branchName, err)
 	}
@@ -43,7 +43,7 @@ func (r *runner) IsMergeInProgress(_ context.Context) bool {
 }
 
 func (r *runner) MergeAbort(ctx context.Context) error {
-	_, err := r.runGitCommandWithContextInternal(ctx, "merge", "--abort")
+	_, err := r.RunGitCommandWithContext(ctx, "merge", "--abort")
 	if err != nil {
 		return fmt.Errorf("merge abort failed: %w", err)
 	}
@@ -51,7 +51,7 @@ func (r *runner) MergeAbort(ctx context.Context) error {
 }
 
 func (r *runner) GetUnmergedFiles(ctx context.Context) ([]string, error) {
-	output, err := r.runGitCommandWithContextInternal(ctx, "diff", "--name-only", "--diff-filter=U")
+	output, err := r.RunGitCommandWithContext(ctx, "diff", "--name-only", "--diff-filter=U")
 	if err != nil {
 		return []string{}, nil //nolint:nilerr
 	}
@@ -82,7 +82,7 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 	// Use git cherry to check if all commits are in trunk
 	// git cherry <trunk> <branch> returns commits that are in branch but not in trunk
 	// If empty, all commits are merged
-	cherryOutput, err := r.runGitCommandWithContextInternal(ctx, "cherry", target, branchName)
+	cherryOutput, err := r.RunGitCommandWithContext(ctx, "cherry", target, branchName)
 	if err != nil {
 		// If cherry fails, fall back to simpler check
 		// Check if branch tip is reachable from trunk

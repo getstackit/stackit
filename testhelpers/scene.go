@@ -12,12 +12,12 @@ var (
 	minimalTemplateDir  string
 	minimalTemplateErr  error
 	minimalTemplateOnce sync.Once
-	minimalTemplateMu    sync.RWMutex
+	minimalTemplateMu   sync.RWMutex
 
 	basicTemplateDir  string
 	basicTemplateErr  error
 	basicTemplateOnce sync.Once
-	basicTemplateMu    sync.RWMutex
+	basicTemplateMu   sync.RWMutex
 )
 
 func getMinimalTemplate(t *testing.T) string {

@@ -15,6 +15,7 @@ package engine
 
 import (
 	"context"
+	"io"
 
 	"stackit.dev/stackit/internal/git"
 )
@@ -99,6 +100,10 @@ type Options struct {
 
 	// Git is the git runner to use. If nil, a default real git runner is used.
 	Git git.Runner
+
+	// Writer is the output writer for warnings and informational messages.
+	// If nil, os.Stderr is used.
+	Writer io.Writer
 }
 
 // UndoManager provides operations for undo/redo functionality

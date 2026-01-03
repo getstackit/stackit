@@ -18,19 +18,21 @@ func GetGlobalOptions(cmd *cobra.Command) app.GlobalOptions {
 	verify, _ := cmd.Flags().GetBool("verify")
 	debug, _ := cmd.Flags().GetBool("debug")
 	quiet, _ := cmd.Flags().GetBool("quiet")
+	cwd, _ := cmd.Flags().GetString("cwd")
 
 	return app.GlobalOptions{
 		Interactive: interactive,
 		Verify:      verify,
 		Debug:       debug,
 		Quiet:       quiet,
+		Cwd:         cwd,
 	}
 }
 
 // Run is a helper that provides a runtime context to a command's execution function
 func Run(cmd *cobra.Command, fn func(ctx *app.Context) error) error {
 	opts := GetGlobalOptions(cmd)
-	ctx, err := app.GetContext(cmd.Context(), opts)
+	ctx, err := app.GetContextWithWriter(cmd.Context(), opts, cmd.OutOrStdout())
 	if err != nil {
 		return err
 	}
@@ -55,8 +57,12 @@ func HandleCommandError(err error) error {
 
 // CompleteBranches is a helper for cobra.ValidArgsFunction and RegisterFlagCompletionFunc
 // that returns all branch names in the repository.
-func CompleteBranches(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+func CompleteBranches(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	cwd, _ := cmd.Flags().GetString("cwd")
 	runner := git.NewRunner()
+	if cwd != "" {
+		runner = git.NewRunnerWithPath(cwd)
+	}
 	branches, err := runner.GetAllBranchNames()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError

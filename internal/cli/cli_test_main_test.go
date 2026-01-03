@@ -4,21 +4,15 @@ import (
 	"testing"
 
 	"stackit.dev/stackit/testhelpers"
+	"stackit.dev/stackit/testhelpers/inprocess"
+	"stackit.dev/stackit/testhelpers/scenario"
 )
 
 func TestMain(m *testing.M) {
-	testhelpers.TestMain(m, nil)
-}
-
-// getStackitBinary returns the path to the pre-built stackit binary.
-func getStackitBinary(t *testing.T) string {
-	t.Helper()
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
+	scenario.GlobalInProcessRunner = func(workDir string, args ...string) (string, error) {
+		runner := inprocess.NewInProcessCLI()
+		res := runner.Run(workDir, args...)
+		return res.Output, res.Err
 	}
-	return binaryPath
+	testhelpers.TestMain(m, nil)
 }

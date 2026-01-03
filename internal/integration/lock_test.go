@@ -6,11 +6,10 @@ import (
 
 func TestLockUnlockCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("lock and unlock workflow", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create branches with actual commits
 		sh.Run("create feature-a").WriteFile("a", "A").Git("add a").Git("commit -m 'A'")
@@ -46,7 +45,7 @@ func TestLockUnlockCommand(t *testing.T) {
 
 	t.Run("command-specific lock enforcement", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		sh.Run("create feature-a").WriteFile("a", "A").Git("add a").Git("commit -m 'A'")
 		sh.Run("lock feature-a")

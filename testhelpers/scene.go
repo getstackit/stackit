@@ -104,22 +104,23 @@ func NewScene(t *testing.T, setup SceneSetup) *Scene {
 
 	// Initialize Git repository
 	var repo *GitRepo
+	var templateDir string
 	isBasicSetup := false
 
 	// Determine which template to use
 	if setup != nil && fmt.Sprintf("%p", setup) == fmt.Sprintf("%p", BasicSceneSetup) {
-		templateDir := getBasicTemplate(t)
+		templateDir = getBasicTemplate(t)
 		repo, err = NewGitRepoFromTemplate(tmpDir, templateDir)
 		isBasicSetup = true
 	} else {
 		// All other cases (nil or custom setup) start with a minimal repo
-		templateDir := getMinimalTemplate(t)
+		templateDir = getMinimalTemplate(t)
 		repo, err = NewGitRepoFromTemplate(tmpDir, templateDir)
 	}
 
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to create Git repo: %v", err)
+		t.Fatalf("Failed to create Git repo (template: %s, target: %s): %v", templateDir, tmpDir, err)
 	}
 
 	scene := &Scene{
@@ -176,21 +177,22 @@ func NewSceneParallel(t *testing.T, setup SceneSetup) *Scene {
 
 	// Initialize Git repository
 	var repo *GitRepo
+	var templateDir string
 	isBasicSetup := false
 
 	if setup != nil && fmt.Sprintf("%p", setup) == fmt.Sprintf("%p", BasicSceneSetup) {
-		templateDir := getBasicTemplate(t)
+		templateDir = getBasicTemplate(t)
 		repo, err = NewGitRepoFromTemplate(tmpDir, templateDir)
 		isBasicSetup = true
 	} else {
 		// All other cases (nil or custom setup) start with a minimal repo
-		templateDir := getMinimalTemplate(t)
+		templateDir = getMinimalTemplate(t)
 		repo, err = NewGitRepoFromTemplate(tmpDir, templateDir)
 	}
 
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to create Git repo: %v", err)
+		t.Fatalf("Failed to create Git repo (template: %s, target: %s): %v", templateDir, tmpDir, err)
 	}
 
 	scene := &Scene{

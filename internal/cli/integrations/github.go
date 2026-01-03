@@ -4,6 +4,7 @@ package integrations
 import (
 	"embed"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -40,9 +41,13 @@ func newGithubInstallCmd() *cobra.Command {
 		
 This will create .github/workflows/stackit-lock-check.yml in your repository.`,
 		SilenceUsage: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, _ := cmd.Flags().GetString("cwd")
 			runner := git.NewRunner()
-			return runGithubInstall(runner, force)
+			if cwd != "" {
+				runner = git.NewRunnerWithPath(cwd)
+			}
+			return runGithubInstall(runner, force, cmd.OutOrStdout())
 		},
 	}
 
@@ -51,7 +56,7 @@ This will create .github/workflows/stackit-lock-check.yml in your repository.`,
 	return cmd
 }
 
-func runGithubInstall(runner git.Runner, force bool) error {
+func runGithubInstall(runner git.Runner, force bool, out io.Writer) error {
 	repoRoot, err := runner.DiscoverRepoRoot()
 	if err != nil {
 		return fmt.Errorf("not a git repository: %w", err)
@@ -76,7 +81,7 @@ func runGithubInstall(runner git.Runner, force bool) error {
 		return fmt.Errorf("failed to write %s: %w", workflowPath, err)
 	}
 
-	fmt.Printf("✓ Installed GitHub Action workflow: %s\n", filepath.Join(".github", "workflows", "stackit-lock-check.yml"))
+	_, _ = fmt.Fprintf(out, "✓ Installed GitHub Action workflow: %s\n", filepath.Join(".github", "workflows", "stackit-lock-check.yml"))
 
 	return nil
 }

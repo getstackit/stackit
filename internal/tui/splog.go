@@ -129,9 +129,15 @@ type Splog struct {
 	quiet      bool           // When true, suppresses all output (used during TUI mode)
 }
 
+var (
+	// DefaultConsoleWriter is the writer used by NewSplog when no writer is specified.
+	// This can be overridden in tests to capture output.
+	DefaultConsoleWriter io.Writer = os.Stdout
+)
+
 // NewSplog creates a new splog instance with console-only logging
 func NewSplog() *Splog {
-	splog, _ := NewSplogWithConfig("", "")
+	splog, _ := NewSplogWithFlagsAndWriter("", os.Getenv("DEBUG") != "", false, DefaultConsoleWriter)
 	return splog
 }
 
@@ -160,7 +166,11 @@ func NewSplogWithConfig(logFilePath string, _ string) (*Splog, error) {
 
 // NewSplogWithFlags creates a new splog instance with the given flags
 func NewSplogWithFlags(logFilePath string, debugMode, quiet bool) (*Splog, error) {
-	var writer io.Writer = os.Stdout
+	return NewSplogWithFlagsAndWriter(logFilePath, debugMode, quiet, os.Stdout)
+}
+
+// NewSplogWithFlagsAndWriter creates a new splog instance with the given flags and writer
+func NewSplogWithFlagsAndWriter(logFilePath string, debugMode, quiet bool, writer io.Writer) (*Splog, error) {
 	splog := &Splog{
 		writer: writer,
 		quiet:  quiet,

@@ -27,7 +27,7 @@ type Handler interface {
 
 // Action performs the initialization of Stackit in a repository
 func Action(ctx context.Context, repoRoot string, opts Options, handler Handler) error {
-	runner := git.NewRunner()
+	runner := git.NewRunnerWithPath(repoRoot)
 
 	cfg, err := config.LoadConfig(repoRoot)
 	if err != nil {
@@ -110,6 +110,12 @@ func InferTrunk(ctx context.Context, runner git.Runner, branchNames []string) st
 
 	if common := FindCommonlyNamedTrunk(branchNames); common != "" {
 		return common
+	}
+
+	// Fallback to current branch
+	current, err := runner.GetCurrentBranch()
+	if err == nil && current != "" {
+		return current
 	}
 
 	return ""

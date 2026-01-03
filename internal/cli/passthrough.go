@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"slices"
@@ -77,19 +78,26 @@ var modifyingGitCommands = []string{
 // HandlePassthrough checks if the command should be passed through to git
 // and executes it if so. Returns true if the command was handled (and the program should exit).
 func HandlePassthrough(args []string) bool {
+	handled, _ := HandlePassthroughWithResult(args, true, os.Stdout, os.Stderr)
+	return handled
+}
+
+// HandlePassthroughWithResult is like HandlePassthrough but returns an error instead of exiting if exit is false.
+func HandlePassthroughWithResult(args []string, exit bool, out, errWriter io.Writer) (bool, error) {
 	if len(args) < 2 {
-		return false
+		return false, nil
 	}
 
 	// Skip global flags to find the git command
 	i := 1
+	var cwd string
 	for i < len(args) {
 		arg := args[i]
 
 		// Handle flags with values
 		if arg == "--cwd" {
 			if i+1 < len(args) {
-				_ = os.Chdir(args[i+1])
+				cwd = args[i+1]
 				i += 2
 				continue
 			}
@@ -109,6 +117,9 @@ func HandlePassthrough(args []string) bool {
 			// Check if the command is modifying and the branch is locked or frozen
 			if slices.Contains(modifyingGitCommands, command) {
 				runner := git.NewRunner()
+				if cwd != "" {
+					runner = git.NewRunnerWithPath(cwd)
+				}
 				if locked, frozen, branch := isCurrentBranchLockedOrFrozen(runner); locked || frozen {
 					var state, cmd string
 					switch {
@@ -122,38 +133,52 @@ func HandlePassthrough(args []string) bool {
 						state = "frozen"
 						cmd = "st unfreeze"
 					}
-					fmt.Fprintf(os.Stderr, "Error: branch %s is %s. Use '%s' to enable modifications.\n", branch, state, cmd)
-					os.Exit(1)
+					err := fmt.Errorf("branch %s is %s. Use '%s' to enable modifications", branch, state, cmd)
+					if exit {
+						_, _ = fmt.Fprintf(errWriter, "Error: %v\n", err)
+						os.Exit(1)
+					}
+					return true, err
 				}
 			}
 
 			// Execute git command
-			gitCmd := exec.Command("git", gitArgs...)
+			var gitCmd *exec.Cmd
+			if cwd != "" {
+				gitCmd = exec.Command("git", append([]string{"-C", cwd}, gitArgs...)...)
+			} else {
+				gitCmd = exec.Command("git", gitArgs...)
+			}
 			gitCmd.Stdin = os.Stdin
-			gitCmd.Stdout = os.Stdout
-			gitCmd.Stderr = os.Stderr
+			gitCmd.Stdout = out
+			gitCmd.Stderr = errWriter
 
 			// Print passthrough message
-			fmt.Fprintf(os.Stderr, "\033[90mPassing command through to git...\033[0m\n")
-			fmt.Fprintf(os.Stderr, "\033[90mRunning: \"git %s\"\033[0m\n\n", joinArgs(gitArgs))
+			_, _ = fmt.Fprintf(errWriter, "\033[90mPassing command through to git...\033[0m\n")
+			_, _ = fmt.Fprintf(errWriter, "\033[90mRunning: \"git %s\"\033[0m\n\n", joinArgs(gitArgs))
 
 			err := gitCmd.Run()
 			if err != nil {
-				var exitError *exec.ExitError
-				if errors.As(err, &exitError) {
-					os.Exit(exitError.ExitCode())
+				if exit {
+					var exitError *exec.ExitError
+					if errors.As(err, &exitError) {
+						os.Exit(exitError.ExitCode())
+					}
+					os.Exit(1)
 				}
-				os.Exit(1)
+				return true, err
 			}
-			os.Exit(0)
-			return true
+			if exit {
+				os.Exit(0)
+			}
+			return true, nil
 		}
 
 		// Not a known git command and not a skipped flag, so stop
-		return false
+		return false, nil
 	}
 
-	return false
+	return false, nil
 }
 
 func joinArgs(args []string) string {

@@ -58,11 +58,12 @@ func newGitRepoInternal(dir string, options *gitRepoOptions) (*GitRepo, error) {
 			return nil, fmt.Errorf("failed to clone repo: %w", err)
 		}
 	case options.templatePath != "":
-		// Clone from template using --local for speed
-		cmd := exec.Command("git", "clone", "--local", options.templatePath, dir)
+		// Clone from template using --local for speed.
+		// Use --no-hardlinks to avoid potential issues with concurrent access or cross-filesystem clones.
+		cmd := exec.Command("git", "clone", "--local", "--no-hardlinks", options.templatePath, dir)
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null")
-		if err := cmd.Run(); err != nil {
-			return nil, fmt.Errorf("failed to clone from template: %w", err)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("failed to clone from template: %w\nOutput: %s", err, string(output))
 		}
 
 		// Remove the 'origin' remote that git clone automatically creates

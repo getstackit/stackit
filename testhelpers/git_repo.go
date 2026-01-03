@@ -131,18 +131,17 @@ func (r *GitRepo) RunGitCommandAndGetOutput(args ...string) (string, error) {
 }
 
 // RunCliCommand executes a Stackit CLI command in the repository directory.
-// This will need to be updated once the CLI is built.
 func (r *GitRepo) RunCliCommand(command []string) error {
-	// TODO: Update this path once the CLI binary is built
-	// For now, this is a placeholder that will need to be updated
-	cliPath := "stackit" // Will be the built binary path
+	cliPath := GetSharedBinaryPath()
+	if cliPath == "" {
+		return fmt.Errorf("failed to get shared binary path")
+	}
 
 	cmd := exec.Command(cliPath, command...)
 	cmd.Dir = r.Dir
 
 	env := os.Environ()
 	env = append(env, "STACKIT_USER_CONFIG_PATH="+r.UserConfigPath)
-	env = append(env, "STACKIT_PROFILE=")
 	cmd.Env = env
 
 	if os.Getenv("DEBUG") == "" {
@@ -159,7 +158,10 @@ func (r *GitRepo) RunCliCommand(command []string) error {
 
 // RunCliCommandAndGetOutput executes a Stackit CLI command and returns its output.
 func (r *GitRepo) RunCliCommandAndGetOutput(command []string) (string, error) {
-	cliPath := "stackit" // Will be the built binary path
+	cliPath := GetSharedBinaryPath()
+	if cliPath == "" {
+		return "", fmt.Errorf("failed to get shared binary path")
+	}
 
 	cmd := exec.Command(cliPath, command...)
 	cmd.Dir = r.Dir
@@ -168,12 +170,8 @@ func (r *GitRepo) RunCliCommandAndGetOutput(command []string) (string, error) {
 	env = append(env, "STACKIT_USER_CONFIG_PATH="+r.UserConfigPath)
 	cmd.Env = env
 
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("CLI command failed: %w", err)
-	}
-
-	return string(output), nil
+	output, err := cmd.CombinedOutput()
+	return string(output), err
 }
 
 // CreateChange creates a file change in the repository.

@@ -54,8 +54,7 @@ func isConflictError(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "hit conflict") ||
-		strings.Contains(msg, "rebase conflict") ||
-		strings.Contains(msg, "could not be fast-forwarded (conflict)")
+		strings.Contains(msg, "rebase conflict")
 }
 
 func isCIFailure(err error) bool {

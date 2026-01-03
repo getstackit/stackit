@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,6 +21,11 @@ import (
 	"stackit.dev/stackit/internal/tui/components/submit"
 	"stackit.dev/stackit/internal/tui/style"
 	"stackit.dev/stackit/internal/utils"
+)
+
+var (
+	// colorProfileMu protects calls to lipgloss.SetColorProfile which is not thread-safe
+	colorProfileMu sync.Mutex
 )
 
 // Key constants for TUI interactions
@@ -274,9 +280,12 @@ func IsTTY() bool {
 
 // SetInteractive sets whether the TUI should be interactive.
 // Re-export from utils for backward compatibility.
+// This function is thread-safe and can be called from concurrent goroutines.
 func SetInteractive(interactive bool) {
 	utils.SetInteractive(interactive)
 	if !interactive {
+		colorProfileMu.Lock()
 		lipgloss.SetColorProfile(termenv.Ascii)
+		colorProfileMu.Unlock()
 	}
 }

@@ -16,11 +16,11 @@ import (
 )
 
 func init() {
-	scenario.GlobalInProcessRunner = func(workDir string, args ...string) (string, error) {
+	scenario.SetGlobalInProcessRunner(func(workDir string, args ...string) (string, error) {
 		runner := inprocess.NewInProcessCLI()
 		res := runner.Run(workDir, args...)
 		return res.Output, res.Err
-	}
+	})
 }
 
 // =============================================================================

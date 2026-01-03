@@ -15,9 +15,6 @@ import (
 
 // NewAgentsCmd creates the agent command
 func NewAgentsCmd(version string) *cobra.Command {
-	// Set the template version to match the app version
-	TemplateVersion = version
-
 	cmd := &cobra.Command{
 		Use:   "agent",
 		Short: "Manage agent integration files for Cursor and Claude Code",
@@ -28,13 +25,13 @@ to understand how to use stackit commands for managing stacked branches.`,
 		SilenceUsage: true,
 	}
 
-	cmd.AddCommand(newAgentInstallCmd())
+	cmd.AddCommand(newAgentInstallCmd(version))
 
 	return cmd
 }
 
 // newAgentInstallCmd creates the agent install command
-func newAgentInstallCmd() *cobra.Command {
+func newAgentInstallCmd(version string) *cobra.Command {
 	var local bool
 	var force bool
 
@@ -60,7 +57,7 @@ to manage stacked branches, create commits, submit PRs, and more.`,
 			if cwd != "" {
 				runner = git.NewRunnerWithPath(cwd)
 			}
-			return runAgentInstall(runner, local, force, cmd.OutOrStdout())
+			return runAgentInstall(runner, local, force, version, cmd.OutOrStdout())
 		},
 	}
 
@@ -70,7 +67,7 @@ to manage stacked branches, create commits, submit PRs, and more.`,
 	return cmd
 }
 
-func runAgentInstall(runner git.Runner, local, force bool, out io.Writer) error {
+func runAgentInstall(runner git.Runner, local, force bool, version string, out io.Writer) error {
 	var baseDir string
 	var err error
 
@@ -92,7 +89,7 @@ func runAgentInstall(runner git.Runner, local, force bool, out io.Writer) error 
 
 	// Check for existing installation and version
 	if !force {
-		if err := checkExistingInstallation(baseDir, out); err != nil {
+		if err := checkExistingInstallation(baseDir, version, out); err != nil {
 			return err
 		}
 	}
@@ -117,7 +114,7 @@ func runAgentInstall(runner git.Runner, local, force bool, out io.Writer) error 
 
 		// Replace version placeholder with actual version
 		contentStr := string(content)
-		contentStr = strings.ReplaceAll(contentStr, "{{VERSION}}", TemplateVersion)
+		contentStr = strings.ReplaceAll(contentStr, "{{VERSION}}", version)
 
 		filePath := filepath.Join(skillDir, filename)
 		if err := os.WriteFile(filePath, []byte(contentStr), 0600); err != nil {
@@ -262,7 +259,7 @@ func runAgentInstall(runner git.Runner, local, force bool, out io.Writer) error 
 		installType = "locally"
 	}
 
-	_, _ = fmt.Fprintf(out, "✓ Installed agent files %s (version %s)\n\n", installType, TemplateVersion)
+	_, _ = fmt.Fprintf(out, "✓ Installed agent files %s (version %s)\n\n", installType, version)
 	_, _ = fmt.Fprintln(out, "Claude Code integration:")
 	_, _ = fmt.Fprintf(out, "✓ Created %s/.claude/skills/stackit/SKILL.md\n", getDisplayPath(baseDir, local))
 	_, _ = fmt.Fprintf(out, "✓ Created %s/.claude/skills/stackit/reference.md\n", getDisplayPath(baseDir, local))
@@ -295,15 +292,15 @@ func runAgentInstall(runner git.Runner, local, force bool, out io.Writer) error 
 	return nil
 }
 
-func checkExistingInstallation(baseDir string, out io.Writer) error {
+func checkExistingInstallation(baseDir, version string, out io.Writer) error {
 	// Check if SKILL.md exists and has version info
 	skillPath := filepath.Join(baseDir, ".claude", "skills", "stackit", "SKILL.md")
 	if content, err := os.ReadFile(skillPath); err == nil {
 		// File exists, check version
 		existingVersion := extractVersion(string(content))
-		if existingVersion != "" && existingVersion != TemplateVersion {
+		if existingVersion != "" && existingVersion != version {
 			_, _ = fmt.Fprintf(out, "Found existing installation (version %s)\n", existingVersion)
-			_, _ = fmt.Fprintf(out, "New version available: %s\n", TemplateVersion)
+			_, _ = fmt.Fprintf(out, "New version available: %s\n", version)
 			_, _ = fmt.Fprintln(out)
 			_, _ = fmt.Fprintln(out, "Run with --force to update")
 			return fmt.Errorf("existing installation found")

@@ -9,10 +9,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	scenario.GlobalInProcessRunner = func(workDir string, args ...string) (string, error) {
+	scenario.SetGlobalInProcessRunner(func(workDir string, args ...string) (string, error) {
 		runner := inprocess.NewInProcessCLI()
 		res := runner.Run(workDir, args...)
 		return res.Output, res.Err
-	}
+	})
 	testhelpers.TestMain(m, nil)
 }

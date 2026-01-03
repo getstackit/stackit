@@ -24,9 +24,9 @@ import (
 // Thread-safe: All methods are safe for concurrent use
 type PRManager interface {
 	UpsertPrInfo(branch Branch, prInfo *PrInfo) error
-	BranchMatchesRemote(branchName string) (bool, error)
+	GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error)
 	PopulateRemoteShas() error
-	PushBranch(ctx context.Context, branchName string, remote string, opts git.PushOptions) error
+	PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error
 }
 
 // SyncManager provides operations for syncing and restacking branches

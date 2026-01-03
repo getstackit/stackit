@@ -293,11 +293,14 @@ func CreateMergePlan(ctx context.Context, eng mergePlanEngine, splog *tui.Splog,
 		}
 
 		// Check if local matches remote
-		matchesRemote, err := eng.BranchMatchesRemote(name)
+		status, err := eng.GetBranchRemoteStatus(eng.GetBranch(name))
+		matchesRemote := true
 		if err != nil {
-			splog.Debug("Failed to check if branch matches remote: %v", err)
-			matchesRemote = true // Assume matches if check fails
+			splog.Debug("Failed to get branch remote status: %v", err)
+		} else {
+			matchesRemote = status.Matches()
 		}
+
 		if !matchesRemote && prInfo != nil && prInfo.Number() != nil {
 			// Get detailed difference information
 			diffInfo, _ := eng.GetBranchRemoteDifference(name)
@@ -347,19 +350,8 @@ func CreateMergePlan(ctx context.Context, eng mergePlanEngine, splog *tui.Splog,
 
 	// Pre-flight check: Check if trunk is in sync with remote
 	trunk := eng.Trunk()
-	trunkName := trunk.GetName()
-	if matches, err := eng.BranchMatchesRemote(trunkName); err == nil && !matches {
-		// If diverged, we want to know now
-		remote := eng.Git().GetRemote()
-		localSha, _ := trunk.GetRevision()
-		remoteSha, _ := eng.Git().GetRemoteSha(remote, trunkName)
-		if localSha != "" && remoteSha != "" {
-			isAncestor, _ := eng.Git().IsAncestor(localSha, remoteSha)
-			isRemoteAncestor, _ := eng.Git().IsAncestor(remoteSha, localSha)
-			if !isAncestor && !isRemoteAncestor {
-				validation.Warnings = append(validation.Warnings, fmt.Sprintf("Trunk branch %s has diverged from remote. You may need to sync it manually or use --force during merge.", trunkName))
-			}
-		}
+	if status, err := eng.GetBranchRemoteStatus(trunk); err == nil && status.Diverged() {
+		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Trunk branch %s has diverged from remote. You may need to sync it manually or use --force during merge.", trunk.GetName()))
 	}
 
 	for i := range allBranches {

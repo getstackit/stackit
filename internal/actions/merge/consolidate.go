@@ -174,7 +174,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 		}
 	}
 
-	if err := c.engine.PushBranch(ctx, branchName, c.engine.GetRemote(), git.PushOptions{
+	if err := c.engine.PushBranch(ctx, c.engine.GetBranch(branchName), c.engine.GetRemote(), git.PushOptions{
 		Force:    false,
 		NoVerify: true,
 	}); err != nil {

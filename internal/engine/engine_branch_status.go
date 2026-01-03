@@ -121,37 +121,49 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 	return *meta.ParentBranchRevision == parentRev
 }
 
-// BranchMatchesRemote checks if a branch matches its remote
-func (e *engineImpl) BranchMatchesRemote(branchName string) (bool, error) {
+// GetBranchRemoteStatus returns the relationship between a local branch and its remote
+func (e *engineImpl) GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error) {
+	branchName := branch.GetName()
 	e.mu.RLock()
-	defer e.mu.RUnlock()
+	remoteSha, hasCachedRemote := e.remoteShas[branchName]
+	e.mu.RUnlock()
 
-	// First try to get remote SHA from cache (populated by PopulateRemoteShas)
-	remoteSha, exists := e.remoteShas[branchName]
-	if exists {
-		// Get local branch SHA
-		localSha, err := e.git.GetRevision(branchName)
-		if err != nil {
-			return false, nil
-		}
-		return localSha == remoteSha, nil
-	}
-
-	// Fall back to checking local remote tracking branch (like getBranchRemoteDifference does)
-	// This handles cases where remote fetching failed but we have local remote tracking
-	remoteTrackingSha, err := e.git.GetRemoteRevision(branchName)
-	if err != nil {
-		// No remote tracking branch exists
-		return false, nil
-	}
-
-	// Get local branch SHA
 	localSha, err := e.git.GetRevision(branchName)
 	if err != nil {
-		return false, nil
+		localSha = "" // Branch doesn't exist locally
 	}
 
-	return localSha == remoteTrackingSha, nil
+	if !hasCachedRemote {
+		// Fall back to local remote tracking branch
+		remoteSha, err = e.git.GetRemoteRevision(branchName)
+		if err != nil {
+			remoteSha = "" // No remote tracking branch
+		}
+	}
+
+	status := BranchRemoteStatus{
+		LocalSha:  localSha,
+		RemoteSha: remoteSha,
+	}
+
+	if localSha == "" || remoteSha == "" {
+		return status, nil
+	}
+
+	if localSha == remoteSha {
+		status.CommonAncestor = localSha
+		return status, nil
+	}
+
+	// They differ, compute common ancestor to determine relation
+	remote := e.git.GetRemote()
+	remoteBranchRef := "refs/remotes/" + remote + "/" + branchName
+	commonAncestor, err := e.git.GetMergeBaseByRef(branchName, remoteBranchRef)
+	if err == nil {
+		status.CommonAncestor = commonAncestor
+	}
+
+	return status, nil
 }
 
 // GetMergedBranches returns a map of branches merged into the target branch
@@ -235,59 +247,43 @@ func (e *engineImpl) GetRemote() string {
 
 // GetBranchRemoteDifference returns a string describing the difference between local and remote branch
 func (e *engineImpl) GetBranchRemoteDifference(branchName string) (string, error) {
-	localSha, err := e.git.GetRevision(branchName)
+	branch := e.GetBranch(branchName)
+	status, err := e.GetBranchRemoteStatus(branch)
 	if err != nil {
-		return "", fmt.Errorf("failed to get local SHA for %s: %w", branchName, err)
+		return "", err
 	}
 
-	remoteSha, err := e.git.GetRemoteRevision(branchName)
-	if err != nil {
-		remote := e.git.GetRemote()
-		remoteShas, err := e.git.FetchRemoteShas(remote)
-		if err != nil {
-			localShort := localSha
-			if len(localSha) > 7 {
-				localShort = localSha[:7]
-			}
-			return fmt.Sprintf("local: %s (unable to fetch remote SHA)", localShort), nil
-		}
-		var exists bool
-		remoteSha, exists = remoteShas[branchName]
-		if !exists {
-			localShort := localSha
-			if len(localSha) > 7 {
-				localShort = localSha[:7]
-			}
-			return fmt.Sprintf("local: %s (branch not found on remote)", localShort), nil
-		}
+	if status.LocalSha == "" {
+		return "(branch not found locally)", nil
 	}
 
-	if localSha == remoteSha {
+	localShort := status.LocalSha
+	if len(localShort) > 7 {
+		localShort = localShort[:7]
+	}
+
+	if status.RemoteSha == "" {
+		return fmt.Sprintf("local: %s (branch not found on remote)", localShort), nil
+	}
+
+	if status.Matches() {
 		return "", nil
 	}
 
-	localShort := localSha
-	if len(localSha) > 7 {
-		localShort = localSha[:7]
-	}
-	remoteShort := remoteSha
-	if len(remoteSha) > 7 {
-		remoteShort = remoteSha[:7]
-	}
-
-	remote := e.git.GetRemote()
-	remoteBranchRef := "refs/remotes/" + remote + "/" + branchName
-	commonAncestor, err := e.git.GetMergeBaseByRef(branchName, remoteBranchRef)
-	if err != nil {
-		return fmt.Sprintf("local: %s, remote: %s (likely local is ahead)", localShort, remoteShort), nil //nolint:nilerr
+	remoteShort := status.RemoteSha
+	if len(remoteShort) > 7 {
+		remoteShort = remoteShort[:7]
 	}
 
 	switch {
-	case commonAncestor == localSha:
+	case status.Behind():
 		return fmt.Sprintf("local is behind remote (local: %s, remote: %s)", localShort, remoteShort), nil
-	case commonAncestor == remoteSha:
+	case status.Ahead():
 		return fmt.Sprintf("local is ahead of remote (local: %s, remote: %s)", localShort, remoteShort), nil
-	default:
+	case status.Diverged():
 		return fmt.Sprintf("local and remote have diverged (local: %s, remote: %s)", localShort, remoteShort), nil
+	default:
+		// If common ancestor couldn't be determined but they are different
+		return fmt.Sprintf("local: %s, remote: %s", localShort, remoteShort), nil
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/mattn/go-isatty"
 )
@@ -25,7 +26,8 @@ var (
 	// BranchNameIgnoreRegex matches trailing slashes and dots that should be removed
 	BranchNameIgnoreRegex = regexp.MustCompile(`[/.]*$`)
 
-	interactiveMode = true
+	// interactiveMode is accessed atomically to avoid data races
+	interactiveMode int32 = 1 // 1 = true, 0 = false
 )
 
 // SanitizeBranchName sanitizes a branch name by replacing invalid characters
@@ -147,12 +149,16 @@ func CleanCommitMessage(message string) string {
 
 // SetInteractive sets whether the TUI should be interactive
 func SetInteractive(interactive bool) {
-	interactiveMode = interactive
+	if interactive {
+		atomic.StoreInt32(&interactiveMode, 1)
+	} else {
+		atomic.StoreInt32(&interactiveMode, 0)
+	}
 }
 
 // IsTTY returns true if we can use a TTY for interactive TUI
 func IsTTY() bool {
-	if !interactiveMode {
+	if atomic.LoadInt32(&interactiveMode) == 0 {
 		return false
 	}
 	// First check if stdin/stdout are terminals

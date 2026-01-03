@@ -301,7 +301,8 @@ func pushBranchIfNeeded(ctx *app.Context, submissionInfo Info, opts Options, rem
 	}
 
 	forceWithLease := !opts.Force
-	if err := ctx.PR().PushBranch(ctx.Context, submissionInfo.BranchName, remote, git.PushOptions{
+	branch := ctx.Navigator().GetBranch(submissionInfo.BranchName)
+	if err := ctx.PR().PushBranch(ctx.Context, branch, remote, git.PushOptions{
 		Force:          opts.Force,
 		ForceWithLease: forceWithLease,
 		NoVerify:       !ctx.Verify,

@@ -125,7 +125,8 @@ func (e *engineImpl) GetPRSubmissionStatus(branch Branch) (PRSubmissionStatus, e
 
 	// It's an update
 	baseChanged := prInfo.Base() != parentBranchName
-	branchChanged, _ := e.BranchMatchesRemote(branch.GetName())
+	status, _ := e.GetBranchRemoteStatus(branch)
+	branchMatches := status.Matches()
 
 	// Check if PR title needs update due to scope changes
 	titleNeedsUpdate := e.prTitleNeedsUpdate(branch, prInfo)
@@ -151,7 +152,7 @@ func (e *engineImpl) GetPRSubmissionStatus(branch Branch) (PRSubmissionStatus, e
 		}
 	}
 
-	needsUpdate := baseChanged || !branchChanged || titleNeedsUpdate || lockStatusChanged || mergeBranchChanged
+	needsUpdate := baseChanged || !branchMatches || titleNeedsUpdate || lockStatusChanged || mergeBranchChanged
 
 	reason := ""
 	if !needsUpdate {

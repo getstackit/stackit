@@ -131,6 +131,47 @@ type PendingChange struct {
 	Staged bool
 }
 
+// BranchRemoteStatus represents the relationship between a local branch and its remote counterpart
+type BranchRemoteStatus struct {
+	LocalSha       string
+	RemoteSha      string
+	CommonAncestor string
+}
+
+// Matches returns true if local and remote SHAs are identical
+func (s BranchRemoteStatus) Matches() bool {
+	return s.LocalSha != "" && s.LocalSha == s.RemoteSha
+}
+
+// Ahead returns true if the local branch has commits not yet on remote
+func (s BranchRemoteStatus) Ahead() bool {
+	if s.Matches() || s.LocalSha == "" || s.RemoteSha == "" {
+		return false
+	}
+	return s.CommonAncestor == s.RemoteSha
+}
+
+// Behind returns true if the remote branch has commits not yet on local
+func (s BranchRemoteStatus) Behind() bool {
+	if s.Matches() || s.LocalSha == "" || s.RemoteSha == "" {
+		return false
+	}
+	return s.CommonAncestor == s.LocalSha
+}
+
+// Diverged returns true if both local and remote have unique commits
+func (s BranchRemoteStatus) Diverged() bool {
+	if s.Matches() || s.LocalSha == "" || s.RemoteSha == "" {
+		return false
+	}
+	return s.CommonAncestor != s.LocalSha && s.CommonAncestor != s.RemoteSha
+}
+
+// MissingRemote returns true if the branch does not exist on the remote
+func (s BranchRemoteStatus) MissingRemote() bool {
+	return s.RemoteSha == ""
+}
+
 // Branch represents a branch in the stack
 type Branch struct {
 	name   string

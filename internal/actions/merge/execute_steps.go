@@ -240,7 +240,7 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 		// Report progress periodically
 		now := time.Now()
 		status, err := githubClient.GetPRChecksStatus(ctx.Context, step.BranchName)
-		if err == nil && status != nil && opts.Handler != nil && now.Sub(lastProgressReport) >= progressInterval {
+		if err == nil && status != nil && now.Sub(lastProgressReport) >= progressInterval {
 			elapsed := now.Sub(startTime)
 			opts.Handler.StepWaiting(stepIndex, elapsed, timeout, status.Checks)
 			lastProgressReport = now
@@ -266,19 +266,17 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 
 			if !isReallyPending {
 				// All checks passed and none are pending
-				if opts.Handler != nil {
-					var maxDuration time.Duration
-					for _, check := range status.Checks {
-						if !check.FinishedAt.IsZero() && !check.StartedAt.IsZero() {
-							d := check.FinishedAt.Sub(check.StartedAt)
-							if d > maxDuration {
-								maxDuration = d
-							}
+				var maxDuration time.Duration
+				for _, check := range status.Checks {
+					if !check.FinishedAt.IsZero() && !check.StartedAt.IsZero() {
+						d := check.FinishedAt.Sub(check.StartedAt)
+						if d > maxDuration {
+							maxDuration = d
 						}
 					}
-					if maxDuration > 0 {
-						opts.Handler.SetEstimatedDuration(maxDuration)
-					}
+				}
+				if maxDuration > 0 {
+					opts.Handler.SetEstimatedDuration(maxDuration)
 				}
 
 				return nil

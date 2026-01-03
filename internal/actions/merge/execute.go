@@ -55,10 +55,7 @@ type ExecuteOptions struct {
 	Plan                    *Plan
 	Strategy                Strategy
 	Force                   bool
-	DryRun                  bool
-	Confirm                 bool
-	Scope                   string
-	TargetBranch            string
+	Wait                    bool                       // Whether to wait for CI/merge (applies to consolidate)
 	Handler                 Handler                    // Optional progress handler
 	UndoStackDepth          int                        // Maximum undo stack depth (from config)
 	ConsolidationResultFunc func(*ConsolidationResult) // Callback for consolidation results
@@ -96,9 +93,9 @@ func Execute(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions) erro
 	// Execute plan (this will send updates to the handler)
 	err := executeSteps(ctx, eng, opts)
 
-	if err == nil {
-		opts.Handler.Complete(consolidationResult)
-	}
+	// Always call Complete to allow handlers to clean up (TUI, etc.)
+	// consolidationResult will be nil if it wasn't reached or failed
+	opts.Handler.Complete(consolidationResult)
 
 	return err
 }
@@ -109,31 +106,23 @@ func executeSteps(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions)
 
 	for i, step := range plan.Steps {
 		// Report step started
-		if opts.Handler != nil {
-			opts.Handler.StepStarted(i, step.Description)
-		}
+		opts.Handler.StepStarted(i, step.Description)
 
 		// 1. Re-validate preconditions for this step
 		if err := validateStepPreconditions(ctx.Context, step, eng, ctx.GitHubClient, opts); err != nil {
-			if opts.Handler != nil {
-				opts.Handler.StepFailed(i, err)
-			}
+			opts.Handler.StepFailed(i, err)
 			return fmt.Errorf("step %d (%s) failed precondition: %w", i+1, step.Description, err)
 		}
 
 		// 2. Execute the step (with progress reporting for wait steps)
 		if err := executeStepWithProgress(ctx, step, i, eng, opts); err != nil {
 			ctx.Splog.Debug("Step %d (%s) failed: %v", i+1, step.Description, err)
-			if opts.Handler != nil {
-				opts.Handler.StepFailed(i, err)
-			}
+			opts.Handler.StepFailed(i, err)
 			return fmt.Errorf("step %d (%s) failed: %w", i+1, step.Description, err)
 		}
 
 		// 3. Report step completed
-		if opts.Handler != nil {
-			opts.Handler.StepCompleted(i)
-		}
+		opts.Handler.StepCompleted(i)
 	}
 
 	return nil
@@ -295,8 +284,8 @@ func executeStep(ctx *app.Context, step PlanStep, eng mergeExecuteEngine, opts E
 
 	case StepWaitCI:
 		// StepWaitCI should be handled by executeStepWithProgress, not executeStep
-		// This case should never be reached, but if it is, return an error
-		return fmt.Errorf("StepWaitCI should be handled by executeStepWithProgress")
+		// This case should never be reached.
+		panic("StepWaitCI should be handled by executeStepWithProgress")
 
 	default:
 		return fmt.Errorf("unknown step type: %s", step.StepType)

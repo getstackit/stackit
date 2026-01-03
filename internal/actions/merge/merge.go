@@ -25,6 +25,7 @@ type Options struct {
 	Confirm        bool
 	Strategy       Strategy
 	Force          bool
+	Wait           bool // Whether to wait for CI/merge (applies to consolidate)
 	Scope          string
 	TargetBranch   string
 	Plan           *Plan // Optional pre-calculated plan
@@ -70,15 +71,12 @@ func Action(ctx *app.Context, opts Options) error {
 		Plan:           opts.Plan,
 		Strategy:       opts.Strategy,
 		Force:          opts.Force,
-		DryRun:         opts.DryRun,
-		Confirm:        opts.Confirm,
-		Scope:          opts.Scope,
-		TargetBranch:   opts.TargetBranch,
+		Wait:           opts.Wait,
 		UndoStackDepth: opts.UndoStackDepth,
 		Handler:        opts.Handler,
 	}
 
-	if err := ExecuteInWorktree(ctx, eng, executeOpts); err != nil {
+	if err := ExecuteInWorktree(ctx, eng, executeOpts, opts.Scope, opts.TargetBranch); err != nil {
 		return err
 	}
 

@@ -69,7 +69,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		err = merge.ExecuteInWorktree(s.Context, s.Engine, merge.ExecuteOptions{
 			Plan:  plan,
 			Force: true,
-		})
+		}, "", "")
 		require.NoError(t, err)
 
 		// Verify we have switched to main since branch-a was merged and deleted

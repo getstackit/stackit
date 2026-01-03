@@ -276,4 +276,56 @@ func TestConsolidationErrorHandling(t *testing.T) {
 		require.True(t, validation.Valid)
 		require.Len(t, plan.BranchesToMerge, 2)
 	})
+
+	t.Run("execute with Wait: false skips waiting", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+			})
+
+		// Set up a remote so PullTrunk/PushBranch can work
+		remoteDir := t.TempDir()
+		s.RunGit("init", "--bare", remoteDir)
+		s.RunGit("remote", "add", "origin", remoteDir).
+			RunGit("push", "-u", "origin", "main").
+			RunGit("push", "-u", "origin", "branch1")
+
+		// Add commits
+		s.Checkout("branch1")
+		s.RunGit("commit", "--allow-empty", "-m", "branch1 commit").Rebuild()
+
+		// Add PR info
+		pr1 := 101
+		branch1 := s.Engine.GetBranch("branch1")
+		err := s.Engine.UpsertPrInfo(branch1, testhelpers.NewTestPrInfo(pr1))
+		require.NoError(t, err)
+
+		plan, _, err := merge.CreateMergePlan(s.Context.Context, s.Engine, s.Context.Splog, s.Context.GitHubClient, merge.CreatePlanOptions{
+			Strategy: merge.StrategyConsolidate,
+			Force:    true,
+		})
+		require.NoError(t, err)
+
+		executor := merge.NewConsolidateMergeExecutor(plan, s.Engine, s.Context)
+
+		// Mock GitHub client
+		mockConfig := testhelpers.NewMockGitHubServerConfig()
+		rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+		githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+		s.Context.GitHubClient = githubClient
+
+		// Mock GitHub client to expect PR creation but NOT merge/waiting
+		// Since we don't have a full mock setup here easily, we'll just verify it doesn't fail
+		// and the result is returned correctly.
+		result, err := executor.Execute(s.Context.Context, merge.ExecuteOptions{
+			Plan:  plan,
+			Wait:  false,
+			Force: true,
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.NotEmpty(t, result.BranchName)
+		require.Equal(t, 1, result.PRNumber) // testhelpers.MockGitHubClient returns PR #1 for CreatePullRequest
+	})
 }

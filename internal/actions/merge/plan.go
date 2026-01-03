@@ -79,6 +79,21 @@ type PlanStep struct {
 	ExpectChecks bool          // Whether we expect CI checks to be present
 }
 
+// HasChecks returns true if the branch has CI checks configured
+func (b BranchMergeInfo) HasChecks() bool {
+	return b.ChecksStatus != ChecksNone
+}
+
+// AnyPRHasChecks returns true if any of the given branches have CI checks configured
+func AnyPRHasChecks(branches []BranchMergeInfo) bool {
+	for _, b := range branches {
+		if b.HasChecks() {
+			return true
+		}
+	}
+	return false
+}
+
 // Plan is the complete plan for a merge operation
 type Plan struct {
 	Strategy        Strategy
@@ -403,7 +418,7 @@ func buildBottomUpSteps(branchesToMerge []BranchMergeInfo, upstackBranches []str
 			PRNumber:     branchInfo.PRNumber,
 			Description:  fmt.Sprintf("Wait for CI checks on PR #%d (%s)", branchInfo.PRNumber, branchInfo.BranchName),
 			WaitTimeout:  defaultTimeout,
-			ExpectChecks: branchInfo.ChecksStatus != ChecksNone,
+			ExpectChecks: branchInfo.HasChecks(),
 		})
 
 		steps = append(steps, PlanStep{
@@ -481,7 +496,7 @@ func buildTopDownSteps(branchesToMerge []BranchMergeInfo, currentBranch string, 
 		PRNumber:     currentBranchInfo.PRNumber,
 		Description:  fmt.Sprintf("Wait for CI checks on PR #%d (%s)", currentBranchInfo.PRNumber, currentBranch),
 		WaitTimeout:  10 * time.Minute,
-		ExpectChecks: currentBranchInfo.ChecksStatus != ChecksNone,
+		ExpectChecks: currentBranchInfo.HasChecks(),
 	})
 
 	steps = append(steps, PlanStep{

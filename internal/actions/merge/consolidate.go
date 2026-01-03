@@ -76,21 +76,26 @@ func (c *ConsolidateMergeExecutor) Execute(ctx context.Context, opts ExecuteOpti
 		splog.Warn("Failed to lock and notify individual PRs: %v", err)
 	}
 
-	if err := c.waitForConsolidationMerge(ctx, consolidationBranch, pr); err != nil {
-		return nil, fmt.Errorf("consolidation merge failed: %w", err)
-	}
+	if opts.Wait {
+		if err := c.waitForConsolidationMerge(ctx, consolidationBranch, pr); err != nil {
+			return nil, fmt.Errorf("consolidation merge failed: %w", err)
+		}
 
-	// Store consolidation info for footer updates
-	c.consolidationPR = pr
-	if userName, err := git.NewRunner().GetUserName(ctx); err == nil && userName != "" {
-		c.consolidationUser = userName
-	}
+		// Store consolidation info for footer updates
+		c.consolidationPR = pr
+		if userName, err := git.NewRunner().GetUserName(ctx); err == nil && userName != "" {
+			c.consolidationUser = userName
+		}
 
-	if err := c.postMergeCleanup(ctx); err != nil {
-		splog.Warn("Post-merge cleanup had issues: %v", err)
-	}
+		if err := c.postMergeCleanup(ctx); err != nil {
+			splog.Warn("Post-merge cleanup had issues: %v", err)
+		}
 
-	splog.Info("🎉 Stack consolidation merge completed successfully!")
+		splog.Info("🎉 Stack consolidation merge completed successfully!")
+	} else {
+		splog.Info("🎉 Consolidation PR created: %s", pr.HTMLURL)
+		splog.Info("   Individual PRs have been locked. Merge the consolidation PR manually to complete.")
+	}
 
 	result := &ConsolidationResult{
 		BranchName: consolidationBranch,
@@ -207,15 +212,7 @@ func (c *ConsolidateMergeExecutor) waitForConsolidationCI(ctx context.Context, b
 	startTime := time.Now()
 	deadline := startTime.Add(timeout)
 
-	// Determine if we expect checks based on whether any constituent branches had them
-	expectChecks := false
-	for _, b := range c.plan.BranchesToMerge {
-		if b.ChecksStatus != ChecksNone {
-			expectChecks = true
-			break
-		}
-	}
-
+	expectChecks := AnyPRHasChecks(c.plan.BranchesToMerge)
 	if expectChecks {
 		splog.Info("   Waiting for CI checks to register...")
 		// Give GitHub a moment to register the PR and start CI

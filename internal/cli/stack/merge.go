@@ -30,6 +30,7 @@ func NewMergeCmd() *cobra.Command {
 		strategy    string
 		scope       string
 		consolidate bool
+		wait        bool
 	)
 
 	cmd := &cobra.Command{
@@ -52,7 +53,7 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 				// Determine if we should run in interactive mode
 				// Interactive if no flags are provided (except dry-run and scope which are always allowed)
 				// Respect global interactive flag
-				interactive := ctx.Interactive && strategy == "" && !consolidate && !yes && !force && scope == "" && len(args) == 0
+				interactive := ctx.Interactive && strategy == "" && !consolidate && !yes && !force && scope == "" && len(args) == 0 && !cmd.Flags().Changed("wait")
 
 				// Parse strategy
 				var mergeStrategy merge.Strategy
@@ -101,6 +102,7 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 					Confirm:        !yes && ctx.Interactive, // If --yes or --no-interactive is set, don't confirm
 					Strategy:       mergeStrategy,
 					Force:          force,
+					Wait:           wait,
 					Scope:          scope,
 					Plan:           plan,
 					UndoStackDepth: undoStackDepth,
@@ -151,6 +153,7 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show merge plan without executing")
 	cmd.Flags().StringVar(&scope, "scope", "", "Bulk-merge all branches within the specified scope")
 	cmd.Flags().BoolVarP(&consolidate, "consolidate", "c", false, "Use consolidate strategy (shortcut for --strategy=consolidate)")
+	cmd.Flags().BoolVar(&wait, "wait", false, "Wait for CI checks and automatically merge (for consolidate strategy)")
 
 	return cmd
 }
@@ -290,6 +293,8 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 
 	// Determine merge strategy
 	var mergeStrategy merge.Strategy
+	var wait bool
+
 	// If only a single PR, automatically use top-down strategy
 	if len(plan.BranchesToMerge) == 1 {
 		mergeStrategy = merge.StrategyTopDown
@@ -331,9 +336,21 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 			mergeStrategy = merge.StrategyTopDown
 		case "consolidate":
 			mergeStrategy = merge.StrategyConsolidate
+			// Prompt for wait if consolidating
+			wait, err = tui.PromptConfirm("Wait for CI and automatically merge the consolidated PR?", false)
+			if err != nil {
+				return fmt.Errorf("wait selection canceled: %w", err)
+			}
 		}
 
 		splog.Info("✅ Strategy: %s", mergeStrategy)
+		if mergeStrategy == merge.StrategyConsolidate {
+			if wait {
+				splog.Info("✅ Wait for CI: Enabled")
+			} else {
+				splog.Info("✅ Wait for CI: Disabled (manual merge required)")
+			}
+		}
 		splog.Newline()
 	}
 
@@ -363,11 +380,15 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 		// For consolidate, show a clear summary of what will happen
 		splog.Info("  1. Lock all %d branches to prevent changes", len(plan.BranchesToMerge))
 		splog.Info("  2. Create consolidation branch with all commits merged")
-		splog.Info("  3. Create consolidation PR and wait for CI")
-		splog.Info("  4. Auto-merge consolidation PR")
-		splog.Info("  5. Update original PRs with consolidation reference")
-		if len(plan.UpstackBranches) > 0 {
-			splog.Info("  6. Restack %d upstack branches onto trunk", len(plan.UpstackBranches))
+		splog.Info("  3. Create consolidation PR")
+		if wait {
+			splog.Info("  4. Wait for CI and auto-merge consolidation PR")
+			splog.Info("  5. Update original PRs with consolidation reference")
+			if len(plan.UpstackBranches) > 0 {
+				splog.Info("  6. Restack %d upstack branches onto trunk", len(plan.UpstackBranches))
+			}
+		} else {
+			splog.Info("  4. Manual merge required (individual PRs remain locked)")
 		}
 	} else {
 		// For other strategies, show step-by-step
@@ -406,6 +427,7 @@ func runInteractiveMergeWizardForBranch(ctx *app.Context, dryRun bool, forceFlag
 		Confirm:        false, // Already confirmed
 		Strategy:       mergeStrategy,
 		Force:          forceFlag,
+		Wait:           wait,
 		Scope:          scope,
 		TargetBranch:   targetBranchName,
 		Plan:           plan,

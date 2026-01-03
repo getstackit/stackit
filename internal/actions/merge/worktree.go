@@ -8,7 +8,7 @@ import (
 )
 
 // ExecuteInWorktree executes the merge plan in a temporary worktree
-func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions) (err error) {
+func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions, scope string, targetBranch string) (err error) {
 	splog := ctx.Splog
 
 	// Create temporary worktree via engine
@@ -76,8 +76,8 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 		plan, _, err = CreateMergePlan(ctx.Context, worktreeEng, splog, ctx.GitHubClient, CreatePlanOptions{
 			Strategy:     opts.Strategy,
 			Force:        opts.Force,
-			Scope:        opts.Scope,
-			TargetBranch: opts.TargetBranch,
+			Scope:        scope,
+			TargetBranch: targetBranch,
 		})
 		if err != nil {
 			return err

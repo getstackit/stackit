@@ -240,3 +240,38 @@ func TestAction(t *testing.T) {
 		require.Equal(t, "branch-b", *updatedPRC.Base.Ref, "branch-c PR base should be branch-b (not main) to preserve stack structure")
 	})
 }
+
+type mockHandler struct {
+	merge.NullHandler
+	completed bool
+}
+
+func (h *mockHandler) Complete(_ *merge.ConsolidationResult) {
+	h.completed = true
+}
+
+func TestExecute_AlwaysCallsComplete(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	t.Run("calls Complete on success", func(t *testing.T) {
+		handler := &mockHandler{}
+		err := merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
+			Plan:    &merge.Plan{Steps: []merge.PlanStep{}},
+			Handler: handler,
+		})
+		require.NoError(t, err)
+		require.True(t, handler.completed)
+	})
+
+	t.Run("calls Complete on failure", func(t *testing.T) {
+		handler := &mockHandler{}
+		err := merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
+			Plan: &merge.Plan{Steps: []merge.PlanStep{
+				{StepType: merge.StepMergePR, BranchName: "non-existent", Description: "test failure"},
+			}},
+			Handler: handler,
+		})
+		require.Error(t, err)
+		require.True(t, handler.completed)
+	})
+}

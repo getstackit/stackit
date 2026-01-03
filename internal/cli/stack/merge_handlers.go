@@ -117,11 +117,6 @@ func (h *InteractiveMergeHandler) StepStarted(stepIndex int, description string)
 func (h *InteractiveMergeHandler) StepCompleted(stepIndex int) {
 	if h.reporter != nil {
 		h.reporter.StepCompleted(stepIndex)
-		if stepIndex == len(h.plan.Steps)-1 {
-			h.reporter.Close()
-			<-h.done
-			h.ctx.Splog.SetQuiet(false)
-		}
 	}
 }
 
@@ -129,9 +124,6 @@ func (h *InteractiveMergeHandler) StepCompleted(stepIndex int) {
 func (h *InteractiveMergeHandler) StepFailed(stepIndex int, err error) {
 	if h.reporter != nil {
 		h.reporter.StepFailed(stepIndex, err)
-		h.reporter.Close()
-		<-h.done
-		h.ctx.Splog.SetQuiet(false)
 	}
 }
 
@@ -151,6 +143,15 @@ func (h *InteractiveMergeHandler) SetEstimatedDuration(duration time.Duration) {
 
 // Complete implements merge.Handler.
 func (h *InteractiveMergeHandler) Complete(result *merge.ConsolidationResult) {
+	if h.reporter != nil {
+		h.reporter.Close()
+		if h.done != nil {
+			<-h.done
+			h.done = nil
+		}
+		h.ctx.Splog.SetQuiet(false)
+	}
+
 	if result != nil {
 		h.ctx.Splog.Info("✅ Created consolidation PR #%d: %s", result.PRNumber, result.PRURL)
 	}

@@ -293,11 +293,14 @@ func CreateMergePlan(ctx context.Context, eng mergePlanEngine, splog *tui.Splog,
 		}
 
 		// Check if local matches remote
-		matchesRemote, err := eng.BranchMatchesRemote(name)
+		status, err := eng.GetBranchRemoteStatus(name)
+		matchesRemote := true
 		if err != nil {
-			splog.Debug("Failed to check if branch matches remote: %v", err)
-			matchesRemote = true // Assume matches if check fails
+			splog.Debug("Failed to get branch remote status: %v", err)
+		} else {
+			matchesRemote = status.Matches()
 		}
+
 		if !matchesRemote && prInfo != nil && prInfo.Number() != nil {
 			// Get detailed difference information
 			diffInfo, _ := eng.GetBranchRemoteDifference(name)

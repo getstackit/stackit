@@ -121,15 +121,6 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 	return *meta.ParentBranchRevision == parentRev
 }
 
-// BranchMatchesRemote checks if a branch matches its remote
-func (e *engineImpl) BranchMatchesRemote(branchName string) (bool, error) {
-	status, err := e.GetBranchRemoteStatus(branchName)
-	if err != nil {
-		return false, err
-	}
-	return status.Matches(), nil
-}
-
 // GetBranchRemoteStatus returns the relationship between a local branch and its remote
 func (e *engineImpl) GetBranchRemoteStatus(branchName string) (BranchRemoteStatus, error) {
 	e.mu.RLock()

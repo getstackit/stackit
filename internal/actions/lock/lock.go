@@ -40,10 +40,9 @@ func Action(ctx *app.Context, branchName string) error {
 			if b.IsTrunk() {
 				continue
 			}
-			matches, err := eng.BranchMatchesRemote(b.GetName())
-			if err == nil && !matches {
-				diff, err := eng.GetBranchRemoteDifference(b.GetName())
-				if err == nil && (strings.Contains(diff, "ahead") || strings.Contains(diff, "not found on remote") || strings.Contains(diff, "diverged")) {
+			status, err := eng.GetBranchRemoteStatus(b.GetName())
+			if err == nil && !status.Matches() {
+				if status.Ahead() || status.MissingRemote() || status.Diverged() {
 					unpushedBranches = append(unpushedBranches, b.GetName())
 				}
 			}

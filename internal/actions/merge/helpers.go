@@ -90,13 +90,13 @@ func CheckSyncStatus(ctx context.Context, eng engine.Engine, splog *tui.Splog) (
 			continue
 		}
 
-		matchesRemote, err := eng.BranchMatchesRemote(branchName)
+		status, err := eng.GetBranchRemoteStatus(branchName)
 		if err != nil {
-			splog.Debug("Failed to check if %s matches remote: %v", branchName, err)
+			splog.Debug("Failed to get status for %s: %v", branchName, err)
 			continue
 		}
 
-		if !matchesRemote {
+		if !status.Matches() {
 			needsSync = true
 			staleBranches = append(staleBranches, branchName)
 		}

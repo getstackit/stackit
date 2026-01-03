@@ -68,8 +68,8 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 		prInfo, _ := branch.GetPrInfo()
 		parentBranch := eng.Trunk().GetName()
 		baseChanged := prInfo.Base() != parentBranch
-		matches, _ := eng.BranchMatchesRemote(branch.GetName())
-		branchChanged := !matches
+		remoteStatus, _ := eng.GetBranchRemoteStatus(branch.GetName())
+		branchChanged := !remoteStatus.Matches()
 		t.Logf("baseChanged: %v, branchChanged: %v, prInfo.IsLocked: %v, branch.IsLocked: %v", baseChanged, branchChanged, prInfo.IsLocked(), branch.IsLocked())
 	}
 	require.False(t, status.NeedsUpdate, "Should not need update if lock status is consistent")

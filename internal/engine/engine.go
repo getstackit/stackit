@@ -25,7 +25,6 @@ import (
 type PRManager interface {
 	UpsertPrInfo(branch Branch, prInfo *PrInfo) error
 	GetBranchRemoteStatus(branchName string) (BranchRemoteStatus, error)
-	BranchMatchesRemote(branchName string) (bool, error)
 	PopulateRemoteShas() error
 	PushBranch(ctx context.Context, branchName string, remote string, opts git.PushOptions) error
 }

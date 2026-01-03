@@ -31,11 +31,31 @@ func (r *runner) Merge(ctx context.Context, branchName string, opts MergeOptions
 	return nil
 }
 
-func (r *runner) IsMergeInProgress(_ context.Context) bool {
-	if r.repoRoot == "" {
-		return false
+func (r *runner) IsMergeInProgress(ctx context.Context) bool {
+	output, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		// Fallback to non-absolute if absolute-git-dir fails (older git versions)
+		output, err = r.RunGitCommandWithContext(ctx, "rev-parse", "--git-dir")
+		if err != nil {
+			// If we can't even get the git dir, fallback to the assumption
+			if r.repoRoot == "" {
+				return false
+			}
+			mergeHead := filepath.Join(r.repoRoot, ".git", "MERGE_HEAD")
+			if _, err := os.Stat(mergeHead); err == nil {
+				return true
+			}
+			return false
+		}
 	}
-	mergeHead := filepath.Join(r.repoRoot, ".git", "MERGE_HEAD")
+
+	gitDir := strings.TrimSpace(output)
+	// If gitDir is relative and we have repoRoot, make it absolute
+	if !filepath.IsAbs(gitDir) && r.repoRoot != "" {
+		gitDir = filepath.Join(r.repoRoot, gitDir)
+	}
+
+	mergeHead := filepath.Join(gitDir, "MERGE_HEAD")
 	if _, err := os.Stat(mergeHead); err == nil {
 		return true
 	}

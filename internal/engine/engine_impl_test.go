@@ -13,7 +13,9 @@ import (
 )
 
 func TestTrackBranch(t *testing.T) {
+	t.Parallel()
 	t.Run("tracks branch with parent", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create feature branch
@@ -42,6 +44,7 @@ func TestTrackBranch(t *testing.T) {
 	})
 
 	t.Run("tracks branch with non-trunk parent", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create both branches first
@@ -85,6 +88,7 @@ func TestTrackBranch(t *testing.T) {
 	})
 
 	t.Run("fails when branch does not exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		err := s.Engine.TrackBranch(context.Background(), "nonexistent", "main")
@@ -93,6 +97,7 @@ func TestTrackBranch(t *testing.T) {
 	})
 
 	t.Run("fails when parent does not exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create feature branch
@@ -108,7 +113,9 @@ func TestTrackBranch(t *testing.T) {
 }
 
 func TestSetParent(t *testing.T) {
+	t.Parallel()
 	t.Run("updates parent relationship", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create all branches first
@@ -162,7 +169,9 @@ func TestSetParent(t *testing.T) {
 }
 
 func TestDeleteBranch(t *testing.T) {
+	t.Parallel()
 	t.Run("deletes branch and updates children", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create branch structure: main -> branch1 -> branch2, branch3
@@ -226,6 +235,7 @@ func TestDeleteBranch(t *testing.T) {
 	})
 
 	t.Run("deletes branch with multiple siblings and children", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"P":   "main",
@@ -294,6 +304,7 @@ func TestDeleteBranch(t *testing.T) {
 	})
 
 	t.Run("fails when trying to delete trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		err := s.Engine.DeleteBranch(context.Background(), s.Engine.GetBranch("main"))
@@ -303,7 +314,9 @@ func TestDeleteBranch(t *testing.T) {
 }
 
 func TestGetRelativeStack(t *testing.T) {
+	t.Parallel()
 	t.Run("returns downstack (ancestors) excluding trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -323,6 +336,7 @@ func TestGetRelativeStack(t *testing.T) {
 	})
 
 	t.Run("returns upstack (descendants)", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -344,6 +358,7 @@ func TestGetRelativeStack(t *testing.T) {
 	})
 
 	t.Run("returns only current branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -360,6 +375,7 @@ func TestGetRelativeStack(t *testing.T) {
 	})
 
 	t.Run("returns full stack (downstack + current + upstack) excluding trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -387,6 +403,7 @@ func TestGetRelativeStack(t *testing.T) {
 	})
 
 	t.Run("returns branching stacks in DFS order (parents before children)", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"stackA":       "main",
@@ -466,7 +483,9 @@ func TestNewEngine_Scoping(t *testing.T) {
 }
 
 func TestRestackBranches(t *testing.T) {
+	t.Parallel()
 	t.Run("restacks branch when parent has moved", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -488,6 +507,7 @@ func TestRestackBranches(t *testing.T) {
 	})
 
 	t.Run("returns unneeded when branch is already fixed", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -501,6 +521,7 @@ func TestRestackBranches(t *testing.T) {
 	})
 
 	t.Run("auto-tracks branch when branch is not tracked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("branch1").
 			Commit("branch1 change")
@@ -523,7 +544,9 @@ func TestRestackBranches(t *testing.T) {
 }
 
 func TestRebuild(t *testing.T) {
+	t.Parallel()
 	t.Run("rebuilds cache from Git state", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -563,7 +586,9 @@ func TestRebuild(t *testing.T) {
 }
 
 func TestIsBranchTracked(t *testing.T) {
+	t.Parallel()
 	t.Run("returns true for tracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("branch1").
 			Commit("branch1 change").
@@ -578,6 +603,7 @@ func TestIsBranchTracked(t *testing.T) {
 	})
 
 	t.Run("returns false for untracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("branch1").
 			Commit("branch1 change").
@@ -588,7 +614,9 @@ func TestIsBranchTracked(t *testing.T) {
 }
 
 func TestIsTrunk(t *testing.T) {
+	t.Parallel()
 	t.Run("returns true for trunk branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		require.True(t, s.Engine.GetBranch("main").IsTrunk())
@@ -597,7 +625,9 @@ func TestIsTrunk(t *testing.T) {
 }
 
 func TestGetParentPrecondition(t *testing.T) {
+	t.Parallel()
 	t.Run("returns parent when exists", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -609,6 +639,7 @@ func TestGetParentPrecondition(t *testing.T) {
 	})
 
 	t.Run("returns trunk when no parent", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("branch1").
 			Commit("branch1 change").
@@ -622,7 +653,9 @@ func TestGetParentPrecondition(t *testing.T) {
 }
 
 func TestIsMergedIntoTrunk(t *testing.T) {
+	t.Parallel()
 	t.Run("returns false for unmerged branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("branch1").
 			Commit("branch1 change").
@@ -635,7 +668,9 @@ func TestIsMergedIntoTrunk(t *testing.T) {
 }
 
 func TestIsBranchEmpty(t *testing.T) {
+	t.Parallel()
 	t.Run("returns false for branch with changes", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("branch1").
 			CommitChange("file1", "branch1 change").
@@ -647,6 +682,7 @@ func TestIsBranchEmpty(t *testing.T) {
 	})
 
 	t.Run("returns true for branch with no changes", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("branch1").
 			Checkout("main")
@@ -658,7 +694,9 @@ func TestIsBranchEmpty(t *testing.T) {
 }
 
 func TestUpsertPrInfo(t *testing.T) {
+	t.Parallel()
 	t.Run("creates PR info for branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -689,6 +727,7 @@ func TestUpsertPrInfo(t *testing.T) {
 	})
 
 	t.Run("updates existing PR info", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -715,7 +754,9 @@ func TestUpsertPrInfo(t *testing.T) {
 }
 
 func TestGetRelativeStackUpstack(t *testing.T) {
+	t.Parallel()
 	t.Run("returns all descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -737,7 +778,9 @@ func TestGetRelativeStackUpstack(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
+	t.Parallel()
 	t.Run("resets engine with new trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -759,7 +802,9 @@ func TestReset(t *testing.T) {
 }
 
 func TestConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	t.Run("handles concurrent reads safely", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -786,7 +831,9 @@ func TestConcurrentAccess(t *testing.T) {
 }
 
 func TestBranchMatchesRemote(t *testing.T) {
+	t.Parallel()
 	t.Run("returns true when branch matches remote", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a bare remote
@@ -815,6 +862,7 @@ func TestBranchMatchesRemote(t *testing.T) {
 	})
 
 	t.Run("returns false when branch has local changes", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a bare remote
@@ -846,6 +894,7 @@ func TestBranchMatchesRemote(t *testing.T) {
 	})
 
 	t.Run("returns false when branch does not exist on remote", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a bare remote
@@ -872,6 +921,7 @@ func TestBranchMatchesRemote(t *testing.T) {
 	})
 
 	t.Run("returns false after amend (branch diverged)", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a bare remote
@@ -906,7 +956,9 @@ func TestBranchMatchesRemote(t *testing.T) {
 }
 
 func TestPopulateRemoteShas(t *testing.T) {
+	t.Parallel()
 	t.Run("populates SHAs for all remote branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a bare remote
@@ -943,6 +995,7 @@ func TestPopulateRemoteShas(t *testing.T) {
 	})
 
 	t.Run("handles empty remote gracefully", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a bare remote but don't push anything
@@ -961,7 +1014,9 @@ func TestPopulateRemoteShas(t *testing.T) {
 }
 
 func TestEdgeCases(t *testing.T) {
+	t.Parallel()
 	t.Run("handles branch with no parent gracefully", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("branch1").
 			Commit("branch1 change").
@@ -979,6 +1034,7 @@ func TestEdgeCases(t *testing.T) {
 	})
 
 	t.Run("handles multiple children correctly", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create multiple branches from main
@@ -1003,7 +1059,9 @@ func TestEdgeCases(t *testing.T) {
 }
 
 func TestDetachAndResetBranchChanges(t *testing.T) {
+	t.Parallel()
 	t.Run("detaches and soft resets to parent merge base", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil)
 		err := s.Scene.Repo.CreateChangeAndCommit("initial content", "shared")
 		require.NoError(t, err)
@@ -1038,6 +1096,7 @@ func TestDetachAndResetBranchChanges(t *testing.T) {
 	})
 
 	t.Run("works with multi-commit branch modifying same file", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil)
 		err := s.Scene.Repo.CreateChangeAndCommit("initial", "shared")
 		require.NoError(t, err)
@@ -1069,6 +1128,7 @@ func TestDetachAndResetBranchChanges(t *testing.T) {
 	})
 
 	t.Run("works with stacked branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil)
 		err := s.Scene.Repo.CreateChangeAndCommit("initial", "shared")
 		require.NoError(t, err)
@@ -1104,6 +1164,7 @@ func TestDetachAndResetBranchChanges(t *testing.T) {
 	})
 
 	t.Run("handles untracked branch using trunk as parent", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil)
 		err := s.Scene.Repo.CreateChangeAndCommit("initial", "shared")
 		require.NoError(t, err)
@@ -1128,6 +1189,7 @@ func TestDetachAndResetBranchChanges(t *testing.T) {
 	})
 
 	t.Run("handles new files as untracked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create feature branch with a NEW file (doesn't exist on main)
@@ -1156,7 +1218,9 @@ func TestDetachAndResetBranchChanges(t *testing.T) {
 }
 
 func TestSetParentScenarios(t *testing.T) {
+	t.Parallel()
 	t.Run("preserves divergence point when parent is rebased and merged into trunk", func(t *testing.T) {
+		t.Parallel()
 		// Scenario: main -> branch1 -> branch2
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
@@ -1200,6 +1264,7 @@ func TestSetParentScenarios(t *testing.T) {
 	})
 
 	t.Run("updates divergence point when parent is folded into child (upward merge)", func(t *testing.T) {
+		t.Parallel()
 		// Scenario: main -> branch1 -> branch2
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
@@ -1230,6 +1295,7 @@ func TestSetParentScenarios(t *testing.T) {
 	})
 
 	t.Run("updates divergence point after manual rebase onto same parent", func(t *testing.T) {
+		t.Parallel()
 		// Scenario: main -> branch1
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
@@ -1261,7 +1327,9 @@ func TestSetParentScenarios(t *testing.T) {
 }
 
 func TestFrozenBranches(t *testing.T) {
+	t.Parallel()
 	t.Run("set and check frozen status", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.CreateBranch("feature").
@@ -1284,6 +1352,7 @@ func TestFrozenBranches(t *testing.T) {
 	})
 
 	t.Run("canModify helper respects frozen status", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.CreateBranch("feature").
@@ -1310,6 +1379,7 @@ func TestFrozenBranches(t *testing.T) {
 	})
 
 	t.Run("EnsureCanModify returns proper error type for frozen branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.CreateBranch("feature").
@@ -1346,6 +1416,7 @@ func TestFrozenBranches(t *testing.T) {
 	})
 
 	t.Run("EnsureCanModify returns proper error type for locked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.CreateBranch("feature").
@@ -1378,6 +1449,7 @@ func TestFrozenBranches(t *testing.T) {
 	})
 
 	t.Run("EnsureCanModify returns proper error type for locked and frozen branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.CreateBranch("feature").
@@ -1412,6 +1484,7 @@ func TestFrozenBranches(t *testing.T) {
 	})
 
 	t.Run("frozen status persists after engine rebuild", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.CreateBranch("feature").

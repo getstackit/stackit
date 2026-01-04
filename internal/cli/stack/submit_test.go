@@ -1,7 +1,6 @@
 package stack_test
 
 import (
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,41 +20,19 @@ func TestSubmitCommand(t *testing.T) {
 
 	t.Run("dry-run output format", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
+			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+				return err
+			}
+			runCliCommand(binaryPath, s.Dir, "init")
+			for _, b := range []string{"branch-a", "branch-b", "branch-c"} {
+				runCliCommand(binaryPath, s.Dir, "create", b)
+			}
+			return s.Repo.CheckoutBranch("branch-b")
+		})
 
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch-a")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch-b")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch-c")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		err = scene.Repo.CheckoutBranch("branch-b")
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "submit failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-
+		// 1. Basic submit (downstack)
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
 		expected := testhelpers.NormalizeOutput(`
 Stack to submit:
   branch-a
@@ -67,117 +44,28 @@ Stack to submit:
   ▸ branch-a → create
   ▸ branch-b (current) → create
 `)
+		require.Equal(t, expected, testhelpers.NormalizeOutput(output))
 
-		require.Equal(t, expected, normalized, "output format should match expected structure")
-	})
-
-	t.Run("submit with --stack includes descendants", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch1")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch2")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch3")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		err = scene.Repo.CheckoutBranch("branch2")
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "submit", "--stack", "--dry-run", "--no-edit", "--draft", "--no-interactive")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "submit command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-
-		expected := testhelpers.NormalizeOutput(`
+		// 2. Submit --stack (full stack)
+		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--stack", "--dry-run", "--no-edit", "--draft", "--no-interactive")
+		expectedStack := testhelpers.NormalizeOutput(`
 Stack to submit:
-  branch1
-● branch2
-  branch3
+  branch-a
+● branch-b
+  branch-c
 ⚠️  The following branches have no changes:
-⚠️  ▸ branch1
-⚠️  ▸ branch2
-⚠️  ▸ branch3
+⚠️  ▸ branch-a
+⚠️  ▸ branch-b
+⚠️  ▸ branch-c
 ⚠️  Are you sure you want to submit them?
-  ▸ branch1 → create
-  ▸ branch2 (current) → create
-  ▸ branch3 → create
+  ▸ branch-a → create
+  ▸ branch-b (current) → create
+  ▸ branch-c → create
 `)
+		require.Equal(t, expectedStack, testhelpers.NormalizeOutput(output))
 
-		require.Equal(t, expected, normalized, "output should include all branches in stack")
-	})
-
-	t.Run("ss alias works like submit --stack", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
-
-		cmd := exec.Command(binaryPath, "init")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch1")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch2")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "create", "branch3")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		err = scene.Repo.CheckoutBranch("branch2")
-		require.NoError(t, err)
-
-		cmd = exec.Command(binaryPath, "ss", "--dry-run", "--no-edit", "--draft", "--no-interactive")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "ss alias failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-
-		expected := testhelpers.NormalizeOutput(`
-Stack to submit:
-  branch1
-● branch2
-  branch3
-⚠️  The following branches have no changes:
-⚠️  ▸ branch1
-⚠️  ▸ branch2
-⚠️  ▸ branch3
-⚠️  Are you sure you want to submit them?
-  ▸ branch1 → create
-  ▸ branch2 (current) → create
-  ▸ branch3 → create
-`)
-
-		require.Equal(t, expected, normalized, "ss alias should behave like submit --stack")
+		// 3. ss alias (same as submit --stack)
+		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "ss", "--dry-run", "--no-edit", "--draft", "--no-interactive")
+		require.Equal(t, expectedStack, testhelpers.NormalizeOutput(output), "ss alias should behave like submit --stack")
 	})
 }

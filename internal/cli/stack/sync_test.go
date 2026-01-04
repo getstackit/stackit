@@ -1,12 +1,12 @@
 package stack_test
 
 import (
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"stackit.dev/stackit/testhelpers"
+	"stackit.dev/stackit/testhelpers/scenario"
 )
 
 func TestSyncCommand(t *testing.T) {
@@ -19,162 +19,92 @@ func TestSyncCommand(t *testing.T) {
 		t.Fatal("stackit binary not built")
 	}
 
-	t.Run("sync when trunk is up to date", func(t *testing.T) {
+	t.Run("successful sync scenarios", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			return cmd.Run()
-		})
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
 
-		// Run sync --no-restack (to isolate trunk sync output)
-		cmd := exec.Command(binaryPath, "sync", "--no-restack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.NoError(t, err, "sync command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-		require.Contains(t, normalized, "Pulling from remote", "should show pulling trunk")
-		require.Contains(t, normalized, "is up to date", "should show trunk is up to date")
-	})
-
-	t.Run("sync with --restack when branches don't need restacking", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			// Create a branch
-			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
-				return err
-			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
-		})
-
-		// Run sync with restack
-		cmd := exec.Command(binaryPath, "sync", "--restack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.NoError(t, err, "sync command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-		require.Contains(t, normalized, "Pulling from remote", "should show pulling trunk")
-		require.Contains(t, normalized, "is up to date", "should show trunk is up to date")
-		// Restack output - branch doesn't need restacking
-		require.Contains(t, normalized, "branch1 does not need restacking", "should show branch1 doesn't need restacking")
-	})
-
-	t.Run("sync with --restack when branches need restacking", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			// Create branch1
-			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
-				return err
-			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch2 on top of branch1
-			if err := s.Repo.CreateChange("branch2 change", "test2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
-		})
-
-		// Make a change to main so branches need restacking
-		err := scene.Repo.CheckoutBranch("main")
-		require.NoError(t, err)
-		err = scene.Repo.CreateChangeAndCommit("main update", "main-file")
+		// Create a remote to avoid sync errors related to missing remote
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)
 
-		// Switch to branch2 for sync
-		err = scene.Repo.CheckoutBranch("branch2")
-		require.NoError(t, err)
+		s.RunCli("init")
+		s.RunCli("create", "branch1", "-m", "branch1")
+		// Add a commit to branch1 so it's not empty and doesn't get cleaned up by sync
+		s.RunGit("commit", "--allow-empty", "-m", "work on branch1")
 
-		// Run sync with restack
-		cmd := exec.Command(binaryPath, "sync", "--restack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		// 1. Trunk up to date
+		output, err := s.RunCliAndGetOutput("sync", "--no-restack")
+		require.NoError(t, err, "sync --no-restack failed: %s", output)
+		normalized := testhelpers.NormalizeOutput(output)
+		require.Equal(t, testhelpers.NormalizeOutput(`
+📥 Pulling from remote...
+  main is up to date
+🔄 Fetching PR info from GitHub...
+  PR info up to date
+🧹 Cleaning branches...
+💡 Try the --restack flag to automatically restack the current stack.
+✨ Everything is up to date!
+`), normalized)
 
-		require.NoError(t, err, "sync command failed: %s", string(output))
+		// 2. Restack not needed
+		output, err = s.RunCliAndGetOutput("sync", "--restack")
+		require.NoError(t, err, "sync --restack (not needed) failed: %s", output)
+		normalized = testhelpers.NormalizeOutput(output)
+		require.Equal(t, testhelpers.NormalizeOutput(`
+📥 Pulling from remote...
+  main is up to date
+🔄 Fetching PR info from GitHub...
+  PR info up to date
+🧹 Cleaning branches...
+📚 Restacking branches...
+  branch1 does not need restacking
+✨ Everything is up to date!
+`), normalized)
 
-		normalized := testhelpers.NormalizeOutput(string(output))
-		require.Contains(t, normalized, "Pulling from remote", "should show pulling trunk")
-		// Since main was updated locally, remote is still at the old commit, so main is up to date
-		require.Contains(t, normalized, "is up to date", "should show trunk is up to date")
-		// Restack output - branches should be restacked (handler format uses -> revision)
-		require.Contains(t, normalized, "Restacked branch1", "should show branch1 restacked")
-		require.Contains(t, normalized, "Restacked branch2", "should show branch2 restacked")
+		// 3. Restack needed
+		s.RunGit("checkout", "main")
+		s.Scene.Repo.CreateChangeAndCommit("main update", "main-file")
+		s.RunCli("checkout", "branch1")
+
+		output, err = s.RunCliAndGetOutput("sync", "--restack")
+		require.NoError(t, err, "sync --restack (needed) failed: %s", output)
+		normalized = testhelpers.NormalizeOutput(output)
+		// We don't know the exact revision, so we'll check the structure
+		require.Contains(t, normalized, "Restacked branch1 ->")
+		require.Contains(t, normalized, "✅ Summary: restacked 1")
 	})
 
-	t.Run("sync fails with uncommitted changes", func(t *testing.T) {
+	t.Run("sync failures and tips", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			return cmd.Run()
-		})
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
 
-		// Create an uncommitted change
-		err := scene.Repo.CreateChange("uncommitted", "uncommitted", false)
+		// Create a remote to avoid sync errors related to missing remote
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)
 
-		// Run sync
-		cmd := exec.Command(binaryPath, "sync")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		s.RunCli("init")
 
-		require.Error(t, err, "sync should fail with uncommitted changes")
-		require.Contains(t, string(output), "uncommitted changes", "should mention uncommitted changes")
-	})
+		// 1. Uncommitted changes failure
+		s.WithUncommittedChange("unstaged")
+		output, err := s.RunCliAndGetOutput("sync")
+		require.Error(t, err)
+		require.Equal(t, testhelpers.NormalizeOutput(`
+Error: you have uncommitted changes. Please commit or stash them before syncing
+`), testhelpers.NormalizeOutput(output))
 
-	t.Run("sync with --no-restack shows tip", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			// Create a branch
-			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
-				return err
-			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
-		})
+		// 2. Reset and check tip
+		s.RunGit("reset", "--hard")
+		s.RunGit("clean", "-fd") // Ensure untracked files are also gone
 
-		// Run sync with --no-restack
-		cmd := exec.Command(binaryPath, "sync", "--no-restack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.NoError(t, err, "sync command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-		require.Contains(t, normalized, "--restack flag", "should show tip about --restack flag")
+		output, err = s.RunCliAndGetOutput("sync", "--no-restack")
+		require.NoError(t, err, "sync --no-restack failed: %s", output)
+		require.Equal(t, testhelpers.NormalizeOutput(`
+📥 Pulling from remote...
+  main is up to date
+🔄 Fetching PR info from GitHub...
+  PR info up to date
+💡 Try the --restack flag to automatically restack the current stack.
+✨ Everything is up to date!
+`), testhelpers.NormalizeOutput(output))
 	})
 }

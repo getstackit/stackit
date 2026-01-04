@@ -1,7 +1,9 @@
 package git
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +18,7 @@ func (r *runner) getCommitDate(repo *Repository, branchName string) (time.Time, 
 	goGitMu.Lock()
 	defer goGitMu.Unlock()
 
-	hash, err := resolveRefHashInternal(repo, branchName)
+	hash, err := r.resolveRefHashInternal(repo, branchName)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to resolve branch reference: %w", err)
 	}
@@ -34,7 +36,7 @@ func (r *runner) getCommitAuthor(repo *Repository, branchName string) (string, e
 	goGitMu.Lock()
 	defer goGitMu.Unlock()
 
-	hash, err := resolveRefHashInternal(repo, branchName)
+	hash, err := r.resolveRefHashInternal(repo, branchName)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve branch reference: %w", err)
 	}
@@ -52,7 +54,7 @@ func (r *runner) getRevision(repo *Repository, branchName string) (string, error
 	goGitMu.Lock()
 	defer goGitMu.Unlock()
 
-	hash, err := resolveRefHashInternal(repo, branchName)
+	hash, err := r.resolveRefHashInternal(repo, branchName)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve branch reference: %w", err)
 	}
@@ -66,7 +68,7 @@ func (r *runner) getRemoteRevision(repo *Repository, branchName string) (string,
 	defer goGitMu.Unlock()
 
 	// Try refs/remotes/origin/branchName
-	hash, err := resolveRefHashInternal(repo, "origin/"+branchName)
+	hash, err := r.resolveRefHashInternal(repo, "origin/"+branchName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get remote branch reference: %w", err)
 	}
@@ -98,40 +100,50 @@ func iterateCommitsNoLock(repo *Repository, headHash, baseHash plumbing.Hash) ([
 }
 
 // resolveRefHash resolves a ref (branch name, SHA, or ref path) to a hash
-func resolveRefHash(repo *Repository, ref string) (plumbing.Hash, error) {
+func (r *runner) resolveRefHash(repo *Repository, ref string) (plumbing.Hash, error) {
 	// Synchronize go-git operations to prevent concurrent packfile access
 	goGitMu.Lock()
 	defer goGitMu.Unlock()
 
-	return resolveRefHashInternal(repo, ref)
+	return r.resolveRefHashInternal(repo, ref)
 }
 
 // resolveRefHashInternal resolves a ref without locking
-func resolveRefHashInternal(repo *Repository, ref string) (plumbing.Hash, error) {
+func (r *runner) resolveRefHashInternal(repo *Repository, ref string) (plumbing.Hash, error) {
 	// 1. Try as a full reference name
-	if r, err := repo.Reference(plumbing.ReferenceName(ref), true); err == nil {
-		return r.Hash(), nil
+	if refInfo, err := repo.Reference(plumbing.ReferenceName(ref), true); err == nil {
+		return refInfo.Hash(), nil
 	}
 
 	// 2. Try as a local branch
-	if r, err := repo.Reference(plumbing.ReferenceName("refs/heads/"+ref), true); err == nil {
-		return r.Hash(), nil
+	if refInfo, err := repo.Reference(plumbing.ReferenceName("refs/heads/"+ref), true); err == nil {
+		return refInfo.Hash(), nil
 	}
 
 	// 3. Try as a remote branch
-	if r, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+ref), true); err == nil {
-		return r.Hash(), nil
+	if refInfo, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+ref), true); err == nil {
+		return refInfo.Hash(), nil
 	}
 
 	// 4. Try as a tag
-	if r, err := repo.Reference(plumbing.ReferenceName("refs/tags/"+ref), true); err == nil {
-		return r.Hash(), nil
+	if refInfo, err := repo.Reference(plumbing.ReferenceName("refs/tags/"+ref), true); err == nil {
+		return refInfo.Hash(), nil
 	}
 
 	// 5. Try ResolveRevision (handles SHAs, short SHAs, and complex expressions like HEAD~1)
 	hash, err := repo.ResolveRevision(plumbing.Revision(ref))
 	if err == nil {
 		return *hash, nil
+	}
+
+	// FALLBACK: Use git rev-parse if go-git fails.
+	// This is especially important for worktrees where go-git might not find all refs
+	// because it doesn't always handle the 'commondir' redirection in worktrees.
+	if output, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", ref); err == nil {
+		trimmed := strings.TrimSpace(output)
+		if len(trimmed) == 40 || len(trimmed) == 64 { // valid SHA1 or SHA256
+			return plumbing.NewHash(trimmed), nil
+		}
 	}
 
 	return plumbing.ZeroHash, fmt.Errorf("failed to resolve ref %s: reference not found", ref)

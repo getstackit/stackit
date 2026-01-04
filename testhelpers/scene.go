@@ -245,10 +245,6 @@ func (s *Scene) writeDefaultConfigs() error {
 		return err
 	}
 
-	// Set environment variable for user config path
-	_ = os.Setenv("STACKIT_USER_CONFIG_PATH", userConfigPath)
-	_ = os.Setenv("STACKIT_PROFILE", "")
-
 	return nil
 }
 

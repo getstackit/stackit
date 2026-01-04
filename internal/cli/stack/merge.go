@@ -149,7 +149,7 @@ If no flags or arguments are provided, an interactive wizard will guide you thro
 
 	cmd.Flags().StringVar(&strategy, "strategy", "", "Merge strategy: 'bottom-up' (merge each PR from bottom), 'top-down' (squash into one PR), or 'consolidate' (single atomic merge). Interactive if not specified.")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation prompt")
-	cmd.Flags().BoolVar(&force, "force", false, "Skip validation checks (draft PRs, failing CI)")
+	cmd.Flags().BoolVar(&force, "force", false, "Skip validation checks (draft PRs, failing CI) and automatically overwrite local trunk if it has diverged from remote")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show merge plan without executing")
 	cmd.Flags().StringVar(&scope, "scope", "", "Bulk-merge all branches within the specified scope")
 	cmd.Flags().BoolVarP(&consolidate, "consolidate", "c", false, "Use consolidate strategy (shortcut for --strategy=consolidate)")

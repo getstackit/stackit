@@ -175,7 +175,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		case engine.PullUnneeded:
 			splog.Debug("Trunk is up to date")
 		case engine.PullConflict:
-			return fmt.Errorf("trunk could not be fast-forwarded (conflict)")
+			return fmt.Errorf("trunk could not be fast-forwarded (conflict). This usually means your local trunk branch has diverged from the remote. Please sync your trunk branch manually")
 		}
 
 	case StepRestack:

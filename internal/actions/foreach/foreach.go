@@ -144,6 +144,8 @@ func foreachSequential(ctx *app.Context, opts Options, branches []engine.Branch,
 		cmd.Stderr = &output
 		cmd.Stdin = os.Stdin
 		cmd.Dir = ctx.RepoRoot
+		cmd.Env = os.Environ()
+		cmd.Env = append(cmd.Env, "STACKIT_BRANCH="+branchName)
 
 		err := cmd.Run()
 		outputStr := output.String()
@@ -361,6 +363,7 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 	cmd.Stderr = &output
 	cmd.Dir = worktreePath
 	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, "STACKIT_BRANCH="+branch.GetName())
 
 	if err := cmd.Run(); err != nil {
 		res.err = err

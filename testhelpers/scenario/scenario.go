@@ -18,6 +18,7 @@ import (
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/config"
 	"stackit.dev/stackit/internal/engine"
+	"stackit.dev/stackit/internal/handlers"
 	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/testhelpers"
 )
@@ -525,7 +526,7 @@ func (s *Scenario) Restack(branchName string, scope engine.StackRange) *Scenario
 		Scope:      scope,
 	}
 
-	err := actions.RestackAction(s.Context, restackOpts)
+	err := actions.RestackAction(s.Context, restackOpts, &handlers.NullRestackHandler{})
 	require.NoError(s.T, err, "failed to restack branch %s", branchName)
 
 	// Rebuild engine state after action

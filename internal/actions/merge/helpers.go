@@ -83,22 +83,20 @@ func CheckSyncStatus(ctx context.Context, eng engine.Engine, splog *tui.Splog) (
 
 	// Check all tracked branches
 	allBranches := eng.AllBranches()
-	for _, branch := range allBranches {
-		branchName := branch.GetName()
-		branch := eng.GetBranch(branchName)
-		if branch.IsTrunk() {
+	for _, b := range allBranches {
+		if b.IsTrunk() {
 			continue
 		}
 
-		matchesRemote, err := eng.BranchMatchesRemote(branchName)
+		status, err := eng.GetBranchRemoteStatus(b)
 		if err != nil {
-			splog.Debug("Failed to check if %s matches remote: %v", branchName, err)
+			splog.Debug("Failed to get status for %s: %v", b.GetName(), err)
 			continue
 		}
 
-		if !matchesRemote {
+		if !status.Matches() {
 			needsSync = true
-			staleBranches = append(staleBranches, branchName)
+			staleBranches = append(staleBranches, b.GetName())
 		}
 	}
 

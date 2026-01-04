@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,9 +23,37 @@ import (
 // InProcessRunner is a function that executes a stackit command in-process.
 type InProcessRunner func(workDir string, args ...string) (string, error)
 
-// GlobalInProcessRunner is a registered runner for in-process CLI execution.
-// This is used to break import cycles between scenario and cli packages.
-var GlobalInProcessRunner InProcessRunner
+var (
+	// GlobalInProcessRunner is a registered runner for in-process CLI execution.
+	// This is used to break import cycles between scenario and cli packages.
+	globalInProcessRunner InProcessRunner
+	globalRunnerMu        sync.RWMutex
+)
+
+// SetGlobalInProcessRunner sets the global in-process runner in a thread-safe way.
+func SetGlobalInProcessRunner(runner InProcessRunner) {
+	globalRunnerMu.Lock()
+	defer globalRunnerMu.Unlock()
+	globalInProcessRunner = runner
+}
+
+// GetGlobalInProcessRunner gets the global in-process runner in a thread-safe way.
+func GetGlobalInProcessRunner() InProcessRunner {
+	globalRunnerMu.RLock()
+	defer globalRunnerMu.RUnlock()
+	return globalInProcessRunner
+}
+
+// GlobalInProcessRunner is kept for backward compatibility.
+// It's a pointer to a struct that provides thread-safe access.
+// Use SetGlobalInProcessRunner and GetGlobalInProcessRunner directly for better clarity.
+var GlobalInProcessRunner = &struct {
+	Get func() InProcessRunner
+	Set func(InProcessRunner)
+}{
+	Get: GetGlobalInProcessRunner,
+	Set: SetGlobalInProcessRunner,
+}
 
 // Scenario represents a high-level test scenario that combines a Scene,
 // an Engine, and a runtime Context to provide a terse API for integration tests.
@@ -276,11 +305,12 @@ func (s *Scenario) RunCli(args ...string) *Scenario {
 	s.T.Helper()
 
 	if s.InProcess {
-		if GlobalInProcessRunner == nil {
+		runner := GetGlobalInProcessRunner()
+		if runner == nil {
 			s.T.Fatal("GlobalInProcessRunner not set. Import stackit.dev/stackit/internal/integration/setup in your test.")
 		}
 		// Use in-process runner if enabled
-		_, err := GlobalInProcessRunner(s.Scene.Dir, args...)
+		_, err := runner(s.Scene.Dir, args...)
 		require.NoError(s.T, err, "CLI command failed: stackit %v", args)
 
 		if s.Engine != nil {
@@ -308,10 +338,11 @@ func (s *Scenario) RunCli(args ...string) *Scenario {
 // RunCliAndGetOutput executes a stackit CLI command and returns its output.
 func (s *Scenario) RunCliAndGetOutput(args ...string) (string, error) {
 	if s.InProcess {
-		if GlobalInProcessRunner == nil {
+		runner := GetGlobalInProcessRunner()
+		if runner == nil {
 			return "", fmt.Errorf("GlobalInProcessRunner not set")
 		}
-		return GlobalInProcessRunner(s.Scene.Dir, args...)
+		return runner(s.Scene.Dir, args...)
 	}
 
 	if s.BinaryPath == "" {
@@ -334,10 +365,11 @@ func (s *Scenario) RunExpectError(args ...string) *Scenario {
 	s.T.Helper()
 
 	if s.InProcess {
-		if GlobalInProcessRunner == nil {
+		runner := GetGlobalInProcessRunner()
+		if runner == nil {
 			s.T.Fatal("GlobalInProcessRunner not set")
 		}
-		_, err := GlobalInProcessRunner(s.Scene.Dir, args...)
+		_, err := runner(s.Scene.Dir, args...)
 		require.Error(s.T, err, "expected CLI command to fail: stackit %v", args)
 
 		if s.Engine != nil {

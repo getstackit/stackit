@@ -18,6 +18,7 @@ import (
 	"stackit.dev/stackit/internal/config"
 	_ "stackit.dev/stackit/internal/demo" // Register demo engine factory
 	"stackit.dev/stackit/internal/output"
+	"stackit.dev/stackit/internal/splog"
 	"stackit.dev/stackit/internal/tui"
 	submitComponent "stackit.dev/stackit/internal/tui/components/submit"
 	"stackit.dev/stackit/internal/tui/components/tree"
@@ -353,21 +354,21 @@ func (h *InteractiveSubmitHandler) ensureProgramStarted() {
 	// Set up signal handler to ensure terminal is restored on interrupt
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
+	splog.SafeGo(func() {
 		<-sigChan
 		h.Cleanup()
 		// Re-raise the signal so the process can exit properly
 		signal.Stop(sigChan)
-	}()
+	})
 
 	// Run program in background
-	go func() {
+	splog.SafeGo(func() {
 		if _, err := h.program.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error running submit TUI: %v\n", err)
 		}
 		// Ensure cleanup happens when program exits
 		h.Cleanup()
-	}()
+	})
 }
 
 // Cleanup ensures the terminal is restored to normal mode

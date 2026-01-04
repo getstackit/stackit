@@ -2,14 +2,18 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/mattn/go-isatty"
+
+	"stackit.dev/stackit/internal/splog"
 )
 
 const (
@@ -154,6 +158,8 @@ func SetInteractive(interactive bool) {
 	} else {
 		atomic.StoreInt32(&interactiveMode, 0)
 	}
+	// Register terminal restorer for splog.SafeGo
+	splog.TerminalRestorer = RestoreTerminal
 }
 
 // IsTTY returns true if we can use a TTY for interactive TUI
@@ -185,6 +191,22 @@ func IsDemoMode() bool {
 	return os.Getenv("STACKIT_DEMO") != ""
 }
 
+// RestoreTerminal attempts to restore the terminal state after a TUI or crash.
+func RestoreTerminal() {
+	if atomic.LoadInt32(&interactiveMode) == 0 {
+		return
+	}
+	// Restore cursor using termenv
+	fmt.Print("\x1b[?25h")
+
+	// Try to restore terminal mode for stdin, stdout, and stderr.
+	// This is important if a TUI (like Bubble Tea) was interrupted by a panic.
+	// While we don't have the original state, most terminal libraries will have
+	// left the terminal in raw mode. Calling this ensures we print a newline
+	// to move past any TUI artifacts.
+	_, _ = os.Stdout.WriteString("\n")
+}
+
 // Run runs the given worker function for each item in the slice in parallel.
 // It uses runtime.GOMAXPROCS(0) as the default number of workers.
 func Run[T any](items []T, worker func(item T)) {
@@ -208,6 +230,12 @@ func Run[T any](items []T, worker func(item T)) {
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					splog.LogPanic(r, debug.Stack())
+					panic(r)
+				}
+			}()
 			for item := range jobs {
 				worker(item)
 			}
@@ -241,6 +269,12 @@ func RunWithWorkers[T any](items []T, numWorkers int, worker func(item T)) {
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					splog.LogPanic(r, debug.Stack())
+					panic(r)
+				}
+			}()
 			for item := range jobs {
 				worker(item)
 			}

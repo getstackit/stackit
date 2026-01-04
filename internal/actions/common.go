@@ -369,9 +369,14 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 	reader := ctx.Reader()
 	out := ctx.Output
 
-	msg := style.ColorRed(fmt.Sprintf("Hit conflict restacking %s", branchName))
-	out.Info("%s", msg)
-	out.Newline()
+	if branchName != "" {
+		msg := style.ColorRed(fmt.Sprintf("Hit conflict restacking %s", branchName))
+		out.Info("%s", msg)
+		out.Newline()
+	} else {
+		out.Info("%s", style.ColorRed("Hit rebase conflict"))
+		out.Newline()
+	}
 
 	// Get unmerged files
 	unmergedFiles, err := reader.GetUnmergedFiles(ctx.Context)

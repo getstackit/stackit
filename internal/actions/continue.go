@@ -81,29 +81,39 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		branchName := result.BranchName
 		if branchName == "" {
 			currentBranch := eng.CurrentBranch()
-			if currentBranch == nil {
-				return fmt.Errorf("not on a branch")
+			if currentBranch != nil {
+				branchName = currentBranch.GetName()
 			}
-			branchName = currentBranch.GetName()
 		}
-		if err := PrintConflictStatus(ctx, branchName); err != nil {
-			return fmt.Errorf("failed to print conflict status: %w", err)
+		if branchName != "" {
+			if err := PrintConflictStatus(ctx, branchName); err != nil {
+				return fmt.Errorf("failed to print conflict status: %w", err)
+			}
+		} else {
+			out.Warn("Hit rebase conflict, but could not determine current branch name.")
 		}
 		return fmt.Errorf("rebase conflict is not yet resolved")
 	}
 
 	// Success - inform user
-	out.Info("Resolved rebase conflict for %s.", style.ColorBranchName(result.BranchName, true))
+	if result.BranchName != "" {
+		out.Info("Resolved rebase conflict for %s.", style.ColorBranchName(result.BranchName, true))
+	} else {
+		out.Info("Resolved rebase conflict.")
+	}
 
 	// Continue with remaining branches to restack
 	if len(continuation.BranchesToRestack) > 0 {
 		// Convert []string to []Branch for RestackBranches
-		branches := make([]engine.Branch, len(continuation.BranchesToRestack))
-		for i, name := range continuation.BranchesToRestack {
-			branches[i] = eng.GetBranch(name)
+		branches := make([]engine.Branch, 0, len(continuation.BranchesToRestack))
+		for _, name := range continuation.BranchesToRestack {
+			branch := eng.GetBranch(name)
+			branches = append(branches, branch)
 		}
-		if err := RestackBranches(ctx, branches); err != nil {
-			return err
+		if len(branches) > 0 {
+			if err := RestackBranches(ctx, branches); err != nil {
+				return err
+			}
 		}
 	}
 

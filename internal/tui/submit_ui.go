@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"stackit.dev/stackit/internal/output"
+	"stackit.dev/stackit/internal/splog"
 	"stackit.dev/stackit/internal/tui/components/submit"
 	"stackit.dev/stackit/internal/tui/components/tree"
 	"stackit.dev/stackit/internal/tui/style"
@@ -238,11 +239,11 @@ func (u *TTYSubmitUI) ensureProgramStarted() {
 	u.program = tea.NewProgram(u.model, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
 
 	// Run program in background
-	go func() {
+	splog.SafeGo(func() {
 		if _, err := u.program.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error running submit TUI: %v\n", err)
 		}
-	}()
+	})
 }
 
 // ShowStack displays the branch stack being submitted

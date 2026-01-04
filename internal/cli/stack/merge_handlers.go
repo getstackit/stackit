@@ -11,6 +11,7 @@ import (
 	"stackit.dev/stackit/internal/actions/merge"
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/github"
+	"stackit.dev/stackit/internal/splog"
 	"stackit.dev/stackit/internal/tui"
 )
 
@@ -111,20 +112,20 @@ func (h *InteractiveMergeHandler) startTUI(plan *merge.Plan) {
 	// Set up signal handler to ensure terminal is restored on interrupt
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
+	splog.SafeGo(func() {
 		<-sigChan
 		h.Cleanup()
 		// Re-raise the signal so the process can exit properly
 		signal.Stop(sigChan)
-	}()
+	})
 
-	go func() {
+	splog.SafeGo(func() {
 		err := tui.RunMergeTUI(groups, stepDescriptions, h.reporter.Updates(), h.done)
 		if err != nil {
 			h.errChan <- err
 		}
 		h.Cleanup()
-	}()
+	})
 }
 
 // Cleanup ensures the terminal is restored to normal mode

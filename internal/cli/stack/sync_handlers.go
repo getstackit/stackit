@@ -13,6 +13,7 @@ import (
 	syncAction "stackit.dev/stackit/internal/actions/sync"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/output"
+	"stackit.dev/stackit/internal/splog"
 	"stackit.dev/stackit/internal/tui"
 	syncComponent "stackit.dev/stackit/internal/tui/components/sync"
 	"stackit.dev/stackit/internal/tui/style"
@@ -324,21 +325,21 @@ func (h *InteractiveSyncHandler) Start(totalOps int) {
 	// Use a buffered channel and only register if not already registered
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
+	splog.SafeGo(func() {
 		<-sigChan
 		h.Cleanup()
 		// Re-raise the signal so the process can exit properly
 		signal.Stop(sigChan)
-	}()
+	})
 
 	// Run program in background
-	go func() {
+	splog.SafeGo(func() {
 		if _, err := h.program.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error running sync TUI: %v\n", err)
 		}
 		// Ensure cleanup happens when program exits
 		h.Cleanup()
-	}()
+	})
 }
 
 // EmitEvent handles progress updates

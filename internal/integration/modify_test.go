@@ -13,11 +13,10 @@ import (
 
 func TestModifyWorkflow(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("modify amends and restacks upstack branches", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Build a stack: main -> feature-a -> feature-b -> feature-c
 		sh.Log("Creating stacked branches...")
@@ -68,7 +67,7 @@ func TestModifyWorkflow(t *testing.T) {
 
 	t.Run("modify with --commit creates new commit and restacks", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Build a stack: main -> feature-a -> feature-b
 		sh.Log("Creating stacked branches...")
@@ -104,7 +103,7 @@ func TestModifyWorkflow(t *testing.T) {
 
 	t.Run("modify with message changes commit message", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create a branch
 		sh.Write("feature", "feature content").
@@ -129,7 +128,7 @@ func TestModifyWorkflow(t *testing.T) {
 
 	t.Run("modify in diamond-shaped stack restacks all children", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create diamond-shaped stack:
 		//        main
@@ -166,7 +165,7 @@ func TestModifyWorkflow(t *testing.T) {
 
 	t.Run("modify with --update only stages tracked files", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create a branch with a tracked file
 		sh.Write("tracked", "tracked content").
@@ -199,7 +198,7 @@ func TestModifyWorkflow(t *testing.T) {
 
 	t.Run("modify errors on trunk branch", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Stay on main (trunk)
 		sh.OnBranch("main")
@@ -214,7 +213,7 @@ func TestModifyWorkflow(t *testing.T) {
 
 	t.Run("modify branching stack restacks all parallel children", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create a branching stack:
 		//        main

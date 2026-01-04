@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
@@ -16,6 +17,7 @@ import (
 // cliInitHandler implements initaction.Handler for the CLI
 type cliInitHandler struct {
 	noInteractive bool
+	writer        io.Writer
 }
 
 func (h *cliInitHandler) SelectTrunk(_ context.Context, branchNames []string, inferredTrunk string) (string, error) {
@@ -48,7 +50,7 @@ func (h *cliInitHandler) SelectTrunk(_ context.Context, branchNames []string, in
 }
 
 func (h *cliInitHandler) OnSuccess(trunkName string, wasInitialized bool, isReset bool) {
-	splog := tui.NewSplog()
+	splog := tui.NewSplogToWriter(h.writer)
 
 	if wasInitialized {
 		splog.Info("Reinitializing Stackit...")
@@ -84,7 +86,7 @@ func (h *cliInitHandler) OnSuccess(trunkName string, wasInitialized bool, isRese
 // EnsureInitialized initializes stackit if not already initialized.
 // Returns the repo root path. This is used by commands that need stackit
 // to be initialized but want to auto-initialize for convenience.
-func EnsureInitialized(ctx context.Context) (string, error) {
+func EnsureInitialized(ctx context.Context, writer io.Writer) (string, error) {
 	runner := git.NewRunner()
 	repoRoot, err := runner.DiscoverRepoRoot()
 	if err != nil {
@@ -93,10 +95,10 @@ func EnsureInitialized(ctx context.Context) (string, error) {
 
 	cfg, _ := config.LoadConfig(repoRoot)
 	if !cfg.IsInitialized() {
-		splog := tui.NewSplog()
+		splog := tui.NewSplogToWriter(writer)
 		splog.Info("Stackit has not been initialized, attempting to setup now...")
 
-		handler := &cliInitHandler{noInteractive: true}
+		handler := &cliInitHandler{noInteractive: true, writer: writer}
 		err := initaction.Action(ctx, repoRoot, initaction.Options{}, handler)
 		if err != nil {
 			return "", err
@@ -120,13 +122,17 @@ func newInitCmd() *cobra.Command {
 		Short:        "Initialize Stackit in the current repository",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, _ := cmd.Flags().GetString("cwd")
 			runner := git.NewRunner()
+			if cwd != "" {
+				runner = git.NewRunnerWithPath(cwd)
+			}
 			repoRoot, err := runner.DiscoverRepoRoot()
 			if err != nil {
 				return fmt.Errorf("failed to get repo root: %w", err)
 			}
 
-			handler := &cliInitHandler{noInteractive: noInteractive}
+			handler := &cliInitHandler{noInteractive: noInteractive, writer: cmd.OutOrStdout()}
 			opts := initaction.Options{
 				Trunk: trunk,
 				Reset: reset,

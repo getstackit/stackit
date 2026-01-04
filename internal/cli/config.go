@@ -33,9 +33,13 @@ Examples:
   stackit config get submit.footer
   stackit config set submit.footer false`,
 		SilenceUsage: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, _ := cmd.Flags().GetString("cwd")
 			// Get repo root
 			runner := git.NewRunner()
+			if cwd != "" {
+				runner = git.NewRunnerWithPath(cwd)
+			}
 			repoRoot, err := runner.DiscoverRepoRoot()
 			if err != nil {
 				return fmt.Errorf("not a git repository: %w", err)
@@ -43,7 +47,7 @@ Examples:
 
 			// If --list flag is set, or terminal is not interactive, show list
 			if listFlag || !tui.IsTTY() {
-				return actions.ConfigListAction(repoRoot)
+				return actions.ConfigListAction(repoRoot, cmd.OutOrStdout())
 			}
 
 			// Otherwise, show interactive TUI
@@ -66,9 +70,13 @@ func newConfigGetCmd() *cobra.Command {
 		Short:        "Get a configuration value",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, _ := cmd.Flags().GetString("cwd")
 			// Get repo root
 			runner := git.NewRunner()
+			if cwd != "" {
+				runner = git.NewRunnerWithPath(cwd)
+			}
 			repoRoot, err := runner.DiscoverRepoRoot()
 			if err != nil {
 				return fmt.Errorf("not a git repository: %w", err)
@@ -82,9 +90,9 @@ func newConfigGetCmd() *cobra.Command {
 
 			switch key {
 			case "branch.pattern":
-				fmt.Println(cfg.BranchNamePattern())
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.BranchNamePattern())
 			case "submit.footer":
-				fmt.Println(cfg.SubmitFooter())
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.SubmitFooter())
 			default:
 				return fmt.Errorf("unknown configuration key: %s", key)
 			}
@@ -103,9 +111,13 @@ func newConfigSetCmd() *cobra.Command {
 		Short:        "Set a configuration value",
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, _ := cmd.Flags().GetString("cwd")
 			// Get repo root
 			runner := git.NewRunner()
+			if cwd != "" {
+				runner = git.NewRunnerWithPath(cwd)
+			}
 			repoRoot, err := runner.DiscoverRepoRoot()
 			if err != nil {
 				return fmt.Errorf("not a git repository: %w", err)
@@ -119,7 +131,7 @@ func newConfigSetCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			splog := tui.NewSplog()
+			splog := tui.NewSplogToWriter(cmd.OutOrStdout())
 
 			switch key {
 			case "branch.pattern":

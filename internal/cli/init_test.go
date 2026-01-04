@@ -3,7 +3,6 @@ package cli_test
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -11,33 +10,30 @@ import (
 
 	"stackit.dev/stackit/internal/config"
 	"stackit.dev/stackit/testhelpers"
+	"stackit.dev/stackit/testhelpers/scenario"
 )
 
 func TestInitCommand(t *testing.T) {
 	t.Parallel()
-	// Build the stackit binary first
-	binaryPath := getStackitBinary(t)
 
 	t.Run("can run init", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
+		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
 
 		// Create initial commit (needed for init)
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
+		err := s.Scene.Repo.CreateChangeAndCommit("initial", "init")
 		require.NoError(t, err)
 
 		// Remove existing config to test fresh init
-		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
+		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
 		_ = os.Remove(configPath)
 		// Ignore error if file doesn't exist
 
 		// Run init command
-		cmd := exec.Command(binaryPath, "init", "--trunk", "main", "--no-interactive")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "init command failed: %s", string(output))
+		output, err := s.RunCliAndGetOutput("init", "--trunk", "main")
+		require.NoError(t, err, "init command failed: %s", output)
 
-		normalized := testhelpers.NormalizeOutput(string(output))
+		normalized := testhelpers.NormalizeOutput(output)
 
 		expected := testhelpers.NormalizeOutput(`
 Welcome to Stackit!
@@ -61,77 +57,71 @@ Pro-tip: enhance your workflow with integrations:
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 
 		// Verify config was created with correct trunk
-		cfg := readRepoConfig(t, scene.Dir)
+		cfg := readRepoConfig(t, s.Scene.Dir)
 		require.NotNil(t, cfg.Trunk)
 		require.Equal(t, "main", *cfg.Trunk)
 	})
 
 	t.Run("errors on invalid trunk when explicitly provided", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
+		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
 
 		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
+		err := s.Scene.Repo.CreateChangeAndCommit("initial", "init")
 		require.NoError(t, err)
 
 		// Remove existing config
-		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
+		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
 		os.Remove(configPath)
 
 		// Run init with non-existent branch
-		cmd := exec.Command(binaryPath, "init", "--trunk", "random", "--no-interactive")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("init", "--trunk", "random")
 
 		// Should fail with error about branch not found
 		require.Error(t, err, "init should fail with invalid branch")
-		require.Contains(t, string(output), "not found", "error message should mention branch not found")
+		require.Contains(t, output, "not found", "error message should mention branch not found")
 	})
 
 	t.Run("errors on invalid trunk when cannot infer", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
+		s := scenario.NewScenarioParallel(t, func(sc *testhelpers.Scene) error {
 			// Create initial commit first
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
 				return err
 			}
 			// Rename main branch to main2
-			return s.Repo.RunGitCommand("branch", "-m", "main2")
-		})
+			return sc.Repo.RunGitCommand("branch", "-m", "main2")
+		}).WithInProcess(true)
 
 		// Remove existing config
-		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
+		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
 		os.Remove(configPath)
 
 		// Run init with non-existent branch and no way to infer
-		cmd := exec.Command(binaryPath, "init", "--trunk", "random", "--no-interactive")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := s.RunCliAndGetOutput("init", "--trunk", "random")
 
 		// Should fail with error
 		require.Error(t, err, "init should fail when trunk cannot be inferred and invalid branch provided")
-		require.Contains(t, string(output), "not found", "error message should mention branch not found")
+		require.Contains(t, output, "not found", "error message should mention branch not found")
 	})
 
 	t.Run("infers trunk when not provided", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
+		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
 
 		// Create initial commit
-		err := scene.Repo.CreateChangeAndCommit("initial", "init")
+		err := s.Scene.Repo.CreateChangeAndCommit("initial", "init")
 		require.NoError(t, err)
 
 		// Remove existing config
-		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
+		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
 		os.Remove(configPath)
 
 		// Run init without specifying trunk (should infer main)
-		cmd := exec.Command(binaryPath, "init", "--no-interactive")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "init command failed: %s", string(output))
+		output, err := s.RunCliAndGetOutput("init")
+		require.NoError(t, err, "init command failed: %s", output)
 
-		normalized := testhelpers.NormalizeOutput(string(output))
+		normalized := testhelpers.NormalizeOutput(output)
 
 		expected := testhelpers.NormalizeOutput(`
 Welcome to Stackit!
@@ -155,7 +145,7 @@ Pro-tip: enhance your workflow with integrations:
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 
 		// Verify config was created with inferred trunk (main)
-		cfg := readRepoConfig(t, scene.Dir)
+		cfg := readRepoConfig(t, s.Scene.Dir)
 		require.NotNil(t, cfg.Trunk)
 		require.Equal(t, "main", *cfg.Trunk)
 	})
@@ -163,14 +153,14 @@ Pro-tip: enhance your workflow with integrations:
 	t.Run("fails when not in git repository", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
+		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
+		s.Scene.Dir = tmpDir // Use empty dir instead of the one with git repo
 
-		// Run init command
-		cmd := exec.Command(binaryPath, "init", "--no-interactive")
-		cmd.Dir = tmpDir
-		output, err := cmd.CombinedOutput()
+		// Run init command in a non-git dir
+		output, err := s.RunCliAndGetOutput("init")
 
 		require.Error(t, err, "init should fail when not in git repository")
-		require.Contains(t, string(output), "not a git repository")
+		require.Contains(t, output, "not a git repository")
 	})
 }
 

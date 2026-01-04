@@ -11,11 +11,9 @@ import (
 )
 
 func TestSyncUIReporting(t *testing.T) {
-	binaryPath := getStackitBinary(t)
-
 	t.Run("reports locked and frozen branches during sync", func(t *testing.T) {
 		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
-			WithBinaryPath(binaryPath)
+			WithInProcess(true)
 
 		// Create a stack: main -> feature-a -> feature-b -> feature-c
 		sh.WithInitialCommit().

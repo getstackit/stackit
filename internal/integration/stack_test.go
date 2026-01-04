@@ -13,11 +13,10 @@ import (
 
 func TestStackWorkflow(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("full stack workflow: create, amend, restack, squash", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Build a stack: main -> feature-a -> feature-b -> feature-c
 		sh.Log("Creating stacked branches...")
@@ -85,7 +84,7 @@ func TestStackWorkflow(t *testing.T) {
 
 	t.Run("scope inheritance in stacked branches", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create a stack with scope inheritance
 		sh.Log("Creating stack with scope inheritance...")
@@ -121,7 +120,7 @@ func TestStackWorkflow(t *testing.T) {
 
 	t.Run("scope override in middle of stack", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create a stack where middle branch overrides scope
 		sh.Log("Creating stack with scope override...")
@@ -156,7 +155,7 @@ func TestStackWorkflow(t *testing.T) {
 
 	t.Run("scope inheritance break with none", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create a stack where middle branch breaks inheritance
 		sh.Log("Creating stack with scope inheritance break...")
@@ -192,7 +191,7 @@ func TestStackWorkflow(t *testing.T) {
 
 	t.Run("mixed scope repository with multiple stacks", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create multiple independent stacks with different scopes
 		sh.Log("Creating mixed scope repository...")
@@ -258,7 +257,7 @@ func TestStackWorkflow(t *testing.T) {
 
 	t.Run("stack workflow with parallel branches", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Create diamond-shaped stack:
 		//        main

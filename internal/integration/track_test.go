@@ -6,15 +6,13 @@ import (
 
 func TestTrackIntegration(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("recover from metadata corruption after git operations", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
+		shell := NewTestShellInProcess(t)
 
 		// Set up a working stack
-		shell.Run("init").
-			Write("feature1.go", "package main").
+		shell.Write("feature1.go", "package main").
 			Run("create feature1 -m 'Add feature1'").
 			Write("feature2.go", "package main").
 			Run("create feature2 -m 'Add feature2'")
@@ -46,10 +44,7 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track existing branches created outside stackit", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
-
-		// Initialize stackit
-		shell.Run("init")
+		shell := NewTestShellInProcess(t)
 
 		// Create branches using raw git (simulating branches created outside stackit)
 		shell.Git("checkout -b feature-a").
@@ -95,10 +90,7 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track entire stack of untracked branches", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
-
-		// Initialize stackit
-		shell.Run("init")
+		shell := NewTestShellInProcess(t)
 
 		// Create a stack of branches manually (simulating import from another tool)
 		shell.Git("checkout -b layer1").
@@ -130,11 +122,10 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track branches to fix wrong parent after manual operations", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
+		shell := NewTestShellInProcess(t)
 
 		// Set up a stack
-		shell.Run("init").
-			Write("a.go", "package main").
+		shell.Write("a.go", "package main").
 			Run("create feature-a -m 'Add feature A'").
 			Write("b.go", "package main").
 			Run("create feature-b -m 'Add feature B'").
@@ -164,11 +155,10 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track with force finds most recent ancestor in complex stack", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
+		shell := NewTestShellInProcess(t)
 
 		// Create a complex stack
-		shell.Run("init").
-			Write("a.go", "package main").
+		shell.Write("a.go", "package main").
 			Run("create feature-a -m 'Add feature A'").
 			Write("b.go", "package main").
 			Run("create feature-b -m 'Add feature B'").
@@ -190,11 +180,10 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track branches after split operation", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
+		shell := NewTestShellInProcess(t)
 
 		// Set up initial branch with multiple commits
-		shell.Run("init").
-			Write("file1.go", "package main").
+		shell.Write("file1.go", "package main").
 			Run("create feature -m 'Add feature'").
 			Write("file2.go", "package main").
 			Commit("file2.go", "Add file2").
@@ -220,11 +209,10 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track branches after force push recovery", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShellWithRemote(t, binaryPath)
+		shell := NewTestShellWithRemoteInProcess(t)
 
 		// Set up a stack and push it
-		shell.Run("init").
-			Write("a.go", "package main").
+		shell.Write("a.go", "package main").
 			Run("create feature-a -m 'Add feature A'").
 			Write("b.go", "package main").
 			Run("create feature-b -m 'Add feature B'").
@@ -247,11 +235,10 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track parallel branches and connect them", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
+		shell := NewTestShellInProcess(t)
 
 		// Create two parallel stacks
-		shell.Run("init").
-			Write("a.go", "package main").
+		shell.Write("a.go", "package main").
 			Run("create feature-a -m 'Add feature A'").
 			Checkout("main").
 			Write("x.go", "package main").
@@ -278,11 +265,10 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track branches after branch recreation", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
+		shell := NewTestShellInProcess(t)
 
 		// Set up a stack
-		shell.Run("init").
-			Write("a.go", "package main").
+		shell.Write("a.go", "package main").
 			Run("create feature-a -m 'Add feature A'").
 			Write("b.go", "package main").
 			Run("create feature-b -m 'Add feature B'")
@@ -309,11 +295,10 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track with force handles multiple potential ancestors correctly", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
+		shell := NewTestShellInProcess(t)
 
 		// Create a complex branching structure
-		shell.Run("init").
-			Write("a.go", "package main").
+		shell.Write("a.go", "package main").
 			Run("create feature-a -m 'Add feature A'").
 			Checkout("main").
 			Write("b.go", "package main").
@@ -339,11 +324,10 @@ func TestTrackIntegration(t *testing.T) {
 
 	t.Run("track can recover entire corrupted stack", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShell(t, binaryPath)
+		shell := NewTestShellInProcess(t)
 
 		// Set up a large stack
-		shell.Run("init").
-			Write("a.go", "package main").
+		shell.Write("a.go", "package main").
 			Run("create feature-a -m 'Add feature A'").
 			Write("b.go", "package main").
 			Run("create feature-b -m 'Add feature B'").

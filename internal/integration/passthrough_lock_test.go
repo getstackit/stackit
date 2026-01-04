@@ -6,11 +6,10 @@ import (
 
 func TestPassthroughLock(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("blocking modifying passthrough on locked branch", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShell(t, binaryPath)
+		sh := NewTestShellInProcess(t)
 
 		// Setup
 		sh.Run("create feature-a").WriteFile("a", "A").Git("add a").Git("commit -m 'A'")

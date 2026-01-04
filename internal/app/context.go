@@ -8,6 +8,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"stackit.dev/stackit/internal/config"
@@ -81,6 +82,7 @@ type GlobalOptions struct {
 	Verify      bool
 	Debug       bool
 	Quiet       bool
+	Cwd         string
 }
 
 // GetDefaultGlobalOptions returns default options
@@ -90,6 +92,7 @@ func GetDefaultGlobalOptions() GlobalOptions {
 		Verify:      true,
 		Debug:       os.Getenv("DEBUG") != "",
 		Quiet:       false,
+		Cwd:         "",
 	}
 }
 
@@ -100,37 +103,7 @@ func NewContext(eng engine.Engine) *Context {
 
 // NewContextWithOptions creates a new context with the given engine and options
 func NewContextWithOptions(eng engine.Engine, opts GlobalOptions) *Context {
-	if eng == nil {
-		panic("NewContextWithOptions called with nil engine")
-	}
-
-	var splog *tui.Splog
-	var err error
-
-	// Update global TUI interactivity
-	utils.SetInteractive(opts.Interactive)
-
-	// Skip file logging when STACKIT_NO_LOGGING is set (e.g., during tests or CI)
-	if os.Getenv("STACKIT_NO_LOGGING") != "" {
-		splog = tui.NewSplog() // Console-only logging
-	} else {
-		logPath := tui.GetLogFilePath()
-		splog, err = tui.NewSplogWithFlags(logPath, opts.Debug, opts.Quiet)
-		if err != nil {
-			// If file logging fails, fall back to console-only
-			splog, _ = tui.NewSplogWithFlags("", opts.Debug, opts.Quiet)
-		}
-	}
-
-	return &Context{
-		Context:     context.Background(),
-		Engine:      eng,
-		Splog:       splog,
-		Interactive: opts.Interactive,
-		Verify:      opts.Verify,
-		Debug:       opts.Debug,
-		Quiet:       opts.Quiet,
-	}
+	return NewContextWithRepoRootOptionsAndWriter(eng, "", opts, tui.DefaultConsoleWriter)
 }
 
 // NewContextWithRepoRoot creates a new context with the given engine and repo root
@@ -140,6 +113,11 @@ func NewContextWithRepoRoot(eng engine.Engine, repoRoot string) *Context {
 
 // NewContextWithRepoRootAndOptions creates a new context with the given engine, repo root and options
 func NewContextWithRepoRootAndOptions(eng engine.Engine, repoRoot string, opts GlobalOptions) *Context {
+	return NewContextWithRepoRootOptionsAndWriter(eng, repoRoot, opts, os.Stdout)
+}
+
+// NewContextWithRepoRootOptionsAndWriter creates a new context with the given engine, repo root, options and writer
+func NewContextWithRepoRootOptionsAndWriter(eng engine.Engine, repoRoot string, opts GlobalOptions, writer io.Writer) *Context {
 	if eng == nil {
 		panic("NewContextWithRepoRootAndOptions called with nil engine")
 	}
@@ -152,13 +130,13 @@ func NewContextWithRepoRootAndOptions(eng engine.Engine, repoRoot string, opts G
 
 	// Skip file logging when STACKIT_NO_LOGGING is set (e.g., during tests or CI)
 	if os.Getenv("STACKIT_NO_LOGGING") != "" {
-		splog = tui.NewSplog() // Console-only logging
+		splog = tui.NewSplogToWriter(writer) // Console-only logging
 	} else {
 		logPath := tui.GetLogFilePath()
-		splog, err = tui.NewSplogWithFlags(logPath, opts.Debug, opts.Quiet)
+		splog, err = tui.NewSplogWithFlagsAndWriter(logPath, opts.Debug, opts.Quiet, writer)
 		if err != nil {
 			// If file logging fails, fall back to console-only
-			splog, _ = tui.NewSplogWithFlags("", opts.Debug, opts.Quiet)
+			splog = tui.NewSplogToWriter(writer)
 		}
 	}
 
@@ -186,9 +164,14 @@ var DemoGitHubClientFactory func() github.Client
 // In demo mode, it creates a demo engine. Otherwise, it creates a real engine
 // using the provided repoRoot.
 func NewContextAuto(ctx context.Context, repoRoot string, opts GlobalOptions) (*Context, error) {
+	return NewContextAutoWithWriter(ctx, repoRoot, opts, os.Stdout)
+}
+
+// NewContextAutoWithWriter is like NewContextAuto but allows specifying the output writer.
+func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalOptions, writer io.Writer) (*Context, error) {
 	if utils.IsDemoMode() && DemoEngineFactory != nil {
 		eng := DemoEngineFactory()
-		runtimeCtx := NewContextWithOptions(eng, opts)
+		runtimeCtx := NewContextWithRepoRootOptionsAndWriter(eng, repoRoot, opts, writer)
 		runtimeCtx.Context = ctx
 		if DemoGitHubClientFactory != nil {
 			runtimeCtx.GitHubClient = DemoGitHubClientFactory()
@@ -209,12 +192,13 @@ func NewContextAuto(ctx context.Context, repoRoot string, opts GlobalOptions) (*
 		RepoRoot:          repoRoot,
 		Trunk:             trunk,
 		MaxUndoStackDepth: maxUndoDepth,
+		Writer:            writer,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	runtimeCtx := NewContextWithRepoRootAndOptions(eng, repoRoot, opts)
+	runtimeCtx := NewContextWithRepoRootOptionsAndWriter(eng, repoRoot, opts, writer)
 	runtimeCtx.Context = ctx
 
 	// Try to create real GitHub client (may fail if no token)
@@ -229,13 +213,21 @@ func NewContextAuto(ctx context.Context, repoRoot string, opts GlobalOptions) (*
 // GetContext returns the appropriate context (demo or real) based on the environment.
 // This handles git initialization and config checks for real mode.
 func GetContext(ctx context.Context, opts GlobalOptions) (*Context, error) {
+	return GetContextWithWriter(ctx, opts, os.Stdout)
+}
+
+// GetContextWithWriter is like GetContext but allows specifying the output writer.
+func GetContextWithWriter(ctx context.Context, opts GlobalOptions, writer io.Writer) (*Context, error) {
 	// Check for demo mode first
 	if utils.IsDemoMode() {
-		return NewContextAuto(ctx, "", opts)
+		return NewContextAutoWithWriter(ctx, "", opts, writer)
 	}
 
 	// Get repo root using a runner
 	runner := git.NewRunner()
+	if opts.Cwd != "" {
+		runner = git.NewRunnerWithPath(opts.Cwd)
+	}
 	repoRoot, err := runner.DiscoverRepoRoot()
 	if err != nil {
 		return nil, fmt.Errorf("not a git repository: %w", err)
@@ -250,5 +242,5 @@ func GetContext(ctx context.Context, opts GlobalOptions) (*Context, error) {
 		return nil, fmt.Errorf("stackit not initialized. Run 'stackit init' first")
 	}
 
-	return NewContextAuto(ctx, repoRoot, opts)
+	return NewContextAutoWithWriter(ctx, repoRoot, opts, writer)
 }

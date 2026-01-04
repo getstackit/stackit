@@ -6,11 +6,10 @@ import (
 
 func TestGetCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := getStackitBinary(t)
 
 	t.Run("basic get from remote", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellWithRemote(t, binaryPath)
+		sh := NewTestShellWithRemoteInProcess(t)
 
 		// Create a branch on remote
 		sh.Log("Creating feature branch on remote...")
@@ -37,7 +36,7 @@ func TestGetCommand(t *testing.T) {
 
 	t.Run("get with force flag", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellWithRemote(t, binaryPath)
+		sh := NewTestShellWithRemoteInProcess(t)
 
 		// Create branch on remote and track it
 		sh.Log("Creating feature branch on remote...")

@@ -501,6 +501,18 @@ func (d *demoGitRunner) DeleteRef(_ string) error {
 	return nil
 }
 
+func (d *demoGitRunner) UpdateRefsBatch(_ context.Context, _ []git.RefUpdate) error {
+	return nil
+}
+
+func (d *demoGitRunner) UpdateRefsBatchWithLog(_ context.Context, _ []git.RefUpdate, _ string) error {
+	return nil
+}
+
+func (d *demoGitRunner) DeleteRefsBatch(_ context.Context, _ []string) error {
+	return nil
+}
+
 func (d *demoGitRunner) CatFile(_ string) (string, error) {
 	return "{}", nil
 }

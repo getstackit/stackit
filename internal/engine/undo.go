@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"stackit.dev/stackit/internal/git"
 	"stackit.dev/stackit/internal/timeutil"
 )
 
@@ -372,58 +373,40 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 		}
 	}
 
-	// Restore branch heads using git update-ref
+	// Collect all ref updates for atomic restore
+	updates := make([]git.RefUpdate, 0, len(snapshot.BranchSHAs)+len(snapshot.MetadataSHAs))
+
 	for branchName, sha := range snapshot.BranchSHAs {
-		refName := fmt.Sprintf("refs/heads/%s", branchName)
-		reflogMessage := fmt.Sprintf("stackit undo: restored to before '%s'", snapshot.Command)
-		err := e.git.UpdateRefWithLog(ctx, refName, sha, reflogMessage)
-		if err != nil {
-			// If branch doesn't exist, create it
-			// First check if it exists
-			checkErr := e.git.VerifyRef(ctx, refName)
-			if checkErr != nil {
-				// Branch doesn't exist, create it
-				createErr := e.git.UpdateRef(refName, sha)
-				if createErr != nil {
-					return fmt.Errorf("failed to restore branch %s: %w", branchName, createErr)
-				}
-			} else {
-				return fmt.Errorf("failed to restore branch %s: %w", branchName, err)
-			}
-		}
+		updates = append(updates, git.RefUpdate{
+			RefName: fmt.Sprintf("refs/heads/%s", branchName),
+			NewSHA:  sha,
+		})
 	}
 
-	// Restore metadata refs
 	for branchName, sha := range snapshot.MetadataSHAs {
-		refName := fmt.Sprintf("refs/stackit/metadata/%s", branchName)
-		reflogMessage := fmt.Sprintf("stackit undo: restored metadata to before '%s'", snapshot.Command)
-		err := e.git.UpdateRefWithLog(ctx, refName, sha, reflogMessage)
-		if err != nil {
-			// If metadata ref doesn't exist, create it
-			checkErr := e.git.VerifyRef(ctx, refName)
-			if checkErr != nil {
-				// Metadata ref doesn't exist, create it
-				createErr := e.git.UpdateRef(refName, sha)
-				if createErr != nil {
-					// Log but continue - metadata might be optional
-					continue
-				}
-			} else {
-				// Log but continue - some metadata refs might fail
-				continue
-			}
-		}
+		updates = append(updates, git.RefUpdate{
+			RefName: fmt.Sprintf("refs/stackit/metadata/%s", branchName),
+			NewSHA:  sha,
+		})
 	}
 
-	// Delete metadata refs that were created after the snapshot
+	// Atomic restore of all refs
+	reflogMessage := fmt.Sprintf("stackit undo: restored to before '%s'", snapshot.Command)
+	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogMessage); err != nil {
+		return fmt.Errorf("failed to restore snapshot atomically: %w", err)
+	}
+
+	// Delete metadata refs that were created after the snapshot (separate operation)
 	currentMetadataRefs, err := e.git.ListMetadata()
 	if err == nil {
+		var toDelete []string
 		for branchName := range currentMetadataRefs {
 			if _, exists := snapshot.MetadataSHAs[branchName]; !exists {
-				// This metadata ref was created after the snapshot, delete it
-				refName := fmt.Sprintf("refs/stackit/metadata/%s", branchName)
-				_ = e.git.DeleteRef(refName)
+				toDelete = append(toDelete, fmt.Sprintf("refs/stackit/metadata/%s", branchName))
 			}
+		}
+		if len(toDelete) > 0 {
+			_ = e.git.DeleteRefsBatch(ctx, toDelete)
 		}
 	}
 

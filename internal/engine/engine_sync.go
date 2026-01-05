@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"stackit.dev/stackit/internal/git"
@@ -151,9 +152,40 @@ func (e *engineImpl) restackBranch(
 			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get local revision for frozen branch %s: %w", branchName, err)
 		}
 		if localSha != remoteSha {
-			// Update the branch reference to match remote
-			if err := e.git.UpdateBranchRef(ctx, branchName, remoteSha); err != nil {
-				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update branch ref for frozen branch %s: %w", branchName, err)
+			// Get parent revision for metadata update
+			parentBranch := e.GetBranch(parent)
+			parentRev, err := parentBranch.GetRevision()
+			if err != nil {
+				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get parent revision for %s: %w", branchName, err)
+			}
+
+			// Get current metadata SHA for optimistic locking
+			oldMetadataSHA, _ := e.git.GetRef(fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName))
+
+			// Prepare metadata update
+			meta, err := e.git.ReadMetadata(branchName)
+			if err != nil {
+				meta = &git.Meta{}
+			}
+			if parentRev != "" {
+				meta.ParentBranchRevision = &parentRev
+			}
+			metadataJSON, err := json.Marshal(meta)
+			if err != nil {
+				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to marshal metadata for frozen branch %s: %w", branchName, err)
+			}
+			metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+			if err != nil {
+				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to prepare metadata blob for frozen branch %s: %w", branchName, err)
+			}
+
+			// Atomic update of both branch ref and metadata ref
+			updates := []git.RefUpdate{
+				{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: remoteSha, OldSHA: localSha},
+				{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+			}
+			if err := e.git.UpdateRefsBatch(ctx, updates); err != nil {
+				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for frozen branch %s: %w", branchName, err)
 			}
 
 			// If the branch is currently checked out in this context, reset the working tree
@@ -166,19 +198,6 @@ func (e *engineImpl) restackBranch(
 				// If the branch is checked out in a different worktree, reset that worktree
 				if worktreePath, err := e.git.GetWorktreePathForBranch(ctx, branchName); err == nil && worktreePath != "" {
 					_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath)
-				}
-			}
-
-			// After update, update parent revision in metadata to match current parent tip
-			// This ensures children know where they are stacked.
-			parentBranch := e.GetBranch(parent)
-			parentRev, err := parentBranch.GetRevision()
-			if err != nil {
-				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get parent revision for %s: %w", branchName, err)
-			}
-			if parentRev != "" {
-				if err := e.UpdateParentRevision(branchName, parentRev); err != nil {
-					return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update metadata for %s: %w", branchName, err)
 				}
 			}
 
@@ -338,8 +357,17 @@ func (e *engineImpl) restackBranch(
 		}, fmt.Errorf("failed to get new revision after rebase: %w", err)
 	}
 
-	// Update the branch reference to the new rebased commit
-	err = e.git.UpdateBranchRef(ctx, branchName, newRev)
+	// Get current SHAs for optimistic locking
+	oldBranchSHA, _ := branch.GetRevision()
+	oldMetadataSHA, _ := e.git.GetRef(fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName))
+
+	// Prepare metadata update
+	meta, metaReadErr := e.git.ReadMetadata(branchName)
+	if metaReadErr != nil {
+		meta = &git.Meta{}
+	}
+	meta.ParentBranchRevision = &parentRev
+	metadataJSON, err := json.Marshal(meta)
 	if err != nil {
 		return RestackBranchResult{
 			Result:            RestackConflict,
@@ -347,9 +375,8 @@ func (e *engineImpl) restackBranch(
 			Reparented:        reparented,
 			OldParent:         oldParent,
 			NewParent:         parent,
-		}, fmt.Errorf("failed to update branch reference %s: %w", branchName, err)
+		}, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
-
 	// If this branch is checked out in a worktree, reset that worktree's working directory
 	// to match the new branch content. Without this, the worktree would have stale content
 	// that appears as staged changes reverting the rebased commits.
@@ -358,15 +385,30 @@ func (e *engineImpl) restackBranch(
 		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath)
 	}
 
-	// Update metadata
-	if err := e.UpdateParentRevision(branchName, parentRev); err != nil {
+	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	if err != nil {
 		return RestackBranchResult{
 			Result:            RestackConflict,
 			RebasedBranchBase: parentRev,
 			Reparented:        reparented,
 			OldParent:         oldParent,
 			NewParent:         parent,
-		}, fmt.Errorf("failed to update metadata: %w", err)
+		}, fmt.Errorf("failed to prepare metadata blob: %w", err)
+	}
+
+	// Atomic update of both branch ref and metadata ref with OldSHA verification
+	updates := []git.RefUpdate{
+		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
+		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+	}
+	if err := e.git.UpdateRefsBatch(ctx, updates); err != nil {
+		return RestackBranchResult{
+			Result:            RestackConflict,
+			RebasedBranchBase: parentRev,
+			Reparented:        reparented,
+			OldParent:         oldParent,
+			NewParent:         parent,
+		}, fmt.Errorf("failed to update refs atomically: %w", err)
 	}
 
 	// Update the cached metadata if we're using a metaMap, so subsequent branches in the batch

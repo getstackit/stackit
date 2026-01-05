@@ -41,6 +41,76 @@ func (r *runner) VerifyRef(ctx context.Context, refName string) error {
 	return err
 }
 
+// RefUpdate represents a single reference update operation.
+type RefUpdate struct {
+	RefName string
+	NewSHA  string
+	OldSHA  string // Optional: for optimistic locking verification
+}
+
+// UpdateRefsBatch performs atomic updates of multiple references using git update-ref --stdin.
+// All updates succeed or all fail.
+func (r *runner) UpdateRefsBatch(ctx context.Context, updates []RefUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	var stdin strings.Builder
+	for _, update := range updates {
+		if update.OldSHA != "" {
+			stdin.WriteString(fmt.Sprintf("update %s %s %s\n", update.RefName, update.NewSHA, update.OldSHA))
+		} else {
+			stdin.WriteString(fmt.Sprintf("update %s %s\n", update.RefName, update.NewSHA))
+		}
+	}
+
+	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, "update-ref", "--stdin")
+	if err != nil {
+		return fmt.Errorf("atomic ref update failed: %w", err)
+	}
+	return nil
+}
+
+// UpdateRefsBatchWithLog performs atomic updates with a reflog message.
+func (r *runner) UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate, reflogMessage string) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	var stdin strings.Builder
+	for _, update := range updates {
+		if update.OldSHA != "" {
+			stdin.WriteString(fmt.Sprintf("update %s %s %s\n", update.RefName, update.NewSHA, update.OldSHA))
+		} else {
+			stdin.WriteString(fmt.Sprintf("update %s %s\n", update.RefName, update.NewSHA))
+		}
+	}
+
+	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, "update-ref", "--stdin", "-m", reflogMessage)
+	if err != nil {
+		return fmt.Errorf("atomic ref update failed: %w", err)
+	}
+	return nil
+}
+
+// DeleteRefsBatch atomically deletes multiple references.
+func (r *runner) DeleteRefsBatch(ctx context.Context, refNames []string) error {
+	if len(refNames) == 0 {
+		return nil
+	}
+
+	var stdin strings.Builder
+	for _, refName := range refNames {
+		stdin.WriteString(fmt.Sprintf("delete %s\n", refName))
+	}
+
+	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, "update-ref", "--stdin")
+	if err != nil {
+		return fmt.Errorf("atomic ref delete failed: %w", err)
+	}
+	return nil
+}
+
 func (r *runner) RunGitCommandWithEnv(ctx context.Context, env []string, args ...string) (string, error) {
 	return r.runGitInternal(ctx, "", env, true, args...)
 }

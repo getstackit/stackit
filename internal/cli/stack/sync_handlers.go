@@ -86,6 +86,9 @@ func (h *SimpleSyncHandler) Complete(summary syncAction.Summary) {
 	h.printSummary(summary)
 }
 
+// Cleanup implements Handler. No-op for non-TTY handler.
+func (h *SimpleSyncHandler) Cleanup() {}
+
 func (h *SimpleSyncHandler) printPhaseHeader(phase syncAction.Phase) {
 	// Add spacing between phases (but not before first phase)
 	if h.currentPhase != "" {

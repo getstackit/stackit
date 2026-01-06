@@ -6,12 +6,15 @@ import (
 	"strings"
 )
 
+// detachedHEAD is the string returned by git rev-parse --abbrev-ref HEAD when in detached HEAD state
+const detachedHEAD = "HEAD"
+
 func (r *runner) GetCurrentBranch() (string, error) {
-	branch, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--abbrev-ref", "HEAD")
+	branch, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--abbrev-ref", detachedHEAD)
 	if err != nil {
 		return "", err
 	}
-	if branch == "HEAD" {
+	if branch == detachedHEAD {
 		return "", fmt.Errorf("HEAD is not on a branch")
 	}
 	return branch, nil

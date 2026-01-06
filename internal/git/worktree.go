@@ -163,6 +163,22 @@ func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath strin
 	return nil
 }
 
+// GetWorktreeCurrentBranch returns the name of the branch currently checked out in a worktree.
+// Returns empty string if the worktree is in detached HEAD state.
+func (r *runner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error) {
+	output, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath, "rev-parse", "--abbrev-ref", detachedHEAD)
+	if err != nil {
+		return "", fmt.Errorf("failed to get current branch in worktree %s: %w", worktreePath, err)
+	}
+
+	branch := strings.TrimSpace(output)
+	if branch == detachedHEAD {
+		// Detached HEAD state
+		return "", nil
+	}
+	return branch, nil
+}
+
 // ListWorktreeMetas lists all registered worktree metadata
 func (r *runner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
 	refs, err := r.ListRefs(WorktreeRefPrefix)

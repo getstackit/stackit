@@ -177,6 +177,7 @@ type WorktreeOperations interface {
 	RemoveWorktree(ctx context.Context, path string) error
 	ListWorktrees(ctx context.Context) ([]string, error)
 	GetWorktreePathForBranch(ctx context.Context, branchName string) (string, error)
+	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
 	ResetWorktreeWorkingDir(ctx context.Context, worktreePath string) error
 }
 

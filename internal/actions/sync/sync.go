@@ -30,6 +30,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		handler = &NullHandler{}
 	}
 
+	// Ensure terminal cleanup happens even on error
+	defer handler.Cleanup()
+
 	// Handle --all flag (stub for now)
 	if opts.All {
 		// For now, just sync the current trunk
@@ -221,6 +224,9 @@ type Handler interface {
 	// Complete is called when sync finishes with the summary
 	Complete(summary Summary)
 
+	// Cleanup ensures terminal is restored on error (may be no-op for non-TTY handlers)
+	Cleanup()
+
 	// RestackHandler methods are available for restack-specific output
 	// This allows the same handler to be used for standalone restack operations
 	RestackHandler
@@ -247,6 +253,9 @@ func (h *NullHandler) OnRestackBranch(_ string, _ RestackResult, _ string, _ *in
 
 // OnRestackComplete implements RestackHandler.
 func (h *NullHandler) OnRestackComplete(_, _ int, _ []string) {}
+
+// Cleanup implements Handler.
+func (h *NullHandler) Cleanup() {}
 
 // FormatSummaryParts returns the summary parts as a slice of strings
 // This is shared between SimpleSyncHandler and InteractiveSyncHandler

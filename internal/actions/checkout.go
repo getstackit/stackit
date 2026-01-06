@@ -6,11 +6,8 @@ import (
 
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
 	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/internal/tui/style"
-	"stackit.dev/stackit/internal/utils"
 )
 
 // CheckoutOptions contains options for the checkout command
@@ -22,11 +19,31 @@ type CheckoutOptions struct {
 	CheckoutTrunk bool   // Checkout trunk directly
 }
 
+// CheckoutHandler abstracts TTY vs non-TTY interactions for checkout operations
+type CheckoutHandler interface {
+	// SelectBranch prompts the user to select a branch interactively.
+	// Returns the selected branch name, or an error if selection failed or was canceled.
+	SelectBranch(ctx *app.Context, opts CheckoutOptions) (string, error)
+}
+
+// NullCheckoutHandler is a no-op handler that returns an error for interactive operations
+type NullCheckoutHandler struct{}
+
+// SelectBranch returns an error since interactive selection is not available
+func (h *NullCheckoutHandler) SelectBranch(_ *app.Context, _ CheckoutOptions) (string, error) {
+	return "", fmt.Errorf("interactive branch selection is not available; please specify a branch name")
+}
+
 // CheckoutAction performs the checkout operation
-func CheckoutAction(ctx *app.Context, opts CheckoutOptions) error {
+func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHandler) error {
 	eng := ctx.Engine
 	out := ctx.Output
 	context := ctx.Context
+
+	// Use null handler if none provided
+	if handler == nil {
+		handler = &NullCheckoutHandler{}
+	}
 
 	var branchName string
 	var err error
@@ -43,24 +60,19 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions) error {
 			return fmt.Errorf("failed to populate remote SHAs: %w", err)
 		}
 
-		if !utils.IsInteractive() {
-			return fmt.Errorf("interactive branch selection is not available in non-interactive mode; please specify a branch name")
-		}
-		branchName, err = tui.PromptLogSelect(ctx.Context, ctx.Engine, ctx.GitHubClient, tui.LogOptions{
-			Style:         "FULL", // Show stats by default in checkout selector
-			ShowUntracked: opts.ShowUntracked,
-		})
+		branchName, err = handler.SelectBranch(ctx, opts)
 		if err != nil {
-			if errors.Is(err, errors.ErrCanceled) {
-				currentBranch := eng.CurrentBranch()
-				currentBranchName := "trunk"
-				if currentBranch != nil {
-					currentBranchName = currentBranch.GetName()
-				}
-				out.Info("No branch selected; staying on %s.", style.ColorBranchName(currentBranchName, true))
-				return nil
-			}
 			return err
+		}
+		if branchName == "" {
+			// User canceled - stay on current branch
+			currentBranch := eng.CurrentBranch()
+			currentBranchName := "trunk"
+			if currentBranch != nil {
+				currentBranchName = currentBranch.GetName()
+			}
+			out.Info("No branch selected; staying on %s.", style.ColorBranchName(currentBranchName, true))
+			return nil
 		}
 	}
 

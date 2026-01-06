@@ -484,7 +484,7 @@ func handlePostMergeFollowUp(ctx *app.Context) error {
 	if selected == "trunk-sync" {
 		if err := actions.CheckoutAction(ctx, actions.CheckoutOptions{
 			CheckoutTrunk: true,
-		}); err != nil {
+		}, nil); err != nil {
 			// Provide guidance if checkout failed due to local changes
 			// actions.CheckoutAction already wraps the error with a friendly message if it's a local changes error
 			out.Newline()

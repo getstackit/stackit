@@ -35,6 +35,9 @@ by typing. Use flags to customize which branches are shown.`,
 					branchName = args[0]
 				}
 
+				// Create handler based on TTY availability
+				handler := NewCheckoutHandler()
+
 				// Prepare options
 				opts := actions.CheckoutOptions{
 					BranchName:    branchName,
@@ -44,8 +47,8 @@ by typing. Use flags to customize which branches are shown.`,
 					CheckoutTrunk: trunk,
 				}
 
-				// Execute checkout action
-				return actions.CheckoutAction(ctx, opts)
+				// Execute checkout action with handler
+				return actions.CheckoutAction(ctx, opts, handler)
 			})
 		},
 	}

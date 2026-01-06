@@ -137,6 +137,13 @@ func (m *LogModel) refresh() tea.Cmd {
 					}
 				}
 			}
+			// Check if this branch is a stack root with a managed worktree
+			stackRoot := m.engine.GetStackRootForBranch(b)
+			if stackRoot == b.GetName() {
+				if wtInfo, err := m.engine.GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
+					ann.WorktreePath = wtInfo.Path
+				}
+			}
 			annotations[b.GetName()] = ann
 		})
 

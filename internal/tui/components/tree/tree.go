@@ -638,6 +638,10 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 	if annotation.IsFrozen {
 		coloredBranchName += " " + style.IconFrozen() + " " + style.ColorDim("(frozen)")
 	}
+	// Worktree indicator (only for stack roots with managed worktrees)
+	if annotation.WorktreePath != "" {
+		coloredBranchName += " " + style.ColorDim("📂 worktree")
+	}
 
 	result = append(result, cursorPrefix+prefix+styleObj.Render(symbol)+" "+coloredBranchName)
 
@@ -664,11 +668,6 @@ func (r *StackTreeRenderer) formatSummaryLine(annotation BranchAnnotation, isTru
 	var prParts []string
 	var statsParts []string
 	var actionParts []string
-
-	// Worktree indicator (if this stack root has a managed worktree)
-	if annotation.WorktreePath != "" {
-		prParts = append(prParts, style.ColorDim("📂 worktree"))
-	}
 
 	// PR number (colored by state)
 	if annotation.PRNumber != nil {

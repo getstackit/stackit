@@ -24,12 +24,12 @@ $ARGUMENTS
 2. If on trunk, confirm proceeding or suggest switching to a feature branch first.
 3. **Generate commit message with validation loop**:
    - Read `README.md` / `CONTRIBUTING.md` for project-specific rules.
-   - Otherwise enforce Conventional Commit: `type(scope): description` with clear, non-empty description.
-   - Examples: "feat(auth): add user authentication", "fix(api): handle timeout errors"
+   - Follow project conventions if documented; otherwise write a clear, descriptive message.
+   - Examples: "Add user authentication to login flow", "Fix timeout handling in API client"
 
    **Validation loop:**
    - Generate message
-   - Verify: Has type prefix? Clear and descriptive? Follows project format?
+   - Verify: Clear and descriptive? Follows project conventions (if documented)?
    - If validation fails: revise and re-validate
    - Only proceed when message meets quality standards
 

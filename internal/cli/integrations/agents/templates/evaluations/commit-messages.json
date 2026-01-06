@@ -29,15 +29,15 @@
     "Only proceeds when message meets quality standards"
   ],
   "quality_indicators": [
-    "Type prefix present and appropriate",
+    "Follows project conventions (if documented in README.md/CONTRIBUTING.md)",
+    "Clear and descriptive subject line",
     "Description is specific (not generic like 'update code')",
     "Explains 'why' not just 'what'",
-    "Follows conventional commit format",
     "No placeholder text or TODO markers"
   ],
   "anti_patterns": [
     "Generic messages like 'update file' or 'fix bug'",
-    "Missing type prefix",
+    "Ignores documented project conventions",
     "No explanation of why change was made",
     "Skips validation loop",
     "Uses 'git commit' directly instead of stackit"

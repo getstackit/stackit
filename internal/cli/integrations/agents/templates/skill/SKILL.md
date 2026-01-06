@@ -38,7 +38,7 @@ bash ~/.claude/skills/stackit/scripts/analyze_stack.sh
 ### Creating a New Branch
 
 1. **Stage changes:** `git add <files>` or use `--all` flag
-2. **Generate commit message** after checking `README.md` / `CONTRIBUTING.md`; default to Conventional Commit `type(scope): description` with a clear, non-empty summary if no project rule exists.
+2. **Generate commit message** after checking `README.md` / `CONTRIBUTING.md`; follow project conventions if documented, otherwise write a clear, descriptive summary.
 3. **Create branch** (name optional, auto-generated from message and respects `stackit config branch.pattern`):
    ```bash
    # Preferred: pipe format
@@ -102,10 +102,9 @@ chore: update dependencies and refactor errors
 ```
 
 **Format:**
-- Type(scope): brief description
-- Blank line
-- Detailed explanation of "why"
-- Common types: feat, fix, docs, style, refactor, perf, test, chore
+- Follow project conventions from README.md/CONTRIBUTING.md if documented
+- Otherwise: clear, descriptive subject line + blank line + explanation of "why"
+- Some projects use conventional commits: `type(scope): description`
 
 ## Command Reference
 
@@ -136,12 +135,12 @@ Branch names are **optional** - stackit auto-generates from commit message:
 When generating commit messages:
 1. Check README.md and CONTRIBUTING.md for project guidelines
 2. Follow documented conventions if available
-3. Default to conventional commit format: `type(scope): description`
+3. If no conventions documented, write a clear, descriptive message
 4. **Always use pipe format:** `echo "message" | stackit create --no-interactive`
 
 **Validation loop:**
 - Generate message
-- Verify: Has type prefix? Clear description? Follows project format?
+- Verify: Clear description? Follows project conventions (if documented)?
 - If fails: revise and re-validate
 - Only proceed when message meets quality standards
 

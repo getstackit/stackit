@@ -17,12 +17,15 @@ Go-based CLI tool for managing stacked changes in Git repositories.
 **All changes must pass tests and lint before committing:**
 
 ```bash
+just check             # Runs fmt, lint, and fast tests (recommended)
+just test-fast         # Run fast unit tests (~30s)
+just test-integration  # Run integration tests (~90s)
 just test              # Run all tests
 just test-pkg ./pkg    # Run tests for a specific package (e.g. ./internal/git)
 just lint              # Run linter
-# Or run both:
-just check             # Runs fmt, lint, and test
 ```
+
+**Workflow:** Run `just check` during development for quick feedback. Run `just test` before submitting PRs to ensure all tests pass.
 
 ## Build
 

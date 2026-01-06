@@ -9,11 +9,103 @@ import (
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/git"
 	"stackit.dev/stackit/internal/github"
+	"stackit.dev/stackit/internal/tui"
 )
 
 const (
 	prStateOpen = "OPEN"
 )
+
+// getMergeMethod returns the merge method to use for PR merges.
+// If not configured, it prompts the user to select one and saves it to config.
+func getMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeMethod, error) {
+	// Load config
+	cfg, err := config.LoadConfig(ctx.RepoRoot)
+	if err != nil {
+		return "", fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Check if already configured
+	if method := cfg.MergeMethod(); method != "" {
+		return github.MergeMethod(method), nil
+	}
+
+	// Query allowed methods from GitHub
+	settings, err := githubClient.GetAllowedMergeMethods(ctx.Context)
+	if err != nil {
+		return "", fmt.Errorf("failed to get allowed merge methods: %w", err)
+	}
+
+	// Build list of allowed methods
+	var options []tui.SelectOption
+	if settings.AllowSquashMerge {
+		options = append(options, tui.SelectOption{
+			Label: "squash (Squash and merge)",
+			Value: "squash",
+		})
+	}
+	if settings.AllowMergeCommit {
+		options = append(options, tui.SelectOption{
+			Label: "merge (Create a merge commit)",
+			Value: "merge",
+		})
+	}
+	if settings.AllowRebaseMerge {
+		options = append(options, tui.SelectOption{
+			Label: "rebase (Rebase and merge)",
+			Value: "rebase",
+		})
+	}
+
+	if len(options) == 0 {
+		return "", fmt.Errorf("no merge methods are allowed for this repository")
+	}
+
+	// If only one option, use it automatically
+	if len(options) == 1 {
+		method := options[0].Value
+		if err := cfg.SetMergeMethod(method); err != nil {
+			return "", fmt.Errorf("failed to save merge method: %w", err)
+		}
+		if err := cfg.Save(); err != nil {
+			return "", fmt.Errorf("failed to save config: %w", err)
+		}
+		ctx.Output.Info("Using merge method: %s (only option available)", method)
+		return github.MergeMethod(method), nil
+	}
+
+	// Check if interactive mode is available
+	if err := tui.CheckInteractiveAllowed(); err != nil {
+		// Non-interactive mode: use the first option (squash if available)
+		method := options[0].Value
+		if err := cfg.SetMergeMethod(method); err != nil {
+			return "", fmt.Errorf("failed to save merge method: %w", err)
+		}
+		if err := cfg.Save(); err != nil {
+			return "", fmt.Errorf("failed to save config: %w", err)
+		}
+		ctx.Output.Info("Using merge method: %s (auto-selected in non-interactive mode)", method)
+		return github.MergeMethod(method), nil
+	}
+
+	// Prompt user to select
+	ctx.Output.Info("Select a merge method for this repository:")
+	selected, err := tui.PromptSelect("Select merge method:", options, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to select merge method: %w", err)
+	}
+
+	// Save to config
+	if err := cfg.SetMergeMethod(selected); err != nil {
+		return "", fmt.Errorf("failed to save merge method: %w", err)
+	}
+	if err := cfg.Save(); err != nil {
+		return "", fmt.Errorf("failed to save config: %w", err)
+	}
+
+	ctx.Output.Info("Saved merge.method = %s to config", selected)
+	return github.MergeMethod(selected), nil
+}
 
 // mergeExecuteEngine is a minimal interface needed for executing a merge plan
 type mergeExecuteEngine interface {
@@ -151,7 +243,15 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 			return fmt.Errorf("GitHub client not available")
 		}
 		out.Debug("Executing StepMergePR for branch %s", step.BranchName)
-		if err := githubClient.MergePullRequest(ctx.Context, step.BranchName); err != nil {
+
+		// Get merge method (prompts user if not configured)
+		mergeMethod, err := getMergeMethod(ctx, githubClient)
+		if err != nil {
+			out.Debug("Failed to get merge method: %v", err)
+			return fmt.Errorf("failed to get merge method: %w", err)
+		}
+
+		if err := githubClient.MergePullRequest(ctx.Context, step.BranchName, mergeMethod); err != nil {
 			out.Debug("StepMergePR for branch %s failed: %v", step.BranchName, err)
 			return fmt.Errorf("failed to merge PR: %w", err)
 		}

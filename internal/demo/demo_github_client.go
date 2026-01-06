@@ -113,14 +113,26 @@ func (c *GitHubClient) GetPullRequest(_ context.Context, _, _ string, prNumber i
 	return nil, fmt.Errorf("PR #%d not found", prNumber)
 }
 
-// MergePullRequest simulates merging a pull request
-func (c *GitHubClient) MergePullRequest(_ context.Context, branchName string) error {
+// MergePullRequest simulates merging a pull request using the specified merge method
+func (c *GitHubClient) MergePullRequest(_ context.Context, branchName string, _ github.MergeMethod) error {
 	simulateDelay(delayMedium)
 
 	if pr, ok := c.prs[branchName]; ok {
 		pr.State = "closed"
 	}
 	return nil
+}
+
+// GetAllowedMergeMethods returns simulated allowed merge methods
+func (c *GitHubClient) GetAllowedMergeMethods(_ context.Context) (*github.MergeMethodSettings, error) {
+	simulateDelay(delayShort)
+
+	// In demo mode, allow all merge methods
+	return &github.MergeMethodSettings{
+		AllowMergeCommit: true,
+		AllowSquashMerge: true,
+		AllowRebaseMerge: true,
+	}, nil
 }
 
 // getPRChecksStatus returns simulated check status

@@ -248,7 +248,7 @@ func ParseReviewers(reviewersStr string) ([]string, []string) {
 }
 
 // MergePullRequest merges a pull request using the GitHub API
-func MergePullRequest(ctx context.Context, client *github.Client, owner, repo, branchName string) error {
+func MergePullRequest(ctx context.Context, client *github.Client, owner, repo, branchName string, method MergeMethod) error {
 	// First, get the PR for this branch
 	pr, err := GetPullRequestByBranch(ctx, client, owner, repo, branchName)
 	if err != nil {
@@ -258,13 +258,13 @@ func MergePullRequest(ctx context.Context, client *github.Client, owner, repo, b
 		return fmt.Errorf("no PR found for branch %s", branchName)
 	}
 
-	// Merge the PR using merge method
+	// Merge the PR using the specified method
 	mergeRequest := &github.PullRequestOptions{
-		MergeMethod: "merge",
+		MergeMethod: string(method),
 	}
 	_, _, err = client.PullRequests.Merge(ctx, owner, repo, *pr.Number, "", mergeRequest)
 	if err != nil {
-		return fmt.Errorf("failed to merge PR #%d for branch %s: %w", *pr.Number, branchName, err)
+		return fmt.Errorf("failed to merge PR #%d for branch %s using %s: %w", *pr.Number, branchName, method, err)
 	}
 	return nil
 }

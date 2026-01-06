@@ -210,6 +210,25 @@ func (c *Config) GetBranchPattern() BranchPattern {
 	return c.data.GetBranchPattern()
 }
 
+// MergeMethod returns the configured merge method, or empty string if not set
+func (c *Config) MergeMethod() string {
+	if c.data.MergeMethod != nil {
+		return *c.data.MergeMethod
+	}
+	return ""
+}
+
+// SetMergeMethod sets the merge method preference
+func (c *Config) SetMergeMethod(method string) error {
+	switch method {
+	case "squash", "merge", "rebase":
+		c.data.MergeMethod = &method
+		return nil
+	default:
+		return fmt.Errorf("invalid merge method: %s (must be squash, merge, or rebase)", method)
+	}
+}
+
 // RepoConfig represents the repository configuration
 type RepoConfig struct {
 	Trunk                      *string  `json:"trunk,omitempty"`
@@ -220,6 +239,7 @@ type RepoConfig struct {
 	UndoStackDepth             *int     `json:"undo.stackDepth,omitempty"`
 	WorktreeBasePath           *string  `json:"worktree.basePath,omitempty"`
 	WorktreeAutoClean          *bool    `json:"worktree.autoClean,omitempty"`
+	MergeMethod                *string  `json:"merge.method,omitempty"`
 }
 
 // GetBranchPattern returns the branch name pattern as a BranchPattern type

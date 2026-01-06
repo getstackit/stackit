@@ -45,6 +45,25 @@ type CheckStatus struct {
 	Checks  []CheckDetail
 }
 
+// MergeMethod represents a GitHub PR merge method
+type MergeMethod string
+
+const (
+	// MergeMethodMerge creates a merge commit
+	MergeMethodMerge MergeMethod = "merge"
+	// MergeMethodSquash squashes commits before merging
+	MergeMethodSquash MergeMethod = "squash"
+	// MergeMethodRebase rebases commits onto base branch
+	MergeMethodRebase MergeMethod = "rebase"
+)
+
+// MergeMethodSettings contains the allowed merge methods for a repository
+type MergeMethodSettings struct {
+	AllowMergeCommit bool
+	AllowSquashMerge bool
+	AllowRebaseMerge bool
+}
+
 // Client is an interface for GitHub API interactions
 type Client interface {
 	// CreatePullRequest creates a new pull request
@@ -59,8 +78,11 @@ type Client interface {
 	// GetPullRequest gets a pull request by number
 	GetPullRequest(ctx context.Context, owner, repo string, prNumber int) (*PullRequestInfo, error)
 
-	// MergePullRequest merges a pull request
-	MergePullRequest(ctx context.Context, branchName string) error
+	// MergePullRequest merges a pull request using the specified merge method
+	MergePullRequest(ctx context.Context, branchName string, method MergeMethod) error
+
+	// GetAllowedMergeMethods returns the allowed merge methods for the repository
+	GetAllowedMergeMethods(ctx context.Context) (*MergeMethodSettings, error)
 
 	// GetPRChecksStatus returns the check status for a single branch
 	GetPRChecksStatus(ctx context.Context, branchName string) (*CheckStatus, error)

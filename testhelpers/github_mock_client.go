@@ -105,10 +105,20 @@ func (c *MockGitHubClient) GetPullRequest(ctx context.Context, owner, repo strin
 	return githubpkg.ToPullRequestInfo(pr), nil
 }
 
-// MergePullRequest merges a pull request
-func (c *MockGitHubClient) MergePullRequest(_ context.Context, _ string) error {
+// MergePullRequest merges a pull request using the specified merge method
+func (c *MockGitHubClient) MergePullRequest(_ context.Context, _ string, _ githubpkg.MergeMethod) error {
 	// In tests, just return nil
 	return nil
+}
+
+// GetAllowedMergeMethods returns the allowed merge methods for the repository
+func (c *MockGitHubClient) GetAllowedMergeMethods(_ context.Context) (*githubpkg.MergeMethodSettings, error) {
+	// In tests, allow all merge methods by default
+	return &githubpkg.MergeMethodSettings{
+		AllowMergeCommit: true,
+		AllowSquashMerge: true,
+		AllowRebaseMerge: true,
+	}, nil
 }
 
 // getPRChecksStatus returns the check status for a PR

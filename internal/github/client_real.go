@@ -112,9 +112,23 @@ func (c *StackitGitHubClient) GetPullRequest(ctx context.Context, owner, repo st
 	return ToPullRequestInfo(pr), nil
 }
 
-// MergePullRequest merges a pull request
-func (c *StackitGitHubClient) MergePullRequest(ctx context.Context, branchName string) error {
-	return MergePullRequest(ctx, c.client, c.owner, c.repo, branchName)
+// MergePullRequest merges a pull request using the specified merge method
+func (c *StackitGitHubClient) MergePullRequest(ctx context.Context, branchName string, method MergeMethod) error {
+	return MergePullRequest(ctx, c.client, c.owner, c.repo, branchName, method)
+}
+
+// GetAllowedMergeMethods returns the allowed merge methods for the repository
+func (c *StackitGitHubClient) GetAllowedMergeMethods(ctx context.Context) (*MergeMethodSettings, error) {
+	repo, _, err := c.client.Repositories.Get(ctx, c.owner, c.repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get repository settings: %w", err)
+	}
+
+	return &MergeMethodSettings{
+		AllowMergeCommit: repo.GetAllowMergeCommit(),
+		AllowSquashMerge: repo.GetAllowSquashMerge(),
+		AllowRebaseMerge: repo.GetAllowRebaseMerge(),
+	}, nil
 }
 
 // GetPRChecksStatus returns the check status for a single branch

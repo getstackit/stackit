@@ -94,6 +94,12 @@ func newConfigGetCmd() *cobra.Command {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.BranchNamePattern())
 			case "submit.footer":
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.SubmitFooter())
+			case "merge.method":
+				method := cfg.MergeMethod()
+				if method == "" {
+					method = "(not set)"
+				}
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), method)
 			default:
 				return fmt.Errorf("unknown configuration key: %s", key)
 			}
@@ -153,6 +159,14 @@ func newConfigSetCmd() *cobra.Command {
 					return fmt.Errorf("failed to save config: %w", err)
 				}
 				splog.Info("Set submit.footer to: %v", enabled)
+			case "merge.method":
+				if err := cfg.SetMergeMethod(value); err != nil {
+					return fmt.Errorf("failed to set merge.method: %w", err)
+				}
+				if err := cfg.Save(); err != nil {
+					return fmt.Errorf("failed to save config: %w", err)
+				}
+				splog.Info("Set merge.method to: %s", value)
 			default:
 				return fmt.Errorf("unknown configuration key: %s", key)
 			}

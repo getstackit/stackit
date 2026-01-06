@@ -27,6 +27,10 @@ func TUIAction(repoRoot string) error {
 		// Get current values
 		branchPattern := cfg.BranchNamePattern()
 		submitFooter := cfg.SubmitFooter()
+		mergeMethod := cfg.MergeMethod()
+		if mergeMethod == "" {
+			mergeMethod = "(not set)"
+		}
 
 		// Build options with current values displayed
 		options := []tui.SelectOption{
@@ -37,6 +41,10 @@ func TUIAction(repoRoot string) error {
 			{
 				Label: fmt.Sprintf("submit.footer: %v", submitFooter),
 				Value: "submit.footer",
+			},
+			{
+				Label: fmt.Sprintf("merge.method: %s", mergeMethod),
+				Value: "merge.method",
 			},
 			{
 				Label: "Exit",
@@ -91,6 +99,32 @@ func TUIAction(repoRoot string) error {
 					continue
 				}
 				out.Info("Set submit.footer to: %v", newValue)
+			}
+
+		case "merge.method":
+			methodOptions := []tui.SelectOption{
+				{Label: "squash (Squash and merge)", Value: "squash"},
+				{Label: "merge (Create a merge commit)", Value: "merge"},
+				{Label: "rebase (Rebase and merge)", Value: "rebase"},
+			}
+			newValue, err := tui.PromptSelect("Select merge method:", methodOptions, 0)
+			if err != nil {
+				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+					continue
+				}
+				return err
+			}
+			currentMethod := cfg.MergeMethod()
+			if newValue != currentMethod {
+				if err := cfg.SetMergeMethod(newValue); err != nil {
+					out.Info("Failed to set merge.method: %v", err)
+					continue
+				}
+				if err := cfg.Save(); err != nil {
+					out.Info("Failed to save config: %v", err)
+					continue
+				}
+				out.Info("Set merge.method to: %s", newValue)
 			}
 		}
 	}

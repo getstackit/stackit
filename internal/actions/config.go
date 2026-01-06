@@ -31,6 +31,12 @@ func ConfigListAction(repoRoot string, writer io.Writer) error {
 	// Get submit.footer
 	submitFooter := cfg.SubmitFooter()
 
+	// Get merge.method
+	mergeMethod := cfg.MergeMethod()
+	if mergeMethod == "" {
+		mergeMethod = "(not set)"
+	}
+
 	// Format and print
 	var lines []string
 	lines = append(lines, fmt.Sprintf("%s: %s", style.ColorCyan("trunk"), trunk))
@@ -49,6 +55,7 @@ func ConfigListAction(repoRoot string, writer io.Writer) error {
 
 	lines = append(lines, fmt.Sprintf("%s: %s", style.ColorCyan("branch.pattern"), branchPattern))
 	lines = append(lines, fmt.Sprintf("%s: %v", style.ColorCyan("submit.footer"), submitFooter))
+	lines = append(lines, fmt.Sprintf("%s: %s", style.ColorCyan("merge.method"), mergeMethod))
 
 	out.Print(strings.Join(lines, "\n"))
 	out.Newline()

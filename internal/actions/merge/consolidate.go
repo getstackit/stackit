@@ -293,7 +293,13 @@ func (c *ConsolidateMergeExecutor) waitForConsolidationMerge(ctx context.Context
 	splog.Info("  ◉ %s PR #%d ✓", branchName, pr.Number)
 	splog.Info("     Auto-merging...")
 
-	if err := c.ctx.GitHubClient.MergePullRequest(ctx, branchName); err != nil {
+	// Get merge method (prompts user if not configured)
+	mergeMethod, err := getMergeMethod(c.ctx, c.ctx.GitHubClient)
+	if err != nil {
+		return fmt.Errorf("failed to get merge method: %w", err)
+	}
+
+	if err := c.ctx.GitHubClient.MergePullRequest(ctx, branchName, mergeMethod); err != nil {
 		return fmt.Errorf("failed to auto-merge consolidation PR #%d: %w", pr.Number, err)
 	}
 

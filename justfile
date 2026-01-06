@@ -86,6 +86,26 @@ test-watch:
 		exit 1; \
 	fi
 
+# Run fast unit tests (excludes integration tests)
+test-fast:
+	#!/usr/bin/env bash
+	echo "Running fast tests (excluding integration)..."
+	PACKAGES=$(go list ./... | grep -v /integration)
+	if command -v gotestsum &> /dev/null; then
+		STACKIT_NO_LOGGING=1 gotestsum --format pkgname-and-test-fails -- $PACKAGES
+	else
+		STACKIT_NO_LOGGING=1 go test $PACKAGES
+	fi
+
+# Run integration tests only
+test-integration:
+	@echo "Running integration tests..."
+	@if command -v gotestsum >/dev/null 2>&1; then \
+		STACKIT_NO_LOGGING=1 gotestsum --format pkgname-and-test-fails -- ./internal/integration/... ./internal/cli/integrations/... ./internal/actions/integrations/...; \
+	else \
+		STACKIT_NO_LOGGING=1 go test ./internal/integration/... ./internal/cli/integrations/... ./internal/actions/integrations/...; \
+	fi
+
 # Clean test artifacts
 clean:
 	rm -f coverage.out coverage.html
@@ -121,14 +141,14 @@ lint-fix:
 		echo "golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
 	fi
 
-# Run all checks (format, lint, test)
+# Run all checks (format, lint, fast tests)
 check:
 	@echo "🎨 Formatting..."
 	@just fmt
 	@echo "🔍 Linting..."
 	@just lint
-	@echo "🧪 Testing..."
-	@just test
+	@echo "🧪 Testing (fast)..."
+	@just test-fast
 
 # Build the stackit binary with local version info
 build:

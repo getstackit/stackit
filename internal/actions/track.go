@@ -6,6 +6,7 @@ import (
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/internal/tui/style"
+	"stackit.dev/stackit/internal/utils"
 )
 
 // TrackOptions contains options for the track command
@@ -95,6 +96,11 @@ func TrackAction(ctx *app.Context, opts TrackOptions) error {
 
 		ctx.Output.Info("Tracked %s with parent %s.", style.ColorBranchName(branchName, false), style.ColorBranchName(parentBranch, false))
 		return nil
+	}
+
+	// Non-interactive mode requires --parent or --force
+	if !utils.IsInteractive() {
+		return fmt.Errorf("parent branch is required in non-interactive mode; use --parent or --force")
 	}
 
 	// Interactive mode: recursively track a stack

@@ -116,8 +116,8 @@ var defaultSelectionKeys = selectionKeys{
 	),
 }
 
-// ErrInteractiveDisabled is returned when interactive prompts are disabled via STACKIT_TEST_NO_INTERACTIVE
-var ErrInteractiveDisabled = fmt.Errorf("interactive prompts are disabled (STACKIT_TEST_NO_INTERACTIVE is set)")
+// ErrInteractiveDisabled is returned when interactive prompts are disabled
+var ErrInteractiveDisabled = fmt.Errorf("interactive prompts are disabled (running with --no-interactive or not in a TTY)")
 
 // CheckInteractiveAllowed returns an error if interactive mode is disabled
 func CheckInteractiveAllowed() error {

@@ -76,6 +76,7 @@ type BranchStatus string
 const (
 	StatusPending    BranchStatus = "pending"
 	StatusSubmitting BranchStatus = "submitting"
+	StatusSyncing    BranchStatus = "syncing"
 	StatusDone       BranchStatus = "done"
 	StatusError      BranchStatus = "error"
 	StatusSkipped    BranchStatus = "skipped"

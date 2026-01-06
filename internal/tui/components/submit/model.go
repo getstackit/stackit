@@ -131,8 +131,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for i, item := range m.Items {
 			if item.BranchName == msg.BranchName {
 				m.Items[i].Status = msg.Status
-				m.Items[i].URL = msg.URL
-				m.Items[i].Error = msg.Err
+				// Only update URL/Error if new values are provided (preserve existing)
+				if msg.URL != "" {
+					m.Items[i].URL = msg.URL
+				}
+				if msg.Err != nil {
+					m.Items[i].Error = msg.Err
+				}
 				break
 			}
 		}
@@ -172,6 +177,8 @@ func (m *Model) View() string {
 				switch item.Status {
 				case StatusSubmitting:
 					ann.CustomLabel = m.Styles.SpinnerStyle.Render(m.Spinner.View() + " submitting...")
+				case StatusSyncing:
+					ann.CustomLabel = m.Styles.SpinnerStyle.Render(m.Spinner.View() + " syncing...")
 				case StatusDone:
 					ann.CustomLabel = m.Styles.DoneStyle.Render("✓")
 					if item.URL != "" {
@@ -215,7 +222,10 @@ func (m *Model) View() string {
 				if item.Action == "update" {
 					action = "Updating"
 				}
-				status = m.Styles.SpinnerStyle.Render(action + "ing...")
+				status = m.Styles.SpinnerStyle.Render(action + "...")
+			case StatusSyncing:
+				icon = m.Spinner.View()
+				status = m.Styles.SpinnerStyle.Render("syncing...")
 			case StatusDone:
 				icon = m.Styles.DoneStyle.Render("✓")
 				status = m.Styles.DoneStyle.Render(item.Action + "ed")

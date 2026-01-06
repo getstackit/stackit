@@ -20,11 +20,12 @@ func UpdateStackPRMetadata(ctx *app.Context, branches []string, repoOwner, repoN
 	}
 
 	utils.Run(branches, func(name string) {
-		updatePRMetadata(ctx, name, repoOwner, repoName)
+		UpdateBranchPRMetadata(ctx, name, repoOwner, repoName)
 	})
 }
 
-func updatePRMetadata(ctx *app.Context, name string, repoOwner, repoName string) {
+// UpdateBranchPRMetadata updates PR title and body footer for a single branch
+func UpdateBranchPRMetadata(ctx *app.Context, name string, repoOwner, repoName string) {
 	branch := ctx.Engine.GetBranch(name)
 	prInfo, err := branch.GetPrInfo()
 	if err != nil || prInfo == nil || prInfo.Number() == nil {

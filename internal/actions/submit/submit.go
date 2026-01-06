@@ -217,9 +217,19 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return submitErr
 	}
 
-	// Update PR body footers silently
+	// Update PR body footers with per-branch progress
 	if opts.SubmitFooter {
-		actions.UpdateStackPRMetadata(ctx, branches, repoOwner, repoName)
+		utils.Run(branches, func(name string) {
+			handler.OnEvent(BranchProgressEvent{
+				BranchName: name,
+				Status:     StatusSyncing,
+			})
+			actions.UpdateBranchPRMetadata(ctx, name, repoOwner, repoName)
+			handler.OnEvent(BranchProgressEvent{
+				BranchName: name,
+				Status:     StatusDone,
+			})
+		})
 	}
 
 	// Push metadata refs for successfully submitted branches

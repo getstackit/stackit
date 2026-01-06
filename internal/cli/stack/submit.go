@@ -264,6 +264,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			}
 			h.splog.Info("  ⋯ %s %s...", ev.BranchName, action)
 
+		case submit.StatusSyncing:
+			h.splog.Info("  ⋯ %s syncing...", ev.BranchName)
+
 		case submit.StatusDone:
 			actionDone := "created"
 			if item.action == "update" {

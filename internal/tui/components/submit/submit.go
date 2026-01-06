@@ -44,6 +44,8 @@ func DefaultStyles() Styles {
 const (
 	// StatusSubmitting indicates the branch is currently being submitted
 	StatusSubmitting = "submitting"
+	// StatusSyncing indicates the branch metadata is being synced
+	StatusSyncing = "syncing"
 	// StatusDone indicates the branch submission was successful
 	StatusDone = "done"
 	// StatusError indicates the branch submission failed

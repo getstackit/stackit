@@ -153,6 +153,8 @@ func Action(ctx *app.Context, opts Options) error {
 		out.Info("Warning: failed to track branch: %v", err)
 	}
 
+	ctx.Logger.Info("branch created", "name", branchName, "parent", currentBranch, "hasCommit", hasStaged)
+
 	// Create worktree if requested
 	if opts.Worktree {
 		// Checkout back to trunk first so we can create the worktree for the branch

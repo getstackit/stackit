@@ -84,6 +84,12 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions) error {
 		return fmt.Errorf("failed to checkout branch %s: %w", branchName, err)
 	}
 
+	previousBranch := "trunk"
+	if currentBranch != nil {
+		previousBranch = currentBranch.GetName()
+	}
+	ctx.Logger.Info("branch changed", "from", previousBranch, "to", branchName)
+
 	out.Info("Checked out %s.", style.ColorBranchName(branchName, false))
 
 	// Skip branch info in quiet mode for faster checkout

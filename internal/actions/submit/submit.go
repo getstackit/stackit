@@ -95,6 +95,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return nil
 	}
 
+	ctx.Logger.Info("submit started", "branchCount", len(branches), "dryRun", opts.DryRun)
+
 	currentBranch := nav.CurrentBranch()
 	currentBranchName := ""
 	if currentBranch != nil {
@@ -237,6 +239,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		handler.OnEvent(CompletionEvent{Success: false, Message: "Submit failed"})
 		return fmt.Errorf("failed to push metadata to remote: %w. Your PRs were created/updated successfully, but metadata sync failed. Run 'st sync' and try submitting again", err)
 	}
+
+	ctx.Logger.Info("submit completed", "branchCount", len(branches))
 
 	handler.OnEvent(CompletionEvent{Success: true, Message: "Submit complete"})
 	return nil

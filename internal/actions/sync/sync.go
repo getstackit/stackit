@@ -25,6 +25,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	gctx := ctx.Context
 	summary := &Summary{}
 
+	ctx.Logger.Info("sync started", "restack", opts.Restack, "force", opts.Force)
+
 	// Use null handler if none provided
 	if handler == nil {
 		handler = &NullHandler{}
@@ -126,6 +128,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if !summary.HasChanges() {
 		summary.UpToDate = true
 	}
+
+	ctx.Logger.Info("sync completed",
+		"trunkUpdated", summary.TrunkUpdated,
+		"branchesRestacked", summary.BranchesRestacked,
+		"branchesDeleted", summary.BranchesDeleted,
+		"branchesSkipped", summary.BranchesSkipped,
+	)
 
 	handler.Complete(*summary)
 	return nil

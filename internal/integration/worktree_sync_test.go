@@ -320,4 +320,100 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 
 		sh.ExpectBranchParent("branchD", "branchC")
 	})
+
+	t.Run("forked stack in worktree - bottom branch merged", func(t *testing.T) {
+		// Test scenario: forked stack where A has two children B and C
+		// Structure: main -> A -> B
+		//                    \-> C
+		// When A is merged:
+		// - B and C both get reparented to main (become independent stacks)
+		// - Worktree should survive and track the currently checked-out branch
+		// - Both B and C should still be accessible from the worktree
+
+		sh := NewTestShellWithRemoteInProcess(t)
+
+		// Create forked stack in a worktree
+		sh.Log("Creating forked stack A -> B, A -> C in worktree...")
+		sh.WriteFile("a.txt", "a content").
+			Run("create branchA -w -m 'branch A'").
+			OnBranch("main")
+
+		worktreeA := sh.GetWorktreePath("branchA")
+		shW := sh.InWorktree(worktreeA)
+
+		// Create first child B from A
+		shW.OnBranch("branchA").
+			WriteFile("b.txt", "b content").
+			Run("create branchB -m 'branch B'").
+			OnBranch("branchB")
+
+		// Go back to A and create second child C (creating the fork)
+		shW.Checkout("branchA").
+			WriteFile("c.txt", "c content").
+			Run("create branchC -m 'branch C'").
+			OnBranch("branchC")
+
+		// Verify forked stack structure
+		sh.Log("Verifying forked stack structure...")
+		sh.ExpectBranchParent("branchA", "main")
+		sh.ExpectBranchParent("branchB", "branchA")
+		sh.ExpectBranchParent("branchC", "branchA")
+
+		// Simulate A getting merged on GitHub
+		sh.Log("Simulating branchA merge on GitHub...")
+		sh.Git("checkout main").
+			Git("merge branchA --ff-only").
+			Git("push origin main")
+
+		// Mark branchA PR as merged
+		sh.SetPrState("branchA", "MERGED")
+
+		// Run sync from main repo
+		sh.Log("Running sync from main repo...")
+		sh.OnBranch("main").
+			Run("sync")
+
+		// Verify branchA is deleted
+		sh.Log("Verifying branchA is deleted...")
+		sh.Git("branch --list branchA")
+		if sh.Output() != "" {
+			t.Errorf("branchA should have been deleted, but still exists")
+		}
+
+		// Both B and C should be reparented to main (independent stacks now)
+		sh.Log("Verifying B and C are reparented to main...")
+		sh.ExpectBranchParent("branchB", "main")
+		sh.ExpectBranchParent("branchC", "main")
+
+		// Worktree should still exist and be functional
+		sh.Log("Verifying worktree still exists...")
+		shW.Git("status --porcelain") // This would fail if worktree doesn't exist
+
+		// We were on branchC, should still be on branchC
+		shW.OnBranch("branchC")
+
+		// Verify both branches are accessible from the worktree
+		sh.Log("Verifying both branches are accessible...")
+		shW.Checkout("branchB").
+			OnBranch("branchB")
+		shW.Checkout("branchC").
+			OnBranch("branchC")
+
+		// Verify we can continue working on both stacks
+		sh.Log("Verifying we can work on branchB stack...")
+		shW.Checkout("branchB").
+			WriteFile("b-child.txt", "b child content").
+			Run("create branchB-child -m 'B child'").
+			OnBranch("branchB-child")
+
+		sh.ExpectBranchParent("branchB-child", "branchB")
+
+		sh.Log("Verifying we can work on branchC stack...")
+		shW.Checkout("branchC").
+			WriteFile("c-child.txt", "c child content").
+			Run("create branchC-child -m 'C child'").
+			OnBranch("branchC-child")
+
+		sh.ExpectBranchParent("branchC-child", "branchC")
+	})
 }

@@ -81,49 +81,37 @@ Examples:
 }
 
 func runCombine(ctx *app.Context, opts combine.Options) error {
-	// Discover available stacks
-	stacks, err := combine.DiscoverStacks(ctx.Engine)
-	if err != nil {
-		return fmt.Errorf("failed to discover stacks: %w", err)
-	}
-
-	if len(stacks) == 0 {
-		ctx.Output.Warn("No independent stacks found rooted at trunk")
-		return nil
-	}
-
-	// Filter stacks if specific ones were selected
-	if len(opts.SelectedStacks) > 0 {
-		stacks = combine.FilterStacks(stacks, opts.SelectedStacks)
-		if len(stacks) == 0 {
-			return fmt.Errorf("none of the specified stacks were found")
+	// If no stacks specified and interactive mode, show picker
+	if len(opts.SelectedStacks) == 0 && ctx.Interactive && !opts.Yes {
+		stacks, err := combine.DiscoverStacks(ctx.Engine)
+		if err != nil {
+			return fmt.Errorf("failed to discover stacks: %w", err)
 		}
-	} else if ctx.Interactive && !opts.Yes {
-		// Show interactive picker
+
+		if len(stacks) == 0 {
+			ctx.Output.Warn("No independent stacks found rooted at trunk")
+			return nil
+		}
+
 		selected := promptStackSelection(ctx, stacks)
 		if len(selected) == 0 {
 			ctx.Output.Info("No stacks selected")
 			return nil
 		}
-		stacks = combine.FilterStacks(stacks, selected)
+		opts.SelectedStacks = selected
 	}
 
-	// Display what will be combined
-	ctx.Output.Info("Stacks to combine:")
-	for _, stack := range stacks {
-		ctx.Output.Info("  • %s (%d PRs, %d branches)", stack.RootBranch, stack.PRCount, len(stack.AllBranches))
+	// Execute combine action
+	result, err := combine.Action(ctx, opts)
+	if err != nil {
+		return err
 	}
 
-	if opts.DryRun {
-		ctx.Output.Info("\n[dry-run] Would combine %d stacks", len(stacks))
-		return nil
+	// Show final result
+	if result.PRNumber > 0 {
+		ctx.Output.Success("Created PR #%d: %s", result.PRNumber, result.PRURL)
 	}
 
-	// TODO: Phase 2 - Execute in worktree and merge stacks
-	// TODO: Phase 3 - Run CI validation and binary search
-	// TODO: Phase 4 - Create consolidated PR
-
-	ctx.Output.Warn("Combine execution not yet implemented (Phase 2-4)")
 	return nil
 }
 

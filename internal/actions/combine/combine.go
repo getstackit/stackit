@@ -116,7 +116,35 @@ func Action(ctx *app.Context, opts Options) (*Result, error) {
 		}
 	}
 
-	// TODO Phase 4: Create consolidated PR
+	// 6. Create consolidated PR
+	prCreator := NewPRCreator(ctx, worktreeResult.WorktreeEngine, worktreeResult.WorktreePath)
+	branchName := GenerateBranchName()
+
+	ctx.Output.Info("Creating combined branch: %s", branchName)
+	if err := prCreator.CreateAndPushBranch(ctx.Context, branchName); err != nil {
+		return nil, fmt.Errorf("failed to create and push branch: %w", err)
+	}
+
+	ctx.Output.Info("Creating pull request...")
+	pr, err := prCreator.CreatePR(ctx.Context, branchName, result.IncludedStacks, result.ExcludedStacks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PR: %w", err)
+	}
+
+	result.PRNumber = pr.Number
+	result.PRURL = pr.HTMLURL
+	result.BranchName = branchName
+
+	ctx.Output.Success("Created PR #%d: %s", pr.Number, pr.HTMLURL)
+
+	// 7. Optionally wait for CI and auto-merge
+	if opts.Wait {
+		ctx.Output.Info("Waiting for CI to pass...")
+		if err := prCreator.WaitAndMerge(ctx.Context, branchName, pr); err != nil {
+			return nil, fmt.Errorf("failed to wait and merge: %w", err)
+		}
+		ctx.Output.Success("PR merged successfully!")
+	}
 
 	return result, nil
 }

@@ -79,6 +79,7 @@ Commit:  ` + commit + `
 	rootCmd.AddCommand(navigation.NewCheckoutCmd())
 	rootCmd.AddCommand(newCherryPickCmd())
 	rootCmd.AddCommand(navigation.NewChildrenCmd())
+	rootCmd.AddCommand(stack.NewCombineCmd())
 	rootCmd.AddCommand(newContinueCmd())
 	rootCmd.AddCommand(branch.NewCreateCmd())
 	rootCmd.AddCommand(newDebugCmd())

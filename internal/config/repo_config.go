@@ -229,6 +229,32 @@ func (c *Config) SetMergeMethod(method string) error {
 	}
 }
 
+// CombineCICommand returns the CI command to run for combine validation
+func (c *Config) CombineCICommand() string {
+	if c.data.CombineCICommand != nil {
+		return *c.data.CombineCICommand
+	}
+	return ""
+}
+
+// SetCombineCICommand sets the CI command for combine validation
+func (c *Config) SetCombineCICommand(cmd string) {
+	c.data.CombineCICommand = &cmd
+}
+
+// CombineCITimeout returns the timeout in seconds for combine CI validation (default: 600)
+func (c *Config) CombineCITimeout() int {
+	if c.data.CombineCITimeout != nil {
+		return *c.data.CombineCITimeout
+	}
+	return 600 // 10 minutes default
+}
+
+// SetCombineCITimeout sets the timeout in seconds for combine CI validation
+func (c *Config) SetCombineCITimeout(seconds int) {
+	c.data.CombineCITimeout = &seconds
+}
+
 // RepoConfig represents the repository configuration
 type RepoConfig struct {
 	Trunk                      *string  `json:"trunk,omitempty"`
@@ -240,6 +266,8 @@ type RepoConfig struct {
 	WorktreeBasePath           *string  `json:"worktree.basePath,omitempty"`
 	WorktreeAutoClean          *bool    `json:"worktree.autoClean,omitempty"`
 	MergeMethod                *string  `json:"merge.method,omitempty"`
+	CombineCICommand           *string  `json:"combine.ciCommand,omitempty"`
+	CombineCITimeout           *int     `json:"combine.ciTimeout,omitempty"`
 }
 
 // GetBranchPattern returns the branch name pattern as a BranchPattern type

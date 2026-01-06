@@ -99,7 +99,7 @@ func ColorBranchNameBoldWithTrunk(branchName string, isCurrent bool, isTrunk boo
 // BranchStyle returns the unified style for a branch name
 func BranchStyle(isCurrent, isTrunk, isDim bool) lipgloss.Style {
 	if isDim {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("8")) // Gray
+		return lipgloss.NewStyle().Foreground(colorDimValue())
 	}
 	if isCurrent {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true) // Bold Green
@@ -118,10 +118,10 @@ func ColorNeedsRestack(text string) string {
 		Render(text)
 }
 
-// ColorDim makes text dim/gray
+// ColorDim makes text dim/gray (adaptive to terminal background)
 func ColorDim(text string) string {
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
+		Foreground(colorDimValue()).
 		Render(text)
 }
 

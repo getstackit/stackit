@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"stackit.dev/stackit/internal/tui/style"
 )
 
 // Phase represents a sync phase
@@ -208,7 +210,7 @@ func (m *Model) View() string {
 		b.WriteString(fmt.Sprintf("%s %s\n", icon, phaseStyle.Render(phase.Message)))
 
 		// Phase details
-		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		dimStyle := style.SubtleStyle()
 		for _, detail := range phase.Details {
 			b.WriteString(fmt.Sprintf("  %s\n", dimStyle.Render(detail)))
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"stackit.dev/stackit/internal/github"
+	"stackit.dev/stackit/internal/tui/style"
 )
 
 // MergeGroup represents a group of steps that should be displayed as a single line
@@ -122,8 +123,8 @@ func NewMergeTUIModel(groups []MergeGroup, stepDescriptions []string) MergeTUIMo
 			doneStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("42")),
 			errorStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("196")),
 			waitStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("214")),
-			dimStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-			timeStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
+			dimStyle:     style.SubtleStyle(),
+			timeStyle:    style.DimStyle(),
 		},
 	}
 }

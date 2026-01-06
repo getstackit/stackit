@@ -476,7 +476,7 @@ func (r *StackTreeRenderer) getBranchingLine(numChildren int, reverse bool, inde
 	}
 
 	if isDim {
-		styleObj = styleObj.Foreground(lipgloss.Color("8"))
+		styleObj = styleObj.Foreground(style.DimColor())
 	}
 
 	if reverse {
@@ -563,12 +563,12 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 	}
 
 	if isDim {
-		styleObj = styleObj.Foreground(lipgloss.Color("8"))
-		parentStyle = parentStyle.Foreground(lipgloss.Color("8"))
+		styleObj = styleObj.Foreground(style.DimColor())
+		parentStyle = parentStyle.Foreground(style.DimColor())
 	}
 	// Also dim style for non-matching search results
 	if !matchesSearch && args.searchQuery != "" {
-		styleObj = styleObj.Foreground(lipgloss.Color("8"))
+		styleObj = styleObj.Foreground(style.DimColor())
 	}
 
 	// Selection cursor prefix

@@ -1,7 +1,76 @@
 // Package style provides styling and coloring for the TUI.
 package style
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"sync"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+)
+
+// Theme represents the terminal background type
+type Theme int
+
+const (
+	// ThemeDark is for terminals with dark backgrounds
+	ThemeDark Theme = iota
+	// ThemeLight is for terminals with light backgrounds
+	ThemeLight
+)
+
+var (
+	detectedTheme Theme
+	themeOnce     sync.Once
+)
+
+// DetectTheme returns whether the terminal has a dark or light background.
+// The result is cached after the first call.
+func DetectTheme() Theme {
+	themeOnce.Do(func() {
+		if termenv.HasDarkBackground() {
+			detectedTheme = ThemeDark
+		} else {
+			detectedTheme = ThemeLight
+		}
+	})
+	return detectedTheme
+}
+
+// IsDarkBackground returns true if the terminal has a dark background
+func IsDarkBackground() bool {
+	return DetectTheme() == ThemeDark
+}
+
+// Adaptive colors that work on both dark and light backgrounds
+// Dark theme: use lighter grays, Light theme: use darker grays
+func colorDimValue() lipgloss.Color {
+	if IsDarkBackground() {
+		return lipgloss.Color("245") // Light gray for dark backgrounds
+	}
+	return lipgloss.Color("240") // Darker gray for light backgrounds
+}
+
+func colorSubtleValue() lipgloss.Color {
+	if IsDarkBackground() {
+		return lipgloss.Color("240") // Medium gray for dark backgrounds
+	}
+	return lipgloss.Color("245") // Medium-dark gray for light backgrounds
+}
+
+// DimColor returns the dim color value (adaptive to terminal background)
+func DimColor() lipgloss.Color {
+	return colorDimValue()
+}
+
+// DimStyle returns a style for dim/muted text (adaptive to terminal background)
+func DimStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(colorDimValue())
+}
+
+// SubtleStyle returns a style for subtle/secondary text (adaptive to terminal background)
+func SubtleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(colorSubtleValue())
+}
 
 // StackitColors defines the color palette for branch visualization
 // Matching the TypeScript version

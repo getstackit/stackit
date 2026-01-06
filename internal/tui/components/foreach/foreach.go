@@ -32,8 +32,8 @@ func DefaultStyles() Styles {
 		DoneStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("42")),
 		ErrorStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("196")),
 		BranchStyle:  style.BranchStyle(false, false, false).Bold(true),
-		OutputStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		DimStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		OutputStyle:  style.DimStyle(),
+		DimStyle:     style.SubtleStyle(),
 	}
 }
 

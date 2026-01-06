@@ -85,8 +85,8 @@ func NewSubmitTUIModel(items []submit.Item, submitFunc func(idx int) tea.Cmd) Su
 			doneStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("42")),
 			errorStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("196")),
 			branchStyle:  style.BranchStyle(false, false, false).Bold(true),
-			urlStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-			dimStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+			urlStyle:     style.DimStyle(),
+			dimStyle:     style.SubtleStyle(),
 		},
 	}
 }

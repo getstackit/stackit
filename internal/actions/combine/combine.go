@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"stackit.dev/stackit/internal/app"
+	"stackit.dev/stackit/internal/config"
 )
 
 // Action performs the multi-stack combine operation.
@@ -74,7 +75,47 @@ func Action(ctx *app.Context, opts Options) (*Result, error) {
 		ExcludedStacks: worktreeResult.ConflictStacks,
 	}
 
-	// TODO Phase 3: Run CI validation and binary search if --skip-ci is not set
+	// 5. Run CI validation if not skipped
+	if !opts.SkipCI {
+		cfg, err := config.LoadConfig(ctx.RepoRoot)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config: %w", err)
+		}
+		validator := NewCIValidator(cfg, ctx.Output)
+		if !validator.IsConfigured() {
+			ctx.Output.Warn("CI validation skipped (no combine.ciCommand configured)")
+		} else {
+			// Run CI on merged stacks
+			err := validator.Validate(ctx.Context, worktreeResult.WorktreePath)
+			if err != nil {
+				// CI failed - try binary search to find largest working set
+				ctx.Output.Warn("CI validation failed, searching for working subset...")
+
+				searchResult, searchErr := FindLargestWorkingSet(
+					ctx.Context,
+					validator,
+					executor,
+					worktreeResult.WorktreeEngine,
+					worktreeResult.WorktreePath,
+					worktreeResult.MergedStacks,
+				)
+				if searchErr != nil {
+					return nil, fmt.Errorf("binary search failed: %w", searchErr)
+				}
+
+				if len(searchResult.WorkingStacks) == 0 {
+					return nil, errors.New("no combination of stacks passes CI")
+				}
+
+				// Update result with binary search findings
+				result.IncludedStacks = searchResult.WorkingStacks
+				result.ExcludedStacks = append(result.ExcludedStacks, searchResult.FailedStacks...)
+
+				ctx.Output.Success("Found %d stacks that pass CI together", len(result.IncludedStacks))
+			}
+		}
+	}
+
 	// TODO Phase 4: Create consolidated PR
 
 	return result, nil

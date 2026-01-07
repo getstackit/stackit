@@ -13,9 +13,10 @@ type Event interface {
 // StackDisplayEvent indicates the initial stack visualization phase.
 // Handlers can use this to display the branches that will be processed.
 type StackDisplayEvent struct {
-	Stack    *tree.StackTree   // tree structure for rendering the stack
-	FixedMap map[string]bool   // branch -> is fixed (doesn't need restack)
-	ScopeMap map[string]string // branch -> scope
+	Stack       *tree.StackTree   // tree structure for rendering the stack
+	FixedMap    map[string]bool   // branch -> is fixed (doesn't need restack)
+	ScopeMap    map[string]string // branch -> scope
+	WorktreeMap map[string]string // branch -> worktree path (only for stack roots with managed worktrees)
 }
 
 func (StackDisplayEvent) submitEvent() {}

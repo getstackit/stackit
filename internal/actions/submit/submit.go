@@ -112,21 +112,31 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	branchObjs := make([]engine.Branch, len(branches))
 	fixedMap := make(map[string]bool)
 	scopeMap := make(map[string]string)
+	worktreeMap := make(map[string]string)
 
 	for i, branchName := range branches {
 		branch := nav.GetBranch(branchName)
 		branchObjs[i] = branch
 		fixedMap[branchName] = branch.IsBranchUpToDate()
 		scopeMap[branchName] = branch.GetScope().String()
+
+		// Check if this branch is a stack root with a managed worktree
+		stackRoot := ctx.Worktree().GetStackRootForBranch(branch)
+		if stackRoot == branchName {
+			if wtInfo, err := ctx.Worktree().GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
+				worktreeMap[branchName] = wtInfo.Path
+			}
+		}
 	}
 
 	stackTree := tree.NewStackTree(branchObjs, currentBranchName, nav.Trunk().GetName())
 
 	// Display the stack
 	handler.OnEvent(StackDisplayEvent{
-		Stack:    stackTree,
-		FixedMap: fixedMap,
-		ScopeMap: scopeMap,
+		Stack:       stackTree,
+		FixedMap:    fixedMap,
+		ScopeMap:    scopeMap,
+		WorktreeMap: worktreeMap,
 	})
 
 	// Restack if requested

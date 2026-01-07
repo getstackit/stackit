@@ -211,11 +211,18 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				marker = "● "
 			}
 			scope := ev.ScopeMap[branch]
+			worktree := ev.WorktreeMap[branch]
+
+			var line string
 			if scope != "" {
-				h.splog.Info("%s%s [%s]", marker, branch, scope)
+				line = marker + branch + " [" + scope + "]"
 			} else {
-				h.splog.Info("%s%s", marker, branch)
+				line = marker + branch
 			}
+			if worktree != "" {
+				line += " 📂 worktree"
+			}
+			h.splog.Info("%s", line)
 		}
 		h.splog.Newline()
 
@@ -375,9 +382,11 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			}
 
 			scope := ev.ScopeMap[branchName]
+			worktreePath := ev.WorktreeMap[branchName]
 			renderer.SetAnnotation(branchName, tree.BranchAnnotation{
 				Scope:         scope,
 				ExplicitScope: scope,
+				WorktreePath:  worktreePath,
 			})
 
 			items = append(items, submitComponent.Item{

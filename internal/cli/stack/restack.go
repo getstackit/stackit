@@ -61,8 +61,10 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 					RecursiveChildren: !only && !downstack, // Default or upstack
 				}
 
-				// Run restack action
-				handler := NewSyncHandler(ctx.Output, ctx.Logger)
+				// Create runner (manages terminal state) and handler (processes events)
+				runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
+				defer runner.Cleanup()
+
 				return actions.RestackAction(ctx, actions.RestackOptions{
 					BranchName: targetBranch,
 					Scope:      rng,

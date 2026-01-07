@@ -15,12 +15,17 @@ import (
 	"stackit.dev/stackit/internal/tui/style"
 )
 
-// NewForeachHandler creates the appropriate handler based on TTY availability
-func NewForeachHandler(out output.Output, logger output.Logger, parallel bool) foreach.Handler {
+// NewForeachUI creates a runner and handler pair for foreach operations.
+// The runner manages terminal state; the handler processes events.
+// Caller must defer runner.Cleanup() to restore terminal on exit.
+func NewForeachUI(out output.Output, logger output.Logger, parallel bool) (*tui.Runner, foreach.Handler) {
 	if tui.IsTTY() {
-		return NewInteractiveForeachHandler(out, logger)
+		model := foreachComponent.NewModel(nil)
+		runner := tui.NewRunner(model, out, logger)
+		runner.Start()
+		return runner, NewInteractiveForeachHandler(runner, model, out)
 	}
-	return NewSimpleForeachHandler(out, parallel)
+	return nil, NewSimpleForeachHandler(out, parallel)
 }
 
 // SimpleForeachHandler implements foreach.Handler with line-by-line output
@@ -169,7 +174,6 @@ func (h *SimpleForeachHandler) OnEvent(e foreach.Event) {
 // InteractiveForeachHandler implements foreach.Handler with bubbletea for animated progress
 type InteractiveForeachHandler struct {
 	out         output.Output
-	logger      output.Logger
 	runner      *tui.Runner
 	model       *foreachComponent.Model
 	inExecPhase bool
@@ -178,8 +182,8 @@ type InteractiveForeachHandler struct {
 }
 
 // NewInteractiveForeachHandler creates a new interactive foreach handler
-func NewInteractiveForeachHandler(out output.Output, logger output.Logger) *InteractiveForeachHandler {
-	return &InteractiveForeachHandler{out: out, logger: logger}
+func NewInteractiveForeachHandler(runner *tui.Runner, model *foreachComponent.Model, out output.Output) *InteractiveForeachHandler {
+	return &InteractiveForeachHandler{runner: runner, model: model, out: out}
 }
 
 // findRootBranch finds the root branch of the stack (the one whose parent is trunk)
@@ -204,27 +208,6 @@ func (h *InteractiveForeachHandler) findRootBranch() string {
 	return h.stack.Branches[0]
 }
 
-func (h *InteractiveForeachHandler) ensureProgramStarted() {
-	if h.runner != nil {
-		return
-	}
-
-	// Initialize model if needed
-	if h.model == nil {
-		h.model = foreachComponent.NewModel(nil)
-	}
-
-	h.runner = tui.NewRunner(h.model, h.out, h.logger)
-	h.runner.Start()
-}
-
-// Cleanup ensures the terminal is restored to normal mode.
-func (h *InteractiveForeachHandler) Cleanup() {
-	if h.runner != nil {
-		h.runner.Cleanup()
-	}
-}
-
 // OnEvent handles events from the foreach action
 func (h *InteractiveForeachHandler) OnEvent(e foreach.Event) {
 	switch ev := e.(type) {
@@ -232,17 +215,13 @@ func (h *InteractiveForeachHandler) OnEvent(e foreach.Event) {
 		h.stack = ev.Stack
 		h.command = ev.Command
 
-		// Create model with tree renderer
-		h.model = foreachComponent.NewModel(nil)
+		// Update model with tree renderer
 		h.model.Renderer = ev.Stack.ToRenderer()
 		h.model.RootBranch = h.findRootBranch()
 		h.model.Command = h.command
 
-		h.ensureProgramStarted()
-
 	case foreach.ExecutionStartEvent:
 		h.inExecPhase = true
-		h.ensureProgramStarted()
 
 		// Update items in the model
 		for _, branch := range ev.Branches {
@@ -266,90 +245,79 @@ func (h *InteractiveForeachHandler) OnEvent(e foreach.Event) {
 		h.runner.Send(foreachComponent.GlobalMessageMsg("Executing..."))
 
 	case foreach.BranchProgressEvent:
-		if !h.inExecPhase || h.runner == nil {
+		if !h.inExecPhase {
 			return
 		}
 
-		status := string(ev.Status)
 		h.runner.Send(foreachComponent.ProgressUpdateMsg{
 			BranchName: ev.BranchName,
-			Status:     status,
+			Status:     string(ev.Status),
 			Output:     ev.Output,
 			Err:        ev.Error,
 		})
 
 	case foreach.CompletionEvent:
-		if h.runner == nil {
-			return
-		}
-
 		if ev.Message != "" && ev.Message != "Execution complete" {
 			h.runner.Send(foreachComponent.GlobalMessageMsg(ev.Message))
 		} else {
 			h.runner.Send(foreachComponent.GlobalMessageMsg(""))
 		}
 		h.runner.Send(foreachComponent.ProgressCompleteMsg{})
-		h.complete(ev.Results)
+		h.printSummary(ev.Results)
 	}
 }
 
-// complete finalizes the display and shows consolidated output
-func (h *InteractiveForeachHandler) complete(results []foreach.BranchResult) {
-	if h.runner != nil {
-		h.runner.Wait()
-		h.runner.Cleanup()
+// printSummary shows consolidated output after TUI completes
+func (h *InteractiveForeachHandler) printSummary(results []foreach.BranchResult) {
+	if len(results) == 0 {
+		return
 	}
 
-	// Show consolidated output summary
-	if len(results) > 0 {
-		h.out.Newline()
-		h.out.Info("Summary:")
-		successCount := 0
-		failCount := 0
-		for _, result := range results {
-			switch result.Status {
-			case foreach.StatusDone:
-				successCount++
-				isCurrent := h.stack != nil && result.BranchName == h.stack.CurrentBranch
-				h.out.Info("  ✓ %s", style.ColorBranchName(result.BranchName, isCurrent))
-				if result.Output != "" {
-					resultOutput := strings.TrimSpace(result.Output)
-					if len(resultOutput) > 0 {
-						// Indent output
-						lines := strings.Split(resultOutput, "\n")
-						for _, line := range lines {
-							if strings.TrimSpace(line) != "" {
-								h.out.Info("    %s", line)
-							}
+	h.out.Newline()
+	h.out.Info("Summary:")
+	successCount := 0
+	failCount := 0
+	for _, result := range results {
+		switch result.Status {
+		case foreach.StatusDone:
+			successCount++
+			isCurrent := h.stack != nil && result.BranchName == h.stack.CurrentBranch
+			h.out.Info("  ✓ %s", style.ColorBranchName(result.BranchName, isCurrent))
+			if result.Output != "" {
+				resultOutput := strings.TrimSpace(result.Output)
+				if len(resultOutput) > 0 {
+					lines := strings.Split(resultOutput, "\n")
+					for _, line := range lines {
+						if strings.TrimSpace(line) != "" {
+							h.out.Info("    %s", line)
 						}
 					}
 				}
-			case foreach.StatusError:
-				failCount++
-				isCurrent := h.stack != nil && result.BranchName == h.stack.CurrentBranch
-				h.out.Error("  ✗ %s", style.ColorBranchName(result.BranchName, isCurrent))
-				if result.Error != nil {
-					h.out.Error("    Error: %v", result.Error)
-				}
-				if result.Output != "" {
-					resultOutput := strings.TrimSpace(result.Output)
-					if len(resultOutput) > 0 {
-						// Indent output
-						lines := strings.Split(resultOutput, "\n")
-						for _, line := range lines {
-							if strings.TrimSpace(line) != "" {
-								h.out.Info("    %s", line)
-							}
+			}
+		case foreach.StatusError:
+			failCount++
+			isCurrent := h.stack != nil && result.BranchName == h.stack.CurrentBranch
+			h.out.Error("  ✗ %s", style.ColorBranchName(result.BranchName, isCurrent))
+			if result.Error != nil {
+				h.out.Error("    Error: %v", result.Error)
+			}
+			if result.Output != "" {
+				resultOutput := strings.TrimSpace(result.Output)
+				if len(resultOutput) > 0 {
+					lines := strings.Split(resultOutput, "\n")
+					for _, line := range lines {
+						if strings.TrimSpace(line) != "" {
+							h.out.Info("    %s", line)
 						}
 					}
 				}
 			}
 		}
-		h.out.Newline()
-		if failCount > 0 {
-			h.out.Info("Completed: %d succeeded, %d failed", successCount, failCount)
-		} else {
-			h.out.Info("All branches completed successfully (%d total)", successCount)
-		}
+	}
+	h.out.Newline()
+	if failCount > 0 {
+		h.out.Info("Completed: %d succeeded, %d failed", successCount, failCount)
+	} else {
+		h.out.Info("All branches completed successfully (%d total)", successCount)
 	}
 }

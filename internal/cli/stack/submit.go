@@ -118,9 +118,9 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			SubmitFooter:         submitFooter,
 		}
 
-		// Create UI (manages terminal state) and handler (processes events)
-		ui, handler := NewSubmitUI(ctx.Output, ctx.Logger)
-		defer ui.Cleanup()
+		// Create runner (manages terminal state) and handler (processes events)
+		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger)
+		defer runner.Cleanup()
 		return submit.Action(ctx, opts, handler)
 	})
 }
@@ -167,26 +167,17 @@ func NewSsCmd() *cobra.Command {
 	return cmd
 }
 
-// SubmitUI manages terminal state for submit operations.
-type SubmitUI struct {
-	handler *InteractiveSubmitHandler
-}
-
-// NewSubmitUI creates a UI and handler pair for submit operations.
-// The UI manages terminal cleanup; the handler processes events.
-func NewSubmitUI(out output.Output, logger output.Logger) (*SubmitUI, submit.Handler) {
+// NewSubmitUI creates a runner and handler pair for submit operations.
+// The runner manages terminal state; the handler processes events.
+// Caller must defer runner.Cleanup() to restore terminal on exit.
+func NewSubmitUI(out output.Output, logger output.Logger) (*tui.Runner, submit.Handler) {
 	if tui.IsTTY() {
-		h := NewInteractiveSubmitHandler(out, logger)
-		return &SubmitUI{handler: h}, h
+		model := submitComponent.NewModel(nil)
+		runner := tui.NewRunner(model, out, logger)
+		runner.Start()
+		return runner, NewInteractiveSubmitHandler(runner, model)
 	}
-	return &SubmitUI{}, NewSimpleSubmitHandler(out)
-}
-
-// Cleanup ensures the terminal is restored to normal mode.
-func (u *SubmitUI) Cleanup() {
-	if u.handler != nil {
-		u.handler.Cleanup()
-	}
+	return nil, NewSimpleSubmitHandler(out)
 }
 
 // SimpleSubmitHandler implements submit.Handler with line-by-line output
@@ -315,8 +306,6 @@ func (h *SimpleSubmitHandler) Confirm(_ string, defaultYes bool) (bool, error) {
 
 // InteractiveSubmitHandler implements submit.Handler with bubbletea for animated progress
 type InteractiveSubmitHandler struct {
-	out           output.Output
-	logger        output.Logger
 	runner        *tui.Runner
 	model         *submitComponent.Model
 	inSubmitPhase bool
@@ -325,8 +314,8 @@ type InteractiveSubmitHandler struct {
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
-func NewInteractiveSubmitHandler(out output.Output, logger output.Logger) *InteractiveSubmitHandler {
-	return &InteractiveSubmitHandler{out: out, logger: logger}
+func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model) *InteractiveSubmitHandler {
+	return &InteractiveSubmitHandler{runner: runner, model: model}
 }
 
 // findRootBranch finds the root branch of the stack (the one whose parent is trunk)
@@ -349,27 +338,6 @@ func (h *InteractiveSubmitHandler) findRootBranch() string {
 	}
 	// Fallback to first branch
 	return h.stack.Branches[0]
-}
-
-func (h *InteractiveSubmitHandler) ensureProgramStarted() {
-	if h.runner != nil {
-		return
-	}
-
-	// Initialize model if needed
-	if h.model == nil {
-		h.model = submitComponent.NewModel(nil)
-	}
-
-	h.runner = tui.NewRunner(h.model, h.out, h.logger)
-	h.runner.Start()
-}
-
-// Cleanup ensures the terminal is restored to normal mode.
-func (h *InteractiveSubmitHandler) Cleanup() {
-	if h.runner != nil {
-		h.runner.Cleanup()
-	}
 }
 
 // OnEvent handles events from the submit action
@@ -411,15 +379,12 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			})
 		}
 
-		// Create model with tree renderer and initial items
-		h.model = submitComponent.NewModel(items)
+		// Update model with tree renderer and initial items
+		h.model.Items = items
 		h.model.Renderer = renderer
 		h.model.RootBranch = h.findRootBranch()
 
-		h.ensureProgramStarted()
-
 	case submit.RestackEvent:
-		h.ensureProgramStarted()
 		if ev.Started {
 			h.runner.Send(submitComponent.GlobalMessageMsg("Restacking branches..."))
 		} else if ev.Completed {
@@ -427,11 +392,9 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		}
 
 	case submit.PreparingEvent:
-		h.ensureProgramStarted()
 		h.runner.Send(submitComponent.GlobalMessageMsg("Preparing branches..."))
 
 	case submit.BranchPlanEvent:
-		h.ensureProgramStarted()
 		h.runner.Send(submitComponent.PlanUpdateMsg{
 			BranchName: ev.BranchName,
 			Action:     ev.Action,
@@ -442,7 +405,6 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 
 	case submit.SubmissionStartEvent:
 		h.inSubmitPhase = true
-		h.ensureProgramStarted()
 
 		// Update items in the model
 		for _, branch := range ev.Branches {
@@ -468,56 +430,31 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		h.runner.Send(submitComponent.GlobalMessageMsg("Submitting..."))
 
 	case submit.BranchProgressEvent:
-		if !h.inSubmitPhase || h.runner == nil {
+		if !h.inSubmitPhase {
 			return
 		}
 
-		status := string(ev.Status)
 		h.runner.Send(submitComponent.ProgressUpdateMsg{
 			BranchName: ev.BranchName,
-			Status:     status,
+			Status:     string(ev.Status),
 			URL:        ev.URL,
 			Err:        ev.Error,
 		})
 
 	case submit.CompletionEvent:
-		if h.runner == nil {
-			return
-		}
-
 		if ev.Message != "" && ev.Message != "Submit complete" {
 			h.runner.Send(submitComponent.GlobalMessageMsg(ev.Message))
 		} else {
 			h.runner.Send(submitComponent.GlobalMessageMsg(""))
 		}
 		h.runner.Send(submitComponent.ProgressCompleteMsg{})
-		h.complete()
 	}
 }
 
 // Confirm prompts for user confirmation
 func (h *InteractiveSubmitHandler) Confirm(message string, defaultYes bool) (bool, error) {
-	// Pause TUI for prompt
-	if h.runner != nil {
-		h.runner.Pause()
-	}
-
+	h.runner.Pause()
 	confirmed, err := tui.PromptConfirm(message, defaultYes)
-
-	// Resume TUI
-	if h.runner != nil {
-		h.runner.Resume()
-	}
-
+	h.runner.Resume()
 	return confirmed, err
-}
-
-// complete finalizes the display
-func (h *InteractiveSubmitHandler) complete() {
-	if h.runner == nil {
-		return
-	}
-
-	h.runner.Wait()
-	h.runner.Cleanup()
 }

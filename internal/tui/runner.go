@@ -82,8 +82,11 @@ func (r *Runner) Start() {
 }
 
 // Cleanup ensures the terminal is restored to normal mode.
-// This is safe to call multiple times - subsequent calls are no-ops.
+// This is safe to call multiple times and on nil receivers.
 func (r *Runner) Cleanup() {
+	if r == nil {
+		return
+	}
 	r.mu.Lock()
 	if r.stopped {
 		r.mu.Unlock()

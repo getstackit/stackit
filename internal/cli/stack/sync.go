@@ -27,8 +27,9 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				// Create handler based on TTY availability
-				handler := NewSyncHandler(ctx.Output, ctx.Logger)
+				// Create runner (manages terminal state) and handler (processes events)
+				runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
+				defer runner.Cleanup()
 
 				// Run sync action with handler
 				return sync.Action(ctx, sync.Options{

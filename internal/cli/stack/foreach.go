@@ -68,8 +68,9 @@ Examples:
 					}
 				}
 
-				// Create the appropriate handler based on TTY availability
-				handler := NewForeachHandler(ctx.Output, ctx.Logger, opts.Parallel)
+				// Create runner (manages terminal state) and handler (processes events)
+				runner, handler := NewForeachUI(ctx.Output, ctx.Logger, opts.Parallel)
+				defer runner.Cleanup()
 				return foreach.Action(ctx, opts, handler)
 			})
 		},

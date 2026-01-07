@@ -82,8 +82,11 @@ func (r *Runner) Start() {
 }
 
 // Cleanup ensures the terminal is restored to normal mode.
-// This is safe to call multiple times - subsequent calls are no-ops.
+// This is safe to call multiple times and on nil receivers.
 func (r *Runner) Cleanup() {
+	if r == nil {
+		return
+	}
 	r.mu.Lock()
 	if r.stopped {
 		r.mu.Unlock()
@@ -107,7 +110,11 @@ func (r *Runner) Cleanup() {
 }
 
 // Pause releases the terminal for interactive prompts.
+// This is safe to call on nil receivers.
 func (r *Runner) Pause() {
+	if r == nil {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -118,7 +125,11 @@ func (r *Runner) Pause() {
 }
 
 // Resume restores the TUI after Pause.
+// This is safe to call on nil receivers.
 func (r *Runner) Resume() {
+	if r == nil {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -129,8 +140,11 @@ func (r *Runner) Resume() {
 }
 
 // Send sends a message to the running program.
-// Safe to call even if program is not running (no-op).
+// Safe to call on nil receivers or when program is not running (no-op).
 func (r *Runner) Send(msg tea.Msg) {
+	if r == nil {
+		return
+	}
 	r.mu.Lock()
 	p := r.program
 	r.mu.Unlock()
@@ -141,7 +155,11 @@ func (r *Runner) Send(msg tea.Msg) {
 }
 
 // Wait blocks until the program exits.
+// Safe to call on nil receivers.
 func (r *Runner) Wait() {
+	if r == nil {
+		return
+	}
 	r.mu.Lock()
 	p := r.program
 	r.mu.Unlock()

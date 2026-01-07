@@ -19,12 +19,17 @@ const (
 	reasonFrozen          = "is frozen"
 )
 
-// NewSyncHandler creates the appropriate handler based on TTY availability
-func NewSyncHandler(out output.Output, logger output.Logger) syncAction.Handler {
+// NewSyncUI creates a runner and handler pair for sync operations.
+// The runner manages terminal state; the handler processes events.
+// Caller must defer runner.Cleanup() to restore terminal on exit.
+func NewSyncUI(out output.Output, logger output.Logger) (*tui.Runner, syncAction.Handler) {
 	if tui.IsTTY() {
-		return NewInteractiveSyncHandler(out, logger)
+		model := syncComponent.NewModel(0) // Start with 0, will be updated in Start()
+		runner := tui.NewRunner(model, out, logger)
+		runner.Start()
+		return runner, NewInteractiveSyncHandler(runner, model)
 	}
-	return NewSimpleSyncHandler(out)
+	return nil, NewSimpleSyncHandler(out)
 }
 
 // SimpleSyncHandler provides streaming text output for non-TTY environments
@@ -283,8 +288,6 @@ func (h *SimpleSyncHandler) OnRestackComplete(restacked, skipped int, conflicts 
 
 // InteractiveSyncHandler provides bubbletea TUI for TTY environments
 type InteractiveSyncHandler struct {
-	out          output.Output
-	logger       output.Logger
 	runner       *tui.Runner
 	model        *syncComponent.Model
 	mu           stdsync.Mutex
@@ -294,10 +297,10 @@ type InteractiveSyncHandler struct {
 }
 
 // NewInteractiveSyncHandler creates a new InteractiveSyncHandler
-func NewInteractiveSyncHandler(out output.Output, logger output.Logger) *InteractiveSyncHandler {
+func NewInteractiveSyncHandler(runner *tui.Runner, model *syncComponent.Model) *InteractiveSyncHandler {
 	return &InteractiveSyncHandler{
-		out:    out,
-		logger: logger,
+		runner: runner,
+		model:  model,
 	}
 }
 
@@ -309,22 +312,14 @@ func (h *InteractiveSyncHandler) Start(totalOps int) {
 	h.totalOps = totalOps
 	h.completedOps = 0
 
-	// Initialize model
-	h.model = syncComponent.NewModel(totalOps)
-
-	// Create and start TUI runner
-	h.runner = tui.NewRunner(h.model, h.out, h.logger)
-	h.runner.Start()
+	// Update model with total ops
+	h.runner.Send(syncComponent.ProgressTickMsg{Completed: 0, Total: totalOps})
 }
 
 // EmitEvent handles progress updates
 func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-
-	if h.runner == nil {
-		return
-	}
 
 	// Handle phase transitions
 	if event.Type == syncAction.EventStarted && event.Phase != h.currentPhase {
@@ -424,17 +419,11 @@ func (h *InteractiveSyncHandler) Complete(summary syncAction.Summary) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.runner == nil {
-		return
-	}
-
 	// Build summary message
 	summaryMsg := h.formatSummary(summary)
 
-	// Send complete message and wait for program to quit
+	// Send complete message
 	h.runner.Send(syncComponent.CompleteMsg{Summary: summaryMsg})
-	h.runner.Wait()
-	h.runner.Cleanup()
 }
 
 // formatSummary formats the sync summary
@@ -466,14 +455,8 @@ func (h *InteractiveSyncHandler) OnRestackStart(branchCount int) {
 	h.totalOps = branchCount
 	h.completedOps = 0
 
-	// Initialize model for restack (reusing sync model with just restack phase)
-	h.model = syncComponent.NewModel(branchCount)
-
-	// Create and start TUI runner
-	h.runner = tui.NewRunner(h.model, h.out, h.logger)
-	h.runner.Start()
-
-	// Start restack phase
+	// Update model with total ops and start restack phase
+	h.runner.Send(syncComponent.ProgressTickMsg{Completed: 0, Total: branchCount})
 	h.runner.Send(syncComponent.PhaseStartMsg{
 		Phase: syncComponent.Phase(syncAction.PhaseRestack),
 	})
@@ -483,10 +466,6 @@ func (h *InteractiveSyncHandler) OnRestackStart(branchCount int) {
 func (h *InteractiveSyncHandler) OnRestackBranch(branch string, result syncAction.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, reparented bool, oldParent, newParent string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-
-	if h.runner == nil {
-		return
-	}
 
 	// Build detail message
 	detail := h.formatRestackDetail(branch, result, newRev, prNumber, lockReason, frozen, isCurrent, parent)
@@ -551,25 +530,15 @@ func (h *InteractiveSyncHandler) OnRestackComplete(restacked, skipped int, confl
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.runner == nil {
-		return
-	}
-
 	// Build summary message
 	summaryMsg := h.formatRestackSummary(restacked, skipped, conflicts)
 
-	// Send complete message and wait for program to quit
+	// Send complete message
 	h.runner.Send(syncComponent.CompleteMsg{Summary: summaryMsg})
-	h.runner.Wait()
-	h.runner.Cleanup()
 }
 
-// Cleanup ensures the terminal is restored to normal mode.
-func (h *InteractiveSyncHandler) Cleanup() {
-	if h.runner != nil {
-		h.runner.Cleanup()
-	}
-}
+// Cleanup is a no-op - terminal cleanup is handled by the runner via defer.
+func (h *InteractiveSyncHandler) Cleanup() {}
 
 // formatRestackSummary formats the restack summary
 func (h *InteractiveSyncHandler) formatRestackSummary(restacked, skipped int, conflicts []string) string {

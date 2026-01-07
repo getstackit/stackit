@@ -174,27 +174,53 @@ func (m *LogModel) log(msg string, args ...any) {
 // enrichData returns a command that fetches full annotation data in the background.
 // This includes git operations and network calls (remote SHAs, CI status).
 func (m *LogModel) enrichData() tea.Cmd {
+	// Capture values needed by the goroutine to avoid races on struct fields
+	ctx := m.context
+	eng := m.engine
+	ghClient := m.githubClient
+	style := m.style
+	logger := m.logger
+
+	logDebug := func(msg string, args ...any) {
+		if logger != nil {
+			logger.Debug(msg, args...)
+		}
+	}
+
 	return func() tea.Msg {
 		enrichStart := time.Now()
-		m.log("TUI enrichment started")
+		logDebug("TUI enrichment started")
 
-		allBranches := m.engine.AllBranches()
+		allBranches := eng.AllBranches()
+
+		// Use channels to safely collect results from parallel goroutines
+		type ciResultType struct {
+			statuses map[string]*github.CheckStatus
+			err      error
+		}
+		ciChan := make(chan ciResultType, 1)
+		remoteShaErrChan := make(chan error, 1)
 
 		// Run PopulateRemoteShas and BatchGetPRChecksStatus in parallel
-		var ciStatuses map[string]*github.CheckStatus
 		var wg sync.WaitGroup
 
-		if m.style == logStyleFull {
+		if style == logStyleFull {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				start := time.Now()
-				_ = m.engine.PopulateRemoteShas()
-				m.log("PopulateRemoteShas completed in %v", time.Since(start))
+				err := eng.PopulateRemoteShas()
+				if err != nil {
+					logDebug("PopulateRemoteShas failed: %v", err)
+				}
+				remoteShaErrChan <- err
+				logDebug("PopulateRemoteShas completed in %v", time.Since(start))
 			}()
+		} else {
+			remoteShaErrChan <- nil
 		}
 
-		if m.style == logStyleFull && m.githubClient != nil {
+		if style == logStyleFull && ghClient != nil {
 			branchNames := make([]string, 0, len(allBranches))
 			for _, b := range allBranches {
 				if !b.IsTrunk() {
@@ -206,21 +232,34 @@ func (m *LogModel) enrichData() tea.Cmd {
 				go func() {
 					defer wg.Done()
 					start := time.Now()
-					ciStatuses, _ = m.githubClient.BatchGetPRChecksStatus(m.context, branchNames)
-					m.log("BatchGetPRChecksStatus for %d branches completed in %v", len(branchNames), time.Since(start))
+					statuses, err := ghClient.BatchGetPRChecksStatus(ctx, branchNames)
+					if err != nil {
+						logDebug("BatchGetPRChecksStatus failed: %v", err)
+					}
+					ciChan <- ciResultType{statuses: statuses, err: err}
+					logDebug("BatchGetPRChecksStatus for %d branches completed in %v", len(branchNames), time.Since(start))
 				}()
+			} else {
+				ciChan <- ciResultType{}
 			}
+		} else {
+			ciChan <- ciResultType{}
 		}
 
 		wg.Wait()
+
+		// Collect results from channels (non-blocking since goroutines are done)
+		<-remoteShaErrChan
+		ciRes := <-ciChan
+		ciStatuses := ciRes.statuses
 
 		// Collect full annotations
 		start := time.Now()
 		annotations := make(map[string]tree.BranchAnnotation)
 		utils.Run(allBranches, func(b engine.Branch) {
-			ann := GetBranchAnnotation(m.engine, b)
+			ann := GetBranchAnnotation(eng, b)
 			// Add CI status if available
-			if m.style == logStyleFull && !b.IsTrunk() && ciStatuses != nil {
+			if style == logStyleFull && !b.IsTrunk() && ciStatuses != nil {
 				if status := ciStatuses[b.GetName()]; status != nil {
 					ann.CheckStatus = tree.CheckStatusPassing
 					if status.Pending {
@@ -231,17 +270,17 @@ func (m *LogModel) enrichData() tea.Cmd {
 				}
 			}
 			// Check if this branch is a stack root with a managed worktree
-			stackRoot := m.engine.GetStackRootForBranch(b)
+			stackRoot := eng.GetStackRootForBranch(b)
 			if stackRoot == b.GetName() {
-				if wtInfo, err := m.engine.GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
+				if wtInfo, err := eng.GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
 					ann.WorktreePath = wtInfo.Path
 				}
 			}
 			annotations[b.GetName()] = ann
 		})
-		m.log("Collected full annotations for %d branches in %v", len(allBranches), time.Since(start))
+		logDebug("Collected full annotations for %d branches in %v", len(allBranches), time.Since(start))
 
-		m.log("TUI enrichment completed in %v", time.Since(enrichStart))
+		logDebug("TUI enrichment completed in %v", time.Since(enrichStart))
 
 		return enrichDataMsg{annotations: annotations}
 	}
@@ -384,6 +423,10 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// renderTree updates the viewport content with the current tree state.
+// This requires the viewport to be ready (initialized via WindowSizeMsg).
+// Note: View() has its own fallback rendering for the !ready case to ensure
+// immediate visual feedback before the viewport is initialized.
 func (m *LogModel) renderTree() {
 	if m.renderer == nil || !m.ready {
 		return

@@ -55,20 +55,9 @@ func NewStackTreeRendererWithStrategy(eng engine.BranchReader, strategy engine.S
 	)
 }
 
-// GetMinimalAnnotation returns a tree.BranchAnnotation with only cached/instant fields.
-// This is used for fast initial rendering before full data is loaded.
-// Note: This doesn't include worktree info - use GetMinimalAnnotationWithWorktree for that.
-func GetMinimalAnnotation(eng engine.BranchReader, branch engine.Branch) tree.BranchAnnotation {
-	return tree.BranchAnnotation{
-		IsLocked:      branch.IsLocked(),
-		IsFrozen:      branch.IsFrozen(),
-		Scope:         eng.GetScope(branch).String(),
-		ExplicitScope: branch.GetExplicitScope().String(),
-	}
-}
-
 // GetMinimalAnnotationWithWorktree returns minimal annotations plus worktree info.
-// The engine parameter must implement WorktreeRegistry for worktree lookups.
+// This is used for fast initial rendering before full data is loaded.
+// Only includes cached/instant fields - no git or network calls.
 func GetMinimalAnnotationWithWorktree(eng engine.Engine, branch engine.Branch) tree.BranchAnnotation {
 	ann := tree.BranchAnnotation{
 		IsLocked:      branch.IsLocked(),

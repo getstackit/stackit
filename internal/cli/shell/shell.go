@@ -105,11 +105,11 @@ __stackit_wrap() {
             rerun_args="${rerun_line#__STACKIT_RERUN__}"
             rerun_args="${rerun_args#:}"
             if [[ -n "$rerun_args" ]]; then
-                # Use specific args provided by stackit
-                eval "STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit $rerun_args"
+                # Use specific args provided by stackit (-q suppresses redundant messages)
+                eval "STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit -q $rerun_args"
             else
-                # No args: re-run original command
-                STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit "$@"
+                # No args: re-run original command (-q suppresses redundant messages)
+                STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit -q "$@"
             fi
         fi
     fi
@@ -152,11 +152,11 @@ __stackit_wrap() {
             rerun_args="${rerun_line#__STACKIT_RERUN__}"
             rerun_args="${rerun_args#:}"
             if [[ -n "$rerun_args" ]]; then
-                # Use specific args provided by stackit
-                eval "STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit $rerun_args"
+                # Use specific args provided by stackit (-q suppresses redundant messages)
+                eval "STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit -q $rerun_args"
             else
-                # No args: re-run original command
-                STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit "$@"
+                # No args: re-run original command (-q suppresses redundant messages)
+                STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit -q "$@"
             fi
         fi
     fi
@@ -198,11 +198,11 @@ function __stackit_wrap --description 'stackit wrapper with auto-cd support'
             # Extract args after __STACKIT_RERUN__: (if present)
             set -l rerun_args (string replace '__STACKIT_RERUN__:' '' -- $rerun_line)
             if test -n "$rerun_args" -a "$rerun_args" != "$rerun_line"
-                # Use specific args provided by stackit
-                eval "env STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit $rerun_args"
+                # Use specific args provided by stackit (-q suppresses redundant messages)
+                eval "env STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit -q $rerun_args"
             else
-                # No args: re-run original command
-                env STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit $argv
+                # No args: re-run original command (-q suppresses redundant messages)
+                env STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit -q $argv
             end
         end
     end

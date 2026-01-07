@@ -78,7 +78,9 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 
 	currentBranch := eng.CurrentBranch()
 	if currentBranch != nil && branchName == currentBranch.GetName() {
-		out.Info("Already on %s.", style.ColorBranchName(branchName, true))
+		if !ctx.Quiet {
+			out.Info("Already on %s.", style.ColorBranchName(branchName, true))
+		}
 		return nil
 	}
 

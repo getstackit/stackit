@@ -565,7 +565,8 @@ func runMergeTypeSelector(ctx *app.Context, dryRun bool, force bool) error {
 
 		// Use branch selector
 		selectedBranch, err := tui.PromptLogSelect(ctx.Context, ctx.Engine, ctx.GitHubClient, tui.LogOptions{
-			Style: "FULL",
+			Style:  "FULL",
+			Logger: ctx.Logger,
 		})
 		if err != nil {
 			return err

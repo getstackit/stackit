@@ -668,7 +668,7 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 	return result
 }
 
-// formatSummaryLine creates line 2: PR# → Review → CI | Stats | Action/Status
+// formatSummaryLine creates line 2: Stats | PR# CI Review | Action/Status
 func (r *StackTreeRenderer) formatSummaryLine(annotation BranchAnnotation, isTrunk bool, hideStats bool) string {
 	var prParts []string
 	var statsParts []string
@@ -684,15 +684,6 @@ func (r *StackTreeRenderer) formatSummaryLine(annotation BranchAnnotation, isTru
 		}
 	}
 
-	// Review status icon
-	switch annotation.ReviewStatus {
-	case "Approved":
-		prParts = append(prParts, style.IconReviewApproved())
-	case "Changes Requested":
-		prParts = append(prParts, style.IconReviewChangesRequested())
-		// Omit "In Review", "Commented", etc. - only show actionable states
-	}
-
 	// CI status (colored dot)
 	switch annotation.CheckStatus {
 	case CheckStatusPassing:
@@ -701,6 +692,14 @@ func (r *StackTreeRenderer) formatSummaryLine(annotation BranchAnnotation, isTru
 		prParts = append(prParts, style.IconCIFailing())
 	case CheckStatusPending:
 		prParts = append(prParts, style.IconCIPending())
+	}
+
+	// Review status icon
+	switch annotation.ReviewStatus {
+	case "Approved":
+		prParts = append(prParts, style.IconReviewApproved())
+	case "Changes Requested":
+		prParts = append(prParts, style.IconReviewChangesRequested())
 	}
 
 	// Stats (contextual, already colored)
@@ -721,13 +720,13 @@ func (r *StackTreeRenderer) formatSummaryLine(annotation BranchAnnotation, isTru
 		actionParts = append(actionParts, annotation.CustomLabel)
 	}
 
-	// Join sections with pipe separators
+	// Join sections with pipe separators (stats first, then PR info)
 	var result []string
-	if len(prParts) > 0 {
-		result = append(result, strings.Join(prParts, " "))
-	}
 	if len(statsParts) > 0 {
 		result = append(result, strings.Join(statsParts, " "))
+	}
+	if len(prParts) > 0 {
+		result = append(result, strings.Join(prParts, " "))
 	}
 	if len(actionParts) > 0 {
 		result = append(result, strings.Join(actionParts, " "))

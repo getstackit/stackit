@@ -140,10 +140,11 @@ func (c *GitHubClient) getPRChecksStatus(_ context.Context, _ string) *github.Ch
 	// Simulate a small delay
 	time.Sleep(50 * time.Millisecond)
 
-	// In demo mode, always return checks passing
+	// In demo mode, always return checks passing with approved review
 	return &github.CheckStatus{
-		Passing: true,
-		Pending: false,
+		Passing:        true,
+		Pending:        false,
+		ReviewDecision: "APPROVED",
 		Checks: []github.CheckDetail{
 			{Name: "Build", Status: "COMPLETED", Conclusion: "SUCCESS"},
 			{Name: "Test", Status: "COMPLETED", Conclusion: "SUCCESS"},

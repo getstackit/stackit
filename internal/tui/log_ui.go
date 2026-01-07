@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -15,17 +14,12 @@ import (
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/errors"
 	"stackit.dev/stackit/internal/github"
+	"stackit.dev/stackit/internal/output"
 	"stackit.dev/stackit/internal/tui/components/tree"
 	"stackit.dev/stackit/internal/tui/keys"
 	"stackit.dev/stackit/internal/tui/style"
 	"stackit.dev/stackit/internal/utils"
 )
-
-// Logger interface for IO timing diagnostics
-type Logger interface {
-	Debug(msg string, args ...any)
-	Info(msg string, args ...any)
-}
 
 const (
 	logStyleFull = "FULL"
@@ -51,7 +45,7 @@ type LogModel struct {
 	width        int
 	height       int
 	ready        bool
-	logger       Logger
+	logger       output.Logger
 
 	// Keys
 	logKeys    keys.LogKeyMap
@@ -193,31 +187,26 @@ func (m *LogModel) enrichData() tea.Cmd {
 
 		allBranches := eng.AllBranches()
 
-		// Use channels to safely collect results from parallel goroutines
-		type ciResultType struct {
+		// Channels for parallel results (buffered so goroutines don't block)
+		type ciResult struct {
 			statuses map[string]*github.CheckStatus
 			err      error
 		}
-		ciChan := make(chan ciResultType, 1)
-		remoteShaErrChan := make(chan error, 1)
+		ciChan := make(chan ciResult, 1)
+		remoteShasDone := make(chan struct{}, 1)
 
 		// Run PopulateRemoteShas and BatchGetPRChecksStatus in parallel
-		var wg sync.WaitGroup
-
 		if style == logStyleFull {
-			wg.Add(1)
 			go func() {
-				defer wg.Done()
 				start := time.Now()
-				err := eng.PopulateRemoteShas()
-				if err != nil {
+				if err := eng.PopulateRemoteShas(); err != nil {
 					logDebug("PopulateRemoteShas failed: %v", err)
 				}
-				remoteShaErrChan <- err
 				logDebug("PopulateRemoteShas completed in %v", time.Since(start))
+				remoteShasDone <- struct{}{}
 			}()
 		} else {
-			remoteShaErrChan <- nil
+			remoteShasDone <- struct{}{}
 		}
 
 		if style == logStyleFull && ghClient != nil {
@@ -228,30 +217,25 @@ func (m *LogModel) enrichData() tea.Cmd {
 				}
 			}
 			if len(branchNames) > 0 {
-				wg.Add(1)
 				go func() {
-					defer wg.Done()
 					start := time.Now()
 					statuses, err := ghClient.BatchGetPRChecksStatus(ctx, branchNames)
 					if err != nil {
 						logDebug("BatchGetPRChecksStatus failed: %v", err)
 					}
-					ciChan <- ciResultType{statuses: statuses, err: err}
 					logDebug("BatchGetPRChecksStatus for %d branches completed in %v", len(branchNames), time.Since(start))
+					ciChan <- ciResult{statuses: statuses, err: err}
 				}()
 			} else {
-				ciChan <- ciResultType{}
+				ciChan <- ciResult{}
 			}
 		} else {
-			ciChan <- ciResultType{}
+			ciChan <- ciResult{}
 		}
 
-		wg.Wait()
-
-		// Collect results from channels (non-blocking since goroutines are done)
-		<-remoteShaErrChan
-		ciRes := <-ciChan
-		ciStatuses := ciRes.statuses
+		// Wait for both operations to complete
+		<-remoteShasDone
+		ciStatuses := (<-ciChan).statuses
 
 		// Collect full annotations
 		start := time.Now()
@@ -585,5 +569,5 @@ type LogOptions struct {
 	Reverse       bool
 	ShowUntracked bool
 	Exclude       map[string]bool // Branches to exclude from selection
-	Logger        Logger          // Optional logger for IO timing diagnostics
+	Logger        output.Logger   // Optional logger for IO timing diagnostics
 }

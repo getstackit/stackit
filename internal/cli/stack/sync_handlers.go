@@ -27,7 +27,7 @@ func NewSyncUI(out output.Output, logger output.Logger) (*tui.Runner, syncAction
 		model := syncComponent.NewModel(0) // Start with 0, will be updated in Start()
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()
-		return runner, NewInteractiveSyncHandler(runner, model, out)
+		return runner, NewInteractiveSyncHandler(runner, model)
 	}
 	return nil, NewSimpleSyncHandler(out)
 }
@@ -288,7 +288,6 @@ func (h *SimpleSyncHandler) OnRestackComplete(restacked, skipped int, conflicts 
 
 // InteractiveSyncHandler provides bubbletea TUI for TTY environments
 type InteractiveSyncHandler struct {
-	out          output.Output
 	runner       *tui.Runner
 	model        *syncComponent.Model
 	mu           stdsync.Mutex
@@ -298,11 +297,10 @@ type InteractiveSyncHandler struct {
 }
 
 // NewInteractiveSyncHandler creates a new InteractiveSyncHandler
-func NewInteractiveSyncHandler(runner *tui.Runner, model *syncComponent.Model, out output.Output) *InteractiveSyncHandler {
+func NewInteractiveSyncHandler(runner *tui.Runner, model *syncComponent.Model) *InteractiveSyncHandler {
 	return &InteractiveSyncHandler{
 		runner: runner,
 		model:  model,
-		out:    out,
 	}
 }
 

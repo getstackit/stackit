@@ -721,13 +721,13 @@ func (r *StackTreeRenderer) formatSummaryLine(annotation BranchAnnotation, isTru
 		actionParts = append(actionParts, annotation.CustomLabel)
 	}
 
-	// Join sections with pipe separators
+	// Join sections with pipe separators (stats first, then PR info)
 	var result []string
-	if len(prParts) > 0 {
-		result = append(result, strings.Join(prParts, " "))
-	}
 	if len(statsParts) > 0 {
 		result = append(result, strings.Join(statsParts, " "))
+	}
+	if len(prParts) > 0 {
+		result = append(result, strings.Join(prParts, " "))
 	}
 	if len(actionParts) > 0 {
 		result = append(result, strings.Join(actionParts, " "))

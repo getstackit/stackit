@@ -417,32 +417,36 @@ func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner git.Runner, owner
 		aliasToBranch[alias] = name
 	}
 
-	// Build GraphQL query
+	// Build GraphQL query - query pullRequests to get both CI status and review decision
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString("query($owner: String!, $repo: String!) {\n")
 	queryBuilder.WriteString("  repository(owner: $owner, name: $repo) {\n")
 	for branch, alias := range aliasMap {
-		fmt.Fprintf(&queryBuilder, "    %s: ref(qualifiedName: \"refs/heads/%s\") {\n", alias, branch)
-		queryBuilder.WriteString("      name\n")
-		queryBuilder.WriteString("      target {\n")
-		queryBuilder.WriteString("        ... on Commit {\n")
-		queryBuilder.WriteString("          oid\n")
-		queryBuilder.WriteString("          statusCheckRollup {\n")
-		queryBuilder.WriteString("            state\n")
-		queryBuilder.WriteString("            contexts(first: 100) {\n")
-		queryBuilder.WriteString("              nodes {\n")
-		queryBuilder.WriteString("                __typename\n")
-		queryBuilder.WriteString("                ... on CheckRun {\n")
-		queryBuilder.WriteString("                  name\n")
-		queryBuilder.WriteString("                  status\n")
-		queryBuilder.WriteString("                  conclusion\n")
-		queryBuilder.WriteString("                  startedAt\n")
-		queryBuilder.WriteString("                  completedAt\n")
-		queryBuilder.WriteString("                }\n")
-		queryBuilder.WriteString("                ... on StatusContext {\n")
-		queryBuilder.WriteString("                  context\n")
-		queryBuilder.WriteString("                  state\n")
-		queryBuilder.WriteString("                  createdAt\n")
+		fmt.Fprintf(&queryBuilder, "    %s: pullRequests(headRefName: \"%s\", first: 1, states: [OPEN]) {\n", alias, branch)
+		queryBuilder.WriteString("      nodes {\n")
+		queryBuilder.WriteString("        reviewDecision\n")
+		queryBuilder.WriteString("        commits(last: 1) {\n")
+		queryBuilder.WriteString("          nodes {\n")
+		queryBuilder.WriteString("            commit {\n")
+		queryBuilder.WriteString("              oid\n")
+		queryBuilder.WriteString("              statusCheckRollup {\n")
+		queryBuilder.WriteString("                state\n")
+		queryBuilder.WriteString("                contexts(first: 100) {\n")
+		queryBuilder.WriteString("                  nodes {\n")
+		queryBuilder.WriteString("                    __typename\n")
+		queryBuilder.WriteString("                    ... on CheckRun {\n")
+		queryBuilder.WriteString("                      name\n")
+		queryBuilder.WriteString("                      status\n")
+		queryBuilder.WriteString("                      conclusion\n")
+		queryBuilder.WriteString("                      startedAt\n")
+		queryBuilder.WriteString("                      completedAt\n")
+		queryBuilder.WriteString("                    }\n")
+		queryBuilder.WriteString("                    ... on StatusContext {\n")
+		queryBuilder.WriteString("                      context\n")
+		queryBuilder.WriteString("                      state\n")
+		queryBuilder.WriteString("                      createdAt\n")
+		queryBuilder.WriteString("                    }\n")
+		queryBuilder.WriteString("                  }\n")
 		queryBuilder.WriteString("                }\n")
 		queryBuilder.WriteString("              }\n")
 		queryBuilder.WriteString("            }\n")
@@ -487,16 +491,46 @@ func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner git.Runner, owner
 			continue
 		}
 
-		refData := data.(map[string]interface{})
-		target, ok := refData["target"].(map[string]interface{})
-		if !ok || target == nil {
+		// Parse pullRequests response
+		prData := data.(map[string]interface{})
+		prNodes, ok := prData["nodes"].([]interface{})
+		if !ok || len(prNodes) == 0 {
+			// No open PR for this branch
 			continue
 		}
 
-		rollup, ok := target["statusCheckRollup"].(map[string]interface{})
+		prNode := prNodes[0].(map[string]interface{})
+
+		// Extract review decision
+		var reviewDecision string
+		if rd, ok := prNode["reviewDecision"].(string); ok {
+			reviewDecision = rd
+		}
+
+		// Navigate to commit's statusCheckRollup
+		commits, ok := prNode["commits"].(map[string]interface{})
+		if !ok {
+			results[branchName] = &CheckStatus{Passing: true, Pending: false, ReviewDecision: reviewDecision}
+			continue
+		}
+
+		commitNodes, ok := commits["nodes"].([]interface{})
+		if !ok || len(commitNodes) == 0 {
+			results[branchName] = &CheckStatus{Passing: true, Pending: false, ReviewDecision: reviewDecision}
+			continue
+		}
+
+		commitNode := commitNodes[0].(map[string]interface{})
+		commit, ok := commitNode["commit"].(map[string]interface{})
+		if !ok {
+			results[branchName] = &CheckStatus{Passing: true, Pending: false, ReviewDecision: reviewDecision}
+			continue
+		}
+
+		rollup, ok := commit["statusCheckRollup"].(map[string]interface{})
 		if !ok || rollup == nil {
 			// No status checks
-			results[branchName] = &CheckStatus{Passing: true, Pending: false}
+			results[branchName] = &CheckStatus{Passing: true, Pending: false, ReviewDecision: reviewDecision}
 			continue
 		}
 
@@ -563,9 +597,10 @@ func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner git.Runner, owner
 		}
 
 		results[branchName] = &CheckStatus{
-			Passing: !hasFailing,
-			Pending: hasPending,
-			Checks:  checks,
+			Passing:        !hasFailing,
+			Pending:        hasPending,
+			Checks:         checks,
+			ReviewDecision: reviewDecision,
 		}
 	}
 

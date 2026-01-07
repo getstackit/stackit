@@ -40,9 +40,10 @@ type CheckDetail struct {
 
 // CheckStatus represents the combined status of all CI checks for a PR
 type CheckStatus struct {
-	Passing bool
-	Pending bool
-	Checks  []CheckDetail
+	Passing        bool
+	Pending        bool
+	Checks         []CheckDetail
+	ReviewDecision string // "APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED", ""
 }
 
 // MergeMethod represents a GitHub PR merge method

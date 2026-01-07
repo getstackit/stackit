@@ -242,7 +242,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 		annotations := make(map[string]tree.BranchAnnotation)
 		utils.Run(allBranches, func(b engine.Branch) {
 			ann := GetBranchAnnotation(eng, b)
-			// Add CI status if available
+			// Add CI status and review status if available
 			if style == logStyleFull && !b.IsTrunk() && ciStatuses != nil {
 				if status := ciStatuses[b.GetName()]; status != nil {
 					ann.CheckStatus = tree.CheckStatusPassing
@@ -250,6 +250,14 @@ func (m *LogModel) enrichData() tea.Cmd {
 						ann.CheckStatus = tree.CheckStatusPending
 					} else if !status.Passing {
 						ann.CheckStatus = tree.CheckStatusFailing
+					}
+
+					// Map review decision to display format
+					switch status.ReviewDecision {
+					case "APPROVED":
+						ann.ReviewStatus = "Approved"
+					case "CHANGES_REQUESTED":
+						ann.ReviewStatus = "Changes Requested"
 					}
 				}
 			}

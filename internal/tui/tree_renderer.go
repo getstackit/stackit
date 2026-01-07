@@ -55,7 +55,30 @@ func NewStackTreeRendererWithStrategy(eng engine.BranchReader, strategy engine.S
 	)
 }
 
+// GetMinimalAnnotationWithWorktree returns minimal annotations plus worktree info.
+// This is used for fast initial rendering before full data is loaded.
+// Only includes cached/instant fields - no git or network calls.
+func GetMinimalAnnotationWithWorktree(eng engine.Engine, branch engine.Branch) tree.BranchAnnotation {
+	ann := tree.BranchAnnotation{
+		IsLocked:      branch.IsLocked(),
+		IsFrozen:      branch.IsFrozen(),
+		Scope:         eng.GetScope(branch).String(),
+		ExplicitScope: branch.GetExplicitScope().String(),
+	}
+
+	// Add worktree info if this branch is a stack root with a managed worktree
+	stackRoot := eng.GetStackRootForBranch(branch)
+	if stackRoot == branch.GetName() {
+		if wtInfo, err := eng.GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
+			ann.WorktreePath = wtInfo.Path
+		}
+	}
+
+	return ann
+}
+
 // GetBranchAnnotation returns a tree.BranchAnnotation populated with standard branch metadata.
+// This includes git operations (SHA, commit count, diff stats) which may be slow.
 func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch) tree.BranchAnnotation {
 	ann := tree.BranchAnnotation{
 		IsLocked:      branch.IsLocked(),

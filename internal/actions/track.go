@@ -190,7 +190,8 @@ func selectParentBranch(ctx *app.Context, branchName string) (string, error) {
 
 	// Show interactive selector
 	selected, err := tui.PromptLogSelect(ctx.Context, ctx.Engine, ctx.GitHubClient, tui.LogOptions{
-		Style: "FULL",
+		Style:  "FULL",
+		Logger: ctx.Logger,
 		Exclude: map[string]bool{
 			branchName: true,
 		},

@@ -99,17 +99,14 @@ __stackit_wrap() {
     # Change directory if path was found and exists
     if [[ -n "$cd_path" && -d "$cd_path" ]]; then
         cd "$cd_path"
-        # Run follow-up command if requested
+        # Run follow-up command if requested (-q suppresses redundant "already on branch" messages)
         if [[ -n "$rerun_line" ]]; then
-            # Extract args after __STACKIT_RERUN__: (if present)
             rerun_args="${rerun_line#__STACKIT_RERUN__}"
             rerun_args="${rerun_args#:}"
             if [[ -n "$rerun_args" ]]; then
-                # Use specific args provided by stackit
-                eval "STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit $rerun_args"
+                eval "STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit -q $rerun_args"
             else
-                # No args: re-run original command
-                STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit "$@"
+                STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit -q "$@"
             fi
         fi
     fi
@@ -146,17 +143,14 @@ __stackit_wrap() {
     # Change directory if path was found and exists
     if [[ -n "$cd_path" && -d "$cd_path" ]]; then
         cd "$cd_path"
-        # Run follow-up command if requested
+        # Run follow-up command if requested (-q suppresses redundant "already on branch" messages)
         if [[ -n "$rerun_line" ]]; then
-            # Extract args after __STACKIT_RERUN__: (if present)
             rerun_args="${rerun_line#__STACKIT_RERUN__}"
             rerun_args="${rerun_args#:}"
             if [[ -n "$rerun_args" ]]; then
-                # Use specific args provided by stackit
-                eval "STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit $rerun_args"
+                eval "STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit -q $rerun_args"
             else
-                # No args: re-run original command
-                STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit "$@"
+                STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit -q "$@"
             fi
         fi
     fi
@@ -193,16 +187,13 @@ function __stackit_wrap --description 'stackit wrapper with auto-cd support'
     # Change directory if path was found and exists
     if test -n "$cd_path" -a -d "$cd_path"
         cd $cd_path
-        # Run follow-up command if requested
+        # Run follow-up command if requested (-q suppresses redundant "already on branch" messages)
         if test -n "$rerun_line"
-            # Extract args after __STACKIT_RERUN__: (if present)
             set -l rerun_args (string replace '__STACKIT_RERUN__:' '' -- $rerun_line)
             if test -n "$rerun_args" -a "$rerun_args" != "$rerun_line"
-                # Use specific args provided by stackit
-                eval "env STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit $rerun_args"
+                eval "env STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE='' command stackit -q $rerun_args"
             else
-                # No args: re-run original command
-                env STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit $argv
+                env STACKIT_SHELL_INTEGRATION=1 STACKIT_DIRECTIVE_FILE="" command stackit -q $argv
             end
         end
     end

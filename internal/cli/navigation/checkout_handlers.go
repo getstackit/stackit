@@ -23,6 +23,7 @@ func (h *InteractiveCheckoutHandler) SelectBranch(ctx *app.Context, opts actions
 	branchName, err := tui.PromptLogSelect(ctx.Context, ctx.Engine, ctx.GitHubClient, tui.LogOptions{
 		Style:         "FULL", // Show stats by default in checkout selector
 		ShowUntracked: opts.ShowUntracked,
+		Logger:        ctx.Logger,
 	})
 	if err != nil {
 		if errors.Is(err, errors.ErrCanceled) {

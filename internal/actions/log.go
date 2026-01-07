@@ -41,6 +41,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 			Style:         opts.Style,
 			Reverse:       opts.Reverse,
 			ShowUntracked: opts.ShowUntracked,
+			Logger:        ctx.Logger,
 		})
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err := p.Run()

@@ -90,6 +90,7 @@ func interactiveOntoSelection(ctx *app.Context, sourceBranch string) (string, er
 	selected, err := tui.PromptLogSelect(ctx.Context, ctx.Engine, ctx.GitHubClient, tui.LogOptions{
 		Style:   "FULL",
 		Exclude: excludedBranches,
+		Logger:  ctx.Logger,
 	})
 	if err != nil {
 		return "", err

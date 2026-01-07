@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -177,18 +178,21 @@ func (m *LogModel) enrichData() tea.Cmd {
 		enrichStart := time.Now()
 		m.log("TUI enrichment started")
 
-		// Populate remote SHAs if needed
-		if m.style == logStyleFull {
-			start := time.Now()
-			_ = m.engine.PopulateRemoteShas()
-			m.log("PopulateRemoteShas completed in %v", time.Since(start))
-		}
-
-		// Prefetch CI status in batch if in FULL style
-		var ciStatuses map[string]*github.CheckStatus
-		start := time.Now()
 		allBranches := m.engine.AllBranches()
-		m.log("AllBranches() returned %d branches in %v", len(allBranches), time.Since(start))
+
+		// Run PopulateRemoteShas and BatchGetPRChecksStatus in parallel
+		var ciStatuses map[string]*github.CheckStatus
+		var wg sync.WaitGroup
+
+		if m.style == logStyleFull {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				start := time.Now()
+				_ = m.engine.PopulateRemoteShas()
+				m.log("PopulateRemoteShas completed in %v", time.Since(start))
+			}()
+		}
 
 		if m.style == logStyleFull && m.githubClient != nil {
 			branchNames := make([]string, 0, len(allBranches))
@@ -198,14 +202,20 @@ func (m *LogModel) enrichData() tea.Cmd {
 				}
 			}
 			if len(branchNames) > 0 {
-				start := time.Now()
-				ciStatuses, _ = m.githubClient.BatchGetPRChecksStatus(m.context, branchNames)
-				m.log("BatchGetPRChecksStatus for %d branches completed in %v", len(branchNames), time.Since(start))
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					start := time.Now()
+					ciStatuses, _ = m.githubClient.BatchGetPRChecksStatus(m.context, branchNames)
+					m.log("BatchGetPRChecksStatus for %d branches completed in %v", len(branchNames), time.Since(start))
+				}()
 			}
 		}
 
+		wg.Wait()
+
 		// Collect full annotations
-		start = time.Now()
+		start := time.Now()
 		annotations := make(map[string]tree.BranchAnnotation)
 		utils.Run(allBranches, func(b engine.Branch) {
 			ann := GetBranchAnnotation(m.engine, b)

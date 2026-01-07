@@ -118,8 +118,9 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			SubmitFooter:         submitFooter,
 		}
 
-		// Create the appropriate handler based on TTY availability
-		handler := NewSubmitHandler(ctx.Output, ctx.Logger)
+		// Create UI (manages terminal state) and handler (processes events)
+		ui, handler := NewSubmitUI(ctx.Output, ctx.Logger)
+		defer ui.Cleanup()
 		return submit.Action(ctx, opts, handler)
 	})
 }
@@ -166,12 +167,26 @@ func NewSsCmd() *cobra.Command {
 	return cmd
 }
 
-// NewSubmitHandler creates the appropriate handler based on TTY availability
-func NewSubmitHandler(out output.Output, logger output.Logger) submit.Handler {
+// SubmitUI manages terminal state for submit operations.
+type SubmitUI struct {
+	handler *InteractiveSubmitHandler
+}
+
+// NewSubmitUI creates a UI and handler pair for submit operations.
+// The UI manages terminal cleanup; the handler processes events.
+func NewSubmitUI(out output.Output, logger output.Logger) (*SubmitUI, submit.Handler) {
 	if tui.IsTTY() {
-		return NewInteractiveSubmitHandler(out, logger)
+		h := NewInteractiveSubmitHandler(out, logger)
+		return &SubmitUI{handler: h}, h
 	}
-	return NewSimpleSubmitHandler(out)
+	return &SubmitUI{}, NewSimpleSubmitHandler(out)
+}
+
+// Cleanup ensures the terminal is restored to normal mode.
+func (u *SubmitUI) Cleanup() {
+	if u.handler != nil {
+		u.handler.Cleanup()
+	}
 }
 
 // SimpleSubmitHandler implements submit.Handler with line-by-line output

@@ -61,17 +61,9 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 			return PullConflict, fmt.Errorf("failed to update local branch %s to %s: %w", branchName, remoteRev, err)
 		}
 
-		// If we are currently ON this branch in this worktree, we need to sync
-		// the index and working tree with the new HEAD. After update-ref, HEAD
-		// (via symbolic ref) already points to the new commit, but the index
-		// still has old content. Using git checkout doesn't reliably update
-		// the index when we're "already on" the branch (especially with squash
-		// merges where git may optimize based on tree similarity).
-		// Use hard reset to ensure index and working tree match the new HEAD.
-		// NOTE: st sync checks for uncommitted changes before calling this,
-		// so hard reset is safe here.
+		// If we are currently ON this branch in this worktree, we need to update HEAD
 		if currentBranch == branchName {
-			_ = r.HardReset(ctx, "HEAD")
+			_ = r.CheckoutBranch(ctx, branchName)
 		} else if currentRev != "" {
 			_ = r.CheckoutDetached(ctx, currentRev)
 		}

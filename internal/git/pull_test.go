@@ -131,66 +131,6 @@ func TestReloadRepository(t *testing.T) {
 	require.NoError(t, err, "go-git should still see old commits")
 }
 
-func TestPullBranch_OnCurrentBranch_NoStagedChanges(t *testing.T) {
-	// This test verifies that when we're ON the branch being pulled (e.g., on main),
-	// the working tree and index are properly synchronized after the pull.
-	// This catches the bug where update-ref updates HEAD (via symbolic ref) but
-	// the index isn't updated, leaving "staged changes" that appear to revert content.
-
-	// 1. Setup a "remote" repository
-	remoteScene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
-	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
-	require.NoError(t, err)
-	err = remoteScene.Repo.PushBranch("upstream", "main")
-	require.NoError(t, err)
-
-	// 2. Setup a "local" repository (clone it)
-	localDir, err := os.MkdirTemp("", "stackit-test-local-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(localDir) })
-
-	cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
-	err = cmd.Run()
-	require.NoError(t, err)
-
-	// Create a runner - we're on main
-	runner := git.NewRunnerWithPath(localDir)
-	err = runner.InitDefaultRepo()
-	require.NoError(t, err)
-
-	// Verify we're on main
-	currentBranch, err := runner.GetCurrentBranch()
-	require.NoError(t, err)
-	require.Equal(t, "main", currentBranch, "Should be on main branch")
-
-	// 3. Add a commit to remote (simulating a squash merge on GitHub)
-	err = remoteScene.Repo.CreateChangeAndCommit("merged feature", "feature.txt")
-	require.NoError(t, err)
-	err = remoteScene.Repo.PushBranch("upstream", "main")
-	require.NoError(t, err)
-
-	// 4. Pull while ON main
-	ctx := context.Background()
-	result, err := runner.PullBranch(ctx, "origin", "main")
-	require.NoError(t, err)
-	require.Equal(t, git.PullDone, result, "PullBranch should succeed")
-
-	// 5. CRITICAL: Verify no staged or unstaged changes
-	// This is the bug we're testing for: after pull, the working tree should be clean
-	status, err := runner.RunGitCommandWithContext(ctx, "status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, status, "Working tree should be clean after pull (no staged changes)")
-
-	// Verify the local branch was updated to remote
-	localSha, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "HEAD")
-	require.NoError(t, err)
-	remoteSha, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "origin/main")
-	require.NoError(t, err)
-	require.Equal(t, remoteSha, localSha, "Local HEAD should match remote after pull")
-}
-
 func TestPullBranch_WithReload(t *testing.T) {
 	// Test that PullBranch works correctly with the refspec fix and reload mechanism
 

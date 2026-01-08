@@ -27,6 +27,7 @@ func syncGitHubPRInfo(ctx *app.Context) (*GitHubSyncResult, error) {
 	nav := ctx.Navigator()
 	gctx := ctx.Context
 
+	setupStart := time.Now()
 	allBranches := nav.AllBranches()
 	branchNames := make([]string, len(allBranches))
 	for i, b := range allBranches {
@@ -37,6 +38,7 @@ func syncGitHubPRInfo(ctx *app.Context) (*GitHubSyncResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
 	}
+	ctx.Logger.Info("github sync setup completed", "durationMs", time.Since(setupStart).Milliseconds(), "branchCount", len(branchNames))
 
 	result := &GitHubSyncResult{
 		BranchNames: branchNames,

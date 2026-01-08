@@ -31,6 +31,11 @@ func TUIAction(repoRoot string) error {
 		if mergeMethod == "" {
 			mergeMethod = "(not set)"
 		}
+		worktreeBasePath := cfg.WorktreeBasePath()
+		if worktreeBasePath == "" {
+			worktreeBasePath = "(not set)"
+		}
+		worktreeAutoClean := cfg.WorktreeAutoClean()
 
 		// Build options with current values displayed
 		options := []tui.SelectOption{
@@ -45,6 +50,14 @@ func TUIAction(repoRoot string) error {
 			{
 				Label: fmt.Sprintf("merge.method: %s", mergeMethod),
 				Value: "merge.method",
+			},
+			{
+				Label: fmt.Sprintf("worktree.basePath: %s", worktreeBasePath),
+				Value: "worktree.basePath",
+			},
+			{
+				Label: fmt.Sprintf("worktree.autoClean: %v", worktreeAutoClean),
+				Value: "worktree.autoClean",
 			},
 			{
 				Label: "Exit",
@@ -125,6 +138,41 @@ func TUIAction(repoRoot string) error {
 					continue
 				}
 				out.Info("Set merge.method to: %s", newValue)
+			}
+
+		case "worktree.basePath":
+			currentPath := cfg.WorktreeBasePath()
+			newPath, err := tui.PromptTextInput(fmt.Sprintf("Enter worktree base path (current: %s):", worktreeBasePath), currentPath)
+			if err != nil {
+				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+					continue
+				}
+				return err
+			}
+			if newPath != currentPath {
+				cfg.SetWorktreeBasePath(newPath)
+				if err := cfg.Save(); err != nil {
+					out.Info("Failed to save config: %v", err)
+					continue
+				}
+				out.Info("Set worktree.basePath to: %s", newPath)
+			}
+
+		case "worktree.autoClean":
+			newValue, err := tui.PromptConfirm(fmt.Sprintf("Auto-clean worktrees during sync? (current: %v):", worktreeAutoClean), worktreeAutoClean)
+			if err != nil {
+				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
+					continue
+				}
+				return err
+			}
+			if newValue != worktreeAutoClean {
+				cfg.SetWorktreeAutoClean(newValue)
+				if err := cfg.Save(); err != nil {
+					out.Info("Failed to save config: %v", err)
+					continue
+				}
+				out.Info("Set worktree.autoClean to: %v", newValue)
 			}
 		}
 	}

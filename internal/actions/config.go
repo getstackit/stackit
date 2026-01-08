@@ -57,6 +57,14 @@ func ConfigListAction(repoRoot string, writer io.Writer) error {
 	lines = append(lines, fmt.Sprintf("%s: %v", style.ColorCyan("submit.footer"), submitFooter))
 	lines = append(lines, fmt.Sprintf("%s: %s", style.ColorCyan("merge.method"), mergeMethod))
 
+	// Worktree settings
+	worktreeBasePath := cfg.WorktreeBasePath()
+	if worktreeBasePath == "" {
+		worktreeBasePath = "(not set)"
+	}
+	lines = append(lines, fmt.Sprintf("%s: %s", style.ColorCyan("worktree.basePath"), worktreeBasePath))
+	lines = append(lines, fmt.Sprintf("%s: %v", style.ColorCyan("worktree.autoClean"), cfg.WorktreeAutoClean()))
+
 	out.Print(strings.Join(lines, "\n"))
 	out.Newline()
 

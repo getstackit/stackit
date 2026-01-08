@@ -100,6 +100,14 @@ func newConfigGetCmd() *cobra.Command {
 					method = "(not set)"
 				}
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), method)
+			case "worktree.basePath":
+				basePath := cfg.WorktreeBasePath()
+				if basePath == "" {
+					basePath = "(not set)"
+				}
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), basePath)
+			case "worktree.autoClean":
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.WorktreeAutoClean())
 			default:
 				return fmt.Errorf("unknown configuration key: %s", key)
 			}
@@ -167,6 +175,22 @@ func newConfigSetCmd() *cobra.Command {
 					return fmt.Errorf("failed to save config: %w", err)
 				}
 				splog.Info("Set merge.method to: %s", value)
+			case "worktree.basePath":
+				cfg.SetWorktreeBasePath(value)
+				if err := cfg.Save(); err != nil {
+					return fmt.Errorf("failed to save config: %w", err)
+				}
+				splog.Info("Set worktree.basePath to: %s", value)
+			case "worktree.autoClean":
+				enabled, err := strconv.ParseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for worktree.autoClean: %s (must be 'true' or 'false')", value)
+				}
+				cfg.SetWorktreeAutoClean(enabled)
+				if err := cfg.Save(); err != nil {
+					return fmt.Errorf("failed to save config: %w", err)
+				}
+				splog.Info("Set worktree.autoClean to: %v", enabled)
 			default:
 				return fmt.Errorf("unknown configuration key: %s", key)
 			}

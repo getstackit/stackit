@@ -4,6 +4,7 @@ package sync
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/engine"
@@ -45,7 +46,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Check for uncommitted changes
-	if ctx.Reader().HasUncommittedChanges(gctx) {
+	uncommittedStart := time.Now()
+	hasUncommitted := ctx.Reader().HasUncommittedChanges(gctx)
+	ctx.Logger.Info("check uncommitted changes completed", "durationMs", time.Since(uncommittedStart).Milliseconds())
+	if hasUncommitted {
 		return fmt.Errorf("you have uncommitted changes. Please commit or stash them before syncing")
 	}
 
@@ -53,7 +57,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	totalOps := 1 // trunk sync
 	if opts.Restack {
 		// Estimate based on tracked branches
-		totalOps += len(ctx.Navigator().AllBranches())
+		progressCountStart := time.Now()
+		branchCount := len(ctx.Navigator().AllBranches())
+		ctx.Logger.Info("count branches for progress completed", "durationMs", time.Since(progressCountStart).Milliseconds(), "branchCount", branchCount)
+		totalOps += branchCount
 	}
 	handler.Start(totalOps)
 
@@ -68,22 +75,30 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var trunkErr error
 	var githubErr error
 
+	parallelStart := time.Now()
+	ctx.Logger.Info("starting parallel phase")
+
 	g, _ := errgroup.WithContext(gctx)
 
 	// Goroutine 1: Pull trunk
 	g.Go(func() error {
+		ctx.Logger.Info("goroutine trunk started", "delayMs", time.Since(parallelStart).Milliseconds())
 		trunkErr = syncTrunk(ctx, &opts, handler, &trunkSummary)
 		return nil // Don't fail the group, handle error after Wait
 	})
 
 	// Goroutine 2: Fetch remote metadata refs (network operation only)
 	g.Go(func() error {
+		ctx.Logger.Info("goroutine metadata started", "delayMs", time.Since(parallelStart).Milliseconds())
+		fetchStart := time.Now()
 		metadataFetchErr = ctx.RemoteMetadata().FetchRemoteMetadata(gctx)
+		ctx.Logger.Info("fetch remote metadata refs completed", "durationMs", time.Since(fetchStart).Milliseconds())
 		return nil
 	})
 
 	// Goroutine 3: Sync PR info from GitHub (network operation only)
 	g.Go(func() error {
+		ctx.Logger.Info("goroutine github started", "delayMs", time.Since(parallelStart).Milliseconds())
 		var err error
 		githubSyncResult, err = syncGitHubPRInfo(ctx)
 		githubErr = err
@@ -91,6 +106,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	})
 
 	_ = g.Wait()
+	ctx.Logger.Info("parallel phase completed", "durationMs", time.Since(parallelStart).Milliseconds())
 
 	// Handle errors from parallel operations
 	if trunkErr != nil {

@@ -12,7 +12,7 @@ func registerMergeStories() {
 		CreateModel: func() tea.Model {
 			return NewSelectModel("What would you like to merge?", []SelectOption{
 				{Label: "🌿 This branch — Merge the current branch and its stack", Value: "this"},
-				{Label: "🏷️  Select a scope — Merge all branches in a specific scope", Value: "scope"},
+				{Label: "🏷️ Select a scope — Merge all branches in a specific scope", Value: "scope"},
 				{Label: "📚 Select an entire stack — Merge a stack from its top branch", Value: "stack"},
 			}, 0)
 		},

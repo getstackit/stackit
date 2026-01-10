@@ -20,20 +20,11 @@ type CheckoutOptions struct {
 }
 
 // CheckoutResult represents the outcome of a checkout operation.
-// CLI layer should use the WorktreeSwitchPath field to derive shell directives.
 type CheckoutResult struct {
-	// Canceled indicates the user canceled interactive selection
-	Canceled bool
-	// AlreadyOnBranch indicates checkout was a no-op (already on target branch)
-	AlreadyOnBranch bool
-	// BranchName is the name of the target branch
-	BranchName string
-	// WorktreeSwitchPath is set when checkout requires switching worktrees (CLI emits CD directive)
+	BranchName         string
 	WorktreeSwitchPath string
-	// RerunArgs are args to rerun stackit after worktree switch (CLI emits Rerun directive)
-	RerunArgs []string
-	// FallbackTip is shown when worktree switch is needed but shell integration is not available
-	FallbackTip string
+	RerunArgs          []string
+	FallbackTips       []string
 }
 
 // CheckoutHandler abstracts TTY vs non-TTY interactions for checkout operations
@@ -52,7 +43,6 @@ func (h *NullCheckoutHandler) SelectBranch(_ *app.Context, _ CheckoutOptions) (s
 }
 
 // CheckoutAction performs the checkout operation.
-// Returns a CheckoutResult with data that CLI can use to determine shell directives.
 func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHandler) (CheckoutResult, error) {
 	eng := ctx.Engine
 	out := ctx.Output
@@ -90,7 +80,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 				currentBranchName = currentBranch.GetName()
 			}
 			out.Info("No branch selected; staying on %s.", style.ColorBranchName(currentBranchName, true))
-			return CheckoutResult{Canceled: true, BranchName: currentBranchName}, nil
+			return CheckoutResult{}, nil
 		}
 	}
 
@@ -99,7 +89,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 		if !ctx.Quiet {
 			out.Info("Already on %s.", style.ColorBranchName(branchName, true))
 		}
-		return CheckoutResult{AlreadyOnBranch: true, BranchName: branchName}, nil
+		return CheckoutResult{}, nil
 	}
 
 	branch := eng.GetBranch(branchName)
@@ -115,15 +105,13 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 		return CheckoutResult{}, fmt.Errorf("cannot check out worktree anchor branch directly; use 'cd $(stackit worktree open %s)' to enter the worktree", displayName)
 	}
 
-	// Check if checkout requires worktree switching (returns info for CLI to emit directives)
-	switchPath, rerunArgs, fallbackTip := getWorktreeSwitchInfo(ctx, branch, branchName)
+	switchPath, rerunArgs, fallbackTips := getWorktreeSwitchInfo(ctx, branch, branchName)
 	if switchPath != "" {
-		// Worktree switch needed - return info for CLI to emit directives
 		return CheckoutResult{
 			BranchName:         branchName,
 			WorktreeSwitchPath: switchPath,
 			RerunArgs:          rerunArgs,
-			FallbackTip:        fallbackTip,
+			FallbackTips:       fallbackTips,
 		}, nil
 	}
 
@@ -201,66 +189,65 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 
 // getWorktreeSwitchInfo checks if the target branch belongs to a stack with a worktree,
 // or if we need to switch back to the main repo from a worktree.
-// Returns (switchPath, rerunArgs, fallbackTip) - all empty if no worktree switch is needed.
-// The CLI layer is responsible for checking shell integration and emitting directives or fallback tips.
-func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName string) (string, []string, string) {
-	// Get target branch's stack root
+// Returns (switchPath, rerunArgs, fallbackTips) - all empty if no worktree switch is needed.
+func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName string) (string, []string, []string) {
 	targetStackRoot := ctx.Engine.GetStackRootForBranch(branch)
 
 	// Case 1: We're in a worktree and checking out a branch NOT in this worktree's stack
-	// (either trunk, or a branch from a different stack)
 	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil {
 		currentStackRoot := ctx.WorktreeInfo.AnchorBranch
 
-		// Check if target is in a different location than current worktree
 		var switchTarget string
-		var fallbackTip string
+		var targetStack string // empty means main repo
 
 		if targetStackRoot == "" {
 			// Target is trunk or untracked - switch to main repo
 			switchTarget = ctx.WorktreeInfo.MainRepoDir
-			fallbackTip = fmt.Sprintf("cd %s && stackit co %s", switchTarget, branchName)
 		} else if targetStackRoot != currentStackRoot {
 			// Target is in a different stack - check if that stack has a worktree
 			targetWorktree, err := ctx.Engine.GetWorktreeForStack(targetStackRoot)
 			if err == nil && targetWorktree != nil {
 				switchTarget = targetWorktree.Path
+				targetStack = targetStackRoot
 			} else {
 				// Target stack has no worktree - switch to main repo
 				switchTarget = ctx.WorktreeInfo.MainRepoDir
 			}
-			fallbackTip = fmt.Sprintf("cd %s && stackit co %s", switchTarget, branchName)
 		}
 
 		if switchTarget != "" {
-			ctx.Output.Info("Switching to %s.", switchTarget)
-			return switchTarget, []string{"co", branchName}, fallbackTip
+			if targetStack != "" {
+				ctx.Output.Info("Switching to worktree for stack %s.", style.ColorBranchName(targetStack, false))
+			} else {
+				ctx.Output.Info("Switching to main repository.")
+			}
+			fallbackTip := fmt.Sprintf("cd %s && stackit co %s", switchTarget, branchName)
+			return switchTarget, []string{"co", branchName}, []string{fallbackTip}
 		}
-		// Target is in current worktree's stack - proceed with normal checkout
-		return "", nil, ""
+		return "", nil, nil
 	}
 
 	// Case 2: We're in main repo and checking out a branch that has a worktree
 	if targetStackRoot == "" {
-		return "", nil, "" // Target is trunk or untracked, no worktree needed
+		return "", nil, nil
 	}
 
-	// Check if this stack has a registered worktree
 	targetWorktree, err := ctx.Engine.GetWorktreeForStack(targetStackRoot)
 	if err != nil || targetWorktree == nil {
-		return "", nil, "" // No worktree for this stack
+		return "", nil, nil
 	}
 
-	// Verify worktree path exists
 	if _, err := os.Stat(targetWorktree.Path); os.IsNotExist(err) {
 		ctx.Output.Warn("Worktree for stack %s is registered but path does not exist: %s",
 			style.ColorBranchName(targetStackRoot, false), targetWorktree.Path)
 		ctx.Output.Tip("stackit worktree remove %s", targetStackRoot)
-		return "", nil, "" // Fall back to normal checkout
+		return "", nil, nil
 	}
 
-	// Return info for CLI to emit directives
 	ctx.Output.Info("Switching to worktree for stack %s.", style.ColorBranchName(targetStackRoot, false))
-	fallbackTip := fmt.Sprintf("cd %s && stackit co %s\nFor automatic worktree switching, enable shell integration: eval \"$(stackit shell zsh)\"", targetWorktree.Path, branchName)
-	return targetWorktree.Path, []string{"co", branchName}, fallbackTip
+	fallbackTips := []string{
+		fmt.Sprintf("cd %s && stackit co %s", targetWorktree.Path, branchName),
+		"For automatic worktree switching, enable shell integration: eval \"$(stackit shell zsh)\"",
+	}
+	return targetWorktree.Path, []string{"co", branchName}, fallbackTips
 }

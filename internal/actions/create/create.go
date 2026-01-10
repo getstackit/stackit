@@ -32,7 +32,6 @@ type Options struct {
 }
 
 // Action creates a new branch stacked on top of the current branch.
-// Returns a Result that the CLI layer can use to determine what shell directives to emit.
 func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	eng := ctx.Engine
 	out := ctx.Output

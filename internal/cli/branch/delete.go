@@ -54,7 +54,6 @@ close the pull request.`,
 					return err
 				}
 
-				// Emit shell directive if user was in a worktree that got deleted (CLI layer responsibility)
 				if result.MainRepoDirForSwitch != "" {
 					ctx.Output.DirectiveCD(result.MainRepoDirForSwitch)
 				}

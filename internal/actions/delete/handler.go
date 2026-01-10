@@ -1,11 +1,7 @@
 package delete
 
-// Result contains the result of the delete action
+// Result contains the result of the delete action.
 type Result struct {
-	// DeletedBranches is the list of deleted branch names
-	DeletedBranches []string
-	// MainRepoDirForSwitch is set when user was in a worktree that got deleted
-	// CLI should emit a CD directive to navigate back to the main repo
 	MainRepoDirForSwitch string
 }
 

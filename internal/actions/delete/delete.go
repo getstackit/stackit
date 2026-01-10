@@ -20,7 +20,6 @@ type Options struct {
 }
 
 // Action deletes a branch and its metadata.
-// Returns a Result with data that CLI can use to determine shell directives.
 func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	eng := ctx.Engine
 	out := ctx.Output
@@ -154,10 +153,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	}
 
 	handler.Complete(len(toDelete), 0)
-	return Result{
-		DeletedBranches:      branchNames,
-		MainRepoDirForSwitch: mainRepoDirForSwitch,
-	}, nil
+	return Result{MainRepoDirForSwitch: mainRepoDirForSwitch}, nil
 }
 
 // cleanupWorktreesForDeletedStacks removes worktrees for stack roots that have been deleted.

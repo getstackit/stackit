@@ -64,14 +64,11 @@ If you have any unstaged changes, you will be asked whether you'd like to stage 
 					defer runner.Cleanup()
 				}
 
-				// Execute create action
 				result, err := create.Action(ctx, opts, handler)
 				if err != nil {
 					return err
 				}
 
-				// Emit shell directives based on result (CLI layer responsibility)
-				// If a worktree was created, emit CD directive to navigate to it
 				if result.WorktreePath != "" {
 					ctx.Output.DirectiveCD(result.WorktreePath)
 				}

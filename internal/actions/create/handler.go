@@ -27,12 +27,11 @@ const (
 )
 
 // Result contains the result of the create action.
-// The CLI layer uses this to determine what shell directives to emit.
 type Result struct {
 	BranchName   string
 	ParentBranch string
 	HasCommit    bool
-	WorktreePath string // If set, CLI should emit a CD directive to this path
+	WorktreePath string
 }
 
 // Handler receives events from create action

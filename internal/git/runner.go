@@ -648,12 +648,19 @@ func (r *runner) GetCommitRange(base, head, format string) ([]string, error) {
 		}
 	}
 
-	var commits []*object.Commit
-	commits, err = iterateCommitsNoLock(repo, headHash, baseHash)
+	// Try go-git first
+	commits, err := iterateCommitsNoLock(repo, headHash, baseHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to iterate commits: %w", err)
+		// Fallback to git CLI for worktree compatibility
+		// go-git doesn't properly handle the 'commondir' redirection in worktrees
+		return r.getCommitRangeWithFallback(base, head, format)
 	}
 
+	return formatCommits(commits, format)
+}
+
+// formatCommits formats go-git commit objects according to format string
+func formatCommits(commits []*object.Commit, format string) ([]string, error) {
 	result := make([]string, 0, len(commits))
 	for _, commit := range commits {
 		var formatted string
@@ -676,6 +683,43 @@ func (r *runner) GetCommitRange(base, head, format string) ([]string, error) {
 
 		if formatted != "" {
 			result = append(result, formatted)
+		}
+	}
+	return result, nil
+}
+
+// getCommitRangeWithFallback uses git rev-list + git log for formatting
+func (r *runner) getCommitRangeWithFallback(base, head, format string) ([]string, error) {
+	// Get SHAs using git rev-list
+	shas, err := r.getCommitRangeGitFallback(base, head)
+	if err != nil {
+		return nil, err
+	}
+
+	if format == "SHA" {
+		return shas, nil
+	}
+
+	// Format each commit using git log
+	result := make([]string, 0, len(shas))
+	for _, sha := range shas {
+		var formatted string
+		switch format {
+		case "READABLE":
+			// Oneline format: short SHA + subject
+			formatted, err = r.GetCommitLog(sha, "%h - %s")
+		case "MESSAGE":
+			formatted, err = r.GetCommitLog(sha, "%B")
+		case "SUBJECT":
+			formatted, err = r.GetCommitLog(sha, "%s")
+		default:
+			return nil, fmt.Errorf("unknown commit format: %s", format)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to format commit %s: %w", sha, err)
+		}
+		if formatted != "" {
+			result = append(result, strings.TrimSpace(formatted))
 		}
 	}
 

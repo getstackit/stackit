@@ -99,6 +99,40 @@ func iterateCommitsNoLock(repo *Repository, headHash, baseHash plumbing.Hash) ([
 	return commits, nil
 }
 
+// getCommitRangeGitFallback uses git rev-list as a fallback when go-git fails.
+// This is especially important for worktrees where go-git might not find all
+// objects because it doesn't handle the 'commondir' redirection properly.
+func (r *runner) getCommitRangeGitFallback(base, head string) ([]string, error) {
+	var args []string
+	if base == "" {
+		// Walk to root: git rev-list <head>
+		args = []string{"rev-list", head}
+	} else {
+		// Range: git rev-list <base>..<head>
+		args = []string{"rev-list", base + ".." + head}
+	}
+
+	output, err := r.RunGitCommandWithContext(context.Background(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get commit range via git: %w", err)
+	}
+
+	if output == "" {
+		return []string{}, nil
+	}
+
+	// Split output into lines (one SHA per line)
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	result := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if line != "" {
+			result = append(result, line)
+		}
+	}
+
+	return result, nil
+}
+
 // resolveRefHash resolves a ref (branch name, SHA, or ref path) to a hash
 func (r *runner) resolveRefHash(repo *Repository, ref string) (plumbing.Hash, error) {
 	// Synchronize go-git operations to prevent concurrent packfile access

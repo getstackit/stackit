@@ -54,9 +54,9 @@ close the pull request.`,
 					return err
 				}
 
-				// Emit shell directives if needed (CLI layer responsibility)
-				if result != nil {
-					common.EmitDirective(ctx.Output, result.Directive)
+				// Emit shell directive if user was in a worktree that got deleted (CLI layer responsibility)
+				if result.MainRepoDirForSwitch != "" {
+					ctx.Output.DirectiveCD(result.MainRepoDirForSwitch)
 				}
 
 				return nil

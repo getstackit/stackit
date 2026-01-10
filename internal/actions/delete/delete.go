@@ -20,8 +20,8 @@ type Options struct {
 }
 
 // Action deletes a branch and its metadata.
-// Returns a Result with any shell directives that should be emitted by the CLI layer.
-func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
+// Returns a Result with data that CLI can use to determine shell directives.
+func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	eng := ctx.Engine
 	out := ctx.Output
 
@@ -35,26 +35,26 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	if branchName == "" {
 		currentBranch := eng.CurrentBranch()
 		if currentBranch == nil {
-			return nil, fmt.Errorf("no branch specified and not on a branch")
+			return Result{}, fmt.Errorf("no branch specified and not on a branch")
 		}
 		branchName = currentBranch.GetName()
 	}
 
 	if branchName == "" {
-		return nil, fmt.Errorf("no branch specified and not on a branch")
+		return Result{}, fmt.Errorf("no branch specified and not on a branch")
 	}
 
 	branch := eng.GetBranch(branchName)
 	if branch.IsTrunk() {
-		return nil, fmt.Errorf("cannot delete trunk branch %s", branchName)
+		return Result{}, fmt.Errorf("cannot delete trunk branch %s", branchName)
 	}
 
 	if !branch.IsTracked() {
-		return nil, fmt.Errorf("branch %s is not tracked by stackit", branchName)
+		return Result{}, fmt.Errorf("branch %s is not tracked by stackit", branchName)
 	}
 
 	if branch.IsWorktreeAnchor() {
-		return nil, fmt.Errorf("cannot delete branch %s because it is a worktree anchor; use 'stackit worktree remove' to remove the worktree first", branchName)
+		return Result{}, fmt.Errorf("cannot delete branch %s because it is a worktree anchor; use 'stackit worktree remove' to remove the worktree first", branchName)
 	}
 
 	// Build StackGraph for efficient traversals
@@ -84,15 +84,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 				if handler.IsInteractive() {
 					confirmed, err := handler.PromptConfirm(b.GetName(), reason)
 					if err != nil {
-						return nil, err
+						return Result{}, err
 					}
 					if !confirmed {
 						handler.OnBranch(b.GetName(), StatusSkipped, nil)
 						handler.Complete(0, 1)
-						return &Result{}, nil
+						return Result{}, nil
 					}
 				} else if reason == "" {
-					return nil, fmt.Errorf("branch %s is not merged/closed; use --force to delete anyway", b.GetName())
+					return Result{}, fmt.Errorf("branch %s is not merged/closed; use --force to delete anyway", b.GetName())
 				}
 			}
 		}
@@ -105,7 +105,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	// Delete branches and get children to restack
 	childrenToRestack, err := eng.DeleteBranches(ctx.Context, toDelete)
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
 	// Batch delete remote metadata for deleted branches
@@ -133,10 +133,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 		}
 	}
 
-	// Cleanup worktrees and get any directive for CLI to emit
-	var directive *actions.ShellDirective
+	// Cleanup worktrees and get path if user was in a deleted worktree
+	var mainRepoDirForSwitch string
 	if len(deletedStackRoots) > 0 {
-		directive = cleanupWorktreesForDeletedStacks(ctx, deletedStackRoots)
+		mainRepoDirForSwitch = cleanupWorktreesForDeletedStacks(ctx, deletedStackRoots)
 	}
 
 	// Restack children if any
@@ -149,22 +149,22 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 			branches[i] = eng.GetBranch(name)
 		}
 		if err := actions.RestackBranches(ctx, branches); err != nil {
-			return nil, fmt.Errorf("failed to restack children: %w", err)
+			return Result{}, fmt.Errorf("failed to restack children: %w", err)
 		}
 	}
 
 	handler.Complete(len(toDelete), 0)
-	return &Result{
-		DeletedBranches: branchNames,
-		Directive:       directive,
+	return Result{
+		DeletedBranches:      branchNames,
+		MainRepoDirForSwitch: mainRepoDirForSwitch,
 	}, nil
 }
 
 // cleanupWorktreesForDeletedStacks removes worktrees for stack roots that have been deleted.
 // This is best-effort - errors are logged but don't fail the delete operation.
-// Returns a ShellDirective if the user needs to be directed back to the main repo.
-func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []string) *actions.ShellDirective {
-	var directive *actions.ShellDirective
+// Returns the main repo directory path if the user needs to be directed back to the main repo.
+func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []string) string {
+	var mainRepoDir string
 
 	for _, stackRoot := range deletedStackRoots {
 		wt, err := ctx.Engine.GetWorktreeForStack(stackRoot)
@@ -172,10 +172,10 @@ func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []stri
 			continue // No worktree registered for this stack
 		}
 
-		// Check if user is in this worktree - set directive to navigate back to main repo
+		// Check if user is in this worktree - we'll need to navigate back to main repo
 		if ctx.InManagedWorktree && ctx.WorktreeInfo != nil &&
 			ctx.WorktreeInfo.AnchorBranch == stackRoot {
-			directive = &actions.ShellDirective{CDPath: wt.MainRepoDir}
+			mainRepoDir = wt.MainRepoDir
 		}
 
 		ctx.Output.Info("Removing worktree for deleted stack %s", style.ColorBranchName(stackRoot, false))
@@ -193,5 +193,5 @@ func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []stri
 		}
 	}
 
-	return directive
+	return mainRepoDir
 }

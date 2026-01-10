@@ -217,9 +217,16 @@ func handlePostMergeAction(ctx *app.Context, action merge.PostMergeAction) error
 			return nil
 		}
 
-		// Emit shell directives if needed
-		if result != nil {
-			common.EmitDirective(ctx.Output, result.Directive)
+		// Emit shell directives if worktree switch is needed (CLI layer responsibility)
+		if result.WorktreeSwitchPath != "" {
+			if common.HasShellIntegration() {
+				ctx.Output.DirectiveCD(result.WorktreeSwitchPath)
+				if len(result.RerunArgs) > 0 {
+					ctx.Output.DirectiveRerun(result.RerunArgs...)
+				}
+			} else if result.FallbackTip != "" {
+				ctx.Output.Tip("%s", result.FallbackTip)
+			}
 		}
 
 		runner, handler := NewSyncUI(ctx.Output, ctx.Logger)

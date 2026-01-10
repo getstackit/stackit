@@ -64,8 +64,16 @@ If you have any unstaged changes, you will be asked whether you'd like to stage 
 					defer runner.Cleanup()
 				}
 
-				// Execute create action
-				return create.Action(ctx, opts, handler)
+				result, err := create.Action(ctx, opts, handler)
+				if err != nil {
+					return err
+				}
+
+				if result.WorktreePath != "" {
+					ctx.Output.DirectiveCD(result.WorktreePath)
+				}
+
+				return nil
 			})
 		},
 	}

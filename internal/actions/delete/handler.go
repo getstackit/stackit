@@ -1,5 +1,10 @@
 package delete
 
+// Result contains the result of the delete action.
+type Result struct {
+	MainRepoDirForSwitch string
+}
+
 // Status represents the status of a branch deletion
 type Status string
 

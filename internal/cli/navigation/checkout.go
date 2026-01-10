@@ -51,7 +51,25 @@ by typing. Use flags to customize which branches are shown.`,
 				}
 
 				// Execute checkout action with handler
-				return actions.CheckoutAction(ctx, opts, handler)
+				result, err := actions.CheckoutAction(ctx, opts, handler)
+				if err != nil {
+					return err
+				}
+
+				if result.WorktreeSwitchPath != "" {
+					if common.HasShellIntegration() {
+						ctx.Output.DirectiveCD(result.WorktreeSwitchPath)
+						if len(result.RerunArgs) > 0 {
+							ctx.Output.DirectiveRerun(result.RerunArgs...)
+						}
+					} else {
+						for _, tip := range result.FallbackTips {
+							ctx.Output.Tip("%s", tip)
+						}
+					}
+				}
+
+				return nil
 			})
 		},
 	}

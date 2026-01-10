@@ -44,12 +44,21 @@ close the pull request.`,
 					defer runner.Cleanup()
 				}
 
-				return delete.Action(ctx, delete.Options{
+				result, err := delete.Action(ctx, delete.Options{
 					BranchName: branchName,
 					Downstack:  downstack,
 					Force:      force,
 					Upstack:    upstack,
 				}, handler)
+				if err != nil {
+					return err
+				}
+
+				if result.MainRepoDirForSwitch != "" {
+					ctx.Output.DirectiveCD(result.MainRepoDirForSwitch)
+				}
+
+				return nil
 			})
 		},
 	}

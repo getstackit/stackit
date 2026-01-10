@@ -26,7 +26,7 @@ const (
 	StatusFailed    StepStatus = "failed"
 )
 
-// Result contains the result of the create action
+// Result contains the result of the create action.
 type Result struct {
 	BranchName   string
 	ParentBranch string

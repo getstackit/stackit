@@ -203,9 +203,10 @@ func handlePostMergeAction(ctx *app.Context, action merge.PostMergeAction) error
 
 	switch action {
 	case merge.PostMergeSyncTrunk:
-		if err := actions.CheckoutAction(ctx, actions.CheckoutOptions{
+		result, err := actions.CheckoutAction(ctx, actions.CheckoutOptions{
 			CheckoutTrunk: true,
-		}, nil); err != nil {
+		}, nil)
+		if err != nil {
 			out.Newline()
 			out.Error("%v", err)
 			out.Newline()
@@ -214,6 +215,19 @@ func handlePostMergeAction(ctx *app.Context, action merge.PostMergeAction) error
 			out.Info("  (2) Switch to trunk: %s", style.ColorCyan("stackit checkout --trunk"))
 			out.Info("  (3) Sync your workspace: %s", style.ColorCyan("stackit sync --restack"))
 			return nil
+		}
+
+		if result.WorktreeSwitchPath != "" {
+			if common.HasShellIntegration() {
+				ctx.Output.DirectiveCD(result.WorktreeSwitchPath)
+				if len(result.RerunArgs) > 0 {
+					ctx.Output.DirectiveRerun(result.RerunArgs...)
+				}
+			} else {
+				for _, tip := range result.FallbackTips {
+					ctx.Output.Tip("%s", tip)
+				}
+			}
 		}
 
 		runner, handler := NewSyncUI(ctx.Output, ctx.Logger)

@@ -58,12 +58,18 @@ split without options will prompt for a splitting strategy.`,
 				cfg, _ := config.LoadConfig(ctx.RepoRoot)
 				branchPattern := cfg.GetBranchPattern()
 
+				// Create runner and handler
+				runner, handler := NewSplitUI(ctx.Output, ctx.Logger)
+				if runner != nil {
+					defer runner.Cleanup()
+				}
+
 				// Run split action
 				return split.Action(ctx, split.Options{
 					Style:         style,
 					Pathspecs:     byFile,
 					BranchPattern: branchPattern,
-				})
+				}, handler)
 			})
 		},
 	}

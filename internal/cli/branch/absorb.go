@@ -41,13 +41,19 @@ Use --show-conflict to see the current conflict state and what changes were bein
 					return absorb.ShowConflict(ctx)
 				}
 
+				// Create runner and handler
+				runner, handler := NewAbsorbUI(ctx.Output, ctx.Logger)
+				if runner != nil {
+					defer runner.Cleanup()
+				}
+
 				// Run absorb action
 				return absorb.Action(ctx, absorb.Options{
 					All:    all,
 					DryRun: dryRun,
 					Force:  force,
 					Patch:  patch,
-				})
+				}, handler)
 			})
 		},
 	}

@@ -36,12 +36,18 @@ close the pull request.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
+				// Create runner and handler
+				runner, handler := NewFoldUI(ctx.Output, ctx.Logger)
+				if runner != nil {
+					defer runner.Cleanup()
+				}
+
 				// Run fold action
 				return fold.Action(ctx, fold.Options{
 					Keep:       keep,
 					AllowTrunk: allowTrunk,
 					DryRun:     dryRun,
-				})
+				}, handler)
 			})
 		},
 	}

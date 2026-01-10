@@ -17,7 +17,7 @@ type Options struct {
 	DryRun     bool // If true, only shows what would happen
 }
 
-func showDryRun(ctx *app.Context, current, parent engine.Branch) error {
+func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 	eng := ctx.Engine
 	out := ctx.Output
 
@@ -76,14 +76,19 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) error {
 
 	out.Newline()
 	out.Info("%s", style.ColorDim("No changes were applied."))
-	return nil
 }
 
 // Action performs the fold operation
-func Action(ctx *app.Context, opts Options) error {
+func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
+
+	// Use null handler if none provided
+	if handler == nil {
+		handler = &NullHandler{}
+	}
+	defer handler.Cleanup()
 
 	// Validate we're on a branch
 	currentBranch, err := eng.ValidateOnBranch()
@@ -153,8 +158,12 @@ func Action(ctx *app.Context, opts Options) error {
 		}
 	}
 
+	// Start handler with branch info
+	handler.Start(currentBranch, parentName, opts.DryRun)
+
 	if opts.DryRun {
-		return showDryRun(ctx, currentBranchObj, parentBranch)
+		showDryRun(ctx, currentBranchObj, parentBranch)
+		return nil
 	}
 
 	if opts.Keep {

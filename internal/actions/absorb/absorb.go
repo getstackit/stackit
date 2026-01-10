@@ -9,7 +9,6 @@ import (
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/internal/tui/style"
 )
 
@@ -27,9 +26,17 @@ type Options struct {
 }
 
 // Action performs the absorb operation
-func Action(ctx *app.Context, opts Options) error {
+func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
 	out := ctx.Output
+
+	// Use null handler if none provided
+	if handler == nil {
+		handler = &NullHandler{}
+	}
+	defer handler.Cleanup()
+
+	handler.Start(opts.DryRun)
 
 	// Get current branch
 	currentBranch := eng.CurrentBranch()
@@ -213,8 +220,8 @@ func Action(ctx *app.Context, opts Options) error {
 	printAbsorbPlan(flatHunksByCommit, unabsorbedHunks, eng, out)
 
 	// Prompt for confirmation if not --force
-	if !opts.Force && ctx.Interactive {
-		confirmed, err := tui.PromptConfirm("Apply these changes to the commits?", false)
+	if !opts.Force && handler.IsInteractive() {
+		confirmed, err := handler.PromptConfirm("Apply these changes to the commits?")
 		if err != nil {
 			return fmt.Errorf("confirmation canceled: %w", err)
 		}
@@ -222,7 +229,7 @@ func Action(ctx *app.Context, opts Options) error {
 			out.Info("Absorb canceled")
 			return nil
 		}
-	} else if !opts.Force && !ctx.Interactive {
+	} else if !opts.Force && !handler.IsInteractive() {
 		// Non-interactive without force: default to no
 		out.Info("Non-interactive mode: skipping absorb (use --force to override)")
 		return nil
@@ -261,6 +268,7 @@ func Action(ctx *app.Context, opts Options) error {
 		}
 
 		for commitSHA := range branchHunks {
+			handler.OnApply(branch.GetName(), commitSHA[:8])
 			out.Info("Absorbed changes into commit %s in %s", commitSHA[:8], style.ColorBranchName(branch.GetName(), false))
 		}
 	}

@@ -401,7 +401,7 @@ func sectionB() {
 		s.RunGit("add", "shared.go")
 
 		// Run absorb with force flag (non-interactive)
-		err = Action(s.Context, Options{Force: true})
+		err = Action(s.Context, Options{Force: true}, nil)
 		require.NoError(t, err)
 
 		// Verify the change was absorbed into branch-a
@@ -472,7 +472,7 @@ func example() {
 		require.Equal(t, "branch-a", originalBranch)
 
 		// Run absorb
-		_ = Action(s.Context, Options{Force: true})
+		_ = Action(s.Context, Options{Force: true}, nil)
 
 		// Regardless of success or failure, we should be back on the original branch
 		currentBranch, branchErr := s.Scene.Repo.CurrentBranchName()
@@ -688,7 +688,7 @@ func DefaultConfig() *Config {
 		s.RunGit("add", "config.go")
 
 		// Run absorb
-		err = Action(s.Context, Options{Force: true})
+		err = Action(s.Context, Options{Force: true}, nil)
 		require.NoError(t, err)
 
 		// Verify the change was absorbed into branch-a

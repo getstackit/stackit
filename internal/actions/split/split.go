@@ -40,10 +40,16 @@ type Result struct {
 }
 
 // Action performs the split operation
-func Action(ctx *app.Context, opts Options) error {
+func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
 	out := ctx.Output
 	context := ctx.Context
+
+	// Use null handler if none provided
+	if handler == nil {
+		handler = &NullHandler{}
+	}
+	defer handler.Cleanup()
 
 	// Get current branch
 	currentBranch := eng.CurrentBranch()
@@ -117,6 +123,9 @@ func Action(ctx *app.Context, opts Options) error {
 			style = StyleHunk
 		}
 	}
+
+	// Start handler with branch info and style
+	handler.Start(currentBranch.GetName(), style)
 
 	// Take snapshot before any modifications
 	snapshotArgs := []string{string(style)}

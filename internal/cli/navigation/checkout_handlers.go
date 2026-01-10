@@ -4,15 +4,19 @@ import (
 	"stackit.dev/stackit/internal/actions"
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/errors"
+	"stackit.dev/stackit/internal/output"
 	"stackit.dev/stackit/internal/tui"
 )
 
-// NewCheckoutHandler creates the appropriate handler based on TTY availability
-func NewCheckoutHandler() actions.CheckoutHandler {
+// NewCheckoutUI creates a runner and handler pair for checkout operations.
+// The runner manages terminal state; the handler processes events.
+// Caller must defer runner.Cleanup() to restore terminal on exit.
+// Currently returns nil runner as interactive selection is handled by PromptLogSelect.
+func NewCheckoutUI(_ output.Output, _ output.Logger) (*tui.Runner, actions.CheckoutHandler) {
 	if tui.IsTTY() {
-		return &InteractiveCheckoutHandler{}
+		return nil, &InteractiveCheckoutHandler{}
 	}
-	return &SimpleCheckoutHandler{}
+	return nil, &SimpleCheckoutHandler{}
 }
 
 // InteractiveCheckoutHandler provides interactive TUI for TTY environments

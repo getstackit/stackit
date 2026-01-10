@@ -9,13 +9,18 @@ import (
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/handlers"
 	"stackit.dev/stackit/internal/output"
+	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/internal/tui/style"
 )
 
-// NewGetHandler creates the appropriate handler based on TTY availability
-func NewGetHandler(splog output.Output) actions.GetHandler {
-	// For now, just use simple handler (can add interactive later)
-	return NewSimpleGetHandler(splog)
+// NewGetUI creates a runner and handler pair for get operations.
+// The runner manages terminal state; the handler processes events.
+// Caller must defer runner.Cleanup() to restore terminal on exit.
+// Currently returns nil runner as there's no TUI component yet.
+func NewGetUI(out output.Output, _ output.Logger) (*tui.Runner, actions.GetHandler) {
+	// TODO: Add interactive TUI handler when needed
+	// For now, use simple handler for both TTY and non-TTY
+	return nil, NewSimpleGetHandler(out)
 }
 
 // SimpleGetHandler provides streaming text output for non-TTY environments

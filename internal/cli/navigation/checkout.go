@@ -35,8 +35,9 @@ by typing. Use flags to customize which branches are shown.`,
 					branchName = args[0]
 				}
 
-				// Create handler based on TTY availability
-				handler := NewCheckoutHandler()
+				// Create runner (manages terminal state) and handler (processes events)
+				runner, handler := NewCheckoutUI(ctx.Output, ctx.Logger)
+				defer runner.Cleanup()
 
 				// Prepare options
 				opts := actions.CheckoutOptions{

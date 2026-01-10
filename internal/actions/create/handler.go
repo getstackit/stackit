@@ -1,5 +1,7 @@
 package create
 
+import "stackit.dev/stackit/internal/actions"
+
 // Step represents a step in the create process
 type Step string
 
@@ -32,6 +34,8 @@ type Result struct {
 	ParentBranch string
 	HasCommit    bool
 	WorktreePath string
+	// Directive contains shell directive info for the CLI to emit (may be nil)
+	Directive *actions.ShellDirective
 }
 
 // Handler receives events from create action

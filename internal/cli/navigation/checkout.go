@@ -51,7 +51,17 @@ by typing. Use flags to customize which branches are shown.`,
 				}
 
 				// Execute checkout action with handler
-				return actions.CheckoutAction(ctx, opts, handler)
+				result, err := actions.CheckoutAction(ctx, opts, handler)
+				if err != nil {
+					return err
+				}
+
+				// Emit shell directives if needed (CLI layer responsibility)
+				if result != nil {
+					common.EmitDirective(ctx.Output, result.Directive)
+				}
+
+				return nil
 			})
 		},
 	}

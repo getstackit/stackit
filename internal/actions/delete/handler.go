@@ -1,5 +1,15 @@
 package delete
 
+import "stackit.dev/stackit/internal/actions"
+
+// Result contains the result of the delete action
+type Result struct {
+	// DeletedBranches is the list of deleted branch names
+	DeletedBranches []string
+	// Directive contains shell directive info for the CLI to emit (may be nil)
+	Directive *actions.ShellDirective
+}
+
 // Status represents the status of a branch deletion
 type Status string
 

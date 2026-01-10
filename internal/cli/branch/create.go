@@ -65,7 +65,17 @@ If you have any unstaged changes, you will be asked whether you'd like to stage 
 				}
 
 				// Execute create action
-				return create.Action(ctx, opts, handler)
+				result, err := create.Action(ctx, opts, handler)
+				if err != nil {
+					return err
+				}
+
+				// Emit shell directives if needed (CLI layer responsibility)
+				if result != nil {
+					common.EmitDirective(ctx.Output, result.Directive)
+				}
+
+				return nil
 			})
 		},
 	}

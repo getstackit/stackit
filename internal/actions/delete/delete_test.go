@@ -18,7 +18,7 @@ func TestDelete(t *testing.T) {
 				"branch2": "branch1",
 			})
 
-		err := Action(s.Context, Options{
+		_, err := Action(s.Context, Options{
 			BranchName: "branch1",
 			Force:      true,
 		}, nil)
@@ -41,7 +41,7 @@ func TestDelete(t *testing.T) {
 				"branch3": "branch2",
 			})
 
-		err := Action(s.Context, Options{
+		_, err := Action(s.Context, Options{
 			BranchName: "branch1",
 			Upstack:    true,
 			Force:      true,
@@ -62,7 +62,7 @@ func TestDelete(t *testing.T) {
 				"branch3": "branch2",
 			})
 
-		err := Action(s.Context, Options{
+		_, err := Action(s.Context, Options{
 			BranchName: "branch3",
 			Downstack:  true,
 			Force:      true,
@@ -85,7 +85,7 @@ func TestDelete(t *testing.T) {
 		s.Checkout("branch1").Commit("some change")
 		s.Engine.Rebuild("main")
 
-		err := Action(s.Context, Options{
+		_, err := Action(s.Context, Options{
 			BranchName: "branch1",
 			Force:      false,
 		}, nil)
@@ -104,7 +104,7 @@ func TestDelete(t *testing.T) {
 		require.NotNil(t, currentBranch)
 		require.Equal(t, "branch1", currentBranch.GetName())
 
-		err := Action(s.Context, Options{
+		_, err := Action(s.Context, Options{
 			BranchName: "branch1",
 			Force:      true,
 		}, nil)
@@ -123,7 +123,7 @@ func TestDelete(t *testing.T) {
 				"child2": "parent",
 			})
 
-		err := Action(s.Context, Options{
+		_, err := Action(s.Context, Options{
 			BranchName: "parent",
 			Force:      true,
 		}, nil)
@@ -165,7 +165,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 
 		// Delete the stack root
 		s.Checkout("main")
-		err = Action(s.Context, Options{
+		_, err = Action(s.Context, Options{
 			BranchName: "feature-branch",
 			Force:      true,
 		}, nil)
@@ -197,7 +197,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 
 		// Delete the child branch (not the stack root)
 		s.Checkout("stack-root")
-		err = Action(s.Context, Options{
+		_, err = Action(s.Context, Options{
 			BranchName: "child-branch",
 			Force:      true,
 		}, nil)
@@ -229,7 +229,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 
 		// Delete upstack from stack root (deletes all branches in the stack)
 		s.Checkout("main")
-		err = Action(s.Context, Options{
+		_, err = Action(s.Context, Options{
 			BranchName: "stack-root",
 			Upstack:    true,
 			Force:      true,

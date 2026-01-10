@@ -2,7 +2,21 @@
 
 Commands for creating, modifying, and managing individual branches.
 
-> **CRITICAL:** Always run these commands with `command stackit ... --no-interactive`.
+> **CRITICAL:** Always run these commands with `command stackit ... --no-interactive`. For commands that require confirmation, include `--force` (for absorb) or `--yes` (for undo/merge).
+
+## FORBIDDEN Commands
+
+| FORBIDDEN | USE INSTEAD |
+|-----------|-------------|
+| `git commit` (new branches) | `command stackit create` |
+| `git checkout -b` | `command stackit create` |
+| `gh pr create` | `command stackit submit` |
+
+**Required workflow for new stacked branches:**
+```bash
+git add -A                                                # 1. Stage FIRST
+echo "message" | command stackit create --no-interactive  # 2. Then create
+```
 
 ## Creating and Modifying
 

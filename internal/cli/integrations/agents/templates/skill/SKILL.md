@@ -182,14 +182,28 @@ When generating PR descriptions:
 - Body has meaningful content (not placeholders)?
 - Test plan is specific?
 
+## FORBIDDEN Commands
+
+When working with stacks, NEVER use these git commands:
+
+| FORBIDDEN | USE INSTEAD |
+|-----------|-------------|
+| `git commit` (for new branches) | `command stackit create` |
+| `git checkout -b` | `command stackit create` |
+| `gh pr create` | `command stackit submit` |
+| `git rebase` | `command stackit restack` |
+
+**Exception:** `git commit` is allowed ONLY when adding additional commits to an existing stacked branch.
+
 ## Important Rules
 
-1. **Never use raw git for branch operations** - always use `command stackit` commands
-2. **Check state before destructive operations** - run `command stackit log` first
-3. **Always validate after absorb** - absorb can cause compilation errors, see fix-absorb workflow
-4. **Handle conflicts gracefully** - guide user through resolution, see conflict-resolution workflow
-5. **Keep PRs small and focused** - suggest splitting if too large
-6. **Use validation loops** - for commit messages, PR descriptions, and post-absorb builds
+1. **NEVER use `git commit` to create new stacked branches** - always use `command stackit create`
+2. **Stage changes BEFORE running `command stackit create`** - it requires staged changes to work correctly
+3. **Check state before destructive operations** - run `command stackit log` first
+4. **Always validate after absorb** - absorb can cause compilation errors, see fix-absorb workflow
+5. **Handle conflicts gracefully** - guide user through resolution, see conflict-resolution workflow
+6. **Keep PRs small and focused** - suggest splitting if too large
+7. **Use validation loops** - for commit messages, PR descriptions, and post-absorb builds
 
 ## Version {{VERSION}} Changes
 

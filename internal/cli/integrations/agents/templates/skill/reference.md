@@ -8,6 +8,20 @@ Quick reference for all stackit commands. For detailed documentation, see:
 
 > **CRITICAL:** Always run stackit with `command stackit ... --no-interactive`. For commands that require confirmation, include `--force` (for absorb) or `--yes` (for undo/merge).
 
+## FORBIDDEN Commands
+
+| FORBIDDEN | USE INSTEAD |
+|-----------|-------------|
+| `git commit` (new branches) | `command stackit create` |
+| `git checkout -b` | `command stackit create` |
+| `gh pr create` | `command stackit submit` |
+
+**Required workflow for new stacked branches:**
+```bash
+git add -A                                        # 1. Stage FIRST
+echo "message" | command stackit create --no-interactive  # 2. Then create
+```
+
 ## Utility Scripts
 
 Run these helper scripts for analysis:

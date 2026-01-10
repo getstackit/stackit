@@ -32,7 +32,9 @@ The doctor command checks:
 
 				// Create runner (manages terminal state) and handler (processes events)
 				runner, handler := NewDoctorUI(ctx.Output, ctx.Logger)
-				defer runner.Cleanup()
+				if runner != nil {
+					defer runner.Cleanup()
+				}
 
 				// Run doctor action
 				return doctor.Action(ctx, doctor.Options{

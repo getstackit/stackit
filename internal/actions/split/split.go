@@ -178,6 +178,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				return fmt.Errorf("failed to restack upstack branches: %w", err)
 			}
 		}
+		handler.Complete(ActionResult{
+			OriginalBranch: currentBranch.GetName(),
+			NewBranches:    pathspecs, // File split uses pathspecs as new branches
+			Style:          style,
+		})
 		return nil
 	default:
 		return fmt.Errorf("unknown split style: %s", style)
@@ -212,5 +217,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
+	handler.Complete(ActionResult{
+		OriginalBranch: currentBranch.GetName(),
+		NewBranches:    result.BranchNames,
+		Style:          style,
+	})
 	return nil
 }

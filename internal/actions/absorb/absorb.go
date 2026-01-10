@@ -95,6 +95,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	if !hasStaged {
 		out.Info("Nothing to absorb.")
+		handler.Complete(Result{})
 		return nil
 	}
 
@@ -106,6 +107,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	if len(hunks) == 0 {
 		out.Info("Nothing to absorb.")
+		handler.Complete(Result{})
 		return nil
 	}
 
@@ -194,6 +196,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		} else {
 			out.Info("Nothing to absorb.")
 		}
+		handler.Complete(Result{Unabsorbed: len(unabsorbedHunks)})
 		return nil
 	}
 
@@ -207,6 +210,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			}
 		}
 		printDryRunOutput(flatHunksByCommit, unabsorbedHunks, eng, out)
+		// Don't call Complete() for dry-run - no actual changes made
 		return nil
 	}
 
@@ -227,11 +231,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 		if !confirmed {
 			out.Info("Absorb canceled")
+			handler.Complete(Result{})
 			return nil
 		}
 	} else if !opts.Force && !handler.IsInteractive() {
 		// Non-interactive without force: default to no
 		out.Info("Non-interactive mode: skipping absorb (use --force to override)")
+		handler.Complete(Result{})
 		return nil
 	}
 
@@ -299,5 +305,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
+	handler.Complete(Result{
+		Absorbed:    len(hunkTargets),
+		Unabsorbed:  len(unabsorbedHunks),
+		BranchCount: len(hunksByBranch),
+	})
 	return nil
 }

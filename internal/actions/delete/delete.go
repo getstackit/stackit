@@ -117,6 +117,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	for _, name := range branchNames {
+		handler.OnBranch(name, StatusDeleted, nil)
 		out.Info("Deleted branch %s", style.ColorBranchName(name, false))
 	}
 
@@ -136,6 +137,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Restack children if any
 	if len(childrenToRestack) > 0 {
+		handler.OnRestack(len(childrenToRestack))
 		out.Info("Restacking children of deleted %s...", actions.Pluralize("branch", len(toDelete)))
 		// Convert []string to []Branch for RestackBranches
 		branches := make([]engine.Branch, len(childrenToRestack))
@@ -147,6 +149,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
+	handler.Complete(len(toDelete), 0)
 	return nil
 }
 

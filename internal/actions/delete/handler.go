@@ -5,9 +5,9 @@ type Status string
 
 // Delete status constants
 const (
-	StatusDeleted  Status = "deleted"
-	StatusSkipped  Status = "skipped"
-	StatusRestaked Status = "restacked"
+	StatusDeleted   Status = "deleted"
+	StatusSkipped   Status = "skipped"
+	StatusRestacked Status = "restacked"
 )
 
 // Handler receives events from delete action

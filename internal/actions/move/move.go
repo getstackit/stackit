@@ -114,6 +114,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Check for scope change and potential rename
+	var renamed bool
 	sourceScope := sourceBranch.GetScope()
 	ontoScope := ontoBranch.GetScope()
 	if sourceScope.IsDefined() && ontoScope.IsDefined() && !sourceScope.Equal(ontoScope) {
@@ -128,6 +129,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 					out.Info("Renamed branch %s to %s.", style.ColorBranchName(source, false), style.ColorBranchName(newName, true))
 					source = newName
 					sourceBranch = eng.GetBranch(source)
+					renamed = true
 				}
 			}
 		}
@@ -185,5 +187,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("failed to restack branches: %w", err)
 	}
 
+	newName := ""
+	if renamed {
+		newName = source
+	}
+	handler.Complete(Result{
+		SourceBranch: source,
+		OldParent:    oldParentName,
+		NewParent:    onto,
+		Renamed:      renamed,
+		NewName:      newName,
+	})
 	return nil
 }

@@ -171,7 +171,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if parentBranch.IsTrunk() {
 			return fmt.Errorf("cannot fold into trunk with --keep because it would delete the trunk branch")
 		}
-		return foldWithKeep(gctx, ctx, currentBranchObj, parentBranch, eng, out, opts)
+		if err := foldWithKeep(gctx, ctx, currentBranchObj, parentBranch, eng, out, opts); err != nil {
+			return err
+		}
+		// With --keep, the parent is folded into current, so parent is deleted
+		handler.Complete(Result{
+			FoldedBranch: parentName,
+			IntoBranch:   currentBranch,
+		})
+		return nil
 	}
 
 	// Check if folding into trunk
@@ -179,5 +187,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("cannot fold into trunk branch %s without --allow-trunk. Folding into trunk will modify your local main branch directly", parentName)
 	}
 
-	return foldNormal(gctx, ctx, currentBranchObj, parentBranch, eng, out, opts)
+	if err := foldNormal(gctx, ctx, currentBranchObj, parentBranch, eng, out, opts); err != nil {
+		return err
+	}
+	// Normal fold: current is folded into parent, so current is deleted
+	handler.Complete(Result{
+		FoldedBranch: currentBranch,
+		IntoBranch:   parentName,
+	})
+	return nil
 }

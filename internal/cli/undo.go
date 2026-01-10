@@ -31,7 +31,9 @@ state without prompting.`,
 			return common.Run(cmd, func(ctx *app.Context) error {
 				// Create runner (manages terminal state) and handler (processes events)
 				runner, handler := NewUndoUI(ctx.Output, ctx.Logger)
-				defer runner.Cleanup()
+				if runner != nil {
+					defer runner.Cleanup()
+				}
 
 				// Run undo action
 				return undo.Action(ctx, undo.Options{

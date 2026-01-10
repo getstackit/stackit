@@ -14,12 +14,12 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/oauth2 v0.34.0
+	golang.org/x/sync v0.19.0
 )
 
 require (
 	github.com/charmbracelet/harmonica v0.2.0 // indirect
 	github.com/sahilm/fuzzy v0.1.1 // indirect
-	golang.org/x/sync v0.19.0 // indirect
 )
 
 require (

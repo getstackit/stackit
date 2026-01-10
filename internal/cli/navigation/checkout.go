@@ -37,7 +37,9 @@ by typing. Use flags to customize which branches are shown.`,
 
 				// Create runner (manages terminal state) and handler (processes events)
 				runner, handler := NewCheckoutUI(ctx.Output, ctx.Logger)
-				defer runner.Cleanup()
+				if runner != nil {
+					defer runner.Cleanup()
+				}
 
 				// Prepare options
 				opts := actions.CheckoutOptions{

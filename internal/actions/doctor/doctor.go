@@ -14,59 +14,38 @@ type Options struct {
 }
 
 // Action runs diagnostic checks on the stackit environment and repository
-func Action(ctx *app.Context, opts Options) error {
-	out := ctx.Output
+func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
 
-	if opts.Fix {
-		out.Info("Running stackit doctor with --fix...")
-	} else {
-		out.Info("Running stackit doctor...")
+	// Use null handler if none provided
+	if handler == nil {
+		handler = &NullHandler{}
 	}
-	out.Newline()
+	defer handler.Cleanup()
 
-	var warnings []string
-	var errors []string
+	handler.Start(opts.Fix)
+
+	var warningCount, errorCount int
 
 	// Environment checks
-	out.Info("Environment:")
-	warnings, errors = checkEnvironment(ctx.Git(), out, warnings, errors)
-
-	out.Newline()
+	handler.OnCategory(CategoryEnvironment)
+	warningCount, errorCount = checkEnvironment(ctx.Git(), handler, warningCount, errorCount)
 
 	// Repository checks
-	out.Info("Repository:")
-	warnings, errors = checkRepository(ctx, out, warnings, errors, opts.Trunk)
-
-	out.Newline()
+	handler.OnCategory(CategoryRepository)
+	warningCount, errorCount = checkRepository(ctx, handler, warningCount, errorCount, opts.Trunk)
 
 	// Stack state checks
-	out.Info("Stack State:")
-	warnings, errors = checkStackState(ctx.Context, eng, out, warnings, errors, opts.Fix)
+	handler.OnCategory(CategoryStackState)
+	warningCount, errorCount = checkStackState(ctx.Context, eng, handler, warningCount, errorCount, opts.Fix)
 
-	// Summary
-	out.Newline()
-	switch {
-	case len(errors) > 0:
-		out.Warn("Doctor found %d error(s) and %d warning(s).", len(errors), len(warnings))
-		for _, err := range errors {
-			out.Error("  %s", err)
-		}
-		for _, warn := range warnings {
-			out.Warn("  %s", warn)
-		}
-		return fmt.Errorf("doctor found %d error(s)", len(errors))
-	case len(warnings) > 0:
-		if opts.Fix {
-			out.Info("Doctor found %d warning(s), some of which may have been fixed.", len(warnings))
-		} else {
-			out.Info("Doctor found %d warning(s). Your stackit setup is mostly healthy.", len(warnings))
-		}
-		for _, warn := range warnings {
-			out.Warn("  %s", warn)
-		}
-	default:
-		out.Info("✅ All checks passed. Your stackit setup is healthy.")
+	// Calculate passed count (we don't track individual checks, so estimate)
+	passedCount := 0 // Will be counted by handlers that track it
+
+	handler.Complete(passedCount, warningCount, errorCount)
+
+	if errorCount > 0 {
+		return fmt.Errorf("doctor found %d error(s)", errorCount)
 	}
 
 	return nil

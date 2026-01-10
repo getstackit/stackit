@@ -30,11 +30,15 @@ The doctor command checks:
 				cfg, _ := config.LoadConfig(ctx.RepoRoot)
 				trunk := cfg.Trunk()
 
+				// Create runner (manages terminal state) and handler (processes events)
+				runner, handler := NewDoctorUI(ctx.Output, ctx.Logger)
+				defer runner.Cleanup()
+
 				// Run doctor action
 				return doctor.Action(ctx, doctor.Options{
 					Fix:   fix,
 					Trunk: trunk,
-				})
+				}, handler)
 			})
 		},
 	}

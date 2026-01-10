@@ -7,7 +7,6 @@ import (
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/timeutil"
-	"stackit.dev/stackit/internal/tui"
 )
 
 // Options contains options for the undo command
@@ -17,9 +16,16 @@ type Options struct {
 }
 
 // Action performs the undo operation
-func Action(ctx *app.Context, opts Options) error {
+func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
-	out := ctx.Output
+
+	// Use null handler if none provided
+	if handler == nil {
+		handler = &NullHandler{}
+	}
+	defer handler.Cleanup()
+
+	handler.Start()
 
 	// Get all available snapshots
 	snapshots, err := eng.GetSnapshots()
@@ -28,9 +34,11 @@ func Action(ctx *app.Context, opts Options) error {
 	}
 
 	if len(snapshots) == 0 {
-		out.Info("No undo history available.")
+		handler.Complete(true, "No undo history available.")
 		return nil
 	}
+
+	handler.OnSnapshotList(snapshots)
 
 	var selectedSnapshotID string
 
@@ -50,26 +58,22 @@ func Action(ctx *app.Context, opts Options) error {
 		}
 	} else {
 		// Interactive selection
-		if len(snapshots) == 1 {
+		switch {
+		case len(snapshots) == 1:
 			// Only one snapshot, use it directly
 			selectedSnapshotID = snapshots[0].ID
-			out.Info("Restoring to: %s", snapshots[0].DisplayName)
-		} else {
-			// Multiple snapshots - show interactive selector
-			options := make([]tui.SelectOption, len(snapshots))
-			for i, snap := range snapshots {
-				options[i] = tui.SelectOption{
-					Label: snap.DisplayName,
-					Value: snap.ID,
-				}
-			}
-
-			selected, err := tui.PromptSelect("Select state to restore:", options, 0)
+			handler.OnStep(fmt.Sprintf("Restoring to: %s", snapshots[0].DisplayName), StepStarted)
+		case handler.IsInteractive():
+			// Multiple snapshots - use handler for interactive selection
+			selected, err := handler.SelectSnapshot(snapshots)
 			if err != nil {
 				return fmt.Errorf("failed to select snapshot: %w", err)
 			}
-
 			selectedSnapshotID = selected
+		default:
+			// Non-interactive mode with multiple snapshots - use most recent
+			selectedSnapshotID = snapshots[0].ID
+			handler.OnStep(fmt.Sprintf("Using most recent snapshot: %s", snapshots[0].DisplayName), StepStarted)
 		}
 	}
 
@@ -106,39 +110,41 @@ func Action(ctx *app.Context, opts Options) error {
 	confirmMessage += " Are you sure?"
 
 	confirmed := opts.Force
-	if !opts.Force {
-		confirmed, err = tui.PromptConfirm(confirmMessage, false)
+	if !opts.Force && handler.IsInteractive() {
+		confirmed, err = handler.PromptConfirm(confirmMessage, false)
 		if err != nil {
 			return fmt.Errorf("failed to get confirmation: %w", err)
 		}
 	}
 
 	if !confirmed {
-		out.Info("Undo canceled.")
+		handler.Complete(true, "Undo canceled.")
 		return nil
 	}
 
 	// Abort any in-progress Git operations that might interfere with restoration
 	if eng.Git().IsRebaseInProgress(ctx.Context) {
-		out.Info("Aborting in-progress rebase before undo...")
+		handler.OnStep("Aborting in-progress rebase before undo...", StepStarted)
 		if err := eng.Git().RebaseAbort(ctx.Context); err != nil {
 			return fmt.Errorf("failed to abort rebase: %w", err)
 		}
+		handler.OnStep("Aborted in-progress rebase", StepCompleted)
 	}
 	if eng.Git().IsMergeInProgress(ctx.Context) {
-		out.Info("Aborting in-progress merge before undo...")
+		handler.OnStep("Aborting in-progress merge before undo...", StepStarted)
 		if err := eng.Git().MergeAbort(ctx.Context); err != nil {
 			return fmt.Errorf("failed to abort merge: %w", err)
 		}
+		handler.OnStep("Aborted in-progress merge", StepCompleted)
 	}
 
 	// Perform the restoration
-	out.Info("Restoring repository state...")
+	handler.OnStep("Restoring repository state...", StepStarted)
 	if err := eng.RestoreSnapshot(ctx.Context, selectedSnapshotID); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
 
-	out.Info("Successfully restored to state before '%s'.", selectedSnapshot.Command)
+	handler.Complete(true, fmt.Sprintf("Successfully restored to state before '%s'.", selectedSnapshot.Command))
 
 	return nil
 }

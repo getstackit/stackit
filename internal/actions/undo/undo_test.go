@@ -15,7 +15,7 @@ func TestUndoAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := Action(s.Context, Options{})
+		err := Action(s.Context, Options{}, nil)
 		require.NoError(t, err) // Should not error, just show message
 	})
 
@@ -72,7 +72,7 @@ func TestUndoAction(t *testing.T) {
 
 		err = Action(s.Context, Options{
 			SnapshotID: "nonexistent-snapshot",
-		})
+		}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not found")
 	})

@@ -6,25 +6,23 @@ import (
 	"strings"
 
 	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui/style"
 )
 
 // checkStackState performs stack state and metadata integrity checks
-func checkStackState(ctx context.Context, eng engine.Engine, out output.Output, warnings []string, errors []string, fix bool) ([]string, []string) {
+func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, warnings int, errors int, fix bool) (int, int) {
 	// Get all branches
 	allBranches, err := eng.Git().GetAllBranchNames()
 	if err != nil {
-		errors = append(errors, fmt.Sprintf("failed to get branch names: %v", err))
-		out.Error("  failed to get branch names: %v", err)
+		errors++
+		handler.OnCheck("branch_list", CheckError, fmt.Sprintf("failed to get branch names: %v", err))
 		return warnings, errors
 	}
 
 	// Get all metadata refs
 	metadataRefs, err := eng.Git().ListMetadata()
 	if err != nil {
-		errors = append(errors, fmt.Sprintf("failed to get metadata refs: %v", err))
-		out.Error("  failed to get metadata refs: %v", err)
+		errors++
+		handler.OnCheck("metadata_list", CheckError, fmt.Sprintf("failed to get metadata refs: %v", err))
 		return warnings, errors
 	}
 
@@ -41,14 +39,14 @@ func checkStackState(ctx context.Context, eng engine.Engine, out output.Output, 
 			orphanedCount++
 			if fix {
 				if err := eng.Git().DeleteMetadata(branchName); err != nil {
-					out.Error("  Failed to prune orphaned metadata for %s: %v", branchName, err)
-					warnings = append(warnings, fmt.Sprintf("orphaned metadata found for deleted branch '%s' (fix failed)", branchName))
+					warnings++
+					handler.OnCheck("orphaned_metadata", CheckWarning, fmt.Sprintf("orphaned metadata for '%s' (fix failed: %v)", branchName, err))
 				} else {
-					out.Info("  ✅ Pruned orphaned metadata for deleted branch %s", style.ColorBranchName(branchName, false))
 					prunedCount++
+					handler.OnCheck("orphaned_metadata", CheckPassed, fmt.Sprintf("Pruned orphaned metadata for deleted branch %s", branchName))
 				}
 			} else {
-				warnings = append(warnings, fmt.Sprintf("orphaned metadata found for deleted branch '%s'", branchName))
+				warnings++
 			}
 		}
 	}
@@ -56,15 +54,15 @@ func checkStackState(ctx context.Context, eng engine.Engine, out output.Output, 
 	if orphanedCount > 0 {
 		if fix {
 			if prunedCount == orphanedCount {
-				out.Info("  ✅ All %d orphaned metadata ref(s) pruned", prunedCount)
+				handler.OnCheck("orphaned_metadata", CheckPassed, fmt.Sprintf("All %d orphaned metadata ref(s) pruned", prunedCount))
 			} else {
-				out.Warn("  Found %d orphaned metadata ref(s), pruned %d", orphanedCount, prunedCount)
+				handler.OnCheck("orphaned_metadata", CheckWarning, fmt.Sprintf("Found %d orphaned metadata ref(s), pruned %d", orphanedCount, prunedCount))
 			}
 		} else {
-			out.Warn("  Found %d orphaned metadata ref(s) (run 'stackit doctor --fix' to prune)", orphanedCount)
+			handler.OnCheck("orphaned_metadata", CheckWarning, fmt.Sprintf("Found %d orphaned metadata ref(s) (run 'stackit doctor --fix' to prune)", orphanedCount))
 		}
 	} else {
-		out.Info("  ✅ No orphaned metadata found")
+		handler.OnCheck("orphaned_metadata", CheckPassed, "No orphaned metadata found")
 	}
 
 	// Check for corrupted metadata
@@ -78,63 +76,50 @@ func checkStackState(ctx context.Context, eng engine.Engine, out output.Output, 
 	for _, branchName := range metadataRefNames {
 		if err := allMetaErrs[branchName]; err != nil {
 			corruptedCount++
-			errors = append(errors, fmt.Sprintf("corrupted metadata for branch '%s': %v", branchName, err))
+			errors++
 		} else if meta := allMeta[branchName]; meta != nil {
 			// Validate that if parent is set, it's not empty
 			if meta.ParentBranchName != nil && *meta.ParentBranchName == "" {
 				corruptedCount++
-				errors = append(errors, fmt.Sprintf("invalid metadata for branch '%s': parent branch name is empty", branchName))
+				errors++
 			}
 		}
 	}
 
 	if corruptedCount > 0 {
-		out.Error("  Found %d corrupted metadata ref(s)", corruptedCount)
+		handler.OnCheck("metadata_integrity", CheckError, fmt.Sprintf("Found %d corrupted metadata ref(s)", corruptedCount))
 	} else {
-		out.Info("  ✅ Metadata integrity check passed")
+		handler.OnCheck("metadata_integrity", CheckPassed, "Metadata integrity check passed")
 	}
 
 	// Check for cycles in the stack graph
 	cycles := detectCycles(eng)
 	if len(cycles) > 0 {
-		for _, cycle := range cycles {
-			errors = append(errors, fmt.Sprintf("cycle detected in stack graph: %s", strings.Join(cycle, " -> ")))
+		for range cycles {
+			errors++
 		}
-		out.Error("  Found %d cycle(s) in stack graph", len(cycles))
+		handler.OnCheck("cycles", CheckError, fmt.Sprintf("Found %d cycle(s) in stack graph: %s", len(cycles), strings.Join(cycles[0], " -> ")))
 	} else {
-		out.Info("  ✅ No cycles detected in stack graph")
+		handler.OnCheck("cycles", CheckPassed, "No cycles detected in stack graph")
 	}
 
 	// Check for missing parent branches
 	missingParents := checkMissingParents(eng, allBranches)
 	if len(missingParents) > 0 {
-		for _, branch := range missingParents {
-			branchObj := eng.GetBranch(branch)
-			parent := branchObj.GetParent()
-			parentName := "unknown"
-			if parent != nil {
-				parentName = parent.GetName()
-			}
-			warnings = append(warnings, fmt.Sprintf("branch '%s' has parent '%s' that does not exist", branch, parentName))
-		}
-		out.Warn("  Found %d branch(es) with missing parents", len(missingParents))
+		warnings += len(missingParents)
+		handler.OnCheck("missing_parents", CheckWarning, fmt.Sprintf("Found %d branch(es) with missing parents", len(missingParents)))
 	} else {
-		out.Info("  ✅ All parent branches exist")
+		handler.OnCheck("missing_parents", CheckPassed, "All parent branches exist")
 	}
 
 	// Check for empty branches (branches with no commits vs their parent)
 	emptyBranches := checkEmptyBranches(ctx, eng)
 	if len(emptyBranches) > 0 {
-		for _, branch := range emptyBranches {
-			warnings = append(warnings, fmt.Sprintf("branch '%s' has no commits (same as parent)", branch))
-		}
-		out.Warn("  Found %d empty branch(es) with no commits vs parent:", len(emptyBranches))
-		for _, branch := range emptyBranches {
-			out.Warn("    - %s", style.ColorBranchName(branch, false))
-		}
-		out.Warn("  Consider running 'stackit delete <branch>' to remove empty branches")
+		warnings += len(emptyBranches)
+		branchList := strings.Join(emptyBranches, ", ")
+		handler.OnCheck("empty_branches", CheckWarning, fmt.Sprintf("Found %d empty branch(es): %s", len(emptyBranches), branchList))
 	} else {
-		out.Info("  ✅ No empty branches found")
+		handler.OnCheck("empty_branches", CheckPassed, "No empty branches found")
 	}
 
 	return warnings, errors

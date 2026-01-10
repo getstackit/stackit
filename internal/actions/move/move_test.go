@@ -34,7 +34,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch2",
 			Onto:   "main",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify new parent relationship
@@ -67,7 +67,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branchA",
 			Onto:   "branchB",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify new parent relationship
@@ -101,7 +101,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branchA2",
 			Onto:   "branchB1",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify new parent relationship
@@ -130,7 +130,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "", // Empty means use current branch
 			Onto:   "main",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify branch2 was moved
@@ -146,7 +146,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "main",
 			Onto:   "main", // Even if onto is same, should fail earlier
-		})
+		}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot move trunk branch")
 	})
@@ -160,7 +160,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch1",
 			Onto:   "branch1",
-		})
+		}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot move branch onto itself")
 	})
@@ -177,7 +177,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch1",
 			Onto:   "branch3",
-		})
+		}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot move")
 		require.Contains(t, err.Error(), "onto its own descendant")
@@ -191,7 +191,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "untracked",
 			Onto:   "main",
-		})
+		}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not tracked")
 	})
@@ -205,7 +205,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch1",
 			Onto:   "nonexistent",
-		})
+		}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "does not exist")
 	})
@@ -220,7 +220,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "",
 			Onto:   "main",
-		})
+		}, nil)
 		require.Error(t, err)
 		// The error should be either "not on a branch" or "cannot move trunk branch"
 		errMsg := err.Error()
@@ -241,7 +241,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch1",
 			Onto:   "untracked",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify new parent relationship
@@ -272,7 +272,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch1",
 			Onto:   "main",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify branches were restacked (revisions should have changed)
@@ -300,7 +300,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch1",
 			Onto:   "", // Empty onto
-		})
+		}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "onto branch must be specified")
 	})
@@ -320,7 +320,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch2",
 			Onto:   "main",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify branch2 only has its own commit relative to main
@@ -356,7 +356,7 @@ func TestMoveAction(t *testing.T) {
 		err = Action(s.Context, Options{
 			Source: "branch2",
 			Onto:   "main",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify PR info is preserved
@@ -382,7 +382,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branch2",
 			Onto:   "main",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify branch2 still has 1 commit relative to main (the amended one)
@@ -411,7 +411,7 @@ func TestMoveAction(t *testing.T) {
 		err := Action(s.Context, Options{
 			Source: "branchA2",
 			Onto:   "branchB1",
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify branchA2 only has its own commit relative to branchB1

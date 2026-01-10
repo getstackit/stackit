@@ -8,9 +8,7 @@ import (
 	"stackit.dev/stackit/internal/actions"
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/internal/tui/style"
-	"stackit.dev/stackit/internal/utils"
 )
 
 // Options contains options for the move command
@@ -20,10 +18,16 @@ type Options struct {
 }
 
 // Action performs the move operation
-func Action(ctx *app.Context, opts Options) error {
+func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
+
+	// Use null handler if none provided
+	if handler == nil {
+		handler = &NullHandler{}
+	}
+	defer handler.Cleanup()
 
 	graph := engine.BuildStackGraph(eng, engine.SortStrategyAlphabetical, nil)
 
@@ -113,13 +117,14 @@ func Action(ctx *app.Context, opts Options) error {
 	sourceScope := sourceBranch.GetScope()
 	ontoScope := ontoBranch.GetScope()
 	if sourceScope.IsDefined() && ontoScope.IsDefined() && !sourceScope.Equal(ontoScope) {
-		if utils.IsInteractive() && strings.Contains(source, sourceScope.String()) {
-			confirmed, err := tui.PromptConfirm(fmt.Sprintf("Branch name contains '%s', but its scope will now be '%s'. Would you like to rename the branch?", sourceScope.String(), ontoScope.String()), true)
+		if handler.IsInteractive() && strings.Contains(source, sourceScope.String()) {
+			confirmed, err := handler.PromptRename(source, sourceScope.String(), ontoScope.String())
 			if err == nil && confirmed {
 				newName := strings.Replace(source, sourceScope.String(), ontoScope.String(), 1)
 				if err := eng.RenameBranch(gctx, eng.GetBranch(source), eng.GetBranch(newName)); err != nil {
 					out.Info("Warning: failed to rename branch: %v", err)
 				} else {
+					handler.OnRename(source, newName)
 					out.Info("Renamed branch %s to %s.", style.ColorBranchName(source, false), style.ColorBranchName(newName, true))
 					source = newName
 					sourceBranch = eng.GetBranch(source)
@@ -137,6 +142,9 @@ func Action(ctx *app.Context, opts Options) error {
 	} else {
 		oldParentName = oldParent.GetName()
 	}
+
+	// Start handler with branch info
+	handler.Start(source, oldParentName, onto)
 
 	// Capture old divergence point to preserve it after reparenting
 	// This ensures we only move the commits that belong to this branch.

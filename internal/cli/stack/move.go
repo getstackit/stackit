@@ -50,11 +50,17 @@ If no branch is passed in, opens an interactive selector to choose the target br
 					}
 				}
 
+				// Create runner and handler
+				runner, handler := NewMoveUI(ctx.Output, ctx.Logger, ctx.Interactive)
+				if runner != nil {
+					defer runner.Cleanup()
+				}
+
 				// Run move action
 				return move.Action(ctx, move.Options{
 					Source: sourceBranch,
 					Onto:   ontoBranch,
-				})
+				}, handler)
 			})
 		},
 	}

@@ -157,8 +157,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 }
 
 // cleanupWorktreesForDeletedStacks removes worktrees for stack roots that have been deleted.
-// This is best-effort - errors are logged but don't fail the delete operation.
-// Returns the main repo directory path if the user needs to be directed back to the main repo.
+// Best-effort - errors are logged but don't fail the delete operation.
 func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []string) string {
 	var mainRepoDir string
 

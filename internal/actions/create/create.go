@@ -234,17 +234,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 		}
 	}
 
-	// Build result
 	result := Result{
 		BranchName:   branchName,
 		ParentBranch: currentBranch,
 		HasCommit:    hasStaged,
 		WorktreePath: worktreePath,
 	}
-
-	// Complete the operation
 	handler.Complete(result)
-
 	return result, nil
 }
 

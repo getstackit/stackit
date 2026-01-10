@@ -21,7 +21,6 @@ type CheckoutOptions struct {
 
 // CheckoutResult represents the outcome of a checkout operation.
 type CheckoutResult struct {
-	BranchName         string
 	WorktreeSwitchPath string
 	RerunArgs          []string
 	FallbackTips       []string
@@ -108,7 +107,6 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 	switchPath, rerunArgs, fallbackTips := getWorktreeSwitchInfo(ctx, branch, branchName)
 	if switchPath != "" {
 		return CheckoutResult{
-			BranchName:         branchName,
 			WorktreeSwitchPath: switchPath,
 			RerunArgs:          rerunArgs,
 			FallbackTips:       fallbackTips,
@@ -135,7 +133,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 		printBranchInfo(ctx, branch)
 	}
 
-	return CheckoutResult{BranchName: branchName}, nil
+	return CheckoutResult{}, nil
 }
 
 func printBranchInfo(ctx *app.Context, branch engine.Branch) {

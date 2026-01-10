@@ -38,12 +38,18 @@ close the pull request.`,
 					branchName = args[0]
 				}
 
+				// Create runner and handler
+				runner, handler := NewDeleteUI(ctx.Output, ctx.Logger)
+				if runner != nil {
+					defer runner.Cleanup()
+				}
+
 				return delete.Action(ctx, delete.Options{
 					BranchName: branchName,
 					Downstack:  downstack,
 					Force:      force,
 					Upstack:    upstack,
-				})
+				}, handler)
 			})
 		},
 	}

@@ -58,8 +58,14 @@ If you have any unstaged changes, you will be asked whether you'd like to stage 
 					Worktree:      worktree,
 				}
 
+				// Create runner and handler
+				runner, handler := NewCreateUI(ctx.Output, ctx.Logger)
+				if runner != nil {
+					defer runner.Cleanup()
+				}
+
 				// Execute create action
-				return create.Action(ctx, opts)
+				return create.Action(ctx, opts, handler)
 			})
 		},
 	}

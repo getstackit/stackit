@@ -20,9 +20,15 @@ type Options struct {
 }
 
 // Action deletes a branch and its metadata
-func Action(ctx *app.Context, opts Options) error {
+func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
 	out := ctx.Output
+
+	// Use null handler if none provided
+	if handler == nil {
+		handler = &NullHandler{}
+	}
+	defer handler.Cleanup()
 
 	branchName := opts.BranchName
 	if branchName == "" {
@@ -66,21 +72,25 @@ func Action(ctx *app.Context, opts Options) error {
 		toDelete = append(downstack, toDelete...)
 	}
 
+	handler.Start(len(toDelete))
+
 	// Confirm if not forced and not merged/closed
 	if !opts.Force {
 		for _, b := range toDelete {
 			shouldDelete, reason := actions.ShouldDeleteBranch(ctx.Context, b.GetName(), eng, false)
 			if !shouldDelete {
-				// For now, if any branch in the list shouldn't be deleted and we're not forced,
-				// we might want to prompt. But since we don't have interactive prompting yet,
-				// we'll just fail if it's not "safe" to delete.
-				// Actually, shouldDeleteBranch returns false if it's not merged/closed/empty.
-
-				// Let's refine this: if it's not forced, we should at least check if the branch
-				// we're deleting has unmerged changes.
-
-				// For now, if we're not forced, and shouldDeleteBranch says no, we'll ask for --force.
-				if reason == "" {
+				// If handler is interactive, prompt for confirmation
+				if handler.IsInteractive() {
+					confirmed, err := handler.PromptConfirm(b.GetName(), reason)
+					if err != nil {
+						return err
+					}
+					if !confirmed {
+						handler.OnBranch(b.GetName(), StatusSkipped, nil)
+						handler.Complete(0, 1)
+						return nil
+					}
+				} else if reason == "" {
 					return fmt.Errorf("branch %s is not merged/closed; use --force to delete anyway", b.GetName())
 				}
 			}

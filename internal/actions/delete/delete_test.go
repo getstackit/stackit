@@ -21,7 +21,7 @@ func TestDelete(t *testing.T) {
 		err := Action(s.Context, Options{
 			BranchName: "branch1",
 			Force:      true,
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// branch1 should be gone, branch2 should be reparented to main
@@ -45,7 +45,7 @@ func TestDelete(t *testing.T) {
 			BranchName: "branch1",
 			Upstack:    true,
 			Force:      true,
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// All branches should be gone
@@ -66,7 +66,7 @@ func TestDelete(t *testing.T) {
 			BranchName: "branch3",
 			Downstack:  true,
 			Force:      true,
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// All branches should be gone
@@ -88,7 +88,7 @@ func TestDelete(t *testing.T) {
 		err := Action(s.Context, Options{
 			BranchName: "branch1",
 			Force:      false,
-		})
+		}, nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "use --force")
 	})
@@ -107,7 +107,7 @@ func TestDelete(t *testing.T) {
 		err := Action(s.Context, Options{
 			BranchName: "branch1",
 			Force:      true,
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		currentBranch = s.Engine.CurrentBranch()
@@ -126,7 +126,7 @@ func TestDelete(t *testing.T) {
 		err := Action(s.Context, Options{
 			BranchName: "parent",
 			Force:      true,
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// parent should be gone
@@ -168,7 +168,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		err = Action(s.Context, Options{
 			BranchName: "feature-branch",
 			Force:      true,
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify worktree registration was cleaned up
@@ -200,7 +200,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		err = Action(s.Context, Options{
 			BranchName: "child-branch",
 			Force:      true,
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify worktree registration is preserved
@@ -233,7 +233,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 			BranchName: "stack-root",
 			Upstack:    true,
 			Force:      true,
-		})
+		}, nil)
 		require.NoError(t, err)
 
 		// Verify worktree registration was cleaned up

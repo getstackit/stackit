@@ -1,7 +1,5 @@
 package create
 
-import "stackit.dev/stackit/internal/actions"
-
 // Step represents a step in the create process
 type Step string
 
@@ -28,14 +26,13 @@ const (
 	StatusFailed    StepStatus = "failed"
 )
 
-// Result contains the result of the create action
+// Result contains the result of the create action.
+// The CLI layer uses this to determine what shell directives to emit.
 type Result struct {
 	BranchName   string
 	ParentBranch string
 	HasCommit    bool
-	WorktreePath string
-	// Directive contains shell directive info for the CLI to emit (may be nil)
-	Directive *actions.ShellDirective
+	WorktreePath string // If set, CLI should emit a CD directive to this path
 }
 
 // Handler receives events from create action

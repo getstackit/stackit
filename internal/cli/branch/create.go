@@ -70,9 +70,10 @@ If you have any unstaged changes, you will be asked whether you'd like to stage 
 					return err
 				}
 
-				// Emit shell directives if needed (CLI layer responsibility)
-				if result != nil {
-					common.EmitDirective(ctx.Output, result.Directive)
+				// Emit shell directives based on result (CLI layer responsibility)
+				// If a worktree was created, emit CD directive to navigate to it
+				if result.WorktreePath != "" {
+					ctx.Output.DirectiveCD(result.WorktreePath)
 				}
 
 				return nil

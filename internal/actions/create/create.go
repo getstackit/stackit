@@ -32,8 +32,8 @@ type Options struct {
 }
 
 // Action creates a new branch stacked on top of the current branch.
-// Returns a Result with any shell directives that should be emitted by the CLI layer.
-func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
+// Returns a Result that the CLI layer can use to determine what shell directives to emit.
+func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	eng := ctx.Engine
 	out := ctx.Output
 
@@ -46,7 +46,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	// Get current branch
 	currentBranch, err := eng.ValidateOnBranch()
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
 	handler.Start(currentBranch)
@@ -54,7 +54,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	// Validate worktree flag - only allowed when creating from trunk
 	if opts.Worktree {
 		if !eng.IsTrunk(eng.GetBranch(currentBranch)) {
-			return nil, fmt.Errorf("--worktree/-w flag is only valid when creating a new stack from trunk")
+			return Result{}, fmt.Errorf("--worktree/-w flag is only valid when creating a new stack from trunk")
 		}
 	}
 
@@ -77,7 +77,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	// Handle staging first if we might need the message to name the branch
 	hasStaged, err := eng.HasStagedChanges(ctx.Context)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check staged changes: %w", err)
+		return Result{}, fmt.Errorf("failed to check staged changes: %w", err)
 	}
 
 	// Stage changes based on flags or prompt
@@ -90,14 +90,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 		}
 		if err := ctx.Git().StageChanges(ctx.Context, stagingOpts); err != nil {
 			handler.OnStep(StepStaging, StatusFailed, err.Error())
-			return nil, err
+			return Result{}, err
 		}
 		hasStaged = true
 		handler.OnStep(StepStaging, StatusCompleted, "Changes staged")
 	} else if !hasStaged && handler.IsInteractive() {
 		hasUnstaged, err := eng.HasUnstagedChanges(ctx.Context)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check unstaged changes: %w", err)
+			return Result{}, fmt.Errorf("failed to check unstaged changes: %w", err)
 		}
 
 		if hasUnstaged {
@@ -106,7 +106,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 				handler.OnStep(StepStaging, StatusStarted, "Staging changes")
 				if err := eng.StageAll(ctx.Context); err != nil {
 					handler.OnStep(StepStaging, StatusFailed, err.Error())
-					return nil, fmt.Errorf("failed to stage changes: %w", err)
+					return Result{}, fmt.Errorf("failed to stage changes: %w", err)
 				}
 				hasStaged = true
 				handler.OnStep(StepStaging, StatusCompleted, "Changes staged")
@@ -119,7 +119,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	// Get commit message for branch name generation (if needed)
 	commitMessage, err = getCommitMessageForBranch(ctx, &opts, commitMessage)
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
 	// Determine branch
@@ -133,7 +133,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	}
 	branch, err := determineBranch(ctx, &opts, commitMessage, scopeToUse)
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 	branchName := branch.GetName()
 
@@ -141,7 +141,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	allBranches := eng.AllBranches()
 	for _, existingBranch := range allBranches {
 		if branch.Equal(existingBranch) {
-			return nil, fmt.Errorf("branch %s already exists", branchName)
+			return Result{}, fmt.Errorf("branch %s already exists", branchName)
 		}
 	}
 
@@ -149,7 +149,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	handler.OnStep(StepBranchCreate, StatusStarted, fmt.Sprintf("Creating branch %s", branchName))
 	if err := eng.CreateAndCheckoutBranch(ctx.Context, branch); err != nil {
 		handler.OnStep(StepBranchCreate, StatusFailed, err.Error())
-		return nil, fmt.Errorf("failed to create branch: %w", err)
+		return Result{}, fmt.Errorf("failed to create branch: %w", err)
 	}
 	handler.OnStep(StepBranchCreate, StatusCompleted, fmt.Sprintf("Created branch %s", branchName))
 
@@ -160,7 +160,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 			// Clean up branch on commit failure
 			_ = eng.DeleteBranch(ctx.Context, branch)
 			handler.OnStep(StepCommit, StatusFailed, err.Error())
-			return nil, fmt.Errorf("failed to commit: %w", err)
+			return Result{}, fmt.Errorf("failed to commit: %w", err)
 		}
 		handler.OnStep(StepCommit, StatusCompleted, "Changes committed")
 	} else {
@@ -182,7 +182,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 
 	// Create worktree if requested
 	var worktreePath string
-	var directive *actions.ShellDirective
 	if opts.Worktree {
 		handler.OnStep(StepWorktree, StatusStarted, "Creating worktree")
 		// Checkout back to trunk first so we can create the worktree for the branch
@@ -197,12 +196,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 			// Clean up branch on worktree failure
 			_ = eng.DeleteBranch(ctx.Context, branch)
 			handler.OnStep(StepWorktree, StatusFailed, err.Error())
-			return nil, fmt.Errorf("failed to create worktree: %w", err)
+			return Result{}, fmt.Errorf("failed to create worktree: %w", err)
 		}
 		handler.OnStep(StepWorktree, StatusCompleted, fmt.Sprintf("Created worktree at %s", worktreePath))
 		out.Info("Created worktree at %s", worktreePath)
-		// Set directive for CLI to emit (instead of emitting directly)
-		directive = &actions.ShellDirective{CDPath: worktreePath}
 	}
 
 	// Set scope: use provided scope if given, otherwise let it inherit from parent naturally
@@ -239,16 +236,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) (*Result, error) {
 	}
 
 	// Build result
-	result := &Result{
+	result := Result{
 		BranchName:   branchName,
 		ParentBranch: currentBranch,
 		HasCommit:    hasStaged,
 		WorktreePath: worktreePath,
-		Directive:    directive,
 	}
 
 	// Complete the operation
-	handler.Complete(*result)
+	handler.Complete(result)
 
 	return result, nil
 }

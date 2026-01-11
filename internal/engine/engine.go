@@ -38,6 +38,9 @@ type SyncManager interface {
 	RestackBranches(ctx context.Context, branches []Branch) (RestackBatchResult, error)
 	ContinueRebase(ctx context.Context, branchName string, rebasedBranchBase string) (ContinueRebaseResult, error)
 	Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RestackResult, error)
+
+	// Validation
+	ValidateRebases(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error)
 }
 
 // StackRewriter provides operations for modifying commit history and branch structure

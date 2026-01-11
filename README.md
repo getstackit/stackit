@@ -243,6 +243,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | `stackit merge` | Merge approved PRs and clean up merged branches |
 | `stackit reorder` | Interactively reorder branches in your stack |
 | `stackit move` | Rebase a branch (and its children) onto a new parent |
+| `stackit pluck` | Extract a single branch from a stack (reparents children to grandparent) |
 
 ### Integrations
 | Command | Description |

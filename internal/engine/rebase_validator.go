@@ -51,17 +51,28 @@ func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*
 		NewSHAs: make(map[string]string),
 	}
 
-	// Track the rebased SHAs so subsequent rebases can use them
-	// (since we're not updating branch refs, we need to track manually)
-	rebasedSHAs := make(map[string]string)
+	// Track rebased SHAs so subsequent rebases can use them.
+	// We track both branch name -> new SHA and old SHA -> new SHA mappings
+	// because callers may pass either branch names or resolved SHAs in NewParent.
+	rebasedByName := make(map[string]string) // branch name -> new SHA
+	rebasedBySHA := make(map[string]string)  // old SHA -> new SHA
 
 	// Execute each rebase in sequence using dry-run mode
 	for _, spec := range specs {
-		// Use the rebased SHA if we already processed this branch's parent
+		// Check if NewParent refers to a branch we already rebased.
+		// This handles chained rebases where child branches depend on their parent's new position.
 		newParent := spec.NewParent
-		if rebased, ok := rebasedSHAs[spec.NewParent]; ok {
+
+		// First check by branch name (if caller passed a name)
+		if rebased, ok := rebasedByName[spec.NewParent]; ok {
+			newParent = rebased
+		} else if rebased, ok := rebasedBySHA[spec.NewParent]; ok {
+			// Then check by old SHA (if caller resolved to SHA before calling)
 			newParent = rebased
 		}
+
+		// Get the branch's current SHA before rebasing (to track old SHA -> new SHA)
+		oldBranchSHA, _ := wtGit.GetRevision(spec.Branch)
 
 		rebaseResult, newSHA, err := dryRunRebase(ctx, wtGit, spec.Branch, newParent, spec.OldUpstream)
 		if err != nil || rebaseResult == git.RebaseConflict {
@@ -83,7 +94,10 @@ func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*
 
 		// Record the resulting SHA for both our result and for subsequent rebases
 		result.NewSHAs[spec.Branch] = newSHA
-		rebasedSHAs[spec.Branch] = newSHA
+		rebasedByName[spec.Branch] = newSHA
+		if oldBranchSHA != "" {
+			rebasedBySHA[oldBranchSHA] = newSHA
+		}
 	}
 
 	return result, nil

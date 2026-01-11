@@ -192,6 +192,52 @@ func TestValidateRebases(t *testing.T) {
 		require.Empty(t, result.NewSHAs["branch2"])
 	})
 
+	t.Run("uses rebased SHA for chained descendants when caller passes SHAs", func(t *testing.T) {
+		// This test verifies that when specs use SHAs (not branch names) for NewParent,
+		// the validator correctly substitutes the rebased SHA for subsequent rebases.
+		// This is critical for move operations where descendants depend on parent's new position.
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+				"branch2": "branch1",
+			})
+
+		// Add a commit to main that will cause branch1 to have a different SHA after rebase
+		s.Checkout("main").
+			Commit("main update")
+
+		// Get SHAs (this is what move.go does - resolves to SHAs before validation)
+		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
+		branch1OldSHA, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
+		branch1OldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+
+		// Build specs using SHAs (not branch names) - mimicking what move.go does
+		specs := []engine.RebaseSpec{
+			{
+				Branch:      "branch1",
+				NewParent:   mainRev,
+				OldUpstream: branch1OldBase,
+			},
+			{
+				Branch:      "branch2",
+				NewParent:   branch1OldSHA, // Using branch1's OLD SHA
+				OldUpstream: branch1OldSHA,
+			},
+		}
+
+		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		require.NoError(t, err)
+		require.True(t, result.Success)
+
+		// Both branches should have new SHAs
+		require.NotEmpty(t, result.NewSHAs["branch1"])
+		require.NotEmpty(t, result.NewSHAs["branch2"])
+
+		// branch1's new SHA should be different from old (it was rebased)
+		require.NotEqual(t, branch1OldSHA, result.NewSHAs["branch1"])
+	})
+
 	t.Run("does not modify actual branch refs", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).

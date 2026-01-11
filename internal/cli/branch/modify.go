@@ -26,7 +26,7 @@ func NewModifyCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "modify",
-		Aliases: []string{"m"},
+		Aliases: []string{},
 		Short:   "Modify the current branch by amending its commit or creating a new commit",
 		Long: `Modify the current branch by amending its commit or creating a new commit.
 

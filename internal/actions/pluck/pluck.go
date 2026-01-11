@@ -101,12 +101,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("cannot pluck branch onto itself")
 	}
 
-	// Get source's children (they will be reparented to grandparent)
-	children := graph.Range(sourceBranch, engine.StackRange{
-		RecursiveChildren: false, // Only direct children
-		IncludeCurrent:    false,
-		RecursiveParents:  false,
-	})
+	// Get source's direct children (they will be reparented to grandparent)
+	children := graph.ChildBranches(sourceBranch)
 
 	// Get all descendants (for cycle detection)
 	descendants := graph.Range(sourceBranch, engine.StackRange{
@@ -189,8 +185,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Children: rebase onto grandparent (source's old parent)
 	for _, child := range children {
+		// Get the old upstream from metadata, falling back to source revision if unavailable
 		childOldUpstream := ""
-		if meta, err := eng.Git().ReadMetadata(child.GetName()); err == nil && meta.ParentBranchRevision != nil {
+		if meta, metaErr := eng.Git().ReadMetadata(child.GetName()); metaErr == nil && meta.ParentBranchRevision != nil {
 			childOldUpstream = *meta.ParentBranchRevision
 		}
 		if childOldUpstream == "" {
@@ -263,8 +260,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Restore old divergence point if valid
 	if sourceOldParentRev != "" {
-		if isAncestor, _ := eng.Git().IsAncestor(sourceOldParentRev, source); isAncestor {
-			_ = eng.UpdateParentRevision(source, sourceOldParentRev)
+		isAncestor, ancestorErr := eng.Git().IsAncestor(sourceOldParentRev, source)
+		if ancestorErr != nil {
+			out.Debug("Failed to check if %s is ancestor of %s: %v", sourceOldParentRev, source, ancestorErr)
+		} else if isAncestor {
+			if updateErr := eng.UpdateParentRevision(source, sourceOldParentRev); updateErr != nil {
+				out.Debug("Failed to update parent revision for %s: %v", source, updateErr)
+			}
 		}
 	}
 

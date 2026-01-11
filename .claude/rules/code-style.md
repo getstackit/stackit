@@ -4,6 +4,7 @@
 
 - Clarity and simplicity over cleverness
 - No backwards compatibility concerns unless specified
+- Do not leave code unimplemented, it is better to leave a TODO
 
 ## Go Code Style
 

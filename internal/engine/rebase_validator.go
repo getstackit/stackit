@@ -93,8 +93,11 @@ func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*
 // This allows testing if a rebase would succeed without modifying the repository.
 // Returns the rebase result, the new SHA (if successful), and any error.
 func dryRunRebase(ctx context.Context, g git.Runner, branchName, upstream, oldUpstream string) (git.RebaseResult, string, error) {
-	// Perform rebase in detached HEAD mode (branchName~0 detaches from the branch)
-	// This is the same as the normal Rebase function, but we DON'T update the branch ref
+	// Perform rebase in detached HEAD mode using branchName~0.
+	// The ~0 suffix resolves to the same commit as branchName but tells git to check out
+	// the commit directly (detached HEAD) rather than the branch ref. This means the rebase
+	// results stay on the detached HEAD and the actual branch ref remains unchanged,
+	// keeping the main repository unmodified during validation.
 	_, err := g.RunGitCommandWithContext(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
 	if err != nil {
 		if g.IsRebaseInProgress(ctx) {

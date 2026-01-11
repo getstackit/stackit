@@ -118,12 +118,18 @@ func (h *InteractivePluckHandler) PromptConfirmPluck(preview pluck.Preview) (boo
 
 	h.splog.Newline()
 	h.splog.Info("This will:")
-	h.splog.Info("  1. Reparent %d children to %s",
-		len(preview.Children),
-		style.ColorBranchName(preview.ChildNewParent, false))
-	h.splog.Info("  2. Move %s to %s",
-		style.ColorBranchName(preview.SourceBranch, true),
-		style.ColorBranchName(preview.NewParent, false))
+	if len(preview.Children) > 0 {
+		h.splog.Info("  1. Reparent %d children to %s",
+			len(preview.Children),
+			style.ColorBranchName(preview.ChildNewParent, false))
+		h.splog.Info("  2. Move %s to %s",
+			style.ColorBranchName(preview.SourceBranch, true),
+			style.ColorBranchName(preview.NewParent, false))
+	} else {
+		h.splog.Info("  1. Move %s to %s",
+			style.ColorBranchName(preview.SourceBranch, true),
+			style.ColorBranchName(preview.NewParent, false))
+	}
 	h.splog.Newline()
 
 	return tui.PromptConfirm("Proceed with pluck?", true)

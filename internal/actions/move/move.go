@@ -176,15 +176,83 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	// Start handler with branch info (oldParentName computed earlier for preview)
-	handler.Start(source, oldParentName, onto)
-
 	// Capture old divergence point to preserve it after reparenting
 	// This ensures we only move the commits that belong to this branch.
 	var oldParentRev string
 	if meta, err := eng.Git().ReadMetadata(source); err == nil && meta.ParentBranchRevision != nil {
 		oldParentRev = *meta.ParentBranchRevision
 	}
+
+	// Build rebase specs for validation
+	// We need to validate that all rebases will succeed before modifying any state
+	rebaseSpecs := make([]engine.RebaseSpec, 0, len(descendants))
+
+	// Get the target parent's revision for the source branch rebase
+	ontoRev, err := eng.GetRevision(ontoBranch)
+	if err != nil {
+		return fmt.Errorf("failed to get revision for %s: %w", onto, err)
+	}
+
+	// Source branch: rebase onto new parent
+	sourceOldUpstream := oldParentRev
+	if sourceOldUpstream == "" {
+		// Fallback to current parent's revision
+		if oldParent != nil {
+			sourceOldUpstream, _ = eng.GetRevision(*oldParent)
+		} else {
+			sourceOldUpstream, _ = eng.GetRevision(eng.Trunk())
+		}
+	}
+	rebaseSpecs = append(rebaseSpecs, engine.RebaseSpec{
+		Branch:      source,
+		NewParent:   ontoRev,
+		OldUpstream: sourceOldUpstream,
+	})
+
+	// For descendants, each will be rebased onto its parent (which is part of the moving stack)
+	// Since these are topologically ordered, each parent will be rebased before its children
+	sortedDescendants := eng.SortBranchesTopologically(descendants)
+	for _, d := range sortedDescendants {
+		if d.GetName() == source {
+			continue // Already handled above
+		}
+		parent := d.GetParent()
+		if parent == nil {
+			continue
+		}
+		parentRev, _ := eng.GetRevision(*parent)
+
+		// Get the old upstream from metadata
+		dOldUpstream := ""
+		if meta, err := eng.Git().ReadMetadata(d.GetName()); err == nil && meta.ParentBranchRevision != nil {
+			dOldUpstream = *meta.ParentBranchRevision
+		}
+		if dOldUpstream == "" {
+			dOldUpstream = parentRev // Fallback
+		}
+
+		rebaseSpecs = append(rebaseSpecs, engine.RebaseSpec{
+			Branch:      d.GetName(),
+			NewParent:   parentRev,
+			OldUpstream: dOldUpstream,
+		})
+	}
+
+	// Validate rebases in a temporary worktree before modifying any state
+	handler.OnStep(StepValidating, StatusStarted, "Validating rebases...")
+	validation, err := eng.ValidateRebases(gctx, rebaseSpecs)
+	if err != nil {
+		handler.OnStep(StepValidating, StatusFailed, err.Error())
+		return fmt.Errorf("failed to validate rebases: %w", err)
+	}
+	if !validation.Success {
+		handler.OnStep(StepValidating, StatusFailed, validation.ErrorMessage)
+		return fmt.Errorf("move would cause conflicts: %s on branch %s", validation.ErrorMessage, validation.FailedBranch)
+	}
+	handler.OnStep(StepValidating, StatusCompleted, "Validation passed")
+
+	// Start handler with branch info (oldParentName computed earlier for preview)
+	handler.Start(source, oldParentName, onto)
 
 	// Update parent in engine
 	if err := eng.SetParent(gctx, sourceBranch, ontoBranch); err != nil {

@@ -1,52 +1,27 @@
 package split
 
 import (
-	"github.com/charmbracelet/lipgloss"
-
 	"stackit.dev/stackit/internal/tui/style"
 )
 
-// Styles contains styling for the split component
+// Styles contains styling for the split component using shared style types
 type Styles struct {
-	Title       lipgloss.Style
-	Subtitle    lipgloss.Style
-	Selected    lipgloss.Style
-	Unselected  lipgloss.Style
-	Cursor      lipgloss.Style
-	Description lipgloss.Style
-	Error       lipgloss.Style
-	Success     lipgloss.Style
-	Hint        lipgloss.Style
-	StatusIcons style.StatusIcons
-	Common      style.CommonStyles
-	Status      style.StatusStyles
+	Header    style.HeaderStyles
+	Selection style.SelectionStyles
+	Status    style.StatusStyles
+	Common    style.CommonStyles
+	Layout    style.LayoutStyles
+	Icons     style.StatusIcons
 }
 
 // DefaultStyles returns the default styles for the split component
 func DefaultStyles() Styles {
 	return Styles{
-		Title: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("205")),
-		Subtitle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")),
-		Selected: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("2")),
-		Unselected: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("243")),
-		Cursor: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("205")),
-		Description: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")),
-		Error: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("1")),
-		Success: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("2")),
-		Hint: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("243")),
-		StatusIcons: style.DefaultStatusIcons(),
-		Common:      style.DefaultCommonStyles(),
-		Status:      style.DefaultStatusStyles(),
+		Header:    style.DefaultHeaderStyles(),
+		Selection: style.DefaultSelectionStyles(),
+		Status:    style.DefaultStatusStyles(),
+		Common:    style.DefaultCommonStyles(),
+		Layout:    style.DefaultLayoutStyles(),
+		Icons:     style.DefaultStatusIcons(),
 	}
 }

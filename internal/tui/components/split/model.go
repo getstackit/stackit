@@ -8,13 +8,13 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/git"
 	"stackit.dev/stackit/internal/tui"
 	"stackit.dev/stackit/internal/tui/components/tree"
 	"stackit.dev/stackit/internal/tui/core"
+	"stackit.dev/stackit/internal/tui/style"
 )
 
 // State represents the main state of the split wizard
@@ -60,14 +60,11 @@ type Model struct {
 	subState SubState
 
 	// UI components
-	help          help.Model
-	branchInput   textinput.Model
-	hunkSelector  *tui.HunkSelectorModel
-	typeKeys      typeSelectKeys
-	directionKeys directionSelectKeys
-	branchKeys    branchNameKeys
-	confirmKeys   confirmKeys
-	styles        Styles
+	help         help.Model
+	branchInput  textinput.Model
+	hunkSelector *tui.HunkSelectorModel
+	keys         KeyMap
+	styles       Styles
 
 	// Type selection state
 	availableTypes []TypeChoice
@@ -105,15 +102,12 @@ func NewModel(cfg Config) *Model {
 	ti.Width = 40
 
 	m := &Model{
-		config:        cfg,
-		help:          help.New(),
-		branchInput:   ti,
-		typeKeys:      defaultTypeSelectKeys,
-		directionKeys: defaultDirectionSelectKeys,
-		branchKeys:    defaultBranchNameKeys,
-		confirmKeys:   defaultConfirmKeys,
-		styles:        DefaultStyles(),
-		direction:     DirectionBelow, // Default
+		config:      cfg,
+		help:        help.New(),
+		branchInput: ti,
+		keys:        DefaultKeyMap,
+		styles:      DefaultStyles(),
+		direction:   DirectionBelow, // Default
 	}
 
 	// Determine initial state based on preselected values
@@ -143,7 +137,7 @@ func NewModel(cfg Config) *Model {
 // Init implements tea.Model
 func (m *Model) Init() tea.Cmd {
 	m.SignalReady()
-	return nil
+	return m.InitSpinner()
 }
 
 // Update implements tea.Model
@@ -273,24 +267,24 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // updateSelectingType handles input during type selection
 func (m *Model) updateSelectingType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.typeKeys.Up):
+	case key.Matches(msg, m.keys.Up):
 		m.typeCursor = max(0, m.typeCursor-1)
 		// Skip unavailable options
 		for m.typeCursor > 0 && !m.availableTypes[m.typeCursor].Available {
 			m.typeCursor--
 		}
-	case key.Matches(msg, m.typeKeys.Down):
+	case key.Matches(msg, m.keys.Down):
 		m.typeCursor = min(len(m.availableTypes)-1, m.typeCursor+1)
 		// Skip unavailable options
 		for m.typeCursor < len(m.availableTypes)-1 && !m.availableTypes[m.typeCursor].Available {
 			m.typeCursor++
 		}
-	case key.Matches(msg, m.typeKeys.Select):
+	case key.Matches(msg, m.keys.Select):
 		if m.typeCursor < len(m.availableTypes) && m.availableTypes[m.typeCursor].Available {
 			m.result.Style = m.availableTypes[m.typeCursor].Style
 			m.state = StateSelectingDirection
 		}
-	case key.Matches(msg, m.typeKeys.Cancel):
+	case key.Matches(msg, m.keys.Cancel):
 		m.state = StateCanceled
 		m.result.Canceled = true
 		return m, tea.Quit
@@ -301,15 +295,15 @@ func (m *Model) updateSelectingType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // updateSelectingDirection handles input during direction selection
 func (m *Model) updateSelectingDirection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.directionKeys.Up):
+	case key.Matches(msg, m.keys.Up):
 		m.direction = DirectionAbove
-	case key.Matches(msg, m.directionKeys.Down):
+	case key.Matches(msg, m.keys.Down):
 		m.direction = DirectionBelow
-	case key.Matches(msg, m.directionKeys.Select):
+	case key.Matches(msg, m.keys.Select):
 		m.result.Direction = m.direction
 		m.state = StateHunkLoop
 		m.subState = SubStateSelectingHunks
-	case key.Matches(msg, m.directionKeys.Cancel):
+	case key.Matches(msg, m.keys.Cancel):
 		m.state = StateCanceled
 		m.result.Canceled = true
 		return m, tea.Quit
@@ -333,7 +327,7 @@ func (m *Model) updateHunkLoop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // updateBranchNameInput handles branch name text input
 func (m *Model) updateBranchNameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.branchKeys.Submit):
+	case key.Matches(msg, m.keys.Submit):
 		name := m.branchInput.Value()
 		if name == "" {
 			name = m.defaultBranchName
@@ -347,7 +341,7 @@ func (m *Model) updateBranchNameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.sessionNames = append(m.sessionNames, name)
 		m.subState = SubStatePromptEditMessage
 		return m, nil
-	case key.Matches(msg, m.branchKeys.Cancel):
+	case key.Matches(msg, m.keys.Cancel):
 		m.state = StateCanceled
 		m.result.Canceled = true
 		return m, tea.Quit
@@ -361,15 +355,15 @@ func (m *Model) updateBranchNameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // updateEditMessagePrompt handles the edit message yes/no prompt
 func (m *Model) updateEditMessagePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.confirmKeys.Yes):
+	case key.Matches(msg, m.keys.Yes):
 		m.wantsEditMessage = true
 		m.subState = SubStateEditingMessage
 		return m, func() tea.Msg { return EditorRequestMsg{DefaultMessage: m.commitMessage} }
-	case key.Matches(msg, m.confirmKeys.No):
+	case key.Matches(msg, m.keys.No):
 		m.wantsEditMessage = false
 		m.subState = SubStateCreatingBranch
 		return m, nil
-	case key.Matches(msg, m.confirmKeys.Cancel):
+	case key.Matches(msg, m.keys.Cancel):
 		m.state = StateCanceled
 		m.result.Canceled = true
 		return m, tea.Quit
@@ -380,14 +374,14 @@ func (m *Model) updateEditMessagePrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // updateRetryPrompt handles the retry yes/no prompt when no changes were staged
 func (m *Model) updateRetryPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.confirmKeys.Yes):
+	case key.Matches(msg, m.keys.Yes):
 		m.subState = SubStateSelectingHunks
 		return m, nil
-	case key.Matches(msg, m.confirmKeys.No):
+	case key.Matches(msg, m.keys.No):
 		m.state = StateCanceled
 		m.result.Canceled = true
 		return m, tea.Quit
-	case key.Matches(msg, m.confirmKeys.Cancel):
+	case key.Matches(msg, m.keys.Cancel):
 		m.state = StateCanceled
 		m.result.Canceled = true
 		return m, tea.Quit
@@ -437,39 +431,39 @@ func (m *Model) View() string {
 func (m *Model) viewSelectingType() string {
 	var sb strings.Builder
 
-	sb.WriteString(m.styles.Title.Render("How would you like to split this branch?"))
+	sb.WriteString(m.styles.Header.Title.Render("How would you like to split this branch?"))
 	sb.WriteString("\n\n")
 
 	for i, choice := range m.availableTypes {
 		cursor := "  "
 		if i == m.typeCursor {
-			cursor = m.styles.Cursor.Render("> ")
+			cursor = m.styles.Selection.Cursor.Render("> ")
 		}
 
 		label := choice.Label
-		desc := m.styles.Description.Render(" - " + choice.Description)
+		desc := m.styles.Common.Dim.Render(" - " + choice.Description)
 
 		if !choice.Available {
-			label = m.styles.Unselected.Render(label)
-			desc = m.styles.Unselected.Render(" (not available)")
+			label = m.styles.Selection.Unselected.Render(label)
+			desc = m.styles.Selection.Unselected.Render(" (not available)")
 		} else if i == m.typeCursor {
-			label = m.styles.Cursor.Render(label)
+			label = m.styles.Selection.Cursor.Render(label)
 		}
 
 		sb.WriteString(cursor + label + desc + "\n")
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(m.help.View(m.typeKeys))
+	sb.WriteString(m.help.View(navigationKeyMap{m.keys}))
 
-	return lipgloss.NewStyle().Margin(1, 2).Render(sb.String())
+	return m.styles.Layout.Container.Render(sb.String())
 }
 
 // viewSelectingDirection renders the direction selection screen
 func (m *Model) viewSelectingDirection() string {
 	var sb strings.Builder
 
-	sb.WriteString(m.styles.Title.Render("Where should the new branch be placed?"))
+	sb.WriteString(m.styles.Header.Title.Render("Where should the new branch be placed?"))
 	sb.WriteString("\n\n")
 
 	// Direction options
@@ -480,9 +474,9 @@ func (m *Model) viewSelectingDirection() string {
 	sb.WriteString(m.renderStackTree())
 	sb.WriteString("\n\n")
 
-	sb.WriteString(m.help.View(m.directionKeys))
+	sb.WriteString(m.help.View(navigationKeyMap{m.keys}))
 
-	return lipgloss.NewStyle().Margin(1, 2).Render(sb.String())
+	return m.styles.Layout.Container.Render(sb.String())
 }
 
 // renderDirectionOptions renders the up/down direction selection
@@ -491,19 +485,19 @@ func (m *Model) renderDirectionOptions() string {
 
 	// Above option
 	if m.direction == DirectionAbove {
-		sb.WriteString(m.styles.Cursor.Render("▸ Above"))
-		sb.WriteString(m.styles.Description.Render(" - Insert as child of current"))
+		sb.WriteString(m.styles.Selection.Cursor.Render("▸ Above"))
+		sb.WriteString(m.styles.Common.Dim.Render(" - Insert as child of current"))
 	} else {
-		sb.WriteString(m.styles.Unselected.Render("  Above - Insert as child of current"))
+		sb.WriteString(m.styles.Selection.Unselected.Render("  Above - Insert as child of current"))
 	}
 	sb.WriteString("\n")
 
 	// Below option
 	if m.direction == DirectionBelow {
-		sb.WriteString(m.styles.Cursor.Render("▸ Below"))
-		sb.WriteString(m.styles.Description.Render(" - Insert between parent and current"))
+		sb.WriteString(m.styles.Selection.Cursor.Render("▸ Below"))
+		sb.WriteString(m.styles.Common.Dim.Render(" - Insert between parent and current"))
 	} else {
-		sb.WriteString(m.styles.Unselected.Render("  Below - Insert between parent and current"))
+		sb.WriteString(m.styles.Selection.Unselected.Render("  Below - Insert between parent and current"))
 	}
 	sb.WriteString("\n")
 
@@ -548,7 +542,7 @@ func (m *Model) renderStackTree() string {
 	lines := renderer.RenderStack(virtualTree.Trunk(), opts)
 
 	// Style the new branch line with green color
-	insertStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10"))
+	insertStyle := style.InsertStyle()
 	for i, line := range lines {
 		if strings.Contains(line, newBranchPlaceholder) {
 			lines[i] = strings.Replace(line, newBranchPlaceholder, insertStyle.Render(newBranchPlaceholder), 1)
@@ -563,67 +557,68 @@ func (m *Model) viewHunkLoop() string {
 	var sb strings.Builder
 
 	// Header showing progress
-	sb.WriteString(m.styles.Title.Render(fmt.Sprintf("Split Branch - Branch %d", len(m.createdBranches)+1)))
+	sb.WriteString(m.styles.Header.Title.Render(fmt.Sprintf("Split Branch - Branch %d", len(m.createdBranches)+1)))
 	sb.WriteString("\n\n")
 
 	switch m.subState {
 	case SubStateSelectingHunks:
 		sb.WriteString("Select hunks to stage for the next branch...\n")
-		sb.WriteString(m.styles.Hint.Render("(Hunks will be shown in full-screen selector)"))
+		sb.WriteString(m.styles.Common.Subtle.Render("(Hunks will be shown in full-screen selector)"))
 
 	case SubStateEnteringBranchName:
 		sb.WriteString("Enter branch name:\n\n")
 		sb.WriteString(m.branchInput.View())
 		if m.errorMessage != "" {
 			sb.WriteString("\n")
-			sb.WriteString(m.styles.Error.Render("Error: " + m.errorMessage))
+			sb.WriteString(m.styles.Status.Error.Render("Error: " + m.errorMessage))
 		}
 		sb.WriteString("\n\n")
-		sb.WriteString(m.help.View(m.branchKeys))
+		sb.WriteString(m.help.View(submitKeyMap{m.keys}))
 
 	case SubStatePromptEditMessage:
 		sb.WriteString("Edit commit message?\n\n")
-		sb.WriteString(m.styles.Hint.Render("Press 'y' for yes, 'n' for no"))
+		sb.WriteString(m.styles.Common.Subtle.Render("Press 'y' for yes, 'n' for no"))
 		sb.WriteString("\n\n")
-		sb.WriteString(m.help.View(m.confirmKeys))
+		sb.WriteString(m.help.View(confirmKeyMap{m.keys}))
 
 	case SubStateEditingMessage:
 		sb.WriteString("Opening editor...")
 
 	case SubStateCreatingBranch:
+		sb.WriteString(m.Spinner.View() + " ")
 		sb.WriteString(m.styles.Status.Active.Render("Creating branch..."))
 
 	case SubStateWaitingForRetry:
-		sb.WriteString(m.styles.Error.Render("No changes were staged."))
+		sb.WriteString(m.styles.Status.Error.Render("No changes were staged."))
 		sb.WriteString("\n\nWould you like to try again?\n")
-		sb.WriteString(m.styles.Hint.Render("Press 'y' to retry, 'n' to cancel"))
+		sb.WriteString(m.styles.Common.Subtle.Render("Press 'y' to retry, 'n' to cancel"))
 		sb.WriteString("\n\n")
-		sb.WriteString(m.help.View(m.confirmKeys))
+		sb.WriteString(m.help.View(confirmKeyMap{m.keys}))
 	}
 
 	// Show created branches so far
 	if len(m.createdBranches) > 0 {
 		sb.WriteString("\n\n")
-		sb.WriteString(m.styles.Subtitle.Render("Created branches:"))
+		sb.WriteString(m.styles.Header.Subtitle.Render("Created branches:"))
 		sb.WriteString("\n")
 		for _, name := range m.createdBranches {
-			sb.WriteString(m.styles.Success.Render("  ✓ " + name))
+			sb.WriteString(m.styles.Status.Done.Render("  " + m.styles.Icons.Done + " " + name))
 			sb.WriteString("\n")
 		}
 	}
 
-	return lipgloss.NewStyle().Margin(1, 2).Render(sb.String())
+	return m.styles.Layout.Container.Render(sb.String())
 }
 
 // viewError renders an error state
 func (m *Model) viewError() string {
 	var sb strings.Builder
 
-	sb.WriteString(m.styles.Error.Render("Error: " + m.errorMessage))
+	sb.WriteString(m.styles.Status.Error.Render("Error: " + m.errorMessage))
 	sb.WriteString("\n\n")
 	sb.WriteString("Press any key to exit...")
 
-	return lipgloss.NewStyle().Margin(1, 2).Render(sb.String())
+	return m.styles.Layout.Container.Render(sb.String())
 }
 
 // buildStackPath builds the path from trunk to current branch

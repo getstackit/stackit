@@ -248,6 +248,7 @@ func runAgentInstall(runner git.Runner, local, force bool, version string, out i
 		"stack-plan.md",
 		"stack-restack.md",
 		"stack-review.md",
+		"stack-split.md",
 		"stack-status.md",
 		"stack-submit.md",
 		"stack-sync.md",
@@ -315,6 +316,7 @@ func runAgentInstall(runner git.Runner, local, force bool, version string, out i
 	_, _ = fmt.Fprintln(out, "  /stack-plan    - Plan and create stack from uncommitted changes")
 	_, _ = fmt.Fprintln(out, "  /stack-restack - Rebase all branches in stack")
 	_, _ = fmt.Fprintln(out, "  /stack-review  - Apply PR review comments and mark resolved")
+	_, _ = fmt.Fprintln(out, "  /stack-split   - Split changes between current and new child branch")
 	_, _ = fmt.Fprintln(out, "  /stack-status  - View stack state and health")
 	_, _ = fmt.Fprintln(out, "  /stack-submit  - Submit PRs with generated descriptions")
 	_, _ = fmt.Fprintln(out, "  /stack-sync    - Sync with trunk and cleanup")

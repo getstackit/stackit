@@ -1,7 +1,9 @@
 package integration
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -477,4 +479,214 @@ func verifyFilesNotExist(t *testing.T, sh *TestShell, filenames []string) {
 		require.False(t, strings.Contains(outputStr, filename),
 			"expected file %s to NOT exist on current branch", filename)
 	}
+}
+
+// =============================================================================
+// Split by Hunk with Patch File Tests
+//
+// These tests cover the --patch flag for non-interactive hunk-based splitting.
+// =============================================================================
+
+func TestSplitByHunkWithPatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("split by hunk with patch file extracts hunks to child branch", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create a file with many lines to enable multi-hunk changes
+		sh.Write("init", "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n").
+			Run("create setup -m 'Setup file with multiple lines'")
+
+		// Create feature branch that adds lines at TOP and BOTTOM (two separate hunks)
+		sh.Write("init", "top_addition\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nbottom_addition\n").
+			Run("create feature -m 'Add top and bottom'")
+
+		// Create a patch that extracts only the bottom addition
+		// The actual diff will have two hunks: one for top and one for bottom
+		// We extract only the bottom hunk
+		patchContent := `diff --git a/init_test.txt b/init_test.txt
+--- a/init_test.txt
++++ b/init_test.txt
+@@ -8,3 +8,4 @@
+ line8
+ line9
+ line10
++bottom_addition
+`
+		patchFile := filepath.Join(tmpDir, "extract.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		// Run split with patch file
+		sh.Run("split --by-hunk --above --patch " + patchFile + " --name child -m 'Extract bottom addition'")
+
+		// Verify the child branch was created
+		sh.HasBranches("main", "setup", "feature", "child")
+
+		// Verify we're on the child branch
+		sh.OnBranch("child")
+
+		// Verify parent relationship
+		sh.ExpectBranchParent("child", "feature")
+
+		// Verify child has bottom_addition
+		sh.Checkout("child").
+			Git("show HEAD:init_test.txt").
+			OutputContains("bottom_addition")
+
+		// Verify feature still has top_addition (the remaining change)
+		sh.Checkout("feature").
+			Git("show HEAD:init_test.txt").
+			OutputContains("top_addition").
+			OutputNotContains("bottom_addition")
+	})
+
+	t.Run("split by hunk with patch file uses default branch name when not provided", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create a file with many lines to enable multi-hunk changes
+		sh.Write("init", "aaa\nbbb\nccc\nddd\neee\nfff\nggg\nhhh\niii\njjj\n").
+			Run("create setup -m 'Setup file'")
+
+		// Create feature branch that adds lines at TOP and BOTTOM
+		sh.Write("init", "top_change\naaa\nbbb\nccc\nddd\neee\nfff\nggg\nhhh\niii\njjj\nbottom_change\n").
+			Run("create feature -m 'Add lines'")
+
+		// Create patch to extract bottom addition (leaving top on feature)
+		patchContent := `diff --git a/init_test.txt b/init_test.txt
+--- a/init_test.txt
++++ b/init_test.txt
+@@ -8,3 +8,4 @@
+ hhh
+ iii
+ jjj
++bottom_change
+`
+		patchFile := filepath.Join(tmpDir, "extract.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		// Run split without --name
+		sh.Run("split --by-hunk --above --patch " + patchFile + " -m 'Extract line'")
+
+		// Should have generated default name
+		sh.HasBranches("main", "setup", "feature", "feature_split")
+	})
+
+	t.Run("split by hunk with patch fails on empty patch", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create a file with multiple lines
+		sh.Write("init", "line1\nline2\nline3\n").
+			Run("create setup -m 'Setup file'")
+
+		// Modify file to add more lines
+		sh.Write("init", "line1\nline2\nline3\nline4\nline5\n").
+			Run("create feature -m 'Add lines'")
+
+		patchFile := filepath.Join(tmpDir, "empty.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(""), 0644))
+
+		sh.RunExpectError("split --by-hunk --above --patch " + patchFile).
+			OutputContains("no hunks")
+	})
+
+	t.Run("split by hunk with patch fails on nonexistent patch file", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+
+		// Setup: Create a file with multiple lines
+		sh.Write("init", "line1\nline2\nline3\n").
+			Run("create setup -m 'Setup file'")
+
+		// Modify file to add more lines
+		sh.Write("init", "line1\nline2\nline3\nline4\nline5\n").
+			Run("create feature -m 'Add lines'")
+
+		sh.RunExpectError("split --by-hunk --above --patch /nonexistent/path.patch").
+			OutputContains("failed to read patch file")
+	})
+
+	t.Run("split by hunk with patch fails when branch already exists", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create a file with many lines
+		sh.Write("init", "alpha\nbeta\ngamma\ndelta\nepsilon\nzeta\neta\ntheta\niota\nkappa\n").
+			Run("create setup -m 'Setup file'")
+
+		// Create feature branch that adds lines at TOP and BOTTOM
+		sh.Write("init", "top_item\nalpha\nbeta\ngamma\ndelta\nepsilon\nzeta\neta\ntheta\niota\nkappa\nbottom_item\n").
+			Run("create feature -m 'Add lines'")
+
+		// Create the branch name we'll try to use
+		sh.Git("branch existing-branch")
+
+		// Patch for init_test.txt - extract bottom addition
+		patchContent := `diff --git a/init_test.txt b/init_test.txt
+--- a/init_test.txt
++++ b/init_test.txt
+@@ -8,3 +8,4 @@
+ theta
+ iota
+ kappa
++bottom_item
+`
+		patchFile := filepath.Join(tmpDir, "extract.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		sh.RunExpectError("split --by-hunk --above --patch " + patchFile + " --name existing-branch").
+			OutputContains("already exists")
+	})
+
+	t.Run("split by hunk with patch reparents existing children", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create a file with many lines
+		sh.Write("init", "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\n").
+			Run("create setup -m 'Setup file'")
+
+		// Create parent branch with top and bottom additions
+		sh.Write("init", "top_new\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\nbottom_new\n").
+			Run("create parent -m 'Add lines to parent'")
+
+		// Create child branch with more modifications
+		sh.Write("init", "top_new\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\nbottom_new\nchild_extra\n").
+			Run("create original-child -m 'Add child content'")
+
+		// Go back to parent and split
+		sh.Checkout("parent")
+
+		// Patch for init_test.txt - extract bottom addition (leaving top on parent)
+		patchContent := `diff --git a/init_test.txt b/init_test.txt
+--- a/init_test.txt
++++ b/init_test.txt
+@@ -8,3 +8,4 @@
+ eight
+ nine
+ ten
++bottom_new
+`
+		patchFile := filepath.Join(tmpDir, "extract.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		sh.Run("split --by-hunk --above --patch " + patchFile + " --name extracted -m 'Extract bottom'")
+
+		// Verify the new child was created between parent and original-child
+		sh.ExpectBranchParent("extracted", "parent")
+		sh.ExpectBranchParent("original-child", "extracted")
+	})
 }

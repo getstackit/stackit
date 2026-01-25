@@ -29,14 +29,13 @@ $ARGUMENTS
 
 ## Safety Model
 
-This workflow uses a **backup branch** strategy to ensure commits are never lost:
+This workflow uses **stackit's undo system** to ensure commits are never lost:
 
-1. **Before execution**: Current branch state is saved to a backup branch
-2. **During execution**: Branch is reset and patches are selectively applied
-3. **On success**: Backup branch is deleted (changes now live in split branches)
-4. **On failure**: Backup branch remains - user can recover original state
+1. **Before execution**: Stackit automatically takes a snapshot of the current state
+2. **During execution**: The split command handles all git operations safely
+3. **On failure**: Use `command stackit undo` to restore the previous state
 
-Recovery is always: `git checkout <backup-branch>`
+Recovery is always: `command stackit undo`
 
 ## Instructions
 
@@ -201,38 +200,35 @@ Use `AskUserQuestion` to get approval:
 
 **If user selects "Dry run"**, show the exact commands:
 ```
-Dry Run - Setup
-===============
-ORIGINAL_BRANCH=<current-branch>
-PARENT_BRANCH=<parent-branch>
-BACKUP_BRANCH="stack-split-backup-$(date +%s)"
+Dry Run - Generate Extract Patch
+================================
+# Write patch file with hunks to extract to child branch
+# (using Write tool to create /tmp/extract.patch)
 
-# Create backup of current state
-git branch "$BACKUP_BRANCH"
+Dry Run - Execute Split
+=======================
+command stackit split --by-hunk --above \
+    --patch /tmp/extract.patch \
+    --name "<child-branch-name>" \
+    --message "<child-commit-message>"
 
-Dry Run - Generate Patches
-==========================
-git diff "$PARENT_BRANCH"..HEAD > /tmp/full.patch
-# Parse and create:
-#   /tmp/keep.patch - hunks to keep on current branch
-#   /tmp/extract.patch - hunks to extract to child
+# This command internally:
+# 1. Takes snapshot (for undo support)
+# 2. Resets branch to expose changes as unstaged
+# 3. Stages hunks from patch file
+# 4. Commits unstaged changes to current branch
+# 5. Creates child branch with staged changes
+# 6. Reparents any existing children
 
-Dry Run - Reset and Apply Keep Patch
-====================================
-git reset --hard "$PARENT_BRANCH"
-git apply --index /tmp/keep.patch
-git commit -m "<keep-message>"
+Dry Run - Verify Build
+======================
+<check-command>
+git checkout <current-branch>
 <check-command>
 
-Dry Run - Create Child with Extract Patch
-=========================================
-git apply --index /tmp/extract.patch
-echo "<extract-message>" | command stackit create <child-name> --no-interactive
-<check-command>
-
-Dry Run - Cleanup (on success)
-==============================
-git branch -D "$BACKUP_BRANCH"
+Recovery (if needed)
+====================
+command stackit undo
 ```
 
 Then ask again whether to execute or cancel.
@@ -243,99 +239,65 @@ Then ask again whether to execute or cancel.
 
 ### Phase 5: Execute Split
 
-#### Step 0: Create Backup Branch
+#### Step 1: Generate Extract Patch
 
-**This is the critical safety step.** Before modifying anything, save the current branch state:
+Write the extract patch to a temporary file using the Write tool. This patch contains the hunks to move to the child branch.
 
-```bash
-# Record branch names
-ORIGINAL_BRANCH=$(git branch --show-current)
-PARENT_BRANCH=<parent-from-stackit-metadata>
-
-# Create backup branch at current HEAD
-BACKUP_BRANCH="stack-split-backup-$(date +%s)"
-git branch "$BACKUP_BRANCH"
-
-# Record the backup commit SHA
-BACKUP_COMMIT=$(git rev-parse HEAD)
-```
-
-Display the recovery reference:
-```
-Starting Split
-==============
-Current branch: <current-branch>
-Parent branch: <parent-branch>
-Child branch: <child-branch>
-
-Safety Backup Created
----------------------
-Backup branch: <backup-branch-name>
-Backup commit: <commit-sha>
-
-RECOVERY: If anything goes wrong, run:
-  git reset --hard <backup-branch-name>
-
-Your original commits are safely preserved. Proceeding...
-```
-
-#### Step 1: Generate Patches
-
-Generate the full diff and create separate patch files:
-
-```bash
-# Generate full diff from parent to current HEAD
-git diff "$PARENT_BRANCH"..HEAD > /tmp/full.patch
-```
-
-**Parse the patch into hunks and create two patch files:**
-- `/tmp/keep.patch` - hunks to keep on current branch
-- `/tmp/extract.patch` - hunks to extract to child branch
-
-Write these files using the Write tool. Each patch file must:
+**The extract patch must be in valid unified diff format:**
 - Include proper `diff --git` headers
 - Include `--- a/file` and `+++ b/file` lines
 - Include `@@ ... @@` hunk headers
-- Be a valid patch that `git apply` can consume
 
-**Handling new files**: A new file is a single hunk. Include the entire file in either keep.patch or extract.patch.
+Example:
+```diff
+diff --git a/src/utils.go b/src/utils.go
+--- a/src/utils.go
++++ b/src/utils.go
+@@ -8,3 +8,8 @@ func existingFunc() {
+ }
 
-**Handling deleted files**: A deleted file is a single hunk. Include the deletion in the appropriate patch.
-
-#### Step 2: Reset and Apply Keep Patch
-
-```bash
-# Reset current branch to parent (removes all commits)
-git reset --hard "$PARENT_BRANCH"
-
-# Apply the keep patch
-git apply --index /tmp/keep.patch
-
-# Verify files are staged
-git diff --cached --stat
-
-# Commit the kept changes
-git commit -m "<keep-message>"
-
-# Run build verification
-<check-command>
++func newHelper() {
++    // This hunk is being extracted
++}
 ```
 
-**On build failure**: Report and offer options (see Error Handling).
+**Handling new files**: A new file is a single hunk. Include the entire file in extract.patch.
 
-#### Step 3: Create Child Branch with Extract Patch
+**Handling deleted files**: A deleted file is a single hunk. Include the deletion if it should be in the child branch.
+
+Write the patch to `/tmp/extract.patch` using the Write tool.
+
+#### Step 2: Run Split Command
+
+Use the new `--patch` flag to execute the split:
 
 ```bash
-# Apply the extract patch
-git apply --index /tmp/extract.patch
+command stackit split --by-hunk --above \
+    --patch /tmp/extract.patch \
+    --name "<child-branch-name>" \
+    --message "<child-commit-message>"
+```
 
-# Verify files are staged
-git diff --cached --stat
+This command:
+1. Takes a snapshot for undo support
+2. Resets the branch to expose all changes
+3. Stages the hunks specified in the patch file
+4. Keeps remaining hunks on the current branch
+5. Creates the child branch with extracted hunks
+6. Reparents any existing children to the new child branch
 
-# Create the child branch
-echo "<extract-message>" | command stackit create <child-name> --no-interactive
+**Note**: Stackit handles all git operations safely. No manual git reset or backup branch is needed.
 
-# Run build verification
+#### Step 3: Verify Build
+
+After the split completes:
+
+```bash
+# Verify the child branch builds
+<check-command>
+
+# Switch to parent and verify it also builds
+git checkout <current-branch>
 <check-command>
 ```
 
@@ -343,12 +305,9 @@ echo "<extract-message>" | command stackit create <child-name> --no-interactive
 
 ### Phase 6: Report Completion
 
-After both branches are updated successfully:
+After both branches are verified successfully:
 
 ```bash
-# Delete the backup branch (no longer needed)
-git branch -D "$BACKUP_BRANCH"
-
 # Show the final stack
 command stackit log --no-interactive
 ```
@@ -366,10 +325,10 @@ Child branch [<child-branch>]:
   - <extract-message>
   - A hunks, B files
 
-Backup branch deleted (changes now live in split branches).
-
 Stack structure:
 <stackit log output>
+
+Recovery: If anything is wrong, run `command stackit undo` to restore.
 
 Next steps:
 - Run /stack-submit to create/update PRs
@@ -384,28 +343,20 @@ Next steps:
 | Phase 1 | No commits on branch | Inform and exit - nothing to split |
 | Phase 2 | All hunks same category | Inform user - splitting not needed |
 | Phase 4 | User cancels | Exit - no changes made |
-| Phase 5 | Patch apply fails | `git reset --hard <backup-branch>` |
-| Phase 5 | Keep build fails | Offer: Continue/Rollback |
-| Phase 5 | Extract build fails | Offer: Continue/Rollback |
+| Phase 5 | Split command fails | `command stackit undo` |
+| Phase 5 | Build fails | Offer: Continue/Rollback |
 
 **On any execution failure**, use `AskUserQuestion`:
 - Header: "Build failed"
 - Question: "The build failed on <branch>. How would you like to proceed?"
 - Options:
   - "Continue anyway" - I've fixed it or will fix later
-  - "Rollback" - Restore from backup and exit
+  - "Rollback" - Restore previous state and exit
   - "Stop here" - Keep current state, I'll handle manually
 
 **If user selects "Rollback"**:
 ```bash
-# Reset to backup state
-git reset --hard "$BACKUP_BRANCH"
-
-# Delete the child branch if created
-git branch -D <child-name> 2>/dev/null || true
-
-# Delete backup branch
-git branch -D "$BACKUP_BRANCH"
+command stackit undo
 ```
 
 Then report: "Rolled back to original state. Your commits are restored."
@@ -452,7 +403,6 @@ new file mode 100644
 - Put the same hunk in both patches
 - Use `git commit` directly for the child branch - use `command stackit create`
 - Skip build verification (unless user explicitly says to)
-- Delete the backup branch until BOTH branches are successfully created and verified
 - Propose child branch names that already exist
 - Split hunks that are interdependent (function + its usages) without asking
 

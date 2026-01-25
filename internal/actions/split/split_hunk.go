@@ -2,6 +2,8 @@ package split
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -14,6 +16,14 @@ import (
 	"stackit.dev/stackit/internal/output"
 	"stackit.dev/stackit/internal/tui/style"
 )
+
+// hunkOptions contains options for hunk-based splitting
+type hunkOptions struct {
+	useGitAddP bool   // Use git add -p instead of TUI selector
+	patchFile  string // Path to patch file for non-interactive mode (use "-" for stdin)
+	name       string // Branch name for the new branch
+	message    string // Commit message for the new branch
+}
 
 // splitByHunkEngine is a minimal interface needed for splitting by hunk
 type splitByHunkEngine interface {
@@ -39,10 +49,11 @@ type splitByHunkEngine interface {
 //  4. Remove staged changes from current branch
 //  5. Existing children of current become children of new branch
 //
-// When useGitAddP is true, uses git add -p instead of the TUI hunk selector.
-func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, direction Direction, useGitAddP bool) error {
+// When opts.useGitAddP is true, uses git add -p instead of the TUI hunk selector.
+// When opts.patchFile is set, uses the patch file instead of interactive selection.
+func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, direction Direction, opts hunkOptions) error {
 	if direction == DirectionAbove {
-		return splitByHunkAbove(ctx, branchToSplit, eng, splog, handler, useGitAddP)
+		return splitByHunkAbove(ctx, branchToSplit, eng, splog, handler, opts)
 	}
 
 	gitCtx := ctx.Context
@@ -124,7 +135,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		}
 
 		// Stage hunks using either git add -p or the TUI selector
-		if useGitAddP {
+		if opts.useGitAddP {
 			// Use git's built-in interactive staging
 			if err := eng.StagePatch(gitCtx); err != nil {
 				return cancelWithRestore()
@@ -292,8 +303,9 @@ func generateDefaultBranchName(originalName string, existingNames []string) stri
 //  7. Pop stash and commit → child branch content
 //  8. Re-parent existing children to the new child
 //
-// When useGitAddP is true, uses git add -p instead of the TUI hunk selector.
-func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, useGitAddP bool) error {
+// When opts.useGitAddP is true, uses git add -p instead of the TUI hunk selector.
+// When opts.patchFile is set, uses the patch file instead of interactive selection.
+func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, opts hunkOptions) error {
 	gitCtx := ctx.Context
 
 	// Get existing children before we modify anything
@@ -319,15 +331,15 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		existingBranchNames[b.GetName()] = true
 	}
 
-	// Show instructions
-	splog.Info("Splitting %s - extracting changes to a new child branch.", style.ColorBranchName(branchToSplit.GetName(), true))
-	splog.Info("")
-	splog.Info("Stage the changes you want to EXTRACT to the new child branch.")
-	splog.Info("The remaining changes will stay on %s.", style.ColorBranchName(branchToSplit.GetName(), true))
-	splog.Info("")
-
-	// Show remaining changes via handler
-	handler.OnStep(StepStagingHunks, StatusStarted, "Stage changes to extract")
+	// Show instructions (only for interactive mode)
+	if handler != nil {
+		splog.Info("Splitting %s - extracting changes to a new child branch.", style.ColorBranchName(branchToSplit.GetName(), true))
+		splog.Info("")
+		splog.Info("Stage the changes you want to EXTRACT to the new child branch.")
+		splog.Info("The remaining changes will stay on %s.", style.ColorBranchName(branchToSplit.GetName(), true))
+		splog.Info("")
+		handler.OnStep(StepStagingHunks, StatusStarted, "Stage changes to extract")
+	}
 
 	unstagedDiff, err := eng.GetUnstagedDiff(gitCtx)
 	if err != nil {
@@ -347,14 +359,41 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		return fmt.Errorf("no changes to extract")
 	}
 
-	// Stage hunks using either git add -p or the TUI selector
-	if useGitAddP {
+	// Stage hunks using: patch file, git add -p, or the TUI selector
+	switch {
+	case opts.patchFile != "":
+		// Non-interactive mode: read hunks from patch file
+		patchContent, err := readPatchFile(opts.patchFile)
+		if err != nil {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+			return fmt.Errorf("failed to read patch file: %w", err)
+		}
+
+		patchHunks, err := git.ParseDiffOutput(patchContent)
+		if err != nil {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+			return fmt.Errorf("failed to parse patch: %w", err)
+		}
+
+		if len(patchHunks) == 0 {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+			return fmt.Errorf("patch file contains no hunks")
+		}
+
+		// Stage the hunks from the patch
+		if err := eng.StageHunks(gitCtx, patchHunks); err != nil {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+			return fmt.Errorf("failed to stage hunks from patch: %w", err)
+		}
+
+	case opts.useGitAddP:
 		// Use git's built-in interactive staging
 		if err := eng.StagePatch(gitCtx); err != nil {
 			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return sterrors.ErrCanceled
 		}
-	} else {
+
+	default:
 		// Use the TUI hunk selector (user selects what to EXTRACT)
 		selectedHunks, err := handler.PromptSelectHunks(hunks)
 		if err != nil {
@@ -393,39 +432,64 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		return fmt.Errorf("all changes were staged - nothing would remain on %s", branchToSplit.GetName())
 	}
 
-	handler.OnStep(StepStagingHunks, StatusCompleted, "Changes staged for extraction")
-
-	// Prompt for child branch name
-	handler.OnStep(StepBranchName, StatusStarted, "Enter child branch name")
-
-	defaultName := generateDefaultBranchName(branchToSplit.GetName(), []string{})
-	childBranchName, err := handler.PromptBranchName(defaultName, []string{}, existingBranchNames, branchToSplit.GetName())
-	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-		return err
+	if handler != nil {
+		handler.OnStep(StepStagingHunks, StatusCompleted, "Changes staged for extraction")
 	}
 
-	handler.OnStep(StepBranchName, StatusCompleted, childBranchName)
+	// Determine child branch name and commit message
+	var childBranchName string
+	var childCommitMessage string
 
-	// Prompt for commit message for the child branch
-	handler.OnStep(StepCommitMessage, StatusStarted, "Enter commit message for extracted changes")
+	if opts.patchFile != "" {
+		// Non-interactive mode: use provided name/message or generate defaults
+		childBranchName = opts.name
+		if childBranchName == "" {
+			childBranchName = generateDefaultBranchName(branchToSplit.GetName(), []string{})
+		}
+		// Validate branch name doesn't already exist
+		if existingBranchNames[childBranchName] {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+			return fmt.Errorf("branch %q already exists", childBranchName)
+		}
 
-	editMessage, err := handler.PromptEditCommitMessage()
-	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-		return err
-	}
+		childCommitMessage = opts.message
+		if childCommitMessage == "" {
+			childCommitMessage = defaultCommitMessage
+		}
+	} else {
+		// Interactive mode: prompt for branch name and commit message
+		handler.OnStep(StepBranchName, StatusStarted, "Enter child branch name")
 
-	childCommitMessage := defaultCommitMessage
-	if editMessage {
-		childCommitMessage, err = handler.PromptCommitMessage(defaultCommitMessage)
+		defaultName := generateDefaultBranchName(branchToSplit.GetName(), []string{})
+		var err error
+		childBranchName, err = handler.PromptBranchName(defaultName, []string{}, existingBranchNames, branchToSplit.GetName())
 		if err != nil {
 			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return err
 		}
-	}
 
-	handler.OnStep(StepCommitMessage, StatusCompleted, "Commit message set")
+		handler.OnStep(StepBranchName, StatusCompleted, childBranchName)
+
+		// Prompt for commit message for the child branch
+		handler.OnStep(StepCommitMessage, StatusStarted, "Enter commit message for extracted changes")
+
+		editMessage, err := handler.PromptEditCommitMessage()
+		if err != nil {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+			return err
+		}
+
+		childCommitMessage = defaultCommitMessage
+		if editMessage {
+			childCommitMessage, err = handler.PromptCommitMessage(defaultCommitMessage)
+			if err != nil {
+				_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+				return err
+			}
+		}
+
+		handler.OnStep(StepCommitMessage, StatusCompleted, "Commit message set")
+	}
 
 	// Stash only the staged changes (what we want to extract to child)
 	// Use a unique stash name with timestamp to prevent collision with previous operations
@@ -519,7 +583,9 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		return fmt.Errorf("failed to track child branch: %w", err)
 	}
 
-	handler.OnBranchCreated(childBranchName)
+	if handler != nil {
+		handler.OnBranchCreated(childBranchName)
+	}
 
 	// Re-parent existing children to the new child branch
 	for _, existingChildName := range existingChildren {
@@ -540,11 +606,30 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		}
 	}
 
-	handler.Complete(ActionResult{
-		OriginalBranch: branchToSplit.GetName(),
-		NewBranches:    []string{childBranchName},
-		Style:          StyleHunk,
-	})
+	if handler != nil {
+		handler.Complete(ActionResult{
+			OriginalBranch: branchToSplit.GetName(),
+			NewBranches:    []string{childBranchName},
+			Style:          StyleHunk,
+		})
+	}
 
 	return nil
+}
+
+// readPatchFile reads patch content from a file path or stdin.
+// If path is "-", reads from stdin.
+func readPatchFile(path string) (string, error) {
+	if path == "-" {
+		content, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		return string(content), nil
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }

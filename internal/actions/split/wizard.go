@@ -134,8 +134,10 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	// Execute the appropriate split based on style
 	switch style {
 	case StyleHunk:
-		useGitAddP := opts.HunkSelector == "git"
-		return splitByHunkWithHandler(ctx, *currentBranch, eng, out, handler, direction, useGitAddP)
+		hunkOpts := hunkOptions{
+			useGitAddP: opts.HunkSelector == "git",
+		}
+		return splitByHunkWithHandler(ctx, *currentBranch, eng, out, handler, direction, hunkOpts)
 	case StyleCommit, StyleFile:
 		// For now, these don't support the new wizard flow with direction
 		// Fall back to the existing implementation

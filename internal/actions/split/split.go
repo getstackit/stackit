@@ -46,6 +46,10 @@ type Options struct {
 	// HunkSelector specifies which hunk selection method to use ("tui" or "git").
 	// Only applies to StyleHunk. When "git", uses git add -p instead of the TUI selector.
 	HunkSelector string
+	// PatchFile specifies a patch file for non-interactive hunk selection.
+	// If set, hunks in the patch are staged directly without prompting.
+	// Use "-" to read from stdin.
+	PatchFile string
 }
 
 // Result contains the result of a split operation
@@ -165,18 +169,31 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	case StyleCommit:
 		result, err = splitByCommit(ctx, currentBranch.GetName(), eng, out, opts.BranchPattern)
 	case StyleHunk:
-		// Hunk split requires an interactive handler
-		interactiveHandler, isInteractive := handler.(InteractiveHandler)
-		if !isInteractive || !interactiveHandler.IsInteractive() {
-			return fmt.Errorf("hunk split requires interactive mode")
-		}
 		// Use provided direction or default to below
 		direction := opts.Direction
 		if direction == "" {
 			direction = DirectionBelow
 		}
-		useGitAddP := opts.HunkSelector == "git"
-		return splitByHunkWithHandler(ctx, *currentBranch, eng, out, interactiveHandler, direction, useGitAddP)
+
+		// Hunk options for the split
+		hunkOpts := hunkOptions{
+			useGitAddP: opts.HunkSelector == "git",
+			patchFile:  opts.PatchFile,
+			name:       opts.Name,
+			message:    opts.Message,
+		}
+
+		// If patch file is provided, we can run non-interactively
+		if opts.PatchFile != "" {
+			return splitByHunkWithHandler(ctx, *currentBranch, eng, out, nil, direction, hunkOpts)
+		}
+
+		// Interactive hunk split requires an interactive handler
+		interactiveHandler, isInteractive := handler.(InteractiveHandler)
+		if !isInteractive || !interactiveHandler.IsInteractive() {
+			return fmt.Errorf("hunk split requires interactive mode")
+		}
+		return splitByHunkWithHandler(ctx, *currentBranch, eng, out, interactiveHandler, direction, hunkOpts)
 	case StyleFile:
 		pathspecs := opts.Pathspecs
 		// If no pathspecs provided, prompt interactively

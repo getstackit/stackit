@@ -307,9 +307,11 @@ func generateDefaultBranchName(originalName string, existingNames []string) stri
 //  5. Stash staged changes
 //  6. Stage and commit remaining changes (these stay on branchToSplit)
 //  7. Update branchToSplit ref
-//  8. Create new parent branch at HEAD~1 (where patch content was committed)
-//  9. Track new parent branch with grandparent as its parent
-//  10. Update branchToSplit to have new parent as its parent
+//  8. Reset to original parent, pop stash, commit (new parent content)
+//  9. Create new parent branch at HEAD
+//  10. Track new parent branch with grandparent as its parent
+//  11. Update branchToSplit to have new parent as its parent
+//  12. Restack branchToSplit onto new parent
 func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, opts hunkOptions) error {
 	gitCtx := ctx.Context
 
@@ -437,12 +439,14 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	// Update branchToSplit to point to this commit (contains remaining changes)
 	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.GetName(), "HEAD"); err != nil {
 		cleanupStash()
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to update branch reference: %w", err)
 	}
 
 	// Reset to original parent to create the new parent branch
 	if err := eng.ResetHard(gitCtx, originalParent.GetName()); err != nil {
 		cleanupStash()
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to reset to original parent: %w", err)
 	}
 
@@ -749,6 +753,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	// Create the child branch at the current position
 	if err := eng.CreateBranch(gitCtx, childBranchName, "HEAD"); err != nil {
 		cleanupStash()
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to create child branch: %w", err)
 	}
 
@@ -756,6 +761,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	childBranch := eng.GetBranch(childBranchName)
 	if err := eng.CheckoutBranch(gitCtx, childBranch); err != nil {
 		cleanupStash()
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to checkout child branch: %w", err)
 	}
 
@@ -818,6 +824,9 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 			NewBranches:    []string{childBranchName},
 			Style:          StyleHunk,
 		})
+	} else {
+		// Non-interactive mode (patch file): print completion message
+		splog.Info("Created branch %s as child of %s", style.ColorBranchName(childBranchName, true), style.ColorBranchName(branchToSplit.GetName(), true))
 	}
 
 	return nil
@@ -827,6 +836,15 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 // If path is "-", reads from stdin.
 func readPatchFile(path string) (string, error) {
 	if path == "-" {
+		// Check if stdin is a terminal - if so, nothing is being piped
+		fi, err := os.Stdin.Stat()
+		if err != nil {
+			return "", fmt.Errorf("failed to stat stdin: %w", err)
+		}
+		if (fi.Mode() & os.ModeCharDevice) != 0 {
+			return "", fmt.Errorf("stdin is a terminal; pipe a patch file or use a file path instead of \"-\"")
+		}
+
 		content, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return "", fmt.Errorf("failed to read from stdin: %w", err)

@@ -844,4 +844,57 @@ just some random text
 		sh.RunExpectError("split --patch " + patchFile).
 			OutputContains("no hunks")
 	})
+
+	t.Run("split by hunk with multi-file patch extracts changes from multiple files", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create two files
+		sh.Write("file1", "file1_line1\nfile1_line2\nfile1_line3\n").
+			Write("file2", "file2_line1\nfile2_line2\nfile2_line3\n").
+			Run("create setup -m 'Setup two files'")
+
+		// Create feature branch that modifies both files
+		sh.Write("file1", "file1_line1\nfile1_modified\nfile1_line3\n").
+			Write("file2", "file2_line1\nfile2_modified\nfile2_line3\n").
+			Run("create feature -m 'Modify both files'")
+
+		// Create patch to extract only file2 changes to child
+		patchContent := `diff --git a/file2_test.txt b/file2_test.txt
+--- a/file2_test.txt
++++ b/file2_test.txt
+@@ -1,3 +1,3 @@
+ file2_line1
+-file2_line2
++file2_modified
+ file2_line3
+`
+		patchFile := filepath.Join(tmpDir, "extract.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		// Run split with patch file (--above extracts to child)
+		sh.Run("split --patch " + patchFile + " --above --name child -m 'Extract file2 changes'")
+
+		// Verify branches exist
+		sh.HasBranches("main", "setup", "feature", "child")
+
+		// Verify child has file2 changes
+		sh.Checkout("child").
+			Git("show HEAD:file2_test.txt").
+			OutputContains("file2_modified")
+
+		// Verify feature keeps file1 changes but not file2 changes
+		sh.Checkout("feature").
+			Git("show HEAD:file1_test.txt").
+			OutputContains("file1_modified")
+		sh.Git("show HEAD:file2_test.txt").
+			OutputContains("file2_line2").
+			OutputNotContains("file2_modified")
+	})
+
+	// NOTE: New file creation and file deletion patches are not currently supported
+	// due to limitations in git apply --cached and git stash push --staged.
+	// The --patch flag only supports modifications to existing files.
 }

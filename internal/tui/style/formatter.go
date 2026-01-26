@@ -226,6 +226,11 @@ func IconLocked() string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("🔒")
 }
 
+// IconInfo returns a blue dot for informational/low-priority items
+func IconInfo() string {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("4")).Render("●")
+}
+
 // ColorPRNumberByState colors PR number based on state
 func ColorPRNumberByState(prNumber int, state string, isDraft bool) string {
 	prefix := fmt.Sprintf("#%d", prNumber)

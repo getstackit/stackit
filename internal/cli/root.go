@@ -97,6 +97,7 @@ Commit:  ` + commit + `
 	rootCmd.AddCommand(branch.NewDeleteCmd())
 	rootCmd.AddCommand(newDoctorCmd())
 	rootCmd.AddCommand(navigation.NewDownCmd())
+	rootCmd.AddCommand(newHealthCmd())
 	rootCmd.AddCommand(branch.NewFoldCmd())
 	rootCmd.AddCommand(stack.NewForeachCmd())
 	rootCmd.AddCommand(branch.NewFreezeCmd())

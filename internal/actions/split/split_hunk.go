@@ -56,6 +56,11 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		return splitByHunkAbove(ctx, branchToSplit, eng, splog, handler, opts)
 	}
 
+	// Non-interactive patch mode for --below direction
+	if opts.patchFile != "" {
+		return splitByHunkBelowWithPatch(ctx, branchToSplit, eng, splog, opts)
+	}
+
 	gitCtx := ctx.Context
 
 	// Detach and reset branch changes
@@ -291,6 +296,205 @@ func generateDefaultBranchName(originalName string, existingNames []string) stri
 	return fmt.Sprintf("%s_split_%d", originalName, len(existingNames)+1)
 }
 
+// splitByHunkBelowWithPatch splits a branch by creating a new parent branch with hunks from a patch file.
+// This is the non-interactive version for --below direction.
+//
+// Algorithm:
+//  1. Get the original parent of branchToSplit
+//  2. Detach HEAD and soft reset to parent's tip (all changes unstaged)
+//  3. Read and parse hunks from patch file
+//  4. Stage hunks from patch (these go to new parent branch)
+//  5. Stash staged changes
+//  6. Stage and commit remaining changes (these stay on branchToSplit)
+//  7. Update branchToSplit ref
+//  8. Create new parent branch at HEAD~1 (where patch content was committed)
+//  9. Track new parent branch with grandparent as its parent
+//  10. Update branchToSplit to have new parent as its parent
+func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, opts hunkOptions) error {
+	gitCtx := ctx.Context
+
+	// Get the original parent before we modify anything
+	originalParent := branchToSplit.GetParent()
+	if originalParent == nil {
+		return fmt.Errorf("cannot split branch %s: it has no parent", branchToSplit.GetName())
+	}
+
+	// Get default commit message
+	commitMessages, err := branchToSplit.GetAllCommits(engine.CommitFormatMessage)
+	if err != nil {
+		return fmt.Errorf("failed to get commit messages: %w", err)
+	}
+	defaultCommitMessage := strings.Join(commitMessages, "\n\n")
+
+	// Build list of existing branch names for validation
+	existingBranchNames := make([]string, 0)
+	existingBranchMap := make(map[string]bool)
+	for _, b := range eng.AllBranches() {
+		existingBranchNames = append(existingBranchNames, b.GetName())
+		existingBranchMap[b.GetName()] = true
+	}
+
+	// Determine new parent branch name
+	newParentName := opts.name
+	if newParentName == "" {
+		newParentName = generateDefaultBranchName(branchToSplit.GetName(), existingBranchNames)
+	}
+	// Validate branch name doesn't already exist
+	if existingBranchMap[newParentName] {
+		return fmt.Errorf("branch %q already exists", newParentName)
+	}
+
+	// Determine commit message for new parent
+	newParentMessage := opts.message
+	if newParentMessage == "" {
+		newParentMessage = defaultCommitMessage
+	}
+
+	// Detach and reset branch changes (all changes become unstaged)
+	if err := eng.DetachAndResetBranchChanges(gitCtx, branchToSplit.GetName()); err != nil {
+		return fmt.Errorf("failed to detach and reset: %w", err)
+	}
+
+	// Read and parse patch file
+	patchContent, err := readPatchFile(opts.patchFile)
+	if err != nil {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("failed to read patch file %q: %w", opts.patchFile, err)
+	}
+
+	patchHunks, err := git.ParseDiffOutput(patchContent)
+	if err != nil {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("failed to parse patch file %q: %w", opts.patchFile, err)
+	}
+
+	if len(patchHunks) == 0 {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("patch file %q contains no hunks", opts.patchFile)
+	}
+
+	// Stage the hunks from the patch (these will go to the new parent branch)
+	if err := eng.StageHunks(gitCtx, patchHunks); err != nil {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("failed to stage hunks from patch file %q: %w", opts.patchFile, err)
+	}
+
+	// Check if anything was staged
+	hasStaged, err := eng.HasStagedChanges(gitCtx)
+	if err != nil {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("failed to check staged changes: %w", err)
+	}
+	if !hasStaged {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("no changes staged from patch file %q", opts.patchFile)
+	}
+
+	// Check if there are unstaged changes (to keep on branchToSplit)
+	hasUnstaged, err := eng.HasUnstagedChanges(gitCtx)
+	if err != nil {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("failed to check unstaged changes: %w", err)
+	}
+	if !hasUnstaged {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("all changes were staged from patch - nothing would remain on %s", branchToSplit.GetName())
+	}
+
+	// Stash the staged changes (these will become the new parent branch content)
+	stashName := fmt.Sprintf("stackit-split-below-parent-%d", time.Now().UnixNano())
+	_, err = eng.StashPushStaged(gitCtx, stashName)
+	if err != nil {
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("failed to stash staged changes: %w", err)
+	}
+
+	// Track stash state for cleanup
+	stashPopped := false
+	cleanupStash := func() {
+		if !stashPopped {
+			_ = eng.StashPop(gitCtx)
+			stashPopped = true
+		}
+	}
+
+	// Stage and commit remaining changes - these stay on branchToSplit
+	if err := eng.StageAll(gitCtx); err != nil {
+		cleanupStash()
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("failed to stage remaining changes: %w", err)
+	}
+
+	if err := eng.CommitWithOptions(gitCtx, git.CommitOptions{
+		Message:  defaultCommitMessage,
+		NoVerify: true,
+	}); err != nil {
+		cleanupStash()
+		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		return fmt.Errorf("failed to commit remaining changes: %w", err)
+	}
+
+	// Update branchToSplit to point to this commit (contains remaining changes)
+	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.GetName(), "HEAD"); err != nil {
+		cleanupStash()
+		return fmt.Errorf("failed to update branch reference: %w", err)
+	}
+
+	// Reset to original parent to create the new parent branch
+	if err := eng.ResetHard(gitCtx, originalParent.GetName()); err != nil {
+		cleanupStash()
+		return fmt.Errorf("failed to reset to original parent: %w", err)
+	}
+
+	// Pop the stash to get the parent branch changes
+	if err := eng.StashPop(gitCtx); err != nil {
+		return fmt.Errorf("failed to pop stash: %w. Recovery: run 'git stash pop' to restore changes", err)
+	}
+	stashPopped = true
+
+	// Stage and commit - this becomes the NEW PARENT branch content
+	if err := eng.StageAll(gitCtx); err != nil {
+		return fmt.Errorf("failed to stage parent branch changes: %w", err)
+	}
+
+	if err := eng.CommitWithOptions(gitCtx, git.CommitOptions{
+		Message:  newParentMessage,
+		NoVerify: true,
+	}); err != nil {
+		return fmt.Errorf("failed to commit parent branch changes: %w", err)
+	}
+
+	// Create the new parent branch at HEAD (contains patch hunks only)
+	if err := eng.CreateBranch(gitCtx, newParentName, "HEAD"); err != nil {
+		return fmt.Errorf("failed to create parent branch: %w", err)
+	}
+
+	// Track the new parent branch with originalParent as its parent
+	newParentBranch := eng.GetBranch(newParentName)
+	if err := eng.TrackBranch(gitCtx, newParentName, originalParent.GetName()); err != nil {
+		return fmt.Errorf("failed to track parent branch: %w", err)
+	}
+
+	// Update branchToSplit to have newParentBranch as its parent
+	if err := eng.SetParent(gitCtx, branchToSplit, newParentBranch); err != nil {
+		return fmt.Errorf("failed to update parent of %s: %w", branchToSplit.GetName(), err)
+	}
+
+	// Restack branchToSplit onto the new parent
+	if err := actions.RestackBranches(ctx, []engine.Branch{branchToSplit}); err != nil {
+		return fmt.Errorf("failed to restack %s: %w", branchToSplit.GetName(), err)
+	}
+
+	// Checkout branchToSplit (we end up on the original branch)
+	if err := eng.CheckoutBranch(gitCtx, branchToSplit); err != nil {
+		return fmt.Errorf("failed to checkout original branch: %w", err)
+	}
+
+	splog.Info("Created branch %s as parent of %s", style.ColorBranchName(newParentName, true), style.ColorBranchName(branchToSplit.GetName(), true))
+
+	return nil
+}
+
 // splitByHunkAbove splits a branch by creating a new child branch with extracted changes.
 //
 // Algorithm:
@@ -326,9 +530,11 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	defaultCommitMessage := strings.Join(commitMessages, "\n\n")
 
 	// Build list of existing branch names for validation
-	existingBranchNames := make(map[string]bool)
+	existingBranchNamesList := make([]string, 0)
+	existingBranchNamesMap := make(map[string]bool)
 	for _, b := range eng.AllBranches() {
-		existingBranchNames[b.GetName()] = true
+		existingBranchNamesList = append(existingBranchNamesList, b.GetName())
+		existingBranchNamesMap[b.GetName()] = true
 	}
 
 	// Show instructions (only for interactive mode)
@@ -366,24 +572,24 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		patchContent, err := readPatchFile(opts.patchFile)
 		if err != nil {
 			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-			return fmt.Errorf("failed to read patch file: %w", err)
+			return fmt.Errorf("failed to read patch file %q: %w", opts.patchFile, err)
 		}
 
 		patchHunks, err := git.ParseDiffOutput(patchContent)
 		if err != nil {
 			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-			return fmt.Errorf("failed to parse patch: %w", err)
+			return fmt.Errorf("failed to parse patch file %q: %w", opts.patchFile, err)
 		}
 
 		if len(patchHunks) == 0 {
 			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-			return fmt.Errorf("patch file contains no hunks")
+			return fmt.Errorf("patch file %q contains no hunks", opts.patchFile)
 		}
 
 		// Stage the hunks from the patch
 		if err := eng.StageHunks(gitCtx, patchHunks); err != nil {
 			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-			return fmt.Errorf("failed to stage hunks from patch: %w", err)
+			return fmt.Errorf("failed to stage hunks from patch file %q: %w", opts.patchFile, err)
 		}
 
 	case opts.useGitAddP:
@@ -444,10 +650,10 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		// Non-interactive mode: use provided name/message or generate defaults
 		childBranchName = opts.name
 		if childBranchName == "" {
-			childBranchName = generateDefaultBranchName(branchToSplit.GetName(), []string{})
+			childBranchName = generateDefaultBranchName(branchToSplit.GetName(), existingBranchNamesList)
 		}
 		// Validate branch name doesn't already exist
-		if existingBranchNames[childBranchName] {
+		if existingBranchNamesMap[childBranchName] {
 			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("branch %q already exists", childBranchName)
 		}
@@ -460,9 +666,9 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		// Interactive mode: prompt for branch name and commit message
 		handler.OnStep(StepBranchName, StatusStarted, "Enter child branch name")
 
-		defaultName := generateDefaultBranchName(branchToSplit.GetName(), []string{})
+		defaultName := generateDefaultBranchName(branchToSplit.GetName(), existingBranchNamesList)
 		var err error
-		childBranchName, err = handler.PromptBranchName(defaultName, []string{}, existingBranchNames, branchToSplit.GetName())
+		childBranchName, err = handler.PromptBranchName(defaultName, []string{}, existingBranchNamesMap, branchToSplit.GetName())
 		if err != nil {
 			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return err

@@ -1,17 +1,21 @@
 ---
-description: Split committed changes between current branch and a new child branch
+description: Split committed changes between current branch and a new branch (parent or child)
 allowed-tools: Bash(stackit:*), Bash(git:*), Read, Write, Glob, Grep, AskUserQuestion
 argument-hint: [check-command]
 ---
 
 # Stack Split
 
-Split the committed changes on the current branch between this branch (keep focused changes) and a new child branch (extract remainder). Supports **hunk-level** analysis for fine-grained splitting.
+Split the committed changes on the current branch between this branch and a new branch. Supports **hunk-level** analysis for fine-grained splitting.
+
+**Split directions:**
+- `--above` (upstack): Extract hunks to a NEW CHILD branch above current
+- `--below` (downstack, default): Extract hunks to a NEW PARENT branch below current
 
 **Key difference from related skills:**
 - `/stack-plan` - Creates N branches from **uncommitted** changes (from scratch)
 - `/stack-extract` - Extracts commits/files to sibling or parent branches
-- `/stack-split` - Binary split of **committed** changes: keep focused changes on current, extract rest to a NEW child branch above
+- `/stack-split` - Binary split of **committed** changes at hunk level
 
 **Primary objective: Never lose someone's work.**
 
@@ -103,13 +107,17 @@ Analyze the changes at the **hunk level**. A hunk is a contiguous block of chang
 - Changes essential to the branch's stated purpose
 - Related hunks (e.g., if a function definition stays, its usages should too)
 
-**Extract to child branch:**
+**Extract to new branch:**
 - Tangential improvements discovered while working
 - Refactoring not strictly necessary for the core feature
 - Documentation changes unrelated to the core feature
 - Infrastructure/config changes
 - New functionality that grew out of scope
 - Cleanup/formatting changes unrelated to the core work
+
+**Choosing direction:**
+- Use `--above` when the extracted changes logically come AFTER the core work (e.g., follow-up refactoring)
+- Use `--below` (default) when the extracted changes are prerequisites (e.g., infrastructure changes needed before the feature)
 
 **Present the proposal with hunk-level detail:**
 ```
@@ -269,13 +277,18 @@ Write the patch to `/tmp/extract.patch` using the Write tool.
 
 #### Step 2: Run Split Command
 
-Use the new `--patch` flag to execute the split:
+Use the `--patch` flag to execute the split:
 
 ```bash
-command stackit split --by-hunk --above \
-    --patch /tmp/extract.patch \
+# For --above (extract to child branch):
+command stackit split --patch /tmp/extract.patch --above \
     --name "<child-branch-name>" \
     --message "<child-commit-message>"
+
+# For --below (extract to parent branch, default):
+command stackit split --patch /tmp/extract.patch \
+    --name "<parent-branch-name>" \
+    --message "<parent-commit-message>"
 ```
 
 This command:

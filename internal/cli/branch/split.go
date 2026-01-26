@@ -46,7 +46,7 @@ Direction options for --by-hunk:
 
 Non-interactive mode (--patch):
   --patch <file>: Read hunks from a patch file instead of prompting interactively.
-                  Use "-" to read from stdin. Implies --by-hunk.
+                  Use "-" to read from stdin. Implies --by-hunk --below unless --above is specified.
 
 By default, --by-file creates a new PARENT branch, making the current branch
 a child of the split branch. Use --as-sibling to create an independent branch
@@ -57,7 +57,8 @@ Examples:
   stackit split --by-hunk                              # Skip type selection
   stackit split --by-hunk --below                      # Skip type and direction
   stackit split --by-hunk --above                      # Split upstack (child)
-  stackit split --by-hunk --above --patch extract.patch -n child -m "Extract feature"
+  stackit split --patch extract.patch -n parent -m "Extract to parent"  # Non-interactive (below)
+  stackit split --patch extract.patch --above -n child -m "Extract to child"  # Non-interactive (above)
   stackit split --by-file path/to/file.go             # Extract to parent branch
   stackit split --by-file path/to/file.go --as-sibling # Extract to sibling branch
   stackit split --by-commit --as-sibling              # Split commits as siblings`,
@@ -88,12 +89,15 @@ Examples:
 
 				// Determine direction
 				var direction split.Direction
-				if above && below {
+				switch {
+				case above && below:
 					return fmt.Errorf("cannot specify both --above and --below")
-				}
-				if above {
+				case above:
 					direction = split.DirectionAbove
-				} else if below {
+				case below:
+					direction = split.DirectionBelow
+				case patchFile != "":
+					// --patch defaults to --below if no direction specified
 					direction = split.DirectionBelow
 				}
 				// If direction is empty, wizard will prompt (for hunk mode)
@@ -167,7 +171,7 @@ Examples:
 	cmd.Flags().BoolVar(&below, "below", false, "Insert new branch below current (as parent, downstack)")
 
 	// Non-interactive hunk mode
-	cmd.Flags().StringVarP(&patchFile, "patch", "p", "", "Path to patch file specifying hunks to extract (implies --by-hunk, use \"-\" for stdin)")
+	cmd.Flags().StringVarP(&patchFile, "patch", "p", "", "Patch file specifying hunks to split (implies --by-hunk, defaults to --below, use \"-\" for stdin)")
 
 	// Add alternative long form names (these will be checked in RunE via cmd.Flags().Changed)
 	// Note: We can't bind the same variable twice, so we check for these flags manually

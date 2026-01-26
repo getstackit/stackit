@@ -689,4 +689,159 @@ func TestSplitByHunkWithPatch(t *testing.T) {
 		sh.ExpectBranchParent("extracted", "parent")
 		sh.ExpectBranchParent("original-child", "extracted")
 	})
+
+	t.Run("split by hunk with patch file defaults to below direction", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create a file with many lines
+		sh.Write("init", "aaa\nbbb\nccc\nddd\neee\nfff\nggg\nhhh\niii\njjj\n").
+			Run("create setup -m 'Setup file'")
+
+		// Create feature branch that adds lines at TOP and BOTTOM
+		sh.Write("init", "top_item\naaa\nbbb\nccc\nddd\neee\nfff\nggg\nhhh\niii\njjj\nbottom_item\n").
+			Run("create feature -m 'Add lines'")
+
+		// Patch extracts top addition to new PARENT branch (--below is default)
+		patchContent := `diff --git a/init_test.txt b/init_test.txt
+--- a/init_test.txt
++++ b/init_test.txt
+@@ -1,3 +1,4 @@
++top_item
+ aaa
+ bbb
+ ccc
+`
+		patchFile := filepath.Join(tmpDir, "extract.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		// Run split with --patch but NO direction flag (should default to --below)
+		sh.Run("split --patch " + patchFile + " --name parent-split -m 'Extract top'")
+
+		// Verify the new parent branch was created
+		sh.HasBranches("main", "setup", "feature", "parent-split")
+
+		// Verify parent-split is parent of feature (--below creates parent)
+		sh.ExpectBranchParent("feature", "parent-split")
+
+		// Verify parent-split has top_item but NOT bottom_item
+		sh.Checkout("parent-split").
+			Git("show HEAD:init_test.txt").
+			OutputContains("top_item").
+			OutputNotContains("bottom_item")
+
+		// Verify feature has BOTH top_item (inherited from parent-split) AND bottom_item (its own change)
+		// This is correct because feature is rebased on parent-split
+		sh.Checkout("feature").
+			Git("show HEAD:init_test.txt").
+			OutputContains("bottom_item").
+			OutputContains("top_item")
+
+		// Verify commit diff only introduces bottom_item (not the whole file)
+		sh.Git("show HEAD --stat").
+			OutputContains("init_test.txt")
+	})
+
+	t.Run("split by hunk with patch file below direction creates parent branch", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create a file with many lines
+		sh.Write("init", "111\n222\n333\n444\n555\n666\n777\n888\n999\n000\n").
+			Run("create setup -m 'Setup file'")
+
+		// Create feature branch that adds lines at TOP and BOTTOM
+		sh.Write("init", "top_line\n111\n222\n333\n444\n555\n666\n777\n888\n999\n000\nbottom_line\n").
+			Run("create feature -m 'Add lines'")
+
+		// Patch extracts bottom addition to new PARENT branch
+		patchContent := `diff --git a/init_test.txt b/init_test.txt
+--- a/init_test.txt
++++ b/init_test.txt
+@@ -8,3 +8,4 @@
+ 888
+ 999
+ 000
++bottom_line
+`
+		patchFile := filepath.Join(tmpDir, "extract.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		// Run split with explicit --below
+		sh.Run("split --patch " + patchFile + " --below --name parent-branch -m 'Extract bottom to parent'")
+
+		// Verify parent-branch is parent of feature
+		sh.ExpectBranchParent("feature", "parent-branch")
+
+		// Verify parent-branch has bottom_line (the patch content goes to parent) but NOT top_line
+		sh.Checkout("parent-branch").
+			Git("show HEAD:init_test.txt").
+			OutputContains("bottom_line").
+			OutputNotContains("top_line")
+
+		// Verify feature has BOTH: bottom_line (from parent-branch) AND top_line (its own change)
+		sh.Checkout("feature").
+			Git("show HEAD:init_test.txt").
+			OutputContains("top_line").
+			OutputContains("bottom_line")
+	})
+
+	t.Run("split by hunk with patch fails when all changes staged", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup: Create a simple file
+		sh.Write("init", "original\n").
+			Run("create setup -m 'Setup file'")
+
+		// Create feature branch with only one hunk
+		sh.Write("init", "modified\n").
+			Run("create feature -m 'Modify file'")
+
+		// Patch that includes ALL the changes
+		patchContent := `diff --git a/init_test.txt b/init_test.txt
+--- a/init_test.txt
++++ b/init_test.txt
+@@ -1 +1 @@
+-original
++modified
+`
+		patchFile := filepath.Join(tmpDir, "all.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		// Should fail because all changes would be staged, leaving nothing on feature
+		sh.RunExpectError("split --patch " + patchFile + " --above").
+			OutputContains("nothing would remain")
+	})
+
+	t.Run("split by hunk with malformed patch fails gracefully", func(t *testing.T) {
+		t.Parallel()
+
+		sh := NewTestShellInProcess(t)
+		tmpDir := t.TempDir()
+
+		// Setup
+		sh.Write("init", "content\n").
+			Run("create setup -m 'Setup'")
+
+		sh.Write("init", "modified content\n").
+			Run("create feature -m 'Modify'")
+
+		// Malformed patch (invalid diff header)
+		patchContent := `this is not a valid patch
+just some random text
+`
+		patchFile := filepath.Join(tmpDir, "bad.patch")
+		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
+
+		// Should fail with no hunks error (parser returns empty when invalid)
+		sh.RunExpectError("split --patch " + patchFile).
+			OutputContains("no hunks")
+	})
 }

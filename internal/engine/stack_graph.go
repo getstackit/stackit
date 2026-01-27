@@ -156,9 +156,29 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 	return graph
 }
 
+// GetNode returns the StackNode for a branch by name, or nil if not found.
+func (g *StackGraph) GetNode(branchName string) *StackNode {
+	return g.Nodes[branchName]
+}
+
 // Node returns the StackNode for the given branch.
 func (g *StackGraph) Node(branch Branch) *StackNode {
 	return g.Nodes[branch.GetName()]
+}
+
+// CurrentBranch returns the name of the currently checked-out branch.
+func (g *StackGraph) CurrentBranch() string {
+	return g.Current
+}
+
+// TrunkName returns the trunk/main branch name.
+func (g *StackGraph) TrunkName() string {
+	return g.Trunk
+}
+
+// RootBranches returns all root branch names (branches with no parent in the graph).
+func (g *StackGraph) RootBranches() []string {
+	return g.Roots
 }
 
 // Children returns the child branch names for the given branch.

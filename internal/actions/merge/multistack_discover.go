@@ -27,14 +27,14 @@ func DiscoverStacks(eng engine.BranchReader) ([]MultiStackInfo, error) {
 	trunk := eng.Trunk()
 
 	// Get the trunk node to find its direct children (stack roots)
-	trunkNode := graph.Nodes[trunk.GetName()]
+	trunkNode := graph.GetNode(trunk.GetName())
 	if trunkNode == nil {
 		return nil, nil // No trunk found
 	}
 
 	stacks := make([]MultiStackInfo, 0, len(trunkNode.Children))
 	for _, rootName := range trunkNode.Children {
-		rootNode := graph.Nodes[rootName]
+		rootNode := graph.GetNode(rootName)
 		if rootNode == nil {
 			continue
 		}

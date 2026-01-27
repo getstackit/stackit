@@ -632,16 +632,16 @@ func (m *Model) buildStackPath() {
 
 	var path []string
 	current := currentName
-	for current != "" && current != graph.Trunk {
+	for current != "" && current != graph.TrunkName() {
 		path = append([]string{current}, path...)
-		node := graph.Nodes[current]
+		node := graph.GetNode(current)
 		if node == nil {
 			break
 		}
 		current = graph.Parent(node.Branch)
 	}
 	// Add trunk at the beginning
-	path = append([]string{graph.Trunk}, path...)
+	path = append([]string{graph.TrunkName()}, path...)
 	m.stackPath = path
 }
 

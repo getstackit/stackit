@@ -124,7 +124,7 @@ func (e *engineImpl) groupSpecsByDepth(specs []RebaseSpec) []validationLevel {
 	// Group specs by their depth in the stack
 	specsByDepth := make(map[int][]RebaseSpec)
 	for _, spec := range specs {
-		node := graph.Nodes[spec.Branch]
+		node := graph.GetNode(spec.Branch)
 		if node == nil {
 			// Branch not in graph, treat as depth 0
 			specsByDepth[0] = append(specsByDepth[0], spec)

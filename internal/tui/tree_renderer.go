@@ -40,17 +40,17 @@ type graphData struct {
 
 // CurrentBranch returns the currently checked out branch.
 func (d *graphData) CurrentBranch() string {
-	return d.graph.Current
+	return d.graph.CurrentBranch()
 }
 
 // Trunk returns the trunk/main branch name.
 func (d *graphData) Trunk() string {
-	return d.graph.Trunk
+	return d.graph.TrunkName()
 }
 
 // Children returns the child branches of the given branch.
 func (d *graphData) Children(branchName string) []string {
-	node := d.graph.Nodes[branchName]
+	node := d.graph.GetNode(branchName)
 	if node == nil {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (d *graphData) Children(branchName string) []string {
 
 // Parent returns the parent branch of the given branch.
 func (d *graphData) Parent(branchName string) string {
-	node := d.graph.Nodes[branchName]
+	node := d.graph.GetNode(branchName)
 	if node == nil {
 		return ""
 	}
@@ -68,12 +68,12 @@ func (d *graphData) Parent(branchName string) string {
 
 // IsTrunk returns whether the given branch is the trunk branch.
 func (d *graphData) IsTrunk(branchName string) bool {
-	return branchName == d.graph.Trunk
+	return branchName == d.graph.TrunkName()
 }
 
 // IsFixed returns whether the branch is up-to-date with its parent.
 func (d *graphData) IsFixed(branchName string) bool {
-	node := d.graph.Nodes[branchName]
+	node := d.graph.GetNode(branchName)
 	if node == nil {
 		return false
 	}

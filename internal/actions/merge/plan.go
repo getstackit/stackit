@@ -645,7 +645,7 @@ func IsSingleBranchLeafMerge(plan *Plan, graph *engine.StackGraph) bool {
 // merged individually without affecting other branches).
 func AllBranchesAreLeaves(graph *engine.StackGraph, branches []BranchMergeInfo) bool {
 	for _, branchInfo := range branches {
-		node := graph.Nodes[branchInfo.BranchName]
+		node := graph.GetNode(branchInfo.BranchName)
 		if node == nil {
 			continue
 		}

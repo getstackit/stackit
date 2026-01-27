@@ -646,7 +646,10 @@ func IsSingleBranchLeafMerge(plan *Plan, graph *engine.StackGraph) bool {
 func AllBranchesAreLeaves(graph *engine.StackGraph, branches []BranchMergeInfo) bool {
 	for _, branchInfo := range branches {
 		node := graph.Nodes[branchInfo.BranchName]
-		if node != nil && len(node.Children) > 0 {
+		if node == nil {
+			continue
+		}
+		if !graph.IsLeaf(node.Branch) {
 			return false
 		}
 	}

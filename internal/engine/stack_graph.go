@@ -276,3 +276,65 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
 
 	return result
 }
+
+// IsLeaf returns true if the branch has no children in the graph.
+func (g *StackGraph) IsLeaf(branch Branch) bool {
+	node := g.Nodes[branch.GetName()]
+	return node == nil || len(node.Children) == 0
+}
+
+// CollectBranches returns all branches in depth-first order starting from root.
+// The root is included as the first element.
+func (g *StackGraph) CollectBranches(root Branch) []Branch {
+	rootNode := g.Nodes[root.GetName()]
+	if rootNode == nil {
+		return nil
+	}
+
+	var branches []Branch
+	var collect func(node *StackNode)
+	collect = func(node *StackNode) {
+		branches = append(branches, node.Branch)
+		for _, childName := range node.Children {
+			if child := g.Nodes[childName]; child != nil {
+				collect(child)
+			}
+		}
+	}
+	collect(rootNode)
+	return branches
+}
+
+// IsRelated returns true if either branch is an ancestor or descendant of the other.
+func (g *StackGraph) IsRelated(branch1, branch2 Branch) bool {
+	name1 := branch1.GetName()
+	name2 := branch2.GetName()
+
+	if name1 == name2 {
+		return true
+	}
+
+	// Check if branch2 is a descendant of branch1
+	if g.isAncestorOf(name1, name2) {
+		return true
+	}
+
+	// Check if branch1 is a descendant of branch2
+	return g.isAncestorOf(name2, name1)
+}
+
+// isAncestorOf returns true if ancestor is an ancestor of descendant.
+func (g *StackGraph) isAncestorOf(ancestor, descendant string) bool {
+	current := descendant
+	for current != "" {
+		node := g.Nodes[current]
+		if node == nil {
+			return false
+		}
+		if node.Parent == ancestor {
+			return true
+		}
+		current = node.Parent
+	}
+	return false
+}

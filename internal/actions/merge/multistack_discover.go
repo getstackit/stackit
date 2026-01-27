@@ -40,10 +40,14 @@ func DiscoverStacks(eng engine.BranchReader) ([]MultiStackInfo, error) {
 		}
 
 		// Collect all branches in this stack using DFS
-		branches := collectStackBranches(graph, rootName)
+		branches := graph.CollectBranches(rootNode.Branch)
+		branchNames := make([]string, len(branches))
+		for i, b := range branches {
+			branchNames[i] = b.GetName()
+		}
 
 		// Count PRs for this stack
-		prCount := countPRs(eng, branches)
+		prCount := countPRs(branches)
 
 		// Get scope from the root branch
 		scope := ""
@@ -53,7 +57,7 @@ func DiscoverStacks(eng engine.BranchReader) ([]MultiStackInfo, error) {
 
 		stacks = append(stacks, MultiStackInfo{
 			RootBranch:  rootName,
-			AllBranches: branches,
+			AllBranches: branchNames,
 			PRCount:     prCount,
 			Scope:       scope,
 		})
@@ -62,29 +66,10 @@ func DiscoverStacks(eng engine.BranchReader) ([]MultiStackInfo, error) {
 	return stacks, nil
 }
 
-// collectStackBranches collects all branches in a stack starting from the root.
-// Returns branches in depth-first order (root first, then descendants).
-func collectStackBranches(graph *engine.StackGraph, rootName string) []string {
-	var branches []string
-	var collect func(name string)
-	collect = func(name string) {
-		branches = append(branches, name)
-		node := graph.Nodes[name]
-		if node != nil {
-			for _, child := range node.Children {
-				collect(child)
-			}
-		}
-	}
-	collect(rootName)
-	return branches
-}
-
 // countPRs counts how many branches in the list have associated PRs.
-func countPRs(eng engine.BranchReader, branches []string) int {
+func countPRs(branches []engine.Branch) int {
 	count := 0
-	for _, name := range branches {
-		branch := eng.GetBranch(name)
+	for _, branch := range branches {
 		prInfo, err := branch.GetPrInfo()
 		if err == nil && prInfo != nil && prInfo.Number() != nil {
 			count++

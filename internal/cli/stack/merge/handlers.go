@@ -136,6 +136,11 @@ func (h *SimpleMergeEventHandler) PromptIndividualMerge(_ []mergeAction.BranchMe
 	return false, fmt.Errorf("interactive mode required for individual merge selection")
 }
 
+// PromptSimpleMergeConfirm implements InteractiveHandler. Returns error in non-interactive mode.
+func (h *SimpleMergeEventHandler) PromptSimpleMergeConfirm(_ mergeAction.BranchMergeInfo, _ string) (bool, error) {
+	return false, fmt.Errorf("interactive mode required for confirmation")
+}
+
 // InteractiveMergeEventHandler provides a TUI for merge operations using runner.Send()
 type InteractiveMergeEventHandler struct {
 	runner *tui.Runner
@@ -516,6 +521,18 @@ func (h *InteractiveMergeEventHandler) PromptIndividualMerge(branches []mergeAct
 	}
 
 	return selected == "individual", nil
+}
+
+// PromptSimpleMergeConfirm implements InteractiveHandler.
+func (h *InteractiveMergeEventHandler) PromptSimpleMergeConfirm(branch mergeAction.BranchMergeInfo, baseBranch string) (bool, error) {
+	h.runner.Pause()
+	defer h.runner.Resume()
+
+	fmt.Println()
+	fmt.Printf("Ready to merge PR #%d: %s\n", branch.PRNumber, branch.BranchName)
+	fmt.Printf("Target: %s\n\n", baseBranch)
+
+	return tui.PromptConfirm("Proceed?", false)
 }
 
 // Group represents a group of steps that should be displayed as a single line.

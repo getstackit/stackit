@@ -627,6 +627,19 @@ func formatSquashPlanSteps(plan *Plan) string {
 	return result.String()
 }
 
+// IsSingleBranchLeafMerge returns true if this is a simple merge of a single
+// leaf branch (no children, no upstack work needed). This is used to streamline
+// the UI for simple single-PR merges.
+func IsSingleBranchLeafMerge(plan *Plan, graph *engine.StackGraph) bool {
+	if len(plan.BranchesToMerge) != 1 {
+		return false
+	}
+	if len(plan.UpstackBranches) > 0 {
+		return false
+	}
+	return AllBranchesAreLeaves(graph, plan.BranchesToMerge)
+}
+
 // AllBranchesAreLeaves checks if all branches in the plan have no children in the stack graph.
 // This is used to determine if individual merging is possible (only leaf branches can be
 // merged individually without affecting other branches).

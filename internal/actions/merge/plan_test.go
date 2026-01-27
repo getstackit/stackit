@@ -451,3 +451,112 @@ func TestAllBranchesAreLeaves(t *testing.T) {
 		require.False(t, result)
 	})
 }
+
+func TestIsSingleBranchLeafMerge(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns true for single leaf branch with no upstack", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"feature": "main",
+			})
+
+		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+		plan := &merge.Plan{
+			BranchesToMerge: []merge.BranchMergeInfo{
+				{BranchName: "feature", PRNumber: 1},
+			},
+			UpstackBranches: []string{},
+		}
+
+		result := merge.IsSingleBranchLeafMerge(plan, graph)
+		require.True(t, result)
+	})
+
+	t.Run("returns false for multiple branches", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+				"branch2": "branch1",
+			})
+
+		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+		plan := &merge.Plan{
+			BranchesToMerge: []merge.BranchMergeInfo{
+				{BranchName: "branch1", PRNumber: 1},
+				{BranchName: "branch2", PRNumber: 2},
+			},
+			UpstackBranches: []string{},
+		}
+
+		result := merge.IsSingleBranchLeafMerge(plan, graph)
+		require.False(t, result)
+	})
+
+	t.Run("returns false when branch has upstack work", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"parent": "main",
+				"child":  "parent",
+			})
+
+		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+		plan := &merge.Plan{
+			BranchesToMerge: []merge.BranchMergeInfo{
+				{BranchName: "parent", PRNumber: 1},
+			},
+			UpstackBranches: []string{"child"},
+		}
+
+		result := merge.IsSingleBranchLeafMerge(plan, graph)
+		require.False(t, result)
+	})
+
+	t.Run("returns false when single branch has children in graph", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"parent": "main",
+				"child":  "parent",
+			})
+
+		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+		// Even if upstack is empty, the branch itself has children in the graph
+		plan := &merge.Plan{
+			BranchesToMerge: []merge.BranchMergeInfo{
+				{BranchName: "parent", PRNumber: 1},
+			},
+			UpstackBranches: []string{},
+		}
+
+		result := merge.IsSingleBranchLeafMerge(plan, graph)
+		require.False(t, result)
+	})
+
+	t.Run("returns false for empty plan", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+		plan := &merge.Plan{
+			BranchesToMerge: []merge.BranchMergeInfo{},
+			UpstackBranches: []string{},
+		}
+
+		result := merge.IsSingleBranchLeafMerge(plan, graph)
+		require.False(t, result)
+	})
+}

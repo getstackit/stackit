@@ -506,11 +506,11 @@ func (h *InteractiveMergeEventHandler) PromptIndividualMerge(branches []mergeAct
 
 	options := []tui.SelectOption{
 		{
-			Label: "🔄 Merge individually — Merge each PR one at a time (recommended)",
+			Label: "🔄 Merge individually — Each PR merged separately, stops on first failure (recommended)",
 			Value: "individual",
 		},
 		{
-			Label: "🔀 Create consolidated PR — Combine all into a single merge commit",
+			Label: "🔀 Create consolidated PR — All-or-nothing atomic merge into single commit",
 			Value: "consolidate",
 		},
 	}
@@ -532,7 +532,7 @@ func (h *InteractiveMergeEventHandler) PromptSimpleMergeConfirm(branch mergeActi
 	fmt.Printf("Ready to merge PR #%d: %s\n", branch.PRNumber, branch.BranchName)
 	fmt.Printf("Target: %s\n\n", baseBranch)
 
-	return tui.PromptConfirm("Proceed?", false)
+	return tui.PromptConfirm(fmt.Sprintf("Merge %s into %s?", branch.BranchName, baseBranch), false)
 }
 
 // Group represents a group of steps that should be displayed as a single line.
@@ -648,17 +648,20 @@ func appendBottomUpGroups(groups []Group, plan *mergeAction.Plan, assigned map[i
 
 	// 2. Create group for upstack branches
 	if len(plan.UpstackBranches) > 0 {
+		// Build set for O(1) lookup instead of O(n) per step
+		upstackSet := make(map[string]bool, len(plan.UpstackBranches))
+		for _, ub := range plan.UpstackBranches {
+			upstackSet[ub] = true
+		}
+
 		var indices []int
 		for i, step := range plan.Steps {
 			if assigned[i] {
 				continue
 			}
-			for _, ub := range plan.UpstackBranches {
-				if step.BranchName == ub {
-					indices = append(indices, i)
-					assigned[i] = true
-					break
-				}
+			if upstackSet[step.BranchName] {
+				indices = append(indices, i)
+				assigned[i] = true
 			}
 		}
 		if len(indices) > 0 {

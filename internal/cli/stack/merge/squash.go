@@ -125,67 +125,16 @@ func runMergeSquash(ctx *app.Context, opts mergeSquashOptions, postMergeHandler 
 		return nil
 	}
 
-	// Check if individual merge is possible (only in interactive mode without --yes)
+	// Check if individual merge is possible and user wants it
 	if !opts.yes && ctx.Interactive && len(plan.BranchesToMerge) > 0 {
+		// Build graph once and reuse for both leaf check and merge eligibility
 		graph := engine.BuildStackGraph(ctx.Engine, engine.SortStrategyAlphabetical, nil)
-		if mergeAction.AllBranchesAreLeaves(graph, plan.BranchesToMerge) {
-			// All branches are leaves - check if they're all mergeable
-			status, err := mergeAction.CanMergeIndividually(ctx.Context, ctx.Engine.Git(), ctx.GitHubClient, graph, plan.BranchesToMerge)
-			if err != nil {
-				out.Debug("Failed to check individual merge possibility: %v", err)
-			} else if status.CanMerge {
-				// Create a TUI handler for the prompt
-				runner, eventHandler := NewMergeUI(ctx.Output, ctx.Logger)
-				if runner != nil {
-					defer runner.Cleanup()
-				}
-
-				// Cast to InteractiveHandler to access the prompt method
-				if interactiveHandler, ok := eventHandler.(mergeAction.InteractiveHandler); ok && interactiveHandler.IsInteractive() {
-					useIndividual, err := interactiveHandler.PromptIndividualMerge(plan.BranchesToMerge)
-					if err != nil {
-						return fmt.Errorf("selection canceled: %w", err)
-					}
-
-					if useIndividual {
-						// Switch to bottom-up strategy
-						out.Info("Switching to individual merge mode...")
-						plan, _, err = mergeAction.CreateMergePlan(ctx.Context, ctx.Engine, ctx.Output, ctx.GitHubClient, mergeAction.CreatePlanOptions{
-							Strategy: mergeAction.StrategyBottomUp,
-							Force:    opts.force,
-							Scope:    opts.scope,
-							Wait:     true, // Individual merge always waits
-						})
-						if err != nil {
-							return err
-						}
-
-						// Execute bottom-up merge
-						cfg, _ := config.LoadConfig(ctx.RepoRoot)
-						actionOpts := mergeAction.Options{
-							DryRun:         false,
-							Confirm:        false,
-							Strategy:       mergeAction.StrategyBottomUp,
-							Force:          opts.force,
-							Wait:           true,
-							Scope:          opts.scope,
-							Plan:           plan,
-							UndoStackDepth: cfg.UndoStackDepth(),
-							Handler:        mergeAction.NewLegacyHandlerAdapter(eventHandler),
-						}
-
-						if err := mergeAction.Action(ctx, actionOpts); err != nil {
-							return err
-						}
-
-						// Post-merge cleanup
-						if postMergeHandler != nil {
-							return postMergeHandler(ctx, mergeAction.PostMergeSyncTrunk)
-						}
-						return nil
-					}
-				}
-			}
+		merged, err := tryIndividualMerge(ctx, opts, plan, graph, postMergeHandler)
+		if err != nil {
+			return err
+		}
+		if merged {
+			return nil
 		}
 	}
 
@@ -234,6 +183,84 @@ func runMergeSquash(ctx *app.Context, opts mergeSquashOptions, postMergeHandler 
 	}
 
 	return nil
+}
+
+// tryIndividualMerge checks if all branches can be merged individually (all leaves,
+// all mergeable) and prompts the user to choose between individual and consolidation.
+// Returns (true, nil) if individual merge was executed, (false, nil) to continue with
+// consolidation, or (false, err) if an error occurred.
+//
+// The graph parameter is passed to avoid rebuilding it (the caller already has one).
+func tryIndividualMerge(ctx *app.Context, opts mergeSquashOptions, plan *mergeAction.Plan, graph *engine.StackGraph, postMergeHandler PostMergeHandler) (bool, error) {
+	out := ctx.Output
+
+	if !mergeAction.AllBranchesAreLeaves(graph, plan.BranchesToMerge) {
+		return false, nil // Not all leaves - continue with consolidation
+	}
+
+	status, err := mergeAction.CanMergeIndividually(ctx.Context, ctx.Engine.Git(), ctx.GitHubClient, graph, plan.BranchesToMerge)
+	if err != nil {
+		out.Debug("Failed to check individual merge possibility: %v", err)
+		return false, nil // Fall back to consolidation
+	}
+	if !status.CanMerge {
+		return false, nil // Cannot merge individually - continue with consolidation
+	}
+
+	// Create a TUI handler for the prompt
+	runner, eventHandler := NewMergeUI(ctx.Output, ctx.Logger)
+	if runner != nil {
+		defer runner.Cleanup()
+	}
+
+	interactiveHandler, ok := eventHandler.(mergeAction.InteractiveHandler)
+	if !ok || !interactiveHandler.IsInteractive() {
+		return false, nil // Not interactive - continue with consolidation
+	}
+
+	useIndividual, err := interactiveHandler.PromptIndividualMerge(plan.BranchesToMerge)
+	if err != nil {
+		return false, fmt.Errorf("selection canceled: %w", err)
+	}
+	if !useIndividual {
+		return false, nil // User chose consolidation
+	}
+
+	// Switch to bottom-up strategy
+	out.Info("Switching to individual merge mode...")
+	plan, _, err = mergeAction.CreateMergePlan(ctx.Context, ctx.Engine, ctx.Output, ctx.GitHubClient, mergeAction.CreatePlanOptions{
+		Strategy: mergeAction.StrategyBottomUp,
+		Force:    opts.force,
+		Scope:    opts.scope,
+		Wait:     true, // Individual merge always waits
+	})
+	if err != nil {
+		return false, err
+	}
+
+	// Execute bottom-up merge
+	cfg, _ := config.LoadConfig(ctx.RepoRoot)
+	actionOpts := mergeAction.Options{
+		DryRun:         false,
+		Confirm:        false,
+		Strategy:       mergeAction.StrategyBottomUp,
+		Force:          opts.force,
+		Wait:           true,
+		Scope:          opts.scope,
+		Plan:           plan,
+		UndoStackDepth: cfg.UndoStackDepth(),
+		Handler:        mergeAction.NewLegacyHandlerAdapter(eventHandler),
+	}
+
+	if err := mergeAction.Action(ctx, actionOpts); err != nil {
+		return false, err
+	}
+
+	// Post-merge cleanup
+	if postMergeHandler != nil {
+		return true, postMergeHandler(ctx, mergeAction.PostMergeSyncTrunk)
+	}
+	return true, nil
 }
 
 func runMultiStackSquash(ctx *app.Context, opts squashMultiStackOptions) error {

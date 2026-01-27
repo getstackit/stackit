@@ -35,11 +35,11 @@ type StackNode struct {
 // It is built once from the engine and then used for traversals/rendering without
 // further engine calls.
 type StackGraph struct {
-	Nodes        map[string]*StackNode
-	Roots        []string
-	Current      string
-	Trunk        string
-	SortStrategy SortStrategy
+	nodes        map[string]*StackNode
+	roots        []string
+	current      string
+	trunk        string
+	sortStrategy SortStrategy
 }
 
 // BuildStackGraph constructs a StackGraph using the provided engine reader and sorting strategy.
@@ -62,10 +62,10 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 	}
 
 	graph := &StackGraph{
-		Nodes:        make(map[string]*StackNode),
-		Current:      current,
-		Trunk:        trunk,
-		SortStrategy: strategy,
+		nodes:        make(map[string]*StackNode),
+		current:      current,
+		trunk:        trunk,
+		sortStrategy: strategy,
 	}
 
 	// Seed nodes with parent references (only if parent is also allowed)
@@ -77,7 +77,7 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 			}
 		}
 
-		graph.Nodes[name] = &StackNode{
+		graph.nodes[name] = &StackNode{
 			Branch:  branch,
 			Parent:  parentName,
 			IsTrunk: name == trunk,
@@ -85,24 +85,24 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 	}
 
 	// Populate children by deriving from parent relationships
-	for name, node := range graph.Nodes {
+	for name, node := range graph.nodes {
 		if node.Parent != "" {
-			if parentNode := graph.Nodes[node.Parent]; parentNode != nil {
+			if parentNode := graph.nodes[node.Parent]; parentNode != nil {
 				parentNode.Children = append(parentNode.Children, name)
 			}
 		}
 	}
 
 	// Sort children based on strategy
-	for _, node := range graph.Nodes {
+	for _, node := range graph.nodes {
 		if len(node.Children) > 1 {
 			switch strategy {
 			case SortStrategySmart:
 				// Smart sort: hoist the active path (current branch first) and then sort descending
 				slices.SortFunc(node.Children, func(a, b string) int {
 					// Current branch or its ancestors come first
-					aOnPath := isOnActivePath(graph.Nodes, a, current)
-					bOnPath := isOnActivePath(graph.Nodes, b, current)
+					aOnPath := isOnActivePath(graph.nodes, a, current)
+					bOnPath := isOnActivePath(graph.nodes, b, current)
 					if aOnPath && !bOnPath {
 						return -1
 					}
@@ -125,9 +125,9 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 	}
 
 	// Determine roots (nodes without an allowed parent)
-	for name, node := range graph.Nodes {
+	for name, node := range graph.nodes {
 		if node.Parent == "" {
-			graph.Roots = append(graph.Roots, name)
+			graph.roots = append(graph.roots, name)
 		}
 	}
 
@@ -138,7 +138,7 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 		if d, ok := depthCache[name]; ok {
 			return d
 		}
-		node := graph.Nodes[name]
+		node := graph.nodes[name]
 		if node == nil || node.Parent == "" {
 			depthCache[name] = 0
 			return 0
@@ -146,44 +146,44 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 		depthCache[name] = computeDepth(node.Parent) + 1
 		return depthCache[name]
 	}
-	for name, node := range graph.Nodes {
+	for name, node := range graph.nodes {
 		node.Depth = computeDepth(name)
 	}
 
 	// Sort roots for deterministic traversal
-	slices.Sort(graph.Roots)
+	slices.Sort(graph.roots)
 
 	return graph
 }
 
 // GetNode returns the StackNode for a branch by name, or nil if not found.
 func (g *StackGraph) GetNode(branchName string) *StackNode {
-	return g.Nodes[branchName]
+	return g.nodes[branchName]
 }
 
 // Node returns the StackNode for the given branch.
 func (g *StackGraph) Node(branch Branch) *StackNode {
-	return g.Nodes[branch.GetName()]
+	return g.nodes[branch.GetName()]
 }
 
 // CurrentBranch returns the name of the currently checked-out branch.
 func (g *StackGraph) CurrentBranch() string {
-	return g.Current
+	return g.current
 }
 
 // TrunkName returns the trunk/main branch name.
 func (g *StackGraph) TrunkName() string {
-	return g.Trunk
+	return g.trunk
 }
 
 // RootBranches returns all root branch names (branches with no parent in the graph).
 func (g *StackGraph) RootBranches() []string {
-	return g.Roots
+	return g.roots
 }
 
 // Children returns the child branch names for the given branch.
 func (g *StackGraph) Children(branch Branch) []string {
-	if node := g.Nodes[branch.GetName()]; node != nil {
+	if node := g.nodes[branch.GetName()]; node != nil {
 		return node.Children
 	}
 	return nil
@@ -191,20 +191,20 @@ func (g *StackGraph) Children(branch Branch) []string {
 
 // ChildBranches returns the child branches for the given branch.
 func (g *StackGraph) ChildBranches(branch Branch) []Branch {
-	node := g.Nodes[branch.GetName()]
+	node := g.nodes[branch.GetName()]
 	if node == nil {
 		return nil
 	}
 	branches := make([]Branch, len(node.Children))
 	for i, n := range node.Children {
-		branches[i] = g.Nodes[n].Branch
+		branches[i] = g.nodes[n].Branch
 	}
 	return branches
 }
 
 // Parent returns the parent branch name (empty string if none).
 func (g *StackGraph) Parent(branch Branch) string {
-	if node := g.Nodes[branch.GetName()]; node != nil {
+	if node := g.nodes[branch.GetName()]; node != nil {
 		return node.Parent
 	}
 	return ""
@@ -229,7 +229,7 @@ func (g *StackGraph) IsDescendant(branch Branch, potentialDescendant string) boo
 // This is useful for parallel operations where branches at the same depth are independent.
 func (g *StackGraph) GetBranchesByDepth() map[int][]string {
 	byDepth := make(map[int][]string)
-	for name, node := range g.Nodes {
+	for name, node := range g.nodes {
 		byDepth[node.Depth] = append(byDepth[node.Depth], name)
 	}
 	return byDepth
@@ -240,7 +240,7 @@ func (g *StackGraph) GetBranchesByDepth() map[int][]string {
 // Descendants are traversed depth-first using the graph's pre-sorted children.
 func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
 	start := branch.GetName()
-	startNode := g.Nodes[start]
+	startNode := g.nodes[start]
 	if startNode == nil {
 		return nil
 	}
@@ -251,8 +251,8 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
 	if rng.RecursiveParents {
 		current := startNode.Parent
 		var ancestors []Branch
-		for current != "" && current != g.Trunk {
-			node := g.Nodes[current]
+		for current != "" && current != g.trunk {
+			node := g.nodes[current]
 			if node == nil {
 				break
 			}
@@ -276,7 +276,7 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
 		visited := map[string]bool{start: true}
 		var collectDescendants func(string)
 		collectDescendants = func(name string) {
-			node := g.Nodes[name]
+			node := g.nodes[name]
 			if node == nil {
 				return
 			}
@@ -285,7 +285,7 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
 					continue
 				}
 				visited[childName] = true
-				if child := g.Nodes[childName]; child != nil {
+				if child := g.nodes[childName]; child != nil {
 					result = append(result, child.Branch)
 					collectDescendants(childName)
 				}
@@ -298,15 +298,19 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
 }
 
 // IsLeaf returns true if the branch has no children in the graph.
+//
+// Note: Returns true if the branch is not in the graph (nil node). Callers that need
+// fail-safe behavior (treating unknown branches as non-leaves) should check GetNode()
+// first, as AllBranchesAreLeaves does.
 func (g *StackGraph) IsLeaf(branch Branch) bool {
-	node := g.Nodes[branch.GetName()]
+	node := g.nodes[branch.GetName()]
 	return node == nil || len(node.Children) == 0
 }
 
 // CollectBranches returns all branches in depth-first order starting from root.
 // The root is included as the first element.
 func (g *StackGraph) CollectBranches(root Branch) []Branch {
-	rootNode := g.Nodes[root.GetName()]
+	rootNode := g.nodes[root.GetName()]
 	if rootNode == nil {
 		return nil
 	}
@@ -316,7 +320,7 @@ func (g *StackGraph) CollectBranches(root Branch) []Branch {
 	collect = func(node *StackNode) {
 		branches = append(branches, node.Branch)
 		for _, childName := range node.Children {
-			if child := g.Nodes[childName]; child != nil {
+			if child := g.nodes[childName]; child != nil {
 				collect(child)
 			}
 		}
@@ -347,7 +351,7 @@ func (g *StackGraph) IsRelated(branch1, branch2 Branch) bool {
 func (g *StackGraph) isAncestorOf(ancestor, descendant string) bool {
 	current := descendant
 	for current != "" {
-		node := g.Nodes[current]
+		node := g.nodes[current]
 		if node == nil {
 			return false
 		}

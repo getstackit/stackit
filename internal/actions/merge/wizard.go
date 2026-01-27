@@ -210,7 +210,11 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	}
 	out.Debug("merge wizard: final plan has %d branches, %d steps", len(plan.BranchesToMerge), len(plan.Steps))
 
-	// Check for simple single-branch merge case for streamlined UX
+	// Streamlined UX for simple merges:
+	// When merging a single leaf branch (no children, no upstack work) with no validation
+	// issues, we skip the full plan display and use a simple "Merge X into Y?" confirmation.
+	// This reduces friction for the common case of merging a single PR, while still showing
+	// the full plan for complex scenarios where users need to understand all the steps.
 	graph := engine.BuildStackGraph(eng, engine.SortStrategyAlphabetical, nil)
 	isSimpleMerge := IsSingleBranchLeafMerge(plan, graph) &&
 		len(validation.Errors) == 0 &&

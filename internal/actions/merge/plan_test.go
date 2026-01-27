@@ -450,6 +450,27 @@ func TestAllBranchesAreLeaves(t *testing.T) {
 		result := merge.AllBranchesAreLeaves(graph, branches)
 		require.False(t, result)
 	})
+
+	t.Run("returns false when branch not in graph (fail-safe)", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"leaf": "main",
+			})
+
+		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+		// Include a branch that doesn't exist in the graph
+		branches := []merge.BranchMergeInfo{
+			{BranchName: "leaf", PRNumber: 1},
+			{BranchName: "nonexistent-branch", PRNumber: 2},
+		}
+
+		// Should return false as a fail-safe when branch isn't in graph
+		result := merge.AllBranchesAreLeaves(graph, branches)
+		require.False(t, result)
+	})
 }
 
 func TestIsSingleBranchLeafMerge(t *testing.T) {

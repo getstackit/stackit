@@ -627,13 +627,40 @@ func formatSquashPlanSteps(plan *Plan) string {
 	return result.String()
 }
 
+// IsSingleBranchLeafMerge returns true if this is a simple merge of a single
+// leaf branch (no children, no upstack work needed).
+//
+// Why this matters: Single leaf branches with no upstack work represent the simplest
+// merge case. We can offer a streamlined confirmation UX (just "Proceed?") instead
+// of showing the full plan, since there are no complex steps or dependencies to review.
+func IsSingleBranchLeafMerge(plan *Plan, graph *engine.StackGraph) bool {
+	if len(plan.BranchesToMerge) != 1 {
+		return false
+	}
+	if len(plan.UpstackBranches) > 0 {
+		return false
+	}
+	return AllBranchesAreLeaves(graph, plan.BranchesToMerge)
+}
+
 // AllBranchesAreLeaves checks if all branches in the plan have no children in the stack graph.
-// This is used to determine if individual merging is possible (only leaf branches can be
-// merged individually without affecting other branches).
+//
+// Why this matters: Only leaf branches (those with no children) can be merged individually
+// without affecting other branches. Merging a non-leaf would orphan its children or require
+// restacking them, making individual merge inappropriate. This check enables offering the
+// "merge individually" option when all selected branches are independent leaves.
+//
+// Note: Branches not found in the graph (nil node) are treated as non-leaves and cause
+// the function to return false. This is a fail-safe behavior - if we can't verify a
+// branch's structure, we don't allow individual merging.
 func AllBranchesAreLeaves(graph *engine.StackGraph, branches []BranchMergeInfo) bool {
 	for _, branchInfo := range branches {
-		node := graph.Nodes[branchInfo.BranchName]
-		if node != nil && len(node.Children) > 0 {
+		node := graph.GetNode(branchInfo.BranchName)
+		if node == nil {
+			// Branch not in graph - fail-safe: treat as non-leaf
+			return false
+		}
+		if !graph.IsLeaf(node.Branch) {
 			return false
 		}
 	}
@@ -652,6 +679,7 @@ type IndividualMergeStatus struct {
 // 2. All PRs have GitHub mergeable state = MERGEABLE (no conflicts with trunk)
 //
 // Returns the status including per-branch mergeable states for display purposes.
+// Returns error if GitHub API call fails; check CanMerge field and BlockingReason for results.
 func CanMergeIndividually(ctx context.Context, gitRunner git.Runner, githubClient github.Client, graph *engine.StackGraph, branches []BranchMergeInfo) (*IndividualMergeStatus, error) {
 	status := &IndividualMergeStatus{
 		MergeableState: make(map[string]bool),
@@ -664,10 +692,12 @@ func CanMergeIndividually(ctx context.Context, gitRunner git.Runner, githubClien
 	}
 
 	// Check 2: All PRs must have MERGEABLE state
+	// First, collect all PR NodeIDs (still requires N API calls)
 	owner, repo := githubClient.GetOwnerRepo()
+	nodeIDToBranch := make(map[string]string, len(branches))
+	nodeIDs := make([]string, 0, len(branches))
 
 	for _, branchInfo := range branches {
-		// Get the PR info from GitHub to obtain NodeID
 		prInfo, err := githubClient.GetPullRequest(ctx, owner, repo, branchInfo.PRNumber)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get PR #%d for %s: %w", branchInfo.PRNumber, branchInfo.BranchName, err)
@@ -678,16 +708,29 @@ func CanMergeIndividually(ctx context.Context, gitRunner git.Runner, githubClien
 			return status, nil
 		}
 
-		// Check mergeable state via GraphQL
-		mergeState, err := github.GetPRMergeableState(ctx, gitRunner, prInfo.NodeID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get mergeable state for %s: %w", branchInfo.BranchName, err)
+		nodeIDToBranch[prInfo.NodeID] = branchInfo.BranchName
+		nodeIDs = append(nodeIDs, prInfo.NodeID)
+	}
+
+	// Batch fetch all mergeable states in a single GraphQL query
+	mergeStates, err := github.BatchGetPRMergeableStates(ctx, gitRunner, nodeIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch get mergeable states: %w", err)
+	}
+
+	// Process results and check for any non-mergeable PRs
+	for nodeID, branchName := range nodeIDToBranch {
+		mergeState, ok := mergeStates[nodeID]
+		if !ok {
+			status.BlockingReason = fmt.Sprintf("could not get mergeable state for %s", branchName)
+			status.CanMerge = false
+			return status, nil
 		}
 
-		status.MergeableState[branchInfo.BranchName] = mergeState.Mergeable
+		status.MergeableState[branchName] = mergeState.Mergeable
 
 		if !mergeState.Mergeable {
-			status.BlockingReason = fmt.Sprintf("PR for %s has conflicts with trunk", branchInfo.BranchName)
+			status.BlockingReason = fmt.Sprintf("PR for %s has conflicts with trunk", branchName)
 		}
 	}
 

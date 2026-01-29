@@ -558,6 +558,75 @@ func GetPRMergeableState(ctx context.Context, runner git.Runner, prNodeID string
 	}, nil
 }
 
+// BatchGetPRMergeableStates checks mergeable state for multiple PRs in a single GraphQL query.
+// Returns a map from node ID to PRMergeableState. If a PR fails to fetch, it won't be in the map.
+func BatchGetPRMergeableStates(ctx context.Context, runner git.Runner, prNodeIDs []string) (map[string]*PRMergeableState, error) {
+	if len(prNodeIDs) == 0 {
+		return make(map[string]*PRMergeableState), nil
+	}
+
+	// Build query with aliases for each PR
+	queryParts := make([]string, 0, len(prNodeIDs))
+	variables := make(map[string]interface{}, len(prNodeIDs))
+	for i, nodeID := range prNodeIDs {
+		alias := fmt.Sprintf("pr%d", i)
+		varName := fmt.Sprintf("nodeId%d", i)
+		queryParts = append(queryParts, fmt.Sprintf(`%s: node(id: $%s) {
+			... on PullRequest {
+				id
+				mergeable
+				mergeStateStatus
+				state
+			}
+		}`, alias, varName))
+		variables[varName] = nodeID
+	}
+
+	// Build variable declarations
+	varDecls := make([]string, 0, len(prNodeIDs))
+	for i := range prNodeIDs {
+		varDecls = append(varDecls, fmt.Sprintf("$nodeId%d: ID!", i))
+	}
+
+	query := fmt.Sprintf("query BatchGetPRMergeableStates(%s) { %s }",
+		strings.Join(varDecls, ", "),
+		strings.Join(queryParts, " "))
+
+	body, err := executeGraphQLQuery(ctx, runner, query, variables)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch get PR mergeable states: %w", err)
+	}
+
+	// Parse response - the data object has dynamic keys (pr0, pr1, etc.)
+	var response struct {
+		Data map[string]struct {
+			ID               string `json:"id"`
+			Mergeable        string `json:"mergeable"`
+			MergeStateStatus string `json:"mergeStateStatus"`
+			State            string `json:"state"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse batch PR mergeable state response: %w", err)
+	}
+
+	// Build result map keyed by node ID
+	result := make(map[string]*PRMergeableState, len(prNodeIDs))
+	for _, prData := range response.Data {
+		if prData.ID == "" {
+			continue // Skip null nodes
+		}
+		result[prData.ID] = &PRMergeableState{
+			Mergeable:      prData.Mergeable == "MERGEABLE",
+			MergeStateText: prData.MergeStateStatus,
+			State:          prData.State,
+		}
+	}
+
+	return result, nil
+}
+
 // WaitForPRMerge polls until a PR is merged or times out.
 // Returns nil if the PR is merged, error otherwise.
 func WaitForPRMerge(ctx context.Context, runner git.Runner, prNodeID string, timeout time.Duration, pollInterval time.Duration) error {

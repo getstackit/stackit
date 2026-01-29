@@ -96,6 +96,11 @@ type InteractiveHandler interface {
 	// are mergeable without conflicts.
 	// Returns true for individual merge, false for consolidation.
 	PromptIndividualMerge(branches []BranchMergeInfo) (bool, error)
+
+	// PromptSimpleMergeConfirm shows a simplified confirmation for single-branch merges.
+	// This provides a cleaner UX than ShowPlan + PromptConfirm for simple cases.
+	// Returns true to proceed, false to cancel.
+	PromptSimpleMergeConfirm(branch BranchMergeInfo, baseBranch string) (bool, error)
 }
 
 // GetAvailableScopes returns all unique non-empty scopes in the repository

@@ -8,6 +8,7 @@ import (
 
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/config"
+	"stackit.dev/stackit/internal/engine"
 	sterrors "stackit.dev/stackit/internal/errors"
 	"stackit.dev/stackit/internal/github"
 )
@@ -209,34 +210,63 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	}
 	out.Debug("merge wizard: final plan has %d branches, %d steps", len(plan.BranchesToMerge), len(plan.Steps))
 
-	// Show the final plan with the selected strategy
-	handler.ShowPlan(plan, validation)
+	// Streamlined UX for simple merges:
+	// When merging a single leaf branch (no children, no upstack work) with no validation
+	// issues, we skip the full plan display and use a simple "Merge X into Y?" confirmation.
+	// This reduces friction for the common case of merging a single PR, while still showing
+	// the full plan for complex scenarios where users need to understand all the steps.
+	graph := engine.BuildStackGraph(eng, engine.SortStrategyAlphabetical, nil)
+	isSimpleMerge := IsSingleBranchLeafMerge(plan, graph) &&
+		len(validation.Errors) == 0 &&
+		len(validation.Warnings) == 0
 
-	// Re-validate with new strategy
-	if !validation.Valid && !opts.Force {
-		out.Debug("merge wizard: validation failed")
-		return formatValidationError(validation.Errors, validation.Warnings)
-	}
+	if isSimpleMerge && !opts.DryRun {
+		// Use simplified confirmation for single-branch merges
+		branch := plan.BranchesToMerge[0]
+		baseBranch := eng.Trunk().GetName()
+		out.Debug("merge wizard: simple single-branch merge detected, using simplified confirmation")
 
-	// If dry-run, stop here
-	if opts.DryRun {
-		out.Debug("merge wizard: dry-run mode, stopping before execution")
-		out.Info("Dry-run mode: plan displayed above. Use without --dry-run to execute.")
-		return nil
-	}
+		confirmed, err := handler.PromptSimpleMergeConfirm(branch, baseBranch)
+		if err != nil {
+			out.Debug("merge wizard: simple confirmation error: %v", err)
+			return fmt.Errorf("confirmation canceled: %w", err)
+		}
+		if !confirmed {
+			out.Debug("merge wizard: user declined simple confirmation")
+			out.Info("Merge canceled")
+			return nil
+		}
+		out.Debug("merge wizard: user confirmed simple merge")
+	} else {
+		// Show the full plan for complex merges or when there are warnings/errors
+		handler.ShowPlan(plan, validation)
 
-	// Confirm before executing
-	confirmed, err := handler.PromptConfirm("Proceed with merge?", false)
-	if err != nil {
-		out.Debug("merge wizard: confirmation error: %v", err)
-		return fmt.Errorf("confirmation canceled: %w", err)
+		// Re-validate with new strategy
+		if !validation.Valid && !opts.Force {
+			out.Debug("merge wizard: validation failed")
+			return formatValidationError(validation.Errors, validation.Warnings)
+		}
+
+		// If dry-run, stop here
+		if opts.DryRun {
+			out.Debug("merge wizard: dry-run mode, stopping before execution")
+			out.Info("Dry-run mode: plan displayed above. Use without --dry-run to execute.")
+			return nil
+		}
+
+		// Confirm before executing
+		confirmed, err := handler.PromptConfirm("Proceed with merge?", false)
+		if err != nil {
+			out.Debug("merge wizard: confirmation error: %v", err)
+			return fmt.Errorf("confirmation canceled: %w", err)
+		}
+		if !confirmed {
+			out.Debug("merge wizard: user declined confirmation")
+			out.Info("Merge canceled")
+			return nil
+		}
+		out.Debug("merge wizard: user confirmed, proceeding with merge")
 	}
-	if !confirmed {
-		out.Debug("merge wizard: user declined confirmation")
-		out.Info("Merge canceled")
-		return nil
-	}
-	out.Debug("merge wizard: user confirmed, proceeding with merge")
 
 	// Get config values
 	cfg, _ := config.LoadConfig(ctx.RepoRoot)

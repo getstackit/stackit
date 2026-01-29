@@ -211,16 +211,16 @@ func NewDirectionSelectModel(eng engine.BranchReader, currentBranch, parentBranc
 
 	var stackPath []string
 	current := currentBranch
-	for current != "" && current != graph.Trunk {
+	for current != "" && current != graph.TrunkName() {
 		stackPath = append([]string{current}, stackPath...)
-		node := graph.Nodes[current]
+		node := graph.GetNode(current)
 		if node == nil {
 			break
 		}
 		current = graph.Parent(node.Branch)
 	}
 	// Add trunk at the beginning
-	stackPath = append([]string{graph.Trunk}, stackPath...)
+	stackPath = append([]string{graph.TrunkName()}, stackPath...)
 
 	return &DirectionSelectModel{
 		currentBranch: currentBranch,

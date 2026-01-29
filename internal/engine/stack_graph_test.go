@@ -106,3 +106,123 @@ func indexOfName(slice []string, item string) int {
 	}
 	return -1
 }
+
+func TestStackGraphIsLeaf(t *testing.T) {
+	t.Parallel()
+
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"parent": "main",
+			"child":  "parent",
+		})
+
+	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+	t.Run("leaf branch returns true", func(t *testing.T) {
+		t.Parallel()
+		require.True(t, graph.IsLeaf(s.Engine.GetBranch("child")))
+	})
+
+	t.Run("non-leaf branch returns false", func(t *testing.T) {
+		t.Parallel()
+		require.False(t, graph.IsLeaf(s.Engine.GetBranch("parent")))
+	})
+
+	t.Run("trunk with children returns false", func(t *testing.T) {
+		t.Parallel()
+		require.False(t, graph.IsLeaf(s.Engine.Trunk()))
+	})
+}
+
+func TestStackGraphCollectBranches(t *testing.T) {
+	t.Parallel()
+
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"a":  "main",
+			"a1": "a",
+			"a2": "a",
+			"b":  "main",
+		})
+
+	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+	t.Run("collects all descendants depth-first", func(t *testing.T) {
+		t.Parallel()
+		branches := graph.CollectBranches(s.Engine.GetBranch("a"))
+		names := branchNames(branches)
+
+		require.Len(t, names, 3)
+		require.Equal(t, "a", names[0], "root should be first")
+		require.Contains(t, names, "a1")
+		require.Contains(t, names, "a2")
+	})
+
+	t.Run("leaf branch returns only itself", func(t *testing.T) {
+		t.Parallel()
+		branches := graph.CollectBranches(s.Engine.GetBranch("b"))
+		names := branchNames(branches)
+
+		require.Equal(t, []string{"b"}, names)
+	})
+
+	t.Run("collects from trunk", func(t *testing.T) {
+		t.Parallel()
+		branches := graph.CollectBranches(s.Engine.Trunk())
+		names := branchNames(branches)
+
+		require.Len(t, names, 5)
+		require.Equal(t, "main", names[0], "trunk should be first")
+	})
+}
+
+func TestStackGraphIsRelated(t *testing.T) {
+	t.Parallel()
+
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"a":  "main",
+			"a1": "a",
+			"b":  "main",
+		})
+
+	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+
+	t.Run("parent and child are related", func(t *testing.T) {
+		t.Parallel()
+		require.True(t, graph.IsRelated(s.Engine.GetBranch("a"), s.Engine.GetBranch("a1")))
+	})
+
+	t.Run("child and parent are related (reverse)", func(t *testing.T) {
+		t.Parallel()
+		require.True(t, graph.IsRelated(s.Engine.GetBranch("a1"), s.Engine.GetBranch("a")))
+	})
+
+	t.Run("grandparent and grandchild are related", func(t *testing.T) {
+		t.Parallel()
+		require.True(t, graph.IsRelated(s.Engine.Trunk(), s.Engine.GetBranch("a1")))
+	})
+
+	t.Run("siblings are not related", func(t *testing.T) {
+		t.Parallel()
+		require.False(t, graph.IsRelated(s.Engine.GetBranch("a"), s.Engine.GetBranch("b")))
+	})
+
+	t.Run("cousins are not related", func(t *testing.T) {
+		t.Parallel()
+		require.False(t, graph.IsRelated(s.Engine.GetBranch("a1"), s.Engine.GetBranch("b")))
+	})
+
+	t.Run("same branch is related to itself", func(t *testing.T) {
+		t.Parallel()
+		require.True(t, graph.IsRelated(s.Engine.GetBranch("a"), s.Engine.GetBranch("a")))
+	})
+}
+
+func branchNames(branches []engine.Branch) []string {
+	names := make([]string, len(branches))
+	for i, b := range branches {
+		names[i] = b.GetName()
+	}
+	return names
+}

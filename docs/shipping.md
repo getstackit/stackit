@@ -4,7 +4,8 @@
 
 **Commands:**
 ```bash
-stackit merge              # Interactive wizard - choose strategy
+stackit merge              # Show your mergeable work, then wizard
+stackit merge --all        # Show entire team's mergeable work
 stackit merge next         # Merge bottom PR, enable automerge, return immediately
 stackit merge squash       # Consolidate stack into single atomic PR
 ```
@@ -27,6 +28,30 @@ stackit merge squash       # Consolidate stack into single atomic PR
 ## Overview
 
 Shipping stacked changes is fundamentally different from shipping linear PRs. Stackit provides two merge strategies optimized for different scenarios, plus advanced multi-stack consolidation for high-velocity teams.
+
+## Merge Status View
+
+When you run `stackit merge`, you first see a status overview of your mergeable work:
+
+```
+📦 Your Mergeable Work
+
+Ready (2):
+  ✅ add-oauth              3 branches  All approved, CI passing
+  ✅ fix-login              1 branch    All approved, CI passing
+
+Pending (1):
+  ⏳ new-dashboard          3 branches  CI running
+
+Blocked (1):
+  ❌ perf-improvements      2 branches  CI failed
+```
+
+This helps you understand what's ready to ship before diving into the merge wizard.
+
+**Filtering:**
+- By default, shows only your stacks (matched by PR author)
+- Use `--all` to see the entire team's work
 
 ## Merge Strategies
 
@@ -193,7 +218,14 @@ This PR was shipped as part of [#123](link) by @username
 
 ### `stackit merge`
 
-Interactive wizard that guides you through merge options.
+Shows your mergeable work status, then launches an interactive wizard.
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Show all team members' stacks (default: your stacks only) |
+| `--dry-run` | Show merge plan without executing |
+| `--force` | Skip validation checks |
+| `--wait` | Wait for merge to complete |
 
 ### `stackit merge next`
 

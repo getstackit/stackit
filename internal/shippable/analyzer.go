@@ -108,6 +108,13 @@ func (a *Analyzer) analyzeStack(stack merge.MultiStackInfo, statusMap map[string
 
 	// Check each branch in the stack
 	for _, branchName := range stack.AllBranches {
+		// Extract author from first branch with PR status
+		if result.Author == "" {
+			if status, ok := statusMap[branchName]; ok && status != nil && status.Author != "" {
+				result.Author = status.Author
+			}
+		}
+
 		blocking := a.analyzeBranch(branchName, statusMap)
 		if blocking != nil {
 			result.BlockingPRs = append(result.BlockingPRs, *blocking)

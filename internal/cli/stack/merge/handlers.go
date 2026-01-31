@@ -10,6 +10,7 @@ import (
 	mergeAction "stackit.dev/stackit/internal/actions/merge"
 	sterrors "stackit.dev/stackit/internal/errors"
 	"stackit.dev/stackit/internal/output"
+	"stackit.dev/stackit/internal/shippable"
 	"stackit.dev/stackit/internal/tui"
 	mergeComponent "stackit.dev/stackit/internal/tui/components/merge"
 	"stackit.dev/stackit/internal/tui/style"
@@ -673,4 +674,123 @@ func appendBottomUpGroups(groups []Group, plan *mergeAction.Plan, assigned map[i
 	}
 
 	return groups
+}
+
+// DisplayMergeStatus renders the shippability status of stacks.
+// Shows stacks grouped by status (Ready, Pending, Blocked, Incomplete).
+func DisplayMergeStatus(out output.Output, result *shippable.AnalysisResult) {
+	styles := style.DefaultStatusStyles()
+
+	// Empty state
+	if result.TotalStacks() == 0 {
+		out.Print("\n")
+		out.Print(style.ColorDim("No active stacks found.") + "\n")
+		out.Print(style.ColorDim("Create a stack with: stackit create -m \"description\"") + "\n")
+		out.Print("\n")
+		return
+	}
+
+	out.Print("\n")
+	out.Print(style.ColorMagenta("📦 Your Mergeable Work") + "\n")
+	out.Print("\n")
+
+	// Ready stacks
+	if ready := result.GetShippable(); len(ready) > 0 {
+		out.Print(styles.Done.Render(fmt.Sprintf("Ready (%d):", len(ready))) + "\n")
+		for _, s := range ready {
+			out.Print(fmt.Sprintf("  ✅ %-25s %d branches  All approved, CI passing\n",
+				truncateBranchName(s.RootBranch()),
+				s.BranchCount()))
+		}
+		out.Print("\n")
+	}
+
+	// Pending stacks
+	if pending := result.GetPending(); len(pending) > 0 {
+		out.Print(style.ColorYellow(fmt.Sprintf("Pending (%d):", len(pending))) + "\n")
+		for _, s := range pending {
+			reason := getPendingReason(s)
+			out.Print(fmt.Sprintf("  ⏳ %-25s %d branches  %s\n",
+				truncateBranchName(s.RootBranch()),
+				s.BranchCount(),
+				reason))
+		}
+		out.Print("\n")
+	}
+
+	// Blocked stacks
+	if blocked := result.GetBlocked(); len(blocked) > 0 {
+		out.Print(styles.Error.Render(fmt.Sprintf("Blocked (%d):", len(blocked))) + "\n")
+		for _, s := range blocked {
+			reason := getBlockedReason(s)
+			out.Print(fmt.Sprintf("  ❌ %-25s %d branches  %s\n",
+				truncateBranchName(s.RootBranch()),
+				s.BranchCount(),
+				reason))
+		}
+		out.Print("\n")
+	}
+
+	// Incomplete stacks
+	if incomplete := result.GetIncomplete(); len(incomplete) > 0 {
+		out.Print(style.ColorDim(fmt.Sprintf("Incomplete (%d):", len(incomplete))) + "\n")
+		for _, s := range incomplete {
+			reason := getIncompleteReason(s)
+			out.Print(fmt.Sprintf("  ○ %-25s %d branches  %s\n",
+				truncateBranchName(s.RootBranch()),
+				s.BranchCount(),
+				reason))
+		}
+		out.Print("\n")
+	}
+}
+
+// truncateBranchName truncates a branch name to 25 chars with ellipsis
+func truncateBranchName(name string) string {
+	const maxLen = 25
+	if len(name) <= maxLen {
+		return name
+	}
+	return name[:maxLen-3] + "..."
+}
+
+// getPendingReason returns a human-readable reason for pending status
+func getPendingReason(s shippable.Stack) string {
+	for _, bp := range s.BlockingPRs {
+		switch bp.Reason {
+		case shippable.ReasonCIPending:
+			return "CI running"
+		case shippable.ReasonReviewRequired:
+			return "Review required"
+		}
+	}
+	return "Waiting"
+}
+
+// getBlockedReason returns a human-readable reason for blocked status
+func getBlockedReason(s shippable.Stack) string {
+	for _, bp := range s.BlockingPRs {
+		switch bp.Reason {
+		case shippable.ReasonCIFailing:
+			return "CI failed"
+		case shippable.ReasonChangesRequested:
+			return "Changes requested"
+		case shippable.ReasonNotPushed:
+			return "Not pushed"
+		}
+	}
+	return "Blocked"
+}
+
+// getIncompleteReason returns a human-readable reason for incomplete status
+func getIncompleteReason(s shippable.Stack) string {
+	for _, bp := range s.BlockingPRs {
+		switch bp.Reason {
+		case shippable.ReasonNoPR:
+			return "Missing PR"
+		case shippable.ReasonDraft:
+			return "Draft PR"
+		}
+	}
+	return "Incomplete"
 }

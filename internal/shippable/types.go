@@ -52,6 +52,7 @@ type BlockingPR struct {
 type Stack struct {
 	Stack  merge.MultiStackInfo // The underlying stack
 	Status Status               // Overall shippability status
+	Author string               // GitHub username of stack author (from first PR)
 
 	// Breakdown of shippability components
 	ApprovalOK bool  // All PRs have been approved
@@ -157,6 +158,35 @@ func (r *AnalysisResult) HasShippable() bool {
 // TotalStacks returns the total number of stacks analyzed.
 func (r *AnalysisResult) TotalStacks() int {
 	return len(r.Stacks)
+}
+
+// FilterByAuthor returns a new AnalysisResult containing only stacks by the given author.
+func (r *AnalysisResult) FilterByAuthor(author string) *AnalysisResult {
+	if author == "" {
+		return r
+	}
+
+	result := &AnalysisResult{
+		Stacks: make([]Stack, 0),
+	}
+
+	for _, s := range r.Stacks {
+		if s.Author == author {
+			result.Stacks = append(result.Stacks, s)
+			switch s.Status {
+			case StatusShippable:
+				result.ShippableCount++
+			case StatusPending:
+				result.PendingCount++
+			case StatusBlocked:
+				result.BlockedCount++
+			case StatusIncomplete:
+				result.IncompleteCount++
+			}
+		}
+	}
+
+	return result
 }
 
 // CombinationResult contains the result of checking if stacks can be merged together.

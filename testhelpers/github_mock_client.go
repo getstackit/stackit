@@ -209,3 +209,8 @@ func (c *MockGitHubClient) ListPRComments(ctx context.Context, owner, repo strin
 	}
 	return result, nil
 }
+
+// GetCurrentUser returns a mock GitHub username
+func (c *MockGitHubClient) GetCurrentUser(_ context.Context) (string, error) {
+	return "testuser", nil
+}

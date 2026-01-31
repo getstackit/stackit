@@ -47,6 +47,7 @@ type CheckStatus struct {
 	Pending        bool
 	Checks         []CheckDetail
 	ReviewDecision string // "APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED", ""
+	Author         string // GitHub username of PR author
 }
 
 // MergeMethod represents a GitHub PR merge method
@@ -113,6 +114,9 @@ type Client interface {
 
 	// ListPRComments lists all comments on a pull request
 	ListPRComments(ctx context.Context, owner, repo string, prNumber int) ([]PRComment, error)
+
+	// GetCurrentUser returns the authenticated GitHub username
+	GetCurrentUser(ctx context.Context) (string, error)
 }
 
 // PRComment represents a comment on a pull request

@@ -217,3 +217,8 @@ func (c *GitHubClient) ListPRComments(_ context.Context, _, _ string, _ int) ([]
 	// In demo mode, return empty list
 	return []github.PRComment{}, nil
 }
+
+// GetCurrentUser returns a simulated GitHub username
+func (c *GitHubClient) GetCurrentUser(_ context.Context) (string, error) {
+	return "demouser", nil
+}

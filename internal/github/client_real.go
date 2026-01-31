@@ -4,6 +4,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/go-github/v62/github"
 
@@ -239,4 +240,13 @@ func (c *StackitGitHubClient) ListPRComments(ctx context.Context, owner, repo st
 	}
 
 	return allComments, nil
+}
+
+// GetCurrentUser returns the authenticated GitHub username
+func (c *StackitGitHubClient) GetCurrentUser(ctx context.Context) (string, error) {
+	output, err := c.runner.RunGHCommandWithContext(ctx, "api", "user", "-q", ".login")
+	if err != nil {
+		return "", fmt.Errorf("failed to get current GitHub user: %w", err)
+	}
+	return strings.TrimSpace(output), nil
 }

@@ -790,66 +790,39 @@ func (e *engineImpl) CreateTemporaryWorktreeWithOptions(ctx context.Context, bra
 	// intermittent failures when stale entries remained after incomplete cleanup.
 	worktreePath := filepath.Join(tmpDir, filepath.Base(tmpDir))
 
-	// Retry worktree creation with exponential backoff to handle transient failures
-	// that can occur when multiple goroutines create worktrees concurrently.
-	// Git's worktree operations can race on .git/worktrees/ directory access.
-	const maxRetries = 3
-	var lastErr error
-	for attempt := range maxRetries {
-		err := e.git.AddWorktreeWithOptions(ctx, worktreePath, branch, true, checkout == WorktreeCheckoutShallow)
-		if err == nil {
-			break
-		}
-		lastErr = err
-		// Only retry on transient errors (race conditions on .git/worktrees/).
-		// Permanent errors (branch not found, permission denied, etc.) should fail immediately.
-		if attempt < maxRetries-1 && isTransientWorktreeError(err) {
-			// Exponential backoff: 10ms, 20ms
-			time.Sleep(time.Duration(10<<attempt) * time.Millisecond)
-			continue
-		}
-		break
-	}
+	// Serialize worktree creation to prevent races on .git/worktrees/ directory.
+	// Git's `worktree add` command is not concurrency-safe - when multiple goroutines
+	// run it simultaneously on the same repo, they can race on reading/writing the
+	// .git/worktrees/ directory, causing "failed to read commondir" errors.
+	//
+	// The mutex ensures only one worktree is being created at a time per engine (repo).
+	// This is acceptable because:
+	// 1. Temp directory creation (above) is still parallel
+	// 2. The actual rebase validation (after worktree creation) is still parallel
+	// 3. Only the brief `git worktree add` command is serialized
+	e.worktreeMu.Lock()
+	err = e.git.AddWorktreeWithOptions(ctx, worktreePath, branch, true, checkout == WorktreeCheckoutShallow)
+	e.worktreeMu.Unlock()
 
-	if lastErr != nil {
+	if err != nil {
 		_ = os.RemoveAll(tmpDir)
-		return "", nil, fmt.Errorf("failed to add worktree: %w", lastErr)
+		return "", nil, fmt.Errorf("failed to add worktree: %w", err)
 	}
 
 	cleanup := func() {
 		// Use context.Background for cleanup to ensure it runs even if ctx is canceled
-		_ = e.RemoveWorktree(context.Background(), worktreePath)
+		cleanupCtx := context.Background()
+		removeErr := e.RemoveWorktree(cleanupCtx, worktreePath)
 		_ = os.RemoveAll(tmpDir)
+		// If worktree removal failed, prune to clean up any dangling entries.
+		// This prevents stale entries from accumulating and causing "commondir" errors
+		// in subsequent worktree operations, especially on busy build servers.
+		if removeErr != nil {
+			_ = e.git.PruneWorktrees(cleanupCtx)
+		}
 	}
 
 	return worktreePath, cleanup, nil
-}
-
-// isTransientWorktreeError returns true if the error is likely a transient race condition
-// that may succeed on retry. These typically occur when multiple goroutines create worktrees
-// concurrently and race on .git/worktrees/ directory access.
-func isTransientWorktreeError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	// Transient errors from git worktree operations during concurrent access:
-	// - "commondir" errors: stale entries in .git/worktrees/ that haven't been pruned yet
-	// - "lock" errors: another process is modifying .git/worktrees/
-	// - "busy" errors: resource temporarily unavailable
-	transientIndicators := []string{
-		"commondir",
-		"lock",
-		"busy",
-		"text file busy",
-		"resource temporarily unavailable",
-	}
-	for _, indicator := range transientIndicators {
-		if strings.Contains(strings.ToLower(errStr), indicator) {
-			return true
-		}
-	}
-	return false
 }
 
 // RegisterWorktree registers a worktree for a stack root in local git refs

@@ -97,6 +97,7 @@ type engineImpl struct {
 	git               git.Runner
 	writer            io.Writer
 	mu                sync.RWMutex
+	worktreeMu        sync.Mutex // serializes worktree creation to avoid git races on .git/worktrees/
 }
 
 // NewEngine creates a new engine instance

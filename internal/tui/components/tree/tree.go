@@ -1011,7 +1011,7 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 
 	// Add SHA if requested (useful for debugging/diagnostics)
 	if args.showSHAs && annotation.LocalSHA != "" {
-		coloredBranchName += " " + style.ColorDim("("+annotation.LocalSHA+")")
+		coloredBranchName += " " + style.ColorDim("(") + style.ColorSHA(annotation.LocalSHA) + style.ColorDim(")")
 	}
 
 	// Add scope (colored to match tree)
@@ -1089,7 +1089,16 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 		}
 		// Then show commit messages
 		for _, msg := range annotation.CommitMessages {
-			result = append(result, selectionPadding+prefix+branchPipe+"  "+style.ColorDim(msg))
+			// Color the SHA (first word), rest dimmed
+			formattedMsg := msg
+			if spaceIdx := strings.Index(msg, " "); spaceIdx > 0 {
+				sha := msg[:spaceIdx]
+				rest := msg[spaceIdx:]
+				formattedMsg = style.ColorSHA(sha) + style.ColorDim(rest)
+			} else {
+				formattedMsg = style.ColorDim(msg)
+			}
+			result = append(result, selectionPadding+prefix+branchPipe+"  "+formattedMsg)
 		}
 	}
 

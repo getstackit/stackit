@@ -125,6 +125,13 @@ func ColorDim(text string) string {
 		Render(text)
 }
 
+// ColorSHA colors a git SHA (yellow)
+func ColorSHA(sha string) string {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("3")).
+		Render(sha)
+}
+
 // ColorMagenta colors text magenta
 func ColorMagenta(text string) string {
 	return lipgloss.NewStyle().

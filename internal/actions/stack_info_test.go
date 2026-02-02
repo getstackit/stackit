@@ -69,7 +69,7 @@ func TestStackInfoAction(t *testing.T) {
 		require.Contains(t, err.Error(), "not on a branch")
 	})
 
-	t.Run("returns simple text info when JSON flag is false", func(t *testing.T) {
+	t.Run("returns tree view with commit messages when JSON flag is false", func(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -80,9 +80,12 @@ func TestStackInfoAction(t *testing.T) {
 		output := s.Output.String()
 
 		require.NoError(t, err)
+		// Tree format includes branch name with symbol
 		require.Contains(t, output, "branch1")
-		require.Contains(t, output, "Parent: main")
-		require.Contains(t, output, "Commits: 1")
+		// Tree format shows trunk at bottom
+		require.Contains(t, output, "main")
+		// Tree format shows commit messages
+		require.Contains(t, output, "change on branch1")
 	})
 
 	t.Run("includes lock and frozen state", func(t *testing.T) {

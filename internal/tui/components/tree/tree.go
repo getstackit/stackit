@@ -69,6 +69,13 @@ type BranchAnnotation struct {
 
 	// MergedDownstack holds historical merged parents for display
 	MergedDownstack []MergedParentDisplay
+
+	// CommitMessages holds formatted commit messages (e.g., "abc123 Commit message")
+	// Used when ShowCommitMessages is enabled in RenderOptions
+	CommitMessages []string
+
+	// PRURL is the GitHub PR URL for this branch
+	PRURL string
 }
 
 // RenderMode specifies the rendering style for the tree.
@@ -110,6 +117,10 @@ type RenderOptions struct {
 
 	// ShowSHAs shows commit SHAs next to branch names (for debugging).
 	ShowSHAs bool
+
+	// ShowCommitMessages shows commit messages below each branch.
+	// Uses CommitMessages from BranchAnnotation.
+	ShowCommitMessages bool
 
 	// SelectedBranch is the name of the currently selected branch (for cursor).
 	SelectedBranch string
@@ -411,6 +422,7 @@ func (r *StackTreeRenderer) RenderStackDetailed(branchName string, opts RenderOp
 		hideStats:           opts.HideStats,
 		hideSummary:         opts.HideSummary,
 		showSHAs:            opts.ShowSHAs,
+		showCommitMessages:  opts.ShowCommitMessages,
 		skipSelectionPrefix: opts.SkipSelectionPrefix,
 		selectedBranch:      opts.SelectedBranch,
 		currentBranch:       r.currentBranch,
@@ -461,6 +473,7 @@ type treeRenderArgs struct {
 	hideStats           bool
 	hideSummary         bool
 	showSHAs            bool
+	showCommitMessages  bool
 	skipSelectionPrefix bool
 	selectedBranch      string
 	currentBranch       string
@@ -493,6 +506,7 @@ func (a treeRenderArgs) childArgs(branchName string, indentLevel int, parentScop
 		hideStats:           a.hideStats,
 		hideSummary:         a.hideSummary,
 		showSHAs:            a.showSHAs,
+		showCommitMessages:  a.showCommitMessages,
 		skipSelectionPrefix: a.skipSelectionPrefix,
 		selectedBranch:      a.selectedBranch,
 		currentBranch:       a.currentBranch,
@@ -523,6 +537,7 @@ func (a treeRenderArgs) downstackArgs(branchName string) treeRenderArgs {
 		hideStats:           a.hideStats,
 		hideSummary:         a.hideSummary,
 		showSHAs:            a.showSHAs,
+		showCommitMessages:  a.showCommitMessages,
 		skipSelectionPrefix: a.skipSelectionPrefix,
 		selectedBranch:      a.selectedBranch,
 		currentBranch:       a.currentBranch,
@@ -1049,8 +1064,37 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 		return result
 	}
 
-	// LINE 2: Summary line with PR# → Review → CI → Stats (skip if hideSummary)
-	if !args.hideSummary {
+	// Show commit messages when enabled (info mode)
+	if args.showCommitMessages && len(annotation.CommitMessages) > 0 {
+		branchPipe := styleObj.Render("│")
+		// Show diff stats and PR info first (above commits)
+		var statsLine string
+		if annotation.LinesAdded > 0 || annotation.LinesDeleted > 0 {
+			statsLine = r.formatContextualStats(annotation)
+		}
+		// Add PR info if available
+		if annotation.PRNumber != nil {
+			prInfo := style.ColorPRNumberByState(*annotation.PRNumber, annotation.PRState, annotation.IsDraft)
+			if annotation.PRURL != "" {
+				prInfo += " " + style.ColorDim(annotation.PRURL)
+			}
+			if statsLine != "" {
+				statsLine += " " + style.ColorDim("|") + " " + prInfo
+			} else {
+				statsLine = prInfo
+			}
+		}
+		if statsLine != "" {
+			result = append(result, selectionPadding+prefix+branchPipe+"  "+statsLine)
+		}
+		// Then show commit messages
+		for _, msg := range annotation.CommitMessages {
+			result = append(result, selectionPadding+prefix+branchPipe+"  "+style.ColorDim(msg))
+		}
+	}
+
+	// LINE 2: Summary line with PR# → Review → CI → Stats (skip if hideSummary or showCommitMessages)
+	if !args.hideSummary && !args.showCommitMessages {
 		branchPipe := styleObj.Render("│")
 		summaryLine := r.formatSummaryLine(annotation, isTrunk, args.hideStats)
 

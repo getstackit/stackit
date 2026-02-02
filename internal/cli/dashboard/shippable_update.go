@@ -249,6 +249,10 @@ func (m *shippableModel) updateFocusedStack() {
 // refresh fetches the latest stack analysis.
 func (m *shippableModel) refresh() tea.Cmd {
 	return func() tea.Msg {
+		// Rebuild engine cache to pick up external changes (e.g., move operations in another terminal)
+		if err := m.engine.Rebuild(m.engine.Trunk().GetName()); err != nil {
+			return refreshCompleteMsg{err: err}
+		}
 		result, err := m.analyzer.AnalyzeAll(m.ctx.Context)
 		return refreshCompleteMsg{result: result, err: err}
 	}

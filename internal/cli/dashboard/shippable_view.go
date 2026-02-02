@@ -474,11 +474,12 @@ func (m *shippableModel) renderStackTree(stack *shippable.Stack) []string {
 		renderer.SetAnnotation(branchName, ann)
 	}
 
-	// Render tree in full mode to match st log full
+	// Render tree in full mode with commit messages to match st info --stack
 	opts := tree.RenderOptions{
 		Mode:                tree.RenderModeFull,
-		HideSummary:         false,
+		HideSummary:         true,
 		SkipSelectionPrefix: true,
+		ShowCommitMessages:  true,
 	}
 
 	return renderer.RenderStack(stack.RootBranch(), opts)

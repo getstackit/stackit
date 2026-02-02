@@ -28,13 +28,13 @@ func RenderMovePreviewSimple(preview MovePreviewData) string {
 	var sb strings.Builder
 
 	// Header
-	sb.WriteString(style.ColorDim("─────────────────────────────────────\n"))
+	sb.WriteString(style.ColorDim("─────────────────────────────────────") + "\n")
 	sb.WriteString("Move Preview:\n")
-	sb.WriteString(style.ColorDim("─────────────────────────────────────\n"))
+	sb.WriteString(style.ColorDim("─────────────────────────────────────") + "\n")
 	sb.WriteString("\n")
 
 	// Current position (dimmed)
-	sb.WriteString(style.ColorDim("Current position:\n"))
+	sb.WriteString(style.ColorDim("Current position:") + "\n")
 	sb.WriteString(fmt.Sprintf("  %s → %s %s\n",
 		style.ColorDim(preview.OldParent),
 		style.ColorDim(preview.SourceBranch),
@@ -68,7 +68,7 @@ func RenderMovePreviewSimple(preview MovePreviewData) string {
 	}
 
 	// Conflict status
-	sb.WriteString(style.ColorDim("─────────────────────────────────────\n"))
+	sb.WriteString(style.ColorDim("─────────────────────────────────────") + "\n")
 	if preview.HasConflicts {
 		sb.WriteString(style.ColorRed("✗ ") + style.ColorRed("Conflicts detected") + "\n")
 		sb.WriteString(fmt.Sprintf("  Branch: %s\n", style.ColorBranchName(preview.ConflictBranch, false)))
@@ -76,7 +76,7 @@ func RenderMovePreviewSimple(preview MovePreviewData) string {
 	} else {
 		sb.WriteString(style.ColorGreen("✓ ") + style.ColorGreen("Move will complete without conflicts") + "\n")
 	}
-	sb.WriteString(style.ColorDim("─────────────────────────────────────\n"))
+	sb.WriteString(style.ColorDim("─────────────────────────────────────") + "\n")
 
 	return sb.String()
 }

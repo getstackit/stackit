@@ -49,7 +49,7 @@ run = """
   mkdir -p bin
   COMMIT=$(git rev-parse --short HEAD)
   DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  go build -a -ldflags "-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE" -o bin/stackit ./cmd/stackit
+  go build -ldflags "-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE" -o bin/stackit ./cmd/stackit
   if [ ! -L ./bin/st ] && [ ! -f ./bin/st ]; then
     ln -s stackit ./bin/st
     echo "Created symlink: bin/st -> stackit"

@@ -3,11 +3,12 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/tui/style"
+	"stackit.dev/stackit/internal/tui/components/tree"
 )
 
 // StackBranchInfo represents JSON-serializable info for a single branch in a stack
@@ -17,6 +18,8 @@ type StackBranchInfo struct {
 	IsLocked       bool      `json:"is_locked"`
 	IsFrozen       bool      `json:"is_frozen"`
 	Scope          string    `json:"scope"`
+	PRNumber       *int      `json:"pr_number,omitempty"`
+	PRURL          string    `json:"pr_url,omitempty"`
 	CommitMessages []string  `json:"commit_messages"`
 	DiffStats      DiffStats `json:"diff_stats"`
 }
@@ -91,6 +94,15 @@ func StackInfoAction(ctx *app.Context, opts StackInfoOptions) error {
 			}
 		}
 
+		// PR info
+		prStatus, err := branch.GetPRSubmissionStatus()
+		if err == nil && prStatus.PRNumber != nil {
+			info.PRNumber = prStatus.PRNumber
+			if prStatus.PRInfo != nil {
+				info.PRURL = prStatus.PRInfo.URL()
+			}
+		}
+
 		result = append(result, info)
 	}
 
@@ -101,41 +113,42 @@ func StackInfoAction(ctx *app.Context, opts StackInfoOptions) error {
 		}
 		ctx.Output.Info("%s", string(data))
 	} else {
-		currentBranchName := ""
-		if currentBranch != nil {
-			currentBranchName = currentBranch.GetName()
+		// Build tree data structure for rendering
+		trunkName := eng.Trunk().GetName()
+		stackTree := tree.NewStackTree(stackBranches, currentBranch.GetName(), trunkName)
+		stackTree.FixedMap = make(map[string]bool)
+		for _, branch := range stackBranches {
+			// IsFixed means it does NOT need restack
+			stackTree.FixedMap[branch.GetName()] = !branch.NeedsRestack()
 		}
+		stackTree.FixedMap[trunkName] = true
 
-		for i, info := range result {
-			coloredName := style.ColorBranchName(info.Name, info.Name == currentBranchName)
-			ctx.Output.Info("%s", coloredName)
+		renderer := tree.NewRenderer(stackTree)
 
-			var coloredParent string
-			if info.Parent != "" {
-				parentBranch := eng.GetBranch(info.Parent)
-				coloredParent = style.ColorBranchNameWithTrunk(info.Parent, false, eng.IsTrunk(parentBranch))
-			} else {
-				coloredParent = style.ColorDim("(none)")
-			}
-			ctx.Output.Info("  %s %s", style.ColorCyan("Parent:"), coloredParent)
-
-			if info.IsLocked {
-				ctx.Output.Info("  %s %s", style.IconLocked(), style.ColorDim("(locked)"))
-			}
-			if info.IsFrozen {
-				ctx.Output.Info("  %s %s", style.IconFrozen(), style.ColorDim("(frozen)"))
-			}
-			if info.Scope != "" {
-				ctx.Output.Info("  %s %s", style.ColorCyan("Scope:"), style.ColorScope(info.Scope))
-			}
-
-			ctx.Output.Info("  %s %d", style.ColorCyan("Commits:"), len(info.CommitMessages))
-			ctx.Output.Info("  %s +%d -%d in %d files", style.ColorCyan("Changes:"), info.DiffStats.Additions, info.DiffStats.Deletions, info.DiffStats.FilesChanged)
-
-			if i < len(result)-1 {
-				ctx.Output.Newline()
+		// Build annotations with commit messages and PR info
+		annotations := make(map[string]tree.BranchAnnotation)
+		for _, info := range result {
+			annotations[info.Name] = tree.BranchAnnotation{
+				CommitMessages: info.CommitMessages,
+				LinesAdded:     info.DiffStats.Additions,
+				LinesDeleted:   info.DiffStats.Deletions,
+				Scope:          info.Scope,
+				IsLocked:       info.IsLocked,
+				IsFrozen:       info.IsFrozen,
+				PRNumber:       info.PRNumber,
+				PRURL:          info.PRURL,
 			}
 		}
+		renderer.SetAnnotations(annotations)
+
+		// Render the tree with commit messages
+		lines := renderer.RenderStack(currentBranch.GetName(), tree.RenderOptions{
+			ShowCommitMessages:  true,
+			HideSummary:         true,
+			SkipSelectionPrefix: true,
+		})
+
+		ctx.Output.Info("%s", strings.Join(lines, "\n"))
 	}
 
 	return nil

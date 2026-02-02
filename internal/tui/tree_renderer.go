@@ -200,6 +200,12 @@ func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch) tree.Bra
 			ann.PRNumber = prInfo.Number()
 			ann.PRState = prInfo.State()
 			ann.IsDraft = prInfo.IsDraft()
+			ann.PRURL = prInfo.URL()
+		}
+
+		// Commit messages for detailed view
+		if commits, err := branch.GetAllCommits(engine.CommitFormatReadable); err == nil {
+			ann.CommitMessages = commits
 		}
 
 		// Merged downstack history

@@ -19,6 +19,9 @@ func TestStackMetadataGC(t *testing.T) {
 		// Create a stack: main -> a -> b
 		sh.CreateLinearStack("a", "b")
 
+		// Trigger stack ID creation by setting a description (stack IDs are created lazily)
+		sh.Run("describe -m 'Test stack for GC'")
+
 		// Capture the stack ID
 		stackID := sh.GetStackID("a")
 		require.NotEmpty(t, stackID, "stack should have a stack ID")
@@ -44,6 +47,9 @@ func TestStackMetadataGC(t *testing.T) {
 		// Create a stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
 
+		// Trigger stack ID creation by setting a description (stack IDs are created lazily)
+		sh.Run("describe -m 'Test stack for GC'")
+
 		// Capture the stack ID
 		stackID := sh.GetStackID("a")
 		require.NotEmpty(t, stackID, "stack should have a stack ID")
@@ -65,6 +71,9 @@ func TestStackMetadataGC(t *testing.T) {
 
 		// Create a stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
+
+		// Trigger stack ID creation by setting a description (stack IDs are created lazily)
+		sh.Run("describe -m 'Test stack for GC'")
 
 		// Capture the stack ID
 		stackID := sh.GetStackID("a")
@@ -96,6 +105,9 @@ func TestStackMetadataGC(t *testing.T) {
 		// Create first stack: main -> a
 		sh.Write("a.txt", "content for a").
 			Run("create a -m 'Add a'")
+
+		// Trigger stack ID creation for first stack
+		sh.Run("describe -m 'First stack'")
 		stackID1 := sh.GetStackID("a")
 		require.NotEmpty(t, stackID1)
 
@@ -103,6 +115,9 @@ func TestStackMetadataGC(t *testing.T) {
 		sh.Checkout("main").
 			Write("x.txt", "content for x").
 			Run("create x -m 'Add x'")
+
+		// Trigger stack ID creation for second stack
+		sh.Run("describe -m 'Second stack'")
 		stackID2 := sh.GetStackID("x")
 		require.NotEmpty(t, stackID2)
 

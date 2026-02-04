@@ -214,9 +214,32 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("failed to set parent: %w", err)
 	}
 
-	// Sync stack ID to match the new parent's stack
-	if err := eng.SyncStackIDFromParent(gctx, sourceBranch); err != nil {
-		ctx.Output.Debug("Failed to sync stack ID for %s: %v", source, err)
+	// Update stack ID based on the pluck destination:
+	// 1. Plucking to trunk creates a new independent stack with a fresh ID
+	// 2. Plucking to a branch in a different stack inherits that stack's ID
+	// 3. Plucking within the same stack keeps the existing ID (no update needed)
+	oldStackID := eng.GetStackID(sourceBranch)
+	newStackID := eng.GetStackID(ontoBranch)
+
+	var targetStackID string
+	switch {
+	case eng.IsTrunk(ontoBranch):
+		// Plucking to trunk creates a new stack
+		targetStackID = eng.GenerateStackID(source)
+		if err := eng.CreateStackRef(targetStackID, nil); err != nil {
+			out.Warn("Failed to create stack ref: %v", err)
+		}
+	case newStackID != "" && newStackID != oldStackID:
+		// Plucking to a different stack - inherit that stack's ID
+		targetStackID = newStackID
+	}
+
+	// Update stack ID if needed (pluck only moves the source, not descendants)
+	if targetStackID != "" {
+		if err := eng.SetStackID(gctx, sourceBranch, targetStackID); err != nil {
+			out.Warn("Failed to update stack ID for %s: %v", source, err)
+		}
+		out.Info("Stack membership updated for %s", source)
 	}
 
 	out.Info("Plucked %s from %s to %s.",

@@ -113,6 +113,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		fetchStart := time.Now()
 		metadataFetchErr = ctx.RemoteMetadata().FetchRemoteMetadata(gctx)
 		ctx.Logger.Info("fetch remote metadata refs completed", "durationMs", time.Since(fetchStart).Milliseconds())
+
+		// Also fetch stack metadata refs (stack-level descriptions, etc.)
+		stackFetchStart := time.Now()
+		if err := ctx.Git().FetchStackMetaRefs(gctx); err != nil {
+			ctx.Logger.Debug("fetch stack metadata refs failed (non-fatal)", "error", err)
+		}
+		ctx.Logger.Info("fetch stack metadata refs completed", "durationMs", time.Since(stackFetchStart).Milliseconds())
 		return nil
 	})
 

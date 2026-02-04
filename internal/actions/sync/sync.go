@@ -192,6 +192,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		ctx.Output.Warn("Worktree cleanup: %s", errMsg)
 	}
 
+	// GC orphaned stack metadata refs (after branch cleanup so we know what's been deleted)
+	gcResult := gcOrphanedStackMetadata(ctx)
+	if len(gcResult.DeletedStackIDs) > 0 {
+		ctx.Logger.Info("cleaned orphaned stack metadata", "count", len(gcResult.DeletedStackIDs))
+	}
+	// Surface any GC errors as warnings (non-fatal)
+	for _, errMsg := range gcResult.Errors {
+		ctx.Output.Warn("Stack metadata cleanup: %s", errMsg)
+	}
+
 	graph := engine.BuildStackGraph(eng, engine.SortStrategyAlphabetical, nil)
 
 	// Add branches with new parents to restack list (skip dirty stacks)

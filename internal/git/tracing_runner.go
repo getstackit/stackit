@@ -218,6 +218,13 @@ func (t *tracingRunner) FetchStackMetaRefs(ctx context.Context) error {
 	return err
 }
 
+func (t *tracingRunner) DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []string) error {
+	start := time.Now()
+	err := t.inner.DeleteRemoteStackMetaRefs(ctx, stackIDs)
+	t.trace("DeleteRemoteStackMetaRefs", time.Since(start), err == nil, err, slog.Int("count", len(stackIDs)))
+	return err
+}
+
 func (t *tracingRunner) DeleteRemoteMetadataRef(ctx context.Context, branch string) error {
 	start := time.Now()
 	err := t.inner.DeleteRemoteMetadataRef(ctx, branch)

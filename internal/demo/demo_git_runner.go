@@ -624,6 +624,10 @@ func (d *demoGitRunner) FetchStackMetaRefs(_ context.Context) error {
 	return nil
 }
 
+func (d *demoGitRunner) DeleteRemoteStackMetaRefs(_ context.Context, _ []string) error {
+	return nil
+}
+
 func (d *demoGitRunner) DeleteRemoteMetadataRef(_ context.Context, _ string) error {
 	return nil
 }

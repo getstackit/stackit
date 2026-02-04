@@ -46,6 +46,7 @@ type RemoteOperations interface {
 	TestRemoteRefCompatibility() error
 	PushStackMetaRefs(ctx context.Context, stackIDs []string) error
 	FetchStackMetaRefs(ctx context.Context) error
+	DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []string) error
 }
 
 // BranchReader provides read access to branch information.

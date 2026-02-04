@@ -970,6 +970,19 @@ func (r *runner) FetchStackMetaRefs(ctx context.Context) error {
 	return err
 }
 
+func (r *runner) DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []string) error {
+	if len(stackIDs) == 0 {
+		return nil
+	}
+	// git push origin --delete refs/stackit/stacks/id1 refs/stackit/stacks/id2 ...
+	args := []string{"push", "origin", "--delete"}
+	for _, stackID := range stackIDs {
+		args = append(args, fmt.Sprintf("refs/stackit/stacks/%s", stackID))
+	}
+	_, err := r.RunGitCommandWithContext(ctx, args...)
+	return err
+}
+
 func (r *runner) DeleteRemoteMetadataRef(ctx context.Context, branch string) error {
 	// git push origin --delete refs/stackit/metadata/<branch>
 	_, err := r.RunGitCommandWithContext(ctx, "push", "origin", "--delete", fmt.Sprintf("refs/stackit/metadata/%s", branch))

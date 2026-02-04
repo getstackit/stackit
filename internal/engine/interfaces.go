@@ -156,6 +156,10 @@ type BranchTracking interface {
 	CreateStackRef(stackID string, meta *git.StackMeta) error
 	// GetStackMeta returns the stack metadata for a stack ID.
 	GetStackMeta(stackID string) (*git.StackMeta, error)
+	// SyncStackIDFromParent updates a branch's stack ID to match its parent's.
+	// This should be called after reparenting operations to keep stack IDs consistent.
+	// Returns nil if the parent is trunk (keeps existing stack ID) or if no change is needed.
+	SyncStackIDFromParent(ctx context.Context, branch Branch) error
 }
 
 // BranchMutations handles branch lifecycle operations

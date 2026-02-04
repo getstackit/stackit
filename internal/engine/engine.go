@@ -86,6 +86,9 @@ type RemoteMetadataManager interface {
 	DeleteMetadata(ctx context.Context, branchName string) error
 	FetchRemoteMetadata(ctx context.Context) error
 	ConfigureRemoteMetadataSync(ctx context.Context) error
+	// GetStackIDsForBranches returns the unique stack IDs for the given branches.
+	// This is used to determine which stack refs need to be pushed to remote.
+	GetStackIDsForBranches(branches []Branch) []string
 }
 
 // ApplySplitOptions contains options for applying a split

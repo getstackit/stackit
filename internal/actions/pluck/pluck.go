@@ -214,6 +214,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("failed to set parent: %w", err)
 	}
 
+	// Sync stack ID to match the new parent's stack
+	if err := eng.SyncStackIDFromParent(gctx, sourceBranch); err != nil {
+		ctx.Output.Debug("Failed to sync stack ID for %s: %v", source, err)
+	}
+
 	out.Info("Plucked %s from %s to %s.",
 		style.ColorBranchName(source, true),
 		style.ColorBranchName(oldParentName, false),

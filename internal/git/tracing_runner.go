@@ -132,6 +132,13 @@ func (t *tracingRunner) EnsureMetadataRefspecConfigured() error {
 	return err
 }
 
+func (t *tracingRunner) EnsureStackMetaRefspecConfigured() error {
+	start := time.Now()
+	err := t.inner.EnsureStackMetaRefspecConfigured()
+	t.trace("EnsureStackMetaRefspecConfigured", time.Since(start), err == nil, err)
+	return err
+}
+
 // RemoteOperations methods
 
 func (t *tracingRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
@@ -194,6 +201,20 @@ func (t *tracingRunner) FetchMetadataRefs(ctx context.Context) error {
 	start := time.Now()
 	err := t.inner.FetchMetadataRefs(ctx)
 	t.trace("FetchMetadataRefs", time.Since(start), err == nil, err)
+	return err
+}
+
+func (t *tracingRunner) PushStackMetaRefs(ctx context.Context, stackIDs []string) error {
+	start := time.Now()
+	err := t.inner.PushStackMetaRefs(ctx, stackIDs)
+	t.trace("PushStackMetaRefs", time.Since(start), err == nil, err, slog.Int("count", len(stackIDs)))
+	return err
+}
+
+func (t *tracingRunner) FetchStackMetaRefs(ctx context.Context) error {
+	start := time.Now()
+	err := t.inner.FetchStackMetaRefs(ctx)
+	t.trace("FetchStackMetaRefs", time.Since(start), err == nil, err)
 	return err
 }
 

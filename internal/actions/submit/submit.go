@@ -604,6 +604,15 @@ func pushMetadataRefs(ctx *app.Context, branches []engine.Branch) error {
 		return fmt.Errorf("failed to push metadata refs: %w", err)
 	}
 
+	// Push stack metadata refs for any stacks that have branches being submitted
+	stackIDs := ctx.Engine.GetStackIDsForBranches(branches)
+	if len(stackIDs) > 0 {
+		if err := ctx.Git().PushStackMetaRefs(ctx.Context, stackIDs); err != nil {
+			ctx.Output.Debug("Failed to push stack metadata refs: %v", err)
+			// Non-fatal: stack metadata push failure shouldn't fail the submit
+		}
+	}
+
 	return nil
 }
 

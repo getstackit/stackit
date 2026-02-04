@@ -27,6 +27,12 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 		return fmt.Errorf("branch %s has no parent", opts.BranchToSplit)
 	}
 
+	// Capture the original stack ID to preserve it on new branches
+	var originalStackID string
+	if meta.StackID != nil {
+		originalStackID = *meta.StackID
+	}
+
 	parentBranchName := *meta.ParentBranchName
 	parentRevision := *meta.ParentBranchRevision
 	children := e.childrenMap[opts.BranchToSplit]
@@ -77,6 +83,11 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 		newMeta := &git.Meta{
 			ParentBranchName:     &branchParentName,
 			ParentBranchRevision: &branchParentRevision,
+		}
+
+		// Preserve stack ID from original branch
+		if originalStackID != "" {
+			newMeta.StackID = &originalStackID
 		}
 
 		// Preserve PR info if applicable

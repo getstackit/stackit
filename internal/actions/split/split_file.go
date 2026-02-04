@@ -86,7 +86,13 @@ func recoverToOriginalBranchAndRef(ctx context.Context, eng splitByFileEngine, b
 // Sibling mode (AsSibling=true):
 // Creates a new SIBLING branch containing the changes to the extracted files.
 // The original branch is unchanged (changes are NOT removed).
+//
+// Stack ID preservation:
+// All new branches created by split inherit the original branch's stack ID,
+// ensuring they remain part of the same logical stack.
 func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []string, eng splitByFileEngine, opts splitByFileOptions) (*Result, error) {
+	// Capture original stack ID to preserve on new branches
+	originalStackID := eng.GetStackID(branchToSplit)
 	// Get parent branch
 	parentBranchName := branchToSplit.GetParentPrecondition()
 	parentBranch := eng.GetBranch(parentBranchName)
@@ -157,12 +163,12 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 
 	// For sibling mode, use simpler approach - create branch at parent and apply hunks directly
 	if opts.AsSibling {
-		return splitByFileSibling(ctx, branchToSplit, parentBranch, newBranchName, filteredHunks, commitMessage, eng, opts.DryRun)
+		return splitByFileSibling(ctx, branchToSplit, parentBranch, newBranchName, filteredHunks, commitMessage, eng, originalStackID, opts.DryRun)
 	}
 
 	// For above mode (upstack), extract to child branch
 	if opts.Direction == DirectionAbove {
-		return splitByFileAbove(ctx, branchToSplit, newBranchName, filteredHunks, defaultCommitMessage, commitMessage, eng, opts.DryRun)
+		return splitByFileAbove(ctx, branchToSplit, newBranchName, filteredHunks, defaultCommitMessage, commitMessage, eng, originalStackID, opts.DryRun)
 	}
 
 	// Dry-run mode: show what would happen without executing
@@ -305,6 +311,15 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 		return nil, recoverWithRef(fmt.Errorf("failed to track parent branch: %w", err))
 	}
 
+	// Preserve stack ID from original branch
+	// TrackBranch may generate a new ID if parent is trunk, but split branches
+	// should stay in the same stack as the branch being split
+	if originalStackID != "" {
+		if err := eng.SetStackID(ctx, newBranch, originalStackID); err != nil {
+			return nil, recoverWithRef(fmt.Errorf("failed to preserve stack ID: %w", err))
+		}
+	}
+
 	// Update branchToSplit to have newBranch as its parent
 	if err := eng.SetParent(ctx, branchToSplit, newBranch); err != nil {
 		return nil, recoverWithRef(fmt.Errorf("failed to update parent of %s: %w", branchToSplit.GetName(), err))
@@ -337,7 +352,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 //  9. Pop stash and commit (extracted files)
 //  10. Track child branch with original as parent
 //  11. Reparent existing children to new child
-func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranchName string, hunks []git.Hunk, defaultCommitMessage string, childCommitMessage string, eng splitByFileEngine, dryRun bool) (*Result, error) {
+func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranchName string, hunks []git.Hunk, defaultCommitMessage string, childCommitMessage string, eng splitByFileEngine, originalStackID string, dryRun bool) (*Result, error) {
 	// Dry-run mode: show what would happen without executing
 	if dryRun {
 		return &Result{
@@ -495,6 +510,13 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 		return nil, fmt.Errorf("failed to track child branch: %w", err)
 	}
 
+	// Preserve stack ID from original branch
+	if originalStackID != "" {
+		if err := eng.SetStackID(ctx, childBranch, originalStackID); err != nil {
+			return nil, fmt.Errorf("failed to preserve stack ID: %w", err)
+		}
+	}
+
 	// Child branch is now fully set up, don't clean it up on subsequent errors
 	childBranchCreated = false
 
@@ -514,7 +536,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 
 // splitByFileSibling creates a sibling branch with the specified file changes.
 // The original branch is unchanged.
-func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parentBranch engine.Branch, newBranchName string, hunks []git.Hunk, commitMessage string, eng splitByFileEngine, dryRun bool) (*Result, error) {
+func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parentBranch engine.Branch, newBranchName string, hunks []git.Hunk, commitMessage string, eng splitByFileEngine, originalStackID string, dryRun bool) (*Result, error) {
 	// Dry-run mode: show what would happen without executing
 	if dryRun {
 		return &Result{
@@ -569,6 +591,15 @@ func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parent
 		_ = eng.DeleteBranch(ctx, newBranch)
 		_ = eng.CheckoutBranch(ctx, branchToSplit)
 		return nil, fmt.Errorf("failed to track branch: %w", err)
+	}
+
+	// Preserve stack ID from original branch
+	if originalStackID != "" {
+		if err := eng.SetStackID(ctx, newBranch, originalStackID); err != nil {
+			_ = eng.DeleteBranch(ctx, newBranch)
+			_ = eng.CheckoutBranch(ctx, branchToSplit)
+			return nil, fmt.Errorf("failed to preserve stack ID: %w", err)
+		}
 	}
 
 	// Return to original branch

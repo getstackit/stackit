@@ -79,6 +79,10 @@ func (d *demoGitRunner) EnsureMetadataRefspecConfigured() error {
 	return nil
 }
 
+func (d *demoGitRunner) EnsureStackMetaRefspecConfigured() error {
+	return nil
+}
+
 func (d *demoGitRunner) GetCurrentBranch() (string, error) {
 	return d.currentBranch, nil
 }
@@ -609,6 +613,14 @@ func (d *demoGitRunner) PushMetadataRefs(_ context.Context, _ []string) error {
 }
 
 func (d *demoGitRunner) FetchMetadataRefs(_ context.Context) error {
+	return nil
+}
+
+func (d *demoGitRunner) PushStackMetaRefs(_ context.Context, _ []string) error {
+	return nil
+}
+
+func (d *demoGitRunner) FetchStackMetaRefs(_ context.Context) error {
 	return nil
 }
 

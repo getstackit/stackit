@@ -1254,3 +1254,28 @@ func (e *engineImpl) CreateStackRef(stackID string, meta *git.StackMeta) error {
 func (e *engineImpl) GetStackMeta(stackID string) (*git.StackMeta, error) {
 	return e.git.ReadStackMeta(stackID)
 }
+
+// SyncStackIDFromParent updates a branch's stack ID to match its parent's.
+// This should be called after reparenting operations to keep stack IDs consistent.
+// Returns nil if the parent is trunk (keeps existing stack ID) or if no change is needed.
+func (e *engineImpl) SyncStackIDFromParent(ctx context.Context, branch Branch) error {
+	parent := branch.GetParent()
+	if parent == nil {
+		// Parent is trunk - keep existing stack ID
+		return nil
+	}
+
+	parentStackID := e.GetStackID(*parent)
+	if parentStackID == "" {
+		// Parent has no stack ID (legacy branch) - no action needed
+		return nil
+	}
+
+	currentStackID := e.GetStackID(branch)
+	if currentStackID == parentStackID {
+		// Already in sync - no change needed
+		return nil
+	}
+
+	return e.SetStackID(ctx, branch, parentStackID)
+}

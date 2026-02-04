@@ -70,7 +70,7 @@ func TestGetStackID(t *testing.T) {
 		require.Empty(t, stackID)
 	})
 
-	t.Run("returns stack ID for tracked branch", func(t *testing.T) {
+	t.Run("returns empty for tracked branch without explicit stack ID", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
@@ -79,12 +79,31 @@ func TestGetStackID(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		branch := s.Engine.GetBranch("feature")
+		// Stack IDs are not auto-created during TrackBranch
 		stackID := s.Engine.GetStackID(branch)
-		require.NotEmpty(t, stackID)
-		require.Contains(t, stackID, "feature")
+		require.Empty(t, stackID)
 	})
 
-	t.Run("child inherits parent stack ID", func(t *testing.T) {
+	t.Run("returns stack ID after EnsureStackID", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit().
+			CreateBranch("feature").
+			Commit("feature commit").
+			TrackBranch("feature", "main")
+
+		branch := s.Engine.GetBranch("feature")
+		stackID, err := s.Engine.EnsureStackID(context.Background(), branch)
+		require.NoError(t, err)
+		require.NotEmpty(t, stackID)
+		require.Contains(t, stackID, "feature")
+
+		// GetStackID should now return the same ID
+		readID := s.Engine.GetStackID(branch)
+		require.Equal(t, stackID, readID)
+	})
+
+	t.Run("child inherits parent stack ID after EnsureStackID", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
@@ -98,8 +117,11 @@ func TestGetStackID(t *testing.T) {
 		rootBranch := s.Engine.GetBranch("root")
 		childBranch := s.Engine.GetBranch("child")
 
+		// Ensure stack ID from child - should propagate to all branches in stack
+		childStackID, err := s.Engine.EnsureStackID(context.Background(), childBranch)
+		require.NoError(t, err)
+
 		rootStackID := s.Engine.GetStackID(rootBranch)
-		childStackID := s.Engine.GetStackID(childBranch)
 
 		require.NotEmpty(t, rootStackID)
 		require.Equal(t, rootStackID, childStackID)
@@ -132,7 +154,7 @@ func TestSetStackID(t *testing.T) {
 func TestStackIDInheritance(t *testing.T) {
 	t.Parallel()
 
-	t.Run("multiple children inherit same stack ID", func(t *testing.T) {
+	t.Run("multiple children inherit same stack ID after EnsureStackID", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
@@ -152,7 +174,10 @@ func TestStackIDInheritance(t *testing.T) {
 		child1 := s.Engine.GetBranch("child1")
 		child2 := s.Engine.GetBranch("child2")
 
-		rootID := s.Engine.GetStackID(root)
+		// EnsureStackID from any branch propagates to whole stack
+		rootID, err := s.Engine.EnsureStackID(context.Background(), root)
+		require.NoError(t, err)
+
 		child1ID := s.Engine.GetStackID(child1)
 		child2ID := s.Engine.GetStackID(child2)
 
@@ -161,7 +186,7 @@ func TestStackIDInheritance(t *testing.T) {
 		require.Equal(t, rootID, child2ID)
 	})
 
-	t.Run("grandchildren inherit same stack ID", func(t *testing.T) {
+	t.Run("grandchildren inherit same stack ID after EnsureStackID", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
@@ -178,14 +203,17 @@ func TestStackIDInheritance(t *testing.T) {
 		root := s.Engine.GetBranch("root")
 		grandchild := s.Engine.GetBranch("grandchild")
 
+		// EnsureStackID from grandchild propagates to all ancestors and descendants
+		grandchildID, err := s.Engine.EnsureStackID(context.Background(), grandchild)
+		require.NoError(t, err)
+
 		rootID := s.Engine.GetStackID(root)
-		grandchildID := s.Engine.GetStackID(grandchild)
 
 		require.NotEmpty(t, rootID)
 		require.Equal(t, rootID, grandchildID)
 	})
 
-	t.Run("separate stacks have different IDs", func(t *testing.T) {
+	t.Run("separate stacks have different IDs after EnsureStackID", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
@@ -200,8 +228,10 @@ func TestStackIDInheritance(t *testing.T) {
 		stack1 := s.Engine.GetBranch("stack1")
 		stack2 := s.Engine.GetBranch("stack2")
 
-		id1 := s.Engine.GetStackID(stack1)
-		id2 := s.Engine.GetStackID(stack2)
+		id1, err := s.Engine.EnsureStackID(context.Background(), stack1)
+		require.NoError(t, err)
+		id2, err := s.Engine.EnsureStackID(context.Background(), stack2)
+		require.NoError(t, err)
 
 		require.NotEmpty(t, id1)
 		require.NotEmpty(t, id2)

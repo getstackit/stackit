@@ -150,6 +150,9 @@ type BranchTracking interface {
 	// Returns empty string for untracked branches or trunk.
 	// For legacy branches without StackID, derives it from the stack root.
 	GetStackID(branch Branch) string
+	// EnsureStackID returns the stack ID for a branch, creating one if it doesn't exist.
+	// This is used for lazy creation of stack metadata when setting descriptions or scopes.
+	EnsureStackID(ctx context.Context, branch Branch) (string, error)
 	// SetStackID sets the stack ID on a branch's metadata.
 	SetStackID(ctx context.Context, branch Branch, stackID string) error
 	// CreateStackRef creates a new stack ref with the given metadata.

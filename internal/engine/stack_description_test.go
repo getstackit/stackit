@@ -147,7 +147,7 @@ func TestSetStackDescription(t *testing.T) {
 			Title: "Test",
 		})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "not part of a tracked stack")
+		require.Contains(t, err.Error(), "not tracked")
 	})
 }
 

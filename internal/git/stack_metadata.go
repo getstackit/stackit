@@ -45,7 +45,7 @@ const (
 // ReadStackMeta reads stack metadata for a given stack ID.
 // Returns nil with no error if the stack doesn't exist.
 func (r *runner) ReadStackMeta(stackID string) (*StackMeta, error) {
-	refName := fmt.Sprintf("%s%s", StackMetaRefPrefix, stackID)
+	refName := StackMetaRefName(stackID)
 
 	sha, err := r.GetRef(refName)
 	if err != nil {
@@ -82,8 +82,7 @@ func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
 		return fmt.Errorf("failed to create stack metadata blob: %w", err)
 	}
 
-	refName := fmt.Sprintf("%s%s", StackMetaRefPrefix, stackID)
-	if err := r.UpdateRef(refName, sha); err != nil {
+	if err := r.UpdateRef(StackMetaRefName(stackID), sha); err != nil {
 		return fmt.Errorf("failed to write stack metadata ref: %w", err)
 	}
 
@@ -92,8 +91,7 @@ func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
 
 // DeleteStackMeta deletes stack metadata for a given stack ID.
 func (r *runner) DeleteStackMeta(stackID string) error {
-	refName := fmt.Sprintf("%s%s", StackMetaRefPrefix, stackID)
-	return r.DeleteRef(refName)
+	return r.DeleteRef(StackMetaRefName(stackID))
 }
 
 // ListStackMetas returns a map of stack IDs to their ref SHAs.
@@ -130,8 +128,7 @@ func (r *runner) WriteStackMetaBlob(meta *StackMeta) (string, error) {
 
 // GetStackMetaRefSHA returns the current SHA of a stack metadata ref, or empty string if not found.
 func (r *runner) GetStackMetaRefSHA(stackID string) string {
-	refName := fmt.Sprintf("%s%s", StackMetaRefPrefix, stackID)
-	sha, err := r.GetRef(refName)
+	sha, err := r.GetRef(StackMetaRefName(stackID))
 	if err != nil {
 		return ""
 	}
@@ -139,6 +136,8 @@ func (r *runner) GetStackMetaRefSHA(stackID string) string {
 }
 
 // StackMetaRefName returns the full ref name for a stack's metadata.
+// Use this helper instead of concatenating StackMetaRefPrefix directly
+// to ensure consistent ref name construction across all stack metadata operations.
 func StackMetaRefName(stackID string) string {
 	return fmt.Sprintf("%s%s", StackMetaRefPrefix, stackID)
 }

@@ -189,3 +189,114 @@ func TestStackMeta_IsEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteStackMetaBlob(t *testing.T) {
+	t.Parallel()
+
+	t.Run("write blob and use SHA to create valid stack meta ref", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
+
+		stackID := "blob-test-stack"
+		meta := &git.StackMeta{
+			ID:          stackID,
+			Title:       "Blob Test Stack",
+			Description: "Testing WriteStackMetaBlob",
+			CreatedAt:   time.Now().Truncate(time.Second),
+			CreatedBy:   "test-user",
+		}
+
+		// Write blob (does not create ref)
+		sha, err := runner.WriteStackMetaBlob(meta)
+		require.NoError(t, err)
+		require.NotEmpty(t, sha)
+
+		// Verify no ref exists yet
+		existingSHA := runner.GetStackMetaRefSHA(stackID)
+		require.Empty(t, existingSHA)
+
+		// Use UpdateRef to create the stack meta ref
+		refName := git.StackMetaRefName(stackID)
+		err = runner.UpdateRef(refName, sha)
+		require.NoError(t, err)
+
+		// Verify we can read the metadata back
+		readMeta, err := runner.ReadStackMeta(stackID)
+		require.NoError(t, err)
+		require.NotNil(t, readMeta)
+		require.Equal(t, stackID, readMeta.ID)
+		require.Equal(t, "Blob Test Stack", readMeta.Title)
+		require.Equal(t, "Testing WriteStackMetaBlob", readMeta.Description)
+		require.Equal(t, "test-user", readMeta.CreatedBy)
+	})
+}
+
+func TestGetStackMetaRefSHA(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns SHA for existing stack", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
+
+		stackID := "sha-test-stack"
+		meta := &git.StackMeta{
+			ID:        stackID,
+			Title:     "SHA Test Stack",
+			CreatedAt: time.Now(),
+		}
+
+		// Write stack meta
+		err := runner.WriteStackMeta(stackID, meta)
+		require.NoError(t, err)
+
+		// Get SHA
+		sha := runner.GetStackMetaRefSHA(stackID)
+		require.NotEmpty(t, sha)
+		require.Len(t, sha, 40) // Git SHAs are 40 hex characters
+	})
+
+	t.Run("returns empty string for non-existent stack", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
+
+		sha := runner.GetStackMetaRefSHA("nonexistent-stack-id")
+		require.Empty(t, sha)
+	})
+}
+
+func TestStackMetaRefName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		stackID  string
+		expected string
+	}{
+		{
+			name:     "simple stack ID",
+			stackID:  "test-id",
+			expected: "refs/stackit/stacks/test-id",
+		},
+		{
+			name:     "stack ID with timestamp prefix",
+			stackID:  "1234567890-my-feature",
+			expected: "refs/stackit/stacks/1234567890-my-feature",
+		},
+		{
+			name:     "stack ID with special characters",
+			stackID:  "feature/add-login",
+			expected: "refs/stackit/stacks/feature/add-login",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := git.StackMetaRefName(tt.stackID)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}

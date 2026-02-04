@@ -4,12 +4,14 @@ package move
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"stackit.dev/stackit/internal/actions"
 	"stackit.dev/stackit/internal/actions/handler"
 	"stackit.dev/stackit/internal/actions/validation"
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/engine"
+	"stackit.dev/stackit/internal/git"
 	"stackit.dev/stackit/internal/output"
 	"stackit.dev/stackit/internal/tui/style"
 )
@@ -210,8 +212,12 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	if eng.IsTrunk(ontoBranch) {
 		// Moving to trunk creates a new stack
 		targetStackID = eng.GenerateStackID(source)
-		// Create a new stack ref
-		if err := eng.CreateStackRef(gctx, targetStackID, nil); err != nil {
+		// Create a new stack ref with proper metadata
+		stackMeta := &git.StackMeta{
+			ID:        targetStackID,
+			CreatedAt: time.Now(),
+		}
+		if err := eng.CreateStackRef(targetStackID, stackMeta); err != nil {
 			out.Debug("Failed to create stack ref: %v", err)
 		}
 	} else if newStackID != "" && newStackID != oldStackID {
@@ -220,7 +226,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	}
 
 	// Update stack IDs if needed
-	if targetStackID != "" && targetStackID != oldStackID {
+	if targetStackID != "" {
 		// Update source branch
 		if err := eng.SetStackID(gctx, sourceBranch, targetStackID); err != nil {
 			out.Debug("Failed to update stack ID for %s: %v", source, err)

@@ -4,9 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"stackit.dev/stackit/internal/git"
 	"stackit.dev/stackit/testhelpers"
 	"stackit.dev/stackit/testhelpers/scenario"
 )
@@ -204,5 +206,132 @@ func TestStackIDInheritance(t *testing.T) {
 		require.NotEmpty(t, id1)
 		require.NotEmpty(t, id2)
 		require.NotEqual(t, id1, id2)
+	})
+}
+
+func TestCreateStackRef(t *testing.T) {
+	t.Parallel()
+
+	t.Run("creates stack ref with provided metadata", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		stackID := "test-stack-id"
+		createdAt := time.Now().Truncate(time.Second)
+		meta := &git.StackMeta{
+			ID:          stackID,
+			Title:       "Test Stack",
+			Description: "A test stack description",
+			CreatedAt:   createdAt,
+			CreatedBy:   "test-user",
+		}
+
+		err := s.Engine.CreateStackRef(stackID, meta)
+		require.NoError(t, err)
+
+		// Verify GetStackMeta returns the correct metadata
+		retrieved, err := s.Engine.GetStackMeta(stackID)
+		require.NoError(t, err)
+		require.NotNil(t, retrieved)
+		require.Equal(t, stackID, retrieved.ID)
+		require.Equal(t, "Test Stack", retrieved.Title)
+		require.Equal(t, "A test stack description", retrieved.Description)
+		require.Equal(t, createdAt, retrieved.CreatedAt)
+		require.Equal(t, "test-user", retrieved.CreatedBy)
+	})
+
+	t.Run("creates stack ref with nil metadata using defaults", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		stackID := "default-meta-stack"
+
+		err := s.Engine.CreateStackRef(stackID, nil)
+		require.NoError(t, err)
+
+		// Verify GetStackMeta returns metadata with defaults
+		retrieved, err := s.Engine.GetStackMeta(stackID)
+		require.NoError(t, err)
+		require.NotNil(t, retrieved)
+		require.Equal(t, stackID, retrieved.ID)
+		require.False(t, retrieved.CreatedAt.IsZero())
+	})
+}
+
+func TestGetStackMeta(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns nil for non-existent stack ID", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		meta, err := s.Engine.GetStackMeta("non-existent-stack-id")
+		require.NoError(t, err)
+		require.Nil(t, meta)
+	})
+
+	t.Run("returns correct metadata for existing stack", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		stackID := "existing-stack"
+		createdAt := time.Now().Truncate(time.Second)
+		meta := &git.StackMeta{
+			ID:          stackID,
+			Title:       "Existing Stack",
+			Description: "This stack exists",
+			CreatedAt:   createdAt,
+			CreatedBy:   "author",
+		}
+
+		err := s.Engine.CreateStackRef(stackID, meta)
+		require.NoError(t, err)
+
+		// Retrieve and verify
+		retrieved, err := s.Engine.GetStackMeta(stackID)
+		require.NoError(t, err)
+		require.NotNil(t, retrieved)
+		require.Equal(t, stackID, retrieved.ID)
+		require.Equal(t, "Existing Stack", retrieved.Title)
+		require.Equal(t, "This stack exists", retrieved.Description)
+		require.Equal(t, createdAt, retrieved.CreatedAt)
+		require.Equal(t, "author", retrieved.CreatedBy)
+	})
+
+	t.Run("returns different metadata for different stacks", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		stack1ID := "stack-1"
+		stack2ID := "stack-2"
+
+		meta1 := &git.StackMeta{
+			ID:        stack1ID,
+			Title:     "Stack One",
+			CreatedAt: time.Now().Truncate(time.Second),
+		}
+		meta2 := &git.StackMeta{
+			ID:        stack2ID,
+			Title:     "Stack Two",
+			CreatedAt: time.Now().Truncate(time.Second),
+		}
+
+		err := s.Engine.CreateStackRef(stack1ID, meta1)
+		require.NoError(t, err)
+		err = s.Engine.CreateStackRef(stack2ID, meta2)
+		require.NoError(t, err)
+
+		retrieved1, err := s.Engine.GetStackMeta(stack1ID)
+		require.NoError(t, err)
+		require.Equal(t, "Stack One", retrieved1.Title)
+
+		retrieved2, err := s.Engine.GetStackMeta(stack2ID)
+		require.NoError(t, err)
+		require.Equal(t, "Stack Two", retrieved2.Title)
 	})
 }

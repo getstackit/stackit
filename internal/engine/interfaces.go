@@ -153,7 +153,7 @@ type BranchTracking interface {
 	// SetStackID sets the stack ID on a branch's metadata.
 	SetStackID(ctx context.Context, branch Branch, stackID string) error
 	// CreateStackRef creates a new stack ref with the given metadata.
-	CreateStackRef(ctx context.Context, stackID string, meta *git.StackMeta) error
+	CreateStackRef(stackID string, meta *git.StackMeta) error
 	// GetStackMeta returns the stack metadata for a stack ID.
 	GetStackMeta(stackID string) (*git.StackMeta, error)
 }

@@ -178,6 +178,7 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 // assignStackID assigns a stack ID to a branch based on its parent.
 // If parent is trunk, generates a new stack ID and creates a stack ref.
 // If parent has a stack ID, inherits the parent's stack ID.
+// If parent has no stack ID (legacy branch), no action is taken.
 func (e *engineImpl) assignStackID(ctx context.Context, branchName string, parentBranchName string) error {
 	var stackID string
 
@@ -1076,25 +1077,20 @@ func (e *engineImpl) GetBranchesNeedingPRBodyUpdate() []string {
 }
 
 // GetStackDescription returns the stack description for a branch's stack.
-// It first checks the stack ref using the branch's StackID, then falls back to legacy branch metadata.
+// It reads from the stack ref using the branch's StackID.
+// Returns nil for untracked branches or if the stack has no description.
 func (e *engineImpl) GetStackDescription(branch Branch) *git.StackDescription {
-	// Get stack ID
 	stackID := e.GetStackID(branch)
 	if stackID == "" {
 		return nil
 	}
 
-	// Try to read from stack ref
 	stackMeta, err := e.git.ReadStackMeta(stackID)
-	if err != nil {
+	if err != nil || stackMeta == nil {
 		return nil
 	}
 
-	if stackMeta != nil {
-		return stackMeta.StackDescription()
-	}
-
-	return nil
+	return stackMeta.StackDescription()
 }
 
 // SetStackDescription sets the stack description in the stack ref for a branch.
@@ -1148,26 +1144,39 @@ func (e *engineImpl) GenerateStackID(rootBranch string) string {
 }
 
 // sanitizeBranchNameForStackID converts a branch name into a safe suffix for stack IDs.
+// Only allows alphanumeric characters and hyphens; collapses runs of hyphens into one.
 func sanitizeBranchNameForStackID(branchName string) string {
-	// Replace slashes and other unsafe characters with hyphens
-	result := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' {
-			return r
-		}
-		return '-'
-	}, branchName)
+	// Single-pass: replace unsafe chars with hyphens and collapse consecutive hyphens
+	var b strings.Builder
+	b.Grow(len(branchName))
+	prevHyphen := true // Start true to skip leading hyphens
 
-	// Collapse multiple hyphens
-	for strings.Contains(result, "--") {
-		result = strings.ReplaceAll(result, "--", "-")
+	for _, r := range branchName {
+		isAlphaNum := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		if isAlphaNum {
+			b.WriteRune(r)
+			prevHyphen = false
+		} else if !prevHyphen {
+			b.WriteRune('-')
+			prevHyphen = true
+		}
 	}
 
-	// Trim leading/trailing hyphens
-	result = strings.Trim(result, "-")
+	result := b.String()
+
+	// Trim trailing hyphen
+	result = strings.TrimSuffix(result, "-")
 
 	// Limit length
 	if len(result) > 50 {
 		result = result[:50]
+		// Ensure we don't end with a hyphen after truncation
+		result = strings.TrimSuffix(result, "-")
+	}
+
+	// Fallback for empty result (branch name was all special chars)
+	if result == "" {
+		result = "stack"
 	}
 
 	return result
@@ -1201,21 +1210,17 @@ func (e *engineImpl) GetStackID(branch Branch) string {
 	}
 
 	// Legacy fallback: derive stack ID from stack root
-	// This provides backwards compatibility for branches created before stack refs
 	rootName := e.GetStackRootForBranch(branch)
 	if rootName == "" {
 		return ""
 	}
 
-	// Check if root has a stack ID
 	rootMeta, err := e.git.ReadMetadata(rootName)
-	if err == nil && rootMeta != nil && rootMeta.StackID != nil && *rootMeta.StackID != "" {
-		return *rootMeta.StackID
+	if err != nil || rootMeta == nil || rootMeta.StackID == nil {
+		return ""
 	}
 
-	// No stack ID exists yet - return empty string
-	// The create action or track command should assign stack IDs
-	return ""
+	return *rootMeta.StackID
 }
 
 // SetStackID sets the stack ID on a branch's metadata.
@@ -1239,7 +1244,13 @@ func (e *engineImpl) SetStackID(ctx context.Context, branch Branch, stackID stri
 }
 
 // CreateStackRef creates a new stack ref with the given metadata.
-func (e *engineImpl) CreateStackRef(_ context.Context, stackID string, meta *git.StackMeta) error {
+func (e *engineImpl) CreateStackRef(stackID string, meta *git.StackMeta) error {
+	if meta == nil {
+		meta = &git.StackMeta{
+			ID:        stackID,
+			CreatedAt: timeNow(),
+		}
+	}
 	return e.git.WriteStackMeta(stackID, meta)
 }
 

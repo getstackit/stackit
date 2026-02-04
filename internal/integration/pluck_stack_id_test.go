@@ -14,6 +14,9 @@ func TestPluckStackID(t *testing.T) {
 		// Create a stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
 
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'First stack'")
+
 		// Capture original stack ID
 		originalStackID := sh.GetStackID("a")
 		sh.ExpectStackIDsMatch("a", "b", "c")
@@ -22,10 +25,13 @@ func TestPluckStackID(t *testing.T) {
 		sh.Checkout("b")
 		sh.Run("pluck --onto main --yes")
 
+		// Set description on b to trigger new stack ID creation
+		sh.Run("describe -m 'Second stack'")
+
 		// Verify b now has a different stack ID (new stack created)
 		newStackID := sh.GetStackID("b")
 		if newStackID == "" {
-			t.Fatal("expected b to have a stack ID after plucking to trunk")
+			t.Fatal("expected b to have a stack ID after plucking to trunk and setting description")
 		}
 		if newStackID == originalStackID {
 			t.Fatalf("expected b to have a new stack ID after plucking to trunk, but got same ID: %s", originalStackID)
@@ -53,6 +59,9 @@ func TestPluckStackID(t *testing.T) {
 			Write("c.txt", "content for c").
 			Run("create c -m 'Add c'")
 
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'First stack'")
+
 		// Capture first stack's ID
 		firstStackID := sh.GetStackID("a")
 		sh.ExpectStackIDsMatch("a", "b", "c")
@@ -61,6 +70,9 @@ func TestPluckStackID(t *testing.T) {
 		sh.Checkout("main").
 			Write("x.txt", "content for x").
 			Run("create x -m 'Add x'")
+
+		// Set a description to trigger stack ID creation for second stack
+		sh.Run("describe -m 'Second stack'")
 
 		// Capture second stack's ID
 		secondStackID := sh.GetStackID("x")
@@ -96,6 +108,9 @@ func TestPluckStackID(t *testing.T) {
 			Write("d.txt", "content for d").
 			Run("create d -m 'Add d'")
 
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'Test stack'")
+
 		// Capture original stack ID
 		originalStackID := sh.GetStackID("a")
 		sh.ExpectStackIDsMatch("a", "b", "c", "d")
@@ -123,6 +138,9 @@ func TestPluckStackID(t *testing.T) {
 		// Create stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
 
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'First stack'")
+
 		// Capture original stack ID
 		originalStackID := sh.GetStackID("a")
 		sh.ExpectStackIDsMatch("a", "b", "c")
@@ -131,10 +149,13 @@ func TestPluckStackID(t *testing.T) {
 		sh.Checkout("c")
 		sh.Run("pluck --onto main --yes")
 
+		// Set description on c to trigger new stack ID creation
+		sh.Run("describe -m 'Second stack'")
+
 		// Verify c now has a new stack ID
 		newStackID := sh.GetStackID("c")
 		if newStackID == "" {
-			t.Fatal("expected c to have a stack ID after plucking to trunk")
+			t.Fatal("expected c to have a stack ID after plucking to trunk and setting description")
 		}
 		if newStackID == originalStackID {
 			t.Fatalf("expected c to have a new stack ID after plucking to trunk, but got same ID: %s", originalStackID)

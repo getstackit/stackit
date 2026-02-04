@@ -14,6 +14,9 @@ func TestMoveStackID(t *testing.T) {
 		// Create a stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
 
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'First stack'")
+
 		// Capture original stack ID
 		originalStackID := sh.GetStackID("a")
 
@@ -21,10 +24,14 @@ func TestMoveStackID(t *testing.T) {
 		sh.Checkout("b")
 		sh.Run("move --onto main --no-interactive --yes")
 
+		// After moving to trunk, b gets a new stack ID when a description is set
+		// Set description to trigger new stack ID creation for b's new stack
+		sh.Run("describe -m 'Second stack'")
+
 		// Verify b now has a different stack ID (new stack created)
 		newStackID := sh.GetStackID("b")
 		if newStackID == "" {
-			t.Fatal("expected b to have a stack ID after moving to trunk")
+			t.Fatal("expected b to have a stack ID after moving to trunk and setting description")
 		}
 		if newStackID == originalStackID {
 			t.Fatalf("expected b to have a new stack ID after moving to trunk, but got same ID: %s", originalStackID)
@@ -47,6 +54,9 @@ func TestMoveStackID(t *testing.T) {
 			Write("b.txt", "content for b").
 			Run("create b -m 'Add b'")
 
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'First stack'")
+
 		// Capture first stack's ID
 		firstStackID := sh.GetStackID("a")
 		sh.ExpectStackID("b", firstStackID) // b should share a's stack ID
@@ -57,6 +67,9 @@ func TestMoveStackID(t *testing.T) {
 			Run("create x -m 'Add x'").
 			Write("y.txt", "content for y").
 			Run("create y -m 'Add y'")
+
+		// Set a description to trigger stack ID creation for second stack
+		sh.Run("describe -m 'Second stack'")
 
 		// Capture second stack's ID
 		secondStackID := sh.GetStackID("x")
@@ -88,6 +101,9 @@ func TestMoveStackID(t *testing.T) {
 			Write("d.txt", "content for d").
 			Run("create d -m 'Add d'")
 
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'First stack'")
+
 		// Capture first stack's ID
 		firstStackID := sh.GetStackID("a")
 		sh.ExpectStackIDsMatch("a", "b", "c", "d")
@@ -96,6 +112,9 @@ func TestMoveStackID(t *testing.T) {
 		sh.Checkout("main").
 			Write("x.txt", "content for x").
 			Run("create x -m 'Add x'")
+
+		// Set a description to trigger stack ID creation for second stack
+		sh.Run("describe -m 'Second stack'")
 
 		// Capture second stack's ID
 		secondStackID := sh.GetStackID("x")
@@ -121,6 +140,9 @@ func TestMoveStackID(t *testing.T) {
 		// Create stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
 
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'First stack'")
+
 		// Capture original stack ID
 		originalStackID := sh.GetStackID("a")
 		sh.ExpectStackIDsMatch("a", "b", "c")
@@ -130,6 +152,9 @@ func TestMoveStackID(t *testing.T) {
 		sh.Checkout("main").
 			Write("x.txt", "content for x").
 			Run("create x -m 'Add x'")
+
+		// Set a description to trigger stack ID creation for x
+		sh.Run("describe -m 'Second stack'")
 
 		secondStackID := sh.GetStackID("x")
 
@@ -153,6 +178,9 @@ func TestMoveStackID(t *testing.T) {
 
 		// Create stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
+
+		// Set a description to trigger stack ID creation
+		sh.Run("describe -m 'Test stack'")
 
 		// Capture original stack ID
 		originalStackID := sh.GetStackID("a")

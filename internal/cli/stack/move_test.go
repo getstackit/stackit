@@ -40,16 +40,18 @@ func TestMoveCommand(t *testing.T) {
 		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "move", "--source", "branch2", "--onto", "main", "-y")
 		normalized := testhelpers.NormalizeOutput(output)
 		require.Equal(t, testhelpers.NormalizeOutput(`
+Stack membership updated for branch2
 Moved branch2 (current) from branch1 to main.
 Restacked branch2 on main.
 Restacked branch3 (current) on branch2.
 `), normalized)
 
-		// 2. Move current branch (branch3) to branch1
+		// 2. Move current branch (branch3) to branch1 (different stack)
 		err := scene.Repo.CheckoutBranch("branch3")
 		require.NoError(t, err)
 		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "move", "--onto", "branch1", "-y")
 		require.Equal(t, testhelpers.NormalizeOutput(`
+Stack membership updated for branch3
 Moved branch3 (current) from branch2 to branch1.
 Restacked branch3 (current) on branch1.
 `), testhelpers.NormalizeOutput(output))

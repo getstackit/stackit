@@ -165,7 +165,7 @@ func TestStackMeta_IsEmpty(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "only ID is empty",
+			name: "only ID set (no title/description) is empty",
 			meta: &git.StackMeta{ID: "test"},
 			want: true,
 		},

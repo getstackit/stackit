@@ -176,9 +176,11 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 }
 
 // assignStackID assigns a stack ID to a branch based on its parent.
-// If parent is trunk, generates a new stack ID and creates a stack ref.
-// If parent has a stack ID, inherits the parent's stack ID.
-// If parent has no stack ID (legacy branch), no action is taken.
+// Stack IDs propagate through the branch tree:
+//   - A new stack (branch off trunk) gets a fresh, unique ID
+//   - A branch stacked on a tracked branch inherits the parent's stack ID,
+//     binding all branches in a stack to the same identifier
+//   - Legacy branches without StackID are left unchanged for gradual migration
 func (e *engineImpl) assignStackID(ctx context.Context, branchName string, parentBranchName string) error {
 	var stackID string
 
@@ -385,14 +387,7 @@ func (e *engineImpl) CreateAndCheckoutBranch(ctx context.Context, branch Branch)
 
 	e.currentBranch = branchName
 	// Add to branches list if not already there
-	found := false
-	for _, b := range e.branches {
-		if b == branchName {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(e.branches, branchName) {
 		e.branches = append(e.branches, branchName)
 		e.branchNamesSet = nil // invalidate cache
 	}
@@ -1144,7 +1139,9 @@ func (e *engineImpl) GenerateStackID(rootBranch string) string {
 }
 
 // sanitizeBranchNameForStackID converts a branch name into a safe suffix for stack IDs.
-// Only allows alphanumeric characters and hyphens; collapses runs of hyphens into one.
+// Only allows alphanumeric characters and hyphens to ensure cross-platform compatibility
+// with Git ref names. Limited to 50 chars to keep ref names reasonable and avoid
+// filesystem path length issues on Windows.
 func sanitizeBranchNameForStackID(branchName string) string {
 	// Single-pass: replace unsafe chars with hyphens and collapse consecutive hyphens
 	var b strings.Builder
@@ -1164,15 +1161,11 @@ func sanitizeBranchNameForStackID(branchName string) string {
 
 	result := b.String()
 
-	// Trim trailing hyphen
-	result = strings.TrimSuffix(result, "-")
-
-	// Limit length
+	// Limit length first, then trim trailing hyphen once
 	if len(result) > 50 {
 		result = result[:50]
-		// Ensure we don't end with a hyphen after truncation
-		result = strings.TrimSuffix(result, "-")
 	}
+	result = strings.TrimSuffix(result, "-")
 
 	// Fallback for empty result (branch name was all special chars)
 	if result == "" {
@@ -1231,6 +1224,9 @@ func (e *engineImpl) SetStackID(ctx context.Context, branch Branch, stackID stri
 		meta, err := e.git.ReadMetadata(branchName)
 		if err != nil {
 			return fmt.Errorf("failed to read metadata: %w", err)
+		}
+		if meta == nil {
+			meta = &git.Meta{}
 		}
 
 		meta.StackID = &stackID

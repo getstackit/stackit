@@ -50,6 +50,11 @@ func TestSanitizeBranchNameForStackID(t *testing.T) {
 			input:    "",
 			expected: "stack",
 		},
+		{
+			name:     "truncation removes trailing hyphen",
+			input:    strings.Repeat("a", 49) + "-b",
+			expected: strings.Repeat("a", 49),
+		},
 	}
 
 	for _, tt := range tests {

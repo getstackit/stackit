@@ -4,14 +4,12 @@ package move
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"stackit.dev/stackit/internal/actions"
 	"stackit.dev/stackit/internal/actions/handler"
 	"stackit.dev/stackit/internal/actions/validation"
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
 	"stackit.dev/stackit/internal/output"
 	"stackit.dev/stackit/internal/tui/style"
 )
@@ -203,41 +201,37 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return fmt.Errorf("failed to set parent: %w", err)
 	}
 
-	// Update stack IDs if moving to a different stack
-	oldStackID := eng.GetStackID(sourceBranch)
-	newStackID := eng.GetStackID(ontoBranch)
+	// Update stack IDs based on the move destination (only if parent actually changed):
+	// 1. Moving to trunk creates a new independent stack with a fresh ID
+	// 2. Moving to a branch in a different stack inherits that stack's ID
+	// 3. Moving within the same stack keeps the existing ID (no update needed)
+	if oldParentName != onto {
+		oldStackID := eng.GetStackID(sourceBranch)
+		newStackID := eng.GetStackID(ontoBranch)
 
-	// Determine what stack ID the source should have after the move
-	var targetStackID string
-	if eng.IsTrunk(ontoBranch) {
-		// Moving to trunk creates a new stack
-		targetStackID = eng.GenerateStackID(source)
-		// Create a new stack ref with proper metadata
-		stackMeta := &git.StackMeta{
-			ID:        targetStackID,
-			CreatedAt: time.Now(),
+		// Determine what stack ID the source should have after the move
+		var targetStackID string
+		switch {
+		case eng.IsTrunk(ontoBranch):
+			// Moving to trunk creates a new stack
+			targetStackID = eng.GenerateStackID(source)
+			// Create a new stack ref (nil meta uses engine's timeNow() for proper testability)
+			if err := eng.CreateStackRef(targetStackID, nil); err != nil {
+				out.Warn("Failed to create stack ref: %v", err)
+			}
+		case newStackID != "" && newStackID != oldStackID:
+			// Moving to a different stack - inherit that stack's ID
+			targetStackID = newStackID
 		}
-		if err := eng.CreateStackRef(targetStackID, stackMeta); err != nil {
-			out.Debug("Failed to create stack ref: %v", err)
-		}
-	} else if newStackID != "" && newStackID != oldStackID {
-		// Moving to a different stack - inherit that stack's ID
-		targetStackID = newStackID
-	}
 
-	// Update stack IDs if needed
-	if targetStackID != "" {
-		// Update source branch
-		if err := eng.SetStackID(gctx, sourceBranch, targetStackID); err != nil {
-			out.Debug("Failed to update stack ID for %s: %v", source, err)
-		}
-		// Update all descendants
-		for _, d := range descendants {
-			if d.GetName() != source {
+		// Update stack IDs if needed (descendants includes source via IncludeCurrent:true)
+		if targetStackID != "" {
+			for _, d := range descendants {
 				if err := eng.SetStackID(gctx, d, targetStackID); err != nil {
-					out.Debug("Failed to update stack ID for %s: %v", d.GetName(), err)
+					out.Warn("Failed to update stack ID for %s: %v", d.GetName(), err)
 				}
 			}
+			out.Info("Stack membership updated for %s", source)
 		}
 	}
 

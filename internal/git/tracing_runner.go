@@ -1141,3 +1141,43 @@ func (t *tracingRunner) RunGHCommandWithContext(ctx context.Context, args ...str
 func (t *tracingRunner) SetLogger(logger DebugLogger) {
 	t.inner.SetLogger(logger)
 }
+
+// StackMetadataOperations methods
+
+func (t *tracingRunner) ReadStackMeta(stackID string) (*StackMeta, error) {
+	start := time.Now()
+	result, err := t.inner.ReadStackMeta(stackID)
+	t.trace("ReadStackMeta", time.Since(start), err == nil, err, slog.String("stackID", stackID))
+	return result, err
+}
+
+func (t *tracingRunner) WriteStackMeta(stackID string, meta *StackMeta) error {
+	start := time.Now()
+	err := t.inner.WriteStackMeta(stackID, meta)
+	t.trace("WriteStackMeta", time.Since(start), err == nil, err, slog.String("stackID", stackID))
+	return err
+}
+
+func (t *tracingRunner) DeleteStackMeta(stackID string) error {
+	// Don't trace - delegates to DeleteRef which is traced
+	return t.inner.DeleteStackMeta(stackID)
+}
+
+func (t *tracingRunner) ListStackMetas() (map[string]string, error) {
+	start := time.Now()
+	result, err := t.inner.ListStackMetas()
+	t.trace("ListStackMetas", time.Since(start), err == nil, err)
+	return result, err
+}
+
+func (t *tracingRunner) WriteStackMetaBlob(meta *StackMeta) (string, error) {
+	start := time.Now()
+	result, err := t.inner.WriteStackMetaBlob(meta)
+	t.trace("WriteStackMetaBlob", time.Since(start), err == nil, err)
+	return result, err
+}
+
+func (t *tracingRunner) GetStackMetaRefSHA(stackID string) string {
+	// Don't trace - this is just a ref lookup, very fast
+	return t.inner.GetStackMetaRefSHA(stackID)
+}

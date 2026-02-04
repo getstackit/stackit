@@ -669,3 +669,29 @@ func (d *demoGitRunner) GetLocalMetadataRefSHA(_ string) string {
 	// Return a mock SHA to simulate existing local metadata refs for CAS testing
 	return demoRefSHA
 }
+
+// StackMetadataOperations methods
+
+func (d *demoGitRunner) ReadStackMeta(_ string) (*git.StackMeta, error) {
+	return nil, nil
+}
+
+func (d *demoGitRunner) WriteStackMeta(_ string, _ *git.StackMeta) error {
+	return nil
+}
+
+func (d *demoGitRunner) DeleteStackMeta(_ string) error {
+	return nil
+}
+
+func (d *demoGitRunner) ListStackMetas() (map[string]string, error) {
+	return make(map[string]string), nil
+}
+
+func (d *demoGitRunner) WriteStackMetaBlob(_ *git.StackMeta) (string, error) {
+	return demoBlobSHA, nil
+}
+
+func (d *demoGitRunner) GetStackMetaRefSHA(_ string) string {
+	return ""
+}

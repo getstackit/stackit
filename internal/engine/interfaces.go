@@ -135,13 +135,27 @@ type BranchTracking interface {
 	GetBranchesNeedingPRBodyUpdate() []string
 
 	// GetStackDescription returns the stack description for a branch's stack.
-	// It first checks the stack root's metadata, then falls back to MergedDownstack history.
+	// It first checks the stack ref, then falls back to legacy branch metadata.
 	GetStackDescription(branch Branch) *git.StackDescription
-	// SetStackDescription sets the stack description on the stack root for a branch.
+	// SetStackDescription sets the stack description in the stack ref for a branch.
 	// Returns an error if the branch is not part of a tracked stack.
 	SetStackDescription(ctx context.Context, branch Branch, desc *git.StackDescription) error
-	// ClearStackDescription removes the stack description from the stack root.
+	// ClearStackDescription removes the stack description from the stack ref.
 	ClearStackDescription(ctx context.Context, branch Branch) error
+
+	// GenerateStackID creates a new stack ID for a new stack.
+	// Format: {timestamp-nanos}-{sanitized-root-branch}
+	GenerateStackID(rootBranch string) string
+	// GetStackID returns the stack ID for a branch.
+	// Returns empty string for untracked branches or trunk.
+	// For legacy branches without StackID, derives it from the stack root.
+	GetStackID(branch Branch) string
+	// SetStackID sets the stack ID on a branch's metadata.
+	SetStackID(ctx context.Context, branch Branch, stackID string) error
+	// CreateStackRef creates a new stack ref with the given metadata.
+	CreateStackRef(ctx context.Context, stackID string, meta *git.StackMeta) error
+	// GetStackMeta returns the stack metadata for a stack ID.
+	GetStackMeta(stackID string) (*git.StackMeta, error)
 }
 
 // BranchMutations handles branch lifecycle operations

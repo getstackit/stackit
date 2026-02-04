@@ -167,7 +167,51 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 	e.mu.Unlock()
 
 	// SetParent handles its own transaction and locking
-	return e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(parentBranchName))
+	if err := e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(parentBranchName)); err != nil {
+		return err
+	}
+
+	// Assign stack ID based on parent
+	return e.assignStackID(ctx, branchName, parentBranchName)
+}
+
+// assignStackID assigns a stack ID to a branch based on its parent.
+// If parent is trunk, generates a new stack ID and creates a stack ref.
+// If parent has a stack ID, inherits the parent's stack ID.
+func (e *engineImpl) assignStackID(ctx context.Context, branchName string, parentBranchName string) error {
+	var stackID string
+
+	// If parent is trunk, generate a new stack ID
+	if parentBranchName == e.trunk {
+		stackID = e.GenerateStackID(branchName)
+
+		// Create stack ref with initial metadata
+		stackMeta := &git.StackMeta{
+			ID:        stackID,
+			CreatedAt: timeNow(),
+		}
+
+		// Try to get user name for CreatedBy
+		if userName, err := e.git.GetUserName(ctx); err == nil {
+			stackMeta.CreatedBy = userName
+		}
+
+		if err := e.git.WriteStackMeta(stackID, stackMeta); err != nil {
+			return fmt.Errorf("failed to create stack ref: %w", err)
+		}
+	} else {
+		// Inherit stack ID from parent
+		parentBranch := e.GetBranch(parentBranchName)
+		stackID = e.GetStackID(parentBranch)
+
+		// If parent has no stack ID, this is a legacy branch - no action needed
+		if stackID == "" {
+			return nil
+		}
+	}
+
+	// Set the stack ID on the branch
+	return e.SetStackID(ctx, e.GetBranch(branchName), stackID)
 }
 
 // UntrackBranch stops tracking a branch by deleting its metadata
@@ -1032,72 +1076,174 @@ func (e *engineImpl) GetBranchesNeedingPRBodyUpdate() []string {
 }
 
 // GetStackDescription returns the stack description for a branch's stack.
-// It first checks the stack root's metadata, then falls back to MergedDownstack history.
+// It first checks the stack ref using the branch's StackID, then falls back to legacy branch metadata.
 func (e *engineImpl) GetStackDescription(branch Branch) *git.StackDescription {
-	// Find stack root
-	rootName := e.GetStackRootForBranch(branch)
-	if rootName == "" {
-		// Not on a tracked stack, check current branch's MergedDownstack
-		meta, err := e.git.ReadMetadata(branch.GetName())
-		if err != nil {
-			return nil
-		}
-		return findDescriptionInHistory(meta.MergedDownstack)
-	}
-
-	// Check root's StackDescription
-	meta, err := e.git.ReadMetadata(rootName)
-	if err != nil || meta == nil {
+	// Get stack ID
+	stackID := e.GetStackID(branch)
+	if stackID == "" {
 		return nil
 	}
 
-	if meta.StackDescription != nil && !meta.StackDescription.IsEmpty() {
-		return meta.StackDescription
+	// Try to read from stack ref
+	stackMeta, err := e.git.ReadStackMeta(stackID)
+	if err != nil {
+		return nil
 	}
 
-	// Check MergedDownstack for historical description
-	return findDescriptionInHistory(meta.MergedDownstack)
-}
-
-// findDescriptionInHistory searches MergedDownstack for the most recent description.
-// This is used to preserve stack descriptions when root branches are deleted/merged,
-// since the description is captured in MergedDownstack history during reparenting.
-// MergedDownstack is ordered oldest to newest, so we iterate from end to find most recent.
-func findDescriptionInHistory(history []git.MergedParent) *git.StackDescription {
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].StackDescription != nil && !history[i].StackDescription.IsEmpty() {
-			return history[i].StackDescription
-		}
+	if stackMeta != nil {
+		return stackMeta.StackDescription()
 	}
+
 	return nil
 }
 
-// SetStackDescription sets the stack description on the stack root for a branch.
+// SetStackDescription sets the stack description in the stack ref for a branch.
 // Returns an error if the branch is not part of a tracked stack.
 func (e *engineImpl) SetStackDescription(_ context.Context, branch Branch, desc *git.StackDescription) error {
-	rootName := e.GetStackRootForBranch(branch)
-	if rootName == "" {
+	stackID := e.GetStackID(branch)
+	if stackID == "" {
 		return fmt.Errorf("branch %s is not part of a tracked stack", branch.GetName())
 	}
 
-	meta, err := e.git.ReadMetadata(rootName)
+	// Read existing stack meta or create new one
+	stackMeta, err := e.git.ReadStackMeta(stackID)
 	if err != nil {
-		return fmt.Errorf("failed to read metadata for %s: %w", rootName, err)
-	}
-	if meta == nil {
-		meta = &git.Meta{}
+		return fmt.Errorf("failed to read stack metadata for %s: %w", stackID, err)
 	}
 
-	meta.StackDescription = desc
+	if stackMeta == nil {
+		stackMeta = &git.StackMeta{
+			ID:        stackID,
+			CreatedAt: timeNow(),
+		}
+	}
 
-	if err := e.git.WriteMetadata(rootName, meta); err != nil {
-		return fmt.Errorf("failed to write metadata for %s: %w", rootName, err)
+	// Update title and description
+	if desc != nil {
+		stackMeta.Title = desc.Title
+		stackMeta.Description = desc.Description
+	} else {
+		stackMeta.Title = ""
+		stackMeta.Description = ""
+	}
+
+	if err := e.git.WriteStackMeta(stackID, stackMeta); err != nil {
+		return fmt.Errorf("failed to write stack metadata for %s: %w", stackID, err)
 	}
 
 	return nil
 }
 
-// ClearStackDescription removes the stack description from the stack root.
+// ClearStackDescription removes the stack description from the stack ref.
 func (e *engineImpl) ClearStackDescription(ctx context.Context, branch Branch) error {
 	return e.SetStackDescription(ctx, branch, nil)
+}
+
+// GenerateStackID creates a new stack ID for a new stack.
+// Format: {timestamp-nanos}-{sanitized-root-branch}
+func (e *engineImpl) GenerateStackID(rootBranch string) string {
+	timestamp := timeNow().UnixNano()
+	sanitized := sanitizeBranchNameForStackID(rootBranch)
+	return fmt.Sprintf("%d-%s", timestamp, sanitized)
+}
+
+// sanitizeBranchNameForStackID converts a branch name into a safe suffix for stack IDs.
+func sanitizeBranchNameForStackID(branchName string) string {
+	// Replace slashes and other unsafe characters with hyphens
+	result := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' {
+			return r
+		}
+		return '-'
+	}, branchName)
+
+	// Collapse multiple hyphens
+	for strings.Contains(result, "--") {
+		result = strings.ReplaceAll(result, "--", "-")
+	}
+
+	// Trim leading/trailing hyphens
+	result = strings.Trim(result, "-")
+
+	// Limit length
+	if len(result) > 50 {
+		result = result[:50]
+	}
+
+	return result
+}
+
+// GetStackID returns the stack ID for a branch.
+// Returns empty string for untracked branches or trunk.
+// For legacy branches without StackID, derives it from the stack root.
+func (e *engineImpl) GetStackID(branch Branch) string {
+	branchName := branch.GetName()
+
+	// Trunk has no stack ID
+	if branchName == e.trunk {
+		return ""
+	}
+
+	// Check if branch is tracked
+	if !e.IsTracked(branch) {
+		return ""
+	}
+
+	// Read branch metadata
+	meta, err := e.git.ReadMetadata(branchName)
+	if err != nil {
+		return ""
+	}
+
+	// Return explicit StackID if present
+	if meta.StackID != nil && *meta.StackID != "" {
+		return *meta.StackID
+	}
+
+	// Legacy fallback: derive stack ID from stack root
+	// This provides backwards compatibility for branches created before stack refs
+	rootName := e.GetStackRootForBranch(branch)
+	if rootName == "" {
+		return ""
+	}
+
+	// Check if root has a stack ID
+	rootMeta, err := e.git.ReadMetadata(rootName)
+	if err == nil && rootMeta != nil && rootMeta.StackID != nil && *rootMeta.StackID != "" {
+		return *rootMeta.StackID
+	}
+
+	// No stack ID exists yet - return empty string
+	// The create action or track command should assign stack IDs
+	return ""
+}
+
+// SetStackID sets the stack ID on a branch's metadata.
+func (e *engineImpl) SetStackID(ctx context.Context, branch Branch, stackID string) error {
+	branchName := branch.GetName()
+
+	return e.WithRetry(ctx, func() error {
+		meta, err := e.git.ReadMetadata(branchName)
+		if err != nil {
+			return fmt.Errorf("failed to read metadata: %w", err)
+		}
+
+		meta.StackID = &stackID
+
+		tx := e.BeginTx(fmt.Sprintf("set stack ID: %s -> %s", branchName, stackID))
+		if err := tx.UpdateMeta(branchName, meta); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	})
+}
+
+// CreateStackRef creates a new stack ref with the given metadata.
+func (e *engineImpl) CreateStackRef(_ context.Context, stackID string, meta *git.StackMeta) error {
+	return e.git.WriteStackMeta(stackID, meta)
+}
+
+// GetStackMeta returns the stack metadata for a stack ID.
+func (e *engineImpl) GetStackMeta(stackID string) (*git.StackMeta, error) {
+	return e.git.ReadStackMeta(stackID)
 }

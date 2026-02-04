@@ -355,6 +355,7 @@ type Runner interface {
 	RefOperations
 	ObjectOperations
 	MetadataOperations
+	StackMetadataOperations
 
 	// Raw command execution
 	RunGitCommandWithContext(ctx context.Context, args ...string) (string, error)

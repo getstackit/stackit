@@ -245,3 +245,16 @@ type MetadataOperations interface {
 	GetMetadataRefSHA(branchName string) string
 	GetLocalMetadataRefSHA(branchName string) string
 }
+
+// StackMetadataOperations handles stack-level metadata persistence.
+// Stack metadata is stored separately from branch metadata and survives branch operations.
+type StackMetadataOperations interface {
+	ReadStackMeta(stackID string) (*StackMeta, error)
+	WriteStackMeta(stackID string, meta *StackMeta) error
+	DeleteStackMeta(stackID string) error
+	ListStackMetas() (map[string]string, error)
+
+	// Transaction support methods
+	WriteStackMetaBlob(meta *StackMeta) (string, error)
+	GetStackMetaRefSHA(stackID string) string
+}

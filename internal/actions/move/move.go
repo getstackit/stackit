@@ -201,6 +201,40 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return fmt.Errorf("failed to set parent: %w", err)
 	}
 
+	// Update stack IDs if moving to a different stack
+	oldStackID := eng.GetStackID(sourceBranch)
+	newStackID := eng.GetStackID(ontoBranch)
+
+	// Determine what stack ID the source should have after the move
+	var targetStackID string
+	if eng.IsTrunk(ontoBranch) {
+		// Moving to trunk creates a new stack
+		targetStackID = eng.GenerateStackID(source)
+		// Create a new stack ref
+		if err := eng.CreateStackRef(gctx, targetStackID, nil); err != nil {
+			out.Debug("Failed to create stack ref: %v", err)
+		}
+	} else if newStackID != "" && newStackID != oldStackID {
+		// Moving to a different stack - inherit that stack's ID
+		targetStackID = newStackID
+	}
+
+	// Update stack IDs if needed
+	if targetStackID != "" && targetStackID != oldStackID {
+		// Update source branch
+		if err := eng.SetStackID(gctx, sourceBranch, targetStackID); err != nil {
+			out.Debug("Failed to update stack ID for %s: %v", source, err)
+		}
+		// Update all descendants
+		for _, d := range descendants {
+			if d.GetName() != source {
+				if err := eng.SetStackID(gctx, d, targetStackID); err != nil {
+					out.Debug("Failed to update stack ID for %s: %v", d.GetName(), err)
+				}
+			}
+		}
+	}
+
 	// Rebuild graph after parent change for downstream traversals
 	graph = engine.BuildStackGraph(eng, engine.SortStrategyAlphabetical, nil)
 

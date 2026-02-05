@@ -201,6 +201,44 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return fmt.Errorf("failed to set parent: %w", err)
 	}
 
+	// Update stack IDs based on the move destination (only if parent actually changed):
+	// Stack IDs are only updated if the source branch already has a stack ID.
+	// If source has no stack ID, we don't auto-create one - stack IDs are created lazily
+	// when descriptions or scopes are set.
+	if oldParentName != onto {
+		oldStackID := eng.GetStackID(sourceBranch)
+
+		// Only sync stack IDs if the source branch already has one
+		if oldStackID != "" {
+			newStackID := eng.GetStackID(ontoBranch)
+
+			// Determine what stack ID the source should have after the move
+			var targetStackID string
+			switch {
+			case eng.IsTrunk(ontoBranch):
+				// Moving to trunk creates a new stack
+				targetStackID = eng.GenerateStackID(source)
+				// Create a new stack ref (nil meta uses engine's timeNow() for proper testability)
+				if err := eng.CreateStackRef(targetStackID, nil); err != nil {
+					out.Warn("Failed to create stack ref: %v", err)
+				}
+			case newStackID != "" && newStackID != oldStackID:
+				// Moving to a different stack - inherit that stack's ID
+				targetStackID = newStackID
+			}
+
+			// Update stack IDs if needed (descendants includes source via IncludeCurrent:true)
+			if targetStackID != "" {
+				for _, d := range descendants {
+					if err := eng.SetStackID(gctx, d, targetStackID); err != nil {
+						out.Warn("Failed to update stack ID for %s: %v", d.GetName(), err)
+					}
+				}
+				out.Info("Stack membership updated for %s", source)
+			}
+		}
+	}
+
 	// Rebuild graph after parent change for downstream traversals
 	graph = engine.BuildStackGraph(eng, engine.SortStrategyAlphabetical, nil)
 

@@ -37,6 +37,8 @@ func TestMoveCommand(t *testing.T) {
 		})
 
 		// 1. Move branch2 to main (downstack)
+		// Note: "Stack membership updated" messages only appear when branches have stack IDs
+		// which are only created when descriptions/scopes are set.
 		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "move", "--source", "branch2", "--onto", "main", "-y")
 		normalized := testhelpers.NormalizeOutput(output)
 		require.Equal(t, testhelpers.NormalizeOutput(`
@@ -45,7 +47,7 @@ Restacked branch2 on main.
 Restacked branch3 (current) on branch2.
 `), normalized)
 
-		// 2. Move current branch (branch3) to branch1
+		// 2. Move current branch (branch3) to branch1 (different stack)
 		err := scene.Repo.CheckoutBranch("branch3")
 		require.NoError(t, err)
 		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "move", "--onto", "branch1", "-y")

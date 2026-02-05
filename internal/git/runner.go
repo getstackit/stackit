@@ -355,6 +355,7 @@ type Runner interface {
 	RefOperations
 	ObjectOperations
 	MetadataOperations
+	StackMetadataOperations
 
 	// Raw command execution
 	RunGitCommandWithContext(ctx context.Context, args ...string) (string, error)
@@ -544,6 +545,25 @@ func (r *runner) EnsureMetadataRefspecConfigured() error {
 
 	// Add refspec for metadata refs
 	return r.AddConfigValue("remote.origin.fetch", metadataRefspec)
+}
+
+func (r *runner) EnsureStackMetaRefspecConfigured() error {
+	const stackMetaRefspec = "+refs/stackit/stacks/*:refs/stackit/remote-stacks/*"
+
+	refspecs, err := r.GetConfigAll("remote.origin.fetch")
+	if err != nil {
+		return fmt.Errorf("failed to get fetch refspecs: %w", err)
+	}
+
+	// Check if already configured
+	for _, rs := range refspecs {
+		if rs == stackMetaRefspec {
+			return nil // Already configured
+		}
+	}
+
+	// Add refspec for stack metadata refs
+	return r.AddConfigValue("remote.origin.fetch", stackMetaRefspec)
 }
 
 func (r *runner) FindRemoteBranch(ctx context.Context, remote string) (string, error) {
@@ -926,6 +946,40 @@ func (r *runner) PushMetadataRefs(ctx context.Context, branches []string) error 
 func (r *runner) FetchMetadataRefs(ctx context.Context) error {
 	// git fetch origin 'refs/stackit/metadata/*:refs/stackit/remote-metadata/*'
 	_, err := r.RunGitCommandWithContext(ctx, "fetch", "origin", "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")
+	return err
+}
+
+func (r *runner) PushStackMetaRefs(ctx context.Context, stackIDs []string) error {
+	if len(stackIDs) == 0 {
+		return nil
+	}
+	// git push origin +refs/stackit/stacks/id1 +refs/stackit/stacks/id2 ...
+	// We use the '+' prefix to force the push because stack metadata refs point to blobs,
+	// and updates to non-commit objects are always considered non-fast-forward by Git.
+	args := []string{"push", "origin"}
+	for _, stackID := range stackIDs {
+		args = append(args, fmt.Sprintf("+refs/stackit/stacks/%s", stackID))
+	}
+	_, err := r.RunGitCommandWithContext(ctx, args...)
+	return err
+}
+
+func (r *runner) FetchStackMetaRefs(ctx context.Context) error {
+	// git fetch origin 'refs/stackit/stacks/*:refs/stackit/remote-stacks/*'
+	_, err := r.RunGitCommandWithContext(ctx, "fetch", "origin", "+refs/stackit/stacks/*:refs/stackit/remote-stacks/*")
+	return err
+}
+
+func (r *runner) DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []string) error {
+	if len(stackIDs) == 0 {
+		return nil
+	}
+	// git push origin --delete refs/stackit/stacks/id1 refs/stackit/stacks/id2 ...
+	args := []string{"push", "origin", "--delete"}
+	for _, stackID := range stackIDs {
+		args = append(args, fmt.Sprintf("refs/stackit/stacks/%s", stackID))
+	}
+	_, err := r.RunGitCommandWithContext(ctx, args...)
 	return err
 }
 

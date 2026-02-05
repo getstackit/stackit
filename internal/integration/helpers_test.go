@@ -743,3 +743,86 @@ func (s *TestShell) SetPrMetadata(branch string, pr PRMetadata) *TestShell {
 
 	return s
 }
+
+// GetStackID returns the stack ID for a branch from its metadata.
+// Returns empty string if the branch has no stack ID.
+func (s *TestShell) GetStackID(branch string) string {
+	s.t.Helper()
+
+	// Read metadata
+	refName := "refs/stackit/metadata/" + branch
+	cmd := exec.Command("git", "show-ref", "-s", refName)
+	cmd.Dir = s.scene.Dir
+	shaOutput, err := cmd.Output()
+	if err != nil {
+		// No metadata ref exists
+		return ""
+	}
+
+	sha := strings.TrimSpace(string(shaOutput))
+	cmd = exec.Command("git", "cat-file", "-p", sha)
+	cmd.Dir = s.scene.Dir
+	blobOutput, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	var meta struct {
+		StackID *string `json:"stackId"`
+	}
+	if err := json.Unmarshal(blobOutput, &meta); err != nil {
+		return ""
+	}
+
+	if meta.StackID == nil {
+		return ""
+	}
+	return *meta.StackID
+}
+
+// ExpectStackID asserts a branch has the expected stack ID.
+func (s *TestShell) ExpectStackID(branch, expectedStackID string) *TestShell {
+	s.t.Helper()
+	actualStackID := s.GetStackID(branch)
+	require.Equal(s.t, expectedStackID, actualStackID,
+		"branch %s expected stack ID %q, got %q", branch, expectedStackID, actualStackID)
+	return s
+}
+
+// ExpectStackIDNotEmpty asserts a branch has a non-empty stack ID.
+func (s *TestShell) ExpectStackIDNotEmpty(branch string) *TestShell {
+	s.t.Helper()
+	actualStackID := s.GetStackID(branch)
+	require.NotEmpty(s.t, actualStackID, "branch %s expected to have a stack ID, but got empty", branch)
+	return s
+}
+
+// ExpectStackIDsMatch asserts that all given branches have the same stack ID.
+func (s *TestShell) ExpectStackIDsMatch(branches ...string) *TestShell {
+	s.t.Helper()
+	if len(branches) < 2 {
+		return s
+	}
+
+	firstStackID := s.GetStackID(branches[0])
+	require.NotEmpty(s.t, firstStackID, "branch %s has no stack ID", branches[0])
+
+	for _, branch := range branches[1:] {
+		stackID := s.GetStackID(branch)
+		require.Equal(s.t, firstStackID, stackID,
+			"branch %s has stack ID %q, expected %q (same as %s)",
+			branch, stackID, firstStackID, branches[0])
+	}
+	return s
+}
+
+// ExpectStackIDsDiffer asserts that two branches have different stack IDs.
+func (s *TestShell) ExpectStackIDsDiffer(branch1, branch2 string) *TestShell {
+	s.t.Helper()
+	stackID1 := s.GetStackID(branch1)
+	stackID2 := s.GetStackID(branch2)
+	require.NotEqual(s.t, stackID1, stackID2,
+		"branch %s and %s both have stack ID %q, expected different IDs",
+		branch1, branch2, stackID1)
+	return s
+}

@@ -51,10 +51,14 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 		return fmt.Errorf("failed to rebuild engine: %w", err)
 	}
 
-	// For each sibling, set parent to current branch
+	// For each sibling, set parent to current branch and sync stack ID
 	for _, sibling := range siblings {
 		if err := eng.SetParent(gctx, sibling, currentBranch); err != nil {
 			return fmt.Errorf("failed to reparent %s to %s: %w", sibling.GetName(), currentBranch.GetName(), err)
+		}
+		// Sync stack ID to match the new parent's stack
+		if err := eng.SyncStackIDFromParent(gctx, sibling); err != nil {
+			splog.Debug("Failed to sync stack ID for %s: %v", sibling.GetName(), err)
 		}
 	}
 

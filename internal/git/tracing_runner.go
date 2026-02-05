@@ -132,6 +132,13 @@ func (t *tracingRunner) EnsureMetadataRefspecConfigured() error {
 	return err
 }
 
+func (t *tracingRunner) EnsureStackMetaRefspecConfigured() error {
+	start := time.Now()
+	err := t.inner.EnsureStackMetaRefspecConfigured()
+	t.trace("EnsureStackMetaRefspecConfigured", time.Since(start), err == nil, err)
+	return err
+}
+
 // RemoteOperations methods
 
 func (t *tracingRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
@@ -194,6 +201,27 @@ func (t *tracingRunner) FetchMetadataRefs(ctx context.Context) error {
 	start := time.Now()
 	err := t.inner.FetchMetadataRefs(ctx)
 	t.trace("FetchMetadataRefs", time.Since(start), err == nil, err)
+	return err
+}
+
+func (t *tracingRunner) PushStackMetaRefs(ctx context.Context, stackIDs []string) error {
+	start := time.Now()
+	err := t.inner.PushStackMetaRefs(ctx, stackIDs)
+	t.trace("PushStackMetaRefs", time.Since(start), err == nil, err, slog.Int("count", len(stackIDs)))
+	return err
+}
+
+func (t *tracingRunner) FetchStackMetaRefs(ctx context.Context) error {
+	start := time.Now()
+	err := t.inner.FetchStackMetaRefs(ctx)
+	t.trace("FetchStackMetaRefs", time.Since(start), err == nil, err)
+	return err
+}
+
+func (t *tracingRunner) DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []string) error {
+	start := time.Now()
+	err := t.inner.DeleteRemoteStackMetaRefs(ctx, stackIDs)
+	t.trace("DeleteRemoteStackMetaRefs", time.Since(start), err == nil, err, slog.Int("count", len(stackIDs)))
 	return err
 }
 
@@ -1140,4 +1168,44 @@ func (t *tracingRunner) RunGHCommandWithContext(ctx context.Context, args ...str
 
 func (t *tracingRunner) SetLogger(logger DebugLogger) {
 	t.inner.SetLogger(logger)
+}
+
+// StackMetadataOperations methods
+
+func (t *tracingRunner) ReadStackMeta(stackID string) (*StackMeta, error) {
+	start := time.Now()
+	result, err := t.inner.ReadStackMeta(stackID)
+	t.trace("ReadStackMeta", time.Since(start), err == nil, err, slog.String("stackID", stackID))
+	return result, err
+}
+
+func (t *tracingRunner) WriteStackMeta(stackID string, meta *StackMeta) error {
+	start := time.Now()
+	err := t.inner.WriteStackMeta(stackID, meta)
+	t.trace("WriteStackMeta", time.Since(start), err == nil, err, slog.String("stackID", stackID))
+	return err
+}
+
+func (t *tracingRunner) DeleteStackMeta(stackID string) error {
+	// Don't trace - delegates to DeleteRef which is traced
+	return t.inner.DeleteStackMeta(stackID)
+}
+
+func (t *tracingRunner) ListStackMetas() (map[string]string, error) {
+	start := time.Now()
+	result, err := t.inner.ListStackMetas()
+	t.trace("ListStackMetas", time.Since(start), err == nil, err)
+	return result, err
+}
+
+func (t *tracingRunner) WriteStackMetaBlob(meta *StackMeta) (string, error) {
+	start := time.Now()
+	result, err := t.inner.WriteStackMetaBlob(meta)
+	t.trace("WriteStackMetaBlob", time.Since(start), err == nil, err)
+	return result, err
+}
+
+func (t *tracingRunner) GetStackMetaRefSHA(stackID string) string {
+	// Don't trace - this is just a ref lookup, very fast
+	return t.inner.GetStackMetaRefSHA(stackID)
 }

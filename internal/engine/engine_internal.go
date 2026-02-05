@@ -299,15 +299,9 @@ func (e *engineImpl) appendMergedDownstack(
 
 	// Build MergedParent from old parent
 	mp := git.MergedParent{BranchName: oldParent}
-	if oldParentMeta != nil {
-		if oldParentMeta.PrInfo != nil {
-			mp.PRNumber = oldParentMeta.PrInfo.Number
-			mp.PRState = oldParentMeta.PrInfo.State
-		}
-		// Capture stack description from deleted parent (if it was the root)
-		if oldParentMeta.StackDescription != nil && !oldParentMeta.StackDescription.IsEmpty() {
-			mp.StackDescription = oldParentMeta.StackDescription
-		}
+	if oldParentMeta != nil && oldParentMeta.PrInfo != nil {
+		mp.PRNumber = oldParentMeta.PrInfo.Number
+		mp.PRState = oldParentMeta.PrInfo.State
 	}
 
 	// Inherit old parent's history (for multi-level: A→B→C, if B merges)

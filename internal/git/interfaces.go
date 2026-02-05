@@ -27,6 +27,7 @@ type RepositoryWriter interface {
 	SetConfig(key, value string) error
 	AddConfigValue(key, value string) error
 	EnsureMetadataRefspecConfigured() error
+	EnsureStackMetaRefspecConfigured() error
 }
 
 // RemoteOperations handles interaction with remote repositories.
@@ -43,6 +44,9 @@ type RemoteOperations interface {
 	DeleteRemoteMetadataRef(ctx context.Context, branch string) error
 	BatchDeleteRemoteMetadataRefs(ctx context.Context, branches []string) error
 	TestRemoteRefCompatibility() error
+	PushStackMetaRefs(ctx context.Context, stackIDs []string) error
+	FetchStackMetaRefs(ctx context.Context) error
+	DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []string) error
 }
 
 // BranchReader provides read access to branch information.
@@ -244,4 +248,17 @@ type MetadataOperations interface {
 	WriteLocalMetadataBlob(meta *LocalMeta) (string, error)
 	GetMetadataRefSHA(branchName string) string
 	GetLocalMetadataRefSHA(branchName string) string
+}
+
+// StackMetadataOperations handles stack-level metadata persistence.
+// Stack metadata is stored separately from branch metadata and survives branch operations.
+type StackMetadataOperations interface {
+	ReadStackMeta(stackID string) (*StackMeta, error)
+	WriteStackMeta(stackID string, meta *StackMeta) error
+	DeleteStackMeta(stackID string) error
+	ListStackMetas() (map[string]string, error)
+
+	// Transaction support methods
+	WriteStackMetaBlob(meta *StackMeta) (string, error)
+	GetStackMetaRefSHA(stackID string) string
 }

@@ -466,3 +466,20 @@ func (e *engineImpl) ConfigureRemoteMetadataSync(ctx context.Context) error {
 	_, err := e.git.RunGitCommandWithContext(ctx, "config", "--add", "remote.origin.fetch", "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")
 	return err
 }
+
+// GetStackIDsForBranches returns the unique stack IDs for the given branches.
+// This is used to determine which stack refs need to be pushed to remote.
+func (e *engineImpl) GetStackIDsForBranches(branches []Branch) []string {
+	seen := make(map[string]bool)
+	var stackIDs []string
+
+	for _, branch := range branches {
+		stackID := e.GetStackID(branch)
+		if stackID != "" && !seen[stackID] {
+			seen[stackID] = true
+			stackIDs = append(stackIDs, stackID)
+		}
+	}
+
+	return stackIDs
+}

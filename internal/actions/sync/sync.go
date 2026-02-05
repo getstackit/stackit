@@ -113,6 +113,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		fetchStart := time.Now()
 		metadataFetchErr = ctx.RemoteMetadata().FetchRemoteMetadata(gctx)
 		ctx.Logger.Info("fetch remote metadata refs completed", "durationMs", time.Since(fetchStart).Milliseconds())
+
+		// Also fetch stack metadata refs (stack-level descriptions, etc.)
+		stackFetchStart := time.Now()
+		if err := ctx.Git().FetchStackMetaRefs(gctx); err != nil {
+			ctx.Logger.Debug("fetch stack metadata refs failed (non-fatal)", "error", err)
+		}
+		ctx.Logger.Info("fetch stack metadata refs completed", "durationMs", time.Since(stackFetchStart).Milliseconds())
 		return nil
 	})
 
@@ -183,6 +190,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Surface any worktree cleanup errors as warnings (non-fatal)
 	for _, errMsg := range worktreeResult.Errors {
 		ctx.Output.Warn("Worktree cleanup: %s", errMsg)
+	}
+
+	// GC orphaned stack metadata refs (after branch cleanup so we know what's been deleted)
+	gcResult := gcOrphanedStackMetadata(ctx)
+	if len(gcResult.DeletedStackIDs) > 0 {
+		ctx.Logger.Info("cleaned orphaned stack metadata", "count", len(gcResult.DeletedStackIDs))
+	}
+	// Surface any GC errors as warnings (non-fatal)
+	for _, errMsg := range gcResult.Errors {
+		ctx.Output.Warn("Stack metadata cleanup: %s", errMsg)
 	}
 
 	graph := engine.BuildStackGraph(eng, engine.SortStrategyAlphabetical, nil)

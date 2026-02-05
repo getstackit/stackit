@@ -66,8 +66,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 		out.Info("Cleared stack description for stack rooted at %s.", style.ColorBranchName(stackRoot, false))
 
-		// Push metadata changes
-		if err := actions.PushMetadataAndSyncPRs(ctx, []string{stackRoot}); err != nil {
+		// Mark stack for PR updates and push metadata
+		if err := markStackAndPushMetadata(ctx, eng, stackRoot); err != nil {
 			out.Debug("Failed to push metadata changes: %v", err)
 		}
 		return nil
@@ -88,8 +88,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			out.Info("  Description: %s", style.ColorDim(opts.Description))
 		}
 
-		// Push metadata changes
-		if err := actions.PushMetadataAndSyncPRs(ctx, []string{stackRoot}); err != nil {
+		// Mark stack for PR updates and push metadata
+		if err := markStackAndPushMetadata(ctx, eng, stackRoot); err != nil {
 			out.Debug("Failed to push metadata changes: %v", err)
 		}
 		return nil
@@ -110,8 +110,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 					out.Info("  Description: %s", style.ColorDim(TruncateDescription(desc.Description, 60)))
 				}
 
-				// Push metadata changes
-				if err := actions.PushMetadataAndSyncPRs(ctx, []string{stackRoot}); err != nil {
+				// Mark stack for PR updates and push metadata
+				if err := markStackAndPushMetadata(ctx, eng, stackRoot); err != nil {
 					out.Debug("Failed to push metadata changes: %v", err)
 				}
 				return nil
@@ -141,12 +141,28 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		out.Info("  Description: %s", style.ColorDim(TruncateDescription(newDesc.Description, 60)))
 	}
 
-	// Push metadata changes
-	if err := actions.PushMetadataAndSyncPRs(ctx, []string{stackRoot}); err != nil {
+	// Mark stack for PR updates and push metadata
+	if err := markStackAndPushMetadata(ctx, eng, stackRoot); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}
 
 	return nil
+}
+
+// markStackAndPushMetadata marks all stack branches for PR update and pushes metadata refs.
+// Unlike PushMetadataAndSyncPRs, this does NOT immediately update GitHub PRs.
+func markStackAndPushMetadata(ctx *app.Context, eng engine.Engine, stackRoot string) error {
+	// Mark all branches in the stack for PR body update
+	graph := engine.BuildStackGraph(eng, engine.SortStrategyAlphabetical, nil)
+	root := eng.GetBranch(stackRoot)
+	if root.IsTracked() {
+		for _, branch := range graph.CollectBranches(root) {
+			_ = eng.MarkNeedsPRBodyUpdate(branch.GetName())
+		}
+	}
+
+	// Push metadata refs (fast git operation)
+	return actions.PushMetadataOnly(ctx, eng, []string{stackRoot})
 }
 
 func showDescription(ctx *app.Context, branch engine.Branch, stackRoot string) error { //nolint:unparam // error return for API consistency

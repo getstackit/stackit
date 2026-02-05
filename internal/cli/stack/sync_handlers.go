@@ -198,8 +198,15 @@ func (h *SimpleSyncHandler) printBranchSyncEvent(event syncAction.Event) {
 }
 
 func (h *SimpleSyncHandler) printGitHubEvent(event syncAction.Event) {
-	if event.Type == syncAction.EventCompleted && event.Message != "" {
-		h.Output.Info("  %s", event.Message)
+	switch event.Type {
+	case syncAction.EventProgress:
+		if event.Branch != "" {
+			h.Output.Info("  Updating PR for %s", style.ColorBranchName(event.Branch, false))
+		}
+	case syncAction.EventCompleted:
+		if event.Message != "" {
+			h.Output.Info("  %s", event.Message)
+		}
 	}
 }
 
@@ -449,8 +456,15 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			}
 		}
 	case syncAction.PhaseGitHub:
-		if event.Type == syncAction.EventCompleted && event.Message != "" {
-			return event.Message, false
+		switch event.Type {
+		case syncAction.EventProgress:
+			if event.Branch != "" {
+				return fmt.Sprintf("Updating PR for %s", event.Branch), false
+			}
+		case syncAction.EventCompleted:
+			if event.Message != "" {
+				return event.Message, false
+			}
 		}
 	case syncAction.PhaseClean:
 		if event.Type == syncAction.EventCompleted && event.Branch != "" {

@@ -113,11 +113,24 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 		})
 	}
 
-	// Update PR body footers if needed
+	// Update PR body footers only for branches flagged as needing updates
 	if ctx.GitHubClient != nil && result.RepoOwner != "" && result.RepoName != "" {
-		updateMetaStart := time.Now()
-		actions.UpdateStackPRMetadata(ctx, result.BranchNames, result.RepoOwner, result.RepoName)
-		ctx.Logger.Info("update stack pr metadata completed durationMs=%d", time.Since(updateMetaStart).Milliseconds())
+		flaggedBranches := ctx.Engine.GetBranchesNeedingPRBodyUpdate()
+		if len(flaggedBranches) > 0 {
+			updateMetaStart := time.Now()
+			// Emit progress events for each branch being updated
+			for _, branchName := range flaggedBranches {
+				handler.EmitEvent(Event{
+					Phase:   PhaseGitHub,
+					Type:    EventProgress,
+					Branch:  branchName,
+					Message: fmt.Sprintf("Updating PR metadata for %s", branchName),
+				})
+			}
+			actions.UpdateStackPRMetadata(ctx, flaggedBranches, result.RepoOwner, result.RepoName)
+			ctx.Logger.Info("update stack pr metadata completed durationMs=%d branchCount=%d",
+				time.Since(updateMetaStart).Milliseconds(), len(flaggedBranches))
+		}
 	}
 
 	// Push local parent changes to GitHub PR bases

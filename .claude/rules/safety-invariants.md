@@ -82,3 +82,57 @@ session.Engine.PushBranch(ctx, tempBranch, remote, opts)
 4. Worktree checks out main (succeeds because main not checked out elsewhere)
 5. Worktree creates merge commits (on main!)
 6. User switches to main - sees unexpected merge commits
+
+## GitHub Writes Only During Sync
+
+**Commands must NOT directly update GitHub PRs. Instead, mark branches for update and let `sync` handle it.**
+
+This applies to: describe, scope, lock, and any command that changes metadata affecting PR display.
+
+### Why This Matters
+
+- **Performance**: GitHub API calls are slow (~200-500ms each). Batching in `sync` is faster.
+- **Predictability**: Users expect `sync` to be the network-heavy command, not `describe` or `lock`.
+- **Offline support**: Users can work offline, then sync when connected.
+- **Consistency**: One place to handle GitHub rate limits, retries, and errors.
+
+### Exceptions (Acceptable GitHub Calls)
+
+1. **Read-only for display**: `log` showing CI status, `get` showing PR info
+2. **Primary purpose is GitHub**: `submit` creating/updating PRs, `merge` creating consolidation PRs
+3. **During sync**: All PR body/title updates should happen here
+
+### Implementation Pattern
+
+```go
+// WRONG - directly updates GitHub
+if err := actions.PushMetadataAndSyncPRs(ctx, branches); err != nil {
+    out.Debug("Failed: %v", err)
+}
+
+// CORRECT - mark for update, sync handles GitHub
+for _, branch := range branches {
+    _ = eng.MarkNeedsPRBodyUpdate(branch.GetName())
+}
+if err := pushMetadataOnly(ctx, eng, branchName); err != nil {
+    out.Debug("Failed: %v", err)
+}
+```
+
+### How Sync Processes Flags
+
+```go
+// In sync/github_sync.go - only updates flagged branches
+flaggedBranches := ctx.Engine.GetBranchesNeedingPRBodyUpdate()
+if len(flaggedBranches) > 0 {
+    actions.UpdateStackPRMetadata(ctx, flaggedBranches, owner, repo)
+}
+```
+
+### Commands That Should Use This Pattern
+
+| Command | What it changes | Should mark, not call GitHub |
+|---------|-----------------|------------------------------|
+| `describe` | Stack description in footer | ✅ Fixed |
+| `scope` | PR title prefix | ❌ TODO |
+| `lock` | Lock section in PR body | ❌ TODO |

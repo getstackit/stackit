@@ -350,6 +350,91 @@ func buildGoldenTests() []goldenTest {
 			opts: RenderOptions{Mode: RenderModeCompact},
 		},
 
+		// Detailed mode (GitButler-inspired)
+		{
+			name: "detailed_linear",
+			mock: NewMockTreeData(),
+			annotations: map[string]BranchAnnotation{
+				"feature-1": {
+					CommitMessages: []string{"111abcd Add feature one", "222bcde Fix tests"},
+				},
+				"feature-2": {
+					CommitMessages: []string{"abc1234 Initial implementation"},
+				},
+			},
+			opts: RenderOptions{Mode: RenderModeDetailed, ShowCommitMessages: true, SkipSelectionPrefix: true},
+		},
+		{
+			name: "detailed_branching",
+			mock: &MockTreeData{
+				CurrentVal: "child-1",
+				TrunkVal:   "main",
+				ChildrenMap: map[string][]string{
+					"main":     {"branch-a", "branch-b"},
+					"branch-a": {"child-1"},
+					"branch-b": {},
+					"child-1":  {},
+				},
+				ParentsMap: map[string]string{
+					"branch-a": "main",
+					"branch-b": "main",
+					"child-1":  "branch-a",
+				},
+				FixedMap: map[string]bool{
+					"main":     true,
+					"branch-a": true,
+					"branch-b": true,
+					"child-1":  true,
+				},
+			},
+			annotations: map[string]BranchAnnotation{
+				"branch-a": {
+					CommitMessages: []string{"aaa1111 Add branch A"},
+				},
+				"branch-b": {
+					CommitMessages: []string{"bbb2222 Add branch B"},
+				},
+				"child-1": {
+					CommitMessages: []string{"ccc3333 Child commit"},
+				},
+			},
+			opts: RenderOptions{Mode: RenderModeDetailed, ShowCommitMessages: true, SkipSelectionPrefix: true},
+		},
+		{
+			name: "detailed_with_unstaged",
+			mock: NewMockTreeData(),
+			annotations: map[string]BranchAnnotation{
+				"feature-1": {
+					CommitMessages: []string{"111abcd Add feature one"},
+				},
+				"feature-2": {
+					CommitMessages:        []string{"abc1234 Initial implementation"},
+					HasWorkingTreeChanges: true,
+					UnstagedFiles:         []string{"M README.md", "A new-file.txt"},
+				},
+			},
+			opts: RenderOptions{Mode: RenderModeDetailed, ShowCommitMessages: true, SkipSelectionPrefix: true},
+		},
+		{
+			name: "detailed_with_annotations",
+			mock: NewMockTreeData(),
+			annotations: map[string]BranchAnnotation{
+				"feature-1": {
+					PRNumber:       intPtr(123),
+					CheckStatus:    CheckStatusPassing,
+					ReviewStatus:   "Approved",
+					CommitMessages: []string{"111abcd Add feature one", "222bcde Fix tests"},
+				},
+				"feature-2": {
+					PRNumber:       intPtr(456),
+					IsDraft:        true,
+					CheckStatus:    CheckStatusPending,
+					CommitMessages: []string{"abc1234 Initial implementation"},
+				},
+			},
+			opts: RenderOptions{Mode: RenderModeDetailed, ShowCommitMessages: true, SkipSelectionPrefix: true},
+		},
+
 		// Split direction previews - linear stack with virtual branch inserted
 		// These simulate the split command's direction selection UI
 		// Uses full format (not short) with HideSummary to show clean │ connectors

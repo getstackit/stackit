@@ -28,6 +28,7 @@ func NewLogCmd() *cobra.Command {
 	// Add subcommands
 	cmd.AddCommand(newLogFullCmd())
 	cmd.AddCommand(newLogShortCmd())
+	cmd.AddCommand(newLogDetailedCmd())
 
 	return cmd
 }
@@ -40,6 +41,27 @@ func newLogFullCmd() *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return executeLog(cmd, f, actions.LogStyleFull)
+		},
+	}
+	addLogFlags(cmd, f)
+	return cmd
+}
+
+func newLogDetailedCmd() *cobra.Command {
+	f := &logFlags{}
+	cmd := &cobra.Command{
+		Use:   "detailed",
+		Short: "Log branches with individual commits and working tree status",
+		Long: `Displays a GitButler-inspired tree view with individual commits per branch,
+rich box-drawing characters, and working tree status.
+
+Examples:
+  stackit log detailed              # Show detailed tree view
+  stackit log detailed -s           # Show current stack only
+  stackit log detailed -n 2         # Show 2 levels up/down`,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return executeLog(cmd, f, actions.LogStyleDetailed)
 		},
 	}
 	addLogFlags(cmd, f)

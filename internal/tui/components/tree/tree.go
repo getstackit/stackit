@@ -30,6 +30,17 @@ const (
 	CheckStatusFailing = "FAILING"
 	// CheckStatusPending indicates CI is pending
 	CheckStatusPending = "PENDING"
+
+	// DetailedBranchOpen is the opening connector for a branch in detailed mode.
+	DetailedBranchOpen = "╭┄"
+	// DetailedPipe is the vertical connector between commits in detailed mode.
+	DetailedPipe = "┊"
+	// DetailedCommitSymbol is the bullet for individual commits in detailed mode.
+	DetailedCommitSymbol = "●"
+	// DetailedBranchClose is the closing connector for a branch in detailed mode.
+	DetailedBranchClose = "├╯"
+	// DetailedTrunkSymbol is the bullet for the trunk branch in detailed mode.
+	DetailedTrunkSymbol = "●"
 )
 
 // MergedParentDisplay represents a historical merged parent for display purposes
@@ -76,6 +87,13 @@ type BranchAnnotation struct {
 
 	// PRURL is the GitHub PR URL for this branch
 	PRURL string
+
+	// UnstagedFiles holds working tree changes for the current branch (detailed mode)
+	// Each entry is formatted as "STATUS PATH" (e.g., "M README.md")
+	UnstagedFiles []string
+
+	// HasWorkingTreeChanges indicates whether there are any uncommitted changes
+	HasWorkingTreeChanges bool
 }
 
 // RenderMode specifies the rendering style for the tree.
@@ -93,6 +111,10 @@ const (
 	// RenderModeSelect shows single-line branches optimized for selection UI.
 	// Similar to Compact but includes selection-related features.
 	RenderModeSelect
+
+	// RenderModeDetailed shows individual commits per branch with GitButler-inspired
+	// box-drawing characters (╭┄, ┊, ●, ├╯) and working tree status.
+	RenderModeDetailed
 )
 
 // RenderOptions configures rendering behavior
@@ -149,6 +171,11 @@ func (o RenderOptions) isShortMode() bool {
 // isSingleLineMode returns true if the options indicate single-line rendering.
 func (o RenderOptions) isSingleLineMode() bool {
 	return o.Mode == RenderModeSelect
+}
+
+// isDetailedMode returns true if the options indicate detailed/GitButler-style rendering.
+func (o RenderOptions) isDetailedMode() bool {
+	return o.Mode == RenderModeDetailed
 }
 
 // Data provides the tree structure data for rendering.
@@ -417,6 +444,7 @@ func (r *StackTreeRenderer) RenderStackDetailed(branchName string, opts RenderOp
 		// Config fields (use helper methods to handle Mode and legacy flags)
 		short:               opts.isShortMode(),
 		singleLine:          opts.isSingleLineMode(),
+		detailed:            opts.isDetailedMode(),
 		omitCurrentBranch:   opts.OmitCurrentBranch,
 		noStyleBranchName:   opts.NoStyleBranchName,
 		hideStats:           opts.HideStats,
@@ -451,9 +479,21 @@ func (r *StackTreeRenderer) RenderStackDetailed(branchName string, opts RenderOp
 	for _, section := range outputDeep {
 		totalLen += len(section)
 	}
-	result := make([]RenderedBranch, 0, totalLen)
+	result := make([]RenderedBranch, 0, totalLen+1) // +1 for potential unstaged section
 	for _, section := range outputDeep {
 		result = append(result, section...)
+	}
+
+	// In detailed mode, prepend unstaged changes section if current branch has working tree changes
+	if opts.isDetailedMode() {
+		if ann, ok := r.Annotations[r.currentBranch]; ok && ann.HasWorkingTreeChanges {
+			unstagedLines := r.getUnstagedSection(ann)
+			unstaged := RenderedBranch{
+				Name:  "__unstaged__",
+				Lines: unstagedLines,
+			}
+			result = append([]RenderedBranch{unstaged}, result...)
+		}
 	}
 
 	return result
@@ -468,6 +508,7 @@ type treeRenderArgs struct {
 	// Config fields - constant during entire render
 	short               bool
 	singleLine          bool
+	detailed            bool
 	omitCurrentBranch   bool
 	noStyleBranchName   bool
 	hideStats           bool
@@ -501,6 +542,7 @@ func (a treeRenderArgs) childArgs(branchName string, indentLevel int, parentScop
 		// Config fields (inherited)
 		short:               a.short,
 		singleLine:          a.singleLine,
+		detailed:            a.detailed,
 		omitCurrentBranch:   a.omitCurrentBranch,
 		noStyleBranchName:   a.noStyleBranchName,
 		hideStats:           a.hideStats,
@@ -532,6 +574,7 @@ func (a treeRenderArgs) downstackArgs(branchName string) treeRenderArgs {
 		// Config fields (inherited)
 		short:               a.short,
 		singleLine:          a.singleLine,
+		detailed:            a.detailed,
 		omitCurrentBranch:   a.omitCurrentBranch,
 		noStyleBranchName:   a.noStyleBranchName,
 		hideStats:           a.hideStats,
@@ -695,6 +738,11 @@ func (r *StackTreeRenderer) getBranchLinesWithCursor(args treeRenderArgs) ([]str
 		return lines, 0
 	}
 
+	// In detailed format, cursor is on the first line (branch header)
+	if args.detailed {
+		return lines, 0
+	}
+
 	// In full format, determine cursor position
 	children := r.children(args.branchName)
 	hasBranchingLine := !args.skipBranchingLine && len(children) >= 2
@@ -731,6 +779,11 @@ func (r *StackTreeRenderer) getBranchLines(args treeRenderArgs) []string {
 		if args.indentLevel > *args.overallIndent {
 			*args.overallIndent = args.indentLevel
 		}
+	}
+
+	// Detailed format (GitButler-inspired)
+	if args.detailed {
+		return r.getDetailedLines(args)
 	}
 
 	// Short format
@@ -815,6 +868,127 @@ func (r *StackTreeRenderer) getBranchLines(args treeRenderArgs) []string {
 	infoLines := r.getInfoLines(args)
 	result = append(result, infoLines...)
 
+	return result
+}
+
+// getDetailedLines renders a branch in detailed mode with GitButler-inspired box-drawing characters.
+// Each branch is shown as:
+//
+//	[prefix]╭┄ [branch-name] #PR ● ✔
+//	[prefix]┊●  sha1234 Commit message 1
+//	[prefix]┊●  sha5678 Commit message 2
+//	[prefix-1]├╯
+//
+// Trunk is shown as a single line: ● main [origin/main]
+func (r *StackTreeRenderer) getDetailedLines(args treeRenderArgs) []string {
+	annotation := r.Annotations[args.branchName]
+	isCurrent := args.branchName == r.currentBranch
+	isTrunk := r.isTrunk(args.branchName)
+
+	// Build indent prefix: ┊ repeated per indent level
+	indentPrefix := strings.Repeat(DetailedPipe, args.indentLevel)
+
+	// TRUNK: single line at the bottom
+	if isTrunk {
+		branchName := style.BranchStyle(isCurrent, true, false).Render(args.branchName)
+		return []string{DetailedTrunkSymbol + " " + branchName}
+	}
+
+	// Pre-allocate: header + commits + close line
+	result := make([]string, 0, 2+len(annotation.CommitMessages))
+
+	// Branch header line: ╭┄ [branch-name] #PR Draft ● ✔
+	headerParts := []string{args.branchName}
+
+	// PR number
+	if annotation.PRNumber != nil {
+		headerParts = append(headerParts, style.ColorPRNumberByState(*annotation.PRNumber, annotation.PRState, annotation.IsDraft))
+	}
+
+	// Draft badge
+	if annotation.IsDraft {
+		headerParts = append(headerParts, style.ColorDim("Draft"))
+	}
+
+	// CI status
+	switch annotation.CheckStatus {
+	case CheckStatusPassing:
+		headerParts = append(headerParts, style.IconCIPassing())
+	case CheckStatusFailing:
+		headerParts = append(headerParts, style.IconCIFailing())
+	case CheckStatusPending:
+		headerParts = append(headerParts, style.IconCIPending())
+	}
+
+	// Review status
+	switch annotation.ReviewStatus {
+	case "Approved":
+		headerParts = append(headerParts, style.IconReviewApproved())
+	case "Changes Requested":
+		headerParts = append(headerParts, style.IconReviewChangesRequested())
+	}
+
+	// Needs restack warning
+	if !r.isBranchFixed(args.branchName) {
+		headerParts = append(headerParts, style.ColorNeedsRestack("(needs restack)"))
+	}
+
+	// Format branch name: bold if current
+	branchNameStr := style.ColorBranchNameBoldWithTrunk(args.branchName, isCurrent, false)
+
+	var headerBuilder strings.Builder
+	headerBuilder.WriteString(indentPrefix)
+	headerBuilder.WriteString(DetailedBranchOpen)
+	headerBuilder.WriteString(" [")
+	headerBuilder.WriteString(branchNameStr)
+	headerBuilder.WriteString("]")
+
+	// Append the rest of the header parts (PR, CI, etc.)
+	for i, part := range headerParts {
+		if i == 0 {
+			continue // Skip the branch name, already added
+		}
+		headerBuilder.WriteString(" ")
+		headerBuilder.WriteString(part)
+	}
+
+	result = append(result, headerBuilder.String())
+
+	// Commit lines
+	contentPrefix := indentPrefix + DetailedPipe
+	if len(annotation.CommitMessages) > 0 {
+		for _, msg := range annotation.CommitMessages {
+			var formattedMsg string
+			if spaceIdx := strings.Index(msg, " "); spaceIdx > 0 {
+				sha := msg[:spaceIdx]
+				rest := msg[spaceIdx:]
+				formattedMsg = style.ColorSHA(sha) + style.ColorDim(rest)
+			} else {
+				formattedMsg = style.ColorDim(msg)
+			}
+			result = append(result, contentPrefix+DetailedCommitSymbol+"  "+formattedMsg)
+		}
+	}
+
+	// Closing line: ├╯ (one fewer ┊ than content lines, connecting back to parent)
+	closeIndent := args.indentLevel
+	if closeIndent > 0 {
+		closeIndent--
+	}
+	result = append(result, strings.Repeat(DetailedPipe, closeIndent)+DetailedBranchClose)
+
+	return result
+}
+
+// getUnstagedSection renders the unstaged changes section at the top of the detailed tree.
+func (r *StackTreeRenderer) getUnstagedSection(annotation BranchAnnotation) []string {
+	// header + files + trailing pipe
+	result := make([]string, 0, 2+len(annotation.UnstagedFiles))
+	result = append(result, DetailedBranchOpen+" "+style.ColorDim("[unstaged changes]"))
+	for _, file := range annotation.UnstagedFiles {
+		result = append(result, DetailedPipe+"   "+style.ColorDim(file))
+	}
+	result = append(result, DetailedPipe)
 	return result
 }
 

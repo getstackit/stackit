@@ -1,0 +1,10 @@
+╭┄ [child-1]
+┊●  ccc3333 Child commit
+├╯
+╭┄ [branch-a]
+┊●  aaa1111 Add branch A
+├╯
+┊╭┄ [branch-b]
+┊┊●  bbb2222 Add branch B
+├╯
+● main

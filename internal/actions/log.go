@@ -17,9 +17,10 @@ import (
 
 // LogStyle defines the output style for the log command
 const (
-	LogStyleNormal = "NORMAL"
-	LogStyleFull   = "FULL"
-	LogStyleShort  = "SHORT"
+	LogStyleNormal   = "NORMAL"
+	LogStyleFull     = "FULL"
+	LogStyleShort    = "SHORT"
+	LogStyleDetailed = "DETAILED"
 )
 
 // LogOptions contains options for the log command
@@ -47,8 +48,8 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 		return err
 	}
 
-	// Populate remote SHAs if needed (only for FULL mode)
-	if opts.Style == LogStyleFull {
+	// Populate remote SHAs if needed (for FULL and DETAILED modes)
+	if opts.Style == LogStyleFull || opts.Style == LogStyleDetailed {
 		if err := ctx.Engine.PopulateRemoteShas(); err != nil {
 			ctx.Output.Debug("Failed to populate remote SHAs: %v", err)
 		}
@@ -74,9 +75,9 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 	annotations := make(map[string]tree.BranchAnnotation)
 	allBranches := ctx.Engine.AllBranches()
 
-	// Prefetch CI status in batch if in FULL style
+	// Prefetch CI status in batch if in FULL or DETAILED style
 	var ciStatuses map[string]*github.CheckStatus
-	if opts.Style == LogStyleFull && ctx.GitHubClient != nil {
+	if (opts.Style == LogStyleFull || opts.Style == LogStyleDetailed) && ctx.GitHubClient != nil {
 		branchNames := make([]string, 0, len(allBranches))
 		for _, b := range allBranches {
 			if !b.IsTrunk() {
@@ -108,11 +109,19 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 
 	renderer.SetAnnotations(annotations)
 
+	// Determine render mode based on style
+	renderMode := tree.RenderModeFull
+	if opts.Style == LogStyleDetailed {
+		renderMode = tree.RenderModeDetailed
+	}
+
 	stackLines := renderer.RenderStack(opts.BranchName, tree.RenderOptions{
-		Mode:        tree.RenderModeFull, // We want the full tree characters with stats
-		Steps:       opts.Steps,
-		ShowSHAs:    opts.ShowSHAs,
-		HideSummary: opts.Style == LogStyleShort,
+		Mode:                renderMode,
+		Steps:               opts.Steps,
+		ShowSHAs:            opts.ShowSHAs,
+		ShowCommitMessages:  opts.Style == LogStyleDetailed,
+		HideSummary:         opts.Style == LogStyleShort,
+		SkipSelectionPrefix: opts.Style == LogStyleDetailed,
 	})
 
 	// Add summary footer
@@ -209,8 +218,23 @@ func getEmptyWorktrees(ctx *app.Context) map[string]*engine.WorktreeInfo {
 func getBranchAnnotation(ctx *app.Context, branchObj engine.Branch, opts LogOptions, ciStatuses map[string]*github.CheckStatus, emptyWorktrees map[string]*engine.WorktreeInfo) tree.BranchAnnotation {
 	annotation := tui.GetBranchAnnotation(ctx.Engine, branchObj)
 
-	// CI status (only in FULL mode)
-	if opts.Style == LogStyleFull && !branchObj.IsTrunk() {
+	// Working tree changes (only in DETAILED mode, only for current branch)
+	if opts.Style == LogStyleDetailed && !branchObj.IsTrunk() {
+		currentBranch := ctx.Engine.CurrentBranch()
+		if currentBranch != nil && currentBranch.GetName() == branchObj.GetName() {
+			if changes, err := ctx.Engine.GetPendingChanges(ctx.Context); err == nil && len(changes) > 0 {
+				annotation.HasWorkingTreeChanges = true
+				for _, change := range changes {
+					if !change.Staged {
+						annotation.UnstagedFiles = append(annotation.UnstagedFiles, change.Status+" "+change.Path)
+					}
+				}
+			}
+		}
+	}
+
+	// CI status (only in FULL or DETAILED mode)
+	if (opts.Style == LogStyleFull || opts.Style == LogStyleDetailed) && !branchObj.IsTrunk() {
 		status := ciStatuses[branchObj.GetName()]
 		if status != nil {
 			annotation.CheckStatus = tree.CheckStatusPassing

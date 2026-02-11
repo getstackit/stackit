@@ -299,6 +299,21 @@ func extractContentFromHunk(h Hunk) string {
 	return result
 }
 
+// ApplyPatchToWorktree applies a patch to the working tree only (not the
+// index) by piping it to `git apply` via stdin. Unlike a stash pop, git apply
+// never performs a three-way merge here, so it can never leave conflict
+// markers: it applies the patch atomically or fails leaving the working tree
+// untouched. An empty patch is a no-op.
+func (r *runner) ApplyPatchToWorktree(ctx context.Context, patch string) error {
+	if strings.TrimSpace(patch) == "" {
+		return nil
+	}
+	if _, err := r.runGitInternal(ctx, patch, nil, true, "apply"); err != nil {
+		return fmt.Errorf("failed to apply patch to worktree: %w", err)
+	}
+	return nil
+}
+
 // UnstageAll removes all changes from the staging area.
 func (r *runner) UnstageAll(ctx context.Context) error {
 	if _, err := r.RunGitCommandWithContext(ctx, "reset"); err != nil {

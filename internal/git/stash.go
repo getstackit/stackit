@@ -89,9 +89,37 @@ func (r *runner) parseGitVersion(ctx context.Context) {
 	r.gitVersionParsed = true
 }
 
+// StashDrop drops the stash entry at ref. It refuses an empty ref: bare
+// `git stash drop` would silently target stash@{0}, which may be an
+// unrelated user stash.
+func (r *runner) StashDrop(ctx context.Context, ref string) error {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return fmt.Errorf("stash drop requires an explicit stash ref")
+	}
+	if _, err := r.RunGitCommandWithContext(ctx, "stash", "drop", ref); err != nil {
+		return fmt.Errorf("stash drop failed: %w", err)
+	}
+	return nil
+}
+
 func (r *runner) StashPop(ctx context.Context) error {
 	_, err := r.RunGitCommandWithContext(ctx, "stash", "pop")
 	if err != nil {
+		return fmt.Errorf("stash pop failed: %w", err)
+	}
+	return nil
+}
+
+// StashPopRef pops the stash entry at ref. It refuses an empty ref: bare
+// `git stash pop` would silently target stash@{0}, which may be an
+// unrelated user stash.
+func (r *runner) StashPopRef(ctx context.Context, ref string) error {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return fmt.Errorf("stash pop requires an explicit stash ref")
+	}
+	if _, err := r.RunGitCommandWithContext(ctx, "stash", "pop", ref); err != nil {
 		return fmt.Errorf("stash pop failed: %w", err)
 	}
 	return nil

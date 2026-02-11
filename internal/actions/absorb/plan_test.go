@@ -49,12 +49,15 @@ func TestGeneratePlanJSON(t *testing.T) {
 			},
 		}
 
-		unabsorbedHunks := []git.Hunk{
+		unabsorbedHunks := []Unabsorbable{
 			{
-				File:     "utils.go",
-				NewStart: 1,
-				NewCount: 5,
-				Content:  "+func helper() string {\n+  return \"help\"\n+}",
+				Hunk: git.Hunk{
+					File:     "utils.go",
+					NewStart: 1,
+					NewCount: 5,
+					Content:  "+func helper() string {\n+  return \"help\"\n+}",
+				},
+				Reason: ReasonCommutesWithAll,
 			},
 		}
 
@@ -126,7 +129,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 		planJSON, err := GeneratePlanJSON(
 			"branch-a",
 			[]git.HunkTarget{},
-			[]git.Hunk{},
+			[]Unabsorbable{},
 			nil,
 			s.Engine,
 		)

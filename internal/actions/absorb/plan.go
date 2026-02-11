@@ -47,7 +47,7 @@ type StackNode struct {
 func GeneratePlanJSON(
 	currentBranch string,
 	hunkTargets []git.HunkTarget,
-	unabsorbedHunks []git.Hunk,
+	unabsorbedHunks []Unabsorbable,
 	newFiles []string,
 	eng engine.Engine,
 ) ([]byte, error) {
@@ -76,12 +76,16 @@ func GeneratePlanJSON(
 		})
 	}
 
-	// Convert unabsorbable hunks
-	for _, hunk := range unabsorbedHunks {
+	// Convert unabsorbable hunks. Binary and deleted-file hunks carry no
+	// new-side line numbers, so derive the range the same way terminal output
+	// does instead of reporting a bogus "0".
+	for _, unabsorbable := range unabsorbedHunks {
+		hunk := unabsorbable.Hunk
+		start, end := hunkLineRange(hunk)
 		plan.Unabsorbable = append(plan.Unabsorbable, UnabsorbableHunk{
 			File:    hunk.File,
-			Lines:   formatLines(hunk.NewStart, hunk.NewCount),
-			Reason:  "commutes_with_all",
+			Lines:   formatLines(start, end-start+1),
+			Reason:  string(unabsorbable.Reason),
 			Content: hunk.Content,
 		})
 	}

@@ -1,6 +1,7 @@
 package absorb
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -58,7 +59,7 @@ func ShowConflict(ctx *app.Context) error {
 	// Check if we're in a detached HEAD state (might be mid-absorb failure)
 	if eng.CurrentBranch() == nil {
 		out.Warn("Repository is in detached HEAD state.")
-		out.Info("This may be from a failed absorb. Run 'stackit absorb --abort' to recover.")
+		out.Info("This may be from a failed absorb. Run 'stackit abort' to recover.")
 		out.Info("")
 
 		// Show unmerged files if any
@@ -159,10 +160,11 @@ func Abort(ctx *app.Context) error {
 		stashList, _ := eng.StashList(ctx.Context)
 		if strings.Contains(stashList, absorbStashMarker) {
 			out.Info("Found stashed changes from previous absorb attempt.")
-			if err := eng.StashPop(ctx.Context); err != nil {
+			restored, err := popAllAbsorbStashes(ctx.Context, eng)
+			if err != nil {
 				out.Warn("Failed to restore stashed changes: %v", err)
 			} else {
-				out.Info("Restored your staged changes from stash.")
+				out.Info("Restored %d absorb stash entries.", restored)
 			}
 			return nil
 		}
@@ -210,13 +212,39 @@ func Abort(ctx *app.Context) error {
 	// Pop stash if there is one
 	stashList, _ := eng.StashList(ctx.Context)
 	if strings.Contains(stashList, absorbStashMarker) {
-		if err := eng.StashPop(ctx.Context); err != nil {
+		restored, err := popAllAbsorbStashes(ctx.Context, eng)
+		if err != nil {
 			out.Warn("Failed to restore stashed changes: %v", err)
 		} else {
-			out.Info("Restored your staged changes from stash.")
+			out.Info("Restored %d absorb stash entries.", restored)
 		}
 	}
 
 	out.Info("Abort complete.")
 	return nil
+}
+
+func popAllAbsorbStashes(gitCtx context.Context, eng engine.Engine) (int, error) {
+	restored := 0
+	for {
+		stashList, err := eng.StashList(gitCtx)
+		if err != nil {
+			return restored, err
+		}
+
+		stashRef := findStashRefByMarkers(
+			stashList,
+			absorbStashStagedMarker,
+			absorbStashUnstagedMarker,
+			absorbStashMarker,
+		)
+		if stashRef == "" {
+			return restored, nil
+		}
+
+		if err := eng.StashPopRef(gitCtx, stashRef); err != nil {
+			return restored, err
+		}
+		restored++
+	}
 }

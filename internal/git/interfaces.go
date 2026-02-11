@@ -105,6 +105,10 @@ type DiffOperations interface {
 	GetDiffNumstat(base, head string) (string, error)
 	GetStagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
+	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary
+	// content (`git diff --binary`) so the result can be reapplied with
+	// `git apply`.
+	GetUnstagedDiffBinary(ctx context.Context, files ...string) (string, error)
 	// GetDiffBetween returns the raw diff between two refs, without color codes.
 	// This is suitable for parsing into hunks.
 	GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error)
@@ -165,7 +169,9 @@ type CherryPickOperations interface {
 type StashOperations interface {
 	StashPush(ctx context.Context, message string) (string, error)
 	StashPushStaged(ctx context.Context, message string) (string, error)
+	StashDrop(ctx context.Context, ref string) error
 	StashPop(ctx context.Context) error
+	StashPopRef(ctx context.Context, ref string) error
 	ListStash(ctx context.Context) (string, error)
 }
 
@@ -186,6 +192,10 @@ type PathOperations interface {
 // PatchOperations handles patch operations.
 type PatchOperations interface {
 	ApplyPatch(ctx context.Context, patchFile string, threeWay bool) error
+	// ApplyPatchToWorktree applies a patch (read from stdin) to the working
+	// tree only, never the index. It applies atomically or fails leaving the
+	// working tree untouched, so it can never write conflict markers.
+	ApplyPatchToWorktree(ctx context.Context, patch string) error
 	CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool, error)
 }
 

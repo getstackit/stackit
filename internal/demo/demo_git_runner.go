@@ -256,7 +256,15 @@ func (d *demoGitRunner) StashPushStaged(_ context.Context, _ string) (string, er
 	return "stashed staged", nil
 }
 
+func (d *demoGitRunner) StashDrop(_ context.Context, _ string) error {
+	return nil
+}
+
 func (d *demoGitRunner) StashPop(_ context.Context) error {
+	return nil
+}
+
+func (d *demoGitRunner) StashPopRef(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -429,6 +437,10 @@ func (d *demoGitRunner) GetUnstagedDiff(_ context.Context, _ ...string) (string,
 	return "", nil
 }
 
+func (d *demoGitRunner) GetUnstagedDiffBinary(_ context.Context, _ ...string) (string, error) {
+	return "", nil
+}
+
 func (d *demoGitRunner) GetDiffBetween(_ context.Context, _, _ string, _ ...string) (string, error) {
 	return "", nil
 }
@@ -518,6 +530,10 @@ func (d *demoGitRunner) CherryPickAbort(_ context.Context) error {
 }
 
 func (d *demoGitRunner) ApplyPatch(_ context.Context, _ string, _ bool) error {
+	return nil
+}
+
+func (d *demoGitRunner) ApplyPatchToWorktree(_ context.Context, _ string) error {
 	return nil
 }
 

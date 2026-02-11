@@ -18,6 +18,7 @@ func NewAbsorbCmd() *cobra.Command {
 		patch        bool
 		showConflict bool
 		jsonOutput   bool
+		restackMode  string
 	)
 
 	cmd := &cobra.Command{
@@ -50,22 +51,24 @@ Use --show-conflict to see the current conflict state and what changes were bein
 
 				// Run absorb action
 				return absorb.Action(ctx, absorb.Options{
-					All:    all,
-					DryRun: dryRun,
-					Force:  force,
-					Patch:  patch,
-					JSON:   jsonOutput,
+					All:     all,
+					DryRun:  dryRun,
+					Force:   force,
+					Patch:   patch,
+					JSON:    jsonOutput,
+					Restack: absorb.RestackMode(restackMode),
 				}, handler)
 			})
 		},
 	}
 
-	cmd.Flags().BoolVarP(&all, "all", "a", false, "Stage all unstaged changes before absorbing. Unlike create and modify, this will not include untracked files, as file creations would never be absorbed.")
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "Stage all unstaged tracked changes before absorbing. Unlike create and modify, this will not include untracked files, as file creations would never be absorbed.")
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Print which commits the hunks would be absorbed into, but do not actually absorb them.")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Do not prompt for confirmation; apply the hunks to the commits immediately.")
 	cmd.Flags().BoolVarP(&patch, "patch", "p", false, "Pick hunks to stage before absorbing.")
 	cmd.Flags().BoolVar(&showConflict, "show-conflict", false, "Show the current absorb conflict state")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output machine-readable JSON summary (works with --dry-run for preview)")
+	cmd.Flags().StringVar(&restackMode, "restack", string(absorb.RestackAll), "Restack scope after absorb: all, current, scope, none")
 
 	return cmd
 }

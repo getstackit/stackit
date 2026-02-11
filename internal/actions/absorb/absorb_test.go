@@ -2,6 +2,7 @@ package absorb
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -711,6 +712,390 @@ func DefaultConfig() *Config {
 	})
 }
 
+func TestAbsorbRestoresBinaryUnabsorbableHunks(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	textFile := filepath.Join(s.Scene.Dir, "text.txt")
+	binaryFile := filepath.Join(s.Scene.Dir, "asset.bin")
+
+	err := os.WriteFile(textFile, []byte("line one\nline two\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(binaryFile, []byte{0x00, 0x01, 0x02, 0x03}, 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "text.txt", "asset.bin")
+	s.RunGit("commit", "-m", "add baseline text and binary files")
+	s.Rebuild()
+
+	err = os.WriteFile(textFile, []byte("line one\nline two absorbed\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(binaryFile, []byte{0x10, 0x11, 0x12, 0x13}, 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "text.txt", "asset.bin")
+
+	err = Action(s.Context, Options{Force: true}, nil)
+	require.NoError(t, err)
+
+	cachedFiles, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached", "--name-only")
+	require.NoError(t, err)
+	require.Contains(t, cachedFiles, "asset.bin")
+	require.NotContains(t, cachedFiles, "text.txt")
+
+	headText, err := s.Scene.Repo.RunGitCommandAndGetOutput("show", "HEAD:text.txt")
+	require.NoError(t, err)
+	require.Contains(t, headText, "line two absorbed")
+
+	stashList, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+	require.NotContains(t, stashList, absorbStashStagedMarker)
+}
+
+func TestAbsorbCleansUpStashOnStashPushStagedError(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	textFile := filepath.Join(s.Scene.Dir, "text.txt")
+	err := os.WriteFile(textFile, []byte("line one\nline two\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "text.txt")
+	s.RunGit("commit", "-m", "add baseline file")
+	s.Rebuild()
+
+	// Create MM state in one file so git stash --staged returns non-zero.
+	err = os.WriteFile(textFile, []byte("line one\nline two staged\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "text.txt")
+	err = os.WriteFile(textFile, []byte("line one\nline two staged\nline three unstaged\n"), 0600)
+	require.NoError(t, err)
+
+	err = Action(s.Context, Options{Force: true}, nil)
+	require.NoError(t, err)
+
+	// No absorb stash of either marker may remain.
+	stashList, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+	require.NotContains(t, stashList, absorbStashStagedMarker)
+	require.NotContains(t, stashList, absorbStashUnstagedMarker)
+
+	// The staged edit landed in the commit; the unstaged edit did not.
+	headText, err := s.Scene.Repo.RunGitCommandAndGetOutput("show", "HEAD:text.txt")
+	require.NoError(t, err)
+	require.Contains(t, headText, "line two staged")
+	require.NotContains(t, headText, "line three unstaged")
+
+	// The unstaged edit survives in the working tree with no conflict markers.
+	currentText, err := os.ReadFile(textFile)
+	require.NoError(t, err)
+	require.Contains(t, string(currentText), "line three unstaged")
+	require.NotContains(t, string(currentText), "<<<<<<<")
+	require.NotContains(t, string(currentText), ">>>>>>>")
+	require.NotContains(t, string(currentText), "=======")
+
+	// No unmerged (UU) entries in the working tree.
+	status, err := s.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
+	require.NoError(t, err)
+	require.NotContains(t, status, "UU ")
+}
+
+// TestAbsorbRestoresUnabsorbableTextHunkToWorktree covers the primary success
+// path: a staged text hunk that commutes with all downstack commits (its target
+// commit is trunk-owned, outside the search range) must be restored to BOTH the
+// index and the on-disk file, not just the index.
+func TestAbsorbRestoresUnabsorbableTextHunkToWorktree(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	// trunk owns trunk.txt; absorb's search range is branch-a only, so a hunk
+	// targeting trunk.txt commutes with all searched commits -> unabsorbable.
+	trunkFile := filepath.Join(s.Scene.Dir, "trunk.txt")
+	err := os.WriteFile(trunkFile, []byte("trunk-line\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "trunk.txt")
+	s.RunGit("commit", "-m", "add trunk file")
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	branchFile := filepath.Join(s.Scene.Dir, "branch.txt")
+	err = os.WriteFile(branchFile, []byte("branch-line\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "branch.txt")
+	s.RunGit("commit", "-m", "add branch file")
+	s.Rebuild()
+
+	// Stage an absorbable hunk (branch.txt -> branch-a's commit) and an
+	// unabsorbable hunk (trunk.txt, commutes with all searched commits).
+	err = os.WriteFile(branchFile, []byte("branch-line absorbed\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(trunkFile, []byte("trunk-line unabsorbable\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "branch.txt", "trunk.txt")
+
+	err = Action(s.Context, Options{Force: true}, nil)
+	require.NoError(t, err)
+
+	// The unabsorbable hunk is staged in the index...
+	cachedDiff, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached")
+	require.NoError(t, err)
+	require.Contains(t, cachedDiff, "trunk-line unabsorbable")
+
+	// ...AND present in the on-disk file (the bug left it only in the index).
+	onDisk, err := os.ReadFile(trunkFile)
+	require.NoError(t, err)
+	require.Contains(t, string(onDisk), "trunk-line unabsorbable")
+
+	// The absorbable hunk landed in the commit and no absorb stash remains.
+	headBranch, err := s.Scene.Repo.RunGitCommandAndGetOutput("show", "HEAD:branch.txt")
+	require.NoError(t, err)
+	require.Contains(t, headBranch, "branch-line absorbed")
+
+	stashList, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+	require.NotContains(t, stashList, absorbStashStagedMarker)
+}
+
+// TestDropStagedStashIfRestored verifies the staged safety stash is dropped only
+// after the unabsorbable-hunk restore succeeds, and kept (as the recovery net)
+// when it fails. This mirrors the ordering guard in restoreStashedState.
+func TestDropStagedStashIfRestored(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	f := filepath.Join(s.Scene.Dir, "f.txt")
+	err := os.WriteFile(f, []byte("base\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "f.txt")
+	s.RunGit("commit", "-m", "base")
+	s.Rebuild()
+
+	// Create a real staged absorb stash to act on.
+	err = os.WriteFile(f, []byte("base\nstaged\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "f.txt")
+	s.RunGit("stash", "push", "--staged", "-m", absorbStashStagedMarker)
+
+	resolve := func(marker string) string {
+		list, listErr := s.Engine.StashList(s.Context.Context)
+		require.NoError(t, listErr)
+		return findStashRef(list, marker)
+	}
+
+	// restoreOK=false keeps the stash for manual recovery.
+	dropStagedStashIfRestored(s.Context.Context, s.Engine, s.Context.Output, false, resolve)
+	list, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+	require.Contains(t, list, absorbStashStagedMarker, "stash must be kept when restore did not fully succeed")
+
+	// restoreOK=true drops it.
+	dropStagedStashIfRestored(s.Context.Context, s.Engine, s.Context.Output, true, resolve)
+	list, err = s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+	require.NotContains(t, list, absorbStashStagedMarker, "stash must be dropped after a successful restore")
+}
+
+func TestAbsorbDryRunDoesNotMutateRepository(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	testFile := filepath.Join(s.Scene.Dir, "test.txt")
+	err := os.WriteFile(testFile, []byte("base\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "test.txt")
+	s.RunGit("commit", "-m", "add baseline file")
+	s.Rebuild()
+
+	err = os.WriteFile(testFile, []byte("base\nstaged\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "test.txt")
+
+	headBefore, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "HEAD")
+	require.NoError(t, err)
+	stashBefore, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+
+	err = Action(s.Context, Options{DryRun: true, Force: true}, nil)
+	require.NoError(t, err)
+
+	headAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "HEAD")
+	require.NoError(t, err)
+	stashAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+	cachedAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached", "--name-only")
+	require.NoError(t, err)
+
+	require.Equal(t, headBefore, headAfter)
+	require.Equal(t, stashBefore, stashAfter)
+	require.Contains(t, cachedAfter, "test.txt")
+}
+
+func TestAbsorbAllAndPatchStagesTrackedOnly(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	trackedFile := filepath.Join(s.Scene.Dir, "tracked.txt")
+	untrackedFile := filepath.Join(s.Scene.Dir, "new.txt")
+
+	err := os.WriteFile(trackedFile, []byte("base\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "tracked.txt")
+	s.RunGit("commit", "-m", "add baseline tracked file")
+	s.Rebuild()
+
+	err = os.WriteFile(trackedFile, []byte("base\ntracked-change\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(untrackedFile, []byte("new file\n"), 0600)
+	require.NoError(t, err)
+
+	err = Action(s.Context, Options{All: true, Patch: true, DryRun: true, Force: true}, nil)
+	require.NoError(t, err)
+
+	cached, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached", "--name-only")
+	require.NoError(t, err)
+	untracked, err := s.Scene.Repo.RunGitCommandAndGetOutput("ls-files", "--others", "--exclude-standard")
+	require.NoError(t, err)
+
+	require.Contains(t, cached, "tracked.txt")
+	require.NotContains(t, cached, "new.txt")
+	require.Contains(t, untracked, "new.txt")
+}
+
+func TestAbsorbPlanOutputIsUserFriendly(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	targetFile := filepath.Join(s.Scene.Dir, "target.txt")
+	newFile := filepath.Join(s.Scene.Dir, "new.txt")
+
+	err := os.WriteFile(targetFile, []byte("base\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "target.txt")
+	s.RunGit("commit", "-m", "add baseline target")
+	s.Rebuild()
+
+	err = os.WriteFile(targetFile, []byte("base\nabsorbed change\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(newFile, []byte("new file content\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "target.txt", "new.txt")
+
+	s.Output.Reset()
+	err = Action(s.Context, Options{Force: false}, nil)
+	require.NoError(t, err)
+
+	out := s.Output.String()
+	require.Contains(t, out, "Absorb plan: 1 hunk into 1 commit, 1 skipped")
+	require.Contains(t, out, "Will absorb:")
+	require.Contains(t, out, "Skipped (1):")
+	require.Contains(t, out, "New files cannot be absorbed (1)")
+	require.Contains(t, out, "Tips:")
+	require.Contains(t, out, "Commit new files with create/modify, then rerun absorb.")
+	require.Contains(t, out, "\n    - new.txt:")
+	require.NotContains(t, out, "new_file")
+}
+
+func TestAbsorbDryRunJSONIncludesUnabsorbableReasons(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	targetFile := filepath.Join(s.Scene.Dir, "target.txt")
+	deleteFile := filepath.Join(s.Scene.Dir, "delete.txt")
+	binaryFile := filepath.Join(s.Scene.Dir, "asset.bin")
+	newFile := filepath.Join(s.Scene.Dir, "new.txt")
+
+	err := os.WriteFile(targetFile, []byte("target base\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(deleteFile, []byte("delete me\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(binaryFile, []byte{0x00, 0x01, 0x02, 0x03}, 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "target.txt", "delete.txt", "asset.bin")
+	s.RunGit("commit", "-m", "add baseline files")
+	s.Rebuild()
+
+	err = os.WriteFile(targetFile, []byte("target absorbed\n"), 0600)
+	require.NoError(t, err)
+	err = os.Remove(deleteFile)
+	require.NoError(t, err)
+	err = os.WriteFile(newFile, []byte("brand new\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(binaryFile, []byte{0x10, 0x11, 0x12, 0x13}, 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "target.txt", "delete.txt", "new.txt", "asset.bin")
+
+	s.Output.Reset()
+	err = Action(s.Context, Options{DryRun: true, Force: true, JSON: true}, nil)
+	require.NoError(t, err)
+
+	out := s.Output.String()
+	start := strings.Index(out, "{\n  \"current_branch\"")
+	require.NotEqual(t, -1, start, "expected JSON output in absorb dry-run output")
+	end := strings.LastIndex(out, "}")
+	require.Greater(t, end, start, "expected complete JSON output")
+
+	var plan PlanJSON
+	err = json.Unmarshal([]byte(out[start:end+1]), &plan)
+	require.NoError(t, err)
+
+	reasons := make(map[string]bool)
+	for _, hunk := range plan.Unabsorbable {
+		reasons[hunk.Reason] = true
+	}
+	require.True(t, reasons[string(ReasonBinary)])
+	require.True(t, reasons[string(ReasonNewFile)])
+	require.True(t, reasons[string(ReasonDeletedFile)])
+}
+
+func TestAbsorbNonInteractiveWithoutForceSkipsApply(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	testFile := filepath.Join(s.Scene.Dir, "skip.txt")
+	err := os.WriteFile(testFile, []byte("base\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "skip.txt")
+	s.RunGit("commit", "-m", "add baseline file")
+	s.Rebuild()
+
+	err = os.WriteFile(testFile, []byte("base\nstaged\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "skip.txt")
+
+	headBefore, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "HEAD")
+	require.NoError(t, err)
+
+	err = Action(s.Context, Options{Force: false}, nil)
+	require.NoError(t, err)
+
+	headAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "HEAD")
+	require.NoError(t, err)
+	cachedAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached", "--name-only")
+	require.NoError(t, err)
+
+	require.Equal(t, headBefore, headAfter)
+	require.Contains(t, cachedAfter, "skip.txt")
+}
+
 func TestAbsorbConflictHandling(t *testing.T) {
 	t.Parallel()
 	t.Run("IsAbsorbInProgress returns false in normal state", func(t *testing.T) {
@@ -867,4 +1252,158 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		// After abort, we should be on test-branch
 		require.Equal(t, "test-branch", strings.TrimSpace(output))
 	})
+
+	t.Run("Abort restores all absorb stashes and keeps unrelated stashes", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		s.CreateBranch("test-branch")
+		s.TrackBranch("test-branch", "main")
+
+		fileA := filepath.Join(s.Scene.Dir, "file-a.txt")
+		fileB := filepath.Join(s.Scene.Dir, "file-b.txt")
+		fileC := filepath.Join(s.Scene.Dir, "file-c.txt")
+
+		err := os.WriteFile(fileA, []byte("a-base\n"), 0600)
+		require.NoError(t, err)
+		err = os.WriteFile(fileB, []byte("b-base\n"), 0600)
+		require.NoError(t, err)
+		err = os.WriteFile(fileC, []byte("c-base\n"), 0600)
+		require.NoError(t, err)
+		s.RunGit("add", "file-a.txt", "file-b.txt", "file-c.txt")
+		s.RunGit("commit", "-m", "add baseline files")
+		s.Rebuild()
+
+		err = os.WriteFile(fileA, []byte("a-absorb-staged\n"), 0600)
+		require.NoError(t, err)
+		s.RunGit("add", "file-a.txt")
+		s.RunGit("stash", "push", "-m", absorbStashStagedMarker)
+
+		err = os.WriteFile(fileB, []byte("b-absorb-unstaged\n"), 0600)
+		require.NoError(t, err)
+		s.RunGit("add", "file-b.txt")
+		s.RunGit("stash", "push", "-m", absorbStashUnstagedMarker)
+
+		err = os.WriteFile(fileC, []byte("c-unrelated\n"), 0600)
+		require.NoError(t, err)
+		s.RunGit("add", "file-c.txt")
+		s.RunGit("stash", "push", "-m", "unrelated-stash")
+
+		stashListBefore, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+		require.NoError(t, err)
+		require.Contains(t, stashListBefore, absorbStashStagedMarker)
+		require.Contains(t, stashListBefore, absorbStashUnstagedMarker)
+		require.Contains(t, stashListBefore, "unrelated-stash")
+
+		err = Abort(s.Context)
+		require.NoError(t, err)
+
+		stashListAfter, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+		require.NoError(t, err)
+		require.NotContains(t, stashListAfter, absorbStashStagedMarker)
+		require.NotContains(t, stashListAfter, absorbStashUnstagedMarker)
+		require.Contains(t, stashListAfter, "unrelated-stash")
+
+		contentA, err := os.ReadFile(fileA)
+		require.NoError(t, err)
+		require.Contains(t, string(contentA), "a-absorb-staged")
+		contentB, err := os.ReadFile(fileB)
+		require.NoError(t, err)
+		require.Contains(t, string(contentB), "b-absorb-unstaged")
+		contentC, err := os.ReadFile(fileC)
+		require.NoError(t, err)
+		require.NotContains(t, string(contentC), "c-unrelated")
+	})
+}
+
+// TestAbsorbFallbackPreservesUnstagedBinaryEdit is the regression test for the
+// data-loss bug: on the stash fallback path (triggered by MM state on a text
+// file), a coexisting UNSTAGED edit to a tracked binary file must survive.
+// Plain `git diff` renders a binary change as only "Binary files ... differ",
+// which `git apply` cannot reapply after `reset --hard` has wiped it — losing
+// the bytes and, because git apply is atomic per invocation, poisoning the
+// text edits captured in the same patch. The fix captures with
+// `git diff --binary`, which round-trips through `git apply`.
+func TestAbsorbFallbackPreservesUnstagedBinaryEdit(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+
+	textFile := filepath.Join(s.Scene.Dir, "text.txt")
+	binFile := filepath.Join(s.Scene.Dir, "blob.bin")
+	originalBinary := []byte{0x00, 0x01, 0x02, 0x03, 'B', 'I', 'N', 0xff, 0xfe}
+	editedBinary := []byte{0x00, 0x01, 0x02, 0x03, 'B', 'I', 'N', '-', 'E', 'D', 'I', 'T', 0xff, 0xfe, 0xaa}
+
+	err := os.WriteFile(textFile, []byte("line one\nline two\n"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(binFile, originalBinary, 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "text.txt", "blob.bin")
+	s.RunGit("commit", "-m", "add baseline files")
+	s.Rebuild()
+
+	// Create MM state on the text file (staged + unstaged edits) so
+	// `git stash push --staged` returns non-zero and absorb takes the fallback.
+	err = os.WriteFile(textFile, []byte("line one\nline two staged\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "text.txt")
+	err = os.WriteFile(textFile, []byte("line one\nline two staged\nline three unstaged\n"), 0600)
+	require.NoError(t, err)
+
+	// Add an UNSTAGED binary edit — the byte sequence that must survive.
+	err = os.WriteFile(binFile, editedBinary, 0600)
+	require.NoError(t, err)
+
+	err = Action(s.Context, Options{Force: true}, nil)
+	require.NoError(t, err)
+
+	// The binary file's worktree bytes equal the unstaged edit exactly.
+	gotBinary, err := os.ReadFile(binFile)
+	require.NoError(t, err)
+	require.Equal(t, editedBinary, gotBinary, "unstaged binary edit must be restored byte-for-byte")
+
+	// The staged text line landed in HEAD; the unstaged text line did not.
+	headText, err := s.Scene.Repo.RunGitCommandAndGetOutput("show", "HEAD:text.txt")
+	require.NoError(t, err)
+	require.Contains(t, headText, "line two staged")
+	require.NotContains(t, headText, "line three unstaged")
+
+	// The unstaged text edit survives in the working tree with no conflict markers.
+	currentText, err := os.ReadFile(textFile)
+	require.NoError(t, err)
+	require.Contains(t, string(currentText), "line three unstaged")
+	require.NotContains(t, string(currentText), "<<<<<<<")
+	require.NotContains(t, string(currentText), ">>>>>>>")
+	require.NotContains(t, string(currentText), "=======")
+
+	// No absorb stash of either marker may remain.
+	stashList, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+	require.NotContains(t, stashList, absorbStashStagedMarker)
+	require.NotContains(t, stashList, absorbStashUnstagedMarker)
+}
+
+// TestAbsorbWarnsWhenSkippingRestack covers, end to end through Action, that the
+// "Skipped restacking" warning is emitted when a narrower restack mode leaves
+// descendants of the rewritten commits on stale parents. Here absorb rewrites a
+// downstack branch (a) while the user is on c with --restack none, so b and c
+// are left un-restacked and the warning must fire.
+func TestAbsorbWarnsWhenSkippingRestack(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithLinearStack3()
+
+	// On c, stage a modification to branch a's committed file so the hunk
+	// absorbs into a (the oldest modified branch).
+	s.Checkout("c")
+	fileA := filepath.Join(s.Scene.Dir, "a_test.txt")
+	err := os.WriteFile(fileA, []byte("change on a modified\n"), 0600)
+	require.NoError(t, err)
+	s.RunGit("add", "a_test.txt")
+
+	err = Action(s.Context, Options{Restack: RestackNone, Force: true}, nil)
+	require.NoError(t, err)
+
+	require.Contains(t, s.Output.String(), "Skipped restacking")
 }

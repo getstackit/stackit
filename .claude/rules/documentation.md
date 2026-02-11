@@ -28,6 +28,7 @@ Examples:
 
 ## Technical Docs (`docs/`)
 
+- `docs/absorb.md` - Absorb command: target selection, stash/restore safety model, restack modes
 - `docs/architecture.md` - Runtime layering, action boundaries, adapters, bootstrap
 - `docs/config.md` - Configuration keys, layered config, adding new keys
 - `docs/tui.md` - TUI patterns, styling, components

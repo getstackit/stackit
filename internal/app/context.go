@@ -330,6 +330,18 @@ func NewContextAuto(ctx context.Context, repoRoot string, opts GlobalOptions) (*
 
 // NewContextAutoWithWriter is like NewContextAuto but allows specifying the output writer.
 func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalOptions, writer io.Writer) (*Context, error) {
+	return newContextAutoWithWriterAndConfig(ctx, repoRoot, opts, writer, nil)
+}
+
+// newContextAutoWithWriterAndConfig is like NewContextAutoWithWriter but can reuse
+// an already-loaded config to avoid duplicate git config reads on startup.
+func newContextAutoWithWriterAndConfig(
+	ctx context.Context,
+	repoRoot string,
+	opts GlobalOptions,
+	writer io.Writer,
+	preloadedCfg config.Configurer,
+) (*Context, error) {
 	if utils.IsDemoMode() && DemoEngineFactory != nil {
 		eng := DemoEngineFactory()
 		runtimeCtx := NewContext(eng, WithRepoRoot(repoRoot), WithGlobalOptions(opts), WithWriter(writer))
@@ -340,14 +352,26 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 		return runtimeCtx, nil
 	}
 
-	// Read config and create engine options
-	cfg, err := config.LoadConfig(repoRoot)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+	// Read config (or reuse preloaded) and create engine options.
+	cfg := preloadedCfg
+	if cfg == nil {
+		loadedCfg, err := config.LoadConfig(repoRoot)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config: %w", err)
+		}
+		cfg = loadedCfg
 	}
-	trunk := cfg.Trunk()
-	maxUndoDepth := cfg.UndoStackDepth()
-	maxConcurrency := cfg.MaxConcurrency()
+
+	var trunk string
+	var maxUndoDepth int
+	var maxConcurrency int
+	if gitCfg, ok := cfg.(*config.GitConfig); ok {
+		trunk, maxUndoDepth, maxConcurrency, _ = gitCfg.BootstrapValues()
+	} else {
+		trunk = cfg.Trunk()
+		maxUndoDepth = cfg.UndoStackDepth()
+		maxConcurrency = cfg.MaxConcurrency()
+	}
 
 	// Create file logger first so git commands during engine init are logged
 	var logger output.Logger
@@ -372,7 +396,7 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 	}
 
 	// Create real engine with configured runner. LoadModeShared skips
-	// BatchReadLocalMetadata at bootstrap — local metadata (Frozen, etc.)
+	// BatchReadLocalMetadataForBranches at bootstrap — local metadata (Frozen, etc.)
 	// loads on first accessor call. For commands that never read local-only
 	// fields this cuts metadata I/O roughly in half on big repos.
 	eng, err := engine.NewEngine(engine.Options{
@@ -429,9 +453,10 @@ func GetContextWithWriter(ctx context.Context, opts GlobalOptions, writer io.Wri
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
-	if !cfg.IsInitialized() {
+	_, _, _, initialized := cfg.BootstrapValues()
+	if !initialized {
 		return nil, fmt.Errorf("stackit not initialized. Run 'stackit init' first")
 	}
 
-	return NewContextAutoWithWriter(ctx, repoRoot, opts, writer)
+	return newContextAutoWithWriterAndConfig(ctx, repoRoot, opts, writer, cfg)
 }

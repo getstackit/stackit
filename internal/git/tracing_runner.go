@@ -1095,11 +1095,11 @@ func (t *tracingRunner) ReadMetadata(branchName string) (*Meta, error) {
 	return result, err
 }
 
-func (t *tracingRunner) BatchReadMetadata(branchNames []string) (map[string]*Meta, map[string]error) {
+func (t *tracingRunner) BatchReadMetadataForBranches(branchNames []string) (map[string]*Meta, map[string]error) {
 	start := time.Now()
-	result, errs := t.inner.BatchReadMetadata(branchNames)
+	result, errs := t.inner.BatchReadMetadataForBranches(branchNames)
 	errCount := len(errs)
-	t.trace("BatchReadMetadata", time.Since(start), errCount == 0, nil, slog.Int("count", len(branchNames)), slog.Int("errors", errCount))
+	t.trace("BatchReadMetadataForBranches", time.Since(start), errCount == 0, nil, slog.Int("count", len(branchNames)), slog.Int("errors", errCount))
 	return result, errs
 }
 
@@ -1144,10 +1144,10 @@ func (t *tracingRunner) ReadLocalMetadata(branchName string) (*LocalMeta, error)
 	return result, err
 }
 
-func (t *tracingRunner) BatchReadLocalMetadata(branchNames []string) map[string]*LocalMeta {
+func (t *tracingRunner) BatchReadLocalMetadataForBranches(branchNames []string) map[string]*LocalMeta {
 	start := time.Now()
-	result := t.inner.BatchReadLocalMetadata(branchNames)
-	t.trace("BatchReadLocalMetadata", time.Since(start), true, nil, slog.Int("count", len(branchNames)))
+	result := t.inner.BatchReadLocalMetadataForBranches(branchNames)
+	t.trace("BatchReadLocalMetadataForBranches", time.Since(start), true, nil, slog.Int("count", len(branchNames)))
 	return result
 }
 

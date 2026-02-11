@@ -634,11 +634,11 @@ func (d *demoGitRunner) ListMetadata() (map[string]string, error) {
 	return make(map[string]string), nil
 }
 
-func (d *demoGitRunner) BatchReadMetadata(_ []string) (map[string]*git.Meta, map[string]error) {
+func (d *demoGitRunner) BatchReadMetadataForBranches(_ []string) (map[string]*git.Meta, map[string]error) {
 	return make(map[string]*git.Meta), make(map[string]error)
 }
 
-func (d *demoGitRunner) BatchReadLocalMetadata(_ []string) map[string]*git.LocalMeta {
+func (d *demoGitRunner) BatchReadLocalMetadataForBranches(_ []string) map[string]*git.LocalMeta {
 	return make(map[string]*git.LocalMeta)
 }
 

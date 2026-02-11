@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -17,6 +18,10 @@ type GitConfig struct {
 	repoRoot string
 	store    *git.ConfigStore
 	project  *ProjectConfig // Team config from .stackit.yaml for fallback
+
+	// stackitSnapshot caches all "stackit.*" keys loaded in one git subprocess.
+	// Used by startup/bootstrap code to avoid repeated git config calls.
+	stackitSnapshot map[string][]string
 }
 
 // LoadGitConfig loads configuration from git config.
@@ -28,6 +33,10 @@ func LoadGitConfig(repoRoot string) (*GitConfig, error) {
 	cfg := &GitConfig{
 		repoRoot: repoRoot,
 		store:    store,
+	}
+
+	if snapshot, err := store.GetAllStackitConfig(); err == nil {
+		cfg.stackitSnapshot = snapshot
 	}
 
 	// Check if we need to migrate from JSON
@@ -68,6 +77,41 @@ func (c *GitConfig) IsInitialized() bool {
 // Callers must not mutate the returned value.
 func (c *GitConfig) ProjectConfig() *ProjectConfig {
 	return c.project
+}
+
+// BootstrapValues returns startup-critical values, preferring the in-memory snapshot
+// loaded at config creation time to avoid repeated git config subprocesses.
+func (c *GitConfig) BootstrapValues() (trunk string, undoDepth int, maxConcurrency int, initialized bool) {
+	// initialized/trunk
+	if vals, ok := c.stackitSnapshot[KeyTrunk]; ok && len(vals) > 0 && vals[0] != "" {
+		trunk = vals[0]
+		initialized = true
+	} else {
+		trunk = c.Trunk()
+		initialized = c.IsInitialized()
+	}
+
+	// undo depth
+	undoDepth = DefaultUndoDepth
+	if vals, ok := c.stackitSnapshot[KeyUndoDepth]; ok && len(vals) > 0 {
+		if n, err := strconv.Atoi(vals[0]); err == nil && n >= 1 {
+			undoDepth = n
+		}
+	} else if c.project != nil && c.project.HasUndoDepth() && c.project.Undo.Depth >= 1 {
+		undoDepth = c.project.Undo.Depth
+	}
+
+	// max concurrency
+	maxConcurrency = DefaultMaxConcurrency
+	if vals, ok := c.stackitSnapshot[KeyMaxConcurrency]; ok && len(vals) > 0 {
+		if n, err := strconv.Atoi(vals[0]); err == nil && n >= 0 {
+			maxConcurrency = n
+		}
+	} else if c.project != nil && c.project.HasMaxConcurrency() {
+		maxConcurrency = c.project.GetMaxConcurrency()
+	}
+
+	return trunk, undoDepth, maxConcurrency, initialized
 }
 
 // Trunk returns the primary trunk branch name.

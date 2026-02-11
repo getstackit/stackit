@@ -246,13 +246,13 @@ type ObjectOperations interface {
 // MetadataOperations handles stackit metadata persistence.
 type MetadataOperations interface {
 	ReadMetadata(branchName string) (*Meta, error)
-	BatchReadMetadata(branchNames []string) (map[string]*Meta, map[string]error)
+	BatchReadMetadataForBranches(branchNames []string) (map[string]*Meta, map[string]error)
 	WriteMetadata(branchName string, meta *Meta) error
 	DeleteMetadata(ctx context.Context, branchName string) error
 	RenameMetadata(oldName, newName string) error
 	ListMetadata() (map[string]string, error)
 	ReadLocalMetadata(branchName string) (*LocalMeta, error)
-	BatchReadLocalMetadata(branchNames []string) map[string]*LocalMeta
+	BatchReadLocalMetadataForBranches(branchNames []string) map[string]*LocalMeta
 	WriteLocalMetadata(branchName string, meta *LocalMeta) error
 
 	// Transaction support methods. The batch forms marshal each entry and

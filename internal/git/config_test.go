@@ -261,6 +261,37 @@ func TestConfigStore_Unset(t *testing.T) {
 	})
 }
 
+func TestConfigStore_GetAllStackitConfig(t *testing.T) {
+	t.Run("returns all stackit keys and values", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+			return s.Repo.CreateChangeAndCommit("initial", "init")
+		})
+
+		store := git.NewConfigStore(scene.Dir)
+		require.NoError(t, store.Set("stackit.trunk", "main"))
+		require.NoError(t, store.Add("stackit.trunks", "develop"))
+		require.NoError(t, store.Add("stackit.trunks", "release"))
+		require.NoError(t, store.Set("stackit.undo.depth", "10"))
+
+		values, err := store.GetAllStackitConfig()
+		require.NoError(t, err)
+		require.Equal(t, []string{"main"}, values["stackit.trunk"])
+		require.Equal(t, []string{"develop", "release"}, values["stackit.trunks"])
+		require.Equal(t, []string{"10"}, values["stackit.undo.depth"])
+	})
+
+	t.Run("returns empty map when no stackit keys exist", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+			return s.Repo.CreateChangeAndCommit("initial", "init")
+		})
+
+		store := git.NewConfigStore(scene.Dir)
+		values, err := store.GetAllStackitConfig()
+		require.NoError(t, err)
+		require.Empty(t, values)
+	})
+}
+
 func TestConfigStore_Exists(t *testing.T) {
 	t.Run("returns true for existing key", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)

@@ -79,7 +79,7 @@ func TestLoadMode_FullParity(t *testing.T) {
 }
 
 // TestLoadMode_SharedSkipsLocalBatch verifies that constructing an engine with
-// LoadModeShared does NOT trigger BatchReadLocalMetadata at bootstrap. The
+// LoadModeShared does NOT trigger BatchReadLocalMetadataForBranches at bootstrap. The
 // local read happens only when an accessor that needs it (IsFrozen) is called.
 //
 // Cache hit counters are the observable signal: LoadModeFull warms the local

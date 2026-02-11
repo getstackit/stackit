@@ -83,7 +83,7 @@ func TestSync(t *testing.T) {
 		mainBranchName := eng.Trunk().GetName()
 
 		// Batch read metadata for all individual branches at once
-		metas, readErrs := eng.Git().BatchReadMetadata(branchNames)
+		metas, readErrs := eng.Git().BatchReadMetadataForBranches(branchNames)
 		for branch, readErr := range readErrs {
 			require.NoError(t, readErr, "failed to read metadata for %s", branch)
 		}

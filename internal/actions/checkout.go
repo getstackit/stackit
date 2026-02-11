@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sahilm/fuzzy"
 
@@ -48,6 +49,11 @@ func (h *NullCheckoutHandler) SelectBranch(_ *app.Context, _ CheckoutOptions) (s
 
 // CheckoutAction performs the checkout operation.
 func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHandler) (CheckoutResult, error) {
+	start := time.Now()
+	defer func() {
+		ctx.Logger.Debug("checkout action completed in %v", time.Since(start))
+	}()
+
 	eng := ctx.Engine
 	out := ctx.Output
 	context := ctx.Context

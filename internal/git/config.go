@@ -82,6 +82,45 @@ func (c *ConfigStore) GetAll(key string) ([]string, error) {
 	return values, nil
 }
 
+// GetAllStackitConfig retrieves all local config keys under the "stackit." namespace
+// in a single git invocation. The returned map contains full keys mapped to one or
+// more values (for multi-value keys).
+func (c *ConfigStore) GetAllStackitConfig() (map[string][]string, error) {
+	cmd := exec.Command("git", "config", "--local", "--get-regexp", "^stackit\\.")
+	cmd.Dir = c.repoRoot
+	out, err := cmd.Output()
+	if err != nil {
+		// git config --get-regexp returns exit code 1 when no keys match
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return map[string][]string{}, nil
+		}
+		return nil, err
+	}
+
+	result := make(map[string][]string)
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return result, nil
+	}
+
+	lines := strings.Split(trimmed, "\n")
+	for _, line := range lines {
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) == 0 || parts[0] == "" {
+			continue
+		}
+		key := parts[0]
+		value := ""
+		if len(parts) == 2 {
+			value = parts[1]
+		}
+		result[key] = append(result[key], value)
+	}
+
+	return result, nil
+}
+
 // Set sets a config value in local git config.
 func (c *ConfigStore) Set(key, value string) error {
 	if _, err := c.runGitConfig(key, value); err != nil {

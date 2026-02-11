@@ -109,7 +109,8 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 
 		// Update in-memory cache
 		e.state.branchState.Set(branchName, &BranchState{
-			Parent: branchParentName,
+			Parent:               branchParentName,
+			ParentBranchRevision: branchParentRevision,
 		})
 		e.state.childrenMap[branchParentName] = append(e.state.childrenMap[branchParentName], branchName)
 		slices.Sort(e.state.childrenMap[branchParentName])

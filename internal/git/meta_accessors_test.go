@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	testBranchMain = "main"
-	testScopeAPI   = "api"
-	testStackID1   = "stack-1"
+	testBranchMain  = "main"
+	testScopeAPI    = "api"
+	testStackID1    = "stack-1"
+	testRevisionABC = "abc123"
 )
 
 func TestNewMeta(t *testing.T) {
@@ -28,7 +29,7 @@ func TestNewMetaFrom(t *testing.T) {
 	t.Parallel()
 
 	name := testBranchMain
-	rev := "abc123"
+	rev := testRevisionABC
 	scope := testScopeAPI
 	stackID := testStackID1
 
@@ -237,7 +238,7 @@ func TestMetaJSONRoundTrip(t *testing.T) {
 	t.Run("full meta round trip", func(t *testing.T) {
 		t.Parallel()
 		name := testBranchMain
-		rev := "abc123"
+		rev := testRevisionABC
 		scope := testScopeAPI
 		hash := "hash"
 		stackID := testStackID1

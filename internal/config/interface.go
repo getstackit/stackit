@@ -6,6 +6,10 @@ type Configurer interface {
 	// Initialization
 	IsInitialized() bool
 
+	// BootstrapValues returns startup-critical configuration in a single call.
+	// GitConfig overrides this to use a pre-loaded snapshot for fewer subprocesses.
+	BootstrapValues() BootstrapConfig
+
 	// Trunk configuration
 	Trunk() string
 	AllTrunks() []string

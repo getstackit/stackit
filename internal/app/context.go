@@ -362,16 +362,7 @@ func newContextAutoWithWriterAndConfig(
 		cfg = loadedCfg
 	}
 
-	var trunk string
-	var maxUndoDepth int
-	var maxConcurrency int
-	if gitCfg, ok := cfg.(*config.GitConfig); ok {
-		trunk, maxUndoDepth, maxConcurrency, _ = gitCfg.BootstrapValues()
-	} else {
-		trunk = cfg.Trunk()
-		maxUndoDepth = cfg.UndoStackDepth()
-		maxConcurrency = cfg.MaxConcurrency()
-	}
+	bc := cfg.BootstrapValues()
 
 	// Create file logger first so git commands during engine init are logged
 	var logger output.Logger
@@ -401,9 +392,9 @@ func newContextAutoWithWriterAndConfig(
 	// fields this cuts metadata I/O roughly in half on big repos.
 	eng, err := engine.NewEngine(engine.Options{
 		RepoRoot:          repoRoot,
-		Trunk:             trunk,
-		MaxUndoStackDepth: maxUndoDepth,
-		MaxConcurrency:    maxConcurrency,
+		Trunk:             bc.Trunk,
+		MaxUndoStackDepth: bc.UndoDepth,
+		MaxConcurrency:    bc.MaxConcurrency,
 		Git:               gitRunner,
 		LoadMode:          loadMode,
 	})
@@ -453,8 +444,7 @@ func GetContextWithWriter(ctx context.Context, opts GlobalOptions, writer io.Wri
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
-	_, _, _, initialized := cfg.BootstrapValues()
-	if !initialized {
+	if !cfg.BootstrapValues().Initialized {
 		return nil, fmt.Errorf("stackit not initialized. Run 'stackit init' first")
 	}
 

@@ -79,39 +79,55 @@ func (c *GitConfig) ProjectConfig() *ProjectConfig {
 	return c.project
 }
 
+// BootstrapConfig holds startup-critical configuration values loaded in a single
+// pass from the config snapshot.
+type BootstrapConfig struct {
+	Trunk          string
+	UndoDepth      int
+	MaxConcurrency int
+	Initialized    bool
+}
+
 // BootstrapValues returns startup-critical values, preferring the in-memory snapshot
 // loaded at config creation time to avoid repeated git config subprocesses.
-func (c *GitConfig) BootstrapValues() (trunk string, undoDepth int, maxConcurrency int, initialized bool) {
+// The snapshot is consumed and cleared after this call — it is only valid once.
+func (c *GitConfig) BootstrapValues() BootstrapConfig {
+	snapshot := c.stackitSnapshot
+	c.stackitSnapshot = nil // consume once — prevent stale reads after mutations
+
+	bc := BootstrapConfig{
+		UndoDepth:      DefaultUndoDepth,
+		MaxConcurrency: DefaultMaxConcurrency,
+	}
+
 	// initialized/trunk
-	if vals, ok := c.stackitSnapshot[KeyTrunk]; ok && len(vals) > 0 && vals[0] != "" {
-		trunk = vals[0]
-		initialized = true
+	if vals, ok := snapshot[KeyTrunk]; ok && len(vals) > 0 && vals[0] != "" {
+		bc.Trunk = vals[0]
+		bc.Initialized = true
 	} else {
-		trunk = c.Trunk()
-		initialized = c.IsInitialized()
+		bc.Trunk = c.Trunk()
+		bc.Initialized = c.IsInitialized()
 	}
 
 	// undo depth
-	undoDepth = DefaultUndoDepth
-	if vals, ok := c.stackitSnapshot[KeyUndoDepth]; ok && len(vals) > 0 {
+	if vals, ok := snapshot[KeyUndoDepth]; ok && len(vals) > 0 {
 		if n, err := strconv.Atoi(vals[0]); err == nil && n >= 1 {
-			undoDepth = n
+			bc.UndoDepth = n
 		}
 	} else if c.project != nil && c.project.HasUndoDepth() && c.project.Undo.Depth >= 1 {
-		undoDepth = c.project.Undo.Depth
+		bc.UndoDepth = c.project.Undo.Depth
 	}
 
 	// max concurrency
-	maxConcurrency = DefaultMaxConcurrency
-	if vals, ok := c.stackitSnapshot[KeyMaxConcurrency]; ok && len(vals) > 0 {
+	if vals, ok := snapshot[KeyMaxConcurrency]; ok && len(vals) > 0 {
 		if n, err := strconv.Atoi(vals[0]); err == nil && n >= 0 {
-			maxConcurrency = n
+			bc.MaxConcurrency = n
 		}
 	} else if c.project != nil && c.project.HasMaxConcurrency() {
-		maxConcurrency = c.project.GetMaxConcurrency()
+		bc.MaxConcurrency = c.project.GetMaxConcurrency()
 	}
 
-	return trunk, undoDepth, maxConcurrency, initialized
+	return bc
 }
 
 // Trunk returns the primary trunk branch name.

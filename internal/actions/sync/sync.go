@@ -138,6 +138,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			ctx.Logger.Debug("fetch trunk and metadata failed error=%v", trunkFetchErr)
 			return trunkFetchErr
 		}
+		// Fetch prompt notes
+		notesFetchStart := time.Now()
+		if err := ctx.Git().FetchNotes(gctx); err != nil {
+			ctx.Logger.Debug("fetch prompt notes failed (non-fatal) error=%v", err)
+		}
+		ctx.Logger.Info("fetch prompt notes completed durationMs=%v", time.Since(notesFetchStart).Milliseconds())
 		return nil
 	})
 

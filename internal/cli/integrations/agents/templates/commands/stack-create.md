@@ -58,6 +58,17 @@ Only run the next shell command needed for the next decision. Avoid eager status
 
 **Never use:** `git commit` or `git checkout -b` — always use `stackit create`.
 
+## Prompt Note
+
+After a successful create, record what was done by running:
+```bash
+command stackit notes add \
+  --prompt "<the user's original instruction that led to these changes>" \
+  --summary "<brief summary of what was actually done>" \
+  --model "<your model name, e.g. claude-sonnet-4>"
+```
+This captures LLM context on the commit for audit and memory purposes. Keep the prompt and summary concise (1-2 sentences each).
+
 ## Follow-up
 
 After successful creation, use `AskUserQuestion`:

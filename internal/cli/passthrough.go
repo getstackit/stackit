@@ -36,7 +36,7 @@ var gitCommandAllowlist = []string{
 	"grep",
 	// "merge" removed - stackit has its own merge command
 	"mv",
-	"notes",
+	// "notes" removed - stackit has its own notes command
 	"pull",
 	"push",
 	"range-diff",

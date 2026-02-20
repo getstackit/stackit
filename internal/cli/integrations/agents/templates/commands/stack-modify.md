@@ -59,6 +59,17 @@ Modify the current branch by amending its commit or creating a new commit. Autom
 
 **Never use:** `git commit --amend` — always use `stackit modify` so descendants are restacked.
 
+## Prompt Note
+
+After a successful modify, record what was done by running:
+```bash
+command stackit notes add \
+  --prompt "<the user's original instruction that led to these changes>" \
+  --summary "<brief summary of what was actually done>" \
+  --model "<your model name, e.g. claude-sonnet-4>"
+```
+This captures LLM context on the commit for audit and memory purposes. Keep the prompt and summary concise (1-2 sentences each).
+
 ## Follow-up
 
 After successful modification, use `AskUserQuestion`:

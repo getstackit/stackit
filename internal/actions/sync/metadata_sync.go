@@ -46,6 +46,13 @@ func processRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) err
 	if err := eng.ConfigureStackMetadataSync(ctx.Context); err != nil {
 		out.Debug("Failed to configure stack metadata refspec: %v", err)
 	}
+	// Configure prompt notes refspec and rewrite config
+	if err := ctx.Git().EnsureNotesRefspecConfigured(); err != nil {
+		out.Debug("Failed to configure notes refspec: %v", err)
+	}
+	if err := ctx.Git().EnsureNotesRewriteConfigured(); err != nil {
+		out.Debug("Failed to configure notes rewrite: %v", err)
+	}
 	ctx.Logger.Info("configure remote metadata sync completed durationMs=%d", time.Since(configStart).Milliseconds())
 
 	// Load remote metadata into cache

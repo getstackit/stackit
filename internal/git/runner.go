@@ -416,6 +416,7 @@ type Runner interface {
 	ObjectOperations
 	MetadataOperations
 	StackMetadataOperations
+	NotesOperations
 
 	// Environment
 	GitVersion(ctx context.Context) (Version, error)

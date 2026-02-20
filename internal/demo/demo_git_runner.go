@@ -825,3 +825,37 @@ func (d *demoGitRunner) TreeContainsAnyPath(_ context.Context, _ string, _ []str
 func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]string, error) {
 	return nil, nil
 }
+
+// NotesOperations methods
+
+func (d *demoGitRunner) AddPromptNote(_ context.Context, _ string, _ *git.PromptNote) error {
+	return nil
+}
+
+func (d *demoGitRunner) ShowPromptNote(_ context.Context, _ string) (*git.PromptNote, error) {
+	return nil, nil
+}
+
+func (d *demoGitRunner) RemovePromptNote(_ context.Context, _ string) error {
+	return nil
+}
+
+func (d *demoGitRunner) LogWithNotes(_ context.Context, _, _ string) ([]git.NoteEntry, error) {
+	return nil, nil
+}
+
+func (d *demoGitRunner) PushNotes(_ context.Context) error {
+	return nil
+}
+
+func (d *demoGitRunner) FetchNotes(_ context.Context) error {
+	return nil
+}
+
+func (d *demoGitRunner) EnsureNotesRewriteConfigured() error {
+	return nil
+}
+
+func (d *demoGitRunner) EnsureNotesRefspecConfigured() error {
+	return nil
+}

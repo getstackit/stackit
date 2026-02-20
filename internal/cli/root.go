@@ -112,6 +112,7 @@ Commit:  ` + commit + `
 	rootCmd.AddCommand(stack.NewMergeCmd())
 	rootCmd.AddCommand(branch.NewModifyCmd())
 	rootCmd.AddCommand(stack.NewMoveCmd())
+	rootCmd.AddCommand(newNotesCmd())
 	rootCmd.AddCommand(navigation.NewParentCmd())
 	rootCmd.AddCommand(branch.NewPopCmd())
 	rootCmd.AddCommand(navigation.NewPrCmd())

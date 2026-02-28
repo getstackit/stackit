@@ -1,0 +1,257 @@
+openapi: 3.1.0
+info:
+  title: Stackit API
+  version: 1.0.0
+  description: API used by the in-repo Stackit web frontend.
+servers:
+  - url: /
+paths:
+  /api/v1/view:
+    get:
+      summary: Combined view payload for the dashboard.
+      operationId: getView
+      responses:
+        "200":
+          description: Current repository and stack state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewResponse"
+  /api/v1/repo:
+    get:
+      summary: Repository metadata.
+      operationId: getRepo
+      responses:
+        "200":
+          description: Repository details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoResponse"
+  /api/v1/stacks:
+    get:
+      summary: List discovered stacks.
+      operationId: listStacks
+      responses:
+        "200":
+          description: Stack list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StackSummary"
+  /api/v1/stacks/{rootBranch}:
+    get:
+      summary: Get detailed stack by root branch.
+      operationId: getStack
+      parameters:
+        - in: path
+          name: rootBranch
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stack details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StackDetail"
+        "404":
+          description: Stack not found.
+  /api/v1/branches:
+    get:
+      summary: List tracked branches.
+      operationId: listBranches
+      responses:
+        "200":
+          description: Branch list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BranchResponse"
+  /api/v1/branches/{branchName}:
+    get:
+      summary: Get one tracked branch.
+      operationId: getBranch
+      parameters:
+        - in: path
+          name: branchName
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Branch details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchResponse"
+        "404":
+          description: Branch not found.
+  /api/v1/events:
+    get:
+      summary: Server-sent event stream for repository refresh events.
+      operationId: streamEvents
+      responses:
+        "200":
+          description: text/event-stream payload.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+components:
+  schemas:
+    ViewResponse:
+      type: object
+      required: [repo, stacks]
+      properties:
+        repo:
+          $ref: "#/components/schemas/RepoResponse"
+        stacks:
+          type: array
+          items:
+            $ref: "#/components/schemas/StackDetail"
+    RepoResponse:
+      type: object
+      required: [owner, repo, trunk, currentBranch, remote]
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        trunk:
+          type: string
+        currentBranch:
+          type: string
+        remote:
+          type: string
+        currentUser:
+          type: string
+    StackSummary:
+      type: object
+      required: [rootBranch, title, status, branchCount, prCount, isCurrent]
+      properties:
+        rootBranch:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+        scope:
+          type: string
+        branchCount:
+          type: integer
+        prCount:
+          type: integer
+        isCurrent:
+          type: boolean
+        description:
+          type: string
+        owner:
+          type: string
+    StackDetail:
+      allOf:
+        - $ref: "#/components/schemas/StackSummary"
+        - type: object
+          required: [branches]
+          properties:
+            branches:
+              type: array
+              items:
+                $ref: "#/components/schemas/BranchResponse"
+    BranchResponse:
+      type: object
+      required: [name, depth, isCurrent, needsRestack, isLocked, isFrozen, revision]
+      properties:
+        name:
+          type: string
+        parent:
+          type: string
+        children:
+          type: array
+          items:
+            type: string
+        depth:
+          type: integer
+        isCurrent:
+          type: boolean
+        needsRestack:
+          type: boolean
+        isLocked:
+          type: boolean
+        lockReason:
+          type: string
+        isFrozen:
+          type: boolean
+        scope:
+          type: string
+        revision:
+          type: string
+        commitDate:
+          type: string
+        commitAuthor:
+          type: string
+        commitCount:
+          type: integer
+        linesAdded:
+          type: integer
+        linesDeleted:
+          type: integer
+        commits:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommitResponse"
+        pr:
+          $ref: "#/components/schemas/PRResponse"
+        ci:
+          $ref: "#/components/schemas/CIResponse"
+    CommitResponse:
+      type: object
+      required: [sha, message]
+      properties:
+        sha:
+          type: string
+        message:
+          type: string
+    PRResponse:
+      type: object
+      required: [number, title, state, url, isDraft, base]
+      properties:
+        number:
+          type: integer
+        title:
+          type: string
+        state:
+          type: string
+        url:
+          type: string
+        isDraft:
+          type: boolean
+        base:
+          type: string
+    CIResponse:
+      type: object
+      required: [status, reviewDecision]
+      properties:
+        status:
+          type: string
+        reviewDecision:
+          type: string
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/CheckDetailResponse"
+    CheckDetailResponse:
+      type: object
+      required: [name, status, conclusion]
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        conclusion:
+          type: string

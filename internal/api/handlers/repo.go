@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"stackit.dev/stackit/internal/api/types"
+	httpcontract "stackit.dev/stackit/internal/contracts/http"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/github"
 )
@@ -16,12 +16,12 @@ type RepoHandler struct {
 	remote string
 }
 
-// NewRepoHandler creates a handler for /api/repo.
+// NewRepoHandler creates a handler for /api/repo and /api/v1/repo.
 func NewRepoHandler(eng engine.BranchReader, gh github.Client, remote string) *RepoHandler {
 	return &RepoHandler{eng: eng, gh: gh, remote: remote}
 }
 
-// ServeHTTP handles GET /api/repo.
+// ServeHTTP handles GET repo endpoints.
 func (h *RepoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -33,7 +33,7 @@ func (h *RepoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		owner, repo = h.gh.GetOwnerRepo()
 	}
 
-	resp := types.RepoResponse{
+	resp := httpcontract.RepoResponse{
 		Owner:         owner,
 		Repo:          repo,
 		Trunk:         h.eng.Trunk().GetName(),

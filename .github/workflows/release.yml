@@ -47,7 +47,10 @@ jobs:
           check-latest: true
 
       - name: Build
-        run: go build -v ./cmd/stackit
+        run: |
+          go build -v ./apps/cli
+          go build -v ./apps/api
+          go build -v ./apps/st-tui
 
   goreleaser:
     needs: [lint, build]

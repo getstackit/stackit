@@ -1,9 +1,9 @@
-// Package types defines JSON-serializable API response types for the stackit-web server.
+// Package httpcontract defines JSON-serializable API response types for stackit HTTP surfaces.
 //
 // These types form the API contract between the Go server and the frontend.
 // They are intentionally decoupled from engine internals to allow the API
 // to evolve independently.
-package types
+package httpcontract
 
 // ViewResponse is the combined response for the frontend view.
 // It bundles repo metadata and all stack details into a single payload

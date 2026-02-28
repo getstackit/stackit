@@ -4,8 +4,11 @@ package api
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	"stackit.dev/stackit/internal/api/handlers"
@@ -20,6 +23,8 @@ type ServerConfig struct {
 	CORSOrigins []string
 	RepoRoot    string
 	Remote      string
+	APIPrefixes []string
+	StaticFS    fs.FS
 }
 
 // Server is the stackit-web HTTP server.
@@ -49,19 +54,42 @@ func (s *Server) Broadcaster() *handlers.EventBroadcaster {
 
 // Start begins serving HTTP requests. It blocks until the server is stopped.
 func (s *Server) Start() error {
-	mux := http.NewServeMux()
+	apiMux := http.NewServeMux()
+	prefixes := normalizeAPIPrefixes(s.config.APIPrefixes)
 
-	// Register handlers
-	mux.Handle("/api/view", handlers.NewViewHandler(s.eng, s.gh, s.config.Remote))
-	mux.Handle("/api/repo", handlers.NewRepoHandler(s.eng, s.gh, s.config.Remote))
-	mux.Handle("/api/stacks", handlers.NewStacksHandler(s.eng, s.gh))
-	mux.Handle("/api/stacks/", handlers.NewStacksHandler(s.eng, s.gh))
-	mux.Handle("/api/branches", handlers.NewBranchesHandler(s.eng, s.gh))
-	mux.Handle("/api/branches/", handlers.NewBranchesHandler(s.eng, s.gh))
-	mux.Handle("/api/events", handlers.NewEventsHandler(s.broadcaster))
+	viewHandler := handlers.NewViewHandler(s.eng, s.gh, s.config.Remote)
+	repoHandler := handlers.NewRepoHandler(s.eng, s.gh, s.config.Remote)
+	stacksHandler := handlers.NewStacksHandler(s.eng, s.gh)
+	branchesHandler := handlers.NewBranchesHandler(s.eng, s.gh)
+	eventsHandler := handlers.NewEventsHandler(s.broadcaster)
+
+	for _, prefix := range prefixes {
+		apiMux.Handle(path.Join(prefix, "view"), viewHandler)
+		apiMux.Handle(path.Join(prefix, "repo"), repoHandler)
+		apiMux.Handle(path.Join(prefix, "stacks"), stacksHandler)
+		apiMux.Handle(path.Join(prefix, "stacks")+"/", stacksHandler)
+		apiMux.Handle(path.Join(prefix, "branches"), branchesHandler)
+		apiMux.Handle(path.Join(prefix, "branches")+"/", branchesHandler)
+		apiMux.Handle(path.Join(prefix, "events"), eventsHandler)
+	}
+
+	webHandler := newStaticHandler(s.config.StaticFS)
+	root := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isAPIPath(r.URL.Path, prefixes) {
+			apiMux.ServeHTTP(w, r)
+			return
+		}
+
+		if webHandler != nil {
+			webHandler.ServeHTTP(w, r)
+			return
+		}
+
+		http.NotFound(w, r)
+	})
 
 	// Wrap with middleware
-	handler := corsMiddleware(s.config.CORSOrigins, mux)
+	handler := corsMiddleware(s.config.CORSOrigins, root)
 	handler = loggingMiddleware(handler)
 
 	// Start watching git refs for changes so the engine stays current
@@ -100,4 +128,46 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return s.httpServer.Shutdown(ctx)
 	}
 	return nil
+}
+
+func normalizeAPIPrefixes(prefixes []string) []string {
+	if len(prefixes) == 0 {
+		return []string{"/api/v1", "/api"}
+	}
+
+	seen := make(map[string]struct{}, len(prefixes))
+	normalized := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		prefix = strings.TrimSpace(prefix)
+		if prefix == "" {
+			continue
+		}
+
+		if !strings.HasPrefix(prefix, "/") {
+			prefix = "/" + prefix
+		}
+		if len(prefix) > 1 {
+			prefix = strings.TrimRight(prefix, "/")
+		}
+
+		if _, ok := seen[prefix]; ok {
+			continue
+		}
+		seen[prefix] = struct{}{}
+		normalized = append(normalized, prefix)
+	}
+
+	if len(normalized) == 0 {
+		return []string{"/api/v1", "/api"}
+	}
+	return normalized
+}
+
+func isAPIPath(path string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }

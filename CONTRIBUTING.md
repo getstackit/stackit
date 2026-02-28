@@ -176,7 +176,11 @@ chore: update dependencies
 
 ```
 stackit/
-├── cmd/stackit/       # CLI entry point and command definitions
+├── apps/
+│   ├── cli/        # CLI entry point
+│   ├── api/        # HTTP API and static web serving binary
+│   ├── st-tui/     # TUI storyboard binary
+│   └── web/        # React/Vite frontend
 ├── internal/
 │   ├── actions/       # High-level business logic for CLI commands
 │   ├── engine/        # Core logic for branch relationships and metadata

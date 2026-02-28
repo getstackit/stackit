@@ -33,3 +33,6 @@ stackit-web
 st-tui
 
 tmp/
+node_modules/
+apps/web/dist/
+apps/api/static/assets/

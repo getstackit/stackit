@@ -30,7 +30,7 @@ jobs:
 
       - name: Build stackit binary
         run: |
-          go build -o stackit ./cmd/stackit
+          go build -o stackit ./apps/cli
           chmod +x stackit
 
       - name: Set up Python

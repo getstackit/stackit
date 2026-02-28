@@ -44,12 +44,14 @@ run = """
 """
 
 [tasks.build]
-description = "Build the stackit binary with local version info"
+description = "Build CLI, API, and TUI binaries with local version info"
 run = """
   mkdir -p bin
   COMMIT=$(git rev-parse --short HEAD)
   DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  go build -ldflags "-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE" -o bin/stackit ./cmd/stackit
+  go build -ldflags "-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE" -o bin/stackit ./apps/cli
+  go build -o bin/stackit-api ./apps/api
+  go build -o bin/st-tui ./apps/st-tui
   if [ ! -L ./bin/st ] && [ ! -f ./bin/st ]; then
     ln -s stackit ./bin/st
     echo "Created symlink: bin/st -> stackit"
@@ -122,6 +124,42 @@ run = """
 [tasks.check]
 description = "Run all checks (format, lint, fast tests)"
 depends = ["fmt", "lint", "test-fast"]
+
+[tasks."check-go"]
+description = "Run all Go checks (format, lint, fast tests)"
+depends = ["fmt", "lint", "test-fast"]
+
+[tasks."web-install"]
+description = "Install frontend workspace dependencies"
+run = "pnpm install"
+
+[tasks."web-dev"]
+description = "Run the web app in development mode"
+run = "pnpm --filter @stackit/web dev"
+
+[tasks."web-build"]
+description = "Build the web app"
+run = "pnpm --filter @stackit/web build"
+
+[tasks."sync-web-static"]
+description = "Copy built web assets into the API static directory"
+depends = ["web-build"]
+run = """
+  mkdir -p apps/api/static
+  rm -rf apps/api/static/assets
+  cp -R apps/web/dist/. apps/api/static/
+"""
+
+[tasks."check-web"]
+description = "Run frontend type checks and build"
+run = """
+  pnpm --filter @stackit/web typecheck
+  pnpm --filter @stackit/web build
+"""
+
+[tasks."check-all"]
+description = "Run Go and web checks"
+depends = ["check-go", "check-web"]
 
 [tasks."install-shims"]
 description = "Install shims to repo root for local development"

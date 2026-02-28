@@ -2,9 +2,8 @@ package handlers
 
 import (
 	"net/http"
-	"strings"
 
-	"stackit.dev/stackit/internal/api/types"
+	httpcontract "stackit.dev/stackit/internal/contracts/http"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/github"
 )
@@ -15,26 +14,28 @@ type BranchesHandler struct {
 	gh  github.Client
 }
 
-// NewBranchesHandler creates a handler for /api/branches.
+// NewBranchesHandler creates a handler for /api/branches and /api/v1/branches.
 func NewBranchesHandler(eng engine.BranchReader, gh github.Client) *BranchesHandler {
 	return &BranchesHandler{eng: eng, gh: gh}
 }
 
-// ServeHTTP handles GET /api/branches and GET /api/branches/{name}.
+// ServeHTTP handles GET branches endpoints.
 func (h *BranchesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Parse path: /api/branches or /api/branches/{name}
-	path := strings.TrimPrefix(r.URL.Path, "/api/branches")
-	path = strings.TrimPrefix(path, "/")
+	branchName, hasBranch := parseResourcePath(r.URL.Path, "branches")
+	if !hasBranch {
+		http.NotFound(w, r)
+		return
+	}
 
-	if path == "" {
+	if branchName == "" {
 		h.listBranches(w, r)
 	} else {
-		h.getBranch(w, r, path)
+		h.getBranch(w, r, branchName)
 	}
 }
 
@@ -60,7 +61,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request) {
 		checksMap, _ = h.gh.BatchGetPRChecksStatus(r.Context(), names)
 	}
 
-	responses := make([]types.BranchResponse, 0, len(branches))
+	responses := make([]httpcontract.BranchResponse, 0, len(branches))
 	for _, branch := range branches {
 		node := graph.GetNode(branch.GetName())
 		if node == nil {
@@ -70,7 +71,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request) {
 		if checksMap != nil {
 			checks = checksMap[branch.GetName()]
 		}
-		responses = append(responses, types.MapBranch(h.eng, branch, node, checks))
+		responses = append(responses, httpcontract.MapBranch(h.eng, branch, node, checks))
 	}
 
 	writeJSON(w, responses)
@@ -98,6 +99,6 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, bran
 		}
 	}
 
-	resp := types.MapBranch(h.eng, branch, node, checks)
+	resp := httpcontract.MapBranch(h.eng, branch, node, checks)
 	writeJSON(w, resp)
 }

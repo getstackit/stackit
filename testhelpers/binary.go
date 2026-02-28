@@ -84,7 +84,7 @@ func buildBinary() (string, error) {
 	binaryPath := filepath.Join(tmpDir, "stackit")
 
 	// Build the binary
-	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/stackit")
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./apps/cli")
 	cmd.Dir = moduleRoot
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -168,7 +168,7 @@ func buildBinaryOnce() (string, func(), error) {
 	binaryPath := filepath.Join(tmpDir, "stackit")
 
 	// Build the binary
-	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/stackit")
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./apps/cli")
 	cmd.Dir = moduleRoot
 	output, err := cmd.CombinedOutput()
 	if err != nil {

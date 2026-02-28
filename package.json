@@ -1,0 +1,12 @@
+{
+  "name": "stackit-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "web:dev": "pnpm --filter @stackit/web dev",
+    "web:build": "pnpm --filter @stackit/web build",
+    "web:test": "pnpm --filter @stackit/web test",
+    "web:lint": "pnpm --filter @stackit/web lint",
+    "web:typecheck": "pnpm --filter @stackit/web typecheck"
+  }
+}

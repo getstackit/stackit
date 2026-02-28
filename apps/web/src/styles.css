@@ -1,0 +1,108 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #f5f7fb 0%, #edf1f7 100%);
+  color: #18222f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+.header {
+  margin-bottom: 1.25rem;
+}
+
+.header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 2rem;
+}
+
+.header p {
+  margin: 0;
+  color: #3f4d5f;
+}
+
+.panel {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid #d9e0ea;
+}
+
+.panel h2 {
+  margin-top: 0;
+}
+
+.stack-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stack-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #f9fbff;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.meta {
+  margin-top: 0.4rem;
+  color: #5a6778;
+  font-size: 0.95rem;
+}
+
+.badge {
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
+.badge-shippable {
+  background: #d7f8dc;
+  color: #175b20;
+}
+
+.badge-pending {
+  background: #fff0cc;
+  color: #7f5200;
+}
+
+.badge-blocked {
+  background: #ffdfe0;
+  color: #7b1218;
+}
+
+.badge-incomplete {
+  background: #e8ebf2;
+  color: #37485d;
+}
+
+.error {
+  color: #8f1319;
+  font-weight: 600;
+}

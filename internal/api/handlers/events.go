@@ -50,12 +50,12 @@ func (b *EventBroadcaster) unsubscribe(ch chan string) {
 	close(ch)
 }
 
-// EventsHandler serves the SSE stream at GET /api/events.
+// EventsHandler serves the SSE stream at GET /api/events and /api/v1/events.
 type EventsHandler struct {
 	broadcaster *EventBroadcaster
 }
 
-// NewEventsHandler creates a handler for /api/events.
+// NewEventsHandler creates a handler for events endpoints.
 func NewEventsHandler(broadcaster *EventBroadcaster) *EventsHandler {
 	return &EventsHandler{broadcaster: broadcaster}
 }

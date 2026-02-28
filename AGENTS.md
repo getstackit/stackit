@@ -75,15 +75,21 @@ command stackit submit             # Update PRs
 ## Architecture
 
 ```
-cmd/stackit/       CLI entry point
+apps/
+├── cli/        CLI entry point
+├── api/        HTTP API + embedded static web assets
+├── st-tui/     TUI storyboard binary
+└── web/        React/Vite frontend workspace
 internal/
 ├── actions/       Business logic for commands (create, submit, sync, etc.)
 ├── cli/           Command definitions, handlers
+├── api/           HTTP handlers, middleware, watcher
 ├── engine/        Core stack logic, metadata, branch relationships
 ├── git/           Low-level git operations
 ├── tui/           Terminal UI components (see docs/tui.md)
 ├── config/        Configuration system (see docs/config.md)
 └── utils/         Shared utilities
+api/openapi/       API contract source of truth
 ```
 
 ## Documentation
@@ -178,4 +184,3 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`
 ## Metadata
 
 Stackit stores branch relationships in `refs/stackit/metadata/`. The `Engine` package is the source of truth for stack structure. Always use `Engine` to query/modify branch relationships.
-

@@ -86,4 +86,31 @@ jobs:
           check-latest: true
 
       - name: Build
-        run: go build -v ./cmd/stackit
+        run: |
+          go build -v ./apps/cli
+          go build -v ./apps/api
+          go build -v ./apps/st-tui
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Typecheck
+        run: pnpm --filter @stackit/web typecheck
+
+      - name: Build web app
+        run: pnpm --filter @stackit/web build

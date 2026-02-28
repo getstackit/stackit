@@ -59,7 +59,7 @@ def on_pre_build(config: MkDocsConfig):
             print("'just' command not found, trying 'go build'...")
             try:
                 subprocess.run(
-                    ["go", "build", "-o", "stackit", "./cmd/stackit"],
+                    ["go", "build", "-o", "stackit", "./apps/cli"],
                     cwd=repo_root,
                     check=True,
                     capture_output=True

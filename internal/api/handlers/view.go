@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"stackit.dev/stackit/internal/actions/merge"
-	"stackit.dev/stackit/internal/api/types"
+	httpcontract "stackit.dev/stackit/internal/contracts/http"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/github"
 )
@@ -16,12 +16,12 @@ type ViewHandler struct {
 	remote string
 }
 
-// NewViewHandler creates a handler for /api/view.
+// NewViewHandler creates a handler for /api/view and /api/v1/view.
 func NewViewHandler(eng engine.BranchReader, gh github.Client, remote string) *ViewHandler {
 	return &ViewHandler{eng: eng, gh: gh, remote: remote}
 }
 
-// ServeHTTP handles GET /api/view.
+// ServeHTTP handles GET view endpoints.
 func (h *ViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -35,7 +35,7 @@ func (h *ViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		owner, repo = h.gh.GetOwnerRepo()
 		currentUser, _ = h.gh.GetCurrentUser(r.Context())
 	}
-	repoResp := types.RepoResponse{
+	repoResp := httpcontract.RepoResponse{
 		Owner:         owner,
 		Repo:          repo,
 		Trunk:         h.eng.Trunk().GetName(),
@@ -65,13 +65,13 @@ func (h *ViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Map all stack details using the shared checks map
-	details := make([]types.StackDetail, 0, len(stacks))
+	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {
-		detail := types.MapStackDetail(h.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap)
+		detail := httpcontract.MapStackDetail(h.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap)
 		details = append(details, detail)
 	}
 
-	writeJSON(w, types.ViewResponse{
+	writeJSON(w, httpcontract.ViewResponse{
 		Repo:   repoResp,
 		Stacks: details,
 	})

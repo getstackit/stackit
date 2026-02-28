@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"stackit.dev/stackit/internal/actions/merge"
-	"stackit.dev/stackit/internal/api/types"
+	httpcontract "stackit.dev/stackit/internal/contracts/http"
 	"stackit.dev/stackit/internal/engine"
 	"stackit.dev/stackit/internal/github"
 )
@@ -16,26 +16,28 @@ type StacksHandler struct {
 	gh  github.Client
 }
 
-// NewStacksHandler creates a handler for /api/stacks.
+// NewStacksHandler creates a handler for /api/stacks and /api/v1/stacks.
 func NewStacksHandler(eng engine.BranchReader, gh github.Client) *StacksHandler {
 	return &StacksHandler{eng: eng, gh: gh}
 }
 
-// ServeHTTP handles GET /api/stacks and GET /api/stacks/{root}.
+// ServeHTTP handles GET stacks endpoints.
 func (h *StacksHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Parse path: /api/stacks or /api/stacks/{root}
-	path := strings.TrimPrefix(r.URL.Path, "/api/stacks")
-	path = strings.TrimPrefix(path, "/")
+	root, hasRoot := parseResourcePath(r.URL.Path, "stacks")
+	if !hasRoot {
+		http.NotFound(w, r)
+		return
+	}
 
-	if path == "" {
+	if root == "" {
 		h.listStacks(w)
 	} else {
-		h.getStack(w, r, path)
+		h.getStack(w, r, root)
 	}
 }
 
@@ -48,9 +50,9 @@ func (h *StacksHandler) listStacks(w http.ResponseWriter) {
 
 	graph := engine.BuildStackGraph(h.eng, engine.SortStrategySmart, nil)
 
-	summaries := make([]types.StackSummary, 0, len(stacks))
+	summaries := make([]httpcontract.StackSummary, 0, len(stacks))
 	for _, stack := range stacks {
-		summary := types.MapStackSummary(h.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, "")
+		summary := httpcontract.MapStackSummary(h.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, "")
 		summaries = append(summaries, summary)
 	}
 
@@ -85,6 +87,17 @@ func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, rootBra
 		checksMap, _ = h.gh.BatchGetPRChecksStatus(r.Context(), found.AllBranches)
 	}
 
-	detail := types.MapStackDetail(h.eng, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap)
+	detail := httpcontract.MapStackDetail(h.eng, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap)
 	writeJSON(w, detail)
+}
+
+func parseResourcePath(requestPath, resource string) (string, bool) {
+	marker := "/" + resource
+	idx := strings.Index(requestPath, marker)
+	if idx == -1 {
+		return "", false
+	}
+
+	suffix := strings.TrimPrefix(requestPath[idx+len(marker):], "/")
+	return suffix, true
 }

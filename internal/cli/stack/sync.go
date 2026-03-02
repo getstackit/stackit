@@ -107,28 +107,29 @@ func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
 		result.WouldPull = trunk.GetName()
 	}
 
-	// Find branches that would be deleted (merged/closed)
+	// Collect candidate branches for deletion and restack checks
 	allBranches := eng.AllBranches()
+	var candidateNames []string
 	for _, branch := range allBranches {
 		if branch.IsTrunk() || !branch.IsTracked() {
 			continue
 		}
+		candidateNames = append(candidateNames, branch.GetName())
 
-		status, err := eng.GetDeletionStatus(ctx.Context, branch.GetName())
-		if err == nil && status.SafeToDelete {
-			result.WouldClean = append(result.WouldClean, branch.GetName())
+		// Check restack status while iterating
+		if opts.Restack && !branch.IsBranchUpToDate() {
+			result.WouldRestack = append(result.WouldRestack, branch.GetName())
 		}
 	}
 
-	// Find branches that need restacking (only if restack is enabled)
-	if opts.Restack {
-		for _, branch := range allBranches {
-			if branch.IsTrunk() || !branch.IsTracked() {
-				continue
-			}
-
-			if !branch.IsBranchUpToDate() {
-				result.WouldRestack = append(result.WouldRestack, branch.GetName())
+	// Batch-check deletion status for all candidates
+	if len(candidateNames) > 0 {
+		statuses, err := eng.BatchGetDeletionStatuses(ctx.Context, candidateNames)
+		if err == nil {
+			for _, name := range candidateNames {
+				if status, ok := statuses[name]; ok && status.SafeToDelete {
+					result.WouldClean = append(result.WouldClean, name)
+				}
 			}
 		}
 	}

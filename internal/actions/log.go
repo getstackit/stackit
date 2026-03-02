@@ -260,9 +260,14 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 		branchesToInclude = eng.AllBranches()
 	}
 
+	// Pre-load metadata and revisions for all branches to eliminate per-branch
+	// cache misses during annotation building.
+	eng.PreloadBranchData()
+
 	// Prefetch CI status for JSON output (always fetched to provide complete data)
+	ghClient := ctx.GitHub()
 	var ciStatuses map[string]*github.CheckStatus
-	if ctx.GitHubClient != nil {
+	if ghClient != nil {
 		branchNames := make([]string, 0, len(branchesToInclude))
 		for _, b := range branchesToInclude {
 			if !b.IsTrunk() {
@@ -270,7 +275,7 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 			}
 		}
 		if len(branchNames) > 0 {
-			ciStatuses, _ = ctx.GitHubClient.BatchGetPRChecksStatus(ctx.Context, branchNames)
+			ciStatuses, _ = ghClient.BatchGetPRChecksStatus(ctx.Context, branchNames)
 		}
 	}
 
@@ -278,107 +283,123 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 	result := LogJSONResult{
 		Branches:        []LogBranchInfo{},
 		Summary:         LogSummary{},
-		GitHubAvailable: ctx.GitHubClient != nil,
+		GitHubAvailable: ghClient != nil,
 	}
 
-	for _, branch := range branchesToInclude {
-		branchName := branch.GetName()
+	// Collect branch info in parallel using worker pool (each branch requires
+	// git subprocesses for commits and diff stats)
+	type branchResult struct {
+		info LogBranchInfo
+	}
+	branchResults := make(chan branchResult, len(branchesToInclude))
 
-		// Skip worktree anchors for cleaner output
-		if branch.IsWorktreeAnchor() {
-			continue
+	// Filter out worktree anchors before parallel processing
+	var processable []engine.Branch
+	for _, b := range branchesToInclude {
+		if !b.IsWorktreeAnchor() {
+			processable = append(processable, b)
 		}
+	}
 
-		info := LogBranchInfo{
-			Name:         branchName,
-			IsCurrent:    branchName == currentBranchName,
-			IsTrunk:      branch.IsTrunk(),
-			IsLocked:     branch.IsLocked(),
-			IsFrozen:     branch.IsFrozen(),
-			NeedsRestack: !branch.IsBranchUpToDate() && !branch.IsTrunk(),
-		}
+	if len(processable) > 0 {
+		utils.Run(processable, func(branch engine.Branch) {
+			branchName := branch.GetName()
 
-		// Parent
-		if parent := branch.GetParent(); parent != nil {
-			info.Parent = parent.GetName()
-		}
-
-		// Scope
-		if scope := branch.GetScope(); !scope.IsNone() {
-			info.Scope = scope.String()
-		}
-
-		// Children
-		children := graph.ChildBranches(branch)
-		for _, child := range children {
-			if !child.IsWorktreeAnchor() {
-				info.Children = append(info.Children, child.GetName())
-			}
-		}
-
-		// Commits and diff stats
-		if !branch.IsTrunk() {
-			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
-			if err == nil {
-				info.Commits = len(commits)
+			info := LogBranchInfo{
+				Name:         branchName,
+				IsCurrent:    branchName == currentBranchName,
+				IsTrunk:      branch.IsTrunk(),
+				IsLocked:     branch.IsLocked(),
+				IsFrozen:     branch.IsFrozen(),
+				NeedsRestack: !branch.IsBranchUpToDate() && !branch.IsTrunk(),
 			}
 
-			added, deleted, err := branch.GetDiffStats()
-			if err == nil {
-				info.Additions = added
-				info.Deletions = deleted
+			// Parent
+			if parent := branch.GetParent(); parent != nil {
+				info.Parent = parent.GetName()
 			}
-		}
 
-		// PR info
-		if !branch.IsTrunk() {
-			prInfo, _ := branch.GetPrInfo()
-			if prInfo != nil && prInfo.Number() != nil {
-				info.PR = &LogPRInfo{
-					Number:  *prInfo.Number(),
-					URL:     prInfo.URL(),
-					Title:   prInfo.Title(),
-					State:   prInfo.State(),
-					IsDraft: prInfo.IsDraft(),
+			// Scope
+			if scope := branch.GetScope(); !scope.IsNone() {
+				info.Scope = scope.String()
+			}
+
+			// Children
+			children := graph.ChildBranches(branch)
+			for _, child := range children {
+				if !child.IsWorktreeAnchor() {
+					info.Children = append(info.Children, child.GetName())
+				}
+			}
+
+			// Commits and diff stats
+			if !branch.IsTrunk() {
+				commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
+				if err == nil {
+					info.Commits = len(commits)
 				}
 
-				// CI status
-				if ciStatuses != nil {
-					if status, ok := ciStatuses[branchName]; ok && status != nil {
-						switch {
-						case status.Pending:
-							info.PR.CIStatus = "pending"
-						case status.Passing:
-							info.PR.CIStatus = "passing"
-						default:
-							info.PR.CIStatus = "failing"
-						}
+				added, deleted, err := branch.GetDiffStats()
+				if err == nil {
+					info.Additions = added
+					info.Deletions = deleted
+				}
+			}
 
-						// Review status
-						switch status.ReviewDecision {
-						case github.ReviewDecisionApproved:
-							info.PR.ReviewStatus = "approved"
-						case github.ReviewDecisionChangesRequested:
-							info.PR.ReviewStatus = "changes_requested"
-						case github.ReviewDecisionReviewRequired:
-							info.PR.ReviewStatus = "review_required"
+			// PR info
+			if !branch.IsTrunk() {
+				prInfo, _ := branch.GetPrInfo()
+				if prInfo != nil && prInfo.Number() != nil {
+					info.PR = &LogPRInfo{
+						Number:  *prInfo.Number(),
+						URL:     prInfo.URL(),
+						Title:   prInfo.Title(),
+						State:   prInfo.State(),
+						IsDraft: prInfo.IsDraft(),
+					}
+
+					// CI status
+					if ciStatuses != nil {
+						if status, ok := ciStatuses[branchName]; ok && status != nil {
+							switch {
+							case status.Pending:
+								info.PR.CIStatus = "pending"
+							case status.Passing:
+								info.PR.CIStatus = "passing"
+							default:
+								info.PR.CIStatus = "failing"
+							}
+
+							// Review status
+							switch status.ReviewDecision {
+							case github.ReviewDecisionApproved:
+								info.PR.ReviewStatus = "approved"
+							case github.ReviewDecisionChangesRequested:
+								info.PR.ReviewStatus = "changes_requested"
+							case github.ReviewDecisionReviewRequired:
+								info.PR.ReviewStatus = "review_required"
+							}
 						}
 					}
 				}
 			}
-		}
 
+			branchResults <- branchResult{info: info}
+		})
+	}
+	close(branchResults)
+
+	for res := range branchResults {
+		info := res.info
 		result.Branches = append(result.Branches, info)
 
 		// Update summary (exclude trunk)
-		if !branch.IsTrunk() && !branch.IsWorktreeAnchor() {
+		if !info.IsTrunk {
 			result.Summary.TotalBranches++
-			if info.PR != nil {
-				if info.PR.ReviewStatus == "approved" {
-					result.Summary.ApprovedCount++
-				} else if info.PR.State != "MERGED" && info.PR.State != "CLOSED" {
-					result.Summary.InReviewCount++
-				}
+			if info.PR != nil && info.PR.ReviewStatus == "approved" {
+				result.Summary.ApprovedCount++
+			} else if info.PR != nil && info.PR.ReviewStatus == "review_required" {
+				result.Summary.InReviewCount++
 			}
 		}
 	}

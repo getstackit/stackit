@@ -202,9 +202,7 @@ func TestJSONOutput(t *testing.T) {
 		err := json.Unmarshal([]byte(output), &result)
 		require.NoError(t, err, "sync --dry-run --json should produce valid JSON")
 
-		// Verify the result was parsed (fields may be nil/empty depending on state)
-		// The main check is that the JSON was valid and parseable
-		require.True(t, true, "JSON was successfully parsed")
+		// JSON was valid and parseable - verified by NoError above
 	})
 
 	t.Run("log --json with no tracked branches outputs valid JSON", func(t *testing.T) {
@@ -220,9 +218,9 @@ func TestJSONOutput(t *testing.T) {
 		err := json.Unmarshal([]byte(output), &result)
 		require.NoError(t, err, "log --json should produce valid JSON even with no tracked branches")
 
-		// Verify minimal state is handled correctly
-		require.GreaterOrEqual(t, len(result.Branches), 0, "should have zero or more branches")
-		require.GreaterOrEqual(t, result.Summary.TotalBranches, 0, "summary total should be non-negative")
+		// With no tracked branches, should have trunk at minimum
+		require.NotNil(t, result.Branches, "branches should not be nil")
+		require.Equal(t, 0, result.Summary.TotalBranches, "summary total should be 0 with no tracked branches")
 	})
 
 	t.Run("log --json with mixed branch states", func(t *testing.T) {

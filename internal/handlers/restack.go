@@ -71,8 +71,7 @@ type RestackConflictInfo struct {
 
 // JSONRestackHandler collects restack results for JSON output
 type JSONRestackHandler struct {
-	Result       *RestackJSONResult
-	branchParent map[string]string
+	Result *RestackJSONResult
 }
 
 // NewJSONRestackHandler creates a new JSON handler
@@ -83,7 +82,6 @@ func NewJSONRestackHandler() *JSONRestackHandler {
 			Skipped:   []string{},
 			Conflicts: []RestackConflictInfo{},
 		},
-		branchParent: make(map[string]string),
 	}
 }
 
@@ -94,8 +92,6 @@ func (h *JSONRestackHandler) OnRestackStart(branchCount int) {
 
 // OnRestackBranch implements RestackHandler.
 func (h *JSONRestackHandler) OnRestackBranch(branch string, result RestackResult, newRev string, prNumber *int, _ engine.LockReason, _ bool, _ bool, parent string, _ bool, _, _ string) {
-	h.branchParent[branch] = parent
-
 	switch result {
 	case RestackDone:
 		h.Result.Restacked = append(h.Result.Restacked, RestackBranchInfo{

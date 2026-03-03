@@ -80,28 +80,28 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		prNumber3 := 3
 		mockConfig.PRs["branch-a"] = &github.PullRequest{
 			Number:  &prNumber1,
-			Title:   github.String("Branch A PR"),
-			Head:    &github.PullRequestBranch{Ref: github.String("branch-a")},
-			Base:    &github.PullRequestBranch{Ref: github.String("main")}, // Correct
-			State:   github.String("open"),
-			HTMLURL: github.String("https://github.com/owner/repo/pull/1"),
+			Title:   new("Branch A PR"),
+			Head:    &github.PullRequestBranch{Ref: new("branch-a")},
+			Base:    &github.PullRequestBranch{Ref: new("main")}, // Correct
+			State:   new("open"),
+			HTMLURL: new("https://github.com/owner/repo/pull/1"),
 		}
 		mockConfig.PRs["branch-b"] = &github.PullRequest{
 			Number:  &prNumber2,
-			Title:   github.String("Branch B PR"),
-			Head:    &github.PullRequestBranch{Ref: github.String("branch-b")},
-			Base:    &github.PullRequestBranch{Ref: github.String("branch-a")}, // Correct
-			State:   github.String("open"),
-			HTMLURL: github.String("https://github.com/owner/repo/pull/2"),
+			Title:   new("Branch B PR"),
+			Head:    &github.PullRequestBranch{Ref: new("branch-b")},
+			Base:    &github.PullRequestBranch{Ref: new("branch-a")}, // Correct
+			State:   new("open"),
+			HTMLURL: new("https://github.com/owner/repo/pull/2"),
 		}
 		// STALE: branch-c shows main as base instead of branch-a
 		mockConfig.PRs["branch-c"] = &github.PullRequest{
 			Number:  &prNumber3,
-			Title:   github.String("Branch C PR"),
-			Head:    &github.PullRequestBranch{Ref: github.String("branch-c")},
-			Base:    &github.PullRequestBranch{Ref: github.String("main")}, // STALE - should be branch-a!
-			State:   github.String("open"),
-			HTMLURL: github.String("https://github.com/owner/repo/pull/3"),
+			Title:   new("Branch C PR"),
+			Head:    &github.PullRequestBranch{Ref: new("branch-c")},
+			Base:    &github.PullRequestBranch{Ref: new("main")}, // STALE - should be branch-a!
+			State:   new("open"),
+			HTMLURL: new("https://github.com/owner/repo/pull/3"),
 		}
 
 		// Create GitHub client and configure context
@@ -214,27 +214,27 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		// All PRs have correct bases in this test
 		mockConfig.PRs["branch-a"] = &github.PullRequest{
 			Number:  &prNumber1,
-			Title:   github.String("Branch A PR"),
-			Head:    &github.PullRequestBranch{Ref: github.String("branch-a")},
-			Base:    &github.PullRequestBranch{Ref: github.String("main")},
-			State:   github.String("open"),
-			HTMLURL: github.String("https://github.com/owner/repo/pull/1"),
+			Title:   new("Branch A PR"),
+			Head:    &github.PullRequestBranch{Ref: new("branch-a")},
+			Base:    &github.PullRequestBranch{Ref: new("main")},
+			State:   new("open"),
+			HTMLURL: new("https://github.com/owner/repo/pull/1"),
 		}
 		mockConfig.PRs["branch-b"] = &github.PullRequest{
 			Number:  &prNumber2,
-			Title:   github.String("Branch B PR"),
-			Head:    &github.PullRequestBranch{Ref: github.String("branch-b")},
-			Base:    &github.PullRequestBranch{Ref: github.String("branch-a")},
-			State:   github.String("open"),
-			HTMLURL: github.String("https://github.com/owner/repo/pull/2"),
+			Title:   new("Branch B PR"),
+			Head:    &github.PullRequestBranch{Ref: new("branch-b")},
+			Base:    &github.PullRequestBranch{Ref: new("branch-a")},
+			State:   new("open"),
+			HTMLURL: new("https://github.com/owner/repo/pull/2"),
 		}
 		mockConfig.PRs["branch-c"] = &github.PullRequest{
 			Number:  &prNumber3,
-			Title:   github.String("Branch C PR"),
-			Head:    &github.PullRequestBranch{Ref: github.String("branch-c")},
-			Base:    &github.PullRequestBranch{Ref: github.String("branch-a")},
-			State:   github.String("open"),
-			HTMLURL: github.String("https://github.com/owner/repo/pull/3"),
+			Title:   new("Branch C PR"),
+			Head:    &github.PullRequestBranch{Ref: new("branch-c")},
+			Base:    &github.PullRequestBranch{Ref: new("branch-a")},
+			State:   new("open"),
+			HTMLURL: new("https://github.com/owner/repo/pull/3"),
 		}
 
 		client, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
@@ -296,20 +296,20 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 
 		mockConfig.PRs["branch-a"] = &github.PullRequest{
 			Number:  &prNumber1,
-			Title:   github.String("Branch A PR"),
-			Head:    &github.PullRequestBranch{Ref: github.String("branch-a")},
-			Base:    &github.PullRequestBranch{Ref: github.String("main")},
-			State:   github.String("open"),
-			HTMLURL: github.String("https://github.com/owner/repo/pull/1"),
+			Title:   new("Branch A PR"),
+			Head:    &github.PullRequestBranch{Ref: new("branch-a")},
+			Base:    &github.PullRequestBranch{Ref: new("main")},
+			State:   new("open"),
+			HTMLURL: new("https://github.com/owner/repo/pull/1"),
 		}
 		// GitHub says branch-b base is main (stale)
 		mockConfig.PRs["branch-b"] = &github.PullRequest{
 			Number:  &prNumber2,
-			Title:   github.String("Branch B PR"),
-			Head:    &github.PullRequestBranch{Ref: github.String("branch-b")},
-			Base:    &github.PullRequestBranch{Ref: github.String("main")}, // Stale base on GitHub
-			State:   github.String("open"),
-			HTMLURL: github.String("https://github.com/owner/repo/pull/2"),
+			Title:   new("Branch B PR"),
+			Head:    &github.PullRequestBranch{Ref: new("branch-b")},
+			Base:    &github.PullRequestBranch{Ref: new("main")}, // Stale base on GitHub
+			State:   new("open"),
+			HTMLURL: new("https://github.com/owner/repo/pull/2"),
 		}
 
 		client, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)

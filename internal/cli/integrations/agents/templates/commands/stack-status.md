@@ -10,9 +10,9 @@ Show the current stack state, identify issues, and provide actionable recommenda
 ## Context
 - Current branch: !`git branch --show-current`
 - Git status: !`git status --short`
-- Stack state: !`command stackit log --no-interactive 2>&1`
+- Stack state (text): !`command stackit log --no-interactive 2>&1`
+- Stack state (json): !`command stackit log --json --no-interactive 2>&1`
 - Branch info: !`command stackit info --json --no-interactive 2>&1`
-- Health report: !`command stackit health --json --no-interactive 2>&1`
 
 ## Task
 
@@ -25,7 +25,7 @@ Based on the stack state context, show:
 
 ### Step 2: Health Analysis
 
-Parse the health report JSON and highlight any issues:
+Parse the stack state JSON and branch info JSON, then highlight issues:
 
 **High Priority Issues (act now):**
 - CI failing on any branch
@@ -33,7 +33,7 @@ Parse the health report JSON and highlight any issues:
 
 **Medium Priority Issues (address soon):**
 - Branches needing restack
-- Branches significantly behind trunk (>3 days)
+- Locked/frozen branches blocking expected changes
 
 **Low Priority (when convenient):**
 - Branches ready to merge (approved + CI passing)
@@ -41,7 +41,7 @@ Parse the health report JSON and highlight any issues:
 
 ### Step 3: Recommendations
 
-Based on the health report, provide actionable next steps:
+Based on the stack state, provide actionable next steps:
 
 | Issue | Recommendation |
 |-------|----------------|
@@ -49,7 +49,7 @@ Based on the health report, provide actionable next steps:
 | Branches have no PR | `command stackit submit --no-interactive` |
 | CI failing | Check CI logs and fix issues |
 | Branch ready to merge | `command stackit merge <branch> --no-interactive` |
-| Behind trunk | `command stackit sync --no-interactive` |
+| Branches need trunk updates | `command stackit sync --no-interactive` |
 
 ### Step 4: Summary
 
@@ -69,7 +69,7 @@ Current: feature-api (3 commits, +45/-12)
   ↑ main
 
 Health:
-  ⚠️  feature-models: needs restack (2 days behind)
+  ⚠️  feature-models: needs restack
   ✓  feature-api: CI passing, ready for review
 
 Recommendations:

@@ -43,7 +43,6 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 						Force:   force,
 						Restack: restack,
 						DryRun:  true,
-						JSON:    true,
 					})
 				}
 
@@ -57,7 +56,6 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 					Force:   force,
 					Restack: restack,
 					DryRun:  dryRun,
-					JSON:    jsonOutput,
 				}, handler)
 			})
 		},

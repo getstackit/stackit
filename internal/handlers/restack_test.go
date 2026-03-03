@@ -25,7 +25,7 @@ func TestJSONRestackHandler(t *testing.T) {
 
 		handler.OnRestackComplete(2, 0, nil)
 
-		require.Equal(t, "success", handler.Result.Status)
+		require.Equal(t, RestackJSONStatusSuccess, handler.Result.Status)
 		require.Len(t, handler.Result.Restacked, 2)
 		require.Equal(t, "branch-a", handler.Result.Restacked[0].Name)
 		require.Equal(t, "main", handler.Result.Restacked[0].Parent)
@@ -47,7 +47,7 @@ func TestJSONRestackHandler(t *testing.T) {
 
 		handler.OnRestackComplete(0, 2, nil)
 
-		require.Equal(t, "success", handler.Result.Status)
+		require.Equal(t, RestackJSONStatusSuccess, handler.Result.Status)
 		require.Empty(t, handler.Result.Restacked)
 		require.Len(t, handler.Result.Skipped, 2)
 		require.Contains(t, handler.Result.Skipped, "branch-a")
@@ -66,7 +66,7 @@ func TestJSONRestackHandler(t *testing.T) {
 
 		handler.OnRestackComplete(1, 0, []string{"branch-b"})
 
-		require.Equal(t, "conflict", handler.Result.Status)
+		require.Equal(t, RestackJSONStatusConflict, handler.Result.Status)
 		require.Len(t, handler.Result.Restacked, 1)
 		require.Len(t, handler.Result.Conflicts, 1)
 		require.Equal(t, "branch-b", handler.Result.Conflicts[0].Branch)
@@ -83,8 +83,23 @@ func TestJSONRestackHandler(t *testing.T) {
 		// Simulate an error
 		handler.SetError(errors.New("something went wrong"))
 
-		require.Equal(t, "error", handler.Result.Status)
+		require.Equal(t, RestackJSONStatusError, handler.Result.Status)
 		require.Equal(t, "something went wrong", handler.Result.Error)
+	})
+
+	t.Run("SetError preserves conflict status when conflicts exist", func(t *testing.T) {
+		t.Parallel()
+
+		handler := NewJSONRestackHandler()
+		handler.OnRestackStart(1)
+		handler.OnRestackBranch("branch-a", RestackConflict, "", nil, engine.LockReasonNone, false, false, "main", false, "", "")
+		handler.OnRestackComplete(0, 0, []string{"branch-a"})
+
+		handler.SetError(errors.New("restack stopped due to conflict on branch-a"))
+
+		require.Equal(t, RestackJSONStatusConflict, handler.Result.Status)
+		require.Equal(t, "restack stopped due to conflict on branch-a", handler.Result.Error)
+		require.Len(t, handler.Result.Conflicts, 1)
 	})
 
 	t.Run("SetError does nothing for nil error", func(t *testing.T) {
@@ -98,7 +113,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.SetError(nil)
 
 		// Status should remain success
-		require.Equal(t, "success", handler.Result.Status)
+		require.Equal(t, RestackJSONStatusSuccess, handler.Result.Status)
 		require.Empty(t, handler.Result.Error)
 	})
 }

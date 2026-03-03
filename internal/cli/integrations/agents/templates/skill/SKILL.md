@@ -54,12 +54,12 @@ When calling `command stackit` commands, **ALWAYS** include the `--no-interactiv
 
 **Run at session start** to proactively identify issues:
 ```bash
-command stackit health --json --no-interactive
+command stackit log --json --no-interactive
 ```
 
 This returns a JSON report with:
-- `branches`: Array of branch health status (CI, PR, needs_restack, days_behind)
-- `recommendations`: Suggested actions with priority and commands
+- `branches`: Array of branch status (current, parent/children, PR status, CI status, needs_restack)
+- `summary`: Counts for total branches, approved branches, and branches in review
 
 **When to mention health issues proactively:**
 If the health check reveals issues, inform the user:

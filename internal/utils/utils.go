@@ -257,7 +257,7 @@ func Run[T any](items []T, worker func(item T)) {
 
 	var wg sync.WaitGroup
 	wg.Add(numWorkers)
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		go func() {
 			defer wg.Done()
 			for item := range jobs {

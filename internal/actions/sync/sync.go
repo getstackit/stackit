@@ -29,7 +29,6 @@ type Options struct {
 	Force        bool
 	Restack      bool
 	DryRun       bool
-	JSON         bool     // CLI layer uses this to determine JSON output mode (requires DryRun)
 	RestackScope []string // When non-nil, only restack these branches (skip current-branch expansion)
 }
 

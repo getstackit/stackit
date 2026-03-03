@@ -96,7 +96,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 				Number:  prInfo.Number(),
 				Title:   stringPtr(prInfo.Title()),
 				Body:    stringPtr(prInfo.Body()),
-				IsDraft: boolPtr(prInfo.IsDraft()),
+				IsDraft: new(prInfo.IsDraft()),
 				State:   stringPtr(prInfo.State()),
 				Base:    stringPtr(prInfo.Base()),
 				URL:     stringPtr(prInfo.URL()),

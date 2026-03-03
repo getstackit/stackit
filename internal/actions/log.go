@@ -1,8 +1,10 @@
 package actions
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -403,6 +405,11 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 			}
 		}
 	}
+
+	// Keep output stable across runs even when collection happens in parallel.
+	slices.SortFunc(result.Branches, func(a, b LogBranchInfo) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
 
 	// Output JSON
 	data, err := json.MarshalIndent(result, "", "  ")

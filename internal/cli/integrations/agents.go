@@ -333,8 +333,8 @@ func parseSelectedFormatLabels(selected []string) ([]agentSkillFormat, error) {
 func parseAgentSkillFormats(rawValues []string) ([]agentSkillFormat, error) {
 	formats := make([]agentSkillFormat, 0, len(rawValues))
 	for _, raw := range rawValues {
-		parts := strings.Split(raw, ",")
-		for _, part := range parts {
+		parts := strings.SplitSeq(raw, ",")
+		for part := range parts {
 			trimmed := strings.TrimSpace(part)
 			if trimmed == "" {
 				continue
@@ -524,9 +524,11 @@ func printSuccessMessage(out io.Writer, targets []agentInstallTarget, workflowBl
 	_, _ = fmt.Fprintln(out, "Available Claude Code commands:")
 	_, _ = fmt.Fprintln(out, "  /stack-absorb  - Intelligently absorb changes into commits")
 	_, _ = fmt.Fprintln(out, "  /stack-create  - Create branch with auto-naming")
+	_, _ = fmt.Fprintln(out, "  /stack-describe - Generate PR descriptions from git history")
 	_, _ = fmt.Fprintln(out, "  /stack-extract - Extract commits/files to independent branch")
 	_, _ = fmt.Fprintln(out, "  /stack-fix     - Diagnose and fix stack issues")
 	_, _ = fmt.Fprintln(out, "  /stack-fold    - Fold granular branches into parents")
+	_, _ = fmt.Fprintln(out, "  /stack-modify  - Amend current branch commit")
 	_, _ = fmt.Fprintln(out, "  /stack-plan    - Plan and create stack from uncommitted changes")
 	_, _ = fmt.Fprintln(out, "  /stack-resolve - Resolve rebase conflicts with AI assistance")
 	_, _ = fmt.Fprintln(out, "  /stack-restack - Rebase all branches in stack")

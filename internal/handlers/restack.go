@@ -43,9 +43,18 @@ func (h *NullRestackHandler) OnRestackBranch(_ string, _ RestackResult, _ string
 // OnRestackComplete implements RestackHandler.
 func (h *NullRestackHandler) OnRestackComplete(_, _ int, _ []string) {}
 
+// RestackJSONStatus represents the aggregate outcome of a JSON restack operation.
+type RestackJSONStatus string
+
+const (
+	RestackJSONStatusSuccess  RestackJSONStatus = "success"
+	RestackJSONStatusConflict RestackJSONStatus = "conflict"
+	RestackJSONStatusError    RestackJSONStatus = "error"
+)
+
 // RestackJSONResult represents the JSON output for restack operations
 type RestackJSONResult struct {
-	Status        string                `json:"status"` // "success", "conflict", "error"
+	Status        RestackJSONStatus     `json:"status"`
 	Error         string                `json:"error,omitempty"`
 	Restacked     []RestackBranchInfo   `json:"restacked,omitempty"`
 	Skipped       []string              `json:"skipped,omitempty"`
@@ -116,9 +125,9 @@ func (h *JSONRestackHandler) OnRestackComplete(restacked, _ int, _ []string) {
 	h.Result.ConflictCount = len(h.Result.Conflicts)
 
 	if h.Result.ConflictCount > 0 {
-		h.Result.Status = "conflict"
+		h.Result.Status = RestackJSONStatusConflict
 	} else {
-		h.Result.Status = "success"
+		h.Result.Status = RestackJSONStatusSuccess
 	}
 }
 
@@ -126,7 +135,15 @@ func (h *JSONRestackHandler) OnRestackComplete(restacked, _ int, _ []string) {
 // Call this when the restack action returns an error.
 func (h *JSONRestackHandler) SetError(err error) {
 	if err != nil {
-		h.Result.Status = "error"
+		// If we already observed restack conflicts, keep status as "conflict"
+		// and attach the error details for debugging/context.
+		if len(h.Result.Conflicts) > 0 {
+			h.Result.Status = RestackJSONStatusConflict
+			h.Result.Error = err.Error()
+			return
+		}
+
+		h.Result.Status = RestackJSONStatusError
 		h.Result.Error = err.Error()
 	}
 }

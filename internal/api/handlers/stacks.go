@@ -93,11 +93,11 @@ func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, rootBra
 
 func parseResourcePath(requestPath, resource string) (string, bool) {
 	marker := "/" + resource
-	idx := strings.Index(requestPath, marker)
-	if idx == -1 {
+	_, after, ok := strings.Cut(requestPath, marker)
+	if !ok {
 		return "", false
 	}
 
-	suffix := strings.TrimPrefix(requestPath[idx+len(marker):], "/")
+	suffix := strings.TrimPrefix(after, "/")
 	return suffix, true
 }

@@ -24,21 +24,21 @@ type SamplePRData struct {
 // NewSamplePullRequest creates a github.PullRequest from sample data
 func NewSamplePullRequest(data SamplePRData) *github.PullRequest {
 	pr := &github.PullRequest{
-		Number:  github.Int(data.Number),
-		Title:   github.String(data.Title),
-		Body:    github.String(data.Body),
-		Head:    &github.PullRequestBranch{Ref: github.String(data.Head)},
-		Base:    &github.PullRequestBranch{Ref: github.String(data.Base)},
-		HTMLURL: github.String(data.HTMLURL),
-		Draft:   github.Bool(data.Draft),
-		State:   github.String(data.State),
+		Number:  new(data.Number),
+		Title:   new(data.Title),
+		Body:    new(data.Body),
+		Head:    &github.PullRequestBranch{Ref: new(data.Head)},
+		Base:    &github.PullRequestBranch{Ref: new(data.Base)},
+		HTMLURL: new(data.HTMLURL),
+		Draft:   new(data.Draft),
+		State:   new(data.State),
 	}
 
 	if len(data.Reviewers) > 0 {
 		pr.RequestedReviewers = make([]*github.User, len(data.Reviewers))
 		for i, reviewer := range data.Reviewers {
 			pr.RequestedReviewers[i] = &github.User{
-				Login: github.String(reviewer),
+				Login: new(reviewer),
 			}
 		}
 	}
@@ -47,7 +47,7 @@ func NewSamplePullRequest(data SamplePRData) *github.PullRequest {
 		pr.RequestedTeams = make([]*github.Team, len(data.TeamReviewers))
 		for i, team := range data.TeamReviewers {
 			pr.RequestedTeams[i] = &github.Team{
-				Slug: github.String(team),
+				Slug: new(team),
 			}
 		}
 	}

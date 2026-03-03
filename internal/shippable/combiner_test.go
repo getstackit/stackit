@@ -207,15 +207,15 @@ func TestCombinationResult_LocalCIFields(t *testing.T) {
 		},
 		{
 			name:          "CI passed",
-			localCIPassed: boolPtr(true),
+			localCIPassed: new(true),
 			localCIError:  nil,
-			expectPassed:  boolPtr(true),
+			expectPassed:  new(true),
 		},
 		{
 			name:          "CI failed",
-			localCIPassed: boolPtr(false),
+			localCIPassed: new(false),
 			localCIError:  assert.AnError,
-			expectPassed:  boolPtr(false),
+			expectPassed:  new(false),
 		},
 	}
 
@@ -231,6 +231,7 @@ func TestCombinationResult_LocalCIFields(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func boolPtr(b bool) *bool {
-	return &b
+	return new(b)
 }

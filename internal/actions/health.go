@@ -437,14 +437,15 @@ func renderHealthReport(out output.Output, report *HealthReport) {
 			icon = style.IconCIPending() // yellow dot
 			issues = append(issues, "needs restack")
 		}
-		if b.CI == CIStatusFailing {
+		switch b.CI {
+		case CIStatusFailing:
 			icon = style.IconCIFailing() // red dot
 			ciMsg := "CI failing"
 			if b.CIError != "" {
 				ciMsg = fmt.Sprintf("CI failing: %s", b.CIError)
 			}
 			issues = append(issues, ciMsg)
-		} else if b.CI == CIStatusPending {
+		case CIStatusPending:
 			issues = append(issues, "CI pending")
 		}
 		if b.CommitsBehind > StaleCommitThreshold {
@@ -463,9 +464,10 @@ func renderHealthReport(out output.Output, report *HealthReport) {
 		prInfo := ""
 		if b.PRNumber != nil {
 			prInfo = fmt.Sprintf(" #%d", *b.PRNumber)
-			if b.PRStatus == PRStatusDraft {
+			switch b.PRStatus {
+			case PRStatusDraft:
 				prInfo += " (draft)"
-			} else if b.PRStatus == PRStatusApproved {
+			case PRStatusApproved:
 				prInfo += " (approved)"
 			}
 		}

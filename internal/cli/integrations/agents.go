@@ -333,8 +333,8 @@ func parseSelectedFormatLabels(selected []string) ([]agentSkillFormat, error) {
 func parseAgentSkillFormats(rawValues []string) ([]agentSkillFormat, error) {
 	formats := make([]agentSkillFormat, 0, len(rawValues))
 	for _, raw := range rawValues {
-		parts := strings.Split(raw, ",")
-		for _, part := range parts {
+		parts := strings.SplitSeq(raw, ",")
+		for part := range parts {
 			trimmed := strings.TrimSpace(part)
 			if trimmed == "" {
 				continue
@@ -521,9 +521,23 @@ func printSuccessMessage(out io.Writer, targets []agentInstallTarget, workflowBl
 	}
 
 	_, _ = fmt.Fprintln(out)
-	_, _ = fmt.Fprintln(out, "Available commands: /stack-absorb, /stack-create, /stack-describe, /stack-extract,")
-	_, _ = fmt.Fprintln(out, "/stack-fix, /stack-fold, /stack-modify, /stack-plan, /stack-restack, /stack-review,")
-	_, _ = fmt.Fprintln(out, "/stack-split, /stack-status, /stack-submit, /stack-sync, /stack-verify")
+	_, _ = fmt.Fprintln(out, "Available Claude Code commands:")
+	_, _ = fmt.Fprintln(out, "  /stack-absorb  - Intelligently absorb changes into commits")
+	_, _ = fmt.Fprintln(out, "  /stack-create  - Create branch with auto-naming")
+	_, _ = fmt.Fprintln(out, "  /stack-describe - Generate PR descriptions from git history")
+	_, _ = fmt.Fprintln(out, "  /stack-extract - Extract commits/files to independent branch")
+	_, _ = fmt.Fprintln(out, "  /stack-fix     - Diagnose and fix stack issues")
+	_, _ = fmt.Fprintln(out, "  /stack-fold    - Fold granular branches into parents")
+	_, _ = fmt.Fprintln(out, "  /stack-modify  - Amend current branch commit")
+	_, _ = fmt.Fprintln(out, "  /stack-plan    - Plan and create stack from uncommitted changes")
+	_, _ = fmt.Fprintln(out, "  /stack-resolve - Resolve rebase conflicts with AI assistance")
+	_, _ = fmt.Fprintln(out, "  /stack-restack - Rebase all branches in stack")
+	_, _ = fmt.Fprintln(out, "  /stack-review  - Apply PR review comments and mark resolved")
+	_, _ = fmt.Fprintln(out, "  /stack-split   - Split changes between current and new child branch")
+	_, _ = fmt.Fprintln(out, "  /stack-status  - View stack state and health")
+	_, _ = fmt.Fprintln(out, "  /stack-submit  - Submit PRs with generated descriptions")
+	_, _ = fmt.Fprintln(out, "  /stack-sync    - Sync with trunk and cleanup")
+	_, _ = fmt.Fprintln(out, "  /stack-verify  - Verify stack health by running checks")
 }
 
 func checkExistingInstallation(baseDir string, format agentSkillFormat, version string, out io.Writer) error {

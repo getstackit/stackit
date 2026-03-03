@@ -52,7 +52,26 @@ When calling `command stackit` commands, **ALWAYS** include the `--no-interactiv
 
 ## Quick Health Check
 
-Run the stack analyzer to check health and get actionable suggestions:
+**Run at session start** to proactively identify issues:
+```bash
+command stackit log --json --no-interactive
+```
+
+This returns a JSON report with:
+- `branches`: Array of branch status (current, parent/children, PR status, CI status, needs_restack)
+- `summary`: Counts for total branches, approved branches, and branches in review
+
+**When to mention health issues proactively:**
+If the health check reveals issues, inform the user:
+```
+I notice your stack has some health issues:
+- feature-api has failing CI
+- feature-models is ready to merge (approved, CI passing)
+
+Would you like me to help address any of these?
+```
+
+**Alternative: Use the analyze script for detailed output:**
 ```bash
 bash ~/.claude/skills/stackit/scripts/analyze_stack.sh
 ```

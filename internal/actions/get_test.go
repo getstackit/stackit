@@ -19,10 +19,10 @@ func TestGetAction(t *testing.T) {
 		// Mock GitHub setup
 		ghConfig := testhelpers.NewMockGitHubServerConfig()
 		pr := &github.PullRequest{
-			Number: github.Int(123),
-			Head:   &github.PullRequestBranch{Ref: github.String("feature-a")},
-			Base:   &github.PullRequestBranch{Ref: github.String("main")},
-			Title:  github.String("Feature A"),
+			Number: new(123),
+			Head:   &github.PullRequestBranch{Ref: new("feature-a")},
+			Base:   &github.PullRequestBranch{Ref: new("main")},
+			Title:  new("Feature A"),
 		}
 		ghConfig.PRs["feature-a"] = pr
 		ghConfig.CreatedPRs = append(ghConfig.CreatedPRs, pr)
@@ -56,14 +56,14 @@ func TestGetAction(t *testing.T) {
 		// Mock GitHub setup: feature-b -> feature-a -> main
 		ghConfig := testhelpers.NewMockGitHubServerConfig()
 		prB := &github.PullRequest{
-			Number: github.Int(2),
-			Head:   &github.PullRequestBranch{Ref: github.String("feature-b")},
-			Base:   &github.PullRequestBranch{Ref: github.String("feature-a")},
+			Number: new(2),
+			Head:   &github.PullRequestBranch{Ref: new("feature-b")},
+			Base:   &github.PullRequestBranch{Ref: new("feature-a")},
 		}
 		prA := &github.PullRequest{
-			Number: github.Int(1),
-			Head:   &github.PullRequestBranch{Ref: github.String("feature-a")},
-			Base:   &github.PullRequestBranch{Ref: github.String("main")},
+			Number: new(1),
+			Head:   &github.PullRequestBranch{Ref: new("feature-a")},
+			Base:   &github.PullRequestBranch{Ref: new("main")},
 		}
 		ghConfig.PRs["feature-b"] = prB
 		ghConfig.PRs["feature-a"] = prA
@@ -108,9 +108,9 @@ func TestGetAction(t *testing.T) {
 		// Mock GitHub: just feature-a
 		ghConfig := testhelpers.NewMockGitHubServerConfig()
 		ghConfig.PRs["feature-a"] = &github.PullRequest{
-			Number: github.Int(1),
-			Head:   &github.PullRequestBranch{Ref: github.String("feature-a")},
-			Base:   &github.PullRequestBranch{Ref: github.String("main")},
+			Number: new(1),
+			Head:   &github.PullRequestBranch{Ref: new("feature-a")},
+			Base:   &github.PullRequestBranch{Ref: new("main")},
 		}
 		ghClient, owner, repo := testhelpers.NewMockGitHubClient(t, ghConfig)
 		s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(ghClient, owner, repo, ghConfig)

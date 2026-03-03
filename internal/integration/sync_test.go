@@ -367,7 +367,7 @@ func TestSyncRemoteMetadata(t *testing.T) {
 		// Create remote metadata refs (simulating a successful fetch)
 		remoteMeta := git.NewMetaFrom(git.MetaFields{
 			LockReason: git.LockReasonUser,
-			Scope:      scopePtr("remote-scope"),
+			Scope:      new("remote-scope"),
 		})
 		createRemoteMetadataRefForSync(t, sh, "feature-a", remoteMeta)
 
@@ -512,8 +512,9 @@ func createRemoteMetadataRefForSync(t *testing.T, sh *scenario.Scenario, branchN
 	require.NoError(t, err)
 }
 
+//go:fix inline
 func scopePtr(s string) *string {
-	return &s
+	return new(s)
 }
 
 // TestSyncDoesNotLeaveIndexState verifies that after sync cleans up merged branches

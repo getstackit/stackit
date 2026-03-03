@@ -67,7 +67,46 @@ For untracked files, read their contents to understand what they contain.
 
 ### Phase 2: Analyze and Propose Stack Structure
 
-Analyze the changes and determine a logical stacking order using these strategies:
+Analyze the changes and determine a logical stacking order using semantic analysis.
+
+#### Step 1: Semantic Analysis
+
+Perform these analyses to understand relationships between changed files:
+
+**1. File Clustering Analysis:**
+- Group files by directory pattern (e.g., `internal/models/`, `internal/api/`)
+- Identify naming conventions (e.g., `*_test.go` pairs with `*.go`)
+- Look for related files (controller/service/model for same entity)
+
+**2. Import/Dependency Analysis (Go projects):**
+```bash
+# For each changed Go file, extract imports
+grep -h "^import" <file> -A 20 | grep -E '^\s*"' | head -20
+```
+- Files that import each other → should likely be in the same branch or adjacent
+- Shared dependencies → may indicate foundational code (stack earlier)
+
+**3. Test ↔ Implementation Pairing:**
+- `*_test.go` should typically go with its corresponding `*.go` file
+- Integration tests (`*_integration_test.go`) may form their own branch
+
+**4. Semantic Type Detection:**
+| Pattern | Type | Stack Position |
+|---------|------|----------------|
+| `migrations/*`, `schema/*` | Database schema | Early (foundational) |
+| `internal/models/*`, `pkg/types/*` | Data models | Early |
+| `internal/engine/*`, `pkg/core/*` | Core logic | After models |
+| `internal/api/*`, `handlers/*` | API layer | After core |
+| `internal/tui/*`, `ui/*`, `frontend/*` | UI layer | Late |
+| `cmd/*`, `main.go` | Entry points | Last |
+
+**5. Change Size Assessment:**
+- Large files (>100 lines changed) → may warrant own branch
+- Tiny changes (<10 lines) across many files → consider grouping by purpose
+
+#### Step 2: Apply Grouping Strategy
+
+Based on analysis, select the best grouping strategy:
 
 **Grouping Strategies** (pick best fit for the codebase):
 1. **By concern/feature** - Group related functionality together
@@ -79,6 +118,7 @@ Analyze the changes and determine a logical stacking order using these strategie
 - Independent/foundational changes come first (bottom of stack)
 - Changes that depend on others come later (top of stack)
 - Smaller, focused branches are preferred over large ones
+- Test files should accompany their implementation
 
 **Limitation - File-level granularity**: This workflow splits changes at the file level. If a single file contains changes that should go to different branches (e.g., two unrelated functions modified), ask the user to either:
 1. Accept the file going to one branch, OR

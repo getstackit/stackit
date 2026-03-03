@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -49,13 +50,9 @@ func (h *interactiveDeleteTestHandler) IsInteractive() bool { return true }
 
 func (h *interactiveDeleteTestHandler) PromptBranchDeletions(branches map[string]string, unpushedBranches map[string]bool) (map[string]bool, error) {
 	h.promptedBranches = make(map[string]string, len(branches))
-	for name, reason := range branches {
-		h.promptedBranches[name] = reason
-	}
+	maps.Copy(h.promptedBranches, branches)
 	h.promptedUnpushed = make(map[string]bool, len(unpushedBranches))
-	for name, unpushed := range unpushedBranches {
-		h.promptedUnpushed[name] = unpushed
-	}
+	maps.Copy(h.promptedUnpushed, unpushedBranches)
 	// Simulate user choosing not to delete any prompted branches.
 	return map[string]bool{}, nil
 }

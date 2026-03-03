@@ -675,6 +675,8 @@ func TestPrintSuccessMessageIncludesClaudeCommands(t *testing.T) {
 
 	require.Contains(t, out.String(), "~/.claude/skills/stackit")
 	require.Contains(t, out.String(), "Slash commands:")
+	require.Contains(t, out.String(), "/stack-describe")
+	require.Contains(t, out.String(), "/stack-modify")
 }
 
 func TestPrintSuccessMessageIncludesMultipleTargets(t *testing.T) {

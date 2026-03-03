@@ -381,17 +381,17 @@ func TestMigrationFromJSON(t *testing.T) {
 		timeout := 300
 		autoClean := false
 		config := &RepoConfig{
-			Trunk:                           stringPtr("develop"),
+			Trunk:                           new("develop"),
 			Trunks:                          []string{"staging", "production"},
-			BranchNamePattern:               stringPtr("feature/{message}"),
+			BranchNamePattern:               new("feature/{message}"),
 			SubmitFooter:                    &footer,
 			UndoStackDepth:                  &depth,
-			MergeMethod:                     stringPtr("squash"),
-			CICommand:                       stringPtr("npm test"),
+			MergeMethod:                     new("squash"),
+			CICommand:                       new("npm test"),
 			CITimeout:                       &timeout,
-			WorktreeBasePath:                stringPtr("/tmp/worktrees"),
+			WorktreeBasePath:                new("/tmp/worktrees"),
 			WorktreeAutoClean:               &autoClean,
-			SplitHunkSelector:               stringPtr("git"),
+			SplitHunkSelector:               new("git"),
 			ApprovedPostWorktreeCreateHooks: []string{"mise trust"},
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -435,8 +435,8 @@ func TestMigrationFromJSON(t *testing.T) {
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		timeout := 120
 		config := &RepoConfig{
-			Trunk:            stringPtr("main"),
-			CombineCICommand: stringPtr("make test"),
+			Trunk:            new("main"),
+			CombineCICommand: new("make test"),
 			CombineCITimeout: &timeout,
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -460,10 +460,10 @@ func TestMigrationFromJSON(t *testing.T) {
 		newTimeout := 300
 		legacyTimeout := 120
 		config := &RepoConfig{
-			Trunk:            stringPtr("main"),
-			CICommand:        stringPtr("mise run check"),
+			Trunk:            new("main"),
+			CICommand:        new("mise run check"),
 			CITimeout:        &newTimeout,
-			CombineCICommand: stringPtr("make test"),
+			CombineCICommand: new("make test"),
 			CombineCITimeout: &legacyTimeout,
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -494,7 +494,7 @@ func TestMigrationFromJSON(t *testing.T) {
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		footer := true
 		config := &RepoConfig{
-			Trunk:        stringPtr("develop"),
+			Trunk:        new("develop"),
 			SubmitFooter: &footer,
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")

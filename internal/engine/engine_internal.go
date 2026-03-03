@@ -270,8 +270,3 @@ func stringPtr(s string) *string {
 	}
 	return &s
 }
-
-//go:fix inline
-func boolPtr(b bool) *bool {
-	return new(b)
-}

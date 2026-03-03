@@ -453,11 +453,6 @@ func buildGoldenTests() []goldenTest {
 	}
 }
 
-//go:fix inline
-func intPtr(i int) *int {
-	return new(i)
-}
-
 func TestStackTreeRenderer_Golden(t *testing.T) {
 	tests := buildGoldenTests()
 

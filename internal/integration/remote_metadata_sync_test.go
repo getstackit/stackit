@@ -257,11 +257,6 @@ func createRemoteMetadataRef(t *testing.T, sh *scenario.Scenario, branchName str
 	require.NoError(t, err)
 }
 
-//go:fix inline
-func strPtr(s string) *string {
-	return new(s)
-}
-
 func trimNewline(s string) string {
 	if len(s) > 0 && s[len(s)-1] == '\n' {
 		return s[:len(s)-1]

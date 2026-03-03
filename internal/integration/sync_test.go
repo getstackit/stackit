@@ -512,11 +512,6 @@ func createRemoteMetadataRefForSync(t *testing.T, sh *scenario.Scenario, branchN
 	require.NoError(t, err)
 }
 
-//go:fix inline
-func scopePtr(s string) *string {
-	return new(s)
-}
-
 // TestSyncDoesNotLeaveIndexState verifies that after sync cleans up merged branches
 // and restacks remaining branches, the working directory is left in a clean state
 // with no staged changes. This is a regression test for the bug where the Git index

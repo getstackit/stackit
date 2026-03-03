@@ -266,8 +266,3 @@ func findSubstr(s, substr string) bool {
 	}
 	return false
 }
-
-//go:fix inline
-func stringPtr(s string) *string {
-	return new(s)
-}

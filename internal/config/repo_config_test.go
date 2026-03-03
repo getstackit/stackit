@@ -540,10 +540,3 @@ func TestConfigApprovedPostWorktreeCreateHooks(t *testing.T) {
 		require.Empty(t, cfg2.ApprovedPostWorktreeCreateHooks())
 	})
 }
-
-// Helper function to create string pointer
-//
-//go:fix inline
-func stringPtr(s string) *string {
-	return new(s)
-}

@@ -230,8 +230,3 @@ func TestCombinationResult_LocalCIFields(t *testing.T) {
 		})
 	}
 }
-
-//go:fix inline
-func boolPtr(b bool) *bool {
-	return new(b)
-}

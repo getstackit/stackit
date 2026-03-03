@@ -57,14 +57,14 @@ type UpdatePROptions struct {
 // CreatePullRequest creates a new pull request
 func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo string, opts CreatePROptions) (*github.PullRequest, error) {
 	pr := &github.NewPullRequest{
-		Title: github.String(opts.Title),
-		Head:  github.String(opts.Head),
-		Base:  github.String(opts.Base),
-		Draft: github.Bool(opts.Draft),
+		Title: new(opts.Title),
+		Head:  new(opts.Head),
+		Base:  new(opts.Base),
+		Draft: new(opts.Draft),
 	}
 
 	if opts.Body != "" {
-		pr.Body = github.String(opts.Body)
+		pr.Body = new(opts.Body)
 	}
 
 	createdPR, _, err := client.PullRequests.Create(ctx, owner, repo, pr)

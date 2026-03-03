@@ -38,14 +38,14 @@ func (c *MockGitHubClient) GetOwnerRepo() (string, string) {
 // CreatePullRequest creates a new pull request
 func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, owner, repo string, opts githubpkg.CreatePROptions) (*githubpkg.PullRequestInfo, error) {
 	pr := &github.NewPullRequest{
-		Title: github.String(opts.Title),
-		Head:  github.String(opts.Head),
-		Base:  github.String(opts.Base),
-		Draft: github.Bool(opts.Draft),
+		Title: new(opts.Title),
+		Head:  new(opts.Head),
+		Base:  new(opts.Base),
+		Draft: new(opts.Draft),
 	}
 
 	if opts.Body != "" {
-		pr.Body = github.String(opts.Body)
+		pr.Body = new(opts.Body)
 	}
 
 	createdPR, _, err := c.client.PullRequests.Create(ctx, owner, repo, pr)
@@ -177,7 +177,7 @@ func (c *MockGitHubClient) ClosePullRequest(ctx context.Context, owner, repo str
 // CreatePRComment creates a new comment on a pull request
 func (c *MockGitHubClient) CreatePRComment(ctx context.Context, owner, repo string, prNumber int, body string) (int64, error) {
 	comment, _, err := c.client.Issues.CreateComment(ctx, owner, repo, prNumber, &github.IssueComment{
-		Body: github.String(body),
+		Body: new(body),
 	})
 	if err != nil {
 		return 0, err
@@ -188,7 +188,7 @@ func (c *MockGitHubClient) CreatePRComment(ctx context.Context, owner, repo stri
 // UpdatePRComment updates an existing pull request comment
 func (c *MockGitHubClient) UpdatePRComment(ctx context.Context, owner, repo string, commentID int64, body string) error {
 	_, _, err := c.client.Issues.EditComment(ctx, owner, repo, commentID, &github.IssueComment{
-		Body: github.String(body),
+		Body: new(body),
 	})
 	return err
 }

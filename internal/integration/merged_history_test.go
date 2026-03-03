@@ -30,7 +30,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 		require.NoError(t, err)
 		meta1 = meta1.WithPrInfo(&git.PrInfoPersistence{
 			Number: &prNum,
-			State:  stringPtr(prStateMerged),
+			State:  new(prStateMerged),
 		})
 		err = sh.Engine.Git().WriteMetadata("branch1", meta1)
 		require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 		require.NoError(t, err)
 		meta1 = meta1.WithPrInfo(&git.PrInfoPersistence{
 			Number: &prNum,
-			State:  stringPtr(prStateMerged),
+			State:  new(prStateMerged),
 		})
 		err = sh.Engine.Git().WriteMetadata("branch1", meta1)
 		require.NoError(t, err)
@@ -113,7 +113,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 		meta1, _ := sh.Engine.Git().ReadMetadata("branch1")
 		meta1 = meta1.WithPrInfo(&git.PrInfoPersistence{
 			Number: &prNum1,
-			State:  stringPtr(prStateMerged),
+			State:  new(prStateMerged),
 		})
 		_ = sh.Engine.Git().WriteMetadata("branch1", meta1)
 
@@ -129,7 +129,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 		meta2, _ := sh.Engine.Git().ReadMetadata("branch2")
 		meta2 = meta2.WithPrInfo(&git.PrInfoPersistence{
 			Number: &prNum2,
-			State:  stringPtr(prStateMerged),
+			State:  new(prStateMerged),
 		})
 		_ = sh.Engine.Git().WriteMetadata("branch2", meta2)
 
@@ -161,7 +161,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 		meta1, _ := sh.Engine.Git().ReadMetadata("branch1")
 		meta1 = meta1.WithPrInfo(&git.PrInfoPersistence{
 			Number: &prNum,
-			State:  stringPtr(prStateMerged),
+			State:  new(prStateMerged),
 		})
 		_ = sh.Engine.Git().WriteMetadata("branch1", meta1)
 
@@ -265,8 +265,4 @@ func findSubstr(s, substr string) bool {
 		}
 	}
 	return false
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

@@ -2,6 +2,7 @@
 package stack
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,15 +11,17 @@ import (
 	"stackit.dev/stackit/internal/app"
 	"stackit.dev/stackit/internal/cli/common"
 	"stackit.dev/stackit/internal/engine"
+	"stackit.dev/stackit/internal/handlers"
 )
 
 // NewRestackCmd creates the restack command
 func NewRestackCmd() *cobra.Command {
 	var (
-		branch    string
-		downstack bool
-		only      bool
-		upstack   bool
+		branch     string
+		downstack  bool
+		only       bool
+		upstack    bool
+		jsonOutput bool
 	)
 
 	cmd := &cobra.Command{
@@ -61,6 +64,31 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 					RecursiveChildren: !only && !downstack, // Default or upstack
 				}
 
+				// JSON output mode
+				if jsonOutput {
+					jsonHandler := handlers.NewJSONRestackHandler()
+					err := actions.RestackAction(ctx, actions.RestackOptions{
+						BranchName: targetBranch,
+						Scope:      rng,
+					}, jsonHandler)
+
+					// Set error status if there was an error
+					if err != nil {
+						jsonHandler.SetError(err)
+					}
+
+					// Output JSON (includes error info if there was one)
+					data, marshalErr := json.MarshalIndent(jsonHandler.Result, "", "  ")
+					if marshalErr != nil {
+						return fmt.Errorf("failed to marshal JSON: %w", marshalErr)
+					}
+					ctx.Output.Info("%s", string(data))
+
+					// Return the error so exit code is non-zero on failure
+					// (JSON output still contains full error details)
+					return err
+				}
+
 				// Create runner (manages terminal state) and handler (processes events)
 				runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
 				defer runner.Cleanup()
@@ -77,6 +105,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 	cmd.Flags().BoolVar(&downstack, "downstack", false, "Only restack this branch and its ancestors.")
 	cmd.Flags().BoolVar(&only, "only", false, "Only restack this branch.")
 	cmd.Flags().BoolVar(&upstack, "upstack", false, "Only restack this branch and its descendants.")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output results in JSON format.")
 
 	return cmd
 }

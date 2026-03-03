@@ -30,7 +30,7 @@ func TestConfigSubmitFooter(t *testing.T) {
 		// Create config file without submit.footer
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
-			Trunk: stringPtr("main"),
+			Trunk: new("main"),
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
 		require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestConfigSubmitFooter(t *testing.T) {
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		enabled := true
 		config := &RepoConfig{
-			Trunk:        stringPtr("main"),
+			Trunk:        new("main"),
 			SubmitFooter: &enabled,
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -71,7 +71,7 @@ func TestConfigSubmitFooter(t *testing.T) {
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		enabled := false
 		config := &RepoConfig{
-			Trunk:        stringPtr("main"),
+			Trunk:        new("main"),
 			SubmitFooter: &enabled,
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -234,8 +234,8 @@ func TestConfigCICommand(t *testing.T) {
 
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
-			Trunk:     stringPtr("main"),
-			CICommand: stringPtr("mise run check"),
+			Trunk:     new("main"),
+			CICommand: new("mise run check"),
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
 		require.NoError(t, err)
@@ -253,8 +253,8 @@ func TestConfigCICommand(t *testing.T) {
 
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
-			Trunk:            stringPtr("main"),
-			CombineCICommand: stringPtr("npm test"),
+			Trunk:            new("main"),
+			CombineCICommand: new("npm test"),
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
 		require.NoError(t, err)
@@ -272,9 +272,9 @@ func TestConfigCICommand(t *testing.T) {
 
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
-			Trunk:            stringPtr("main"),
-			CICommand:        stringPtr("mise run check"),
-			CombineCICommand: stringPtr("npm test"),
+			Trunk:            new("main"),
+			CICommand:        new("mise run check"),
+			CombineCICommand: new("npm test"),
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
 		require.NoError(t, err)
@@ -325,7 +325,7 @@ func TestConfigCITimeout(t *testing.T) {
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		timeout := 300
 		config := &RepoConfig{
-			Trunk:     stringPtr("main"),
+			Trunk:     new("main"),
 			CITimeout: &timeout,
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -345,7 +345,7 @@ func TestConfigCITimeout(t *testing.T) {
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		timeout := 120
 		config := &RepoConfig{
-			Trunk:            stringPtr("main"),
+			Trunk:            new("main"),
 			CombineCITimeout: &timeout,
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -366,7 +366,7 @@ func TestConfigCITimeout(t *testing.T) {
 		newTimeout := 180
 		legacyTimeout := 300
 		config := &RepoConfig{
-			Trunk:            stringPtr("main"),
+			Trunk:            new("main"),
 			CITimeout:        &newTimeout,
 			CombineCITimeout: &legacyTimeout,
 		}
@@ -418,7 +418,7 @@ func TestConfigApprovedPostWorktreeCreateHooks(t *testing.T) {
 
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
-			Trunk:                           stringPtr("main"),
+			Trunk:                           new("main"),
 			ApprovedPostWorktreeCreateHooks: []string{"mise trust", "npm install"},
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -437,7 +437,7 @@ func TestConfigApprovedPostWorktreeCreateHooks(t *testing.T) {
 
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
-			Trunk:                           stringPtr("main"),
+			Trunk:                           new("main"),
 			ApprovedPostWorktreeCreateHooks: []string{"mise trust"},
 		}
 		configJSON, err := json.MarshalIndent(config, "", "  ")
@@ -539,9 +539,4 @@ func TestConfigApprovedPostWorktreeCreateHooks(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, cfg2.ApprovedPostWorktreeCreateHooks())
 	})
-}
-
-// Helper function to create string pointer
-func stringPtr(s string) *string {
-	return &s
 }

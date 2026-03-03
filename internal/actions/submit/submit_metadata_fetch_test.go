@@ -30,11 +30,11 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 		// 2. Setup Mock GitHub Client
 		config := testhelpers.NewMockGitHubServerConfig()
 		config.PRs[branchName] = &gh.PullRequest{
-			Number: gh.Int(prNumber),
-			Title:  gh.String("Existing Title"),
-			Body:   gh.String(githubBody),
-			Head:   &gh.PullRequestBranch{Ref: gh.String(branchName)},
-			Base:   &gh.PullRequestBranch{Ref: gh.String("main")},
+			Number: new(prNumber),
+			Title:  new("Existing Title"),
+			Body:   new(githubBody),
+			Head:   &gh.PullRequestBranch{Ref: new(branchName)},
+			Base:   &gh.PullRequestBranch{Ref: new("main")},
 		}
 		config.UpdatedPRs[prNumber] = config.PRs[branchName]
 

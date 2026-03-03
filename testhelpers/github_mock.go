@@ -136,7 +136,7 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 					if pr == nil {
 						// Create a new PR if it doesn't exist
 						pr = &github.PullRequest{
-							Number: github.Int(prNumber),
+							Number: new(prNumber),
 						}
 					}
 				} else {
@@ -252,13 +252,13 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 				// Create a mock PR response
 				prNumber := len(config.CreatedPRs) + 1
 				pr := &github.PullRequest{
-					Number:  github.Int(prNumber),
+					Number:  new(prNumber),
 					Title:   newPR.Title,
 					Body:    newPR.Body,
 					Head:    &github.PullRequestBranch{Ref: newPR.Head},
 					Base:    &github.PullRequestBranch{Ref: newPR.Base},
 					Draft:   newPR.Draft,
-					HTMLURL: github.String("https://github.com/" + config.Owner + "/" + config.Repo + "/pull/" + fmt.Sprintf("%d", prNumber)),
+					HTMLURL: new("https://github.com/" + config.Owner + "/" + config.Repo + "/pull/" + fmt.Sprintf("%d", prNumber)),
 				}
 
 				config.CreatedPRs = append(config.CreatedPRs, pr)

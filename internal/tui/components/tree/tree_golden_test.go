@@ -155,8 +155,8 @@ func buildGoldenTests() []goldenTest {
 			name: "with_pr_numbers",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: intPtr(123)},
-				"feature-2": {PRNumber: intPtr(456)},
+				"feature-1": {PRNumber: new(123)},
+				"feature-2": {PRNumber: new(456)},
 			},
 			opts: RenderOptions{Mode: RenderModeCompact},
 		},
@@ -174,7 +174,7 @@ func buildGoldenTests() []goldenTest {
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
 				"feature-1": {
-					PRNumber:     intPtr(123),
+					PRNumber:     new(123),
 					CheckStatus:  CheckStatusPassing,
 					ReviewStatus: "Approved",
 					CommitCount:  3,
@@ -182,7 +182,7 @@ func buildGoldenTests() []goldenTest {
 					LinesDeleted: 10,
 				},
 				"feature-2": {
-					PRNumber:     intPtr(456),
+					PRNumber:     new(456),
 					CheckStatus:  CheckStatusPending,
 					IsDraft:      true,
 					CommitCount:  1,
@@ -219,7 +219,7 @@ func buildGoldenTests() []goldenTest {
 			name: "merged_pr",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: intPtr(123), PRState: PRStateMerged},
+				"feature-1": {PRNumber: new(123), PRState: PRStateMerged},
 			},
 			opts: RenderOptions{Mode: RenderModeFull},
 		},
@@ -227,7 +227,7 @@ func buildGoldenTests() []goldenTest {
 			name: "closed_pr",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: intPtr(123), PRState: PRStateClosed},
+				"feature-1": {PRNumber: new(123), PRState: PRStateClosed},
 			},
 			opts: RenderOptions{Mode: RenderModeFull},
 		},
@@ -315,8 +315,8 @@ func buildGoldenTests() []goldenTest {
 			name: "hide_summary",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: intPtr(123), CommitCount: 5},
-				"feature-2": {PRNumber: intPtr(456), CommitCount: 3},
+				"feature-1": {PRNumber: new(123), CommitCount: 5},
+				"feature-2": {PRNumber: new(456), CommitCount: 3},
 			},
 			opts: RenderOptions{Mode: RenderModeFull, HideSummary: true},
 		},
@@ -341,8 +341,8 @@ func buildGoldenTests() []goldenTest {
 			name: "mode_compact_with_annotations",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: intPtr(123), CheckStatus: CheckStatusPassing},
-				"feature-2": {PRNumber: intPtr(456), CheckStatus: CheckStatusFailing},
+				"feature-1": {PRNumber: new(123), CheckStatus: CheckStatusPassing},
+				"feature-2": {PRNumber: new(456), CheckStatus: CheckStatusFailing},
 			},
 			opts: RenderOptions{Mode: RenderModeCompact},
 		},
@@ -451,10 +451,6 @@ func buildGoldenTests() []goldenTest {
 			opts: RenderOptions{Mode: RenderModeFull, HideSummary: true, SkipSelectionPrefix: true},
 		},
 	}
-}
-
-func intPtr(i int) *int {
-	return &i
 }
 
 func TestStackTreeRenderer_Golden(t *testing.T) {

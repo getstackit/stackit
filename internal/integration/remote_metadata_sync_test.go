@@ -42,7 +42,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		// This simulates what would happen after `git fetch origin refs/stackit/metadata/*:refs/stackit/remote-metadata/*`
 		remoteMeta := git.NewMetaFrom(git.MetaFields{
 			LockReason: git.LockReasonUser,
-			Scope:      strPtr("remote-scope"),
+			Scope:      new("remote-scope"),
 			LastModifiedBy: &git.ModifiedBy{
 				GitName:  "Remote User",
 				GitEmail: "remote@example.com",
@@ -97,7 +97,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		// Create identical remote metadata
 		remoteMeta := git.NewMetaFrom(git.MetaFields{
 			LockReason: git.LockReasonUser,
-			Scope:      strPtr("same-scope"),
+			Scope:      new("same-scope"),
 		})
 		createRemoteMetadataRef(t, sh, "feature-b", remoteMeta)
 
@@ -180,7 +180,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		// 1. Simulate remote metadata for a branch that doesn't exist locally
 		remoteMeta := git.NewMetaFrom(git.MetaFields{
 			LockReason: git.LockReasonUser,
-			Scope:      strPtr("remote-scope"),
+			Scope:      new("remote-scope"),
 		})
 		createRemoteMetadataRef(t, sh, "non-existent-branch", remoteMeta)
 
@@ -255,10 +255,6 @@ func createRemoteMetadataRef(t *testing.T, sh *scenario.Scenario, branchName str
 	refName := "refs/stackit/remote-metadata/" + branchName
 	err = sh.Scene.Repo.RunGitCommand("update-ref", refName, blobSha)
 	require.NoError(t, err)
-}
-
-func strPtr(s string) *string {
-	return &s
 }
 
 func trimNewline(s string) string {

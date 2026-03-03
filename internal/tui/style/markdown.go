@@ -38,6 +38,7 @@ func RenderMarkdown(content string) string {
 	return strings.TrimSpace(rendered)
 }
 
+//go:fix inline
 func uintPtr(v uint) *uint {
-	return &v
+	return new(v)
 }

@@ -140,7 +140,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 		// Fetch prompt notes
 		notesFetchStart := time.Now()
-		if err := ctx.Git().FetchNotes(gctx); err != nil {
+		if err := ctx.Engine.FetchNotes(gctx); err != nil {
 			ctx.Logger.Debug("fetch prompt notes failed (non-fatal) error=%v", err)
 		}
 		ctx.Logger.Info("fetch prompt notes completed durationMs=%v", time.Since(notesFetchStart).Milliseconds())

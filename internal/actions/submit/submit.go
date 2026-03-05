@@ -1096,7 +1096,7 @@ func pushMetadataRefs(ctx *app.Context, branches engine.Branches) error {
 	}
 
 	// Push prompt notes alongside branches
-	if err := ctx.Git().PushNotes(ctx.Context); err != nil {
+	if err := ctx.Engine.PushNotes(ctx.Context); err != nil {
 		ctx.Output.Debug("Failed to push prompt notes: %v", err)
 		// Non-fatal: prompt notes push failure shouldn't fail the submit
 	}

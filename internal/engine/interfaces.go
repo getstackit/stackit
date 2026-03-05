@@ -100,6 +100,15 @@ type BranchInfo interface {
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
 	GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
+	// Notes operations. Prompt notes are a domain concern, so they are exposed
+	// here rather than reached for through Git() from the action layer.
+	ShowPromptNote(ctx context.Context, commit, namespace string) (*git.PromptNote, error)
+	AddPromptNote(ctx context.Context, commit, namespace string, note *git.PromptNote) error
+	LogWithNotes(ctx context.Context, base, head, namespace string) ([]git.NoteEntry, error)
+	PushNotes(ctx context.Context) error
+	FetchNotes(ctx context.Context) error
+	EnsureNotesRewriteConfigured() error
+	EnsureNotesRefspecConfigured() error
 	// GetDivergencePoint returns the divergence point of a branch from its parent.
 	// Returns the ParentBranchRevision from metadata if valid, otherwise the parent's current revision.
 	GetDivergencePoint(branchName string) (string, error)

@@ -16,8 +16,11 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 )
 
+// cmdAdd is shared by the git passthrough lists and the `notes add` command.
+const cmdAdd = "add"
+
 var gitCommandAllowlist = []string{
-	"add",
+	cmdAdd,
 	"am",
 	"apply",
 	"archive",
@@ -59,7 +62,7 @@ var gitCommandAllowlist = []string{
 }
 
 var modifyingGitCommands = []string{
-	"add",
+	cmdAdd,
 	"am",
 	"apply",
 	"cherry-pick",

@@ -828,19 +828,19 @@ func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]stri
 
 // NotesOperations methods
 
-func (d *demoGitRunner) AddPromptNote(_ context.Context, _ string, _ *git.PromptNote) error {
+func (d *demoGitRunner) AddPromptNote(_ context.Context, _, _ string, _ *git.PromptNote) error {
 	return nil
 }
 
-func (d *demoGitRunner) ShowPromptNote(_ context.Context, _ string) (*git.PromptNote, error) {
+func (d *demoGitRunner) ShowPromptNote(_ context.Context, _, _ string) (*git.PromptNote, error) {
 	return nil, nil
 }
 
-func (d *demoGitRunner) RemovePromptNote(_ context.Context, _ string) error {
+func (d *demoGitRunner) RemovePromptNote(_ context.Context, _, _ string) error {
 	return nil
 }
 
-func (d *demoGitRunner) LogWithNotes(_ context.Context, _, _ string) ([]git.NoteEntry, error) {
+func (d *demoGitRunner) LogWithNotes(_ context.Context, _, _, _ string) ([]git.NoteEntry, error) {
 	return nil, nil
 }
 

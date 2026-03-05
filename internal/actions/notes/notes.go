@@ -1,4 +1,4 @@
-// Package notes implements the stackit notes command for managing prompt notes on commits.
+// Package notes implements the stackit notes command for managing contextual notes on commits.
 package notes
 
 import (
@@ -14,39 +14,46 @@ import (
 
 // ShowOptions contains options for the show subcommand.
 type ShowOptions struct {
-	Commit string // Commit to show note for (defaults to HEAD)
+	Commit    string // Commit to show note for (defaults to HEAD)
+	Namespace string // Namespace to read (defaults to story)
 }
 
 // AddOptions contains options for the add subcommand.
 type AddOptions struct {
-	Prompt  string
-	Summary string
-	Model   string
-	Memory  []string
-	JSON    string // Raw JSON alternative to individual flags
+	Namespace string
+	Prompt    string
+	Summary   string
+	Model     string
+	Memory    []string
+	JSON      string // Raw JSON alternative to individual flags
 }
 
 // LogOptions contains options for the log subcommand.
 type LogOptions struct {
-	// Empty for now - uses current branch's commit range
+	Namespace string
 }
 
-// Show displays the prompt note for a commit.
+// Show displays the note for a commit.
 func Show(ctx *app.Context, opts ShowOptions) error {
 	out := ctx.Output
 
 	commit := opts.Commit
 	if commit == "" {
-		rev, err := ctx.Git().GetCurrentRevision(ctx.Context)
+		rev, err := ctx.Engine.GetCurrentRevision(ctx.Context)
 		if err != nil {
 			return fmt.Errorf("failed to get current revision: %w", err)
 		}
 		commit = rev
 	}
 
-	note, err := ctx.Git().ShowPromptNote(ctx.Context, commit)
+	namespace := opts.Namespace
+	if namespace == "" {
+		namespace = git.DefaultNotesNamespace
+	}
+
+	note, err := ctx.Engine.ShowPromptNote(ctx.Context, commit, namespace)
 	if err != nil {
-		return fmt.Errorf("failed to read prompt note: %w", err)
+		return fmt.Errorf("failed to read note: %w", err)
 	}
 
 	if note == nil {
@@ -54,7 +61,7 @@ func Show(ctx *app.Context, opts ShowOptions) error {
 		if len(shortSHA) > 7 {
 			shortSHA = shortSHA[:7]
 		}
-		out.Info("No prompt note on %s.", style.ColorDim(shortSHA))
+		out.Info("No %s note on %s.", style.ColorDim(namespace), style.ColorDim(shortSHA))
 		return nil
 	}
 
@@ -62,10 +69,14 @@ func Show(ctx *app.Context, opts ShowOptions) error {
 	return nil
 }
 
-// Add creates or replaces a prompt note on HEAD.
+// Add creates or replaces a note on HEAD.
 func Add(ctx *app.Context, opts AddOptions) error {
 	out := ctx.Output
-	g := ctx.Git()
+	g := ctx.Engine
+	namespace := opts.Namespace
+	if namespace == "" {
+		namespace = git.DefaultNotesNamespace
+	}
 
 	rev, err := g.GetCurrentRevision(ctx.Context)
 	if err != nil {
@@ -95,7 +106,7 @@ func Add(ctx *app.Context, opts AddOptions) error {
 		out.Debug("Failed to configure notes.rewriteRef: %v", err)
 	}
 
-	if err := g.AddPromptNote(ctx.Context, rev, &note); err != nil {
+	if err := g.AddPromptNote(ctx.Context, rev, namespace, &note); err != nil {
 		return err
 	}
 
@@ -103,14 +114,18 @@ func Add(ctx *app.Context, opts AddOptions) error {
 	if len(shortSHA) > 7 {
 		shortSHA = shortSHA[:7]
 	}
-	out.Info("Added prompt note to %s.", style.ColorDim(shortSHA))
+	out.Info("Added %s note to %s.", style.ColorDim(namespace), style.ColorDim(shortSHA))
 	return nil
 }
 
-// Log shows commits on the current branch with their prompt notes.
-func Log(ctx *app.Context) error {
+// Log shows commits on the current branch with notes from the requested namespace.
+func Log(ctx *app.Context, opts LogOptions) error {
 	eng := ctx.Engine
 	out := ctx.Output
+	namespace := opts.Namespace
+	if namespace == "" {
+		namespace = git.DefaultNotesNamespace
+	}
 
 	currentBranch := eng.CurrentBranch()
 	if currentBranch == nil {
@@ -123,7 +138,7 @@ func Log(ctx *app.Context) error {
 		return fmt.Errorf("branch %s has no parent; cannot determine commit range", currentBranch.GetName())
 	}
 
-	entries, err := ctx.Git().LogWithNotes(ctx.Context, parent.GetName(), currentBranch.GetName())
+	entries, err := ctx.Engine.LogWithNotes(ctx.Context, parent.GetName(), currentBranch.GetName(), namespace)
 	if err != nil {
 		return err
 	}
@@ -145,22 +160,22 @@ func Log(ctx *app.Context) error {
 				out.Info("  Summary: %s", entry.Note.Summary)
 			}
 		} else {
-			out.Info("  %s", style.ColorDim("(no prompt note)"))
+			out.Info("  %s", style.ColorDim("(no note in namespace "+namespace+")"))
 		}
 	}
 
 	return nil
 }
 
-// Push pushes prompt notes to the remote.
+// Push pushes notes to the remote.
 func Push(ctx *app.Context) error {
 	out := ctx.Output
 
-	if err := ctx.Git().PushNotes(ctx.Context); err != nil {
+	if err := ctx.Engine.PushNotes(ctx.Context); err != nil {
 		return err
 	}
 
-	out.Info("Pushed prompt notes to remote.")
+	out.Info("Pushed notes to remote.")
 	return nil
 }
 

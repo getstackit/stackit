@@ -302,13 +302,14 @@ type MetadataOperations interface {
 	MetadataCacheStats() MetadataCacheSummary
 }
 
-// NotesOperations handles prompt note persistence via git notes.
-// Notes are stored on individual commits using refs/notes/prompts.
+// NotesOperations handles contextual note persistence via git notes.
+// Notes are stored on individual commits using a single notes ref and
+// namespaced payloads.
 type NotesOperations interface {
-	AddPromptNote(ctx context.Context, commit string, note *PromptNote) error
-	ShowPromptNote(ctx context.Context, commit string) (*PromptNote, error)
-	RemovePromptNote(ctx context.Context, commit string) error
-	LogWithNotes(ctx context.Context, base, head string) ([]NoteEntry, error)
+	AddPromptNote(ctx context.Context, commit, namespace string, note *PromptNote) error
+	ShowPromptNote(ctx context.Context, commit, namespace string) (*PromptNote, error)
+	RemovePromptNote(ctx context.Context, commit, namespace string) error
+	LogWithNotes(ctx context.Context, base, head, namespace string) ([]NoteEntry, error)
 	PushNotes(ctx context.Context) error
 	FetchNotes(ctx context.Context) error
 	EnsureNotesRewriteConfigured() error

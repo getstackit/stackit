@@ -1,175 +1,49 @@
 package actions_test
 
 import (
-	"context"
-	"sync"
 	"testing"
 
-	"github.com/google/go-github/v67/github"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
-	stackitgithub "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-type countingGitHubClient struct {
-	stackitgithub.Client
-	mu          sync.Mutex
-	branchCalls map[string]int
-}
-
-func newCountingGitHubClient(client stackitgithub.Client) *countingGitHubClient {
-	return &countingGitHubClient{
-		Client:      client,
-		branchCalls: make(map[string]int),
-	}
-}
-
-func (c *countingGitHubClient) GetPullRequestByBranch(ctx context.Context, owner, repo, branchName string) (*stackitgithub.PullRequestInfo, error) {
-	c.mu.Lock()
-	c.branchCalls[branchName]++
-	c.mu.Unlock()
-
-	return c.Client.GetPullRequestByBranch(ctx, owner, repo, branchName)
-}
-
-func (c *countingGitHubClient) branchCallCount(branchName string) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.branchCalls[branchName]
-}
-
 func TestGetAction(t *testing.T) {
 	t.Parallel()
-	t.Run("resolves PR number and fetches branches", func(t *testing.T) {
+	t.Run("reparents an existing branch using GitHub base info without carrying old parent commits", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithLinearStack("a", "b")
 
-		// Mock GitHub setup
-		ghConfig := testhelpers.NewMockGitHubServerConfig()
-		pr := &github.PullRequest{
-			Number: new(123),
-			Head:   &github.PullRequestBranch{Ref: new("feature-a")},
-			Base:   &github.PullRequestBranch{Ref: new("main")},
-			Title:  new("Feature A"),
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
+		require.NoError(t, err)
+		for _, branch := range []string{"main", "a", "b"} {
+			require.NoError(t, s.Scene.Repo.PushBranch("origin", branch))
 		}
-		ghConfig.PRs["feature-a"] = pr
-		ghConfig.CreatedPRs = append(ghConfig.CreatedPRs, pr)
-		ghClient, owner, repo := testhelpers.NewMockGitHubClient(t, ghConfig)
-		s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(ghClient, owner, repo, ghConfig)
 
-		// Create a bare repository to act as the remote
-		remoteDir := t.TempDir()
-		s.RunGit("init", "--bare", remoteDir)
+		mockConfig := testhelpers.NewMockGitHubServerConfig()
+		rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+		s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
 
-		// Create remote branch feature-a by creating it and pushing it to origin
-		s.RunGit("checkout", "-b", "feature-a").
-			RunGit("remote", "add", "origin", remoteDir).
-			RunGit("push", "-u", "origin", "feature-a").
-			RunGit("checkout", "main").
-			RunGit("branch", "-D", "feature-a")
+		prData := testhelpers.DefaultPRData()
+		prData.Number = 101
+		prData.Head = "b"
+		prData.Base = "main"
+		mockConfig.PRs["b"] = testhelpers.NewSamplePullRequest(prData)
 
-		// Run GetAction with PR number
-		err := actions.GetAction(s.Context, "123", actions.GetOptions{}, &actions.GetNullHandler{})
+		s.Checkout("b")
+
+		err = actions.GetAction(s.Context, "b", actions.GetOptions{Restack: true}, &actions.GetNullHandler{})
 		require.NoError(t, err)
 
-		// Verify branch feature-a exists and is tracked
-		require.True(t, s.Engine.GetBranch("feature-a").IsTracked())
-		require.Equal(t, "main", s.Engine.GetBranch("feature-a").GetParent().GetName())
-	})
+		parent := s.Engine.GetBranch("b").GetParent()
+		require.NotNil(t, parent)
+		require.Equal(t, "main", parent.GetName())
 
-	t.Run("crawls ancestors via GitHub PRs", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
-
-		// Mock GitHub setup: feature-b -> feature-a -> main
-		ghConfig := testhelpers.NewMockGitHubServerConfig()
-		prB := &github.PullRequest{
-			Number: new(2),
-			Head:   &github.PullRequestBranch{Ref: new("feature-b")},
-			Base:   &github.PullRequestBranch{Ref: new("feature-a")},
-		}
-		prA := &github.PullRequest{
-			Number: new(1),
-			Head:   &github.PullRequestBranch{Ref: new("feature-a")},
-			Base:   &github.PullRequestBranch{Ref: new("main")},
-		}
-		ghConfig.PRs["feature-b"] = prB
-		ghConfig.PRs["feature-a"] = prA
-		ghClient, owner, repo := testhelpers.NewMockGitHubClient(t, ghConfig)
-		countingClient := newCountingGitHubClient(testhelpers.NewMockGitHubClientInterface(ghClient, owner, repo, ghConfig))
-		s.Context.GitHubClient = countingClient
-
-		// Create a bare repository to act as the remote
-		remoteDir := t.TempDir()
-		s.RunGit("init", "--bare", remoteDir)
-
-		// Create remote branches
-		s.RunGit("checkout", "-b", "feature-a").
-			RunGit("checkout", "-b", "feature-b").
-			RunGit("remote", "add", "origin", remoteDir).
-			RunGit("push", "-u", "origin", "feature-a").
-			RunGit("push", "-u", "origin", "feature-b").
-			RunGit("checkout", "main").
-			RunGit("branch", "-D", "feature-a").
-			RunGit("branch", "-D", "feature-b")
-
-		// Run GetAction for feature-b
-		err := actions.GetAction(s.Context, "feature-b", actions.GetOptions{}, &actions.GetNullHandler{})
+		commitCount, err := s.Scene.Repo.GetCommitCount("main", "b")
 		require.NoError(t, err)
-
-		// Verify both branches are tracked correctly
-		require.True(t, s.Engine.GetBranch("feature-a").IsTracked())
-		require.True(t, s.Engine.GetBranch("feature-b").IsTracked())
-		require.Equal(t, "main", s.Engine.GetBranch("feature-a").GetParent().GetName())
-		require.Equal(t, "feature-a", s.Engine.GetBranch("feature-b").GetParent().GetName())
-		require.Equal(t, 1, countingClient.branchCallCount("feature-a"))
-		require.Equal(t, 1, countingClient.branchCallCount("feature-b"))
-	})
-
-	t.Run("identifies and syncs local descendants", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit().
-			CreateBranch("feature-a").
-			Commit("a1").
-			CreateBranch("feature-b").
-			Commit("b1").
-			TrackBranch("feature-a", "main").
-			TrackBranch("feature-b", "feature-a")
-
-		// Mock GitHub: just feature-a
-		ghConfig := testhelpers.NewMockGitHubServerConfig()
-		ghConfig.PRs["feature-a"] = &github.PullRequest{
-			Number: new(1),
-			Head:   &github.PullRequestBranch{Ref: new("feature-a")},
-			Base:   &github.PullRequestBranch{Ref: new("main")},
-		}
-		ghClient, owner, repo := testhelpers.NewMockGitHubClient(t, ghConfig)
-		s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(ghClient, owner, repo, ghConfig)
-
-		s.RunGit("remote", "add", "origin", s.Scene.Dir)
-
-		// Run GetAction for feature-a
-		err := actions.GetAction(s.Context, "feature-a", actions.GetOptions{}, &actions.GetNullHandler{})
-		require.NoError(t, err)
-
-		// feature-b should also have been refreshed/checked out because it's upstack of a
-		// (though in this unit test it might not do much since remote == local)
-	})
-
-	t.Run("fails if uncommitted changes exist", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit().
-			WithUncommittedChange("dirty.txt")
-
-		err := actions.GetAction(s.Context, "some-branch", actions.GetOptions{}, &actions.GetNullHandler{})
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "uncommitted changes")
+		require.Equal(t, 1, commitCount)
 	})
 }

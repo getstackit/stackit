@@ -246,6 +246,40 @@ func TestWorktreeDetach(t *testing.T) {
 		sh.ExpectBranchParent("feature", "main")
 	})
 
+	run("detach created worktree preserves commit counts for multiple anchor children", func(t *testing.T, sh *TestShell) {
+		sh.Run("worktree create my-wt")
+		sh.Run("worktree open my-wt")
+		worktreePath := strings.TrimSpace(sh.Output())
+		shW := sh.InWorktree(worktreePath)
+
+		shW.Git("branch --show-current")
+		anchorBranch := strings.TrimSpace(shW.Output())
+
+		shW.WriteFile("feature-a.txt", "feature a").
+			Run("create feature-a -m 'feature-a branch'")
+
+		shW.Git("checkout "+anchorBranch).
+			WriteFile("feature-b.txt", "feature b").
+			Run("create feature-b -m 'feature-b branch'")
+
+		sh.Run("worktree detach my-wt")
+
+		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+			t.Errorf("Worktree directory should be removed at %s", worktreePath)
+		}
+
+		sh.HasBranches("main", "feature-a", "feature-b")
+		sh.ExpectBranchParent("feature-a", "main").
+			ExpectBranchParent("feature-b", "main")
+
+		sh.Checkout("feature-a").
+			Run("restack").
+			CommitCount("main", "feature-a", 1)
+		sh.Checkout("feature-b").
+			Run("restack").
+			CommitCount("main", "feature-b", 1)
+	})
+
 	run("detach with dirty worktree requires --force", func(t *testing.T, sh *TestShell) {
 		for _, tt := range []struct {
 			name     string

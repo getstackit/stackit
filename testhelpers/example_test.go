@@ -67,14 +67,10 @@ func TestSceneWithSetup(t *testing.T) {
 
 // TestExpectBranches demonstrates the branch assertion helper.
 func TestExpectBranches(t *testing.T) {
-	scene := testhelpers.NewScene(t, nil)
-
-	// Need at least one commit before creating branches
-	err := scene.Repo.CreateChangeAndCommit("initial", "init")
-	require.NoError(t, err)
+	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 	// Create branches manually
-	err = scene.Repo.CreateAndCheckoutBranch("feature")
+	err := scene.Repo.CreateAndCheckoutBranch("feature")
 	require.NoError(t, err)
 	err = scene.Repo.CreateAndCheckoutBranch("bugfix")
 	require.NoError(t, err)

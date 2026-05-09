@@ -12,9 +12,7 @@ import (
 
 func TestRebase(t *testing.T) {
 	t.Run("rebases branch onto parent", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create branch1
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")
@@ -182,9 +180,7 @@ func TestRebase(t *testing.T) {
 
 func TestIsRebaseInProgress(t *testing.T) {
 	t.Run("returns false when no rebase", func(t *testing.T) {
-		_ = testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		_ = testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunner(nil)
 		require.False(t, runner.IsRebaseInProgress(context.Background()))

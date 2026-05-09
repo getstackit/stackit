@@ -25,7 +25,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch1 (parent) using create command
@@ -87,7 +87,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch1 (parent) using create command
@@ -136,7 +136,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create a change and use create command (which automatically tracks)
@@ -168,7 +168,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch1 using create command
@@ -210,7 +210,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch1 using create command
@@ -256,7 +256,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch1 using create command
@@ -292,7 +292,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch1 using create command
@@ -339,7 +339,7 @@ func TestRestackCommand(t *testing.T) {
 	t.Run("restack --all-stacks restacks every independent stack", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 
@@ -399,7 +399,7 @@ func TestRestackCommand(t *testing.T) {
 	t.Run("restack --stacks only restacks selected independent stacks", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 
@@ -509,7 +509,7 @@ func TestRestackCommand(t *testing.T) {
 	t.Run("restack --all-stacks --parallel restacks every independent stack", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 
@@ -612,9 +612,7 @@ func TestRestackCommand(t *testing.T) {
 
 	t.Run("restack --parallel without --all-stacks errors", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		cmd := exec.Command(binaryPath, "restack", "--parallel")
 		cmd.Dir = scene.Dir
@@ -626,9 +624,7 @@ func TestRestackCommand(t *testing.T) {
 
 	t.Run("restack errors when multiple scope flags specified", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Run restack with conflicting flags
 		cmd := exec.Command(binaryPath, "restack", "--downstack", "--upstack")
@@ -641,9 +637,7 @@ func TestRestackCommand(t *testing.T) {
 
 	t.Run("restack errors when not on a branch and --branch not specified", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Detach HEAD
 		err := scene.Repo.RunGitCommand("checkout", "HEAD~0")
@@ -665,7 +659,7 @@ func TestRestackCommand(t *testing.T) {
 			if err := s.Repo.CreateChange("initial", "test", false); err != nil {
 				return err
 			}
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch1 using create command
@@ -729,7 +723,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create parent branch
@@ -807,7 +801,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 
@@ -917,7 +911,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create parent branch
@@ -1017,7 +1011,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 
@@ -1085,7 +1079,7 @@ func TestRestackCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 

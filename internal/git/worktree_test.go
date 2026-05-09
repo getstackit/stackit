@@ -14,9 +14,7 @@ import (
 
 func TestWorktree(t *testing.T) {
 	t.Run("add and remove worktree", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Create a branch to checkout in the worktree
@@ -55,9 +53,7 @@ func TestWorktree(t *testing.T) {
 	})
 
 	t.Run("add detached worktree", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Create a temporary directory for the worktree
@@ -81,9 +77,7 @@ func TestWorktree(t *testing.T) {
 
 func TestWorktreeRegistry(t *testing.T) {
 	t.Run("write and read worktree metadata", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Write worktree metadata
@@ -105,9 +99,7 @@ func TestWorktreeRegistry(t *testing.T) {
 	})
 
 	t.Run("read non-existent worktree metadata returns nil", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Read non-existent metadata
@@ -117,9 +109,7 @@ func TestWorktreeRegistry(t *testing.T) {
 	})
 
 	t.Run("delete worktree metadata", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Write worktree metadata
@@ -141,9 +131,7 @@ func TestWorktreeRegistry(t *testing.T) {
 	})
 
 	t.Run("list worktree metadata", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Write multiple worktree metadata

@@ -78,26 +78,39 @@ run = "golangci-lint run --allow-parallel-runners --fix"
 
 [tasks.test]
 description = "Run all tests (with caching for faster repeated runs)"
-run = "gotestsum --format pkgname-and-test-fails -- ./..."
+run = """
+  PACKAGES=$(bash scripts/go-test-packages.sh all)
+  gotestsum --format pkgname-and-test-fails -- $PACKAGES
+"""
 
 [tasks."test:fresh"]
 description = "Run all tests without caching"
-run = "gotestsum --format pkgname-and-test-fails -- ./... -count=1"
+run = """
+  PACKAGES=$(bash scripts/go-test-packages.sh all)
+  gotestsum --format pkgname-and-test-fails -- $PACKAGES -count=1
+"""
 
 [tasks."test:verbose"]
 description = "Run tests with verbose output"
-run = "gotestsum --format standard-verbose -- ./..."
+run = """
+  PACKAGES=$(bash scripts/go-test-packages.sh all)
+  gotestsum --format standard-verbose -- $PACKAGES
+"""
 
 [tasks."test:coverage"]
 description = "Run tests with coverage"
 run = """
-  gotestsum --format pkgname-and-test-fails -- -coverprofile=coverage.out ./...
+  PACKAGES=$(bash scripts/go-test-packages.sh all)
+  gotestsum --format pkgname-and-test-fails -- -coverprofile=coverage.out $PACKAGES
   go tool cover -html=coverage.out -o coverage.html
 """
 
 [tasks."test:race"]
 description = "Run tests with race detection"
-run = "gotestsum --format pkgname-and-test-fails -- -race ./..."
+run = """
+  PACKAGES=$(bash scripts/go-test-packages.sh all)
+  gotestsum --format pkgname-and-test-fails -- -race $PACKAGES
+"""
 
 [tasks."test:pkg"]
 description = "Run tests for a specific package"
@@ -106,16 +119,33 @@ arg "package" help="Package to test (e.g. ./testhelpers)"
 '''
 run = "gotestsum --format standard-verbose -- {{arg(name='package')}}"
 
-[tasks."test:fast"]
-description = "Run fast unit tests (excludes integration tests)"
+[tasks."test:unit"]
+description = "Run low-IO Go unit tests only"
 run = """
-  PACKAGES=$(go list ./... | grep -v /integration)
+  PACKAGES=$(bash scripts/go-test-packages.sh unit)
+  gotestsum --format pkgname-and-test-fails -- $PACKAGES
+"""
+
+[tasks."test:fast"]
+description = "Run fast Go tests without git-scenario or integration packages"
+run = """
+  PACKAGES=$(bash scripts/go-test-packages.sh fast)
+  gotestsum --format pkgname-and-test-fails -- $PACKAGES
+"""
+
+[tasks."test:git"]
+description = "Run git-backed scenario tests outside the integration tree"
+run = """
+  PACKAGES=$(bash scripts/go-test-packages.sh git)
   gotestsum --format pkgname-and-test-fails -- $PACKAGES
 """
 
 [tasks."test:integration"]
 description = "Run integration tests only"
-run = "gotestsum --format pkgname-and-test-fails -- ./internal/integration/... ./internal/cli/integrations/... ./internal/actions/integrations/..."
+run = """
+  PACKAGES=$(bash scripts/go-test-packages.sh integration)
+  gotestsum --format pkgname-and-test-fails -- $PACKAGES
+"""
 
 [tasks.clean]
 description = "Clean built binaries, shims, and test artifacts"
@@ -128,12 +158,12 @@ run = """
 """
 
 [tasks.check]
-description = "Run all checks (Go format, lint, fast tests + web tests, typecheck, build)"
-depends = ["fmt", "lint", "test:fast", "check:web"]
+description = "Run all checks (Go format, lint, all Go tests + web tests, typecheck, build)"
+depends = ["fmt", "lint", "test", "check:web"]
 
 [tasks."check:go"]
-description = "Run all Go checks (format, lint, fast tests)"
-depends = ["fmt", "lint", "test:fast"]
+description = "Run all Go checks (format, lint, all Go tests)"
+depends = ["fmt", "lint", "test"]
 
 [tasks."web:install"]
 description = "Install frontend workspace dependencies"

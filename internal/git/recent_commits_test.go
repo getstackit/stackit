@@ -11,9 +11,7 @@ import (
 
 func TestGetRecentCommits_DuplicateTrailers(t *testing.T) {
 	t.Parallel()
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	err := scene.Repo.CreateChange("change", "dup", false)
 	require.NoError(t, err)
@@ -39,9 +37,7 @@ func TestGetRecentCommits_DuplicateTrailers(t *testing.T) {
 
 func TestGetRecentCommits_WithoutTrailers(t *testing.T) {
 	t.Parallel()
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	err := scene.Repo.CreateChange("file1", "content1", false)
 	require.NoError(t, err)
@@ -64,9 +60,7 @@ func TestGetRecentCommits_WithoutTrailers(t *testing.T) {
 
 func TestGetRecentCommits_MultipleCommits(t *testing.T) {
 	t.Parallel()
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	// Create a regular commit
 	err := scene.Repo.CreateChange("file1", "content1", false)
@@ -112,9 +106,7 @@ func TestGetRecentCommits_MultipleCommits(t *testing.T) {
 
 func TestGetRecentCommits_ParsesPRNumberSuffix(t *testing.T) {
 	t.Parallel()
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	err := scene.Repo.CreateChange("file1", "content1", false)
 	require.NoError(t, err)
@@ -133,9 +125,7 @@ func TestGetRecentCommits_ParsesPRNumberSuffix(t *testing.T) {
 
 func TestGetRecentCommits_MergeCommitSkipsTrailerSubject(t *testing.T) {
 	t.Parallel()
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	// Simulate what GitHub creates when merging a consolidation PR:
 	// Subject: "Merge pull request #786 from org/stack-merge-..."
@@ -164,9 +154,7 @@ func TestGetRecentCommits_MergeCommitSkipsTrailerSubject(t *testing.T) {
 
 func TestGetRecentCommits_MergeCommitWithTitleBeforeTrailers(t *testing.T) {
 	t.Parallel()
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	// When the body has a descriptive line before trailers
 	err := scene.Repo.CreateChange("file1", "content1", false)

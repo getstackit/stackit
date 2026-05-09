@@ -12,9 +12,7 @@ import (
 
 func TestIsMerged(t *testing.T) {
 	t.Run("returns false for unmerged branch", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create branch
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")
@@ -34,9 +32,7 @@ func TestIsMerged(t *testing.T) {
 	})
 
 	t.Run("returns true for merged branch", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create branch
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")

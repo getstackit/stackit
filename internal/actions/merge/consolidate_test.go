@@ -57,10 +57,10 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 			})
 
 		// Add commits to branches to make them different
-		s.Checkout("branch1")
+		s.CheckoutQuiet("branch1")
 		s.RunGit("commit", "--allow-empty", "-m", "branch1 commit").Rebuild()
 
-		s.Checkout("branch2")
+		s.CheckoutQuiet("branch2")
 		s.RunGit("commit", "--allow-empty", "-m", "branch2 commit").Rebuild()
 
 		// Add PR info
@@ -281,20 +281,15 @@ func TestConsolidationErrorHandling(t *testing.T) {
 	})
 
 	t.Run("execute with Wait: false skips waiting", func(t *testing.T) {
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch1": "main",
 			})
 
-		// Set up a remote so PullTrunk/PushBranch can work
-		remoteDir := t.TempDir()
-		s.RunGit("init", "--bare", remoteDir)
-		s.RunGit("remote", "add", "origin", remoteDir).
-			RunGit("push", "-u", "origin", "main").
-			RunGit("push", "-u", "origin", "branch1")
+		s.RunGit("push", "-u", "origin", "branch1")
 
 		// Add commits
-		s.Checkout("branch1")
+		s.CheckoutQuiet("branch1")
 		s.RunGit("commit", "--allow-empty", "-m", "branch1 commit").Rebuild()
 
 		// Add PR info

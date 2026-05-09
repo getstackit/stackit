@@ -22,10 +22,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create empty branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -49,10 +46,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create branch with --all flag", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -84,10 +78,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create branch from commit message", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -120,7 +111,7 @@ func TestCreateCommand(t *testing.T) {
 			if err := s.Repo.CreateChange("initial", "test", false); err != nil {
 				return err
 			}
-			return s.Repo.CreateChangeAndCommit("initial", "init")
+			return testhelpers.InitialCommitSceneSetup(s)
 		})
 
 		// Initialize stackit
@@ -148,10 +139,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create fails when not on a branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -174,10 +162,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create fails when branch already exists", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -202,10 +187,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create fails when no name or message provided", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -224,10 +206,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create auto-initializes when not initialized", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Do NOT initialize stackit - let create auto-initialize
 
@@ -261,10 +240,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create uses branch name pattern from config", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -297,10 +273,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create uses default pattern when none configured", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -332,10 +305,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("config get returns branch name pattern", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -359,10 +329,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("config set rejects pattern without message placeholder", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -380,10 +347,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create with branch name works without message", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -407,10 +371,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create with --scope sets explicit scope on new branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -444,10 +405,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create with --scope inherits scope when not provided", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -490,10 +448,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create with --scope overrides inherited scope", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")
@@ -536,10 +491,7 @@ func TestCreateCommand(t *testing.T) {
 
 	t.Run("create with --scope uses scope in branch name pattern", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize stackit
 		cmd := exec.Command(binaryPath, "init")

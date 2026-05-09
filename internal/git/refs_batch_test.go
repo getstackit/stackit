@@ -12,9 +12,7 @@ import (
 
 func TestUpdateRefsBatch(t *testing.T) {
 	t.Run("atomically updates multiple refs", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -56,9 +54,7 @@ func TestUpdateRefsBatch(t *testing.T) {
 	})
 
 	t.Run("fails atomically when OldSHA does not match", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -100,9 +96,7 @@ func TestUpdateRefsBatch(t *testing.T) {
 	})
 
 	t.Run("handles empty updates", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -112,9 +106,7 @@ func TestUpdateRefsBatch(t *testing.T) {
 	})
 
 	t.Run("updates without OldSHA verification", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -137,9 +129,7 @@ func TestUpdateRefsBatch(t *testing.T) {
 
 func TestUpdateRefsBatchWithLog(t *testing.T) {
 	t.Run("updates metadata refs with reflog message", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -161,9 +151,7 @@ func TestUpdateRefsBatchWithLog(t *testing.T) {
 	})
 
 	t.Run("updates branch refs with commits", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -193,9 +181,7 @@ func TestUpdateRefsBatchWithLog(t *testing.T) {
 
 func TestDeleteRefsBatch(t *testing.T) {
 	t.Run("atomically deletes multiple refs", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -227,9 +213,7 @@ func TestDeleteRefsBatch(t *testing.T) {
 	})
 
 	t.Run("handles empty deletion list", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -241,9 +225,7 @@ func TestDeleteRefsBatch(t *testing.T) {
 	t.Run("handles deleting non-existent ref gracefully", func(t *testing.T) {
 		// Note: git update-ref --stdin with delete does NOT fail on non-existent refs
 		// It silently succeeds, which is different from individual delete operations
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -270,9 +252,7 @@ func TestDeleteRefsBatch(t *testing.T) {
 
 func TestRefUpdateIntegration(t *testing.T) {
 	t.Run("simulates restack atomic update pattern", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
@@ -320,9 +300,7 @@ func TestRefUpdateIntegration(t *testing.T) {
 	})
 
 	t.Run("simulates undo restore pattern", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()

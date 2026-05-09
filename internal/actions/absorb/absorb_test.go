@@ -296,8 +296,6 @@ func sectionB() {
 		require.NoError(t, err)
 		s.RunGit("add", "shared.go")
 		s.RunGit("commit", "-m", "modify section A in branch-a")
-		s.Rebuild()
-
 		// Create branch-b on top of branch-a modifying section B (far away from section A)
 		s.CreateBranch("branch-b")
 		s.TrackBranch("branch-b", "branch-a")
@@ -586,8 +584,6 @@ func DefaultConfig() *Config {
 		require.NoError(t, err)
 		s.RunGit("add", "config.go")
 		s.RunGit("commit", "-m", "update default config in branch-a")
-		s.Rebuild()
-
 		// branch-b modifies Config struct (at the beginning, far from DefaultConfig)
 		s.CreateBranch("branch-b")
 		s.TrackBranch("branch-b", "branch-a")
@@ -720,8 +716,6 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.NoError(t, err)
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
-		s.Rebuild()
-
 		// Should return false in normal state
 		require.False(t, IsAbsorbInProgress(s.Context))
 	})
@@ -738,8 +732,6 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.NoError(t, err)
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
-		s.Rebuild()
-
 		// Simulate a failed absorb by detaching HEAD
 		s.RunGit("checkout", "--detach", "HEAD")
 
@@ -759,8 +751,6 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.NoError(t, err)
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
-		s.Rebuild()
-
 		// Stage a change
 		err = os.WriteFile(testFile, []byte("package main\n\nfunc test() { modified }\n"), 0600)
 		require.NoError(t, err)
@@ -783,8 +773,6 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.NoError(t, err)
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
-		s.Rebuild()
-
 		// ShowConflict should work without error when no staged changes
 		err = ShowConflict(s.Context)
 		require.NoError(t, err)
@@ -802,8 +790,6 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.NoError(t, err)
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
-		s.Rebuild()
-
 		// Abort should work without error when not in a failed absorb state
 		err = Abort(s.Context)
 		require.NoError(t, err)
@@ -821,8 +807,6 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.NoError(t, err)
 		s.RunGit("add", "test.go")
 		s.RunGit("commit", "-m", "add test.go")
-		s.Rebuild()
-
 		// Simulate a failed absorb by detaching HEAD
 		s.RunGit("checkout", "--detach", "HEAD")
 

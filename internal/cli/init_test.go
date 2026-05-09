@@ -17,11 +17,7 @@ func TestInitCommand(t *testing.T) {
 
 	t.Run("can run init", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
-
-		// Create initial commit (needed for init)
-		err := s.Scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
+		s := scenario.NewScenarioParallel(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Remove existing config to test fresh init
 		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
@@ -63,11 +59,7 @@ Pro-tip: enhance your workflow with integrations:
 
 	t.Run("errors on invalid trunk when explicitly provided", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
-
-		// Create initial commit
-		err := s.Scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
+		s := scenario.NewScenarioParallel(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Remove existing config
 		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
@@ -85,7 +77,7 @@ Pro-tip: enhance your workflow with integrations:
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, func(sc *testhelpers.Scene) error {
 			// Create initial commit first
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(sc); err != nil {
 				return err
 			}
 			// Rename main branch to main2
@@ -106,11 +98,7 @@ Pro-tip: enhance your workflow with integrations:
 
 	t.Run("infers trunk when not provided", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, nil).WithInProcess(true)
-
-		// Create initial commit
-		err := s.Scene.Repo.CreateChangeAndCommit("initial", "init")
-		require.NoError(t, err)
+		s := scenario.NewScenarioParallel(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Remove existing config
 		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")

@@ -146,9 +146,7 @@ func TestParseGitHubRemoteURL(t *testing.T) {
 // NOTE: NewScene is NOT safe for parallel tests, so these tests must run sequentially.
 func TestGetGitHubClient(t *testing.T) {
 	t.Run("creates client for github.com", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Set up github.com remote (add if it doesn't exist, otherwise set-url)
 		err := scene.Repo.RunGitCommand("remote", "add", "origin", "https://github.com/testowner/testrepo.git")
@@ -182,9 +180,7 @@ func TestGetGitHubClient(t *testing.T) {
 	})
 
 	t.Run("creates client for GitHub Enterprise", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Set up Enterprise remote (add if it doesn't exist, otherwise set-url)
 		err := scene.Repo.RunGitCommand("remote", "add", "origin", "https://github.company.com/enterprise/repo.git")
@@ -218,9 +214,7 @@ func TestGetGitHubClient(t *testing.T) {
 	})
 
 	t.Run("creates client for Enterprise GitHub with simple hostname", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Set up Enterprise remote with simple hostname (add if it doesn't exist, otherwise set-url)
 		err := scene.Repo.RunGitCommand("remote", "add", "origin", "https://my-internal-github/org/repo")

@@ -18,9 +18,7 @@ func TestContinueCommand(t *testing.T) {
 
 	t.Run("continue errors when no rebase in progress", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Verify no rebase is in progress
 		require.False(t, s.Scene.Repo.RebaseInProgress(), "should not have rebase in progress")
@@ -34,13 +32,7 @@ func TestContinueCommand(t *testing.T) {
 
 	t.Run("continue works without continuation state", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch1 using create command (automatically tracks)
 		if err := s.Scene.Repo.CreateChange("branch1 change", "test1", false); err != nil {
@@ -82,7 +74,7 @@ func TestContinueCommand(t *testing.T) {
 			if err := sc.Repo.CreateChange("initial", "test", false); err != nil {
 				return err
 			}
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(sc); err != nil {
 				return err
 			}
 			return nil
@@ -151,7 +143,7 @@ func TestContinueCommand(t *testing.T) {
 			if err := sc.Repo.CreateChange("initial", "test", false); err != nil {
 				return err
 			}
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(sc); err != nil {
 				return err
 			}
 			return nil
@@ -229,7 +221,7 @@ func TestContinueCommand(t *testing.T) {
 			if err := sc.Repo.CreateChange("initial", "test", false); err != nil {
 				return err
 			}
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(sc); err != nil {
 				return err
 			}
 			return nil
@@ -311,7 +303,7 @@ func TestContinueCommand(t *testing.T) {
 			if err := sc.Repo.CreateChange("initial", "test", false); err != nil {
 				return err
 			}
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(sc); err != nil {
 				return err
 			}
 			return nil

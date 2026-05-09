@@ -14,9 +14,7 @@ func TestUntrackCommand(t *testing.T) {
 
 	t.Run("untrack current branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create a tracked branch
 		s.RunCli("create", "a", "-m", "Add a")
@@ -34,9 +32,7 @@ func TestUntrackCommand(t *testing.T) {
 
 	t.Run("untrack specified branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create tracked branches
 		s.RunCli("create", "a", "-m", "Add a")
@@ -63,9 +59,7 @@ func TestUntrackCommand(t *testing.T) {
 
 	t.Run("untrack fails for untracked branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create an untracked branch
 		err := s.Scene.Repo.CreateAndCheckoutBranch("untracked")

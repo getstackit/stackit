@@ -72,11 +72,22 @@ type Scenario struct {
 // It is safe for parallel tests as it uses NewSceneParallel.
 func NewScenario(t *testing.T, setup testhelpers.SceneSetup) *Scenario {
 	t.Helper()
+	return newScenarioWithScene(t, testhelpers.NewSceneParallel(t, setup))
+}
+
+// NewRemoteScenario creates a new Scenario backed by a cached scene that
+// already has a local bare "origin" remote and trunk pushed there.
+func NewRemoteScenario(t *testing.T) *Scenario {
+	t.Helper()
+	return newScenarioWithScene(t, testhelpers.NewRemoteSceneParallel(t))
+}
+
+func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
+	t.Helper()
 
 	// Force non-interactive mode for tests in the current process
 	tui.SetInteractive(false)
 
-	scene := testhelpers.NewSceneParallel(t, setup)
 	cfg, _ := config.LoadConfig(scene.Dir)
 	trunk := cfg.Trunk()
 	if trunk == "" {
@@ -129,7 +140,7 @@ func NewScenarioParallel(t *testing.T, setup testhelpers.SceneSetup) *Scenario {
 // WithInitialCommit creates an initial commit on the main branch.
 func (s *Scenario) WithInitialCommit() *Scenario {
 	s.T.Helper()
-	err := s.Scene.Repo.CreateChangeAndCommit("initial", "init")
+	err := testhelpers.InitialCommitSceneSetup(s.Scene)
 	require.NoError(s.T, err)
 	return s
 }

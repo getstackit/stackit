@@ -12,9 +12,7 @@ import (
 
 func TestStageAll(t *testing.T) {
 	t.Run("stages all changes including untracked", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		// Create unstaged change
@@ -70,9 +68,7 @@ func TestStageTracked(t *testing.T) {
 
 func TestHasStagedChanges(t *testing.T) {
 	t.Run("returns false when no staged changes", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		hasStaged, err := runner.HasStagedChanges(context.Background())
@@ -81,9 +77,7 @@ func TestHasStagedChanges(t *testing.T) {
 	})
 
 	t.Run("returns true when changes are staged", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		// Create and stage change
@@ -98,9 +92,7 @@ func TestHasStagedChanges(t *testing.T) {
 
 func TestHasUnstagedChanges(t *testing.T) {
 	t.Run("returns false when no unstaged changes", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		hasUnstaged, err := runner.HasUnstagedChanges(context.Background())
@@ -126,9 +118,7 @@ func TestHasUnstagedChanges(t *testing.T) {
 
 func TestHasUntrackedFiles(t *testing.T) {
 	t.Run("returns false when no untracked files", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		hasUntracked, err := runner.HasUntrackedFiles(context.Background())
@@ -137,9 +127,7 @@ func TestHasUntrackedFiles(t *testing.T) {
 	})
 
 	t.Run("returns true when untracked files exist", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		// Create untracked file
@@ -154,9 +142,7 @@ func TestHasUntrackedFiles(t *testing.T) {
 
 func TestAddAll(t *testing.T) {
 	t.Run("is alias for StageAll", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		// Create unstaged change

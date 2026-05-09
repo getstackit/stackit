@@ -120,7 +120,7 @@ func TestAction(t *testing.T) {
 	})
 
 	t.Run("preserves stack structure when merging bottom PR", func(t *testing.T) {
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch-a": "main",
 				"branch-b": "branch-a",
@@ -199,19 +199,12 @@ func TestAction(t *testing.T) {
 		require.Contains(t, plan.UpstackBranches, "branch-c")
 
 		// Set up a remote so PullTrunk can work
-		remoteDir := t.TempDir()
-
-		s.RunGit("init", "--bare", remoteDir)
-
-		// Add remote and push main
-		s.RunGit("remote", "add", "origin", remoteDir).
-			RunGit("push", "-u", "origin", "main").
-			RunGit("push", "-u", "origin", "branch-a").
+		s.RunGit("push", "-u", "origin", "branch-a").
 			RunGit("push", "-u", "origin", "branch-b").
 			RunGit("push", "-u", "origin", "branch-c")
 
 		// Now merge branch-a into main locally and push to simulate the PR merge
-		s.Checkout("main").
+		s.CheckoutQuiet("main").
 			RunGit("merge", "branch-a", "--no-ff", "-m", "Merge branch-a").
 			RunGit("push", "origin", "main")
 

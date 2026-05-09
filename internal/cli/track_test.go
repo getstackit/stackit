@@ -15,10 +15,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track with --parent flag tracks single branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create a tracked branch
 		err := s.Scene.Repo.CreateChange("a content", "a", false)
@@ -47,10 +44,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track with --parent flag using trunk", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create an untracked branch
 		err := s.Scene.Repo.CreateChange("feature content", "feature", false)
@@ -72,10 +66,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track with --parent fails when parent not tracked", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create an untracked branch
 		err := s.Scene.Repo.CreateChange("feature content", "feature", false)
@@ -108,10 +99,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track with --parent fails when branch doesn't exist", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Try to track non-existent branch
 		output, err := s.RunCliAndGetOutput("track", "nonexistent", "--parent", "main")
@@ -121,10 +109,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track with --force finds most recent tracked ancestor", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create a stack: main -> a -> b
 		err := s.Scene.Repo.CreateChange("a content", "a", false)
@@ -155,10 +140,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track with --force falls back to trunk when no tracked ancestor", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create an untracked branch from main
 		err := s.Scene.Repo.CreateChange("feature content", "feature", false)
@@ -180,10 +162,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track defaults to current branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create a tracked branch
 		err := s.Scene.Repo.CreateChange("a content", "a", false)
@@ -212,10 +191,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track fails when not on branch and no branch specified", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Detach HEAD
 		err := s.Scene.Repo.RunGitCommand("checkout", "HEAD~0")
@@ -229,10 +205,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track already tracked branch updates parent", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create a stack: main -> a -> b
 		err := s.Scene.Repo.CreateChange("a content", "a", false)
@@ -274,10 +247,7 @@ func TestTrackCommand(t *testing.T) {
 
 	t.Run("track can fix corrupted metadata", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create a tracked branch
 		err := s.Scene.Repo.CreateChange("a content", "a", false)

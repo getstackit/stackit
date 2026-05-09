@@ -18,9 +18,7 @@ func TestConfigInit(t *testing.T) {
 	t.Run("creates .stackit.yaml when none exists", func(t *testing.T) {
 		t.Parallel()
 
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Ensure no .stackit.yaml exists
 		configPath := filepath.Join(scene.Dir, ".stackit.yaml")
@@ -47,9 +45,7 @@ func TestConfigInit(t *testing.T) {
 	t.Run("errors when file exists without force flag", func(t *testing.T) {
 		t.Parallel()
 
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create existing .stackit.yaml
 		configPath := filepath.Join(scene.Dir, ".stackit.yaml")
@@ -72,9 +68,7 @@ func TestConfigInit(t *testing.T) {
 	t.Run("overwrites with force flag", func(t *testing.T) {
 		t.Parallel()
 
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create existing .stackit.yaml
 		configPath := filepath.Join(scene.Dir, ".stackit.yaml")
@@ -111,9 +105,7 @@ func TestConfigInit(t *testing.T) {
 	t.Run("template contains all expected sections", func(t *testing.T) {
 		t.Parallel()
 
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Run config init
 		cli := inprocess.NewInProcessCLI()

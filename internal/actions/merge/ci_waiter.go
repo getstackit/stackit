@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // CIWaiter handles waiting for CI checks to pass on GitHub PRs.

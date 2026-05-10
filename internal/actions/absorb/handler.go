@@ -1,8 +1,8 @@
 package absorb
 
 import (
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // Step represents a step in the absorb process

@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 	"slices"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/actions/validation"
-	"stackit.dev/stackit/internal/actions/worktree"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/actions/validation"
+	"github.com/getstackit/stackit/internal/actions/worktree"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the create command

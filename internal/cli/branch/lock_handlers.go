@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/actions/lock"
-	"stackit.dev/stackit/internal/actions/submit"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions/lock"
+	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewLockUI creates a handler for lock/unlock operations.

@@ -6,12 +6,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/tui/components/tree"
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 func TestMergedDownstackHistory(t *testing.T) {

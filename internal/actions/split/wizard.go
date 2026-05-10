@@ -3,12 +3,12 @@ package split
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions"
-	handlerBase "stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/actions"
+	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
 )
 
 // WizardOptions configures the interactive split wizard

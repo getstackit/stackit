@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 func TestMapTrunkCommits(t *testing.T) {

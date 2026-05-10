@@ -1,7 +1,7 @@
 // Package navigation implements the stackit top/bottom commands for navigating stacked branches.
 package navigation
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Handler receives events from navigation action
 type Handler interface {

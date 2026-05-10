@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // HookTimeout is the maximum duration a hook can run before being killed

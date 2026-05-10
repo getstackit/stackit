@@ -3,8 +3,8 @@ package track
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Options contains options for the track command

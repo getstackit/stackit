@@ -1,11 +1,11 @@
 package actions
 
 import (
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/pr"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/pr"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // UpdateStackPRMetadata updates PR titles and body footers for a list of branches

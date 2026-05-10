@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
 )
 
 // WorktreeCleanupResult contains the results of worktree cleanup

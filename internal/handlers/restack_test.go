@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 func TestJSONRestackHandler(t *testing.T) {

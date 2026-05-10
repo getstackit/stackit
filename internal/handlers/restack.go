@@ -5,7 +5,7 @@ import (
 	"slices"
 	"sync"
 
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // RestackResult represents the outcome of a restack operation for a single branch

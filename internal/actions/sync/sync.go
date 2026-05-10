@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/handlers"
-	"stackit.dev/stackit/internal/rerere"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/handlers"
+	"github.com/getstackit/stackit/internal/rerere"
 
 	"golang.org/x/sync/errgroup"
 )

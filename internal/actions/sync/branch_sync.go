@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // syncStackBranches pulls stack branches that are behind their remote counterparts.

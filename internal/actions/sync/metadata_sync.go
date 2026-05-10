@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // syncRemoteMetadata fetches and processes remote metadata.

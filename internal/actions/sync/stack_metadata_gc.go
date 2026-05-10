@@ -1,7 +1,7 @@
 package sync
 
 import (
-	"stackit.dev/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/app"
 )
 
 // StackMetadataGCResult contains the results of stack metadata garbage collection.

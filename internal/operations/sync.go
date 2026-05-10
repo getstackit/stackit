@@ -3,8 +3,8 @@ package operations
 import (
 	"context"
 
-	syncAction "stackit.dev/stackit/internal/actions/sync"
-	"stackit.dev/stackit/internal/app"
+	syncAction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/app"
 )
 
 // SyncOperation wraps the sync action as an async Operation.

@@ -4,7 +4,7 @@
 package shippable
 
 import (
-	"stackit.dev/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/merge"
 )
 
 // Status represents the overall shippability state of a stack.

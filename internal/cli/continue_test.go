@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 func TestContinueCommand(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/go-github/v62/github"
 
-	githubpkg "stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/utils"
+	githubpkg "github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // MockGitHubClient implements githubpkg.Client using the mock server

@@ -3,9 +3,9 @@ package common
 import (
 	"os"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // HasShellIntegration checks if stackit shell integration is installed.

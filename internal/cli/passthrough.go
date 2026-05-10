@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 var gitCommandAllowlist = []string{

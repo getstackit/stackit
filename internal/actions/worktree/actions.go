@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // ListOptions contains options for the list action

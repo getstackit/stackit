@@ -11,10 +11,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/tui/core"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // defaultPreviewLines is the number of diff lines to show in the collapsed preview

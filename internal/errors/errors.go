@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // Standard library error functions wrapped for convenience

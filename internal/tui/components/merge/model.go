@@ -10,9 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/tui/core"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Group represents a group of steps that should be displayed as a single line

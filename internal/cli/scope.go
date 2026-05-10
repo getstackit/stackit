@@ -3,11 +3,11 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/scope"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/cli/stack"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions/scope"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/cli/stack"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // newScopeCmd creates the scope command

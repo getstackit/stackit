@@ -4,11 +4,11 @@ package split
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
 )
 
 // Style specifies the split mode

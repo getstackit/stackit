@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // mockPRMergeAPI is a test double for prMergeAPI that records calls and returns configured responses.

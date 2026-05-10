@@ -22,10 +22,10 @@ import (
 
 	"github.com/gertd/go-pluralize"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 var pluralizeClient = pluralize.NewClient()

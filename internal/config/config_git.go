@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // GitConfig provides typed access to stackit configuration stored in git config.

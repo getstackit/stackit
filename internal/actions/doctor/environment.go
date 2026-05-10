@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // checkEnvironment performs environment-related checks

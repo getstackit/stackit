@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/move"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/actions/move"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
 )
 
 // NewMoveCmd creates the move command

@@ -1,6 +1,6 @@
 package tree
 
-import "stackit.dev/stackit/internal/engine"
+import "github.com/getstackit/stackit/internal/engine"
 
 // StackTree represents the structure of a branch stack for rendering.
 // It encapsulates parent/child relationships and metadata needed to visualize stacks.

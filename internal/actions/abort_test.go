@@ -7,10 +7,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/actions/abort"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/internal/actions/abort"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 // testAbortHandler is a test handler for abort operations

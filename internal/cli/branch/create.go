@@ -4,10 +4,10 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/create"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/actions/create"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/config"
 )
 
 // NewCreateCmd creates the create command

@@ -3,7 +3,7 @@ package merge
 import (
 	"time"
 
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // Phase represents a phase in the merge process

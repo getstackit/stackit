@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"stackit.dev/stackit/internal/api/handlers"
-	"stackit.dev/stackit/internal/api/watcher"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/api/handlers"
+	"github.com/getstackit/stackit/internal/api/watcher"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // ServerConfig holds configuration for the API server.

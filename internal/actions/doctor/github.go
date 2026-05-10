@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // getGitHubToken gets the GitHub token (similar to internal/github/pr_info.go)

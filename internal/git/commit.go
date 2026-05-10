@@ -3,7 +3,7 @@ package git
 import (
 	"context"
 
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // CommitOptions contains options for creating a commit

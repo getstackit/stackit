@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/tui/components/tree"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // StackBranchInfo represents JSON-serializable info for a single branch in a stack

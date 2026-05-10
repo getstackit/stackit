@@ -1,6 +1,6 @@
 package doctor
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // CheckStatus represents the result of a diagnostic check
 type CheckStatus string

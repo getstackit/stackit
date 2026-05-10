@@ -4,9 +4,9 @@ package merge
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/shippable"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/shippable"
 )
 
 // NewStatusCmd creates the merge status subcommand.

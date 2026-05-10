@@ -1,9 +1,9 @@
 package merge
 
 import (
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/pr"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/pr"
 )
 
 // PRContentGenerator handles PR title and body generation for merge PRs.

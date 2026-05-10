@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/actions/worktree"
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/internal/actions/worktree"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 func TestListAction(t *testing.T) {

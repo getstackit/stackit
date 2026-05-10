@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // Transaction retry configuration

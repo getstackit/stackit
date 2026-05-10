@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	mergeAction "stackit.dev/stackit/internal/actions/merge"
-	sterrors "stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/shippable"
-	"stackit.dev/stackit/internal/tui"
-	mergeComponent "stackit.dev/stackit/internal/tui/components/merge"
-	"stackit.dev/stackit/internal/tui/style"
+	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
+	sterrors "github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/shippable"
+	"github.com/getstackit/stackit/internal/tui"
+	mergeComponent "github.com/getstackit/stackit/internal/tui/components/merge"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewMergeUI creates a runner and handler pair for merge operations.

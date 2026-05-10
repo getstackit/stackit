@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/config"
 )
 
 // newDocsCmd creates the docs command for generating documentation.

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 const (

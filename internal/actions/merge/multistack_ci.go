@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"time"
 
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // LocalCIValidator runs local CI validation on merged code

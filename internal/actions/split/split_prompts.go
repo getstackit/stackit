@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"slices"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 func promptBranchName(existingNames []string, originalBranchName string, branchNum int, eng engine.BranchReader) (string, error) {

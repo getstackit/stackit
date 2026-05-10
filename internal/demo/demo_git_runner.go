@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // demoGitRunner implements git.Runner with simulated data for demo mode.

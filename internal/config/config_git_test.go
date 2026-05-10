@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers"
 )
 
 // removeDefaultConfig removes the default JSON config file created by test setup

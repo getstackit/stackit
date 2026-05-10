@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 func TestCheckoutCommand(t *testing.T) {

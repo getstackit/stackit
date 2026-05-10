@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	sterrors "stackit.dev/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	sterrors "github.com/getstackit/stackit/internal/errors"
 )
 
 // WizardOptions configures the interactive merge wizard

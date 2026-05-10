@@ -4,9 +4,9 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/delete"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/actions/delete"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
 )
 
 // NewDeleteCmd creates the delete command

@@ -10,10 +10,10 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/tui/components/tree"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Direction represents where to place a new branch

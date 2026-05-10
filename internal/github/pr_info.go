@@ -11,8 +11,8 @@ import (
 	"github.com/google/go-github/v62/github"
 	"golang.org/x/oauth2"
 
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // SyncPrInfo syncs PR information for branches from GitHub

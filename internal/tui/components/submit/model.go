@@ -8,8 +8,8 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
-	"stackit.dev/stackit/internal/tui/components/tree"
-	"stackit.dev/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/core"
 )
 
 // Model is the bubbletea model for submit progress.

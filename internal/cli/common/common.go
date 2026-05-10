@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // GetGlobalOptions returns runtime.GlobalOptions populated from a cobra.Command's flags

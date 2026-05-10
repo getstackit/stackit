@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"stackit.dev/stackit/internal/api"
-	"stackit.dev/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/api"
+	"github.com/getstackit/stackit/internal/app"
 )
 
 // all: is required because Next static exports use underscore-prefixed paths like _next/.

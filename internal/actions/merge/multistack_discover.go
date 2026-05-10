@@ -3,7 +3,7 @@ package merge
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // FormatStackLabel creates a display label for a stack

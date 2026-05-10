@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/tui/style"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the describe command

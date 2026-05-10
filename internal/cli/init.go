@@ -7,14 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	initaction "stackit.dev/stackit/internal/actions/init"
-	"stackit.dev/stackit/internal/cli/integrations"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/rerere"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/tui/style"
+	initaction "github.com/getstackit/stackit/internal/actions/init"
+	"github.com/getstackit/stackit/internal/cli/integrations"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/rerere"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // cliInitHandler implements initaction.Handler for the CLI

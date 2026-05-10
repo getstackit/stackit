@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/pr"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/pr"
 )
 
 // MultiStackPRCreator handles creating the multi-stack PR

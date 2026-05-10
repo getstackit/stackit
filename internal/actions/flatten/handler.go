@@ -1,6 +1,6 @@
 package flatten
 
-import basehandler "stackit.dev/stackit/internal/actions/handler"
+import basehandler "github.com/getstackit/stackit/internal/actions/handler"
 
 // Step represents a step in the flatten process
 type Step string

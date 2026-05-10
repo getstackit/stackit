@@ -1,6 +1,6 @@
 package pluck
 
-import basehandler "stackit.dev/stackit/internal/actions/handler"
+import basehandler "github.com/getstackit/stackit/internal/actions/handler"
 
 // Step represents a step in the pluck process
 type Step string

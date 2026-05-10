@@ -12,12 +12,12 @@ import (
 	"os"
 	"sync"
 
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Context provides access to engine and output for commands

@@ -11,10 +11,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/utils"
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/inprocess"
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/internal/utils"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/inprocess"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 // =============================================================================

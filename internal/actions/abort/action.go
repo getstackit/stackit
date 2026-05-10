@@ -3,8 +3,8 @@ package abort
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
 )
 
 // Options contains options for the abort command

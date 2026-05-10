@@ -3,9 +3,9 @@ package shippable
 import (
 	"context"
 
-	"stackit.dev/stackit/internal/actions/merge"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // Analyzer analyzes stacks for shippability.

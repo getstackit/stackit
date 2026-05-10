@@ -2,7 +2,7 @@
 package tui
 
 import (
-	"stackit.dev/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/tui/core"
 )
 
 // BaseModel is an alias to core.BaseModel for backwards compatibility.

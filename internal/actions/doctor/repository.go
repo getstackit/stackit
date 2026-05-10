@@ -3,8 +3,8 @@ package doctor
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // checkRepository performs repository-related checks

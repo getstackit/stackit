@@ -1,9 +1,9 @@
 package tui
 
 import (
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
 )
 
 // NewStackTreeRenderer creates a tree renderer configured for the current engine state

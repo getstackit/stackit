@@ -3,7 +3,7 @@ package engine
 import (
 	"slices"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // BranchState holds the cached metadata state for a single branch.

@@ -3,7 +3,7 @@ package common
 import (
 	"sync"
 
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // BaseHandler provides common functionality for CLI handlers.

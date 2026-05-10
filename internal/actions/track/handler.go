@@ -4,10 +4,10 @@ package track
 import (
 	"context"
 
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Handler receives events from track action

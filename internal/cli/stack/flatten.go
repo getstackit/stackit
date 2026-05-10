@@ -3,9 +3,9 @@ package stack
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/flatten"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/actions/flatten"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
 )
 
 // NewFlattenCmd creates the flatten command

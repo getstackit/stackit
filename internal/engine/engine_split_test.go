@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/testhelpers"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/testhelpers"
 )
 
 func TestApplySplitToCommits(t *testing.T) {

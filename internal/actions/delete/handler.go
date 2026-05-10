@@ -1,6 +1,6 @@
 package delete
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Result contains the result of the delete action.
 type Result struct {

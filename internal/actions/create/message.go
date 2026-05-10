@@ -3,9 +3,9 @@ package create
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 func getCommitMessage(ctx *app.Context) (string, error) {

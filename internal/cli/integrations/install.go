@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"stackit.dev/stackit/internal/actions/integrations"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/actions/integrations"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // InstallGitHub installs GitHub Actions workflow for stackit CI checks.

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // cleanBranches handles cleaning merged/closed branches

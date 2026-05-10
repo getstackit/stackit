@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/actions"
-	handlerBase "stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	sterrors "stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	sterrors "github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // hunkOptions contains options for hunk-based splitting

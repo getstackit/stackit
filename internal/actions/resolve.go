@@ -1,8 +1,8 @@
 package actions
 
 import (
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
 )
 
 // ResolveBranchName resolves a branch name, defaulting to current branch if empty.

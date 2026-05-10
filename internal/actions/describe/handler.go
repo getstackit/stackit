@@ -1,7 +1,7 @@
 // Package describe implements the stackit describe command for managing stack descriptions.
 package describe
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Handler receives events from describe action
 type Handler interface {

@@ -14,8 +14,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/core"
 )
 
 // Runner manages async bubbletea program lifecycle with panic recovery.

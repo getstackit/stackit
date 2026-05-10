@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"stackit.dev/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
 )
 
 func registerLargeTreeStories() {

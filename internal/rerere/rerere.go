@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 const declinedKey = "stackit.rerere.declined"

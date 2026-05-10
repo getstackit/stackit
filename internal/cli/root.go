@@ -5,12 +5,12 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/cli/branch"
-	"stackit.dev/stackit/internal/cli/integrations"
-	"stackit.dev/stackit/internal/cli/navigation"
-	"stackit.dev/stackit/internal/cli/shell"
-	"stackit.dev/stackit/internal/cli/stack"
-	"stackit.dev/stackit/internal/cli/worktree"
+	"github.com/getstackit/stackit/internal/cli/branch"
+	"github.com/getstackit/stackit/internal/cli/integrations"
+	"github.com/getstackit/stackit/internal/cli/navigation"
+	"github.com/getstackit/stackit/internal/cli/shell"
+	"github.com/getstackit/stackit/internal/cli/stack"
+	"github.com/getstackit/stackit/internal/cli/worktree"
 )
 
 // NewRootCmd creates the root cobra command

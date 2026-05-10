@@ -9,7 +9,7 @@ import (
 	"slices"
 	"sync"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // engineImpl is a minimal implementation of the Engine interface

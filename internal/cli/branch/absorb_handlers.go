@@ -1,12 +1,12 @@
 package branch
 
 import (
-	"stackit.dev/stackit/internal/actions/absorb"
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/actions/absorb"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // NewAbsorbUI creates a runner and handler pair for absorb operations.

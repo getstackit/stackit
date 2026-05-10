@@ -3,9 +3,9 @@ package actions
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions/validation"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions/validation"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // PopOptions contains options for the pop command

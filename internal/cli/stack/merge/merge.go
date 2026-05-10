@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	mergeAction "stackit.dev/stackit/internal/actions/merge"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
+	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
 )
 
 // PostMergeHandler handles post-merge actions like syncing trunk.

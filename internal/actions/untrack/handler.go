@@ -1,7 +1,7 @@
 // Package untrack implements the stackit untrack command for stopping branch tracking.
 package untrack
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Handler receives events from untrack action
 type Handler interface {

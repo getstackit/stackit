@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RemoteMetadataView provides read-only access to the remote metadata cache.

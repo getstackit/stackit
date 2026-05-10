@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers"
 )
 
 func TestReorderCommand(t *testing.T) {

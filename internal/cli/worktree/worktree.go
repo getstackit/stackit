@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/worktree"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions/worktree"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewWorktreeCmd creates the worktree command group

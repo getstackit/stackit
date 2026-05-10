@@ -4,10 +4,10 @@ package branch
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	_ "stackit.dev/stackit/internal/demo" // Register demo engine factory
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	_ "github.com/getstackit/stackit/internal/demo" // Register demo engine factory
 )
 
 // NewPopCmd creates the pop command

@@ -3,12 +3,12 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/track"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/cli/stack"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions/track"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/cli/stack"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // newTrackCmd creates the track command

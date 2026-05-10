@@ -3,9 +3,9 @@ package move
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // SelectOntoInteractive shows an interactive branch selector for choosing the "onto" branch

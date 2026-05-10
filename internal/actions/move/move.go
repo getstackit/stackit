@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/actions/validation"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/actions/validation"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Options contains options for the move command

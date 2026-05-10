@@ -4,10 +4,10 @@ package undo
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/timeutil"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/timeutil"
 )
 
 // Options contains options for the undo command

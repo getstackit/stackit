@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	mergeAction "stackit.dev/stackit/internal/actions/merge"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/tui"
+	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // NewShipCmd creates the merge ship subcommand.

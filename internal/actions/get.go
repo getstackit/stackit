@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"sync"
 
-	"stackit.dev/stackit/internal/actions/validation"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/handlers"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions/validation"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/handlers"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // GetPhase represents the current phase of the get operation

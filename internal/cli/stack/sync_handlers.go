@@ -5,14 +5,14 @@ import (
 	"strings"
 	stdsync "sync"
 
-	"stackit.dev/stackit/internal/actions"
-	syncAction "stackit.dev/stackit/internal/actions/sync"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	syncComponent "stackit.dev/stackit/internal/tui/components/sync"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	syncAction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	syncComponent "github.com/getstackit/stackit/internal/tui/components/sync"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewSyncUI creates a runner and handler pair for sync operations.

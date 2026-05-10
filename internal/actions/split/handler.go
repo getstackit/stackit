@@ -1,6 +1,6 @@
 package split
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Step represents a step in the split process
 type Step string

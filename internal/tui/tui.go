@@ -15,11 +15,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui/components/submit"
-	"stackit.dev/stackit/internal/tui/core"
-	"stackit.dev/stackit/internal/tui/style"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/components/submit"
+	"github.com/getstackit/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Key constants re-exported from core for backwards compatibility.

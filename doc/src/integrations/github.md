@@ -56,49 +56,20 @@ This prevents accidentally merging branches that are still being worked on or co
 
 ### Stack Order Check
 
-The action verifies that the PR is at the bottom of its stack:
+The action verifies that the PR is at the bottom of its stack. A branch is considered ready to merge when its parent is the trunk (e.g. `main`).
 
-```
-✓ Stack order check passed - PR is ready to merge
-```
-
-If there are PRs below this one in the stack:
-
-```
-✗ Stack order check failed - merge PR #42 first
-```
+If the PR is not at the bottom of the stack, the check fails with a message naming the parent branch that must merge first.
 
 This ensures stacked PRs are merged in order, maintaining clean git history.
 
 ## Workflow File
 
-The installed workflow looks like:
+The installed workflow reads the stackit metadata refs directly with `git` and `jq` — no separate stackit installation is required on the runner. The two jobs are:
 
-```yaml
-name: Stackit Checks
+- **check-lock** — fails if the branch's metadata has `lockReason` set
+- **check-stack-order** — fails if the branch's parent is not the trunk
 
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-
-jobs:
-  stackit-checks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install stackit
-        run: |
-          curl -fsSL https://get.stackit.dev | bash
-
-      - name: Run lock check
-        run: stackit github check-lock
-
-      - name: Run stack order check
-        run: stackit github check-order
-```
+See `.github/workflows/stackit.yml` after running `stackit github install` for the full template.
 
 ## Customization
 
@@ -136,16 +107,14 @@ You can make either check required or optional:
 
 ### Check Failing Unexpectedly
 
-1. View the check details in the PR
-2. Run the check locally:
-   ```bash
-   stackit github check-lock
-   stackit github check-order
-   ```
-
-3. Check branch metadata:
+1. View the check details in the PR — the inline shell script logs which condition failed and why
+2. Check branch metadata locally:
    ```bash
    stackit info
+   ```
+3. View the raw metadata ref:
+   ```bash
+   git show "refs/stackit/metadata/$(git branch --show-current)"
    ```
 
 ## Combining with Local Hooks

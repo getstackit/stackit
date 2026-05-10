@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/sync"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
 )
 
 // NewSyncCmd creates the sync command

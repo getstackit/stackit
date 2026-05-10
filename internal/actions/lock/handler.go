@@ -1,8 +1,8 @@
 package lock
 
 import (
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/actions/submit"
 )
 
 // Handler receives events from lock/unlock actions

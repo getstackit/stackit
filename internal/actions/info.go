@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // SingleBranchInfo represents JSON-serializable info for a single branch (used by info --json)

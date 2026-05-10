@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 type pauseResumer interface {

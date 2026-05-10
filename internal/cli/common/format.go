@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Restack reason constants used by sync and get handlers.

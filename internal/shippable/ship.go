@@ -3,8 +3,8 @@ package shippable
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions/merge"
-	"stackit.dev/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/app"
 )
 
 // ShipOptions configures the ship operation.

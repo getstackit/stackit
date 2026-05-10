@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 func TestCheckStatus_IsApproved(t *testing.T) {

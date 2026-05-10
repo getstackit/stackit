@@ -1,7 +1,7 @@
 package split
 
 import (
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Styles contains styling for the split component using shared style types

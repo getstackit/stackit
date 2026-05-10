@@ -1,4 +1,4 @@
-module stackit.dev/stackit
+module github.com/getstackit/stackit
 
 go 1.26.0
 

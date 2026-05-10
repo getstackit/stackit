@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	httpcontract "stackit.dev/stackit/internal/contracts/http"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/github"
+	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // BranchesHandler serves branch data.

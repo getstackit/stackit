@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // MapBranch converts an engine Branch and its StackNode into an API BranchResponse.

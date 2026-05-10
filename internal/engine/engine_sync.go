@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // PullTrunk pulls the trunk branch from remote

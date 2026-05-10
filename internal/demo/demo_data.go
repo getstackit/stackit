@@ -2,7 +2,7 @@
 // without requiring a real git repository.
 package demo
 
-import "stackit.dev/stackit/internal/engine"
+import "github.com/getstackit/stackit/internal/engine"
 
 // Branch represents a simulated branch with PR info
 type Branch struct {

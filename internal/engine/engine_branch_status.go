@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // IsTrunk checks if a branch is the trunk

@@ -3,9 +3,9 @@ package cli_test
 import (
 	"testing"
 
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/inprocess"
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/inprocess"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 func TestMain(m *testing.M) {

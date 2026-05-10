@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // BatchGetPRTitlesGraphQL fetches PR titles for multiple PR numbers using a single GraphQL query.

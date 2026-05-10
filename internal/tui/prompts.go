@@ -12,11 +12,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/tui/components/tree"
-	"stackit.dev/stackit/internal/tui/style"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 type promptKeyMap struct {

@@ -4,11 +4,11 @@ package flatten
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions"
-	basehandler "stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	basehandler "github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Options contains options for the flatten command

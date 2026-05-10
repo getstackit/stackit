@@ -7,10 +7,10 @@ import (
 	"github.com/google/go-github/v62/github"
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/engine"
-	stackitgithub "stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/internal/engine"
+	stackitgithub "github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 const (

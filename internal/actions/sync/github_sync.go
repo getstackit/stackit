@@ -5,12 +5,12 @@ import (
 	"sync"
 	"time"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/tui/style"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // GitHubSyncResult holds the results from GitHub PR info sync (network operation)

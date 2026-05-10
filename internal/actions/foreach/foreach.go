@@ -9,12 +9,12 @@ import (
 	stdruntime "runtime"
 	"strings"
 
-	"stackit.dev/stackit/internal/actions/worktree"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/tui/components/tree"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions/worktree"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the foreach command

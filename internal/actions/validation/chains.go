@@ -3,7 +3,7 @@ package validation
 import (
 	"context"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // ModifyBranchChain validates for simple branch modifications (rename, scope).

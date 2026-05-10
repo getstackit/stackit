@@ -8,7 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/errors"
 )
 
 // GetLogShortColor returns a styled string with the color from StackitColors

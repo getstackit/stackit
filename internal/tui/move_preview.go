@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // MovePreviewData contains the data needed to render a move preview.

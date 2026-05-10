@@ -1,7 +1,7 @@
 package testhelpers
 
 import (
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // NewTestPrInfo creates a PrInfo for testing with common defaults

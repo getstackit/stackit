@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // SortStrategy specifies how branches should be sorted in displays

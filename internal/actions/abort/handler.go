@@ -1,7 +1,7 @@
 // Package abort implements the stackit abort command for canceling in-progress operations.
 package abort
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Handler receives events from abort action
 type Handler interface {

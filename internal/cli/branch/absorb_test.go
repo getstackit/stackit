@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers"
 )
 
 func TestAbsorbCommand(t *testing.T) {

@@ -3,7 +3,7 @@ package split
 import (
 	"charm.land/bubbles/v2/key"
 
-	"stackit.dev/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/tui/core"
 )
 
 // KeyMap defines unified key bindings for the split wizard

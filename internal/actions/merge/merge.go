@@ -2,8 +2,8 @@
 package merge
 
 import (
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // Options contains options for the merge command

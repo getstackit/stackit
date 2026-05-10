@@ -8,7 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 const (

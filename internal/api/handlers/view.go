@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // ViewHandler serves the combined view payload for the frontend.

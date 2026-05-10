@@ -8,17 +8,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/submit"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/config"
-	_ "stackit.dev/stackit/internal/demo" // Register demo engine factory
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	submitComponent "stackit.dev/stackit/internal/tui/components/submit"
-	"stackit.dev/stackit/internal/tui/components/tree"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/config"
+	_ "github.com/getstackit/stackit/internal/demo" // Register demo engine factory
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 type submitFlags struct {

@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/git"
-	githubpkg "stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/testhelpers"
+	"github.com/getstackit/stackit/internal/git"
+	githubpkg "github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/testhelpers"
 )
 
 func TestParseGitHubRemoteURL(t *testing.T) {

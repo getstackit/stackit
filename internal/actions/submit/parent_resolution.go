@@ -1,6 +1,6 @@
 package submit
 
-import "stackit.dev/stackit/internal/engine"
+import "github.com/getstackit/stackit/internal/engine"
 
 // resolveSubmitParentName returns the nearest non-worktree-anchor ancestor.
 // If no tracked non-anchor parent exists, trunk is returned.

@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	stackiterrors "stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
+	stackiterrors "github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // NewAgentsCmd creates the agent command

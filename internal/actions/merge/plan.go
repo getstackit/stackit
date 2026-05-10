@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Strategy defines how PRs in the stack should be merged

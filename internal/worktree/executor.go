@@ -4,9 +4,9 @@ package worktree
 import (
 	"context"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Session represents an active worktree session that can be used to execute operations.

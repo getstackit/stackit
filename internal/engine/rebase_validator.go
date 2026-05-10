@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"sync"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // ValidationErrorType distinguishes between conflict errors and system errors

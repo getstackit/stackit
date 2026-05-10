@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeCtx *app.Context, opts *Options) error {

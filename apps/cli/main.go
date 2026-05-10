@@ -6,8 +6,8 @@ import (
 	"os"
 	"runtime/debug"
 
-	"stackit.dev/stackit/internal/cli"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/cli"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 var (

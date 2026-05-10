@@ -14,11 +14,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/testhelpers"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/testhelpers"
 )
 
 // InProcessRunner is a function that executes a stackit command in-process.
@@ -321,7 +321,7 @@ func (s *Scenario) RunCli(args ...string) *Scenario {
 	if s.InProcess {
 		runner := GetGlobalInProcessRunner()
 		if runner == nil {
-			s.T.Fatal("GlobalInProcessRunner not set. Import stackit.dev/stackit/internal/integration/setup in your test.")
+			s.T.Fatal("GlobalInProcessRunner not set. Import github.com/getstackit/stackit/internal/integration/setup in your test.")
 		}
 		// Use in-process runner if enabled
 		_, err := runner(s.Scene.Dir, args...)

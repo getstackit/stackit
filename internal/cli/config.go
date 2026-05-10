@@ -10,13 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	configtui "stackit.dev/stackit/internal/tui/config"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	configtui "github.com/getstackit/stackit/internal/tui/config"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Config key constants for CLI commands

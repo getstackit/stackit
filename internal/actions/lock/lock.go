@@ -4,11 +4,11 @@ package lock
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/actions/submit"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Action locks the specified branch and all branches downstack of it

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/github"
-	"stackit.dev/stackit/internal/pr"
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/pr"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // GetPRTitle gets the PR title, prompting if needed

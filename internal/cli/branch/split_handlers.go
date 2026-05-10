@@ -8,17 +8,17 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/actions/split"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	splitcomp "stackit.dev/stackit/internal/tui/components/split"
-	"stackit.dev/stackit/internal/tui/style"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/actions/split"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	splitcomp "github.com/getstackit/stackit/internal/tui/components/split"
+	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewSplitUI creates a runner and handler pair for split operations.

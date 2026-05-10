@@ -6,7 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 func TestStackTreeRenderer_RenderStack_LinearStack(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // GetCommitDate returns the commit date for a branch

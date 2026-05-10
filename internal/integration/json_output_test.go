@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/actions/sync"
-	"stackit.dev/stackit/internal/handlers"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/handlers"
 )
 
 // =============================================================================

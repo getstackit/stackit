@@ -8,10 +8,10 @@ import (
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/actions/submit"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/shippable"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/shippable"
 )
 
 // Update handles all messages and updates the model.

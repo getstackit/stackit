@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	httpcontract "stackit.dev/stackit/internal/contracts/http"
-	"stackit.dev/stackit/internal/engine"
+	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // BranchDiffHandler serves raw branch patch diffs.

@@ -1,7 +1,7 @@
 package merge
 
 import (
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // MergeType represents what the user wants to merge

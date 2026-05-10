@@ -1,7 +1,7 @@
 // Package scope implements the stackit scope command for managing branch scopes.
 package scope
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Handler receives events from scope action
 type Handler interface {

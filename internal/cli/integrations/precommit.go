@@ -3,8 +3,8 @@ package integrations
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/integrations"
-	"stackit.dev/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/actions/integrations"
+	"github.com/getstackit/stackit/internal/cli/common"
 )
 
 // NewPrecommitCmd creates the precommit command

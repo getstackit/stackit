@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/tui/keys"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/tui/keys"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Tree symbols for rendering

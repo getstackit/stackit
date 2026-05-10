@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"strings"
 
-	"stackit.dev/stackit/internal/cli"
+	"github.com/getstackit/stackit/internal/cli"
 )
 
 // CLI provides in-process CLI execution for faster tests.

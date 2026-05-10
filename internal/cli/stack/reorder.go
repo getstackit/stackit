@@ -4,8 +4,8 @@ package stack
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/cli/common"
 )
 
 // NewReorderCmd creates the reorder command

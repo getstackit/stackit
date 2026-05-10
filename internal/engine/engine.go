@@ -17,7 +17,7 @@ import (
 	"context"
 	"io"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // PRManager provides operations for managing pull request information

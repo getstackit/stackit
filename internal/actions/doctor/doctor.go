@@ -4,7 +4,7 @@ package doctor
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/app"
 )
 
 // Options contains options for the doctor command

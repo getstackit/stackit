@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // SquashCurrentBranch squashes all commits in the current branch into a single commit

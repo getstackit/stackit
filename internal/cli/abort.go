@@ -3,12 +3,12 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions/abort"
-	"stackit.dev/stackit/internal/actions/absorb"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/cli/stack"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions/abort"
+	"github.com/getstackit/stackit/internal/actions/absorb"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/cli/stack"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // newAbortCmd creates the abort command

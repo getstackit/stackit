@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers"
 )
 
 // TestExampleUsage demonstrates how to use the testhelpers package.

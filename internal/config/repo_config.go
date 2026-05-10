@@ -7,7 +7,7 @@
 package config
 
 import (
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // resolveGitDir returns the path to the shared .git directory.

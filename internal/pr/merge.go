@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // FormatMergeTitleWithDescription formats a merge PR title, using the stack description if present.

@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 func TestValidateBranchesMatchRemote(t *testing.T) {

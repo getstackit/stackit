@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/inprocess"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/inprocess"
 )
 
 func TestInitIntegration(t *testing.T) {

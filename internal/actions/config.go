@@ -5,9 +5,9 @@ import (
 	"io"
 	"strings"
 
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 const valueNotSet = "(not set)"

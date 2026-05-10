@@ -3,13 +3,13 @@ package branch
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions/create"
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/tui/style"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/actions/create"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewCreateUI creates a runner and handler pair for create operations.

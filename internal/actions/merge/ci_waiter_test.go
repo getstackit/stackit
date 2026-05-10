@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 type mockGitHubClient struct {

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // GetPendingChanges returns the status of pending changes in the working directory

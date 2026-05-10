@@ -1,8 +1,8 @@
 package split
 
 import (
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // DirectionContext provides context for the direction selection prompt

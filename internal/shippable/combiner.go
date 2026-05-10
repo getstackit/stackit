@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions/merge"
-	"stackit.dev/stackit/internal/config"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/worktree"
+	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/worktree"
 )
 
 // Combiner analyzes whether multiple stacks can be merged together.

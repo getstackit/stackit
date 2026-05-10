@@ -1,10 +1,10 @@
 package stack
 
 import (
-	"stackit.dev/stackit/internal/actions/abort"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/actions/abort"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // NewAbortUI creates a handler for abort operations.

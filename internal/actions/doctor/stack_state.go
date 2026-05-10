@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // checkStackState performs stack state and metadata integrity checks

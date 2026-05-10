@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"stackit.dev/stackit/internal/actions"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // restackBranches handles restacking branches after sync operations.

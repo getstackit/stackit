@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	stackiterrors "stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/tui"
+	stackiterrors "github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 func TestReplaceWorkflowBlock(t *testing.T) {

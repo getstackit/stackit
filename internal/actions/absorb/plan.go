@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // PlanJSON is the machine-readable absorb plan for LLM consumption

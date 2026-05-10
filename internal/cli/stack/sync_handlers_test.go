@@ -6,11 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	syncAction "stackit.dev/stackit/internal/actions/sync"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	syncComponent "stackit.dev/stackit/internal/tui/components/sync"
+	syncAction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	syncComponent "github.com/getstackit/stackit/internal/tui/components/sync"
 )
 
 func TestInteractiveSyncHandler_Start(t *testing.T) {

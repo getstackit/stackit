@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // rebuildInternal is the internal rebuild logic without locking

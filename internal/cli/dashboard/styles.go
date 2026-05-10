@@ -3,7 +3,7 @@ package dashboard
 import (
 	"sync"
 
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // All dashboard styles are defined in style.DefaultDashboardStyles() so that

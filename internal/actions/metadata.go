@@ -1,8 +1,8 @@
 package actions
 
 import (
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // MetadataPushEngine defines the engine capabilities needed for pushing metadata.

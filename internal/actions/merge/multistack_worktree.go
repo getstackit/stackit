@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/worktree"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/worktree"
 )
 
 // MultiStackWorktreeResult contains the result of merging stacks in a worktree

@@ -3,14 +3,14 @@ package stack
 import (
 	"strings"
 
-	"stackit.dev/stackit/internal/actions/foreach"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	foreachComponent "stackit.dev/stackit/internal/tui/components/foreach"
-	"stackit.dev/stackit/internal/tui/components/tree"
-	"stackit.dev/stackit/internal/tui/core"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions/foreach"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	foreachComponent "github.com/getstackit/stackit/internal/tui/components/foreach"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewForeachUI creates a runner and handler pair for foreach operations.

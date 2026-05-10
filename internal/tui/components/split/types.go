@@ -1,6 +1,6 @@
 package split
 
-import "stackit.dev/stackit/internal/engine"
+import "github.com/getstackit/stackit/internal/engine"
 
 // Style specifies the split mode
 // Note: This mirrors split.Style from actions/split to avoid import cycles.

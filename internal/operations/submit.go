@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	submitAction "stackit.dev/stackit/internal/actions/submit"
-	"stackit.dev/stackit/internal/app"
+	submitAction "github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/app"
 )
 
 // SubmitOperation wraps the submit action as an async Operation.

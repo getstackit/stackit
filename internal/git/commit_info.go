@@ -8,7 +8,7 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 func (r *runner) getCommitDate(repo *Repository, branchName string) (time.Time, error) {

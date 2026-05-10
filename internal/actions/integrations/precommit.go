@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 const precommitHookTemplate = `#!/bin/bash

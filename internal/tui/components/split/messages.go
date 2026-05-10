@@ -2,7 +2,7 @@
 package split
 
 import (
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // TypeSelectedMsg indicates user selected a split type

@@ -6,7 +6,7 @@ import (
 	"iter"
 	"slices"
 
-	"stackit.dev/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/errors"
 )
 
 // AllBranches returns all branches

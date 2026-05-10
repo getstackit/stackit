@@ -7,12 +7,12 @@ import (
 	"strings"
 	"sync"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/handlers"
-	"stackit.dev/stackit/internal/rerere"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/handlers"
+	"github.com/getstackit/stackit/internal/rerere"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 var newWorktreeEngine = engine.NewEngineForWorktree

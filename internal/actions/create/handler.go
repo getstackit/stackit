@@ -1,6 +1,6 @@
 package create
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Step represents a step in the create process
 type Step string

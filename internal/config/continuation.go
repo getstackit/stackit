@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // ContinuationState represents the state of a command that was interrupted by a rebase conflict

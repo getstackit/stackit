@@ -1,7 +1,7 @@
 package foreach
 
 import (
-	"stackit.dev/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
 )
 
 // Event represents a feedback event from the foreach action.

@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // readMetadata loads branch metadata from the configured metadata store.

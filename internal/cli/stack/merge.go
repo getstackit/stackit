@@ -4,13 +4,13 @@ package stack
 import (
 	"github.com/spf13/cobra"
 
-	"stackit.dev/stackit/internal/actions"
-	mergeAction "stackit.dev/stackit/internal/actions/merge"
-	"stackit.dev/stackit/internal/actions/sync"
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/cli/common"
-	mergeCmd "stackit.dev/stackit/internal/cli/stack/merge"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions"
+	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/common"
+	mergeCmd "github.com/getstackit/stackit/internal/cli/stack/merge"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewMergeCmd creates the merge command

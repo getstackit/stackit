@@ -1,12 +1,12 @@
 package branch
 
 import (
-	"stackit.dev/stackit/internal/actions/fold"
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/actions/fold"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewFoldUI creates a runner and handler pair for fold operations.

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // ApplyHunksToBranch applies multiple hunks to commits in a branch by recreating them.

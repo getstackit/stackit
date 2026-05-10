@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/go-github/v62/github"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // StackitGitHubClient implements Client using the real GitHub API

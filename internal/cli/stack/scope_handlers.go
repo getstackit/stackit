@@ -3,10 +3,10 @@ package stack
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions/scope"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/actions/scope"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // NewScopeUI creates a handler for scope operations.

@@ -3,12 +3,12 @@ package stack
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/actions/flatten"
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
-	flattenComponent "stackit.dev/stackit/internal/tui/components/flatten"
+	"github.com/getstackit/stackit/internal/actions/flatten"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
+	flattenComponent "github.com/getstackit/stackit/internal/tui/components/flatten"
 )
 
 // NewFlattenUI creates a runner and handler pair for flatten operations.

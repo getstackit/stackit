@@ -1,6 +1,6 @@
 package fold
 
-import "stackit.dev/stackit/internal/actions/handler"
+import "github.com/getstackit/stackit/internal/actions/handler"
 
 // Step represents a step in the fold process
 type Step string

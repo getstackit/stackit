@@ -10,9 +10,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	httpcontract "stackit.dev/stackit/internal/contracts/http"
-	"stackit.dev/stackit/testhelpers"
-	"stackit.dev/stackit/testhelpers/scenario"
+	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
+	"github.com/getstackit/stackit/testhelpers"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 func TestBranchesHandler_AllowsBranchNamedDiff(t *testing.T) {

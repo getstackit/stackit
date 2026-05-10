@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"stackit.dev/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/merge"
 )
 
 func TestCombinationResult_IncludedCount(t *testing.T) {

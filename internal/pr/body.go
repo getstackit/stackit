@@ -1,7 +1,7 @@
 package pr
 
 import (
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // GenerateBody creates a PR body from branch commits.

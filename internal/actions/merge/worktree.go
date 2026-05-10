@@ -3,8 +3,8 @@ package merge
 import (
 	"fmt"
 
-	"stackit.dev/stackit/internal/app"
-	"stackit.dev/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // ExecuteInWorktree executes the merge plan in a temporary worktree

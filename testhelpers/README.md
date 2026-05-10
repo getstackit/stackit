@@ -18,7 +18,7 @@ The scene system creates isolated test environments with temporary Git repositor
 ```go
 import (
     "testing"
-    "stackit.dev/stackit/testhelpers"
+    "github.com/getstackit/stackit/testhelpers"
 )
 
 func TestMyFeature(t *testing.T) {
@@ -152,10 +152,10 @@ The `NewMockGitHubServer` and `NewMockGitHubClient` functions create a mock GitH
 ```go
 import (
     "testing"
-    "stackit.dev/stackit/testhelpers"
-    "stackit.dev/stackit/internal/actions"
-    "stackit.dev/stackit/internal/engine"
-    "stackit.dev/stackit/internal/output"
+    "github.com/getstackit/stackit/testhelpers"
+    "github.com/getstackit/stackit/internal/actions"
+    "github.com/getstackit/stackit/internal/engine"
+    "github.com/getstackit/stackit/internal/output"
 )
 
 func TestSubmitWithMockedGitHub(t *testing.T) {

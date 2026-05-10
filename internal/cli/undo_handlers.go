@@ -1,12 +1,12 @@
 package cli
 
 import (
-	"stackit.dev/stackit/internal/actions/handler"
-	"stackit.dev/stackit/internal/actions/undo"
-	"stackit.dev/stackit/internal/cli/common"
-	"stackit.dev/stackit/internal/engine"
-	"stackit.dev/stackit/internal/output"
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/actions/undo"
+	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // NewUndoUI creates a runner and handler pair for undo operations.

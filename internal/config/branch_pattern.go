@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"stackit.dev/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // BranchPattern represents a branch name pattern with validation

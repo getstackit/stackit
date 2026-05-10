@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"stackit.dev/stackit/internal/utils"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // LockReason is an enum for the reason why a branch is locked

@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	stackiterrors "stackit.dev/stackit/internal/errors"
-	"stackit.dev/stackit/internal/tui"
+	stackiterrors "github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 var (

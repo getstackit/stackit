@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"stackit.dev/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // viewString extracts the string content from a tea.View for test assertions.

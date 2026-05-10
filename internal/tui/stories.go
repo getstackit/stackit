@@ -7,8 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"stackit.dev/stackit/internal/tui/components/submit"
-	"stackit.dev/stackit/internal/tui/components/tree"
+	"github.com/getstackit/stackit/internal/tui/components/submit"
+	"github.com/getstackit/stackit/internal/tui/components/tree"
 )
 
 // Story represents a specific state of a TUI component

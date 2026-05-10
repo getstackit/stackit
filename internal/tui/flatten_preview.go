@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"stackit.dev/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // FlattenPlannedMove represents a single branch move in the flatten plan.

@@ -44,6 +44,7 @@ type LogModel struct {
 	engine       engine.Engine
 	githubClient github.Client
 	renderer     *tree.StackTreeRenderer
+	allBranches  []engine.Branch
 	viewport     viewport.Model
 	width        int
 	height       int
@@ -128,8 +129,9 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 
 	// Build minimal annotations synchronously (includes worktree info, no git/network calls)
 	start = time.Now()
+	allBranches := eng.AllBranches()
 	annotations := make(map[string]tree.BranchAnnotation)
-	for _, b := range eng.AllBranches() {
+	for _, b := range allBranches {
 		annotations[b.GetName()] = GetMinimalAnnotationWithWorktreeAndEmpty(eng, b, wtData)
 	}
 	// Apply annotation overrides (e.g., custom labels for move operation)
@@ -157,7 +159,7 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 
 	// Initialize search matches (all branches match when no search query)
 	searchMatches := make(map[string]bool)
-	for _, b := range eng.AllBranches() {
+	for _, b := range allBranches {
 		searchMatches[b.GetName()] = true
 	}
 
@@ -169,6 +171,7 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 		githubClient:      ghClient,
 		logger:            opts.Logger,
 		renderer:          renderer,
+		allBranches:       allBranches,
 		selectedBranch:    selectedBranch,
 		logKeys:           keys.DefaultLog,
 		selectKeys:        keys.DefaultSelect,
@@ -237,6 +240,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 	ctx := m.context
 	eng := m.engine
 	ghClient := m.githubClient
+	allBranches := m.allBranches
 	style := m.style
 	logger := m.logger
 
@@ -256,8 +260,6 @@ func (m *LogModel) enrichData() tea.Cmd {
 	return SafeCmdFunc("TUI enrichment", logger, func() tea.Msg {
 		enrichStart := time.Now()
 		logDebug("TUI enrichment started")
-
-		allBranches := eng.AllBranches()
 
 		// Channels for parallel results (buffered so goroutines don't block)
 		type ciResult struct {
@@ -638,18 +640,17 @@ func (m *LogModel) ensureVisible() {
 // updateSearchMatches updates the searchMatches map based on current searchQuery
 func (m *LogModel) updateSearchMatches() {
 	m.searchMatches = make(map[string]bool)
-	allBranches := m.engine.AllBranches() // Call once and reuse
 
 	if m.searchQuery == "" {
 		// All branches match when search is empty
-		for _, b := range allBranches {
+		for _, b := range m.allBranches {
 			m.searchMatches[b.GetName()] = true
 		}
 		return
 	}
 
 	query := strings.ToLower(m.searchQuery)
-	for _, b := range allBranches {
+	for _, b := range m.allBranches {
 		branchName := strings.ToLower(b.GetName())
 		m.searchMatches[b.GetName()] = strings.Contains(branchName, query)
 	}
@@ -731,7 +732,7 @@ func (m *LogModel) View() tea.View {
 		}
 	}
 
-	header := style.ColorDim(fmt.Sprintf(" %s | %d branches | %s", title, len(m.engine.AllBranches()), help))
+	header := style.ColorDim(fmt.Sprintf(" %s | %d branches | %s", title, len(m.allBranches), help))
 
 	// Render content - use viewport for full-screen mode, direct rendering for inline
 	var content string

@@ -23,7 +23,7 @@ func TestModifyCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch with commit
@@ -70,7 +70,7 @@ func TestModifyCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch with commit
@@ -103,7 +103,7 @@ func TestModifyCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch with commit
@@ -144,7 +144,7 @@ func TestModifyCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch A
@@ -189,9 +189,7 @@ func TestModifyCommand(t *testing.T) {
 
 	t.Run("modify errors on trunk branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Try to modify trunk (main)
 		cmd := exec.Command(binaryPath, "modify", "-a", "-n")
@@ -204,9 +202,7 @@ func TestModifyCommand(t *testing.T) {
 
 	t.Run("modify errors when not on a branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Detach HEAD
 		require.NoError(t, scene.Repo.RunGitCommand("checkout", "HEAD~0"))
@@ -244,7 +240,7 @@ func TestModifyCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create branch with commit
@@ -280,7 +276,7 @@ func TestModifyCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Create empty branch (no commits yet)

@@ -17,9 +17,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	// returns PullConflict even though a fast-forward is possible.
 
 	// 1. Setup a "remote" repository
-	remoteScene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
 	require.NoError(t, err)
 	err = remoteScene.Repo.PushBranch("upstream", "main")
@@ -92,9 +90,7 @@ func TestReloadRepository(t *testing.T) {
 	// This ensures go-git can see newly fetched commits
 
 	// 1. Setup a repository
-	scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 	// Create a runner and initialize it
 	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
@@ -135,9 +131,7 @@ func TestPullBranch_WithReload(t *testing.T) {
 	// Test that PullBranch works correctly with the refspec fix and reload mechanism
 
 	// 1. Setup a "remote" repository
-	remoteScene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
 	require.NoError(t, err)
 	err = remoteScene.Repo.PushBranch("upstream", "main")

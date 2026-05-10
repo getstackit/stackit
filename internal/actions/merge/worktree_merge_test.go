@@ -14,7 +14,7 @@ import (
 
 func TestExecuteInWorktree(t *testing.T) {
 	t.Run("successfully merges in worktree", func(t *testing.T) {
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch-a": "main",
 			})
@@ -42,11 +42,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a remote
-		remoteDir := t.TempDir()
-		s.RunGit("init", "--bare", remoteDir)
-		s.RunGit("remote", "add", "origin", remoteDir).
-			RunGit("push", "-u", "origin", "main").
-			RunGit("push", "-u", "origin", "branch-a")
+		s.RunGit("push", "-u", "origin", "branch-a")
 
 		// Create merge plan
 		s.Checkout("branch-a")
@@ -60,7 +56,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		require.True(t, validation.Valid)
 
 		// Now merge branch-a into main locally and push to simulate the PR merge
-		s.Checkout("main").
+		s.CheckoutQuiet("main").
 			RunGit("merge", "branch-a", "--no-ff", "-m", "Merge branch-a").
 			RunGit("push", "origin", "main")
 
@@ -96,7 +92,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		// the merge execution properly removes the worktree before deleting the branch.
 		// Previously, the deletion would fail silently because git refuses to delete
 		// a branch that is checked out in any worktree.
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch-a": "main",
 			})
@@ -124,11 +120,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a remote
-		remoteDir := t.TempDir()
-		s.RunGit("init", "--bare", remoteDir)
-		s.RunGit("remote", "add", "origin", remoteDir).
-			RunGit("push", "-u", "origin", "main").
-			RunGit("push", "-u", "origin", "branch-a")
+		s.RunGit("push", "-u", "origin", "branch-a")
 
 		// Create merge plan while on branch-a
 		s.Checkout("branch-a")

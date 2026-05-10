@@ -12,9 +12,7 @@ import (
 
 func TestIsDiffEmpty(t *testing.T) {
 	t.Run("returns true when branch equals base", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize git repo
 		runner := git.NewRunner(nil)
@@ -30,9 +28,7 @@ func TestIsDiffEmpty(t *testing.T) {
 	})
 
 	t.Run("returns false when branch has changes", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize git repo
 		runner := git.NewRunner(nil)
@@ -54,9 +50,7 @@ func TestIsDiffEmpty(t *testing.T) {
 	})
 
 	t.Run("returns true for branch with no commits", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize git repo
 		runner := git.NewRunner(nil)
@@ -80,9 +74,7 @@ func TestIsDiffEmpty(t *testing.T) {
 
 func TestGetUnmergedFiles(t *testing.T) {
 	t.Run("returns empty list when no conflicts", func(t *testing.T) {
-		_ = testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		_ = testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunner(nil)
 		files, err := runner.GetUnmergedFiles(context.Background())

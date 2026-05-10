@@ -21,7 +21,7 @@ func TestSubmitCommand(t *testing.T) {
 	t.Run("dry-run output format", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			runCliCommand(binaryPath, s.Dir, "init")

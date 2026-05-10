@@ -15,13 +15,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("basic info display on current branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch with commit
 		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
@@ -40,13 +34,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info for specified branch argument", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch A
 		if err := s.Scene.Repo.CreateChange("a change", "a", false); err != nil {
@@ -74,13 +62,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info shows parent branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch A
 		if err := s.Scene.Repo.CreateChange("a change", "a", false); err != nil {
@@ -104,13 +86,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info shows children branches", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch A
 		if err := s.Scene.Repo.CreateChange("a change", "a", false); err != nil {
@@ -134,13 +110,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info with --diff flag shows diff", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch with change
 		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
@@ -159,13 +129,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info with --patch flag shows patches", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch with change
 		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
@@ -184,13 +148,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info with --stat flag shows diffstat", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch with change
 		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
@@ -209,13 +167,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info with --stat --diff shows diffstat", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch with change
 		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
@@ -234,13 +186,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info with --stat --patch shows stat per commit", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch with change
 		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
@@ -259,9 +205,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info errors on non-existent branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Run info for non-existent branch
 		output, err := s.RunCliAndGetOutput("info", "nonexistent")
@@ -272,9 +216,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info works on trunk", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Run info on trunk (main)
 		output, err := s.RunCliAndGetOutput("info", "main")
@@ -285,9 +227,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info errors when not on branch and no branch specified", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			return sc.Repo.CreateChangeAndCommit("initial", "init")
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Detach HEAD
 		require.NoError(t, s.Scene.Repo.RunGitCommand("checkout", "HEAD~0"))
@@ -326,13 +266,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info with --stack --json shows JSON output", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch A
 		if err := s.Scene.Repo.CreateChange("a change", "a", false); err != nil {
@@ -359,13 +293,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info with --json shows JSON output for single branch", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch with change
 		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
@@ -389,13 +317,7 @@ func TestInfoCommand(t *testing.T) {
 
 	t.Run("info with --json shows scope when set", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenario(t, func(sc *testhelpers.Scene) error {
-			// Create initial commit
-			if err := sc.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-				return err
-			}
-			return nil
-		}).WithInProcess(true)
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
 		// Create branch with scope
 		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {

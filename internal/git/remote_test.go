@@ -12,9 +12,7 @@ import (
 
 func TestFetchRemoteShas(t *testing.T) {
 	t.Run("fetches SHAs from remote", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a bare remote
 		_, err := scene.Repo.CreateBareRemote("origin")
@@ -51,9 +49,7 @@ func TestFetchRemoteShas(t *testing.T) {
 	})
 
 	t.Run("returns empty map for empty remote", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a bare remote but don't push anything
 		_, err := scene.Repo.CreateBareRemote("origin")
@@ -68,9 +64,7 @@ func TestFetchRemoteShas(t *testing.T) {
 	})
 
 	t.Run("handles branches with slashes in names", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a bare remote
 		_, err := scene.Repo.CreateBareRemote("origin")

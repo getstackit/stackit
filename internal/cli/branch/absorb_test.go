@@ -24,7 +24,7 @@ func TestAbsorbCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Initialize stackit
@@ -69,7 +69,7 @@ func TestAbsorbCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Initialize stackit
@@ -113,7 +113,7 @@ func TestAbsorbCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Initialize stackit
@@ -143,7 +143,7 @@ func TestAbsorbCommand(t *testing.T) {
 	t.Run("absorb - only unabsorbable changes", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			cmd := exec.Command(binaryPath, "init")
@@ -214,7 +214,7 @@ func TestAbsorbCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Initialize stackit
@@ -253,7 +253,7 @@ func TestAbsorbCommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Initialize stackit
@@ -308,7 +308,7 @@ func TestAbsorbComplex(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create branch A
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			cmd := exec.Command(binaryPath, "init")

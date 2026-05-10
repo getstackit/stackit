@@ -14,9 +14,7 @@ import (
 
 func TestIsAncestor(t *testing.T) {
 	t.Run("returns true when commit is ancestor", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		err := runner.InitDefaultRepo()
@@ -39,9 +37,7 @@ func TestIsAncestor(t *testing.T) {
 	})
 
 	t.Run("returns false when commit is not ancestor", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		err := runner.InitDefaultRepo()
@@ -64,9 +60,7 @@ func TestIsAncestor(t *testing.T) {
 	})
 
 	t.Run("returns true when commits are the same", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		err := runner.InitDefaultRepo()
@@ -92,9 +86,7 @@ func TestIsAncestor_GoGitAfterFetch(t *testing.T) {
 
 	t.Run("works after fetch with fresh runner", func(t *testing.T) {
 		// 1. Setup a "remote" repository
-		remoteScene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
 		require.NoError(t, err)
 		err = remoteScene.Repo.PushBranch("upstream", "main")
@@ -144,9 +136,7 @@ func TestIsAncestor_GoGitAfterFetch(t *testing.T) {
 
 	t.Run("works with diverged branches", func(t *testing.T) {
 		// Test that IsAncestor correctly returns false for diverged branches
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		err := runner.InitDefaultRepo()

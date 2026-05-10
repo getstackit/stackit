@@ -20,9 +20,7 @@ func TestInitIntegration(t *testing.T) {
 		t.Parallel()
 
 		// Create a fresh scene without pre-initialization
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Remove any existing config
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
@@ -53,9 +51,7 @@ func TestInitIntegration(t *testing.T) {
 		t.Parallel()
 
 		// Create a fresh scene
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a legacy JSON config file
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
@@ -91,9 +87,7 @@ func TestInitIntegration(t *testing.T) {
 		t.Parallel()
 
 		// Create a fresh scene without initialization
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Remove any existing config
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")

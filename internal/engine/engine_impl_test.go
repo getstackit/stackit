@@ -584,9 +584,9 @@ func TestRebuild(t *testing.T) {
 		require.Equal(t, "main", parent1.GetName())
 
 		// Create new branch externally (not tracked)
-		s.CreateBranch("branch2").
+		s.CreateBranchQuiet("branch2").
 			Commit("branch2 change").
-			Checkout("main")
+			CheckoutQuiet("main")
 
 		// Rebuild should pick up new branch
 		err := s.Engine.Rebuild("main")
@@ -706,7 +706,7 @@ func TestGetDeletionStatus(t *testing.T) {
 			})
 
 		// Merge branch1 into main
-		s.Checkout("main").
+		s.CheckoutQuiet("main").
 			RunGit("merge", "branch1")
 
 		err := s.Engine.Rebuild("main")
@@ -725,7 +725,7 @@ func TestGetDeletionStatus(t *testing.T) {
 			})
 
 		// Merge branch1 into main so it would normally be deletable
-		s.Checkout("main").
+		s.CheckoutQuiet("main").
 			RunGit("merge", "branch1")
 
 		err := s.Engine.Rebuild("main")
@@ -763,7 +763,7 @@ func TestBatchGetDeletionStatuses(t *testing.T) {
 			})
 
 		// Merge branch1 into main (branch2 stays unmerged)
-		s.Checkout("main").
+		s.CheckoutQuiet("main").
 			RunGit("merge", "branch1")
 
 		err := s.Engine.Rebuild("main")
@@ -792,7 +792,7 @@ func TestBatchGetDeletionStatuses(t *testing.T) {
 			})
 
 		// Merge branch1 into main
-		s.Checkout("main").
+		s.CheckoutQuiet("main").
 			RunGit("merge", "branch1")
 
 		err := s.Engine.Rebuild("main")

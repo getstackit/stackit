@@ -64,9 +64,7 @@ type TestShell struct {
 // NewTestShell creates a shell-like test environment with an initialized repo.
 func NewTestShell(t *testing.T, binaryPath string) *TestShell {
 	t.Helper()
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	return &TestShell{t: t, scene: scene, binaryPath: binaryPath}
 }
 
@@ -100,9 +98,7 @@ func NewTestShellInProcess(t *testing.T, opts ...TestShellOption) *TestShell {
 		return sh
 	}
 
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		return s.Repo.CreateChangeAndCommit("initial", "init")
-	})
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	sh := &TestShell{
 		t:            t,
 		scene:        scene,
@@ -126,33 +122,7 @@ func NewTestShellWithRemote(t *testing.T, binaryPath string) *TestShell {
 // newTestShellWithRemote is the shared implementation for creating shells with remotes.
 func newTestShellWithRemote(t *testing.T, binaryPath string, inProcessCLI *inprocess.CLI) *TestShell {
 	t.Helper()
-
-	// Create a bare repository to act as the remote
-	remoteDir := t.TempDir()
-	cmd := exec.Command("git", "init", "--bare", remoteDir)
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "failed to create bare repo: %s", string(output))
-
-	// Create the scene with the remote set up
-	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-		// Create initial commit
-		if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
-			return err
-		}
-		// Add the bare repo as origin
-		cmd := exec.Command("git", "remote", "add", "origin", remoteDir)
-		cmd.Dir = s.Dir
-		if err := cmd.Run(); err != nil {
-			return err
-		}
-		// Push main to origin
-		cmd = exec.Command("git", "push", "-u", "origin", "main")
-		cmd.Dir = s.Dir
-		if err := cmd.Run(); err != nil {
-			return err
-		}
-		return nil
-	})
+	scene := testhelpers.NewRemoteSceneParallel(t)
 	return &TestShell{t: t, scene: scene, binaryPath: binaryPath, inProcessCLI: inProcessCLI}
 }
 

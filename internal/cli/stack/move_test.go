@@ -22,7 +22,7 @@ func TestMoveCommand(t *testing.T) {
 	t.Run("successful moves", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			runCliCommand(binaryPath, s.Dir, "init")
@@ -76,7 +76,7 @@ Restacked branch3 on branch1.
 	t.Run("dry-run shows what would happen without making changes", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			runCliCommand(binaryPath, s.Dir, "init")
@@ -111,7 +111,7 @@ Restacked branch3 on branch1.
 	t.Run("dry-run requires --onto flag", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			runCliCommand(binaryPath, s.Dir, "init")
@@ -133,7 +133,7 @@ Restacked branch3 on branch1.
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create a scenario that will have conflicts
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			runCliCommand(binaryPath, s.Dir, "init")
@@ -168,7 +168,7 @@ Restacked branch3 on branch1.
 	t.Run("invalid moves", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			if err := s.Repo.CreateChangeAndCommit("initial", "init"); err != nil {
+			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			runCliCommand(binaryPath, s.Dir, "init")

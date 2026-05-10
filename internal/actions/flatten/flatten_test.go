@@ -54,7 +54,7 @@ func TestFlattenAction(t *testing.T) {
 		// Make B depend on A
 		// A created "A_test.txt". B created "B_test.txt".
 		// We modify "A_test.txt" in B.
-		s.Checkout("B")
+		s.CheckoutQuiet("B")
 		writeFile(t, s, "A_test.txt", "modified by B")
 		s.RunGit("add", ".")
 		s.RunGit("commit", "-m", "B depends on A")
@@ -86,7 +86,7 @@ func TestFlattenAction(t *testing.T) {
 			})
 
 		// Make B depend on A
-		s.Checkout("B")
+		s.CheckoutQuiet("B")
 		writeFile(t, s, "A_test.txt", "modified by B")
 		s.RunGit("add", ".")
 		s.RunGit("commit", "-m", "B depends on A")
@@ -146,7 +146,7 @@ func TestFlattenAction(t *testing.T) {
 				"B": "A",
 			})
 
-		s.Checkout("B")
+		s.CheckoutQuiet("B")
 		s.Rebuild()
 
 		// Empty branch name should use current branch
@@ -203,7 +203,7 @@ func TestFlattenAction(t *testing.T) {
 
 		// C modifies A_test.txt (created by A's commit in WithStack)
 		// This means C depends on content from A
-		s.Checkout("C")
+		s.CheckoutQuiet("C")
 		writeFile(t, s, "A_test.txt", "modified by C - I depend on content from branch A")
 		s.RunGit("add", ".")
 		s.RunGit("commit", "-m", "C modifies A_test.txt")

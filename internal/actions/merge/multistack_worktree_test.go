@@ -17,14 +17,14 @@ func TestMultiStackWorktreeExecutor_ConflictingStackResetsState(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// stack1 modifies test.txt to "stack1"
-	s.CreateBranch("stack1").
+	s.CreateBranchQuiet("stack1").
 		TrackBranch("stack1", s.Engine.Trunk().GetName())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack1", ""))
 	s.Rebuild().
-		Checkout(s.Engine.Trunk().GetName())
+		CheckoutQuiet(s.Engine.Trunk().GetName())
 
 	// stack2 modifies the same file differently to force a conflict when merged after stack1
-	s.CreateBranch("stack2").
+	s.CreateBranchQuiet("stack2").
 		TrackBranch("stack2", s.Engine.Trunk().GetName())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack2", ""))
 	s.Rebuild().
@@ -51,12 +51,10 @@ func TestMultiStackWorktreeExecutor_ConflictingStackResetsState(t *testing.T) {
 }
 
 func TestMultiStackWorktreeExecutor_PullsTrunkBeforeMerge(t *testing.T) {
-	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s := scenario.NewRemoteScenario(t)
 
-	// Set up remote and push initial trunk
-	remotePath, err := s.Scene.Repo.CreateBareRemote("origin")
+	remotePath, err := s.Scene.Repo.RunGitCommandAndGetOutput("remote", "get-url", "origin")
 	require.NoError(t, err)
-	require.NoError(t, s.Scene.Repo.PushBranch("origin", s.Engine.Trunk().GetName()))
 
 	// Create a new commit on trunk and push it to the remote, then rewind local to make it stale
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("remote-change", "remote"))
@@ -89,27 +87,27 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 
 	// Create a stack with 3 branches: branch1 -> branch2 -> branch3
 	// Each branch modifies different files to avoid conflicts
-	s.CreateBranch("branch1").
+	s.CreateBranchQuiet("branch1").
 		TrackBranch("branch1", s.Engine.Trunk().GetName())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("branch1-content", "file1"))
 	branch1SHA, err := s.Scene.Repo.GetRevision("branch1")
 	require.NoError(t, err)
 	s.Rebuild()
 
-	s.CreateBranch("branch2").
+	s.CreateBranchQuiet("branch2").
 		TrackBranch("branch2", "branch1")
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("branch2-content", "file2"))
 	branch2SHA, err := s.Scene.Repo.GetRevision("branch2")
 	require.NoError(t, err)
 	s.Rebuild()
 
-	s.CreateBranch("branch3").
+	s.CreateBranchQuiet("branch3").
 		TrackBranch("branch3", "branch2")
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("branch3-content", "file3"))
 	branch3SHA, err := s.Scene.Repo.GetRevision("branch3")
 	require.NoError(t, err)
 	s.Rebuild().
-		Checkout(s.Engine.Trunk().GetName())
+		CheckoutQuiet(s.Engine.Trunk().GetName())
 
 	// Execute octopus merge
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)
@@ -166,36 +164,36 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Create stack1 with 2 branches modifying different files
-	s.CreateBranch("stack1-branch1").
+	s.CreateBranchQuiet("stack1-branch1").
 		TrackBranch("stack1-branch1", s.Engine.Trunk().GetName())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack1-b1", "s1file1"))
 	stack1Branch1SHA, err := s.Scene.Repo.GetRevision("stack1-branch1")
 	require.NoError(t, err)
 	s.Rebuild()
 
-	s.CreateBranch("stack1-branch2").
+	s.CreateBranchQuiet("stack1-branch2").
 		TrackBranch("stack1-branch2", "stack1-branch1")
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack1-b2", "s1file2"))
 	stack1Branch2SHA, err := s.Scene.Repo.GetRevision("stack1-branch2")
 	require.NoError(t, err)
 	s.Rebuild().
-		Checkout(s.Engine.Trunk().GetName())
+		CheckoutQuiet(s.Engine.Trunk().GetName())
 
 	// Create stack2 with 2 branches modifying different files (no conflicts with stack1)
-	s.CreateBranch("stack2-branch1").
+	s.CreateBranchQuiet("stack2-branch1").
 		TrackBranch("stack2-branch1", s.Engine.Trunk().GetName())
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack2-b1", "s2file1"))
 	stack2Branch1SHA, err := s.Scene.Repo.GetRevision("stack2-branch1")
 	require.NoError(t, err)
 	s.Rebuild()
 
-	s.CreateBranch("stack2-branch2").
+	s.CreateBranchQuiet("stack2-branch2").
 		TrackBranch("stack2-branch2", "stack2-branch1")
 	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("stack2-b2", "s2file2"))
 	stack2Branch2SHA, err := s.Scene.Repo.GetRevision("stack2-branch2")
 	require.NoError(t, err)
 	s.Rebuild().
-		Checkout(s.Engine.Trunk().GetName())
+		CheckoutQuiet(s.Engine.Trunk().GetName())
 
 	// Execute multi-stack merge
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)

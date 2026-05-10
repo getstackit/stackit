@@ -13,9 +13,7 @@ import (
 
 func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
 	t.Run("deletes multiple remote metadata refs", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a bare remote
 		_, err := scene.Repo.CreateBareRemote("origin")
@@ -60,9 +58,7 @@ func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
 	})
 
 	t.Run("handles single ref deletion", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		_, err := scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)

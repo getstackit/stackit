@@ -12,9 +12,7 @@ import (
 
 func TestGetRepoInfo(t *testing.T) {
 	t.Run("parses SCP-style SSH URL", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Set remote URL to SCP-style SSH format
 		err := scene.Repo.RunGitCommand("config", "remote.origin.url", "git@github.com:myowner/myrepo.git")
@@ -28,9 +26,7 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 
 	t.Run("parses ssh:// protocol SSH URL", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Set remote URL to ssh:// protocol format
 		err := scene.Repo.RunGitCommand("config", "remote.origin.url", "ssh://git@github.com/myowner/myrepo.git")
@@ -44,9 +40,7 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 
 	t.Run("parses ssh:// protocol SSH URL without .git suffix", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		err := scene.Repo.RunGitCommand("config", "remote.origin.url", "ssh://git@github.com/myowner/myrepo")
 		require.NoError(t, err)
@@ -59,9 +53,7 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 
 	t.Run("parses ssh:// protocol with GitHub Enterprise", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		err := scene.Repo.RunGitCommand("config", "remote.origin.url", "ssh://git@github.enterprise.com/org/project.git")
 		require.NoError(t, err)
@@ -74,9 +66,7 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 
 	t.Run("parses HTTPS URL", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		err := scene.Repo.RunGitCommand("config", "remote.origin.url", "https://github.com/myowner/myrepo.git")
 		require.NoError(t, err)
@@ -89,9 +79,7 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 
 	t.Run("returns empty for missing remote", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// Don't set any remote URL
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
@@ -102,9 +90,7 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 
 	t.Run("parses HTTPS URL with authentication", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// HTTPS URL with embedded username (e.g., for token auth)
 		err := scene.Repo.RunGitCommand("config", "remote.origin.url", "https://user@github.com/myowner/myrepo.git")
@@ -118,9 +104,7 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 
 	t.Run("parses ssh:// URL with explicit port", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// SSH URL with explicit port number
 		err := scene.Repo.RunGitCommand("config", "remote.origin.url", "ssh://git@github.com:22/myowner/myrepo.git")
@@ -134,9 +118,7 @@ func TestGetRepoInfo(t *testing.T) {
 	})
 
 	t.Run("parses git:// protocol URL", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
-			return s.Repo.CreateChangeAndCommit("initial", "init")
-		})
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		// git:// protocol (read-only anonymous access)
 		err := scene.Repo.RunGitCommand("config", "remote.origin.url", "git://github.com/myowner/myrepo.git")

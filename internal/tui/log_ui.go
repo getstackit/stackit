@@ -45,6 +45,7 @@ type LogModel struct {
 	githubClient github.Client
 	renderer     *tree.StackTreeRenderer
 	allBranches  []engine.Branch
+	trunkName    string
 	viewport     viewport.Model
 	width        int
 	height       int
@@ -72,6 +73,7 @@ type LogModel struct {
 	cachedTreeData  *tree.CachedTreeData // Cached tree without selection (Phase 3)
 	cachedTreeValid bool                 // Whether cachedTreeData is valid
 	cachedLines     []string             // All rendered lines (with selection applied)
+	branchLineStart []int                // Starting line offset for each rendered branch
 
 	// Options
 	altScreen         bool
@@ -149,11 +151,12 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 
 	// Set initial selection
 	start = time.Now()
+	trunkName := eng.Trunk().GetName()
 	selectedBranch := ""
 	if current := eng.CurrentBranch(); current != nil {
 		selectedBranch = current.GetName()
 	} else {
-		selectedBranch = eng.Trunk().GetName()
+		selectedBranch = trunkName
 	}
 	logDebug("Initial selection completed in %v", time.Since(start))
 
@@ -172,6 +175,7 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 		logger:            opts.Logger,
 		renderer:          renderer,
 		allBranches:       allBranches,
+		trunkName:         trunkName,
 		selectedBranch:    selectedBranch,
 		logKeys:           keys.DefaultLog,
 		selectKeys:        keys.DefaultSelect,
@@ -579,7 +583,6 @@ func (m *LogModel) renderTree() {
 		return
 	}
 
-	trunk := m.engine.Trunk().GetName()
 	mode := tree.RenderModeFull
 	if m.mode == LogModeSelect {
 		mode = tree.RenderModeSelect
@@ -599,15 +602,23 @@ func (m *LogModel) renderTree() {
 		m.branches = m.cachedTreeData.ApplySelection(m.selectedBranch)
 	} else {
 		// Slow path: full render and cache
-		m.cachedTreeData = m.renderer.RenderStackCached(trunk, opts)
+		m.cachedTreeData = m.renderer.RenderStackCached(m.trunkName, opts)
 		m.cachedTreeValid = true
 		m.branches = m.cachedTreeData.ApplySelection(m.selectedBranch)
 	}
 
 	// Flatten lines for viewport/direct rendering
-	m.cachedLines = nil
+	totalLines := 0
 	for _, b := range m.branches {
+		totalLines += len(b.Lines)
+	}
+	m.cachedLines = make([]string, 0, totalLines)
+	m.branchLineStart = make([]int, len(m.branches))
+	lineOffset := 0
+	for i, b := range m.branches {
+		m.branchLineStart[i] = lineOffset
 		m.cachedLines = append(m.cachedLines, b.Lines...)
+		lineOffset += len(b.Lines)
 	}
 
 	// Update viewport with rendered content (skip in inline mode - viewport not used)
@@ -620,12 +631,11 @@ func (m *LogModel) ensureVisible() {
 	if m.selectedIndex < 0 || m.selectedIndex >= len(m.branches) {
 		return
 	}
-
-	// Calculate the line offset for the selected branch
-	lineOffset := 0
-	for i := 0; i < m.selectedIndex; i++ {
-		lineOffset += len(m.branches[i].Lines)
+	if m.selectedIndex >= len(m.branchLineStart) {
+		return
 	}
+
+	lineOffset := m.branchLineStart[m.selectedIndex]
 
 	branchHeight := len(m.branches[m.selectedIndex].Lines)
 
@@ -744,7 +754,6 @@ func (m *LogModel) View() tea.View {
 		content = strings.Join(m.cachedLines, "\n")
 	default:
 		// Fallback: render tree directly for immediate display before first renderTree call
-		trunk := m.engine.Trunk().GetName()
 		mode := tree.RenderModeFull
 		if m.mode == LogModeSelect {
 			mode = tree.RenderModeSelect
@@ -757,7 +766,7 @@ func (m *LogModel) View() tea.View {
 			SearchMatches:  m.searchMatches,
 			NonSelectable:  m.nonSelectable,
 		}
-		branches := m.renderer.RenderStackDetailed(trunk, opts)
+		branches := m.renderer.RenderStackDetailed(m.trunkName, opts)
 		var lines []string
 		for _, b := range branches {
 			lines = append(lines, b.Lines...)

@@ -1,7 +1,7 @@
 <!-- stackit:start -->
 ## Git Workflow: Stacked PRs
 
-This project uses [stackit](https://stackit.dev) for stacked changes.
+This project uses [stackit](https://github.com/getstackit/stackit) for stacked changes.
 AI agents should proactively work in stacks.
 
 ### Why Stack?

@@ -121,20 +121,29 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 		renderer = tui.NewStackTreeRenderer(ctx.Engine)
 	}
 
-	// Pre-load metadata and revisions for all branches to eliminate per-branch
-	// cache misses during parallel annotation building.
-	ctx.Engine.PreloadBranchData()
-
-	// Render the stack
-	// First, collect annotations for all branches in the stack using a worker pool
-	annotations := make(map[string]tree.BranchAnnotation)
 	allBranches := ctx.Engine.AllBranches()
+	renderOpts := tree.RenderOptions{
+		Mode:        tree.RenderModeFull, // We want the full tree characters with stats
+		Steps:       opts.Steps,
+		ShowSHAs:    opts.ShowSHAs,
+		HideSummary: opts.Style == LogStyleShort,
+	}
+	visibleBranches := visibleLogBranches(renderer, opts.BranchName, renderOpts, allBranches)
+
+	// Pre-load branch data only when most branches will be annotated. Bounded log
+	// views are faster with lazy lookups than with a repo-wide preload.
+	if shouldPreloadLogBranchData(opts, len(visibleBranches), len(allBranches)) {
+		ctx.Engine.PreloadBranchData()
+	}
+
+	// Collect annotations only for branches that will be rendered.
+	annotations := make(map[string]tree.BranchAnnotation, len(visibleBranches))
 
 	// Prefetch CI status in batch if in FULL style
 	var ciStatuses map[string]*github.CheckStatus
 	if opts.Style == LogStyleFull && ctx.GitHub() != nil {
-		branchNames := make([]string, 0, len(allBranches))
-		for _, b := range allBranches {
+		branchNames := make([]string, 0, len(visibleBranches))
+		for _, b := range visibleBranches {
 			if !b.IsTrunk() {
 				branchNames = append(branchNames, b.GetName())
 			}
@@ -154,11 +163,11 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 		branchName string
 		annotation tree.BranchAnnotation
 	}
-	results := make(chan result, len(allBranches))
+	results := make(chan result, len(visibleBranches))
 
-	if len(allBranches) > 0 {
-		utils.Run(allBranches, func(branchObj engine.Branch) {
-			annotation := tui.BuildFullAnnotation(ctx.Engine, branchObj, enrichment)
+	if len(visibleBranches) > 0 {
+		utils.Run(visibleBranches, func(branchObj engine.Branch) {
+			annotation := buildLogAnnotation(ctx.Engine, branchObj, opts, wtData, enrichment)
 			results <- result{branchObj.GetName(), annotation}
 		})
 	}
@@ -170,12 +179,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 
 	renderer.SetAnnotations(annotations)
 
-	stackLines := renderer.RenderStack(opts.BranchName, tree.RenderOptions{
-		Mode:        tree.RenderModeFull, // We want the full tree characters with stats
-		Steps:       opts.Steps,
-		ShowSHAs:    opts.ShowSHAs,
-		HideSummary: opts.Style == LogStyleShort,
-	})
+	stackLines := renderer.RenderStack(opts.BranchName, renderOpts)
 
 	// Add summary footer
 	branchCount := 0
@@ -222,6 +226,57 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 	ctx.Output.Newline()
 
 	return nil
+}
+
+func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opts tree.RenderOptions, branches []engine.Branch) []engine.Branch {
+	branchByName := make(map[string]engine.Branch, len(branches))
+	for _, b := range branches {
+		branchByName[b.GetName()] = b
+	}
+
+	rendered := renderer.RenderStackDetailed(branchName, opts)
+	visible := make([]engine.Branch, 0, len(rendered))
+	seen := make(map[string]struct{}, len(rendered))
+	for _, renderedBranch := range rendered {
+		if _, ok := seen[renderedBranch.Name]; ok {
+			continue
+		}
+		seen[renderedBranch.Name] = struct{}{}
+		if branch, ok := branchByName[renderedBranch.Name]; ok {
+			visible = append(visible, branch)
+		}
+	}
+	return visible
+}
+
+func shouldPreloadLogBranchData(opts LogOptions, visibleCount, totalCount int) bool {
+	if opts.Style == LogStyleShort {
+		return false
+	}
+	if visibleCount == 0 || totalCount == 0 {
+		return false
+	}
+	return visibleCount*2 >= totalCount
+}
+
+func buildLogAnnotation(
+	eng engine.Engine,
+	branch engine.Branch,
+	opts LogOptions,
+	wtData *tui.WorktreeData,
+	enrichment *tui.AnnotationEnrichment,
+) tree.BranchAnnotation {
+	if opts.Style != LogStyleShort {
+		return tui.BuildFullAnnotation(eng, branch, enrichment)
+	}
+
+	annotation := tui.GetMinimalAnnotationWithWorktreeAndEmpty(eng, branch, wtData)
+	if opts.ShowSHAs {
+		if sha, err := branch.GetRevision(); err == nil && len(sha) >= 7 {
+			annotation.LocalSHA = sha[:7]
+		}
+	}
+	return annotation
 }
 
 func getUntrackedBranchNames(ctx *app.Context) []string {

@@ -52,6 +52,25 @@ type submitFlags struct {
 	noAssignees          bool
 }
 
+func snapshotToStackTree(snapshot submit.StackSnapshot) *tree.StackTree {
+	childrenMap := make(map[string][]string, len(snapshot.Branches))
+	for _, branchName := range snapshot.Branches {
+		parentName := snapshot.ParentMap[branchName]
+		if parentName != "" {
+			childrenMap[parentName] = append(childrenMap[parentName], branchName)
+		}
+	}
+
+	return &tree.StackTree{
+		Branches:       snapshot.Branches,
+		CurrentBranchV: snapshot.CurrentBranch,
+		TrunkBranch:    snapshot.TrunkBranch,
+		ParentMap:      snapshot.ParentMap,
+		ChildrenMap:    childrenMap,
+		FixedMap:       snapshot.FixedMap,
+	}
+}
+
 func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
 	cmd.Flags().StringVar(&f.branch, "branch", "", "Which branch to run this command from. Defaults to the current branch.")
 	cmd.Flags().BoolVarP(&f.stack, "stack", "s", false, "Submit descendants of the current branch in addition to its ancestors.")
@@ -212,14 +231,19 @@ type SimpleSubmitHandler struct {
 	splog     output.Output
 	out       io.Writer
 	items     map[string]*branchItem
+	order     []string
 	mu        sync.Mutex
 	started   bool
 	displayed bool
 }
 
 type branchItem struct {
-	name   string
-	action string
+	name     string
+	action   string
+	prNumber *int
+	url      string
+	status   string
+	err      error
 }
 
 // NewSimpleSubmitHandler creates a new simple submit handler
@@ -239,20 +263,21 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 	switch ev := e.(type) {
 	case submit.StackDisplayEvent:
 		h.displayed = true
+		stackTree := snapshotToStackTree(ev.Stack)
 		h.splog.Info("Stack to submit:")
 		for _, branch := range ev.Stack.Branches {
 			marker := "  "
-			if branch == ev.Stack.CurrentBranch() {
+			if branch == stackTree.CurrentBranch() {
 				marker = "● "
 			}
-			scope := ev.ScopeMap[branch]
-			worktree := ev.WorktreeMap[branch]
+			scope := ev.Stack.ScopeMap[branch]
+			worktree := ev.Stack.WorktreeMap[branch]
 
 			var line string
 			if scope != "" {
-				line = marker + branch + " [" + scope + "]"
+				line = marker + submitComponent.DisplayBranchName(branch) + " [" + scope + "]"
 			} else {
-				line = marker + branch
+				line = marker + submitComponent.DisplayBranchName(branch)
 			}
 			if worktree != "" {
 				line += " 📂 worktree"
@@ -271,9 +296,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		// Skip - we'll show progress during actual submission
 
 	case submit.BranchPlanEvent:
-		displayName := ev.BranchName
+		displayName := submitComponent.DisplayBranchName(ev.BranchName)
 		if ev.IsCurrent {
-			displayName = ev.BranchName + " (current)"
+			displayName += " (current)"
 		}
 		if ev.Skipped {
 			h.splog.Info("  ▸ %s %s", style.ColorDim(displayName), style.ColorDim("— "+ev.SkipReason))
@@ -283,19 +308,30 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 
 	case submit.SubmissionStartEvent:
 		h.started = true
+		h.order = h.order[:0]
 		for _, branch := range ev.Branches {
 			h.items[branch.Name] = &branchItem{
-				name:   branch.Name,
-				action: branch.Action,
+				name:     branch.Name,
+				action:   branch.Action,
+				prNumber: branch.PRNumber,
+				status:   string(submit.StatusPending),
 			}
+			h.order = append(h.order, branch.Name)
 		}
 		h.splog.Newline()
-		h.splog.Info("Submitting...")
+		h.splog.Info("Submitting %d %s", len(ev.Branches), pluralizeBranches(len(ev.Branches)))
 
 	case submit.BranchProgressEvent:
 		item := h.items[ev.BranchName]
 		if item == nil {
 			return
+		}
+		item.status = string(ev.Status)
+		if ev.URL != "" {
+			item.url = ev.URL
+		}
+		if ev.Error != nil {
+			item.err = ev.Error
 		}
 
 		switch ev.Status {
@@ -304,26 +340,36 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			if item.action == "update" {
 				action = "Updating"
 			}
-			h.splog.Info("  ⋯ %s %s...", ev.BranchName, action)
+			h.splog.Info("  ⋯ %s %s...", submitComponent.DisplayBranchName(ev.BranchName), action)
 
 		case submit.StatusSyncing:
-			h.splog.Info("  ⋯ %s syncing...", ev.BranchName)
+			h.splog.Info("  ⋯ %s syncing...", submitComponent.DisplayBranchName(ev.BranchName))
 
 		case submit.StatusDone:
 			actionDone := "created"
 			if item.action == "update" {
 				actionDone = "updated"
 			}
-			h.splog.Info("  ✓ %s %s → %s", ev.BranchName, actionDone, ev.URL)
+			ref := submitComponent.PRRef(item.toSubmitItem())
+			if ref != "" {
+				h.splog.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), ref)
+			} else {
+				h.splog.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), actionDone)
+			}
 
 		case submit.StatusError:
-			h.splog.Info("  ✗ %s failed: %v", ev.BranchName, ev.Error)
+			h.splog.Info("  ✗ %s failed: %v", submitComponent.DisplayBranchName(ev.BranchName), ev.Error)
 		}
 
 	case submit.CompletionEvent:
 		switch {
 		case !ev.Success && ev.Message != "":
 			h.splog.Info("%s", ev.Message)
+		case ev.Success && ev.Message == "Submit complete":
+			if summary := submitComponent.FormatURLSummary(h.submitItems()); summary != "" {
+				h.splog.Newline()
+				h.splog.Info("%s", summary)
+			}
 		case ev.Success && !h.displayed && ev.Message != "":
 			// No stack was ever displayed (empty scope / nothing to submit).
 			// Surface the outcome that the CLI used to print before delegating
@@ -332,6 +378,39 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			h.splog.Info("%s", ev.Message)
 		}
 	}
+}
+
+func (h *SimpleSubmitHandler) submitItems() []submitComponent.Item {
+	items := make([]submitComponent.Item, 0, len(h.order))
+	for _, name := range h.order {
+		item := h.items[name]
+		if item == nil {
+			continue
+		}
+		items = append(items, item.toSubmitItem())
+	}
+	return items
+}
+
+func (i *branchItem) toSubmitItem() submitComponent.Item {
+	if i == nil {
+		return submitComponent.Item{}
+	}
+	return submitComponent.Item{
+		BranchName: i.name,
+		Action:     i.action,
+		PRNumber:   i.prNumber,
+		Status:     i.status,
+		URL:        i.url,
+		Error:      i.err,
+	}
+}
+
+func pluralizeBranches(count int) string {
+	if count == 1 {
+		return "branch"
+	}
+	return "branches"
 }
 
 // Confirm prompts for confirmation - in non-TTY mode, uses default
@@ -386,11 +465,11 @@ func (h *InteractiveSubmitHandler) findRootBranch() string {
 func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 	switch ev := e.(type) {
 	case submit.StackDisplayEvent:
-		h.stack = ev.Stack
-		h.fixedMap = ev.FixedMap
+		h.stack = snapshotToStackTree(ev.Stack)
+		h.fixedMap = ev.Stack.FixedMap
 
 		// Build a tree renderer from the stack with custom fixed logic
-		renderer := ev.Stack.ToRendererWithFixed(func(branchName string) bool {
+		renderer := h.stack.ToRendererWithFixed(func(branchName string) bool {
 			// Trunk is always "fixed" (never needs restack)
 			if branchName == h.stack.TrunkBranch {
 				return true
@@ -406,8 +485,8 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 				continue
 			}
 
-			scope := ev.ScopeMap[branchName]
-			worktreePath := ev.WorktreeMap[branchName]
+			scope := ev.Stack.ScopeMap[branchName]
+			worktreePath := ev.Stack.WorktreeMap[branchName]
 			renderer.SetAnnotation(branchName, tree.BranchAnnotation{
 				Scope:         scope,
 				ExplicitScope: scope,
@@ -508,6 +587,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			h.runner.Send(submitComponent.GlobalMessageMsg(""))
 		}
 		h.runner.Send(submitComponent.ProgressCompleteMsg{})
+		h.runner.Wait()
 	}
 }
 

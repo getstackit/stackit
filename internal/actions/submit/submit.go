@@ -12,7 +12,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -170,15 +169,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	stackTree := tree.NewStackTree(branchObjs, currentBranchName, nav.Trunk().GetName())
-	normalizeDisplayTreeParents(nav, stackTree)
+	stackSnapshot := buildStackSnapshot(nav, branchObjs, currentBranchName, nav.Trunk().GetName(), fixedMap, scopeMap, worktreeMap)
 
 	// Display the stack
 	handler.OnEvent(StackDisplayEvent{
-		Stack:       stackTree,
-		FixedMap:    fixedMap,
-		ScopeMap:    scopeMap,
-		WorktreeMap: worktreeMap,
+		Stack: stackSnapshot,
 	})
 
 	// Restack if requested
@@ -346,23 +341,34 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	return nil
 }
 
-// normalizeDisplayTreeParents rewrites stack display parent links to skip
-// worktree anchors so submit tree rendering matches log rendering behavior.
-func normalizeDisplayTreeParents(nav engine.StackNavigator, stackTree *tree.StackTree) {
-	if stackTree == nil {
-		return
+// buildStackSnapshot captures the stack relationships and metadata that submit
+// adapters need for rendering.
+func buildStackSnapshot(
+	nav engine.StackNavigator,
+	branches []engine.Branch,
+	currentBranchName string,
+	trunkBranchName string,
+	fixedMap map[string]bool,
+	scopeMap map[string]string,
+	worktreeMap map[string]string,
+) StackSnapshot {
+	parentMap := make(map[string]string, len(branches))
+	branchNames := make([]string, len(branches))
+	for i, branch := range branches {
+		branchName := branch.GetName()
+		branchNames[i] = branchName
+		parentMap[branchName] = resolveSubmitParentName(nav, branch)
 	}
 
-	childrenMap := make(map[string][]string, len(stackTree.Branches))
-	for _, branchName := range stackTree.Branches {
-		branch := nav.GetBranch(branchName)
-		parentName := resolveSubmitParentName(nav, branch)
-		stackTree.ParentMap[branchName] = parentName
-		if parentName != "" {
-			childrenMap[parentName] = append(childrenMap[parentName], branchName)
-		}
+	return StackSnapshot{
+		Branches:      branchNames,
+		CurrentBranch: currentBranchName,
+		TrunkBranch:   trunkBranchName,
+		ParentMap:     parentMap,
+		FixedMap:      fixedMap,
+		ScopeMap:      scopeMap,
+		WorktreeMap:   worktreeMap,
 	}
-	stackTree.ChildrenMap = childrenMap
 }
 
 // submitBranch creates or updates the PR for a single branch. The branch has

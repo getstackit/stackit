@@ -161,6 +161,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ProgressCompleteMsg:
 		m.Done = true
+		summary := FormatURLSummary(m.Items)
+		if summary != "" {
+			return m, tea.Sequence(
+				tea.Printf("\n%s", summary),
+				tea.Quit,
+			)
+		}
 		return m, tea.Quit
 	}
 
@@ -169,6 +176,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the model as a string.
 func (m *Model) View() tea.View {
+	if m.Done {
+		return tea.NewView("")
+	}
+
 	var b strings.Builder
 
 	if m.Renderer != nil {
@@ -211,82 +222,54 @@ func (m *Model) View() tea.View {
 			}
 			m.Renderer.SetAnnotation(item.BranchName, ann)
 		}
-
-		lines := m.Renderer.RenderStack(m.RootBranch, tree.RenderOptions{
-			HideStats:   true,
-			HideSummary: true,
-		})
-		b.WriteString(strings.Join(lines, "\n"))
-	} else {
-		// Fallback to list view if no renderer
-		for i, item := range m.Items {
-			var icon string
-			var status string
-
-			switch item.Status {
-			case StatusPending, "":
-				icon = m.Styles.DimStyle.Render("○")
-				if item.IsSkipped {
-					if item.SkipReason == SkipReasonNoChanges {
-						status = m.Styles.DimStyle.Render(SkipReasonNoChanges)
-					} else {
-						status = m.Styles.DimStyle.Render("skipped (" + item.SkipReason + ")")
-					}
-				} else {
-					status = m.Styles.DimStyle.Render("will " + item.Action)
-				}
-			case StatusSubmitting:
-				icon = m.spinner.View()
-				action := "Creating"
-				if item.Action == ActionUpdate {
-					action = "Updating"
-				}
-				status = m.Styles.SpinnerStyle.Render(action + "...")
-			case StatusSyncing:
-				icon = m.spinner.View()
-				status = m.Styles.SpinnerStyle.Render("syncing...")
-			case StatusDone:
-				icon = m.Styles.DoneStyle.Render("✓")
-				status = m.Styles.DoneStyle.Render(item.Action + "ed")
-			case StatusError:
-				icon = m.Styles.ErrorStyle.Render("✗")
-				status = m.Styles.ErrorStyle.Render("failed")
-			}
-
-			branchName := m.Styles.BranchStyle.Render(item.BranchName)
-			line := fmt.Sprintf("  %s %s %s", icon, branchName, status)
-
-			if item.Status == StatusDone && item.URL != "" {
-				line += " " + m.Styles.URLStyle.Render("→ "+item.URL)
-			}
-			if item.Status == StatusError && item.Error != nil {
-				line += " " + m.Styles.ErrorStyle.Render(item.Error.Error())
-			}
-
-			b.WriteString(line)
-			if i < len(m.Items)-1 {
-				b.WriteString("\n")
-			}
-		}
 	}
 
-	if m.Done {
-		completed := 0
-		failed := 0
-		for _, item := range m.Items {
-			switch item.Status {
-			case StatusDone:
-				completed++
-			case StatusError:
-				failed++
-			}
-		}
-		if failed > 0 {
-			b.WriteString("\n\n")
-			b.WriteString(m.Styles.ErrorStyle.Render(fmt.Sprintf("Completed: %d, Failed: %d", completed, failed)))
+	header := m.header()
+	if header != "" {
+		b.WriteString(header)
+		b.WriteString("\n\n")
+	}
+
+	width := m.Width
+	if width == 0 {
+		width = defaultSubmitWidth
+	}
+	for i, item := range m.Items {
+		b.WriteString(FormatCompactRow(item, width, m.spinner.View(), m.Styles))
+		if i < len(m.Items)-1 {
+			b.WriteString("\n")
 		}
 	}
 
 	b.WriteString("\n")
 	return tea.NewView(b.String())
+}
+
+func (m *Model) header() string {
+	message := strings.TrimSpace(m.GlobalMessage)
+	count := len(m.Items)
+	if message == "" {
+		if count == 0 {
+			return ""
+		}
+		return fmt.Sprintf("Submit %d %s", count, pluralBranch(count))
+	}
+
+	switch strings.TrimSuffix(message, "...") {
+	case "Submitting":
+		return fmt.Sprintf("Submitting %d %s", count, pluralBranch(count))
+	case "Preparing branches":
+		return fmt.Sprintf("Preparing %d %s", count, pluralBranch(count))
+	case "Restacking branches":
+		return fmt.Sprintf("Restacking %d %s", count, pluralBranch(count))
+	default:
+		return message
+	}
+}
+
+func pluralBranch(count int) string {
+	if count == 1 {
+		return "branch"
+	}
+	return "branches"
 }

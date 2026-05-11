@@ -1,22 +1,28 @@
 package submit
 
-import (
-	"github.com/getstackit/stackit/internal/tui/components/tree"
-)
-
 // Event represents a feedback event from the submit action.
 // Implementations should use type switches to handle specific event types.
 type Event interface {
 	submitEvent() // marker method for type safety
 }
 
+// StackSnapshot contains the branch relationships and metadata needed to render
+// the stack being submitted. This is action-layer data; adapters decide how to
+// visualize it.
+type StackSnapshot struct {
+	Branches      []string          // branches in the stack, in order
+	CurrentBranch string            // currently checked out branch
+	TrunkBranch   string            // trunk/main branch name
+	ParentMap     map[string]string // branch -> parent
+	FixedMap      map[string]bool   // branch -> is fixed (doesn't need restack)
+	ScopeMap      map[string]string // branch -> scope
+	WorktreeMap   map[string]string // branch -> worktree path (for stack roots with managed worktrees)
+}
+
 // StackDisplayEvent indicates the initial stack visualization phase.
 // Handlers can use this to display the branches that will be processed.
 type StackDisplayEvent struct {
-	Stack       *tree.StackTree   // tree structure for rendering the stack
-	FixedMap    map[string]bool   // branch -> is fixed (doesn't need restack)
-	ScopeMap    map[string]string // branch -> scope
-	WorktreeMap map[string]string // branch -> worktree path (only for stack roots with managed worktrees)
+	Stack StackSnapshot
 }
 
 func (StackDisplayEvent) submitEvent() {}

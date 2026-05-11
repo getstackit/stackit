@@ -176,8 +176,8 @@ func (r *runner) runGitInternal(ctx context.Context, input string, env []string,
 	r.debugLog("git %s", strings.Join(args, " "))
 
 	cmd := exec.CommandContext(ctx, "git", args...)
-	if r.repoRoot != "" {
-		cmd.Dir = r.repoRoot
+	if root := r.getRepoRoot(); root != "" {
+		cmd.Dir = root
 	}
 
 	if input != "" {
@@ -224,8 +224,8 @@ func (r *runner) runGitStreaming(ctx context.Context, args ...string) (string, e
 	r.debugLog("git %s (streaming)", strings.Join(args, " "))
 
 	cmd := exec.CommandContext(ctx, "git", args...)
-	if r.repoRoot != "" {
-		cmd.Dir = r.repoRoot
+	if root := r.getRepoRoot(); root != "" {
+		cmd.Dir = root
 	}
 
 	var stdoutBuf, stderrBuf bytes.Buffer
@@ -263,8 +263,8 @@ func (r *runner) RunGHCommandWithContext(ctx context.Context, args ...string) (s
 
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	// Use repoRoot for gh commands to ensure they are scoped to the correct repo
-	if r.repoRoot != "" {
-		cmd.Dir = r.repoRoot
+	if root := r.getRepoRoot(); root != "" {
+		cmd.Dir = root
 	} else {
 		wd, _ := os.Getwd()
 		cmd.Dir = wd
@@ -297,8 +297,8 @@ func (r *runner) RunGitCommandInteractive(args ...string) error {
 	r.debugLog("git %s (interactive)", strings.Join(args, " "))
 
 	cmd := exec.Command("git", args...)
-	if r.repoRoot != "" {
-		cmd.Dir = r.repoRoot
+	if root := r.getRepoRoot(); root != "" {
+		cmd.Dir = root
 	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -521,14 +521,14 @@ func (r *runner) SetConfig(key, value string) error {
 	if _, err := r.ensureRepo(); err != nil {
 		return err
 	}
-	return NewConfigStore(r.repoRoot).Set(key, value)
+	return NewConfigStore(r.getRepoRoot()).Set(key, value)
 }
 
 func (r *runner) GetConfigAll(key string) ([]string, error) {
 	if _, err := r.ensureRepo(); err != nil {
 		return []string{}, err
 	}
-	values, err := NewConfigStore(r.repoRoot).GetAll(key)
+	values, err := NewConfigStore(r.getRepoRoot()).GetAll(key)
 	if err != nil || len(values) == 0 {
 		return []string{}, err
 	}
@@ -539,7 +539,7 @@ func (r *runner) AddConfigValue(key, value string) error {
 	if _, err := r.ensureRepo(); err != nil {
 		return err
 	}
-	return NewConfigStore(r.repoRoot).Add(key, value)
+	return NewConfigStore(r.getRepoRoot()).Add(key, value)
 }
 
 func (r *runner) IsInsideRepo() bool {
@@ -560,6 +560,14 @@ func (r *runner) DiscoverRepoRoot() (string, error) {
 }
 
 func (r *runner) GetRepoRoot() string {
+	return r.getRepoRoot()
+}
+
+// getRepoRoot returns r.repoRoot under repoMu. All reads of repoRoot must go
+// through this getter so they don't race with ensureRepo's normalization write.
+func (r *runner) getRepoRoot() string {
+	r.repoMu.Lock()
+	defer r.repoMu.Unlock()
 	return r.repoRoot
 }
 

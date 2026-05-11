@@ -31,7 +31,7 @@ The deterministic steps live in `.claude/skills/create-release/scripts/`. Use th
 | `gather-commits.sh <tag>` | Sanity-check commit list since `<tag>` (catches direct pushes) |
 | `bump-version.sh <current> <patch\|minor\|major>` | Compute next semver tag |
 | `tag-and-push.sh <tag>` | Create annotated tag + push to origin |
-| `wait-for-release.sh <tag> [timeout]` | Poll until goreleaser materializes the release |
+| `wait-for-release.sh <tag> [timeout]` | Poll until goreleaser materializes the release (default 1200s; goreleaser typically takes 9-11 minutes) |
 | `apply-notes.sh <tag> <file>` | Overwrite release body with notes file, print URL |
 | `append-github-footer.sh <new> <prev> <file>` | Append GitHub's auto-generated "What's Changed" footer |
 

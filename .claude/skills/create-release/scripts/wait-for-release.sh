@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Poll until the GitHub release for the given tag exists. Goreleaser
-# typically materializes the release entry 2-4 minutes after tag push.
+# typically materializes the release entry 9-11 minutes after tag push
+# (the workflow has to build CLI + server binaries for 3 OSes × 2 arches,
+# run upx compression, and publish to the Homebrew tap). 1200s gives
+# comfortable headroom over the historical 9-11 minute runtime.
 # Usage: wait-for-release.sh <tag> [timeout-seconds]
 set -euo pipefail
 
 tag="${1:?missing tag}"
-timeout="${2:-600}"
+timeout="${2:-1200}"
 interval=20
 elapsed=0
 

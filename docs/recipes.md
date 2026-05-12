@@ -35,16 +35,43 @@ When adding a field that flows from Go through the API to the web app:
 
 When changing a mapper function signature, grep for all callers — typically `view_assembler.go` and `mappers_test.go`.
 
+## Add a New Reusable Operation
+
+When adding or refactoring a business operation that should be reusable across entry points:
+
+| # | File/Area | What to do |
+|---|-----------|------------|
+| 1 | `internal/usecase/<name>/` | Add request/result structs, dependency interfaces, and orchestration logic |
+| 2 | `internal/actions/<name>/` | Only use when extending an existing transitional package; keep new logic on use-case-style boundaries |
+| 3 | `internal/cli/...` and/or `internal/api/...` | Add adapter code that parses input and renders output |
+| 4 | `internal/app` / `internal/config` | Resolve config and construct concrete dependencies before calling the operation |
+| 5 | Tests in the relevant packages | Use fake collaborators for use case tests; keep adapter tests focused on mapping/rendering |
+
+Use these rules:
+
+- Do not pass `*app.Context` into new reusable orchestration code.
+- Do not load config inside the operation; pass resolved values in the request.
+- Do not construct GitHub clients inside the operation; inject ports/interfaces.
+- Do not render terminal output inside the operation; emit structured results or events.
+
 ## Add a New CLI Command
 
 | # | File | What to do |
 |---|------|------------|
-| 1 | `internal/cli/stack/<name>.go` | Cobra command definition (`Long` should include examples) |
-| 2 | `internal/actions/<name>/` | Business logic package |
-| 3 | `internal/cli/stack/root.go` | Register command in parent |
-| 4 | Tests in respective packages | |
+| 1 | `internal/usecase/<name>/` or existing `internal/actions/<name>/` | Implement or extend the reusable operation |
+| 2 | `internal/cli/stack/<name>.go` | Cobra command definition (`Long` should include examples) |
+| 3 | `internal/cli/stack/<name>_handlers.go` or related adapter files | Add prompt/progress/output handling if needed |
+| 4 | `internal/cli/stack/root.go` | Register command in parent |
+| 5 | Tests in respective packages | Use use-case tests for orchestration and CLI tests for flags/output |
 
-Follow patterns in existing commands (e.g., `internal/cli/stack/describe.go`).
+CLI commands should:
+
+- resolve config before invoking the operation
+- construct any concrete clients they need via bootstrap/runtime wiring
+- convert command flags into request structs
+- render results returned by the operation
+
+Follow patterns in existing commands, but prefer the architecture in `docs/architecture.md` over older `internal/actions/*` examples when the two differ.
 
 ## Frontend Testing Notes
 

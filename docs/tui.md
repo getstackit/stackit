@@ -114,6 +114,20 @@ Handler interfaces define:
 - `IsInteractive() bool` to check mode
 - `NullHandler` struct for non-interactive/testing use
 
+Handler interfaces are adapter boundaries. The action or use case may define the interface, but the implementation belongs in the CLI/TUI layer.
+
+### Boundary Rules
+
+The handler pattern only works if the business logic stays on its side of the boundary:
+
+- Business logic may call handler methods for prompts, progress, and completion events.
+- Business logic should return structured results and errors.
+- Business logic should not render terminal output directly with `output`, `style`, or Bubble Tea components.
+- Business logic should not load config or construct concrete integration clients.
+- CLI and TUI code should resolve config, construct dependencies, and decide how to present events/results.
+
+If you are adding a new operation, prefer putting the orchestration in `internal/usecase/<name>/`. Existing `internal/actions/<name>/` packages should be treated as transitional use case packages and follow the same constraints for new code.
+
 ### Handler Implementations
 
 Provide two implementations:

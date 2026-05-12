@@ -360,8 +360,9 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 	}
 	branch := eng.GetBranch(opts.BranchName)
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	branches := excludeTrunkBranches(graph.Range(branch, opts.Scope))
 	return []restackBranchGroup{{
-		branches: graph.Range(branch, opts.Scope),
+		branches: branches,
 	}}, nil
 }
 
@@ -405,6 +406,17 @@ func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptio
 
 func joinStrings(values []string) string {
 	return strings.Join(values, ",")
+}
+
+func excludeTrunkBranches(branches []engine.Branch) []engine.Branch {
+	filtered := make([]engine.Branch, 0, len(branches))
+	for _, branch := range branches {
+		if branch.IsTrunk() {
+			continue
+		}
+		filtered = append(filtered, branch)
+	}
+	return filtered
 }
 
 func handleRestackProgress(

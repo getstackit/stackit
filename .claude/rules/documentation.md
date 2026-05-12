@@ -28,7 +28,7 @@ Examples:
 
 ## Technical Docs (`docs/`)
 
-- `docs/architecture.md` - Runtime layering, use case boundaries, adapters, bootstrap
+- `docs/architecture.md` - Runtime layering, action boundaries, adapters, bootstrap
 - `docs/config.md` - Configuration keys, layered config, adding new keys
 - `docs/tui.md` - TUI patterns, styling, components
 - `docs/testing.md` - Test tiers and layer-specific testing guidance

@@ -11,7 +11,7 @@ bootstrap/runtime wiring
     ↓
 adapters
     ↓
-use cases
+actions
     ↓
 core
 ```
@@ -26,30 +26,25 @@ internal/git
 
 internal/engine
     CAN import: git and small domain/support packages
-    CANNOT import: usecase/actions, tui, cli, api, app, output
+    CANNOT import: actions, tui, cli, api, app, output
 
-internal/usecase/*
-    Target home for reusable business operations
+internal/actions/*
+    Canonical home for reusable business operations
     CAN import: engine, git, small domain/support packages
     CANNOT import: cli, api, tui, output, app/bootstrap packages
 
-internal/actions/*
-    Transitional location for existing business operations
-    Follow the same rules as internal/usecase/* for new code whenever practical
-    In particular: avoid new direct imports of tui, output, and app in core action logic
-
 internal/tui
     Adapter layer for Bubble Tea models and interactive views
-    CAN import: usecase/actions handler interfaces, engine, git, tui/components/*, tui/style
+    CAN import: actions handler interfaces, engine, git, tui/components/*, tui/style
     CANNOT import: cli/*
 
 internal/cli/*
     Adapter layer for Cobra commands, flag parsing, and terminal rendering
-    CAN import: usecase/actions, tui, engine, app/bootstrap packages, output
+    CAN import: actions, tui, engine, app/bootstrap packages, output
 
 internal/api/*
     Adapter layer for HTTP handlers, SSE, and transport mapping
-    CAN import: usecase/actions, engine, app/bootstrap packages, internal/contracts/http
+    CAN import: actions, engine, app/bootstrap packages, internal/contracts/http
 
 internal/app
 internal/config
@@ -59,7 +54,7 @@ internal/config
 
 internal/github
     Concrete integration adapter
-    Keep GitHub client construction and transport details here, not in use cases
+    Keep GitHub client construction and transport details here, not in actions
 
 internal/contracts/http
     Source of truth for API response/request shapes shared with the web app
@@ -69,16 +64,16 @@ apps/web/
     CANNOT import: any Go packages directly
 ```
 
-## Use Case Boundary Rules
+## Action Boundary Rules
 
-Use case code should expose:
+Action code should expose:
 
 - request structs
 - result structs
 - narrow dependency interfaces or dependency bundles
 - event/prompt interfaces when interaction is required
 
-Use case code should not:
+Action code should not:
 
 - load config from disk
 - discover the repo root
@@ -86,24 +81,24 @@ Use case code should not:
 - call Cobra APIs
 - render terminal output or styling directly
 
-If a use case needs config values, resolve them in bootstrap or the adapter layer and pass the final values into the request.
+If an action needs config values, resolve them in bootstrap or the adapter layer and pass the final values into the request.
 
 ## Common Pitfalls
 
-1. **TUI importing use case data types directly**: If `internal/tui` needs a preview/result shape from `internal/actions/X` or `internal/usecase/X`, define a local struct in `tui` with the same fields and have the caller convert.
+1. **TUI importing action data types directly**: If `internal/tui` needs a preview/result shape from `internal/actions/X`, define a local struct in `tui` with the same fields and have the caller convert.
 
-2. **Action/use case taking `*app.Context`**: This couples orchestration to bootstrap concerns. Prefer explicit dependency structs and request structs.
+2. **Action taking `*app.Context`**: This couples orchestration to bootstrap concerns. Prefer explicit dependency structs and request structs.
 
-3. **Action/use case rendering output**: Return structured results or emit events. Let CLI/TUI/API adapters decide how to present them.
+3. **Action rendering output**: Return structured results or emit events. Let CLI/TUI/API adapters decide how to present them.
 
-4. **Action/use case loading config or constructing GitHub clients**: Resolve configuration and integrations before calling the use case.
+4. **Action loading config or constructing GitHub clients**: Resolve configuration and integrations before calling the action.
 
-5. **Circular handler dependencies**: Prompt/progress interfaces may live next to the use case, but implementations belong in `internal/cli/*` or `internal/tui/*`.
+5. **Circular handler dependencies**: Prompt/progress interfaces may live next to the action, but implementations belong in `internal/cli/*` or `internal/tui/*`.
 
 ## Example: Avoiding Cycles
 
 ```go
-// BAD - creates an adapter/use case dependency in the wrong direction
+// BAD - creates an adapter/action dependency in the wrong direction
 // internal/tui/preview.go
 import "stackit.dev/stackit/internal/actions/move"
 func RenderPreview(p move.Preview) string { ... }

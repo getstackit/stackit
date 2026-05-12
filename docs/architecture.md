@@ -20,26 +20,22 @@ Core packages:
 - do not know about Cobra, Bubble Tea, HTTP, terminal formatting, or config loading
 - should remain safe to reuse from multiple entry points
 
-### Use Cases
+### Actions
 
-Use case packages orchestrate business operations such as create, track, restack, submit, and info.
+Action packages orchestrate business operations such as create, track, restack, submit, and info.
 
-Target location:
-
-- `internal/usecase/<name>/`
-
-Transitional location:
+Canonical location:
 
 - `internal/actions/<name>/`
 
-Use cases should expose:
+Actions should expose:
 
 - request structs
 - result structs
 - narrow dependency interfaces or dependency bundles
 - optional event/prompt interfaces for progress and interaction
 
-Use cases should not:
+Actions should not:
 
 - load config from disk
 - discover the repo root
@@ -47,13 +43,13 @@ Use cases should not:
 - write directly to terminal output
 - import Cobra, Bubble Tea models, or terminal styling packages
 
-If a use case needs configuration, the caller should resolve it first and pass the final values in the request.
+If an action needs configuration, the caller should resolve it first and pass the final values in the request.
 
-If a use case needs prompts or progress reporting, define an interface next to the use case and let adapters implement it.
+If an action needs prompts or progress reporting, define an interface next to the action and let adapters implement it.
 
 ### Adapters
 
-Adapters translate between delivery mechanisms and use cases.
+Adapters translate between delivery mechanisms and actions.
 
 Examples:
 
@@ -67,7 +63,7 @@ Adapters may:
 - parse flags or HTTP input
 - render terminal or JSON output
 - implement prompt/progress interfaces
-- map use case results into transport-specific response shapes
+- map action results into transport-specific response shapes
 
 Adapters should not contain the core stack orchestration themselves.
 
@@ -89,28 +85,28 @@ Bootstrap is responsible for:
 - constructing concrete GitHub clients
 - wiring loggers, output sinks, and runtime flags
 
-Bootstrap should call into use cases or adapters. It should not become the place where business logic accumulates.
+Bootstrap should call into actions or adapters. It should not become the place where business logic accumulates.
 
 ## Dependency Direction
 
 Dependencies should point inward:
 
-`bootstrap -> adapters -> use cases -> core`
+`bootstrap -> adapters -> actions -> core`
 
 Not every path exists in every flow, but the important rule is that inner layers must not depend on outer ones.
 
 In particular:
 
-- core must not depend on use cases or adapters
-- use cases must not depend on CLI, API, TUI, or concrete GitHub clients
-- adapters may depend on use cases and core
+- core must not depend on actions or adapters
+- actions must not depend on CLI, API, TUI, or concrete GitHub clients
+- adapters may depend on actions and core
 - bootstrap may depend on everything needed to assemble the runtime
 
 ## Practical Rules
 
 When adding or refactoring an operation:
 
-1. Put the orchestration in a use case package.
+1. Put the orchestration in an `internal/actions/<name>/` package.
 2. Pass resolved options into the request struct instead of loading config inside the operation.
 3. Pass dependencies explicitly instead of passing `*app.Context`.
 4. Return structured results and typed events instead of writing output directly.
@@ -118,9 +114,9 @@ When adding or refactoring an operation:
 
 ## Transitional Guidance
 
-The repository still contains substantial logic under `internal/actions/*`.
+The repository already uses `internal/actions/*` as the home for reusable orchestration.
 
-Until the codebase finishes migrating to `internal/usecase/*`, treat `internal/actions/*` as use cases in transition:
+When extending or adding actions:
 
 - prefer explicit deps over `*app.Context`
 - keep new logic free of direct output/styling
@@ -128,4 +124,4 @@ Until the codebase finishes migrating to `internal/usecase/*`, treat `internal/a
 - define interfaces for prompts and progress
 - keep concrete GitHub wiring outside the action
 
-New reusable business logic should follow this pattern even if it remains in `internal/actions/*` temporarily.
+New reusable business logic should follow this pattern inside `internal/actions/*`.

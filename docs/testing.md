@@ -29,9 +29,9 @@ When a package mixes cheap unit tests with expensive scenario tests, split the e
 
 Keep the test shape aligned with the architecture in `docs/architecture.md`.
 
-### Use Cases
+### Actions
 
-Use case tests should verify orchestration with fake collaborators whenever possible.
+Action tests should verify orchestration with fake collaborators whenever possible.
 
 - inject fake engines, Git ports, GitHub ports, or prompt/event handlers
 - assert on returned results, emitted events, and dependency calls
@@ -45,7 +45,7 @@ Adapter tests should stay focused on translation concerns.
 - API tests: request decoding, response mapping, status codes, and SSE payloads
 - TUI tests: model updates, message flow, and rendering behavior
 
-Do not use adapter tests as the primary place to prove business rules that belong in use case tests.
+Do not use adapter tests as the primary place to prove business rules that belong in action tests.
 
 ### Bootstrap / Runtime Wiring
 
@@ -53,7 +53,7 @@ Bootstrap tests should cover repo discovery, config loading, and concrete depend
 
 - verify config values are resolved once and passed through correctly
 - verify runtime defaults and error paths
-- keep business behavior assertions in use case tests
+- keep business behavior assertions in action tests
 
 ### Core
 

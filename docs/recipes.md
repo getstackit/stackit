@@ -41,11 +41,10 @@ When adding or refactoring a business operation that should be reusable across e
 
 | # | File/Area | What to do |
 |---|-----------|------------|
-| 1 | `internal/usecase/<name>/` | Add request/result structs, dependency interfaces, and orchestration logic |
-| 2 | `internal/actions/<name>/` | Only use when extending an existing transitional package; keep new logic on use-case-style boundaries |
-| 3 | `internal/cli/...` and/or `internal/api/...` | Add adapter code that parses input and renders output |
-| 4 | `internal/app` / `internal/config` | Resolve config and construct concrete dependencies before calling the operation |
-| 5 | Tests in the relevant packages | Use fake collaborators for use case tests; keep adapter tests focused on mapping/rendering |
+| 1 | `internal/actions/<name>/` | Add request/result structs, dependency interfaces, and orchestration logic |
+| 2 | `internal/cli/...` and/or `internal/api/...` | Add adapter code that parses input and renders output |
+| 3 | `internal/app` / `internal/config` | Resolve config and construct concrete dependencies before calling the operation |
+| 4 | Tests in the relevant packages | Use fake collaborators for action tests; keep adapter tests focused on mapping/rendering |
 
 Use these rules:
 
@@ -58,11 +57,11 @@ Use these rules:
 
 | # | File | What to do |
 |---|------|------------|
-| 1 | `internal/usecase/<name>/` or existing `internal/actions/<name>/` | Implement or extend the reusable operation |
+| 1 | `internal/actions/<name>/` | Implement or extend the reusable operation |
 | 2 | `internal/cli/stack/<name>.go` | Cobra command definition (`Long` should include examples) |
 | 3 | `internal/cli/stack/<name>_handlers.go` or related adapter files | Add prompt/progress/output handling if needed |
 | 4 | `internal/cli/stack/root.go` | Register command in parent |
-| 5 | Tests in respective packages | Use use-case tests for orchestration and CLI tests for flags/output |
+| 5 | Tests in respective packages | Use action tests for orchestration and CLI tests for flags/output |
 
 CLI commands should:
 

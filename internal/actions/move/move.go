@@ -72,8 +72,12 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return dryRun(ctx, plan.source, plan.oldParentName, plan.onto, plan.sourceBranch, plan.descendants, plan.rebaseSpecs)
 	}
 
-	if err := validateForExecution(ctx, h, plan, opts.SkipConfirm); err != nil {
+	proceed, err := validateForExecution(ctx, h, plan, opts.SkipConfirm)
+	if err != nil {
 		return err
+	}
+	if !proceed {
+		return nil
 	}
 
 	renamed, source, sourceBranch := maybeRename(ctx, h, opts, plan)
@@ -180,14 +184,18 @@ func buildMovePlan(eng engine.Engine, out output.Output, source, onto string, re
 	}, nil
 }
 
-func validateForExecution(ctx *app.Context, h Handler, plan *movePlan, skipConfirm bool) error {
+// validateForExecution validates the planned move (in interactive mode it also
+// confirms with the user). It returns (proceed, error): proceed=false with a
+// nil error means the user canceled and the caller should stop without
+// surfacing an error.
+func validateForExecution(ctx *app.Context, h Handler, plan *movePlan, skipConfirm bool) (bool, error) {
 	if h.IsInteractive() && !skipConfirm {
 		return confirmInteractive(ctx, h, plan)
 	}
 	return validateNonInteractive(ctx, h, plan)
 }
 
-func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) error {
+func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, error) {
 	eng := ctx.Engine
 	out := ctx.Output
 
@@ -198,35 +206,37 @@ func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) error {
 
 	confirmed, err := h.PromptConfirmMove(preview)
 	if err != nil {
-		return fmt.Errorf("failed to prompt for confirmation: %w", err)
+		return false, fmt.Errorf("failed to prompt for confirmation: %w", err)
 	}
 	if !confirmed {
 		out.Info("Move canceled.")
-		return nil
+		return false, nil
 	}
 
+	// System errors (worktree setup, etc.) can't be resolved by the user,
+	// so abort instead of dropping into the conflict workflow.
 	if validationErr != nil {
-		return fmt.Errorf("failed to validate rebases: %w", validationErr)
+		return false, fmt.Errorf("failed to validate rebases: %w", validationErr)
 	}
-	if preview.HasConflicts {
-		return fmt.Errorf("move would cause conflicts: %s on branch %s", preview.ConflictError, preview.ConflictBranch)
-	}
-	return nil
+
+	// Conflicts are fine to proceed with — the restack call below will enter
+	// the conflict workflow so the user can resolve and `stackit continue`.
+	return true, nil
 }
 
-func validateNonInteractive(ctx *app.Context, h Handler, plan *movePlan) error {
+func validateNonInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, error) {
 	h.OnStep(StepValidating, handler.StatusStarted, "Validating rebases...")
 	validation, err := ctx.Engine.ValidateRebases(ctx.Context, plan.rebaseSpecs)
 	if err != nil {
 		h.OnStep(StepValidating, handler.StatusFailed, err.Error())
-		return fmt.Errorf("failed to validate rebases: %w", err)
+		return false, fmt.Errorf("failed to validate rebases: %w", err)
 	}
 	if !validation.Success {
 		h.OnStep(StepValidating, handler.StatusFailed, validation.ErrorMessage)
-		return fmt.Errorf("move would cause conflicts: %s on branch %s", validation.ErrorMessage, validation.FailedBranch)
+		return false, fmt.Errorf("move would cause conflicts: %s on branch %s", validation.ErrorMessage, validation.FailedBranch)
 	}
 	h.OnStep(StepValidating, handler.StatusCompleted, "Validation passed")
-	return nil
+	return true, nil
 }
 
 func buildPreview(plan *movePlan, commits []string, validation *engine.RebaseValidation, validationErr error) Preview {

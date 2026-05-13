@@ -65,6 +65,8 @@ type Handler interface {
 
 	// PromptConfirmMove displays a preview of the move and asks for confirmation.
 	// Returns true to proceed with the move, false to cancel.
+	// If the preview reports conflicts, returning true means the user has opted
+	// to proceed and resolve conflicts manually via `stackit continue`.
 	// In non-interactive mode, returns true (auto-confirm).
 	PromptConfirmMove(preview Preview) (bool, error)
 

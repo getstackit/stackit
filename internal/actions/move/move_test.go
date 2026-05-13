@@ -2,15 +2,47 @@ package move
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+// interactiveTestHandler simulates an interactive user for move tests. It
+// records whether the prompt was issued and lets the test choose to proceed or
+// cancel. It is *not* the production InteractiveMoveHandler — we want a
+// minimal stub so action-layer tests do not depend on the cli package.
+type interactiveTestHandler struct {
+	NullHandler
+	proceed bool
+	prompts int
+	preview Preview
+}
+
+func (h *interactiveTestHandler) IsInteractive() bool { return true }
+
+func (h *interactiveTestHandler) PromptConfirmMove(p Preview) (bool, error) {
+	h.prompts++
+	h.preview = p
+	return h.proceed, nil
+}
+
+// writeAndCommit writes content to a file at the repo root and commits it with
+// the given message. Used to seed conflicting commits across branches.
+func writeAndCommit(t *testing.T, s *scenario.Scenario, file, content, message string) {
+	t.Helper()
+	path := filepath.Join(s.Scene.Dir, file)
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	s.RunGit("add", file).RunGit("commit", "-m", message).Rebuild()
+}
 
 func TestMoveAction(t *testing.T) {
 	t.Run("moves branch downstack and restacks descendants", func(t *testing.T) {
@@ -476,5 +508,82 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, len(branchCCommits), "branchC should have 1 commit")
 		require.Equal(t, "commit C", branchCCommits[0])
+	})
+
+	t.Run("interactive cancel does not move", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+				"branch2": "branch1",
+			})
+
+		h := &interactiveTestHandler{proceed: false}
+		err := Action(s.Context, Options{
+			Source: "branch2",
+			Onto:   "main",
+		}, h)
+		require.NoError(t, err)
+		require.Equal(t, 1, h.prompts, "user should have been prompted")
+
+		// Branch should still be parented to branch1 — the move was canceled.
+		parent := s.Engine.GetBranch("branch2").GetParent()
+		require.NotNil(t, parent)
+		require.Equal(t, "branch1", parent.GetName())
+	})
+
+	t.Run("interactive proceed on conflict enters conflict workflow", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInitialCommit()
+
+		// Restack invokes git commit without stripping global config, so any
+		// signing requirement from the host env (e.g. a sandbox key) breaks
+		// the rebase mid-test. Local config wins so this is safe in CI too.
+		s.RunGit("config", "commit.gpgsign", "false")
+		s.RunGit("config", "tag.gpgsign", "false")
+
+		// branch1: change conflict.txt
+		s.Checkout("main").
+			CreateBranch("branch1")
+		writeAndCommit(t, s, "conflict.txt", "branch1 content\n", "branch1 change")
+		s.TrackBranch("branch1", "main")
+
+		// branch2 forks from main with a conflicting change to the same file
+		s.Checkout("main").
+			CreateBranch("branch2")
+		writeAndCommit(t, s, "conflict.txt", "branch2 content\n", "branch2 change")
+		s.TrackBranch("branch2", "main")
+
+		// Attempt to move branch2 onto branch1 — this will conflict on conflict.txt.
+		// The interactive handler opts to proceed and resolve manually.
+		h := &interactiveTestHandler{proceed: true}
+		err := Action(s.Context, Options{
+			Source: "branch2",
+			Onto:   "branch1",
+		}, h)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "conflict")
+		require.True(t, h.preview.HasConflicts, "preview should report a conflict")
+
+		// Rebase must be in progress so the user can resolve.
+		require.True(t, s.Engine.Git().IsRebaseInProgress(s.Context.Context),
+			"rebase should be in progress after entering conflict workflow")
+
+		// Continuation state should be persisted for `stackit continue` to pick up.
+		cont, contErr := config.GetContinuationState(s.Scene.Dir)
+		require.NoError(t, contErr)
+		require.NotNil(t, cont)
+		require.Equal(t, "branch2", cont.CurrentBranchOverride)
+
+		// Parent metadata is updated even though the rebase is incomplete.
+		parent := s.Engine.GetBranch("branch2").GetParent()
+		require.NotNil(t, parent)
+		require.Equal(t, "branch1", parent.GetName())
+
+		// Resolve the conflict (take incoming) and continue.
+		require.NoError(t, s.Scene.Repo.ResolveMergeConflicts())
+		require.NoError(t, s.Scene.Repo.MarkMergeConflictsAsResolved())
+
+		require.NoError(t, actions.ContinueAction(s.Context, actions.ContinueOptions{}))
+		require.False(t, s.Engine.Git().IsRebaseInProgress(s.Context.Context),
+			"rebase should be complete after stackit continue")
 	})
 }

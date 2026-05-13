@@ -126,10 +126,12 @@ func (h *InteractiveMoveHandler) PromptConfirmMove(preview move.Preview) (bool, 
 
 	h.Output.Newline()
 
-	// If there are conflicts, warn user more prominently
+	// If there are conflicts, offer to enter the conflict-resolution workflow.
 	if preview.HasConflicts {
-		h.Output.Info("The move cannot proceed due to conflicts.")
-		return tui.PromptConfirm("View the conflict details above and cancel?", false)
+		h.Output.Info("The move will hit conflicts that need to be resolved manually.")
+		h.Output.Info("Proceeding will pause the rebase so you can fix the files, then run %s.",
+			style.ColorCyan("stackit continue"))
+		return tui.PromptConfirm("Proceed and resolve conflicts manually?", false)
 	}
 
 	return tui.PromptConfirm("Proceed with move?", true)

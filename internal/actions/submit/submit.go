@@ -262,23 +262,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	// Build branch info for submission start event
+	// Build branch info for submission start event. Track whether every action
+	// is a create — new stacks submit sequentially so PRs get sequential numbers.
 	branchInfos := make([]BranchInfo, len(submissionInfos))
+	allCreates := true
 	for i, info := range submissionInfos {
 		branchInfos[i] = BranchInfo{
 			Name:     info.BranchName,
 			Action:   info.Action,
 			PRNumber: info.PRNumber,
 		}
-	}
-
-	// Check if this is a new stack (all creates) - use sequential submission
-	// to ensure PRs get sequential numbers in GitHub
-	allCreates := true
-	for _, info := range submissionInfos {
 		if info.Action != actionCreate {
 			allCreates = false
-			break
 		}
 	}
 

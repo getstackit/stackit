@@ -160,8 +160,25 @@ func TestRestackCommand(t *testing.T) {
   feature (current) up to date
 
 ✨ All branches are up to date!
-`)
+		`)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
+	})
+
+	t.Run("restack on trunk with no stack reports no branches", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+		cmd := exec.Command(binaryPath, "restack")
+		cmd.Dir = scene.Dir
+		output, err := cmd.CombinedOutput()
+
+		require.NoError(t, err, "restack command failed: %s", string(output))
+
+		normalized := testhelpers.NormalizeOutput(string(output))
+		expected := testhelpers.NormalizeOutput(`
+No branches to restack.
+`)
+		require.Equal(t, expected, normalized, "trunk should not be treated as a restack target")
 	})
 
 	t.Run("restack with downstack flag", func(t *testing.T) {

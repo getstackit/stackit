@@ -13,6 +13,43 @@ import (
 )
 
 func TestRestackAction(t *testing.T) {
+	t.Run("planning from trunk excludes trunk branch", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		plan, err := PlanRestack(s.Context, RestackOptions{
+			BranchName: "main",
+			Scope:      engine.StackRangeFull(),
+		})
+		require.NoError(t, err)
+		require.False(t, plan.HasBranches())
+		require.Equal(t, 0, plan.BranchCount())
+	})
+
+	t.Run("planning from trunk keeps descendants but not trunk", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"feature":       "main",
+				"feature-child": "feature",
+			})
+
+		plan, err := PlanRestack(s.Context, RestackOptions{
+			BranchName: "main",
+			Scope:      engine.StackRangeFull(),
+		})
+		require.NoError(t, err)
+		require.True(t, plan.HasBranches())
+		require.Equal(t, 2, plan.BranchCount())
+
+		var names []string
+		for _, group := range plan.groups {
+			for _, branch := range group.sortedBranches {
+				names = append(names, branch.GetName())
+			}
+		}
+		require.Equal(t, []string{"feature", "feature-child"}, names)
+		require.NotContains(t, names, "main")
+	})
+
 	t.Run("parallel multi-stack restack returns worker errors", func(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{

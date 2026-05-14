@@ -8,10 +8,7 @@ argument-hint: [-m "message"] [--scope <scope>] [branch-name]
 # Stack Create
 
 ## Context
-- Current branch: !`git branch --show-current`
-- Unstaged changes: !`git diff --stat 2>&1 | head -20`
-- Staged changes: !`git diff --cached --stat 2>&1 | head -20`
-- Recent commits (for style): !`git log --oneline -5 2>&1`
+- Working tree: !`git status --short --branch 2>&1`
 
 ## Arguments
 $ARGUMENTS
@@ -22,26 +19,42 @@ Create a new stacked branch with the current changes.
 
 **Critical:** `stackit create` requires staged changes. It creates a branch AND commits in one atomic operation.
 
-1. If no staged changes, run `git add --all` first
-2. If no changes at all (staged or unstaged), inform user and stop
-3. **If changes span multiple unrelated concerns** (different features, mixed refactoring + features, many directories with different purposes), use `AskUserQuestion`:
+1. Start from the working-tree status above. If there are no changes at all, inform the user and stop.
+2. Only if you need to decide whether this should be split, run exactly one targeted path query:
+   - Prefer `git diff --cached --name-only`
+   - If nothing is staged yet, use `git diff --name-only`
+3. **If changed paths span multiple unrelated concerns** (different features, mixed refactoring + features, many directories with different purposes), use `AskUserQuestion`:
    - Header: "Large changes"
    - Question: "These changes span multiple areas. How would you like to proceed?"
    - Options:
      - "Use /stack-plan (Recommended)" → Stop and tell user to run `/stack-plan`
      - "Single commit" → Proceed with one commit
      - "Let me describe" → Wait for user to provide message
-4. If user provided `-m "message"`, use that message
-5. Otherwise, generate a commit message matching the project's style (see recent commits)
-6. Run: `echo "<message>" | stackit create -F - [branch-name] [--scope <scope> if provided] --no-interactive`
-7. **If create fails due to missing scope** (error mentions scope required):
+4. Stage the intended changes with `git add -A`.
+5. If the user provided `-m "message"`, use it.
+6. Otherwise, generate a non-empty commit message deterministically:
+   - Read repo-local guidance first
+   - Run `git log --oneline -5` only now, when style reference is needed
+   - Choose the Conventional Commit type from the dominant intent of the staged changes
+   - Prefer a one-line subject under 72 characters
+7. If the user did not provide a branch name, preserve the repo's configured `branch.pattern` by omitting the branch-name argument. Only pass an explicit branch name when the user asked for one.
+8. Run: `printf '%s\n' "<message>" | stackit create -F - [branch-name only if user provided one] [--scope <scope> if provided] --no-interactive`
+9. **If create fails due to missing scope** (error mentions scope required):
    - Use `AskUserQuestion`:
      - Header: "Scope"
      - Question: "Branch pattern requires a scope (e.g., feature area, ticket ID). What scope should this branch use?"
      - Options: Generate 2-3 sensible suggestions based on the codebase + user can type custom
    - Retry with `--scope <value>`
+10. If creation fails because Git cannot write under `.git/refs/heads` or create a `.lock` file, retry the exact same command with the required permission or approval. Do not change the branch name just to work around that failure.
+11. After success, run `stackit log --no-interactive` and report:
+   - branch name
+   - parent branch
+   - commit subject
+   - scope status: explicit, inherited, or none
+   - worktree path if created
+   - recommended next step
 
-You can call multiple tools in a single response. Stage and create in one message.
+Only run the next shell command needed for the next decision. Avoid eager status gathering.
 
 **Never use:** `git commit` or `git checkout -b` — always use `stackit create`.
 

@@ -468,7 +468,7 @@ func (r *runner) ensureRepo() (*Repository, error) {
 	// Discover and cache the actual root path
 	wt, err := repo.Worktree()
 	if err == nil {
-		r.repoRoot = wt.Filesystem.Root()
+		r.repoRoot = wt.Filesystem().Root()
 	}
 
 	r.repo = repo
@@ -556,7 +556,7 @@ func (r *runner) DiscoverRepoRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return worktree.Filesystem.Root(), nil
+	return worktree.Filesystem().Root(), nil
 }
 
 func (r *runner) GetRepoRoot() string {

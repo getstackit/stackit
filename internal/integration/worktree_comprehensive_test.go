@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,6 +59,55 @@ func TestWorktreeBasicOperations(t *testing.T) {
 			OutputContains("stack-a").
 			OutputContains("stack-b").
 			OutputContains("stack-c")
+	})
+
+	run("worktree list json shows root branch and actions", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile("feature.txt", "feature").
+			Run("create feature -w -m 'feature branch'")
+
+		worktreePath := sh.GetWorktreePath("feature")
+		shW := sh.InWorktree(worktreePath)
+		shW.WriteFile("child.txt", "child").
+			Run("create child -m 'child branch'")
+
+		sh.Run("worktree list --json")
+		var result struct {
+			Worktrees []struct {
+				Name              string   `json:"name"`
+				AnchorBranch      string   `json:"anchor_branch"`
+				RootBranches      []string `json:"root_branches"`
+				RegistrationState string   `json:"registration_state"`
+				CanRemove         bool     `json:"can_remove"`
+				CanDetach         bool     `json:"can_detach"`
+				NeedsRepair       bool     `json:"needs_repair"`
+				StackSize         int      `json:"stack_size"`
+			} `json:"worktrees"`
+		}
+		if err := json.Unmarshal([]byte(sh.Output()), &result); err != nil {
+			t.Fatalf("failed to parse worktree list JSON: %v\n%s", err, sh.Output())
+		}
+		if len(result.Worktrees) != 1 {
+			t.Fatalf("expected one worktree, got %d", len(result.Worktrees))
+		}
+		entry := result.Worktrees[0]
+		if entry.RegistrationState != "ok" {
+			t.Fatalf("expected healthy registration, got %s", entry.RegistrationState)
+		}
+		if entry.NeedsRepair {
+			t.Fatalf("expected healthy worktree not to need repair")
+		}
+		if entry.CanRemove {
+			t.Fatalf("expected non-empty worktree not to be removable")
+		}
+		if !entry.CanDetach {
+			t.Fatalf("expected anchored worktree to be detachable")
+		}
+		if entry.StackSize != 2 {
+			t.Fatalf("expected stack size 2, got %d", entry.StackSize)
+		}
+		if len(entry.RootBranches) != 1 || entry.RootBranches[0] != "feature" {
+			t.Fatalf("expected feature root branch, got %#v", entry.RootBranches)
+		}
 	})
 
 	run("worktree open returns correct path", func(_ *testing.T, sh *TestShell) {
@@ -1142,7 +1192,7 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 		// Prune should skip because anchor has children
 		sh.Run("worktree prune").
 			OutputContains("Skipped").
-			OutputContains("children")
+			OutputContains("detach")
 
 		// Anchor branch and child should still exist
 		sh.HasBranches("main", "feature", "child")

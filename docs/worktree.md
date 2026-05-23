@@ -15,6 +15,7 @@ All Stackit-managed worktrees are registered to hidden `worktree-anchor` branche
 | `stackit worktree remove <name>` | Remove an empty worktree and delete its hidden anchor |
 | `stackit worktree detach <name>` | Remove worktree but keep branches |
 | `stackit worktree prune` | Clean up empty/stale worktrees |
+| `stackit worktree repair [name]` | Repair stale or legacy worktree registrations |
 
 **Alias:** `wt` is a short alias for `worktree` (e.g., `stackit wt list`).
 
@@ -95,14 +96,18 @@ stackit worktree attach feature
 
 ```bash
 stackit worktree list
+stackit worktree list --json
 ```
 
 Shows each worktree with:
 - Name and anchor branch
+- Root branch
 - Path on disk
 - Stack size (number of branches)
 - Current branch in that worktree
 - Dirty status (uncommitted changes)
+- Registration health (`healthy`, `legacy`, `missing`, or repair-needed)
+- Whether the worktree can be removed or detached
 
 ### `worktree open` - Navigate to a worktree
 
@@ -156,6 +161,21 @@ stackit worktree prune --dry-run  # Preview what would be removed
 - Have stacked branches
 - Have uncommitted changes
 - Are currently checked out
+- Need repair before Stackit can safely reason about them
+
+### `worktree repair` - Fix stale or legacy registrations
+
+Repairs managed worktree metadata when it no longer matches the anchored model.
+
+```bash
+stackit worktree repair           # Repair every stale or legacy registration
+stackit worktree repair payments  # Repair one worktree by name
+```
+
+Repair can:
+- Convert a legacy real-root registration into a hidden-anchor registration
+- Move a stale registration back onto an existing anchor
+- Remove registrations whose directories and anchor branches are both gone
 
 ---
 

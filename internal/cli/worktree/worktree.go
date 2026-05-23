@@ -2,7 +2,9 @@
 package worktree
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -31,6 +33,7 @@ directory. Create a worktree with 'stackit worktree create' from trunk.`,
 	cmd.AddCommand(newPruneCmd())
 	cmd.AddCommand(newAttachCmd())
 	cmd.AddCommand(newDetachCmd())
+	cmd.AddCommand(newRepairCmd())
 
 	return cmd
 }
@@ -87,12 +90,14 @@ Use --no-open to skip the automatic directory change.`,
 
 // newListCmd creates the worktree list command
 func newListCmd() *cobra.Command {
+	var jsonOutput bool
+
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all managed worktrees",
 		Long: `List all stackit-managed worktrees.
 
-Shows each worktree's name, stack size, current branch, and status.`,
+Shows each worktree's name, root branch, stack size, registration health, and status.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
@@ -107,6 +112,16 @@ Shows each worktree's name, stack size, current branch, and status.`,
 					return nil
 				}
 
+				if jsonOutput {
+					data, marshalErr := json.MarshalIndent(result, "", "  ")
+					if marshalErr != nil {
+						return fmt.Errorf("failed to marshal JSON: %w", marshalErr)
+					}
+					ctx.Output.Print(string(data))
+					ctx.Output.Newline()
+					return nil
+				}
+
 				for _, wt := range result.Worktrees {
 					renderWorktreeEntry(ctx, wt, result.CurrentAnchor)
 				}
@@ -115,6 +130,8 @@ Shows each worktree's name, stack size, current branch, and status.`,
 			})
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 
 	return cmd
 }
@@ -135,12 +152,6 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 	}
 	coloredName := style.ColorBranchName(name, isCurrent)
 
-	// Handle missing worktrees
-	if !wt.Exists {
-		ctx.Output.Println(fmt.Sprintf("%s%s  %s", indicator, coloredName, style.ColorRed("(missing)")))
-		return
-	}
-
 	// Stack size
 	stackInfo := style.ColorDim("empty")
 	if wt.StackSize > 0 {
@@ -151,6 +162,11 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 		stackInfo = fmt.Sprintf("%d %s", wt.StackSize, branchWord)
 	}
 
+	rootInfo := ""
+	if len(wt.RootBranches) > 0 {
+		rootInfo = fmt.Sprintf("root %s", style.ColorCyan(strings.Join(wt.RootBranches, ",")))
+	}
+
 	// Current branch in worktree (only show if different from anchor)
 	branchInfo := ""
 	if wt.CurrentBranch != "" && wt.CurrentBranch != wt.AnchorBranch {
@@ -158,9 +174,26 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 	}
 
 	// Status indicator
-	status := ""
+	statusParts := make([]string, 0, 4)
+	if rootInfo != "" {
+		statusParts = append(statusParts, rootInfo)
+	}
+	if !wt.Exists {
+		statusParts = append(statusParts, style.ColorRed("missing"))
+	}
 	if wt.IsDirty {
-		status = style.ColorYellow("*")
+		statusParts = append(statusParts, style.ColorYellow("dirty"))
+	}
+	switch {
+	case wt.NeedsRepair:
+		statusParts = append(statusParts, style.ColorYellow("repair"))
+	case wt.CanRemove:
+		statusParts = append(statusParts, style.ColorGreen("remove"))
+	case wt.CanDetach:
+		statusParts = append(statusParts, style.ColorGreen("detach"))
+	}
+	if wt.RegistrationState != worktree.RegistrationStateOK || wt.StatusMessage != "" {
+		statusParts = append(statusParts, style.ColorDim(wt.StatusMessage))
 	}
 
 	// Build the output line
@@ -168,8 +201,8 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 	if branchInfo != "" {
 		line += fmt.Sprintf("  on %s", branchInfo)
 	}
-	if status != "" {
-		line += " " + status
+	if len(statusParts) > 0 {
+		line += "  " + strings.Join(statusParts, "  ")
 	}
 
 	ctx.Output.Println(line)
@@ -388,6 +421,48 @@ Examples:
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force detach even with uncommitted changes")
+
+	return cmd
+}
+
+func newRepairCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "repair [name-or-anchor-branch]",
+		Short: "Repair invalid or legacy managed worktree registrations",
+		Long: `Repair invalid or legacy managed worktree registrations.
+
+Without an argument, repairs every managed worktree registration that needs
+attention. With a target, repairs only the named worktree or anchor branch.
+
+Legacy registrations that point at a real stack root are converted to hidden
+worktree anchors. Stale registrations with missing directories are removed.`,
+		SilenceUsage: true,
+		Args:         cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return common.Run(cmd, func(ctx *app.Context) error {
+				target := ""
+				if len(args) > 0 {
+					target = args[0]
+				}
+
+				result, err := worktree.RepairAction(ctx, worktree.RepairOptions{NameOrBranch: target})
+				if err != nil {
+					return err
+				}
+
+				for _, repaired := range result.Repaired {
+					ctx.Output.Success("%s: %s", style.ColorBranchName(repaired.Name, false), repaired.Action)
+				}
+				for _, skipped := range result.Skipped {
+					ctx.Output.Info("Skipped %s: %s", style.ColorBranchName(skipped.Name, false), style.ColorDim(skipped.Reason))
+				}
+				if len(result.Repaired) == 0 && len(result.Skipped) == 0 {
+					ctx.Output.Info("No managed worktrees needed repair.")
+				}
+				return nil
+			})
+		},
+	}
 
 	return cmd
 }

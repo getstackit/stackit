@@ -1,6 +1,7 @@
 package worktree_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,9 +36,31 @@ func TestListAction(t *testing.T) {
 		assert.Equal(t, "feature-stack", result.Worktrees[0].AnchorBranch)
 		assert.Equal(t, "/tmp/fake-worktree", result.Worktrees[0].Path)
 		assert.False(t, result.Worktrees[0].Exists) // Path doesn't actually exist
+		assert.Equal(t, worktree.RegistrationStateInvalid, result.Worktrees[0].RegistrationState)
+		assert.True(t, result.Worktrees[0].NeedsRepair)
 
 		// Clean up
 		_ = s.Engine.UnregisterWorktree("feature-stack")
+	})
+
+	t.Run("marks legacy registrations", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		s.RunGit("checkout", "-b", "feature")
+		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+
+		worktreeDir := t.TempDir()
+		require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", worktreeDir, "feature"))
+
+		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, result.Worktrees, 1)
+		assert.Equal(t, worktree.RegistrationStateLegacy, result.Worktrees[0].RegistrationState)
+		assert.True(t, result.Worktrees[0].NeedsRepair)
+		assert.Equal(t, []string{"feature"}, result.Worktrees[0].RootBranches)
+
+		_ = s.Engine.UnregisterWorktree("feature")
 	})
 }
 
@@ -74,6 +97,23 @@ func TestRemoveAction(t *testing.T) {
 
 		// Verify it's gone
 		wt, err = s.Engine.GetWorktreeForStack("feature-stack")
+		require.NoError(t, err)
+		assert.Nil(t, wt)
+	})
+
+	t.Run("removes stale invalid registration without repair", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		err := s.Engine.RegisterWorktree("feature-stack", "/tmp/nonexistent-worktree")
+		require.NoError(t, err)
+
+		err = worktree.RemoveAction(s.Context, worktree.RemoveOptions{
+			AnchorBranch: "feature-stack",
+		})
+		require.NoError(t, err)
+
+		wt, err := s.Engine.GetWorktreeForStack("feature-stack")
 		require.NoError(t, err)
 		assert.Nil(t, wt)
 	})
@@ -248,5 +288,38 @@ func TestCreateAction(t *testing.T) {
 		// Clean up worktree
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
 		_ = s.Engine.UnregisterWorktree(result.AnchorBranch)
+	})
+}
+
+func TestRepairAction(t *testing.T) {
+	t.Run("converts legacy registration to hidden anchor", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		s.RunGit("checkout", "-b", "feature")
+		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+
+		worktreeDir := t.TempDir()
+		require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", worktreeDir, "legacy-wt"))
+
+		result, err := worktree.RepairAction(s.Context, worktree.RepairOptions{NameOrBranch: "legacy-wt"})
+		require.NoError(t, err)
+		require.Len(t, result.Repaired, 1)
+		require.Equal(t, "converted legacy registration to hidden anchor", result.Repaired[0].Action)
+		require.NotEmpty(t, result.Repaired[0].AnchorBranch)
+		require.NotEqual(t, "feature", result.Repaired[0].AnchorBranch)
+
+		legacy, err := s.Engine.GetWorktreeForStack("feature")
+		require.NoError(t, err)
+		assert.Nil(t, legacy)
+
+		repaired, err := s.Engine.GetWorktreeForStack(result.Repaired[0].AnchorBranch)
+		require.NoError(t, err)
+		require.NotNil(t, repaired)
+		assert.Equal(t, worktreeDir, repaired.Path)
+		assert.True(t, s.Engine.GetBranch(result.Repaired[0].AnchorBranch).IsWorktreeAnchor())
+		assert.Equal(t, result.Repaired[0].AnchorBranch, s.Engine.GetBranch("feature").GetParent().GetName())
+
+		_ = s.Engine.UnregisterWorktree(result.Repaired[0].AnchorBranch)
 	})
 }

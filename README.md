@@ -275,6 +275,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | `stackit worktree attach <branch>` | Move an existing stack into a managed worktree by inserting a hidden anchor above it |
 | `stackit worktree detach <name>` | Remove a managed worktree but keep and reparent its real branches |
 | `stackit worktree prune` | Clean up empty or stale managed worktrees |
+| `stackit worktree repair [name]` | Repair stale or legacy managed worktree registrations |
 
 ### Stack Operations
 | Command | Description |

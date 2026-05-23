@@ -18,8 +18,16 @@ import (
 
 // ListOptions contains options for the list action
 type ListOptions struct {
-	// No options for now
+	NameOrBranch string
 }
+
+type RegistrationState string
+
+const (
+	RegistrationStateOK      RegistrationState = "ok"
+	RegistrationStateLegacy  RegistrationState = "legacy"
+	RegistrationStateInvalid RegistrationState = "invalid"
+)
 
 // ListResult contains the results of listing worktrees
 type ListResult struct {
@@ -29,17 +37,142 @@ type ListResult struct {
 
 // Entry represents a single managed worktree
 type Entry struct {
-	Name          string // User-provided name
-	AnchorBranch  string // Anchor branch name
-	Path          string
-	Exists        bool   // Whether the path still exists on disk
-	StackSize     int    // Number of branches in the stack (excluding anchor)
-	CurrentBranch string // Branch currently checked out in this worktree
-	IsDirty       bool   // Has uncommitted changes
+	Name              string            `json:"name"`          // User-provided name
+	AnchorBranch      string            `json:"anchor_branch"` // Registered anchor branch name
+	Path              string            `json:"path"`
+	Exists            bool              `json:"exists"`                   // Whether the path still exists on disk
+	StackSize         int               `json:"stack_size"`               // Number of real branches in the stack
+	CurrentBranch     string            `json:"current_branch,omitempty"` // Branch currently checked out in this worktree
+	IsDirty           bool              `json:"is_dirty"`
+	RootBranches      []string          `json:"root_branches,omitempty"`  // Real stack roots visible to the user
+	RegistrationState RegistrationState `json:"registration_state"`       // Whether the registration is anchored, legacy, or invalid
+	StatusMessage     string            `json:"status_message,omitempty"` // Human-readable summary of current state
+	CanRemove         bool              `json:"can_remove"`               // Empty anchored worktree can be removed
+	CanDetach         bool              `json:"can_detach"`               // Anchored worktree can be detached
+	NeedsRepair       bool              `json:"needs_repair"`             // Registration requires repair before lifecycle actions
+	IsCurrent         bool              `json:"is_current,omitempty"`     // Whether this is the current managed worktree
 }
 
-// ListAction lists all managed worktrees
-func ListAction(ctx *app.Context, _ ListOptions) (*ListResult, error) {
+type worktreeSnapshot struct {
+	Info           engine.WorktreeInfo
+	CheckoutBranch string
+	AnchorExists   bool
+	AnchorParent   string
+	AnchorScope    string
+	AnchorRev      string
+	ChildNames     []string
+}
+
+func (e Entry) displayName() string {
+	if e.Name != "" {
+		return e.Name
+	}
+	return e.AnchorBranch
+}
+
+func (e Entry) primaryRootBranch() string {
+	if len(e.RootBranches) == 0 {
+		return ""
+	}
+	return e.RootBranches[0]
+}
+
+func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engine.StackGraph, currentAnchor string) Entry {
+	entry := Entry{
+		Name:              wt.Name,
+		AnchorBranch:      wt.AnchorBranch,
+		Path:              wt.Path,
+		Exists:            true,
+		RegistrationState: RegistrationStateInvalid,
+		StatusMessage:     "registration is invalid",
+		IsCurrent:         currentAnchor != "" && wt.AnchorBranch == currentAnchor,
+	}
+
+	if _, statErr := os.Stat(wt.Path); os.IsNotExist(statErr) {
+		entry.Exists = false
+	}
+
+	if entry.Exists {
+		currentBranch, err := ctx.Git().GetWorktreeCurrentBranch(ctx.Context, wt.Path)
+		if err == nil && currentBranch != "" {
+			entry.CurrentBranch = currentBranch
+		}
+
+		isDirty, err := ctx.Git().WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+		if err == nil {
+			entry.IsDirty = isDirty
+		}
+	}
+
+	anchorBranch := ctx.Engine.GetBranch(wt.AnchorBranch)
+	anchorExists := ctx.Engine.BranchNames().Contains(wt.AnchorBranch)
+
+	switch {
+	case anchorExists && ctx.Engine.IsWorktreeAnchor(anchorBranch):
+		entry.RegistrationState = RegistrationStateOK
+		entry.StatusMessage = "healthy"
+		children := graph.Children(anchorBranch)
+		entry.RootBranches = append(entry.RootBranches, children...)
+
+		descendants := graph.Range(anchorBranch, engine.StackRange{
+			RecursiveChildren: true,
+			IncludeCurrent:    false,
+		})
+		entry.StackSize = len(descendants)
+		entry.CanDetach = !entry.IsCurrent
+		entry.CanRemove = !entry.IsCurrent && len(children) == 0
+
+		switch {
+		case !entry.Exists:
+			entry.StatusMessage = "worktree directory is missing"
+		case entry.IsDirty:
+			entry.StatusMessage = "has uncommitted changes"
+		case len(children) == 0:
+			entry.StatusMessage = "empty anchor"
+		}
+
+	case anchorExists:
+		entry.RegistrationState = RegistrationStateLegacy
+		entry.StatusMessage = "legacy registration points at a real branch"
+		entry.RootBranches = []string{wt.AnchorBranch}
+		entry.NeedsRepair = true
+
+		descendants := graph.Range(anchorBranch, engine.StackRange{
+			RecursiveChildren: true,
+			IncludeCurrent:    true,
+		})
+		entry.StackSize = len(descendants)
+
+		if !entry.Exists {
+			entry.StatusMessage = "legacy registration points at a real branch and the directory is missing"
+		}
+
+	default:
+		entry.NeedsRepair = true
+		entry.StatusMessage = "registered anchor branch is missing"
+
+		if entry.CurrentBranch != "" {
+			currentBranch := ctx.Engine.GetBranch(entry.CurrentBranch)
+			if currentBranch.IsTracked() {
+				stackRoot := ctx.Engine.GetStackRootForBranch(currentBranch)
+				if stackRoot != "" {
+					entry.RootBranches = []string{stackRoot}
+				} else {
+					entry.RootBranches = []string{entry.CurrentBranch}
+				}
+			}
+		}
+
+		if !entry.Exists {
+			entry.StatusMessage = "registration is stale and the directory is missing"
+			entry.CanRemove = !entry.IsCurrent
+		}
+	}
+
+	return entry
+}
+
+func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 	worktrees, err := ctx.Engine.ListManagedWorktrees()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list managed worktrees: %w", err)
@@ -49,55 +182,26 @@ func ListAction(ctx *app.Context, _ ListOptions) (*ListResult, error) {
 		Worktrees: make([]Entry, 0, len(worktrees)),
 	}
 
-	// Check if we're in a managed worktree
 	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil {
 		result.CurrentAnchor = ctx.WorktreeInfo.AnchorBranch
 	}
 
-	// Build stack graph once to get stack sizes
 	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
 
 	for _, wt := range worktrees {
-		entry := Entry{
-			Name:         wt.Name,
-			AnchorBranch: wt.AnchorBranch,
-			Path:         wt.Path,
-			Exists:       true,
-		}
-
-		// Check if path exists
-		if _, statErr := os.Stat(wt.Path); os.IsNotExist(statErr) {
-			entry.Exists = false
-			result.Worktrees = append(result.Worktrees, entry)
+		entry := inspectWorktreeEntry(ctx, wt, graph, result.CurrentAnchor)
+		if opts.NameOrBranch != "" && entry.AnchorBranch != opts.NameOrBranch && entry.Name != opts.NameOrBranch {
 			continue
 		}
-
-		// Get stack size (descendants of anchor branch)
-		anchorBranch := ctx.Engine.GetBranch(wt.AnchorBranch)
-		if anchorBranch.IsTracked() {
-			descendants := graph.Range(anchorBranch, engine.StackRange{
-				RecursiveChildren: true,
-				IncludeCurrent:    false,
-			})
-			entry.StackSize = len(descendants)
-		}
-
-		// Get current branch in worktree
-		currentBranch, err := ctx.Git().GetWorktreeCurrentBranch(ctx.Context, wt.Path)
-		if err == nil && currentBranch != "" {
-			entry.CurrentBranch = currentBranch
-		}
-
-		// Check for uncommitted changes
-		isDirty, err := ctx.Git().WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
-		if err == nil {
-			entry.IsDirty = isDirty
-		}
-
 		result.Worktrees = append(result.Worktrees, entry)
 	}
 
 	return result, nil
+}
+
+// ListAction lists all managed worktrees
+func ListAction(ctx *app.Context, _ ListOptions) (*ListResult, error) {
+	return listEntries(ctx, ListOptions{})
 }
 
 // RemoveOptions contains options for the remove action
@@ -131,71 +235,179 @@ func findWorktreeByNameOrBranch(ctx *app.Context, nameOrBranch string) (*engine.
 	return nil, fmt.Errorf("no worktree found for %s", style.ColorBranchName(nameOrBranch, false))
 }
 
+func getWorktreeEntry(ctx *app.Context, nameOrBranch string) (*Entry, error) {
+	result, err := listEntries(ctx, ListOptions{NameOrBranch: nameOrBranch})
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Worktrees) == 0 {
+		return nil, fmt.Errorf("no worktree found for %s", style.ColorBranchName(nameOrBranch, false))
+	}
+	entry := result.Worktrees[0]
+	return &entry, nil
+}
+
+func repairHint(entry *Entry) string {
+	return fmt.Sprintf("run 'stackit worktree repair %s' first", entry.displayName())
+}
+
+func snapshotWorktree(ctx *app.Context, entry *Entry) (*worktreeSnapshot, error) {
+	wtInfo, err := findWorktreeByNameOrBranch(ctx, entry.AnchorBranch)
+	if err != nil {
+		return nil, err
+	}
+
+	checkoutBranch := entry.CurrentBranch
+	if checkoutBranch == "" {
+		if root := entry.primaryRootBranch(); root != "" {
+			checkoutBranch = root
+		} else {
+			checkoutBranch = entry.AnchorBranch
+		}
+	}
+
+	snapshot := &worktreeSnapshot{
+		Info:           *wtInfo,
+		CheckoutBranch: checkoutBranch,
+	}
+
+	anchorBranch := ctx.Engine.GetBranch(entry.AnchorBranch)
+	if !ctx.Engine.BranchNames().Contains(entry.AnchorBranch) {
+		return snapshot, nil
+	}
+
+	snapshot.AnchorExists = true
+	snapshot.AnchorScope = ctx.Engine.GetScope(anchorBranch).String()
+	if parent := anchorBranch.GetParent(); parent != nil {
+		snapshot.AnchorParent = parent.GetName()
+	} else {
+		snapshot.AnchorParent = ctx.Engine.Trunk().GetName()
+	}
+	anchorRev, err := anchorBranch.GetRevision()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get revision for %s: %w", entry.AnchorBranch, err)
+	}
+	snapshot.AnchorRev = anchorRev
+
+	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	snapshot.ChildNames = append(snapshot.ChildNames, graph.Children(anchorBranch)...)
+	return snapshot, nil
+}
+
+func restoreWorktreeRegistration(ctx *app.Context, snapshot *worktreeSnapshot) error {
+	return ctx.Engine.RegisterWorktreeWithName(snapshot.Info.AnchorBranch, snapshot.Info.Path, snapshot.Info.Name)
+}
+
+func restoreWorktreePath(ctx *app.Context, snapshot *worktreeSnapshot) error {
+	if snapshot.CheckoutBranch == "" {
+		return nil
+	}
+	return ctx.Engine.AddWorktree(ctx.Context, snapshot.Info.Path, snapshot.CheckoutBranch, false)
+}
+
+func restoreAnchorBranch(ctx *app.Context, snapshot *worktreeSnapshot) error {
+	if !snapshot.AnchorExists || snapshot.AnchorRev == "" {
+		return nil
+	}
+	anchorName := snapshot.Info.AnchorBranch
+	if ctx.Engine.BranchNames().Contains(anchorName) {
+		return nil
+	}
+	if err := ctx.Engine.CreateBranch(ctx.Context, anchorName, snapshot.AnchorRev); err != nil {
+		return fmt.Errorf("failed to recreate anchor branch %s: %w", anchorName, err)
+	}
+	anchorBranch := ctx.Engine.GetBranch(anchorName)
+	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, ctx.Engine.GetBranch(snapshot.AnchorParent)); err != nil {
+		return fmt.Errorf("failed to restore anchor parent for %s: %w", anchorName, err)
+	}
+	if err := ctx.Engine.SetBranchType(anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
+		return fmt.Errorf("failed to restore anchor branch type for %s: %w", anchorName, err)
+	}
+	if snapshot.AnchorScope != "" {
+		if err := ctx.Engine.SetScope(ctx.Context, anchorBranch, engine.NewScope(snapshot.AnchorScope)); err != nil {
+			return fmt.Errorf("failed to restore anchor scope for %s: %w", anchorName, err)
+		}
+	}
+	return nil
+}
+
 // RemoveAction removes a worktree for a stack
 func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 	out := ctx.Output
 
-	// Get worktree info (supports lookup by name or anchor branch)
-	wtInfo, err := findWorktreeByNameOrBranch(ctx, opts.AnchorBranch)
+	entry, err := getWorktreeEntry(ctx, opts.AnchorBranch)
+	if err != nil {
+		return err
+	}
+	if entry.NeedsRepair && (entry.RegistrationState != RegistrationStateInvalid || entry.Exists) {
+		return fmt.Errorf("managed worktree %s cannot be removed because %s; %s", style.ColorBranchName(entry.displayName(), false), style.ColorDim(entry.StatusMessage), repairHint(entry))
+	}
+	if entry.IsCurrent {
+		return fmt.Errorf("cannot remove the current worktree; cd to the main repo first")
+	}
+	if len(entry.RootBranches) > 0 {
+		return fmt.Errorf("worktree %s has %d branch(es); use 'stackit worktree detach %s' to remove the worktree while keeping branches", style.ColorBranchName(entry.displayName(), false), entry.StackSize, entry.displayName())
+	}
+	if entry.Exists && entry.IsDirty && !opts.Force {
+		return fmt.Errorf("worktree has uncommitted changes; use --force to discard them")
+	}
+
+	snapshot, err := snapshotWorktree(ctx, entry)
 	if err != nil {
 		return err
 	}
 
-	anchorBranch := ctx.Engine.GetBranch(wtInfo.AnchorBranch)
-	anchorExists := ctx.Engine.BranchNames().Contains(wtInfo.AnchorBranch)
-	if anchorExists && !ctx.Engine.IsWorktreeAnchor(anchorBranch) {
-		return fmt.Errorf("managed worktree %s is registered to non-anchor branch %s", style.ColorBranchName(wtInfo.Name, false), style.ColorBranchName(wtInfo.AnchorBranch, false))
-	}
-
-	if anchorExists {
-		graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
-		children := graph.Children(anchorBranch)
-		if len(children) > 0 {
-			return fmt.Errorf("worktree %s has %d branch(es); use 'stackit worktree detach %s' to remove the worktree while keeping branches", style.ColorBranchName(wtInfo.Name, false), len(children), wtInfo.Name)
-		}
-	}
-
-	// Check if path exists before trying to remove
-	if _, statErr := os.Stat(wtInfo.Path); statErr == nil {
-		if !opts.Force {
-			isDirty, dirtyErr := ctx.Git().WorktreeHasUncommittedChanges(ctx.Context, wtInfo.Path)
-			if dirtyErr != nil {
-				return fmt.Errorf("failed to check worktree status at %s: %w", wtInfo.Path, dirtyErr)
-			}
-			if isDirty {
-				return fmt.Errorf("worktree has uncommitted changes; use --force to discard them")
+	pathRemoved := false
+	unregistered := false
+	rollback := func(cause error) error {
+		var rollbackErrs []string
+		if unregistered {
+			if err := restoreWorktreeRegistration(ctx, snapshot); err != nil {
+				rollbackErrs = append(rollbackErrs, err.Error())
 			}
 		}
+		if pathRemoved {
+			if err := restoreWorktreePath(ctx, snapshot); err != nil {
+				rollbackErrs = append(rollbackErrs, err.Error())
+			}
+		}
+		if len(rollbackErrs) == 0 {
+			return cause
+		}
+		return fmt.Errorf("%w (rollback failed: %s)", cause, strings.Join(rollbackErrs, "; "))
+	}
 
-		// Try to remove the git worktree
-		if removeErr := removeWorktreePath(ctx, wtInfo.Path, opts.Force); removeErr != nil {
+	if entry.Exists {
+		if removeErr := removeWorktreePath(ctx, snapshot.Info.Path, opts.Force); removeErr != nil {
 			if opts.Force {
-				return fmt.Errorf("failed to force remove worktree at %s: %w", wtInfo.Path, removeErr)
+				return fmt.Errorf("failed to force remove worktree at %s: %w", snapshot.Info.Path, removeErr)
 			}
-			return fmt.Errorf("failed to remove worktree at %s: %w (use --force to discard uncommitted changes)", wtInfo.Path, removeErr)
+			return fmt.Errorf("failed to remove worktree at %s: %w (use --force to discard uncommitted changes)", snapshot.Info.Path, removeErr)
 		}
+		pathRemoved = true
 	} else {
-		out.Debug("Worktree path %s does not exist, skipping removal", wtInfo.Path)
-		// Prune stale git worktree references to allow branch deletion later
+		out.Debug("Worktree path %s does not exist, skipping removal", snapshot.Info.Path)
 		if pruneErr := ctx.Engine.PruneWorktrees(ctx.Context); pruneErr != nil {
 			out.Debug("Failed to prune worktrees: %v", pruneErr)
 		}
 	}
 
-	// Unregister from registry (use the anchor branch from worktree info)
-	if unregErr := ctx.Engine.UnregisterWorktree(wtInfo.AnchorBranch); unregErr != nil {
+	if unregErr := ctx.Engine.UnregisterWorktree(snapshot.Info.AnchorBranch); unregErr != nil {
+		if pathRemoved {
+			return rollback(fmt.Errorf("failed to unregister worktree: %w", unregErr))
+		}
 		return fmt.Errorf("failed to unregister worktree: %w", unregErr)
 	}
+	unregistered = true
 
-	if anchorExists {
-		if err := ctx.Engine.DeleteBranch(ctx.Context, anchorBranch); err != nil {
-			out.Warn("Failed to delete anchor branch: %v", err)
-		} else {
-			out.Debug("Deleted anchor branch %s", wtInfo.AnchorBranch)
+	if snapshot.AnchorExists {
+		if err := ctx.Engine.DeleteBranch(ctx.Context, ctx.Engine.GetBranch(snapshot.Info.AnchorBranch)); err != nil {
+			return rollback(fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err))
 		}
+		out.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
 	}
 
-	out.Success("Removed worktree for stack %s", style.ColorBranchName(wtInfo.AnchorBranch, false))
+	out.Success("Removed worktree for stack %s", style.ColorBranchName(snapshot.Info.AnchorBranch, false))
 	return nil
 }
 
@@ -549,38 +761,24 @@ func PruneAction(ctx *app.Context, opts PruneOptions) (*PruneResult, error) {
 	}
 
 	for _, wt := range listResult.Worktrees {
-		// Determine display name
-		name := wt.Name
-		if name == "" {
-			name = wt.AnchorBranch
-		}
+		name := wt.displayName()
 
 		// Clean up missing worktrees (directory deleted but registration remains)
 		if !wt.Exists {
+			if wt.NeedsRepair {
+				if opts.DryRun && wt.CanRemove {
+					result.Pruned = append(result.Pruned, name)
+					continue
+				}
+				result.Skipped = append(result.Skipped, SkippedEntry{
+					Name:   name,
+					Reason: wt.StatusMessage + "; " + repairHint(&wt),
+				})
+				continue
+			}
 			if opts.DryRun {
 				result.Pruned = append(result.Pruned, name)
 				continue
-			}
-
-			// Check if anchor branch has children before deleting
-			anchorBranch := ctx.Engine.GetBranch(wt.AnchorBranch)
-			if anchorBranch.IsTracked() {
-				if !ctx.Engine.IsWorktreeAnchor(anchorBranch) {
-					result.Skipped = append(result.Skipped, SkippedEntry{
-						Name:   name,
-						Reason: "registered branch is not a worktree anchor",
-					})
-					continue
-				}
-				graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
-				children := graph.Children(anchorBranch)
-				if len(children) > 0 {
-					result.Skipped = append(result.Skipped, SkippedEntry{
-						Name:   name,
-						Reason: fmt.Sprintf("anchor branch has %d children", len(children)),
-					})
-					continue
-				}
 			}
 
 			// Unregister and delete anchor branch
@@ -598,17 +796,16 @@ func PruneAction(ctx *app.Context, opts PruneOptions) (*PruneResult, error) {
 			continue
 		}
 
-		anchorBranch := ctx.Engine.GetBranch(wt.AnchorBranch)
-		if anchorBranch.IsTracked() && !ctx.Engine.IsWorktreeAnchor(anchorBranch) {
+		if wt.NeedsRepair {
 			result.Skipped = append(result.Skipped, SkippedEntry{
 				Name:   name,
-				Reason: "registered branch is not a worktree anchor",
+				Reason: wt.StatusMessage + "; " + repairHint(&wt),
 			})
 			continue
 		}
 
 		// Skip worktrees with stacked branches
-		if wt.StackSize > 0 {
+		if len(wt.RootBranches) > 0 {
 			result.Skipped = append(result.Skipped, SkippedEntry{
 				Name:   name,
 				Reason: fmt.Sprintf("has %d stacked branches", wt.StackSize),
@@ -798,84 +995,324 @@ type DetachOptions struct {
 	Force        bool   // Allow detach even with uncommitted changes
 }
 
+type RepairOptions struct {
+	NameOrBranch string
+}
+
+type RepairEntry struct {
+	Name         string `json:"name"`
+	Action       string `json:"action"`
+	AnchorBranch string `json:"anchor_branch,omitempty"`
+}
+
+type RepairResult struct {
+	Repaired []RepairEntry  `json:"repaired"`
+	Skipped  []SkippedEntry `json:"skipped,omitempty"`
+}
+
 // DetachAction removes a worktree while preserving all branches
 func DetachAction(ctx *app.Context, opts DetachOptions) error {
 	out := ctx.Output
 
-	// Find worktree by name or anchor branch
-	wtInfo, err := findWorktreeByNameOrBranch(ctx, opts.NameOrBranch)
+	entry, err := getWorktreeEntry(ctx, opts.NameOrBranch)
 	if err != nil {
 		return err
+	}
+	if entry.NeedsRepair {
+		return fmt.Errorf("managed worktree %s cannot be detached because %s; %s", style.ColorBranchName(entry.displayName(), false), style.ColorDim(entry.StatusMessage), repairHint(entry))
 	}
 
 	// Check if we're currently in this worktree
 	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil {
-		if ctx.WorktreeInfo.AnchorBranch == wtInfo.AnchorBranch {
+		if ctx.WorktreeInfo.AnchorBranch == entry.AnchorBranch {
 			return fmt.Errorf("cannot detach from inside the worktree; cd to main repo first")
 		}
 	}
 
-	// Check if path exists and has uncommitted changes
-	if _, statErr := os.Stat(wtInfo.Path); statErr == nil {
-		isDirty, err := ctx.Git().WorktreeHasUncommittedChanges(ctx.Context, wtInfo.Path)
-		if err == nil && isDirty && !opts.Force {
-			return fmt.Errorf("worktree has uncommitted changes; use --force to override")
-		}
+	if entry.IsDirty && !opts.Force {
+		return fmt.Errorf("worktree has uncommitted changes; use --force to override")
 	}
 
-	anchorBranch := ctx.Engine.GetBranch(wtInfo.AnchorBranch)
-	anchorExists := ctx.Engine.BranchNames().Contains(wtInfo.AnchorBranch)
-	if anchorExists && !ctx.Engine.IsWorktreeAnchor(anchorBranch) {
-		return fmt.Errorf("managed worktree %s is registered to non-anchor branch %s", style.ColorBranchName(wtInfo.Name, false), style.ColorBranchName(wtInfo.AnchorBranch, false))
+	snapshot, err := snapshotWorktree(ctx, entry)
+	if err != nil {
+		return err
 	}
 
-	anchorParent := ctx.Engine.Trunk()
-	if anchorExists {
-		if parent := anchorBranch.GetParent(); parent != nil {
-			anchorParent = *parent
+	pathRemoved := false
+	reparented := false
+	anchorDeleted := false
+	unregistered := false
+	rollback := func(cause error) error {
+		var rollbackErrs []string
+		if anchorDeleted {
+			if err := restoreAnchorBranch(ctx, snapshot); err != nil {
+				rollbackErrs = append(rollbackErrs, err.Error())
+			}
 		}
+		if reparented && len(snapshot.ChildNames) > 0 {
+			if err := ctx.Engine.ReparentBranches(ctx.Context, snapshot.ChildNames, ctx.Engine.GetBranch(snapshot.Info.AnchorBranch)); err != nil {
+				rollbackErrs = append(rollbackErrs, err.Error())
+			}
+		}
+		if unregistered {
+			if err := restoreWorktreeRegistration(ctx, snapshot); err != nil {
+				rollbackErrs = append(rollbackErrs, err.Error())
+			}
+		}
+		if pathRemoved {
+			if err := restoreWorktreePath(ctx, snapshot); err != nil {
+				rollbackErrs = append(rollbackErrs, err.Error())
+			}
+		}
+		if len(rollbackErrs) == 0 {
+			return cause
+		}
+		return fmt.Errorf("%w (rollback failed: %s)", cause, strings.Join(rollbackErrs, "; "))
 	}
 
 	// Remove the git worktree directory
-	if _, statErr := os.Stat(wtInfo.Path); statErr == nil {
-		if removeErr := removeWorktreePath(ctx, wtInfo.Path, opts.Force); removeErr != nil {
+	if entry.Exists {
+		if removeErr := removeWorktreePath(ctx, snapshot.Info.Path, opts.Force); removeErr != nil {
 			if opts.Force {
-				return fmt.Errorf("failed to force remove worktree at %s: %w", wtInfo.Path, removeErr)
+				return fmt.Errorf("failed to force remove worktree at %s: %w", snapshot.Info.Path, removeErr)
 			}
-			return fmt.Errorf("failed to remove worktree at %s: %w (use --force to discard uncommitted changes)", wtInfo.Path, removeErr)
+			return fmt.Errorf("failed to remove worktree at %s: %w (use --force to discard uncommitted changes)", snapshot.Info.Path, removeErr)
 		}
+		pathRemoved = true
 	} else {
-		out.Debug("Worktree path %s does not exist, skipping removal", wtInfo.Path)
+		out.Debug("Worktree path %s does not exist, skipping removal", snapshot.Info.Path)
 		// Prune stale git worktree references
 		if pruneErr := ctx.Engine.PruneWorktrees(ctx.Context); pruneErr != nil {
 			out.Debug("Failed to prune worktrees: %v", pruneErr)
 		}
 	}
 
-	// Unregister from registry
-	if unregErr := ctx.Engine.UnregisterWorktree(wtInfo.AnchorBranch); unregErr != nil {
-		return fmt.Errorf("failed to unregister worktree: %w", unregErr)
+	if snapshot.AnchorExists && len(snapshot.ChildNames) > 0 {
+		if err := ctx.Engine.ReparentBranches(ctx.Context, snapshot.ChildNames, ctx.Engine.GetBranch(snapshot.AnchorParent)); err != nil {
+			return rollback(fmt.Errorf("failed to reparent children to %s: %w", snapshot.AnchorParent, err))
+		}
+		reparented = true
 	}
 
-	if anchorExists {
-		graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
-		childNames := graph.Children(anchorBranch)
-
-		if len(childNames) > 0 {
-			if err := ctx.Engine.ReparentBranches(ctx.Context, childNames, anchorParent); err != nil {
-				out.Warn("Failed to reparent children to %s: %v", anchorParent.GetName(), err)
-			}
+	if snapshot.AnchorExists {
+		if err := ctx.Engine.DeleteBranch(ctx.Context, ctx.Engine.GetBranch(snapshot.Info.AnchorBranch)); err != nil {
+			return rollback(fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err))
 		}
-
-		if err := ctx.Engine.DeleteBranch(ctx.Context, anchorBranch); err != nil {
-			out.Warn("Failed to delete anchor branch: %v", err)
-		} else {
-			out.Debug("Deleted anchor branch %s", wtInfo.AnchorBranch)
-		}
+		anchorDeleted = true
+		out.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
 	}
 
-	out.Success("Detached worktree %s", style.ColorBranchName(wtInfo.Name, false))
+	if unregErr := ctx.Engine.UnregisterWorktree(snapshot.Info.AnchorBranch); unregErr != nil {
+		return rollback(fmt.Errorf("failed to unregister worktree: %w", unregErr))
+	}
+	unregistered = true
+
+	out.Success("Detached worktree %s", style.ColorBranchName(snapshot.Info.Name, false))
 	return nil
+}
+
+func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
+	listResult, err := listEntries(ctx, ListOptions(opts))
+	if err != nil {
+		return nil, err
+	}
+	if opts.NameOrBranch != "" && len(listResult.Worktrees) == 0 {
+		return nil, fmt.Errorf("no worktree found for %s", style.ColorBranchName(opts.NameOrBranch, false))
+	}
+
+	result := &RepairResult{
+		Repaired: []RepairEntry{},
+		Skipped:  []SkippedEntry{},
+	}
+
+	for _, entry := range listResult.Worktrees {
+		if !entry.NeedsRepair {
+			result.Skipped = append(result.Skipped, SkippedEntry{
+				Name:   entry.displayName(),
+				Reason: "registration is already healthy",
+			})
+			continue
+		}
+
+		repaired, err := repairEntry(ctx, entry)
+		if err != nil {
+			result.Skipped = append(result.Skipped, SkippedEntry{
+				Name:   entry.displayName(),
+				Reason: err.Error(),
+			})
+			continue
+		}
+		result.Repaired = append(result.Repaired, repaired)
+	}
+
+	return result, nil
+}
+
+func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
+	switch entry.RegistrationState {
+	case RegistrationStateLegacy:
+		wtInfo, err := findWorktreeByNameOrBranch(ctx, entry.AnchorBranch)
+		if err != nil {
+			return RepairEntry{}, err
+		}
+		anchorName, err := convertLegacyRegistration(ctx, *wtInfo, entry.AnchorBranch)
+		if err != nil {
+			return RepairEntry{}, err
+		}
+		return RepairEntry{
+			Name:         entry.displayName(),
+			Action:       "converted legacy registration to hidden anchor",
+			AnchorBranch: anchorName,
+		}, nil
+
+	case RegistrationStateInvalid:
+		wtInfo, err := findWorktreeByNameOrBranch(ctx, entry.AnchorBranch)
+		if err != nil {
+			return RepairEntry{}, err
+		}
+
+		if !entry.Exists {
+			if err := ctx.Engine.UnregisterWorktree(wtInfo.AnchorBranch); err != nil {
+				return RepairEntry{}, fmt.Errorf("failed to remove stale registration: %w", err)
+			}
+			return RepairEntry{
+				Name:   entry.displayName(),
+				Action: "removed stale registration",
+			}, nil
+		}
+
+		if entry.CurrentBranch == "" {
+			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because the worktree has no branch checked out", style.ColorBranchName(entry.displayName(), false))
+		}
+
+		currentBranch := ctx.Engine.GetBranch(entry.CurrentBranch)
+		if !currentBranch.IsTracked() {
+			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because %s is not tracked by stackit", style.ColorBranchName(entry.displayName(), false), style.ColorBranchName(entry.CurrentBranch, false))
+		}
+
+		stackRootName := ctx.Engine.GetStackRootForBranch(currentBranch)
+		if stackRootName == "" {
+			stackRootName = entry.CurrentBranch
+		}
+		stackRoot := ctx.Engine.GetBranch(stackRootName)
+		if !stackRoot.IsTracked() {
+			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because no tracked stack root could be determined", style.ColorBranchName(entry.displayName(), false))
+		}
+
+		if ctx.Engine.IsWorktreeAnchor(stackRoot) {
+			existing, err := ctx.Engine.GetWorktreeForStack(stackRootName)
+			if err != nil {
+				return RepairEntry{}, fmt.Errorf("failed to inspect anchor registration: %w", err)
+			}
+			if existing != nil && existing.Path != wtInfo.Path {
+				return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because anchor %s is already registered to %s", style.ColorBranchName(entry.displayName(), false), style.ColorBranchName(stackRootName, false), existing.Path)
+			}
+			if err := ctx.Engine.RegisterWorktreeWithName(stackRootName, wtInfo.Path, wtInfo.Name); err != nil {
+				return RepairEntry{}, fmt.Errorf("failed to register worktree under anchor %s: %w", stackRootName, err)
+			}
+			if err := ctx.Engine.UnregisterWorktree(wtInfo.AnchorBranch); err != nil {
+				_ = ctx.Engine.UnregisterWorktree(stackRootName)
+				return RepairEntry{}, fmt.Errorf("failed to remove stale registration %s: %w", style.ColorBranchName(wtInfo.AnchorBranch, false), err)
+			}
+			return RepairEntry{
+				Name:         entry.displayName(),
+				Action:       "moved registration to existing anchor",
+				AnchorBranch: stackRootName,
+			}, nil
+		}
+
+		anchorName, err := convertLegacyRegistration(ctx, *wtInfo, stackRootName)
+		if err != nil {
+			return RepairEntry{}, err
+		}
+		return RepairEntry{
+			Name:         entry.displayName(),
+			Action:       "recovered worktree by inserting hidden anchor",
+			AnchorBranch: anchorName,
+		}, nil
+	}
+
+	return RepairEntry{}, fmt.Errorf("registration is already healthy")
+}
+
+func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, rootBranchName string) (string, error) {
+	rootBranch := ctx.Engine.GetBranch(rootBranchName)
+	if !rootBranch.IsTracked() {
+		return "", fmt.Errorf("branch %s is not tracked by stackit", style.ColorBranchName(rootBranchName, false))
+	}
+
+	originalParent := ctx.Engine.Trunk().GetName()
+	if parent := rootBranch.GetParent(); parent != nil {
+		originalParent = parent.GetName()
+	}
+	scope := rootBranch.GetScope().String()
+	name := wtInfo.Name
+	if name == "" {
+		name = rootBranchName
+	}
+
+	anchorBranchName, err := generateAnchorBranchName(ctx, wtInfo.MainRepoDir, name, scope)
+	if err != nil {
+		return "", err
+	}
+	if ctx.Engine.BranchNames().Contains(anchorBranchName) {
+		return "", fmt.Errorf("generated anchor branch %s already exists", style.ColorBranchName(anchorBranchName, false))
+	}
+
+	parentBranch := ctx.Engine.GetBranch(originalParent)
+	parentSHA, err := parentBranch.GetRevision()
+	if err != nil {
+		return "", fmt.Errorf("failed to get parent revision for %s: %w", style.ColorBranchName(originalParent, false), err)
+	}
+	if err := ctx.Engine.CreateBranch(ctx.Context, anchorBranchName, parentSHA); err != nil {
+		return "", fmt.Errorf("failed to create anchor branch %s: %w", style.ColorBranchName(anchorBranchName, false), err)
+	}
+
+	anchorBranch := ctx.Engine.GetBranch(anchorBranchName)
+	anchorCreated := true
+	rootReparented := false
+	registered := false
+	cleanup := func() {
+		if registered {
+			_ = ctx.Engine.UnregisterWorktree(anchorBranchName)
+		}
+		if rootReparented {
+			_ = ctx.Engine.ReparentBranch(ctx.Context, ctx.Engine.GetBranch(rootBranchName), ctx.Engine.GetBranch(originalParent))
+		}
+		if anchorCreated {
+			cleanupAnchorBranch(ctx.Context, ctx.Engine, anchorBranchName, ctx.Output)
+		}
+	}
+
+	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, parentBranch); err != nil {
+		cleanup()
+		return "", fmt.Errorf("failed to set parent on anchor branch %s: %w", style.ColorBranchName(anchorBranchName, false), err)
+	}
+	if err := ctx.Engine.SetBranchType(anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
+		cleanup()
+		return "", fmt.Errorf("failed to mark %s as a worktree anchor: %w", style.ColorBranchName(anchorBranchName, false), err)
+	}
+	if scope != "" {
+		if err := ctx.Engine.SetScope(ctx.Context, anchorBranch, engine.NewScope(scope)); err != nil {
+			cleanup()
+			return "", fmt.Errorf("failed to set scope on anchor branch %s: %w", style.ColorBranchName(anchorBranchName, false), err)
+		}
+	}
+	if err := ctx.Engine.ReparentBranch(ctx.Context, ctx.Engine.GetBranch(rootBranchName), anchorBranch); err != nil {
+		cleanup()
+		return "", fmt.Errorf("failed to reparent %s under anchor %s: %w", style.ColorBranchName(rootBranchName, false), style.ColorBranchName(anchorBranchName, false), err)
+	}
+	rootReparented = true
+	if err := ctx.Engine.RegisterWorktreeWithName(anchorBranchName, wtInfo.Path, wtInfo.Name); err != nil {
+		cleanup()
+		return "", fmt.Errorf("failed to register worktree under anchor %s: %w", style.ColorBranchName(anchorBranchName, false), err)
+	}
+	registered = true
+	if err := ctx.Engine.UnregisterWorktree(wtInfo.AnchorBranch); err != nil {
+		cleanup()
+		return "", fmt.Errorf("failed to remove legacy registration %s: %w", style.ColorBranchName(wtInfo.AnchorBranch, false), err)
+	}
+	return anchorBranchName, nil
 }
 
 func removeWorktreePath(ctx *app.Context, path string, force bool) error {

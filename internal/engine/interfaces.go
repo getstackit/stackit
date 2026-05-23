@@ -218,9 +218,9 @@ type WorktreeOperations interface {
 
 // WorktreeInfo represents information about a stackit-managed worktree
 type WorktreeInfo struct {
-	Name         string    // User-provided name for display (empty for legacy worktrees)
+	Name         string    // User-provided name for display
 	Path         string    // Absolute path to worktree
-	AnchorBranch string    // Anchor branch name (stack root for legacy worktrees)
+	AnchorBranch string    // Hidden worktree anchor branch name
 	CreatedAt    time.Time // When worktree was created
 	MainRepoDir  string    // Path to main repo
 }

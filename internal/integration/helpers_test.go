@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -427,7 +428,24 @@ func (s *TestShell) OnBranch(expected string) *TestShell {
 // HasBranches asserts the repo has exactly these branches
 func (s *TestShell) HasBranches(branches ...string) *TestShell {
 	s.t.Helper()
-	testhelpers.ExpectBranches(s.t, s.scene.Repo, branches)
+	cmd := exec.Command("git", "-C", s.scene.Repo.Dir,
+		"for-each-ref", "refs/heads/", "--format=%(refname:short)")
+	output, err := cmd.Output()
+	require.NoError(s.t, err, "Failed to list branches")
+
+	actualBranches := strings.Split(strings.TrimSpace(string(output)), "\n")
+	filtered := []string{}
+	for _, branch := range actualBranches {
+		branch = strings.TrimSpace(branch)
+		if branch == "" || branch == "prod" || branch == "x2" || s.isWorktreeAnchorBranch(branch) {
+			continue
+		}
+		filtered = append(filtered, branch)
+	}
+
+	slices.Sort(filtered)
+	slices.Sort(branches)
+	require.Equal(s.t, branches, filtered, "Branches do not match")
 	return s
 }
 
@@ -633,16 +651,59 @@ func (s *TestShell) CreateDiamondStack() *TestShell {
 // Worktree Helpers
 // =============================================================================
 
-// GetWorktreePath returns the path to a worktree for a given stack root.
-// This reads from refs/stackit/worktrees/{stackRoot} metadata.
-func (s *TestShell) GetWorktreePath(stackRoot string) string {
+// GetWorktreePath returns the path to a worktree for a given worktree name or anchor.
+// It first tries refs/stackit/worktrees/{nameOrAnchor}, then scans worktree
+// metadata for a matching display name.
+func (s *TestShell) GetWorktreePath(nameOrAnchor string) string {
 	s.t.Helper()
-	// Use git to read the worktree metadata ref
-	refName := "refs/stackit/worktrees/" + stackRoot
+
+	if path, ok := s.getWorktreePathByRef(nameOrAnchor); ok {
+		return path
+	}
+
+	cmd := exec.Command("git", "for-each-ref", "--format=%(refname)", "refs/stackit/worktrees")
+	cmd.Dir = s.scene.Dir
+	refsOutput, err := cmd.Output()
+	require.NoError(s.t, err, "failed to list worktree refs")
+
+	for _, refName := range strings.Fields(string(refsOutput)) {
+		cmd = exec.Command("git", "show-ref", "-s", refName)
+		cmd.Dir = s.scene.Dir
+		shaOutput, err := cmd.Output()
+		require.NoError(s.t, err, "failed to get worktree ref for %s", refName)
+
+		sha := strings.TrimSpace(string(shaOutput))
+		cmd = exec.Command("git", "cat-file", "-p", sha)
+		cmd.Dir = s.scene.Dir
+		blobOutput, err := cmd.Output()
+		require.NoError(s.t, err, "failed to read worktree metadata blob")
+
+		var meta struct {
+			Name         string `json:"name"`
+			Path         string `json:"path"`
+			AnchorBranch string `json:"stackRoot"`
+		}
+		err = json.Unmarshal(blobOutput, &meta)
+		require.NoError(s.t, err, "failed to parse worktree metadata")
+		if meta.Name == nameOrAnchor || meta.AnchorBranch == nameOrAnchor {
+			require.NotEmpty(s.t, meta.Path, "worktree path is empty for %s", nameOrAnchor)
+			return meta.Path
+		}
+	}
+
+	require.Failf(s.t, "worktree not found", "failed to find worktree metadata for %s", nameOrAnchor)
+	return ""
+}
+
+func (s *TestShell) getWorktreePathByRef(anchor string) (string, bool) {
+	s.t.Helper()
+	refName := "refs/stackit/worktrees/" + anchor
 	cmd := exec.Command("git", "show-ref", "-s", refName)
 	cmd.Dir = s.scene.Dir
 	shaOutput, err := cmd.Output()
-	require.NoError(s.t, err, "failed to get worktree ref for %s", stackRoot)
+	if err != nil {
+		return "", false
+	}
 
 	sha := strings.TrimSpace(string(shaOutput))
 	cmd = exec.Command("git", "cat-file", "-p", sha)
@@ -656,9 +717,9 @@ func (s *TestShell) GetWorktreePath(stackRoot string) string {
 	}
 	err = json.Unmarshal(blobOutput, &meta)
 	require.NoError(s.t, err, "failed to parse worktree metadata")
-	require.NotEmpty(s.t, meta.Path, "worktree path is empty for %s", stackRoot)
+	require.NotEmpty(s.t, meta.Path, "worktree path is empty for %s", anchor)
 
-	return meta.Path
+	return meta.Path, true
 }
 
 // InWorktree creates a new TestShell operating in the specified worktree path.
@@ -739,7 +800,33 @@ func (s *TestShell) SetPrState(branch, state string) *TestShell {
 func (s *TestShell) ExpectBranchParent(branch, expectedParent string) *TestShell {
 	s.t.Helper()
 
-	// Read metadata
+	meta := s.readBranchMeta(branch)
+
+	require.NotNil(s.t, meta.ParentBranchName, "branch %s has no parent", branch)
+	actualParent := s.visibleParent(*meta.ParentBranchName)
+	require.Equal(s.t, expectedParent, actualParent,
+		"branch %s expected parent %s, got %s", branch, expectedParent, actualParent)
+
+	return s
+}
+
+// ExpectStackStructure asserts the entire stack structure matches expected parent-child relationships.
+func (s *TestShell) ExpectStackStructure(expected map[string]string) *TestShell {
+	s.t.Helper()
+	for branch, expectedParent := range expected {
+		s.ExpectBranchParent(branch, expectedParent)
+	}
+	return s
+}
+
+type testBranchMeta struct {
+	ParentBranchName *string `json:"parentBranchName"`
+	BranchType       string  `json:"branchType"`
+}
+
+func (s *TestShell) readBranchMeta(branch string) testBranchMeta {
+	s.t.Helper()
+
 	refName := "refs/stackit/metadata/" + branch
 	cmd := exec.Command("git", "show-ref", "-s", refName)
 	cmd.Dir = s.scene.Dir
@@ -752,26 +839,48 @@ func (s *TestShell) ExpectBranchParent(branch, expectedParent string) *TestShell
 	blobOutput, err := cmd.Output()
 	require.NoError(s.t, err, "failed to read metadata blob for %s", branch)
 
-	var meta struct {
-		ParentBranchName *string `json:"parentBranchName"`
-	}
+	var meta testBranchMeta
 	err = json.Unmarshal(blobOutput, &meta)
 	require.NoError(s.t, err, "failed to parse metadata for %s", branch)
-
-	require.NotNil(s.t, meta.ParentBranchName, "branch %s has no parent", branch)
-	require.Equal(s.t, expectedParent, *meta.ParentBranchName,
-		"branch %s expected parent %s, got %s", branch, expectedParent, *meta.ParentBranchName)
-
-	return s
+	return meta
 }
 
-// ExpectStackStructure asserts the entire stack structure matches expected parent-child relationships.
-func (s *TestShell) ExpectStackStructure(expected map[string]string) *TestShell {
+func (s *TestShell) isWorktreeAnchorBranch(branch string) bool {
 	s.t.Helper()
-	for branch, expectedParent := range expected {
-		s.ExpectBranchParent(branch, expectedParent)
+
+	refName := "refs/stackit/metadata/" + branch
+	cmd := exec.Command("git", "show-ref", "-s", refName)
+	cmd.Dir = s.scene.Dir
+	shaOutput, err := cmd.Output()
+	if err != nil {
+		return false
 	}
-	return s
+
+	sha := strings.TrimSpace(string(shaOutput))
+	cmd = exec.Command("git", "cat-file", "-p", sha)
+	cmd.Dir = s.scene.Dir
+	blobOutput, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	var meta testBranchMeta
+	if err := json.Unmarshal(blobOutput, &meta); err != nil {
+		return false
+	}
+	return meta.BranchType == "worktree-anchor"
+}
+
+func (s *TestShell) visibleParent(parent string) string {
+	s.t.Helper()
+	if !s.isWorktreeAnchorBranch(parent) {
+		return parent
+	}
+	meta := s.readBranchMeta(parent)
+	if meta.ParentBranchName == nil {
+		return parent
+	}
+	return *meta.ParentBranchName
 }
 
 // PRMetadata contains options for setting PR metadata

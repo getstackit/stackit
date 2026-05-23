@@ -28,9 +28,17 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches []Branch) (*Resta
 		}
 		plan.ApplyMap[item.Branch] = true
 		if item.Action == RestackPlanApplyValidated {
+			specNewParent := item.NewParent
+			if parentItem, ok := plan.Items[item.NewParent]; ok && parentItem.Action == RestackPlanApplyAnchor && parentItem.TargetRev != "" {
+				specNewParent = parentItem.TargetRev
+			} else if e.IsWorktreeAnchor(e.GetBranch(item.NewParent)) && item.ParentRev != "" {
+				if parentRev, err := e.GetBranch(item.NewParent).GetRevision(); err == nil && parentRev != item.ParentRev {
+					specNewParent = item.ParentRev
+				}
+			}
 			plan.Specs = append(plan.Specs, RebaseSpec{
 				Branch:      item.Branch,
-				NewParent:   item.NewParent,
+				NewParent:   specNewParent,
 				OldUpstream: item.OldUpstream,
 			})
 			plan.BranchMap[item.Branch] = true
@@ -165,6 +173,15 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	parentRev, err := e.GetBranch(parentName).GetRevision()
 	if err != nil {
 		return item, false
+	}
+	if e.IsWorktreeAnchor(e.GetBranch(parentName)) {
+		trunkRev, err := e.Trunk().GetRevision()
+		if err != nil {
+			return item, false
+		}
+		if parentRev != trunkRev {
+			parentRev = trunkRev
+		}
 	}
 	item.ParentRev = parentRev
 

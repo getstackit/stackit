@@ -178,18 +178,18 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 // newRemoveCmd creates the worktree remove command
 func newRemoveCmd() *cobra.Command {
 	var force bool
-	var keepBranch bool
 
 	cmd := &cobra.Command{
 		Use:   "remove <name-or-anchor-branch>",
 		Short: "Remove a managed worktree",
 		Long: `Remove a stackit-managed worktree.
 
-This removes the worktree directory, unregisters it from stackit, and deletes
-the anchor branch. You can specify either the worktree name or the anchor
-branch name.
+This removes an empty worktree directory, unregisters it from stackit, and
+deletes the hidden anchor branch. You can specify either the worktree name or
+the anchor branch name.
 
-Use --keep-branch to preserve the anchor branch after removing the worktree.`,
+Worktrees with real branches are refused. Use 'stackit worktree detach' to
+remove the worktree while preserving those branches.`,
 		SilenceUsage: true,
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -197,14 +197,12 @@ Use --keep-branch to preserve the anchor branch after removing the worktree.`,
 				return worktree.RemoveAction(ctx, worktree.RemoveOptions{
 					AnchorBranch: args[0],
 					Force:        force,
-					KeepBranch:   keepBranch,
 				})
 			})
 		},
 	}
 
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force removal even if there are errors")
-	cmd.Flags().BoolVar(&keepBranch, "keep-branch", false, "Keep the anchor branch instead of deleting it")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Discard uncommitted worktree changes while removing")
 
 	return cmd
 }
@@ -317,7 +315,8 @@ func newAttachCmd() *cobra.Command {
 		Long: `Create a worktree for an existing stack.
 
 Takes any branch in the stack and creates a worktree for the entire stack.
-The stack root branch serves as the anchor for the worktree.
+Stackit inserts a hidden anchor above the stack root and checks the worktree
+out on the original stack root branch.
 
 Examples:
   stackit worktree attach feature      # Attach stack rooted at 'feature'
@@ -369,13 +368,8 @@ func newDetachCmd() *cobra.Command {
 Unlike 'remove', this command preserves the branches in the main repository.
 Use this when you want to stop working in a worktree but keep all your branches.
 
-For worktrees created with 'wt create' (anchor-only worktrees):
-  - Reparents children of the anchor branch to trunk
-  - Deletes the anchor branch (which has no commits)
-
-For worktrees created with 'wt attach' (existing stack worktrees):
-  - Leaves all branches intact
-  - The stack remains usable in the main repository
+Detach removes the worktree, reparents children of the hidden anchor to the
+anchor's parent, then deletes the anchor branch.
 
 Examples:
   stackit worktree detach my-feature   # Detach by worktree name

@@ -10,7 +10,7 @@ Worktrees allow you to work on multiple stacks in parallel, each in its own dire
 | `stackit worktree attach <branch>` | Create a worktree for an existing stack |
 | `stackit worktree list` | List all managed worktrees |
 | `stackit worktree open <name>` | Open/cd to a worktree |
-| `stackit worktree remove <name>` | Remove worktree and delete branches |
+| `stackit worktree remove <name>` | Remove worktree and delete the registered root if empty |
 | `stackit worktree detach <name>` | Remove worktree but keep branches |
 | `stackit worktree prune` | Clean up empty/stale worktrees |
 
@@ -98,19 +98,19 @@ stackit worktree open my-feature
 
 With shell integration enabled, this changes your directory to the worktree. Without shell integration, it prints the path for use with `cd $(...)`.
 
-### `worktree remove` - Delete worktree and branches
+### `worktree remove` - Delete a worktree
 
-Removes the worktree directory and deletes the anchor branch (if it has no children).
+Removes the worktree directory and deletes the registered root or anchor branch if it has no children.
 
 ```bash
 stackit worktree remove my-feature
 ```
 
 **Options:**
-- `--force`: Remove even with uncommitted changes
+- `--force`: Remove and discard uncommitted changes
 - `--keep-branch`: Keep the anchor branch instead of deleting it
 
-**Use when:** The stack is fully merged or you want to discard all the work.
+**Use when:** The stack is fully merged, or you intentionally want to discard the workspace.
 
 ### `worktree detach` - Remove worktree, keep branches
 

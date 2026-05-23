@@ -207,6 +207,7 @@ type CommitOperations interface {
 type WorktreeOperations interface {
 	AddWorktree(ctx context.Context, path string, branch string, detach bool) error
 	RemoveWorktree(ctx context.Context, path string) error
+	ForceRemoveWorktree(ctx context.Context, path string) error
 	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string) (path string, cleanup func(), err error)
 	// CreateTemporaryWorktreeSkipPrune is like CreateTemporaryWorktree but skips the automatic
 	// PruneWorktrees() call. Use this when creating multiple worktrees in parallel after

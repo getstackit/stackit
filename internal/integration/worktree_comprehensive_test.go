@@ -93,6 +93,43 @@ func TestWorktreeBasicOperations(t *testing.T) {
 			t.Errorf("Worktree directory should be removed at %s", worktreePath)
 		}
 	})
+
+	run("worktree remove refuses dirty worktree without force", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile("dirty-stack.txt", "dirty-stack").
+			Run("create dirty-stack -w -m 'dirty stack branch'")
+
+		worktreePath := sh.GetWorktreePath("dirty-stack")
+		uncommittedFile := worktreePath + "/uncommitted.txt"
+		if err := os.WriteFile(uncommittedFile, []byte("uncommitted"), 0644); err != nil {
+			t.Fatalf("Failed to write file: %v", err)
+		}
+
+		sh.RunExpectError("worktree remove dirty-stack")
+
+		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+			t.Errorf("Dirty worktree should still exist")
+		}
+
+		sh.Run("worktree list").
+			OutputContains("dirty-stack")
+	})
+
+	run("worktree remove force discards dirty worktree", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile("force-stack.txt", "force-stack").
+			Run("create force-stack -w -m 'force stack branch'")
+
+		worktreePath := sh.GetWorktreePath("force-stack")
+		uncommittedFile := worktreePath + "/uncommitted.txt"
+		if err := os.WriteFile(uncommittedFile, []byte("uncommitted"), 0644); err != nil {
+			t.Fatalf("Failed to write file: %v", err)
+		}
+
+		sh.Run("worktree remove force-stack --force")
+
+		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+			t.Errorf("Worktree directory should be removed at %s", worktreePath)
+		}
+	})
 }
 
 // =============================================================================

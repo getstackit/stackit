@@ -100,6 +100,20 @@ func TestWorktreeAttach(t *testing.T) {
 		sh.HasBranches("main", "stack-root", "child")
 	})
 
+	run("attach preserves unrelated current branch", func(_ *testing.T, sh *TestShell) {
+		sh.WriteFile("a.txt", "a").
+			Run("create stack-a -m 'stack a'")
+		sh.Checkout("main")
+		sh.WriteFile("b.txt", "b").
+			Run("create stack-b -m 'stack b'")
+
+		sh.Run("worktree attach stack-a")
+
+		sh.OnBranch("stack-b")
+		sh.Run("worktree list").
+			OutputContains("stack-a")
+	})
+
 	run("attach fails for untracked branch", func(_ *testing.T, sh *TestShell) {
 		// Create a regular git branch (not tracked by stackit)
 		sh.Git("checkout -b untracked-branch")

@@ -144,12 +144,22 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 
 	// Check if path exists before trying to remove
 	if _, statErr := os.Stat(wtInfo.Path); statErr == nil {
-		// Try to remove the git worktree
-		if removeErr := ctx.Engine.RemoveWorktree(ctx.Context, wtInfo.Path); removeErr != nil {
-			if !opts.Force {
-				return fmt.Errorf("failed to remove worktree at %s: %w (use --force to override)", wtInfo.Path, removeErr)
+		if !opts.Force {
+			isDirty, dirtyErr := ctx.Git().WorktreeHasUncommittedChanges(ctx.Context, wtInfo.Path)
+			if dirtyErr != nil {
+				return fmt.Errorf("failed to check worktree status at %s: %w", wtInfo.Path, dirtyErr)
 			}
-			out.Warn("Failed to remove worktree directory, continuing with unregistration: %v", removeErr)
+			if isDirty {
+				return fmt.Errorf("worktree has uncommitted changes; use --force to discard them")
+			}
+		}
+
+		// Try to remove the git worktree
+		if removeErr := removeWorktreePath(ctx, wtInfo.Path, opts.Force); removeErr != nil {
+			if opts.Force {
+				return fmt.Errorf("failed to force remove worktree at %s: %w", wtInfo.Path, removeErr)
+			}
+			return fmt.Errorf("failed to remove worktree at %s: %w (use --force to discard uncommitted changes)", wtInfo.Path, removeErr)
 		}
 	} else {
 		out.Debug("Worktree path %s does not exist, skipping removal", wtInfo.Path)
@@ -666,20 +676,6 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*AttachResult, error) {
 		return nil, fmt.Errorf("failed to register worktree: %w", err)
 	}
 
-	// If we weren't already on trunk, checkout trunk now (stack now "belongs" to worktree)
-	if !needsCheckout {
-		if err := eng.CheckoutBranch(ctx.Context, trunk); err != nil {
-			// Clean up on failure
-			_ = eng.UnregisterWorktree(stackRootName)
-			_ = eng.RemoveWorktree(ctx.Context, worktreePath)
-			// Try to restore original branch
-			if currentBranch != nil {
-				_ = eng.CheckoutBranch(ctx.Context, *currentBranch)
-			}
-			return nil, fmt.Errorf("failed to checkout trunk: %w", err)
-		}
-	}
-
 	out.Success("Attached stack %s to worktree", style.ColorBranchName(stackRootName, false))
 	out.Info("  Name: %s", style.ColorBranchName(name, false))
 	out.Info("  Path: %s", style.ColorDim(worktreePath))
@@ -734,11 +730,11 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 
 	// Remove the git worktree directory
 	if _, statErr := os.Stat(wtInfo.Path); statErr == nil {
-		if removeErr := ctx.Engine.RemoveWorktree(ctx.Context, wtInfo.Path); removeErr != nil {
-			if !opts.Force {
-				return fmt.Errorf("failed to remove worktree at %s: %w (use --force to override)", wtInfo.Path, removeErr)
+		if removeErr := removeWorktreePath(ctx, wtInfo.Path, opts.Force); removeErr != nil {
+			if opts.Force {
+				return fmt.Errorf("failed to force remove worktree at %s: %w", wtInfo.Path, removeErr)
 			}
-			out.Warn("Failed to remove worktree directory, continuing with unregistration: %v", removeErr)
+			return fmt.Errorf("failed to remove worktree at %s: %w (use --force to discard uncommitted changes)", wtInfo.Path, removeErr)
 		}
 	} else {
 		out.Debug("Worktree path %s does not exist, skipping removal", wtInfo.Path)
@@ -782,4 +778,11 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 	}
 
 	return nil
+}
+
+func removeWorktreePath(ctx *app.Context, path string, force bool) error {
+	if force {
+		return ctx.Engine.ForceRemoveWorktree(ctx.Context, path)
+	}
+	return ctx.Engine.RemoveWorktree(ctx.Context, path)
 }

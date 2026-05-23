@@ -219,7 +219,7 @@ func newPruneCmd() *cobra.Command {
 		Long: `Remove all worktrees that have no stacked branches.
 
 Empty worktrees are those with only the anchor branch and no work in progress.
-Worktrees with uncommitted changes are skipped unless --force is used.`,
+Worktrees with uncommitted changes are skipped.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {

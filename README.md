@@ -268,9 +268,9 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 ### Worktree Management
 | Command | Description |
 |:---|:---|
-| `stackit worktree create <name>` | Create a new worktree (use `--open` to auto-cd) |
+| `stackit worktree create <name>` | Create a new worktree (auto-cd with shell integration; use `--no-open` to skip) |
 | `stackit worktree list` | List all managed worktrees |
-| `stackit worktree remove <stack>` | Remove a worktree and unregister it |
+| `stackit worktree remove <stack>` | Remove a worktree and unregister it (use `--force` to discard dirty changes) |
 | `stackit worktree open <stack>` | Open a worktree (auto-cd with shell integration, or print path for `cd $(...)`) |
 | `stackit worktree attach <branch>` | Attach an existing stack to a worktree |
 | `stackit worktree detach <name>` | Detach a stack from a worktree |

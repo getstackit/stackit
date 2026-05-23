@@ -270,11 +270,11 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 |:---|:---|
 | `stackit worktree create <name>` | Create a new worktree (auto-cd with shell integration; use `--no-open` to skip) |
 | `stackit worktree list` | List all managed worktrees |
-| `stackit worktree remove <stack>` | Remove a worktree and unregister it (use `--force` to discard dirty changes) |
+| `stackit worktree remove <stack>` | Remove an empty managed worktree and delete its hidden anchor (`--force` discards dirty files only) |
 | `stackit worktree open <stack>` | Open a worktree (auto-cd with shell integration, or print path for `cd $(...)`) |
-| `stackit worktree attach <branch>` | Attach an existing stack to a worktree |
-| `stackit worktree detach <name>` | Detach a stack from a worktree |
-| `stackit worktree prune` | Clean up stale worktrees |
+| `stackit worktree attach <branch>` | Move an existing stack into a managed worktree by inserting a hidden anchor above it |
+| `stackit worktree detach <name>` | Remove a managed worktree but keep and reparent its real branches |
+| `stackit worktree prune` | Clean up empty or stale managed worktrees |
 
 ### Stack Operations
 | Command | Description |
@@ -360,7 +360,8 @@ To work on separate features simultaneously, each in their own directory:
 stackit create my-feature -m "feat: start new feature" -w
 
 # This creates:
-# - A new branch 'my-feature' tracked by stackit
+# - A hidden worktree anchor branch at trunk
+# - A new branch 'my-feature' parented under that anchor
 # - A worktree at ../your-repo-stacks/my-feature/
 ```
 Navigate to the worktree:
@@ -371,7 +372,7 @@ stackit worktree open my-feature
 # Without shell integration: use command substitution
 cd $(stackit worktree open my-feature)
 ```
-Worktrees are automatically cleaned up during `stackit sync` when their stack is merged.
+During `stackit sync`, Stackit can automatically clean up managed worktrees that are clean and empty after merged or deleted branches are removed.
 
 ### Collaborating on Stacks
 To work on a stack created by someone else or on another machine:
@@ -435,7 +436,7 @@ This allows teams to define shared settings that individual developers can overr
 | `ci.timeout` | CI command timeout in seconds (default: 600) | `stackit config set ci.timeout 300` |
 | `undo.depth` | Maximum undo snapshots to retain (default: 10) | `stackit config set undo.depth 20` |
 | `worktree.basePath` | Customize where worktrees are created | `stackit config set worktree.basePath "../my-stacks"` |
-| `worktree.autoClean` | Auto-remove worktrees for merged stacks during sync (default: true) | `stackit config set worktree.autoClean false` |
+| `worktree.autoClean` | Auto-remove clean, empty managed worktrees during sync (default: true) | `stackit config set worktree.autoClean false` |
 | `split.hunkSelector` | Hunk selector mode: tui or git (default: tui) | `stackit config set split.hunkSelector git` |
 | `maxConcurrency` | Maximum concurrent validation operations (default: auto) | `stackit config set maxConcurrency 4` |
 | `navigation.when` | When to show navigation: always, never, or multiple (default: always) | `stackit config set navigation.when multiple` |
@@ -517,7 +518,7 @@ hooks:
 
 #### Worktree Hooks
 
-The `hooks.post-worktree-create` option allows you to run commands automatically after creating a worktree with `stackit create -w`. This is useful for:
+The `hooks.post-worktree-create` option allows you to run commands automatically after Stackit creates a managed worktree, including `stackit create -w`, `stackit worktree create`, and `stackit worktree attach`. This is useful for:
 
 - Installing dependencies (`npm install`, `bundle install`, etc.)
 - Setting up environment files

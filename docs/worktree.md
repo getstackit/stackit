@@ -2,6 +2,8 @@
 
 Worktrees allow you to work on multiple stacks in parallel, each in its own directory.
 
+All Stackit-managed worktrees are registered to hidden `worktree-anchor` branches. The worktree name is just the user-facing container; real branches always live under the anchor.
+
 ## Quick Reference
 
 | Command | Description |
@@ -55,6 +57,18 @@ stackit wt create auth-refactor
 # Now in ../myapp-stacks/auth-refactor/
 stackit create api-changes -m "refactor: update auth API"
 stackit create ui-updates -m "feat: new login UI"
+```
+
+### `create -w` - Start the first real branch in a worktree
+
+`stackit create ... -w` creates the first real branch and commit as usual, then creates a hidden anchor at trunk, reparents the new branch under that anchor, and opens the worktree on the real branch.
+
+```bash
+stackit create payments -m "feat: start payments" -w
+# Creates:
+#   - Anchor branch: {pattern}-payments-wt (hidden)
+#   - Real branch: {pattern}-payments
+#   - Worktree at: ../myapp-stacks/payments/
 ```
 
 ### `worktree attach` - Move existing stack to a worktree
@@ -129,7 +143,7 @@ Detach reparents children of the hidden anchor to the anchor's parent, unregiste
 - You need to free up disk space but keep your branches
 - You're done with the isolated workspace but not the code
 
-### `worktree prune` - Clean up stale worktrees
+### `worktree prune` - Clean up empty or stale worktrees
 
 Removes worktrees that are empty (no stacked branches) or have missing directories.
 
@@ -199,7 +213,7 @@ Configure worktree behavior in `.stackit.yaml` or via `stackit config`:
 # .stackit.yaml
 worktree:
   basePath: "../my-stacks"  # Custom location (default: ../{repo}-stacks)
-  autoClean: true           # Auto-remove merged worktrees during sync
+  autoClean: true           # Auto-remove clean, empty managed worktrees during sync
 ```
 
 ```bash
@@ -233,7 +247,7 @@ cd $(stackit worktree open my-feature)
 
 ## Post-Create Hooks
 
-Run commands automatically after creating a worktree:
+Run commands automatically after Stackit creates a managed worktree:
 
 ```yaml
 # .stackit.yaml

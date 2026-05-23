@@ -63,7 +63,7 @@ git config --local --add stackit.trunks develop
 | `stackit.submit.assignees` | string[] | `[]` | Default assignees for PRs |
 | `stackit.undo.depth` | int | `10` | Max undo snapshots to retain |
 | `stackit.worktree.basePath` | string | `""` | Base directory for worktrees |
-| `stackit.worktree.autoClean` | bool | `true` | Auto-clean worktrees during sync |
+| `stackit.worktree.autoClean` | bool | `true` | Auto-remove clean, empty managed worktrees during sync |
 | `stackit.merge.method` | string | `""` | Merge strategy (squash/merge/rebase) |
 | `stackit.ci.command` | string | `""` | CI validation command |
 | `stackit.ci.timeout` | int | `600` | CI command timeout in seconds |
@@ -196,7 +196,7 @@ undo:
 # Worktree settings
 worktree:
   basePath: ""  # Base directory for worktrees (empty = auto)
-  autoClean: true  # Auto-clean worktrees during sync
+  autoClean: true  # Auto-remove clean, empty managed worktrees during sync
 
 # Split settings
 split:
@@ -229,7 +229,7 @@ The table below shows all options available in `.stackit.yaml`. The "Team Fallba
 | `ci.timeout` | int | `600` | CI timeout in seconds | Yes |
 | `undo.depth` | int | `10` | Max undo snapshots to retain | Yes |
 | `worktree.basePath` | string | `""` | Base directory for worktrees | Yes |
-| `worktree.autoClean` | bool | `true` | Auto-clean worktrees during sync | Yes |
+| `worktree.autoClean` | bool | `true` | Auto-remove clean, empty managed worktrees during sync | Yes |
 | `split.hunkSelector` | string | `tui` | Hunk selector mode (tui/git) | Yes |
 | `maxConcurrency` | int | `0` | Max concurrent operations (0 = auto) | Yes |
 | `hooks.post-worktree-create` | string[] | `[]` | Post-worktree-create commands | No (requires approval) |

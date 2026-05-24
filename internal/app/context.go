@@ -364,6 +364,7 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 		loadMode = *opts.EngineLoadMode
 	}
 
+
 	// Create real engine with configured runner. LoadModeShared skips
 	// BatchReadLocalMetadata at bootstrap — local metadata (Frozen, etc.)
 	// loads on first accessor call. For commands that never read local-only

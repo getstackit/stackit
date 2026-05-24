@@ -304,6 +304,7 @@ func (e *engineImpl) ensureBranchSharedLoaded(branchName string) {
 	e.mu.Unlock()
 }
 
+
 // ensureLocalLoaded reads local metadata for all known branches and applies
 // the Frozen flag to state. Same locking contract as ensureSharedLoaded.
 //

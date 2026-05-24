@@ -146,37 +146,30 @@ func (e *engineImpl) getExplicitScope(branch Branch) Scope {
 // IsUpToDate checks if a branch is up to date with its parent
 // A branch is up to date if its parent revision matches the stored parent revision
 func (e *engineImpl) IsUpToDate(branch Branch) bool {
-	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
 		return true
 	}
 
 	e.mu.RLock()
-	state := e.state.branchState.GetByName(branchName)
+	state := e.state.branchState.GetByName(branch.GetName())
 	e.mu.RUnlock()
 
 	if state == nil {
 		return true // Not tracked, consider it fixed
 	}
 
-	// Get current parent revision
+	if state.ParentBranchRevision == "" {
+		return false // No stored revision, needs restack
+	}
+
+	// Get current parent revision (cached via revisionCache after first read).
 	parentRev, err := e.git.GetRevision(state.Parent)
 	if err != nil {
 		return false // Can't determine, assume needs restack
 	}
 
-	// Get stored parent revision from metadata
-	meta, err := e.readMetadata(branchName)
-	if err != nil {
-		return false // No metadata, assume needs restack
-	}
-
-	if meta.GetParentBranchRevision() == nil {
-		return false // No stored revision, needs restack
-	}
-
-	// Branch is fixed if stored revision matches current parent revision
-	return *meta.GetParentBranchRevision() == parentRev
+	// Branch is up to date if stored revision matches current parent revision.
+	return state.ParentBranchRevision == parentRev
 }
 
 // GetBranchRemoteStatus returns the relationship between a local branch and its remote

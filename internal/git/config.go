@@ -58,6 +58,7 @@ func (c *ConfigStore) loadConfig() (*Repository, *format.Config, error) {
 
 	cfg, err := repo.Config()
 	if err != nil {
+		_ = repo.Close()
 		return nil, nil, err
 	}
 	if cfg.Raw == nil {
@@ -74,10 +75,11 @@ func (c *ConfigStore) Get(key string) (string, error) {
 		return "", err
 	}
 
-	_, cfg, err := c.loadConfig()
+	repo, cfg, err := c.loadConfig()
 	if err != nil {
 		return "", err
 	}
+	defer func() { _ = repo.Close() }()
 	if parsed.subsection == "" {
 		return cfg.Section(parsed.section).Option(parsed.name), nil
 	}
@@ -92,10 +94,11 @@ func (c *ConfigStore) GetAll(key string) ([]string, error) {
 		return nil, err
 	}
 
-	_, cfg, err := c.loadConfig()
+	repo, cfg, err := c.loadConfig()
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = repo.Close() }()
 	var values []string
 	if parsed.subsection == "" {
 		values = cfg.Section(parsed.section).OptionAll(parsed.name)
@@ -119,6 +122,7 @@ func (c *ConfigStore) Set(key, value string) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = repo.Close() }()
 	raw.SetOption(parsed.section, parsed.subsection, parsed.name, value)
 	return repo.SetConfigRaw(raw)
 }
@@ -144,6 +148,7 @@ func (c *ConfigStore) Add(key, value string) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = repo.Close() }()
 	raw.AddOption(parsed.section, parsed.subsection, parsed.name, value)
 	return repo.SetConfigRaw(raw)
 }
@@ -160,6 +165,7 @@ func (c *ConfigStore) Unset(key string) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = repo.Close() }()
 	if parsed.subsection == "" {
 		raw.Section(parsed.section).RemoveOption(parsed.name)
 	} else {

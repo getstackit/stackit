@@ -51,12 +51,18 @@ func (r *runner) CommitWithOptions(opts CommitOptions) error {
 	if !utils.IsInteractive() || (opts.Message != "" && !opts.Edit) || (opts.Amend && opts.NoEdit) {
 		_, err := r.runGitStreaming(context.Background(), args...)
 		r.revisionCache.InvalidateAll()
-		return err
+		if err != nil {
+			return err
+		}
+		return r.ReloadRepository()
 	}
 
 	err := r.RunGitCommandInteractive(args...)
 	r.revisionCache.InvalidateAll()
-	return err
+	if err != nil {
+		return err
+	}
+	return r.ReloadRepository()
 }
 
 func (r *runner) Commit(message string, verbose int, noVerify bool) error {
@@ -70,5 +76,8 @@ func (r *runner) Commit(message string, verbose int, noVerify bool) error {
 func (r *runner) CommitAmendNoEdit(ctx context.Context) error {
 	_, err := r.RunGitCommandWithContext(ctx, "commit", "-a", "--amend", "--no-edit", "--no-verify")
 	r.revisionCache.InvalidateAll()
-	return err
+	if err != nil {
+		return err
+	}
+	return r.ReloadRepository()
 }

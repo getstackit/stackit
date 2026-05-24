@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	gogit "github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
 )
 
@@ -42,7 +43,26 @@ func (r *runner) GetAllBranchNames() ([]string, error) {
 }
 
 func (r *runner) CheckoutBranch(ctx context.Context, branchName string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "checkout", branchName)
+	repo, err := r.ensureRepo()
+	if err != nil {
+		return err
+	}
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+
+	status, err := worktree.Status()
+	if err != nil {
+		return fmt.Errorf("failed to check status before checkout: %w", err)
+	}
+	err = worktree.Checkout(&gogit.CheckoutOptions{
+		Branch: plumbing.NewBranchReferenceName(branchName),
+		Keep:   !status.IsClean(),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to checkout branch %s: %w", branchName, err)
 	}
@@ -50,12 +70,46 @@ func (r *runner) CheckoutBranch(ctx context.Context, branchName string) error {
 }
 
 func (r *runner) CheckoutBranchForce(ctx context.Context, branchName string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "checkout", "-f", branchName)
+	repo, err := r.ensureRepo()
+	if err != nil {
+		return err
+	}
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+	err = worktree.Checkout(&gogit.CheckoutOptions{
+		Branch: plumbing.NewBranchReferenceName(branchName),
+		Force:  true,
+	})
 	return err
 }
 
 func (r *runner) CreateAndCheckoutBranch(ctx context.Context, branchName string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "checkout", "-b", branchName)
+	repo, err := r.ensureRepo()
+	if err != nil {
+		return err
+	}
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+
+	status, err := worktree.Status()
+	if err != nil {
+		return fmt.Errorf("failed to check status before creating branch %s: %w", branchName, err)
+	}
+	err = worktree.Checkout(&gogit.CheckoutOptions{
+		Branch: plumbing.NewBranchReferenceName(branchName),
+		Create: true,
+		Keep:   !status.IsClean(),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create and checkout branch %s: %w", branchName, err)
 	}
@@ -63,7 +117,14 @@ func (r *runner) CreateAndCheckoutBranch(ctx context.Context, branchName string)
 }
 
 func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "branch", "-D", branchName)
+	repo, err := r.ensureRepo()
+	if err != nil {
+		return err
+	}
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+	err = repo.Storer.RemoveReference(plumbing.NewBranchReferenceName(branchName))
 	if err != nil {
 		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
 	}
@@ -82,23 +143,73 @@ func (r *runner) RenameBranch(ctx context.Context, oldName, newName string) erro
 }
 
 func (r *runner) CreateBranch(ctx context.Context, branchName, startPoint string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "branch", branchName, startPoint)
+	repo, err := r.ensureRepo()
 	if err != nil {
+		return err
+	}
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+
+	refName := plumbing.NewBranchReferenceName(branchName)
+	if _, err := repo.Reference(refName, false); err == nil {
+		return fmt.Errorf("failed to create branch %s from %s: branch already exists", branchName, startPoint)
+	}
+
+	hash, err := r.resolveRefHashInternal(repo, startPoint)
+	if err != nil {
+		return fmt.Errorf("failed to create branch %s from %s: %w", branchName, startPoint, err)
+	}
+
+	if err := repo.Storer.SetReference(plumbing.NewHashReference(refName, hash)); err != nil {
 		return fmt.Errorf("failed to create branch %s from %s: %w", branchName, startPoint, err)
 	}
 	return nil
 }
 
 func (r *runner) CreateBranchForce(ctx context.Context, branchName, revision string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "branch", "-f", branchName, revision)
-	if err == nil {
-		r.revisionCache.Delete(branchName)
+	repo, err := r.ensureRepo()
+	if err != nil {
+		return err
 	}
-	return err
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+
+	hash, err := r.resolveRefHashInternal(repo, revision)
+	if err != nil {
+		return err
+	}
+
+	refName := plumbing.NewBranchReferenceName(branchName)
+	if err := repo.Storer.SetReference(plumbing.NewHashReference(refName, hash)); err != nil {
+		return err
+	}
+	r.revisionCache.Delete(branchName)
+	return nil
 }
 
 func (r *runner) CheckoutDetached(ctx context.Context, revision string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "checkout", "--detach", revision)
+	repo, err := r.ensureRepo()
+	if err != nil {
+		return err
+	}
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+
+	hash, err := r.resolveRefHashInternal(repo, revision)
+	if err == nil {
+		status, statusErr := worktree.Status()
+		if statusErr != nil {
+			return fmt.Errorf("failed to check status before detached checkout: %w", statusErr)
+		}
+		err = worktree.Checkout(&gogit.CheckoutOptions{Hash: hash, Keep: !status.IsClean()})
+	}
 	if err != nil {
 		return fmt.Errorf("failed to checkout %s in detached state: %w", revision, err)
 	}
@@ -106,8 +217,21 @@ func (r *runner) CheckoutDetached(ctx context.Context, revision string) error {
 }
 
 func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "update-ref", "refs/heads/"+branchName, revision)
+	repo, err := r.ensureRepo()
 	if err != nil {
+		return err
+	}
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+
+	hash, err := r.resolveRefHashInternal(repo, revision)
+	if err != nil {
+		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)
+	}
+
+	refName := plumbing.NewBranchReferenceName(branchName)
+	if err := repo.Storer.SetReference(plumbing.NewHashReference(refName, hash)); err != nil {
 		return fmt.Errorf("failed to update branch ref: %w", err)
 	}
 	r.revisionCache.Delete(branchName)

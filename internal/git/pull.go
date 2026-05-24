@@ -3,6 +3,8 @@ package git
 import (
 	"context"
 	"fmt"
+
+	gitcfg "github.com/go-git/go-git/v6/config"
 )
 
 // PullResult represents the result of a pull operation
@@ -34,12 +36,8 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 
 	// Fetch with explicit refspec to update the remote-tracking branch
 	// This ensures refs/remotes/origin/<branch> is actually updated
-	refspec := fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branchName, remote, branchName)
-	_, _ = r.RunGitCommandWithContext(ctx, "fetch", remote, refspec)
-
-	// Force-reload the git repository object to ensure we see newly fetched commits
-	// This clears the go-git cache so it re-scans for new objects on disk
-	_ = r.ReloadRepository()
+	refspec := gitcfg.RefSpec(fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branchName, remote, branchName))
+	_ = r.fetchRemoteRefSpecs(ctx, remote, []gitcfg.RefSpec{refspec})
 
 	// Get the SHA of the remote branch
 	remoteRev, err := r.GetRemoteSha(remote, branchName)
@@ -112,7 +110,8 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 }
 
 func (r *runner) Fetch(ctx context.Context, remote, branch string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "fetch", remote, branch)
+	refspec := gitcfg.RefSpec(fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch))
+	err := r.fetchRemoteRefSpecs(ctx, remote, []gitcfg.RefSpec{refspec})
 	if err != nil {
 		return fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 	}

@@ -51,7 +51,7 @@ func TestConflictResolution(t *testing.T) {
 
 		// 4. Verify: restack stops at branch-a with conflict
 		sh.Log("Verifying conflict on branch-a...")
-		sh.Git("status").OutputContains("rebase in progress")
+		sh.Git("status").OutputContains("currently rebasing")
 
 		// 5. Resolve conflict, run `stackit continue`
 		sh.Log("Resolving conflict on branch-a and continuing...")
@@ -65,7 +65,7 @@ func TestConflictResolution(t *testing.T) {
 
 		// 6. Verify: restack continues, stops at branch-b with conflict
 		sh.Log("Verifying conflict on branch-b...")
-		sh.Git("status").OutputContains("rebase in progress")
+		sh.Git("status").OutputContains("currently rebasing")
 
 		// 7. Resolve conflict, run `stackit continue`
 		sh.Log("Resolving conflict on branch-b and continuing...")
@@ -76,7 +76,7 @@ func TestConflictResolution(t *testing.T) {
 
 		// 8. Verify: restack continues, stops at branch-c with conflict
 		sh.Log("Verifying conflict on branch-c...")
-		sh.Git("status").OutputContains("rebase in progress")
+		sh.Git("status").OutputContains("currently rebasing")
 
 		// 9. Resolve conflict, run `stackit continue`
 		sh.Log("Resolving conflict on branch-c and completing...")
@@ -128,7 +128,7 @@ func TestConflictResolution(t *testing.T) {
 
 		// 4. Verify: conflict occurs at branch-c
 		sh.Log("Verifying conflict on branch-c")
-		sh.Git("status").OutputContains("rebase in progress")
+		sh.Git("status").OutputContains("currently rebasing")
 
 		// 5. Resolve conflict, run continue
 		sh.Log("Resolving conflict on branch-c and continuing")

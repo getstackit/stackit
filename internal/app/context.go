@@ -340,7 +340,10 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 	// Create git runner with logger for command logging, wrapped with tracing
 	gitRunner := git.NewTracingRunner(git.NewRunnerWithPath(repoRoot, logger), logger)
 
-	// Create real engine with configured runner
+	// Create real engine with configured runner. LoadModeShared skips
+	// BatchReadLocalMetadata at bootstrap — local metadata (Frozen, etc.)
+	// loads on first accessor call. For commands that never read local-only
+	// fields this cuts metadata I/O roughly in half on big repos.
 	eng, err := engine.NewEngine(engine.Options{
 		RepoRoot:          repoRoot,
 		Trunk:             trunk,
@@ -348,6 +351,7 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 		MaxConcurrency:    maxConcurrency,
 		Writer:            writer,
 		Git:               gitRunner,
+		LoadMode:          engine.LoadModeShared,
 	})
 	if err != nil {
 		return nil, err

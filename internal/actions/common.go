@@ -162,61 +162,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches []engine.Branch, prePlan
 		}
 	}
 
-	// Split branches into successful and conflicting
-	var successBranches []engine.Branch
-	var conflictBranches []string
-
-	if validation.Success {
-		// All branches succeeded - add them all to success list
-		for _, branch := range branches {
-			if _, exists := plan.ApplyMap[branch.GetName()]; exists {
-				successBranches = append(successBranches, branch)
-			}
-		}
-	} else {
-		// Build a position map for fast lookups
-		positionMap := make(map[string]int)
-		for i, spec := range specs {
-			positionMap[spec.Branch] = i
-		}
-		branchIndex := make(map[string]int, len(branches))
-		for i, branch := range branches {
-			branchIndex[branch.GetName()] = i
-		}
-
-		// Find position of failed branch
-		failedPos, failedExists := positionMap[validation.FailedBranch]
-		if !failedExists {
-			// This shouldn't happen, but handle gracefully
-			ctx.Logger.Warn("failed branch not found in specs branch=%v", validation.FailedBranch)
-			failedPos = len(specs) // Treat as if it failed at the end
-		}
-
-		// Classify branches based on their position relative to the conflict
-		for _, branch := range branches {
-			branchName := branch.GetName()
-			if _, exists := plan.ApplyMap[branchName]; !exists {
-				continue
-			}
-
-			pos, ok := positionMap[branchName]
-			if !ok {
-				if branchIndex[branchName] < branchIndex[validation.FailedBranch] {
-					successBranches = append(successBranches, branch)
-				}
-				continue
-			}
-
-			if pos < failedPos {
-				// Branch comes before conflict - will succeed
-				successBranches = append(successBranches, branch)
-			} else if pos == failedPos {
-				// This is the conflicted branch
-				conflictBranches = append(conflictBranches, branchName)
-			}
-			// Branches after conflict (pos > failedPos) are not processed
-		}
-	}
+	successBranches, conflictBranches := classifyValidatedBranches(branches, plan, validation)
 
 	// For standalone mode, enter conflict workflow on first conflict
 	if mode == ConflictModeEnterWorkflow && len(conflictBranches) > 0 {
@@ -305,6 +251,48 @@ func restackBranchesWithPlan(ctx *app.Context, branches []engine.Branch, prePlan
 	}
 
 	return nil
+}
+
+// classifyValidatedBranches splits the planned branches into ones safe to
+// apply now and ones to surface as conflicts, using the validation result as
+// the source of truth instead of position-in-specs arithmetic. The earlier
+// position-based split was racy: when multiple sibling specs at the same
+// depth validate in parallel and one fails, validation.FailedBranch is
+// whichever failure arrives first on the results channel — non-deterministic.
+// Alphabetically-earlier canceled siblings would then satisfy `pos < failedPos`
+// and end up in successBranches without a matching entry in NewSHAs, and the
+// engine would error with "missing validated SHA for X". Here we apply a
+// branch only if its action proves it's safe: Frozen/Anchor branches don't
+// touch a rebase worktree at all, and Validated branches need a confirmed SHA.
+func classifyValidatedBranches(branches []engine.Branch, plan *engine.RestackPlan, validation *engine.RebaseValidation) (success []engine.Branch, conflicts []string) {
+	if plan == nil || validation == nil {
+		return nil, nil
+	}
+	for _, branch := range branches {
+		branchName := branch.GetName()
+		if _, exists := plan.ApplyMap[branchName]; !exists {
+			continue
+		}
+		item, ok := plan.Items[branchName]
+		if !ok {
+			continue
+		}
+
+		switch item.Action {
+		case engine.RestackPlanApplyFrozen, engine.RestackPlanApplyAnchor:
+			success = append(success, branch)
+		case engine.RestackPlanApplyValidated:
+			if _, hasSHA := validation.NewSHAs[branchName]; hasSHA {
+				success = append(success, branch)
+			} else if branchName == validation.FailedBranch {
+				conflicts = append(conflicts, branchName)
+			}
+			// Otherwise the branch was canceled — a sibling at the same depth
+			// failed first, or validation never reached this depth. Leave it
+			// for the next restack pass.
+		}
+	}
+	return success, conflicts
 }
 
 func getCurrentBranchName(eng engine.BranchReader) string {

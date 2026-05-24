@@ -429,6 +429,25 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 // EnterConflictWorkflow performs the rebase to enter conflict state and persists continuation state.
 // This helper is shared between RestackBranchesWithHandler (standalone mode) and sync.RunSync (sync mode).
 func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches []engine.Branch) error {
+	// Detach HEAD before the real rebase. Validation already told us this rebase
+	// will conflict, so the worktree is about to be left in a long-lived rebase
+	// state. If the worktree is still "on a branch" (typically trunk, since
+	// `st sync` is usually run from main), a later `git rebase --abort` — by
+	// the user, by stackit's own error paths, or even by another `st sync` —
+	// can do `git reset --hard orig-head` and move that branch's ref to the
+	// failed rebase's target, corrupting the branch. Detaching first ensures
+	// abort can only touch HEAD, never a branch ref. `st continue` already
+	// re-attaches to the conflict branch on success.
+	if currentBranch := ctx.Engine.CurrentBranch(); currentBranch != nil {
+		currentRev, revErr := ctx.Engine.Git().GetCurrentRevision(ctx.Context)
+		if revErr != nil {
+			return fmt.Errorf("failed to read HEAD before conflict workflow: %w", revErr)
+		}
+		if detachErr := ctx.Engine.Git().CheckoutDetached(ctx.Context, currentRev); detachErr != nil {
+			return fmt.Errorf("failed to detach HEAD before conflict workflow: %w", detachErr)
+		}
+	}
+
 	// Perform rebase to enter conflict state
 	conflictBranch := ctx.Engine.GetBranch(firstConflict)
 	batchResult, err := ctx.Engine.RestackBranches(ctx.Context, []engine.Branch{conflictBranch})

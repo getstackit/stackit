@@ -3,7 +3,6 @@ package create
 
 import (
 	"fmt"
-	"path/filepath"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -201,17 +200,19 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		// Checkout back to trunk first so we can create the worktree for the branch
 		trunkBranch := eng.Trunk()
 		if err := eng.CheckoutBranch(ctx.Context, trunkBranch); err != nil {
-			out.Debug("Warning: failed to checkout trunk before creating worktree: %v", err)
+			_ = eng.DeleteBranch(ctx.Context, branch)
+			h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
+			return Result{}, fmt.Errorf("failed to checkout trunk before creating worktree: %w", err)
 		}
 
-		var err error
-		worktreePath, err = createWorktreeForStack(ctx, branchName)
+		created, err := worktree.CreateAnchoredWorktreeForBranch(ctx, branchName, branchName, opts.Scope)
 		if err != nil {
 			// Clean up branch on worktree failure
 			_ = eng.DeleteBranch(ctx.Context, branch)
 			h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to create worktree: %w", err)
 		}
+		worktreePath = created.Path
 		h.OnStep(StepWorktree, handler.StatusCompleted, fmt.Sprintf("Created worktree at %s", worktreePath))
 		out.Info("Created worktree at %s", worktreePath)
 
@@ -282,36 +283,4 @@ func determineBranch(ctx *app.Context, opts *Options, commitMessage string, scop
 	}
 
 	return ctx.Engine.GetBranch(branchName), nil
-}
-
-// createWorktreeForStack creates a worktree for the given stack root and registers it
-func createWorktreeForStack(ctx *app.Context, stackRoot string) (string, error) {
-	eng := ctx.Engine
-
-	// Get worktree base path from config, or use default
-	cfg, _ := config.LoadConfig(ctx.RepoRoot)
-	basePath := cfg.WorktreeBasePath()
-
-	// Default: sibling directory named {repo}-stacks
-	if basePath == "" {
-		repoName := filepath.Base(ctx.RepoRoot)
-		basePath = filepath.Join(filepath.Dir(ctx.RepoRoot), repoName+"-stacks")
-	}
-
-	// Worktree path: basePath/stackRoot
-	worktreePath := filepath.Join(basePath, stackRoot)
-
-	// Create the worktree (non-detached, pointing to the stack root branch)
-	if err := eng.AddWorktree(ctx.Context, worktreePath, stackRoot, false); err != nil {
-		return "", fmt.Errorf("failed to create worktree: %w", err)
-	}
-
-	// Register the worktree in local refs
-	if err := eng.RegisterWorktree(stackRoot, worktreePath); err != nil {
-		// Clean up worktree on registration failure
-		_ = eng.RemoveWorktree(ctx.Context, worktreePath)
-		return "", fmt.Errorf("failed to register worktree: %w", err)
-	}
-
-	return worktreePath, nil
 }

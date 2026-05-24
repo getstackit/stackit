@@ -6,6 +6,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // WorktreeCleanupResult contains the results of worktree cleanup
@@ -54,109 +55,63 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors map[string]bool) *Wor
 		return result
 	}
 
-	// Check each worktree to see if its stack root still exists
+	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+
+	// Check each anchored worktree and remove it once it is clean and empty.
 	for _, wt := range worktrees {
 		// Skip dirty worktrees - don't clean up while there are uncommitted changes
 		if dirtyAnchors[wt.AnchorBranch] {
 			continue
 		}
+		if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && wt.AnchorBranch == ctx.WorktreeInfo.AnchorBranch {
+			ctx.Output.Debug("Skipping cleanup for current managed worktree %s", wt.AnchorBranch)
+			continue
+		}
 
-		stackRootBranch := ctx.Engine.GetBranch(wt.AnchorBranch)
+		anchorBranch := ctx.Engine.GetBranch(wt.AnchorBranch)
+		anchorExists := ctx.Engine.BranchNames().Contains(wt.AnchorBranch)
+		if anchorExists && !ctx.Engine.IsWorktreeAnchor(anchorBranch) {
+			result.Errors = append(result.Errors, "worktree "+wt.AnchorBranch+" is registered to a non-anchor branch")
+			continue
+		}
 
-		// Check if the stack root branch still exists and is tracked
-		// A branch "exists" if it's in the branch list (not just tracked)
-		branchExists := ctx.Engine.BranchNames().Contains(wt.AnchorBranch)
+		if anchorExists && len(graph.Children(anchorBranch)) > 0 {
+			continue
+		}
 
-		if !branchExists || (!stackRootBranch.IsTrunk() && !stackRootBranch.IsTracked()) {
-			// Stack root no longer exists or is not tracked
-			// Check if there's a surviving branch in the worktree that should become the new root
-			newStackRoot := findNewStackRootInWorktree(ctx, wt.Path)
+		ctx.Output.Info("Removing empty worktree %s", wt.AnchorBranch)
 
-			if newStackRoot != "" {
-				// Update the worktree registry to point to the new stack root
-				ctx.Output.Info("Updating worktree stack root from %s to %s", wt.AnchorBranch, newStackRoot)
+		if _, statErr := os.Stat(wt.Path); statErr == nil {
+			if removeErr := ctx.Engine.RemoveWorktree(ctx.Context, wt.Path); removeErr != nil {
+				result.Errors = append(result.Errors,
+					"failed to remove worktree at "+wt.Path+": "+removeErr.Error())
+				ctx.Output.Debug("Failed to remove worktree at %s: %v", wt.Path, removeErr)
+				continue
+			}
+		} else if os.IsNotExist(statErr) {
+		} else {
+			result.Errors = append(result.Errors,
+				"failed to inspect worktree at "+wt.Path+": "+statErr.Error())
+			ctx.Output.Debug("Failed to stat worktree at %s: %v", wt.Path, statErr)
+			continue
+		}
 
-				// Unregister old stack root
-				if unregErr := ctx.Engine.UnregisterWorktree(wt.AnchorBranch); unregErr != nil {
-					ctx.Output.Debug("Failed to unregister old worktree for %s: %v", wt.AnchorBranch, unregErr)
-				}
+		if unregErr := ctx.Engine.UnregisterWorktree(wt.AnchorBranch); unregErr != nil {
+			result.Errors = append(result.Errors,
+				"failed to unregister worktree for "+wt.AnchorBranch+": "+unregErr.Error())
+			ctx.Output.Debug("Failed to unregister worktree for %s: %v", wt.AnchorBranch, unregErr)
+			continue
+		}
 
-				// Register new stack root
-				if regErr := ctx.Engine.RegisterWorktree(newStackRoot, wt.Path); regErr != nil {
-					result.Errors = append(result.Errors,
-						"failed to update worktree registry for "+newStackRoot+": "+regErr.Error())
-					ctx.Output.Debug("Failed to register new worktree for %s: %v", newStackRoot, regErr)
-				}
-			} else {
-				// No surviving branches - clean up worktree
-				ctx.Output.Info("Removing worktree for deleted stack %s", wt.AnchorBranch)
-
-				// Check if worktree path still exists before trying to remove
-				if _, statErr := os.Stat(wt.Path); statErr == nil {
-					// Path exists, try to remove the worktree
-					if removeErr := ctx.Engine.RemoveWorktree(ctx.Context, wt.Path); removeErr != nil {
-						result.Errors = append(result.Errors,
-							"failed to remove worktree at "+wt.Path+": "+removeErr.Error())
-						ctx.Output.Debug("Failed to remove worktree at %s: %v", wt.Path, removeErr)
-						// Continue to unregister even if removal fails
-					}
-				}
-
-				// Unregister the worktree from the registry
-				if unregErr := ctx.Engine.UnregisterWorktree(wt.AnchorBranch); unregErr != nil {
-					result.Errors = append(result.Errors,
-						"failed to unregister worktree for "+wt.AnchorBranch+": "+unregErr.Error())
-					ctx.Output.Debug("Failed to unregister worktree for %s: %v", wt.AnchorBranch, unregErr)
-				} else {
-					result.RemovedWorktrees = append(result.RemovedWorktrees, wt.AnchorBranch)
-				}
+		if anchorExists {
+			if deleteErr := ctx.Engine.DeleteBranch(ctx.Context, anchorBranch); deleteErr != nil {
+				result.Errors = append(result.Errors,
+					"failed to delete anchor branch "+wt.AnchorBranch+": "+deleteErr.Error())
+				ctx.Output.Debug("Failed to delete anchor branch %s: %v", wt.AnchorBranch, deleteErr)
 			}
 		}
+		result.RemovedWorktrees = append(result.RemovedWorktrees, wt.AnchorBranch)
 	}
 
 	return result
-}
-
-// findNewStackRootInWorktree checks if there's a surviving branch in the worktree
-// that should become the new stack root. This happens when the bottom branch of
-// a stack is merged but there are still child branches that got reparented to trunk.
-func findNewStackRootInWorktree(ctx *app.Context, worktreePath string) string {
-	// Get the current branch checked out in the worktree
-	currentBranch, err := ctx.Engine.Git().GetWorktreeCurrentBranch(ctx.Context, worktreePath)
-	if err != nil {
-		ctx.Output.Debug("Failed to get current branch in worktree %s: %v", worktreePath, err)
-		return ""
-	}
-
-	if currentBranch == "" {
-		return ""
-	}
-
-	// Check if the current branch is tracked
-	branch := ctx.Engine.GetBranch(currentBranch)
-	if !branch.IsTracked() {
-		return ""
-	}
-
-	// Find the root of this branch's stack (the branch whose parent is trunk)
-	// Use visited set to prevent infinite loops from circular references
-	visited := make(map[string]bool)
-	for branch.IsTracked() && !branch.IsTrunk() {
-		name := branch.GetName()
-		if visited[name] {
-			// Circular reference detected, bail out
-			ctx.Output.Debug("Circular reference detected in branch hierarchy at %s", name)
-			return ""
-		}
-		visited[name] = true
-
-		parent := branch.GetParent()
-		if parent == nil || parent.IsTrunk() {
-			// This branch's parent is trunk, so it's the new stack root
-			return branch.GetName()
-		}
-		branch = *parent
-	}
-
-	return ""
 }

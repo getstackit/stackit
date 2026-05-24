@@ -1,7 +1,9 @@
 package integration
 
 import (
+	"encoding/json"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -98,6 +100,20 @@ func TestWorktreeAttach(t *testing.T) {
 
 		// Both branches should be accessible in the worktree
 		sh.HasBranches("main", "stack-root", "child")
+	})
+
+	run("attach preserves unrelated current branch", func(_ *testing.T, sh *TestShell) {
+		sh.WriteFile("a.txt", "a").
+			Run("create stack-a -m 'stack a'")
+		sh.Checkout("main")
+		sh.WriteFile("b.txt", "b").
+			Run("create stack-b -m 'stack b'")
+
+		sh.Run("worktree attach stack-a")
+
+		sh.OnBranch("stack-b")
+		sh.Run("worktree list").
+			OutputContains("stack-a")
 	})
 
 	run("attach fails for untracked branch", func(_ *testing.T, sh *TestShell) {
@@ -435,4 +451,105 @@ func TestWorktreeAttachDetachEdgeCases(t *testing.T) {
 			t.Errorf("Worktree should be unregistered from list")
 		}
 	})
+}
+
+func TestWorktreeRepair(t *testing.T) {
+	t.Parallel()
+
+	shared := NewTestShellInProcess(t)
+	shared.SetWorktreeBasePath(t.TempDir())
+
+	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
+		t.Run(name, func(t *testing.T) {
+			sh := shared.WithT(t)
+			sh.ResetRepo()
+			fn(t, sh)
+		})
+	}
+
+	run("repair converts legacy registration to hidden anchor", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile("feature.txt", "feature").
+			Run("create feature -m 'feature branch'")
+
+		legacyPath := t.TempDir()
+		writeWorktreeRegistration(t, sh, "feature", map[string]any{
+			"name":        "legacy-wt",
+			"path":        legacyPath,
+			"stackRoot":   "feature",
+			"mainRepoDir": sh.Scene().Dir,
+		})
+
+		sh.Run("worktree list").OutputContains("repair")
+		sh.Run("worktree repair legacy-wt").
+			OutputContains("converted legacy registration to hidden anchor")
+
+		sh.Run("worktree list --json")
+		var result struct {
+			Worktrees []struct {
+				Name              string   `json:"name"`
+				AnchorBranch      string   `json:"anchor_branch"`
+				RegistrationState string   `json:"registration_state"`
+				RootBranches      []string `json:"root_branches"`
+				NeedsRepair       bool     `json:"needs_repair"`
+			} `json:"worktrees"`
+		}
+		if err := json.Unmarshal([]byte(sh.Output()), &result); err != nil {
+			t.Fatalf("failed to parse JSON output: %v\n%s", err, sh.Output())
+		}
+		if len(result.Worktrees) != 1 {
+			t.Fatalf("expected one worktree, got %d", len(result.Worktrees))
+		}
+		const featureRoot = "feature"
+		if result.Worktrees[0].AnchorBranch == featureRoot {
+			t.Fatalf("expected repair to move registration to a hidden anchor")
+		}
+		if result.Worktrees[0].RegistrationState != "ok" {
+			t.Fatalf("expected repaired registration to be ok, got %s", result.Worktrees[0].RegistrationState)
+		}
+		if result.Worktrees[0].NeedsRepair {
+			t.Fatalf("expected repaired registration not to need repair")
+		}
+		if len(result.Worktrees[0].RootBranches) != 1 || result.Worktrees[0].RootBranches[0] != featureRoot {
+			t.Fatalf("expected feature root branch after repair, got %#v", result.Worktrees[0].RootBranches)
+		}
+	})
+
+	run("repair removes stale registration for missing directory", func(t *testing.T, sh *TestShell) {
+		writeWorktreeRegistration(t, sh, "missing-anchor", map[string]any{
+			"name":        "stale-wt",
+			"path":        t.TempDir() + "/gone",
+			"stackRoot":   "missing-anchor",
+			"mainRepoDir": sh.Scene().Dir,
+		})
+
+		sh.Run("worktree repair stale-wt").
+			OutputContains("removed stale registration")
+
+		sh.Run("worktree list")
+		if !strings.Contains(sh.Output(), "No managed worktrees") {
+			t.Fatalf("expected stale registration to be removed, got:\n%s", sh.Output())
+		}
+	})
+}
+
+func writeWorktreeRegistration(t *testing.T, sh *TestShell, refName string, meta map[string]any) {
+	t.Helper()
+
+	data, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatalf("failed to marshal worktree metadata: %v", err)
+	}
+
+	hashCmd := exec.Command("git", "hash-object", "-w", "--stdin")
+	hashCmd.Dir = sh.Scene().Dir
+	hashCmd.Stdin = strings.NewReader(string(data))
+	shaBytes, err := hashCmd.Output()
+	if err != nil {
+		t.Fatalf("failed to write worktree metadata blob: %v", err)
+	}
+	sha := strings.TrimSpace(string(shaBytes))
+
+	if err := sh.Scene().Repo.RunGitCommand("update-ref", "refs/stackit/worktrees/"+refName, sha); err != nil {
+		t.Fatalf("failed to update worktree ref: %v", err)
+	}
 }

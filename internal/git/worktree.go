@@ -46,6 +46,14 @@ func (r *runner) AddWorktreeWithOptions(ctx context.Context, path string, branch
 }
 
 func (r *runner) RemoveWorktree(ctx context.Context, path string) error {
+	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", path)
+	if err != nil {
+		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
+	}
+	return nil
+}
+
+func (r *runner) ForceRemoveWorktree(ctx context.Context, path string) error {
 	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", path)
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)

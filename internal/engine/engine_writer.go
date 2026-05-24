@@ -759,6 +759,11 @@ func (e *engineImpl) RemoveWorktree(ctx context.Context, path string) error {
 	return e.git.RemoveWorktree(ctx, path)
 }
 
+// ForceRemoveWorktree removes a worktree even if it contains uncommitted changes.
+func (e *engineImpl) ForceRemoveWorktree(ctx context.Context, path string) error {
+	return e.git.ForceRemoveWorktree(ctx, path)
+}
+
 // PruneWorktrees removes stale worktree entries from .git/worktrees.
 // This cleans up worktree information for worktrees whose working directory
 // has been deleted or is otherwise unavailable.

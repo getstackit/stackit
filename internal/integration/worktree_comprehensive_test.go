@@ -385,6 +385,30 @@ func TestWorktreeSyncOperations(t *testing.T) {
 			}
 		}
 	})
+
+	run("sync from current worktree preserves current worktree after merge cleanup", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile("feature.txt", "feature").
+			Run("create feature -w -m 'feature branch'")
+
+		worktreePath := sh.GetWorktreePath("feature")
+		shW := sh.InWorktree(worktreePath)
+
+		sh.Git("checkout main").
+			Git("merge feature --ff-only").
+			Git("push origin main")
+		sh.SetPrState("feature", "MERGED")
+
+		shW.Git("checkout --detach HEAD")
+		shW.Run("sync")
+
+		sh.HasBranches("main")
+		if _, err := os.Stat(worktreePath); err != nil {
+			t.Fatalf("current worktree should remain on disk after sync cleanup skip: %v", err)
+		}
+
+		sh.Run("worktree list").
+			OutputContains("feature")
+	})
 }
 
 // =============================================================================

@@ -122,8 +122,13 @@ Shows each worktree's name, root branch, stack size, registration health, and st
 					return nil
 				}
 
+				needsRepair := false
 				for _, wt := range result.Worktrees {
 					renderWorktreeEntry(ctx, wt, result.CurrentAnchor)
+					needsRepair = needsRepair || wt.NeedsRepair
+				}
+				if needsRepair {
+					ctx.Output.Tip("Some managed worktrees need repair: stackit worktree repair")
 				}
 
 				return nil

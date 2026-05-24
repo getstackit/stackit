@@ -63,6 +63,10 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors map[string]bool) *Wor
 		if dirtyAnchors[wt.AnchorBranch] {
 			continue
 		}
+		if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && wt.AnchorBranch == ctx.WorktreeInfo.AnchorBranch {
+			ctx.Output.Debug("Skipping cleanup for current managed worktree %s", wt.AnchorBranch)
+			continue
+		}
 
 		anchorBranch := ctx.Engine.GetBranch(wt.AnchorBranch)
 		anchorExists := ctx.Engine.BranchNames().Contains(wt.AnchorBranch)
@@ -82,7 +86,14 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors map[string]bool) *Wor
 				result.Errors = append(result.Errors,
 					"failed to remove worktree at "+wt.Path+": "+removeErr.Error())
 				ctx.Output.Debug("Failed to remove worktree at %s: %v", wt.Path, removeErr)
+				continue
 			}
+		} else if os.IsNotExist(statErr) {
+		} else {
+			result.Errors = append(result.Errors,
+				"failed to inspect worktree at "+wt.Path+": "+statErr.Error())
+			ctx.Output.Debug("Failed to stat worktree at %s: %v", wt.Path, statErr)
+			continue
 		}
 
 		if unregErr := ctx.Engine.UnregisterWorktree(wt.AnchorBranch); unregErr != nil {

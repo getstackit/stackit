@@ -4,6 +4,8 @@ Worktrees allow you to work on multiple stacks in parallel, each in its own dire
 
 All Stackit-managed worktrees are registered to hidden `worktree-anchor` branches. The worktree name is just the user-facing container; real branches always live under the anchor.
 
+If you already have managed worktrees from before hidden anchors were introduced, run `stackit worktree list` after upgrading. Any entries marked `legacy` or `repair` can be migrated in place with `stackit worktree repair` or `stackit worktree repair <name>`.
+
 ## Quick Reference
 
 | Command | Description |

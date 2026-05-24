@@ -375,6 +375,8 @@ cd $(stackit worktree open my-feature)
 ```
 During `stackit sync`, Stackit can automatically clean up managed worktrees that are clean and empty after merged or deleted branches are removed.
 
+If you upgrade from an older Stackit version with pre-anchor managed worktrees, run `stackit worktree list` once. Any `legacy` or `repair` entries can be migrated in place with `stackit worktree repair`.
+
 ### Collaborating on Stacks
 To work on a stack created by someone else or on another machine:
 ```bash

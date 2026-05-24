@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // OpenEditor opens the user's preferred editor with the given initial content.
@@ -52,7 +54,10 @@ func OpenEditor(initialContent, filenamePattern string) (string, error) {
 	}
 
 	// Open editor
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("%s %s", editor, tmpFile.Name()))
+	cmd, err := utils.BuildEditorCommand(editor, tmpFile.Name())
+	if err != nil {
+		return "", fmt.Errorf("failed to build editor command: %w", err)
+	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

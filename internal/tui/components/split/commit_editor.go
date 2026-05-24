@@ -3,7 +3,6 @@ package split
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"charm.land/bubbles/v2/help"
@@ -178,7 +177,13 @@ func (m *CommitEditorModel) openEditor() tea.Cmd {
 	}
 
 	// Create the command
-	c := exec.Command(editor, m.tempFile) //nolint:gosec
+	c, err := utils.BuildEditorCommand(editor, m.tempFile)
+	if err != nil {
+		_ = os.Remove(m.tempFile)
+		return func() tea.Msg {
+			return editorFinishedMsg{err: err}
+		}
+	}
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr

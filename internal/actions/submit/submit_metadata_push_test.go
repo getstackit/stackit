@@ -57,4 +57,3 @@ func TestIsRaceConditionError(t *testing.T) {
 		})
 	}
 }
-

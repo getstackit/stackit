@@ -2,6 +2,7 @@ package pr
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -27,7 +28,7 @@ type StackTrailerInfo = StackMetadata
 func NewStackMetadata(stackSize int, prNumbers []int, scope string) StackMetadata {
 	return StackMetadata{
 		StackSize: stackSize,
-		PRNumbers: slicesClone(prNumbers),
+		PRNumbers: slices.Clone(prNumbers),
 		Scope:     scope,
 	}
 }
@@ -131,13 +132,4 @@ func parsePRNumbers(s string) []int {
 		}
 	}
 	return nums
-}
-
-func slicesClone(in []int) []int {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]int, len(in))
-	copy(out, in)
-	return out
 }

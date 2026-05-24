@@ -4,6 +4,7 @@ package submit
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -675,23 +676,9 @@ func isRaceConditionError(err error) bool {
 	}
 	errStr := err.Error()
 	// Git push rejection messages that indicate concurrent changes
-	return contains(errStr, "rejected") &&
-		(contains(errStr, "non-fast-forward") ||
-			contains(errStr, "fetch first") ||
-			contains(errStr, "needs force") ||
-			contains(errStr, "updates were rejected"))
-}
-
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 &&
-		(s == substr || (len(s) >= len(substr) && searchSubstring(s, substr)))
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(errStr, "rejected") &&
+		(strings.Contains(errStr, "non-fast-forward") ||
+			strings.Contains(errStr, "fetch first") ||
+			strings.Contains(errStr, "needs force") ||
+			strings.Contains(errStr, "updates were rejected"))
 }

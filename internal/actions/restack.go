@@ -138,7 +138,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	snapshotOpts := NewSnapshot("restack",
 		WithArg(opts.BranchName),
 		WithFlag(opts.AllStacks, "--all-stacks"),
-		WithFlagValue("--stacks", joinStrings(opts.StackRoots)),
+		WithFlagValue("--stacks", strings.Join(opts.StackRoots, ",")),
 		WithFlag(opts.ContinueOnConflict, "--continue-on-conflict"),
 		WithFlag(opts.Parallel, "--parallel"),
 	)
@@ -402,10 +402,6 @@ func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptio
 		}
 	}
 	return groups, nil
-}
-
-func joinStrings(values []string) string {
-	return strings.Join(values, ",")
 }
 
 func excludeTrunkBranches(branches []engine.Branch) []engine.Branch {

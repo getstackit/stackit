@@ -184,7 +184,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			}
 
 			parentMap[current] = base
-			if !contains(branchesToSync, base) {
+			if !slices.Contains(branchesToSync, base) {
 				branchesToSync = append([]string{base}, branchesToSync...)
 				current = base
 			} else {
@@ -199,7 +199,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		graph := eng.Graph(engine.SortStrategyAlphabetical)
 		upstack := graph.Range(targetBranchObj, engine.StackRange{RecursiveChildren: true})
 		for _, b := range upstack {
-			if !contains(branchesToSync, b.GetName()) {
+			if !slices.Contains(branchesToSync, b.GetName()) {
 				branchesToSync = append(branchesToSync, b.GetName())
 			}
 		}
@@ -410,10 +410,6 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	})
 
 	return nil
-}
-
-func contains(slice []string, s string) bool {
-	return slices.Contains(slice, s)
 }
 
 // getPRNumber returns the PR number for a branch, or nil if not available

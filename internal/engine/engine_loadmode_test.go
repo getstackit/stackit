@@ -206,6 +206,7 @@ func TestLoadMode_BranchesOnly_GetScopeLazilyLoadsParentChain(t *testing.T) {
 		"lazy scope lookup should read only the target branch and scoped parent")
 }
 
+
 // TestLoadMode_ConcurrentEnsureLoaded asserts that many concurrent accessors
 // against a LoadModeBranchesOnly engine all see the same fully-populated state
 // after the gate fires, regardless of which goroutine triggers it. This is

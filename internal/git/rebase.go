@@ -200,7 +200,7 @@ func (r *runner) GetRebaseHead() (string, error) {
 	}
 
 	for _, refName := range refs {
-		output, err := r.runGitCommandInternal("rev-parse", "--verify", refName)
+		output, err := r.GetRef(refName)
 		if err == nil && output != "" {
 			return strings.TrimSpace(output), nil
 		}

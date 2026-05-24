@@ -191,6 +191,7 @@ func (r *runner) WorktreeHasUncommittedChanges(_ context.Context, worktreePath s
 	if err != nil {
 		return false, fmt.Errorf("failed to check status in worktree %s: %w", worktreePath, err)
 	}
+	defer func() { _ = repo.Close() }()
 	worktree, err := repo.Worktree()
 	if err != nil {
 		return false, fmt.Errorf("failed to open worktree %s: %w", worktreePath, err)
@@ -209,6 +210,7 @@ func (r *runner) GetWorktreeCurrentBranch(_ context.Context, worktreePath string
 	if err != nil {
 		return "", fmt.Errorf("failed to get current branch in worktree %s: %w", worktreePath, err)
 	}
+	defer func() { _ = repo.Close() }()
 	head, err := repo.Head()
 	if err != nil {
 		return "", fmt.Errorf("failed to get current branch in worktree %s: %w", worktreePath, err)

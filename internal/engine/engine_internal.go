@@ -36,11 +36,18 @@ func (e *engineImpl) rebuildInternal(refreshCurrentBranch bool) error {
 
 // applyRebuild updates the internal state from the provided metadata results.
 // The caller MUST hold the engine's write lock (e.mu).
+//
+// After a full rebuild both lazy-load gates are considered open — subsequent
+// ensureSharedLoaded / ensureLocalLoaded calls become no-ops via the atomic
+// fast path. We can't run sharedLoadOnce/localLoadOnce here (they'd block
+// future loads even on Reset), so we set the atomic flags directly.
 func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMeta map[string]*git.Meta, allLocalMeta map[string]*git.LocalMeta) {
 	e.state.rebuildFromMetadata(e.trunk, branches, allMeta, allLocalMeta)
 	if currentBranch != "" {
 		e.currentBranch = currentBranch
 	}
+	e.sharedLoaded.Store(true)
+	e.localLoaded.Store(true)
 }
 
 // rebuild loads all branches and their metadata from Git

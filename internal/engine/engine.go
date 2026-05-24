@@ -107,6 +107,31 @@ type ApplySplitOptions struct {
 	AsSibling bool
 }
 
+// LoadMode controls how much state the engine populates at construction time.
+// Lighter modes defer metadata reads until the first accessor that needs them
+// triggers a promotion via ensureSharedLoaded / ensureLocalLoaded.
+type LoadMode int
+
+const (
+	// LoadModeFull reads both shared and local metadata at construction.
+	// This is today's behavior and the default. Used by tests and any
+	// command that needs lock/frozen/scope/PR data for every branch.
+	LoadModeFull LoadMode = iota
+
+	// LoadModeShared reads shared metadata at construction but defers local
+	// metadata (Frozen, NeedsPRBodyUpdate, NavigationCommentID) until the
+	// first local-only accessor is called. Saves the BatchReadLocalMetadata
+	// pass for commands that never touch frozen/needs-PR-update state.
+	LoadModeShared
+
+	// LoadModeBranchesOnly reads only the branch list at construction.
+	// Shared metadata is loaded on the first state access; local metadata on
+	// the first local-only accessor. Intended for read-only navigation
+	// commands (parent, children, trunk, co <exact>) that only need a
+	// single branch's metadata, not every branch in the repo.
+	LoadModeBranchesOnly
+)
+
 // Options contains configuration options for creating an Engine
 type Options struct {
 	// RepoRoot is the root directory of the Git repository
@@ -129,6 +154,11 @@ type Options struct {
 	// Writer is the output writer for warnings and informational messages.
 	// If nil, os.Stderr is used.
 	Writer io.Writer
+
+	// LoadMode controls how much metadata is read at construction time.
+	// Zero value (LoadModeFull) matches the pre-lite behavior — readers see
+	// all metadata populated synchronously after NewEngine returns.
+	LoadMode LoadMode
 }
 
 // UndoManager provides operations for undo/redo functionality

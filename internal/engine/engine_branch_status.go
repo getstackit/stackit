@@ -73,8 +73,11 @@ func (e *engineImpl) GetLockReason(branch Branch) LockReason {
 	return LockReasonNone
 }
 
-// IsFrozen checks if a branch is frozen
+// IsFrozen checks if a branch is frozen.
+// Frozen lives in local metadata which is loaded lazily — promote the local
+// tier before reading. Under LoadModeFull this is a no-op atomic check.
 func (e *engineImpl) IsFrozen(branch Branch) bool {
+	e.ensureLocalLoaded()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if state := e.readState(branch.GetName()); state != nil {

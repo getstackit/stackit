@@ -137,6 +137,21 @@ func (s *stateCore) rebuildFromMetadata(
 	allMeta map[string]*git.Meta,
 	allLocalMeta map[string]*git.LocalMeta,
 ) {
+	s.applySharedMetadata(trunk, branches, allMeta)
+	s.applyLocalMetadata(allLocalMeta)
+}
+
+// applySharedMetadata rebuilds branchState and childrenMap from shared
+// metadata (refs/stackit/metadata/*). Resets branchState before populating
+// so stale entries from external mutations are dropped. Frozen is NOT
+// modified here — call applyLocalMetadata to fill that in.
+//
+// Callers must hold the engine write lock.
+func (s *stateCore) applySharedMetadata(
+	trunk string,
+	branches []string,
+	allMeta map[string]*git.Meta,
+) {
 	s.setBranches(branches)
 
 	// Reset tracked-state caches from fresh metadata snapshot.
@@ -173,16 +188,23 @@ func (s *stateCore) rebuildFromMetadata(
 		s.childrenMap[parent] = append(s.childrenMap[parent], name)
 	}
 
-	// Frozen is local-only metadata and may exist for untracked branches.
+	for _, children := range s.childrenMap {
+		slices.Sort(children)
+	}
+}
+
+// applyLocalMetadata layers local-only state (Frozen) onto branchState.
+// Safe to call after applySharedMetadata or independently; entries for
+// branches not already in branchState are created as bare wrappers so the
+// flag is preserved for untracked branches.
+//
+// Callers must hold the engine write lock.
+func (s *stateCore) applyLocalMetadata(allLocalMeta map[string]*git.LocalMeta) {
 	for name, meta := range allLocalMeta {
 		if meta.Frozen {
 			state := s.branchState.GetOrCreate(name)
 			state.Frozen = true
 		}
-	}
-
-	for _, children := range s.childrenMap {
-		slices.Sort(children)
 	}
 }
 

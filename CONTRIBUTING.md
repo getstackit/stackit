@@ -116,6 +116,15 @@ All changes must pass tests and linting before being submitted.
 <type>[optional scope]: <description>
 ```
 
+When the subject line does not fully explain the change, add a body after a blank line:
+
+```text
+<type>[optional scope]: <description>
+
+Explain why the change exists and any important context or tradeoffs.
+Prefer concise prose over a diff-style summary of what changed.
+```
+
 ### Types
 
 - `feat`: A new feature
@@ -145,6 +154,8 @@ chore: update dependencies
 - Keep the description concise but descriptive
 - Reference issues or PRs when applicable: `feat: add feature (#123)`
 - Use the scope when it helps clarify the change: `feat(engine): add new merge strategy`
+- Separate the subject and body with a blank line when a body is present
+- Use the body for rationale, constraints, or reviewer context; skip it for small obvious changes
 
 ## Submitting Changes
 

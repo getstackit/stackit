@@ -205,6 +205,20 @@ Use **Conventional Commits**: `<type>: <description>`
 
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`
 
+When the subject line is not enough to explain the change, add a body:
+
+```text
+<type>: <description>
+
+Explain why the change exists and any important context or tradeoffs.
+Prefer concise prose over diff-style detail.
+```
+
+Body guidance:
+- Use a blank line between subject and body
+- Focus on why and important context, not a line-by-line summary of what changed
+- Omit the body for small, obvious changes; include it for broader changes where the intent is not clear from the subject alone
+
 ## Metadata
 
 Stackit stores branch relationships in `refs/stackit/metadata/`. The `Engine` package is the source of truth for stack structure. Always use `Engine` to query/modify branch relationships.

@@ -1,6 +1,8 @@
 package sync_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,5 +69,25 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		wt, err := s.Engine.GetWorktreeForStack("feature-branch")
 		require.NoError(t, err)
 		assert.NotNil(t, wt, "worktree registration should be preserved when branch exists")
+	})
+
+	t.Run("preserves registration when worktree removal fails", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		worktreePath := filepath.Join(t.TempDir(), "not-a-git-worktree")
+		require.NoError(t, os.MkdirAll(worktreePath, 0o755))
+
+		err := s.Engine.RegisterWorktree("missing-anchor", worktreePath)
+		require.NoError(t, err)
+
+		handler := &sync.NullHandler{}
+		err = sync.Action(s.Context, sync.Options{}, handler)
+		require.NoError(t, err)
+
+		wt, err := s.Engine.GetWorktreeForStack("missing-anchor")
+		require.NoError(t, err)
+		assert.NotNil(t, wt, "registration should be preserved when physical worktree removal fails")
+		assert.Equal(t, worktreePath, wt.Path)
 	})
 }

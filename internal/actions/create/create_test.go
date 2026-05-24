@@ -310,15 +310,22 @@ func TestCreateAction_Worktree(t *testing.T) {
 
 		// Verify worktree was registered
 		eng := s.Context.Engine
-		worktreeInfo, err := eng.GetWorktreeForStack("feature-branch")
+		stackRoot := eng.GetStackRootForBranch(eng.GetBranch("feature-branch"))
+		require.NotEmpty(t, stackRoot)
+		require.NotEqual(t, "feature-branch", stackRoot)
+
+		worktreeInfo, err := eng.GetWorktreeForStack(stackRoot)
 		require.NoError(t, err)
 		require.NotNil(t, worktreeInfo)
-		require.Equal(t, "feature-branch", worktreeInfo.AnchorBranch)
+		require.Equal(t, stackRoot, worktreeInfo.AnchorBranch)
 		require.Contains(t, worktreeInfo.Path, "feature-branch")
+
+		require.True(t, eng.GetBranch(stackRoot).IsWorktreeAnchor())
+		require.Equal(t, stackRoot, eng.GetBranch("feature-branch").GetParent().GetName())
 
 		// Clean up worktree
 		_ = eng.RemoveWorktree(s.Context.Context, worktreeInfo.Path)
-		_ = eng.UnregisterWorktree("feature-branch")
+		_ = eng.UnregisterWorktree(stackRoot)
 	})
 
 	t.Run("fails with -w flag when not on trunk", func(t *testing.T) {

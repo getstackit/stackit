@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,6 +61,55 @@ func TestWorktreeBasicOperations(t *testing.T) {
 			OutputContains("stack-c")
 	})
 
+	run("worktree list json shows root branch and actions", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile("feature.txt", "feature").
+			Run("create feature -w -m 'feature branch'")
+
+		worktreePath := sh.GetWorktreePath("feature")
+		shW := sh.InWorktree(worktreePath)
+		shW.WriteFile("child.txt", "child").
+			Run("create child -m 'child branch'")
+
+		sh.Run("worktree list --json")
+		var result struct {
+			Worktrees []struct {
+				Name              string   `json:"name"`
+				AnchorBranch      string   `json:"anchor_branch"`
+				RootBranches      []string `json:"root_branches"`
+				RegistrationState string   `json:"registration_state"`
+				CanRemove         bool     `json:"can_remove"`
+				CanDetach         bool     `json:"can_detach"`
+				NeedsRepair       bool     `json:"needs_repair"`
+				StackSize         int      `json:"stack_size"`
+			} `json:"worktrees"`
+		}
+		if err := json.Unmarshal([]byte(sh.Output()), &result); err != nil {
+			t.Fatalf("failed to parse worktree list JSON: %v\n%s", err, sh.Output())
+		}
+		if len(result.Worktrees) != 1 {
+			t.Fatalf("expected one worktree, got %d", len(result.Worktrees))
+		}
+		entry := result.Worktrees[0]
+		if entry.RegistrationState != "ok" {
+			t.Fatalf("expected healthy registration, got %s", entry.RegistrationState)
+		}
+		if entry.NeedsRepair {
+			t.Fatalf("expected healthy worktree not to need repair")
+		}
+		if entry.CanRemove {
+			t.Fatalf("expected non-empty worktree not to be removable")
+		}
+		if !entry.CanDetach {
+			t.Fatalf("expected anchored worktree to be detachable")
+		}
+		if entry.StackSize != 2 {
+			t.Fatalf("expected stack size 2, got %d", entry.StackSize)
+		}
+		if len(entry.RootBranches) != 1 || entry.RootBranches[0] != "feature" {
+			t.Fatalf("expected feature root branch, got %#v", entry.RootBranches)
+		}
+	})
+
 	run("worktree open returns correct path", func(_ *testing.T, sh *TestShell) {
 		sh.WriteFile("feature.txt", "feature").
 			Run("create feature -w -m 'feature branch'")
@@ -73,8 +123,7 @@ func TestWorktreeBasicOperations(t *testing.T) {
 	})
 
 	run("worktree remove cleans up worktree", func(t *testing.T, sh *TestShell) {
-		sh.WriteFile("mystack.txt", "mystack").
-			Run("create mystack -w -m 'mystack branch'")
+		sh.Run("worktree create mystack")
 
 		worktreePath := sh.GetWorktreePath("mystack")
 
@@ -89,6 +138,42 @@ func TestWorktreeBasicOperations(t *testing.T) {
 		}
 
 		// Directory should be cleaned up
+		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+			t.Errorf("Worktree directory should be removed at %s", worktreePath)
+		}
+	})
+
+	run("worktree remove refuses dirty worktree without force", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile("dirty-stack.txt", "dirty-stack").
+			Run("create dirty-stack -w -m 'dirty stack branch'")
+
+		worktreePath := sh.GetWorktreePath("dirty-stack")
+		uncommittedFile := worktreePath + "/uncommitted.txt"
+		if err := os.WriteFile(uncommittedFile, []byte("uncommitted"), 0644); err != nil {
+			t.Fatalf("Failed to write file: %v", err)
+		}
+
+		sh.RunExpectError("worktree remove dirty-stack")
+
+		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+			t.Errorf("Dirty worktree should still exist")
+		}
+
+		sh.Run("worktree list").
+			OutputContains("dirty-stack")
+	})
+
+	run("worktree remove force discards dirty worktree", func(t *testing.T, sh *TestShell) {
+		sh.Run("worktree create force-stack")
+
+		worktreePath := sh.GetWorktreePath("force-stack")
+		uncommittedFile := worktreePath + "/uncommitted.txt"
+		if err := os.WriteFile(uncommittedFile, []byte("uncommitted"), 0644); err != nil {
+			t.Fatalf("Failed to write file: %v", err)
+		}
+
+		sh.Run("worktree remove force-stack --force")
+
 		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
 			t.Errorf("Worktree directory should be removed at %s", worktreePath)
 		}
@@ -299,6 +384,30 @@ func TestWorktreeSyncOperations(t *testing.T) {
 				t.Errorf("Worktree directory should be removed after branch merged")
 			}
 		}
+	})
+
+	run("sync from current worktree preserves current worktree after merge cleanup", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile("feature.txt", "feature").
+			Run("create feature -w -m 'feature branch'")
+
+		worktreePath := sh.GetWorktreePath("feature")
+		shW := sh.InWorktree(worktreePath)
+
+		sh.Git("checkout main").
+			Git("merge feature --ff-only").
+			Git("push origin main")
+		sh.SetPrState("feature", "MERGED")
+
+		shW.Git("checkout --detach HEAD")
+		shW.Run("sync")
+
+		sh.HasBranches("main")
+		if _, err := os.Stat(worktreePath); err != nil {
+			t.Fatalf("current worktree should remain on disk after sync cleanup skip: %v", err)
+		}
+
+		sh.Run("worktree list").
+			OutputContains("feature")
 	})
 }
 
@@ -993,12 +1102,10 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 	}
 
 	run("worktree remove deletes anchor branch", func(t *testing.T, sh *TestShell) {
-		// Create worktree
-		sh.WriteFile("mystack.txt", "mystack").
-			Run("create mystack -w -m 'mystack branch'")
+		// Create empty anchored worktree.
+		sh.Run("worktree create mystack")
 
-		// Verify anchor branch exists
-		sh.HasBranches("main", "mystack")
+		sh.HasBranches("main")
 
 		worktreePath := sh.GetWorktreePath("mystack")
 
@@ -1014,26 +1121,9 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 		sh.HasBranches("main")
 	})
 
-	run("worktree remove with --keep-branch preserves anchor", func(t *testing.T, sh *TestShell) {
-		// Create worktree
-		sh.WriteFile("mystack.txt", "mystack").
-			Run("create mystack -w -m 'mystack branch'")
-
-		// Verify anchor branch exists
-		sh.HasBranches("main", "mystack")
-
-		worktreePath := sh.GetWorktreePath("mystack")
-
-		// Remove the worktree with --keep-branch
-		sh.Run("worktree remove mystack --keep-branch")
-
-		// Worktree should be removed
-		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
-			t.Errorf("Worktree directory should be removed at %s", worktreePath)
-		}
-
-		// Anchor branch should still exist
-		sh.HasBranches("main", "mystack")
+	run("worktree remove rejects removed keep-branch flag", func(_ *testing.T, sh *TestShell) {
+		sh.Run("worktree create mystack")
+		sh.RunExpectError("worktree remove mystack --keep-branch")
 	})
 
 	run("worktree remove skips deletion when anchor has children", func(_ *testing.T, sh *TestShell) {
@@ -1051,20 +1141,18 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 		// Checkout main in worktree so we can remove it
 		shW.Git("checkout --detach HEAD")
 
-		// Remove the worktree - should warn about children and not delete anchor
-		sh.Run("worktree remove feature")
+		// Remove refuses worktrees with real child branches.
+		sh.RunExpectError("worktree remove feature")
 
 		// Anchor branch and child should still exist
 		sh.HasBranches("main", "feature", "child")
 	})
 
 	run("worktree prune cleans up missing directories", func(t *testing.T, sh *TestShell) {
-		// Create worktree
-		sh.WriteFile("test-wt.txt", "test-wt").
-			Run("create test-wt -w -m 'test worktree'")
+		// Create empty anchored worktree.
+		sh.Run("worktree create test-wt")
 
-		// Verify anchor branch exists
-		sh.HasBranches("main", "test-wt")
+		sh.HasBranches("main")
 
 		worktreePath := sh.GetWorktreePath("test-wt")
 
@@ -1089,9 +1177,8 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 	})
 
 	run("worktree prune dry-run shows what would be cleaned", func(t *testing.T, sh *TestShell) {
-		// Create worktree
-		sh.WriteFile("test-wt.txt", "test-wt").
-			Run("create test-wt -w -m 'test worktree'")
+		// Create empty anchored worktree.
+		sh.Run("worktree create test-wt")
 
 		worktreePath := sh.GetWorktreePath("test-wt")
 
@@ -1106,7 +1193,7 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 			OutputContains("test-wt")
 
 		// But nothing should actually be deleted
-		sh.HasBranches("main", "test-wt")
+		sh.HasBranches("main")
 	})
 
 	run("worktree prune skips missing worktrees with children", func(t *testing.T, sh *TestShell) {
@@ -1129,7 +1216,7 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 		// Prune should skip because anchor has children
 		sh.Run("worktree prune").
 			OutputContains("Skipped").
-			OutputContains("children")
+			OutputContains("detach")
 
 		// Anchor branch and child should still exist
 		sh.HasBranches("main", "feature", "child")

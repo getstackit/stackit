@@ -207,6 +207,7 @@ type CommitOperations interface {
 type WorktreeOperations interface {
 	AddWorktree(ctx context.Context, path string, branch string, detach bool) error
 	RemoveWorktree(ctx context.Context, path string) error
+	ForceRemoveWorktree(ctx context.Context, path string) error
 	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string) (path string, cleanup func(), err error)
 	// CreateTemporaryWorktreeSkipPrune is like CreateTemporaryWorktree but skips the automatic
 	// PruneWorktrees() call. Use this when creating multiple worktrees in parallel after
@@ -217,9 +218,9 @@ type WorktreeOperations interface {
 
 // WorktreeInfo represents information about a stackit-managed worktree
 type WorktreeInfo struct {
-	Name         string    // User-provided name for display (empty for legacy worktrees)
+	Name         string    // User-provided name for display
 	Path         string    // Absolute path to worktree
-	AnchorBranch string    // Anchor branch name (stack root for legacy worktrees)
+	AnchorBranch string    // Hidden worktree anchor branch name
 	CreatedAt    time.Time // When worktree was created
 	MainRepoDir  string    // Path to main repo
 }

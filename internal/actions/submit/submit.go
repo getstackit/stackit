@@ -192,9 +192,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		fixedMap[branchName] = branch.IsBranchUpToDate()
 		scopeMap[branchName] = branch.GetScope().String()
 
-		// Check if this branch is a stack root with a managed worktree
+		// Check if this branch belongs to a stack with a managed worktree.
 		stackRoot := ctx.Worktree().GetStackRootForBranch(branch)
-		if stackRoot == branchName {
+		if stackRoot != "" {
 			if wtInfo, err := ctx.Worktree().GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
 				worktreeMap[branchName] = wtInfo.Path
 			}

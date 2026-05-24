@@ -106,7 +106,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 	if branch.IsWorktreeAnchor() {
 		// Find the worktree name for a better error message
 		wtInfo, _ := eng.GetWorktreeForStack(branchName)
-		displayName := branchName // Default to branch name for legacy worktrees
+		displayName := branchName
 		if wtInfo != nil && wtInfo.Name != "" {
 			displayName = wtInfo.Name
 		}

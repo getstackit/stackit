@@ -171,7 +171,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 
 	// Get parent
 	parent := e.trunk
-	if state := e.state.branchState.GetByName(branchName); state != nil {
+	if state := e.readState(branchName); state != nil {
 		parent = state.Parent
 	}
 
@@ -990,7 +990,7 @@ func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
 
 	current := branchName
 	for {
-		state := e.state.branchState.GetByName(current)
+		state := e.readState(current)
 		if state == nil {
 			// Should not happen since we checked above, but handle gracefully
 			return ""

@@ -8,6 +8,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -25,6 +26,21 @@ type engineImpl struct {
 	writer            io.Writer
 	mu                sync.RWMutex
 	worktreeMu        sync.Mutex // serializes worktree add/remove/prune to avoid git races on .git/worktrees/
+
+	// Lazy-load gates. sharedLoaded and localLoaded track whether the
+	// corresponding metadata batch has been populated into state. Both default
+	// to false and are flipped true after the single-shot load runs.
+	// The atomic provides a lock-free fast path on the hot accessor path;
+	// the sync.Once enforces single-flight semantics across goroutines.
+	//
+	// ensureSharedLoaded / ensureLocalLoaded must NOT be called while holding
+	// e.mu (read or write). They acquire e.mu.Lock() internally to apply the
+	// loaded metadata. Callers should ensure the gate is open BEFORE acquiring
+	// e.mu for the operation that needs the data.
+	sharedLoaded   atomic.Bool
+	localLoaded    atomic.Bool
+	sharedLoadOnce sync.Once
+	localLoadOnce  sync.Once
 
 	// Temporary worktree cleanup tracking.
 	tempWorktreeNeedsPrune bool
@@ -46,7 +62,15 @@ type WorktreeSnapshot struct {
 // SnapshotForWorktree creates a deep copy of the engine's mutable state for use in
 // worktree sessions. The snapshot is safe to use from another goroutine since all
 // maps and slices are deep-copied.
+//
+// Force-loads both metadata tiers before snapshotting so worktree consumers
+// (restack, sync, etc.) get a fully-populated state regardless of the parent
+// engine's LoadMode. Without this a snapshot taken from a Lite engine would
+// only carry the branch list.
 func (e *engineImpl) SnapshotForWorktree() WorktreeSnapshot {
+	e.ensureSharedLoaded()
+	e.ensureLocalLoaded()
+
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -134,6 +158,11 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 	}
 	e.currentBranch = currentBranch
 
+	// Worktree snapshots are built only from fully-loaded parent engines (see
+	// SnapshotForWorktree), so the worktree engine starts with both gates open.
+	e.sharedLoaded.Store(true)
+	e.localLoaded.Store(true)
+
 	return e, nil
 }
 
@@ -183,9 +212,27 @@ func NewEngine(opts Options) (Engine, error) {
 	}
 	e.currentBranch = currentBranch
 
-	// Don't refresh currentBranch here since we just set it
-	if err := e.rebuildInternal(false); err != nil {
-		return nil, fmt.Errorf("failed to rebuild engine: %w", err)
+	// Bootstrap state based on the requested LoadMode. Modes lighter than Full
+	// defer metadata reads until an accessor triggers ensureSharedLoaded or
+	// ensureLocalLoaded. All modes need the branches list so navigation
+	// commands can validate existence without a metadata read.
+	switch opts.LoadMode {
+	case LoadModeBranchesOnly:
+		if err := e.loadBranchList(); err != nil {
+			return nil, fmt.Errorf("failed to load branch list: %w", err)
+		}
+	case LoadModeShared:
+		if err := e.loadBranchList(); err != nil {
+			return nil, fmt.Errorf("failed to load branch list: %w", err)
+		}
+		e.ensureSharedLoaded()
+	case LoadModeFull:
+		fallthrough
+	default:
+		// Don't refresh currentBranch here since we just set it
+		if err := e.rebuildInternal(false); err != nil {
+			return nil, fmt.Errorf("failed to rebuild engine: %w", err)
+		}
 	}
 
 	// Auto-fetch remote metadata on first use (fresh clone scenario)
@@ -193,6 +240,75 @@ func NewEngine(opts Options) (Engine, error) {
 	e.maybeAutoFetchRemoteMetadata()
 
 	return e, nil
+}
+
+// loadBranchList populates only e.state.branches via a single GetAllBranchNames
+// call. Used by lighter LoadModes that defer metadata reads.
+func (e *engineImpl) loadBranchList() error {
+	branches, err := e.git.GetAllBranchNames()
+	if err != nil {
+		return fmt.Errorf("failed to get branches: %w", err)
+	}
+	e.mu.Lock()
+	e.state.setBranches(branches)
+	e.mu.Unlock()
+	return nil
+}
+
+// ensureSharedLoaded reads shared metadata for all known branches and applies
+// it to state. Idempotent and goroutine-safe — the actual read runs at most
+// once per engine lifetime via sharedLoadOnce. The atomic flag provides a
+// lock-free fast path so the common "already loaded" case adds only an
+// atomic load to each accessor.
+//
+// CRITICAL: callers must NOT hold e.mu (read or write) when calling this.
+// The function acquires e.mu.Lock() internally to apply the loaded metadata.
+func (e *engineImpl) ensureSharedLoaded() {
+	if e.sharedLoaded.Load() {
+		return
+	}
+	e.sharedLoadOnce.Do(func() {
+		// Snapshot the branches list under a read lock to avoid racing with
+		// concurrent mutations (e.g. CreateAndCheckoutBranch).
+		e.mu.RLock()
+		branches := slices.Clone(e.state.branches)
+		trunk := e.trunk
+		e.mu.RUnlock()
+
+		allMeta, _ := e.batchReadMetadata(branches)
+
+		e.mu.Lock()
+		e.state.applySharedMetadata(trunk, branches, allMeta)
+		e.mu.Unlock()
+
+		e.sharedLoaded.Store(true)
+	})
+}
+
+// ensureLocalLoaded reads local metadata for all known branches and applies
+// the Frozen flag to state. Same locking contract as ensureSharedLoaded.
+//
+// Local metadata is layered on top of shared, so this is typically called
+// after ensureSharedLoaded — but the order is enforced naturally because
+// applyLocalMetadata only sets Frozen and creates wrapper entries for any
+// branches that didn't appear in the shared pass.
+func (e *engineImpl) ensureLocalLoaded() {
+	if e.localLoaded.Load() {
+		return
+	}
+	e.localLoadOnce.Do(func() {
+		e.mu.RLock()
+		branches := slices.Clone(e.state.branches)
+		e.mu.RUnlock()
+
+		allLocalMeta := e.batchReadLocalMetadata(branches)
+
+		e.mu.Lock()
+		e.state.applyLocalMetadata(allLocalMeta)
+		e.mu.Unlock()
+
+		e.localLoaded.Store(true)
+	})
 }
 
 // maybeAutoFetchRemoteMetadata fetches remote metadata if this appears to be a fresh clone
@@ -253,6 +369,19 @@ func (e *engineImpl) Git() git.Runner {
 	return e.git
 }
 
+// readState returns the cached BranchState for a branch by name, or nil if
+// the branch is unknown to the engine. This is the single chokepoint for
+// branch-state reads inside the engine — every accessor that needs to inspect
+// scope, lock, parent, type, or frozen state goes through here so future
+// lazy-load work has one place to insert the gate.
+//
+// The caller is responsible for holding e.mu (read or write) for the duration
+// of the read; this helper does NOT acquire the lock. Many callers compose
+// multiple state reads under a single lock and need that consistency.
+func (e *engineImpl) readState(name string) *BranchState {
+	return e.state.branchState.GetByName(name)
+}
+
 // Rebuild reloads branch cache with new trunk
 func (e *engineImpl) Rebuild(newTrunkName string) error {
 	e.mu.Lock()
@@ -282,7 +411,7 @@ func (e *engineImpl) PopulateRemoteShas() error {
 
 	// Set RemoteSHA for tracked branches that have a remote
 	for branchName, sha := range remoteShas {
-		if state := e.state.branchState.GetByName(branchName); state != nil {
+		if state := e.readState(branchName); state != nil {
 			state.RemoteSHA = sha
 		}
 	}

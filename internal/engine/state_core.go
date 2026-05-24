@@ -9,13 +9,14 @@ import (
 // BranchState holds the cached metadata state for a single branch.
 // This consolidates what was previously stored in separate maps.
 type BranchState struct {
-	Parent        string         // Parent branch name
-	Scope         string         // Scope string (may be empty)
-	LockReason    git.LockReason // Lock reason (empty if not locked)
-	Frozen        bool           // Whether branch is frozen (local-only state)
-	BranchType    git.BranchType // Branch type (worktree-anchor, utility, etc.)
-	RemoteSHA     string         // Remote SHA (populated by PopulateRemoteShas)
-	LocalModified bool           // Has local metadata changes not yet pushed
+	Parent               string         // Parent branch name
+	ParentBranchRevision string         // Stored parent SHA from metadata; "" if none recorded
+	Scope                string         // Scope string (may be empty)
+	LockReason           git.LockReason // Lock reason (empty if not locked)
+	Frozen               bool           // Whether branch is frozen (local-only state)
+	BranchType           git.BranchType // Branch type (worktree-anchor, utility, etc.)
+	RemoteSHA            string         // Remote SHA (populated by PopulateRemoteShas)
+	LocalModified        bool           // Has local metadata changes not yet pushed
 }
 
 // HasScope returns true if this branch has an explicit scope set.
@@ -136,6 +137,21 @@ func (s *stateCore) rebuildFromMetadata(
 	allMeta map[string]*git.Meta,
 	allLocalMeta map[string]*git.LocalMeta,
 ) {
+	s.applySharedMetadata(trunk, branches, allMeta)
+	s.applyLocalMetadata(allLocalMeta)
+}
+
+// applySharedMetadata rebuilds branchState and childrenMap from shared
+// metadata (refs/stackit/metadata/*). Resets branchState before populating
+// so stale entries from external mutations are dropped. Frozen is NOT
+// modified here — call applyLocalMetadata to fill that in.
+//
+// Callers must hold the engine write lock.
+func (s *stateCore) applySharedMetadata(
+	trunk string,
+	branches []string,
+	allMeta map[string]*git.Meta,
+) {
 	s.setBranches(branches)
 
 	// Reset tracked-state caches from fresh metadata snapshot.
@@ -164,21 +180,31 @@ func (s *stateCore) rebuildFromMetadata(
 		if meta.GetScope() != nil {
 			state.Scope = *meta.GetScope()
 		}
+		if rev := meta.GetParentBranchRevision(); rev != nil {
+			state.ParentBranchRevision = *rev
+		}
 
 		s.branchState.Set(name, state)
 		s.childrenMap[parent] = append(s.childrenMap[parent], name)
 	}
 
-	// Frozen is local-only metadata and may exist for untracked branches.
+	for _, children := range s.childrenMap {
+		slices.Sort(children)
+	}
+}
+
+// applyLocalMetadata layers local-only state (Frozen) onto branchState.
+// Safe to call after applySharedMetadata or independently; entries for
+// branches not already in branchState are created as bare wrappers so the
+// flag is preserved for untracked branches.
+//
+// Callers must hold the engine write lock.
+func (s *stateCore) applyLocalMetadata(allLocalMeta map[string]*git.LocalMeta) {
 	for name, meta := range allLocalMeta {
 		if meta.Frozen {
 			state := s.branchState.GetOrCreate(name)
 			state.Frozen = true
 		}
-	}
-
-	for _, children := range s.childrenMap {
-		slices.Sort(children)
 	}
 }
 
@@ -202,6 +228,12 @@ func (s *stateCore) updateBranchStateFromMeta(branch string, meta *git.Meta) {
 		state.Scope = *meta.GetScope()
 	} else {
 		state.Scope = ""
+	}
+
+	if rev := meta.GetParentBranchRevision(); rev != nil {
+		state.ParentBranchRevision = *rev
+	} else {
+		state.ParentBranchRevision = ""
 	}
 
 	state.LockReason = meta.GetLockReason()

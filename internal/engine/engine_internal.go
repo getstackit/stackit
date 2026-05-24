@@ -36,11 +36,18 @@ func (e *engineImpl) rebuildInternal(refreshCurrentBranch bool) error {
 
 // applyRebuild updates the internal state from the provided metadata results.
 // The caller MUST hold the engine's write lock (e.mu).
+//
+// After a full rebuild both lazy-load gates are considered open — subsequent
+// ensureSharedLoaded / ensureLocalLoaded calls become no-ops via the atomic
+// fast path. We can't run sharedLoadOnce/localLoadOnce here (they'd block
+// future loads even on Reset), so we set the atomic flags directly.
 func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMeta map[string]*git.Meta, allLocalMeta map[string]*git.LocalMeta) {
 	e.state.rebuildFromMetadata(e.trunk, branches, allMeta, allLocalMeta)
 	if currentBranch != "" {
 		e.currentBranch = currentBranch
 	}
+	e.sharedLoaded.Store(true)
+	e.localLoaded.Store(true)
 }
 
 // rebuild loads all branches and their metadata from Git
@@ -124,7 +131,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 // Returns trunk if all ancestors have been merged
 func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName string, metaMap map[string]*git.Meta) string {
 	// Get the starting parent from branchState
-	state := e.state.branchState.GetByName(branchName)
+	state := e.readState(branchName)
 	if state == nil {
 		return e.trunk
 	}
@@ -135,7 +142,7 @@ func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName st
 			return current
 		}
 		// Move to the next parent
-		parentState := e.state.branchState.GetByName(current)
+		parentState := e.readState(current)
 		if parentState == nil {
 			break
 		}

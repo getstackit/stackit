@@ -19,7 +19,7 @@ func (e *engineImpl) IsTrunk(branch Branch) bool {
 func (e *engineImpl) IsTracked(branch Branch) bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	state := e.state.branchState.Get(branch)
+	state := e.readState(branch.GetName())
 	return state != nil && state.Parent != ""
 }
 
@@ -34,7 +34,7 @@ func (e *engineImpl) GetScope(branch Branch) Scope {
 	for !visited[current] {
 		visited[current] = true
 
-		state := e.state.branchState.GetByName(current)
+		state := e.readState(current)
 		if state == nil {
 			break
 		}
@@ -57,7 +57,7 @@ func (e *engineImpl) GetScope(branch Branch) Scope {
 func (e *engineImpl) IsLocked(branch Branch) bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.state.branchState.Get(branch); state != nil {
+	if state := e.readState(branch.GetName()); state != nil {
 		return state.IsLocked()
 	}
 	return false
@@ -67,17 +67,20 @@ func (e *engineImpl) IsLocked(branch Branch) bool {
 func (e *engineImpl) GetLockReason(branch Branch) LockReason {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.state.branchState.Get(branch); state != nil {
+	if state := e.readState(branch.GetName()); state != nil {
 		return state.LockReason
 	}
 	return LockReasonNone
 }
 
-// IsFrozen checks if a branch is frozen
+// IsFrozen checks if a branch is frozen.
+// Frozen lives in local metadata which is loaded lazily — promote the local
+// tier before reading. Under LoadModeFull this is a no-op atomic check.
 func (e *engineImpl) IsFrozen(branch Branch) bool {
+	e.ensureLocalLoaded()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.state.branchState.Get(branch); state != nil {
+	if state := e.readState(branch.GetName()); state != nil {
 		return state.Frozen
 	}
 	return false
@@ -87,7 +90,7 @@ func (e *engineImpl) IsFrozen(branch Branch) bool {
 func (e *engineImpl) GetBranchType(branch Branch) git.BranchType {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if state := e.state.branchState.Get(branch); state != nil {
+	if state := e.readState(branch.GetName()); state != nil {
 		return state.BranchType
 	}
 	return ""
@@ -120,7 +123,7 @@ func (e *engineImpl) SetBranchType(branch Branch, branchType git.BranchType) err
 	}
 
 	// Update in-memory state
-	if state := e.state.branchState.GetByName(branchName); state != nil {
+	if state := e.readState(branchName); state != nil {
 		state.BranchType = branchType
 	}
 
@@ -132,7 +135,7 @@ func (e *engineImpl) GetExplicitScope(branch Branch) Scope {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if state := e.state.branchState.Get(branch); state != nil && state.HasScope() {
+	if state := e.readState(branch.GetName()); state != nil && state.HasScope() {
 		return state.GetScope()
 	}
 	return Empty()
@@ -146,44 +149,37 @@ func (e *engineImpl) getExplicitScope(branch Branch) Scope {
 // IsUpToDate checks if a branch is up to date with its parent
 // A branch is up to date if its parent revision matches the stored parent revision
 func (e *engineImpl) IsUpToDate(branch Branch) bool {
-	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
 		return true
 	}
 
 	e.mu.RLock()
-	state := e.state.branchState.GetByName(branchName)
+	state := e.readState(branch.GetName())
 	e.mu.RUnlock()
 
 	if state == nil {
 		return true // Not tracked, consider it fixed
 	}
 
-	// Get current parent revision
+	if state.ParentBranchRevision == "" {
+		return false // No stored revision, needs restack
+	}
+
+	// Get current parent revision (cached via revisionCache after first read).
 	parentRev, err := e.git.GetRevision(state.Parent)
 	if err != nil {
 		return false // Can't determine, assume needs restack
 	}
 
-	// Get stored parent revision from metadata
-	meta, err := e.readMetadata(branchName)
-	if err != nil {
-		return false // No metadata, assume needs restack
-	}
-
-	if meta.GetParentBranchRevision() == nil {
-		return false // No stored revision, needs restack
-	}
-
-	// Branch is fixed if stored revision matches current parent revision
-	return *meta.GetParentBranchRevision() == parentRev
+	// Branch is up to date if stored revision matches current parent revision.
+	return state.ParentBranchRevision == parentRev
 }
 
 // GetBranchRemoteStatus returns the relationship between a local branch and its remote
 func (e *engineImpl) GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error) {
 	branchName := branch.GetName()
 	e.mu.RLock()
-	state := e.state.branchState.Get(branch)
+	state := e.readState(branch.GetName())
 	var remoteSha string
 	if state != nil {
 		remoteSha = state.RemoteSHA
@@ -244,7 +240,7 @@ func (e *engineImpl) IsMergedIntoTrunk(ctx context.Context, branchName string) (
 // IsBranchEmpty checks if a branch has no changes compared to its parent
 func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool, error) {
 	e.mu.RLock()
-	state := e.state.branchState.GetByName(branchName)
+	state := e.readState(branchName)
 	trunk := e.trunk
 	e.mu.RUnlock()
 

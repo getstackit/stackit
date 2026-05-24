@@ -96,7 +96,7 @@ func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
 func (e *engineImpl) resolveBranchComparisonRevisions(branchName string) (base, branchRev string, err error) {
 	e.mu.RLock()
 	trunk := e.trunk
-	state := e.state.branchState.GetByName(branchName)
+	state := e.readState(branchName)
 	e.mu.RUnlock()
 
 	parent := trunk

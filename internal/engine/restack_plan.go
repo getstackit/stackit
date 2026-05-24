@@ -65,7 +65,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	parent := branch.GetParent()
 	parentName := e.trunk
 	e.mu.RLock()
-	state := e.state.branchState.GetByName(branchName)
+	state := e.readState(branchName)
 	e.mu.RUnlock()
 	if state != nil && state.Parent != "" {
 		parentName = state.Parent

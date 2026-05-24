@@ -187,7 +187,7 @@ func (e *engineImpl) ApplyRemoteMetadataIfExists(branchName string) error {
 	}
 
 	// Update local branch state
-	if state := e.state.branchState.GetByName(branchName); state != nil {
+	if state := e.readState(branchName); state != nil {
 		state.LockReason = remote.GetLockReason()
 		if remote.GetScope() != nil {
 			state.Scope = *remote.GetScope()
@@ -318,7 +318,7 @@ func (e *engineImpl) AcceptRemoteMetadata(branch string) error {
 func (e *engineImpl) RejectRemoteMetadata(branch string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if state := e.state.branchState.GetByName(branch); state != nil {
+	if state := e.readState(branch); state != nil {
 		state.LocalModified = true
 	}
 }
@@ -328,7 +328,7 @@ func (e *engineImpl) HasLocalModifications(branch string) bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if state := e.state.branchState.GetByName(branch); state != nil && state.LocalModified {
+	if state := e.readState(branch); state != nil && state.LocalModified {
 		return true
 	}
 

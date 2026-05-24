@@ -257,6 +257,10 @@ type MetadataOperations interface {
 
 	// Cache management
 	ClearMetadataCache()
+
+	// MetadataCacheStats returns cumulative cache hit/miss counts since process start.
+	// Used by tests and instrumentation to verify lazy-load behavior.
+	MetadataCacheStats() MetadataCacheSummary
 }
 
 // StackMetadataOperations handles stack-level metadata persistence.

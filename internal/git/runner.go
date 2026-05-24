@@ -23,9 +23,13 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-// DebugLogger is an interface for logging debug messages
+// DebugLogger is an interface for logging messages from the git layer.
+// Despite its name, it carries both debug and informational events; the latter
+// is used for instrumentation lines (cache stats, batch-load timings) that
+// should be visible at the default log level.
 type DebugLogger interface {
 	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
 }
 
 // DefaultCommandTimeout is the default timeout for git commands
@@ -445,6 +449,18 @@ func (r *runner) debugLog(format string, args ...any) {
 	r.loggerMu.RUnlock()
 	if logger != nil {
 		logger.Debug(format, args...)
+	}
+}
+
+// infoLog emits an informational log entry through the attached logger.
+// Used for low-volume instrumentation events (e.g. metadata batch-load timings)
+// that should be visible at the default log level.
+func (r *runner) infoLog(format string, args ...any) {
+	r.loggerMu.RLock()
+	logger := r.logger
+	r.loggerMu.RUnlock()
+	if logger != nil {
+		logger.Info(format, args...)
 	}
 }
 

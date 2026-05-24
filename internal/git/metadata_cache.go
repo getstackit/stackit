@@ -3,6 +3,7 @@ package git
 import (
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // metadataCache provides thread-safe caching of branch metadata.
@@ -10,16 +11,45 @@ import (
 // without deep copying.
 type metadataCache struct {
 	entries sync.Map // map[string]*Meta
+
+	// Instrumentation counters. Updated with atomics to stay lock-free on the
+	// hot Get path. Exposed via Summary() for logging and tests.
+	hits   atomic.Uint64
+	misses atomic.Uint64
+}
+
+// MetadataCacheSummary captures cumulative metadata-cache activity since
+// process start. Used by tests and by the runner to log periodic stats.
+type MetadataCacheSummary struct {
+	Hits   uint64
+	Misses uint64
 }
 
 // Get returns the cached metadata for the given branch, or nil if not cached.
 func (c *metadataCache) Get(branchName string) *Meta {
 	value, ok := c.entries.Load(branchName)
 	if !ok {
+		c.misses.Add(1)
 		return nil
 	}
+	c.hits.Add(1)
 	meta, _ := value.(*Meta)
 	return meta
+}
+
+// Summary returns the current cumulative hit/miss counts.
+func (c *metadataCache) Summary() MetadataCacheSummary {
+	return MetadataCacheSummary{
+		Hits:   c.hits.Load(),
+		Misses: c.misses.Load(),
+	}
+}
+
+// ResetStats zeroes the instrumentation counters. Intended for tests that
+// want to assert behavior of a single operation in isolation.
+func (c *metadataCache) ResetStats() {
+	c.hits.Store(0)
+	c.misses.Store(0)
 }
 
 // Put stores the metadata in the cache.

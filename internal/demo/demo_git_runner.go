@@ -594,6 +594,10 @@ func (d *demoGitRunner) RenameMetadata(_, _ string) error {
 
 func (d *demoGitRunner) ClearMetadataCache() {}
 
+func (d *demoGitRunner) MetadataCacheStats() git.MetadataCacheSummary {
+	return git.MetadataCacheSummary{}
+}
+
 func (d *demoGitRunner) ReadLocalMetadata(_ string) (*git.LocalMeta, error) {
 	return &git.LocalMeta{}, nil
 }

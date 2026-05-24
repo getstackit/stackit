@@ -131,6 +131,9 @@ func (r *runner) BatchReadMetadata(branchNames []string) (map[string]*Meta, map[
 		return results, errs
 	}
 
+	start := time.Now()
+	missesBefore := r.metadataCache.misses.Load()
+
 	utils.Run(branchNames, func(name string) {
 		meta, err := r.ReadMetadata(name)
 		if err != nil {
@@ -143,6 +146,10 @@ func (r *runner) BatchReadMetadata(branchNames []string) (map[string]*Meta, map[
 		results[name] = meta
 		resultsMu.Unlock()
 	})
+
+	missed := r.metadataCache.misses.Load() - missesBefore
+	r.infoLog("metadata batch-load kind=shared branches=%d cache_misses=%d elapsed_ms=%d",
+		len(branchNames), missed, time.Since(start).Milliseconds())
 
 	return results, errs
 }
@@ -158,6 +165,8 @@ func (r *runner) BatchReadLocalMetadata(branchNames []string) map[string]*LocalM
 		return results
 	}
 
+	start := time.Now()
+
 	utils.Run(branchNames, func(name string) {
 		meta, err := r.ReadLocalMetadata(name)
 		if err != nil {
@@ -168,6 +177,9 @@ func (r *runner) BatchReadLocalMetadata(branchNames []string) map[string]*LocalM
 		results[name] = meta
 		resultsMu.Unlock()
 	})
+
+	r.infoLog("metadata batch-load kind=local branches=%d elapsed_ms=%d",
+		len(branchNames), time.Since(start).Milliseconds())
 
 	return results
 }
@@ -241,6 +253,19 @@ func (r *runner) DeleteMetadata(branchName string) error {
 // from external changes (e.g., branches created in another terminal) are not retained.
 func (r *runner) ClearMetadataCache() {
 	r.metadataCache.Clear()
+}
+
+// MetadataCacheStats returns cumulative hit/miss counts for the metadata cache
+// since process start. Counts are read with atomics and are safe to call
+// concurrently. Reset via ResetMetadataCacheStats (test-only).
+func (r *runner) MetadataCacheStats() MetadataCacheSummary {
+	return r.metadataCache.Summary()
+}
+
+// ResetMetadataCacheStats zeroes the metadata cache counters. Intended for
+// tests that need to assert behavior of a single operation in isolation.
+func (r *runner) ResetMetadataCacheStats() {
+	r.metadataCache.ResetStats()
 }
 
 func (r *runner) RenameMetadata(oldName, newName string) error {

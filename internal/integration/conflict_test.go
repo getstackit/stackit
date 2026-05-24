@@ -1,7 +1,10 @@
 package integration
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // =============================================================================
@@ -205,5 +208,50 @@ func TestConflictResolution(t *testing.T) {
 			OutputContains("Parent: main")
 
 		sh.Log("✓ Branching stack conflict resolution test complete!")
+	})
+
+	// Regression: entering the conflict workflow while the worktree is on
+	// trunk used to leave the worktree in a rebase state where the trunk's
+	// ref could be overwritten — by a manual `git rebase --abort`, by
+	// stackit's own error paths, or by a subsequent `st sync` — moving
+	// refs/heads/main to the failed rebase's target. EnterConflictWorkflow
+	// now detaches HEAD first so abort can only touch HEAD.
+	t.Run("entering conflict workflow from trunk preserves trunk ref", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		// Stack: main → feature, with conflicting changes on both sides.
+		sh.WriteFile("f.txt", "feature change").
+			Run("create feature -m 'feature change'").
+			OnBranch("feature")
+
+		sh.Checkout("main").
+			WriteFile("f.txt", "main change").
+			Git("commit -am 'main change'")
+
+		// Snapshot main's tip before the conflict workflow runs.
+		sh.Git("rev-parse main")
+		mainBefore := strings.TrimSpace(sh.Output())
+
+		// Trigger the conflict workflow from main. Restack hits the conflict
+		// during validation, then enters the real rebase (which fails),
+		// leaving the worktree in a rebase-in-progress state.
+		sh.RunExpectError("restack feature").
+			OutputContains("conflict").
+			OutputContains("feature")
+
+		sh.Git("status").OutputContains("currently rebasing")
+
+		// Main's ref must not move just because we entered conflict state.
+		sh.Git("rev-parse main")
+		require.Equal(t, mainBefore, strings.TrimSpace(sh.Output()),
+			"trunk ref must not change when entering conflict workflow")
+
+		// And `git rebase --abort` must not move it either — the worktree
+		// is detached, so abort can only touch HEAD.
+		sh.Git("rebase --abort")
+		sh.Git("rev-parse main")
+		require.Equal(t, mainBefore, strings.TrimSpace(sh.Output()),
+			"trunk ref must not change after aborting the conflict rebase")
 	})
 }

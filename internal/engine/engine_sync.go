@@ -112,7 +112,7 @@ func (e *engineImpl) restackBranch(
 	}
 
 	e.mu.RLock()
-	state := e.state.branchState.GetByName(branchName)
+	state := e.readState(branchName)
 	e.mu.RUnlock()
 
 	var parent string
@@ -721,7 +721,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches []Branch, val
 		// Crawl up the branch state to find all ancestors
 		current := name
 		for {
-			state := e.state.branchState.GetByName(current)
+			state := e.readState(current)
 			if state == nil || state.Parent == e.trunk || allInvolvedBranches[state.Parent] {
 				break
 			}

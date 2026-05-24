@@ -179,7 +179,7 @@ func (e *engineImpl) DetachAndResetBranchChanges(ctx context.Context, branchName
 
 	// Get the parent branch
 	parentBranchName := e.trunk
-	if state := e.state.branchState.GetByName(branchName); state != nil {
+	if state := e.readState(branchName); state != nil {
 		parentBranchName = state.Parent
 	}
 

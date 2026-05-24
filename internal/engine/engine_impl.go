@@ -253,6 +253,19 @@ func (e *engineImpl) Git() git.Runner {
 	return e.git
 }
 
+// readState returns the cached BranchState for a branch by name, or nil if
+// the branch is unknown to the engine. This is the single chokepoint for
+// branch-state reads inside the engine — every accessor that needs to inspect
+// scope, lock, parent, type, or frozen state goes through here so future
+// lazy-load work has one place to insert the gate.
+//
+// The caller is responsible for holding e.mu (read or write) for the duration
+// of the read; this helper does NOT acquire the lock. Many callers compose
+// multiple state reads under a single lock and need that consistency.
+func (e *engineImpl) readState(name string) *BranchState {
+	return e.state.branchState.GetByName(name)
+}
+
 // Rebuild reloads branch cache with new trunk
 func (e *engineImpl) Rebuild(newTrunkName string) error {
 	e.mu.Lock()
@@ -282,7 +295,7 @@ func (e *engineImpl) PopulateRemoteShas() error {
 
 	// Set RemoteSHA for tracked branches that have a remote
 	for branchName, sha := range remoteShas {
-		if state := e.state.branchState.GetByName(branchName); state != nil {
+		if state := e.readState(branchName); state != nil {
 			state.RemoteSHA = sha
 		}
 	}

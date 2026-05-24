@@ -124,7 +124,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 // Returns trunk if all ancestors have been merged
 func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName string, metaMap map[string]*git.Meta) string {
 	// Get the starting parent from branchState
-	state := e.state.branchState.GetByName(branchName)
+	state := e.readState(branchName)
 	if state == nil {
 		return e.trunk
 	}
@@ -135,7 +135,7 @@ func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName st
 			return current
 		}
 		// Move to the next parent
-		parentState := e.state.branchState.GetByName(current)
+		parentState := e.readState(current)
 		if parentState == nil {
 			break
 		}

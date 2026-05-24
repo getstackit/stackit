@@ -89,7 +89,7 @@ func (e *engineImpl) GetParent(branch Branch) *Branch {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if state := e.state.branchState.Get(branch); state != nil {
+	if state := e.readState(branch.GetName()); state != nil {
 		b := NewBranch(state.Parent, e)
 		return &b
 	}
@@ -272,7 +272,7 @@ func (e *engineImpl) GetDivergencePoint(branchName string) (string, error) {
 
 	// Get the parent branch
 	e.mu.RLock()
-	state := e.state.branchState.GetByName(branchName)
+	state := e.readState(branchName)
 	e.mu.RUnlock()
 
 	if state == nil {

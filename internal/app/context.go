@@ -146,11 +146,12 @@ func (c *Context) Worktree() engine.WorktreeRegistry { return c.Engine }
 
 // GlobalOptions holds settings from global flags
 type GlobalOptions struct {
-	Interactive bool
-	Verify      bool
-	Debug       bool
-	Quiet       bool
-	Cwd         string
+	Interactive    bool
+	Verify         bool
+	Debug          bool
+	Quiet          bool
+	Cwd            string
+	EngineLoadMode *engine.LoadMode
 }
 
 // GetDefaultGlobalOptions returns default options
@@ -340,6 +341,11 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 	// Create git runner with logger for command logging, wrapped with tracing
 	gitRunner := git.NewTracingRunner(git.NewRunnerWithPath(repoRoot, logger), logger)
 
+	loadMode := engine.LoadModeShared
+	if opts.EngineLoadMode != nil {
+		loadMode = *opts.EngineLoadMode
+	}
+
 	// Create real engine with configured runner. LoadModeShared skips
 	// BatchReadLocalMetadata at bootstrap — local metadata (Frozen, etc.)
 	// loads on first accessor call. For commands that never read local-only
@@ -351,7 +357,7 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 		MaxConcurrency:    maxConcurrency,
 		Writer:            writer,
 		Git:               gitRunner,
-		LoadMode:          engine.LoadModeShared,
+		LoadMode:          loadMode,
 	})
 	if err != nil {
 		return nil, err

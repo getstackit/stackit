@@ -158,14 +158,6 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 		return
 	}
 
-	if !branch.IsBranchUpToDate() {
-		parent := branch.GetParentOrTrunk()
-		ctx.Output.Info("This branch has fallen behind %s - you may want to %s.",
-			style.ColorBranchName(parent, false),
-			style.ColorCyan("stackit upstack restack"))
-		return
-	}
-
 	// Check if any downstack branch needs restack
 	// Limit to checking up to 10 ancestors to avoid performance issues with deep stacks
 	rng := engine.StackRange{
@@ -174,16 +166,24 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 		RecursiveChildren: false,
 	}
 	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
-	downstack := graph.Range(branch, rng)
+	downstack := graph.RangeBranches(branch, rng)
 
 	// Limit the number of branches we check to avoid slow metadata reads
 	const maxDownstackChecks = 10
-	startIdx := max(len(downstack)-maxDownstackChecks, 0)
+	downstackToCheck := downstack.Last(maxDownstackChecks).Reverse()
+	statuses := ctx.Engine.ReadBranchStatuses(engine.BranchesOf(branch).Append(downstackToCheck.All()...))
 
-	// Check from trunk upward (but limit to last maxDownstackChecks branches)
-	for i := len(downstack) - 1; i >= startIdx; i-- {
-		ancestor := downstack[i]
-		if !ancestor.IsBranchUpToDate() {
+	if !statuses.IsUpToDate(branch) {
+		parent := branch.GetParentOrTrunk()
+		ctx.Output.Info("This branch has fallen behind %s - you may want to %s.",
+			style.ColorBranchName(parent, false),
+			style.ColorCyan("stackit upstack restack"))
+		return
+	}
+
+	// Check nearest ancestors first (but limit to last maxDownstackChecks branches)
+	for _, ancestor := range downstackToCheck.All() {
+		if !statuses.IsUpToDate(ancestor) {
 			parent := ancestor.GetParentOrTrunk()
 			ctx.Output.Info("The downstack branch %s has fallen behind %s - you may want to %s.",
 				style.ColorBranchName(ancestor.GetName(), false),
@@ -262,16 +262,12 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 // resolveBranchName resolves a user input to a branch name.
 // It tries: exact match → scope match (topmost branch) → fuzzy match.
 func resolveBranchName(eng engine.Engine, out output.Output, input string) (string, error) {
-	allBranches := eng.AllBranches()
-
-	// Build name list and check for exact match
-	names := make([]string, len(allBranches))
-	for i, b := range allBranches {
-		names[i] = b.GetName()
-		if b.GetName() == input {
-			return input, nil // Exact match found
-		}
+	branchNames := eng.BranchNames()
+	if branchNames.Contains(input) {
+		return input, nil
 	}
+
+	allBranches := eng.AllBranches()
 
 	// Try as scope - find topmost branch with this scope
 	var scopeBranches []engine.Branch
@@ -288,6 +284,7 @@ func resolveBranchName(eng engine.Engine, out output.Output, input string) (stri
 	}
 
 	// Try fuzzy match
+	names := branchNames.Names()
 	matches := fuzzy.Find(input, names)
 	if len(matches) == 1 {
 		out.Info("Fuzzy matched to %s.", style.ColorBranchName(matches[0].Str, false))

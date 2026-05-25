@@ -285,6 +285,38 @@ func (e *engineImpl) ensureSharedLoaded() {
 	})
 }
 
+func (e *engineImpl) ensureBranchSharedLoaded(branchName string) {
+	if e.sharedLoaded.Load() {
+		return
+	}
+
+	e.mu.RLock()
+	if e.state.branchState.HasByName(branchName) {
+		e.mu.RUnlock()
+		return
+	}
+	branchExists := slices.Contains(e.state.branches, branchName)
+	e.mu.RUnlock()
+	if !branchExists {
+		return
+	}
+
+	meta, err := e.readMetadata(branchName)
+	if err != nil || meta == nil {
+		return
+	}
+	parent := meta.GetParentBranchName()
+	if parent == nil || *parent == branchName {
+		return
+	}
+
+	e.mu.Lock()
+	if !e.state.branchState.HasByName(branchName) {
+		e.state.updateBranchStateFromMeta(branchName, meta)
+	}
+	e.mu.Unlock()
+}
+
 // ensureLocalLoaded reads local metadata for all known branches and applies
 // the Frozen flag to state. Same locking contract as ensureSharedLoaded.
 //

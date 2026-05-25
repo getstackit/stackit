@@ -32,6 +32,11 @@ func GetGlobalOptions(cmd *cobra.Command) app.GlobalOptions {
 // Run is a helper that provides a runtime context to a command's execution function
 func Run(cmd *cobra.Command, fn func(ctx *app.Context) error) error {
 	opts := GetGlobalOptions(cmd)
+	return RunWithOptions(cmd, opts, fn)
+}
+
+// RunWithOptions is like Run but allows commands to tune context construction.
+func RunWithOptions(cmd *cobra.Command, opts app.GlobalOptions, fn func(ctx *app.Context) error) error {
 	ctx, err := app.GetContextWithWriter(cmd.Context(), opts, cmd.OutOrStdout())
 	if err != nil {
 		return err

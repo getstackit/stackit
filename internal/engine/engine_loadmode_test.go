@@ -158,6 +158,54 @@ func TestLoadMode_BranchesOnly_ReadsBranchListOnly(t *testing.T) {
 	require.Zero(t, stats.Misses, "BranchesOnly bootstrap must not read metadata refs")
 }
 
+func TestLoadMode_BranchesOnly_LazilyLoadsBranchChain(t *testing.T) {
+	t.Parallel()
+	s := makeStackForLoadModeTest(t)
+
+	gitRunner := git.NewRunnerWithPath(s.Scene.Dir, nil)
+	require.NoError(t, gitRunner.InitDefaultRepo())
+
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot: s.Scene.Dir,
+		Trunk:    "main",
+		Git:      gitRunner,
+		LoadMode: engine.LoadModeBranchesOnly,
+	})
+	require.NoError(t, err)
+
+	root := eng.GetStackRootForBranch(eng.GetBranch("c"))
+	require.Equal(t, "a", root)
+	require.True(t, eng.IsTracked(eng.GetBranch("c")))
+
+	stats := gitRunner.MetadataCacheStats()
+	require.LessOrEqual(t, stats.Misses, uint64(3),
+		"lazy stack-root lookup should read only the target parent chain")
+}
+
+func TestLoadMode_BranchesOnly_GetScopeLazilyLoadsParentChain(t *testing.T) {
+	t.Parallel()
+	s := makeStackForLoadModeTest(t)
+	require.NoError(t, s.Engine.SetScope(context.Background(), s.Engine.GetBranch("b"), engine.NewScope("topic")))
+
+	gitRunner := git.NewRunnerWithPath(s.Scene.Dir, nil)
+	require.NoError(t, gitRunner.InitDefaultRepo())
+
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot: s.Scene.Dir,
+		Trunk:    "main",
+		Git:      gitRunner,
+		LoadMode: engine.LoadModeBranchesOnly,
+	})
+	require.NoError(t, err)
+
+	scope := eng.GetScope(eng.GetBranch("c"))
+	require.Equal(t, "topic", scope.String())
+
+	stats := gitRunner.MetadataCacheStats()
+	require.LessOrEqual(t, stats.Misses, uint64(2),
+		"lazy scope lookup should read only the target branch and scoped parent")
+}
+
 // TestLoadMode_ConcurrentEnsureLoaded asserts that many concurrent accessors
 // against a LoadModeBranchesOnly engine all see the same fully-populated state
 // after the gate fires, regardless of which goroutine triggers it. This is

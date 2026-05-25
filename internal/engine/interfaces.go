@@ -33,6 +33,7 @@ type BranchStatus interface {
 	IsTrunk(branch Branch) bool
 	IsTracked(branch Branch) bool
 	IsUpToDate(branch Branch) bool
+	ReadBranchStatuses(branches Branches) BranchStatuses
 	IsMergedIntoTrunk(ctx context.Context, branchName string) (bool, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	GetDeletionStatus(ctx context.Context, branchName string) (DeletionStatus, error)

@@ -302,6 +302,11 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
 	return result
 }
 
+// RangeBranches returns branches matching the provided StackRange as an ordered set.
+func (g *StackGraph) RangeBranches(branch Branch, rng StackRange) Branches {
+	return NewBranches(g.Range(branch, rng))
+}
+
 // IsLeaf returns true if the branch has no children in the graph.
 //
 // Note: Returns true if the branch is not in the graph (nil node). Callers that need

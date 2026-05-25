@@ -780,6 +780,16 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches []Branch, val
 			for j, b := range branches[i+1:] {
 				remainingBranchNames[j] = b.GetName()
 			}
+			if needsRebuild {
+				if rebuildErr := e.rebuild(); rebuildErr != nil {
+					return RestackBatchResult{
+						ConflictBranch:    branchName,
+						RebasedBranchBase: result.RebasedBranchBase,
+						RemainingBranches: remainingBranchNames,
+						Results:           results,
+					}, fmt.Errorf("failed to rebuild after partial batch restack: %w", rebuildErr)
+				}
+			}
 			return RestackBatchResult{
 				ConflictBranch:    branchName,
 				RebasedBranchBase: result.RebasedBranchBase,
@@ -793,6 +803,16 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches []Branch, val
 			remainingBranchNames := make([]string, len(branches[i+1:]))
 			for j, b := range branches[i+1:] {
 				remainingBranchNames[j] = b.GetName()
+			}
+			if needsRebuild {
+				if rebuildErr := e.rebuild(); rebuildErr != nil {
+					return RestackBatchResult{
+						ConflictBranch:    branchName,
+						RebasedBranchBase: result.RebasedBranchBase,
+						RemainingBranches: remainingBranchNames,
+						Results:           results,
+					}, fmt.Errorf("failed to rebuild after partial batch restack: %w", rebuildErr)
+				}
 			}
 			return RestackBatchResult{
 				ConflictBranch:    branchName,

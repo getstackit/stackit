@@ -86,6 +86,7 @@ func (e *engineImpl) GetBranch(branchName string) Branch {
 
 // GetParent returns the parent branch (nil if no parent)
 func (e *engineImpl) GetParent(branch Branch) *Branch {
+	e.ensureBranchSharedLoaded(branch.GetName())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 

@@ -32,7 +32,7 @@ This is the single biggest user-perceived win across the CLI. Especially for rep
 
 Both functions call go-git's `worktree.Status()` purely to decide the `Keep: !status.IsClean()` argument to `Checkout`. `Status()` walks the entire working tree — easily the slowest single operation in `co` on a large repo.
 
-**Proposal:** either (a) always pass `Keep: true` and let go-git's checkout surface a clear conflict, or (b) shell out to `git checkout <branch>` and let git handle dirty-tree behavior natively (typically faster than go-git's pure-Go checkout on large trees).
+**Proposal:** shell out to `git checkout <branch>` and let git handle dirty-tree behavior natively. This should be treated as a narrow exception to the default preference for go-git: use go-git where it is correct and fast enough, but prefer native Git for checkout because go-git's checkout/status path walks the whole working tree and is materially slower on large repos.
 
 **Affects:** co.md #1, create.md #1, modify.md #4, absorb.md #1, navigation.md #2, and every other command that ends in a branch switch.
 
@@ -215,4 +215,4 @@ These are back-of-envelope guesses to size effort vs reward, not measured:
 
 - **`git commit` itself and pre-commit hooks.** The user owns hook cost.
 - **GitHub API latency.** Batching is already in place; further wins are caching with TTL (`log.md` #4, `submit.md` #2) which is bounded by correctness.
-- **go-git's checkout itself when used.** Switching to shell-out is item #2's option (b); if we stay on go-git, the Status fix still applies. Don't rewrite go-git internals.
+- **go-git's internals.** Checkout is the narrow native-Git exception in item #2 because the go-git checkout/status path is materially slower on large working trees. Keep the broader default as go-git where it is correct and fast enough; don't rewrite go-git internals.

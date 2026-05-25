@@ -269,7 +269,7 @@ func (e *engineImpl) CheckoutBranch(ctx context.Context, branch Branch) error {
 	branchName := branch.GetName()
 	if err := e.git.CheckoutBranch(ctx, branchName); err != nil {
 		// If it's already used by another worktree, try checking out detached
-		if strings.Contains(err.Error(), "already used by worktree") {
+		if branchCheckedOutInAnotherWorktree(err) {
 			if err := e.git.CheckoutDetached(ctx, branchName); err != nil {
 				return err
 			}
@@ -285,6 +285,15 @@ func (e *engineImpl) CheckoutBranch(ctx context.Context, branch Branch) error {
 	e.currentBranch = branchName
 	e.mu.Unlock()
 	return nil
+}
+
+func branchCheckedOutInAnotherWorktree(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "already used by worktree") ||
+		strings.Contains(msg, "is already checked out")
 }
 
 // UpdateBranchRef updates a branch reference to point to a new revision

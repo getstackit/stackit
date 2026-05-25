@@ -3,8 +3,14 @@ package worktree
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +19,8 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
+
+const generatedRunWorktreeFallbackName = "agent"
 
 // NewWorktreeCmd creates the worktree command group
 func NewWorktreeCmd() *cobra.Command {
@@ -31,11 +39,111 @@ directory. Create a worktree with 'stackit worktree create' from trunk.`,
 	cmd.AddCommand(newRemoveCmd())
 	cmd.AddCommand(newOpenCmd())
 	cmd.AddCommand(newPruneCmd())
+	cmd.AddCommand(newRunCmd())
 	cmd.AddCommand(newAttachCmd())
 	cmd.AddCommand(newDetachCmd())
 	cmd.AddCommand(newRepairCmd())
 
 	return cmd
+}
+
+// newRunCmd creates a worktree and runs a command inside it.
+func newRunCmd() *cobra.Command {
+	var (
+		name  string
+		scope string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "run -- <command> [args...]",
+		Short: "Create a new worktree and run a command inside it",
+		Long: `Create a new stackit-managed worktree with a generated name and run a command inside it.
+
+The worktree starts on a hidden anchor branch at trunk. When the command creates
+the first real branch with 'stackit create', that branch becomes rooted under
+the worktree anchor.
+
+Examples:
+  stackit worktree run -- claude
+  stackit wt run -- codex
+  stackit wt run --name payments-agent -- claude`,
+		SilenceUsage: true,
+		Args:         cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			worktreeName := name
+			if worktreeName == "" {
+				worktreeName = generatedRunWorktreeName(args[0], time.Now())
+			}
+
+			return common.Run(cmd, func(ctx *app.Context) error {
+				result, err := worktree.CreateAction(ctx, worktree.CreateOptions{
+					Name:  worktreeName,
+					Scope: scope,
+				})
+				if err != nil {
+					return err
+				}
+
+				ctx.Output.Info("Running %s in %s", style.ColorCyan(args[0]), style.ColorDim(result.Path))
+
+				runCmd := exec.CommandContext(ctx.Context, args[0], args[1:]...)
+				runCmd.Dir = result.Path
+				runCmd.Stdin = os.Stdin
+				runCmd.Stdout = cmd.OutOrStdout()
+				runCmd.Stderr = cmd.ErrOrStderr()
+
+				if err := runCmd.Run(); err != nil {
+					var exitErr *exec.ExitError
+					if errors.As(err, &exitErr) {
+						cmd.SilenceErrors = true
+						return common.NewExitCodeError(exitErr.ExitCode(), err)
+					}
+					return fmt.Errorf("failed to run %s in worktree: %w", args[0], err)
+				}
+				return nil
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&name, "name", "", "Use an explicit worktree name instead of generating one")
+	cmd.Flags().StringVarP(&scope, "scope", "s", "", "Scope to apply to all branches in this worktree")
+
+	return cmd
+}
+
+func generatedRunWorktreeName(command string, now time.Time) string {
+	base := filepath.Base(strings.TrimSpace(command))
+	if base == "." || base == string(os.PathSeparator) || base == "" {
+		base = generatedRunWorktreeFallbackName
+	}
+
+	var sanitized strings.Builder
+	lastHyphen := false
+	for _, r := range strings.ToLower(base) {
+		valid := unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_'
+		if valid {
+			sanitized.WriteRune(r)
+			lastHyphen = false
+			continue
+		}
+		if !lastHyphen {
+			sanitized.WriteByte('-')
+			lastHyphen = true
+		}
+	}
+
+	prefix := strings.Trim(sanitized.String(), "-_")
+	if prefix == "" {
+		prefix = generatedRunWorktreeFallbackName
+	}
+	if len(prefix) > 32 {
+		prefix = strings.Trim(prefix[:32], "-_")
+	}
+	if prefix == "" {
+		prefix = generatedRunWorktreeFallbackName
+	}
+
+	return fmt.Sprintf("%s-%s", prefix, now.Format("20060102-150405-000000000"))
 }
 
 // newCreateCmd creates the worktree create command

@@ -17,6 +17,7 @@ If you already have managed worktrees from before hidden anchors were introduced
 | `stackit worktree remove <name>` | Remove an empty worktree and delete its hidden anchor |
 | `stackit worktree detach <name>` | Remove worktree but keep branches |
 | `stackit worktree prune` | Clean up empty/stale worktrees |
+| `stackit worktree run -- <cmd>` | Create a generated worktree and run a tool inside it |
 | `stackit worktree repair [name]` | Repair stale or legacy worktree registrations |
 
 **Alias:** `wt` is a short alias for `worktree` (e.g., `stackit wt list`).
@@ -61,6 +62,30 @@ stackit wt create auth-refactor
 stackit create api-changes -m "refactor: update auth API"
 stackit create ui-updates -m "feat: new login UI"
 ```
+
+### `worktree run` - Start a tool in a generated worktree
+
+Creates a fresh worktree with a generated name, then runs a command with that
+worktree as its working directory. When the command exits, your original shell
+stays in its original directory.
+
+```bash
+stackit worktree run -- claude
+stackit wt run -- codex
+```
+
+The worktree starts on a hidden anchor branch at trunk. The first
+`stackit create` run inside the worktree creates the first real branch under
+that anchor, so the stack remains rooted in the generated worktree.
+
+**Options:**
+- `--name <name>`: Use an explicit worktree name instead of generating one
+- `--scope <name>`: Set a scope on the anchor branch
+
+**When to use:**
+- You want to start Claude Code, Codex, or another tool in an isolated workspace
+- You do not want to choose a worktree name up front
+- You want the first `stackit create` from that tool session to define the stack root under the generated anchor
 
 ### `create -w` - Start the first real branch in a worktree
 
@@ -281,6 +306,8 @@ hooks:
 
 **Security:** First-time hooks require approval (defaults to "No"). Approvals are stored in git config. Hooks have a 60-second timeout.
 
+Hooks also run for `stackit worktree run` before the requested command starts, so generated worktrees can install dependencies or copy environment files before an agent session begins.
+
 ---
 
 ## Common Workflows
@@ -293,6 +320,20 @@ stackit wt create payments
 stackit create api -m "feat: payment API"
 stackit create ui -m "feat: checkout UI"
 stackit submit
+```
+
+### Start an agent in a generated worktree
+
+```bash
+stackit wt run -- claude
+# Claude starts inside a generated worktree rooted at a hidden anchor.
+# When Claude creates the first branch with stackit create, that branch is
+# parented under the generated anchor.
+```
+
+Use `--name` when you want a stable worktree name:
+```bash
+stackit wt run --name payments-agent -- codex
 ```
 
 ### Move in-progress work to worktree

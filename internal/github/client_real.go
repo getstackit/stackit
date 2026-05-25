@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v62/github"
+	"github.com/google/go-github/v67/github"
 
 	"github.com/getstackit/stackit/internal/git"
 )

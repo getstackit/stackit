@@ -3,7 +3,7 @@ package actions_test
 import (
 	"testing"
 
-	"github.com/google/go-github/v62/github"
+	"github.com/google/go-github/v67/github"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"

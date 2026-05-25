@@ -430,7 +430,7 @@ func TestRestackBranchesPropagatesRerereResolvedCount(t *testing.T) {
 	// RestackBranchResult.
 	branch2 := s.Engine.GetBranch("branch2")
 	require.NotNil(t, branch2)
-	batchResult, err := s.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+	batchResult, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, batchResult.Results["branch2"].Result)
 	require.Greater(t, batchResult.Results["branch2"].RerereResolvedCount, 0)
@@ -465,7 +465,7 @@ func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, validation.NewSHAs["branch1"], oldBranchRev)
 
-	result, err := s.Engine.RestackBranchesWithValidatedRebases(context.Background(), []engine.Branch{branch1}, validation, nil)
+	result, err := s.Engine.RestackBranchesWithValidatedRebases(context.Background(), engine.BranchesOf(branch1), validation, nil)
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, result.Results["branch1"].Result)
 
@@ -491,7 +491,7 @@ func TestRestackBranchesWithValidatedPlanAppliesFrozenBranch(t *testing.T) {
 	require.NoError(t, s.Engine.TrackBranch(context.Background(), "child", "parent"))
 
 	child := s.Engine.GetBranch("child")
-	_, err := s.Engine.SetFrozen(context.Background(), []engine.Branch{child}, true)
+	_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(child), true)
 	require.NoError(t, err)
 
 	s.CreateBranch("remote-child").
@@ -500,13 +500,13 @@ func TestRestackBranchesWithValidatedPlanAppliesFrozenBranch(t *testing.T) {
 	require.NoError(t, err)
 	s.RunGit("update-ref", "refs/heads/origin/child", remoteSHA)
 
-	plan, err := s.Engine.PlanRestack(context.Background(), []engine.Branch{child})
+	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(child))
 	require.NoError(t, err)
 	require.Empty(t, plan.Specs)
 	require.True(t, plan.ApplyMap["child"])
 
 	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
-	result, err := s.Engine.RestackBranchesWithValidatedPlan(context.Background(), []engine.Branch{child}, validation, plan, nil)
+	result, err := s.Engine.RestackBranchesWithValidatedPlan(context.Background(), engine.BranchesOf(child), validation, plan, nil)
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, result.Results["child"].Result)
 
@@ -532,13 +532,13 @@ func TestRestackBranchesWithValidatedPlanAppliesAnchorBranch(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, oldSHA, trunkSHA)
 
-	plan, err := s.Engine.PlanRestack(context.Background(), []engine.Branch{anchor})
+	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(anchor))
 	require.NoError(t, err)
 	require.Empty(t, plan.Specs)
 	require.True(t, plan.ApplyMap["anchor"])
 
 	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
-	result, err := s.Engine.RestackBranchesWithValidatedPlan(context.Background(), []engine.Branch{anchor}, validation, plan, nil)
+	result, err := s.Engine.RestackBranchesWithValidatedPlan(context.Background(), engine.BranchesOf(anchor), validation, plan, nil)
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, result.Results["anchor"].Result)
 
@@ -560,7 +560,7 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	require.NoError(t, s.Engine.Rebuild("main"))
 
 	branch2 := s.Engine.GetBranch("branch2")
-	plan, err := s.Engine.PlanRestack(context.Background(), []engine.Branch{branch2})
+	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(branch2))
 	require.NoError(t, err)
 	require.Len(t, plan.Specs, 1)
 	require.True(t, plan.ApplyMap["branch2"])
@@ -572,7 +572,7 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, validation.Success)
 
-	result, err := s.Engine.RestackBranchesWithValidatedPlan(context.Background(), []engine.Branch{branch2}, validation, plan, nil)
+	result, err := s.Engine.RestackBranchesWithValidatedPlan(context.Background(), engine.BranchesOf(branch2), validation, plan, nil)
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, result.Results["branch2"].Result)
 	require.True(t, result.Results["branch2"].Reparented)

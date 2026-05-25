@@ -182,7 +182,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Build tree structure for display
-	branchObjs := make([]engine.Branch, len(branches))
+	branchObjs := make(engine.Branches, len(branches))
 	fixedMap := make(map[string]bool)
 	scopeMap := make(map[string]string)
 	worktreeMap := make(map[string]string)
@@ -216,12 +216,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Restack if requested
 	if opts.Restack {
 		handler.OnEvent(RestackEvent{Started: true})
-		// Convert []string to []engine.Branch for RestackBranches
-		branchObjects := make([]engine.Branch, len(branches))
-		for i, branchName := range branches {
-			branchObjects[i] = nav.GetBranch(branchName)
-		}
-		if err := actions.RestackBranches(ctx, branchObjects); err != nil {
+		if err := actions.RestackBranches(ctx, branchObjs); err != nil {
 			return fmt.Errorf("failed to restack branches: %w", err)
 		}
 		handler.OnEvent(RestackEvent{Completed: true})
@@ -620,17 +615,14 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 }
 
 // pushMetadataRefs pushes metadata refs for submitted branches to remote
-func pushMetadataRefs(ctx *app.Context, branches []engine.Branch) error {
+func pushMetadataRefs(ctx *app.Context, branches engine.Branches) error {
 	if len(branches) == 0 {
 		return nil
 	}
 
 	rm := ctx.RemoteMetadata()
 
-	branchNames := make([]string, len(branches))
-	for i, branch := range branches {
-		branchNames[i] = branch.GetName()
-	}
+	branchNames := branches.Names()
 
 	if err := rm.BatchSetLastModifiedBy(branchNames); err != nil {
 		return fmt.Errorf("failed to update metadata: %w", err)

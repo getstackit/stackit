@@ -311,7 +311,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		// if the parent has been merged/deleted
 		branch := eng.GetBranch(step.BranchName)
 		out.Debug("Executing StepRestack for branch %s", step.BranchName)
-		batchResult, err := eng.RestackBranches(ctx.Context, []engine.Branch{branch})
+		batchResult, err := eng.RestackBranches(ctx.Context, engine.BranchesOf(branch))
 		result := batchResult.Results[step.BranchName]
 		if err != nil {
 			out.Debug("StepRestack for branch %s failed: %v", step.BranchName, err)

@@ -52,7 +52,7 @@ type BranchValidationEngine interface {
 	ValidateOnBranch() (string, error)
 	GetBranch(branchName string) engine.Branch
 	CurrentBranch() *engine.Branch
-	AllBranches() []engine.Branch
+	AllBranches() engine.Branches
 }
 
 // MustBeOnBranch validates that HEAD is on a branch (not detached).

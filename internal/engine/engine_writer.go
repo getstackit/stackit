@@ -228,7 +228,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 }
 
 // DeleteBranches deletes multiple branches and returns the children that need restacking
-func (e *engineImpl) DeleteBranches(ctx context.Context, branches []Branch) ([]string, error) {
+func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]string, error) {
 	// Identify all children of all branches to be deleted
 	allChildren := make(map[string]bool)
 	toDeleteSet := make(map[string]bool)
@@ -512,7 +512,7 @@ func (e *engineImpl) SetScope(ctx context.Context, branch Branch, scope Scope) e
 
 // SetLocked updates multiple branches' locked status atomically using transactions.
 // It retries on concurrent modification errors with exponential backoff.
-func (e *engineImpl) SetLocked(ctx context.Context, branches []Branch, reason LockReason) (BatchLockResult, error) {
+func (e *engineImpl) SetLocked(ctx context.Context, branches Branches, reason LockReason) (BatchLockResult, error) {
 	result := BatchLockResult{
 		AffectedBranches: make([]string, 0, len(branches)),
 		Errors:           make(map[string]error),
@@ -598,7 +598,7 @@ func (e *engineImpl) SetLocked(ctx context.Context, branches []Branch, reason Lo
 
 // SetFrozen updates multiple branches' frozen status atomically using transactions.
 // It retries on concurrent modification errors with exponential backoff.
-func (e *engineImpl) SetFrozen(ctx context.Context, branches []Branch, frozen bool) (BatchFreezeResult, error) {
+func (e *engineImpl) SetFrozen(ctx context.Context, branches Branches, frozen bool) (BatchFreezeResult, error) {
 	result := BatchFreezeResult{
 		AffectedBranches: make([]string, 0, len(branches)),
 		Errors:           make(map[string]error),
@@ -982,35 +982,45 @@ func (e *engineImpl) ListManagedWorktrees() ([]WorktreeInfo, error) {
 // The stack root is the first ancestor branch whose parent is trunk.
 // Returns empty string for trunk or untracked branches.
 func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	branchName := branch.GetName()
 
 	// Trunk has no stack root
-	if branchName == e.trunk {
+	e.mu.RLock()
+	trunk := e.trunk
+	e.mu.RUnlock()
+	if branchName == trunk {
 		return ""
 	}
 
-	// Check if branch is tracked at all
-	if !e.state.branchState.HasByName(branchName) {
-		return "" // Untracked branch has no stack root
-	}
-
 	current := branchName
+	visited := make(map[string]bool)
 	for {
+		if visited[current] {
+			return ""
+		}
+		visited[current] = true
+		e.ensureBranchSharedLoaded(current)
+
+		e.mu.RLock()
 		state := e.readState(current)
+		trunk := e.trunk
+		parent := ""
+		if state != nil {
+			parent = state.Parent
+		}
+		e.mu.RUnlock()
+
 		if state == nil {
 			// Should not happen since we checked above, but handle gracefully
 			return ""
 		}
 
 		// If parent is trunk, current is the stack root
-		if state.Parent == e.trunk {
+		if parent == trunk {
 			return current
 		}
 
-		current = state.Parent
+		current = parent
 	}
 }
 

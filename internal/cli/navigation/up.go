@@ -77,10 +77,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 							var candidates []string
 							for _, child := range children {
 								upstack := graph.Range(child, engine.StackRange{RecursiveChildren: true})
-								upstackNames := make([]string, len(upstack))
-								for j, b := range upstack {
-									upstackNames[j] = b.GetName()
-								}
+								upstackNames := upstack.Names()
 								if child.GetName() == toBranch || slices.Contains(upstackNames, toBranch) {
 									candidates = append(candidates, child.GetName())
 								}
@@ -95,21 +92,13 @@ the --to flag is used to specify a target branch to navigate towards.`,
 								fallthrough
 							default:
 								// Still ambiguous even with --to (shouldn't happen in a tree)
-								childNames := make([]string, len(children))
-								for i, c := range children {
-									childNames[i] = c.GetName()
-								}
-								nextBranch, err = promptForChild(childNames, targetBranch)
+								nextBranch, err = promptForChild(children.Names(), targetBranch)
 								if err != nil {
 									return err
 								}
 							}
 						} else {
-							childNames := make([]string, len(children))
-							for i, c := range children {
-								childNames[i] = c.GetName()
-							}
-							nextBranch, err = promptForChild(childNames, targetBranch)
+							nextBranch, err = promptForChild(children.Names(), targetBranch)
 							if err != nil {
 								return err
 							}
@@ -141,14 +130,14 @@ the --to flag is used to specify a target branch to navigate towards.`,
 }
 
 // flattenThroughAnchors replaces worktree anchor branches with their non-anchor children.
-func flattenThroughAnchors(branches []engine.Branch, graph *engine.StackGraph) []engine.Branch {
-	var result []engine.Branch
+func flattenThroughAnchors(branches engine.Branches, graph *engine.StackGraph) engine.Branches {
+	result := engine.Branches{}
 	for _, b := range branches {
 		if b.IsWorktreeAnchor() {
 			grandchildren := graph.ChildBranches(b)
-			result = append(result, flattenThroughAnchors(grandchildren, graph)...)
+			result = result.Concat(flattenThroughAnchors(grandchildren, graph))
 		} else {
-			result = append(result, b)
+			result = result.Append(b)
 		}
 	}
 	return result

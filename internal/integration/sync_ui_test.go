@@ -26,11 +26,11 @@ func TestSyncUIReporting(t *testing.T) {
 
 		// Lock feature-b
 		branch := sh.Engine.GetBranch("feature-b")
-		_, err := sh.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+		_, err := sh.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Freeze feature-c
-		_, err = sh.Engine.SetFrozen(context.Background(), []engine.Branch{sh.Engine.GetBranch("feature-c")}, true)
+		_, err = sh.Engine.SetFrozen(context.Background(), engine.BranchesOf(sh.Engine.GetBranch("feature-c")), true)
 		require.NoError(t, err)
 
 		// Make feature-a need restacking by amending its parent (main)

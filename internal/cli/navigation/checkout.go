@@ -6,6 +6,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // NewCheckoutCmd creates the checkout command
@@ -28,13 +29,17 @@ by typing. Use flags to customize which branches are shown.`,
 		ValidArgsFunction: common.CompleteBranches,
 		SilenceUsage:      true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.Run(cmd, func(ctx *app.Context) error {
-				// Get branch name from args
-				branchName := ""
-				if len(args) > 0 {
-					branchName = args[0]
-				}
+			globalOpts := common.GetGlobalOptions(cmd)
+			branchName := ""
+			if len(args) > 0 {
+				branchName = args[0]
+			}
+			if globalOpts.Quiet && (branchName != "" || trunk) {
+				loadMode := engine.LoadModeBranchesOnly
+				globalOpts.EngineLoadMode = &loadMode
+			}
 
+			return common.RunWithOptions(cmd, globalOpts, func(ctx *app.Context) error {
 				// Create runner (manages terminal state) and handler (processes events)
 				runner, handler := NewCheckoutUI(ctx.Output, ctx.Logger)
 				if runner != nil {

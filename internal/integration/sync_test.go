@@ -361,7 +361,7 @@ func TestSyncRemoteMetadata(t *testing.T) {
 
 		// Set local metadata
 		branch := eng.GetBranch("feature-a")
-		_, err := eng.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonNone)
+		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
 		require.NoError(t, err)
 
 		// Create remote metadata refs (simulating a successful fetch)
@@ -395,7 +395,7 @@ func TestSyncRemoteMetadata(t *testing.T) {
 
 		// Set local metadata: locked=false
 		branch := eng.GetBranch("feature-b")
-		_, err := eng.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonNone)
+		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
 		require.NoError(t, err)
 
 		// Create remote metadata refs: locked=true (conflict)

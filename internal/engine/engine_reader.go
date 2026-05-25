@@ -9,15 +9,15 @@ import (
 	"github.com/getstackit/stackit/internal/errors"
 )
 
-// AllBranches returns all branches
-func (e *engineImpl) AllBranches() []Branch {
+// AllBranches returns all branches.
+func (e *engineImpl) AllBranches() Branches {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	branches := make([]Branch, len(e.state.branches))
 	for i, name := range e.state.branches {
 		branches[i] = NewBranch(name, e)
 	}
-	return branches
+	return NewBranches(branches)
 }
 
 // BranchNames returns a cached BranchSet for O(1) branch name lookups.
@@ -86,6 +86,7 @@ func (e *engineImpl) GetBranch(branchName string) Branch {
 
 // GetParent returns the parent branch (nil if no parent)
 func (e *engineImpl) GetParent(branch Branch) *Branch {
+	e.ensureBranchSharedLoaded(branch.GetName())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -190,14 +191,14 @@ func (e *engineImpl) FindBranchForCommit(commitSHA string) (string, error) {
 
 // SortBranchesTopologically sorts branches so parents come before children.
 // This ensures correct restack order (bottom of stack first).
-func (e *engineImpl) SortBranchesTopologically(branches []Branch) []Branch {
+func (e *engineImpl) SortBranchesTopologically(branches Branches) Branches {
 	if len(branches) == 0 {
 		return branches
 	}
 
 	// Build a full graph once and sort by computed depth, then name for stability.
 	graph := e.Graph(SortStrategyAlphabetical)
-	result := make([]Branch, len(branches))
+	result := make(Branches, len(branches))
 	copy(result, branches)
 	for i := 0; i < len(result)-1; i++ {
 		for j := i + 1; j < len(result); j++ {

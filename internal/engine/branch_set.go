@@ -35,12 +35,6 @@ func (s *BranchSet) Len() int {
 }
 
 // FilterBranches returns branches matching the predicate.
-func FilterBranches(eng StackNavigator, predicate func(Branch) bool) []Branch {
-	var result []Branch
-	for _, b := range eng.AllBranches() {
-		if predicate(b) {
-			result = append(result, b)
-		}
-	}
-	return result
+func FilterBranches(eng StackNavigator, predicate func(Branch) bool) Branches {
+	return eng.AllBranches().Filter(predicate)
 }

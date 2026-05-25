@@ -501,7 +501,7 @@ func (e *engineImpl) ConfigureRemoteMetadataSync(_ context.Context) error {
 
 // GetStackIDsForBranches returns the unique stack IDs for the given branches.
 // This is used to determine which stack refs need to be pushed to remote.
-func (e *engineImpl) GetStackIDsForBranches(branches []Branch) []string {
+func (e *engineImpl) GetStackIDsForBranches(branches Branches) []string {
 	seen := make(map[string]bool)
 	var stackIDs []string
 

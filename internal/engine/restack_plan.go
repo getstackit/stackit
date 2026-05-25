@@ -7,7 +7,7 @@ import (
 // PlanRestack builds the rebase specs and branch decisions for a restack.
 // Branches that are locked or provably up to date are reported in
 // PlannedResults so callers can skip validation worktrees for them.
-func (e *engineImpl) PlanRestack(ctx context.Context, branches []Branch) (*RestackPlan, error) {
+func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*RestackPlan, error) {
 	plan := &RestackPlan{
 		Specs:          make([]RebaseSpec, 0, len(branches)),
 		BranchMap:      make(map[string]bool),

@@ -75,7 +75,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 	}
 
 	affectedBranches := []string{}
-	branchesToLock := []engine.Branch{}
+	branchesToLock := engine.Branches{}
 	for _, b := range branches {
 		if b.IsTrunk() {
 			continue
@@ -84,7 +84,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 			out.Info("Branch %s is already locked.", style.ColorBranchName(b.GetName(), b.GetName() == branchName))
 			continue
 		}
-		branchesToLock = append(branchesToLock, b)
+		branchesToLock = branchesToLock.Append(b)
 	}
 
 	if len(branchesToLock) > 0 {
@@ -140,28 +140,25 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 		RecursiveParents: true,
 	})
 
-	lockedDownstack := []engine.Branch{}
+	lockedDownstack := engine.Branches{}
 	for _, b := range downstack {
 		if !b.IsTrunk() && b.IsLocked() {
-			lockedDownstack = append(lockedDownstack, b)
+			lockedDownstack = lockedDownstack.Append(b)
 		}
 	}
 
 	if len(lockedDownstack) > 0 && handler.IsInteractive() {
 		// Collect branch names for the prompt
-		lockedNames := make([]string, len(lockedDownstack))
-		for i, b := range lockedDownstack {
-			lockedNames[i] = b.GetName()
-		}
+		lockedNames := lockedDownstack.Names()
 
 		confirm, err := handler.PromptUnlockDownstack(lockedNames)
 		if err == nil && confirm {
-			branches = append(branches, lockedDownstack...)
+			branches = branches.Concat(lockedDownstack)
 		}
 	}
 
 	affectedBranches := []string{}
-	branchesToUnlock := []engine.Branch{}
+	branchesToUnlock := engine.Branches{}
 	for _, b := range branches {
 		if b.IsTrunk() {
 			continue
@@ -170,7 +167,7 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 			out.Info("Branch %s is already unlocked.", style.ColorBranchName(b.GetName(), b.GetName() == branchName))
 			continue
 		}
-		branchesToUnlock = append(branchesToUnlock, b)
+		branchesToUnlock = branchesToUnlock.Append(b)
 	}
 
 	if len(branchesToUnlock) > 0 {

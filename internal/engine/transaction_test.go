@@ -29,7 +29,7 @@ func TestSetLocked_SingleBranch(t *testing.T) {
 	branch := s.Engine.GetBranch("feature-1")
 
 	// Lock the branch
-	result, err := s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+	result, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 	assert.Len(t, result.AffectedBranches, 1)
 	assert.Contains(t, result.AffectedBranches, "feature-1")
@@ -125,7 +125,7 @@ func TestSetLocked_EmptyBranchList(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Empty branch list should succeed
-	result, err := s.Engine.SetLocked(context.Background(), []engine.Branch{}, engine.LockReasonUser)
+	result, err := s.Engine.SetLocked(context.Background(), engine.Branches{}, engine.LockReasonUser)
 	require.NoError(t, err)
 	assert.Empty(t, result.AffectedBranches)
 	assert.Empty(t, result.Errors)
@@ -136,7 +136,7 @@ func TestSetFrozen_EmptyBranchList(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Empty branch list should succeed
-	result, err := s.Engine.SetFrozen(context.Background(), []engine.Branch{}, true)
+	result, err := s.Engine.SetFrozen(context.Background(), engine.Branches{}, true)
 	require.NoError(t, err)
 	assert.Empty(t, result.AffectedBranches)
 	assert.Empty(t, result.Errors)
@@ -155,7 +155,7 @@ func TestSetLocked_UnlockBranches(t *testing.T) {
 	branch := s.Engine.GetBranch("feature-1")
 
 	// Lock the branch
-	_, err = s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+	_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 
 	// Verify locked
@@ -165,7 +165,7 @@ func TestSetLocked_UnlockBranches(t *testing.T) {
 	assert.Equal(t, git.LockReasonUser, meta.GetLockReason())
 
 	// Unlock the branch
-	_, err = s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonNone)
+	_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
 	require.NoError(t, err)
 
 	// Verify unlocked
@@ -187,7 +187,7 @@ func TestSetFrozen_UnfreezeBranches(t *testing.T) {
 	branch := s.Engine.GetBranch("feature-1")
 
 	// Freeze the branch
-	_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, true)
+	_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
 	require.NoError(t, err)
 
 	// Verify frozen
@@ -197,7 +197,7 @@ func TestSetFrozen_UnfreezeBranches(t *testing.T) {
 	assert.True(t, localMeta.Frozen)
 
 	// Unfreeze the branch
-	_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, false)
+	_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), false)
 	require.NoError(t, err)
 
 	// Verify unfrozen
@@ -292,7 +292,7 @@ func TestWithRetry_ContextCancellation(t *testing.T) {
 	branch := s.Engine.GetBranch("feature-1")
 
 	// SetLocked should return context error since context is canceled
-	_, err = s.Engine.SetLocked(ctx, []engine.Branch{branch}, engine.LockReasonUser)
+	_, err = s.Engine.SetLocked(ctx, engine.BranchesOf(branch), engine.LockReasonUser)
 	// Note: The operation might succeed before the context check, or fail with context error
 	// We just verify it doesn't hang indefinitely
 	if err != nil {
@@ -908,7 +908,7 @@ func TestTransaction_DeleteLocalMetaClearsFrozenState(t *testing.T) {
 
 	// Freeze the branch
 	branch := s.Engine.GetBranch("feature-1")
-	_, err := s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, true)
+	_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
 	require.NoError(t, err)
 
 	// Verify frozen in cache

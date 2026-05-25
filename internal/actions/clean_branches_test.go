@@ -122,7 +122,7 @@ func TestCleanBranches(t *testing.T) {
 
 		// Lock the branch (simulating consolidation)
 		branch := s.Engine.GetBranch("branch1")
-		_, err = s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonConsolidating)
+		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonConsolidating)
 		require.NoError(t, err)
 		require.True(t, branch.IsLocked(), "branch should be locked")
 

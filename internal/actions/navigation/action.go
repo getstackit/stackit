@@ -115,11 +115,7 @@ func traverseUpward(currentBranch string, ctx *app.Context, graph *engine.StackG
 		nextBranch = children[0].GetName()
 	} else {
 		// Multiple children, use handler to select
-		childNames := make([]string, len(children))
-		for i, c := range children {
-			childNames[i] = c.GetName()
-		}
-		nextBranch, err = handleMultipleChildren(childNames, handler)
+		nextBranch, err = handleMultipleChildren(children.Names(), handler)
 		if err != nil {
 			return "", err
 		}
@@ -130,15 +126,15 @@ func traverseUpward(currentBranch string, ctx *app.Context, graph *engine.StackG
 }
 
 // flattenThroughAnchors replaces worktree anchor branches with their non-anchor children.
-func flattenThroughAnchors(branches []engine.Branch, graph *engine.StackGraph) []engine.Branch {
-	var result []engine.Branch
+func flattenThroughAnchors(branches engine.Branches, graph *engine.StackGraph) engine.Branches {
+	result := engine.Branches{}
 	for _, b := range branches {
 		if b.IsWorktreeAnchor() {
 			// Replace anchor with its children (recursively flatten)
 			grandchildren := graph.ChildBranches(b)
-			result = append(result, flattenThroughAnchors(grandchildren, graph)...)
+			result = result.Concat(flattenThroughAnchors(grandchildren, graph))
 		} else {
-			result = append(result, b)
+			result = result.Append(b)
 		}
 	}
 	return result

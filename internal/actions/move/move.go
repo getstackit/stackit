@@ -30,7 +30,7 @@ type movePlan struct {
 	onto          string
 	sourceBranch  engine.Branch
 	ontoBranch    engine.Branch
-	descendants   []engine.Branch
+	descendants   engine.Branches
 	oldParentName string
 	oldParentRev  string
 	rebaseSpecs   []engine.RebaseSpec
@@ -258,14 +258,10 @@ func buildPreview(plan *movePlan, commits []string, validation *engine.RebaseVal
 	return preview
 }
 
-func descendantNames(descendants []engine.Branch, source string) []string {
-	var names []string
-	for _, d := range descendants {
-		if d.GetName() != source {
-			names = append(names, d.GetName())
-		}
-	}
-	return names
+func descendantNames(descendants engine.Branches, source string) []string {
+	return descendants.Filter(func(d engine.Branch) bool {
+		return d.GetName() != source
+	}).Names()
 }
 
 func maybeRename(ctx *app.Context, h Handler, opts Options, plan *movePlan) (bool, string, engine.Branch) {
@@ -391,7 +387,7 @@ func completeMove(h Handler, plan *movePlan, renamed bool) {
 }
 
 // dryRun validates and prints what the move would do without making changes.
-func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch engine.Branch, descendants []engine.Branch, rebaseSpecs []engine.RebaseSpec) error {
+func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch engine.Branch, descendants engine.Branches, rebaseSpecs []engine.RebaseSpec) error {
 	eng := ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
@@ -403,12 +399,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	commits, _ := eng.GetAllCommits(sourceBranch, engine.CommitFormatSubject)
 
 	// Get descendant names (excluding source itself)
-	var descendantNames []string
-	for _, d := range descendants {
-		if d.GetName() != source {
-			descendantNames = append(descendantNames, d.GetName())
-		}
-	}
+	descNames := descendantNames(descendants, source)
 
 	// Print dry-run header
 	out.Info("Dry-run: showing what would happen without making changes\n")
@@ -429,9 +420,9 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	}
 
 	// Print descendants that would be restacked
-	if len(descendantNames) > 0 {
-		out.Info("\nDescendant branches to restack (%d):", len(descendantNames))
-		for _, name := range descendantNames {
+	if len(descNames) > 0 {
+		out.Info("\nDescendant branches to restack (%d):", len(descNames))
+		for _, name := range descNames {
 			out.Info("  • %s", style.ColorBranchName(name, false))
 		}
 	}
@@ -464,7 +455,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 
 // BuildRebaseSpecs builds the rebase specifications for validating/executing the move.
 // Exported so it can be used by the selection validation callback.
-func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string, oldParent *engine.Branch, oldParentRev string, descendants []engine.Branch) []engine.RebaseSpec {
+func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string, oldParent *engine.Branch, oldParentRev string, descendants engine.Branches) []engine.RebaseSpec {
 	rebaseSpecs := make([]engine.RebaseSpec, 0, len(descendants))
 
 	ontoBranch := eng.GetBranch(onto)

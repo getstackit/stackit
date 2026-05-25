@@ -266,7 +266,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			isFrozen := !opts.Unfrozen
 			branchFrozenStatus[branchName] = isFrozen
 			if isFrozen {
-				if _, err := eng.SetFrozen(ctx, []engine.Branch{eng.GetBranch(branchName)}, true); err != nil {
+				if _, err := eng.SetFrozen(ctx, engine.BranchesOf(eng.GetBranch(branchName)), true); err != nil {
 					out.Debug("Failed to freeze new branch %s: %v", branchName, err)
 				}
 			}
@@ -347,18 +347,18 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	var restacked, skipped int
 	var conflicts []string
 	if opts.Restack {
-		uniqueBranches := []engine.Branch{}
+		uniqueBranches := engine.NewBranchesBuilder(len(branchesToSync))
 		seen := make(map[string]bool)
 		for _, name := range branchesToSync {
 			if !seen[name] {
 				seen[name] = true
 				b := eng.GetBranch(name)
 				if b.IsTracked() {
-					uniqueBranches = append(uniqueBranches, b)
+					uniqueBranches.Add(b)
 				}
 			}
 		}
-		sorted := eng.SortBranchesTopologically(uniqueBranches)
+		sorted := eng.SortBranchesTopologically(uniqueBranches.Build())
 		if len(sorted) > 0 {
 			// Use RestackHandler for consistent output
 			handler.OnRestackStart(len(sorted))

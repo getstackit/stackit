@@ -302,12 +302,12 @@ func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(_ context.Context,
 	splog := c.ctx.Output
 	splog.Info("🔒 Locking individual PRs and updating status...")
 
-	branchesToLock := make([]engine.Branch, 0, len(c.plan.BranchesToMerge))
+	branchesToLock := engine.Branches{}
 	branchNames := make([]string, 0, len(c.plan.BranchesToMerge))
 	for _, b := range c.plan.BranchesToMerge {
 		branch := c.engine.GetBranch(b.BranchName)
 		if !branch.IsLocked() {
-			branchesToLock = append(branchesToLock, branch)
+			branchesToLock = branchesToLock.Append(branch)
 		}
 		branchNames = append(branchNames, b.BranchName)
 	}

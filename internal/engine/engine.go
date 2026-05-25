@@ -39,11 +39,11 @@ type SyncManager interface {
 	// Sync operations
 	PullTrunk(ctx context.Context) (PullResult, error)
 	ResetTrunkToRemote(ctx context.Context) error
-	PlanRestack(ctx context.Context, branches []Branch) (*RestackPlan, error)
-	RestackBranches(ctx context.Context, branches []Branch) (RestackBatchResult, error)
-	RestackBranchesWithProgress(ctx context.Context, branches []Branch, progress RestackBranchProgressFunc) (RestackBatchResult, error)
-	RestackBranchesWithValidatedRebases(ctx context.Context, branches []Branch, validation *RebaseValidation, progress RestackBranchProgressFunc) (RestackBatchResult, error)
-	RestackBranchesWithValidatedPlan(ctx context.Context, branches []Branch, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error)
+	PlanRestack(ctx context.Context, branches Branches) (*RestackPlan, error)
+	RestackBranches(ctx context.Context, branches Branches) (RestackBatchResult, error)
+	RestackBranchesWithProgress(ctx context.Context, branches Branches, progress RestackBranchProgressFunc) (RestackBatchResult, error)
+	RestackBranchesWithValidatedRebases(ctx context.Context, branches Branches, validation *RebaseValidation, progress RestackBranchProgressFunc) (RestackBatchResult, error)
+	RestackBranchesWithValidatedPlan(ctx context.Context, branches Branches, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error)
 	ContinueRebase(ctx context.Context, branchName string, rebasedBranchBase string) (ContinueRebaseResult, error)
 	Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RestackResult, error)
 
@@ -92,7 +92,7 @@ type RemoteMetadataManager interface {
 	ConfigureRemoteMetadataSync(ctx context.Context) error
 	// GetStackIDsForBranches returns the unique stack IDs for the given branches.
 	// This is used to determine which stack refs need to be pushed to remote.
-	GetStackIDsForBranches(branches []Branch) []string
+	GetStackIDsForBranches(branches Branches) []string
 }
 
 // ApplySplitOptions contains options for applying a split

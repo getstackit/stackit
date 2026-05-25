@@ -663,13 +663,13 @@ func (e *engineImpl) applyBranchAndMetadata(
 // 1. Collect all data required for the restack (in bulk)
 // 2. Process branches using individual restackBranch calls with deferred rebuilds
 // 3. Final cache rebuild
-func (e *engineImpl) RestackBranches(ctx context.Context, branches []Branch) (RestackBatchResult, error) {
+func (e *engineImpl) RestackBranches(ctx context.Context, branches Branches) (RestackBatchResult, error) {
 	return e.restackBranches(ctx, branches, nil, nil, nil)
 }
 
 // RestackBranchesWithProgress mirrors RestackBranches but reports progress
 // after each branch is processed.
-func (e *engineImpl) RestackBranchesWithProgress(ctx context.Context, branches []Branch, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
+func (e *engineImpl) RestackBranchesWithProgress(ctx context.Context, branches Branches, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
 	return e.restackBranches(ctx, branches, nil, nil, progress)
 }
 
@@ -677,7 +677,7 @@ func (e *engineImpl) RestackBranchesWithProgress(ctx context.Context, branches [
 // commits directly to branch refs. Validation worktrees share the repository's
 // object database, so the rebased commits can be reused instead of replaying
 // the same rebase a second time.
-func (e *engineImpl) RestackBranchesWithValidatedRebases(ctx context.Context, branches []Branch, validation *RebaseValidation, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
+func (e *engineImpl) RestackBranchesWithValidatedRebases(ctx context.Context, branches Branches, validation *RebaseValidation, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
 	plan, err := e.PlanRestack(ctx, branches)
 	if err != nil {
 		return RestackBatchResult{}, err
@@ -687,11 +687,11 @@ func (e *engineImpl) RestackBranchesWithValidatedRebases(ctx context.Context, br
 
 // RestackBranchesWithValidatedPlan applies successful dry-run validation
 // commits using the caller's restack plan.
-func (e *engineImpl) RestackBranchesWithValidatedPlan(ctx context.Context, branches []Branch, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
+func (e *engineImpl) RestackBranchesWithValidatedPlan(ctx context.Context, branches Branches, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
 	return e.restackBranches(ctx, branches, validation, plan, progress)
 }
 
-func (e *engineImpl) restackBranches(ctx context.Context, branches []Branch, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
+func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
 	// Save current branch to restore after restacking
 	originalBranch := e.CurrentBranch()
 	var originalRev string
@@ -780,6 +780,16 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches []Branch, val
 			for j, b := range branches[i+1:] {
 				remainingBranchNames[j] = b.GetName()
 			}
+			if needsRebuild {
+				if rebuildErr := e.rebuild(); rebuildErr != nil {
+					return RestackBatchResult{
+						ConflictBranch:    branchName,
+						RebasedBranchBase: result.RebasedBranchBase,
+						RemainingBranches: remainingBranchNames,
+						Results:           results,
+					}, fmt.Errorf("failed to rebuild after partial batch restack: %w", rebuildErr)
+				}
+			}
 			return RestackBatchResult{
 				ConflictBranch:    branchName,
 				RebasedBranchBase: result.RebasedBranchBase,
@@ -793,6 +803,16 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches []Branch, val
 			remainingBranchNames := make([]string, len(branches[i+1:]))
 			for j, b := range branches[i+1:] {
 				remainingBranchNames[j] = b.GetName()
+			}
+			if needsRebuild {
+				if rebuildErr := e.rebuild(); rebuildErr != nil {
+					return RestackBatchResult{
+						ConflictBranch:    branchName,
+						RebasedBranchBase: result.RebasedBranchBase,
+						RemainingBranches: remainingBranchNames,
+						Results:           results,
+					}, fmt.Errorf("failed to rebuild after partial batch restack: %w", rebuildErr)
+				}
 			}
 			return RestackBatchResult{
 				ConflictBranch:    branchName,

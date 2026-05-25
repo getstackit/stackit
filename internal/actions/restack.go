@@ -44,7 +44,7 @@ type RestackPlan struct {
 // for empty groups (which never reach the action's main loop).
 type restackPlannedGroup struct {
 	rootBranch     string
-	sortedBranches []engine.Branch
+	sortedBranches engine.Branches
 	enginePlan     *engine.RestackPlan
 }
 
@@ -347,7 +347,7 @@ func restackGroupsParallel(
 
 type restackBranchGroup struct {
 	rootBranch string // independent stack root name (direct child of trunk)
-	branches   []engine.Branch
+	branches   engine.Branches
 }
 
 // planRestackBranchGroups computes the branch groups that RestackAction would
@@ -360,7 +360,7 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 	}
 	branch := eng.GetBranch(opts.BranchName)
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	branches := excludeTrunkBranches(graph.Range(branch, opts.Scope))
+	branches := graph.Range(branch, opts.Scope).WithoutTrunk()
 	return []restackBranchGroup{{
 		branches: branches,
 	}}, nil
@@ -387,32 +387,20 @@ func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptio
 
 	groups := make([]restackBranchGroup, 0, len(stacks))
 	for _, stack := range stacks {
-		branches := make([]engine.Branch, 0, len(stack.Branches))
-		for _, branchName := range stack.Branches {
-			branch := eng.GetBranch(branchName)
+		branches := engine.NewBranchesBuilder(len(stack.Branches))
+		for _, branch := range engine.BranchesFromNames(eng, stack.Branches) {
 			if branch.IsTracked() && !branch.IsTrunk() {
-				branches = append(branches, branch)
+				branches.Add(branch)
 			}
 		}
-		if len(branches) > 0 {
+		if built := branches.Build(); len(built) > 0 {
 			groups = append(groups, restackBranchGroup{
 				rootBranch: stack.RootBranch,
-				branches:   branches,
+				branches:   built,
 			})
 		}
 	}
 	return groups, nil
-}
-
-func excludeTrunkBranches(branches []engine.Branch) []engine.Branch {
-	filtered := make([]engine.Branch, 0, len(branches))
-	for _, branch := range branches {
-		if branch.IsTrunk() {
-			continue
-		}
-		filtered = append(filtered, branch)
-	}
-	return filtered
 }
 
 func handleRestackProgress(

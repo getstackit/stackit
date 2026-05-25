@@ -22,7 +22,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	branch := eng.GetBranch("feature")
 
 	// 1. Lock the branch
-	_, err := eng.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+	_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 	require.True(t, branch.IsLocked())
 	require.Equal(t, string(engine.LockReasonUser), string(branch.GetLockReason()))

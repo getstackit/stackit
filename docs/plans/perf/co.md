@@ -47,11 +47,9 @@ NewCheckoutCmd.RunE
 
 ### 1. Eliminate the pre-checkout `Status()` walk *(high impact, low risk)*
 
-`internal/git/branches.go:45` — remove the `worktree.Status()` call and either:
-- always pass `Keep: true` and let go-git surface a clear conflict, or
-- shell out to `git checkout <branch>` and rely on git's own dirty-tree handling (still cheaper than a full status walk).
+`internal/git/branches.go:45` — remove the `worktree.Status()` call and shell out to `git checkout <branch>`, relying on Git's own dirty-tree handling. This is a narrow exception to the usual preference for go-git: keep go-git for repository operations where it is correct and fast enough, but use native Git here because go-git's checkout/status path walks the whole working tree.
 
-Either change saves the dominant cost on large working trees.
+This saves the dominant cost on large working trees.
 
 ### 2. Lite bootstrap path that skips `rebuildInternal` *(high impact, medium risk)*
 

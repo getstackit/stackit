@@ -43,27 +43,13 @@ func (r *runner) GetAllBranchNames() ([]string, error) {
 }
 
 func (r *runner) CheckoutBranch(ctx context.Context, branchName string) error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return err
-	}
-
 	r.goGitMu.Lock()
 	defer r.goGitMu.Unlock()
 
-	status, err := worktree.Status()
-	if err != nil {
-		return fmt.Errorf("failed to check status before checkout: %w", err)
-	}
-	err = worktree.Checkout(&gogit.CheckoutOptions{
-		Branch: plumbing.NewBranchReferenceName(branchName),
-		Keep:   !status.IsClean(),
-	})
-	if err != nil {
+	// Prefer go-git for repository operations, but checkout is an explicit
+	// exception: go-git's checkout path requires expensive working-tree walks,
+	// while native git already preserves dirty-tree safety with better perf.
+	if _, err := r.RunGitCommandWithContext(ctx, "checkout", branchName); err != nil {
 		return fmt.Errorf("failed to checkout branch %s: %w", branchName, err)
 	}
 	return nil
@@ -89,28 +75,11 @@ func (r *runner) CheckoutBranchForce(ctx context.Context, branchName string) err
 }
 
 func (r *runner) CreateAndCheckoutBranch(ctx context.Context, branchName string) error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return err
-	}
-
 	r.goGitMu.Lock()
 	defer r.goGitMu.Unlock()
 
-	status, err := worktree.Status()
-	if err != nil {
-		return fmt.Errorf("failed to check status before creating branch %s: %w", branchName, err)
-	}
-	err = worktree.Checkout(&gogit.CheckoutOptions{
-		Branch: plumbing.NewBranchReferenceName(branchName),
-		Create: true,
-		Keep:   !status.IsClean(),
-	})
-	if err != nil {
+	// See CheckoutBranch for why checkout uses native git instead of go-git.
+	if _, err := r.RunGitCommandWithContext(ctx, "checkout", "-b", branchName); err != nil {
 		return fmt.Errorf("failed to create and checkout branch %s: %w", branchName, err)
 	}
 	return nil
@@ -190,27 +159,11 @@ func (r *runner) CreateBranchForce(ctx context.Context, branchName, revision str
 }
 
 func (r *runner) CheckoutDetached(ctx context.Context, revision string) error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return err
-	}
-
 	r.goGitMu.Lock()
 	defer r.goGitMu.Unlock()
 
-	hash, err := r.resolveRefHashInternal(repo, revision)
-	if err == nil {
-		status, statusErr := worktree.Status()
-		if statusErr != nil {
-			return fmt.Errorf("failed to check status before detached checkout: %w", statusErr)
-		}
-		err = worktree.Checkout(&gogit.CheckoutOptions{Hash: hash, Keep: !status.IsClean()})
-	}
-	if err != nil {
+	// See CheckoutBranch for why checkout uses native git instead of go-git.
+	if _, err := r.RunGitCommandWithContext(ctx, "checkout", "--detach", revision); err != nil {
 		return fmt.Errorf("failed to checkout %s in detached state: %w", revision, err)
 	}
 	return nil

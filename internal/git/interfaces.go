@@ -43,7 +43,7 @@ type RemoteOperations interface {
 	FetchMetadataRefs(ctx context.Context) error
 	DeleteRemoteMetadataRef(ctx context.Context, branch string) error
 	BatchDeleteRemoteMetadataRefs(ctx context.Context, branches []string) error
-	TestRemoteRefCompatibility() error
+	TestRemoteRefCompatibility(ctx context.Context) error
 	PushStackMetaRefs(ctx context.Context, stackIDs []string) error
 	FetchStackMetaRefs(ctx context.Context) error
 	DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []string) error
@@ -206,7 +206,7 @@ type WorktreeOperations interface {
 type WorktreeRegistryOperations interface {
 	ReadWorktreeMeta(stackRoot string) (*WorktreeMeta, error)
 	WriteWorktreeMeta(stackRoot string, meta *WorktreeMeta) error
-	DeleteWorktreeMeta(stackRoot string) error
+	DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 	ListWorktreeMetas() (map[string]*WorktreeMeta, error)
 }
 
@@ -226,7 +226,7 @@ type RefOperations interface {
 	UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate, reflogMessage string) error
 	DeleteRefsBatch(ctx context.Context, refNames []string) error
 	VerifyRef(ctx context.Context, refName string) error
-	DeleteRef(name string) error
+	DeleteRef(ctx context.Context, name string) error
 	ListRefs(prefix string) (map[string]string, error)
 }
 
@@ -242,7 +242,7 @@ type MetadataOperations interface {
 	ReadMetadata(branchName string) (*Meta, error)
 	BatchReadMetadata(branchNames []string) (map[string]*Meta, map[string]error)
 	WriteMetadata(branchName string, meta *Meta) error
-	DeleteMetadata(branchName string) error
+	DeleteMetadata(ctx context.Context, branchName string) error
 	RenameMetadata(oldName, newName string) error
 	ListMetadata() (map[string]string, error)
 	ReadLocalMetadata(branchName string) (*LocalMeta, error)
@@ -268,7 +268,7 @@ type MetadataOperations interface {
 type StackMetadataOperations interface {
 	ReadStackMeta(stackID string) (*StackMeta, error)
 	WriteStackMeta(stackID string, meta *StackMeta) error
-	DeleteStackMeta(stackID string) error
+	DeleteStackMeta(ctx context.Context, stackID string) error
 	ListStackMetas() (map[string]string, error)
 
 	// Transaction support methods

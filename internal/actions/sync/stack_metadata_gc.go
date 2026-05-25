@@ -56,7 +56,7 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 
 	// 4. Delete local refs
 	for _, stackID := range orphaned {
-		if err := ctx.Git().DeleteStackMeta(stackID); err != nil {
+		if err := ctx.Git().DeleteStackMeta(ctx.Context, stackID); err != nil {
 			result.Errors = append(result.Errors, "failed to delete local stack ref "+stackID+": "+err.Error())
 			ctx.Logger.Debug("failed to delete local stack ref stackID=%v error=%v", stackID, err)
 		} else {

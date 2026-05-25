@@ -50,13 +50,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Untrack recursively (descendants first, then the branch itself)
 	// Actually order doesn't strictly matter for metadata deletion but it's cleaner
 	for _, descendant := range descendants {
-		if err := eng.UntrackBranch(descendant.GetName()); err != nil {
+		if err := eng.UntrackBranch(ctx.Context, descendant.GetName()); err != nil {
 			return fmt.Errorf("failed to untrack descendant %s: %w", descendant.GetName(), err)
 		}
 		ctx.Output.Info("Stopped tracking %s.", style.ColorBranchName(descendant.GetName(), false))
 	}
 
-	if err := eng.UntrackBranch(branchName); err != nil {
+	if err := eng.UntrackBranch(ctx.Context, branchName); err != nil {
 		return fmt.Errorf("failed to untrack branch %s: %w", branchName, err)
 	}
 	ctx.Output.Info("Stopped tracking %s.", style.ColorBranchName(branchName, false))

@@ -11,6 +11,7 @@ package git
 //   - refs/stackit/remote-stacks/ - Fetched remote stack metadata
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -100,8 +101,8 @@ func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
 }
 
 // DeleteStackMeta deletes stack metadata for a given stack ID.
-func (r *runner) DeleteStackMeta(stackID string) error {
-	return r.DeleteRef(StackMetaRefName(stackID))
+func (r *runner) DeleteStackMeta(ctx context.Context, stackID string) error {
+	return r.DeleteRef(ctx, StackMetaRefName(stackID))
 }
 
 // ListStackMetas returns a map of stack IDs to their ref SHAs.

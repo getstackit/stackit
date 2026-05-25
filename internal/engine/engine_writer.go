@@ -145,9 +145,9 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 }
 
 // UntrackBranch stops tracking a branch by deleting its metadata
-func (e *engineImpl) UntrackBranch(branchName string) error {
+func (e *engineImpl) UntrackBranch(ctx context.Context, branchName string) error {
 	// Delete metadata
-	if err := e.git.DeleteMetadata(branchName); err != nil {
+	if err := e.git.DeleteMetadata(ctx, branchName); err != nil {
 		return fmt.Errorf("failed to delete metadata ref: %w", err)
 	}
 
@@ -195,12 +195,12 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	}
 
 	// Delete metadata
-	if err := e.git.DeleteMetadata(branchName); err != nil {
+	if err := e.git.DeleteMetadata(ctx, branchName); err != nil {
 		_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete metadata ref for %s: %v\n", branchName, err)
 	}
 
 	// Delete local metadata
-	if err := e.git.DeleteRef(fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, branchName)); err != nil {
+	if err := e.git.DeleteRef(ctx, fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, branchName)); err != nil {
 		_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete local metadata ref for %s: %v\n", branchName, err)
 	}
 
@@ -693,7 +693,7 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 	if sha, err := e.git.GetRef(oldLocalRef); err == nil {
 		if err := e.git.UpdateRef(newLocalRef, sha); err != nil {
 			_, _ = fmt.Fprintf(e.writer, "Warning: failed to update new local metadata ref: %v\n", err)
-		} else if err := e.git.DeleteRef(oldLocalRef); err != nil {
+		} else if err := e.git.DeleteRef(ctx, oldLocalRef); err != nil {
 			_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete old local metadata ref: %v\n", err)
 		}
 	}
@@ -926,8 +926,8 @@ func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, 
 }
 
 // UnregisterWorktree removes worktree registration for a stack root
-func (e *engineImpl) UnregisterWorktree(stackRoot string) error {
-	return e.git.DeleteWorktreeMeta(stackRoot)
+func (e *engineImpl) UnregisterWorktree(ctx context.Context, stackRoot string) error {
+	return e.git.DeleteWorktreeMeta(ctx, stackRoot)
 }
 
 // GetWorktreeForStack returns worktree info for a stack root, or nil if none

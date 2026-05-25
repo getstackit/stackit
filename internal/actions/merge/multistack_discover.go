@@ -33,9 +33,9 @@ func DiscoverStacksWithSort(eng engine.BranchReader, strategy engine.SortStrateg
 
 	stacks := make([]MultiStackInfo, 0, len(independentStacks))
 	for _, independentStack := range independentStacks {
-		branches := make([]engine.Branch, len(independentStack.Branches))
-		for i, branchName := range independentStack.Branches {
-			branches[i] = eng.GetBranch(branchName)
+		branches := engine.Branches{}
+		for _, branchName := range independentStack.Branches {
+			branches = branches.Append(eng.GetBranch(branchName))
 		}
 
 		// Get scope from the root branch
@@ -57,7 +57,7 @@ func DiscoverStacksWithSort(eng engine.BranchReader, strategy engine.SortStrateg
 }
 
 // countPRs counts how many branches in the list have associated PRs.
-func countPRs(branches []engine.Branch) int {
+func countPRs(branches engine.Branches) int {
 	count := 0
 	for _, branch := range branches {
 		prInfo, err := branch.GetPrInfo()

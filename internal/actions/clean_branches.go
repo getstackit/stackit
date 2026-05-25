@@ -201,12 +201,7 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 
 	// Collect non-trunk candidate branch names
 	allTrackedBranches := eng.AllBranches()
-	candidateNames := make([]string, 0, len(allTrackedBranches))
-	for _, branch := range allTrackedBranches {
-		if !branch.IsTrunk() {
-			candidateNames = append(candidateNames, branch.GetName())
-		}
-	}
+	candidateNames := allTrackedBranches.WithoutTrunk().Names()
 
 	// Single batch call to engine for deletion statuses
 	statuses, err := eng.BatchGetDeletionStatuses(c, candidateNames)
@@ -389,11 +384,11 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		}
 
 		// Prepare engine branches and track parents
-		branches := make([]engine.Branch, len(batchNames))
+		branches := engine.Branches{}
 		parents := make(map[string]string)
-		for i, name := range batchNames {
+		for _, name := range batchNames {
 			branch := eng.GetBranch(name)
-			branches[i] = branch
+			branches = branches.Append(branch)
 			parents[name] = getParentName(branch)
 		}
 

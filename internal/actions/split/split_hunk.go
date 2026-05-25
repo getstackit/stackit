@@ -490,7 +490,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Restack branchToSplit onto the new parent
-	if err := actions.RestackBranches(ctx, []engine.Branch{branchToSplit}); err != nil {
+	if err := actions.RestackBranches(ctx, engine.BranchesOf(branchToSplit)); err != nil {
 		return fmt.Errorf("failed to restack %s: %w", branchToSplit.GetName(), err)
 	}
 
@@ -820,9 +820,9 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 	// Restack the children that were reparented
 	if len(existingChildren) > 0 {
-		childBranches := make([]engine.Branch, 0, len(existingChildren))
+		childBranches := engine.Branches{}
 		for _, name := range existingChildren {
-			childBranches = append(childBranches, eng.GetBranch(name))
+			childBranches = childBranches.Append(eng.GetBranch(name))
 		}
 		if err := actions.RestackBranches(ctx, childBranches); err != nil {
 			return fmt.Errorf("failed to restack children: %w", err)

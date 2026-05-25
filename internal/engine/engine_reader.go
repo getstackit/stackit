@@ -9,15 +9,15 @@ import (
 	"github.com/getstackit/stackit/internal/errors"
 )
 
-// AllBranches returns all branches
-func (e *engineImpl) AllBranches() []Branch {
+// AllBranches returns all branches.
+func (e *engineImpl) AllBranches() Branches {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	branches := make([]Branch, len(e.state.branches))
 	for i, name := range e.state.branches {
 		branches[i] = NewBranch(name, e)
 	}
-	return branches
+	return NewBranches(branches)
 }
 
 // BranchNames returns a cached BranchSet for O(1) branch name lookups.

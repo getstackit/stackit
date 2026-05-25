@@ -45,7 +45,7 @@ func HasForeachWork(ctx *app.Context, opts Options) (bool, error) {
 		return false, errors.ErrNotOnBranch
 	}
 
-	var branches []engine.Branch
+	var branches engine.Branches
 	if multiStack {
 		multiStackBranches, err := collectMultiStackBranches(eng, opts)
 		if err != nil {
@@ -88,7 +88,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Build graph once — needed for scope range and for find-first-failure depth grouping.
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 
-	var branches []engine.Branch
+	var branches engine.Branches
 	if multiStack {
 		multiStackBranches, err := collectMultiStackBranches(eng, opts)
 		if err != nil {
@@ -114,12 +114,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Filter out trunk branches
-	nonTrunkBranches := make([]engine.Branch, 0, len(branches))
-	for _, branch := range branches {
-		if !branch.IsTrunk() {
-			nonTrunkBranches = append(nonTrunkBranches, branch)
-		}
-	}
+	nonTrunkBranches := branches.WithoutTrunk()
 
 	if len(nonTrunkBranches) == 0 {
 		handler.OnEvent(CompletionEvent{Success: true, Message: "No branches to process"})
@@ -131,7 +126,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if currentBranch != nil {
 		currentBranchName = currentBranch.GetName()
 	}
-	stackTree := tree.NewStackTree(nonTrunkBranches, currentBranchName, eng.Trunk().GetName())
+	stackTree := tree.NewStackTree(nonTrunkBranches.All(), currentBranchName, eng.Trunk().GetName())
 
 	// Display the stack
 	fullCommand := strings.Join(append([]string{opts.Command}, opts.Args...), " ")
@@ -158,7 +153,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	return foreachSequential(ctx, opts, nonTrunkBranches, handler)
 }
 
-func foreachSequential(ctx *app.Context, opts Options, branches []engine.Branch, handler Handler) error {
+func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches, handler Handler) error {
 	eng := ctx.Engine
 	out := ctx.Output
 
@@ -292,7 +287,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches []engine.Branch,
 	return nil
 }
 
-func foreachParallel(ctx *app.Context, opts Options, branches []engine.Branch, handler Handler) error {
+func foreachParallel(ctx *app.Context, opts Options, branches engine.Branches, handler Handler) error {
 	fullCommand, approvedHooks, numJobs := prepareWorktreeRun(ctx, opts)
 	sortedResults := runBranchesInWorktrees(ctx, opts, branches, handler, fullCommand, approvedHooks, numJobs)
 
@@ -343,7 +338,7 @@ func prepareWorktreeRun(ctx *app.Context, opts Options) (string, []string, int) 
 	return fullCommand, approvedHooks, numJobs
 }
 
-func foreachFindFirstFailure(ctx *app.Context, opts Options, branches []engine.Branch, graph *engine.StackGraph, handler Handler) error {
+func foreachFindFirstFailure(ctx *app.Context, opts Options, branches engine.Branches, graph *engine.StackGraph, handler Handler) error {
 	fullCommand, approvedHooks, numJobs := prepareWorktreeRun(ctx, opts)
 	branchesByDepth := groupBranchesByDepth(branches, graph)
 
@@ -375,10 +370,10 @@ func foreachFindFirstFailure(ctx *app.Context, opts Options, branches []engine.B
 
 type branchDepthGroup struct {
 	depth    int
-	branches []engine.Branch
+	branches engine.Branches
 }
 
-func groupBranchesByDepth(branches []engine.Branch, graph *engine.StackGraph) []branchDepthGroup {
+func groupBranchesByDepth(branches engine.Branches, graph *engine.StackGraph) []branchDepthGroup {
 	groups := []branchDepthGroup{}
 	groupByDepth := make(map[int]int)
 	for _, branch := range branches {
@@ -393,12 +388,12 @@ func groupBranchesByDepth(branches []engine.Branch, graph *engine.StackGraph) []
 			groupByDepth[depth] = idx
 			groups = append(groups, branchDepthGroup{depth: depth})
 		}
-		groups[idx].branches = append(groups[idx].branches, branch)
+		groups[idx].branches = groups[idx].branches.Append(branch)
 	}
 	return groups
 }
 
-func runBranchesInWorktrees(ctx *app.Context, opts Options, branches []engine.Branch, handler Handler, fullCommand string, hooks []string, numJobs int) []BranchResult {
+func runBranchesInWorktrees(ctx *app.Context, opts Options, branches engine.Branches, handler Handler, fullCommand string, hooks []string, numJobs int) []BranchResult {
 	type result struct {
 		branchName string
 		output     string
@@ -410,7 +405,7 @@ func runBranchesInWorktrees(ctx *app.Context, opts Options, branches []engine.Br
 	runCtx, cancel := context.WithCancel(ctx.Context)
 	defer cancel()
 
-	utils.RunWithWorkers(branches, numJobs, func(branch engine.Branch) {
+	utils.RunWithWorkers(branches.All(), numJobs, func(branch engine.Branch) {
 		select {
 		case <-runCtx.Done():
 			return
@@ -528,7 +523,7 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 
 // collectMultiStackBranches expands --all-stacks / --stacks into a flat branch list,
 // preserving independent-stack ordering and excluding trunk and untracked branches.
-func collectMultiStackBranches(eng engine.BranchReader, opts Options) ([]engine.Branch, error) {
+func collectMultiStackBranches(eng engine.BranchReader, opts Options) (engine.Branches, error) {
 	stacks := engine.DiscoverIndependentStacks(eng)
 	if len(opts.StackRoots) > 0 {
 		stackByRoot := make(map[string]engine.IndependentStack, len(stacks))
@@ -546,12 +541,12 @@ func collectMultiStackBranches(eng engine.BranchReader, opts Options) ([]engine.
 		stacks = filtered
 	}
 
-	branches := make([]engine.Branch, 0)
+	branches := engine.Branches{}
 	for _, stack := range stacks {
 		for _, branchName := range stack.Branches {
 			branch := eng.GetBranch(branchName)
 			if branch.IsTracked() && !branch.IsTrunk() {
-				branches = append(branches, branch)
+				branches = branches.Append(branch)
 			}
 		}
 	}

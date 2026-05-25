@@ -166,7 +166,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 	results := make(chan result, len(visibleBranches))
 
 	if len(visibleBranches) > 0 {
-		utils.Run(visibleBranches, func(branchObj engine.Branch) {
+		utils.Run(visibleBranches.All(), func(branchObj engine.Branch) {
 			annotation := buildLogAnnotation(ctx.Engine, branchObj, opts, wtData, enrichment)
 			results <- result{branchObj.GetName(), annotation}
 		})
@@ -228,14 +228,14 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 	return nil
 }
 
-func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opts tree.RenderOptions, branches []engine.Branch) []engine.Branch {
+func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opts tree.RenderOptions, branches engine.Branches) engine.Branches {
 	branchByName := make(map[string]engine.Branch, len(branches))
 	for _, b := range branches {
 		branchByName[b.GetName()] = b
 	}
 
 	rendered := renderer.RenderStackDetailed(branchName, opts)
-	visible := make([]engine.Branch, 0, len(rendered))
+	visible := engine.Branches{}
 	seen := make(map[string]struct{}, len(rendered))
 	for _, renderedBranch := range rendered {
 		if _, ok := seen[renderedBranch.Name]; ok {
@@ -243,7 +243,7 @@ func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opt
 		}
 		seen[renderedBranch.Name] = struct{}{}
 		if branch, ok := branchByName[renderedBranch.Name]; ok {
-			visible = append(visible, branch)
+			visible = visible.Append(branch)
 		}
 	}
 	return visible
@@ -283,11 +283,7 @@ func getUntrackedBranchNames(ctx *app.Context) []string {
 	untracked := engine.FilterBranches(ctx.Engine, func(b engine.Branch) bool {
 		return !b.IsTrunk() && !b.IsTracked()
 	})
-	names := make([]string, len(untracked))
-	for i, b := range untracked {
-		names[i] = b.GetName()
-	}
-	return names
+	return untracked.Names()
 }
 
 // logActionJSON generates JSON output for the log command
@@ -303,7 +299,7 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 
 	// Get all branches in stack order
-	var branchesToInclude []engine.Branch
+	var branchesToInclude engine.Branches
 	if opts.BranchName != "" && opts.BranchName != eng.Trunk().GetName() {
 		targetBranch := eng.GetBranch(opts.BranchName)
 		stackRange := engine.StackRange{
@@ -351,15 +347,15 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 	branchResults := make(chan branchResult, len(branchesToInclude))
 
 	// Filter out worktree anchors before parallel processing
-	var processable []engine.Branch
+	processable := engine.Branches{}
 	for _, b := range branchesToInclude {
 		if !b.IsWorktreeAnchor() {
-			processable = append(processable, b)
+			processable = processable.Append(b)
 		}
 	}
 
 	if len(processable) > 0 {
-		utils.Run(processable, func(branch engine.Branch) {
+		utils.Run(processable.All(), func(branch engine.Branch) {
 			branchName := branch.GetName()
 
 			info := LogBranchInfo{

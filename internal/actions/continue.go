@@ -102,10 +102,9 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 
 	// Continue with remaining branches to restack
 	if len(continuation.BranchesToRestack) > 0 {
-		// Convert []string to []Branch for RestackBranches
-		branches := make([]engine.Branch, len(continuation.BranchesToRestack))
-		for i, name := range continuation.BranchesToRestack {
-			branches[i] = eng.GetBranch(name)
+		branches := engine.Branches{}
+		for _, name := range continuation.BranchesToRestack {
+			branches = branches.Append(eng.GetBranch(name))
 		}
 		if err := RestackBranches(ctx, branches); err != nil {
 			return err

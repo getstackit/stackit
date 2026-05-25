@@ -183,7 +183,7 @@ func TestClassifyValidatedBranches(t *testing.T) {
 		}
 
 		success, conflicts := classifyValidatedBranches(
-			[]engine.Branch{mkBranch("a"), mkBranch("b")},
+			engine.BranchesOf(mkBranch("a"), mkBranch("b")),
 			plan,
 			validation,
 		)
@@ -206,7 +206,7 @@ func TestClassifyValidatedBranches(t *testing.T) {
 		}
 
 		success, conflicts := classifyValidatedBranches(
-			[]engine.Branch{mkBranch("frozen"), mkBranch("anchor")},
+			engine.BranchesOf(mkBranch("frozen"), mkBranch("anchor")),
 			plan,
 			validation,
 		)
@@ -236,7 +236,7 @@ func TestClassifyValidatedBranches(t *testing.T) {
 		}
 
 		success, conflicts := classifyValidatedBranches(
-			[]engine.Branch{mkBranch("alpha-canceled"), mkBranch("beta-conflict"), mkBranch("gamma-ok")},
+			engine.BranchesOf(mkBranch("alpha-canceled"), mkBranch("beta-conflict"), mkBranch("gamma-ok")),
 			plan,
 			validation,
 		)
@@ -257,7 +257,7 @@ func TestClassifyValidatedBranches(t *testing.T) {
 		}
 
 		success, conflicts := classifyValidatedBranches(
-			[]engine.Branch{mkBranch("a"), mkBranch("not-in-plan")},
+			engine.BranchesOf(mkBranch("a"), mkBranch("not-in-plan")),
 			plan,
 			validation,
 		)

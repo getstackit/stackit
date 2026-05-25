@@ -103,7 +103,7 @@ func TestCreatePRBodyFooter(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		// Lock the branch
-		_, err := s.Engine.SetLocked(context.Background(), []engine.Branch{s.Engine.GetBranch("feature-a")}, engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Use When: "always" to ensure footer is generated for single-branch stack
@@ -473,7 +473,7 @@ func TestCreateNavigationComment(t *testing.T) {
 		require.NoError(t, err)
 
 		// Lock the branch
-		_, err = s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Navigation comment should NOT contain lock message anymore
@@ -510,7 +510,7 @@ func TestCreateLockSection(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		// Lock the branch
-		_, err := s.Engine.SetLocked(context.Background(), []engine.Branch{s.Engine.GetBranch("feature-a")}, engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		section := CreateLockSection("feature-a", s.Engine)
@@ -538,7 +538,7 @@ func TestCreateLockSection(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		// Lock the branch with consolidating reason
-		_, err := s.Engine.SetLocked(context.Background(), []engine.Branch{s.Engine.GetBranch("feature-a")}, engine.LockReasonConsolidating)
+		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonConsolidating)
 		require.NoError(t, err)
 
 		section := CreateLockSection("feature-a", s.Engine)
@@ -643,7 +643,7 @@ func TestLockSectionIndependentFromNavigation(t *testing.T) {
 		require.NoError(t, err)
 
 		// Lock the branch
-		_, err = s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// With when=multiple and only 1 branch, navigation should NOT show

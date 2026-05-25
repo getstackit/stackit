@@ -270,10 +270,10 @@ func resolveBranchName(eng engine.Engine, out output.Output, input string) (stri
 	allBranches := eng.AllBranches()
 
 	// Try as scope - find topmost branch with this scope
-	var scopeBranches []engine.Branch
+	scopeBranches := engine.Branches{}
 	for _, b := range allBranches {
 		if !b.IsTrunk() && eng.GetScope(b).String() == input {
-			scopeBranches = append(scopeBranches, b)
+			scopeBranches = scopeBranches.Append(b)
 		}
 	}
 	if len(scopeBranches) > 0 {

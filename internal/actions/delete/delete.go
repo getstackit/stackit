@@ -63,25 +63,22 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 
 	// Determine branches to delete
-	toDelete := []engine.Branch{branch}
+	toDelete := engine.BranchesOf(branch)
 
 	if opts.Upstack {
 		upstack := graph.Range(branch, engine.StackRange{RecursiveChildren: true})
-		toDelete = append(toDelete, upstack...)
+		toDelete = toDelete.Concat(upstack)
 	}
 
 	if opts.Downstack {
 		downstack := graph.Range(branch, engine.StackRange{RecursiveParents: true})
-		toDelete = append(downstack, toDelete...)
+		toDelete = downstack.Concat(toDelete)
 	}
 
 	handler.Start(len(toDelete))
 
 	// Precompute deletion statuses once (used for confirmation and divergence-preserving reparenting).
-	toDeleteNames := make([]string, len(toDelete))
-	for i, b := range toDelete {
-		toDeleteNames[i] = b.GetName()
-	}
+	toDeleteNames := toDelete.Names()
 	statuses, err := eng.BatchGetDeletionStatuses(ctx.Context, toDeleteNames)
 	if err != nil {
 		return Result{}, fmt.Errorf("failed to check deletion statuses: %w", err)
@@ -160,10 +157,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	if len(childrenToRestack) > 0 {
 		handler.OnRestack(len(childrenToRestack))
 		out.Info("Restacking children of deleted %s...", actions.Pluralize("branch", len(toDelete)))
-		// Convert []string to []Branch for RestackBranches
-		branches := make([]engine.Branch, len(childrenToRestack))
-		for i, name := range childrenToRestack {
-			branches[i] = eng.GetBranch(name)
+		branches := engine.Branches{}
+		for _, name := range childrenToRestack {
+			branches = branches.Append(eng.GetBranch(name))
 		}
 		if err := actions.RestackBranches(ctx, branches); err != nil {
 			return Result{}, fmt.Errorf("failed to restack children: %w", err)
@@ -174,7 +170,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	return Result{MainRepoDirForSwitch: mainRepoDirForSwitch}, nil
 }
 
-func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete []engine.Branch, statuses map[string]engine.DeletionStatus) ([]string, error) {
+func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engine.Branches, statuses map[string]engine.DeletionStatus) ([]string, error) {
 	eng := ctx.Engine
 	gctx := ctx.Context
 	out := ctx.Output

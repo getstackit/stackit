@@ -93,13 +93,13 @@ const (
 )
 
 // RestackBranches restacks a list of branches using the engine's batch restack method
-func RestackBranches(ctx *app.Context, branches []engine.Branch) error {
+func RestackBranches(ctx *app.Context, branches engine.Branches) error {
 	return RestackBranchesWithHandler(ctx, branches, nil, ConflictModeEnterWorkflow)
 }
 
 // RestackBranchesWithHandler restacks branches with optional progress callback.
 // See ConflictMode for how mode controls conflict handling.
-func RestackBranchesWithHandler(ctx *app.Context, branches []engine.Branch, callback RestackProgressCallback, mode ConflictMode) error {
+func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, callback RestackProgressCallback, mode ConflictMode) error {
 	return restackBranchesWithPlan(ctx, branches, nil, callback, mode)
 }
 
@@ -108,17 +108,13 @@ func RestackBranchesWithHandler(ctx *app.Context, branches []engine.Branch, call
 // engine.PlanRestack call is skipped — used by RestackAction when the CLI
 // already built the plan to gate TUI initialization, so we don't pay for
 // roughly 3 git operations per branch twice per invocation.
-func restackBranchesWithPlan(ctx *app.Context, branches []engine.Branch, prePlan *engine.RestackPlan, callback RestackProgressCallback, mode ConflictMode) error {
+func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan *engine.RestackPlan, callback RestackProgressCallback, mode ConflictMode) error {
 	if len(branches) == 0 {
 		return nil
 	}
 
 	// Log entry point for diagnostics
-	branchNames := make([]string, len(branches))
-	for i, b := range branches {
-		branchNames[i] = b.GetName()
-	}
-	ctx.Logger.Info("restack started branches=%v count=%v", branchNames, len(branches))
+	ctx.Logger.Info("restack started branches=%v count=%v", branches.Names(), len(branches))
 
 	// Pre-flight validation: check branch ancestry relationships
 	if err := validateBranchAncestry(ctx, branches); err != nil {
@@ -264,7 +260,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches []engine.Branch, prePlan
 // engine would error with "missing validated SHA for X". Here we apply a
 // branch only if its action proves it's safe: Frozen/Anchor branches don't
 // touch a rebase worktree at all, and Validated branches need a confirmed SHA.
-func classifyValidatedBranches(branches []engine.Branch, plan *engine.RestackPlan, validation *engine.RebaseValidation) (success []engine.Branch, conflicts []string) {
+func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPlan, validation *engine.RebaseValidation) (success engine.Branches, conflicts []string) {
 	if plan == nil || validation == nil {
 		return nil, nil
 	}
@@ -280,10 +276,10 @@ func classifyValidatedBranches(branches []engine.Branch, plan *engine.RestackPla
 
 		switch item.Action {
 		case engine.RestackPlanApplyFrozen, engine.RestackPlanApplyAnchor:
-			success = append(success, branch)
+			success = success.Append(branch)
 		case engine.RestackPlanApplyValidated:
 			if _, hasSHA := validation.NewSHAs[branchName]; hasSHA {
-				success = append(success, branch)
+				success = success.Append(branch)
 			} else if branchName == validation.FailedBranch {
 				conflicts = append(conflicts, branchName)
 			}
@@ -327,7 +323,7 @@ func logRestackResults(ctx *app.Context, results map[string]engine.RestackBranch
 // reportPlannedResults streams pre-skipped branch outcomes (locked, frozen,
 // anchor) produced by PlanRestack. Branches that go through the actual rebase
 // loop are reported via the engine's progress callback instead.
-func reportPlannedResults(ctx *app.Context, branches []engine.Branch, plannedResults map[string]engine.RestackBranchResult, callback RestackProgressCallback) {
+func reportPlannedResults(ctx *app.Context, branches engine.Branches, plannedResults map[string]engine.RestackBranchResult, callback RestackProgressCallback) {
 	if len(plannedResults) == 0 {
 		return
 	}
@@ -416,7 +412,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 
 // EnterConflictWorkflow performs the rebase to enter conflict state and persists continuation state.
 // This helper is shared between RestackBranchesWithHandler (standalone mode) and sync.RunSync (sync mode).
-func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches []engine.Branch) error {
+func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches engine.Branches) error {
 	// Detach HEAD before the real rebase. Validation already told us this rebase
 	// will conflict, so the worktree is about to be left in a long-lived rebase
 	// state. If the worktree is still "on a branch" (typically trunk, since
@@ -438,7 +434,7 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches [
 
 	// Perform rebase to enter conflict state
 	conflictBranch := ctx.Engine.GetBranch(firstConflict)
-	batchResult, err := ctx.Engine.RestackBranches(ctx.Context, []engine.Branch{conflictBranch})
+	batchResult, err := ctx.Engine.RestackBranches(ctx.Context, engine.BranchesOf(conflictBranch))
 	if err != nil {
 		return fmt.Errorf("failed to enter conflict state for %s: %w", firstConflict, err)
 	}
@@ -490,7 +486,7 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches [
 // validateBranchAncestry performs pre-flight checks on branch ancestry relationships.
 // Returns an error if any branch has invalid parent relationships.
 // Note: Missing parents are tolerated as buildRebaseSpecs will handle auto-reparenting.
-func validateBranchAncestry(ctx *app.Context, branches []engine.Branch) error {
+func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 	for _, branch := range branches {
 		branchName := branch.GetName()
 

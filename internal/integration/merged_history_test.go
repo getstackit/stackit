@@ -41,7 +41,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 
 		// Restack branch2 directly
 		branch2 := sh.Engine.GetBranch("branch2")
-		_, err = sh.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, err = sh.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 		require.NoError(t, err)
 
 		// Verify branch2 now has merged history
@@ -80,7 +80,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 
 		// Restack branch2
 		branch2 := sh.Engine.GetBranch("branch2")
-		_, err = sh.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, err = sh.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 		require.NoError(t, err)
 
 		// Get annotations for log display
@@ -122,7 +122,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 
 		// Restack branch2
 		branch2 := sh.Engine.GetBranch("branch2")
-		_, _ = sh.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, _ = sh.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 
 		// Now merge branch2
 		prNum2 := 101
@@ -138,7 +138,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 
 		// Restack branch3
 		branch3 := sh.Engine.GetBranch("branch3")
-		_, err := sh.Engine.RestackBranches(context.Background(), []engine.Branch{branch3})
+		_, err := sh.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch3))
 		require.NoError(t, err)
 
 		// Verify branch3 has full history: [branch1, branch2]
@@ -170,7 +170,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 
 		// Restack branch2
 		branch2 := sh.Engine.GetBranch("branch2")
-		_, _ = sh.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, _ = sh.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 
 		// Read metadata directly to verify it was persisted
 		meta2, err := sh.Engine.Git().ReadMetadata("branch2")

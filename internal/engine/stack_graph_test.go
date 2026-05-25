@@ -227,7 +227,7 @@ func TestStackGraphForEachDepth(t *testing.T) {
 		t.Parallel()
 
 		depthOrder := []int{}
-		err := graph.ForEachDepth(func(depth int, _ []engine.Branch) error {
+		err := graph.ForEachDepth(func(depth int, _ engine.Branches) error {
 			depthOrder = append(depthOrder, depth)
 			return nil
 		})
@@ -239,11 +239,9 @@ func TestStackGraphForEachDepth(t *testing.T) {
 		t.Parallel()
 
 		branchesAtDepth1 := []string{}
-		err := graph.ForEachDepth(func(depth int, branches []engine.Branch) error {
+		err := graph.ForEachDepth(func(depth int, branches engine.Branches) error {
 			if depth == 1 {
-				for _, b := range branches {
-					branchesAtDepth1 = append(branchesAtDepth1, b.GetName())
-				}
+				branchesAtDepth1 = branches.Names()
 			}
 			return nil
 		})
@@ -256,7 +254,7 @@ func TestStackGraphForEachDepth(t *testing.T) {
 
 		testErr := errors.New("test error")
 		callCount := 0
-		err := graph.ForEachDepth(func(depth int, _ []engine.Branch) error {
+		err := graph.ForEachDepth(func(depth int, _ engine.Branches) error {
 			callCount++
 			if depth == 1 {
 				return testErr

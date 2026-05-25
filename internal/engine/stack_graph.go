@@ -373,7 +373,7 @@ func (g *StackGraph) isAncestorOf(ancestor, descendant string) bool {
 // If fn returns an error, iteration stops and that error is returned.
 // Branches at the same depth can be processed in parallel by fn.
 // This is useful for operations like restacking where parents must complete before children.
-func (g *StackGraph) ForEachDepth(fn func(depth int, branches []Branch) error) error {
+func (g *StackGraph) ForEachDepth(fn func(depth int, branches Branches) error) error {
 	byDepth := g.GetBranchesByDepth()
 
 	// Get max depth
@@ -397,7 +397,7 @@ func (g *StackGraph) ForEachDepth(fn func(depth int, branches []Branch) error) e
 			branches[i] = g.nodes[name].Branch
 		}
 
-		if err := fn(depth, branches); err != nil {
+		if err := fn(depth, NewBranches(branches)); err != nil {
 			return err
 		}
 	}

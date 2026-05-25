@@ -261,14 +261,14 @@ func lockAndNotifyMultiStackPRs(ctx *app.Context, eng engine.Engine, includedSta
 	out := ctx.Output
 	out.Info("🔒 Locking individual PRs and updating status...")
 
-	branchesToLock := []engine.Branch{}
+	branchesToLock := engine.Branches{}
 	branchNames := []string{}
 
 	for _, stack := range includedStacks {
 		for _, branchName := range stack.AllBranches {
 			branch := eng.GetBranch(branchName)
 			if !branch.IsLocked() {
-				branchesToLock = append(branchesToLock, branch)
+				branchesToLock = branchesToLock.Append(branch)
 			}
 			branchNames = append(branchNames, branchName)
 		}

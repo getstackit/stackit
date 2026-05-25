@@ -10,7 +10,7 @@ import (
 
 // StackNavigator handles stack relationship queries
 type StackNavigator interface {
-	AllBranches() []Branch
+	AllBranches() Branches
 	BranchNames() *BranchSet
 	CurrentBranch() *Branch
 	Trunk() Branch

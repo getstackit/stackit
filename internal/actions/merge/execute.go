@@ -381,13 +381,21 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 			// Check if branch is checked out in a worktree and remove it first
 			// Git refuses to delete a branch that is checked out in any worktree
 			if err := removeWorktreeForBranch(ctx.Context, step.BranchName, eng, out); err != nil {
-				out.Debug("Failed to remove worktree for branch %s: %v", step.BranchName, err)
+				out.Warn("Failed to remove worktree for branch %s: %v", step.BranchName, err)
 				// Continue anyway - deletion might still work if worktree is gone
 			}
 
 			if err := eng.DeleteBranch(ctx.Context, branch); err != nil {
-				// Non-fatal - branch might already be deleted
-				out.Debug("Failed to delete branch %s (may already be deleted): %v", step.BranchName, err)
+				// Surface as warning so cleanup doesn't silently lie about success.
+				// Engine already swallows "branch not found" — any error here is a real failure
+				// the user needs to know about (e.g., branch checked out in another worktree).
+				out.Warn("Failed to delete branch %s: %v", step.BranchName, err)
+			} else {
+				// Drop the remote metadata ref so it doesn't linger on origin and surface as
+				// a phantom conflict next time someone runs sync.
+				if err := eng.Git().BatchDeleteRemoteMetadataRefs(ctx.Context, []string{step.BranchName}); err != nil {
+					out.Debug("Failed to delete remote metadata ref for %s: %v", step.BranchName, err)
+				}
 			}
 		}
 

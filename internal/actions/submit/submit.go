@@ -630,7 +630,7 @@ func pushMetadataRefs(ctx *app.Context, branches engine.Branches) error {
 
 	// Check if remote sync is enabled; if not, run compatibility test first
 	if !rm.IsRemoteSyncEnabled() {
-		if err := ctx.Git().TestRemoteRefCompatibility(); err != nil {
+		if err := ctx.Git().TestRemoteRefCompatibility(ctx.Context); err != nil {
 			return fmt.Errorf("remote does not support metadata refs (GitHub compatibility check failed): %w", err)
 		}
 		rm.SetRemoteSyncEnabled(true)

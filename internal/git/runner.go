@@ -952,18 +952,22 @@ func (r *runner) UpdateRef(name, sha string) error {
 	return nil
 }
 
-func (r *runner) DeleteRef(name string) error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-
+func (r *runner) DeleteRef(ctx context.Context, name string) error {
 	r.goGitMu.Lock()
 	defer r.goGitMu.Unlock()
 
-	if err := repo.Storer.RemoveReference(plumbing.ReferenceName(name)); err != nil {
+	// Use native git instead of go-git's RemoveReference: go-git's filesystem
+	// storer only handles loose refs, so deleting a ref packed into
+	// .git/packed-refs silently no-ops. `git update-ref -d` rewrites
+	// packed-refs correctly and is lenient when the ref doesn't exist.
+	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", "-d", name); err != nil {
+		return fmt.Errorf("failed to delete ref %s: %w", name, err)
+	}
+
+	if err := r.verifyRefDeleted(ctx, name); err != nil {
 		return err
 	}
+
 	r.metadataCache.InvalidateForRefNames([]string{name})
 	r.invalidateRevisionCacheForRefNames([]string{name})
 	return nil
@@ -1131,7 +1135,7 @@ func (r *runner) BatchDeleteRemoteMetadataRefs(ctx context.Context, branches []s
 	return r.pushOriginRefSpecs(ctx, refspecs)
 }
 
-func (r *runner) TestRemoteRefCompatibility() error {
+func (r *runner) TestRemoteRefCompatibility(ctx context.Context) error {
 	testRef := "refs/stackit/metadata/stackit-compat-test"
 	testContent := fmt.Sprintf(`{"test":true,"timestamp":%d}`, time.Now().Unix())
 
@@ -1146,14 +1150,14 @@ func (r *runner) TestRemoteRefCompatibility() error {
 		return fmt.Errorf("failed to update local test ref: %w", err)
 	}
 
-	if err := r.pushOriginRefSpecs(context.Background(), []gitcfg.RefSpec{gitcfg.RefSpec("+" + testRef)}); err != nil {
-		_ = r.DeleteRef(testRef) // Cleanup local
+	if err := r.pushOriginRefSpecs(ctx, []gitcfg.RefSpec{gitcfg.RefSpec("+" + testRef)}); err != nil {
+		_ = r.DeleteRef(ctx, testRef) // Cleanup local
 		return fmt.Errorf("remote rejected metadata ref push: %w", err)
 	}
 
 	// Cleanup: delete remote and local test ref
-	_ = r.pushOriginRefSpecs(context.Background(), []gitcfg.RefSpec{gitcfg.RefSpec(":" + testRef)})
-	_ = r.DeleteRef(testRef)
+	_ = r.pushOriginRefSpecs(ctx, []gitcfg.RefSpec{gitcfg.RefSpec(":" + testRef)})
+	_ = r.DeleteRef(ctx, testRef)
 
 	return nil
 }

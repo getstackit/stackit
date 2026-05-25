@@ -325,7 +325,7 @@ func TestCreateAction_Worktree(t *testing.T) {
 
 		// Clean up worktree
 		_ = eng.RemoveWorktree(s.Context.Context, worktreeInfo.Path)
-		_ = eng.UnregisterWorktree(stackRoot)
+		_ = eng.UnregisterWorktree(s.Context.Context, stackRoot)
 	})
 
 	t.Run("fails with -w flag when not on trunk", func(t *testing.T) {

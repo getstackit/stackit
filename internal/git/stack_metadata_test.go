@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -68,7 +69,7 @@ func TestStackMetaOperations(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete
-		err = runner.DeleteStackMeta(stackID)
+		err = runner.DeleteStackMeta(context.Background(), stackID)
 		require.NoError(t, err)
 
 		// Verify deleted

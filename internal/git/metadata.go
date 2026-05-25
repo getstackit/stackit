@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -241,9 +242,9 @@ func (r *runner) WriteMetadata(branchName string, meta *Meta) error {
 	return nil
 }
 
-func (r *runner) DeleteMetadata(branchName string) error {
+func (r *runner) DeleteMetadata(ctx context.Context, branchName string) error {
 	refName := fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
-	err := r.DeleteRef(refName)
+	err := r.DeleteRef(ctx, refName)
 	r.metadataCache.Delete(branchName)
 	return err
 }

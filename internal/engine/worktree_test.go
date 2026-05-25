@@ -49,7 +49,7 @@ func TestWorktreeRegistry_StackRootForBranch(t *testing.T) {
 	assert.Equal(t, "branch1", stackRoot)
 
 	// Clean up
-	_ = s.Engine.UnregisterWorktree("branch1")
+	_ = s.Engine.UnregisterWorktree(s.Context, "branch1")
 }
 
 func TestCreateTemporaryWorktree(t *testing.T) {

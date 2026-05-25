@@ -96,7 +96,7 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors map[string]bool) *Wor
 			continue
 		}
 
-		if unregErr := ctx.Engine.UnregisterWorktree(wt.AnchorBranch); unregErr != nil {
+		if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, wt.AnchorBranch); unregErr != nil {
 			result.Errors = append(result.Errors,
 				"failed to unregister worktree for "+wt.AnchorBranch+": "+unregErr.Error())
 			ctx.Output.Debug("Failed to unregister worktree for %s: %v", wt.AnchorBranch, unregErr)

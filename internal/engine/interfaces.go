@@ -123,7 +123,7 @@ type BranchReader interface {
 // BranchTracking handles branch tracking operations
 type BranchTracking interface {
 	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
-	UntrackBranch(branchName string) error
+	UntrackBranch(ctx context.Context, branchName string) error
 	SetParent(ctx context.Context, branch Branch, parentBranch Branch) error
 	// ReparentBranch changes a branch's parent while automatically preserving
 	// its divergence point. Preferred over SetParent for existing branches.
@@ -233,7 +233,7 @@ type WorktreeRegistry interface {
 	// RegisterWorktreeWithName registers a worktree with a user-friendly name
 	RegisterWorktreeWithName(anchorBranch string, path string, name string) error
 	// UnregisterWorktree removes worktree registration for a stack root
-	UnregisterWorktree(stackRoot string) error
+	UnregisterWorktree(ctx context.Context, stackRoot string) error
 	// GetWorktreeForStack returns worktree info for a stack root, or nil if none
 	GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error)
 	// ListManagedWorktrees returns all stackit-managed worktrees

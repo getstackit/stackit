@@ -40,7 +40,7 @@ func TestListAction(t *testing.T) {
 		assert.True(t, result.Worktrees[0].NeedsRepair)
 
 		// Clean up
-		_ = s.Engine.UnregisterWorktree("feature-stack")
+		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
 	})
 
 	t.Run("marks legacy registrations", func(t *testing.T) {
@@ -60,7 +60,7 @@ func TestListAction(t *testing.T) {
 		assert.True(t, result.Worktrees[0].NeedsRepair)
 		assert.Equal(t, []string{"feature"}, result.Worktrees[0].RootBranches)
 
-		_ = s.Engine.UnregisterWorktree("feature")
+		_ = s.Engine.UnregisterWorktree(s.Context, "feature")
 	})
 }
 
@@ -146,7 +146,7 @@ func TestOpenAction(t *testing.T) {
 		assert.Contains(t, err.Error(), "does not exist")
 
 		// Clean up
-		_ = s.Engine.UnregisterWorktree("feature-stack")
+		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
 	})
 
 	t.Run("returns path when worktree exists", func(t *testing.T) {
@@ -165,7 +165,7 @@ func TestOpenAction(t *testing.T) {
 		assert.Equal(t, repoRoot, path)
 
 		// Clean up
-		_ = s.Engine.UnregisterWorktree("feature-stack")
+		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
 	})
 }
 
@@ -191,7 +191,7 @@ func TestCreateAction(t *testing.T) {
 
 		// Clean up worktree
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
-		_ = s.Engine.UnregisterWorktree(result.AnchorBranch)
+		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
 	t.Run("fails when name is empty", func(t *testing.T) {
@@ -235,7 +235,7 @@ func TestCreateAction(t *testing.T) {
 
 		// Clean up
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
-		_ = s.Engine.UnregisterWorktree(result.AnchorBranch)
+		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
 	t.Run("creates worktree with anchor branch", func(t *testing.T) {
@@ -266,7 +266,7 @@ func TestCreateAction(t *testing.T) {
 
 		// Clean up worktree
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
-		_ = s.Engine.UnregisterWorktree(result.AnchorBranch)
+		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
 	t.Run("creates worktree with scope", func(t *testing.T) {
@@ -287,7 +287,7 @@ func TestCreateAction(t *testing.T) {
 
 		// Clean up worktree
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
-		_ = s.Engine.UnregisterWorktree(result.AnchorBranch)
+		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 }
 
@@ -320,6 +320,6 @@ func TestRepairAction(t *testing.T) {
 		assert.True(t, s.Engine.GetBranch(result.Repaired[0].AnchorBranch).IsWorktreeAnchor())
 		assert.Equal(t, result.Repaired[0].AnchorBranch, s.Engine.GetBranch("feature").GetParent().GetName())
 
-		_ = s.Engine.UnregisterWorktree(result.Repaired[0].AnchorBranch)
+		_ = s.Engine.UnregisterWorktree(s.Context, result.Repaired[0].AnchorBranch)
 	})
 }

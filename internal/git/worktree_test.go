@@ -121,7 +121,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete it
-		err = runner.DeleteWorktreeMeta("feature-branch")
+		err = runner.DeleteWorktreeMeta(context.Background(), "feature-branch")
 		require.NoError(t, err)
 
 		// Verify it's gone

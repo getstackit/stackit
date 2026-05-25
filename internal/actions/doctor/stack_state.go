@@ -38,7 +38,7 @@ func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, wa
 		if !branchSet[branchName] {
 			orphanedCount++
 			if fix {
-				if err := eng.Git().DeleteMetadata(branchName); err != nil {
+				if err := eng.Git().DeleteMetadata(ctx, branchName); err != nil {
 					warnings++
 					handler.OnCheck("orphaned_metadata", CheckWarning, fmt.Sprintf("orphaned metadata for '%s' (fix failed: %v)", branchName, err))
 				} else {

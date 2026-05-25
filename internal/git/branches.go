@@ -86,18 +86,36 @@ func (r *runner) CreateAndCheckoutBranch(ctx context.Context, branchName string)
 }
 
 func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
+	refName := fmt.Sprintf("refs/heads/%s", branchName)
 
 	r.goGitMu.Lock()
 	defer r.goGitMu.Unlock()
-	err = repo.Storer.RemoveReference(plumbing.NewBranchReferenceName(branchName))
-	if err != nil {
+
+	// Use native git instead of go-git's RemoveReference: go-git's filesystem
+	// storer only handles loose refs, so deleting a branch packed into
+	// .git/packed-refs silently no-ops (returns nil while the ref survives).
+	// `git update-ref -d` rewrites packed-refs correctly and is lenient when
+	// the ref doesn't exist.
+	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", "-d", refName); err != nil {
 		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
 	}
+
+	if err := r.verifyRefDeleted(ctx, refName); err != nil {
+		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
+	}
+
 	r.revisionCache.Delete(branchName)
+	return nil
+}
+
+// verifyRefDeleted returns an error if the ref still resolves after a delete.
+// Defense against silent failures in the underlying storage layer (e.g. when a
+// ref deletion appears to succeed but a packed entry survives).
+func (r *runner) verifyRefDeleted(ctx context.Context, refName string) error {
+	_, err := r.RunGitCommandRawWithContext(ctx, "show-ref", "--verify", "--quiet", refName)
+	if err == nil {
+		return fmt.Errorf("ref %s still resolves after delete", refName)
+	}
 	return nil
 }
 

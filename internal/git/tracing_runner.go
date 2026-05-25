@@ -239,9 +239,9 @@ func (t *tracingRunner) BatchDeleteRemoteMetadataRefs(ctx context.Context, branc
 	return err
 }
 
-func (t *tracingRunner) TestRemoteRefCompatibility() error {
+func (t *tracingRunner) TestRemoteRefCompatibility(ctx context.Context) error {
 	start := time.Now()
-	err := t.inner.TestRemoteRefCompatibility()
+	err := t.inner.TestRemoteRefCompatibility(ctx)
 	t.trace("TestRemoteRefCompatibility", time.Since(start), err == nil, err)
 	return err
 }
@@ -931,9 +931,9 @@ func (t *tracingRunner) WriteWorktreeMeta(stackRoot string, meta *WorktreeMeta) 
 	return err
 }
 
-func (t *tracingRunner) DeleteWorktreeMeta(stackRoot string) error {
+func (t *tracingRunner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error {
 	// Don't trace - delegates to DeleteRef which is traced
-	return t.inner.DeleteWorktreeMeta(stackRoot)
+	return t.inner.DeleteWorktreeMeta(ctx, stackRoot)
 }
 
 func (t *tracingRunner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
@@ -1017,9 +1017,9 @@ func (t *tracingRunner) VerifyRef(ctx context.Context, refName string) error {
 	return err
 }
 
-func (t *tracingRunner) DeleteRef(name string) error {
+func (t *tracingRunner) DeleteRef(ctx context.Context, name string) error {
 	start := time.Now()
-	err := t.inner.DeleteRef(name)
+	err := t.inner.DeleteRef(ctx, name)
 	t.trace("DeleteRef", time.Since(start), err == nil, err, slog.String("ref", name))
 	return err
 }
@@ -1076,9 +1076,9 @@ func (t *tracingRunner) WriteMetadata(branchName string, meta *Meta) error {
 	return err
 }
 
-func (t *tracingRunner) DeleteMetadata(branchName string) error {
+func (t *tracingRunner) DeleteMetadata(ctx context.Context, branchName string) error {
 	// Don't trace - delegates to DeleteRef which is traced
-	return t.inner.DeleteMetadata(branchName)
+	return t.inner.DeleteMetadata(ctx, branchName)
 }
 
 func (t *tracingRunner) ClearMetadataCache() {
@@ -1215,9 +1215,9 @@ func (t *tracingRunner) WriteStackMeta(stackID string, meta *StackMeta) error {
 	return err
 }
 
-func (t *tracingRunner) DeleteStackMeta(stackID string) error {
+func (t *tracingRunner) DeleteStackMeta(ctx context.Context, stackID string) error {
 	// Don't trace - delegates to DeleteRef which is traced
-	return t.inner.DeleteStackMeta(stackID)
+	return t.inner.DeleteStackMeta(ctx, stackID)
 }
 
 func (t *tracingRunner) ListStackMetas() (map[string]string, error) {

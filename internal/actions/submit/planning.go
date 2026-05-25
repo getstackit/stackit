@@ -9,7 +9,7 @@ import (
 )
 
 // prepareBranchesForSubmit prepares submission info for each branch, emitting events via handler
-func prepareBranchesForSubmit(ctx *app.Context, branches []engine.Branch, opts Options, currentBranch string, handler Handler) ([]Info, error) {
+func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, handler Handler) ([]Info, error) {
 	submissionInfos := make([]Info, 0, len(branches))
 	nav := ctx.Navigator()
 
@@ -142,10 +142,7 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 	}
 	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
 	stackBranches := graph.Range(nav.GetBranch(branchName), stackRange)
-	allBranches := make([]string, len(stackBranches))
-	for i, b := range stackBranches {
-		allBranches[i] = b.GetName()
-	}
+	allBranches := stackBranches.Names()
 
 	// Remove duplicates, trunk, and worktree anchor branches (which are not submittable)
 	branches := []string{}

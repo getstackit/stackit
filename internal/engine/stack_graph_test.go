@@ -23,13 +23,8 @@ func TestStackGraphRangeAncestorsExcludeTrunk(t *testing.T) {
 	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 	branches := graph.Range(s.Engine.GetBranch("branch2"), engine.StackRange{RecursiveParents: true})
 
-	names := make([]string, 0, len(branches))
-	for _, b := range branches {
-		names = append(names, b.GetName())
-	}
-
-	require.Equal(t, []string{"branch1"}, names)
-	require.NotContains(t, names, "main")
+	require.Equal(t, []string{"branch1"}, branches.Names())
+	require.False(t, branches.Contains("main"))
 }
 
 func TestStackGraphRangeDescendantsOrderParentsFirst(t *testing.T) {
@@ -48,10 +43,7 @@ func TestStackGraphRangeDescendantsOrderParentsFirst(t *testing.T) {
 		RecursiveChildren: true,
 	})
 
-	names := make([]string, 0, len(branches))
-	for _, b := range branches {
-		names = append(names, b.GetName())
-	}
+	names := branches.Names()
 
 	require.Len(t, names, 4)
 	require.Contains(t, names, "stackA")
@@ -87,10 +79,7 @@ func TestStackGraphFilterPrunesSubtrees(t *testing.T) {
 		RecursiveChildren: true,
 	})
 
-	names := make([]string, 0, len(branches))
-	for _, b := range branches {
-		names = append(names, b.GetName())
-	}
+	names := branches.Names()
 
 	require.Contains(t, names, "a")
 	require.Contains(t, names, "a1")
@@ -151,7 +140,7 @@ func TestStackGraphCollectBranches(t *testing.T) {
 	t.Run("collects all descendants depth-first", func(t *testing.T) {
 		t.Parallel()
 		branches := graph.CollectBranches(s.Engine.GetBranch("a"))
-		names := branchNames(branches)
+		names := branches.Names()
 
 		require.Len(t, names, 3)
 		require.Equal(t, "a", names[0], "root should be first")
@@ -162,7 +151,7 @@ func TestStackGraphCollectBranches(t *testing.T) {
 	t.Run("leaf branch returns only itself", func(t *testing.T) {
 		t.Parallel()
 		branches := graph.CollectBranches(s.Engine.GetBranch("b"))
-		names := branchNames(branches)
+		names := branches.Names()
 
 		require.Equal(t, []string{"b"}, names)
 	})
@@ -170,7 +159,7 @@ func TestStackGraphCollectBranches(t *testing.T) {
 	t.Run("collects from trunk", func(t *testing.T) {
 		t.Parallel()
 		branches := graph.CollectBranches(s.Engine.Trunk())
-		names := branchNames(branches)
+		names := branches.Names()
 
 		require.Len(t, names, 5)
 		require.Equal(t, "main", names[0], "trunk should be first")
@@ -220,14 +209,6 @@ func TestStackGraphIsRelated(t *testing.T) {
 	})
 }
 
-func branchNames(branches []engine.Branch) []string {
-	names := make([]string, len(branches))
-	for i, b := range branches {
-		names[i] = b.GetName()
-	}
-	return names
-}
-
 func TestStackGraphForEachDepth(t *testing.T) {
 	t.Parallel()
 
@@ -246,7 +227,7 @@ func TestStackGraphForEachDepth(t *testing.T) {
 		t.Parallel()
 
 		depthOrder := []int{}
-		err := graph.ForEachDepth(func(depth int, _ []engine.Branch) error {
+		err := graph.ForEachDepth(func(depth int, _ engine.Branches) error {
 			depthOrder = append(depthOrder, depth)
 			return nil
 		})
@@ -254,15 +235,38 @@ func TestStackGraphForEachDepth(t *testing.T) {
 		require.Equal(t, []int{0, 1, 2, 3}, depthOrder)
 	})
 
+	t.Run("DepthGroups exposes named grouped traversal", func(t *testing.T) {
+		t.Parallel()
+
+		groups := graph.DepthGroups()
+		require.Len(t, groups, 4)
+		require.Equal(t, 0, groups[0].Depth)
+		require.Equal(t, []string{"main"}, groups[0].Branches.Names())
+		require.Equal(t, 1, groups[1].Depth)
+		require.Equal(t, []string{"a", "b"}, groups[1].Branches.Names())
+	})
+
+	t.Run("DepthGroupsSeq supports early exit", func(t *testing.T) {
+		t.Parallel()
+
+		seen := []int{}
+		for group := range graph.DepthGroupsSeq() {
+			seen = append(seen, group.Depth)
+			if group.Depth == 1 {
+				break
+			}
+		}
+
+		require.Equal(t, []int{0, 1}, seen)
+	})
+
 	t.Run("branches at same depth are independent", func(t *testing.T) {
 		t.Parallel()
 
 		branchesAtDepth1 := []string{}
-		err := graph.ForEachDepth(func(depth int, branches []engine.Branch) error {
+		err := graph.ForEachDepth(func(depth int, branches engine.Branches) error {
 			if depth == 1 {
-				for _, b := range branches {
-					branchesAtDepth1 = append(branchesAtDepth1, b.GetName())
-				}
+				branchesAtDepth1 = branches.Names()
 			}
 			return nil
 		})
@@ -275,7 +279,7 @@ func TestStackGraphForEachDepth(t *testing.T) {
 
 		testErr := errors.New("test error")
 		callCount := 0
-		err := graph.ForEachDepth(func(depth int, _ []engine.Branch) error {
+		err := graph.ForEachDepth(func(depth int, _ engine.Branches) error {
 			callCount++
 			if depth == 1 {
 				return testErr
@@ -331,7 +335,7 @@ func TestStackGraphBranchesAtDepth(t *testing.T) {
 	t.Run("returns branches at depth 1", func(t *testing.T) {
 		t.Parallel()
 		branches := graph.BranchesAtDepth(1)
-		names := branchNames(branches)
+		names := branches.Names()
 		require.ElementsMatch(t, []string{"a", "b"}, names)
 	})
 

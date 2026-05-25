@@ -27,12 +27,12 @@ func UnfreezeAction(ctx *app.Context, branchName string) error {
 		RecursiveChildren: true,
 	})
 
-	branchesToUnfreeze := []engine.Branch{}
+	branchesToUnfreeze := engine.Branches{}
 	for _, b := range branches {
 		if b.IsTrunk() {
 			continue
 		}
-		branchesToUnfreeze = append(branchesToUnfreeze, b)
+		branchesToUnfreeze = branchesToUnfreeze.Append(b)
 	}
 
 	if len(branchesToUnfreeze) > 0 {

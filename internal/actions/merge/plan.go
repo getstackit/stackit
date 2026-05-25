@@ -189,10 +189,10 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 	if opts.Scope != "" {
 		// Collect all branches with the specified scope
-		scopeBranches := []engine.Branch{}
+		scopeBranches := engine.Branches{}
 		for _, b := range eng.AllBranches() {
 			if !b.IsTrunk() && eng.GetScope(b).String() == opts.Scope {
-				scopeBranches = append(scopeBranches, b)
+				scopeBranches = scopeBranches.Append(b)
 			}
 		}
 		if len(scopeBranches) == 0 {
@@ -201,10 +201,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 		// Sort branches topologically so we merge in correct order (bottom to top)
 		scopeBranches = eng.SortBranchesTopologically(scopeBranches)
-		allBranches = make([]string, len(scopeBranches))
-		for i, b := range scopeBranches {
-			allBranches[i] = b.GetName()
-		}
+		allBranches = scopeBranches.Names()
 		// In scope mode, the "current branch" for the plan is the top-most branch in the scope
 		planCurrentBranch = allBranches[len(allBranches)-1]
 	} else {

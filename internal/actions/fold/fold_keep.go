@@ -19,10 +19,10 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 	allChildren := graph.ChildBranches(parentBranch)
 
 	// Identify siblings (children of parent excluding current branch)
-	siblings := []engine.Branch{}
+	siblings := engine.Branches{}
 	for _, child := range allChildren {
 		if child.GetName() != currentBranch.GetName() {
-			siblings = append(siblings, child)
+			siblings = siblings.Append(child)
 		}
 	}
 

@@ -15,7 +15,7 @@ type Selection struct {
 	out          output.Output
 	source       string
 	sourceBranch engine.Branch
-	descendants  []engine.Branch
+	descendants  engine.Branches
 	oldParent    *engine.Branch
 	oldParentRev string
 }
@@ -53,7 +53,7 @@ func PrepareSelection(ctx *app.Context, source string) (*Selection, error) {
 }
 
 // Descendants returns the descendant branches (including the source).
-func (s *Selection) Descendants() []engine.Branch {
+func (s *Selection) Descendants() engine.Branches {
 	return s.descendants
 }
 

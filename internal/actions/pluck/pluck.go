@@ -90,16 +90,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if handler.IsInteractive() && !opts.SkipConfirm {
 		commits, _ := eng.GetAllCommits(sourceBranch, engine.CommitFormatSubject)
 
-		var childNames []string
-		for _, c := range children {
-			childNames = append(childNames, c.GetName())
-		}
-
 		preview := Preview{
 			SourceBranch:   source,
 			OldParent:      oldParentName,
 			NewParent:      onto,
-			Children:       childNames,
+			Children:       children.Names(),
 			ChildNewParent: oldParentName,
 			Commits:        commits,
 		}
@@ -253,7 +248,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Collect all branches that need restacking:
 	// 1. The children (now on grandparent) and their descendants
 	// 2. The source branch (now on new parent)
-	var branchesToRestack []engine.Branch
+	branchesToRestack := engine.Branches{}
 
 	for _, child := range children {
 		childBranch := eng.GetBranch(child.GetName())
@@ -262,12 +257,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			IncludeCurrent:    true,
 			RecursiveParents:  false,
 		})
-		branchesToRestack = append(branchesToRestack, childDescendants...)
+		branchesToRestack = branchesToRestack.Concat(childDescendants)
 	}
 
 	// Add source branch
 	sourceBranch = eng.GetBranch(source)
-	branchesToRestack = append(branchesToRestack, sourceBranch)
+	branchesToRestack = branchesToRestack.Append(sourceBranch)
 
 	if err := actions.RestackBranches(ctx, branchesToRestack); err != nil {
 		handler.OnStep(StepRestackingOrphans, basehandler.StatusFailed, err.Error())

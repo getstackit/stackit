@@ -88,10 +88,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Filter out trunk - we only flatten feature branches
 	trunk := eng.Trunk()
-	var featureBranches []engine.Branch
+	featureBranches := engine.Branches{}
 	for _, b := range sortedBranches {
 		if !b.IsTrunk() && b.GetName() != trunk.GetName() {
-			featureBranches = append(featureBranches, b)
+			featureBranches = featureBranches.Append(b)
 		}
 	}
 
@@ -137,15 +137,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	allBranchesToValidate := collectAllBranchesToRestack(eng, graph, plan.Moves)
 
 	// Sort branches topologically (parents before children) for correct validation order
-	branchObjects := make([]engine.Branch, 0, len(allBranchesToValidate))
+	branchObjects := engine.Branches{}
 	for _, name := range allBranchesToValidate {
-		branchObjects = append(branchObjects, eng.GetBranch(name))
+		branchObjects = branchObjects.Append(eng.GetBranch(name))
 	}
 	sortedForValidation := eng.SortBranchesTopologically(branchObjects)
-	sortedNames := make([]string, len(sortedForValidation))
-	for i, b := range sortedForValidation {
-		sortedNames[i] = b.GetName()
-	}
+	sortedNames := sortedForValidation.Names()
 
 	// Build rebase specs for all branches in topological order
 	allRebaseSpecs := buildRebaseSpecsForAll(eng, plan, sortedNames)
@@ -244,7 +241,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	graph = eng.Graph(engine.SortStrategyAlphabetical)
 
 	// Collect all branches that need restacking (moved branches and their descendants)
-	branchesToRestack := make([]engine.Branch, 0)
+	branchesToRestack := engine.Branches{}
 	seenRestackBranches := make(map[string]bool)
 	for _, move := range filteredPlan.Moves {
 		moveBranch := eng.GetBranch(move.Branch)
@@ -259,7 +256,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				continue
 			}
 			seenRestackBranches[name] = true
-			branchesToRestack = append(branchesToRestack, branch)
+			branchesToRestack = branchesToRestack.Append(branch)
 		}
 	}
 	branchesToRestack = eng.SortBranchesTopologically(branchesToRestack)
@@ -433,7 +430,7 @@ type AnalysisProgressFunc func(current, total int, branchName string)
 // buildFlattenPlan calculates which branches can be moved closer to trunk.
 // For each branch (in topological order), it tests if the branch can rebase
 // onto trunk or any intermediate branch that's closer to trunk.
-func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches []engine.Branch, trunk engine.Branch, onProgress AnalysisProgressFunc) (*flattenPlan, error) {
+func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branches, trunk engine.Branch, onProgress AnalysisProgressFunc) (*flattenPlan, error) {
 	plan := &flattenPlan{
 		Moves:       make([]PlannedMove, 0),
 		RebaseSpecs: make([]engine.RebaseSpec, 0),

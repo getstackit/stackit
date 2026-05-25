@@ -1,6 +1,9 @@
 package engine
 
-import "slices"
+import (
+	"iter"
+	"slices"
+)
 
 // isOnActivePath checks if branchName is on the path from trunk to current branch
 func isOnActivePath(nodes map[string]*StackNode, branchName, current string) bool {
@@ -40,6 +43,12 @@ type StackGraph struct {
 	current      string
 	trunk        string
 	sortStrategy SortStrategy
+}
+
+// DepthGroup contains the ordered branches at a single stack depth.
+type DepthGroup struct {
+	Depth    int
+	Branches Branches
 }
 
 // BuildStackGraph constructs a StackGraph using the provided engine reader and sorting strategy.
@@ -195,7 +204,7 @@ func (g *StackGraph) Children(branch Branch) []string {
 }
 
 // ChildBranches returns the child branches for the given branch.
-func (g *StackGraph) ChildBranches(branch Branch) []Branch {
+func (g *StackGraph) ChildBranches(branch Branch) Branches {
 	node := g.nodes[branch.GetName()]
 	if node == nil {
 		return nil
@@ -204,7 +213,7 @@ func (g *StackGraph) ChildBranches(branch Branch) []Branch {
 	for i, n := range node.Children {
 		branches[i] = g.nodes[n].Branch
 	}
-	return branches
+	return NewBranches(branches)
 }
 
 // Parent returns the parent branch name (empty string if none).
@@ -234,16 +243,75 @@ func (g *StackGraph) IsDescendant(branch Branch, potentialDescendant Branch) boo
 // This is useful for parallel operations where branches at the same depth are independent.
 func (g *StackGraph) GetBranchesByDepth() map[int][]string {
 	byDepth := make(map[int][]string)
-	for name, node := range g.nodes {
-		byDepth[node.Depth] = append(byDepth[node.Depth], name)
+	for _, group := range g.DepthGroups() {
+		byDepth[group.Depth] = group.Branches.Names()
 	}
 	return byDepth
+}
+
+// DepthGroups returns the graph's branches grouped by depth in traversal order.
+func (g *StackGraph) DepthGroups() []DepthGroup {
+	if len(g.nodes) == 0 {
+		return nil
+	}
+
+	builders := make(map[int]*BranchesBuilder)
+	maxDepth := -1
+
+	var visit func(name string)
+	visit = func(name string) {
+		node := g.nodes[name]
+		if node == nil {
+			return
+		}
+		builder := builders[node.Depth]
+		if builder == nil {
+			builder = NewBranchesBuilder(len(g.nodes))
+			builders[node.Depth] = builder
+		}
+		builder.Add(node.Branch)
+		if node.Depth > maxDepth {
+			maxDepth = node.Depth
+		}
+		for _, childName := range node.Children {
+			visit(childName)
+		}
+	}
+
+	for _, root := range g.roots {
+		visit(root)
+	}
+
+	groups := make([]DepthGroup, 0, maxDepth+1)
+	for depth := 0; depth <= maxDepth; depth++ {
+		builder := builders[depth]
+		if builder == nil {
+			continue
+		}
+		groups = append(groups, DepthGroup{
+			Depth:    depth,
+			Branches: builder.Build(),
+		})
+	}
+
+	return groups
+}
+
+// DepthGroupsSeq yields the graph's depth groups in order.
+func (g *StackGraph) DepthGroupsSeq() iter.Seq[DepthGroup] {
+	return func(yield func(DepthGroup) bool) {
+		for _, group := range g.DepthGroups() {
+			if !yield(group) {
+				return
+			}
+		}
+	}
 }
 
 // Range returns branches matching the provided StackRange, ordered the same as the legacy
 // GetRelativeStack implementation: ancestors (oldest to nearest), current, then descendants.
 // Descendants are traversed depth-first using the graph's pre-sorted children.
-func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
+func (g *StackGraph) Range(branch Branch, rng StackRange) Branches {
 	start := branch.GetName()
 	startNode := g.nodes[start]
 	if startNode == nil {
@@ -299,7 +367,7 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) []Branch {
 		collectDescendants(start)
 	}
 
-	return result
+	return NewBranches(result)
 }
 
 // IsLeaf returns true if the branch has no children in the graph.
@@ -314,7 +382,7 @@ func (g *StackGraph) IsLeaf(branch Branch) bool {
 
 // CollectBranches returns all branches in depth-first order starting from root.
 // The root is included as the first element.
-func (g *StackGraph) CollectBranches(root Branch) []Branch {
+func (g *StackGraph) CollectBranches(root Branch) Branches {
 	rootNode := g.nodes[root.GetName()]
 	if rootNode == nil {
 		return nil
@@ -331,7 +399,7 @@ func (g *StackGraph) CollectBranches(root Branch) []Branch {
 		}
 	}
 	collect(rootNode)
-	return branches
+	return NewBranches(branches)
 }
 
 // IsRelated returns true if either branch is an ancestor or descendant of the other.
@@ -373,31 +441,9 @@ func (g *StackGraph) isAncestorOf(ancestor, descendant string) bool {
 // If fn returns an error, iteration stops and that error is returned.
 // Branches at the same depth can be processed in parallel by fn.
 // This is useful for operations like restacking where parents must complete before children.
-func (g *StackGraph) ForEachDepth(fn func(depth int, branches []Branch) error) error {
-	byDepth := g.GetBranchesByDepth()
-
-	// Get max depth
-	maxDepth := 0
-	for d := range byDepth {
-		if d > maxDepth {
-			maxDepth = d
-		}
-	}
-
-	// Process each depth in order
-	for depth := 0; depth <= maxDepth; depth++ {
-		names := byDepth[depth]
-		if len(names) == 0 {
-			continue
-		}
-
-		// Convert names to branches
-		branches := make([]Branch, len(names))
-		for i, name := range names {
-			branches[i] = g.nodes[name].Branch
-		}
-
-		if err := fn(depth, branches); err != nil {
+func (g *StackGraph) ForEachDepth(fn func(depth int, branches Branches) error) error {
+	for group := range g.DepthGroupsSeq() {
+		if err := fn(group.Depth, group.Branches); err != nil {
 			return err
 		}
 	}
@@ -418,27 +464,30 @@ func (g *StackGraph) MaxDepth() int {
 
 // BranchesAtDepth returns all branches at the specified depth.
 // Returns nil if no branches exist at that depth.
-func (g *StackGraph) BranchesAtDepth(depth int) []Branch {
+func (g *StackGraph) BranchesAtDepth(depth int) Branches {
 	var branches []Branch
 	for _, node := range g.nodes {
 		if node.Depth == depth {
 			branches = append(branches, node.Branch)
 		}
 	}
-	return branches
+	if len(branches) == 0 {
+		return nil
+	}
+	return NewBranches(branches)
 }
 
 // Upstack returns children of the branch (upstack).
-func (g *StackGraph) Upstack(branch Branch, includeCurrent bool) []Branch {
+func (g *StackGraph) Upstack(branch Branch, includeCurrent bool) Branches {
 	return g.Range(branch, StackRangeUpstack(includeCurrent))
 }
 
 // Downstack returns parents of the branch (downstack).
-func (g *StackGraph) Downstack(branch Branch, includeCurrent bool) []Branch {
+func (g *StackGraph) Downstack(branch Branch, includeCurrent bool) Branches {
 	return g.Range(branch, StackRangeDownstack(includeCurrent))
 }
 
 // FullStack returns the entire stack (parents + current + children).
-func (g *StackGraph) FullStack(branch Branch) []Branch {
+func (g *StackGraph) FullStack(branch Branch) Branches {
 	return g.Range(branch, StackRangeFull())
 }

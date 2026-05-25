@@ -70,7 +70,7 @@ func TestStackGraphUpstack(t *testing.T) {
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		branches := graph.Upstack(s.Engine.GetBranch("a"), true)
 
-		names := getBranchNames(branches)
+		names := branches.Names()
 		require.Contains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.Contains(t, names, "c")
@@ -84,7 +84,7 @@ func TestStackGraphUpstack(t *testing.T) {
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		branches := graph.Upstack(s.Engine.GetBranch("a"), false)
 
-		names := getBranchNames(branches)
+		names := branches.Names()
 		require.NotContains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.Contains(t, names, "c")
@@ -102,7 +102,7 @@ func TestStackGraphDownstack(t *testing.T) {
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		branches := graph.Downstack(s.Engine.GetBranch("c"), true)
 
-		names := getBranchNames(branches)
+		names := branches.Names()
 		require.Contains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.Contains(t, names, "c")
@@ -118,7 +118,7 @@ func TestStackGraphDownstack(t *testing.T) {
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		branches := graph.Downstack(s.Engine.GetBranch("c"), false)
 
-		names := getBranchNames(branches)
+		names := branches.Names()
 		require.Contains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.NotContains(t, names, "c")
@@ -136,17 +136,9 @@ func TestStackGraphFullStack(t *testing.T) {
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		branches := graph.FullStack(s.Engine.GetBranch("b"))
 
-		names := getBranchNames(branches)
+		names := branches.Names()
 		require.Contains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.Contains(t, names, "c")
 	})
-}
-
-func getBranchNames(branches []engine.Branch) []string {
-	names := make([]string, len(branches))
-	for i, b := range branches {
-		names[i] = b.GetName()
-	}
-	return names
 }

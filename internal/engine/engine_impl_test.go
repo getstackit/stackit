@@ -323,10 +323,7 @@ func TestStackGraphRange(t *testing.T) {
 		// Get downstack from branch2 - should NOT include trunk (main)
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		stack := graph.Range(s.Engine.GetBranch("branch2"), engine.StackRange{RecursiveParents: true})
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.Equal(t, []string{"branch1"}, stackNames)
 		require.NotContains(t, stackNames, "main", "trunk should not be included in ancestors")
 	})
@@ -343,10 +340,7 @@ func TestStackGraphRange(t *testing.T) {
 		// Get upstack from branch1
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		stack := graph.Range(s.Engine.GetBranch("branch1"), engine.StackRange{RecursiveChildren: true})
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.Contains(t, stackNames, "branch2")
 		require.Contains(t, stackNames, "branch3")
 		require.Len(t, stackNames, 2)
@@ -361,10 +355,7 @@ func TestStackGraphRange(t *testing.T) {
 
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		stack := graph.Range(s.Engine.GetBranch("branch1"), engine.StackRange{IncludeCurrent: true})
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.Equal(t, []string{"branch1"}, stackNames)
 	})
 
@@ -384,10 +375,7 @@ func TestStackGraphRange(t *testing.T) {
 			IncludeCurrent:    true,
 			RecursiveChildren: true,
 		})
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.NotContains(t, stackNames, "main", "trunk should not be included in ancestors")
 		require.Contains(t, stackNames, "branch1")
 		require.Contains(t, stackNames, "branch2")
@@ -411,11 +399,7 @@ func TestStackGraphRange(t *testing.T) {
 
 		// Should have all 4 branches
 		require.Len(t, stack, 4)
-		// Convert []engine.Branch to []string for require.Contains and indexOf
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.Contains(t, stackNames, "stackA")
 		require.Contains(t, stackNames, "stackA-child")
 		require.Contains(t, stackNames, "stackB")
@@ -490,7 +474,7 @@ func TestRestackBranches(t *testing.T) {
 
 		// Restack branch1 (should rebase onto new main)
 		branch1 := s.Engine.GetBranch("branch1")
-		batchResult, err := s.Engine.RestackBranches(context.Background(), []engine.Branch{branch1})
+		batchResult, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch1))
 		require.NoError(t, err)
 		require.Equal(t, engine.RestackDone, batchResult.Results["branch1"].Result)
 
@@ -507,7 +491,7 @@ func TestRestackBranches(t *testing.T) {
 
 		// Branch is already fixed (no changes to main)
 		branch1 := s.Engine.GetBranch("branch1")
-		batchResult, err := s.Engine.RestackBranches(context.Background(), []engine.Branch{branch1})
+		batchResult, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch1))
 		require.NoError(t, err)
 		require.Equal(t, engine.RestackUnneeded, batchResult.Results["branch1"].Result)
 	})
@@ -549,7 +533,7 @@ func TestRestackBranches(t *testing.T) {
 		// RestackBranches should auto-discover parent (main) and succeed
 		// In this case, main is still at the fork point, so FindMostRecentTrackedAncestors finds it.
 		branch1 := s.Engine.GetBranch("branch1")
-		batchResult, err := s.Engine.RestackBranches(context.Background(), []engine.Branch{branch1})
+		batchResult, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch1))
 		require.NoError(t, err)
 		require.Equal(t, engine.RestackUnneeded, batchResult.Results["branch1"].Result)
 
@@ -1374,7 +1358,7 @@ func TestSetParentScenarios(t *testing.T) {
 		// 4. Rebase branch1 onto main (changing its SHA)
 		s.Checkout("branch1")
 		branch1 := s.Engine.GetBranch("branch1")
-		_, _ = s.Engine.RestackBranches(context.Background(), []engine.Branch{branch1})
+		_, _ = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch1))
 		branch1NewSHA, _ := s.Engine.GetBranch("branch1").GetRevision()
 		require.NotEqual(t, branch1OriginalSHA, branch1NewSHA)
 
@@ -1499,11 +1483,11 @@ func TestFrozenBranches(t *testing.T) {
 		branch := s.Engine.GetBranch("feature")
 		require.False(t, branch.IsFrozen())
 
-		_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
 		require.NoError(t, err)
 		require.True(t, s.Engine.GetBranch("feature").IsFrozen())
 
-		_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, false)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), false)
 		require.NoError(t, err)
 		require.False(t, s.Engine.GetBranch("feature").IsFrozen())
 	})
@@ -1523,14 +1507,14 @@ func TestFrozenBranches(t *testing.T) {
 		require.True(t, branch.CanModify())
 
 		// Test frozen
-		_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
 		require.NoError(t, err)
 		require.False(t, s.Engine.GetBranch("feature").CanModify())
 
 		// Test locked
-		_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, false)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), false)
 		require.NoError(t, err)
-		_, err = s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 		require.False(t, s.Engine.GetBranch("feature").CanModify())
 	})
@@ -1553,7 +1537,7 @@ func TestFrozenBranches(t *testing.T) {
 		require.NoError(t, err)
 
 		// Freeze the branch
-		_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
 		require.NoError(t, err)
 
 		// Now EnsureCanModify should return an error
@@ -1586,7 +1570,7 @@ func TestFrozenBranches(t *testing.T) {
 		branch := s.Engine.GetBranch("feature")
 
 		// Lock the branch
-		_, err = s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Now EnsureCanModify should return an error
@@ -1619,9 +1603,9 @@ func TestFrozenBranches(t *testing.T) {
 		branch := s.Engine.GetBranch("feature")
 
 		// Lock and freeze the branch
-		_, err = s.Engine.SetLocked(context.Background(), []engine.Branch{branch}, engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
-		_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
 		require.NoError(t, err)
 
 		// Now EnsureCanModify should return an error
@@ -1652,7 +1636,7 @@ func TestFrozenBranches(t *testing.T) {
 		require.NoError(t, err)
 
 		branch := s.Engine.GetBranch("feature")
-		_, err = s.Engine.SetFrozen(context.Background(), []engine.Branch{branch}, true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
 		require.NoError(t, err)
 		require.True(t, s.Engine.GetBranch("feature").IsFrozen())
 

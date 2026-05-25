@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -17,6 +18,7 @@ func (e *engineImpl) IsTrunk(branch Branch) bool {
 
 // IsTracked checks if a branch is tracked (has a parent in metadata)
 func (e *engineImpl) IsTracked(branch Branch) bool {
+	e.ensureBranchSharedLoaded(branch.GetName())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	state := e.readState(branch.GetName())
@@ -25,30 +27,35 @@ func (e *engineImpl) IsTracked(branch Branch) bool {
 
 // GetScope returns the scope for a branch, inheriting from parent if not set
 func (e *engineImpl) GetScope(branch Branch) Scope {
-	branchName := branch.GetName()
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	current := branchName
+	current := branch.GetName()
 	visited := make(map[string]bool)
 	for !visited[current] {
 		visited[current] = true
 
+		e.ensureBranchSharedLoaded(current)
+		e.mu.RLock()
 		state := e.readState(current)
 		if state == nil {
+			e.mu.RUnlock()
 			break
 		}
-		if state.HasScope() {
-			scope := state.GetScope()
+
+		hasScope := state.HasScope()
+		scope := state.GetScope()
+		parent := state.Parent
+		trunk := e.trunk
+		e.mu.RUnlock()
+
+		if hasScope {
 			if scope.IsNone() {
 				return Empty()
 			}
 			return scope
 		}
-		if state.Parent == "" || state.Parent == e.trunk {
+		if parent == "" || parent == trunk {
 			break
 		}
-		current = state.Parent
+		current = parent
 	}
 	return Empty()
 }
@@ -88,6 +95,7 @@ func (e *engineImpl) IsFrozen(branch Branch) bool {
 
 // GetBranchType returns the branch type for a branch
 func (e *engineImpl) GetBranchType(branch Branch) git.BranchType {
+	e.ensureBranchSharedLoaded(branch.GetName())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if state := e.readState(branch.GetName()); state != nil {
@@ -173,6 +181,65 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 
 	// Branch is up to date if stored revision matches current parent revision.
 	return state.ParentBranchRevision == parentRev
+}
+
+// ReadBranchStatuses reads status facts for a group of branches.
+// Parent revisions are fetched in one batch. Missing metadata follows
+// IsUpToDate semantics.
+func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
+	results := make(map[string]bool, branches.Len())
+	type pendingCheck struct {
+		parent      string
+		expectedRev string
+	}
+	pending := make(map[string]pendingCheck, branches.Len())
+	parentSet := make(map[string]struct{}, branches.Len())
+
+	e.mu.RLock()
+	trunk := e.trunk
+	for _, branch := range branches {
+		name := branch.GetName()
+		if name == trunk {
+			results[name] = true
+			continue
+		}
+
+		state := e.readState(name)
+		if state == nil {
+			results[name] = true
+			continue
+		}
+
+		if state.ParentBranchRevision == "" {
+			results[name] = false
+			continue
+		}
+
+		pending[name] = pendingCheck{
+			parent:      state.Parent,
+			expectedRev: state.ParentBranchRevision,
+		}
+		parentSet[state.Parent] = struct{}{}
+	}
+	e.mu.RUnlock()
+
+	if len(parentSet) == 0 {
+		return newBranchStatuses(results)
+	}
+
+	parents := make([]string, 0, len(parentSet))
+	for parent := range parentSet {
+		parents = append(parents, parent)
+	}
+	slices.Sort(parents)
+
+	parentRevs, _ := e.git.BatchGetRevisions(parents)
+	for name, check := range pending {
+		parentRev, ok := parentRevs[check.parent]
+		results[name] = ok && check.expectedRev == parentRev
+	}
+
+	return newBranchStatuses(results)
 }
 
 // GetBranchRemoteStatus returns the relationship between a local branch and its remote

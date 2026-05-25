@@ -101,19 +101,19 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// We need commits from all branches downstack, not just current branch
 	downstackBranches := graph.Range(*currentBranch, engine.StackRange{RecursiveParents: true})
 	// Include current branch (prepend since Range returns ancestors oldest-to-nearest)
-	downstackBranches = append([]engine.Branch{*currentBranch}, downstackBranches...)
+	downstackBranches = engine.BranchesOf(*currentBranch).Concat(downstackBranches)
 
 	// Terminate downstack search if a scope boundary is hit
 	currentScope := currentBranch.GetScope()
 	if currentScope.IsDefined() {
-		limitedDownstack := []engine.Branch{}
+		limitedDownstack := engine.NewBranchesBuilder(len(downstackBranches))
 		for _, branch := range downstackBranches {
 			if branch.IsTrunk() || !branch.GetScope().Equal(currentScope) {
 				break
 			}
-			limitedDownstack = append(limitedDownstack, branch)
+			limitedDownstack.Add(branch)
 		}
-		downstackBranches = limitedDownstack
+		downstackBranches = limitedDownstack.Build()
 	}
 
 	// Get all commit SHAs from downstack branches (newest to oldest)

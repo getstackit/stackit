@@ -37,7 +37,7 @@ func TestRestackBranch_CapturesMergedHistory(t *testing.T) {
 
 		// Restack branch2 - should reparent to main and capture branch1 in history
 		branch2 := s.Engine.GetBranch("branch2")
-		batchResult, err := s.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		batchResult, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 		require.NoError(t, err)
 
 		// Verify reparenting happened
@@ -83,7 +83,7 @@ func TestRestackBranch_CapturesMergedHistory(t *testing.T) {
 
 		// Restack branch2 - should reparent and capture PR info
 		branch2 := s.Engine.GetBranch("branch2")
-		_, err = s.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 		require.NoError(t, err)
 
 		// Verify merged history includes PR info
@@ -117,7 +117,7 @@ func TestRestackBranch_InheritsMergedHistory(t *testing.T) {
 		// Rebuild and restack branch2
 		_ = s.Engine.Rebuild("main")
 		branch2 := s.Engine.GetBranch("branch2")
-		_, _ = s.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, _ = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 
 		// Verify branch2 now has branch1 in history
 		history2 := branch2.GetMergedDownstack()
@@ -132,7 +132,7 @@ func TestRestackBranch_InheritsMergedHistory(t *testing.T) {
 		// Rebuild and restack branch3
 		_ = s.Engine.Rebuild("main")
 		branch3 := s.Engine.GetBranch("branch3")
-		_, err := s.Engine.RestackBranches(context.Background(), []engine.Branch{branch3})
+		_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch3))
 		require.NoError(t, err)
 
 		// Verify branch3 inherited history: [branch1, branch2]
@@ -177,7 +177,7 @@ func TestRestackBranch_LimitsHistoryGrowth(t *testing.T) {
 			// Rebuild and restack child
 			_ = s.Engine.Rebuild("main")
 			child := s.Engine.GetBranch(childBranch)
-			_, _ = s.Engine.RestackBranches(context.Background(), []engine.Branch{child})
+			_, _ = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(child))
 		}
 
 		// Verify b7 has exactly 5 entries (the most recent 5)
@@ -216,7 +216,7 @@ func TestRestackBranch_HandlesNoPRInfo(t *testing.T) {
 		require.NoError(t, err)
 
 		branch2 := s.Engine.GetBranch("branch2")
-		_, err = s.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 		require.NoError(t, err)
 
 		// Verify history was captured with just the branch name
@@ -247,7 +247,7 @@ func TestRestackBranch_PreventsDuplicateHistory(t *testing.T) {
 		// Rebuild and restack branch2 (first time)
 		_ = s.Engine.Rebuild("main")
 		branch2 := s.Engine.GetBranch("branch2")
-		_, err := s.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 		require.NoError(t, err)
 
 		// Verify branch2 has branch1 in history
@@ -257,7 +257,7 @@ func TestRestackBranch_PreventsDuplicateHistory(t *testing.T) {
 
 		// Restack branch2 again (simulating interrupted/retried operation)
 		branch2 = s.Engine.GetBranch("branch2")
-		_, err = s.Engine.RestackBranches(context.Background(), []engine.Branch{branch2})
+		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2))
 		require.NoError(t, err)
 
 		// Verify history still has exactly 1 entry (no duplicate)

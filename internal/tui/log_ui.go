@@ -44,6 +44,8 @@ type LogModel struct {
 	engine       engine.Engine
 	githubClient github.Client
 	renderer     *tree.StackTreeRenderer
+	allBranches  []engine.Branch
+	trunkName    string
 	viewport     viewport.Model
 	width        int
 	height       int
@@ -71,6 +73,7 @@ type LogModel struct {
 	cachedTreeData  *tree.CachedTreeData // Cached tree without selection (Phase 3)
 	cachedTreeValid bool                 // Whether cachedTreeData is valid
 	cachedLines     []string             // All rendered lines (with selection applied)
+	branchLineStart []int                // Starting line offset for each rendered branch
 
 	// Options
 	altScreen         bool
@@ -128,8 +131,9 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 
 	// Build minimal annotations synchronously (includes worktree info, no git/network calls)
 	start = time.Now()
+	allBranches := eng.AllBranches()
 	annotations := make(map[string]tree.BranchAnnotation)
-	for _, b := range eng.AllBranches() {
+	for _, b := range allBranches {
 		annotations[b.GetName()] = GetMinimalAnnotationWithWorktreeAndEmpty(eng, b, wtData)
 	}
 	// Apply annotation overrides (e.g., custom labels for move operation)
@@ -147,17 +151,18 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 
 	// Set initial selection
 	start = time.Now()
+	trunkName := eng.Trunk().GetName()
 	selectedBranch := ""
 	if current := eng.CurrentBranch(); current != nil {
 		selectedBranch = current.GetName()
 	} else {
-		selectedBranch = eng.Trunk().GetName()
+		selectedBranch = trunkName
 	}
 	logDebug("Initial selection completed in %v", time.Since(start))
 
 	// Initialize search matches (all branches match when no search query)
 	searchMatches := make(map[string]bool)
-	for _, b := range eng.AllBranches() {
+	for _, b := range allBranches {
 		searchMatches[b.GetName()] = true
 	}
 
@@ -169,6 +174,8 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 		githubClient:      ghClient,
 		logger:            opts.Logger,
 		renderer:          renderer,
+		allBranches:       allBranches,
+		trunkName:         trunkName,
 		selectedBranch:    selectedBranch,
 		logKeys:           keys.DefaultLog,
 		selectKeys:        keys.DefaultSelect,
@@ -237,6 +244,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 	ctx := m.context
 	eng := m.engine
 	ghClient := m.githubClient
+	allBranches := m.allBranches
 	style := m.style
 	logger := m.logger
 
@@ -256,8 +264,6 @@ func (m *LogModel) enrichData() tea.Cmd {
 	return SafeCmdFunc("TUI enrichment", logger, func() tea.Msg {
 		enrichStart := time.Now()
 		logDebug("TUI enrichment started")
-
-		allBranches := eng.AllBranches()
 
 		// Channels for parallel results (buffered so goroutines don't block)
 		type ciResult struct {
@@ -577,7 +583,6 @@ func (m *LogModel) renderTree() {
 		return
 	}
 
-	trunk := m.engine.Trunk().GetName()
 	mode := tree.RenderModeFull
 	if m.mode == LogModeSelect {
 		mode = tree.RenderModeSelect
@@ -597,15 +602,23 @@ func (m *LogModel) renderTree() {
 		m.branches = m.cachedTreeData.ApplySelection(m.selectedBranch)
 	} else {
 		// Slow path: full render and cache
-		m.cachedTreeData = m.renderer.RenderStackCached(trunk, opts)
+		m.cachedTreeData = m.renderer.RenderStackCached(m.trunkName, opts)
 		m.cachedTreeValid = true
 		m.branches = m.cachedTreeData.ApplySelection(m.selectedBranch)
 	}
 
 	// Flatten lines for viewport/direct rendering
-	m.cachedLines = nil
+	totalLines := 0
 	for _, b := range m.branches {
+		totalLines += len(b.Lines)
+	}
+	m.cachedLines = make([]string, 0, totalLines)
+	m.branchLineStart = make([]int, len(m.branches))
+	lineOffset := 0
+	for i, b := range m.branches {
+		m.branchLineStart[i] = lineOffset
 		m.cachedLines = append(m.cachedLines, b.Lines...)
+		lineOffset += len(b.Lines)
 	}
 
 	// Update viewport with rendered content (skip in inline mode - viewport not used)
@@ -618,12 +631,11 @@ func (m *LogModel) ensureVisible() {
 	if m.selectedIndex < 0 || m.selectedIndex >= len(m.branches) {
 		return
 	}
-
-	// Calculate the line offset for the selected branch
-	lineOffset := 0
-	for i := 0; i < m.selectedIndex; i++ {
-		lineOffset += len(m.branches[i].Lines)
+	if m.selectedIndex >= len(m.branchLineStart) {
+		return
 	}
+
+	lineOffset := m.branchLineStart[m.selectedIndex]
 
 	branchHeight := len(m.branches[m.selectedIndex].Lines)
 
@@ -638,18 +650,17 @@ func (m *LogModel) ensureVisible() {
 // updateSearchMatches updates the searchMatches map based on current searchQuery
 func (m *LogModel) updateSearchMatches() {
 	m.searchMatches = make(map[string]bool)
-	allBranches := m.engine.AllBranches() // Call once and reuse
 
 	if m.searchQuery == "" {
 		// All branches match when search is empty
-		for _, b := range allBranches {
+		for _, b := range m.allBranches {
 			m.searchMatches[b.GetName()] = true
 		}
 		return
 	}
 
 	query := strings.ToLower(m.searchQuery)
-	for _, b := range allBranches {
+	for _, b := range m.allBranches {
 		branchName := strings.ToLower(b.GetName())
 		m.searchMatches[b.GetName()] = strings.Contains(branchName, query)
 	}
@@ -731,7 +742,7 @@ func (m *LogModel) View() tea.View {
 		}
 	}
 
-	header := style.ColorDim(fmt.Sprintf(" %s | %d branches | %s", title, len(m.engine.AllBranches()), help))
+	header := style.ColorDim(fmt.Sprintf(" %s | %d branches | %s", title, len(m.allBranches), help))
 
 	// Render content - use viewport for full-screen mode, direct rendering for inline
 	var content string
@@ -743,7 +754,6 @@ func (m *LogModel) View() tea.View {
 		content = strings.Join(m.cachedLines, "\n")
 	default:
 		// Fallback: render tree directly for immediate display before first renderTree call
-		trunk := m.engine.Trunk().GetName()
 		mode := tree.RenderModeFull
 		if m.mode == LogModeSelect {
 			mode = tree.RenderModeSelect
@@ -756,7 +766,7 @@ func (m *LogModel) View() tea.View {
 			SearchMatches:  m.searchMatches,
 			NonSelectable:  m.nonSelectable,
 		}
-		branches := m.renderer.RenderStackDetailed(trunk, opts)
+		branches := m.renderer.RenderStackDetailed(m.trunkName, opts)
 		var lines []string
 		for _, b := range branches {
 			lines = append(lines, b.Lines...)

@@ -3,21 +3,19 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/api/registry"
 )
 
 // ViewHandler serves the combined view payload for the frontend.
 type ViewHandler struct {
-	assembler *ViewAssembler
+	reg *registry.Registry
 }
 
-// NewViewHandler creates a handler for /api/view and /api/v1/view.
-// Assembly logic lives in ViewAssembler to keep this handler transport-focused.
-func NewViewHandler(eng engine.BranchReader, gh github.Client, remote string) *ViewHandler {
-	return &ViewHandler{
-		assembler: NewViewAssembler(eng, gh, remote),
-	}
+// NewViewHandler creates a handler that resolves the per-request repo from
+// the registry. Assembly logic lives in ViewAssembler so this handler stays
+// transport-focused.
+func NewViewHandler(reg *registry.Registry) *ViewHandler {
+	return &ViewHandler{reg: reg}
 }
 
 // ServeHTTP handles GET view endpoints.
@@ -27,7 +25,13 @@ func (h *ViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view, err := h.assembler.Build(r.Context())
+	entry, ok := resolveRepo(h.reg, w, r)
+	if !ok {
+		return
+	}
+
+	assembler := NewViewAssembler(entry.Engine, entry.GitHub, entry.Remote)
+	view, err := assembler.Build(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

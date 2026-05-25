@@ -8,32 +8,27 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
-	"path"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/getstackit/stackit/internal/api/handlers"
+	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/api/watcher"
-	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/github"
 )
 
 // ServerConfig holds configuration for the API server.
 type ServerConfig struct {
 	Port        int
 	CORSOrigins []string
-	RepoRoot    string
-	Remote      string
 	APIPrefixes []string
 	StaticFS    fs.FS
+	Registry    *registry.Registry
 }
 
 // Server is the stackit-web HTTP server.
 type Server struct {
 	config            ServerConfig
-	eng               engine.Engine
-	gh                github.Client
 	broadcaster       *handlers.EventBroadcaster
 	httpServer        *http.Server
 	refWatcher        *watcher.RefWatcher
@@ -41,12 +36,14 @@ type Server struct {
 	lastCurrentBranch string
 }
 
-// NewServer creates a new API server.
-func NewServer(cfg ServerConfig, eng engine.Engine, gh github.Client) *Server {
+// NewServer creates a new API server backed by the given registry. Per-repo
+// engine and GitHub client state lives on each registry entry; the server
+// only owns transport-level concerns and (for now) a single broadcaster +
+// watcher that follow the first registered repo. A follow-up change moves
+// the watcher and broadcaster onto each entry so events are per-repo.
+func NewServer(cfg ServerConfig) *Server {
 	return &Server{
 		config:      cfg,
-		eng:         eng,
-		gh:          gh,
 		broadcaster: handlers.NewEventBroadcaster(),
 	}
 }
@@ -61,22 +58,43 @@ func (s *Server) Start() error {
 	apiMux := http.NewServeMux()
 	prefixes := normalizeAPIPrefixes(s.config.APIPrefixes)
 
-	viewHandler := handlers.NewViewHandler(s.eng, s.gh, s.config.Remote)
-	repoHandler := handlers.NewRepoHandler(s.eng, s.gh, s.config.Remote)
-	stacksHandler := handlers.NewStacksHandler(s.eng, s.gh)
-	branchesHandler := handlers.NewBranchesHandler(s.eng, s.gh)
-	branchDiffHandler := handlers.NewBranchDiffHandler(s.eng)
+	reg := s.config.Registry
+
+	viewHandler := handlers.NewViewHandler(reg)
+	repoHandler := handlers.NewRepoHandler(reg)
+	stacksHandler := handlers.NewStacksHandler(reg)
+	branchesHandler := handlers.NewBranchesHandler(reg)
+	branchDiffHandler := handlers.NewBranchDiffHandler(reg)
+	submitHandler := handlers.NewSubmitHandler(reg)
 	eventsHandler := handlers.NewEventsHandler(s.broadcaster)
 
 	for _, prefix := range prefixes {
-		apiMux.Handle(path.Join(prefix, "view"), viewHandler)
-		apiMux.Handle(path.Join(prefix, "repo"), repoHandler)
-		apiMux.Handle(path.Join(prefix, "stacks"), stacksHandler)
-		apiMux.Handle(path.Join(prefix, "stacks")+"/", stacksHandler)
-		apiMux.Handle(path.Join(prefix, "branches"), branchesHandler)
-		apiMux.Handle(path.Join(prefix, "branches")+"/", branchesHandler)
-		apiMux.Handle(path.Join(prefix, "branch-diff"), branchDiffHandler)
-		apiMux.Handle(path.Join(prefix, "events"), eventsHandler)
+		// New multi-repo routes. {repoID} resolves through the registry;
+		// unknown IDs return 404 from inside the handler.
+		apiMux.Handle("GET "+prefix+"/repos/{repoID}/view", viewHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{repoID}/repo", repoHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{repoID}/stacks", stacksHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{repoID}/stacks/{name...}", stacksHandler)
+		apiMux.Handle("POST "+prefix+"/repos/{repoID}/stacks/{rootBranch}/submit", submitHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branches", branchesHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branches/{name...}", branchesHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branch-diff", branchDiffHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{repoID}/events", eventsHandler)
+
+		// Legacy unscoped routes. With no {repoID} path value, handlers
+		// fall back to "default" (see defaultRepoID in handlers/common.go).
+		// These keep the existing web client working while the multi-repo
+		// migration is in progress and are removed once the frontend uses
+		// the /repos/{repoID}/ shape.
+		apiMux.Handle("GET "+prefix+"/view", viewHandler)
+		apiMux.Handle("GET "+prefix+"/repo", repoHandler)
+		apiMux.Handle("GET "+prefix+"/stacks", stacksHandler)
+		apiMux.Handle("GET "+prefix+"/stacks/{name...}", stacksHandler)
+		apiMux.Handle("POST "+prefix+"/stacks/{rootBranch}/submit", submitHandler)
+		apiMux.Handle("GET "+prefix+"/branches", branchesHandler)
+		apiMux.Handle("GET "+prefix+"/branches/{name...}", branchesHandler)
+		apiMux.Handle("GET "+prefix+"/branch-diff", branchDiffHandler)
+		apiMux.Handle("GET "+prefix+"/events", eventsHandler)
 	}
 
 	webHandler := newStaticHandler(s.config.StaticFS)
@@ -94,42 +112,48 @@ func (s *Server) Start() error {
 		http.NotFound(w, r)
 	})
 
-	// Wrap with middleware
 	handler := corsMiddleware(s.config.CORSOrigins, root)
 	handler = loggingMiddleware(handler)
 
-	// Start watching git refs for changes so the engine stays current
-	if s.config.RepoRoot != "" {
-		trunkName := s.eng.Trunk().GetName()
-		if cb := s.eng.CurrentBranch(); cb != nil {
-			s.lastCurrentBranch = cb.GetName()
-		}
-		s.refWatcher = watcher.NewRefWatcher(s.config.RepoRoot, 200*time.Millisecond, func() {
-			if err := s.eng.Rebuild(trunkName); err != nil {
-				log.Printf("engine rebuild failed: %v", err)
-				return
-			}
-
-			if cb := s.eng.CurrentBranch(); cb != nil {
-				newBranch := cb.GetName()
-				if s.lastCurrentBranch != "" && newBranch != s.lastCurrentBranch {
-					data, _ := json.Marshal(map[string]string{
-						"from":      s.lastCurrentBranch,
-						"to":        newBranch,
-						"timestamp": time.Now().Format(time.RFC3339),
-					})
-					s.broadcaster.Broadcast("branch_switched", string(data))
+	// Start watching the first registered repo's refs so the engine stays
+	// current. A follow-up change spawns one watcher per registry entry so
+	// every repo's refs are tracked independently.
+	if reg != nil {
+		if entries := reg.List(); len(entries) > 0 {
+			entry := entries[0]
+			if entry.RepoRoot != "" {
+				trunkName := entry.Engine.Trunk().GetName()
+				if cb := entry.Engine.CurrentBranch(); cb != nil {
+					s.lastCurrentBranch = cb.GetName()
 				}
-				s.lastCurrentBranch = newBranch
-			}
+				s.refWatcher = watcher.NewRefWatcher(entry.RepoRoot, 200*time.Millisecond, func() {
+					if err := entry.Engine.Rebuild(trunkName); err != nil {
+						log.Printf("engine rebuild failed: %v", err)
+						return
+					}
 
-			s.broadcaster.Broadcast("refresh", "{}")
-		})
-		s.watcherWG.Go(func() {
-			if err := s.refWatcher.Start(); err != nil {
-				log.Printf("ref watcher stopped: %v", err)
+					if cb := entry.Engine.CurrentBranch(); cb != nil {
+						newBranch := cb.GetName()
+						if s.lastCurrentBranch != "" && newBranch != s.lastCurrentBranch {
+							data, _ := json.Marshal(map[string]string{
+								"from":      s.lastCurrentBranch,
+								"to":        newBranch,
+								"timestamp": time.Now().Format(time.RFC3339),
+							})
+							s.broadcaster.Broadcast("branch_switched", string(data))
+						}
+						s.lastCurrentBranch = newBranch
+					}
+
+					s.broadcaster.Broadcast("refresh", "{}")
+				})
+				s.watcherWG.Go(func() {
+					if err := s.refWatcher.Start(); err != nil {
+						log.Printf("ref watcher stopped: %v", err)
+					}
+				})
 			}
-		})
+		}
 	}
 
 	s.httpServer = &http.Server{

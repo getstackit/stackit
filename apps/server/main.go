@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/api"
+	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/app"
 )
 
@@ -72,14 +73,25 @@ func run() error {
 		log.Printf("GitHub client unavailable: %v", runtimeCtx.GitHubError())
 	}
 
+	reg := registry.New()
+	if err := reg.Add(&registry.RepoEntry{
+		ID:          "default",
+		DisplayName: "default",
+		RepoRoot:    runtimeCtx.RepoRoot,
+		Remote:      *remote,
+		Engine:      runtimeCtx.Engine,
+		GitHub:      gh,
+	}); err != nil {
+		return err
+	}
+
 	server := api.NewServer(api.ServerConfig{
 		Port:        *port,
 		CORSOrigins: parseCSV(*corsOrigins),
-		RepoRoot:    runtimeCtx.RepoRoot,
-		Remote:      *remote,
 		APIPrefixes: prefixes,
 		StaticFS:    staticFS,
-	}, runtimeCtx.Engine, gh)
+		Registry:    reg,
+	})
 
 	errCh := make(chan error, 1)
 	go func() {

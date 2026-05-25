@@ -67,7 +67,7 @@ func TestIsAPIPath(t *testing.T) {
 }
 
 func TestServerShutdownClosesBroadcaster(t *testing.T) {
-	server := NewServer(ServerConfig{}, nil, nil)
+	server := NewServer(ServerConfig{})
 
 	if err := server.Shutdown(context.Background()); err != nil {
 		t.Fatalf("shutdown returned error: %v", err)

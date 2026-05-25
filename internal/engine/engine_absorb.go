@@ -22,9 +22,6 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	originalRef, _ := e.git.GetCurrentBranchOrSHA(ctx)
 	originalRef = strings.TrimSpace(originalRef)
 
-	// Track if we've modified branch state - used for cleanup on error
-	var branchModified bool
-
 	// Cleanup function to restore state on error
 	cleanup := func() {
 		// Reset any unmerged/dirty state
@@ -66,7 +63,6 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	if err := e.git.CheckoutDetached(ctx, currentBase); err != nil {
 		return fmt.Errorf("failed to checkout base %s: %w", currentBase[:8], err)
 	}
-	branchModified = true
 
 	// Recreate branch commit by commit (oldest to newest)
 	for i := len(commitSHAs) - 1; i >= 0; i-- {
@@ -138,7 +134,6 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 			}
 		}
 	}
-	_ = branchModified // Mark as used
 
 	// Get new tip
 	newTip, err := e.git.GetCurrentRevision(ctx)

@@ -394,7 +394,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		for i, name := range batchNames {
 			branch := eng.GetBranch(name)
 			branches[i] = branch
-			parents[name] = getParentName(branch, eng)
+			parents[name] = getParentName(branch)
 		}
 
 		// Batch delete from engine
@@ -432,7 +432,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 }
 
 // getParentName returns the name of the parent branch or trunk if no parent exists
-func getParentName(branch engine.Branch, _ engine.Engine) string {
+func getParentName(branch engine.Branch) string {
 	return branch.GetParentOrTrunk()
 }
 
@@ -512,7 +512,7 @@ func findNonDeletingAncestor(startParent string, plan *deletionPlan, eng engine.
 // Returns the name of the new parent if changed, or empty string if not changed.
 func reparentBranchIfNecessary(ctx context.Context, branch engine.Branch, plan *deletionPlan, eng engine.Engine, out output.Output) (string, error) {
 	branchName := branch.GetName()
-	parentName := getParentName(branch, eng)
+	parentName := getParentName(branch)
 
 	// Find nearest ancestor that isn't being deleted
 	newParentName := findNonDeletingAncestor(parentName, plan, eng)

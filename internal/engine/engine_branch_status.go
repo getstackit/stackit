@@ -197,7 +197,7 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 
 	e.mu.RLock()
 	trunk := e.trunk
-	for _, branch := range branches.All() {
+	for _, branch := range branches {
 		name := branch.GetName()
 		if name == trunk {
 			results[name] = true

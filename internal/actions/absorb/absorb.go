@@ -106,14 +106,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Terminate downstack search if a scope boundary is hit
 	currentScope := currentBranch.GetScope()
 	if currentScope.IsDefined() {
-		limitedDownstack := engine.Branches{}
+		limitedDownstack := engine.NewBranchesBuilder(len(downstackBranches))
 		for _, branch := range downstackBranches {
 			if branch.IsTrunk() || !branch.GetScope().Equal(currentScope) {
 				break
 			}
-			limitedDownstack = limitedDownstack.Append(branch)
+			limitedDownstack.Add(branch)
 		}
-		downstackBranches = limitedDownstack
+		downstackBranches = limitedDownstack.Build()
 	}
 
 	// Get all commit SHAs from downstack branches (newest to oldest)

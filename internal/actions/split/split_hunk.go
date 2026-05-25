@@ -820,10 +820,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 	// Restack the children that were reparented
 	if len(existingChildren) > 0 {
-		childBranches := engine.Branches{}
-		for _, name := range existingChildren {
-			childBranches = childBranches.Append(eng.GetBranch(name))
-		}
+		childBranches := engine.BranchesFromNames(eng, existingChildren)
 		if err := actions.RestackBranches(ctx, childBranches); err != nil {
 			return fmt.Errorf("failed to restack children: %w", err)
 		}

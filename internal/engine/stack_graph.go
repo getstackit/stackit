@@ -1,6 +1,9 @@
 package engine
 
-import "slices"
+import (
+	"iter"
+	"slices"
+)
 
 // isOnActivePath checks if branchName is on the path from trunk to current branch
 func isOnActivePath(nodes map[string]*StackNode, branchName, current string) bool {
@@ -40,6 +43,12 @@ type StackGraph struct {
 	current      string
 	trunk        string
 	sortStrategy SortStrategy
+}
+
+// DepthGroup contains the ordered branches at a single stack depth.
+type DepthGroup struct {
+	Depth    int
+	Branches Branches
 }
 
 // BuildStackGraph constructs a StackGraph using the provided engine reader and sorting strategy.
@@ -204,7 +213,7 @@ func (g *StackGraph) ChildBranches(branch Branch) Branches {
 	for i, n := range node.Children {
 		branches[i] = g.nodes[n].Branch
 	}
-	return branches
+	return NewBranches(branches)
 }
 
 // Parent returns the parent branch name (empty string if none).
@@ -234,10 +243,69 @@ func (g *StackGraph) IsDescendant(branch Branch, potentialDescendant Branch) boo
 // This is useful for parallel operations where branches at the same depth are independent.
 func (g *StackGraph) GetBranchesByDepth() map[int][]string {
 	byDepth := make(map[int][]string)
-	for name, node := range g.nodes {
-		byDepth[node.Depth] = append(byDepth[node.Depth], name)
+	for _, group := range g.DepthGroups() {
+		byDepth[group.Depth] = group.Branches.Names()
 	}
 	return byDepth
+}
+
+// DepthGroups returns the graph's branches grouped by depth in traversal order.
+func (g *StackGraph) DepthGroups() []DepthGroup {
+	if len(g.nodes) == 0 {
+		return nil
+	}
+
+	builders := make(map[int]*BranchesBuilder)
+	maxDepth := -1
+
+	var visit func(name string)
+	visit = func(name string) {
+		node := g.nodes[name]
+		if node == nil {
+			return
+		}
+		builder := builders[node.Depth]
+		if builder == nil {
+			builder = NewBranchesBuilder(len(g.nodes))
+			builders[node.Depth] = builder
+		}
+		builder.Add(node.Branch)
+		if node.Depth > maxDepth {
+			maxDepth = node.Depth
+		}
+		for _, childName := range node.Children {
+			visit(childName)
+		}
+	}
+
+	for _, root := range g.roots {
+		visit(root)
+	}
+
+	groups := make([]DepthGroup, 0, maxDepth+1)
+	for depth := 0; depth <= maxDepth; depth++ {
+		builder := builders[depth]
+		if builder == nil {
+			continue
+		}
+		groups = append(groups, DepthGroup{
+			Depth:    depth,
+			Branches: builder.Build(),
+		})
+	}
+
+	return groups
+}
+
+// DepthGroupsSeq yields the graph's depth groups in order.
+func (g *StackGraph) DepthGroupsSeq() iter.Seq[DepthGroup] {
+	return func(yield func(DepthGroup) bool) {
+		for _, group := range g.DepthGroups() {
+			if !yield(group) {
+				return
+			}
+		}
+	}
 }
 
 // Range returns branches matching the provided StackRange, ordered the same as the legacy
@@ -374,30 +442,8 @@ func (g *StackGraph) isAncestorOf(ancestor, descendant string) bool {
 // Branches at the same depth can be processed in parallel by fn.
 // This is useful for operations like restacking where parents must complete before children.
 func (g *StackGraph) ForEachDepth(fn func(depth int, branches Branches) error) error {
-	byDepth := g.GetBranchesByDepth()
-
-	// Get max depth
-	maxDepth := 0
-	for d := range byDepth {
-		if d > maxDepth {
-			maxDepth = d
-		}
-	}
-
-	// Process each depth in order
-	for depth := 0; depth <= maxDepth; depth++ {
-		names := byDepth[depth]
-		if len(names) == 0 {
-			continue
-		}
-
-		// Convert names to branches
-		branches := make([]Branch, len(names))
-		for i, name := range names {
-			branches[i] = g.nodes[name].Branch
-		}
-
-		if err := fn(depth, NewBranches(branches)); err != nil {
+	for group := range g.DepthGroupsSeq() {
+		if err := fn(group.Depth, group.Branches); err != nil {
 			return err
 		}
 	}

@@ -387,17 +387,16 @@ func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptio
 
 	groups := make([]restackBranchGroup, 0, len(stacks))
 	for _, stack := range stacks {
-		branches := engine.Branches{}
-		for _, branchName := range stack.Branches {
-			branch := eng.GetBranch(branchName)
+		branches := engine.NewBranchesBuilder(len(stack.Branches))
+		for _, branch := range engine.BranchesFromNames(eng, stack.Branches) {
 			if branch.IsTracked() && !branch.IsTrunk() {
-				branches = branches.Append(branch)
+				branches.Add(branch)
 			}
 		}
-		if len(branches) > 0 {
+		if built := branches.Build(); len(built) > 0 {
 			groups = append(groups, restackBranchGroup{
 				rootBranch: stack.RootBranch,
-				branches:   branches,
+				branches:   built,
 			})
 		}
 	}

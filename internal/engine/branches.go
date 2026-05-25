@@ -3,24 +3,75 @@ package engine
 // Branches is an ordered set of branches.
 type Branches []Branch
 
+// BranchesBuilder incrementally builds an ordered branch set without repeatedly
+// copying intermediate slices.
+type BranchesBuilder struct {
+	branches []Branch
+	seen     map[string]struct{}
+}
+
+// NewBranchesBuilder creates a builder sized for up to capHint branches.
+func NewBranchesBuilder(capHint int) *BranchesBuilder {
+	if capHint < 0 {
+		capHint = 0
+	}
+	return &BranchesBuilder{
+		branches: make([]Branch, 0, capHint),
+		seen:     make(map[string]struct{}, capHint),
+	}
+}
+
+// Add adds branch if it is not already present.
+func (b *BranchesBuilder) Add(branch Branch) {
+	if b == nil {
+		return
+	}
+	name := branch.GetName()
+	if _, exists := b.seen[name]; exists {
+		return
+	}
+	b.branches = append(b.branches, branch)
+	b.seen[name] = struct{}{}
+}
+
+// AddAll adds each branch in order, deduplicating by branch name.
+func (b *BranchesBuilder) AddAll(branches Branches) {
+	for _, branch := range branches {
+		b.Add(branch)
+	}
+}
+
+// Build returns the built ordered branch set.
+func (b *BranchesBuilder) Build() Branches {
+	if b == nil || len(b.branches) == 0 {
+		return Branches{}
+	}
+	branches := make([]Branch, len(b.branches))
+	copy(branches, b.branches)
+	return Branches(branches)
+}
+
 // NewBranches creates an ordered branch set from branches.
 func NewBranches(branches []Branch) Branches {
-	list := make([]Branch, 0, len(branches))
-	seen := make(map[string]bool, len(branches))
+	builder := NewBranchesBuilder(len(branches))
 	for _, branch := range branches {
-		name := branch.GetName()
-		if seen[name] {
-			continue
-		}
-		list = append(list, branch)
-		seen[name] = true
+		builder.Add(branch)
 	}
-	return Branches(list)
+	return builder.Build()
 }
 
 // BranchesOf creates an ordered branch set from variadic branches.
 func BranchesOf(branches ...Branch) Branches {
 	return NewBranches(branches)
+}
+
+// BranchesFromNames resolves branch names into an ordered branch set.
+func BranchesFromNames(nav StackNavigator, branchNames []string) Branches {
+	builder := NewBranchesBuilder(len(branchNames))
+	for _, branchName := range branchNames {
+		builder.Add(nav.GetBranch(branchName))
+	}
+	return builder.Build()
 }
 
 // Append returns a new branch set with branches appended in order.

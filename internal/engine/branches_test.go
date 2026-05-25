@@ -78,6 +78,27 @@ func TestBranches(t *testing.T) {
 
 		require.Equal(t, []string{"feature"}, branches.Names())
 	})
+
+	t.Run("BranchesBuilder preserves order without repeated copies", func(t *testing.T) {
+		t.Parallel()
+
+		builder := NewBranchesBuilder(4)
+		builder.Add(main)
+		builder.Add(feature)
+		builder.Add(main)
+		builder.Add(bugfix)
+
+		require.Equal(t, []string{"main", "feature", "bugfix"}, builder.Build().Names())
+	})
+
+	t.Run("BranchesFromNames resolves ordered branch sets", func(t *testing.T) {
+		t.Parallel()
+
+		eng := &engineImpl{}
+		branches := BranchesFromNames(eng, []string{"feature", "bugfix", "feature"})
+
+		require.Equal(t, []string{"feature", "bugfix"}, branches.Names())
+	})
 }
 
 func TestBranchStatuses(t *testing.T) {

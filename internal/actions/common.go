@@ -264,6 +264,7 @@ func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPla
 	if plan == nil || validation == nil {
 		return nil, nil
 	}
+	builder := engine.NewBranchesBuilder(len(branches))
 	for _, branch := range branches {
 		branchName := branch.GetName()
 		if _, exists := plan.ApplyMap[branchName]; !exists {
@@ -276,10 +277,10 @@ func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPla
 
 		switch item.Action {
 		case engine.RestackPlanApplyFrozen, engine.RestackPlanApplyAnchor:
-			success = success.Append(branch)
+			builder.Add(branch)
 		case engine.RestackPlanApplyValidated:
 			if _, hasSHA := validation.NewSHAs[branchName]; hasSHA {
-				success = success.Append(branch)
+				builder.Add(branch)
 			} else if branchName == validation.FailedBranch {
 				conflicts = append(conflicts, branchName)
 			}
@@ -288,7 +289,7 @@ func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPla
 			// for the next restack pass.
 		}
 	}
-	return success, conflicts
+	return builder.Build(), conflicts
 }
 
 func getCurrentBranchName(eng engine.BranchReader) string {

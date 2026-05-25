@@ -33,10 +33,7 @@ func DiscoverStacksWithSort(eng engine.BranchReader, strategy engine.SortStrateg
 
 	stacks := make([]MultiStackInfo, 0, len(independentStacks))
 	for _, independentStack := range independentStacks {
-		branches := engine.Branches{}
-		for _, branchName := range independentStack.Branches {
-			branches = branches.Append(eng.GetBranch(branchName))
-		}
+		branches := engine.BranchesFromNames(eng, independentStack.Branches)
 
 		// Get scope from the root branch
 		scope := ""

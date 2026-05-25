@@ -384,16 +384,16 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		}
 
 		// Prepare engine branches and track parents
-		branches := engine.Branches{}
+		branches := engine.NewBranchesBuilder(len(batchNames))
 		parents := make(map[string]string)
 		for _, name := range batchNames {
 			branch := eng.GetBranch(name)
-			branches = branches.Append(branch)
+			branches.Add(branch)
 			parents[name] = getParentName(branch)
 		}
 
 		// Batch delete from engine
-		if _, err := eng.DeleteBranches(c, branches); err != nil {
+		if _, err := eng.DeleteBranches(c, branches.Build()); err != nil {
 			return fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(batchNames, ", "), err)
 		}
 

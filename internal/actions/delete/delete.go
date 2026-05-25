@@ -157,10 +157,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	if len(childrenToRestack) > 0 {
 		handler.OnRestack(len(childrenToRestack))
 		out.Info("Restacking children of deleted %s...", actions.Pluralize("branch", len(toDelete)))
-		branches := engine.Branches{}
-		for _, name := range childrenToRestack {
-			branches = branches.Append(eng.GetBranch(name))
-		}
+		branches := engine.BranchesFromNames(eng, childrenToRestack)
 		if err := actions.RestackBranches(ctx, branches); err != nil {
 			return Result{}, fmt.Errorf("failed to restack children: %w", err)
 		}

@@ -235,7 +235,7 @@ func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opt
 	}
 
 	rendered := renderer.RenderStackDetailed(branchName, opts)
-	visible := engine.Branches{}
+	visible := engine.NewBranchesBuilder(len(rendered))
 	seen := make(map[string]struct{}, len(rendered))
 	for _, renderedBranch := range rendered {
 		if _, ok := seen[renderedBranch.Name]; ok {
@@ -243,10 +243,10 @@ func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opt
 		}
 		seen[renderedBranch.Name] = struct{}{}
 		if branch, ok := branchByName[renderedBranch.Name]; ok {
-			visible = visible.Append(branch)
+			visible.Add(branch)
 		}
 	}
-	return visible
+	return visible.Build()
 }
 
 func shouldPreloadLogBranchData(opts LogOptions, visibleCount, totalCount int) bool {
@@ -321,12 +321,7 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 	ghClient := ctx.GitHub()
 	var ciStatuses map[string]*github.CheckStatus
 	if ghClient != nil {
-		branchNames := make([]string, 0, len(branchesToInclude))
-		for _, b := range branchesToInclude {
-			if !b.IsTrunk() {
-				branchNames = append(branchNames, b.GetName())
-			}
-		}
+		branchNames := branchesToInclude.WithoutTrunk().Names()
 		if len(branchNames) > 0 {
 			ciStatuses, _ = ghClient.BatchGetPRChecksStatus(ctx.Context, branchNames)
 		}
@@ -347,15 +342,16 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 	branchResults := make(chan branchResult, len(branchesToInclude))
 
 	// Filter out worktree anchors before parallel processing
-	processable := engine.Branches{}
+	processable := engine.NewBranchesBuilder(len(branchesToInclude))
 	for _, b := range branchesToInclude {
 		if !b.IsWorktreeAnchor() {
-			processable = processable.Append(b)
+			processable.Add(b)
 		}
 	}
+	processableBranches := processable.Build()
 
-	if len(processable) > 0 {
-		utils.Run(processable.All(), func(branch engine.Branch) {
+	if len(processableBranches) > 0 {
+		utils.Run(processableBranches.All(), func(branch engine.Branch) {
 			branchName := branch.GetName()
 
 			info := LogBranchInfo{

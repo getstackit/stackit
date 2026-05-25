@@ -235,6 +235,31 @@ func TestStackGraphForEachDepth(t *testing.T) {
 		require.Equal(t, []int{0, 1, 2, 3}, depthOrder)
 	})
 
+	t.Run("DepthGroups exposes named grouped traversal", func(t *testing.T) {
+		t.Parallel()
+
+		groups := graph.DepthGroups()
+		require.Len(t, groups, 4)
+		require.Equal(t, 0, groups[0].Depth)
+		require.Equal(t, []string{"main"}, groups[0].Branches.Names())
+		require.Equal(t, 1, groups[1].Depth)
+		require.Equal(t, []string{"a", "b"}, groups[1].Branches.Names())
+	})
+
+	t.Run("DepthGroupsSeq supports early exit", func(t *testing.T) {
+		t.Parallel()
+
+		seen := []int{}
+		for group := range graph.DepthGroupsSeq() {
+			seen = append(seen, group.Depth)
+			if group.Depth == 1 {
+				break
+			}
+		}
+
+		require.Equal(t, []int{0, 1}, seen)
+	})
+
 	t.Run("branches at same depth are independent", func(t *testing.T) {
 		t.Parallel()
 

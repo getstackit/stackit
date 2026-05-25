@@ -51,20 +51,20 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 
 	// Remove duplicates and filter out non-existent/untracked branches and dirty stacks
 	seen := make(map[string]bool)
-	uniqueBranches := engine.Branches{}
+	uniqueBranches := engine.NewBranchesBuilder(len(branchesToRestack))
 	for _, branchName := range branchesToRestack {
 		if !seen[branchName] && !isInDirtyStack(ctx, branchName, dirtyAnchors) {
 			seen[branchName] = true
 			branch := nav.GetBranch(branchName)
 			// Only include branches that exist, are tracked, and are not trunks
 			if branch.IsTracked() && !branch.IsTrunk() {
-				uniqueBranches = uniqueBranches.Append(branch)
+				uniqueBranches.Add(branch)
 			}
 		}
 	}
 
 	// Sort branches topologically (parents before children) for correct restack order
-	sortedBranches := nav.SortBranchesTopologically(uniqueBranches)
+	sortedBranches := nav.SortBranchesTopologically(uniqueBranches.Build())
 
 	// Restack branches with handler for progress
 	if len(sortedBranches) > 0 {

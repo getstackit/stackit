@@ -376,19 +376,22 @@ type branchDepthGroup struct {
 func groupBranchesByDepth(branches engine.Branches, graph *engine.StackGraph) []branchDepthGroup {
 	groups := []branchDepthGroup{}
 	groupByDepth := make(map[int]int)
+	builders := make(map[int]*engine.BranchesBuilder)
 	for _, branch := range branches {
 		depth := 0
 		if node := graph.GetNode(branch.GetName()); node != nil {
 			depth = node.Depth
 		}
 
-		idx, ok := groupByDepth[depth]
-		if !ok {
-			idx = len(groups)
-			groupByDepth[depth] = idx
+		if _, ok := groupByDepth[depth]; !ok {
+			groupByDepth[depth] = len(groups)
 			groups = append(groups, branchDepthGroup{depth: depth})
+			builders[depth] = engine.NewBranchesBuilder(len(branches))
 		}
-		groups[idx].branches = groups[idx].branches.Append(branch)
+		builders[depth].Add(branch)
+	}
+	for i := range groups {
+		groups[i].branches = builders[groups[i].depth].Build()
 	}
 	return groups
 }
@@ -541,16 +544,16 @@ func collectMultiStackBranches(eng engine.BranchReader, opts Options) (engine.Br
 		stacks = filtered
 	}
 
-	branches := engine.Branches{}
+	branches := engine.NewBranchesBuilder(len(stacks) * 4)
 	for _, stack := range stacks {
 		for _, branchName := range stack.Branches {
 			branch := eng.GetBranch(branchName)
 			if branch.IsTracked() && !branch.IsTrunk() {
-				branches = branches.Append(branch)
+				branches.Add(branch)
 			}
 		}
 	}
-	return branches, nil
+	return branches.Build(), nil
 }
 
 func exitCodeFromError(err error) int {

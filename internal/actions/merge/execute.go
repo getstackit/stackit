@@ -390,6 +390,12 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 				// Engine already swallows "branch not found" — any error here is a real failure
 				// the user needs to know about (e.g., branch checked out in another worktree).
 				out.Warn("Failed to delete branch %s: %v", step.BranchName, err)
+			} else {
+				// Drop the remote metadata ref so it doesn't linger on origin and surface as
+				// a phantom conflict next time someone runs sync.
+				if err := eng.Git().BatchDeleteRemoteMetadataRefs(ctx.Context, []string{step.BranchName}); err != nil {
+					out.Debug("Failed to delete remote metadata ref for %s: %v", step.BranchName, err)
+				}
 			}
 		}
 

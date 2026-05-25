@@ -133,14 +133,14 @@ func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
 		log.Printf("[%s] GitHub client unavailable: %v", rc.ID, runtimeCtx.GitHubError())
 	}
 
-	entry := &registry.RepoEntry{
+	entry := registry.NewEntry(registry.EntryConfig{
 		ID:          rc.ID,
 		DisplayName: rc.DisplayName,
 		RepoRoot:    runtimeCtx.RepoRoot,
 		Remote:      rc.Remote,
 		Engine:      runtimeCtx.Engine,
 		GitHub:      gh,
-	}
+	})
 	if runtimeCtx.Logger != nil {
 		entry.AddCloser(runtimeCtx.Logger.Close)
 	}

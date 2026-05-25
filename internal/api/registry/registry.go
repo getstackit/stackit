@@ -1,27 +1,49 @@
 // Package registry holds the set of repositories served by the stackit
 // server, keyed by a stable repoID. Each entry owns the per-repository
-// engine and (in follow-up changes) its own ref watcher and event
-// broadcaster, so multiple repositories can be served from one process
-// without leaking events between them.
+// engine, GitHub client, event broadcaster, and ref watcher — so multiple
+// repositories can be served from one process without leaking events
+// between them.
 package registry
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"sort"
 	"sync"
+	"time"
 
+	"github.com/getstackit/stackit/internal/api/watcher"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
 )
+
+// watcherDebounce is the interval the ref watcher coalesces filesystem
+// events over before notifying the engine. Matches the previous server-
+// scoped value.
+const watcherDebounce = 200 * time.Millisecond
 
 // idPattern restricts repo IDs to characters that survive in URL paths
 // without escaping, keeping the routing surface simple.
 var idPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+// EntryConfig is the input to NewEntry. It captures the per-repo state the
+// constructor needs to wire up the broadcaster + watcher.
+type EntryConfig struct {
+	ID          string
+	DisplayName string
+	RepoRoot    string
+	Remote      string
+	Engine      engine.Engine
+	GitHub      github.Client
+}
+
 // RepoEntry is the per-repository state required to serve API requests for
-// one repo. Per-repo broadcaster and watcher are wired in by a follow-up PR.
+// one repo. Constructed via NewEntry so the watcher + broadcaster lifecycle
+// stays consistent across call sites; raw struct literals are still usable
+// in tests where neither is needed.
 type RepoEntry struct {
 	ID          string
 	DisplayName string
@@ -30,12 +52,48 @@ type RepoEntry struct {
 	Engine      engine.Engine
 	GitHub      github.Client
 
+	Broadcaster *Broadcaster
+	Watcher     *watcher.RefWatcher
+
 	closers []func() error
+}
+
+// NewEntry constructs a ready-to-use entry with a broadcaster, a ref
+// watcher (when RepoRoot is set), and closers that cleanly tear down both
+// when registry.Close is called. The watcher goroutine starts immediately.
+func NewEntry(cfg EntryConfig) *RepoEntry {
+	entry := &RepoEntry{
+		ID:          cfg.ID,
+		DisplayName: cfg.DisplayName,
+		RepoRoot:    cfg.RepoRoot,
+		Remote:      cfg.Remote,
+		Engine:      cfg.Engine,
+		GitHub:      cfg.GitHub,
+		Broadcaster: NewBroadcaster(),
+	}
+	entry.AddCloser(func() error { entry.Broadcaster.Close(); return nil })
+
+	if cfg.RepoRoot != "" && cfg.Engine != nil {
+		entry.Watcher = watcher.NewRefWatcher(cfg.RepoRoot, watcherDebounce, makeWatcherCallback(entry))
+		watcherDone := make(chan error, 1)
+		go func() {
+			watcherDone <- entry.Watcher.Start()
+		}()
+		entry.AddCloser(func() error {
+			entry.Watcher.Stop()
+			if err := <-watcherDone; err != nil {
+				return fmt.Errorf("ref watcher: %w", err)
+			}
+			return nil
+		})
+	}
+
+	return entry
 }
 
 // AddCloser registers a teardown function that Registry.Close will invoke
 // in reverse-registration order. Use it to attach lifecycle hooks (logger
-// closers, watcher stoppers, etc.) when constructing an entry.
+// closers, etc.) when constructing an entry.
 func (e *RepoEntry) AddCloser(fn func() error) {
 	if fn == nil {
 		return
@@ -52,6 +110,40 @@ func (e *RepoEntry) close() error {
 	}
 	e.closers = nil
 	return errors.Join(errs...)
+}
+
+// makeWatcherCallback returns the function the ref watcher invokes when
+// the repo's refs change. It rebuilds the engine, detects branch switches,
+// and re-broadcasts both "branch_switched" and "refresh" so connected SSE
+// clients refetch.
+func makeWatcherCallback(entry *RepoEntry) func() {
+	trunkName := entry.Engine.Trunk().GetName()
+	var lastCurrentBranch string
+	if cb := entry.Engine.CurrentBranch(); cb != nil {
+		lastCurrentBranch = cb.GetName()
+	}
+
+	return func() {
+		if err := entry.Engine.Rebuild(trunkName); err != nil {
+			log.Printf("[%s] engine rebuild failed: %v", entry.ID, err)
+			return
+		}
+
+		if cb := entry.Engine.CurrentBranch(); cb != nil {
+			newBranch := cb.GetName()
+			if lastCurrentBranch != "" && newBranch != lastCurrentBranch {
+				data, _ := json.Marshal(map[string]string{
+					"from":      lastCurrentBranch,
+					"to":        newBranch,
+					"timestamp": time.Now().Format(time.RFC3339),
+				})
+				entry.Broadcaster.Broadcast("branch_switched", string(data))
+			}
+			lastCurrentBranch = newBranch
+		}
+
+		entry.Broadcaster.Broadcast("refresh", "{}")
+	}
 }
 
 // Registry is a goroutine-safe collection of RepoEntries keyed by ID.

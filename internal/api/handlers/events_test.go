@@ -5,6 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/getstackit/stackit/internal/api/registry"
 )
 
 type signalingResponseWriter struct {
@@ -29,10 +33,18 @@ func (w *signalingResponseWriter) Write(p []byte) (int, error) {
 }
 
 func TestEventsHandlerReturnsWhenBroadcasterCloses(t *testing.T) {
-	broadcaster := NewEventBroadcaster()
-	handler := NewEventsHandler(broadcaster)
+	t.Parallel()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	reg := registry.New()
+	broadcaster := registry.NewBroadcaster()
+	require.NoError(t, reg.Add(&registry.RepoEntry{
+		ID:          "default",
+		Broadcaster: broadcaster,
+	}))
+	handler := NewEventsHandler(reg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/repos/default/events", nil)
+	req.SetPathValue("repoID", "default")
 	recorder := newSignalingResponseWriter()
 
 	done := make(chan struct{})
@@ -54,4 +66,22 @@ func TestEventsHandlerReturnsWhenBroadcasterCloses(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("handler did not exit after broadcaster shutdown")
 	}
+}
+
+func TestEventsHandlerReturns404ForUnknownRepo(t *testing.T) {
+	t.Parallel()
+
+	reg := registry.New()
+	require.NoError(t, reg.Add(&registry.RepoEntry{
+		ID:          "default",
+		Broadcaster: registry.NewBroadcaster(),
+	}))
+	handler := NewEventsHandler(reg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/repos/missing/events", nil)
+	req.SetPathValue("repoID", "missing")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusNotFound, rr.Code)
 }

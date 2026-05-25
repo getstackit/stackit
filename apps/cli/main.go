@@ -2,11 +2,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
 
 	"github.com/getstackit/stackit/internal/cli"
+	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -44,6 +46,10 @@ func run() int {
 
 	rootCmd := cli.NewRootCmd(version, commit, date)
 	if err := rootCmd.Execute(); err != nil {
+		var exitCodeErr *common.ExitCodeError
+		if errors.As(err, &exitCodeErr) {
+			return exitCodeErr.ExitCode()
+		}
 		return 1
 	}
 	return 0

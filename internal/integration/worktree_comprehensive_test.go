@@ -2,10 +2,13 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/getstackit/stackit/internal/cli/common"
 )
 
 // =============================================================================
@@ -59,6 +62,66 @@ func TestWorktreeBasicOperations(t *testing.T) {
 			OutputContains("stack-a").
 			OutputContains("stack-b").
 			OutputContains("stack-c")
+	})
+
+	run("worktree run creates generated anchor and runs command", func(t *testing.T, sh *TestShell) {
+		sh.Run("worktree run -- /bin/sh -c 'pwd > run-marker.txt'")
+
+		sh.Run("worktree list --json")
+		var list struct {
+			Worktrees []struct {
+				Name         string   `json:"name"`
+				AnchorBranch string   `json:"anchor_branch"`
+				Path         string   `json:"path"`
+				RootBranches []string `json:"root_branches"`
+			} `json:"Worktrees"`
+		}
+		if err := json.Unmarshal([]byte(sh.Output()), &list); err != nil {
+			t.Fatalf("failed to parse worktree list JSON: %v\n%s", err, sh.Output())
+		}
+		if len(list.Worktrees) != 1 {
+			t.Fatalf("expected one generated worktree, got %d", len(list.Worktrees))
+		}
+
+		wt := list.Worktrees[0]
+		if !strings.HasPrefix(wt.Name, "sh-") {
+			t.Fatalf("expected generated worktree name to use command prefix, got %q", wt.Name)
+		}
+		if !sh.isWorktreeAnchorBranch(wt.AnchorBranch) {
+			t.Fatalf("expected %s to be a worktree anchor", wt.AnchorBranch)
+		}
+		if len(wt.RootBranches) != 0 {
+			t.Fatalf("expected generated worktree to start without real branches, got %v", wt.RootBranches)
+		}
+		if _, err := os.Stat(filepath.Join(wt.Path, "run-marker.txt")); err != nil {
+			t.Fatalf("expected command to run in worktree %s: %v", wt.Path, err)
+		}
+
+		shW := sh.InWorktree(wt.Path)
+		shW.OnBranch(wt.AnchorBranch).
+			WriteFile("first.txt", "first").
+			Run("create first -m 'first branch'").
+			OnBranch("first")
+
+		meta := sh.readBranchMeta("first")
+		if meta.ParentBranchName == nil || *meta.ParentBranchName != wt.AnchorBranch {
+			t.Fatalf("expected first branch parent %s, got %#v", wt.AnchorBranch, meta.ParentBranchName)
+		}
+	})
+
+	run("worktree run returns child process exit code", func(t *testing.T, sh *TestShell) {
+		result := sh.inProcessCLI.Run(sh.Dir(), "worktree", "run", "--name", "exit-test", "--", "/bin/sh", "-c", "exit 7")
+		if result.Err == nil {
+			t.Fatalf("expected child process failure")
+		}
+
+		var exitErr *common.ExitCodeError
+		if !errors.As(result.Err, &exitErr) {
+			t.Fatalf("expected ExitCodeError, got %T: %v", result.Err, result.Err)
+		}
+		if exitErr.ExitCode() != 7 {
+			t.Fatalf("expected exit code 7, got %d", exitErr.ExitCode())
+		}
 	})
 
 	run("worktree list json shows root branch and actions", func(t *testing.T, sh *TestShell) {

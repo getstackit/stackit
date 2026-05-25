@@ -223,8 +223,14 @@ The generated skills are designed to:
 ### Example Agent Workflow
 
 ```bash
+# Start Claude Code or Codex in a fresh generated worktree
+stackit wt run -- claude
+stackit wt run -- codex
+
+# Inside the generated worktree, create the first real branch under its anchor
+stackit create add-user-auth -m "feat: add user auth"
+
 # Claude Code or Codex can help with complex stacking operations
-stack-create add-user-auth    # Creates branch with proper commit message
 # Make changes...
 stack-absorb                 # Intelligently distributes changes across commits
 stack-fix                    # Diagnoses and fixes any issues
@@ -275,6 +281,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | `stackit worktree attach <branch>` | Move an existing stack into a managed worktree by inserting a hidden anchor above it |
 | `stackit worktree detach <name>` | Remove a managed worktree but keep and reparent its real branches |
 | `stackit worktree prune` | Clean up empty or stale managed worktrees |
+| `stackit worktree run -- <cmd>` | Create a generated anchored worktree and run a command inside it |
 | `stackit worktree repair [name]` | Repair stale or legacy managed worktree registrations |
 
 ### Stack Operations
@@ -373,6 +380,14 @@ stackit worktree open my-feature
 # Without shell integration: use command substitution
 cd $(stackit worktree open my-feature)
 ```
+
+To hand a fresh isolated workspace to an AI coding tool without choosing a name:
+```bash
+stackit wt run -- claude
+stackit wt run -- codex
+```
+Stackit generates the worktree name, creates a hidden anchor at trunk, and runs the tool inside that worktree. When the tool exits, your shell stays in the original directory. The first `stackit create` run inside that worktree creates the first real branch under the anchor.
+
 During `stackit sync`, Stackit can automatically clean up managed worktrees that are clean and empty after merged or deleted branches are removed.
 
 If you upgrade from an older Stackit version with pre-anchor managed worktrees, run `stackit worktree list` once. Any `legacy` or `repair` entries can be migrated in place with `stackit worktree repair`.
@@ -521,7 +536,7 @@ hooks:
 
 #### Worktree Hooks
 
-The `hooks.post-worktree-create` option allows you to run commands automatically after Stackit creates a managed worktree, including `stackit create -w`, `stackit worktree create`, and `stackit worktree attach`. This is useful for:
+The `hooks.post-worktree-create` option allows you to run commands automatically after Stackit creates a managed worktree, including `stackit create -w`, `stackit worktree create`, `stackit worktree attach`, and `stackit worktree run`. This is useful for:
 
 - Installing dependencies (`npm install`, `bundle install`, etc.)
 - Setting up environment files

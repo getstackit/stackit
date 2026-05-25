@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	gh "github.com/google/go-github/v62/github"
+	gh "github.com/google/go-github/v67/github"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/submit"

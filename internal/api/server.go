@@ -67,8 +67,12 @@ func (s *Server) Start() error {
 	branchDiffHandler := handlers.NewBranchDiffHandler(reg)
 	submitHandler := handlers.NewSubmitHandler(reg)
 	eventsHandler := handlers.NewEventsHandler(s.broadcaster)
+	reposListHandler := handlers.NewReposListHandler(reg)
 
 	for _, prefix := range prefixes {
+		// Unscoped index of available repos.
+		apiMux.Handle("GET "+prefix+"/repos", reposListHandler)
+
 		// New multi-repo routes. {repoID} resolves through the registry;
 		// unknown IDs return 404 from inside the handler.
 		apiMux.Handle("GET "+prefix+"/repos/{repoID}/view", viewHandler)

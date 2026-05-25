@@ -541,7 +541,7 @@ func (d *demoGitRunner) UpdateRef(_, _ string) error {
 	return nil
 }
 
-func (d *demoGitRunner) DeleteRef(_ string) error {
+func (d *demoGitRunner) DeleteRef(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -584,7 +584,7 @@ func (d *demoGitRunner) WriteMetadata(_ string, _ *git.Meta) error {
 	return nil
 }
 
-func (d *demoGitRunner) DeleteMetadata(_ string) error {
+func (d *demoGitRunner) DeleteMetadata(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -654,7 +654,7 @@ func (d *demoGitRunner) BatchDeleteRemoteMetadataRefs(_ context.Context, _ []str
 	return nil
 }
 
-func (d *demoGitRunner) TestRemoteRefCompatibility() error {
+func (d *demoGitRunner) TestRemoteRefCompatibility(_ context.Context) error {
 	return nil
 }
 
@@ -666,7 +666,7 @@ func (d *demoGitRunner) WriteWorktreeMeta(_ string, _ *git.WorktreeMeta) error {
 	return nil
 }
 
-func (d *demoGitRunner) DeleteWorktreeMeta(_ string) error {
+func (d *demoGitRunner) DeleteWorktreeMeta(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -714,7 +714,7 @@ func (d *demoGitRunner) WriteStackMeta(_ string, _ *git.StackMeta) error {
 	return nil
 }
 
-func (d *demoGitRunner) DeleteStackMeta(_ string) error {
+func (d *demoGitRunner) DeleteStackMeta(_ context.Context, _ string) error {
 	return nil
 }
 

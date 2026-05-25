@@ -173,7 +173,7 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 		}
 	}
 
-	if unregErr := ctx.Engine.UnregisterWorktree(snapshot.Info.AnchorBranch); unregErr != nil {
+	if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, snapshot.Info.AnchorBranch); unregErr != nil {
 		if pathRemoved {
 			return rollback(fmt.Errorf("failed to unregister worktree: %w", unregErr))
 		}
@@ -406,7 +406,7 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 
 	cleanup := func() {
 		if registered {
-			if err := eng.UnregisterWorktree(anchorBranchName); err != nil {
+			if err := eng.UnregisterWorktree(ctx.Context, anchorBranchName); err != nil {
 				out.Debug("Failed to unregister worktree during rollback: %v", err)
 			}
 		}
@@ -868,7 +868,7 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 		out.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
 	}
 
-	if unregErr := ctx.Engine.UnregisterWorktree(snapshot.Info.AnchorBranch); unregErr != nil {
+	if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, snapshot.Info.AnchorBranch); unregErr != nil {
 		return rollback(fmt.Errorf("failed to unregister worktree: %w", unregErr))
 	}
 	unregistered = true

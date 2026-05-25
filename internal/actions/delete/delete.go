@@ -282,7 +282,7 @@ func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []stri
 		}
 
 		// Unregister the worktree from the registry
-		if unregErr := ctx.Engine.UnregisterWorktree(stackRoot); unregErr != nil {
+		if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, stackRoot); unregErr != nil {
 			ctx.Output.Debug("Failed to unregister worktree for %s: %v", stackRoot, unregErr)
 		}
 	}

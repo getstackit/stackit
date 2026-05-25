@@ -20,7 +20,7 @@ func TestCheckoutActionWorktreeSwitchIncludesTargetBranch(t *testing.T) {
 
 	err := s.Engine.RegisterWorktree("feature", s.Context.RepoRoot)
 	require.NoError(t, err)
-	defer func() { _ = s.Engine.UnregisterWorktree("feature") }()
+	defer func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") }()
 
 	s.Checkout("main")
 

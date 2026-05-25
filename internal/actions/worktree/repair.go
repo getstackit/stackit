@@ -85,7 +85,7 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 		}
 
 		if !entry.Exists {
-			if err := ctx.Engine.UnregisterWorktree(wtInfo.AnchorBranch); err != nil {
+			if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
 				return RepairEntry{}, fmt.Errorf("failed to remove stale registration: %w", err)
 			}
 			return RepairEntry{
@@ -123,8 +123,8 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 			if err := ctx.Engine.RegisterWorktreeWithName(stackRootName, wtInfo.Path, wtInfo.Name); err != nil {
 				return RepairEntry{}, fmt.Errorf("failed to register worktree under anchor %s: %w", stackRootName, err)
 			}
-			if err := ctx.Engine.UnregisterWorktree(wtInfo.AnchorBranch); err != nil {
-				_ = ctx.Engine.UnregisterWorktree(stackRootName)
+			if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
+				_ = ctx.Engine.UnregisterWorktree(ctx.Context, stackRootName)
 				return RepairEntry{}, fmt.Errorf("failed to remove stale registration %s: %w", style.ColorBranchName(wtInfo.AnchorBranch, false), err)
 			}
 			return RepairEntry{
@@ -187,7 +187,7 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 	registered := false
 	cleanup := func() {
 		if registered {
-			_ = ctx.Engine.UnregisterWorktree(anchorBranchName)
+			_ = ctx.Engine.UnregisterWorktree(ctx.Context, anchorBranchName)
 		}
 		if rootReparented {
 			_ = ctx.Engine.ReparentBranch(ctx.Context, ctx.Engine.GetBranch(rootBranchName), ctx.Engine.GetBranch(originalParent))
@@ -221,7 +221,7 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 		return "", fmt.Errorf("failed to register worktree under anchor %s: %w", style.ColorBranchName(anchorBranchName, false), err)
 	}
 	registered = true
-	if err := ctx.Engine.UnregisterWorktree(wtInfo.AnchorBranch); err != nil {
+	if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
 		cleanup()
 		return "", fmt.Errorf("failed to remove legacy registration %s: %w", style.ColorBranchName(wtInfo.AnchorBranch, false), err)
 	}

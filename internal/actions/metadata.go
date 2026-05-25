@@ -25,7 +25,7 @@ func PushMetadataOnly(ctx *app.Context, eng MetadataPushEngine, branchNames []st
 
 	// Check if remote sync is enabled; if not, run compatibility test first
 	if !eng.IsRemoteSyncEnabled() {
-		if err := eng.Git().TestRemoteRefCompatibility(); err != nil {
+		if err := eng.Git().TestRemoteRefCompatibility(ctx.Context); err != nil {
 			out.Debug("Remote metadata sync not supported: %v", err)
 			return nil // Non-fatal
 		}

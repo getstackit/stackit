@@ -142,9 +142,9 @@ func (r *runner) WriteWorktreeMeta(stackRoot string, meta *WorktreeMeta) error {
 }
 
 // DeleteWorktreeMeta deletes worktree metadata for a stack root
-func (r *runner) DeleteWorktreeMeta(stackRoot string) error {
+func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error {
 	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
-	return r.DeleteRef(refName)
+	return r.DeleteRef(ctx, refName)
 }
 
 // GetWorktreePathForBranch returns the worktree path where a branch is checked out.

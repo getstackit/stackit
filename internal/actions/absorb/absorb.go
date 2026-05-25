@@ -101,17 +101,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// We need commits from all branches downstack, not just current branch
 	downstackBranches := graph.Range(*currentBranch, engine.StackRange{RecursiveParents: true})
 	// Include current branch (prepend since Range returns ancestors oldest-to-nearest)
-	downstackBranches = append([]engine.Branch{*currentBranch}, downstackBranches...)
+	downstackBranches = engine.BranchesOf(*currentBranch).Concat(downstackBranches)
 
 	// Terminate downstack search if a scope boundary is hit
 	currentScope := currentBranch.GetScope()
 	if currentScope.IsDefined() {
-		limitedDownstack := []engine.Branch{}
+		limitedDownstack := engine.Branches{}
 		for _, branch := range downstackBranches {
 			if branch.IsTrunk() || !branch.GetScope().Equal(currentScope) {
 				break
 			}
-			limitedDownstack = append(limitedDownstack, branch)
+			limitedDownstack = limitedDownstack.Append(branch)
 		}
 		downstackBranches = limitedDownstack
 	}

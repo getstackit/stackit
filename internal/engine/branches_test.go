@@ -51,6 +51,33 @@ func TestBranches(t *testing.T) {
 		require.Equal(t, []string{"bugfix", "feature", "main"}, branches.Reverse().Names())
 		require.Empty(t, branches.Last(0).Names())
 	})
+
+	t.Run("Concat returns a deduplicated ordered set", func(t *testing.T) {
+		t.Parallel()
+
+		branches := BranchesOf(main, feature).Concat(BranchesOf(feature, bugfix))
+
+		require.Equal(t, []string{"main", "feature", "bugfix"}, branches.Names())
+	})
+
+	t.Run("Filter returns a matching ordered set", func(t *testing.T) {
+		t.Parallel()
+
+		branches := BranchesOf(main, feature, bugfix).Filter(func(branch Branch) bool {
+			return branch.GetName() != "feature"
+		})
+
+		require.Equal(t, []string{"main", "bugfix"}, branches.Names())
+	})
+
+	t.Run("WithoutTrunk removes trunk branches", func(t *testing.T) {
+		t.Parallel()
+
+		eng := &engineImpl{trunk: "main"}
+		branches := BranchesOf(NewBranch("main", eng), NewBranch("feature", eng)).WithoutTrunk()
+
+		require.Equal(t, []string{"feature"}, branches.Names())
+	})
 }
 
 func TestBranchStatuses(t *testing.T) {

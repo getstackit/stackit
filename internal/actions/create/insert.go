@@ -64,16 +64,16 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 	}
 
 	// Update parent for each child to move
-	allToRestack := []engine.Branch{}
+	allToRestack := engine.Branches{}
 	for _, child := range toMove {
 		if err := runtimeCtx.Engine.TrackBranch(ctx, child, newBranch); err != nil {
 			return fmt.Errorf("failed to update parent for %s: %w", child, err)
 		}
 		childBranch := runtimeCtx.Engine.GetBranch(child)
-		allToRestack = append(allToRestack, childBranch)
+		allToRestack = allToRestack.Append(childBranch)
 
 		// Include all descendants in the restack operation
-		allToRestack = append(allToRestack, graph.Range(childBranch, engine.StackRange{RecursiveChildren: true})...)
+		allToRestack = allToRestack.Concat(graph.Range(childBranch, engine.StackRange{RecursiveChildren: true}))
 	}
 
 	// Sort topologically to ensure we restack from bottom to top

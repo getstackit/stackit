@@ -17,7 +17,7 @@ type StackNavigator interface {
 	GetBranch(branchName string) Branch
 	Graph(strategy SortStrategy) *StackGraph
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
-	SortBranchesTopologically(branches []Branch) []Branch
+	SortBranchesTopologically(branches Branches) Branches
 	FindBranchForCommit(commitSHA string) (string, error)
 	ValidateOnBranch() (string, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
@@ -134,8 +134,8 @@ type BranchTracking interface {
 	ReparentBranches(ctx context.Context, branchNames []string, newParent Branch) error
 	SetScope(ctx context.Context, branch Branch, scope Scope) error
 	SetBranchType(branch Branch, branchType git.BranchType) error
-	SetLocked(ctx context.Context, branches []Branch, reason LockReason) (BatchLockResult, error)
-	SetFrozen(ctx context.Context, branches []Branch, frozen bool) (BatchFreezeResult, error)
+	SetLocked(ctx context.Context, branches Branches, reason LockReason) (BatchLockResult, error)
+	SetFrozen(ctx context.Context, branches Branches, frozen bool) (BatchFreezeResult, error)
 
 	// BatchMarkNeedsPRBodyUpdate marks multiple branches as needing PR body update in a single atomic operation
 	BatchMarkNeedsPRBodyUpdate(branchNames []string) error
@@ -179,7 +179,7 @@ type BranchTracking interface {
 type BranchMutations interface {
 	RenameBranch(ctx context.Context, oldBranch, newBranch Branch) error
 	DeleteBranch(ctx context.Context, branch Branch) error
-	DeleteBranches(ctx context.Context, branches []Branch) ([]string, error)
+	DeleteBranches(ctx context.Context, branches Branches) ([]string, error)
 	CheckoutBranch(ctx context.Context, branch Branch) error
 	CreateAndCheckoutBranch(ctx context.Context, branch Branch) error
 	UpdateBranchRef(ctx context.Context, branchName, revision string) error

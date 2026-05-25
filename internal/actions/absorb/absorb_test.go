@@ -70,16 +70,16 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		downstackBranches := graph.Range(currentBranch, engine.StackRange{RecursiveParents: true})
 		// Include current branch
-		downstackBranches = append([]engine.Branch{currentBranch}, downstackBranches...)
+		downstackBranches = engine.BranchesOf(currentBranch).Concat(downstackBranches)
 
 		// Apply scope boundary filtering as absorb does
 		if currentScope.IsDefined() {
-			limitedDownstack := []engine.Branch{}
+			limitedDownstack := engine.Branches{}
 			for _, branch := range downstackBranches {
 				if branch.IsTrunk() || !branch.GetScope().Equal(currentScope) {
 					break
 				}
-				limitedDownstack = append(limitedDownstack, branch)
+				limitedDownstack = limitedDownstack.Append(branch)
 			}
 			downstackBranches = limitedDownstack
 		}
@@ -111,16 +111,16 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		downstackBranches := graph.Range(currentBranch, engine.StackRange{RecursiveParents: true})
 		// Include current branch
-		downstackBranches = append([]engine.Branch{currentBranch}, downstackBranches...)
+		downstackBranches = engine.BranchesOf(currentBranch).Concat(downstackBranches)
 
 		// Apply scope boundary filtering as absorb does
 		if currentScope.IsDefined() {
-			limitedDownstack := []engine.Branch{}
+			limitedDownstack := engine.Branches{}
 			for _, branch := range downstackBranches {
 				if branch.IsTrunk() || !branch.GetScope().Equal(currentScope) {
 					break
 				}
-				limitedDownstack = append(limitedDownstack, branch)
+				limitedDownstack = limitedDownstack.Append(branch)
 			}
 			downstackBranches = limitedDownstack
 		}
@@ -165,16 +165,16 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		downstackBranches := graph.Range(currentBranch, engine.StackRange{RecursiveParents: true})
 		// Include current branch
-		downstackBranches = append([]engine.Branch{currentBranch}, downstackBranches...)
+		downstackBranches = engine.BranchesOf(currentBranch).Concat(downstackBranches)
 
 		// Apply scope boundary filtering as absorb does
 		if currentScope.IsDefined() {
-			limitedDownstack := []engine.Branch{}
+			limitedDownstack := engine.Branches{}
 			for _, branch := range downstackBranches {
 				if branch.IsTrunk() || !branch.GetScope().Equal(currentScope) {
 					break // Stop at first scope mismatch
 				}
-				limitedDownstack = append(limitedDownstack, branch)
+				limitedDownstack = limitedDownstack.Append(branch)
 			}
 			downstackBranches = limitedDownstack
 		}

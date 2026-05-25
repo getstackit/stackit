@@ -323,10 +323,7 @@ func TestStackGraphRange(t *testing.T) {
 		// Get downstack from branch2 - should NOT include trunk (main)
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		stack := graph.Range(s.Engine.GetBranch("branch2"), engine.StackRange{RecursiveParents: true})
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.Equal(t, []string{"branch1"}, stackNames)
 		require.NotContains(t, stackNames, "main", "trunk should not be included in ancestors")
 	})
@@ -343,10 +340,7 @@ func TestStackGraphRange(t *testing.T) {
 		// Get upstack from branch1
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		stack := graph.Range(s.Engine.GetBranch("branch1"), engine.StackRange{RecursiveChildren: true})
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.Contains(t, stackNames, "branch2")
 		require.Contains(t, stackNames, "branch3")
 		require.Len(t, stackNames, 2)
@@ -361,10 +355,7 @@ func TestStackGraphRange(t *testing.T) {
 
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 		stack := graph.Range(s.Engine.GetBranch("branch1"), engine.StackRange{IncludeCurrent: true})
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.Equal(t, []string{"branch1"}, stackNames)
 	})
 
@@ -384,10 +375,7 @@ func TestStackGraphRange(t *testing.T) {
 			IncludeCurrent:    true,
 			RecursiveChildren: true,
 		})
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.NotContains(t, stackNames, "main", "trunk should not be included in ancestors")
 		require.Contains(t, stackNames, "branch1")
 		require.Contains(t, stackNames, "branch2")
@@ -411,11 +399,7 @@ func TestStackGraphRange(t *testing.T) {
 
 		// Should have all 4 branches
 		require.Len(t, stack, 4)
-		// Convert []engine.Branch to []string for require.Contains and indexOf
-		stackNames := make([]string, len(stack))
-		for i, b := range stack {
-			stackNames[i] = b.GetName()
-		}
+		stackNames := stack.Names()
 		require.Contains(t, stackNames, "stackA")
 		require.Contains(t, stackNames, "stackA-child")
 		require.Contains(t, stackNames, "stackB")

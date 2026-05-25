@@ -1,27 +1,21 @@
 package engine
 
 // Branches is an ordered set of branches.
-type Branches struct {
-	list   []Branch
-	byName map[string]Branch
-}
+type Branches []Branch
 
 // NewBranches creates an ordered branch set from branches.
 func NewBranches(branches []Branch) Branches {
 	list := make([]Branch, 0, len(branches))
-	byName := make(map[string]Branch, len(branches))
+	seen := make(map[string]bool, len(branches))
 	for _, branch := range branches {
 		name := branch.GetName()
-		if _, ok := byName[name]; ok {
+		if seen[name] {
 			continue
 		}
 		list = append(list, branch)
-		byName[name] = branch
+		seen[name] = true
 	}
-	return Branches{
-		list:   list,
-		byName: byName,
-	}
+	return Branches(list)
 }
 
 // BranchesOf creates an ordered branch set from variadic branches.
@@ -36,37 +30,62 @@ func (b Branches) Append(branches ...Branch) Branches {
 	return NewBranches(all)
 }
 
+// Concat returns a new branch set with other appended in order.
+func (b Branches) Concat(other Branches) Branches {
+	all := b.All()
+	all = append(all, other...)
+	return NewBranches(all)
+}
+
+// Filter returns a new branch set containing branches that match predicate.
+func (b Branches) Filter(predicate func(Branch) bool) Branches {
+	filtered := make([]Branch, 0, len(b))
+	for _, branch := range b {
+		if predicate(branch) {
+			filtered = append(filtered, branch)
+		}
+	}
+	return NewBranches(filtered)
+}
+
+// WithoutTrunk returns a new branch set without trunk branches.
+func (b Branches) WithoutTrunk() Branches {
+	return b.Filter(func(branch Branch) bool {
+		return !branch.IsTrunk()
+	})
+}
+
 // Last returns a branch set containing up to the last n branches.
 func (b Branches) Last(n int) Branches {
 	if n <= 0 {
 		return Branches{}
 	}
-	if n >= len(b.list) {
-		return NewBranches(b.list)
+	if n >= len(b) {
+		return NewBranches(b)
 	}
-	return NewBranches(b.list[len(b.list)-n:])
+	return NewBranches(b[len(b)-n:])
 }
 
 // Reverse returns a branch set with the branch order reversed.
 func (b Branches) Reverse() Branches {
-	reversed := make([]Branch, 0, len(b.list))
-	for i := len(b.list) - 1; i >= 0; i-- {
-		reversed = append(reversed, b.list[i])
+	reversed := make([]Branch, 0, len(b))
+	for i := len(b) - 1; i >= 0; i-- {
+		reversed = append(reversed, b[i])
 	}
 	return NewBranches(reversed)
 }
 
 // All returns the branches in insertion order.
 func (b Branches) All() []Branch {
-	branches := make([]Branch, len(b.list))
-	copy(branches, b.list)
+	branches := make([]Branch, len(b))
+	copy(branches, b)
 	return branches
 }
 
 // Names returns branch names in insertion order.
 func (b Branches) Names() []string {
-	names := make([]string, 0, len(b.list))
-	for _, branch := range b.list {
+	names := make([]string, 0, len(b))
+	for _, branch := range b {
 		names = append(names, branch.GetName())
 	}
 	return names
@@ -74,13 +93,17 @@ func (b Branches) Names() []string {
 
 // Contains returns true if the branch set contains name.
 func (b Branches) Contains(name string) bool {
-	_, ok := b.byName[name]
-	return ok
+	for _, branch := range b {
+		if branch.GetName() == name {
+			return true
+		}
+	}
+	return false
 }
 
 // Len returns the number of branches in the set.
 func (b Branches) Len() int {
-	return len(b.list)
+	return len(b)
 }
 
 // BranchStatuses contains status facts for an ordered branch set.

@@ -166,12 +166,12 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 		RecursiveChildren: false,
 	}
 	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
-	downstack := graph.RangeBranches(branch, rng)
+	downstack := graph.Range(branch, rng)
 
 	// Limit the number of branches we check to avoid slow metadata reads
 	const maxDownstackChecks = 10
 	downstackToCheck := downstack.Last(maxDownstackChecks).Reverse()
-	statuses := ctx.Engine.ReadBranchStatuses(engine.BranchesOf(branch).Append(downstackToCheck.All()...))
+	statuses := ctx.Engine.ReadBranchStatuses(engine.BranchesOf(branch).Append(downstackToCheck...))
 
 	if !statuses.IsUpToDate(branch) {
 		parent := branch.GetParentOrTrunk()
@@ -182,7 +182,7 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 	}
 
 	// Check nearest ancestors first (but limit to last maxDownstackChecks branches)
-	for _, ancestor := range downstackToCheck.All() {
+	for _, ancestor := range downstackToCheck {
 		if !statuses.IsUpToDate(ancestor) {
 			parent := ancestor.GetParentOrTrunk()
 			ctx.Output.Info("The downstack branch %s has fallen behind %s - you may want to %s.",

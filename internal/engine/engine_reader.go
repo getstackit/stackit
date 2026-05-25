@@ -191,14 +191,14 @@ func (e *engineImpl) FindBranchForCommit(commitSHA string) (string, error) {
 
 // SortBranchesTopologically sorts branches so parents come before children.
 // This ensures correct restack order (bottom of stack first).
-func (e *engineImpl) SortBranchesTopologically(branches []Branch) []Branch {
+func (e *engineImpl) SortBranchesTopologically(branches Branches) Branches {
 	if len(branches) == 0 {
 		return branches
 	}
 
 	// Build a full graph once and sort by computed depth, then name for stability.
 	graph := e.Graph(SortStrategyAlphabetical)
-	result := make([]Branch, len(branches))
+	result := make(Branches, len(branches))
 	copy(result, branches)
 	for i := 0; i < len(result)-1; i++ {
 		for j := i + 1; j < len(result); j++ {

@@ -44,7 +44,7 @@ type RestackPlan struct {
 // for empty groups (which never reach the action's main loop).
 type restackPlannedGroup struct {
 	rootBranch     string
-	sortedBranches []engine.Branch
+	sortedBranches engine.Branches
 	enginePlan     *engine.RestackPlan
 }
 
@@ -347,7 +347,7 @@ func restackGroupsParallel(
 
 type restackBranchGroup struct {
 	rootBranch string // independent stack root name (direct child of trunk)
-	branches   []engine.Branch
+	branches   engine.Branches
 }
 
 // planRestackBranchGroups computes the branch groups that RestackAction would
@@ -360,7 +360,7 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 	}
 	branch := eng.GetBranch(opts.BranchName)
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	branches := excludeTrunkBranches(graph.Range(branch, opts.Scope))
+	branches := graph.Range(branch, opts.Scope).WithoutTrunk()
 	return []restackBranchGroup{{
 		branches: branches,
 	}}, nil
@@ -402,17 +402,6 @@ func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptio
 		}
 	}
 	return groups, nil
-}
-
-func excludeTrunkBranches(branches []engine.Branch) []engine.Branch {
-	filtered := make([]engine.Branch, 0, len(branches))
-	for _, branch := range branches {
-		if branch.IsTrunk() {
-			continue
-		}
-		filtered = append(filtered, branch)
-	}
-	return filtered
 }
 
 func handleRestackProgress(

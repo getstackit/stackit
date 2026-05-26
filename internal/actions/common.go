@@ -342,15 +342,20 @@ func reportPlannedResults(ctx *app.Context, branches engine.Branches, plannedRes
 func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.RestackBranchResult, currentBranchName string, callback RestackProgressCallback) {
 	branchName := branch.GetName()
 
-	// Get new revision if available.
+	// Use the new revision the engine already captured during restack. Falling
+	// back to branch.GetRevision is fine if it's not set (RestackUnneeded
+	// leaves NewRev empty), but the common Done path doesn't need an extra
+	// git call.
 	newRev := ""
 	if result.Result == engine.RestackDone {
-		if rev, err := branch.GetRevision(); err == nil {
-			if len(rev) > 7 {
-				newRev = rev[:7]
-			} else {
-				newRev = rev
-			}
+		rev := result.NewRev
+		if rev == "" {
+			rev, _ = branch.GetRevision()
+		}
+		if len(rev) > 7 {
+			newRev = rev[:7]
+		} else {
+			newRev = rev
 		}
 	}
 

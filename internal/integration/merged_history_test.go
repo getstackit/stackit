@@ -88,7 +88,7 @@ func TestMergedDownstackHistory(t *testing.T) {
 
 		// Populate annotations
 		branch2 = sh.Engine.GetBranch("branch2")
-		ann := tui.GetBranchAnnotation(sh.Engine, branch2)
+		ann := tui.GetBranchAnnotation(sh.Engine, branch2, tui.AnnotationOptions{})
 		renderer.SetAnnotation("branch2", ann)
 
 		// Verify annotations include merged history

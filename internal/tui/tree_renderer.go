@@ -282,11 +282,20 @@ type AnnotationEnrichment struct {
 	WorktreeByStackRoot map[string]*engine.WorktreeInfo
 }
 
+// AnnotationOptions controls which expensive git-derived fields are skipped.
+// The zero value populates every field — opt out of work, never into it, so
+// callers that forget the struct still get a complete annotation.
+type AnnotationOptions struct {
+	SkipCommitMessages bool
+	SkipDiffStats      bool
+}
+
 // BuildFullAnnotation returns a fully populated BranchAnnotation including
 // git operations (SHA, commits, diff stats), CI status, review status, and worktree info.
 // Pass nil for enrichment to get just the base annotation without CI/worktree enrichment.
-func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, enrichment *AnnotationEnrichment) tree.BranchAnnotation {
-	ann := GetBranchAnnotation(eng, branch)
+// Pass AnnotationOptions{} for the full annotation, or set Skip* flags to skip work.
+func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, enrichment *AnnotationEnrichment, opts AnnotationOptions) tree.BranchAnnotation {
+	ann := GetBranchAnnotation(eng, branch, opts)
 
 	if enrichment == nil {
 		return ann
@@ -324,7 +333,8 @@ func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, enrichment *An
 
 // GetBranchAnnotation returns a tree.BranchAnnotation populated with standard branch metadata.
 // This includes git operations (SHA, commit count, diff stats) which may be slow.
-func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch) tree.BranchAnnotation {
+// Pass AnnotationOptions{} for the full annotation, or set Skip* flags to skip work.
+func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch, opts AnnotationOptions) tree.BranchAnnotation {
 	ann := tree.BranchAnnotation{
 		IsLocked:      branch.IsLocked(),
 		IsFrozen:      branch.IsFrozen(),
@@ -346,10 +356,14 @@ func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch) tree.Bra
 			ann.PRURL = prInfo.URL()
 		}
 
-		// Commit messages for detailed view
-		if commits, err := branch.GetAllCommits(engine.CommitFormatReadable); err == nil {
-			ann.CommitMessages = commits
-			ann.CommitCount = len(commits)
+		if !opts.SkipCommitMessages {
+			// Commit messages for detailed view
+			if commits, err := branch.GetAllCommits(engine.CommitFormatReadable); err == nil {
+				ann.CommitMessages = commits
+				ann.CommitCount = len(commits)
+			}
+		} else if count, err := eng.GetCommitCount(branch); err == nil {
+			ann.CommitCount = count
 		}
 
 		// Merged downstack history
@@ -367,9 +381,11 @@ func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch) tree.Bra
 		}
 
 		// Local stats
-		if added, deleted, err := branch.GetDiffStats(); err == nil {
-			ann.LinesAdded = added
-			ann.LinesDeleted = deleted
+		if !opts.SkipDiffStats {
+			if added, deleted, err := branch.GetDiffStats(); err == nil {
+				ann.LinesAdded = added
+				ann.LinesDeleted = deleted
+			}
 		}
 	}
 

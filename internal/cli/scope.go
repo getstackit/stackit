@@ -30,20 +30,22 @@ Use 'none' or 'clear' as the scope name to explicitly break the inheritance chai
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.Run(cmd, func(ctx *app.Context) error {
-				var scopeName string
-				if len(args) > 0 {
-					scopeName = args[0]
-				}
+			var scopeName string
+			if len(args) > 0 {
+				scopeName = args[0]
+			}
 
-				if scopeName == "" && !unset && !show {
-					show = true // Default to show if no args/flags
-				}
+			effectiveShow := show || (scopeName == "" && !unset)
+			globalOpts := common.GetGlobalOptions(cmd)
+			if effectiveShow {
+				globalOpts = common.ApplyReadOnlyCurrentBranch(globalOpts)
+			}
 
+			return common.RunWithOptions(cmd, globalOpts, func(ctx *app.Context) error {
 				opts := scope.Options{
 					Scope: scopeName,
 					Unset: unset,
-					Show:  show,
+					Show:  effectiveShow,
 				}
 
 				handler := stack.NewScopeUI(ctx.Output, utils.IsInteractive())

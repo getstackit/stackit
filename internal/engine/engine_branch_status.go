@@ -62,6 +62,7 @@ func (e *engineImpl) GetScope(branch Branch) Scope {
 
 // IsLocked checks if a branch is locked
 func (e *engineImpl) IsLocked(branch Branch) bool {
+	e.ensureBranchSharedLoaded(branch.GetName())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if state := e.readState(branch.GetName()); state != nil {
@@ -72,6 +73,7 @@ func (e *engineImpl) IsLocked(branch Branch) bool {
 
 // GetLockReason returns the reason why a branch is locked
 func (e *engineImpl) GetLockReason(branch Branch) LockReason {
+	e.ensureBranchSharedLoaded(branch.GetName())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if state := e.readState(branch.GetName()); state != nil {
@@ -140,6 +142,7 @@ func (e *engineImpl) SetBranchType(branch Branch, branchType git.BranchType) err
 
 // GetExplicitScope returns the explicit scope set for a branch (no inheritance)
 func (e *engineImpl) GetExplicitScope(branch Branch) Scope {
+	e.ensureBranchSharedLoaded(branch.GetName())
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 

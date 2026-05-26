@@ -342,6 +342,12 @@ func (b Branch) GetPrInfo() (*PrInfo, error) {
 	return b.reader.getPrInfo(b)
 }
 
+// HasPR reports whether this branch has a submitted PR number recorded.
+func (b Branch) HasPR() bool {
+	prInfo, err := b.GetPrInfo()
+	return err == nil && prInfo != nil && prInfo.Number() != nil
+}
+
 // GetMergedDownstack returns the merged downstack history for this branch
 func (b Branch) GetMergedDownstack() []git.MergedParent {
 	return b.reader.getMergedDownstack(b)

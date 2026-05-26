@@ -293,12 +293,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 		}
 
 		if style == logStyleFull && ghClient != nil {
-			branchNames := make([]string, 0, len(allBranches))
-			for _, b := range allBranches {
-				if !b.IsTrunk() {
-					branchNames = append(branchNames, b.GetName())
-				}
-			}
+			branchNames := engine.Branches(allBranches).Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 			if len(branchNames) > 0 {
 				go func() {
 					defer func() {
@@ -345,10 +340,18 @@ func (m *LogModel) enrichData() tea.Cmd {
 			EmptyWorktrees:      wtData.EmptyWorktrees,
 			WorktreeByStackRoot: wtData.WorktreeByStackRoot,
 		}
-		annotations := make(map[string]tree.BranchAnnotation)
-		utils.Run(allBranches, func(b engine.Branch) {
-			annotations[b.GetName()] = BuildFullAnnotation(eng, b, enrichment)
+		// Build into a positional slice so concurrent workers don't race on a
+		// shared map, then assemble the map serially.
+		built := make([]tree.BranchAnnotation, len(allBranches))
+		utils.Run(indexedBranches(allBranches), func(item indexedBranch) {
+			built[item.index] = BuildFullAnnotation(eng, item.branch, enrichment, AnnotationOptions{
+				SkipCommitMessages: true,
+			})
 		})
+		annotations := make(map[string]tree.BranchAnnotation, len(allBranches))
+		for i, b := range allBranches {
+			annotations[b.GetName()] = built[i]
+		}
 		logDebug("Collected full annotations for %d branches in %v", len(allBranches), time.Since(start))
 
 		logDebug("TUI enrichment completed in %v", time.Since(enrichStart))
@@ -830,6 +833,21 @@ func PromptLogSelect(ctx context.Context, eng engine.Engine, ghClient github.Cli
 	}
 
 	return res.selectedBranch, nil
+}
+
+// indexedBranch pairs a branch with its position so parallel workers can write
+// results into a positional slice without coordinating on a shared map.
+type indexedBranch struct {
+	index  int
+	branch engine.Branch
+}
+
+func indexedBranches(branches []engine.Branch) []indexedBranch {
+	out := make([]indexedBranch, len(branches))
+	for i, b := range branches {
+		out[i] = indexedBranch{index: i, branch: b}
+	}
+	return out
 }
 
 // SelectionValidation contains the result of validating a selection

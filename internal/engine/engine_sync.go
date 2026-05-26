@@ -217,6 +217,7 @@ func (e *engineImpl) restackBranch(
 			return RestackBranchResult{
 				Result:            RestackDone,
 				RebasedBranchBase: remoteSha,
+				NewRev:            remoteSha,
 			}, nil
 		}
 
@@ -287,6 +288,7 @@ func (e *engineImpl) restackBranch(
 		return RestackBranchResult{
 			Result:            RestackDone,
 			RebasedBranchBase: trunkRev,
+			NewRev:            trunkRev,
 		}, nil
 	}
 
@@ -494,6 +496,7 @@ func (e *engineImpl) restackBranch(
 	return RestackBranchResult{
 		Result:              RestackDone,
 		RebasedBranchBase:   parentRev,
+		NewRev:              newRev,
 		Reparented:          reparented,
 		OldParent:           oldParent,
 		NewParent:           parent,
@@ -674,6 +677,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	return RestackBranchResult{
 		Result:            RestackDone,
 		RebasedBranchBase: parentRev,
+		NewRev:            newRev,
 		Reparented:        item.Reparented,
 		OldParent:         item.OldParent,
 		NewParent:         item.NewParent,
@@ -805,16 +809,17 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			progress(branch, result)
 		}
 
-		if err == nil && (result.Result == RestackDone || result.Result == RestackUnneeded) {
-			// Update the revision map with the current SHA of the branch.
-			// This is important because subsequent branches in the batch might
-			// use this branch as their parent.
-			if currentSha, err := e.git.GetRevision(branchName); err == nil {
-				if allRevisions == nil {
-					allRevisions = make(map[string]string)
-				}
-				allRevisions[branchName] = currentSha
+		if err == nil && result.Result == RestackDone && result.NewRev != "" {
+			// Update the revision map with the new SHA for downstream branches
+			// in the batch. The new SHA was already computed inside restackBranch
+			// / applyBranchAndMetadata — using it here avoids a per-branch
+			// GetRevision subprocess. For RestackUnneeded we leave the map alone
+			// because the branch's SHA didn't change and allRevisions already
+			// holds the pre-restack value from BatchGetRevisions.
+			if allRevisions == nil {
+				allRevisions = make(map[string]string)
 			}
+			allRevisions[branchName] = result.NewRev
 		}
 
 		if err != nil {

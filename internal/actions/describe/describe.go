@@ -133,16 +133,15 @@ func applyStackDescription(ctx *app.Context, branch engine.Branch, stackRoot str
 // markStackAndPushMetadata marks all stack branches for PR update and pushes metadata refs.
 // Unlike PushMetadataAndSyncPRs, this does NOT immediately update GitHub PRs.
 func markStackAndPushMetadata(ctx *app.Context, eng engine.Engine, stackRoot string) error {
+	out := ctx.Output
+
 	// Mark all branches in the stack for PR body update
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 	root := eng.GetBranch(stackRoot)
 	if root.IsTracked() {
-		branches := graph.CollectBranches(root)
-		branchNames := make([]string, len(branches))
-		for i, b := range branches {
-			branchNames[i] = b.GetName()
+		if err := eng.BatchMarkNeedsPRBodyUpdate(graph.CollectBranches(root).Names()); err != nil {
+			out.Debug("Failed to mark branches for PR body update: %v", err)
 		}
-		_ = eng.BatchMarkNeedsPRBodyUpdate(branchNames)
 	}
 
 	// Push metadata refs (fast git operation)

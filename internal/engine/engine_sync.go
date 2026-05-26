@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -100,15 +101,16 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 
 // restackBranch rebases a branch onto its parent
 // If the parent has been merged/deleted, it will automatically reparent to the nearest valid ancestor.
-// worktrees is a snapshot of `git worktree list` taken by the caller — used to
-// avoid spawning `git worktree list` per branch when resetting another
-// worktree's working directory.
+// worktrees and metaRefSHAs are snapshots taken by the caller — passing them
+// avoids spawning `git worktree list` and `git rev-parse <metadata ref>` per
+// branch.
 func (e *engineImpl) restackBranch(
 	ctx context.Context,
 	branch Branch,
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
 	worktrees git.WorktreeList,
+	metaRefSHAs map[string]string,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
@@ -168,7 +170,7 @@ func (e *engineImpl) restackBranch(
 			}
 
 			// Get current metadata SHA for optimistic locking
-			oldMetadataSHA, _ := e.git.GetRef(fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName))
+			oldMetadataSHA := metaRefSHAs[branchName]
 
 			// Prepare metadata update
 			meta, err := e.readMetadata(branchName)
@@ -241,7 +243,7 @@ func (e *engineImpl) restackBranch(
 		}
 
 		// Get current metadata SHA for optimistic locking
-		oldMetadataSHA, _ := e.git.GetRef(fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName))
+		oldMetadataSHA := metaRefSHAs[branchName]
 
 		// Prepare metadata update with new parent revision
 		meta, err := e.readMetadata(branchName)
@@ -320,6 +322,13 @@ func (e *engineImpl) restackBranch(
 		// Capture the old parent in merged history (best-effort, don't fail on error).
 		// appendMergedDownstack reads fresh from disk and updates metaMap.
 		_ = e.appendMergedDownstack(branchName, oldParent, metaMap)
+
+		// SetParent + appendMergedDownstack bumped the metadata ref. Refresh
+		// the cached SHA so the later optimistic-locking UpdateRefsBatch
+		// doesn't fail with "is at X but expected Y".
+		if sha, refErr := e.git.GetRef(git.MetadataRefPrefix + branchName); refErr == nil {
+			metaRefSHAs[branchName] = sha
+		}
 	}
 
 	// Get parent revision (needed for rebasedBranchBase even if restack is unneeded)
@@ -421,7 +430,7 @@ func (e *engineImpl) restackBranch(
 
 	// Get current SHAs for optimistic locking
 	oldBranchSHA, _ := branch.GetRevision()
-	oldMetadataSHA, _ := e.git.GetRef(fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName))
+	oldMetadataSHA := metaRefSHAs[branchName]
 
 	// Prepare metadata update
 	meta, metaReadErr := e.readMetadata(branchName)
@@ -500,6 +509,7 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
 	worktrees git.WorktreeList,
+	metaRefSHAs map[string]string,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
@@ -519,9 +529,9 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 
 	switch item.Action {
 	case RestackPlanApplyFrozen, RestackPlanApplyAnchor:
-		return e.applyPlannedRefUpdate(ctx, branch, item, metaMap, revMap, worktrees)
+		return e.applyPlannedRefUpdate(ctx, branch, item, metaMap, revMap, worktrees, metaRefSHAs)
 	case RestackPlanApplyValidated:
-		return e.applyValidatedRestack(ctx, branch, validation, item, metaMap, revMap, worktrees)
+		return e.applyValidatedRestack(ctx, branch, validation, item, metaMap, revMap, worktrees, metaRefSHAs)
 	default:
 		return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("unknown restack plan action for %s", branchName)
 	}
@@ -535,6 +545,7 @@ func (e *engineImpl) applyValidatedRestack(
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
 	worktrees git.WorktreeList,
+	metaRefSHAs map[string]string,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	newRev := ""
@@ -563,7 +574,7 @@ func (e *engineImpl) applyValidatedRestack(
 		parentRev = rev
 	}
 
-	result, err := e.applyBranchAndMetadata(ctx, branch, item, newRev, parentRev, metaMap, revMap, worktrees)
+	result, err := e.applyBranchAndMetadata(ctx, branch, item, newRev, parentRev, metaMap, revMap, worktrees, metaRefSHAs)
 	if err != nil {
 		return result, err
 	}
@@ -581,6 +592,7 @@ func (e *engineImpl) applyPlannedRefUpdate(
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
 	worktrees git.WorktreeList,
+	metaRefSHAs map[string]string,
 ) (RestackBranchResult, error) {
 	if item.TargetRev == "" {
 		return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("missing target revision for %s", item.Branch)
@@ -595,7 +607,7 @@ func (e *engineImpl) applyPlannedRefUpdate(
 		parentRev = rev
 	}
 
-	return e.applyBranchAndMetadata(ctx, branch, item, item.TargetRev, parentRev, metaMap, revMap, worktrees)
+	return e.applyBranchAndMetadata(ctx, branch, item, item.TargetRev, parentRev, metaMap, revMap, worktrees, metaRefSHAs)
 }
 
 func (e *engineImpl) applyBranchAndMetadata(
@@ -607,6 +619,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
 	worktrees git.WorktreeList,
+	metaRefSHAs map[string]string,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	meta := (*git.Meta)(nil)
@@ -622,7 +635,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	}
 
 	oldBranchSHA, _ := branch.GetRevision()
-	oldMetadataSHA, _ := e.git.GetRef(fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName))
+	oldMetadataSHA := metaRefSHAs[branchName]
 
 	updatedMeta := meta.WithParentBranchRevision(&parentRev)
 	if item.Reparented {
@@ -760,6 +773,19 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 		worktrees = git.WorktreeList{}
 	}
 
+	// Snapshot every metadata ref's SHA once via a single in-process iterator
+	// (git.ListRefs). The previous code called GetRef per branch in three
+	// places (frozen path, anchor path, regular rebase) plus applyBranchAndMetadata
+	// — N branches meant N+ rev-parse subprocesses. Each branch only reads its
+	// own SHA for optimistic locking on the metadata ref UpdateRefsBatch, so a
+	// pre-loop snapshot is stable.
+	metaRefSHAs := make(map[string]string)
+	if refs, listErr := e.git.ListRefs(git.MetadataRefPrefix); listErr == nil {
+		for refName, sha := range refs {
+			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
+		}
+	}
+
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)
 	needsRebuild := false
@@ -769,9 +795,9 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 		var result RestackBranchResult
 		var err error
 		if validation != nil {
-			result, err = e.restackBranchWithValidatedRebase(ctx, branch, validation, plan, allMeta, allRevisions, worktrees)
+			result, err = e.restackBranchWithValidatedRebase(ctx, branch, validation, plan, allMeta, allRevisions, worktrees, metaRefSHAs)
 		} else {
-			result, err = e.restackBranch(ctx, branch, allMeta, allRevisions, worktrees)
+			result, err = e.restackBranch(ctx, branch, allMeta, allRevisions, worktrees, metaRefSHAs)
 		}
 		results[branchName] = result
 

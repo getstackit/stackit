@@ -335,6 +335,21 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 	out := ctx.Output
 	c := ctx.Context
 
+	// Push every successfully-deleted branch's remote metadata ref in a single
+	// `git push --delete` after the loop. The deletion loop runs one batch per
+	// topological layer; without this, a 3-deep chain would issue 3 separate
+	// network roundtrips even though one would do. Deferred so previously-
+	// completed batches still push if a later batch fails.
+	var deletedBranchNames []string
+	defer func() {
+		if len(deletedBranchNames) == 0 {
+			return
+		}
+		if err := eng.Git().BatchDeleteRemoteMetadataRefs(c, deletedBranchNames); err != nil {
+			out.Debug("Failed to batch delete remote metadata: %v", err)
+		}
+	}()
+
 	previousCount := len(plan.branches)
 	for {
 		var batchNames []string
@@ -404,10 +419,8 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 			return fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(batchNames, ", "), err)
 		}
 
-		// Batch delete remote metadata
-		if err := eng.Git().BatchDeleteRemoteMetadataRefs(c, batchNames); err != nil {
-			out.Debug("Failed to batch delete remote metadata: %v", err)
-		}
+		// Defer the remote metadata push to one combined call after the loop.
+		deletedBranchNames = append(deletedBranchNames, batchNames...)
 
 		// Cleanup plan and update parent blockers
 		for _, name := range batchNames {

@@ -34,9 +34,9 @@ NewRestackCmd → common.Run                           (same bootstrap as co)
 
 ## Proposed wins (ranked)
 
-### 1. The big shared win: skip `ValidateRebases` when conflict-impossible *(shared with modify.md #1)*
+### 1. The big shared win: avoid validation worktrees when conflict-impossible *(shared with modify.md #1)*
 
-Per-spec diff-file overlap check turns most stack restacks into "0 worktrees needed". For typical post-amend restacks, the descendant commits don't touch the same files as the parent's amend diff. This collapses to a few `git diff --name-only` invocations.
+Per-spec diff-file overlap check turns most stack restacks into "0 validation worktrees needed". For typical post-amend restacks, the descendant commits don't touch the same files as the parent's amend diff. This needs a direct safe-replay path that still produces the rewritten SHAs consumed by the apply phase; once that exists, the classifier collapses many cases to a few `git diff --name-only` invocations.
 
 ### 2. Pre-warm revision cache before `PlanRestack` *(small, free)*
 

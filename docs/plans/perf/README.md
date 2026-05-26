@@ -34,9 +34,9 @@ Per-command analysis of where `stackit` spends time, with proposed wins. All cla
 
 See [cross-cutting.md → Recommended attack order](cross-cutting.md#recommended-attack-order). TL;DR:
 
-1. Lite bootstrap path
-2. Kill pre-checkout `worktree.Status()`
-3. Conflict-impossible validation for restack
-4. Cached `IsUpToDate`
-5. Preload stack stats for `log`
-6. `RebuildBranches([]string)` for `untrack` + `absorb` cleanup
+1. Expand lightweight load modes
+2. Conflict-impossible validation for restack
+3. Preload stack stats for `log`
+4. `RebuildBranches([]string)` for `untrack` + `absorb` cleanup
+5. Snapshot batching / undo opt-out
+6. Coalesce remaining staging `worktree.Status()` calls

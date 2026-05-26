@@ -30,7 +30,7 @@ NewAbsorbCmd → common.Run                            (same bootstrap as co)
        │
        ├─ eng.StashPush                              shells `git stash push`
        ├─ for each modified branch (topo order):
-       │     eng.ApplyHunksToBranch                  checkout → amend → ...  ← N branches × git ops
+       │     eng.ApplyHunksToBranch                  native checkout → amend → ...  ← N branches × git ops
        ├─ eng.StashPop                               shells `git stash pop`
        ├─ eng.Rebuild("")                            full rebuild after the rewrites
        └─ RestackBranches(upstack)                   internal/actions/common.go:96
@@ -39,7 +39,7 @@ NewAbsorbCmd → common.Run                            (same bootstrap as co)
 
 ## Where time goes
 
-1. **`ApplyHunksToBranch` loop** — for each modified branch, it checks out, amends, restacks. Each checkout pays the go-git `worktree.Status()` + `worktree.Checkout()` tax (`co.md` #1). For an absorb that touches 3 branches, that's 3 × full checkouts plus 3 amends.
+1. **`ApplyHunksToBranch` loop** — for each modified branch, it checks out, amends, restacks. Checkout now uses native Git, but an absorb that touches 3 branches still pays 3 checkouts plus 3 amends.
 2. **`RestackBranches` → `ValidateRebases`** — worktree-per-spec (`modify.md` #1).
 3. **`FindTargetCommitForHunk`** — proportional to (hunks × downstack commits). For a heavy absorb (lots of staged hunks, deep stack), this dominates the pre-apply phase. Algorithm-bound; speedup needs algorithmic insight, not engine plumbing.
 4. **`worktree.Status()` × 2** (`HasStagedChanges` called before *and* after staging at `absorb.go:63` and `:78`). Same fix as `create.md` #1.
@@ -49,27 +49,23 @@ NewAbsorbCmd → common.Run                            (same bootstrap as co)
 
 ## Proposed wins (ranked)
 
-### 1. Same checkout-path fix benefits every `ApplyHunksToBranch` iteration *(shared with co.md #1)*
-
-Each branch touched costs one full go-git Status+Checkout cycle. Eliminating `worktree.Status()` in `CheckoutBranch` saves N×(big number) here.
-
-### 2. Same worktree-validation fix benefits the post-absorb restack *(shared with modify.md #1)*
+### 1. Same worktree-validation fix benefits the post-absorb restack *(shared with modify.md #1)*
 
 `RestackBranches` here goes through the same `ValidateRebases` worktree-per-spec path. Trivially-safe rebases (very common after absorb — most hunks land in a single ancestor and don't change descendant-touched files) could skip validation entirely.
 
-### 3. Combine the two `HasStagedChanges` calls *(small, low risk)*
+### 2. Combine the two `HasStagedChanges` calls *(small, low risk)*
 
 `absorb.go:63` checks before staging, `:78` checks after. The first call is *only* used to decide whether to print "Nothing to absorb" — which the second call also catches. Drop the first one; the user-facing message arrives one staging op later but the behavior is the same.
 
-### 4. Scope `eng.Rebuild("")` to touched branches *(medium, medium risk)*
+### 3. Scope `eng.Rebuild("")` to touched branches *(medium, medium risk)*
 
 After absorb, only the modified branches and their descendants have changed. A `RebuildBranches([]string)` that re-reads metadata + revisions for just that subset would skip O(N - touched) of the full rebuild. Useful here, in `restack`, in `modify`, in `sync`.
 
-### 5. Single downstack `git rev-list` instead of per-branch `GetAllCommits` *(small impact, simple)*
+### 4. Single downstack `git rev-list` instead of per-branch `GetAllCommits` *(small impact, simple)*
 
 `absorb.go:121–130` calls `GetAllCommits(SHA)` per branch and then walks. One `git rev-list --boundary <trunk>..<current>` returns all SHAs in one process. The per-branch attribution can be done from the parent-revision metadata already in the cache.
 
-### 6. `FindBranchForCommit` could come from a commit→branch map built during the SHA walk *(trivial)*
+### 5. `FindBranchForCommit` could come from a commit→branch map built during the SHA walk *(trivial)*
 
 While iterating `downstackBranches` to collect SHAs, also populate `commitSHA → branchName`. Then `FindBranchForCommit` becomes a map lookup. Today it's a separate function call per target hunk.
 
@@ -83,4 +79,4 @@ STACKIT_NO_LOGGING=1 hyperfine 'stackit absorb --force --dry-run'
 STACKIT_NO_LOGGING=1 hyperfine 'stackit absorb --force'
 ```
 
-Instrument: each `ApplyHunksToBranch` (esp. the inner Checkout call), the `RestackBranches` block, `FindTargetCommitForHunk`, and the `eng.Rebuild("")` call. Dry-run isolates the planning phase from the apply phase.
+Instrument: each `ApplyHunksToBranch`, the `RestackBranches` block, `FindTargetCommitForHunk`, and the `eng.Rebuild("")` call. Dry-run isolates the planning phase from the apply phase.

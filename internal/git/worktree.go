@@ -11,6 +11,37 @@ import (
 // WorktreeRefPrefix is the prefix for Git refs where worktree metadata is stored (local-only)
 const WorktreeRefPrefix = "refs/stackit/worktrees/"
 
+// Worktree represents a single entry from `git worktree list`.
+type Worktree struct {
+	Path   string
+	Branch string // empty when the worktree is at detached HEAD
+}
+
+// WorktreeList is the parsed result of one `git worktree list --porcelain`
+// invocation. Callers should pass it down per-batch instead of calling
+// ListWorktrees per branch — see PathForBranch for the common lookup.
+type WorktreeList []Worktree
+
+// PathForBranch returns the worktree path where branchName is checked out,
+// or "" if no worktree currently has it.
+func (l WorktreeList) PathForBranch(branchName string) string {
+	for _, w := range l {
+		if w.Branch == branchName {
+			return w.Path
+		}
+	}
+	return ""
+}
+
+// Paths returns just the worktree paths.
+func (l WorktreeList) Paths() []string {
+	out := make([]string, len(l))
+	for i, w := range l {
+		out[i] = w.Path
+	}
+	return out
+}
+
 // WorktreeMeta represents worktree tracking metadata stored in local Git refs
 type WorktreeMeta struct {
 	Name         string    `json:"name,omitempty"` // User-provided name for display (new worktrees only)
@@ -61,24 +92,41 @@ func (r *runner) ForceRemoveWorktree(ctx context.Context, path string) error {
 	return nil
 }
 
-func (r *runner) ListWorktrees(ctx context.Context) ([]string, error) {
+// ListWorktrees returns every working tree registered with the repo,
+// including the branch (if any) checked out in each. Callers needing to look
+// up many branches should call this once and reuse the result rather than
+// invoking git per branch — see WorktreeList.PathForBranch.
+func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
 	if output == "" {
-		return []string{}, nil
+		return WorktreeList{}, nil
 	}
 
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	var worktrees []string
-	for _, line := range lines {
-		if len(line) > 9 && line[:9] == "worktree " {
-			worktrees = append(worktrees, line[9:])
+	var result WorktreeList
+	var current Worktree
+	flush := func() {
+		if current.Path != "" {
+			result = append(result, current)
+		}
+		current = Worktree{}
+	}
+	for line := range strings.SplitSeq(output, "\n") {
+		switch {
+		case line == "":
+			flush()
+		case strings.HasPrefix(line, "worktree "):
+			flush()
+			current.Path = strings.TrimPrefix(line, "worktree ")
+		case strings.HasPrefix(line, "branch "):
+			current.Branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
 		}
 	}
-	return worktrees, nil
+	flush()
+	return result, nil
 }
 
 // PruneWorktrees removes stale worktree entries from .git/worktrees.
@@ -181,35 +229,6 @@ func (r *runner) GetWorktreePathForBranch(ctx context.Context, branchName string
 	}
 
 	return "", nil
-}
-
-// WorktreeBranchMap returns a map of branch name to worktree path for every
-// branch currently checked out in any worktree. Use this instead of looping
-// GetWorktreePathForBranch when you need to test many branches — one git
-// subprocess instead of N.
-func (r *runner) WorktreeBranchMap(ctx context.Context) (map[string]string, error) {
-	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain")
-	if err != nil {
-		return nil, fmt.Errorf("failed to list worktrees: %w", err)
-	}
-
-	result := make(map[string]string)
-	if output == "" {
-		return result, nil
-	}
-
-	var currentWorktree string
-	for line := range strings.SplitSeq(output, "\n") {
-		if after, ok := strings.CutPrefix(line, "worktree "); ok {
-			currentWorktree = after
-		} else if after, ok := strings.CutPrefix(line, "branch "); ok {
-			if currentWorktree != "" {
-				branchName := strings.TrimPrefix(after, "refs/heads/")
-				result[branchName] = currentWorktree
-			}
-		}
-	}
-	return result, nil
 }
 
 // ResetWorktreeWorkingDir resets a worktree's working directory to match HEAD.

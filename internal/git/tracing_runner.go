@@ -873,10 +873,10 @@ func (t *tracingRunner) ForceRemoveWorktree(ctx context.Context, path string) er
 	return err
 }
 
-func (t *tracingRunner) ListWorktrees(ctx context.Context) ([]string, error) {
+func (t *tracingRunner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 	start := time.Now()
 	result, err := t.inner.ListWorktrees(ctx)
-	t.trace("ListWorktrees", time.Since(start), err == nil, err)
+	t.trace("ListWorktrees", time.Since(start), err == nil, err, slog.Int("count", len(result)))
 	return result, err
 }
 
@@ -891,13 +891,6 @@ func (t *tracingRunner) GetWorktreePathForBranch(ctx context.Context, branchName
 	start := time.Now()
 	result, err := t.inner.GetWorktreePathForBranch(ctx, branchName)
 	t.trace("GetWorktreePathForBranch", time.Since(start), err == nil, err, slog.String("branch", branchName))
-	return result, err
-}
-
-func (t *tracingRunner) WorktreeBranchMap(ctx context.Context) (map[string]string, error) {
-	start := time.Now()
-	result, err := t.inner.WorktreeBranchMap(ctx)
-	t.trace("WorktreeBranchMap", time.Since(start), err == nil, err, slog.Int("count", len(result)))
 	return result, err
 }
 

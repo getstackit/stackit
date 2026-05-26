@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
@@ -345,11 +346,16 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		if len(deletedBranchNames) == 0 {
 			return
 		}
-		if err := eng.Git().BatchDeleteRemoteMetadataRefs(c, deletedBranchNames); err != nil {
+		pushStart := time.Now()
+		err := eng.Git().BatchDeleteRemoteMetadataRefs(c, deletedBranchNames)
+		ctx.Logger.Info("delete remote metadata refs completed durationMs=%d branchCount=%d ok=%v",
+			time.Since(pushStart).Milliseconds(), len(deletedBranchNames), err == nil)
+		if err != nil {
 			out.Debug("Failed to batch delete remote metadata: %v", err)
 		}
 	}()
 
+	batchIdx := 0
 	previousCount := len(plan.branches)
 	for {
 		var batchNames []string
@@ -365,23 +371,36 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 
 		// Sort for deterministic deletion order (helps with debugging and reproducibility)
 		sort.Strings(batchNames)
+		batchIdx++
 
 		// Snapshot the worktree list once for this batch instead of
 		// re-running `git worktree list --porcelain` per branch.
+		listStart := time.Now()
 		worktrees, err := eng.Git().ListWorktrees(c)
+		ctx.Logger.Info("list worktrees for cleanup batch completed durationMs=%d batch=%d worktreeCount=%d",
+			time.Since(listStart).Milliseconds(), batchIdx, len(worktrees))
 		if err != nil {
 			out.Debug("Failed to list worktrees for branch cleanup: %v", err)
 			worktrees = git.WorktreeList{}
 		}
 
 		// Remove any worktrees that have these branches checked out
+		removeStart := time.Now()
 		var failedWorktreeRemovals []string
+		worktreesRemoved := 0
 		for _, name := range batchNames {
-			if _, err := removeWorktreeIfCheckedOut(c, name, worktrees, eng, out); err != nil {
+			removed, err := removeWorktreeIfCheckedOut(c, name, worktrees, eng, out)
+			if err != nil {
 				out.Warn("Could not remove worktree for branch %s: %v", name, err)
 				failedWorktreeRemovals = append(failedWorktreeRemovals, name)
+				continue
+			}
+			if removed != "" {
+				worktreesRemoved++
 			}
 		}
+		ctx.Logger.Info("remove worktrees for cleanup batch completed durationMs=%d batch=%d branchCount=%d worktreesRemoved=%d worktreesFailed=%d",
+			time.Since(removeStart).Milliseconds(), batchIdx, len(batchNames), worktreesRemoved, len(failedWorktreeRemovals))
 
 		// Filter out branches where worktree removal failed
 		if len(failedWorktreeRemovals) > 0 {
@@ -415,8 +434,12 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		}
 
 		// Batch delete from engine
-		if _, err := eng.DeleteBranches(c, branches.Build()); err != nil {
-			return fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(batchNames, ", "), err)
+		engineStart := time.Now()
+		_, engineErr := eng.DeleteBranches(c, branches.Build())
+		ctx.Logger.Info("engine delete branches batch completed durationMs=%d batch=%d branchCount=%d ok=%v",
+			time.Since(engineStart).Milliseconds(), batchIdx, len(batchNames), engineErr == nil)
+		if engineErr != nil {
+			return fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(batchNames, ", "), engineErr)
 		}
 
 		// Defer the remote metadata push to one combined call after the loop.

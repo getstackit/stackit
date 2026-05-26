@@ -36,7 +36,8 @@ Automatically restacks descendants after the modification.
 Examples:
   stackit modify -a -m "Updated feature"  # Stage all and amend with message
   stackit modify -a -F /tmp/msg           # Stage all and amend, reading message from a file
-  stackit modify -a                       # Stage all and amend (opens editor)
+  stackit modify -a                       # Stage all and amend in place (keeps existing message)
+  stackit modify -a -e                    # Stage all and amend (opens editor)
   stackit modify -p                       # Interactive patch staging then amend
   stackit modify -c -a -m "New commit"    # Create new commit instead of amending
   stackit modify --interactive-rebase     # Interactive rebase on branch commits`,
@@ -48,15 +49,8 @@ Examples:
 					return err
 				}
 
-				// Determine noEdit flag:
-				// - If --no-edit is explicitly set, use it
-				// - If message is provided, don't open editor (noEdit = true)
-				// - If --edit is set, open editor (noEdit = false)
-				// - Default: open editor when amending without message (noEdit = false)
-				noEditFlag := noEdit
-				if resolvedMessage != "" && !edit {
-					noEditFlag = true
-				}
+				// --edit explicitly requests the editor; everything else amends in place.
+				noEditFlag := noEdit || !edit
 
 				// Run modify action
 				return actions.ModifyAction(ctx, actions.ModifyOptions{
@@ -78,7 +72,7 @@ Examples:
 	// Add flags
 	cmd.Flags().BoolVarP(&all, "all", "a", false, "Stage all changes before committing.")
 	cmd.Flags().BoolVarP(&commit, "commit", "c", false, "Create a new commit instead of amending the current commit. If this branch has no commits, this command always creates a new commit.")
-	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "If passed, open an editor to edit the commit message.")
+	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "Open an editor to edit the commit message.")
 	cmd.Flags().BoolVar(&interactiveRebase, "interactive-rebase", false, "Ignore all other flags and start a git interactive rebase on the commits in this branch.")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "The message for the new or amended commit. If passed, no editor is opened.")
 	cmd.Flags().StringVarP(&messageFile, "message-file", "F", "", "Read commit message from a file (use \"-\" for stdin). Mutually exclusive with --message.")

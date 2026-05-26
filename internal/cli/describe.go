@@ -36,17 +36,19 @@ Examples:
   stackit describe --clear                      # Remove description`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return common.Run(cmd, func(ctx *app.Context) error {
-				// If no flags and no message, default to editor (interactive) or show
-				if message == "" && !clearFlag && !show && !utils.IsInteractive() {
-					show = true
-				}
+			// If no flags and no message, default to editor (interactive) or show
+			effectiveShow := show || (message == "" && !clearFlag && !utils.IsInteractive())
+			globalOpts := common.GetGlobalOptions(cmd)
+			if effectiveShow {
+				globalOpts = common.ApplyReadOnlyCurrentBranch(globalOpts)
+			}
 
+			return common.RunWithOptions(cmd, globalOpts, func(ctx *app.Context) error {
 				opts := describe.Options{
 					Title:       message,
 					Description: description,
 					Clear:       clearFlag,
-					Show:        show,
+					Show:        effectiveShow,
 				}
 
 				handler := &describeHandler{

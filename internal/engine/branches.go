@@ -99,11 +99,41 @@ func (b Branches) Filter(predicate func(Branch) bool) Branches {
 	return NewBranches(filtered)
 }
 
+// BranchFilter declaratively expresses the set of constraints to apply when
+// selecting branches. The zero value matches every branch — opt into
+// constraints, never out of them. Use with Branches.Select for single-pass
+// multi-criteria filtering instead of chaining WithoutTrunk().WithPR() etc.
+type BranchFilter struct {
+	ExcludeTrunk bool // when true, drop trunk branches
+	RequirePR    bool // when true, keep only branches with a submitted PR
+}
+
+// Matches reports whether branch satisfies every constraint in f.
+func (f BranchFilter) Matches(branch Branch) bool {
+	if f.ExcludeTrunk && branch.IsTrunk() {
+		return false
+	}
+	if f.RequirePR && !branch.HasPR() {
+		return false
+	}
+	return true
+}
+
+// Select returns the branches that match every constraint in f. Prefer this
+// over WithoutTrunk().WithPR() chains: one pass over b instead of N.
+func (b Branches) Select(f BranchFilter) Branches {
+	return b.Filter(f.Matches)
+}
+
 // WithoutTrunk returns a new branch set without trunk branches.
 func (b Branches) WithoutTrunk() Branches {
-	return b.Filter(func(branch Branch) bool {
-		return !branch.IsTrunk()
-	})
+	return b.Select(BranchFilter{ExcludeTrunk: true})
+}
+
+// WithPR returns a new branch set containing only branches that have a
+// submitted PR recorded.
+func (b Branches) WithPR() Branches {
+	return b.Select(BranchFilter{RequirePR: true})
 }
 
 // Last returns a branch set containing up to the last n branches.

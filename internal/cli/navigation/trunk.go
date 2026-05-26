@@ -29,7 +29,12 @@ By default, displays the trunk branch that the current branch's stack is based o
 Use --all to see all configured trunk branches, or --add to add an additional trunk.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return common.Run(cmd, func(ctx *app.Context) error {
+			opts := common.GetGlobalOptions(cmd)
+			if add == "" && !all {
+				opts = common.ApplyReadOnlyCurrentBranch(opts)
+			}
+
+			return common.RunWithOptions(cmd, opts, func(ctx *app.Context) error {
 				// Handle --add flag
 				if add != "" {
 					return handleAddTrunk(ctx, add)

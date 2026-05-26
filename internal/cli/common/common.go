@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui/style"
@@ -43,7 +44,7 @@ func RunWithOptions(cmd *cobra.Command, opts app.GlobalOptions, fn func(ctx *app
 	}
 
 	// Populate worktree context
-	if ctx.Engine != nil {
+	if ctx.Engine != nil && !opts.SkipManagedWorktreeCheck {
 		if isManaged, wtInfo, err := ctx.Engine.IsInManagedWorktree(); err == nil && isManaged {
 			ctx.InManagedWorktree = true
 			ctx.WorktreeInfo = wtInfo
@@ -55,6 +56,23 @@ func RunWithOptions(cmd *cobra.Command, opts app.GlobalOptions, fn func(ctx *app
 		return HandleCommandError(err)
 	}
 	return nil
+}
+
+// ApplyReadOnlyCurrentBranch tunes opts for commands that only inspect the
+// current branch or its parent chain: skip the full metadata bootstrap and
+// the managed-worktree check. Compose this when the optimization only applies
+// to some code paths (e.g. show vs. write modes of a single command).
+func ApplyReadOnlyCurrentBranch(opts app.GlobalOptions) app.GlobalOptions {
+	loadMode := engine.LoadModeBranchesOnly
+	opts.EngineLoadMode = &loadMode
+	opts.SkipManagedWorktreeCheck = true
+	return opts
+}
+
+// RunReadOnlyCurrentBranch is for commands whose every code path is a
+// read-only inspection of the current branch or its parent chain.
+func RunReadOnlyCurrentBranch(cmd *cobra.Command, fn func(ctx *app.Context) error) error {
+	return RunWithOptions(cmd, ApplyReadOnlyCurrentBranch(GetGlobalOptions(cmd)), fn)
 }
 
 // ResolveBranchArg returns the first positional branch argument, or the current

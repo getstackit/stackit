@@ -423,7 +423,7 @@ func (m *shippableModel) rebuildCache() {
 		for _, branchName := range stack.Stack.AllBranches {
 			branch := m.engine.GetBranch(branchName)
 			if branch.GetName() != "" {
-				ann := tui.GetBranchAnnotation(m.engine, branch)
+				ann := tui.GetBranchAnnotation(m.engine, branch, tui.AnnotationOptions{})
 				m.cache.branchAnnotations[branchName] = ann
 			}
 		}

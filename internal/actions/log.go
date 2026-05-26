@@ -142,12 +142,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 	// Prefetch CI status in batch if in FULL style
 	var ciStatuses map[string]*github.CheckStatus
 	if opts.Style == LogStyleFull && ctx.GitHub() != nil {
-		branchNames := make([]string, 0, len(visibleBranches))
-		for _, b := range visibleBranches {
-			if !b.IsTrunk() {
-				branchNames = append(branchNames, b.GetName())
-			}
-		}
+		branchNames := visibleBranches.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 		if len(branchNames) > 0 {
 			ciStatuses, _ = ctx.GitHub().BatchGetPRChecksStatus(ctx.Context, branchNames)
 		}
@@ -267,7 +262,9 @@ func buildLogAnnotation(
 	enrichment *tui.AnnotationEnrichment,
 ) tree.BranchAnnotation {
 	if opts.Style != LogStyleShort {
-		return tui.BuildFullAnnotation(eng, branch, enrichment)
+		return tui.BuildFullAnnotation(eng, branch, enrichment, tui.AnnotationOptions{
+			SkipCommitMessages: true,
+		})
 	}
 
 	annotation := tui.GetMinimalAnnotationWithWorktreeAndEmpty(eng, branch, wtData)
@@ -321,7 +318,7 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 	ghClient := ctx.GitHub()
 	var ciStatuses map[string]*github.CheckStatus
 	if ghClient != nil {
-		branchNames := branchesToInclude.WithoutTrunk().Names()
+		branchNames := branchesToInclude.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 		if len(branchNames) > 0 {
 			ciStatuses, _ = ghClient.BatchGetPRChecksStatus(ctx.Context, branchNames)
 		}

@@ -146,12 +146,13 @@ func (c *Context) Worktree() engine.WorktreeRegistry { return c.Engine }
 
 // GlobalOptions holds settings from global flags
 type GlobalOptions struct {
-	Interactive    bool
-	Verify         bool
-	Debug          bool
-	Quiet          bool
-	Cwd            string
-	EngineLoadMode *engine.LoadMode
+	Interactive              bool
+	Verify                   bool
+	Debug                    bool
+	Quiet                    bool
+	Cwd                      string
+	EngineLoadMode           *engine.LoadMode
+	SkipManagedWorktreeCheck bool
 }
 
 // GetDefaultGlobalOptions returns default options

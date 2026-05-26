@@ -2,6 +2,7 @@ package sync
 
 import (
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // StackMetadataGCResult contains the results of stack metadata garbage collection.
@@ -54,14 +55,27 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 
 	ctx.Logger.Info("found orphaned stack metadata refs count=%v", len(orphaned))
 
-	// 4. Delete local refs
+	// 4. Delete local refs in a single update-ref --stdin batch. The previous
+	// per-orphan DeleteStackMeta loop spawned 2 git subprocesses per ref
+	// (update-ref -d + show-ref --verify) — same N+1 pattern fixed for branch
+	// deletion. If the atomic batch fails, fall back to per-ref so partial
+	// progress is still reported.
+	refs := make([]string, 0, len(orphaned))
 	for _, stackID := range orphaned {
-		if err := ctx.Git().DeleteStackMeta(ctx.Context, stackID); err != nil {
-			result.Errors = append(result.Errors, "failed to delete local stack ref "+stackID+": "+err.Error())
-			ctx.Logger.Debug("failed to delete local stack ref stackID=%v error=%v", stackID, err)
-		} else {
-			result.DeletedStackIDs = append(result.DeletedStackIDs, stackID)
+		refs = append(refs, git.StackMetaRefName(stackID))
+	}
+	if err := ctx.Git().DeleteRefsBatch(ctx.Context, refs); err != nil {
+		ctx.Logger.Debug("batch delete of local stack refs failed, falling back per-ref error=%v", err)
+		for _, stackID := range orphaned {
+			if perRefErr := ctx.Git().DeleteStackMeta(ctx.Context, stackID); perRefErr != nil {
+				result.Errors = append(result.Errors, "failed to delete local stack ref "+stackID+": "+perRefErr.Error())
+				ctx.Logger.Debug("failed to delete local stack ref stackID=%v error=%v", stackID, perRefErr)
+			} else {
+				result.DeletedStackIDs = append(result.DeletedStackIDs, stackID)
+			}
 		}
+	} else {
+		result.DeletedStackIDs = append(result.DeletedStackIDs, orphaned...)
 	}
 
 	// 5. Delete remote refs (best-effort, non-fatal)

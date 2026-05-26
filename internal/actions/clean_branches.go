@@ -351,11 +351,18 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		// Sort for deterministic deletion order (helps with debugging and reproducibility)
 		sort.Strings(batchNames)
 
+		// Snapshot the worktree list once for this batch instead of
+		// re-running `git worktree list --porcelain` per branch.
+		worktrees, err := eng.Git().ListWorktrees(c)
+		if err != nil {
+			out.Debug("Failed to list worktrees for branch cleanup: %v", err)
+			worktrees = git.WorktreeList{}
+		}
+
 		// Remove any worktrees that have these branches checked out
 		var failedWorktreeRemovals []string
 		for _, name := range batchNames {
-			_, err := removeWorktreeIfCheckedOut(c, name, eng, out)
-			if err != nil {
+			if _, err := removeWorktreeIfCheckedOut(c, name, worktrees, eng, out); err != nil {
 				out.Warn("Could not remove worktree for branch %s: %v", name, err)
 				failedWorktreeRemovals = append(failedWorktreeRemovals, name)
 			}
@@ -568,19 +575,14 @@ func applyReparent(ctx context.Context, eng engine.Engine, branch engine.Branch,
 // removeWorktreeIfCheckedOut removes the worktree if the branch is checked out in one.
 // Returns the worktree path that was removed (or empty string if none), and any error.
 //
+// The caller passes a precomputed WorktreeList so we don't re-invoke
+// `git worktree list` per branch when cleaning a batch.
+//
 // Error handling strategy:
-//   - Errors when *checking* if a branch is in a worktree are swallowed (return nil error)
-//     because we don't want to block branch deletion if we can't determine worktree status.
 //   - Errors when *removing* a worktree are returned because they indicate a real problem
 //     that would prevent the branch from being deleted cleanly.
-func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, eng engine.Engine, out output.Output) (string, error) {
-	worktreePath, err := eng.Git().GetWorktreePathForBranch(ctx, branchName)
-	if err != nil {
-		// Swallow error: don't block deletion if we can't check worktree status
-		out.Debug("Failed to check worktree for branch %s: %v", branchName, err)
-		return "", nil
-	}
-
+func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktrees git.WorktreeList, eng engine.Engine, out output.Output) (string, error) {
+	worktreePath := worktrees.PathForBranch(branchName)
 	if worktreePath == "" {
 		return "", nil // Branch not in any worktree
 	}

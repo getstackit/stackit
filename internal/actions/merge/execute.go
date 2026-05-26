@@ -197,6 +197,17 @@ func Execute(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions) erro
 func executeSteps(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions) error {
 	plan := opts.Plan
 
+	// Snapshot the worktree list once for the whole merge plan. A multi-branch
+	// merge with several StepDeleteBranch steps used to spawn `git worktree
+	// list` per step via removeWorktreeForBranch; the snapshot covers every
+	// step in this run. Safe to reuse: deleting a branch can only invalidate
+	// its own entry, and we only ever read each entry once.
+	worktrees, err := eng.Git().ListWorktrees(ctx.Context)
+	if err != nil {
+		ctx.Output.Debug("Failed to list worktrees for merge plan: %v", err)
+		worktrees = git.WorktreeList{}
+	}
+
 	for i, step := range plan.Steps {
 		stepRef := &plan.Steps[i]
 
@@ -222,7 +233,7 @@ func executeSteps(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions)
 		}
 
 		// 2. Execute the step (with progress reporting for wait steps)
-		if err := executeStepWithProgress(ctx, step, i, eng, opts); err != nil {
+		if err := executeStepWithProgress(ctx, step, i, eng, opts, worktrees); err != nil {
 			ctx.Output.Debug("Step %d (%s) failed: %v", i+1, step.Description, err)
 			opts.Handler.EmitEvent(Event{
 				Phase:     phaseFromStep(stepRef),
@@ -247,16 +258,16 @@ func executeSteps(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions)
 }
 
 // executeStepWithProgress executes a step with progress reporting
-func executeStepWithProgress(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecuteEngine, opts ExecuteOptions) error {
+func executeStepWithProgress(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecuteEngine, opts ExecuteOptions, worktrees git.WorktreeList) error {
 	// Special handling for wait steps to report progress
 	if step.StepType == StepWaitCI {
 		return executeWaitCIWithProgress(ctx, step, stepIndex, eng, opts)
 	}
-	return executeStep(ctx, step, stepIndex, eng, opts)
+	return executeStep(ctx, step, stepIndex, eng, opts, worktrees)
 }
 
 // executeStep executes a single step
-func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecuteEngine, opts ExecuteOptions) error {
+func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecuteEngine, opts ExecuteOptions, worktrees git.WorktreeList) error {
 	trunk := eng.Trunk() // Cache trunk for this function scope
 	githubClient := ctx.GitHub()
 	out := ctx.Output
@@ -380,7 +391,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		if branch.IsTracked() {
 			// Check if branch is checked out in a worktree and remove it first
 			// Git refuses to delete a branch that is checked out in any worktree
-			if err := removeWorktreeForBranch(ctx.Context, step.BranchName, eng, out); err != nil {
+			if err := removeWorktreeForBranch(ctx.Context, step.BranchName, worktrees, eng, out); err != nil {
 				out.Warn("Failed to remove worktree for branch %s: %v", step.BranchName, err)
 				// Continue anyway - deletion might still work if worktree is gone
 			}
@@ -435,14 +446,11 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 // removeWorktreeForBranch removes any worktree that has the given branch checked out.
 // This is necessary because git refuses to delete a branch that is checked out in any worktree.
 // Returns nil if no worktree exists or if removal succeeds.
-func removeWorktreeForBranch(ctx context.Context, branchName string, eng mergeExecuteEngine, out output.Output) error {
-	worktreePath, err := eng.Git().GetWorktreePathForBranch(ctx, branchName)
-	if err != nil {
-		// Don't block deletion if we can't check worktree status
-		out.Debug("Failed to check worktree for branch %s: %v", branchName, err)
-		return nil
-	}
-
+//
+// worktrees is a snapshot taken by the caller; passing it avoids spawning
+// `git worktree list` per merge step.
+func removeWorktreeForBranch(ctx context.Context, branchName string, worktrees git.WorktreeList, eng mergeExecuteEngine, out output.Output) error {
+	worktreePath := worktrees.PathForBranch(branchName)
 	if worktreePath == "" {
 		return nil // Branch not in any worktree
 	}

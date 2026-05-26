@@ -453,8 +453,8 @@ func (d *demoGitRunner) ForceRemoveWorktree(_ context.Context, _ string) error {
 	return nil
 }
 
-func (d *demoGitRunner) ListWorktrees(_ context.Context) ([]string, error) {
-	return []string{}, nil
+func (d *demoGitRunner) ListWorktrees(_ context.Context) (git.WorktreeList, error) {
+	return git.WorktreeList{}, nil
 }
 
 func (d *demoGitRunner) PruneWorktrees(_ context.Context) error {

@@ -227,40 +227,117 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	return nil
 }
 
-// DeleteBranches deletes multiple branches and returns the children that need restacking
+// DeleteBranches deletes multiple branches and returns the children that need restacking.
+//
+// All ref deletions (heads, metadata, local-metadata) for every branch in the
+// batch go through a single `git update-ref --stdin` invocation. The previous
+// implementation looped DeleteBranch per branch, spawning 4+ git subprocesses
+// per branch — at ~30-50ms each that dominated cleanup time during sync.
 func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]string, error) {
-	// Identify all children of all branches to be deleted
-	allChildren := make(map[string]bool)
-	toDeleteSet := make(map[string]bool)
+	if len(branches) == 0 {
+		return nil, nil
+	}
+
+	// Validate: no trunk in the batch.
+	if slices.ContainsFunc(branches, func(b Branch) bool { return e.IsTrunk(b) }) {
+		return nil, fmt.Errorf("cannot delete trunk branch")
+	}
+
+	// Snapshot in-memory state under one lock acquisition: children and parent
+	// for each branch, and whether the current branch is being deleted.
+	toDeleteSet := make(map[string]bool, len(branches))
+	childrenByBranch := make(map[string][]string, len(branches))
+	parentByBranch := make(map[string]string, len(branches))
+	var needCheckoutTrunk bool
+
+	e.mu.Lock()
+	trunkName := e.trunk
 	for _, b := range branches {
-		branchName := b.GetName()
-		toDeleteSet[branchName] = true
-		e.mu.RLock()
-		children := e.state.childrenMap[branchName]
-		e.mu.RUnlock()
-		for _, child := range children {
-			allChildren[child] = true
+		name := b.GetName()
+		toDeleteSet[name] = true
+		if name == e.currentBranch {
+			needCheckoutTrunk = true
+		}
+		childrenByBranch[name] = slices.Clone(e.state.childrenMap[name])
+		parent := trunkName
+		if state := e.readState(name); state != nil {
+			parent = state.Parent
+		}
+		parentByBranch[name] = parent
+	}
+	e.mu.Unlock()
+
+	// If the current branch is being deleted, switch to trunk first so we
+	// don't end up detached after `update-ref -d refs/heads/<current>`.
+	if needCheckoutTrunk {
+		if err := e.git.CheckoutBranch(ctx, trunkName); err != nil {
+			return nil, fmt.Errorf("failed to switch to trunk before deleting current branch: %w", err)
+		}
+		e.mu.Lock()
+		e.currentBranch = e.trunk
+		e.mu.Unlock()
+	}
+
+	// One ref-deletion batch covers heads + metadata + local-metadata for every
+	// branch. update-ref --stdin tolerates missing refs (no oldvalue), so an
+	// already-deleted head or absent local-metadata won't fail the batch.
+	refsToDelete := make([]string, 0, 3*len(branches))
+	for _, b := range branches {
+		name := b.GetName()
+		refsToDelete = append(refsToDelete,
+			"refs/heads/"+name,
+			git.MetadataRefPrefix+name,
+			git.LocalMetadataRefPrefix+name,
+		)
+	}
+	if err := e.git.DeleteRefsBatch(ctx, refsToDelete); err != nil {
+		return nil, fmt.Errorf("failed to delete branch refs: %w", err)
+	}
+
+	// Reparent surviving children of each deleted branch to that branch's
+	// parent. Children that are themselves being deleted in this batch are
+	// skipped — callers are expected to pass branches in a topological order
+	// (children before parents) so the parent already reflects the right
+	// grandparent by the time we get here.
+	allSurvivingChildren := make(map[string]bool)
+	var reparentErr error
+	for _, b := range branches {
+		name := b.GetName()
+		var surviving []string
+		for _, child := range childrenByBranch[name] {
+			if !toDeleteSet[child] {
+				surviving = append(surviving, child)
+				allSurvivingChildren[child] = true
+			}
+		}
+		if len(surviving) == 0 {
+			continue
+		}
+		parentBranch := e.GetBranch(parentByBranch[name])
+		if err := e.ReparentBranches(ctx, surviving, parentBranch); err != nil {
+			reparentErr = fmt.Errorf("failed to reparent children of %s: %w", name, err)
+			break
 		}
 	}
 
-	// Remove branches that are also being deleted from the children set
-	for _, b := range branches {
-		delete(allChildren, b.GetName())
-	}
-
-	// Delete branches
-	for _, b := range branches {
-		if err := e.DeleteBranch(ctx, b); err != nil {
-			return nil, fmt.Errorf("failed to delete branch %s: %w", b.GetName(), err)
+	// Clean up in-memory state for the deleted branches.
+	e.mu.Lock()
+	for name := range toDeleteSet {
+		e.state.removeBranch(name)
+		if i := slices.Index(e.state.branches, name); i >= 0 {
+			e.state.setBranches(slices.Delete(e.state.branches, i, i+1))
 		}
 	}
+	e.mu.Unlock()
 
-	// Convert children map to slice
-	childrenToRestack := make([]string, 0, len(allChildren))
-	for child := range allChildren {
+	childrenToRestack := make([]string, 0, len(allSurvivingChildren))
+	for child := range allSurvivingChildren {
 		childrenToRestack = append(childrenToRestack, child)
 	}
 
+	if reparentErr != nil {
+		return childrenToRestack, reparentErr
+	}
 	return childrenToRestack, nil
 }
 

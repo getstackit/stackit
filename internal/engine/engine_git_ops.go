@@ -106,8 +106,8 @@ func (e *engineImpl) GetChangedFiles(ctx context.Context, base, head string) ([]
 	return e.git.GetChangedFiles(ctx, base, head)
 }
 
-// ListWorktrees returns a list of worktree paths
-func (e *engineImpl) ListWorktrees(ctx context.Context) ([]string, error) {
+// ListWorktrees returns every working tree registered with the repo.
+func (e *engineImpl) ListWorktrees(ctx context.Context) (git.WorktreeList, error) {
 	return e.git.ListWorktrees(ctx)
 }
 

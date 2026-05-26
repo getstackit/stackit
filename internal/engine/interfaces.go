@@ -101,7 +101,7 @@ type WorkingTree interface {
 	GetCommitTemplate(ctx context.Context) (string, error)
 	GetUnmergedFiles(ctx context.Context) ([]string, error)
 	ParseStagedHunks(ctx context.Context) ([]git.Hunk, error)
-	ListWorktrees(ctx context.Context) ([]string, error)
+	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
 	IsRebaseInProgress(ctx context.Context) bool
 	GetRebaseHead() (string, error)
 	HasUncommittedChanges(ctx context.Context) bool

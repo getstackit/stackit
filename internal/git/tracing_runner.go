@@ -873,10 +873,10 @@ func (t *tracingRunner) ForceRemoveWorktree(ctx context.Context, path string) er
 	return err
 }
 
-func (t *tracingRunner) ListWorktrees(ctx context.Context) ([]string, error) {
+func (t *tracingRunner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 	start := time.Now()
 	result, err := t.inner.ListWorktrees(ctx)
-	t.trace("ListWorktrees", time.Since(start), err == nil, err)
+	t.trace("ListWorktrees", time.Since(start), err == nil, err, slog.Int("count", len(result)))
 	return result, err
 }
 

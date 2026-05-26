@@ -99,12 +99,16 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 }
 
 // restackBranch rebases a branch onto its parent
-// If the parent has been merged/deleted, it will automatically reparent to the nearest valid ancestor
+// If the parent has been merged/deleted, it will automatically reparent to the nearest valid ancestor.
+// worktrees is a snapshot of `git worktree list` taken by the caller — used to
+// avoid spawning `git worktree list` per branch when resetting another
+// worktree's working directory.
 func (e *engineImpl) restackBranch(
 	ctx context.Context,
 	branch Branch,
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
+	worktrees git.WorktreeList,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
@@ -203,7 +207,7 @@ func (e *engineImpl) restackBranch(
 				// This is best-effort: sync checks for uncommitted changes before proceeding,
 				// so failure here just means the worktree may be briefly out of sync with HEAD.
 				// The ResetWorktreeWorkingDir command itself is logged via debugLog.
-				if worktreePath, wtErr := e.git.GetWorktreePathForBranch(ctx, branchName); wtErr == nil && worktreePath != "" {
+				if worktreePath := worktrees.PathForBranch(branchName); worktreePath != "" {
 					_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 				}
 			}
@@ -273,7 +277,7 @@ func (e *engineImpl) restackBranch(
 			// If the branch is checked out in a different worktree, reset that worktree.
 			// This is best-effort: sync checks for uncommitted changes before proceeding,
 			// so failure here just means the worktree may be briefly out of sync with HEAD.
-			if worktreePath, wtErr := e.git.GetWorktreePathForBranch(ctx, branchName); wtErr == nil && worktreePath != "" {
+			if worktreePath := worktrees.PathForBranch(branchName); worktreePath != "" {
 				_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 			}
 		}
@@ -440,7 +444,7 @@ func (e *engineImpl) restackBranch(
 	// that appears as staged changes reverting the rebased commits.
 	// This is best-effort: sync checks for uncommitted changes before proceeding,
 	// so failure here just means the worktree may be briefly out of sync with HEAD.
-	if worktreePath, wtErr := e.git.GetWorktreePathForBranch(ctx, branchName); wtErr == nil && worktreePath != "" {
+	if worktreePath := worktrees.PathForBranch(branchName); worktreePath != "" {
 		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 	}
 
@@ -495,6 +499,7 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 	plan *RestackPlan,
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
+	worktrees git.WorktreeList,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
@@ -514,9 +519,9 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 
 	switch item.Action {
 	case RestackPlanApplyFrozen, RestackPlanApplyAnchor:
-		return e.applyPlannedRefUpdate(ctx, branch, item, metaMap, revMap)
+		return e.applyPlannedRefUpdate(ctx, branch, item, metaMap, revMap, worktrees)
 	case RestackPlanApplyValidated:
-		return e.applyValidatedRestack(ctx, branch, validation, item, metaMap, revMap)
+		return e.applyValidatedRestack(ctx, branch, validation, item, metaMap, revMap, worktrees)
 	default:
 		return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("unknown restack plan action for %s", branchName)
 	}
@@ -529,6 +534,7 @@ func (e *engineImpl) applyValidatedRestack(
 	item RestackPlanItem,
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
+	worktrees git.WorktreeList,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	newRev := ""
@@ -557,7 +563,7 @@ func (e *engineImpl) applyValidatedRestack(
 		parentRev = rev
 	}
 
-	result, err := e.applyBranchAndMetadata(ctx, branch, item, newRev, parentRev, metaMap, revMap)
+	result, err := e.applyBranchAndMetadata(ctx, branch, item, newRev, parentRev, metaMap, revMap, worktrees)
 	if err != nil {
 		return result, err
 	}
@@ -574,6 +580,7 @@ func (e *engineImpl) applyPlannedRefUpdate(
 	item RestackPlanItem,
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
+	worktrees git.WorktreeList,
 ) (RestackBranchResult, error) {
 	if item.TargetRev == "" {
 		return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("missing target revision for %s", item.Branch)
@@ -588,7 +595,7 @@ func (e *engineImpl) applyPlannedRefUpdate(
 		parentRev = rev
 	}
 
-	return e.applyBranchAndMetadata(ctx, branch, item, item.TargetRev, parentRev, metaMap, revMap)
+	return e.applyBranchAndMetadata(ctx, branch, item, item.TargetRev, parentRev, metaMap, revMap, worktrees)
 }
 
 func (e *engineImpl) applyBranchAndMetadata(
@@ -599,6 +606,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	parentRev string,
 	metaMap map[string]*git.Meta,
 	revMap map[string]string,
+	worktrees git.WorktreeList,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	meta := (*git.Meta)(nil)
@@ -639,7 +647,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update refs atomically: %w", err)
 	}
 
-	if worktreePath, wtErr := e.git.GetWorktreePathForBranch(ctx, branchName); wtErr == nil && worktreePath != "" {
+	if worktreePath := worktrees.PathForBranch(branchName); worktreePath != "" {
 		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 	}
 
@@ -743,6 +751,15 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// Fetch ALL revisions in parallel
 	allRevisions, _ := e.git.BatchGetRevisions(involvedBranchNames)
 
+	// Snapshot the worktree list once. Restacking N branches used to call
+	// `git worktree list` N times for the "reset other worktree's working dir"
+	// check; the snapshot is stable across the restack loop since we don't
+	// add or remove worktrees here.
+	worktrees, err := e.git.ListWorktrees(ctx)
+	if err != nil {
+		worktrees = git.WorktreeList{}
+	}
+
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)
 	needsRebuild := false
@@ -752,9 +769,9 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 		var result RestackBranchResult
 		var err error
 		if validation != nil {
-			result, err = e.restackBranchWithValidatedRebase(ctx, branch, validation, plan, allMeta, allRevisions)
+			result, err = e.restackBranchWithValidatedRebase(ctx, branch, validation, plan, allMeta, allRevisions, worktrees)
 		} else {
-			result, err = e.restackBranch(ctx, branch, allMeta, allRevisions)
+			result, err = e.restackBranch(ctx, branch, allMeta, allRevisions, worktrees)
 		}
 		results[branchName] = result
 

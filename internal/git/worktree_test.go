@@ -40,7 +40,7 @@ func TestWorktree(t *testing.T) {
 		// List worktrees
 		worktrees, err := runner.ListWorktrees(context.Background())
 		require.NoError(t, err)
-		require.Contains(t, worktrees, worktreePath)
+		require.Contains(t, worktrees.Paths(), worktreePath)
 
 		// Remove worktree
 		err = runner.RemoveWorktree(context.Background(), worktreePath)
@@ -49,7 +49,7 @@ func TestWorktree(t *testing.T) {
 		// Verify worktree is gone from list
 		worktrees, err = runner.ListWorktrees(context.Background())
 		require.NoError(t, err)
-		require.NotContains(t, worktrees, worktreePath)
+		require.NotContains(t, worktrees.Paths(), worktreePath)
 	})
 
 	t.Run("add detached worktree", func(t *testing.T) {

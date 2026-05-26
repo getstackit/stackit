@@ -194,7 +194,7 @@ type WorktreeOperations interface {
 	AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach bool, noCheckout bool) error
 	RemoveWorktree(ctx context.Context, path string) error
 	ForceRemoveWorktree(ctx context.Context, path string) error
-	ListWorktrees(ctx context.Context) ([]string, error)
+	ListWorktrees(ctx context.Context) (WorktreeList, error)
 	PruneWorktrees(ctx context.Context) error
 	GetWorktreePathForBranch(ctx context.Context, branchName string) (string, error)
 	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)

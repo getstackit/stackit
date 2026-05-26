@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/getstackit/stackit/internal/config"
@@ -19,6 +20,22 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/utils"
 )
+
+// loggingDisabled reports whether STACKIT_NO_LOGGING is set to a truthy value.
+// Empty / unset / explicitly false-y values (0, false, ...) keep logging on,
+// so STACKIT_NO_LOGGING=0 means what it looks like it means. Unrecognized
+// non-empty values are treated as truthy for backward compatibility with the
+// previous "any non-empty value disables logging" behavior.
+func loggingDisabled() bool {
+	raw := os.Getenv("STACKIT_NO_LOGGING")
+	if raw == "" {
+		return false
+	}
+	if v, err := strconv.ParseBool(raw); err == nil {
+		return v
+	}
+	return true
+}
 
 // Context provides access to engine and output for commands
 type Context struct {
@@ -259,7 +276,7 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 	// If no logger provided, create one
 	logger := options.logger
 	if logger == nil {
-		if os.Getenv("STACKIT_NO_LOGGING") != "" {
+		if loggingDisabled() {
 			logger = output.NewNullLogger()
 		} else {
 			logPath := output.GetLogFilePath()
@@ -327,7 +344,7 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 
 	// Create file logger first so git commands during engine init are logged
 	var logger output.Logger
-	if os.Getenv("STACKIT_NO_LOGGING") != "" {
+	if loggingDisabled() {
 		logger = output.NewNullLogger()
 	} else {
 		logPath := output.GetLogFilePath()

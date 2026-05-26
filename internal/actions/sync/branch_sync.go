@@ -24,7 +24,15 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 	// Get all tracked branches
 	allBranches := nav.AllBranches()
 
+	syncStart := time.Now()
+	var statusCheckTotalMs int64
+	statusCheckCount := 0
 	branchesSynced := 0
+	defer func() {
+		ctx.Logger.Info("syncStackBranches completed durationMs=%d branchCount=%d branchesSynced=%d statusChecksMs=%d statusCheckCount=%d",
+			time.Since(syncStart).Milliseconds(), len(allBranches), branchesSynced, statusCheckTotalMs, statusCheckCount)
+	}()
+
 	for _, branch := range allBranches {
 		// Check for context cancellation
 		if err := gctx.Err(); err != nil {
@@ -59,7 +67,10 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 		}
 
 		// Check if branch is behind remote
+		statusStart := time.Now()
 		status, err := eng.GetBranchRemoteStatus(branch)
+		statusCheckTotalMs += time.Since(statusStart).Milliseconds()
+		statusCheckCount++
 		if err != nil {
 			// Can't determine status, skip
 			continue

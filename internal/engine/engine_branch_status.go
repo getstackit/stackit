@@ -434,7 +434,20 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 		}
 	}
 
-	// 5. Check if empty (no diff from parent) with an associated PR
+	// 5. Check if empty (no diff from parent) with an associated PR.
+	//
+	// Rule 5 only fires when the branch is empty AND has a PR. Establishing
+	// the PR side first lets us skip the IsDiffEmpty tree comparison entirely
+	// for the (common) case of branches without PR metadata — that comparison
+	// dominated branch-deletion planning when scaled to 20+ candidate branches.
+	if meta == nil {
+		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
+	}
+	prInfoMeta := meta.GetPrInfo()
+	if prInfoMeta == nil || prInfoMeta.Number == nil || *prInfoMeta.Number == 0 {
+		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
+	}
+
 	parent := branch.GetParent()
 	parentName := trunkName
 	if parent != nil {
@@ -448,15 +461,8 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 		}
 	}
 	if parentRev != "" {
-		empty, err := e.git.IsDiffEmpty(ctx, branchName, parentRev)
-		if err == nil && empty {
-			// Only delete empty branches if they have a PR
-			if meta != nil {
-				metaPrInfo := meta.GetPrInfo()
-				if metaPrInfo != nil && metaPrInfo.Number != nil && *metaPrInfo.Number != 0 {
-					return DeletionStatus{SafeToDelete: true, Reason: "empty", Kind: DeletionReasonEmptyWithPR}
-				}
-			}
+		if empty, err := e.git.IsDiffEmpty(ctx, branchName, parentRev); err == nil && empty {
+			return DeletionStatus{SafeToDelete: true, Reason: "empty", Kind: DeletionReasonEmptyWithPR}
 		}
 	}
 

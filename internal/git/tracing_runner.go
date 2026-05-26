@@ -894,6 +894,13 @@ func (t *tracingRunner) GetWorktreePathForBranch(ctx context.Context, branchName
 	return result, err
 }
 
+func (t *tracingRunner) WorktreeBranchMap(ctx context.Context) (map[string]string, error) {
+	start := time.Now()
+	result, err := t.inner.WorktreeBranchMap(ctx)
+	t.trace("WorktreeBranchMap", time.Since(start), err == nil, err, slog.Int("count", len(result)))
+	return result, err
+}
+
 func (t *tracingRunner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error) {
 	start := time.Now()
 	result, err := t.inner.GetWorktreeCurrentBranch(ctx, worktreePath)

@@ -465,6 +465,10 @@ func (d *demoGitRunner) GetWorktreePathForBranch(_ context.Context, _ string) (s
 	return "", nil
 }
 
+func (d *demoGitRunner) WorktreeBranchMap(_ context.Context) (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
 func (d *demoGitRunner) GetWorktreeCurrentBranch(_ context.Context, _ string) (string, error) {
 	return "", nil
 }

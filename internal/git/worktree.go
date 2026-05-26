@@ -183,6 +183,35 @@ func (r *runner) GetWorktreePathForBranch(ctx context.Context, branchName string
 	return "", nil
 }
 
+// WorktreeBranchMap returns a map of branch name to worktree path for every
+// branch currently checked out in any worktree. Use this instead of looping
+// GetWorktreePathForBranch when you need to test many branches — one git
+// subprocess instead of N.
+func (r *runner) WorktreeBranchMap(ctx context.Context) (map[string]string, error) {
+	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	result := make(map[string]string)
+	if output == "" {
+		return result, nil
+	}
+
+	var currentWorktree string
+	for line := range strings.SplitSeq(output, "\n") {
+		if after, ok := strings.CutPrefix(line, "worktree "); ok {
+			currentWorktree = after
+		} else if after, ok := strings.CutPrefix(line, "branch "); ok {
+			if currentWorktree != "" {
+				branchName := strings.TrimPrefix(after, "refs/heads/")
+				result[branchName] = currentWorktree
+			}
+		}
+	}
+	return result, nil
+}
+
 // ResetWorktreeWorkingDir resets a worktree's working directory to match HEAD.
 // This is used after updating a branch ref to sync the worktree's working directory.
 func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath string) error {

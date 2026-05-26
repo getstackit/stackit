@@ -197,6 +197,7 @@ type WorktreeOperations interface {
 	ListWorktrees(ctx context.Context) ([]string, error)
 	PruneWorktrees(ctx context.Context) error
 	GetWorktreePathForBranch(ctx context.Context, branchName string) (string, error)
+	WorktreeBranchMap(ctx context.Context) (map[string]string, error)
 	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
 	ResetWorktreeWorkingDir(ctx context.Context, worktreePath string) error
 	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)

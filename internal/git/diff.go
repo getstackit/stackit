@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-func (r *runner) IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error) {
+func (r *runner) IsDiffEmpty(_ context.Context, branchName, base string) (bool, error) {
 	branchRev, err := r.GetRevision(branchName)
 	if err != nil {
 		return false, fmt.Errorf("failed to get branch revision: %w", err)
@@ -16,11 +16,37 @@ func (r *runner) IsDiffEmpty(ctx context.Context, branchName, base string) (bool
 		return true, nil
 	}
 
-	changedFiles, err := r.changedFilesBetween(ctx, base, branchRev)
+	// Two refs at different commits can still represent identical content if
+	// their trees match (e.g. revert chain, no-op rebase). Compare commit
+	// TreeHash directly instead of walking the file-level diff — go-git tree
+	// hashes are content-addressed, so equal hash ⇔ no changes. This skips
+	// the O(tree-size) DiffContext call that dominated branch-deletion
+	// planning.
+	repo, err := r.ensureRepo()
 	if err != nil {
 		return false, err
 	}
-	return len(changedFiles) == 0, nil
+
+	r.goGitMu.Lock()
+	defer r.goGitMu.Unlock()
+
+	baseHash, err := r.resolveRefHashInternal(repo, base)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve base %s: %w", base, err)
+	}
+	headHash, err := r.resolveRefHashInternal(repo, branchRev)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve head %s: %w", branchRev, err)
+	}
+	baseCommit, err := repo.CommitObject(baseHash)
+	if err != nil {
+		return false, fmt.Errorf("failed to load base commit %s: %w", base, err)
+	}
+	headCommit, err := repo.CommitObject(headHash)
+	if err != nil {
+		return false, fmt.Errorf("failed to load head commit %s: %w", branchRev, err)
+	}
+	return baseCommit.TreeHash == headCommit.TreeHash, nil
 }
 
 func (r *runner) GetChangedFiles(ctx context.Context, base, head string) ([]string, error) {

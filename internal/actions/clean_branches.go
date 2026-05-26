@@ -199,13 +199,17 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 	c := ctx.Context
 
 	ctx.Logger.Info("identifyBranchesToDelete started force=%v inManagedWorktree=%v", opts.Force, opts.InManagedWorktree)
+	identifyStart := time.Now()
 
 	// Collect non-trunk candidate branch names
 	allTrackedBranches := eng.AllBranches()
 	candidateNames := allTrackedBranches.WithoutTrunk().Names()
 
 	// Single batch call to engine for deletion statuses
+	batchStart := time.Now()
 	statuses, err := eng.BatchGetDeletionStatuses(c, candidateNames)
+	ctx.Logger.Info("BatchGetDeletionStatuses completed durationMs=%d candidateCount=%d ok=%v",
+		time.Since(batchStart).Milliseconds(), len(candidateNames), err == nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get deletion statuses: %w", err)
 	}
@@ -245,7 +249,8 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 		ctx.Logger.Info("identifyBranchesToDelete marked for deletion branch=%v reason=%v unpushed=%v", name, status.Reason, status.HasUnpushedChanges)
 	}
 
-	ctx.Logger.Info("identifyBranchesToDelete completed toDeleteCount=%v skippedCount=%v", len(deleteStatuses), len(skippedInWorktree))
+	ctx.Logger.Info("identifyBranchesToDelete completed durationMs=%d toDeleteCount=%v skippedCount=%v",
+		time.Since(identifyStart).Milliseconds(), len(deleteStatuses), len(skippedInWorktree))
 
 	return deleteStatuses, skippedInWorktree, utilityBranches, nil
 }

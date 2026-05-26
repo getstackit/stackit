@@ -8,11 +8,12 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 type SSECallback = () => void;
 
 /**
- * Hook that connects to the SSE event stream and calls onUpdate
- * whenever stack refresh events are received.
+ * Connects to the per-repo SSE event stream and calls onUpdate whenever
+ * the server signals that the repo's view should be refetched.
  * Optionally calls onEvent for server-sourced feed events.
  */
 export function useSSE(
+  repoId: string,
   onUpdate: SSECallback,
   onEvent?: (event: FeedEvent) => void
 ) {
@@ -22,7 +23,8 @@ export function useSSE(
   });
 
   useEffect(() => {
-    const eventSource = new EventSource(`${API_BASE}/api/events`);
+    const url = `${API_BASE}/api/v1/repos/${encodeURIComponent(repoId)}/events`;
+    const eventSource = new EventSource(url);
 
     eventSource.addEventListener("stacks_updated", () => {
       handleUpdate();
@@ -58,5 +60,5 @@ export function useSSE(
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [repoId]);
 }

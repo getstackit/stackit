@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   fetchView,
   fetchRepo,
+  fetchRepos,
   fetchStacks,
   fetchStack,
   fetchBranch,
@@ -30,43 +31,61 @@ function mockError(status: number, statusText: string) {
   });
 }
 
+describe("fetchRepos", () => {
+  it("fetches the unscoped repos index", async () => {
+    const data = { repos: [{ id: "stackit", displayName: "Stackit", trunk: "main" }] };
+    mockOk(data);
+
+    const result = await fetchRepos();
+    expect(result).toEqual(data);
+    expect(mockFetch).toHaveBeenCalledWith("http://localhost:8080/api/v1/repos");
+  });
+});
+
 describe("fetchView", () => {
-  it("fetches from /api/view", async () => {
+  it("scopes to repoId", async () => {
     const data = { repo: {}, stacks: [] };
     mockOk(data);
 
-    const result = await fetchView();
+    const result = await fetchView("stackit");
     expect(result).toEqual(data);
-    expect(mockFetch).toHaveBeenCalledWith("http://localhost:8080/api/view");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/v1/repos/stackit/view"
+    );
   });
 });
 
 describe("fetchRepo", () => {
-  it("fetches from /api/repo", async () => {
+  it("scopes to repoId", async () => {
     const data = { owner: "test", repo: "repo", trunk: "main", currentBranch: "main", remote: "origin" };
     mockOk(data);
 
-    const result = await fetchRepo();
+    const result = await fetchRepo("stackit");
     expect(result).toEqual(data);
-    expect(mockFetch).toHaveBeenCalledWith("http://localhost:8080/api/repo");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/v1/repos/stackit/repo"
+    );
   });
 });
 
 describe("fetchStacks", () => {
-  it("fetches from /api/stacks", async () => {
+  it("scopes to repoId", async () => {
     mockOk([]);
-    const result = await fetchStacks();
+    const result = await fetchStacks("stackit");
     expect(result).toEqual([]);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/api/v1/repos/stackit/stacks"
+    );
   });
 });
 
 describe("fetchStack", () => {
-  it("encodes branch name in URL", async () => {
+  it("encodes both repoId and branch name in URL", async () => {
     mockOk({ rootBranch: "feat/foo", branches: [] });
 
-    await fetchStack("feat/foo");
+    await fetchStack("stackit", "feat/foo");
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/stacks/feat%2Ffoo"
+      "http://localhost:8080/api/v1/repos/stackit/stacks/feat%2Ffoo"
     );
   });
 });
@@ -75,9 +94,9 @@ describe("fetchBranch", () => {
   it("encodes branch name in URL", async () => {
     mockOk({ name: "feat/bar" });
 
-    await fetchBranch("feat/bar");
+    await fetchBranch("stackit", "feat/bar");
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/branches/feat%2Fbar"
+      "http://localhost:8080/api/v1/repos/stackit/branches/feat%2Fbar"
     );
   });
 });
@@ -86,9 +105,9 @@ describe("fetchBranchDiff", () => {
   it("sends encoded branch name in query string", async () => {
     mockOk({ branch: "feat/bar", baseRevision: "abc", headRevision: "def", patch: "" });
 
-    await fetchBranchDiff("feat/bar");
+    await fetchBranchDiff("stackit", "feat/bar");
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/branch-diff?branch=feat%2Fbar"
+      "http://localhost:8080/api/v1/repos/stackit/branch-diff?branch=feat%2Fbar"
     );
   });
 });
@@ -97,12 +116,12 @@ describe("error handling", () => {
   it("throws on non-ok response", async () => {
     mockError(404, "Not Found");
 
-    await expect(fetchRepo()).rejects.toThrow("API error: 404 Not Found");
+    await expect(fetchRepo("stackit")).rejects.toThrow("API error: 404 Not Found");
   });
 
   it("throws on 500 response", async () => {
     mockError(500, "Internal Server Error");
 
-    await expect(fetchView()).rejects.toThrow("API error: 500 Internal Server Error");
+    await expect(fetchView("stackit")).rejects.toThrow("API error: 500 Internal Server Error");
   });
 });

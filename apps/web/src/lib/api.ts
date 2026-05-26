@@ -13,6 +13,17 @@ export interface RepoResponse {
   currentUser?: string;
 }
 
+export interface RepoSummary {
+  id: string;
+  displayName: string;
+  trunk: string;
+  currentBranch?: string;
+}
+
+export interface ReposListResponse {
+  repos: RepoSummary[];
+}
+
 export interface StackSummary {
   rootBranch: string;
   title: string;
@@ -125,35 +136,41 @@ async function fetchAPI<T>(path: string): Promise<T> {
   return res.json();
 }
 
-export function fetchView(): Promise<ViewResponse> {
-  return fetchAPI<ViewResponse>("/api/view");
+function repoPath(repoId: string, suffix: string): string {
+  return `/api/v1/repos/${encodeURIComponent(repoId)}/${suffix}`;
 }
 
-export function fetchRepo(): Promise<RepoResponse> {
-  return fetchAPI<RepoResponse>("/api/repo");
+export function fetchRepos(): Promise<ReposListResponse> {
+  return fetchAPI<ReposListResponse>("/api/v1/repos");
 }
 
-export function fetchStacks(): Promise<StackSummary[]> {
-  return fetchAPI<StackSummary[]>("/api/stacks");
+export function fetchView(repoId: string): Promise<ViewResponse> {
+  return fetchAPI<ViewResponse>(repoPath(repoId, "view"));
 }
 
-export function fetchStack(rootBranch: string): Promise<StackDetail> {
-  return fetchAPI<StackDetail>(`/api/stacks/${encodeURIComponent(rootBranch)}`);
+export function fetchRepo(repoId: string): Promise<RepoResponse> {
+  return fetchAPI<RepoResponse>(repoPath(repoId, "repo"));
 }
 
-export function fetchBranches(): Promise<BranchResponse[]> {
-  return fetchAPI<BranchResponse[]>("/api/branches");
+export function fetchStacks(repoId: string): Promise<StackSummary[]> {
+  return fetchAPI<StackSummary[]>(repoPath(repoId, "stacks"));
 }
 
-export function fetchBranch(name: string): Promise<BranchResponse> {
-  return fetchAPI<BranchResponse>(
-    `/api/branches/${encodeURIComponent(name)}`
-  );
+export function fetchStack(repoId: string, rootBranch: string): Promise<StackDetail> {
+  return fetchAPI<StackDetail>(repoPath(repoId, `stacks/${encodeURIComponent(rootBranch)}`));
 }
 
-export function fetchBranchDiff(name: string): Promise<BranchDiffResponse> {
+export function fetchBranches(repoId: string): Promise<BranchResponse[]> {
+  return fetchAPI<BranchResponse[]>(repoPath(repoId, "branches"));
+}
+
+export function fetchBranch(repoId: string, name: string): Promise<BranchResponse> {
+  return fetchAPI<BranchResponse>(repoPath(repoId, `branches/${encodeURIComponent(name)}`));
+}
+
+export function fetchBranchDiff(repoId: string, name: string): Promise<BranchDiffResponse> {
   return fetchAPI<BranchDiffResponse>(
-    `/api/branch-diff?branch=${encodeURIComponent(name)}`
+    repoPath(repoId, `branch-diff?branch=${encodeURIComponent(name)}`)
   );
 }
 
@@ -195,9 +212,9 @@ export interface SubmitResponse {
 
 // --- Mutation Functions ---
 
-export async function submitStack(rootBranch: string): Promise<SubmitResponse> {
+export async function submitStack(repoId: string, rootBranch: string): Promise<SubmitResponse> {
   const res = await fetch(
-    `${API_BASE}/api/submit/${encodeURIComponent(rootBranch)}`,
+    `${API_BASE}${repoPath(repoId, `stacks/${encodeURIComponent(rootBranch)}/submit`)}`,
     { method: "POST" }
   );
   const data: SubmitResponse = await res.json();

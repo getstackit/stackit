@@ -9,7 +9,7 @@ newDescribeCmd → common.Run → describe.Action          internal/actions/desc
   ├─ eng.IsTrunk + currentBranch.IsTracked            cache reads
   ├─ eng.GetStackRootForBranch                        in-memory traversal
   │
-  ├─ --show: print + return                           (no network)
+  ├─ --show: branches-only bootstrap, print + return  (no network)
   ├─ --clear:
   │    ├─ eng.ClearStackDescription                   metadata transaction
   │    └─ markStackAndPushMetadata                    see below
@@ -36,7 +36,7 @@ markStackAndPushMetadata:
 Looking at `engine_writer.go:1062` (not pasted here), `BatchMarkNeedsPRBodyUpdate` should ideally write all the flags in a single `UpdateRefsBatch` call. The CLAUDE.md "Batch Operations" rule explicitly calls this out. If it does — good. If it just loops `MarkNeedsPRBodyUpdate` internally, that's an N+1.
 
 3. **`SetStackDescription` (or `ClearStackDescription`)** — one metadata transaction.
-4. **Bootstrap + open editor** — same fixed costs as everywhere else.
+4. **Bootstrap + open editor** — `--show` already uses branches-only mode and skips the managed-worktree check; mutating/editor paths still use the normal context.
 
 For a stack with 10 branches, the metadata phase writes 1 description + 10 mark-flags + 1 push. The push dominates by an order of magnitude.
 
@@ -54,11 +54,7 @@ The description write and the mark-for-PR-update write touch overlapping metadat
 
 `--show` short-circuits before any writes/pushes. Good.
 
-### 4. Bootstrap "lite" mode benefits `--show` *(shared with co.md #2)*
-
-`--show` only needs the current branch and its stack root. Doesn't need full metadata for every branch in the repo.
-
-### 5. Editor mode: don't re-fetch description after editor closes *(trivial)*
+### 4. Editor mode: don't re-fetch description after editor closes *(trivial)*
 
 `describe.go:96` reads `existingDesc` before opening the editor; `applyStackDescription` writes the new one. No redundant read on this path. Good.
 

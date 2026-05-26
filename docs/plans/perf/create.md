@@ -32,8 +32,7 @@ NewCreateCmd.RunE → common.Run                       (same bootstrap as co)
        │
        ├─ eng.CreateAndCheckoutBranch                internal/engine/engine_writer.go:296
        │     └─ git.runner.CreateAndCheckoutBranch   internal/git/branches.go:91
-       │           ├─ worktree.Status()              ← O(working tree) again
-       │           └─ worktree.Checkout(Create:true) ← go-git checkout
+       │           └─ native `git checkout -b <branch>`
        │
        ├─ if staged: eng.Commit                      internal/engine/engine_writer.go:709
        │     └─ git.runner.Commit                    internal/git/commit.go:68
@@ -54,7 +53,7 @@ NewCreateCmd.RunE → common.Run                       (same bootstrap as co)
 
 1. **`git commit` subprocess + user hooks** — the user's pre-commit hook usually dominates wall time when present. Stackit can't change that, but it can avoid duplicate work around it (see #4).
 2. **`ReloadRepository`** (`internal/git/runner.go:480`) after every commit. Closes the go-git `*Repository`, invalidates the entire revision cache, and re-opens. Re-opens of large repos cost real I/O; throwing away `revisionCache.AllBranchRevisions` is wasteful since only the freshly committed branch's SHA changed.
-3. **`worktree.Status()` × 2–3** — `HasStagedChanges` calls it once, `HasUnstagedChanges` calls it again in the interactive prompt path, and `CreateAndCheckoutBranch` calls it a third time to decide `Keep`. Each is a full working-tree walk; on a big repo this is the dominant non-hook cost.
+3. **`worktree.Status()` × 1–2** — `HasStagedChanges` calls it once, and `HasUnstagedChanges` calls it again in the interactive prompt path. Checkout no longer adds an extra go-git status walk. Each remaining status check is a full working-tree walk; on a big repo this is the dominant non-hook cost.
 4. **`TakeSnapshot`** (`internal/engine/undo.go:108`). Iterates `e.state.branches` and calls `branch.GetRevision()` per branch, hitting `r.revisionCache` one entry at a time. Also calls `git.ListMetadata` (separate ref iter) and an `os.ReadDir` for stack-depth enforcement. On a 50-branch repo this is ~50 cached lookups + 1 metadata scan + snapshot write — usually 5–15ms but it runs on every mutation.
 5. **Bootstrap (`rebuildInternal`)** — same fixed cost as `co.md` describes.
 6. **`TrackBranch` re-fetches `GetCurrentBranch`** inside its critical section (`internal/engine/engine_writer.go:102`) even though we just created the branch. Small but pointless.
@@ -63,11 +62,9 @@ NewCreateCmd.RunE → common.Run                       (same bootstrap as co)
 
 ## Proposed wins (ranked)
 
-### 1. Coalesce all `worktree.Status()` calls *(high impact, low risk)*
+### 1. Coalesce staging `worktree.Status()` calls *(medium impact, low risk)*
 
-`HasStagedChanges`, `HasUnstagedChanges`, and the `Status()` inside `CreateAndCheckoutBranch` all walk the working tree. Add a single `RepoStatus` (`{HasStaged, HasUnstaged, HasUntracked}`) call early in `create.Action`, cache it on the engine for the duration of the request, and feed it to `CreateAndCheckoutBranch` so it can decide `Keep` without re-walking. Same fix benefits `modify`, `absorb`, and `submit`.
-
-For the `CreateAndCheckoutBranch` path, the cleanest fix is shared with `co`: always `Keep: true` or shell to `git checkout`. (See `co.md` win #1.)
+`HasStagedChanges` and `HasUnstagedChanges` both walk the working tree. Add a single `RepoStatus` (`{HasStaged, HasUnstaged, HasUntracked}`) call early in `create.Action`, cache it on the engine for the duration of the request, and reuse it for prompts/validation. Same fix benefits `modify`, `absorb`, and `submit`.
 
 ### 2. Snapshot should use batched revisions and skip on opt-out *(medium impact, low risk)*
 
@@ -102,4 +99,4 @@ STACKIT_NO_LOGGING=1 hyperfine --warmup 1 \
   'cd /tmp/scratch && git add . && stackit create -m "perf: noop"'
 ```
 
-Run with a no-op pre-commit hook (or `--no-verify` if that flag is available) to isolate the stackit overhead from user hook cost. Instrument: each `worktree.Status()` call, `TakeSnapshot`, `ReloadRepository`, and `git commit`. The `Status` × 3 pattern is the easiest first measurement.
+Run with a no-op pre-commit hook (or `--no-verify` if that flag is available) to isolate the stackit overhead from user hook cost. Instrument: each remaining `worktree.Status()` call, `TakeSnapshot`, `ReloadRepository`, and `git commit`.

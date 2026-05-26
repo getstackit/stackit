@@ -9,7 +9,7 @@ NewSubmitCmd → executeSubmit → submit.Action         internal/actions/submit
   ├─ if untracked target: prompt + eng.TrackBranch
   ├─ getBranchesToSubmit                              graph walk over the stack
   ├─ pr.PopulateRemoteShas                            one `for-each-ref refs/remotes/...`
-  ├─ for each branch: branch.IsBranchUpToDate         N × GetRevision + readMetadata (see co.md #3)
+  ├─ for each branch: branch.IsBranchUpToDate         N × parent revision lookup/status check
   ├─ tree.NewStackTree + normalizeDisplayTreeParents  in-memory
   ├─ handler.OnEvent(StackDisplayEvent)               render
   │
@@ -43,13 +43,13 @@ For a **new-stack submit** (creates):
 For a **--restack submit**:
 - `RestackBranches` pays the per-spec worktree validation tax (`modify.md` #1).
 
-Local (non-network) overhead is small compared to remote calls. The dominant local cost is the same bootstrap and the same `IsBranchUpToDate` per branch (every branch in the stack iterates through a fresh `GetRevision + readMetadata`).
+Local (non-network) overhead is small compared to remote calls. The dominant local cost is bootstrap plus per-branch up-to-date checks while walking the stack.
 
 ## Proposed wins (ranked)
 
-### 1. Skip the per-branch `IsBranchUpToDate` re-reads *(shared with co.md #3)*
+### 1. Batch per-branch `IsBranchUpToDate` checks *(shared with cross-cutting.md #2)*
 
-`internal/actions/submit/submit.go:192` calls `branch.IsBranchUpToDate()` for every branch in the stack. Each goes through `engine_branch_status.go:148` and re-reads metadata. After bootstrap, the engine already knows whether each branch's stored `ParentBranchRevision` matches the current parent SHA. One batched comparison instead of N metadata reads.
+`internal/actions/submit/submit.go` calls `branch.IsBranchUpToDate()` for every branch in the stack. Route this through `ReadBranchStatuses` or an equivalent batched parent-revision lookup so the submit planning path does one grouped read instead of N individual checks.
 
 ### 2. Cache PR check status reads (shared with log.md #4)
 

@@ -13,7 +13,7 @@ newInfoCmd → common.Run                              (same bootstrap as co)
        │     ← network fetch — only on untracked-branch path
        ├─ if --json: outputBranchInfoJSON            JSON path
        │
-       ├─ branch.IsBranchUpToDate                    engine_branch_status.go:148 — fresh metadata read + GetRevision
+       ├─ branch.IsBranchUpToDate                    parent revision lookup + cached metadata
        ├─ eng.GetStackDescription
        ├─ branch.GetCommitDate                       one git op
        ├─ branch.GetPrInfo                           cache hit
@@ -28,7 +28,7 @@ newInfoCmd → common.Run                              (same bootstrap as co)
 
 For the **default `stackit info` on the current branch** (no flags):
 1. **Bootstrap** dominates — info does ~5 git ops after bootstrap.
-2. `branch.IsBranchUpToDate` re-reads metadata + does a `GetRevision` even though bootstrap has all of this in `state.branchState`. Same N+1 pattern as `co.md` #3.
+2. `branch.IsBranchUpToDate` still does a live parent revision lookup. For one branch this is small, but stack-wide variants should use batched status reads.
 3. `branch.GetCommitDate` shells out per call.
 4. `branch.GetAllCommits(Readable)` walks the commit range via go-git.
 
@@ -41,9 +41,9 @@ For **`info <untracked-branch>`** (`internal/actions/info.go:78–97`):
 
 ## Proposed wins (ranked)
 
-### 1. Make `IsBranchUpToDate` use cached state *(shared with co.md #3)*
+### 1. Reuse batched status reads for stack-wide info *(shared with cross-cutting.md #2)*
 
-`internal/engine/engine_branch_status.go:148` re-reads metadata per call. For `info`, this is one extra metadata read per invocation — small but free.
+For the default one-branch `info` path this is small. For JSON/stack-wide info, avoid looping through branches with individual `IsBranchUpToDate` calls; use `ReadBranchStatuses` or a batched parent-revision helper.
 
 ### 2. Cache `FetchMetadataRefs` per session *(small impact, low risk)*
 

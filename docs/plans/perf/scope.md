@@ -6,7 +6,7 @@
 
 ```
 newScopeCmd → common.Run → scope.Action               internal/actions/scope/action.go:22
-  ├─ --show: read explicit + resolved scope from cache; print            (no network)
+  ├─ --show: branches-only bootstrap, read explicit + resolved scope; print (no network)
   ├─ --unset:
   │    ├─ eng.SetScope(Empty)                        metadata transaction (1 ref)
   │    ├─ eng.BatchMarkNeedsPRBodyUpdate              metadata transaction (1 ref)
@@ -26,8 +26,8 @@ newScopeCmd → common.Run → scope.Action               internal/actions/scope
 1. **`actions.PushMetadataOnly`** — one `git push` (network round trip, 200–500ms typical). Dominates everything else when remote-sync is on.
 2. **`TestRemoteRefCompatibility`** on first run — another network round trip. Only runs once per repo (caches in `IsRemoteSyncEnabled`).
 3. **Two metadata transactions** per call: `SetScope` writes one ref, `BatchMarkNeedsPRBodyUpdate` writes another. Both go through the metadata tx machinery; each is ~2–5ms.
-4. **Bootstrap** — `rebuildInternal` as always.
-5. **`--show`** is pure cache reads after bootstrap. The fast path.
+4. **Bootstrap** — `--show` already uses branches-only mode and skips the managed-worktree check. Mutating scope paths still use the normal engine context.
+5. **`--show`** is the fast path and should mostly be current-branch metadata promotion after bootstrap.
 
 `RenameBranch` is rare — only triggered when the user explicitly confirms — but it does a real branch checkout + ref rename and is more expensive than the rest combined when it runs.
 
@@ -45,14 +45,6 @@ For non-interactive `--unset` and `--set`, the user is blocked on `git push` of 
 - Batch metadata pushes across consecutive `scope`/`describe`/`lock` commands during a single shell session via a debounce. Complex; only worth it if these commands run in bursts.
 
 Default to keeping the sync push but document that it's the dominant cost.
-
-### 3. `--show` should skip remote-shas / IsInManagedWorktree *(small impact, free)*
-
-`common.Run` does `IsInManagedWorktree()` unconditionally (`internal/cli/common/common.go:42`). `scope --show` doesn't need that. Same fix listed in `co.md` #5 — gate per command.
-
-### 4. Bootstrap "lite" mode benefits `--show` *(shared with co.md #2)*
-
-`--show` only needs the current branch and its scope chain. Doesn't need a full `rebuildInternal`.
 
 ## Validation
 

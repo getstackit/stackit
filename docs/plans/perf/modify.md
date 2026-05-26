@@ -9,7 +9,7 @@ NewModifyCmd.RunE → common.Run                       (same bootstrap as co)
   └─ actions.ModifyAction                            internal/actions/modify.go:34
        ├─ validation.ModifyBranchChain               cheap ancestry checks
        ├─ validation.MustNotHaveRebaseInProgress     fs check on .git/rebase-merge etc.
-       ├─ eng.IsBranchEmpty(currentBranch)           engine_branch_status.go:245 — git rev-list / metadata compare
+       ├─ if amending: eng.IsBranchEmpty(currentBranch)   git rev-list / metadata compare
        ├─ git.StageChanges(opts)                     shells `git add ...` (only if --all/--update/--patch)
        ├─ eng.HasStagedChanges                       worktree.Status() — full tree walk
        │
@@ -41,8 +41,7 @@ NewModifyCmd.RunE → common.Run                       (same bootstrap as co)
 3. **`ReloadRepository`** after the amend (`internal/git/commit.go:57`). Closes and re-opens the go-git repo, wiping the revision cache. Same cost as in `create.md` #3.
 4. **`PlanRestack`** — ~3 git ops per descendant. Currently bounded by descendant count, not particularly parallel. For a deep stack, this is meaningful.
 5. **`worktree.Status()`** in `HasStagedChanges` (`internal/git/staging.go:103`). Same full-tree walk pattern as in `create.md` #1.
-6. **`IsBranchEmpty`** — runs even when the user passed `-c` (already requested a new commit). Wasted work.
-7. **Bootstrap (`rebuildInternal`)** — fixed cost; see `co.md`.
+6. **Bootstrap (`rebuildInternal`)** — fixed cost; see `co.md`.
 
 For a **leaf branch amend** (no children): the restack block is skipped entirely. The dominant non-hook cost is `worktree.Status()` (#5) + `ReloadRepository` (#3) + bootstrap. Big win there is shared with `create`.
 
@@ -67,23 +66,19 @@ For a typical amend that only touches one file in a leaf branch, this collapses 
 
 Risk: rerere state and partial-rebase state need careful reset between specs. The current per-spec isolation is the safe design — opt-in path for the validated-good case is safer.
 
-### 3. Drop `IsBranchEmpty` when `--commit` is set *(trivial)*
-
-`internal/actions/modify.go:57` checks emptiness even when the user already chose `-c`. Move the check inside the `if !opts.CreateCommit` branch.
-
-### 4. Same `worktree.Status()` coalescing as `create` *(low impact for modify, shared fix)*
+### 3. Same `worktree.Status()` coalescing as `create` *(low impact for modify, shared fix)*
 
 `HasStagedChanges` here calls `worktree.Status()`. `StageChanges` may have just finished a `git add` and knows what was staged. Returning a "staged any files?" flag from `StageChanges` would let us skip the second status walk. Same fix benefits `create`, `absorb`, `submit`.
 
-### 5. Same `ReloadRepository` scoping as `create` *(see create.md #3)*
+### 4. Same `ReloadRepository` scoping as `create` *(see create.md #3)*
 
 Invalidate just the affected branch's revision rather than dropping the whole go-git handle.
 
-### 6. Parallelize `PlanRestack`'s per-branch git ops *(small impact)*
+### 5. Parallelize `PlanRestack`'s per-branch git ops *(small impact)*
 
 `PlanRestack` runs ~3 git ops per branch sequentially. Most are revision lookups that go through `revisionCache`. After `PreloadBranchData` (which modify doesn't currently call but easily could) most of these would be cache hits and the issue vanishes. Cheaper than building a fan-out.
 
-### 7. Pre-warm the revision cache before restack *(trivial)*
+### 6. Pre-warm the revision cache before restack *(trivial)*
 
 Call `LoadAllBranchRevisions` (already exists, used by `log`) before `PlanRestack` so its per-branch SHA lookups are all cache hits. One go-git ref iter vs. N individual lookups.
 

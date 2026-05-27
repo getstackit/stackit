@@ -76,13 +76,13 @@ func TestIsAncestor(t *testing.T) {
 	})
 }
 
-func TestIsAncestor_GoGitAfterFetch(t *testing.T) {
-	// This test verifies go-git can resolve and walk to a newly fetched commit.
-	// We test this by creating a scenario similar to a PR merge:
+func TestIsAncestor_AfterFetch(t *testing.T) {
+	// This test verifies the runner can resolve and walk to a newly fetched
+	// commit. We test this by creating a scenario similar to a PR merge:
 	// 1. Local repo has main at commit A
 	// 2. Remote has main at commit B (which includes A as ancestor)
 	// 3. We fetch but use a fresh runner that hasn't cached the commits
-	// 4. IsAncestor should still work via go-git
+	// 4. IsAncestor should still resolve through `git merge-base --is-ancestor`
 
 	t.Run("works after fetch with fresh runner", func(t *testing.T) {
 		// 1. Setup a "remote" repository

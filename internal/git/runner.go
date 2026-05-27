@@ -467,8 +467,7 @@ func (r *runner) infoLog(format string, args ...any) {
 // are validated by running the command in that directory.
 //
 // Outside a git repository the error message starts with "not a git
-// repository" so callers (and tests) can match on that phrase. This mirrors
-// the language go-git's PlainOpen used to return.
+// repository" so callers (and tests) can match on that phrase.
 func (r *runner) ensureRepo() error {
 	r.repoRootMu.Lock()
 	defer r.repoRootMu.Unlock()
@@ -479,7 +478,11 @@ func (r *runner) ensureRepo() error {
 
 	dir := r.repoRoot
 	if dir == "" {
-		dir, _ = os.Getwd()
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("not a git repository: failed to resolve working directory: %w", err)
+		}
+		dir = wd
 	}
 
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")

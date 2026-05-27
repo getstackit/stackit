@@ -272,8 +272,8 @@ func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath strin
 }
 
 // WorktreeHasUncommittedChanges checks if a worktree has uncommitted changes.
-// "Clean" means: no staged, unstaged, or untracked entries — matching the
-// prior go-git Status().IsClean() definition.
+// "Clean" means: no staged, unstaged, or untracked entries — equivalent to
+// `git status --porcelain --untracked-files=normal` returning empty output.
 func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error) {
 	out, err := r.RunGitCommandRawWithContext(ctx,
 		"-C", worktreePath,

@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -200,15 +199,11 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	slices.Sort(metaBranches)
 
 	if len(metaBranches) > 0 {
-		contents := make([]string, len(metaBranches))
+		metas := make([]*git.Meta, len(metaBranches))
 		for i, branch := range metaBranches {
-			jsonData, err := json.Marshal(tx.metaUpdates[branch])
-			if err != nil {
-				return fmt.Errorf("marshal meta for %s: %w", branch, err)
-			}
-			contents[i] = string(jsonData)
+			metas[i] = tx.metaUpdates[branch]
 		}
-		shas, err := tx.eng.git.CreateBlobsBatch(contents)
+		shas, err := tx.eng.git.WriteMetadataBlobsBatch(metas)
 		if err != nil {
 			return fmt.Errorf("write meta blobs: %w", err)
 		}
@@ -229,15 +224,11 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	slices.Sort(localBranches)
 
 	if len(localBranches) > 0 {
-		contents := make([]string, len(localBranches))
+		metas := make([]*git.LocalMeta, len(localBranches))
 		for i, branch := range localBranches {
-			jsonData, err := json.Marshal(tx.localUpdates[branch])
-			if err != nil {
-				return fmt.Errorf("marshal local meta for %s: %w", branch, err)
-			}
-			contents[i] = string(jsonData)
+			metas[i] = tx.localUpdates[branch]
 		}
-		shas, err := tx.eng.git.CreateBlobsBatch(contents)
+		shas, err := tx.eng.git.WriteLocalMetadataBlobsBatch(metas)
 		if err != nil {
 			return fmt.Errorf("write local meta blobs: %w", err)
 		}

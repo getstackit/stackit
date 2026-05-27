@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1165,8 +1164,9 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 }
 
 // BatchMarkNeedsPRBodyUpdate marks multiple branches as needing PR body update in a single atomic operation.
-// It batch-reads local metadata, sets the flag, creates blobs in one git
-// hash-object call, and atomically updates all refs.
+// It batch-reads local metadata, sets the flag, writes all the blobs in one
+// `git hash-object` call via WriteLocalMetadataBlobsBatch, and atomically
+// updates all refs.
 func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
 	if len(branchNames) == 0 {
 		return nil
@@ -1175,9 +1175,7 @@ func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
 	// Batch read all local metadata in parallel
 	allMeta := e.batchReadLocalMetadata(branchNames)
 
-	// Marshal each branch's updated metadata to JSON; track parallel slices
-	// so we can map blob SHAs back to ref names after the batch call.
-	contents := make([]string, 0, len(branchNames))
+	metas := make([]*git.LocalMeta, 0, len(branchNames))
 	orderedNames := make([]string, 0, len(branchNames))
 	for _, name := range branchNames {
 		meta := allMeta[name]
@@ -1185,16 +1183,11 @@ func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
 			meta = &git.LocalMeta{}
 		}
 		meta.NeedsPRBodyUpdate = true
-
-		jsonData, err := json.Marshal(meta)
-		if err != nil {
-			return fmt.Errorf("failed to marshal local metadata for %s: %w", name, err)
-		}
-		contents = append(contents, string(jsonData))
+		metas = append(metas, meta)
 		orderedNames = append(orderedNames, name)
 	}
 
-	shas, err := e.git.CreateBlobsBatch(contents)
+	shas, err := e.git.WriteLocalMetadataBlobsBatch(metas)
 	if err != nil {
 		return fmt.Errorf("failed to create local metadata blobs: %w", err)
 	}

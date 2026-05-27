@@ -25,7 +25,7 @@ func GetGitCommonDir(repoRoot string) string {
 
 // getGitDir returns the runner's worktree-specific git directory.
 func (r *runner) getGitDir(_ context.Context) string {
-	root := r.repoRoot
+	root := r.getRepoRoot()
 	if root == "" {
 		root, _ = os.Getwd()
 	}

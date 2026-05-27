@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/api/auth"
 	"github.com/getstackit/stackit/internal/api/handlers"
 	"github.com/getstackit/stackit/internal/api/registry"
 )
@@ -25,6 +26,21 @@ type ServerConfig struct {
 	APIPrefixes []string
 	StaticFS    fs.FS
 	Registry    *registry.Registry
+
+	// Auth bundles the OAuth handler, session store, and surrounding state
+	// needed to gate /api/* routes behind GitHub login. When nil the server
+	// runs without authentication; that mode is only safe on a private
+	// network (localhost dev, tunneled access). apps/server refuses to
+	// start unauthenticated when STACKIT_PUBLIC or $PORT are set unless
+	// -auth-disabled is passed explicitly.
+	Auth *AuthConfig
+}
+
+// AuthConfig is the runtime auth setup. SessionStore must outlive the
+// Server's lifetime (close it after Shutdown returns).
+type AuthConfig struct {
+	Handler      *auth.Handler
+	SessionStore auth.Store
 }
 
 // Server is the stackit-web HTTP server. Per-repo state (engine, watcher,
@@ -88,10 +104,32 @@ func (s *Server) Start() error {
 		apiMux.Handle("GET "+prefix+"/events", eventsHandler)
 	}
 
+	// Apply session enforcement to /api/* only. /auth/* and static assets
+	// stay unauthenticated so the user can complete the login flow and
+	// land on the SPA shell.
+	var protectedAPI http.Handler = apiMux
+	if s.config.Auth != nil {
+		protectedAPI = auth.RequireSession(s.config.Auth.SessionStore, apiMux)
+	}
+
+	authMux := http.NewServeMux()
+	if s.config.Auth != nil {
+		h := s.config.Auth.Handler
+		authMux.HandleFunc("GET /auth/login", h.LoginHandler)
+		authMux.HandleFunc("GET /auth/callback", h.CallbackHandler)
+		authMux.HandleFunc("POST /auth/logout", h.LogoutHandler)
+		authMux.HandleFunc("GET /auth/me", h.MeHandler)
+	}
+
 	webHandler := newStaticHandler(s.config.StaticFS)
 	root := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isAPIPath(r.URL.Path, prefixes) {
-			apiMux.ServeHTTP(w, r)
+			protectedAPI.ServeHTTP(w, r)
+			return
+		}
+
+		if s.config.Auth != nil && strings.HasPrefix(r.URL.Path, "/auth/") {
+			authMux.ServeHTTP(w, r)
 			return
 		}
 

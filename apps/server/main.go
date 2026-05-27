@@ -42,6 +42,7 @@ func run() error {
 		apiPrefix       = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
 		enableLegacy    = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
 		shutdownGrace   = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
+		authDisabled    = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
 	)
 	flag.Parse()
 
@@ -103,6 +104,24 @@ func run() error {
 		}
 	}
 
+	publicMode := os.Getenv("PORT") != "" || os.Getenv("STACKIT_PUBLIC") != ""
+	authBuild, err := buildAuthConfig(*authDisabled, publicMode)
+	if err != nil {
+		return err
+	}
+	var authCfg *api.AuthConfig
+	if authBuild != nil {
+		authCfg = authBuild.cfg
+		defer func() {
+			if closeErr := authBuild.store.Close(); closeErr != nil {
+				log.Printf("session store close: %v", closeErr)
+			}
+		}()
+		log.Printf("auth: GitHub OAuth gate enabled")
+	} else {
+		log.Printf("auth: DISABLED (no STACKIT_GITHUB_* env or -auth-disabled set). Do not expose this port publicly.")
+	}
+
 	server := api.NewServer(api.ServerConfig{
 		BindAddr:    *bind,
 		Port:        *port,
@@ -110,6 +129,7 @@ func run() error {
 		APIPrefixes: prefixes,
 		StaticFS:    staticFS,
 		Registry:    reg,
+		Auth:        authCfg,
 	})
 
 	errCh := make(chan error, 1)

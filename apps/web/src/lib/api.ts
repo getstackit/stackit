@@ -126,14 +126,59 @@ export interface ViewResponse {
   recentlyMerged?: TrunkCommitResponse[];
 }
 
+// --- Auth Types ---
+
+export interface MeResponse {
+  login: string;
+  id: number;
+}
+
+// UnauthorizedError is thrown by fetchAPI on a 401. Callers (the auth
+// provider) translate it into a redirect to /auth/login; other consumers
+// can treat it as a fatal error.
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("unauthenticated");
+    this.name = "UnauthorizedError";
+  }
+}
+
 // --- Fetch Functions ---
 
 async function fetchAPI<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+  // credentials: include sends the session cookie cross-origin during
+  // `next dev` (web on :3000, API on :8080). The server's CORS layer
+  // sets Allow-Credentials: true for configured origins.
+  const res = await fetch(`${API_BASE}${path}`, { credentials: "include" });
+  if (res.status === 401) {
+    throw new UnauthorizedError();
+  }
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
   return res.json();
+}
+
+export function fetchMe(): Promise<MeResponse> {
+  return fetchAPI<MeResponse>("/auth/me");
+}
+
+export function authLoginURL(returnTo?: string): string {
+  const path = "/auth/login";
+  if (!returnTo) {
+    return `${API_BASE}${path}`;
+  }
+  return `${API_BASE}${path}?return=${encodeURIComponent(returnTo)}`;
+}
+
+export async function logout(): Promise<void> {
+  const res = await fetch(`${API_BASE}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`logout failed: ${res.status}`);
+  }
 }
 
 function repoPath(repoId: string, suffix: string): string {
@@ -215,8 +260,11 @@ export interface SubmitResponse {
 export async function submitStack(repoId: string, rootBranch: string): Promise<SubmitResponse> {
   const res = await fetch(
     `${API_BASE}${repoPath(repoId, `stacks/${encodeURIComponent(rootBranch)}/submit`)}`,
-    { method: "POST" }
+    { method: "POST", credentials: "include" }
   );
+  if (res.status === 401) {
+    throw new UnauthorizedError();
+  }
   const data: SubmitResponse = await res.json();
   if (!res.ok && !data.message) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);

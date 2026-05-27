@@ -53,8 +53,14 @@ running `stackit init` inside each one before starting the container.
 
 | Var | Purpose |
 |-----|---------|
-| `PORT` | Listen port. Honored when `-port` isn't passed explicitly — needed for Railway, Fly, Heroku. Defaults to `8080`. |
-| `STACKIT_PUBLIC` | If set (any value), flips the default bind from `127.0.0.1` to `0.0.0.0`. `PORT` does the same thing implicitly. |
+| `PORT` | Listen port. Honored when `-port` isn't passed explicitly — needed for Railway, Fly, Heroku. Defaults to `8080`. Setting this also implicitly switches the server into "public mode" (binds `0.0.0.0`, requires auth env). |
+| `STACKIT_PUBLIC` | Explicit version of the same signal. Set when you mean to expose the server publicly without `$PORT` (e.g. behind a tunnel). |
+| `STACKIT_BASE_URL` | The canonical https:// URL the server is reachable at. Required when auth is enabled (used to build the OAuth callback URL). |
+| `STACKIT_GITHUB_CLIENT_ID` | GitHub OAuth App client ID. |
+| `STACKIT_GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret. |
+| `STACKIT_SESSION_KEY` | Base64-encoded 32-byte key for AES-GCM-encrypting access tokens at rest. Generate with `openssl rand -base64 32`. |
+| `STACKIT_ALLOWED_GH_USERS` | Comma-separated GitHub logins allowed to sign in. |
+| `STACKIT_ALLOWED_GH_ORG` | GitHub org slug; members may sign in. At least one of `_USERS` or `_ORG` is required. |
 
 ### Flags
 
@@ -66,8 +72,26 @@ The most useful flags:
 | `-port` | `8080` | Listen port; overrides `$PORT`. |
 | `-bind` | `127.0.0.1` (or `0.0.0.0` if `$PORT`/`$STACKIT_PUBLIC` are set) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server on a host where the heuristics don't fire. |
 | `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. Loopback origins are **not** allowed implicitly — list each origin you want to accept. |
+| `-auth-disabled` | `false` | Skip the GitHub OAuth gate. **Refused** when `$PORT` or `$STACKIT_PUBLIC` is set. Use only for local dev or when fronted by platform auth (Tailscale, Cloudflare Access). |
 
 Run `stackit-server -h` inside the container for the full list.
+
+### GitHub OAuth setup
+
+1. Create a GitHub OAuth App at [github.com/settings/developers](https://github.com/settings/developers).
+   - Homepage URL: your `STACKIT_BASE_URL`.
+   - Authorization callback URL: `${STACKIT_BASE_URL}/auth/callback`.
+2. Copy the client ID + secret into env.
+3. Generate a session key:
+   ```bash
+   openssl rand -base64 32
+   ```
+4. Set the allowlist (at least one of):
+   ```
+   STACKIT_ALLOWED_GH_USERS=jonnii,teammate
+   STACKIT_ALLOWED_GH_ORG=getstackit
+   ```
+5. Boot the server. The startup log prints `auth: GitHub OAuth gate enabled` when configured correctly.
 
 ## Security posture
 

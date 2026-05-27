@@ -3,19 +3,14 @@ package worktree
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/hooks"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 )
-
-// HookTimeout is the maximum duration a hook can run before being killed
-const HookTimeout = 60 * time.Second
 
 // ResolveApprovedHooks loads the project config, checks for approvals, and prompts
 // the user for any unapproved hooks. Returns the list of approved hook commands.
@@ -30,13 +25,13 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 	}
 
 	// Get hooks to run, filtering out empty/whitespace-only entries
-	var hooks []string
+	var hookCmds []string
 	for _, hook := range projectCfg.Hooks.PostWorktreeCreate {
 		if trimmed := strings.TrimSpace(hook); trimmed != "" {
-			hooks = append(hooks, hook)
+			hookCmds = append(hookCmds, hook)
 		}
 	}
-	if len(hooks) == 0 {
+	if len(hookCmds) == 0 {
 		return nil, nil
 	}
 
@@ -47,9 +42,9 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 	}
 
 	// For each hook, check approval or prompt
-	approved := make([]string, 0, len(hooks))
+	approved := make([]string, 0, len(hookCmds))
 
-	for _, hook := range hooks {
+	for _, hook := range hookCmds {
 		if repoCfg.IsPostWorktreeCreateHookApproved(hook) {
 			approved = append(approved, hook)
 			continue
@@ -79,10 +74,10 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 
 // RunResolvedHooks executes a pre-resolved list of hooks in the given directory.
 // No prompting is performed — safe for parallel use.
-func RunResolvedHooks(hooks []string, worktreePath string, out output.Output) {
-	for _, hook := range hooks {
+func RunResolvedHooks(hookCmds []string, worktreePath string, out output.Output) {
+	for _, hook := range hookCmds {
 		out.Info("Running hook: %s", hook)
-		if err := runHookWithTimeout(hook, worktreePath, HookTimeout); err != nil {
+		if err := hooks.Run(context.Background(), hook, worktreePath, nil, hooks.DefaultTimeout); err != nil {
 			out.Warn("Hook failed: %s: %v", hook, err)
 		}
 	}
@@ -99,22 +94,4 @@ func RunPostCreateHooks(ctx *app.Context, worktreePath string) error {
 
 	RunResolvedHooks(approved, worktreePath, ctx.Output)
 	return nil
-}
-
-// runHookWithTimeout executes a hook command with a timeout.
-// Returns an error if the command fails or times out.
-func runHookWithTimeout(hook string, dir string, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "sh", "-c", hook)
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	if ctx.Err() == context.DeadlineExceeded {
-		return fmt.Errorf("timed out after %s", timeout)
-	}
-	return err
 }

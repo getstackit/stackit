@@ -333,9 +333,7 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) Branches {
 			current = node.Parent
 		}
 		// Reverse to go from trunk-ward to the starting branch
-		for i, j := 0, len(ancestors)-1; i < j; i, j = i+1, j-1 {
-			ancestors[i], ancestors[j] = ancestors[j], ancestors[i]
-		}
+		slices.Reverse(ancestors)
 		result = append(result, ancestors...)
 	}
 

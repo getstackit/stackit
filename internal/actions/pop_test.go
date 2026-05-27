@@ -1,6 +1,7 @@
 package actions_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,7 +33,7 @@ func TestPopAction(t *testing.T) {
 		require.Equal(t, "main", currentBranch)
 
 		// Verify branch1 is deleted
-		branches, err := s.Engine.Git().GetAllBranchNames()
+		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 
@@ -63,7 +64,7 @@ func TestPopAction(t *testing.T) {
 		require.Equal(t, "main", parent.GetName())
 
 		// Verify branch1 is deleted
-		branches, err := s.Engine.Git().GetAllBranchNames()
+		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 	})

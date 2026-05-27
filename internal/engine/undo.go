@@ -349,7 +349,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	defer e.mu.Unlock()
 
 	// Get current branches
-	currentBranches, err := e.git.GetAllBranchNames()
+	currentBranches, err := e.git.GetAllBranchNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get current branches: %w", err)
 	}

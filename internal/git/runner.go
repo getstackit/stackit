@@ -673,16 +673,16 @@ func (r *runner) BatchGetRevisions(branchNames []string) (map[string]string, []e
 	return r.batchGetRevisions(branchNames)
 }
 
-func (r *runner) GetMergeBase(rev1, rev2 string) (string, error) {
-	return r.getMergeBaseByRef(rev1, rev2)
+func (r *runner) GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error) {
+	return r.getMergeBaseByRef(ctx, rev1, rev2)
 }
 
-func (r *runner) GetMergeBaseByRef(ref1, ref2 string) (string, error) {
-	return r.getMergeBaseByRef(ref1, ref2)
+func (r *runner) GetMergeBaseByRef(ctx context.Context, ref1, ref2 string) (string, error) {
+	return r.getMergeBaseByRef(ctx, ref1, ref2)
 }
 
-func (r *runner) IsAncestor(ancestor, descendant string) (bool, error) {
-	return r.isAncestor(ancestor, descendant)
+func (r *runner) IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error) {
+	return r.isAncestor(ctx, ancestor, descendant)
 }
 
 func (r *runner) GetCommitDate(branchName string) (time.Time, error) {
@@ -693,7 +693,7 @@ func (r *runner) GetCommitAuthor(branchName string) (string, error) {
 	return r.getCommitAuthor(branchName)
 }
 
-func (r *runner) GetCommitRange(base, head, format string) ([]string, error) {
+func (r *runner) GetCommitRange(ctx context.Context, base, head, format string) ([]string, error) {
 	rangeArg := head
 	if base != "" {
 		rangeArg = base + ".." + head
@@ -701,16 +701,16 @@ func (r *runner) GetCommitRange(base, head, format string) ([]string, error) {
 
 	switch format {
 	case "SHA":
-		return r.gitLogLines(rangeArg, "%H")
+		return r.gitLogLines(ctx, rangeArg, "%H")
 	case "READABLE":
-		return r.gitLogLines(rangeArg, "%h %s")
+		return r.gitLogLines(ctx, rangeArg, "%h %s")
 	case "SUBJECT":
-		return r.gitLogLines(rangeArg, "%s")
+		return r.gitLogLines(ctx, rangeArg, "%s")
 	case "READABLE_WITH_DATE":
 		// Tab-separated: short SHA, RFC3339 UTC date, subject. Use Unix
 		// epoch from git and convert in Go to preserve the prior behavior of
 		// normalizing to UTC regardless of the commit's recorded TZ.
-		lines, err := r.gitLogLines(rangeArg, "%h\t%at\t%s")
+		lines, err := r.gitLogLines(ctx, rangeArg, "%h\t%at\t%s")
 		if err != nil {
 			return nil, err
 		}
@@ -733,7 +733,7 @@ func (r *runner) GetCommitRange(base, head, format string) ([]string, error) {
 		return out, nil
 	case "MESSAGE":
 		// Bodies can contain newlines; use NUL record separator.
-		out, err := r.RunGitCommandRawWithContext(context.Background(), "log", "-z", "--format=%B", rangeArg)
+		out, err := r.RunGitCommandRawWithContext(ctx, "log", "-z", "--format=%B", rangeArg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to walk commits %s: %w", rangeArg, err)
 		}
@@ -758,8 +758,8 @@ func (r *runner) GetCommitRange(base, head, format string) ([]string, error) {
 // gitLogLines runs `git log` over a range with a single-line format and
 // returns one element per commit, dropping blank lines. Suitable for any
 // format that does not include literal newlines.
-func (r *runner) gitLogLines(rangeArg, format string) ([]string, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(), "log", "--format="+format, rangeArg)
+func (r *runner) gitLogLines(ctx context.Context, rangeArg, format string) ([]string, error) {
+	out, err := r.RunGitCommandWithContext(ctx, "log", "--format="+format, rangeArg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk commits %s: %w", rangeArg, err)
 	}
@@ -778,12 +778,12 @@ func (r *runner) gitLogLines(rangeArg, format string) ([]string, error) {
 	return result, nil
 }
 
-func (r *runner) GetCommitRangeSHAs(base, head string) ([]string, error) {
-	return r.GetCommitRange(base, head, "SHA")
+func (r *runner) GetCommitRangeSHAs(ctx context.Context, base, head string) ([]string, error) {
+	return r.GetCommitRange(ctx, base, head, "SHA")
 }
 
-func (r *runner) GetCommitHistorySHAs(branchName string) ([]string, error) {
-	return r.GetCommitRangeSHAs("", branchName)
+func (r *runner) GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error) {
+	return r.GetCommitRangeSHAs(ctx, "", branchName)
 }
 
 func (r *runner) GetCommitSHA(branchName string, offset int) (string, error) {
@@ -917,7 +917,7 @@ func (r *runner) CreateBlob(content string) (string, error) {
 // For very small N the overhead of staging temp files exceeds the savings
 // from collapsing subprocess calls; callers with N==1 should use CreateBlob
 // directly. We still handle N==0/1 here so the method's contract holds.
-func (r *runner) CreateBlobsBatch(contents []string) ([]string, error) {
+func (r *runner) CreateBlobsBatch(ctx context.Context, contents []string) ([]string, error) {
 	if len(contents) == 0 {
 		return nil, nil
 	}
@@ -947,7 +947,7 @@ func (r *runner) CreateBlobsBatch(contents []string) ([]string, error) {
 	}
 
 	stdin := strings.Join(paths, "\n") + "\n"
-	out, err := r.runGitInternal(context.Background(), stdin, nil, true, "hash-object", "-w", "--stdin-paths")
+	out, err := r.runGitInternal(ctx, stdin, nil, true, "hash-object", "-w", "--stdin-paths")
 	if err != nil {
 		return nil, fmt.Errorf("failed to batch-create blobs: %w", err)
 	}

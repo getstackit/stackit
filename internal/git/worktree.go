@@ -286,13 +286,17 @@ func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath
 }
 
 // GetWorktreeCurrentBranch returns the name of the branch currently checked out in a worktree.
-// Returns empty string if the worktree is in detached HEAD state.
+// Returns empty string if the worktree is in detached HEAD state. Real failures
+// (worktree missing, repo corruption, context cancellation) are surfaced — git
+// uses exit code 1 specifically for "not a symbolic ref" when `-q` is passed,
+// reserving 128 (and others) for genuine errors.
 func (r *runner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error) {
-	out, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath, "symbolic-ref", "--short", "HEAD")
+	out, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath, "symbolic-ref", "-q", "--short", "HEAD")
 	if err != nil {
-		// Detached HEAD: symbolic-ref exits non-zero. Treat as empty rather
-		// than an error to match the prior behavior.
-		return "", nil //nolint:nilerr
+		if isExitCode(err, 1) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to read HEAD of worktree %s: %w", worktreePath, err)
 	}
 	return strings.TrimSpace(out), nil
 }

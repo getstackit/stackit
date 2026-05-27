@@ -255,9 +255,9 @@ func (t *tracingRunner) GetCurrentBranch() (string, error) {
 	return result, err
 }
 
-func (t *tracingRunner) GetAllBranchNames() ([]string, error) {
+func (t *tracingRunner) GetAllBranchNames(ctx context.Context) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.GetAllBranchNames()
+	result, err := t.inner.GetAllBranchNames(ctx)
 	t.trace("GetAllBranchNames", time.Since(start), err == nil, err)
 	return result, err
 }
@@ -385,21 +385,21 @@ func (t *tracingRunner) GetCommitAuthor(branchName string) (string, error) {
 	return result, err
 }
 
-func (t *tracingRunner) GetCommitRange(base, head, format string) ([]string, error) {
+func (t *tracingRunner) GetCommitRange(ctx context.Context, base, head, format string) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.GetCommitRange(base, head, format)
+	result, err := t.inner.GetCommitRange(ctx, base, head, format)
 	t.trace("GetCommitRange", time.Since(start), err == nil, err, slog.String("base", base), slog.String("head", head))
 	return result, err
 }
 
-func (t *tracingRunner) GetCommitRangeSHAs(base, head string) ([]string, error) {
+func (t *tracingRunner) GetCommitRangeSHAs(ctx context.Context, base, head string) ([]string, error) {
 	// Don't trace - delegates to GetCommitRange which is traced
-	return t.inner.GetCommitRangeSHAs(base, head)
+	return t.inner.GetCommitRangeSHAs(ctx, base, head)
 }
 
-func (t *tracingRunner) GetCommitHistorySHAs(branchName string) ([]string, error) {
+func (t *tracingRunner) GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error) {
 	// Don't trace - delegates to GetCommitRangeSHAs which delegates to GetCommitRange
-	return t.inner.GetCommitHistorySHAs(branchName)
+	return t.inner.GetCommitHistorySHAs(ctx, branchName)
 }
 
 func (t *tracingRunner) GetCommitSHA(branchName string, offset int) (string, error) {
@@ -416,9 +416,9 @@ func (t *tracingRunner) GetCommitLog(sha, format string) (string, error) {
 	return result, err
 }
 
-func (t *tracingRunner) GetRecentCommits(branchName string, count int) ([]RecentCommit, error) {
+func (t *tracingRunner) GetRecentCommits(ctx context.Context, branchName string, count int) ([]RecentCommit, error) {
 	start := time.Now()
-	result, err := t.inner.GetRecentCommits(branchName, count)
+	result, err := t.inner.GetRecentCommits(ctx, branchName, count)
 	t.trace("GetRecentCommits", time.Since(start), err == nil, err, slog.String("branch", branchName), slog.Int("count", count))
 	return result, err
 }
@@ -439,23 +439,23 @@ func (t *tracingRunner) GetParentCommitSHA(commitSHA string) (string, error) {
 
 // DiffOperations methods
 
-func (t *tracingRunner) GetMergeBase(rev1, rev2 string) (string, error) {
+func (t *tracingRunner) GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error) {
 	start := time.Now()
-	result, err := t.inner.GetMergeBase(rev1, rev2)
+	result, err := t.inner.GetMergeBase(ctx, rev1, rev2)
 	t.trace("GetMergeBase", time.Since(start), err == nil, err, slog.String("rev1", rev1), slog.String("rev2", rev2))
 	return result, err
 }
 
-func (t *tracingRunner) GetMergeBaseByRef(ref1, ref2 string) (string, error) {
+func (t *tracingRunner) GetMergeBaseByRef(ctx context.Context, ref1, ref2 string) (string, error) {
 	start := time.Now()
-	result, err := t.inner.GetMergeBaseByRef(ref1, ref2)
+	result, err := t.inner.GetMergeBaseByRef(ctx, ref1, ref2)
 	t.trace("GetMergeBaseByRef", time.Since(start), err == nil, err, slog.String("ref1", ref1), slog.String("ref2", ref2))
 	return result, err
 }
 
-func (t *tracingRunner) IsAncestor(ancestor, descendant string) (bool, error) {
+func (t *tracingRunner) IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error) {
 	start := time.Now()
-	result, err := t.inner.IsAncestor(ancestor, descendant)
+	result, err := t.inner.IsAncestor(ctx, ancestor, descendant)
 	t.trace("IsAncestor", time.Since(start), err == nil, err, slog.String("ancestor", ancestor), slog.String("descendant", descendant))
 	return result, err
 }
@@ -1040,9 +1040,9 @@ func (t *tracingRunner) CreateBlob(content string) (string, error) {
 	return result, err
 }
 
-func (t *tracingRunner) CreateBlobsBatch(contents []string) ([]string, error) {
+func (t *tracingRunner) CreateBlobsBatch(ctx context.Context, contents []string) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.CreateBlobsBatch(contents)
+	result, err := t.inner.CreateBlobsBatch(ctx, contents)
 	t.trace("CreateBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(contents)))
 	return result, err
 }
@@ -1131,16 +1131,16 @@ func (t *tracingRunner) WriteLocalMetadata(branchName string, meta *LocalMeta) e
 	return err
 }
 
-func (t *tracingRunner) WriteMetadataBlobsBatch(metas []*Meta) ([]string, error) {
+func (t *tracingRunner) WriteMetadataBlobsBatch(ctx context.Context, metas []*Meta) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.WriteMetadataBlobsBatch(metas)
+	result, err := t.inner.WriteMetadataBlobsBatch(ctx, metas)
 	t.trace("WriteMetadataBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(metas)))
 	return result, err
 }
 
-func (t *tracingRunner) WriteLocalMetadataBlobsBatch(metas []*LocalMeta) ([]string, error) {
+func (t *tracingRunner) WriteLocalMetadataBlobsBatch(ctx context.Context, metas []*LocalMeta) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.WriteLocalMetadataBlobsBatch(metas)
+	result, err := t.inner.WriteLocalMetadataBlobsBatch(ctx, metas)
 	t.trace("WriteLocalMetadataBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(metas)))
 	return result, err
 }

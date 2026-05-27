@@ -41,7 +41,7 @@ func TestValidateRebases(t *testing.T) {
 		// Get revisions
 		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
 		require.NoError(t, err)
-		branch1OldBase, err := s.Engine.Git().GetMergeBase("main", "branch1")
+		branch1OldBase, err := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 		require.NoError(t, err)
 
 		specs := []engine.RebaseSpec{
@@ -114,7 +114,7 @@ func TestValidateRebases(t *testing.T) {
 		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
 		require.NoError(t, err)
 
-		branch1OldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+		branch1OldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 		branch1Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
 		branch2Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch2"))
 
@@ -211,7 +211,7 @@ func TestValidateRebases(t *testing.T) {
 		// Get SHAs (this is what move.go does - resolves to SHAs before validation)
 		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
 		branch1OldSHA, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
-		branch1OldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+		branch1OldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 
 		// Build specs using SHAs (not branch names) - mimicking what move.go does
 		specs := []engine.RebaseSpec{
@@ -255,7 +255,7 @@ func TestValidateRebases(t *testing.T) {
 			Commit("main update")
 
 		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		branch1OldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+		branch1OldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 
 		specs := []engine.RebaseSpec{
 			{
@@ -330,7 +330,7 @@ func TestValidateRebases(t *testing.T) {
 		// Get revisions
 		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
 		require.NoError(t, err)
-		branch1OldBase, err := s.Engine.Git().GetMergeBase("main", "branch1")
+		branch1OldBase, err := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 		require.NoError(t, err)
 
 		specs := []engine.RebaseSpec{
@@ -448,7 +448,7 @@ func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {
 
 	mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
 	require.NoError(t, err)
-	oldBase, err := s.Engine.Git().GetMergeBase("main", "branch1")
+	oldBase, err := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 	require.NoError(t, err)
 
 	validation, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{{
@@ -610,7 +610,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		require.NoError(t, err)
 
 		// Get old bases for all branches (they all share the same old main)
-		oldBase, _ := s.Engine.Git().GetMergeBase("main", "feature-a")
+		oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "feature-a")
 
 		// Build specs for all branches
 		specs := []engine.RebaseSpec{
@@ -657,7 +657,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			Commit("main update")
 
 		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldMainBase, _ := s.Engine.Git().GetMergeBase("main", "feature-a")
+		oldMainBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "feature-a")
 
 		// Get SHAs for depth-1 branches (for depth-2 rebases)
 		featureARev, _ := s.Engine.GetRevision(s.Engine.GetBranch("feature-a"))
@@ -739,7 +739,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			Commit("main update")
 
 		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+		oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 		branch1Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch1"))
 		branch3Rev, _ := s.Engine.GetRevision(s.Engine.GetBranch("branch3"))
 
@@ -774,7 +774,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").Commit("main update")
 
 		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+		oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
@@ -809,7 +809,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").Commit("main update")
 
 		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+		oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
@@ -878,7 +878,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		s.Checkout("main").Commit("main update")
 
 		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+		oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
@@ -904,7 +904,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			})
 
 		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Engine.Git().GetMergeBase("main", "branch1")
+		oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), "main", "branch1")
 
 		specs := []engine.RebaseSpec{
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},

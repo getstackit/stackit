@@ -109,7 +109,7 @@ func CompleteBranches(cmd *cobra.Command, _ []string, _ string) ([]string, cobra
 	if cwd != "" {
 		runner = git.NewRunnerWithPath(cwd, nil)
 	}
-	branches, err := runner.GetAllBranchNames()
+	branches, err := runner.GetAllBranchNames(cmd.Context())
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}

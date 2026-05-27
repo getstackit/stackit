@@ -53,7 +53,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			if err != nil {
 				return fmt.Errorf("failed to get branch revision: %w", err)
 			}
-			isAnc, err := eng.IsAncestor(parentRev, branchRev)
+			isAnc, err := eng.IsAncestor(ctx.Context, parentRev, branchRev)
 			if err != nil {
 				return fmt.Errorf("failed to check ancestry: %w", err)
 			}
@@ -166,7 +166,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 		}
 
 		// Check if candidate is a child (has this branch as merge base)
-		mergeBase, err := eng.GetMergeBase(candidate, branchName)
+		mergeBase, err := eng.GetMergeBase(ctx.Context, candidate, branchName)
 		if err != nil {
 			continue
 		}

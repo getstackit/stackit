@@ -48,8 +48,11 @@ func isExitCode(err error, codes ...int) bool {
 	return slices.Contains(codes, exitErr.ExitCode())
 }
 
-// Get retrieves a single config value from local git config.
-// Returns empty string if the key doesn't exist.
+// Get retrieves a single config value, reading git's merged config
+// (system → global → local) — the same precedence `git config --get`
+// applies when invoked from inside the repo. Returns empty string if the
+// key isn't set in any scope. Use this for keys whose canonical home is
+// often the user's global config (e.g. user.name, user.email).
 func (c *ConfigStore) Get(key string) (string, error) {
 	out, err := c.runGitConfig("--get", key)
 	if err == nil {

@@ -4,35 +4,37 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	gogit "github.com/go-git/go-git/v6"
-	"github.com/go-git/go-git/v6/plumbing"
-	"github.com/go-git/go-git/v6/plumbing/transport"
+	"os/exec"
+	"strings"
 )
 
 // DefaultRemote is the default name for the remote repository
 const DefaultRemote = "origin"
 
-func (r *runner) getRemote(repo *Repository) string {
-	// Try to get current branch
-	head, err := repo.Head()
-	if err == nil && head.Name().IsBranch() {
-		branchName := head.Name().Short()
-		// Try to get remote for the current branch
-		cfg, err := repo.Config()
-		if err == nil {
-			if b, ok := cfg.Branches[branchName]; ok && b.Remote != "" {
-				return b.Remote
-			}
+// getRemote returns the configured remote for the current branch, falling
+// back to DefaultRemote. Implemented via `git config` rather than walking
+// go-git's typed config; the value is a single string and the call site
+// already accepts a fallback path.
+func (r *runner) getRemote() string {
+	branch, err := r.GetCurrentBranch()
+	if err != nil || branch == "" {
+		return DefaultRemote
+	}
+	out, err := r.RunGitCommandWithContext(context.Background(),
+		"config", "--get", "branch."+branch+".remote",
+	)
+	if err == nil {
+		if val := strings.TrimSpace(out); val != "" {
+			return val
 		}
 	}
-
-	// Fallback to origin
 	return DefaultRemote
 }
 
-func (r *runner) fetchRemoteShas(ctx context.Context, repo *Repository, remote string) (map[string]string, error) {
-	// Ensure context has a deadline for the network operation
+// fetchRemoteShas lists the branch refs on a remote without modifying any
+// local refs. `git ls-remote --heads` matches the previous go-git behavior
+// of returning only refs/heads/*.
+func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -42,38 +44,44 @@ func (r *runner) fetchRemoteShas(ctx context.Context, repo *Repository, remote s
 		defer cancel()
 	}
 
-	rem, err := repo.Remote(remote)
+	out, err := r.RunGitCommandWithContext(ctx, "ls-remote", "--heads", "--refs", remote)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get remote %s: %w", remote, err)
-	}
-
-	// List remote references with context for timeout support
-	refs, err := rem.ListContext(ctx, &gogit.ListOptions{})
-	if err != nil {
-		if errors.Is(err, transport.ErrEmptyRemoteRepository) || errors.Is(err, gogit.NoErrAlreadyUpToDate) {
-			return make(map[string]string), nil
+		// Empty remote / no refs is not an error for callers; treat exit
+		// code 2 (no matching refs) as an empty result. Network errors
+		// surface unchanged.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
+			return map[string]string{}, nil
 		}
 		return nil, fmt.Errorf("failed to list remote refs for %s: %w", remote, err)
 	}
 
-	remoteShas := make(map[string]string)
-	for _, ref := range refs {
-		// Only process refs/heads/* (branches)
-		if ref.Name().IsBranch() {
-			branchName := ref.Name().Short()
-			remoteShas[branchName] = ref.Hash().String()
+	result := make(map[string]string)
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
+		if line == "" {
+			continue
 		}
+		sha, ref, ok := strings.Cut(line, "\t")
+		if !ok {
+			continue
+		}
+		// Only branches: refs/heads/<name>
+		branchName, ok := strings.CutPrefix(ref, "refs/heads/")
+		if !ok {
+			continue
+		}
+		result[branchName] = sha
 	}
-
-	return remoteShas, nil
+	return result, nil
 }
 
-func (r *runner) getRemoteSha(repo *Repository, remote, branchName string) (string, error) {
-	refName := plumbing.ReferenceName(fmt.Sprintf("refs/remotes/%s/%s", remote, branchName))
-	ref, err := repo.Reference(refName, true)
+func (r *runner) getRemoteSha(remote, branchName string) (string, error) {
+	out, err := r.RunGitCommandWithContext(context.Background(),
+		"rev-parse", "--verify", "--end-of-options",
+		fmt.Sprintf("refs/remotes/%s/%s", remote, branchName),
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to get remote SHA for %s/%s: %w", remote, branchName, err)
 	}
-
-	return ref.Hash().String(), nil
+	return strings.TrimSpace(out), nil
 }

@@ -1,194 +1,155 @@
 package git
 
 import (
+	"context"
 	"fmt"
-	"sync"
+	"strings"
 	"time"
-
-	"github.com/go-git/go-git/v6/plumbing"
-	"github.com/go-git/go-git/v6/plumbing/object"
-
-	"github.com/getstackit/stackit/internal/utils"
 )
 
-func (r *runner) getCommitDate(repo *Repository, branchName string) (time.Time, error) {
-	// Synchronize go-git operations to prevent concurrent packfile access
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	hash, err := r.resolveRefHashInternal(repo, branchName)
+// resolveRefSHA resolves any ref form (branch, short SHA, full SHA, tag,
+// "HEAD~1") to a 40-char SHA using `git rev-parse --verify`. The verify flag
+// turns ambiguity into an error rather than a heuristic guess.
+//
+// On failure the returned error string contains "reference not found" so
+// downstream callers that match on that legacy phrase continue to work.
+func (r *runner) resolveRefSHA(ref string) (string, error) {
+	out, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to resolve branch reference: %w", err)
+		// Fall back to the non-commit form: tags pointing at trees/blobs, or
+		// generic ref lookups that aren't commits. Most stackit call sites
+		// only care about commits, so try ^{commit} first to fail fast on
+		// nonsense input.
+		out, err = r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", ref)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve ref %s: reference not found: %w", ref, err)
+		}
 	}
-
-	commit, err := repo.CommitObject(hash)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to get commit: %w", err)
+	sha := strings.TrimSpace(out)
+	if sha == "" {
+		return "", fmt.Errorf("failed to resolve ref %s: reference not found", ref)
 	}
-
-	return commit.Author.When, nil
+	return sha, nil
 }
 
-func (r *runner) getCommitAuthor(repo *Repository, branchName string) (string, error) {
-	// Synchronize go-git operations to prevent concurrent packfile access
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	hash, err := r.resolveRefHashInternal(repo, branchName)
+func (r *runner) getCommitDate(branchName string) (time.Time, error) {
+	out, err := r.RunGitCommandWithContext(context.Background(), "log", "-1", "--format=%aI", branchName)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve branch reference: %w", err)
+		return time.Time{}, fmt.Errorf("failed to get commit date for %s: %w", branchName, err)
 	}
-
-	commit, err := repo.CommitObject(hash)
+	s := strings.TrimSpace(out)
+	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		return "", fmt.Errorf("failed to get commit: %w", err)
+		return time.Time{}, fmt.Errorf("failed to parse commit date %q: %w", s, err)
 	}
-
-	return commit.Author.Name, nil
+	return t, nil
 }
 
-func (r *runner) getRevision(repo *Repository, branchName string) (string, error) {
-	// Check revision cache first to avoid go-git mutex contention.
-	// The cache is populated by LoadAllBranchRevisions (batch preload)
-	// but not on individual misses, to avoid stale entries from external mutations.
+func (r *runner) getCommitAuthor(branchName string) (string, error) {
+	out, err := r.RunGitCommandWithContext(context.Background(), "log", "-1", "--format=%an", branchName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit author for %s: %w", branchName, err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func (r *runner) getRevision(branchName string) (string, error) {
+	// Check revision cache first to avoid spawning git rev-parse. The cache
+	// is populated by LoadAllBranchRevisions (batch preload) but not on
+	// individual misses, to avoid stale entries from external mutations.
 	if cached, ok := r.revisionCache.Get(branchName); ok {
 		return cached, nil
 	}
-
-	// Synchronize go-git operations to prevent concurrent packfile access
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	hash, err := r.resolveRefHashInternal(repo, branchName)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve branch reference: %w", err)
-	}
-
-	return hash.String(), nil
+	return r.resolveRefSHA(branchName)
 }
 
-func (r *runner) getRemoteRevision(repo *Repository, branchName string) (string, error) {
-	// Synchronize go-git operations to prevent concurrent packfile access
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	// Try refs/remotes/origin/branchName
-	hash, err := r.resolveRefHashInternal(repo, "origin/"+branchName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get remote branch reference: %w", err)
-	}
-
-	return hash.String(), nil
-}
-
-// iterateCommitsNoLock iterates commits from head to base without locking
-func iterateCommitsNoLock(repo *Repository, headHash, baseHash plumbing.Hash) ([]*object.Commit, error) {
-	var commits []*object.Commit
-	currentHash := headHash
-
-	for !currentHash.IsZero() && currentHash != baseHash {
-		commit, err := repo.CommitObject(currentHash)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get commit %s: %w", currentHash, err)
-		}
-
-		commits = append(commits, commit)
-
-		if commit.NumParents() == 0 {
-			break
-		}
-		// Follow the first parent for a linear history walk
-		currentHash = commit.ParentHashes[0]
-	}
-
-	return commits, nil
-}
-
-// resolveRefHash resolves a ref (branch name, SHA, or ref path) to a hash
-func (r *runner) resolveRefHash(repo *Repository, ref string) (plumbing.Hash, error) {
-	// Synchronize go-git operations to prevent concurrent packfile access
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	return r.resolveRefHashInternal(repo, ref)
-}
-
-// resolveRefHashInternal resolves a ref without locking
-func (r *runner) resolveRefHashInternal(repo *Repository, ref string) (plumbing.Hash, error) {
-	// 1. Try as a full reference name
-	if refInfo, err := repo.Reference(plumbing.ReferenceName(ref), true); err == nil {
-		return refInfo.Hash(), nil
-	}
-
-	// 2. Try as a local branch
-	if refInfo, err := repo.Reference(plumbing.ReferenceName("refs/heads/"+ref), true); err == nil {
-		return refInfo.Hash(), nil
-	}
-
-	// 3. Try as a remote branch
-	if refInfo, err := repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+ref), true); err == nil {
-		return refInfo.Hash(), nil
-	}
-
-	// 4. Try as a tag
-	if refInfo, err := repo.Reference(plumbing.ReferenceName("refs/tags/"+ref), true); err == nil {
-		return refInfo.Hash(), nil
-	}
-
-	// 5. Try ResolveRevision (handles SHAs, short SHAs, and complex expressions like HEAD~1)
-	hash, err := repo.ResolveRevision(plumbing.Revision(ref))
-	if err == nil {
-		return *hash, nil
-	}
-
-	return plumbing.ZeroHash, fmt.Errorf("failed to resolve ref %s: reference not found", ref)
+func (r *runner) getRemoteRevision(branchName string) (string, error) {
+	// Use the bare "origin/<branch>" form so git's normal ref lookup order
+	// applies (refs/heads/, refs/remotes/, etc.). Tests sometimes mock the
+	// remote SHA by creating a local branch named "origin/<branch>" and
+	// rely on that fallback resolving via refs/heads/.
+	return r.resolveRefSHA("origin/" + branchName)
 }
 
 // LoadAllBranchRevisions populates the revision cache for all local branches
-// using one go-git reference iteration. This replaces N individual ref
-// resolutions and avoids spawning a git process for the common preload path.
+// with one `git for-each-ref` invocation, replacing N individual ref lookups
+// during engine startup.
 func (r *runner) LoadAllBranchRevisions() error {
-	repo, err := r.ensureRepo()
+	out, err := r.RunGitCommandWithContext(context.Background(),
+		"for-each-ref",
+		"--format=%(refname:short)%00%(objectname)",
+		"refs/heads/",
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list branch revisions: %w", err)
 	}
 
-	branches, err := repo.Branches()
-	if err != nil {
-		return fmt.Errorf("failed to list branches: %w", err)
-	}
-	defer branches.Close()
-
-	return branches.ForEach(func(ref *plumbing.Reference) error {
-		if ref.Name().IsBranch() {
-			r.revisionCache.Put(ref.Name().Short(), ref.Hash().String())
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
+		if line == "" {
+			continue
 		}
-		return nil
-	})
+		name, sha, ok := strings.Cut(line, "\x00")
+		if !ok || sha == "" {
+			continue
+		}
+		r.revisionCache.Put(name, sha)
+	}
+	return nil
 }
 
-func (r *runner) batchGetRevisions(repo *Repository, branchNames []string) (map[string]string, []error) {
+func (r *runner) batchGetRevisions(branchNames []string) (map[string]string, []error) {
 	results := make(map[string]string)
-	var errors []error
-	resultsMu := sync.Mutex{}
-	errorsMu := sync.Mutex{}
+	var errs []error
 
 	if len(branchNames) == 0 {
-		return results, errors
+		return results, errs
 	}
 
-	utils.Run(branchNames, func(name string) {
-		sha, err := r.getRevision(repo, name)
-		if err != nil {
-			errorsMu.Lock()
-			errors = append(errors, fmt.Errorf("failed to get revision for %s: %w", name, err))
-			errorsMu.Unlock()
-		} else {
-			resultsMu.Lock()
+	// Serve cache hits first; collect misses for a single shell-out.
+	var misses []string
+	for _, name := range branchNames {
+		if sha, ok := r.revisionCache.Get(name); ok {
 			results[name] = sha
-			resultsMu.Unlock()
+			continue
 		}
-	})
+		misses = append(misses, name)
+	}
+	if len(misses) == 0 {
+		return results, errs
+	}
 
-	return results, errors
+	// Resolve all misses in one `git rev-parse` invocation. Each ref is
+	// printed on its own line in the same order as the args, so we can map
+	// back by index. `--verify` would short-circuit on the first bad ref, so
+	// omit it and detect failures via empty/short output.
+	args := append([]string{"rev-parse"}, misses...)
+	out, err := r.RunGitCommandWithContext(context.Background(), args...)
+	if err != nil {
+		// Fall back to per-ref resolution so we can attribute errors to
+		// specific branch names rather than a single bulk failure.
+		for _, name := range misses {
+			sha, e := r.resolveRefSHA(name)
+			if e != nil {
+				errs = append(errs, fmt.Errorf("failed to get revision for %s: %w", name, e))
+				continue
+			}
+			results[name] = sha
+		}
+		return results, errs
+	}
+
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != len(misses) {
+		// Output shape mismatch: surface a single error rather than misalign.
+		return results, []error{fmt.Errorf("batch rev-parse returned %d lines for %d refs", len(lines), len(misses))}
+	}
+	for i, name := range misses {
+		sha := strings.TrimSpace(lines[i])
+		if sha == "" {
+			errs = append(errs, fmt.Errorf("failed to get revision for %s: empty output", name))
+			continue
+		}
+		results[name] = sha
+	}
+	return results, errs
 }

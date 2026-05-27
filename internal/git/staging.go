@@ -2,17 +2,17 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
-
-	gogit "github.com/go-git/go-git/v6"
 )
 
 func (r *runner) StageAll(ctx context.Context) error {
-	if err := r.addAllGoGit(); err != nil {
+	if _, err := r.RunGitCommandWithContext(ctx, "add", "-A"); err != nil {
 		return fmt.Errorf("failed to stage all changes: %w", err)
 	}
 	return nil
@@ -23,7 +23,7 @@ func (r *runner) StagePatch(_ context.Context) error {
 }
 
 func (r *runner) StageTracked(ctx context.Context) error {
-	if err := r.addTrackedGoGit(); err != nil {
+	if _, err := r.RunGitCommandWithContext(ctx, "add", "-u"); err != nil {
 		return fmt.Errorf("failed to stage tracked changes: %w", err)
 	}
 	return nil
@@ -43,111 +43,50 @@ func (r *runner) StageChanges(ctx context.Context, opts StagingOptions) error {
 	}
 
 	if opts.Update {
-		return r.addTrackedGoGit()
+		return r.StageTracked(ctx)
 	}
 
 	return nil
 }
 
-func (r *runner) addAllGoGit() error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return err
-	}
-
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-	return worktree.AddWithOptions(&gogit.AddOptions{All: true})
+// HasStagedChanges reports whether the index has changes relative to HEAD.
+// `git diff --cached --quiet` exits 0 when there are no differences and 1
+// when there are; any other non-zero exit is a real failure.
+func (r *runner) HasStagedChanges(ctx context.Context) (bool, error) {
+	return diffHasChanges(r, ctx, "diff", "--cached", "--quiet")
 }
 
-func (r *runner) addTrackedGoGit() error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return err
-	}
-
-	status, err := worktree.Status()
-	if err != nil {
-		return err
-	}
-
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-	for path, file := range status {
-		if file.Worktree == gogit.Unmodified || file.Worktree == gogit.Untracked {
-			continue
-		}
-		exists, err := indexHasPath(repo, path)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			continue
-		}
-		if _, err := worktree.Add(path); err != nil {
-			return err
-		}
-	}
-	return nil
+// HasUnstagedChanges reports whether the working tree differs from the index
+// (tracked-file modifications only — untracked files are reported via
+// HasUntrackedFiles).
+func (r *runner) HasUnstagedChanges(ctx context.Context) (bool, error) {
+	return diffHasChanges(r, ctx, "diff", "--quiet")
 }
 
-func (r *runner) HasStagedChanges(_ context.Context) (bool, error) {
-	status, err := r.worktreeStatus()
-	if err != nil {
-		return false, fmt.Errorf("failed to check staged changes: %w", err)
+func diffHasChanges(r *runner, ctx context.Context, args ...string) (bool, error) {
+	_, err := r.RunGitCommandWithContext(ctx, args...)
+	if err == nil {
+		return false, nil
 	}
-	for _, file := range status {
-		if file.Staging != gogit.Unmodified && file.Staging != gogit.Untracked {
-			return true, nil
-		}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return true, nil
 	}
-	return false, nil
+	return false, fmt.Errorf("failed to check %v: %w", args, err)
 }
 
-func (r *runner) HasUnstagedChanges(_ context.Context) (bool, error) {
-	status, err := r.worktreeStatus()
+func (r *runner) HasUntrackedFiles(ctx context.Context) (bool, error) {
+	files, err := r.listUntrackedFiles(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to check unstaged changes: %w", err)
+		return false, err
 	}
-	for _, file := range status {
-		if file.Worktree != gogit.Unmodified && file.Worktree != gogit.Untracked {
-			return true, nil
-		}
-	}
-	return false, nil
+	return len(files) > 0, nil
 }
 
-func (r *runner) HasUntrackedFiles(_ context.Context) (bool, error) {
-	status, err := r.worktreeStatus()
+func (r *runner) GetUntrackedFiles(ctx context.Context) ([]string, error) {
+	files, err := r.listUntrackedFiles(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to check for untracked files: %w", err)
-	}
-	for _, file := range status {
-		if file.Worktree == gogit.Untracked {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (r *runner) GetUntrackedFiles(_ context.Context) ([]string, error) {
-	status, err := r.worktreeStatus()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get untracked files: %w", err)
-	}
-	files := make([]string, 0)
-	for path, file := range status {
-		if file.Worktree == gogit.Untracked {
-			files = append(files, path)
-		}
+		return nil, err
 	}
 	if len(files) == 0 {
 		return nil, nil
@@ -156,16 +95,26 @@ func (r *runner) GetUntrackedFiles(_ context.Context) ([]string, error) {
 	return files, nil
 }
 
-func (r *runner) worktreeStatus() (gogit.Status, error) {
-	repo, err := r.ensureRepo()
+// listUntrackedFiles returns all untracked, non-ignored files. Uses
+// `git ls-files --others --exclude-standard -z` so paths with newlines or
+// shell metacharacters round-trip cleanly.
+func (r *runner) listUntrackedFiles(ctx context.Context) ([]string, error) {
+	out, err := r.RunGitCommandRawWithContext(ctx, "ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list untracked files: %w", err)
 	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return nil, err
+	out = strings.TrimRight(out, "\x00")
+	if out == "" {
+		return nil, nil
 	}
-	return worktree.Status()
+	files := strings.Split(out, "\x00")
+	result := make([]string, 0, len(files))
+	for _, f := range files {
+		if f != "" {
+			result = append(result, f)
+		}
+	}
+	return result, nil
 }
 
 func (r *runner) ParseStagedHunks(ctx context.Context) ([]Hunk, error) {
@@ -199,7 +148,7 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 
 	// Handle new files: extract content and write to disk, then stage with git add
 	for _, h := range newFileHunks {
-		if err := r.stageNewFileHunk(h); err != nil {
+		if err := r.stageNewFileHunk(ctx, h); err != nil {
 			return err
 		}
 	}
@@ -220,7 +169,7 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 					if len(rescuedHunks) > 0 {
 						// Stage the rescued new files
 						for _, h := range rescuedHunks {
-							if err := r.stageNewFileHunk(h); err != nil {
+							if err := r.stageNewFileHunk(ctx, h); err != nil {
 								return fmt.Errorf("failed to stage misdetected new file %s: %w", h.File, err)
 							}
 						}
@@ -246,7 +195,7 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 }
 
 // stageNewFileHunk handles staging a single new file hunk by writing content to disk and staging it.
-func (r *runner) stageNewFileHunk(h Hunk) error {
+func (r *runner) stageNewFileHunk(ctx context.Context, h Hunk) error {
 	content := extractContentFromHunk(h)
 	filePath := filepath.Join(r.repoRoot, h.File)
 
@@ -276,18 +225,7 @@ func (r *runner) stageNewFileHunk(h Hunk) error {
 		}
 	}
 
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return fmt.Errorf("failed to stage new file %s: %w", h.File, err)
-	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to stage new file %s: %w", h.File, err)
-	}
-
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-	if _, err := worktree.Add(h.File); err != nil {
+	if _, err := r.RunGitCommandWithContext(ctx, "add", "--", h.File); err != nil {
 		return fmt.Errorf("failed to stage new file %s: %w", h.File, err)
 	}
 	return nil
@@ -326,34 +264,20 @@ func (r *runner) rescueMisdetectedNewFiles(ctx context.Context, modHunks []Hunk)
 	return newFiles, remaining
 }
 
-// fileExistsInIndex checks if a file exists in the git index.
-func (r *runner) fileExistsInIndex(_ context.Context, file string) (bool, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return false, fmt.Errorf("failed to check index for %s: %w", file, err)
+// fileExistsInIndex checks if a file exists in the git index. Uses
+// `git ls-files --error-unmatch` which exits non-zero when the path is not
+// tracked; that's the cheapest one-shot index probe.
+func (r *runner) fileExistsInIndex(ctx context.Context, file string) (bool, error) {
+	_, err := r.RunGitCommandWithContext(ctx, "ls-files", "--error-unmatch", "-z", "--", file)
+	if err == nil {
+		return true, nil
 	}
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	exists, err := indexHasPath(repo, file)
-	if err != nil {
-		return false, fmt.Errorf("failed to read index: %w", err)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		// Any non-zero exit means the path isn't in the index.
+		return false, nil
 	}
-	return exists, nil
-}
-
-func indexHasPath(repo *Repository, file string) (bool, error) {
-	idx, err := repo.Storer.Index()
-	if err != nil {
-		return false, err
-	}
-	file = filepath.ToSlash(file)
-	for _, entry := range idx.Entries {
-		if entry.Name == file {
-			return true, nil
-		}
-	}
-	return false, nil
+	return false, fmt.Errorf("failed to read index for %s: %w", file, err)
 }
 
 // extractContentFromHunk extracts the file content from a new file hunk.
@@ -387,18 +311,7 @@ func extractContentFromHunk(h Hunk) string {
 
 // UnstageAll removes all changes from the staging area.
 func (r *runner) UnstageAll(ctx context.Context) error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return fmt.Errorf("failed to unstage changes: %w", err)
-	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to unstage changes: %w", err)
-	}
-
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-	if err := worktree.Reset(&gogit.ResetOptions{Mode: gogit.MixedReset}); err != nil {
+	if _, err := r.RunGitCommandWithContext(ctx, "reset"); err != nil {
 		return fmt.Errorf("failed to unstage changes: %w", err)
 	}
 	return nil

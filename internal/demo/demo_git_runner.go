@@ -568,6 +568,14 @@ func (d *demoGitRunner) CreateBlob(_ string) (string, error) {
 	return demoBlobSHA, nil
 }
 
+func (d *demoGitRunner) CreateBlobsBatch(contents []string) ([]string, error) {
+	shas := make([]string, len(contents))
+	for i := range shas {
+		shas[i] = demoBlobSHA
+	}
+	return shas, nil
+}
+
 func (d *demoGitRunner) ReadBlob(_ string) (string, error) {
 	return "{}", nil
 }

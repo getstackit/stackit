@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -198,18 +199,26 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	}
 	slices.Sort(metaBranches)
 
-	for _, branch := range metaBranches {
-		meta := tx.metaUpdates[branch]
-		blobSHA, err := tx.eng.git.WriteMetadataBlob(meta)
-		if err != nil {
-			return fmt.Errorf("write blob for %s: %w", branch, err)
+	if len(metaBranches) > 0 {
+		contents := make([]string, len(metaBranches))
+		for i, branch := range metaBranches {
+			jsonData, err := json.Marshal(tx.metaUpdates[branch])
+			if err != nil {
+				return fmt.Errorf("marshal meta for %s: %w", branch, err)
+			}
+			contents[i] = string(jsonData)
 		}
-
-		refUpdates = append(refUpdates, git.RefUpdate{
-			RefName: git.MetadataRefName(branch),
-			NewSHA:  blobSHA,
-			OldSHA:  tx.originalMeta[branch], // CAS validation
-		})
+		shas, err := tx.eng.git.CreateBlobsBatch(contents)
+		if err != nil {
+			return fmt.Errorf("write meta blobs: %w", err)
+		}
+		for i, branch := range metaBranches {
+			refUpdates = append(refUpdates, git.RefUpdate{
+				RefName: git.MetadataRefName(branch),
+				NewSHA:  shas[i],
+				OldSHA:  tx.originalMeta[branch], // CAS validation
+			})
+		}
 	}
 
 	// Sort local metadata branches for deterministic order
@@ -219,18 +228,26 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	}
 	slices.Sort(localBranches)
 
-	for _, branch := range localBranches {
-		meta := tx.localUpdates[branch]
-		blobSHA, err := tx.eng.git.WriteLocalMetadataBlob(meta)
-		if err != nil {
-			return fmt.Errorf("write local blob for %s: %w", branch, err)
+	if len(localBranches) > 0 {
+		contents := make([]string, len(localBranches))
+		for i, branch := range localBranches {
+			jsonData, err := json.Marshal(tx.localUpdates[branch])
+			if err != nil {
+				return fmt.Errorf("marshal local meta for %s: %w", branch, err)
+			}
+			contents[i] = string(jsonData)
 		}
-
-		refUpdates = append(refUpdates, git.RefUpdate{
-			RefName: git.LocalMetadataRefName(branch),
-			NewSHA:  blobSHA,
-			OldSHA:  tx.originalLocalMeta[branch],
-		})
+		shas, err := tx.eng.git.CreateBlobsBatch(contents)
+		if err != nil {
+			return fmt.Errorf("write local meta blobs: %w", err)
+		}
+		for i, branch := range localBranches {
+			refUpdates = append(refUpdates, git.RefUpdate{
+				RefName: git.LocalMetadataRefName(branch),
+				NewSHA:  shas[i],
+				OldSHA:  tx.originalLocalMeta[branch],
+			})
+		}
 	}
 
 	// Add metadata deletions

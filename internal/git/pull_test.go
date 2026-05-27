@@ -37,7 +37,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	err = runner.InitDefaultRepo()
 	require.NoError(t, err)
 
-	// Warm up the runner's internal go-git state
+	// Warm up the runner's revision cache
 	initialLocalSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
 	require.NoError(t, err)
 	_, err = runner.GetCommitAuthor(initialLocalSha)
@@ -75,9 +75,9 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	// Verify that the pull succeeded (fast-forward should work)
 	require.Equal(t, git.PullDone, result, "PullBranch should return PullDone for a valid fast-forward")
 
-	// Verify that go-git can now see the new commit
+	// Verify the cached revision is updated to the newly fetched commit
 	_, err = runner.GetCommitAuthor(newRemoteSha)
-	require.NoError(t, err, "go-git should be able to see the newly fetched commit after reload")
+	require.NoError(t, err, "runner should resolve the newly fetched commit after reload")
 
 	// Verify that the local branch was actually updated
 	localSha, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "main")
@@ -86,8 +86,8 @@ func TestPullBranch_Reproduction(t *testing.T) {
 }
 
 func TestReloadRepository(t *testing.T) {
-	// Test that PullBranch automatically reloads the repository cache after fetching
-	// This ensures go-git can see newly fetched commits
+	// Test that the runner can resolve commits created externally — the
+	// revision cache must invalidate / pass through to git for unknown SHAs.
 
 	// 1. Setup a repository
 	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
@@ -101,30 +101,27 @@ func TestReloadRepository(t *testing.T) {
 	initialSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
 	require.NoError(t, err)
 
-	// Verify we can access it via go-git
+	// Verify we can resolve the initial commit
 	_, err = runner.GetCommitAuthor(initialSha)
 	require.NoError(t, err)
 
-	// Create a new commit directly via git command (bypassing go-git)
+	// Create a new commit directly via git command (outside the runner's cache)
 	err = scene.Repo.CreateChangeAndCommit("new change", "new")
 	require.NoError(t, err)
 	newSha, err := scene.Repo.GetCurrentSHA()
 	require.NoError(t, err)
 
-	// The reload happens automatically inside PullBranch when it fetches
-	// We can verify this works by checking that go-git can see the new commit
-	// after operations that would trigger a reload (though in this test we're not
-	// actually fetching, so the reload mechanism is tested indirectly through PullBranch tests)
+	// PullBranch normally triggers the reload after fetch; this test verifies
+	// the runner falls through to git for SHAs that aren't in its cache. The
+	// full fetch+reload flow is exercised in TestPullBranch_WithReload below.
 
-	// Verify we can access the new commit via go-git
-	// Note: This test verifies the reload mechanism works, but the actual reload
-	// is tested in TestPullBranch_WithReload which exercises the full fetch+reload flow
+	// Verify the new commit is resolvable
 	_, err = runner.GetCommitAuthor(newSha)
-	require.NoError(t, err, "go-git should see the new commit")
+	require.NoError(t, err, "runner should resolve the new commit")
 
-	// Verify we can still access old commits
+	// Verify the initial commit is still resolvable
 	_, err = runner.GetCommitAuthor(initialSha)
-	require.NoError(t, err, "go-git should still see old commits")
+	require.NoError(t, err, "runner should still resolve old commits")
 }
 
 func TestPullBranch_WithReload(t *testing.T) {
@@ -174,14 +171,14 @@ func TestPullBranch_WithReload(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, remoteSha, localSha, "Local branch should match remote")
 
-	// 6. Verify go-git can see the new commit (this tests the reload mechanism in PullTrunk)
-	// Note: This test verifies the refspec fix works. The reload is tested in engine_sync.go
+	// 6. Verify the newly fetched commit is resolvable through the runner
+	// (this exercises the reload mechanism in PullBranch).
 	_, err = runner.GetCommitAuthor(remoteSha)
-	require.NoError(t, err, "go-git should be able to see the newly fetched commit")
+	require.NoError(t, err, "runner should resolve the newly fetched commit")
 
 	// Verify initial commit is still accessible
 	_, err = runner.GetCommitAuthor(initialSha)
-	require.NoError(t, err, "go-git should still see old commits")
+	require.NoError(t, err, "runner should still resolve old commits")
 }
 
 func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {

@@ -348,36 +348,48 @@ func (r *runner) ListMetadata() (map[string]string, error) {
 	return result, nil
 }
 
-// WriteMetadataBlob creates a blob containing the metadata JSON and returns its SHA.
-// This does NOT update any refs - use this for batched/transactional writes.
-func (r *runner) WriteMetadataBlob(meta *Meta) (string, error) {
-	jsonData, err := json.Marshal(meta)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal metadata: %w", err)
+// WriteMetadataBlobsBatch marshals each Meta to JSON and writes all the blobs
+// in one `git hash-object` invocation via CreateBlobsBatch. Returns SHAs in
+// input order. Does NOT update any refs — callers (transaction commit,
+// BatchMarkNeedsPRBodyUpdate) pair the SHAs with ref updates afterwards.
+func (r *runner) WriteMetadataBlobsBatch(metas []*Meta) ([]string, error) {
+	if len(metas) == 0 {
+		return nil, nil
 	}
-
-	sha, err := r.CreateBlob(string(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("failed to create metadata blob: %w", err)
+	contents := make([]string, len(metas))
+	for i, meta := range metas {
+		jsonData, err := json.Marshal(meta)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal metadata at index %d: %w", i, err)
+		}
+		contents[i] = string(jsonData)
 	}
-
-	return sha, nil
+	shas, err := r.CreateBlobsBatch(contents)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metadata blobs: %w", err)
+	}
+	return shas, nil
 }
 
-// WriteLocalMetadataBlob creates a blob containing the local metadata JSON and returns its SHA.
-// This does NOT update any refs - use this for batched/transactional writes.
-func (r *runner) WriteLocalMetadataBlob(meta *LocalMeta) (string, error) {
-	jsonData, err := json.Marshal(meta)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal local metadata: %w", err)
+// WriteLocalMetadataBlobsBatch is the LocalMeta counterpart to
+// WriteMetadataBlobsBatch.
+func (r *runner) WriteLocalMetadataBlobsBatch(metas []*LocalMeta) ([]string, error) {
+	if len(metas) == 0 {
+		return nil, nil
 	}
-
-	sha, err := r.CreateBlob(string(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("failed to create local metadata blob: %w", err)
+	contents := make([]string, len(metas))
+	for i, meta := range metas {
+		jsonData, err := json.Marshal(meta)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal local metadata at index %d: %w", i, err)
+		}
+		contents[i] = string(jsonData)
 	}
-
-	return sha, nil
+	shas, err := r.CreateBlobsBatch(contents)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local metadata blobs: %w", err)
+	}
+	return shas, nil
 }
 
 // GetMetadataRefSHA returns the current SHA of a metadata ref, or empty string if not found.

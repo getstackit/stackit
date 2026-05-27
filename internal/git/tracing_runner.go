@@ -1131,17 +1131,17 @@ func (t *tracingRunner) WriteLocalMetadata(branchName string, meta *LocalMeta) e
 	return err
 }
 
-func (t *tracingRunner) WriteMetadataBlob(meta *Meta) (string, error) {
+func (t *tracingRunner) WriteMetadataBlobsBatch(metas []*Meta) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.WriteMetadataBlob(meta)
-	t.trace("WriteMetadataBlob", time.Since(start), err == nil, err)
+	result, err := t.inner.WriteMetadataBlobsBatch(metas)
+	t.trace("WriteMetadataBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(metas)))
 	return result, err
 }
 
-func (t *tracingRunner) WriteLocalMetadataBlob(meta *LocalMeta) (string, error) {
+func (t *tracingRunner) WriteLocalMetadataBlobsBatch(metas []*LocalMeta) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.WriteLocalMetadataBlob(meta)
-	t.trace("WriteLocalMetadataBlob", time.Since(start), err == nil, err)
+	result, err := t.inner.WriteLocalMetadataBlobsBatch(metas)
+	t.trace("WriteLocalMetadataBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(metas)))
 	return result, err
 }
 

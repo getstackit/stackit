@@ -694,12 +694,20 @@ func (d *demoGitRunner) UnstageAll(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) WriteMetadataBlob(_ *git.Meta) (string, error) {
-	return demoBlobSHA, nil
+func (d *demoGitRunner) WriteMetadataBlobsBatch(metas []*git.Meta) ([]string, error) {
+	shas := make([]string, len(metas))
+	for i := range shas {
+		shas[i] = demoBlobSHA
+	}
+	return shas, nil
 }
 
-func (d *demoGitRunner) WriteLocalMetadataBlob(_ *git.LocalMeta) (string, error) {
-	return demoBlobSHA, nil
+func (d *demoGitRunner) WriteLocalMetadataBlobsBatch(metas []*git.LocalMeta) ([]string, error) {
+	shas := make([]string, len(metas))
+	for i := range shas {
+		shas[i] = demoBlobSHA
+	}
+	return shas, nil
 }
 
 func (d *demoGitRunner) GetMetadataRefSHA(_ string) string {

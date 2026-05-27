@@ -156,30 +156,33 @@ func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
 	return r.GetCurrentRevision(ctx)
 }
 
-func (r *runner) GetMergedBranches(_ context.Context, target string) (map[string]bool, error) {
-	targetSHA, err := r.resolveRefSHA(target)
+// GetMergedBranches returns the set of local branches whose tip commit is
+// reachable from target — i.e., branches that have been merged into target.
+// Equivalent to running `isAncestor(branch, target)` for every branch, but
+// does it in one `git for-each-ref --merged` invocation instead of N
+// subprocesses.
+//
+// Squash-merged branches are intentionally not included: a squash leaves no
+// ancestor relationship, so the per-branch isAncestor loop never reported them
+// either. Callers that care about squash merges (engine_branch_status.go's
+// deletion policy) consult PR metadata first and only fall back to this map.
+func (r *runner) GetMergedBranches(ctx context.Context, target string) (map[string]bool, error) {
+	out, err := r.RunGitCommandWithContext(ctx,
+		"for-each-ref",
+		"--format=%(refname:short)",
+		"--merged", target,
+		"refs/heads/",
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve target %s: %w", target, err)
-	}
-
-	branches, err := r.allBranchHashes()
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list branches merged into %s: %w", target, err)
 	}
 
 	merged := make(map[string]bool)
-	for branchName, branchSHA := range branches {
-		if branchSHA == targetSHA {
-			merged[branchName] = true
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
+		if line == "" {
 			continue
 		}
-		isMerged, err := r.isAncestor(branchSHA, targetSHA)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check if %s is merged into %s: %w", branchName, target, err)
-		}
-		if isMerged {
-			merged[branchName] = true
-		}
+		merged[line] = true
 	}
 	return merged, nil
 }

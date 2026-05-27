@@ -80,7 +80,7 @@ export function RepoPicker() {
             <button
               type="button"
               data-testid={`repo-card-${repo.id}`}
-              onClick={() => router.push(`/${encodeURIComponent(repo.id)}`)}
+              onClick={() => router.push(`/?repo=${encodeURIComponent(repo.id)}`)}
               className="block w-full text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
             >
               <Card>

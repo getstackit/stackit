@@ -40,7 +40,7 @@ describe("RepoPicker", () => {
     expect(screen.getByText("Other Project")).toBeDefined();
   });
 
-  it("navigates to /{repoId} on click", async () => {
+  it("navigates to /?repo={repoId} on click", async () => {
     mockRepos({
       repos: [{ id: "stackit", displayName: "Stackit", trunk: "main" }],
     });
@@ -49,7 +49,7 @@ describe("RepoPicker", () => {
 
     const card = await screen.findByTestId("repo-card-stackit");
     fireEvent.click(card);
-    expect(mockPush).toHaveBeenCalledWith("/stackit");
+    expect(mockPush).toHaveBeenCalledWith("/?repo=stackit");
   });
 
   it("shows the empty-state message when no repos are configured", async () => {

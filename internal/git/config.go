@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	gogitconfig "github.com/go-git/go-git/v6/config"
 	format "github.com/go-git/go-git/v6/plumbing/format/config"
 )
 
@@ -84,6 +85,49 @@ func (c *ConfigStore) Get(key string) (string, error) {
 		return cfg.Section(parsed.section).Option(parsed.name), nil
 	}
 	return cfg.Section(parsed.section).Subsection(parsed.subsection).Option(parsed.name), nil
+}
+
+// GetMerged retrieves a config value applying git's standard precedence:
+// local > global > system. Returns empty string if the key is not set in any
+// scope. Use this for keys (like user.name) whose canonical home is typically
+// the user's global config rather than the repository.
+func (c *ConfigStore) GetMerged(key string) (string, error) {
+	val, err := c.Get(key)
+	if err != nil {
+		return "", err
+	}
+	if val != "" {
+		return val, nil
+	}
+
+	for _, scope := range []gogitconfig.Scope{gogitconfig.GlobalScope, gogitconfig.SystemScope} {
+		val, err := readFromScope(key, scope)
+		if err != nil {
+			return "", err
+		}
+		if val != "" {
+			return val, nil
+		}
+	}
+	return "", nil
+}
+
+func readFromScope(key string, scope gogitconfig.Scope) (string, error) {
+	parsed, err := parseConfigKey(key)
+	if err != nil {
+		return "", err
+	}
+	cfg, err := gogitconfig.LoadConfig(scope)
+	if err != nil {
+		return "", err
+	}
+	if cfg == nil || cfg.Raw == nil {
+		return "", nil
+	}
+	if parsed.subsection == "" {
+		return cfg.Raw.Section(parsed.section).Option(parsed.name), nil
+	}
+	return cfg.Raw.Section(parsed.section).Subsection(parsed.subsection).Option(parsed.name), nil
 }
 
 // GetAll retrieves all values for a multi-value config key.

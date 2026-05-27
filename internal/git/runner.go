@@ -611,7 +611,7 @@ func (r *runner) GetUserName(ctx context.Context) (string, error) {
 	if _, err := r.ensureRepo(); err != nil {
 		return "", err
 	}
-	return NewConfigStore(r.getRepoRoot()).Get("user.name")
+	return NewConfigStore(r.getRepoRoot()).GetMerged("user.name")
 }
 
 func (r *runner) EnsureMetadataRefspecConfigured() error {

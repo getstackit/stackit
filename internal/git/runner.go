@@ -16,8 +16,6 @@ import (
 	"sync"
 	"time"
 
-	gogit "github.com/go-git/go-git/v6"
-	gitcfg "github.com/go-git/go-git/v6/config"
 	"github.com/go-git/go-git/v6/plumbing"
 
 	"github.com/getstackit/stackit/internal/utils"
@@ -1013,19 +1011,19 @@ func (r *runner) PushMetadataRefs(ctx context.Context, branches []string) error 
 		return nil
 	}
 	// git push origin +refs/stackit/metadata/branch1 +refs/stackit/metadata/branch2 ...
-	// We use the '+' prefix to force the push because metadata refs point to blobs,
-	// and updates to non-commit objects are always considered non-fast-forward by Git.
-	refspecs := make([]gitcfg.RefSpec, 0, len(branches))
+	// The '+' prefix forces the push: metadata refs point to blobs, and
+	// updates to non-commit objects are always considered non-fast-forward
+	// by Git.
+	refspecs := make([]string, 0, len(branches))
 	for _, branch := range branches {
-		refspecs = append(refspecs, gitcfg.RefSpec(fmt.Sprintf("+refs/stackit/metadata/%s", branch)))
+		refspecs = append(refspecs, fmt.Sprintf("+refs/stackit/metadata/%s", branch))
 	}
 	return r.pushOriginRefSpecs(ctx, refspecs)
 }
 
 func (r *runner) FetchMetadataRefs(ctx context.Context) error {
-	// git fetch origin 'refs/stackit/metadata/*:refs/stackit/remote-metadata/*'
-	return r.fetchRemoteRefSpecs(ctx, "origin", []gitcfg.RefSpec{
-		gitcfg.RefSpec("+refs/stackit/metadata/*:refs/stackit/remote-metadata/*"),
+	return r.fetchRemoteRefSpecs(ctx, "origin", []string{
+		"+refs/stackit/metadata/*:refs/stackit/remote-metadata/*",
 	})
 }
 
@@ -1033,20 +1031,16 @@ func (r *runner) PushStackMetaRefs(ctx context.Context, stackIDs []string) error
 	if len(stackIDs) == 0 {
 		return nil
 	}
-	// git push origin +refs/stackit/stacks/id1 +refs/stackit/stacks/id2 ...
-	// We use the '+' prefix to force the push because stack metadata refs point to blobs,
-	// and updates to non-commit objects are always considered non-fast-forward by Git.
-	refspecs := make([]gitcfg.RefSpec, 0, len(stackIDs))
+	refspecs := make([]string, 0, len(stackIDs))
 	for _, stackID := range stackIDs {
-		refspecs = append(refspecs, gitcfg.RefSpec(fmt.Sprintf("+refs/stackit/stacks/%s", stackID)))
+		refspecs = append(refspecs, fmt.Sprintf("+refs/stackit/stacks/%s", stackID))
 	}
 	return r.pushOriginRefSpecs(ctx, refspecs)
 }
 
 func (r *runner) FetchStackMetaRefs(ctx context.Context) error {
-	// git fetch origin 'refs/stackit/stacks/*:refs/stackit/remote-stacks/*'
-	return r.fetchRemoteRefSpecs(ctx, "origin", []gitcfg.RefSpec{
-		gitcfg.RefSpec("+refs/stackit/stacks/*:refs/stackit/remote-stacks/*"),
+	return r.fetchRemoteRefSpecs(ctx, "origin", []string{
+		"+refs/stackit/stacks/*:refs/stackit/remote-stacks/*",
 	})
 }
 
@@ -1054,18 +1048,16 @@ func (r *runner) DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []strin
 	if len(stackIDs) == 0 {
 		return nil
 	}
-	// git push origin --delete refs/stackit/stacks/id1 refs/stackit/stacks/id2 ...
-	refspecs := make([]gitcfg.RefSpec, 0, len(stackIDs))
+	refspecs := make([]string, 0, len(stackIDs))
 	for _, stackID := range stackIDs {
-		refspecs = append(refspecs, gitcfg.RefSpec(fmt.Sprintf(":refs/stackit/stacks/%s", stackID)))
+		refspecs = append(refspecs, fmt.Sprintf(":refs/stackit/stacks/%s", stackID))
 	}
 	return r.pushOriginRefSpecs(ctx, refspecs)
 }
 
 func (r *runner) DeleteRemoteMetadataRef(ctx context.Context, branch string) error {
-	// git push origin --delete refs/stackit/metadata/<branch>
-	return r.pushOriginRefSpecs(ctx, []gitcfg.RefSpec{
-		gitcfg.RefSpec(fmt.Sprintf(":refs/stackit/metadata/%s", branch)),
+	return r.pushOriginRefSpecs(ctx, []string{
+		fmt.Sprintf(":refs/stackit/metadata/%s", branch),
 	})
 }
 
@@ -1073,10 +1065,9 @@ func (r *runner) BatchDeleteRemoteMetadataRefs(ctx context.Context, branches []s
 	if len(branches) == 0 {
 		return nil
 	}
-	// git push origin --delete refs/stackit/metadata/branch1 refs/stackit/metadata/branch2 ...
-	refspecs := make([]gitcfg.RefSpec, 0, len(branches))
+	refspecs := make([]string, 0, len(branches))
 	for _, branch := range branches {
-		refspecs = append(refspecs, gitcfg.RefSpec(fmt.Sprintf(":refs/stackit/metadata/%s", branch)))
+		refspecs = append(refspecs, fmt.Sprintf(":refs/stackit/metadata/%s", branch))
 	}
 	return r.pushOriginRefSpecs(ctx, refspecs)
 }
@@ -1085,24 +1076,21 @@ func (r *runner) TestRemoteRefCompatibility(ctx context.Context) error {
 	testRef := "refs/stackit/metadata/stackit-compat-test"
 	testContent := fmt.Sprintf(`{"test":true,"timestamp":%d}`, time.Now().Unix())
 
-	// Create test blob
 	sha, err := r.CreateBlob(testContent)
 	if err != nil {
 		return fmt.Errorf("failed to create test blob: %w", err)
 	}
 
-	// Try to push test ref
 	if err := r.UpdateRef(testRef, sha); err != nil {
 		return fmt.Errorf("failed to update local test ref: %w", err)
 	}
 
-	if err := r.pushOriginRefSpecs(ctx, []gitcfg.RefSpec{gitcfg.RefSpec("+" + testRef)}); err != nil {
-		_ = r.DeleteRef(ctx, testRef) // Cleanup local
+	if err := r.pushOriginRefSpecs(ctx, []string{"+" + testRef}); err != nil {
+		_ = r.DeleteRef(ctx, testRef)
 		return fmt.Errorf("remote rejected metadata ref push: %w", err)
 	}
 
-	// Cleanup: delete remote and local test ref
-	_ = r.pushOriginRefSpecs(ctx, []gitcfg.RefSpec{gitcfg.RefSpec(":" + testRef)})
+	_ = r.pushOriginRefSpecs(ctx, []string{":" + testRef})
 	_ = r.DeleteRef(ctx, testRef)
 
 	return nil
@@ -1115,91 +1103,26 @@ func ctxOrBackground(ctx context.Context) context.Context {
 	return ctx
 }
 
-func refSpecStrings(refspecs []gitcfg.RefSpec) []string {
-	args := make([]string, 0, len(refspecs))
-	for _, refspec := range refspecs {
-		args = append(args, refspec.String())
-	}
-	return args
-}
-
-func forceForRefSpecs(refspecs []gitcfg.RefSpec) bool {
-	for _, refspec := range refspecs {
-		if refspec.IsForceUpdate() {
-			return true
-		}
-	}
-	return false
-}
-
-func (r *runner) fetchRemoteRefSpecs(ctx context.Context, remote string, refspecs []gitcfg.RefSpec) error {
+func (r *runner) fetchRemoteRefSpecs(ctx context.Context, remote string, refspecs []string) error {
 	if len(refspecs) == 0 {
 		return nil
 	}
-
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-
 	ctx = ctxOrBackground(ctx)
-
-	r.goGitMu.Lock()
-	err = repo.FetchContext(ctx, &gogit.FetchOptions{
-		RemoteName: remote,
-		RefSpecs:   refspecs,
-		Force:      forceForRefSpecs(refspecs),
-	})
-	r.goGitMu.Unlock()
-	switch {
-	case err == nil:
-		return r.ReloadRepository()
-	case errors.Is(err, gogit.NoErrAlreadyUpToDate):
-		return nil
-	}
-
-	args := append([]string{"fetch", remote}, refSpecStrings(refspecs)...)
-	if _, fallbackErr := r.RunGitCommandWithContext(ctx, args...); fallbackErr != nil {
-		return errors.Join(
-			fmt.Errorf("go-git fetch failed: %w", err),
-			fmt.Errorf("git fetch fallback failed: %w", fallbackErr),
-		)
+	args := append([]string{"fetch", remote}, refspecs...)
+	if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
+		return fmt.Errorf("git fetch failed: %w", err)
 	}
 	return r.ReloadRepository()
 }
 
-func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []gitcfg.RefSpec) error {
+func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) error {
 	if len(refspecs) == 0 {
 		return nil
 	}
-
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-
 	ctx = ctxOrBackground(ctx)
-
-	r.goGitMu.Lock()
-	err = repo.PushContext(ctx, &gogit.PushOptions{
-		RemoteName: "origin",
-		RefSpecs:   refspecs,
-		Force:      forceForRefSpecs(refspecs),
-	})
-	r.goGitMu.Unlock()
-	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, gogit.NoErrAlreadyUpToDate):
-		return nil
-	}
-
-	args := append([]string{"push", "origin"}, refSpecStrings(refspecs)...)
-	if _, fallbackErr := r.RunGitCommandWithContext(ctx, args...); fallbackErr != nil {
-		return errors.Join(
-			fmt.Errorf("go-git push failed: %w", err),
-			fmt.Errorf("git push fallback failed: %w", fallbackErr),
-		)
+	args := append([]string{"push", "origin"}, refspecs...)
+	if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
+		return fmt.Errorf("git push failed: %w", err)
 	}
 	return nil
 }

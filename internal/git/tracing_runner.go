@@ -1040,6 +1040,13 @@ func (t *tracingRunner) CreateBlob(content string) (string, error) {
 	return result, err
 }
 
+func (t *tracingRunner) CreateBlobsBatch(contents []string) ([]string, error) {
+	start := time.Now()
+	result, err := t.inner.CreateBlobsBatch(contents)
+	t.trace("CreateBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(contents)))
+	return result, err
+}
+
 func (t *tracingRunner) ReadBlob(sha string) (string, error) {
 	// Don't trace - delegates to CatFile which is traced
 	return t.inner.ReadBlob(sha)

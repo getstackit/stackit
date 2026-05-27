@@ -233,6 +233,11 @@ type RefOperations interface {
 // ObjectOperations provides low-level Git object operations.
 type ObjectOperations interface {
 	CreateBlob(content string) (string, error)
+	// CreateBlobsBatch writes N blobs in a single `git hash-object` invocation.
+	// Returns SHAs in input order. For small N (<3) callers should still use
+	// CreateBlob — the temp-file staging the batch path requires only pays
+	// off once the per-blob subprocess overhead would dominate.
+	CreateBlobsBatch(contents []string) ([]string, error)
 	ReadBlob(sha string) (string, error)
 	CatFile(sha string) (string, error)
 }

@@ -7,21 +7,12 @@ import (
 	"strings"
 )
 
-func (r *runner) GetRepoInfo(_ context.Context) (string, string, error) {
-	repo, err := r.ensureRepo()
+func (r *runner) GetRepoInfo(ctx context.Context) (string, string, error) {
+	out, err := r.RunGitCommandWithContext(ctx, "remote", "get-url", DefaultRemote)
 	if err != nil {
-		return "", "", nil //nolint:nilerr // missing repo/remote info is non-fatal for callers
+		return "", "", nil //nolint:nilerr // missing remote is non-fatal here
 	}
-	cfg, err := repo.Config()
-	if err != nil {
-		return "", "", nil //nolint:nilerr // preserve previous git config lookup behavior
-	}
-	origin := cfg.Remotes[DefaultRemote]
-	if origin == nil || len(origin.URLs) == 0 {
-		return "", "", nil
-	}
-
-	remoteURL := strings.TrimSpace(origin.URLs[0])
+	remoteURL := strings.TrimSpace(out)
 	if remoteURL == "" {
 		return "", "", nil
 	}

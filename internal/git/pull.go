@@ -3,8 +3,6 @@ package git
 import (
 	"context"
 	"fmt"
-
-	gitcfg "github.com/go-git/go-git/v6/config"
 )
 
 // PullResult represents the result of a pull operation
@@ -34,10 +32,10 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 		return PullConflict, fmt.Errorf("failed to get local revision for %s: %w", branchName, err)
 	}
 
-	// Fetch with explicit refspec to update the remote-tracking branch
-	// This ensures refs/remotes/origin/<branch> is actually updated
-	refspec := gitcfg.RefSpec(fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branchName, remote, branchName))
-	_ = r.fetchRemoteRefSpecs(ctx, remote, []gitcfg.RefSpec{refspec})
+	// Fetch with explicit refspec to update the remote-tracking branch.
+	// This ensures refs/remotes/origin/<branch> is actually updated.
+	refspec := fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branchName, remote, branchName)
+	_ = r.fetchRemoteRefSpecs(ctx, remote, []string{refspec})
 
 	// Get the SHA of the remote branch
 	remoteRev, err := r.GetRemoteSha(remote, branchName)
@@ -110,9 +108,8 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 }
 
 func (r *runner) Fetch(ctx context.Context, remote, branch string) error {
-	refspec := gitcfg.RefSpec(fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch))
-	err := r.fetchRemoteRefSpecs(ctx, remote, []gitcfg.RefSpec{refspec})
-	if err != nil {
+	refspec := fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch)
+	if err := r.fetchRemoteRefSpecs(ctx, remote, []string{refspec}); err != nil {
 		return fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 	}
 	return nil

@@ -97,14 +97,13 @@ func BenchmarkGetRecentCommits(b *testing.B) {
 	}
 }
 
-// BenchmarkGetRevision measures the cost of resolving a branch name to a SHA.
-// Phase 2 replaces the go-git Reference lookup with `git rev-parse --verify`.
-// The revisionCache may serve the read on subsequent calls; this bench
-// measures the cache-warm path. See BenchmarkGetRevisionCold for the miss path.
+// BenchmarkGetRevision measures the cache-warm path — the realistic case in
+// production where engine bootstrap preloads all branch revisions via
+// LoadAllBranchRevisions before any individual lookup.
 func BenchmarkGetRevision(b *testing.B) {
 	br := newBenchRepo(b, 5, 1)
-	if _, err := br.runner.GetRevision("branch-0"); err != nil {
-		b.Fatalf("warm GetRevision: %v", err)
+	if err := br.runner.LoadAllBranchRevisions(); err != nil {
+		b.Fatalf("LoadAllBranchRevisions: %v", err)
 	}
 	for b.Loop() {
 		if _, err := br.runner.GetRevision("branch-0"); err != nil {
@@ -113,9 +112,21 @@ func BenchmarkGetRevision(b *testing.B) {
 	}
 }
 
-// BenchmarkBatchGetRevisions measures bulk revision resolution. The bench
-// repo has 20 branches; LoadAllBranchRevisions warms the cache via a single
-// go-git iteration today (Phase 2 swaps that for a single `git for-each-ref`).
+// BenchmarkGetRevisionCold measures the cache-miss path. The cache is only
+// populated by LoadAllBranchRevisions (not on individual misses) so repeated
+// calls without a preload always pay the subprocess cost.
+func BenchmarkGetRevisionCold(b *testing.B) {
+	br := newBenchRepo(b, 5, 1)
+	for b.Loop() {
+		if _, err := br.runner.GetRevision("branch-0"); err != nil {
+			b.Fatalf("GetRevision: %v", err)
+		}
+	}
+}
+
+// BenchmarkBatchGetRevisions measures bulk revision resolution with a cold
+// cache so we see the actual shell-out cost (Phase 2 batches all misses into
+// a single `git rev-parse` invocation rather than N parallel subprocesses).
 func BenchmarkBatchGetRevisions(b *testing.B) {
 	const branches = 20
 	br := newBenchRepo(b, 5, branches)

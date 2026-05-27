@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +19,6 @@ import (
 	gogit "github.com/go-git/go-git/v6"
 	gitcfg "github.com/go-git/go-git/v6/config"
 	"github.com/go-git/go-git/v6/plumbing"
-	"github.com/go-git/go-git/v6/plumbing/object"
 
 	"github.com/getstackit/stackit/internal/utils"
 )
@@ -518,27 +518,15 @@ func (r *runner) InitDefaultRepo() error {
 }
 
 func (r *runner) GetRemote() string {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return DefaultRemote
-	}
-	return r.getRemote(repo)
+	return r.getRemote()
 }
 
 func (r *runner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return nil, err
-	}
-	return r.fetchRemoteShas(ctx, repo, remote)
+	return r.fetchRemoteShas(ctx, remote)
 }
 
 func (r *runner) GetRemoteSha(remote, branchName string) (string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return "", err
-	}
-	return r.getRemoteSha(repo, remote, branchName)
+	return r.getRemoteSha(remote, branchName)
 }
 
 func (r *runner) GetConfig(key string) (string, error) {
@@ -667,146 +655,125 @@ func (r *runner) FindRemoteBranch(_ context.Context, remote string) (string, err
 }
 
 func (r *runner) GetRemoteRevision(branchName string) (string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return "", err
-	}
-	return r.getRemoteRevision(repo, branchName)
+	return r.getRemoteRevision(branchName)
 }
 
 func (r *runner) GetCurrentRevision(ctx context.Context) (string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return "", err
-	}
-
-	head, err := repo.Head()
+	out, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--verify", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve HEAD: %w", err)
 	}
-	return head.Hash().String(), nil
+	return strings.TrimSpace(out), nil
 }
 
 func (r *runner) GetRevision(branchName string) (string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return "", err
-	}
-	return r.getRevision(repo, branchName)
+	return r.getRevision(branchName)
 }
 
 func (r *runner) BatchGetRevisions(branchNames []string) (map[string]string, []error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		errors := make([]error, 0, len(branchNames))
-		for range branchNames {
-			errors = append(errors, fmt.Errorf("failed to get repository: %w", err))
-		}
-		return nil, errors
-	}
-	return r.batchGetRevisions(repo, branchNames)
+	return r.batchGetRevisions(branchNames)
 }
 
 func (r *runner) GetMergeBase(rev1, rev2 string) (string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return "", err
-	}
-	return r.getMergeBase(repo, rev1, rev2)
+	return r.getMergeBaseByRef(rev1, rev2)
 }
 
 func (r *runner) GetMergeBaseByRef(ref1, ref2 string) (string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return "", err
-	}
-	return r.getMergeBaseByRef(repo, ref1, ref2)
+	return r.getMergeBaseByRef(ref1, ref2)
 }
 
 func (r *runner) IsAncestor(ancestor, descendant string) (bool, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return false, err
-	}
-	return r.isAncestor(repo, ancestor, descendant)
+	return r.isAncestor(ancestor, descendant)
 }
 
 func (r *runner) GetCommitDate(branchName string) (time.Time, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return time.Time{}, err
-	}
-	return r.getCommitDate(repo, branchName)
+	return r.getCommitDate(branchName)
 }
 
 func (r *runner) GetCommitAuthor(branchName string) (string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return "", err
-	}
-	return r.getCommitAuthor(repo, branchName)
+	return r.getCommitAuthor(branchName)
 }
 
 func (r *runner) GetCommitRange(base, head, format string) ([]string, error) {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return nil, err
-	}
-
-	// Synchronize go-git operations to prevent concurrent packfile access
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	headHash, err := r.resolveRefHashInternal(repo, head)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve head: %w", err)
-	}
-
-	var baseHash plumbing.Hash
+	rangeArg := head
 	if base != "" {
-		baseHash, err = r.resolveRefHashInternal(repo, base)
+		rangeArg = base + ".." + head
+	}
+
+	switch format {
+	case "SHA":
+		return r.gitLogLines(rangeArg, "%H")
+	case "READABLE":
+		return r.gitLogLines(rangeArg, "%h %s")
+	case "SUBJECT":
+		return r.gitLogLines(rangeArg, "%s")
+	case "READABLE_WITH_DATE":
+		// Tab-separated: short SHA, RFC3339 UTC date, subject. Use Unix
+		// epoch from git and convert in Go to preserve the prior behavior of
+		// normalizing to UTC regardless of the commit's recorded TZ.
+		lines, err := r.gitLogLines(rangeArg, "%h\t%at\t%s")
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve base: %w", err)
+			return nil, err
 		}
+		out := make([]string, 0, len(lines))
+		for _, line := range lines {
+			sha, rest, ok := strings.Cut(line, "\t")
+			if !ok {
+				continue
+			}
+			epochStr, subject, ok := strings.Cut(rest, "\t")
+			if !ok {
+				continue
+			}
+			epoch, err := strconv.ParseInt(epochStr, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse commit epoch %q: %w", epochStr, err)
+			}
+			out = append(out, fmt.Sprintf("%s\t%s\t%s", sha, time.Unix(epoch, 0).UTC().Format(time.RFC3339), subject))
+		}
+		return out, nil
+	case "MESSAGE":
+		// Bodies can contain newlines; use NUL record separator.
+		out, err := r.RunGitCommandRawWithContext(context.Background(), "log", "-z", "--format=%B", rangeArg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to walk commits %s: %w", rangeArg, err)
+		}
+		raw := strings.TrimRight(out, "\x00")
+		if raw == "" {
+			return nil, nil
+		}
+		records := strings.Split(raw, "\x00")
+		result := make([]string, 0, len(records))
+		for _, rec := range records {
+			rec = strings.TrimSpace(rec)
+			if rec != "" {
+				result = append(result, rec)
+			}
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("unknown commit format: %s", format)
 	}
-
-	commits, err := iterateCommitsNoLock(repo, headHash, baseHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return formatCommits(commits, format)
 }
 
-// formatCommits formats go-git commit objects according to format string
-func formatCommits(commits []*object.Commit, format string) ([]string, error) {
-	result := make([]string, 0, len(commits))
-	for _, commit := range commits {
-		var formatted string
-		switch format {
-		case "SHA":
-			formatted = commit.Hash.String()
-		case "READABLE":
-			// Oneline format: short SHA + subject
-			shortHash := commit.Hash.String()[:7]
-			subject := strings.Split(strings.TrimSpace(commit.Message), "\n")[0]
-			formatted = fmt.Sprintf("%s %s", shortHash, subject)
-		case "READABLE_WITH_DATE":
-			// Tab-separated: short SHA, ISO date, subject
-			shortHash := commit.Hash.String()[:7]
-			subject := strings.Split(strings.TrimSpace(commit.Message), "\n")[0]
-			formatted = fmt.Sprintf("%s\t%s\t%s", shortHash, commit.Author.When.UTC().Format(time.RFC3339), subject)
-		case "MESSAGE":
-			formatted = strings.TrimSpace(commit.Message)
-		case "SUBJECT":
-			subject := strings.Split(strings.TrimSpace(commit.Message), "\n")[0]
-			formatted = strings.TrimSpace(subject)
-		default:
-			return nil, fmt.Errorf("unknown commit format: %s", format)
-		}
-
-		if formatted != "" {
-			result = append(result, formatted)
+// gitLogLines runs `git log` over a range with a single-line format and
+// returns one element per commit, dropping blank lines. Suitable for any
+// format that does not include literal newlines.
+func (r *runner) gitLogLines(rangeArg, format string) ([]string, error) {
+	out, err := r.RunGitCommandWithContext(context.Background(), "log", "--format="+format, rangeArg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk commits %s: %w", rangeArg, err)
+	}
+	out = strings.TrimRight(out, "\n")
+	if out == "" {
+		return nil, nil
+	}
+	lines := strings.Split(out, "\n")
+	result := make([]string, 0, len(lines))
+	for _, l := range lines {
+		l = strings.TrimSpace(l)
+		if l != "" {
+			result = append(result, l)
 		}
 	}
 	return result, nil
@@ -824,40 +791,15 @@ func (r *runner) GetCommitSHA(branchName string, offset int) (string, error) {
 	if offset < 0 {
 		return "", fmt.Errorf("offset must be non-negative")
 	}
-
-	repo, err := r.ensureRepo()
+	ref := branchName
+	if offset > 0 {
+		ref = fmt.Sprintf("%s~%d", branchName, offset)
+	}
+	out, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to walk %d commit(s) back from %s: %w", offset, branchName, err)
 	}
-
-	// Synchronize go-git operations to prevent concurrent packfile access
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	// Resolve branch reference
-	hash, err := r.resolveRefHashInternal(repo, branchName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get branch reference: %w", err)
-	}
-
-	commit, err := repo.CommitObject(hash)
-	if err != nil {
-		return "", fmt.Errorf("failed to get commit: %w", err)
-	}
-
-	// Walk back offset number of commits
-	for i := range offset {
-		if commit.NumParents() == 0 {
-			return "", fmt.Errorf("commit has no parent at offset %d", i)
-		}
-		// Get first parent
-		commit, err = commit.Parent(0)
-		if err != nil {
-			return "", fmt.Errorf("failed to get parent commit: %w", err)
-		}
-	}
-
-	return commit.Hash.String(), nil
+	return strings.TrimSpace(out), nil
 }
 
 func (r *runner) CheckoutPaths(ctx context.Context, branch string, paths []string) error {
@@ -1263,29 +1205,11 @@ func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []gitcfg.RefSp
 }
 
 func (r *runner) GetParentCommitSHA(commitSHA string) (string, error) {
-	repo, err := r.ensureRepo()
+	out, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", commitSHA+"^")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get parent of %s: %w", commitSHA, err)
 	}
-
-	hash, err := r.resolveRefHash(repo, commitSHA)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve commit: %w", err)
-	}
-
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	commit, err := repo.CommitObject(hash)
-	if err != nil {
-		return "", fmt.Errorf("failed to get commit: %w", err)
-	}
-
-	if commit.NumParents() == 0 {
-		return "", fmt.Errorf("commit has no parents")
-	}
-
-	return commit.ParentHashes[0].String(), nil
+	return strings.TrimSpace(out), nil
 }
 
 func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool, error) {

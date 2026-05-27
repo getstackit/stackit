@@ -243,7 +243,7 @@ func (r *runner) GetMergedBranches(_ context.Context, target string) (map[string
 			merged[branchName] = true
 			continue
 		}
-		isMerged, err := r.isAncestorGoGit(repo, branchHash, targetHash)
+		isMerged, err := r.isAncestor(branchHash.String(), targetHash.String())
 		if err != nil {
 			return nil, fmt.Errorf("failed to check if %s is merged into %s: %w", branchName, target, err)
 		}

@@ -29,7 +29,7 @@ export function StackDetailPanel({
   const status = stackStatusInfo[stack.status] || stackStatusInfo.incomplete;
   const issues = collectIssues(stack.branches);
   const stats = computeStackStats(stack.branches);
-  const { refresh } = useRepo();
+  const { refresh, repoId } = useRepo();
 
   const allHavePRs = stack.branches.every((b) => b.pr != null);
 
@@ -40,7 +40,7 @@ export function StackDetailPanel({
     setSubmitting(true);
     setSubmitResult(null);
     try {
-      const result = await submitStack(stack.rootBranch);
+      const result = await submitStack(repoId, stack.rootBranch);
       setSubmitResult(result);
       refresh();
     } catch (err) {

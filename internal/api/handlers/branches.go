@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/getstackit/stackit/internal/api/registry"
 	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
@@ -10,13 +11,13 @@ import (
 
 // BranchesHandler serves branch data.
 type BranchesHandler struct {
-	eng engine.BranchReader
-	gh  github.Client
+	reg *registry.Registry
 }
 
-// NewBranchesHandler creates a handler for /api/branches and /api/v1/branches.
-func NewBranchesHandler(eng engine.BranchReader, gh github.Client) *BranchesHandler {
-	return &BranchesHandler{eng: eng, gh: gh}
+// NewBranchesHandler creates a handler that resolves the per-request repo
+// from the registry.
+func NewBranchesHandler(reg *registry.Registry) *BranchesHandler {
+	return &BranchesHandler{reg: reg}
 }
 
 // ServeHTTP handles GET branches endpoints.
@@ -26,24 +27,23 @@ func (h *BranchesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	branchName, hasBranch := parseResourcePath(r.URL.Path, "branches")
-	if !hasBranch {
-		http.NotFound(w, r)
+	entry, ok := resolveRepo(h.reg, w, r)
+	if !ok {
 		return
 	}
 
+	branchName := r.PathValue("name")
 	if branchName == "" {
-		h.listBranches(w, r)
+		h.listBranches(w, r, entry)
 	} else {
-		h.getBranch(w, r, branchName)
+		h.getBranch(w, r, entry, branchName)
 	}
 }
 
-func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request) {
-	graph := h.eng.Graph(engine.SortStrategyAlphabetical)
-	allBranches := h.eng.AllBranches()
+func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry) {
+	graph := entry.Engine.Graph(engine.SortStrategyAlphabetical)
+	allBranches := entry.Engine.AllBranches()
 
-	// Filter to only tracked (non-trunk) branches
 	branches := make([]engine.Branch, 0, len(allBranches))
 	for _, b := range allBranches {
 		if b.IsTracked() {
@@ -51,14 +51,13 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Optionally fetch CI checks
 	var checksMap map[string]*github.CheckStatus
-	if h.gh != nil {
+	if entry.GitHub != nil {
 		names := make([]string, len(branches))
 		for i, b := range branches {
 			names[i] = b.GetName()
 		}
-		checksMap, _ = h.gh.BatchGetPRChecksStatus(r.Context(), names)
+		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), names)
 	}
 
 	responses := make([]httpcontract.BranchResponse, 0, len(branches))
@@ -71,20 +70,20 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request) {
 		if checksMap != nil {
 			checks = checksMap[branch.GetName()]
 		}
-		responses = append(responses, httpcontract.MapBranch(h.eng, branch, node, checks))
+		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks))
 	}
 
 	writeJSON(w, responses)
 }
 
-func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, branchName string) {
-	branch := h.eng.GetBranch(branchName)
+func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry, branchName string) {
+	branch := entry.Engine.GetBranch(branchName)
 	if !branch.IsTracked() {
 		http.Error(w, "branch not found or not tracked", http.StatusNotFound)
 		return
 	}
 
-	graph := h.eng.Graph(engine.SortStrategyAlphabetical)
+	graph := entry.Engine.Graph(engine.SortStrategyAlphabetical)
 	node := graph.GetNode(branchName)
 	if node == nil {
 		http.Error(w, "branch not in stack graph", http.StatusNotFound)
@@ -92,13 +91,13 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, bran
 	}
 
 	var checks *github.CheckStatus
-	if h.gh != nil {
-		checksMap, _ := h.gh.BatchGetPRChecksStatus(r.Context(), []string{branchName})
+	if entry.GitHub != nil {
+		checksMap, _ := entry.GitHub.BatchGetPRChecksStatus(r.Context(), []string{branchName})
 		if checksMap != nil {
 			checks = checksMap[branchName]
 		}
 	}
 
-	resp := httpcontract.MapBranch(h.eng, branch, node, checks)
+	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks)
 	writeJSON(w, resp)
 }

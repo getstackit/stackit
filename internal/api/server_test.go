@@ -4,6 +4,10 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/getstackit/stackit/internal/api/registry"
 )
 
 func TestNormalizeAPIPrefixes(t *testing.T) {
@@ -66,16 +70,29 @@ func TestIsAPIPath(t *testing.T) {
 	}
 }
 
-func TestServerShutdownClosesBroadcaster(t *testing.T) {
-	server := NewServer(ServerConfig{}, nil, nil)
+func TestServerShutdownIsIdempotentWithoutHTTPServer(t *testing.T) {
+	server := NewServer(ServerConfig{})
 
 	if err := server.Shutdown(context.Background()); err != nil {
 		t.Fatalf("shutdown returned error: %v", err)
 	}
+}
+
+func TestRegistryCloseClosesEntryBroadcasters(t *testing.T) {
+	reg := registry.New()
+	b := registry.NewBroadcaster()
+	entry := &registry.RepoEntry{
+		ID:          "default",
+		Broadcaster: b,
+	}
+	entry.AddCloser(func() error { b.Close(); return nil })
+	require.NoError(t, reg.Add(entry))
+
+	require.NoError(t, reg.Close())
 
 	select {
-	case <-server.Broadcaster().Done():
+	case <-b.Done():
 	case <-time.After(time.Second):
-		t.Fatal("broadcaster was not closed during shutdown")
+		t.Fatal("broadcaster was not closed after registry.Close")
 	}
 }

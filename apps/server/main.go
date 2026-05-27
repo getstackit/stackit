@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/api"
+	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/app"
 )
 
@@ -31,31 +33,16 @@ func main() {
 
 func run() error {
 	var (
-		port          = flag.Int("port", 8080, "Port to listen on")
-		cwd           = flag.String("cwd", "", "Working directory for repository detection")
-		remote        = flag.String("remote", "origin", "Git remote name used in API responses")
-		corsOrigins   = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
-		apiPrefix     = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
-		enableLegacy  = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
-		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
+		port            = flag.Int("port", 8080, "Port to listen on")
+		cwd             = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -repos-config is set)")
+		reposConfigPath = flag.String("repos-config", "", "Path to a JSON file listing repos to serve (mutually exclusive with -cwd)")
+		remote          = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
+		corsOrigins     = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
+		apiPrefix       = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
+		enableLegacy    = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
+		shutdownGrace   = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
 	)
 	flag.Parse()
-
-	opts := app.GetDefaultGlobalOptions()
-	opts.Cwd = *cwd
-	opts.Interactive = false
-
-	runtimeCtx, err := app.GetContext(context.Background(), opts)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if runtimeCtx.Logger != nil {
-			if closeErr := runtimeCtx.Logger.Close(); closeErr != nil {
-				log.Printf("failed to close logger: %v", closeErr)
-			}
-		}
-	}()
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -67,19 +54,44 @@ func run() error {
 		prefixes = append(prefixes, "/api")
 	}
 
-	gh := runtimeCtx.GitHub()
-	if gh == nil && runtimeCtx.GitHubError() != nil {
-		log.Printf("GitHub client unavailable: %v", runtimeCtx.GitHubError())
+	reg := registry.New()
+	defer func() {
+		if closeErr := reg.Close(); closeErr != nil {
+			log.Printf("registry close: %v", closeErr)
+		}
+	}()
+
+	switch {
+	case *reposConfigPath != "":
+		cfg, err := loadReposConfig(*reposConfigPath)
+		if err != nil {
+			return err
+		}
+		for _, rc := range cfg.Repos {
+			if err := addRegistryEntry(reg, rc); err != nil {
+				return fmt.Errorf("repo %q: %w", rc.ID, err)
+			}
+		}
+	default:
+		// Single-repo shortcut. `-cwd ""` falls back to git discovery
+		// from the process cwd, matching the previous behavior.
+		if err := addRegistryEntry(reg, repoConfig{
+			ID:          "default",
+			DisplayName: "default",
+			Path:        *cwd,
+			Remote:      *remote,
+		}); err != nil {
+			return err
+		}
 	}
 
 	server := api.NewServer(api.ServerConfig{
 		Port:        *port,
 		CORSOrigins: parseCSV(*corsOrigins),
-		RepoRoot:    runtimeCtx.RepoRoot,
-		Remote:      *remote,
 		APIPrefixes: prefixes,
 		StaticFS:    staticFS,
-	}, runtimeCtx.Engine, gh)
+		Registry:    reg,
+	})
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -101,6 +113,39 @@ func run() error {
 		}
 		return nil
 	}
+}
+
+// addRegistryEntry resolves rc into an engine via app.GetContext and adds
+// the resulting RepoEntry to reg, registering a logger-close callback so
+// reg.Close releases the file handle on shutdown.
+func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
+	opts := app.GetDefaultGlobalOptions()
+	opts.Cwd = rc.Path
+	opts.Interactive = false
+
+	runtimeCtx, err := app.GetContext(context.Background(), opts)
+	if err != nil {
+		return err
+	}
+
+	gh := runtimeCtx.GitHub()
+	if gh == nil && runtimeCtx.GitHubError() != nil {
+		log.Printf("[%s] GitHub client unavailable: %v", rc.ID, runtimeCtx.GitHubError())
+	}
+
+	entry := registry.NewEntry(registry.EntryConfig{
+		ID:          rc.ID,
+		DisplayName: rc.DisplayName,
+		RepoRoot:    runtimeCtx.RepoRoot,
+		Remote:      rc.Remote,
+		Engine:      runtimeCtx.Engine,
+		GitHub:      gh,
+	})
+	if runtimeCtx.Logger != nil {
+		entry.AddCloser(runtimeCtx.Logger.Close)
+	}
+
+	return reg.Add(entry)
 }
 
 func parseCSV(raw string) []string {

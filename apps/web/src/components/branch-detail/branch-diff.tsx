@@ -226,6 +226,7 @@ function parseConventionalCommit(message: string): ConventionalCommit | null {
 }
 
 export function BranchDiff({ branchName, revision, commits, onExit }: BranchDiffProps) {
+  const { repoId } = useRepo();
   const [diff, setDiff] = useState<BranchDiffResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -245,7 +246,7 @@ export function BranchDiff({ branchName, revision, commits, onExit }: BranchDiff
       setDiff(null);
     });
 
-    fetchBranchDiff(branchName)
+    fetchBranchDiff(repoId, branchName)
       .then((result) => {
         if (!active) return;
         setDiff(result);
@@ -262,7 +263,7 @@ export function BranchDiff({ branchName, revision, commits, onExit }: BranchDiff
     return () => {
       active = false;
     };
-  }, [branchName, revision]);
+  }, [branchName, revision, repoId]);
 
   const parsed = useMemo(() => {
     if (!diff?.patch.trim()) {

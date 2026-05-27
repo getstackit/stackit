@@ -38,7 +38,9 @@ func (h *captureStackHandler) Confirm(_ string, defaultYes bool) (bool, error) {
 func (h *captureStackHandler) IsInteractive() bool { return false }
 
 func TestActionWithMockedGitHub(t *testing.T) {
+	t.Parallel()
 	t.Run("creates PR for branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"feature": "main",
@@ -78,6 +80,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 	})
 
 	t.Run("updates existing PR", func(t *testing.T) {
+		t.Parallel()
 		// Skip this test for now - branch tracking issue needs to be resolved separately
 		t.Skip("Skipping due to branch tracking issue in test setup")
 
@@ -133,6 +136,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 	})
 
 	t.Run("submits entire branching stack with --stack flag", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"P":  "main",
@@ -185,6 +189,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 	})
 
 	t.Run("skips base update when no commits between base and head", func(t *testing.T) {
+		t.Parallel()
 		// This test covers the scenario where after reordering, a branch has no commits
 		// between it and its new base, which would cause GitHub to reject the PR update.
 		// Our fix should detect this and skip the base update to avoid the error.
@@ -257,6 +262,40 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		updatedPR, exists := config.UpdatedPRs[prNumberB]
 		require.True(t, exists, "PR %d should be in UpdatedPRs", prNumberB)
 		require.NotNil(t, updatedPR, "Updated PR should not be nil")
+	})
+
+	t.Run("skips push when branch is already in sync with remote", func(t *testing.T) {
+		// Regression test: when local SHA == remote SHA, a plain --force-with-lease push
+		// causes the server to reject with "cannot lock ref: reference already exists".
+		// pushBranchIfNeeded must detect the Matches() case and skip the push entirely.
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"feature": "main",
+			})
+
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
+		require.NoError(t, err)
+
+		// Push the branch to remote first (simulating a prior successful push)
+		err = s.Scene.Repo.PushBranch("origin", "feature")
+		require.NoError(t, err)
+
+		config := testhelpers.NewMockGitHubServerConfig()
+		rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
+		githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
+
+		s.Context.GitHubClient = githubClient
+		opts := submit.Options{
+			DryRun: false,
+			NoEdit: true,
+			Draft:  true,
+		}
+
+		s.Checkout("feature")
+		// Second submit with the branch already pushed — must not fail with a push rejection.
+		err = submit.Action(s.Context, opts, &noopHandler{})
+		require.NoError(t, err, "submit should succeed when branch is already in sync with remote")
 	})
 }
 

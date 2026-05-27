@@ -311,7 +311,7 @@ func BenchmarkCreateBlobsBatch(b *testing.B) {
 				for j := range n {
 					contents[j] = fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
 				}
-				if _, err := br.runner.CreateBlobsBatch(contents); err != nil {
+				if _, err := br.runner.CreateBlobsBatch(context.Background(), contents); err != nil {
 					b.Fatalf("CreateBlobsBatch: %v", err)
 				}
 				iter++

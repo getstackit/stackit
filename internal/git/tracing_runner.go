@@ -1040,9 +1040,9 @@ func (t *tracingRunner) CreateBlob(content string) (string, error) {
 	return result, err
 }
 
-func (t *tracingRunner) CreateBlobsBatch(contents []string) ([]string, error) {
+func (t *tracingRunner) CreateBlobsBatch(ctx context.Context, contents []string) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.CreateBlobsBatch(contents)
+	result, err := t.inner.CreateBlobsBatch(ctx, contents)
 	t.trace("CreateBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(contents)))
 	return result, err
 }
@@ -1131,16 +1131,16 @@ func (t *tracingRunner) WriteLocalMetadata(branchName string, meta *LocalMeta) e
 	return err
 }
 
-func (t *tracingRunner) WriteMetadataBlobsBatch(metas []*Meta) ([]string, error) {
+func (t *tracingRunner) WriteMetadataBlobsBatch(ctx context.Context, metas []*Meta) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.WriteMetadataBlobsBatch(metas)
+	result, err := t.inner.WriteMetadataBlobsBatch(ctx, metas)
 	t.trace("WriteMetadataBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(metas)))
 	return result, err
 }
 
-func (t *tracingRunner) WriteLocalMetadataBlobsBatch(metas []*LocalMeta) ([]string, error) {
+func (t *tracingRunner) WriteLocalMetadataBlobsBatch(ctx context.Context, metas []*LocalMeta) ([]string, error) {
 	start := time.Now()
-	result, err := t.inner.WriteLocalMetadataBlobsBatch(metas)
+	result, err := t.inner.WriteLocalMetadataBlobsBatch(ctx, metas)
 	t.trace("WriteLocalMetadataBlobsBatch", time.Since(start), err == nil, err, slog.Int("count", len(metas)))
 	return result, err
 }

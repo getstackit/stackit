@@ -917,7 +917,7 @@ func (r *runner) CreateBlob(content string) (string, error) {
 // For very small N the overhead of staging temp files exceeds the savings
 // from collapsing subprocess calls; callers with N==1 should use CreateBlob
 // directly. We still handle N==0/1 here so the method's contract holds.
-func (r *runner) CreateBlobsBatch(contents []string) ([]string, error) {
+func (r *runner) CreateBlobsBatch(ctx context.Context, contents []string) ([]string, error) {
 	if len(contents) == 0 {
 		return nil, nil
 	}
@@ -947,7 +947,7 @@ func (r *runner) CreateBlobsBatch(contents []string) ([]string, error) {
 	}
 
 	stdin := strings.Join(paths, "\n") + "\n"
-	out, err := r.runGitInternal(context.Background(), stdin, nil, true, "hash-object", "-w", "--stdin-paths")
+	out, err := r.runGitInternal(ctx, stdin, nil, true, "hash-object", "-w", "--stdin-paths")
 	if err != nil {
 		return nil, fmt.Errorf("failed to batch-create blobs: %w", err)
 	}

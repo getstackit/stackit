@@ -1167,7 +1167,7 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 // It batch-reads local metadata, sets the flag, writes all the blobs in one
 // `git hash-object` call via WriteLocalMetadataBlobsBatch, and atomically
 // updates all refs.
-func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
+func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(ctx context.Context, branchNames []string) error {
 	if len(branchNames) == 0 {
 		return nil
 	}
@@ -1187,7 +1187,7 @@ func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
 		orderedNames = append(orderedNames, name)
 	}
 
-	shas, err := e.git.WriteLocalMetadataBlobsBatch(metas)
+	shas, err := e.git.WriteLocalMetadataBlobsBatch(ctx, metas)
 	if err != nil {
 		return fmt.Errorf("failed to create local metadata blobs: %w", err)
 	}
@@ -1201,7 +1201,7 @@ func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
 	}
 
 	// Atomic batch update all refs
-	return e.git.UpdateRefsBatch(context.Background(), updates)
+	return e.git.UpdateRefsBatch(ctx, updates)
 }
 
 // ClearNeedsPRBodyUpdate clears the PR body update flag for a branch

@@ -236,8 +236,9 @@ type ObjectOperations interface {
 	// CreateBlobsBatch writes N blobs in a single `git hash-object` invocation.
 	// Returns SHAs in input order. For small N (<3) callers should still use
 	// CreateBlob — the temp-file staging required by the batch path only pays
-	// off once per-blob subprocess overhead would dominate.
-	CreateBlobsBatch(contents []string) ([]string, error)
+	// off once per-blob subprocess overhead would dominate. ctx is honored for
+	// the underlying git invocation so long-running batches can be canceled.
+	CreateBlobsBatch(ctx context.Context, contents []string) ([]string, error)
 	ReadBlob(sha string) (string, error)
 	CatFile(sha string) (string, error)
 }
@@ -256,9 +257,10 @@ type MetadataOperations interface {
 
 	// Transaction support methods. The batch forms marshal each entry and
 	// forward to CreateBlobsBatch — call them with len(metas) >= 1 from
-	// engine_writer.go and transaction.go's commit path.
-	WriteMetadataBlobsBatch(metas []*Meta) ([]string, error)
-	WriteLocalMetadataBlobsBatch(metas []*LocalMeta) ([]string, error)
+	// engine_writer.go and transaction.go's commit path. ctx is honored for
+	// the underlying git hash-object invocation.
+	WriteMetadataBlobsBatch(ctx context.Context, metas []*Meta) ([]string, error)
+	WriteLocalMetadataBlobsBatch(ctx context.Context, metas []*LocalMeta) ([]string, error)
 	GetMetadataRefSHA(branchName string) string
 	GetLocalMetadataRefSHA(branchName string) string
 

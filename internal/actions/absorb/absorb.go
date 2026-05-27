@@ -291,7 +291,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	// Refresh engine state after modifying branch references directly via git
+	// Absorb rewrites history via raw git operations (cherry-pick + reset on
+	// every modified branch), which engine doesn't observe through its own
+	// mutation paths. Rebuild reconciles cached ParentBranchRevision and
+	// branch tips with the post-rewrite state on disk.
 	if err := eng.Rebuild(""); err != nil {
 		return fmt.Errorf("failed to refresh engine after absorb: %w", err)
 	}

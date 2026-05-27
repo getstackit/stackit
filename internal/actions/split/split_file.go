@@ -321,7 +321,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Update branchToSplit to have newBranch as its parent
-	if err := eng.SetParent(ctx, branchToSplit, newBranch); err != nil {
+	if err := eng.SetParent(ctx, branchToSplit, newBranch, engine.DivergenceRecompute); err != nil {
 		return nil, recoverWithRef(fmt.Errorf("failed to update parent of %s: %w", branchToSplit.GetName(), err))
 	}
 

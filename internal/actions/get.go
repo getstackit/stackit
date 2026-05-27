@@ -312,11 +312,11 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	}
 
 	// Fetch and apply remote metadata for all branches in the stack
-	if err := eng.Git().FetchMetadataRefs(ctx.Context); err != nil {
+	if err := eng.FetchRemoteMetadata(ctx.Context); err != nil {
 		out.Debug("No remote metadata to fetch: %v", err)
 	} else {
 		// Configure refspec so future git fetch commands also fetch metadata
-		if err := eng.Git().EnsureMetadataRefspecConfigured(); err != nil {
+		if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
 			out.Debug("Failed to configure metadata refspec: %v", err)
 		}
 		if err := eng.LoadRemoteMetadataCache(); err != nil {
@@ -338,7 +338,8 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		return fmt.Errorf("failed to checkout target branch %s: %w", targetBranch, err)
 	}
 
-	// Refresh engine
+	// `get` may have created local branches via raw git fetch above; rebuild
+	// so engine's branch list includes those new branches before we proceed.
 	if err := eng.Rebuild(""); err != nil {
 		return fmt.Errorf("failed to refresh engine: %w", err)
 	}

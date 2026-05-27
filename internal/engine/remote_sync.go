@@ -488,30 +488,14 @@ func (e *engineImpl) DeleteMetadata(ctx context.Context, branchName string) erro
 	})
 }
 
-// FetchRemoteMetadata fetches metadata refs from origin
+// FetchRemoteMetadata fetches metadata refs from origin into the remote-metadata
+// namespace, so the cache loader sees the latest authored values.
 func (e *engineImpl) FetchRemoteMetadata(ctx context.Context) error {
-	_, err := e.git.RunGitCommandWithContext(ctx, "fetch", "origin", "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")
-	return err
+	return e.git.FetchMetadataRefs(ctx)
 }
 
-// ConfigureRemoteMetadataSync adds the metadata refspec to origin
+// ConfigureRemoteMetadataSync adds the metadata refspec to origin so subsequent
+// `git fetch origin` invocations pick up metadata changes automatically.
 func (e *engineImpl) ConfigureRemoteMetadataSync(_ context.Context) error {
 	return e.git.EnsureMetadataRefspecConfigured()
-}
-
-// GetStackIDsForBranches returns the unique stack IDs for the given branches.
-// This is used to determine which stack refs need to be pushed to remote.
-func (e *engineImpl) GetStackIDsForBranches(branches Branches) []string {
-	seen := make(map[string]bool)
-	var stackIDs []string
-
-	for _, branch := range branches {
-		stackID := e.GetStackID(branch)
-		if stackID != "" && !seen[stackID] {
-			seen[stackID] = true
-			stackIDs = append(stackIDs, stackID)
-		}
-	}
-
-	return stackIDs
 }

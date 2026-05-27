@@ -119,7 +119,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Also fetch stack metadata refs (stack-level descriptions, etc.)
 		stackFetchStart := time.Now()
-		if err := ctx.Git().FetchStackMetaRefs(gctx); err != nil {
+		if err := ctx.Engine.FetchStackMetadata(gctx); err != nil {
 			ctx.Logger.Debug("fetch stack metadata refs failed (non-fatal) error=%v", err)
 		}
 		ctx.Logger.Info("fetch stack metadata refs completed durationMs=%v", time.Since(stackFetchStart).Milliseconds())

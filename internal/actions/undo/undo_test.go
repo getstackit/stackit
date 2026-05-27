@@ -211,7 +211,7 @@ func TestUndoAfterMove(t *testing.T) {
 		require.NoError(t, err)
 
 		// Move feature2 to main
-		err = s.Engine.SetParent(s.Context, s.Engine.GetBranch("feature2"), s.Engine.GetBranch("main"))
+		err = s.Engine.SetParent(s.Context, s.Engine.GetBranch("feature2"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// Verify parent changed

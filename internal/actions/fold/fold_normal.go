@@ -12,14 +12,9 @@ import (
 )
 
 func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBranch engine.Branch, eng engine.Engine, splog output.Output, _ Options) error {
-	// Checkout parent branch
+	// Checkout parent branch (engine updates its currentBranch internally).
 	if err := eng.CheckoutBranch(gctx, parentBranch); err != nil {
 		return fmt.Errorf("failed to checkout parent branch: %w", err)
-	}
-
-	// Rebuild engine so it knows we're on the parent branch
-	if err := eng.Rebuild(eng.Trunk().GetName()); err != nil {
-		return fmt.Errorf("failed to rebuild engine: %w", err)
 	}
 
 	// Try fast-forward merge first, fallback to regular merge
@@ -53,12 +48,8 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 
 	// Restack all descendants of the parent
 	if len(descendants) > 0 {
-		// Rebuild engine to reflect the deletion
-		if err := eng.Rebuild(eng.Trunk().GetName()); err != nil {
-			return fmt.Errorf("failed to rebuild engine: %w", err)
-		}
-
-		// Rebuild graph with fresh engine state
+		// DeleteBranch rebuilds engine state internally; just refresh the graph
+		// snapshot (graphs are immutable copies of engine state at query time).
 		graph = eng.Graph(engine.SortStrategyAlphabetical)
 
 		// Get updated descendants list (current branch's children are now children of parent)

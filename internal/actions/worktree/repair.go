@@ -197,7 +197,7 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 		}
 	}
 
-	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, parentBranch); err != nil {
+	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, parentBranch, engine.DivergenceRecompute); err != nil {
 		cleanup()
 		return "", fmt.Errorf("failed to set parent on anchor branch %s: %w", style.ColorBranchName(anchorBranchName, false), err)
 	}

@@ -82,7 +82,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		}
 
 		// For remote branches, fetch metadata to show the latest info
-		if err := eng.Git().FetchMetadataRefs(ctx.Context); err != nil {
+		if err := eng.FetchRemoteMetadata(ctx.Context); err != nil {
 			out.Debug("Failed to fetch remote metadata: %v", err)
 		} else {
 			if err := eng.LoadRemoteMetadataCache(); err != nil {

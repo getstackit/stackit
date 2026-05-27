@@ -19,6 +19,10 @@ type StackNavigator interface {
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	SortBranchesTopologically(branches Branches) Branches
 	FindBranchForCommit(commitSHA string) (string, error)
+	// FindNearestNonExcludedAncestor walks the parent chain from startParent
+	// and returns the first ancestor for which isExcluded returns false. Falls
+	// back to trunk if every ancestor up the chain is excluded.
+	FindNearestNonExcludedAncestor(startParent string, isExcluded func(name string) bool) string
 	ValidateOnBranch() (string, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	GetScope(branch Branch) Scope
@@ -124,7 +128,7 @@ type BranchReader interface {
 type BranchTracking interface {
 	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
 	UntrackBranch(ctx context.Context, branchName string) error
-	SetParent(ctx context.Context, branch Branch, parentBranch Branch) error
+	SetParent(ctx context.Context, branch Branch, parentBranch Branch, mode DivergenceMode) error
 	// ReparentBranch changes a branch's parent while automatically preserving
 	// its divergence point. Preferred over SetParent for existing branches.
 	ReparentBranch(ctx context.Context, branch Branch, newParent Branch) error
@@ -169,10 +173,6 @@ type BranchTracking interface {
 	CreateStackRef(stackID string, meta *git.StackMeta) error
 	// GetStackMeta returns the stack metadata for a stack ID.
 	GetStackMeta(stackID string) (*git.StackMeta, error)
-	// SyncStackIDFromParent updates a branch's stack ID to match its parent's.
-	// This should be called after reparenting operations to keep stack IDs consistent.
-	// Returns nil if the parent is trunk (keeps existing stack ID) or if no change is needed.
-	SyncStackIDFromParent(ctx context.Context, branch Branch) error
 }
 
 // BranchMutations handles branch lifecycle operations

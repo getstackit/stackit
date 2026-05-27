@@ -535,22 +535,6 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 	return queue
 }
 
-// findNonDeletingAncestor finds the nearest ancestor that is not marked for deletion
-func findNonDeletingAncestor(startParent string, plan *deletionPlan, eng engine.Engine) string {
-	current := startParent
-	for {
-		if !plan.isDeleting(current) {
-			return current
-		}
-		branch := eng.GetBranch(current)
-		parent := branch.GetParent()
-		if parent == nil {
-			return eng.Trunk().GetName()
-		}
-		current = parent.GetName()
-	}
-}
-
 // reparentBranchIfNecessary updates a branch's parent if its current parent is being deleted.
 // Returns the name of the new parent if changed, or empty string if not changed.
 func reparentBranchIfNecessary(ctx context.Context, branch engine.Branch, plan *deletionPlan, eng engine.Engine, out output.Output) (string, error) {
@@ -558,7 +542,7 @@ func reparentBranchIfNecessary(ctx context.Context, branch engine.Branch, plan *
 	parentName := getParentName(branch)
 
 	// Find nearest ancestor that isn't being deleted
-	newParentName := findNonDeletingAncestor(parentName, plan, eng)
+	newParentName := eng.FindNearestNonExcludedAncestor(parentName, plan.isDeleting)
 
 	// If parent changed, update it
 	if newParentName != parentName {
@@ -610,7 +594,7 @@ func applyReparent(ctx context.Context, eng engine.Engine, branch engine.Branch,
 	if opts.preserveDivergence {
 		return eng.ReparentBranch(ctx, branch, newParent)
 	}
-	return eng.SetParent(ctx, branch, newParent)
+	return eng.SetParent(ctx, branch, newParent, engine.DivergenceRecompute)
 }
 
 // removeWorktreeIfCheckedOut removes the worktree if the branch is checked out in one.

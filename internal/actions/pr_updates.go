@@ -222,19 +222,19 @@ func PushMetadataAndSyncPRs(ctx *app.Context, branchNames []string) error {
 
 	// Check if remote sync is enabled; if not, run compatibility test first
 	if !eng.IsRemoteSyncEnabled() {
-		if err := eng.Git().TestRemoteRefCompatibility(ctx.Context); err != nil {
+		if err := eng.TestRemoteMetadataCompatibility(ctx.Context); err != nil {
 			out.Debug("Remote metadata sync not supported: %v", err)
 			return nil // Non-fatal
 		}
 		eng.SetRemoteSyncEnabled(true)
 		// Configure refspec so future git fetch commands also fetch metadata
-		if err := eng.Git().EnsureMetadataRefspecConfigured(); err != nil {
+		if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
 			out.Debug("Failed to configure metadata refspec: %v", err)
 		}
 	}
 
 	// Push metadata refs
-	if err := eng.Git().PushMetadataRefs(ctx.Context, branchNames); err != nil {
+	if err := eng.PushMetadataForBranches(ctx.Context, branchNames); err != nil {
 		out.Debug("Failed to push metadata refs: %v", err)
 		return err
 	}

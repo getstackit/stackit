@@ -22,7 +22,7 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 	}
 
 	// 1. Get all local stack metadata refs (returns map[stackID]sha)
-	allStackRefs, err := ctx.Git().ListStackMetas()
+	allStackRefs, err := ctx.Engine.ListStackMetadata()
 	if err != nil {
 		ctx.Logger.Debug("failed to list stack metadata refs error=%v", err)
 		return result
@@ -67,7 +67,7 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 	if err := ctx.Git().DeleteRefsBatch(ctx.Context, refs); err != nil {
 		ctx.Logger.Debug("batch delete of local stack refs failed, falling back per-ref error=%v", err)
 		for _, stackID := range orphaned {
-			if perRefErr := ctx.Git().DeleteStackMeta(ctx.Context, stackID); perRefErr != nil {
+			if perRefErr := ctx.Engine.DeleteStackMetadata(ctx.Context, stackID); perRefErr != nil {
 				result.Errors = append(result.Errors, "failed to delete local stack ref "+stackID+": "+perRefErr.Error())
 				ctx.Logger.Debug("failed to delete local stack ref stackID=%v error=%v", stackID, perRefErr)
 			} else {
@@ -80,7 +80,7 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 
 	// 5. Delete remote refs (best-effort, non-fatal)
 	if len(result.DeletedStackIDs) > 0 {
-		if err := ctx.Git().DeleteRemoteStackMetaRefs(ctx.Context, result.DeletedStackIDs); err != nil {
+		if err := ctx.Engine.DeleteRemoteStackMetadata(ctx.Context, result.DeletedStackIDs); err != nil {
 			// This is expected to fail if refs don't exist on remote, so just log it
 			ctx.Logger.Debug("failed to delete remote stack refs (may not exist) error=%v", err)
 		}

@@ -98,7 +98,7 @@ func restoreAnchorBranch(ctx *app.Context, snapshot *worktreeSnapshot) error {
 		return fmt.Errorf("failed to recreate anchor branch %s: %w", anchorName, err)
 	}
 	anchorBranch := ctx.Engine.GetBranch(anchorName)
-	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, ctx.Engine.GetBranch(snapshot.AnchorParent)); err != nil {
+	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, ctx.Engine.GetBranch(snapshot.AnchorParent), engine.DivergenceRecompute); err != nil {
 		return fmt.Errorf("failed to restore anchor parent for %s: %w", anchorName, err)
 	}
 	if err := ctx.Engine.SetBranchType(anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
@@ -250,7 +250,6 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*CreateResult, error) {
 			Trunk:             mainCfg.Trunk(),
 			MaxUndoStackDepth: mainCfg.UndoStackDepth(),
 			Git:               mainGit,
-			Writer:            os.Stderr,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create engine for main repo: %w", err)
@@ -425,7 +424,7 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 		}
 	}
 
-	if err := eng.SetParent(ctx.Context, anchorBranch, parentBranch); err != nil {
+	if err := eng.SetParent(ctx.Context, anchorBranch, parentBranch, engine.DivergenceRecompute); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("failed to set parent: %w", err)
 	}

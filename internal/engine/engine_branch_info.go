@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -152,7 +153,7 @@ func (e *engineImpl) PreloadBranchData() {
 // GetRecentTrunkCommits returns the most recent commits on the trunk branch,
 // including any stack trailer metadata embedded in consolidation merge commits.
 func (e *engineImpl) GetRecentTrunkCommits(count int) ([]git.RecentCommit, error) {
-	return e.git.GetRecentCommits(e.trunk, count)
+	return e.git.GetRecentCommits(context.Background(), e.trunk, count)
 }
 
 // GetAllCommits returns commits for a branch in various formats
@@ -187,5 +188,5 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 
 	// Use GetCommitRange directly to handle formatting in-process via go-git,
 	// avoiding per-commit git process spawns.
-	return e.git.GetCommitRange(baseRevision, branchRevision, string(format))
+	return e.git.GetCommitRange(context.Background(), baseRevision, branchRevision, string(format))
 }

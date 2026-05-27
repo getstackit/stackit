@@ -14,9 +14,18 @@ const DefaultRemote = "origin"
 // getRemote returns the configured remote for the current branch, falling
 // back to DefaultRemote. Implemented via `git config --get` — the value is a
 // single string and the call site already accepts a fallback path.
+//
+// A failure to resolve the current branch (e.g. detached HEAD, corrupted
+// repo) is logged at debug level rather than surfaced, because callers want
+// a usable remote name; the debug line is the only breadcrumb when an
+// unhealthy repo masquerades as a clean "branch with no upstream → origin".
 func (r *runner) getRemote() string {
 	branch, err := r.GetCurrentBranch()
-	if err != nil || branch == "" {
+	if err != nil {
+		r.debugLog("getRemote: GetCurrentBranch failed, falling back to %s: %v", DefaultRemote, err)
+		return DefaultRemote
+	}
+	if branch == "" {
 		return DefaultRemote
 	}
 	out, err := r.RunGitCommandWithContext(context.Background(),

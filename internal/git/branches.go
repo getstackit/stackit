@@ -15,8 +15,8 @@ func (r *runner) GetCurrentBranch() (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-func (r *runner) GetAllBranchNames() ([]string, error) {
-	branches, err := r.allBranchHashes()
+func (r *runner) GetAllBranchNames(ctx context.Context) ([]string, error) {
+	branches, err := r.allBranchHashes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -189,8 +189,8 @@ func (r *runner) GetMergedBranches(ctx context.Context, target string) (map[stri
 
 // allBranchHashes returns a map of local branch name → SHA via a single
 // `git for-each-ref` invocation.
-func (r *runner) allBranchHashes() (map[string]string, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(),
+func (r *runner) allBranchHashes(ctx context.Context) (map[string]string, error) {
+	out, err := r.RunGitCommandWithContext(ctx,
 		"for-each-ref",
 		"--format=%(refname:short)%00%(objectname)",
 		"refs/heads/",

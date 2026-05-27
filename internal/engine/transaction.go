@@ -203,7 +203,7 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 		for i, branch := range metaBranches {
 			metas[i] = tx.metaUpdates[branch]
 		}
-		shas, err := tx.eng.git.WriteMetadataBlobsBatch(metas)
+		shas, err := tx.eng.git.WriteMetadataBlobsBatch(ctx, metas)
 		if err != nil {
 			return fmt.Errorf("write meta blobs: %w", err)
 		}
@@ -228,7 +228,7 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 		for i, branch := range localBranches {
 			metas[i] = tx.localUpdates[branch]
 		}
-		shas, err := tx.eng.git.WriteLocalMetadataBlobsBatch(metas)
+		shas, err := tx.eng.git.WriteLocalMetadataBlobsBatch(ctx, metas)
 		if err != nil {
 			return fmt.Errorf("write local meta blobs: %w", err)
 		}

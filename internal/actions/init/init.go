@@ -35,7 +35,7 @@ func Action(ctx context.Context, repoRoot string, opts Options, handler Handler)
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	branchNames, err := runner.GetAllBranchNames()
+	branchNames, err := runner.GetAllBranchNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}

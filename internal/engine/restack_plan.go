@@ -150,19 +150,19 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 
 	if oldParentRev != "" {
-		isAncestor, err := e.git.IsAncestor(oldParentRev, branchName)
+		isAncestor, err := e.git.IsAncestor(ctx, oldParentRev, branchName)
 		if err != nil {
 			isAncestor = false
 		}
 		if !isAncestor {
-			mergeBase, err := e.git.GetMergeBase(branchName, parentName)
+			mergeBase, err := e.git.GetMergeBase(ctx, branchName, parentName)
 			if err != nil {
 				return item, false
 			}
 			oldParentRev = mergeBase
 		}
 	} else {
-		mergeBase, err := e.git.GetMergeBase(branchName, parentName)
+		mergeBase, err := e.git.GetMergeBase(ctx, branchName, parentName)
 		if err != nil {
 			return item, false
 		}

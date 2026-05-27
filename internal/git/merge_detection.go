@@ -90,7 +90,7 @@ func (r *runner) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 
 func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool, error) {
 	// Get merge base
-	mergeBase, err := r.GetMergeBase(branchName, target)
+	mergeBase, err := r.GetMergeBase(ctx, branchName, target)
 	if err != nil {
 		return false, fmt.Errorf("failed to get merge base: %w", err)
 	}
@@ -113,7 +113,7 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 	if err != nil {
 		// If cherry fails, fall back to simpler check
 		// Check if branch tip is reachable from trunk
-		return r.IsAncestor(branchRev, target)
+		return r.IsAncestor(ctx, branchRev, target)
 	}
 
 	// If cherry output is empty or all lines start with '-', branch is merged

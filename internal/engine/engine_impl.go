@@ -245,7 +245,7 @@ func NewEngine(opts Options) (Engine, error) {
 // loadBranchList populates only e.state.branches via a single GetAllBranchNames
 // call. Used by lighter LoadModes that defer metadata reads.
 func (e *engineImpl) loadBranchList() error {
-	branches, err := e.git.GetAllBranchNames()
+	branches, err := e.git.GetAllBranchNames(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}

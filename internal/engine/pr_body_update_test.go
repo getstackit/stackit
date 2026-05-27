@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		require.Empty(t, needsUpdate)
 
 		// Mark branch as needing update
-		err := eng.BatchMarkNeedsPRBodyUpdate([]string{"feature"})
+		err := eng.BatchMarkNeedsPRBodyUpdate(context.Background(), []string{"feature"})
 		require.NoError(t, err)
 
 		// Now it should be in the list
@@ -42,7 +43,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		eng := s.Engine
 
 		// Mark and then clear
-		err := eng.BatchMarkNeedsPRBodyUpdate([]string{"feature"})
+		err := eng.BatchMarkNeedsPRBodyUpdate(context.Background(), []string{"feature"})
 		require.NoError(t, err)
 
 		err = eng.ClearNeedsPRBodyUpdate("feature")
@@ -77,7 +78,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		eng := s.Engine
 
 		// Mark branch
-		err := eng.BatchMarkNeedsPRBodyUpdate([]string{"feature"})
+		err := eng.BatchMarkNeedsPRBodyUpdate(context.Background(), []string{"feature"})
 		require.NoError(t, err)
 
 		// Rebuild engine to simulate fresh state
@@ -103,7 +104,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		eng := s.Engine
 
 		// Mark only feature-a
-		err := eng.BatchMarkNeedsPRBodyUpdate([]string{"feature-a"})
+		err := eng.BatchMarkNeedsPRBodyUpdate(context.Background(), []string{"feature-a"})
 		require.NoError(t, err)
 
 		needsUpdate := eng.GetBranchesNeedingPRBodyUpdate()
@@ -111,7 +112,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		require.NotContains(t, needsUpdate, "feature-b")
 
 		// Mark feature-b too
-		err = eng.BatchMarkNeedsPRBodyUpdate([]string{"feature-b"})
+		err = eng.BatchMarkNeedsPRBodyUpdate(context.Background(), []string{"feature-b"})
 		require.NoError(t, err)
 
 		needsUpdate = eng.GetBranchesNeedingPRBodyUpdate()
@@ -141,7 +142,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 		eng := s.Engine
 
 		// Mark both at once
-		err := eng.BatchMarkNeedsPRBodyUpdate([]string{"feature-a", "feature-b"})
+		err := eng.BatchMarkNeedsPRBodyUpdate(context.Background(), []string{"feature-a", "feature-b"})
 		require.NoError(t, err)
 
 		needsUpdate := eng.GetBranchesNeedingPRBodyUpdate()
@@ -155,10 +156,10 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 
 		eng := s.Engine
 
-		err := eng.BatchMarkNeedsPRBodyUpdate([]string{})
+		err := eng.BatchMarkNeedsPRBodyUpdate(context.Background(), []string{})
 		require.NoError(t, err)
 
-		err = eng.BatchMarkNeedsPRBodyUpdate(nil)
+		err = eng.BatchMarkNeedsPRBodyUpdate(context.Background(), nil)
 		require.NoError(t, err)
 	})
 }

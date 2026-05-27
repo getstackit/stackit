@@ -286,7 +286,7 @@ func (e *engineImpl) GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, e
 	// They differ, compute common ancestor to determine relation
 	remote := e.git.GetRemote()
 	remoteBranchRef := "refs/remotes/" + remote + "/" + branchName
-	commonAncestor, err := e.git.GetMergeBaseByRef(branchName, remoteBranchRef)
+	commonAncestor, err := e.git.GetMergeBaseByRef(context.Background(), branchName, remoteBranchRef)
 	if err == nil {
 		status.CommonAncestor = commonAncestor
 	}

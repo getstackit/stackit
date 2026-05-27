@@ -184,7 +184,7 @@ func (e *engineImpl) DetachAndResetBranchChanges(ctx context.Context, branchName
 	}
 
 	// Get the merge base between this branch and its parent
-	mergeBase, err := e.git.GetMergeBase(branchName, parentBranchName)
+	mergeBase, err := e.git.GetMergeBase(ctx, branchName, parentBranchName)
 	if err != nil {
 		return fmt.Errorf("failed to get merge base: %w", err)
 	}

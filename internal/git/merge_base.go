@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-func (r *runner) getMergeBaseByRef(ref1Name, ref2Name string) (string, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(), "merge-base", ref1Name, ref2Name)
+func (r *runner) getMergeBaseByRef(ctx context.Context, ref1Name, ref2Name string) (string, error) {
+	out, err := r.RunGitCommandWithContext(ctx, "merge-base", ref1Name, ref2Name)
 	if err != nil {
 		return "", fmt.Errorf("failed to find merge base of %s and %s: %w", ref1Name, ref2Name, err)
 	}
@@ -20,8 +20,8 @@ func (r *runner) getMergeBaseByRef(ref1Name, ref2Name string) (string, error) {
 	return sha, nil
 }
 
-func (r *runner) isAncestor(ancestor, descendant string) (bool, error) {
-	_, err := r.RunGitCommandWithContext(context.Background(), "merge-base", "--is-ancestor", ancestor, descendant)
+func (r *runner) isAncestor(ctx context.Context, ancestor, descendant string) (bool, error) {
+	_, err := r.RunGitCommandWithContext(ctx, "merge-base", "--is-ancestor", ancestor, descendant)
 	if err == nil {
 		return true, nil
 	}

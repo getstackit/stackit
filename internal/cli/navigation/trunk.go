@@ -62,7 +62,7 @@ func handleAddTrunk(ctx *app.Context, trunkName string) error {
 	runner := ctx.Git()
 	repoRoot := ctx.RepoRoot
 	// Verify the branch exists
-	branches, err := runner.GetAllBranchNames()
+	branches, err := runner.GetAllBranchNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}

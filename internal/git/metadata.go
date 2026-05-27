@@ -352,7 +352,7 @@ func (r *runner) ListMetadata() (map[string]string, error) {
 // in one `git hash-object` invocation via CreateBlobsBatch. Returns SHAs in
 // input order. Does NOT update any refs — callers (transaction commit,
 // BatchMarkNeedsPRBodyUpdate) pair the SHAs with ref updates afterwards.
-func (r *runner) WriteMetadataBlobsBatch(metas []*Meta) ([]string, error) {
+func (r *runner) WriteMetadataBlobsBatch(ctx context.Context, metas []*Meta) ([]string, error) {
 	if len(metas) == 0 {
 		return nil, nil
 	}
@@ -364,7 +364,7 @@ func (r *runner) WriteMetadataBlobsBatch(metas []*Meta) ([]string, error) {
 		}
 		contents[i] = string(jsonData)
 	}
-	shas, err := r.CreateBlobsBatch(contents)
+	shas, err := r.CreateBlobsBatch(ctx, contents)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metadata blobs: %w", err)
 	}
@@ -373,7 +373,7 @@ func (r *runner) WriteMetadataBlobsBatch(metas []*Meta) ([]string, error) {
 
 // WriteLocalMetadataBlobsBatch is the LocalMeta counterpart to
 // WriteMetadataBlobsBatch.
-func (r *runner) WriteLocalMetadataBlobsBatch(metas []*LocalMeta) ([]string, error) {
+func (r *runner) WriteLocalMetadataBlobsBatch(ctx context.Context, metas []*LocalMeta) ([]string, error) {
 	if len(metas) == 0 {
 		return nil, nil
 	}
@@ -385,7 +385,7 @@ func (r *runner) WriteLocalMetadataBlobsBatch(metas []*LocalMeta) ([]string, err
 		}
 		contents[i] = string(jsonData)
 	}
-	shas, err := r.CreateBlobsBatch(contents)
+	shas, err := r.CreateBlobsBatch(ctx, contents)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create local metadata blobs: %w", err)
 	}

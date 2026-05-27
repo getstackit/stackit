@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"iter"
@@ -196,30 +197,24 @@ func (e *engineImpl) SortBranchesTopologically(branches Branches) Branches {
 		return branches
 	}
 
-	// Build a full graph once and sort by computed depth, then name for stability.
+	// Build the graph once and pre-compute each branch's depth to avoid
+	// repeated lookups inside the sort comparator (O(n²) → O(n log n)).
 	graph := e.Graph(SortStrategyAlphabetical)
-	result := make(Branches, len(branches))
-	copy(result, branches)
-	for i := 0; i < len(result)-1; i++ {
-		for j := i + 1; j < len(result); j++ {
-			left := graph.GetNode(result[i].GetName())
-			right := graph.GetNode(result[j].GetName())
-			leftDepth := 0
-			rightDepth := 0
-			if left != nil {
-				leftDepth = left.Depth
-			}
-			if right != nil {
-				rightDepth = right.Depth
-			}
-
-			swap := leftDepth > rightDepth ||
-				(leftDepth == rightDepth && result[i].GetName() > result[j].GetName())
-			if swap {
-				result[i], result[j] = result[j], result[i]
-			}
+	depth := make(map[string]int, len(branches))
+	for _, b := range branches {
+		if node := graph.GetNode(b.GetName()); node != nil {
+			depth[b.GetName()] = node.Depth
 		}
 	}
+
+	result := make([]Branch, len(branches))
+	copy(result, branches)
+	slices.SortFunc(result, func(a, b Branch) int {
+		if c := cmp.Compare(depth[a.GetName()], depth[b.GetName()]); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.GetName(), b.GetName())
+	})
 
 	return result
 }

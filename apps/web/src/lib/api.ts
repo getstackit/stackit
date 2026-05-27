@@ -2,6 +2,12 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
+// CSRF_HEADER must be sent on every non-safe request. The server doesn't
+// inspect the value, only the header's presence — see
+// internal/api/auth/middleware.go (RequireCSRFHeader).
+const CSRF_HEADER = "X-Stackit-CSRF";
+const CSRF_HEADER_VALUE = "1";
+
 // --- Response Types (matching Go API types) ---
 
 export interface RepoResponse {
@@ -175,6 +181,7 @@ export async function logout(): Promise<void> {
   const res = await fetch(`${API_BASE}/auth/logout`, {
     method: "POST",
     credentials: "include",
+    headers: { [CSRF_HEADER]: CSRF_HEADER_VALUE },
   });
   if (!res.ok && res.status !== 204) {
     throw new Error(`logout failed: ${res.status}`);
@@ -260,7 +267,11 @@ export interface SubmitResponse {
 export async function submitStack(repoId: string, rootBranch: string): Promise<SubmitResponse> {
   const res = await fetch(
     `${API_BASE}${repoPath(repoId, `stacks/${encodeURIComponent(rootBranch)}/submit`)}`,
-    { method: "POST", credentials: "include" }
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { [CSRF_HEADER]: CSRF_HEADER_VALUE },
+    }
   );
   if (res.status === 401) {
     throw new UnauthorizedError();

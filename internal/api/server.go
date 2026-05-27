@@ -111,6 +111,10 @@ func (s *Server) Start() error {
 	if s.config.Auth != nil {
 		protectedAPI = auth.RequireSession(s.config.Auth.SessionStore, apiMux)
 	}
+	// CSRF header check wraps protectedAPI so it covers POST /submit. Safe
+	// methods (GET/HEAD/OPTIONS) pass through untouched, so the read API
+	// is unaffected.
+	protectedAPI = auth.RequireCSRFHeader(protectedAPI)
 
 	authMux := http.NewServeMux()
 	if s.config.Auth != nil {
@@ -120,6 +124,10 @@ func (s *Server) Start() error {
 		authMux.HandleFunc("POST /auth/logout", h.LogoutHandler)
 		authMux.HandleFunc("GET /auth/me", h.MeHandler)
 	}
+	// /auth/logout is a POST and needs the same CSRF gate as /api/*.
+	// Login and callback are GETs and pass through. The CSRF middleware
+	// short-circuits safe methods so wrapping the whole mux is fine.
+	authHandler := auth.RequireCSRFHeader(http.Handler(authMux))
 
 	webHandler := newStaticHandler(s.config.StaticFS)
 	root := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +137,7 @@ func (s *Server) Start() error {
 		}
 
 		if s.config.Auth != nil && strings.HasPrefix(r.URL.Path, "/auth/") {
-			authMux.ServeHTTP(w, r)
+			authHandler.ServeHTTP(w, r)
 			return
 		}
 

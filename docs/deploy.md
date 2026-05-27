@@ -108,7 +108,7 @@ The container is safe to run on a public hostname **only** behind:
    and creates PRs using the container's GitHub credentials.
 
 Built-in security controls (the server hardening pass that lands with
-this doc revision):
+this doc revision and follow-on PRs):
 
 - Process runs as the unprivileged `stackit` user (uid 10001) inside the
   container — neither user nor group is `root`.
@@ -125,6 +125,26 @@ this doc revision):
 - CORS allowlist is exact-match; no implicit loopback bypass.
 - Branch names supplied via path/query are validated against the same
   rules `stackit` enforces locally before reaching git.
+- GitHub OAuth gate via `STACKIT_GITHUB_*` + an allowlist. Every
+  `/api/*` route requires a valid session; the user's access token is
+  stored AES-GCM-encrypted at rest in the session store.
+- CSRF gate on every non-safe HTTP method: the server requires a
+  `X-Stackit-CSRF: 1` request header on POST/PUT/PATCH/DELETE. The
+  web app sends it automatically; scripts and direct API callers must
+  include it.
+
+### Calling the API from scripts
+
+```bash
+# Establish a session via your browser first; copy the stackit_session
+# cookie into the call, then add the CSRF header for mutating requests.
+curl https://stackit.example.com/api/v1/repos \
+  -H "Cookie: stackit_session=$STACKIT_SESSION"
+
+curl -X POST https://stackit.example.com/api/v1/repos/default/stacks/main/submit \
+  -H "Cookie: stackit_session=$STACKIT_SESSION" \
+  -H "X-Stackit-CSRF: 1"
+```
 
 ## Local smoke test
 

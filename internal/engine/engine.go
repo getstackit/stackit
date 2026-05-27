@@ -15,7 +15,6 @@ package engine
 
 import (
 	"context"
-	"io"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -150,10 +149,6 @@ type Options struct {
 
 	// Git is the git runner to use. If nil, a default real git runner is used.
 	Git git.Runner
-
-	// Writer is the output writer for warnings and informational messages.
-	// If nil, os.Stderr is used.
-	Writer io.Writer
 
 	// LoadMode controls how much metadata is read at construction time.
 	// Zero value (LoadModeFull) matches the pre-lite behavior — readers see

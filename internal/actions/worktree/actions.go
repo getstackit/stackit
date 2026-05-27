@@ -250,7 +250,6 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*CreateResult, error) {
 			Trunk:             mainCfg.Trunk(),
 			MaxUndoStackDepth: mainCfg.UndoStackDepth(),
 			Git:               mainGit,
-			Writer:            os.Stderr,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create engine for main repo: %w", err)

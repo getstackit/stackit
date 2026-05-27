@@ -103,15 +103,11 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 		}
 	}
 
-	// Delete metadata
-	if err := e.git.DeleteMetadata(ctx, branchName); err != nil {
-		_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete metadata ref for %s: %v\n", branchName, err)
-	}
-
-	// Delete local metadata
-	if err := e.git.DeleteRef(ctx, fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, branchName)); err != nil {
-		_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete local metadata ref for %s: %v\n", branchName, err)
-	}
+	// Best-effort metadata cleanup. The branch ref is already gone, so any
+	// remaining metadata refs are orphans that `sync` reconciles later — no
+	// user-actionable signal here.
+	_ = e.git.DeleteMetadata(ctx, branchName)
+	_ = e.git.DeleteRef(ctx, fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, branchName))
 
 	// Reparent children to grandparent, preserving divergence points so
 	// children don't carry the deleted branch's commits after restacking.
@@ -336,20 +332,15 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 		return err
 	}
 
-	// Rename metadata ref
-	if err := e.git.RenameMetadata(oldName, newName); err != nil {
-		// Log but continue if metadata rename fails
-		_, _ = fmt.Fprintf(e.writer, "Warning: failed to rename metadata ref: %v\n", err)
-	}
+	// Best-effort metadata-ref rename. The branch rename already succeeded;
+	// orphaned refs are reconciled by `sync`.
+	_ = e.git.RenameMetadata(oldName, newName)
 
-	// Rename local metadata ref
 	oldLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, oldName)
 	newLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, newName)
 	if sha, err := e.git.GetRef(oldLocalRef); err == nil {
-		if err := e.git.UpdateRef(newLocalRef, sha); err != nil {
-			_, _ = fmt.Fprintf(e.writer, "Warning: failed to update new local metadata ref: %v\n", err)
-		} else if err := e.git.DeleteRef(ctx, oldLocalRef); err != nil {
-			_, _ = fmt.Fprintf(e.writer, "Warning: failed to delete old local metadata ref: %v\n", err)
+		if updateErr := e.git.UpdateRef(newLocalRef, sha); updateErr == nil {
+			_ = e.git.DeleteRef(ctx, oldLocalRef)
 		}
 	}
 

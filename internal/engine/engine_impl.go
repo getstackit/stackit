@@ -3,9 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
-	"io"
 	"maps"
-	"os"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -23,7 +21,6 @@ type engineImpl struct {
 	maxUndoStackDepth int
 	maxConcurrency    int
 	git               git.Runner
-	writer            io.Writer
 	mu                sync.RWMutex
 	worktreeMu        sync.Mutex // serializes worktree add/remove/prune to avoid git races on .git/worktrees/
 
@@ -114,9 +111,6 @@ type WorktreeEngineOptions struct {
 
 	// Snapshot is the parent engine's state snapshot.
 	Snapshot WorktreeSnapshot
-
-	// Writer is the output writer for warnings. If nil, os.Stderr is used.
-	Writer io.Writer
 }
 
 // NewEngineForWorktree creates an engine for a worktree session using a snapshot
@@ -127,11 +121,6 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 
 	if err := g.InitDefaultRepo(); err != nil {
 		return nil, fmt.Errorf("failed to initialize worktree git repository: %w", err)
-	}
-
-	writer := opts.Writer
-	if writer == nil {
-		writer = os.Stderr
 	}
 
 	// Sort children for deterministic traversal (snapshot should already be sorted,
@@ -148,7 +137,6 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 		maxUndoStackDepth: 0, // No undo in temporary worktrees
 		maxConcurrency:    opts.Snapshot.MaxConcurrency,
 		git:               g,
-		writer:            writer,
 	}
 
 	// Get current branch (1 cheap git call — needed for worktree's HEAD)
@@ -190,11 +178,6 @@ func NewEngine(opts Options) (Engine, error) {
 		maxDepth = DefaultMaxUndoStackDepth
 	}
 
-	writer := opts.Writer
-	if writer == nil {
-		writer = os.Stderr
-	}
-
 	e := &engineImpl{
 		repoRoot:          opts.RepoRoot,
 		trunk:             opts.Trunk,
@@ -203,7 +186,6 @@ func NewEngine(opts Options) (Engine, error) {
 		maxUndoStackDepth: maxDepth,
 		maxConcurrency:    opts.MaxConcurrency,
 		git:               g,
-		writer:            writer,
 	}
 
 	currentBranch, err := g.GetCurrentBranch()

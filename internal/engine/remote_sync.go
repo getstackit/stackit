@@ -498,20 +498,3 @@ func (e *engineImpl) FetchRemoteMetadata(ctx context.Context) error {
 func (e *engineImpl) ConfigureRemoteMetadataSync(_ context.Context) error {
 	return e.git.EnsureMetadataRefspecConfigured()
 }
-
-// GetStackIDsForBranches returns the unique stack IDs for the given branches.
-// This is used to determine which stack refs need to be pushed to remote.
-func (e *engineImpl) GetStackIDsForBranches(branches Branches) []string {
-	seen := make(map[string]bool)
-	var stackIDs []string
-
-	for _, branch := range branches {
-		stackID := e.GetStackID(branch)
-		if stackID != "" && !seen[stackID] {
-			seen[stackID] = true
-			stackIDs = append(stackIDs, stackID)
-		}
-	}
-
-	return stackIDs
-}

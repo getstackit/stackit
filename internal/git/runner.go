@@ -479,7 +479,11 @@ func (r *runner) ensureRepo() error {
 
 	dir := r.repoRoot
 	if dir == "" {
-		dir, _ = os.Getwd()
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("not a git repository: failed to resolve working directory: %w", err)
+		}
+		dir = wd
 	}
 
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")

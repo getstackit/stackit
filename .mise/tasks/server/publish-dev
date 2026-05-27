@@ -30,19 +30,29 @@ command -v docker >/dev/null    || die "docker not on PATH"
 command -v goreleaser >/dev/null || die "goreleaser not on PATH (mise should install it)"
 command -v jq >/dev/null         || die "jq not on PATH"
 
-# Verify we can push to GHCR before spending 90s on a build.
-if ! docker buildx imagetools inspect "$IMAGE:latest" >/dev/null 2>&1; then
-  if ! grep -q '"ghcr.io"' "${HOME}/.docker/config.json" 2>/dev/null; then
-    warn "Not logged into ghcr.io — attempting via 'gh auth token'."
-    if command -v gh >/dev/null && gh auth token >/dev/null 2>&1; then
-      gh auth token | docker login ghcr.io \
-        -u "$(gh api user --jq .login)" --password-stdin
-    else
-      die "Login to ghcr.io first. Run: gh auth refresh -s write:packages,read:packages && \\
-       echo \$(gh auth token) | docker login ghcr.io -u \$(gh api user --jq .login) --password-stdin"
-    fi
-  fi
-fi
+# Auth to ghcr.io before spending 90s on a build. We always reset the
+# docker credential here because cached creds from a prior login with
+# narrower scopes (e.g. missing write:packages) succeed at login time but
+# fail at push time — leading to wasted builds. Pulling a fresh token from
+# `gh auth` and re-logging in every run avoids that footgun.
+command -v gh >/dev/null \
+  || die "gh CLI not on PATH (used to mint a ghcr.io token)"
+gh auth token >/dev/null 2>&1 \
+  || die "gh CLI not logged in. Run: gh auth login"
+
+scopes="$(gh auth status 2>&1 | sed -n 's/.*Token scopes: //p')"
+case "$scopes" in
+  *"write:packages"*) ;;
+  *)
+    die "gh token is missing the 'write:packages' scope (got: ${scopes:-none}).
+       Run: gh auth refresh -s write:packages,read:packages"
+    ;;
+esac
+
+log "Logging into ghcr.io with current gh token"
+docker logout ghcr.io >/dev/null 2>&1 || true
+gh auth token | docker login ghcr.io \
+  -u "$(gh api user --jq .login)" --password-stdin >/dev/null
 
 if [ "$SKIP_BUILD" != "1" ]; then
   log "Building snapshot images (multi-arch, this takes a few minutes)..."

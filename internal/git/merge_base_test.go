@@ -31,7 +31,7 @@ func TestIsAncestor(t *testing.T) {
 		require.NoError(t, err)
 
 		// Initial should be ancestor of second
-		isAncestor, err := runner.IsAncestor(initialSha, secondSha)
+		isAncestor, err := runner.IsAncestor(context.Background(), initialSha, secondSha)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "initial commit should be ancestor of second commit")
 	})
@@ -54,7 +54,7 @@ func TestIsAncestor(t *testing.T) {
 		require.NoError(t, err)
 
 		// Second should NOT be ancestor of initial
-		isAncestor, err := runner.IsAncestor(secondSha, initialSha)
+		isAncestor, err := runner.IsAncestor(context.Background(), secondSha, initialSha)
 		require.NoError(t, err)
 		require.False(t, isAncestor, "second commit should not be ancestor of initial commit")
 	})
@@ -70,7 +70,7 @@ func TestIsAncestor(t *testing.T) {
 		require.NoError(t, err)
 
 		// Same commit should be considered its own ancestor
-		isAncestor, err := runner.IsAncestor(sha, sha)
+		isAncestor, err := runner.IsAncestor(context.Background(), sha, sha)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "commit should be its own ancestor")
 	})
@@ -124,12 +124,12 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// 6. Test IsAncestor with the newly fetched commit
-		isAncestor, err := runner.IsAncestor(initialSha, newSha)
+		isAncestor, err := runner.IsAncestor(context.Background(), initialSha, newSha)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "initial should be ancestor of new commit after fetch")
 
 		// Also verify the reverse is false
-		isAncestor, err = runner.IsAncestor(newSha, initialSha)
+		isAncestor, err = runner.IsAncestor(context.Background(), newSha, initialSha)
 		require.NoError(t, err)
 		require.False(t, isAncestor, "new commit should not be ancestor of initial")
 	})
@@ -165,20 +165,20 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Neither should be ancestor of the other (diverged)
-		isAncestor, err := runner.IsAncestor(shaA, shaB)
+		isAncestor, err := runner.IsAncestor(context.Background(), shaA, shaB)
 		require.NoError(t, err)
 		require.False(t, isAncestor, "diverged commit A should not be ancestor of B")
 
-		isAncestor, err = runner.IsAncestor(shaB, shaA)
+		isAncestor, err = runner.IsAncestor(context.Background(), shaB, shaA)
 		require.NoError(t, err)
 		require.False(t, isAncestor, "diverged commit B should not be ancestor of A")
 
 		// But initial should be ancestor of both
-		isAncestor, err = runner.IsAncestor(initialSha, shaA)
+		isAncestor, err = runner.IsAncestor(context.Background(), initialSha, shaA)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "initial should be ancestor of A")
 
-		isAncestor, err = runner.IsAncestor(initialSha, shaB)
+		isAncestor, err = runner.IsAncestor(context.Background(), initialSha, shaB)
 		require.NoError(t, err)
 		require.True(t, isAncestor, "initial should be ancestor of B")
 	})

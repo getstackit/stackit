@@ -92,8 +92,8 @@ func (e *engineImpl) GetUntrackedFileHunks(ctx context.Context) ([]git.Hunk, err
 }
 
 // GetMergeBase returns the merge base between two revisions
-func (e *engineImpl) GetMergeBase(rev1, rev2 string) (string, error) {
-	return e.git.GetMergeBase(rev1, rev2)
+func (e *engineImpl) GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error) {
+	return e.git.GetMergeBase(ctx, rev1, rev2)
 }
 
 // IsDiffEmpty checks if the diff between base and head is empty
@@ -183,8 +183,8 @@ func (e *engineImpl) GetCommitSHA(branchName string, offset int) (string, error)
 }
 
 // IsAncestor checks if one commit is an ancestor of another
-func (e *engineImpl) IsAncestor(ancestor, descendant string) (bool, error) {
-	return e.git.IsAncestor(ancestor, descendant)
+func (e *engineImpl) IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error) {
+	return e.git.IsAncestor(ctx, ancestor, descendant)
 }
 
 // IsRebaseInProgress checks if a rebase is in progress

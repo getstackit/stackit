@@ -107,7 +107,7 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 	branchExists := slices.Contains(e.state.branches, branchName)
 	if !branchExists {
 		// Refresh branches list
-		branches, err := e.git.GetAllBranchNames()
+		branches, err := e.git.GetAllBranchNames(ctx)
 		if err != nil {
 			e.mu.Unlock()
 			return fmt.Errorf("failed to get branches: %w", err)
@@ -125,7 +125,7 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 		parentExists := slices.Contains(e.state.branches, parentBranchName)
 		if !parentExists {
 			// Refresh branches list to check again
-			branches, err := e.git.GetAllBranchNames()
+			branches, err := e.git.GetAllBranchNames(ctx)
 			if err != nil {
 				e.mu.Unlock()
 				return fmt.Errorf("failed to get branches: %w", err)
@@ -419,7 +419,7 @@ func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch 
 
 	return e.WithRetry(ctx, func() error {
 		// Get new parent revision (may run multiple times on retry)
-		parentRev, err := e.git.GetMergeBase(branchName, parentBranchName)
+		parentRev, err := e.git.GetMergeBase(ctx, branchName, parentBranchName)
 		if err != nil {
 			return fmt.Errorf("failed to get merge base: %w", err)
 		}
@@ -441,7 +441,7 @@ func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch 
 		shouldUpdateRevision := true
 		if oldParent != "" && oldParent != parentBranchName && meta.GetParentBranchRevision() != nil && *meta.GetParentBranchRevision() != "" {
 			// Check if existing revision is still a valid ancestor of the branch
-			if isAncestor, _ := e.git.IsAncestor(*meta.GetParentBranchRevision(), branchName); isAncestor {
+			if isAncestor, _ := e.git.IsAncestor(ctx, *meta.GetParentBranchRevision(), branchName); isAncestor {
 				// Check if the old parent was merged into the new parent (the "merge" case)
 				if merged, _ := e.git.IsMerged(ctx, oldParent, parentBranchName); merged {
 					shouldUpdateRevision = false
@@ -504,7 +504,7 @@ func (e *engineImpl) setParentPreservingDivergence(ctx context.Context, branch B
 
 	// Set the correct divergence point so restacking replays only this
 	// branch's commits, not commits from the old parent.
-	isAncestor, err := e.git.IsAncestor(oldDivergencePoint, branch.GetName())
+	isAncestor, err := e.git.IsAncestor(ctx, oldDivergencePoint, branch.GetName())
 	if err != nil {
 		return fmt.Errorf("failed to check ancestry of divergence point %s for %s: %w", oldDivergencePoint, branch.GetName(), err)
 	}

@@ -89,7 +89,7 @@ func BenchmarkGetRecentCommits(b *testing.B) {
 		b.Run(fmt.Sprintf("count=%d", count), func(b *testing.B) {
 			br := newBenchRepo(b, count+5, 0)
 			for b.Loop() {
-				if _, err := br.runner.GetRecentCommits("main", count); err != nil {
+				if _, err := br.runner.GetRecentCommits(context.Background(), "main", count); err != nil {
 					b.Fatalf("GetRecentCommits: %v", err)
 				}
 			}
@@ -158,7 +158,7 @@ func BenchmarkLoadAllBranchRevisions(b *testing.B) {
 func BenchmarkGetMergeBase(b *testing.B) {
 	br := newBenchRepo(b, 30, 2)
 	for b.Loop() {
-		if _, err := br.runner.GetMergeBase("branch-0", "branch-1"); err != nil {
+		if _, err := br.runner.GetMergeBase(context.Background(), "branch-0", "branch-1"); err != nil {
 			b.Fatalf("GetMergeBase: %v", err)
 		}
 	}
@@ -177,7 +177,7 @@ func BenchmarkIsAncestor(b *testing.B) {
 		b.Fatalf("resolve descendant sha: %v", err)
 	}
 	for b.Loop() {
-		if _, err := br.runner.IsAncestor(ancestorSHA, descendantSHA); err != nil {
+		if _, err := br.runner.IsAncestor(context.Background(), ancestorSHA, descendantSHA); err != nil {
 			b.Fatalf("IsAncestor: %v", err)
 		}
 	}
@@ -375,7 +375,7 @@ func BenchmarkParallelGetMergeBase(b *testing.B) {
 		for pb.Next() {
 			p := pairs[i%len(pairs)]
 			i++
-			if _, err := br.runner.GetMergeBase(p[0], p[1]); err != nil {
+			if _, err := br.runner.GetMergeBase(context.Background(), p[0], p[1]); err != nil {
 				b.Fatalf("GetMergeBase: %v", err)
 			}
 		}

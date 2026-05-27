@@ -29,7 +29,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 is deleted
-		branches, err := s.Engine.Git().GetAllBranchNames()
+		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch2")
 
@@ -67,7 +67,7 @@ func TestFoldAction(t *testing.T) {
 		require.Equal(t, "branch1", parent.GetName())
 
 		// Verify branch2 is deleted
-		branches, err := s.Engine.Git().GetAllBranchNames()
+		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch2")
 	})
@@ -87,7 +87,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
-		branches, err := s.Engine.Git().GetAllBranchNames()
+		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 
@@ -125,7 +125,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
-		branches, err := s.Engine.Git().GetAllBranchNames()
+		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 
@@ -276,7 +276,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// branch3 should be deleted and branch4 should now be a child of branch2.
-		branches, err := s.Engine.Git().GetAllBranchNames()
+		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch3")
 		require.Equal(t, "branch2", s.Engine.GetBranch("branch4").GetParent().GetName())
@@ -402,7 +402,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 is deleted and we're on branch1
-		branches, _ := s.Engine.Git().GetAllBranchNames()
+		branches, _ := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NotContains(t, branches, "branch2")
 		current, _ := s.Scene.Repo.CurrentBranchName()
 		require.Equal(t, "branch1", current)
@@ -468,7 +468,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch1 is deleted
-		branches, _ := s.Engine.Git().GetAllBranchNames()
+		branches, _ := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NotContains(t, branches, "branch1")
 
 		// Verify we're on main
@@ -569,7 +569,7 @@ func TestFoldAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 still exists
-		branches, err := s.Engine.Git().GetAllBranchNames()
+		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.Contains(t, branches, "branch2")
 

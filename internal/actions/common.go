@@ -520,7 +520,7 @@ func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 			}
 
 			// Parent exists - verify they have a common ancestor
-			_, err = ctx.Engine.Git().GetMergeBase(parentRev, branchRev)
+			_, err = ctx.Engine.Git().GetMergeBase(ctx.Context, parentRev, branchRev)
 			if err != nil {
 				return fmt.Errorf("branch %s and parent %s have no common ancestor: %w",
 					branchName, parentName, err)

@@ -11,7 +11,7 @@ import (
 // checkStackState performs stack state and metadata integrity checks
 func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, warnings int, errors int, fix bool) (int, int) {
 	// Get all branches
-	allBranches, err := eng.Git().GetAllBranchNames()
+	allBranches, err := eng.Git().GetAllBranchNames(ctx)
 	if err != nil {
 		errors++
 		handler.OnCheck("branch_list", CheckError, fmt.Sprintf("failed to get branch names: %v", err))

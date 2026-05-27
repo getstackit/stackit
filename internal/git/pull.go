@@ -49,7 +49,7 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 	}
 
 	// Check if it's a fast-forward (remote is ahead of local)
-	isRemoteAhead, err := r.IsAncestor(oldRev, remoteRev)
+	isRemoteAhead, err := r.IsAncestor(ctx, oldRev, remoteRev)
 	if err == nil && isRemoteAhead {
 		// Before updating the ref, check if this branch is checked out in another worktree.
 		// update-ref is global and will affect all worktrees, so we need to sync any
@@ -98,7 +98,7 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 	}
 
 	// Check if local is already ahead of remote
-	isLocalAhead, _ := r.IsAncestor(remoteRev, oldRev)
+	isLocalAhead, _ := r.IsAncestor(ctx, remoteRev, oldRev)
 	if isLocalAhead {
 		return PullUnneeded, nil
 	}

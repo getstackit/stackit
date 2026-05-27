@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,7 @@ func TestGetRecentCommits_DuplicateTrailers(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits("main", 1)
+	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 
@@ -47,7 +48,7 @@ func TestGetRecentCommits_WithoutTrailers(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits("main", 1)
+	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 
@@ -83,7 +84,7 @@ func TestGetRecentCommits_MultipleCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits("main", 3)
+	commits, err := runner.GetRecentCommits(context.Background(), "main", 3)
 	require.NoError(t, err)
 	require.Len(t, commits, 3)
 
@@ -116,7 +117,7 @@ func TestGetRecentCommits_ParsesPRNumberSuffix(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits("main", 1)
+	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 	require.Equal(t, 123, commits[0].PRNumber)
@@ -142,7 +143,7 @@ func TestGetRecentCommits_MergeCommitSkipsTrailerSubject(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits("main", 1)
+	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 
@@ -169,7 +170,7 @@ func TestGetRecentCommits_MergeCommitWithTitleBeforeTrailers(t *testing.T) {
 	require.NoError(t, err)
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	commits, err := runner.GetRecentCommits("main", 1)
+	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 

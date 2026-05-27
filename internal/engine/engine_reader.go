@@ -152,7 +152,7 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 	}
 
 	// Get history of the branch we're tracking
-	history, err := e.git.GetCommitHistorySHAs(branchName)
+	history, err := e.git.GetCommitHistorySHAs(ctx, branchName)
 	if err != nil {
 		return nil, err
 	}

@@ -51,7 +51,7 @@ const commitFieldSep = "\x1f"
 // The underlying transport is `git log -z` so commit bodies (which may contain
 // newlines) round-trip safely. Fields within a record are separated by US
 // (0x1f); records by NUL.
-func (r *runner) GetRecentCommits(branchName string, count int) ([]RecentCommit, error) {
+func (r *runner) GetRecentCommits(ctx context.Context, branchName string, count int) ([]RecentCommit, error) {
 	if count <= 0 {
 		return nil, nil
 	}
@@ -60,7 +60,7 @@ func (r *runner) GetRecentCommits(branchName string, count int) ([]RecentCommit,
 		"%H", "%an", "%aI", "%B",
 	}, commitFieldSep)
 
-	out, err := r.RunGitCommandRawWithContext(context.Background(),
+	out, err := r.RunGitCommandRawWithContext(ctx,
 		"log",
 		fmt.Sprintf("-n%d", count),
 		"-z",

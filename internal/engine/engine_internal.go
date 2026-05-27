@@ -12,7 +12,7 @@ import (
 // refreshCurrentBranch indicates whether to refresh currentBranch from Git
 func (e *engineImpl) rebuildInternal(refreshCurrentBranch bool) error {
 	// Get all branch names
-	branches, err := e.git.GetAllBranchNames()
+	branches, err := e.git.GetAllBranchNames(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}
@@ -56,7 +56,7 @@ func (e *engineImpl) rebuild() error {
 	e.git.ClearMetadataCache()
 
 	// 1. Get all branch names (slow)
-	branches, err := e.git.GetAllBranchNames()
+	branches, err := e.git.GetAllBranchNames(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}

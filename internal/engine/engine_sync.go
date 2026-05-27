@@ -371,14 +371,14 @@ func (e *engineImpl) restackBranch(
 	// was set to a revision that was never actually an ancestor.
 	// This check MUST run before the early-exit checks to match buildRebaseSpecs behavior.
 	if oldParentRev != "" {
-		if isAncestor, _ := e.git.IsAncestor(oldParentRev, branchName); !isAncestor {
-			if mergeBase, err := e.git.GetMergeBase(branchName, parent); err == nil {
+		if isAncestor, _ := e.git.IsAncestor(ctx, oldParentRev, branchName); !isAncestor {
+			if mergeBase, err := e.git.GetMergeBase(ctx, branchName, parent); err == nil {
 				oldParentRev = mergeBase
 			}
 		}
 	} else {
 		// No old parent revision in metadata, try to find merge base
-		if mergeBase, err := e.git.GetMergeBase(branchName, parent); err == nil {
+		if mergeBase, err := e.git.GetMergeBase(ctx, branchName, parent); err == nil {
 			oldParentRev = mergeBase
 		}
 	}

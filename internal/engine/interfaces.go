@@ -80,12 +80,12 @@ type BranchInfo interface {
 
 // GitDiffer handles diff and merge operations
 type GitDiffer interface {
-	GetMergeBase(rev1, rev2 string) (string, error)
+	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
 	GetChangedFiles(ctx context.Context, base, head string) ([]string, error)
 	IsDiffEmpty(ctx context.Context, base, head string) (bool, error)
 	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
 	ShowCommits(ctx context.Context, base, head string, patch, stat bool) (string, error)
-	IsAncestor(ancestor, descendant string) (bool, error)
+	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
 	// GetDiffBetween returns raw diff between two refs, suitable for parsing into hunks.
 	GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error)
 }

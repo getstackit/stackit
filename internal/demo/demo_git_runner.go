@@ -87,7 +87,7 @@ func (d *demoGitRunner) GetCurrentBranch() (string, error) {
 	return d.currentBranch, nil
 }
 
-func (d *demoGitRunner) GetAllBranchNames() ([]string, error) {
+func (d *demoGitRunner) GetAllBranchNames(_ context.Context) ([]string, error) {
 	names := make([]string, len(d.branches))
 	for i, b := range d.branches {
 		names[i] = b.Name
@@ -176,15 +176,15 @@ func (d *demoGitRunner) LoadAllBranchRevisions() error {
 	return nil
 }
 
-func (d *demoGitRunner) GetMergeBase(_, _ string) (string, error) {
+func (d *demoGitRunner) GetMergeBase(_ context.Context, _, _ string) (string, error) {
 	return "merge-base-sha", nil
 }
 
-func (d *demoGitRunner) GetMergeBaseByRef(_, _ string) (string, error) {
+func (d *demoGitRunner) GetMergeBaseByRef(_ context.Context, _, _ string) (string, error) {
 	return "merge-base-sha", nil
 }
 
-func (d *demoGitRunner) IsAncestor(_, _ string) (bool, error) {
+func (d *demoGitRunner) IsAncestor(_ context.Context, _, _ string) (bool, error) {
 	return true, nil
 }
 
@@ -196,7 +196,7 @@ func (d *demoGitRunner) GetCommitAuthor(_ string) (string, error) {
 	return "Demo User", nil
 }
 
-func (d *demoGitRunner) GetCommitRange(_, _, _ string) ([]string, error) {
+func (d *demoGitRunner) GetCommitRange(_ context.Context, _, _, _ string) ([]string, error) {
 	return []string{"commit message"}, nil
 }
 
@@ -297,11 +297,11 @@ func (d *demoGitRunner) GetReflog(_ context.Context, _ int, _ string) (string, e
 	return "", nil
 }
 
-func (d *demoGitRunner) GetCommitRangeSHAs(_, _ string) ([]string, error) {
+func (d *demoGitRunner) GetCommitRangeSHAs(_ context.Context, _, _ string) ([]string, error) {
 	return []string{"sha1", "sha2"}, nil
 }
 
-func (d *demoGitRunner) GetCommitHistorySHAs(_ string) ([]string, error) {
+func (d *demoGitRunner) GetCommitHistorySHAs(_ context.Context, _ string) ([]string, error) {
 	return []string{"sha1", "sha2"}, nil
 }
 
@@ -425,7 +425,7 @@ func (d *demoGitRunner) GetCommitLog(_, _ string) (string, error) {
 	return "demo commit", nil
 }
 
-func (d *demoGitRunner) GetRecentCommits(_ string, _ int) ([]git.RecentCommit, error) {
+func (d *demoGitRunner) GetRecentCommits(_ context.Context, _ string, _ int) ([]git.RecentCommit, error) {
 	return nil, nil
 }
 

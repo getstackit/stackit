@@ -129,7 +129,7 @@ func benchmarkWideStack(b *testing.B, numBranches int) {
 	setupBenchmark()
 
 	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-	oldBase, _ := s.Engine.Git().GetMergeBase(mainBranch, branchName(0))
+	oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), mainBranch, branchName(0))
 
 	// Build specs
 	specs := make([]engine.RebaseSpec, numBranches)
@@ -174,7 +174,7 @@ func benchmarkLinearStack(b *testing.B, depth int) {
 	setupBenchmark()
 
 	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-	oldBase, _ := s.Engine.Git().GetMergeBase(mainBranch, branchName(0))
+	oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), mainBranch, branchName(0))
 
 	// Build specs for chained rebases
 	specs := make([]engine.RebaseSpec, depth)
@@ -227,7 +227,7 @@ func benchmarkMixedStack(b *testing.B) {
 	setupBenchmark()
 
 	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-	oldBase, _ := s.Engine.Git().GetMergeBase(mainBranch, "feature-a")
+	oldBase, _ := s.Engine.Git().GetMergeBase(context.Background(), mainBranch, "feature-a")
 
 	// Get revisions for chaining
 	featureARev, _ := s.Engine.GetRevision(s.Engine.GetBranch("feature-a"))

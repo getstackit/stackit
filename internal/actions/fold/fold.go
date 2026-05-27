@@ -54,7 +54,7 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 	if err != nil {
 		out.Debug("Failed to get revision for grandparent %s: %v", grandparentName, err)
 		var mbErr error
-		baseRev, mbErr = eng.GetMergeBase(eng.Trunk().GetName(), parent.GetName())
+		baseRev, mbErr = eng.GetMergeBase(ctx, eng.Trunk().GetName(), parent.GetName())
 		if mbErr != nil {
 			out.Debug("Failed to get merge base for %s: %v", parent.GetName(), mbErr)
 		}

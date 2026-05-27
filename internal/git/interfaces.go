@@ -52,7 +52,7 @@ type RemoteOperations interface {
 // BranchReader provides read access to branch information.
 type BranchReader interface {
 	GetCurrentBranch() (string, error)
-	GetAllBranchNames() ([]string, error)
+	GetAllBranchNames(ctx context.Context) ([]string, error)
 	GetCurrentBranchOrSHA(ctx context.Context) (string, error)
 }
 
@@ -80,21 +80,21 @@ type CommitReader interface {
 	LoadAllBranchRevisions() error
 	GetCommitDate(branchName string) (time.Time, error)
 	GetCommitAuthor(branchName string) (string, error)
-	GetCommitRange(base, head, format string) ([]string, error)
-	GetCommitRangeSHAs(base, head string) ([]string, error)
-	GetCommitHistorySHAs(branchName string) ([]string, error)
+	GetCommitRange(ctx context.Context, base, head, format string) ([]string, error)
+	GetCommitRangeSHAs(ctx context.Context, base, head string) ([]string, error)
+	GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetCommitLog(sha, format string) (string, error)
-	GetRecentCommits(branchName string, count int) ([]RecentCommit, error)
+	GetRecentCommits(ctx context.Context, branchName string, count int) ([]RecentCommit, error)
 	GetCommitTemplate(ctx context.Context) (string, error)
 	GetParentCommitSHA(commitSHA string) (string, error)
 }
 
 // DiffOperations provides access to diff and comparison operations.
 type DiffOperations interface {
-	GetMergeBase(rev1, rev2 string) (string, error)
-	GetMergeBaseByRef(ref1, ref2 string) (string, error)
-	IsAncestor(ancestor, descendant string) (bool, error)
+	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
+	GetMergeBaseByRef(ctx context.Context, ref1, ref2 string) (string, error)
+	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
 	IsMerged(ctx context.Context, branchName, target string) (bool, error)
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
 	IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error)

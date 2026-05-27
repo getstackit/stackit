@@ -44,6 +44,18 @@ func run() error {
 	)
 	flag.Parse()
 
+	// Honor $PORT when -port wasn't passed explicitly. PaaS hosts (Railway,
+	// Fly, Heroku) inject the port this way.
+	portExplicit := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "port" {
+			portExplicit = true
+		}
+	})
+	if err := resolvePort(port, portExplicit, os.Getenv("PORT")); err != nil {
+		return err
+	}
+
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		return err

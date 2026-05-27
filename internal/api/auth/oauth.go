@@ -15,6 +15,8 @@ import (
 
 	"golang.org/x/oauth2"
 	githuboauth "golang.org/x/oauth2/github"
+
+	"github.com/getstackit/stackit/internal/api/reqid"
 )
 
 // DefaultScopes is what the OAuth flow requests today. `read:user` gets the
@@ -188,7 +190,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.allow.Check(ctx, user.Login, tok.AccessToken); err != nil {
 		if errors.Is(err, ErrDenied) {
-			log.Printf("auth callback: denied login=%q", user.Login) //nolint:gosec // login is %q-quoted
+			log.Printf("audit action=denied actor=%q request_id=%s", user.Login, reqid.FromContext(ctx)) //nolint:gosec // login is %q-quoted
 			http.Redirect(w, r, h.cfg.DeniedPath, http.StatusFound)
 			return
 		}
@@ -211,7 +213,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	h.cfg.Cookies.clearReturn(w)
 
-	log.Printf("auth: login login=%q user_id=%d -> %s", user.Login, user.ID, target) //nolint:gosec // logged values are quoted/numeric/safe target
+	log.Printf("audit action=login actor=%q user_id=%d target=%s request_id=%s", user.Login, user.ID, target, reqid.FromContext(ctx)) //nolint:gosec // logged values are quoted/numeric/safe target
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
@@ -221,7 +223,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	if cookie := readCookie(r, sessionCookieName); cookie != "" {
 		if sess, ok := h.store.Get(cookie); ok {
-			log.Printf("auth: logout login=%q", sess.GitHubLogin) //nolint:gosec // login is %q-quoted
+			log.Printf("audit action=logout actor=%q request_id=%s", sess.GitHubLogin, reqid.FromContext(r.Context())) //nolint:gosec // login is %q-quoted
 		}
 		h.store.Delete(cookie)
 	}

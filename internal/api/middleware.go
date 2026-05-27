@@ -9,28 +9,23 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/getstackit/stackit/internal/api/reqid"
 )
 
 // requestIDHeader is the response header that carries the per-request ID. The
-// same value is stashed on the request context so handlers and the logger can
-// reference it.
-const requestIDHeader = "X-Request-ID"
+// same value is stashed on the request context (via package reqid) so
+// handlers and the logger can reference it.
+const requestIDHeader = reqid.HeaderName
 
 // maxRequestBodyBytes caps every request body. POST /submit takes no body
 // today; this is defense against runaway uploads against any endpoint.
 const maxRequestBodyBytes = 1 << 20 // 1 MiB
 
-type ctxKey int
-
-const ctxKeyRequestID ctxKey = iota
-
-// RequestIDFromContext returns the request ID associated with the context, or
-// the empty string if none was set.
+// RequestIDFromContext is kept here as a re-export for callers in the api
+// package; handlers in other packages import internal/api/reqid directly.
 func RequestIDFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(ctxKeyRequestID).(string); ok {
-		return v
-	}
-	return ""
+	return reqid.FromContext(ctx)
 }
 
 // recoverMiddleware catches panics in downstream handlers, logs them with a
@@ -63,7 +58,7 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 			rid = newRequestID()
 		}
 		w.Header().Set(requestIDHeader, rid)
-		ctx := context.WithValue(r.Context(), ctxKeyRequestID, rid)
+		ctx := reqid.WithValue(r.Context(), rid)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

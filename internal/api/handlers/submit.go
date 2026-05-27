@@ -3,10 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/api/auth"
 	"github.com/getstackit/stackit/internal/api/registry"
+	"github.com/getstackit/stackit/internal/api/reqid"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
@@ -56,6 +59,15 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !validateBranchName(w, rootBranch) {
 		return
 	}
+
+	// Audit line for a mutating call. "actor" is whichever GitHub login
+	// the session belongs to; unauthenticated submits (only possible
+	// when -auth-disabled is set on a private deploy) log actor=<none>.
+	actor := "<none>"
+	if sess := auth.SessionFromContext(r.Context()); sess != nil {
+		actor = sess.GitHubLogin
+	}
+	log.Printf("audit action=submit actor=%q repo=%q branch=%q request_id=%s", actor, entry.ID, rootBranch, reqid.FromContext(r.Context())) //nolint:gosec // values are %q-quoted
 
 	ctx := app.NewContext(entry.Engine,
 		app.WithRepoRoot(entry.RepoRoot),

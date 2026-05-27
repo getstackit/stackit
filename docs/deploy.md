@@ -133,6 +133,36 @@ this doc revision and follow-on PRs):
   web app sends it automatically; scripts and direct API callers must
   include it.
 
+### Audit logging
+
+The server emits a single-line `audit action=...` log entry for every
+identity-changing or mutating action. The fields are key-quoted so they
+can be ingested by any structured log pipeline.
+
+| Action | Emitted by | Fields |
+|--------|------------|--------|
+| `login` | `GET /auth/callback` after a successful exchange | `actor`, `user_id`, `target` (post-login URL), `request_id` |
+| `denied` | `GET /auth/callback` for non-allowlisted users | `actor`, `request_id` |
+| `logout` | `POST /auth/logout` | `actor`, `request_id` |
+| `submit` | `POST /api/v1/repos/{id}/stacks/{branch}/submit` | `actor`, `repo`, `branch`, `request_id` |
+
+Every request also carries a `X-Request-ID` response header with the
+same value used as `request_id` in the audit lines. Pass it through
+your reverse proxy (Caddy, Cloudflare) for end-to-end correlation.
+
+### Log retention
+
+The container writes everything to stdout/stderr; retention is the
+platform's responsibility. A useful baseline:
+
+- **Railway / Fly / Heroku** — keep the platform default (7–14 days),
+  ship to an external sink (BetterStack, Datadog, S3) for longer.
+- **Self-hosted Docker** — pipe `docker logs` to journald or an
+  equivalent rotating sink; aim for 30+ days on the audit lines.
+
+The `audit action=` prefix is stable; alert on `audit action=denied`
+and on bursts of `audit action=submit` from a single `actor`.
+
 ### Calling the API from scripts
 
 ```bash

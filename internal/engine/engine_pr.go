@@ -42,11 +42,6 @@ func NewPrInfoFromMeta(meta *git.Meta) *PrInfo {
 	)
 }
 
-// getPrInfo is an internal method for Branch type
-func (e *engineImpl) getPrInfo(branch Branch) (*PrInfo, error) {
-	return e.GetPrInfo(branch)
-}
-
 // GetMergedDownstack returns the merged downstack history for a branch
 func (e *engineImpl) GetMergedDownstack(branch Branch) []git.MergedParent {
 	meta, err := e.readMetadata(branch.GetName())
@@ -54,11 +49,6 @@ func (e *engineImpl) GetMergedDownstack(branch Branch) []git.MergedParent {
 		return nil
 	}
 	return meta.GetMergedDownstack()
-}
-
-// getMergedDownstack is an internal method for Branch type
-func (e *engineImpl) getMergedDownstack(branch Branch) []git.MergedParent {
-	return e.GetMergedDownstack(branch)
 }
 
 // UpsertPrInfo updates or creates PR information for a branch with retry logic
@@ -192,11 +182,6 @@ func (e *engineImpl) GetPRSubmissionStatus(branch Branch) (PRSubmissionStatus, e
 		PRNumber:    prInfo.Number(),
 		PRInfo:      prInfo,
 	}, nil
-}
-
-// getPRSubmissionStatus is an internal method for Branch type
-func (e *engineImpl) getPRSubmissionStatus(branch Branch) (PRSubmissionStatus, error) {
-	return e.GetPRSubmissionStatus(branch)
 }
 
 // prTitleNeedsUpdate checks if the PR title needs to be updated due to scope changes

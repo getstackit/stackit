@@ -152,11 +152,6 @@ func (e *engineImpl) GetExplicitScope(branch Branch) Scope {
 	return Empty()
 }
 
-// getExplicitScope is an internal method for Branch type
-func (e *engineImpl) getExplicitScope(branch Branch) Scope {
-	return e.GetExplicitScope(branch)
-}
-
 // IsUpToDate checks if a branch is up to date with its parent
 // A branch is up to date if its parent revision matches the stored parent revision
 func (e *engineImpl) IsUpToDate(branch Branch) bool {

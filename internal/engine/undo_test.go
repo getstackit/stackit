@@ -292,7 +292,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Modify metadata by changing parent
-		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("feature"), s.Engine.GetBranch("main"))
+		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("feature"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// Restore snapshot

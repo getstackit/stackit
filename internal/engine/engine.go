@@ -15,7 +15,6 @@ package engine
 
 import (
 	"context"
-	"io"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -90,6 +89,23 @@ type RemoteMetadataManager interface {
 	DeleteMetadata(ctx context.Context, branchName string) error
 	FetchRemoteMetadata(ctx context.Context) error
 	ConfigureRemoteMetadataSync(ctx context.Context) error
+	// TestRemoteMetadataCompatibility probes the configured remote to verify it
+	// accepts the metadata-ref namespace. Adapter code should call this instead
+	// of reaching to the git runner directly.
+	TestRemoteMetadataCompatibility(ctx context.Context) error
+	// PushMetadataForBranches pushes the metadata refs for the given branch
+	// names to origin.
+	PushMetadataForBranches(ctx context.Context, branchNames []string) error
+	// ConfigureStackMetadataSync adds the stack-metadata refspec to origin.
+	ConfigureStackMetadataSync(ctx context.Context) error
+	// FetchStackMetadata fetches stack-metadata refs from origin.
+	FetchStackMetadata(ctx context.Context) error
+	// ListStackMetadata returns a map of local stack IDs to their ref SHAs.
+	ListStackMetadata() (map[string]string, error)
+	// DeleteStackMetadata removes a single local stack-metadata ref.
+	DeleteStackMetadata(ctx context.Context, stackID string) error
+	// DeleteRemoteStackMetadata pushes ref-deletions for the given stack IDs.
+	DeleteRemoteStackMetadata(ctx context.Context, stackIDs []string) error
 	// GetStackIDsForBranches returns the unique stack IDs for the given branches.
 	// This is used to determine which stack refs need to be pushed to remote.
 	GetStackIDsForBranches(branches Branches) []string
@@ -150,10 +166,6 @@ type Options struct {
 
 	// Git is the git runner to use. If nil, a default real git runner is used.
 	Git git.Runner
-
-	// Writer is the output writer for warnings and informational messages.
-	// If nil, os.Stderr is used.
-	Writer io.Writer
 
 	// LoadMode controls how much metadata is read at construction time.
 	// Zero value (LoadModeFull) matches the pre-lite behavior — readers see

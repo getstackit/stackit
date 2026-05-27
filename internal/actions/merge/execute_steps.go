@@ -137,7 +137,7 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 	}
 
 	// Update parent to trunk
-	if err := eng.SetParent(ctx.Context, eng.GetBranch(step.BranchName), eng.GetBranch(trunkName)); err != nil {
+	if err := eng.SetParent(ctx.Context, eng.GetBranch(step.BranchName), eng.GetBranch(trunkName), engine.DivergenceRecompute); err != nil {
 		return fmt.Errorf("failed to update parent: %w", err)
 	}
 
@@ -146,11 +146,8 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 		return fmt.Errorf("failed to update PR base: %w", err)
 	}
 
-	// Rebuild engine to reflect changes
-	if err := eng.Rebuild(trunkName); err != nil {
-		return fmt.Errorf("failed to rebuild engine: %w", err)
-	}
-
+	// SetParent above already committed metadata via transaction and refreshed
+	// in-memory state; no explicit Rebuild needed.
 	return nil
 }
 

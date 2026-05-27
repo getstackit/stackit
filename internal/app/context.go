@@ -373,7 +373,6 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 		Trunk:             trunk,
 		MaxUndoStackDepth: maxUndoDepth,
 		MaxConcurrency:    maxConcurrency,
-		Writer:            writer,
 		Git:               gitRunner,
 		LoadMode:          loadMode,
 	})

@@ -41,37 +41,28 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 		}
 	}
 
-	// Delete the parent branch (this will reparent current branch and siblings to grandparent)
+	// Delete the parent branch (engine reparents children to grandparent and
+	// rebuilds internally).
 	if err := eng.DeleteBranch(gctx, parentBranch); err != nil {
 		return fmt.Errorf("failed to delete parent branch: %w", err)
 	}
 
-	// Rebuild engine to reflect the deletion
-	if err := eng.Rebuild(eng.Trunk().GetName()); err != nil {
-		return fmt.Errorf("failed to rebuild engine: %w", err)
-	}
-
 	// The current branch absorbed the parent via merge, so it needs a fresh
 	// merge-base calculation against the grandparent (now its parent).
-	// DeleteBranch preserved the old divergence point, which would cause
-	// restack to drop the merged commits. Using SetParent (not
-	// SetParentPreservingDivergence) is intentional here — we want the
-	// merge-base recalculation to include the absorbed commits.
+	// DeleteBranch preserved the old divergence point, which would drop the
+	// merged commits at restack; DivergenceRecompute pulls them back in.
 	refreshedCurrent := eng.GetBranch(currentBranch.GetName())
 	if grandparent := refreshedCurrent.GetParent(); grandparent != nil {
-		if err := eng.SetParent(gctx, refreshedCurrent, *grandparent); err != nil {
+		if err := eng.SetParent(gctx, refreshedCurrent, *grandparent, engine.DivergenceRecompute); err != nil {
 			return fmt.Errorf("failed to reset divergence for %s: %w", currentBranch.GetName(), err)
 		}
 	}
 
-	// For each sibling, reparent to current branch (preserving divergence) and sync stack ID
+	// Reparent each sibling onto the current branch. Stack ID is propagated
+	// automatically by ReparentBranch.
 	for _, sibling := range siblings {
 		if err := eng.ReparentBranch(gctx, sibling, refreshedCurrent); err != nil {
 			return fmt.Errorf("failed to reparent %s to %s: %w", sibling.GetName(), currentBranch.GetName(), err)
-		}
-		// Sync stack ID to match the new parent's stack
-		if err := eng.SyncStackIDFromParent(gctx, sibling); err != nil {
-			splog.Debug("Failed to sync stack ID for %s: %v", sibling.GetName(), err)
 		}
 	}
 

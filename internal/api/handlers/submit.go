@@ -6,22 +6,21 @@ import (
 	"net/http"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 // SubmitHandler handles POST requests to submit a stack.
 type SubmitHandler struct {
-	eng      engine.Engine
-	gh       github.Client
-	repoRoot string
+	reg *registry.Registry
 }
 
-// NewSubmitHandler creates a handler for /api/stacks/{rootBranch}/submit.
-func NewSubmitHandler(eng engine.Engine, gh github.Client, repoRoot string) *SubmitHandler {
-	return &SubmitHandler{eng: eng, gh: gh, repoRoot: repoRoot}
+// NewSubmitHandler creates a handler that resolves the per-request repo
+// from the registry.
+func NewSubmitHandler(reg *registry.Registry) *SubmitHandler {
+	return &SubmitHandler{reg: reg}
 }
 
 type submitResponse struct {
@@ -44,20 +43,25 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rootBranch, hasRoot := parseResourcePath(r.URL.Path, "submit")
-	if !hasRoot || rootBranch == "" {
+	entry, ok := resolveRepo(h.reg, w, r)
+	if !ok {
+		return
+	}
+
+	rootBranch := r.PathValue("rootBranch")
+	if rootBranch == "" {
 		http.NotFound(w, r)
 		return
 	}
 
-	ctx := app.NewContext(h.eng,
-		app.WithRepoRoot(h.repoRoot),
+	ctx := app.NewContext(entry.Engine,
+		app.WithRepoRoot(entry.RepoRoot),
 		app.WithInteractive(false),
 		app.WithWriter(io.Discard),
 		app.WithLogger(output.NewNullLogger()),
 	)
 	ctx.Context = r.Context()
-	ctx.GitHubClient = h.gh
+	ctx.GitHubClient = entry.GitHub
 
 	opts := submit.Options{
 		Branch:     rootBranch,
@@ -70,7 +74,6 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var completionMsg string
 	var success bool
 
-	// Run submit in a goroutine, collect events
 	done := make(chan error, 1)
 	go func() {
 		err := submit.Action(ctx, opts, handler)
@@ -78,7 +81,6 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		done <- err
 	}()
 
-	// Collect events
 	for event := range handler.Events() {
 		switch e := event.(type) {
 		case submit.BranchProgressEvent:
@@ -97,7 +99,6 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Wait for submit to finish
 	if err := <-done; err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)

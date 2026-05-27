@@ -5,6 +5,20 @@
 // to evolve independently.
 package httpcontract
 
+// RepoSummary is one entry in ReposListResponse — the metadata clients
+// need to render a repo picker without hitting per-repo endpoints.
+type RepoSummary struct {
+	ID            string `json:"id"`
+	DisplayName   string `json:"displayName"`
+	Trunk         string `json:"trunk"`
+	CurrentBranch string `json:"currentBranch,omitempty"`
+}
+
+// ReposListResponse is the response shape for GET /api/v1/repos.
+type ReposListResponse struct {
+	Repos []RepoSummary `json:"repos"`
+}
+
 // ViewResponse is the combined response for the frontend view.
 // It bundles repo metadata and all stack details into a single payload
 // to avoid N+1 API calls.

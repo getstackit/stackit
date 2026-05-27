@@ -4,21 +4,19 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/getstackit/stackit/internal/api/registry"
 	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
-	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/github"
 )
 
 // RepoHandler serves repository metadata.
 type RepoHandler struct {
-	eng    engine.BranchReader
-	gh     github.Client
-	remote string
+	reg *registry.Registry
 }
 
-// NewRepoHandler creates a handler for /api/repo and /api/v1/repo.
-func NewRepoHandler(eng engine.BranchReader, gh github.Client, remote string) *RepoHandler {
-	return &RepoHandler{eng: eng, gh: gh, remote: remote}
+// NewRepoHandler creates a handler that resolves the per-request repo from
+// the registry.
+func NewRepoHandler(reg *registry.Registry) *RepoHandler {
+	return &RepoHandler{reg: reg}
 }
 
 // ServeHTTP handles GET repo endpoints.
@@ -28,17 +26,22 @@ func (h *RepoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	entry, ok := resolveRepo(h.reg, w, r)
+	if !ok {
+		return
+	}
+
 	owner, repo := "", ""
-	if h.gh != nil {
-		owner, repo = h.gh.GetOwnerRepo()
+	if entry.GitHub != nil {
+		owner, repo = entry.GitHub.GetOwnerRepo()
 	}
 
 	resp := httpcontract.RepoResponse{
 		Owner:         owner,
 		Repo:          repo,
-		Trunk:         h.eng.Trunk().GetName(),
-		CurrentBranch: h.eng.CurrentBranch().GetName(),
-		Remote:        h.remote,
+		Trunk:         entry.Engine.Trunk().GetName(),
+		CurrentBranch: entry.Engine.CurrentBranch().GetName(),
+		Remote:        entry.Remote,
 	}
 
 	writeJSON(w, resp)

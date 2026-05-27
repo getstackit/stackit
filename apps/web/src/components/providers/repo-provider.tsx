@@ -23,6 +23,7 @@ import { diffViews } from "@/lib/diff-views";
 const MAX_EVENTS = 100;
 
 interface RepoState {
+  repoId: string;
   repo: RepoResponse | null;
   stackDetails: StackDetail[];
   recentlyMerged: TrunkCommitResponse[];
@@ -42,7 +43,7 @@ export function useRepo() {
   return ctx;
 }
 
-export function RepoProvider({ children }: { children: ReactNode }) {
+export function RepoProvider({ repoId, children }: { repoId: string; children: ReactNode }) {
   const [repo, setRepo] = useState<RepoResponse | null>(null);
   const [stackDetails, setStackDetails] = useState<StackDetail[]>([]);
   const [recentlyMerged, setRecentlyMerged] = useState<TrunkCommitResponse[]>([]);
@@ -68,7 +69,7 @@ export function RepoProvider({ children }: { children: ReactNode }) {
 
   const loadData = useCallback(async () => {
     try {
-      const view = await fetchView();
+      const view = await fetchView(repoId);
       setRepo(view.repo);
 
       // TODO: Remove sample stacks — for UI development only
@@ -185,7 +186,7 @@ export function RepoProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [addEvents]);
+  }, [addEvents, repoId]);
 
   // Initial load
   useEffect(() => {
@@ -197,11 +198,12 @@ export function RepoProvider({ children }: { children: ReactNode }) {
   }, [loadData]);
 
   // SSE updates trigger refresh; server events get added directly
-  useSSE(loadData, addEvent);
+  useSSE(repoId, loadData, addEvent);
 
   return (
     <RepoContext.Provider
       value={{
+        repoId,
         repo,
         stackDetails,
         recentlyMerged,

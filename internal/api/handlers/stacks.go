@@ -2,10 +2,9 @@ package handlers
 
 import (
 	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/api/registry"
 	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
@@ -13,13 +12,13 @@ import (
 
 // StacksHandler serves stack data.
 type StacksHandler struct {
-	eng engine.BranchReader
-	gh  github.Client
+	reg *registry.Registry
 }
 
-// NewStacksHandler creates a handler for /api/stacks and /api/v1/stacks.
-func NewStacksHandler(eng engine.BranchReader, gh github.Client) *StacksHandler {
-	return &StacksHandler{eng: eng, gh: gh}
+// NewStacksHandler creates a handler that resolves the per-request repo
+// from the registry.
+func NewStacksHandler(reg *registry.Registry) *StacksHandler {
+	return &StacksHandler{reg: reg}
 }
 
 // ServeHTTP handles GET stacks endpoints.
@@ -29,45 +28,44 @@ func (h *StacksHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	root, hasRoot := parseResourcePath(r.URL.Path, "stacks")
-	if !hasRoot {
-		http.NotFound(w, r)
+	entry, ok := resolveRepo(h.reg, w, r)
+	if !ok {
 		return
 	}
 
+	root := r.PathValue("name")
 	if root == "" {
-		h.listStacks(w)
+		h.listStacks(w, entry)
 	} else {
-		h.getStack(w, r, root)
+		h.getStack(w, r, entry, root)
 	}
 }
 
-func (h *StacksHandler) listStacks(w http.ResponseWriter) {
-	stacks, err := merge.DiscoverStacksWithSort(h.eng, engine.SortStrategySmart)
+func (h *StacksHandler) listStacks(w http.ResponseWriter, entry *registry.RepoEntry) {
+	stacks, err := merge.DiscoverStacksWithSort(entry.Engine, engine.SortStrategySmart)
 	if err != nil {
 		http.Error(w, "failed to discover stacks: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	graph := h.eng.Graph(engine.SortStrategySmart)
+	graph := entry.Engine.Graph(engine.SortStrategySmart)
 
 	summaries := make([]httpcontract.StackSummary, 0, len(stacks))
 	for _, stack := range stacks {
-		summary := httpcontract.MapStackSummary(h.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, "")
+		summary := httpcontract.MapStackSummary(entry.Engine, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, "")
 		summaries = append(summaries, summary)
 	}
 
 	writeJSON(w, summaries)
 }
 
-func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, rootBranch string) {
-	stacks, err := merge.DiscoverStacksWithSort(h.eng, engine.SortStrategySmart)
+func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry, rootBranch string) {
+	stacks, err := merge.DiscoverStacksWithSort(entry.Engine, engine.SortStrategySmart)
 	if err != nil {
 		http.Error(w, "failed to discover stacks: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Find the requested stack
 	var found *merge.MultiStackInfo
 	for i := range stacks {
 		if stacks[i].RootBranch == rootBranch {
@@ -80,30 +78,13 @@ func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, rootBra
 		return
 	}
 
-	graph := h.eng.Graph(engine.SortStrategySmart)
+	graph := entry.Engine.Graph(engine.SortStrategySmart)
 
-	// Fetch CI checks if GitHub client is available
 	var checksMap map[string]*github.CheckStatus
-	if h.gh != nil {
-		checksMap, _ = h.gh.BatchGetPRChecksStatus(r.Context(), found.AllBranches)
+	if entry.GitHub != nil {
+		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), found.AllBranches)
 	}
 
-	detail := httpcontract.MapStackDetail(h.eng, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap)
+	detail := httpcontract.MapStackDetail(entry.Engine, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap)
 	writeJSON(w, detail)
-}
-
-func parseResourcePath(requestPath, resource string) (string, bool) {
-	marker := "/" + resource
-	_, after, ok := strings.Cut(requestPath, marker)
-	if !ok {
-		return "", false
-	}
-
-	suffix := strings.TrimPrefix(after, "/")
-	decoded, err := url.PathUnescape(suffix)
-	if err != nil {
-		// Keep previous behavior for malformed escape sequences.
-		return suffix, true
-	}
-	return decoded, true
 }

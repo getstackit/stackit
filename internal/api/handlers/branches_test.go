@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/api/registry"
 	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -19,9 +20,11 @@ func TestBranchesHandler_AllowsBranchNamedDiff(t *testing.T) {
 	t.Parallel()
 
 	s := setupTrackedBranchScenario(t, "diff")
-	handler := NewBranchesHandler(s.Engine, nil)
+	reg := singleEntryRegistry(t, s)
+	handler := NewBranchesHandler(reg)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branches/diff", nil)
+	req.SetPathValue("name", "diff")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -37,9 +40,11 @@ func TestBranchesHandler_AllowsBranchEndingInDiffSuffix(t *testing.T) {
 
 	branchName := "team/feature/diff"
 	s := setupTrackedBranchScenario(t, branchName)
-	handler := NewBranchesHandler(s.Engine, nil)
+	reg := singleEntryRegistry(t, s)
+	handler := NewBranchesHandler(reg)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branches/"+url.PathEscape(branchName), nil)
+	req.SetPathValue("name", branchName)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -55,7 +60,8 @@ func TestBranchDiffHandler_ReturnsDiff(t *testing.T) {
 
 	branchName := "feature"
 	s := setupTrackedBranchScenario(t, branchName)
-	handler := NewBranchDiffHandler(s.Engine)
+	reg := singleEntryRegistry(t, s)
+	handler := NewBranchDiffHandler(reg)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff?branch="+url.QueryEscape(branchName), nil)
 	rr := httptest.NewRecorder()
@@ -75,7 +81,8 @@ func TestBranchDiffHandler_RequiresBranchQuery(t *testing.T) {
 	t.Parallel()
 
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-	handler := NewBranchDiffHandler(s.Engine)
+	reg := singleEntryRegistry(t, s)
+	handler := NewBranchDiffHandler(reg)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff", nil)
 	rr := httptest.NewRecorder()
@@ -90,7 +97,8 @@ func TestBranchDiffHandler_RejectsUntrackedBranch(t *testing.T) {
 	t.Parallel()
 
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-	handler := NewBranchDiffHandler(s.Engine)
+	reg := singleEntryRegistry(t, s)
+	handler := NewBranchDiffHandler(reg)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff?branch=main", nil)
 	rr := httptest.NewRecorder()
@@ -99,6 +107,22 @@ func TestBranchDiffHandler_RejectsUntrackedBranch(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, rr.Code)
 	require.Contains(t, rr.Body.String(), "branch not found or not tracked")
+}
+
+func TestResolveRepo_Returns404ForUnknownID(t *testing.T) {
+	t.Parallel()
+
+	reg := registry.New()
+	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default"}))
+	handler := NewBranchesHandler(reg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/repos/missing/branches", nil)
+	req.SetPathValue("repoID", "missing")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 func setupTrackedBranchScenario(t *testing.T, branchName string) *scenario.Scenario {
@@ -114,4 +138,17 @@ func setupTrackedBranchScenario(t *testing.T, branchName string) *scenario.Scena
 		Rebuild()
 
 	return s
+}
+
+// singleEntryRegistry builds a registry with one entry id="default" pointing
+// at the scenario's engine. Mirrors the bootstrap behavior of the single-repo
+// `-cwd` shortcut and lets tests skip path-value setup for repoID.
+func singleEntryRegistry(t *testing.T, s *scenario.Scenario) *registry.Registry {
+	t.Helper()
+	reg := registry.New()
+	require.NoError(t, reg.Add(&registry.RepoEntry{
+		ID:     "default",
+		Engine: s.Engine,
+	}))
+	return reg
 }

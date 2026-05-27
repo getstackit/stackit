@@ -906,6 +906,64 @@ func (r *runner) CreateBlob(content string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
+// CreateBlobsBatch writes N blobs to the object store in a single
+// `git hash-object -w --stdin-paths` invocation. Each content is staged to a
+// temp file (so git's path-based hashing can read it) and the SHAs come back
+// on stdout in input order.
+//
+// For very small N the overhead of staging temp files exceeds the savings
+// from collapsing subprocess calls; callers with N==1 should use CreateBlob
+// directly. We still handle N==0/1 here so the method's contract holds.
+func (r *runner) CreateBlobsBatch(contents []string) ([]string, error) {
+	if len(contents) == 0 {
+		return nil, nil
+	}
+	if len(contents) == 1 {
+		sha, err := r.CreateBlob(contents[0])
+		if err != nil {
+			return nil, err
+		}
+		return []string{sha}, nil
+	}
+
+	tempDir, err := os.MkdirTemp("", "stackit-blob-batch-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp dir for blob batch: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Stage each blob to a deterministically-named file so we can pass the
+	// list to stdin in input order and rely on git's output order matching.
+	paths := make([]string, len(contents))
+	for i, content := range contents {
+		p := filepath.Join(tempDir, fmt.Sprintf("blob-%06d", i))
+		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+			return nil, fmt.Errorf("failed to stage blob %d: %w", i, err)
+		}
+		paths[i] = p
+	}
+
+	stdin := strings.Join(paths, "\n") + "\n"
+	out, err := r.runGitInternal(context.Background(), stdin, nil, true, "hash-object", "-w", "--stdin-paths")
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch-create blobs: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != len(contents) {
+		return nil, fmt.Errorf("git hash-object returned %d shas for %d blobs", len(lines), len(contents))
+	}
+	shas := make([]string, len(lines))
+	for i, line := range lines {
+		sha := strings.TrimSpace(line)
+		if sha == "" {
+			return nil, fmt.Errorf("git hash-object returned empty sha at index %d", i)
+		}
+		shas[i] = sha
+	}
+	return shas, nil
+}
+
 func (r *runner) ReadBlob(sha string) (string, error) {
 	out, err := r.RunGitCommandRawWithContext(context.Background(), "cat-file", "blob", sha)
 	if err != nil {

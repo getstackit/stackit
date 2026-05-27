@@ -280,9 +280,9 @@ func BenchmarkCreateBlob(b *testing.B) {
 	}
 }
 
-// BenchmarkCreateBlobs_Sequential simulates the metadata-flush pattern in
-// engine_writer.go (BatchMarkNeedsPRBodyUpdate writes one blob per branch in
-// a loop). Phase 6 replaces this with WriteBlobsBatch.
+// BenchmarkCreateBlobs_Sequential simulates the original metadata-flush
+// pattern: one CreateBlob per branch in a loop. Each call is its own
+// subprocess.
 func BenchmarkCreateBlobs_Sequential(b *testing.B) {
 	for _, n := range []int{1, 10, 50} {
 		b.Run(fmt.Sprintf("blobs=%d", n), func(b *testing.B) {
@@ -294,6 +294,28 @@ func BenchmarkCreateBlobs_Sequential(b *testing.B) {
 					if _, err := br.runner.CreateBlob(content); err != nil {
 						b.Fatalf("CreateBlob: %v", err)
 					}
+				}
+				iter++
+			}
+		})
+	}
+}
+
+// BenchmarkCreateBlobsBatch exercises the optimized batched path used by
+// BatchMarkNeedsPRBodyUpdate and transaction commits — temp-file staging
+// plus a single `git hash-object -w --stdin-paths` invocation.
+func BenchmarkCreateBlobsBatch(b *testing.B) {
+	for _, n := range []int{1, 10, 50} {
+		b.Run(fmt.Sprintf("blobs=%d", n), func(b *testing.B) {
+			br := newBenchRepo(b, 1, 0)
+			iter := 0
+			for b.Loop() {
+				contents := make([]string, n)
+				for j := range n {
+					contents[j] = fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
+				}
+				if _, err := br.runner.CreateBlobsBatch(contents); err != nil {
+					b.Fatalf("CreateBlobsBatch: %v", err)
 				}
 				iter++
 			}

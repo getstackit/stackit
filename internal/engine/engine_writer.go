@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1164,7 +1165,8 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 }
 
 // BatchMarkNeedsPRBodyUpdate marks multiple branches as needing PR body update in a single atomic operation.
-// It batch-reads local metadata, sets the flag, creates blobs, and atomically updates all refs.
+// It batch-reads local metadata, sets the flag, creates blobs in one git
+// hash-object call, and atomically updates all refs.
 func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
 	if len(branchNames) == 0 {
 		return nil
@@ -1173,8 +1175,10 @@ func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
 	// Batch read all local metadata in parallel
 	allMeta := e.batchReadLocalMetadata(branchNames)
 
-	// Create blobs and collect ref updates
-	updates := make([]git.RefUpdate, 0, len(branchNames))
+	// Marshal each branch's updated metadata to JSON; track parallel slices
+	// so we can map blob SHAs back to ref names after the batch call.
+	contents := make([]string, 0, len(branchNames))
+	orderedNames := make([]string, 0, len(branchNames))
 	for _, name := range branchNames {
 		meta := allMeta[name]
 		if meta == nil {
@@ -1182,14 +1186,25 @@ func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(branchNames []string) error {
 		}
 		meta.NeedsPRBodyUpdate = true
 
-		sha, err := e.git.WriteLocalMetadataBlob(meta)
+		jsonData, err := json.Marshal(meta)
 		if err != nil {
-			return fmt.Errorf("failed to create local metadata blob for %s: %w", name, err)
+			return fmt.Errorf("failed to marshal local metadata for %s: %w", name, err)
 		}
-		updates = append(updates, git.RefUpdate{
+		contents = append(contents, string(jsonData))
+		orderedNames = append(orderedNames, name)
+	}
+
+	shas, err := e.git.CreateBlobsBatch(contents)
+	if err != nil {
+		return fmt.Errorf("failed to create local metadata blobs: %w", err)
+	}
+
+	updates := make([]git.RefUpdate, len(orderedNames))
+	for i, name := range orderedNames {
+		updates[i] = git.RefUpdate{
 			RefName: git.LocalMetadataRefName(name),
-			NewSHA:  sha,
-		})
+			NewSHA:  shas[i],
+		}
 	}
 
 	// Atomic batch update all refs

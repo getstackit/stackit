@@ -197,7 +197,7 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 // stageNewFileHunk handles staging a single new file hunk by writing content to disk and staging it.
 func (r *runner) stageNewFileHunk(ctx context.Context, h Hunk) error {
 	content := extractContentFromHunk(h)
-	filePath := filepath.Join(r.repoRoot, h.File)
+	filePath := filepath.Join(r.getRepoRoot(), h.File)
 
 	// Create parent directories if they don't exist
 	if dir := filepath.Dir(filePath); dir != "." {
@@ -265,16 +265,17 @@ func (r *runner) rescueMisdetectedNewFiles(ctx context.Context, modHunks []Hunk)
 }
 
 // fileExistsInIndex checks if a file exists in the git index. Uses
-// `git ls-files --error-unmatch` which exits non-zero when the path is not
-// tracked; that's the cheapest one-shot index probe.
+// `git ls-files --error-unmatch` which exits 1 when the path is not tracked;
+// that's the cheapest one-shot index probe. Other non-zero exits (e.g., 128
+// for "not a git repo" or argument errors) surface as real errors so callers
+// don't silently treat them as "not tracked".
 func (r *runner) fileExistsInIndex(ctx context.Context, file string) (bool, error) {
 	_, err := r.RunGitCommandWithContext(ctx, "ls-files", "--error-unmatch", "-z", "--", file)
 	if err == nil {
 		return true, nil
 	}
 	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		// Any non-zero exit means the path isn't in the index.
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return false, nil
 	}
 	return false, fmt.Errorf("failed to read index for %s: %w", file, err)

@@ -162,6 +162,12 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 		return fmt.Errorf("cannot delete trunk branch")
 	}
 
+	// Refresh the actual HEAD branch before deciding whether deletion needs to
+	// move the main worktree off the target branch. The git layer refuses to
+	// raw-delete any checked-out branch, so relying on stale cached state here
+	// would turn a recoverable current-branch delete into an error.
+	e.CurrentBranch()
+
 	// Get children and parent info under lock, then release for SetParent calls
 	e.mu.Lock()
 
@@ -249,6 +255,10 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 	childrenByBranch := make(map[string][]string, len(branches))
 	parentByBranch := make(map[string]string, len(branches))
 	var needCheckoutTrunk bool
+
+	// Keep e.currentBranch aligned with the real repository before deciding
+	// whether the batch includes HEAD.
+	e.CurrentBranch()
 
 	e.mu.Lock()
 	trunkName := e.trunk

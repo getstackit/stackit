@@ -53,6 +53,40 @@ func TestDeleteBranch_NoErrorWhenBranchMissing(t *testing.T) {
 	require.NoError(t, runner.DeleteBranch(context.Background(), "nope"))
 }
 
+func TestDeleteBranch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	ctx := context.Background()
+
+	require.NoError(t, scene.Repo.CreateBranch("feature"))
+	worktreePath := filepath.Join(t.TempDir(), "feature-worktree")
+	_, err := runner.RunGitCommandWithContext(ctx, "worktree", "add", worktreePath, "feature")
+	require.NoError(t, err)
+
+	err = runner.DeleteBranch(ctx, "feature")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "checked out in worktree")
+	requireRefPresent(t, runner, "refs/heads/feature")
+}
+
+func TestDeleteRefsBatch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	ctx := context.Background()
+
+	require.NoError(t, scene.Repo.CreateBranch("feature"))
+	worktreePath := filepath.Join(t.TempDir(), "feature-worktree")
+	_, err := runner.RunGitCommandWithContext(ctx, "worktree", "add", worktreePath, "feature")
+	require.NoError(t, err)
+
+	err = runner.DeleteRefsBatch(ctx, []string{"refs/heads/feature"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "checked out in worktree")
+	requireRefPresent(t, runner, "refs/heads/feature")
+}
+
 func TestDeleteRef_RemovesPackedRef(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
@@ -109,6 +143,12 @@ func requireRefAbsent(t *testing.T, runner git.Runner, refName string) {
 	t.Helper()
 	_, err := runner.GetRef(refName)
 	require.Error(t, err, "ref %s should not resolve", refName)
+}
+
+func requireRefPresent(t *testing.T, runner git.Runner, refName string) {
+	t.Helper()
+	_, err := runner.GetRef(refName)
+	require.NoError(t, err, "ref %s should still resolve", refName)
 }
 
 func requireLooseRefAbsent(t *testing.T, repoDir, refName string) {

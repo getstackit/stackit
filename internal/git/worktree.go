@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -40,6 +41,35 @@ func (l WorktreeList) Paths() []string {
 		out[i] = w.Path
 	}
 	return out
+}
+
+func (r *runner) ensureRefBranchesNotCheckedOut(ctx context.Context, refNames []string) error {
+	branchNames := make([]string, 0, len(refNames))
+	for _, refName := range refNames {
+		if branchName, ok := strings.CutPrefix(refName, "refs/heads/"); ok {
+			branchNames = append(branchNames, branchName)
+		}
+	}
+	return r.ensureBranchesNotCheckedOut(ctx, branchNames)
+}
+
+func (r *runner) ensureBranchesNotCheckedOut(ctx context.Context, branchNames []string) error {
+	if len(branchNames) == 0 {
+		return nil
+	}
+	branchNames = slices.Compact(slices.Sorted(slices.Values(branchNames)))
+
+	worktrees, err := r.ListWorktrees(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check worktrees: %w", err)
+	}
+
+	for _, worktree := range worktrees {
+		if slices.Contains(branchNames, worktree.Branch) {
+			return fmt.Errorf("branch %s is checked out in worktree %s", worktree.Branch, worktree.Path)
+		}
+	}
+	return nil
 }
 
 // WorktreeMeta represents worktree tracking metadata stored in local Git refs

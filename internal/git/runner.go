@@ -122,6 +122,10 @@ func (r *runner) DeleteRefsBatch(ctx context.Context, refNames []string) error {
 		return nil
 	}
 
+	if err := r.ensureRefBranchesNotCheckedOut(ctx, refNames); err != nil {
+		return err
+	}
+
 	var stdin strings.Builder
 	for _, refName := range refNames {
 		fmt.Fprintf(&stdin, "delete %s\n", refName)

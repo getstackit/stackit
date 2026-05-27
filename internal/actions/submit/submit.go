@@ -635,18 +635,18 @@ func pushMetadataRefs(ctx *app.Context, branches engine.Branches) error {
 
 	// Check if remote sync is enabled; if not, run compatibility test first
 	if !rm.IsRemoteSyncEnabled() {
-		if err := ctx.Git().TestRemoteRefCompatibility(ctx.Context); err != nil {
+		if err := rm.TestRemoteMetadataCompatibility(ctx.Context); err != nil {
 			return fmt.Errorf("remote does not support metadata refs (GitHub compatibility check failed): %w", err)
 		}
 		rm.SetRemoteSyncEnabled(true)
 		// Configure refspec so future git fetch commands also fetch metadata
-		if err := ctx.Git().EnsureMetadataRefspecConfigured(); err != nil {
+		if err := rm.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
 			ctx.Output.Debug("Failed to configure metadata refspec: %v", err)
 		}
 	}
 
 	// Push metadata refs
-	if err := ctx.Git().PushMetadataRefs(ctx.Context, branchNames); err != nil {
+	if err := rm.PushMetadataForBranches(ctx.Context, branchNames); err != nil {
 		// Check if this looks like a race condition (concurrent push)
 		if isRaceConditionError(err) {
 			return fmt.Errorf("metadata push rejected due to concurrent changes by another user. Run 'st sync' to pull the latest metadata, then retry: %w", err)

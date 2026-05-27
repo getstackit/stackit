@@ -488,13 +488,14 @@ func (e *engineImpl) DeleteMetadata(ctx context.Context, branchName string) erro
 	})
 }
 
-// FetchRemoteMetadata fetches metadata refs from origin
+// FetchRemoteMetadata fetches metadata refs from origin into the remote-metadata
+// namespace, so the cache loader sees the latest authored values.
 func (e *engineImpl) FetchRemoteMetadata(ctx context.Context) error {
-	_, err := e.git.RunGitCommandWithContext(ctx, "fetch", "origin", "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")
-	return err
+	return e.git.FetchMetadataRefs(ctx)
 }
 
-// ConfigureRemoteMetadataSync adds the metadata refspec to origin
+// ConfigureRemoteMetadataSync adds the metadata refspec to origin so subsequent
+// `git fetch origin` invocations pick up metadata changes automatically.
 func (e *engineImpl) ConfigureRemoteMetadataSync(_ context.Context) error {
 	return e.git.EnsureMetadataRefspecConfigured()
 }

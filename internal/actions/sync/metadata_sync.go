@@ -41,7 +41,7 @@ func processRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) err
 		out.Debug("Failed to configure metadata refspec: %v", err)
 	}
 	// Also configure stack metadata refspec
-	if err := ctx.Git().EnsureStackMetaRefspecConfigured(); err != nil {
+	if err := eng.ConfigureStackMetadataSync(ctx.Context); err != nil {
 		out.Debug("Failed to configure stack metadata refspec: %v", err)
 	}
 	ctx.Logger.Info("configure remote metadata sync completed durationMs=%d", time.Since(configStart).Milliseconds())

@@ -237,12 +237,13 @@ type Branch struct {
 
 type branchReader interface {
 	BranchReader
+	// Branch-internal accessors. These complement the public BranchReader
+	// methods that operate on branch names with versions that take a Branch
+	// value, used by Branch's own getters. Engine is the only implementor.
 	GetParent(branch Branch) *Branch
-	getParent(branch Branch) *Branch
-	getPrInfo(branch Branch) (*PrInfo, error)
-	getMergedDownstack(branch Branch) []git.MergedParent
-	getExplicitScope(branch Branch) Scope
-	getPRSubmissionStatus(branch Branch) (PRSubmissionStatus, error)
+	GetMergedDownstack(branch Branch) []git.MergedParent
+	GetExplicitScope(branch Branch) Scope
+	GetPRSubmissionStatus(branch Branch) (PRSubmissionStatus, error)
 }
 
 // NewBranch creates a new immutable Branch
@@ -334,12 +335,12 @@ func (b Branch) GetAllCommits(format CommitFormat) ([]string, error) {
 
 // GetParent returns the parent branch (nil if no parent)
 func (b Branch) GetParent() *Branch {
-	return b.reader.getParent(b)
+	return b.reader.GetParent(b)
 }
 
 // GetPrInfo returns PR information for this branch
 func (b Branch) GetPrInfo() (*PrInfo, error) {
-	return b.reader.getPrInfo(b)
+	return b.reader.GetPrInfo(b)
 }
 
 // HasPR reports whether this branch has a submitted PR number recorded.
@@ -350,12 +351,12 @@ func (b Branch) HasPR() bool {
 
 // GetMergedDownstack returns the merged downstack history for this branch
 func (b Branch) GetMergedDownstack() []git.MergedParent {
-	return b.reader.getMergedDownstack(b)
+	return b.reader.GetMergedDownstack(b)
 }
 
 // GetExplicitScope returns the explicit scope set for this branch (no inheritance)
 func (b Branch) GetExplicitScope() Scope {
-	return b.reader.getExplicitScope(b)
+	return b.reader.GetExplicitScope(b)
 }
 
 // IsLocked checks if the branch is locked for modifications
@@ -414,7 +415,7 @@ func (b Branch) EnsureCanModify() error {
 
 // GetPRSubmissionStatus returns the PR submission status for this branch
 func (b Branch) GetPRSubmissionStatus() (PRSubmissionStatus, error) {
-	return b.reader.getPRSubmissionStatus(b)
+	return b.reader.GetPRSubmissionStatus(b)
 }
 
 // DefaultPRTitle returns the default PR title for this branch.

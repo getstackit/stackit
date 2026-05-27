@@ -98,11 +98,6 @@ func (e *engineImpl) GetParent(branch Branch) *Branch {
 	return nil
 }
 
-// getParent is an internal method for Branch type
-func (e *engineImpl) getParent(branch Branch) *Branch {
-	return e.GetParent(branch) // Delegate to existing implementation for now
-}
-
 // FindMostRecentTrackedAncestors finds the most recent tracked ancestors of a branch
 // by checking the branch's commit history against tracked branch tips.
 // Returns a slice of branch names that point to the most recent tracked commit in history.

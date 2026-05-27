@@ -467,8 +467,7 @@ func (r *runner) infoLog(format string, args ...any) {
 // are validated by running the command in that directory.
 //
 // Outside a git repository the error message starts with "not a git
-// repository" so callers (and tests) can match on that phrase. This mirrors
-// the language go-git's PlainOpen used to return.
+// repository" so callers (and tests) can match on that phrase.
 func (r *runner) ensureRepo() error {
 	r.repoRootMu.Lock()
 	defer r.repoRootMu.Unlock()

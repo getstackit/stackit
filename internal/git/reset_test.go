@@ -12,10 +12,9 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 )
 
-// TestHardReset_HonorsCanceledContext locks in the cancellation behavior that
-// the go-git-based implementation lacked: worktree.Reset() took no context, so
-// callers passing a canceled or deadline-exceeded ctx could not interrupt a
-// long-running reset.
+// TestHardReset_HonorsCanceledContext locks in the cancellation behavior: the
+// reset path is wired to RunGitCommandWithContext so callers passing a canceled
+// or deadline-exceeded ctx can interrupt a long-running reset.
 func TestHardReset_HonorsCanceledContext(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
@@ -48,7 +47,7 @@ func TestHardReset_DiscardsUncommittedChanges(t *testing.T) {
 }
 
 // TestSoftReset_PreservesWorkingTree verifies the soft mode does not touch
-// the index or working tree, matching the previous go-git semantics.
+// the index or working tree.
 func TestSoftReset_PreservesWorkingTree(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)

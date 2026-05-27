@@ -12,9 +12,8 @@ import (
 const DefaultRemote = "origin"
 
 // getRemote returns the configured remote for the current branch, falling
-// back to DefaultRemote. Implemented via `git config` rather than walking
-// go-git's typed config; the value is a single string and the call site
-// already accepts a fallback path.
+// back to DefaultRemote. Implemented via `git config --get` — the value is a
+// single string and the call site already accepts a fallback path.
 func (r *runner) getRemote() string {
 	branch, err := r.GetCurrentBranch()
 	if err != nil || branch == "" {
@@ -32,8 +31,7 @@ func (r *runner) getRemote() string {
 }
 
 // fetchRemoteShas lists the branch refs on a remote without modifying any
-// local refs. `git ls-remote --heads` matches the previous go-git behavior
-// of returning only refs/heads/*.
+// local refs. `git ls-remote --heads` returns only refs/heads/*.
 func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
 	if ctx == nil {
 		ctx = context.Background()

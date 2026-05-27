@@ -57,8 +57,8 @@ func (r *runner) changedFilesBetween(ctx context.Context, base, head string) ([]
 	}
 
 	// Short-circuit on equal trees so we don't pay for a diff that we know
-	// will be empty. This preserves the optimization the prior go-git
-	// implementation had via TreeHash comparison.
+	// will be empty. Tree SHAs are content-addressed, so equal SHA ⇔ no
+	// changes — cheaper than walking the file-level diff.
 	baseTree, err := r.resolveTreeSHA(ctx, base)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve base %s: %w", base, err)

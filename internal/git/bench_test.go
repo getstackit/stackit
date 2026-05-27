@@ -82,8 +82,8 @@ func (br *benchRepo) runGit(b *testing.B, args ...string) {
 	}
 }
 
-// BenchmarkGetRecentCommits measures the cost of walking N recent commits.
-// Phase 2 replaces the go-git CommitObject walk with `git log --format=...`.
+// BenchmarkGetRecentCommits measures the cost of walking N recent commits via
+// `git log --format=...`.
 func BenchmarkGetRecentCommits(b *testing.B) {
 	for _, count := range []int{50, 200} {
 		b.Run(fmt.Sprintf("count=%d", count), func(b *testing.B) {
@@ -142,7 +142,8 @@ func BenchmarkBatchGetRevisions(b *testing.B) {
 }
 
 // BenchmarkLoadAllBranchRevisions measures the cache-preload path used by
-// engine startup. Today this is a go-git Branches() iteration under goGitMu.
+// engine startup. One `git for-each-ref` invocation fills the revision cache
+// for all local branches.
 func BenchmarkLoadAllBranchRevisions(b *testing.B) {
 	br := newBenchRepo(b, 5, 20)
 	for b.Loop() {
@@ -152,8 +153,8 @@ func BenchmarkLoadAllBranchRevisions(b *testing.B) {
 	}
 }
 
-// BenchmarkGetMergeBase exercises the merge-base API. Phase 2 replaces
-// go-git's commit.MergeBase walk with `git merge-base <a> <b>`.
+// BenchmarkGetMergeBase exercises the merge-base API, implemented as a single
+// `git merge-base <a> <b>` invocation.
 func BenchmarkGetMergeBase(b *testing.B) {
 	br := newBenchRepo(b, 30, 2)
 	for b.Loop() {
@@ -182,9 +183,8 @@ func BenchmarkIsAncestor(b *testing.B) {
 	}
 }
 
-// BenchmarkHasStagedChanges exercises the go-git Worktree.Status() path used
-// by stackit's pre-commit guards. Phase 3 replaces it with
-// `git status --porcelain=v2 -z`.
+// BenchmarkHasStagedChanges exercises the pre-commit guard path
+// (`git diff --cached --quiet`).
 func BenchmarkHasStagedChanges(b *testing.B) {
 	br := newBenchRepo(b, 5, 0)
 	for b.Loop() {
@@ -194,9 +194,9 @@ func BenchmarkHasStagedChanges(b *testing.B) {
 	}
 }
 
-// BenchmarkHasStagedChanges_LargeTree measures the worktree walk on a tree
-// with many untracked files. This is the worst case for the current go-git
-// Status() implementation, which walks the entire tree in-process.
+// BenchmarkHasStagedChanges_LargeTree measures the diff-quiet check on a tree
+// with many untracked files. `git diff --cached --quiet` short-circuits on
+// exit code, so the untracked count should not blow up the cost.
 func BenchmarkHasStagedChanges_LargeTree(b *testing.B) {
 	br := newBenchRepo(b, 5, 0)
 	for i := range 1000 {
@@ -212,8 +212,7 @@ func BenchmarkHasStagedChanges_LargeTree(b *testing.B) {
 	}
 }
 
-// BenchmarkStageAll measures the cost of staging all changes via
-// worktree.AddWithOptions today; Phase 3 swaps in `git add -A`.
+// BenchmarkStageAll measures the cost of `git add -A`.
 func BenchmarkStageAll(b *testing.B) {
 	iter := 0
 	for b.Loop() {
@@ -232,9 +231,7 @@ func BenchmarkStageAll(b *testing.B) {
 	}
 }
 
-// BenchmarkGetConfig measures single-key config reads. Today this goes
-// through go-git's format.Config parser; Phase 5 swaps in `git config <key>`.
-// Expect a regression on this bench unless a small in-process cache is added.
+// BenchmarkGetConfig measures single-key config reads via `git config --get`.
 func BenchmarkGetConfig(b *testing.B) {
 	br := newBenchRepo(b, 1, 0)
 	br.runGit(b, "config", "stackit.bench.key", "bench-value")
@@ -337,10 +334,9 @@ func BenchmarkReadBlob(b *testing.B) {
 	}
 }
 
-// BenchmarkParallelGetRevision is the goGitMu-sensitive case: N goroutines
-// resolving distinct branch names concurrently. Today the goGitMu serializes
-// the underlying go-git reference lookup; after Phase 2 + Phase 6, parallel
-// callers should scale near-linearly.
+// BenchmarkParallelGetRevision measures the parallel-resolution path: N
+// goroutines resolving distinct branch names concurrently. With the revision
+// cache warm, this is dominated by cache hits and should scale near-linearly.
 func BenchmarkParallelGetRevision(b *testing.B) {
 	const branches = 20
 	br := newBenchRepo(b, 5, branches)
@@ -363,8 +359,8 @@ func BenchmarkParallelGetRevision(b *testing.B) {
 }
 
 // BenchmarkParallelGetMergeBase mirrors BenchmarkParallelGetRevision for
-// merge-base. Today merge-base also takes goGitMu (the inner CommitObject
-// walk requires it). Native `git merge-base` is parallel-safe.
+// merge-base. `git merge-base` is parallel-safe — each call spawns its own
+// subprocess and there's no process-wide lock in the runner.
 func BenchmarkParallelGetMergeBase(b *testing.B) {
 	br := newBenchRepo(b, 30, 4)
 	pairs := [][2]string{

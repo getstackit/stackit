@@ -75,8 +75,8 @@ type CommitReader interface {
 	GetCurrentRevision(ctx context.Context) (string, error)
 	BatchGetRevisions(branchNames []string) (map[string]string, []error)
 	// LoadAllBranchRevisions populates the revision cache for all local branches
-	// using one batched branch-ref load. Subsequent GetRevision calls
-	// for cached branches avoid go-git mutex contention entirely.
+	// using one `git for-each-ref` invocation. Subsequent GetRevision calls
+	// for cached branches resolve in-process without spawning git.
 	LoadAllBranchRevisions() error
 	GetCommitDate(branchName string) (time.Time, error)
 	GetCommitAuthor(branchName string) (string, error)
@@ -235,8 +235,8 @@ type ObjectOperations interface {
 	CreateBlob(content string) (string, error)
 	// CreateBlobsBatch writes N blobs in a single `git hash-object` invocation.
 	// Returns SHAs in input order. For small N (<3) callers should still use
-	// CreateBlob — the temp-file staging the batch path requires only pays
-	// off once the per-blob subprocess overhead would dominate.
+	// CreateBlob — the temp-file staging required by the batch path only pays
+	// off once per-blob subprocess overhead would dominate.
 	CreateBlobsBatch(contents []string) ([]string, error)
 	ReadBlob(sha string) (string, error)
 	CatFile(sha string) (string, error)

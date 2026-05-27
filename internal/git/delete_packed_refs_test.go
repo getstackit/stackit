@@ -15,11 +15,12 @@ import (
 
 // Regression tests for the silent packed-refs deletion bug.
 //
-// go-git's filesystem Storer.RemoveReference only deletes the loose ref file.
-// If a ref lives in .git/packed-refs (e.g., because `git gc` or `git pack-refs`
-// ran), the call returns nil but the ref survives. That caused merge ship's
-// cleanup to silently leave a packed branch behind, recreate its metadata via
-// post-merge sync, and then prompt on a phantom metadata conflict.
+// The original implementation only deleted the loose ref file. If a ref lived
+// in .git/packed-refs (e.g., because `git gc` or `git pack-refs` ran), the
+// call returned nil but the ref survived. That caused merge ship's cleanup to
+// silently leave a packed branch behind, recreate its metadata via post-merge
+// sync, and then prompt on a phantom metadata conflict. The fix routes delete
+// through `git update-ref -d`, which rewrites packed-refs correctly.
 //
 // These tests pack the relevant refs before calling our delete APIs and assert
 // the refs are actually gone afterward.

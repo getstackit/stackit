@@ -338,7 +338,8 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		return fmt.Errorf("failed to checkout target branch %s: %w", targetBranch, err)
 	}
 
-	// Refresh engine
+	// `get` may have created local branches via raw git fetch above; rebuild
+	// so engine's branch list includes those new branches before we proceed.
 	if err := eng.Rebuild(""); err != nil {
 		return fmt.Errorf("failed to refresh engine: %w", err)
 	}

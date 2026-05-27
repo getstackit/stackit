@@ -146,11 +146,8 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 		return fmt.Errorf("failed to update PR base: %w", err)
 	}
 
-	// Rebuild engine to reflect changes
-	if err := eng.Rebuild(trunkName); err != nil {
-		return fmt.Errorf("failed to rebuild engine: %w", err)
-	}
-
+	// SetParent above already committed metadata via transaction and refreshed
+	// in-memory state; no explicit Rebuild needed.
 	return nil
 }
 

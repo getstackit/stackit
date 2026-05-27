@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 )
 
-func (r *runner) IsDiffEmpty(_ context.Context, branchName, base string) (bool, error) {
+func (r *runner) IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error) {
 	branchRev, err := r.GetRevision(branchName)
 	if err != nil {
 		return false, fmt.Errorf("failed to get branch revision: %w", err)
@@ -17,36 +18,29 @@ func (r *runner) IsDiffEmpty(_ context.Context, branchName, base string) (bool, 
 	}
 
 	// Two refs at different commits can still represent identical content if
-	// their trees match (e.g. revert chain, no-op rebase). Compare commit
-	// TreeHash directly instead of walking the file-level diff — go-git tree
-	// hashes are content-addressed, so equal hash ⇔ no changes. This skips
-	// the O(tree-size) DiffContext call that dominated branch-deletion
-	// planning.
-	repo, err := r.ensureRepo()
+	// their trees match (revert chain, no-op rebase, etc.). Compare commit
+	// tree SHAs directly — they are content-addressed, so equal SHA ⇔ no
+	// changes — instead of walking the file-level diff.
+	baseTree, err := r.resolveTreeSHA(ctx, base)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to resolve base tree %s: %w", base, err)
 	}
+	headTree, err := r.resolveTreeSHA(ctx, branchRev)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve head tree %s: %w", branchRev, err)
+	}
+	return baseTree == headTree, nil
+}
 
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	baseHash, err := r.resolveRefHashInternal(repo, base)
-	if err != nil {
-		return false, fmt.Errorf("failed to resolve base %s: %w", base, err)
+func (r *runner) resolveTreeSHA(ctx context.Context, ref string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	headHash, err := r.resolveRefHashInternal(repo, branchRev)
+	out, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--verify", "--end-of-options", ref+"^{tree}")
 	if err != nil {
-		return false, fmt.Errorf("failed to resolve head %s: %w", branchRev, err)
+		return "", err
 	}
-	baseCommit, err := repo.CommitObject(baseHash)
-	if err != nil {
-		return false, fmt.Errorf("failed to load base commit %s: %w", base, err)
-	}
-	headCommit, err := repo.CommitObject(headHash)
-	if err != nil {
-		return false, fmt.Errorf("failed to load head commit %s: %w", branchRev, err)
-	}
-	return baseCommit.TreeHash == headCommit.TreeHash, nil
+	return strings.TrimSpace(out), nil
 }
 
 func (r *runner) GetChangedFiles(ctx context.Context, base, head string) ([]string, error) {
@@ -62,63 +56,38 @@ func (r *runner) changedFilesBetween(ctx context.Context, base, head string) ([]
 		ctx = context.Background()
 	}
 
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return nil, err
-	}
-
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
-	baseHash, err := r.resolveRefHashInternal(repo, base)
+	// Short-circuit on equal trees so we don't pay for a diff that we know
+	// will be empty. This preserves the optimization the prior go-git
+	// implementation had via TreeHash comparison.
+	baseTree, err := r.resolveTreeSHA(ctx, base)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve base %s: %w", base, err)
 	}
-	headHash, err := r.resolveRefHashInternal(repo, head)
+	headTree, err := r.resolveTreeSHA(ctx, head)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve head %s: %w", head, err)
 	}
-
-	baseCommit, err := repo.CommitObject(baseHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load base commit %s: %w", base, err)
-	}
-	headCommit, err := repo.CommitObject(headHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load head commit %s: %w", head, err)
-	}
-
-	baseTree, err := baseCommit.Tree()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load base tree %s: %w", base, err)
-	}
-	headTree, err := headCommit.Tree()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load head tree %s: %w", head, err)
-	}
-	if baseTree.Hash == headTree.Hash {
+	if baseTree == headTree {
 		return []string{}, nil
 	}
 
-	changes, err := baseTree.DiffContext(ctx, headTree)
+	out, err := r.RunGitCommandRawWithContext(ctx, "diff", "--name-only", "-z", base, head)
 	if err != nil {
-		return nil, fmt.Errorf("failed to diff trees: %w", err)
+		return nil, fmt.Errorf("failed to diff %s..%s: %w", base, head, err)
 	}
-	if len(changes) == 0 {
+	out = strings.TrimRight(out, "\x00")
+	if out == "" {
 		return []string{}, nil
 	}
-
-	files := make([]string, 0, len(changes))
-	for _, change := range changes {
-		switch {
-		case change.To.Name != "":
-			files = append(files, change.To.Name)
-		case change.From.Name != "":
-			files = append(files, change.From.Name)
+	files := strings.Split(out, "\x00")
+	result := make([]string, 0, len(files))
+	for _, f := range files {
+		if f != "" {
+			result = append(result, f)
 		}
 	}
-	slices.Sort(files)
-	return files, nil
+	slices.Sort(result)
+	return result, nil
 }
 
 func (r *runner) ShowDiff(ctx context.Context, left, right string, stat bool) (string, error) {

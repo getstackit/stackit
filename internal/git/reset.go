@@ -41,12 +41,8 @@ func (r *runner) MixedReset(ctx context.Context, revision string) error {
 }
 
 // resetWorktree shells out to native git so the caller's context (deadline,
-// cancellation) is honored. go-git's worktree.Reset() takes no context, so a
-// hung reset (e.g., huge working tree) could not be interrupted.
+// cancellation) is honored.
 func (r *runner) resetWorktree(ctx context.Context, revision, modeFlag string) error {
-	r.goGitMu.Lock()
-	defer r.goGitMu.Unlock()
-
 	if _, err := r.RunGitCommandWithContext(ctx, "reset", modeFlag, revision); err != nil {
 		return err
 	}

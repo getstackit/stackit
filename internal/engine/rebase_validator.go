@@ -232,6 +232,13 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 
 // processValidationLevel processes all specs at a given depth level in parallel.
 // Returns true if any validation failed, false if all succeeded.
+//
+// Siblings at the same depth are independent: one failing does not invalidate
+// the others. We let every sibling run to completion so that a failed sibling
+// does not cancel an in-flight successful one — that race would silently drop
+// the survivor from NewSHAs and prevent it from being restacked. Deeper levels
+// are still skipped because the caller stops iterating after the first failed
+// level.
 func (e *engineImpl) processValidationLevel(
 	ctx context.Context,
 	level validationLevel,
@@ -240,10 +247,6 @@ func (e *engineImpl) processValidationLevel(
 	rebasedByName *sync.Map,
 	rebasedBySHA *sync.Map,
 ) bool {
-	// Create cancelable context for this level to enable early exit on first failure
-	levelCtx, cancelLevel := context.WithCancel(ctx)
-	defer cancelLevel() // Ensure context is always canceled to prevent leaks
-
 	// Within each level, validate specs in parallel
 	semaphore := make(chan struct{}, maxConcurrency)
 	results := make(chan validationResult, len(level.specs))
@@ -265,9 +268,10 @@ func (e *engineImpl) processValidationLevel(
 			}()
 			defer wg.Done()
 
-			// Check context before acquiring semaphore to allow quick cancellation
+			// Check parent context before acquiring semaphore so an outer cancel
+			// (e.g. user Ctrl+C) short-circuits queued siblings.
 			select {
-			case <-levelCtx.Done():
+			case <-ctx.Done():
 				results <- validationResult{
 					spec:         spec,
 					success:      false,
@@ -281,27 +285,24 @@ func (e *engineImpl) processValidationLevel(
 			}
 
 			// Validate this single spec
-			valResult := e.validateSingleSpec(levelCtx, spec, rebasedByName, rebasedBySHA)
+			valResult := e.validateSingleSpec(ctx, spec, rebasedByName, rebasedBySHA)
 			results <- valResult
 		}(spec)
 	}
 
-	// Collect results as they come in, cancel on first failure
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// Process results and cancel context on first failure for early exit
+	// Collect every sibling's result. The first failure wins for reporting,
+	// but we keep accumulating successes so they don't get dropped.
 	var firstFailure *validationResult
 	for valResult := range results {
 		if !valResult.success {
 			if firstFailure == nil {
-				// First failure detected - save it and cancel remaining validations
 				firstFailure = &valResult
-				cancelLevel()
 			}
-			// Continue draining results to avoid blocking goroutines
 			continue
 		}
 

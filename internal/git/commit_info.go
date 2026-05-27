@@ -5,28 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/go-git/go-git/v6/plumbing"
 )
-
-// resolveRefHashInternal is a transitional shim that converts the string SHA
-// from `git rev-parse` into a plumbing.Hash. Callers that still pass the hash
-// to go-git's repo.CommitObject (diff.go, branches.go, GetCommitSHA/GetParent
-// in runner.go) need this until Phase 6 swaps those go-git uses out too.
-func (r *runner) resolveRefHashInternal(_ *Repository, ref string) (plumbing.Hash, error) {
-	sha, err := r.resolveRefSHA(ref)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-	return plumbing.NewHash(sha), nil
-}
-
-// resolveRefHash is the locking variant of resolveRefHashInternal. The lock
-// no longer matters (the shell-out is parallel-safe) but the signature is
-// preserved for callers still mid-migration.
-func (r *runner) resolveRefHash(repo *Repository, ref string) (plumbing.Hash, error) {
-	return r.resolveRefHashInternal(repo, ref)
-}
 
 // resolveRefSHA resolves any ref form (branch, short SHA, full SHA, tag,
 // "HEAD~1") to a 40-char SHA using `git rev-parse --verify`. The verify flag

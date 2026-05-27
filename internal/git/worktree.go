@@ -272,39 +272,29 @@ func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath strin
 }
 
 // WorktreeHasUncommittedChanges checks if a worktree has uncommitted changes.
-func (r *runner) WorktreeHasUncommittedChanges(_ context.Context, worktreePath string) (bool, error) {
-	repo, err := OpenRepository(worktreePath)
+// "Clean" means: no staged, unstaged, or untracked entries — matching the
+// prior go-git Status().IsClean() definition.
+func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error) {
+	out, err := r.RunGitCommandRawWithContext(ctx,
+		"-C", worktreePath,
+		"status", "--porcelain", "--untracked-files=normal",
+	)
 	if err != nil {
 		return false, fmt.Errorf("failed to check status in worktree %s: %w", worktreePath, err)
 	}
-	defer func() { _ = repo.Close() }()
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return false, fmt.Errorf("failed to open worktree %s: %w", worktreePath, err)
-	}
-	status, err := worktree.Status()
-	if err != nil {
-		return false, fmt.Errorf("failed to check status in worktree %s: %w", worktreePath, err)
-	}
-	return !status.IsClean(), nil
+	return strings.TrimSpace(out) != "", nil
 }
 
 // GetWorktreeCurrentBranch returns the name of the branch currently checked out in a worktree.
 // Returns empty string if the worktree is in detached HEAD state.
-func (r *runner) GetWorktreeCurrentBranch(_ context.Context, worktreePath string) (string, error) {
-	repo, err := OpenRepository(worktreePath)
+func (r *runner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error) {
+	out, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
-		return "", fmt.Errorf("failed to get current branch in worktree %s: %w", worktreePath, err)
+		// Detached HEAD: symbolic-ref exits non-zero. Treat as empty rather
+		// than an error to match the prior behavior.
+		return "", nil //nolint:nilerr
 	}
-	defer func() { _ = repo.Close() }()
-	head, err := repo.Head()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current branch in worktree %s: %w", worktreePath, err)
-	}
-	if !head.Name().IsBranch() {
-		return "", nil
-	}
-	return head.Name().Short(), nil
+	return strings.TrimSpace(out), nil
 }
 
 // ListWorktreeMetas lists all registered worktree metadata

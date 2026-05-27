@@ -91,6 +91,10 @@ func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
 	r.goGitMu.Lock()
 	defer r.goGitMu.Unlock()
 
+	if err := r.ensureBranchesNotCheckedOut(ctx, []string{branchName}); err != nil {
+		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
+	}
+
 	// Use native git instead of go-git's RemoveReference: go-git's filesystem
 	// storer only handles loose refs, so deleting a branch packed into
 	// .git/packed-refs silently no-ops (returns nil while the ref survives).

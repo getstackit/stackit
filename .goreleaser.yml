@@ -79,6 +79,46 @@ archives:
         formats: [zip]
     files:
       - README.md
+dockers:
+  - id: server-amd64
+    image_templates:
+      - 'ghcr.io/getstackit/stackit-server:{{ .Version }}-amd64'
+    ids: [server]
+    dockerfile: Dockerfile.server
+    use: buildx
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/getstackit/stackit"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.revision={{.Commit}}"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+  - id: server-arm64
+    image_templates:
+      - 'ghcr.io/getstackit/stackit-server:{{ .Version }}-arm64'
+    ids: [server]
+    dockerfile: Dockerfile.server
+    use: buildx
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/getstackit/stackit"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.revision={{.Commit}}"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+
+docker_manifests:
+  - name_template: 'ghcr.io/getstackit/stackit-server:{{ .Version }}'
+    image_templates:
+      - 'ghcr.io/getstackit/stackit-server:{{ .Version }}-amd64'
+      - 'ghcr.io/getstackit/stackit-server:{{ .Version }}-arm64'
+  - name_template: 'ghcr.io/getstackit/stackit-server:latest'
+    image_templates:
+      - 'ghcr.io/getstackit/stackit-server:{{ .Version }}-amd64'
+      - 'ghcr.io/getstackit/stackit-server:{{ .Version }}-arm64'
+
 checksum:
   name_template: 'checksums.txt'
 

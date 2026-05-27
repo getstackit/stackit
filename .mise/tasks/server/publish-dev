@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+#MISE description="Build and push a snapshot stackit-server image to ghcr.io without a release"
+#MISE alias="server:publish:dev"
+set -euo pipefail
+
+# Push a snapshot multi-arch image to ghcr.io for ad-hoc dogfooding (Railway,
+# remote pulls, etc.) without cutting a release tag. Uses goreleaser snapshot
+# mode to build the per-arch images locally, then re-tags and pushes them
+# under TAG (default: dev).
+#
+# Usage:
+#   mise run server:publish:dev                # pushes :dev (+ amd64/arm64)
+#   TAG=preview mise run server:publish:dev    # pushes :preview
+#   SKIP_BUILD=1 mise run server:publish:dev   # reuse existing dist/ output
+
+IMAGE="${IMAGE:-ghcr.io/getstackit/stackit-server}"
+TAG="${TAG:-dev}"
+SKIP_BUILD="${SKIP_BUILD:-0}"
+
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[0;33m'
+RED=$'\033[0;31m'
+RESET=$'\033[0m'
+
+log()  { printf "%s==>%s %s\n" "$GREEN" "$RESET" "$*"; }
+warn() { printf "%s==>%s %s\n" "$YELLOW" "$RESET" "$*" >&2; }
+die()  { printf "%serror:%s %s\n" "$RED" "$RESET" "$*" >&2; exit 1; }
+
+command -v docker >/dev/null    || die "docker not on PATH"
+command -v goreleaser >/dev/null || die "goreleaser not on PATH (mise should install it)"
+command -v jq >/dev/null         || die "jq not on PATH"
+
+# Verify we can push to GHCR before spending 90s on a build.
+if ! docker buildx imagetools inspect "$IMAGE:latest" >/dev/null 2>&1; then
+  if ! grep -q '"ghcr.io"' "${HOME}/.docker/config.json" 2>/dev/null; then
+    warn "Not logged into ghcr.io — attempting via 'gh auth token'."
+    if command -v gh >/dev/null && gh auth token >/dev/null 2>&1; then
+      gh auth token | docker login ghcr.io \
+        -u "$(gh api user --jq .login)" --password-stdin
+    else
+      die "Login to ghcr.io first. Run: gh auth refresh -s write:packages,read:packages && \\
+       echo \$(gh auth token) | docker login ghcr.io -u \$(gh api user --jq .login) --password-stdin"
+    fi
+  fi
+fi
+
+if [ "$SKIP_BUILD" != "1" ]; then
+  log "Building snapshot images (multi-arch, this takes a few minutes)..."
+  goreleaser release --snapshot --clean \
+    --skip=archive,homebrew,scoop,nfpm,sbom,announce,publish
+else
+  log "SKIP_BUILD=1 — reusing existing dist/"
+  [ -f dist/metadata.json ] || die "dist/metadata.json missing; can't skip build"
+fi
+
+SNAP_VERSION="$(jq -r .version dist/metadata.json)"
+log "Snapshot version: ${SNAP_VERSION}"
+log "Pushing to ${IMAGE}:${TAG} (+ ${TAG}-amd64, ${TAG}-arm64)"
+
+for arch in amd64 arm64; do
+  src="${IMAGE}:${SNAP_VERSION}-${arch}"
+  dst="${IMAGE}:${TAG}-${arch}"
+  docker tag "$src" "$dst"
+  docker push "$dst"
+done
+
+# Manifest may already exist locally from a previous run; recreate it cleanly.
+docker manifest rm "${IMAGE}:${TAG}" >/dev/null 2>&1 || true
+docker manifest create "${IMAGE}:${TAG}" \
+  "${IMAGE}:${TAG}-amd64" \
+  "${IMAGE}:${TAG}-arm64"
+docker manifest push "${IMAGE}:${TAG}"
+
+log "Done. Pull with:  docker pull ${IMAGE}:${TAG}"
+log "Verify multi-arch: docker buildx imagetools inspect ${IMAGE}:${TAG}"

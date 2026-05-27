@@ -16,6 +16,10 @@ import (
 
 // ServerConfig holds configuration for the API server.
 type ServerConfig struct {
+	// BindAddr is the host/IP to listen on. Empty means "all interfaces".
+	// apps/server picks a safe default (127.0.0.1) and switches to the
+	// public-facing form when PORT or STACKIT_PUBLIC is set.
+	BindAddr    string
 	Port        int
 	CORSOrigins []string
 	APIPrefixes []string
@@ -99,16 +103,27 @@ func (s *Server) Start() error {
 		http.NotFound(w, r)
 	})
 
-	handler := corsMiddleware(s.config.CORSOrigins, root)
-	handler = loggingMiddleware(handler)
+	// Middleware order (outermost first). recover wraps everything so a
+	// panic in any inner layer can't kill the process; logging is innermost
+	// so it sees the final status written by handlers (and by any earlier
+	// middleware that short-circuits).
+	handler := loggingMiddleware(root)
+	handler = maxBodyMiddleware(handler)
+	handler = corsMiddleware(s.config.CORSOrigins, handler)
+	handler = securityHeadersMiddleware(handler)
+	handler = requestIDMiddleware(handler)
+	handler = recoverMiddleware(handler)
 
 	s.httpServer = &http.Server{
-		Addr:              fmt.Sprintf(":%d", s.config.Port),
+		Addr:              fmt.Sprintf("%s:%d", s.config.BindAddr, s.config.Port),
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MiB
 	}
 
-	log.Printf("stackit-web server listening on http://localhost:%d", s.config.Port)
+	log.Printf("stackit-web server listening on http://%s:%d", displayHost(s.config.BindAddr), s.config.Port)
 	return s.httpServer.ListenAndServe()
 }
 
@@ -152,6 +167,17 @@ func normalizeAPIPrefixes(prefixes []string) []string {
 		return []string{"/api/v1", "/api"}
 	}
 	return normalized
+}
+
+// displayHost returns a user-friendly host for the startup log line. Empty
+// bind address means "listen on all interfaces", which we surface as
+// "localhost" because that's what the operator will type in a browser to
+// reach the server locally.
+func displayHost(bind string) string {
+	if bind == "" || bind == "0.0.0.0" || bind == "::" {
+		return "localhost"
+	}
+	return bind
 }
 
 func isAPIPath(path string, prefixes []string) bool {

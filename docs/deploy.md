@@ -54,6 +54,7 @@ running `stackit init` inside each one before starting the container.
 | Var | Purpose |
 |-----|---------|
 | `PORT` | Listen port. Honored when `-port` isn't passed explicitly — needed for Railway, Fly, Heroku. Defaults to `8080`. |
+| `STACKIT_PUBLIC` | If set (any value), flips the default bind from `127.0.0.1` to `0.0.0.0`. `PORT` does the same thing implicitly. |
 
 ### Flags
 
@@ -63,9 +64,43 @@ The most useful flags:
 |------|---------|---------|
 | `-repos-config` | _(empty)_ | Path to the JSON repos file. Required for multi-repo mode. |
 | `-port` | `8080` | Listen port; overrides `$PORT`. |
-| `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. |
+| `-bind` | `127.0.0.1` (or `0.0.0.0` if `$PORT`/`$STACKIT_PUBLIC` are set) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server on a host where the heuristics don't fire. |
+| `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. Loopback origins are **not** allowed implicitly — list each origin you want to accept. |
 
 Run `stackit-server -h` inside the container for the full list.
+
+## Security posture
+
+The container is safe to run on a public hostname **only** behind:
+
+1. **TLS termination.** The server speaks plain HTTP; the PaaS / reverse
+   proxy in front (Railway, Fly, Cloudflare, Caddy, nginx) must terminate
+   HTTPS. The `Strict-Transport-Security` header the server emits assumes
+   this.
+2. **An authentication gateway** until in-process auth lands. Use Tailscale,
+   Cloudflare Access, an oauth2-proxy sidecar, or similar. Without one,
+   any caller can read every repo's branches/diffs and trigger
+   `POST /api/v1/repos/{id}/stacks/{branch}/submit`, which pushes branches
+   and creates PRs using the container's GitHub credentials.
+
+Built-in security controls (the server hardening pass that lands with
+this doc revision):
+
+- Process runs as the unprivileged `stackit` user (uid 10001) inside the
+  container — neither user nor group is `root`.
+- Default bind is `127.0.0.1`; the `$PORT`/`$STACKIT_PUBLIC` heuristic
+  flips to `0.0.0.0` so PaaS routers can reach the port.
+- Request body capped at 1 MiB; `MaxHeaderBytes` at 1 MiB; `WriteTimeout`
+  30 s, `IdleTimeout` 120 s, `ReadHeaderTimeout` 10 s.
+- Panic recovery middleware: a panicking handler returns 500 but cannot
+  kill the process.
+- Per-request `X-Request-ID` (16 random bytes) echoed back and logged.
+- Security headers on every response: `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `HSTS` with a
+  two-year max-age, and a CSP locked to `'self'` for scripts/connects.
+- CORS allowlist is exact-match; no implicit loopback bypass.
+- Branch names supplied via path/query are validated against the same
+  rules `stackit` enforces locally before reaching git.
 
 ## Local smoke test
 

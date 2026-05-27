@@ -1,15 +1,139 @@
 package api
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
+	"runtime/debug"
 	"strings"
 	"time"
 )
 
-// corsMiddleware adds CORS headers for the given allowed origins.
+// requestIDHeader is the response header that carries the per-request ID. The
+// same value is stashed on the request context so handlers and the logger can
+// reference it.
+const requestIDHeader = "X-Request-ID"
+
+// maxRequestBodyBytes caps every request body. POST /submit takes no body
+// today; this is defense against runaway uploads against any endpoint.
+const maxRequestBodyBytes = 1 << 20 // 1 MiB
+
+type ctxKey int
+
+const ctxKeyRequestID ctxKey = iota
+
+// RequestIDFromContext returns the request ID associated with the context, or
+// the empty string if none was set.
+func RequestIDFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(ctxKeyRequestID).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// recoverMiddleware catches panics in downstream handlers, logs them with a
+// stack trace, and returns a 500. Without this, a single panicking handler
+// kills the whole server process.
+func recoverMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			rec := recover()
+			if rec == nil {
+				return
+			}
+			rid := RequestIDFromContext(r.Context())
+			log.Printf("panic recovered request_id=%s %s %s: %v\n%s", rid, r.Method, r.URL.Path, rec, debug.Stack()) //nolint:gosec // method and path are safe to log
+			// If the handler already wrote a status, we can't change it.
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+// requestIDMiddleware assigns each request an opaque ID, echoes it as a
+// response header, and stashes it on the context for handlers/logging. If
+// the client supplied an X-Request-ID we adopt it (so traces can be
+// stitched across a proxy), capped at 64 chars and ASCII-only.
+func requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rid := sanitizeIncomingRequestID(r.Header.Get(requestIDHeader))
+		if rid == "" {
+			rid = newRequestID()
+		}
+		w.Header().Set(requestIDHeader, rid)
+		ctx := context.WithValue(r.Context(), ctxKeyRequestID, rid)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func newRequestID() string {
+	var buf [16]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		// rand.Read on modern OSes only fails in pathological conditions.
+		// Fall back to a timestamp so we still produce *something*.
+		return "rid-" + time.Now().UTC().Format("20060102T150405.000000000")
+	}
+	return hex.EncodeToString(buf[:])
+}
+
+// sanitizeIncomingRequestID accepts a caller-supplied ID only if it's short
+// and ASCII-printable. Anything else gets dropped so we don't reflect attacker
+// input into headers or log lines.
+func sanitizeIncomingRequestID(s string) string {
+	if s == "" || len(s) > 64 {
+		return ""
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c > 0x7e {
+			return ""
+		}
+	}
+	return s
+}
+
+// securityHeadersMiddleware sets the baseline browser security headers we want
+// on every response. CSP here matches the embedded Next.js shell; if the
+// frontend starts pulling third-party scripts/images, tighten or extend
+// connect-src/script-src to match.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		h.Set("Content-Security-Policy",
+			"default-src 'self'; "+
+				"img-src 'self' data: https:; "+
+				"style-src 'self' 'unsafe-inline'; "+
+				"script-src 'self'; "+
+				"connect-src 'self'; "+
+				"frame-ancestors 'none'; "+
+				"base-uri 'self'; "+
+				"form-action 'self'")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// maxBodyMiddleware caps each request body at maxRequestBodyBytes. Reads past
+// the limit return an error from the handler's Read call, and http.MaxBytesReader
+// surfaces a 413 if the handler doesn't handle it explicitly.
+func maxBodyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// corsMiddleware adds CORS headers for the given allowed origins. Origins
+// must be configured explicitly via -cors; there is no implicit loopback
+// allowance, so the server is safe to run on a host shared with untrusted
+// processes.
 func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
@@ -17,12 +141,15 @@ func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if _, ok := originSet[origin]; ok || isLocalDevOrigin(origin) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			w.Header().Set("Access-Control-Max-Age", "86400")
+		origin := strings.TrimRight(r.Header.Get("Origin"), "/")
+		if _, ok := originSet[origin]; ok {
+			h := w.Header()
+			h.Set("Access-Control-Allow-Origin", origin)
+			h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			h.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID")
+			h.Set("Access-Control-Allow-Credentials", "true")
+			h.Set("Access-Control-Max-Age", "86400")
+			h.Add("Vary", "Origin")
 		}
 
 		if r.Method == http.MethodOptions {
@@ -34,29 +161,8 @@ func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 	})
 }
 
-func isLocalDevOrigin(origin string) bool {
-	if origin == "" {
-		return false
-	}
-
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return false
-	}
-
-	host := u.Hostname()
-	if host == "localhost" {
-		return true
-	}
-
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
-// loggingMiddleware logs each request with method, path, status, and duration.
+// loggingMiddleware logs each request with method, path, status, duration,
+// and request ID.
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -64,7 +170,8 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(sw, r)
 
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond)) //nolint:gosec // method and path are safe to log
+		rid := RequestIDFromContext(r.Context())
+		log.Printf("%s %s %d %s rid=%s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond), rid) //nolint:gosec // method and path are safe to log
 	})
 }
 
@@ -79,7 +186,7 @@ func (w *statusWriter) WriteHeader(code int) {
 }
 
 // Unwrap allows http.ResponseController to access the underlying ResponseWriter
-// for features like Flush.
+// for features like Flush and SetWriteDeadline (SSE).
 func (w *statusWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }

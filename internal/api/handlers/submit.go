@@ -53,6 +53,9 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !validateBranchName(w, rootBranch) {
+		return
+	}
 
 	ctx := app.NewContext(entry.Engine,
 		app.WithRepoRoot(entry.RepoRoot),

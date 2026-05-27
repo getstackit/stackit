@@ -42,6 +42,14 @@ func newStaticHandler(staticFS fs.FS) http.Handler {
 
 		if staticFS != nil {
 			if _, err := fs.Stat(staticFS, cleanPath); err == nil {
+				// Next emits hashed asset paths under _next/static/, which are
+				// safe to cache aggressively. Everything else (HTML, manifests,
+				// etc.) should re-validate so deploys take effect immediately.
+				if strings.HasPrefix(cleanPath, "_next/static/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					w.Header().Set("Cache-Control", "no-cache")
+				}
 				fileServer.ServeHTTP(w, r)
 				return
 			}
@@ -60,6 +68,7 @@ func newStaticHandler(staticFS fs.FS) http.Handler {
 
 func writeIndex(w http.ResponseWriter, indexHTML []byte) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(indexHTML)
 }

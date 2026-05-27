@@ -1,12 +1,17 @@
-# Image for stackit-server. Goreleaser builds binaries via cross-compile and
-# drops the linux/amd64 or linux/arm64 binary into the build context, where
-# this COPY picks it up. Alpine (not distroless-static) because the server
-# shells out to git for every git op — distroless has no git binary.
+# Image for stackit-server. Goreleaser dockers_v2 builds binaries via
+# cross-compile and arranges them under linux/<arch>/ in the build context,
+# which TARGETPLATFORM ("linux/amd64" or "linux/arm64") then selects.
+# Alpine (not distroless-static) because the server shells out to git for
+# every git op — distroless has no git binary.
 FROM alpine:3.20
 
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apk add --no-cache git ca-certificates tzdata \
+ && addgroup -S -g 10001 stackit \
+ && adduser -S -D -H -u 10001 -G stackit stackit
 
-COPY stackit-server /usr/local/bin/stackit-server
+ARG TARGETPLATFORM
+COPY --chown=stackit:stackit $TARGETPLATFORM/stackit-server /usr/local/bin/stackit-server
 
+USER stackit:stackit
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/stackit-server"]

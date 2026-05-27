@@ -120,13 +120,17 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 
 	// Clean up in-memory cache for deleted branch
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	e.state.removeBranch(branchName)
-
-	// Remove from branches list
 	if i := slices.Index(e.state.branches, branchName); i >= 0 {
 		e.state.setBranches(slices.Delete(e.state.branches, i, i+1))
+	}
+	e.mu.Unlock()
+
+	// Rebuild engine state from disk so callers don't need to track when to call
+	// eng.Rebuild() themselves. After this returns, GetBranch/GetParent/children
+	// reflect the post-deletion state across all cached relationships.
+	if err := e.rebuild(); err != nil {
+		return fmt.Errorf("deleted branch %s but failed to rebuild engine state: %w", branchName, err)
 	}
 
 	if reparentErr != nil {
@@ -246,6 +250,12 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 	childrenToRestack := make([]string, 0, len(allSurvivingChildren))
 	for child := range allSurvivingChildren {
 		childrenToRestack = append(childrenToRestack, child)
+	}
+
+	// Rebuild engine state from disk so callers don't need to track when to
+	// call eng.Rebuild() themselves. One rebuild covers the entire batch.
+	if rebuildErr := e.rebuild(); rebuildErr != nil {
+		return childrenToRestack, fmt.Errorf("deleted branches but failed to rebuild engine state: %w", rebuildErr)
 	}
 
 	if reparentErr != nil {

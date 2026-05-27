@@ -268,10 +268,15 @@ func (e *engineImpl) GetStackMeta(stackID string) (*git.StackMeta, error) {
 	return e.git.ReadStackMeta(stackID)
 }
 
-// SyncStackIDFromParent updates a branch's stack ID to match its parent's.
-// This should be called after reparenting operations to keep stack IDs consistent.
-// Returns nil if the parent is trunk (keeps existing stack ID) or if no change is needed.
-func (e *engineImpl) SyncStackIDFromParent(ctx context.Context, branch Branch) error {
+// syncStackIDFromParent updates a branch's stack ID to match its parent's and
+// propagates that stack ID to all descendants. Called automatically at the end
+// of ReparentBranch/ReparentBranches so callers don't need to remember; not
+// exported because external callers should reparent via ReparentBranch instead
+// of poking the stack ID directly.
+//
+// Returns nil if the parent is trunk (keeps existing stack ID), the parent has
+// no stack ID (legacy branch), or the branch is already in sync.
+func (e *engineImpl) syncStackIDFromParent(ctx context.Context, branch Branch) error {
 	parent := branch.GetParent()
 	if parent == nil {
 		// Parent is trunk - keep existing stack ID
@@ -290,7 +295,9 @@ func (e *engineImpl) SyncStackIDFromParent(ctx context.Context, branch Branch) e
 		return nil
 	}
 
-	return e.SetStackID(ctx, branch, parentStackID)
+	// Propagate to descendants so a cross-stack reparent moves the whole
+	// subtree under the new stack, not just the reparented branch.
+	return e.propagateStackID(ctx, branch.GetName(), parentStackID)
 }
 
 // GetStackIDsForBranches returns the unique stack IDs for the given branches.

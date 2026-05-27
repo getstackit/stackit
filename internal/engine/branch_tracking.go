@@ -187,18 +187,29 @@ func (e *engineImpl) setParentPreservingDivergence(ctx context.Context, branch B
 // ReparentBranch changes a branch's parent while automatically preserving its
 // divergence point. This is the preferred way to reparent an existing branch
 // when the branch's own commits should not change.
+//
+// Automatically propagates the new parent's stack ID to the reparented branch
+// when the move crosses a stack boundary; same-stack reparenting is a no-op
+// for stack ID.
 func (e *engineImpl) ReparentBranch(ctx context.Context, branch Branch, newParent Branch) error {
 	div, err := e.GetDivergencePoint(branch.GetName())
 	if err != nil {
 		return fmt.Errorf("failed to determine divergence point for %s: %w", branch.GetName(), err)
 	}
-	return e.setParentPreservingDivergence(ctx, branch, newParent, div)
+	if err := e.setParentPreservingDivergence(ctx, branch, newParent, div); err != nil {
+		return err
+	}
+	// Fetch the post-reparent branch so syncStackIDFromParent sees the new parent.
+	return e.syncStackIDFromParent(ctx, e.GetBranch(branch.GetName()))
 }
 
 // ReparentBranches changes multiple branches to the same new parent while
 // preserving each branch's divergence point. Divergence points are captured
 // for all branches before any reparenting begins, ensuring correctness when
 // branches in the list are related to each other.
+//
+// Automatically propagates the new parent's stack ID to each branch when the
+// move crosses a stack boundary.
 func (e *engineImpl) ReparentBranches(ctx context.Context, branchNames []string, newParent Branch) error {
 	divPoints := make(map[string]string, len(branchNames))
 	for _, name := range branchNames {
@@ -212,6 +223,9 @@ func (e *engineImpl) ReparentBranches(ctx context.Context, branchNames []string,
 	for _, name := range branchNames {
 		if err := e.setParentPreservingDivergence(ctx, e.GetBranch(name), newParent, divPoints[name]); err != nil {
 			return fmt.Errorf("failed to reparent %s to %s: %w", name, newParent.GetName(), err)
+		}
+		if err := e.syncStackIDFromParent(ctx, e.GetBranch(name)); err != nil {
+			return fmt.Errorf("failed to sync stack ID for %s: %w", name, err)
 		}
 	}
 	return nil

@@ -53,12 +53,8 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 
 	// Restack all descendants of the parent
 	if len(descendants) > 0 {
-		// Rebuild engine to reflect the deletion
-		if err := eng.Rebuild(eng.Trunk().GetName()); err != nil {
-			return fmt.Errorf("failed to rebuild engine: %w", err)
-		}
-
-		// Rebuild graph with fresh engine state
+		// DeleteBranch rebuilds engine state internally; just refresh the graph
+		// snapshot (graphs are immutable copies of engine state at query time).
 		graph = eng.Graph(engine.SortStrategyAlphabetical)
 
 		// Get updated descendants list (current branch's children are now children of parent)

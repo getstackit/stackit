@@ -610,7 +610,7 @@ func applyReparent(ctx context.Context, eng engine.Engine, branch engine.Branch,
 	if opts.preserveDivergence {
 		return eng.ReparentBranch(ctx, branch, newParent)
 	}
-	return eng.SetParent(ctx, branch, newParent)
+	return eng.SetParent(ctx, branch, newParent, engine.DivergenceRecompute)
 }
 
 // removeWorktreeIfCheckedOut removes the worktree if the branch is checked out in one.

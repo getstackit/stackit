@@ -237,7 +237,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update parent relationship: B's parent is now A
-		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("B"), s.Engine.GetBranch("A"))
+		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("B"), s.Engine.GetBranch("A"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// Verify that B and A have the same SHA (no commits between them)

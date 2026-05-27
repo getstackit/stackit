@@ -61,8 +61,9 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 	}
 	e.mu.Unlock()
 
-	// SetParent handles its own transaction and locking
-	return e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(parentBranchName))
+	// New branches start without prior divergence metadata, so recompute the
+	// merge-base from scratch.
+	return e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(parentBranchName), DivergenceRecompute)
 }
 
 // UntrackBranch stops tracking a branch by deleting its metadata
@@ -76,15 +77,55 @@ func (e *engineImpl) UntrackBranch(ctx context.Context, branchName string) error
 	return e.rebuild()
 }
 
-// SetParent updates a branch's parent using transaction API with retry logic
-// for concurrent modification resilience.
-func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch Branch) error {
+// DivergenceMode controls how SetParent updates a branch's recorded divergence
+// point (ParentBranchRevision) when its parent changes.
+type DivergenceMode int
+
+const (
+	// DivergencePreserve keeps the existing divergence point if it's still a
+	// valid ancestor of the branch. Use when the branch's own commits should
+	// not change — e.g., reparenting a branch onto a sibling stack.
+	DivergencePreserve DivergenceMode = iota
+
+	// DivergenceRecompute computes a fresh merge-base against the new parent
+	// (with a minor exception: if the old parent was merged into the new
+	// parent, the existing revision is retained as a stable anchor). Use when
+	// the branch has absorbed commits from a former parent (e.g. after a
+	// fold/merge), so that subsequent restacks include those commits.
+	DivergenceRecompute
+)
+
+// SetParent updates a branch's parent. The mode controls whether the existing
+// divergence point is preserved or recomputed; see DivergenceMode for the
+// trade-off. Retries on concurrent modification.
+func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch Branch, mode DivergenceMode) error {
 	branchName := branch.GetName()
 	parentBranchName := parentBranch.GetName()
 
 	if branchName == parentBranchName {
 		return fmt.Errorf("branch %s cannot be its own parent", branchName)
 	}
+
+	switch mode {
+	case DivergencePreserve:
+		div, err := e.GetDivergencePoint(branchName)
+		if err != nil {
+			return fmt.Errorf("failed to determine divergence point for %s: %w", branchName, err)
+		}
+		return e.setParentPreservingDivergence(ctx, branch, parentBranch, div)
+	case DivergenceRecompute:
+		return e.setParentRecomputingDivergence(ctx, branch, parentBranch)
+	default:
+		return fmt.Errorf("unknown DivergenceMode: %d", mode)
+	}
+}
+
+// setParentRecomputingDivergence updates a branch's parent and refreshes the
+// divergence point by computing a new merge-base. Retries on concurrent
+// modification.
+func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch Branch, parentBranch Branch) error {
+	branchName := branch.GetName()
+	parentBranchName := parentBranch.GetName()
 
 	return e.WithRetry(ctx, func() error {
 		// Get new parent revision (may run multiple times on retry)

@@ -124,7 +124,7 @@ type BranchReader interface {
 type BranchTracking interface {
 	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
 	UntrackBranch(ctx context.Context, branchName string) error
-	SetParent(ctx context.Context, branch Branch, parentBranch Branch) error
+	SetParent(ctx context.Context, branch Branch, parentBranch Branch, mode DivergenceMode) error
 	// ReparentBranch changes a branch's parent while automatically preserving
 	// its divergence point. Preferred over SetParent for existing branches.
 	ReparentBranch(ctx context.Context, branch Branch, newParent Branch) error

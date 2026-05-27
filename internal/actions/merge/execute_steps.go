@@ -137,7 +137,7 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 	}
 
 	// Update parent to trunk
-	if err := eng.SetParent(ctx.Context, eng.GetBranch(step.BranchName), eng.GetBranch(trunkName)); err != nil {
+	if err := eng.SetParent(ctx.Context, eng.GetBranch(step.BranchName), eng.GetBranch(trunkName), engine.DivergenceRecompute); err != nil {
 		return fmt.Errorf("failed to update parent: %w", err)
 	}
 

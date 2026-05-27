@@ -309,13 +309,13 @@ func (e *engineImpl) restackBranch(
 		newParent := e.findNearestValidAncestor(ctx, branchName, metaMap)
 		e.mu.RUnlock()
 
-		// Reparent to the nearest valid ancestor. Using SetParent (not
-		// SetParentPreservingDivergence) is intentional here: the old parent
-		// was merged/deleted, so SetParent's shouldUpdateRevision logic
-		// correctly preserves the existing divergence point when the old
-		// parent was merged into the new parent. The subsequent restack then
-		// rebases the branch's own commits onto the new parent.
-		if err := e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(newParent)); err != nil {
+		// Reparent to the nearest valid ancestor. DivergenceRecompute is
+		// intentional: the old parent was merged/deleted, so SetParent's
+		// shouldUpdateRevision logic correctly preserves the existing
+		// divergence point when the old parent was merged into the new parent.
+		// The subsequent restack then rebases the branch's own commits onto
+		// the new parent.
+		if err := e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(newParent), DivergenceRecompute); err != nil {
 			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to reparent %s to %s: %w", branchName, newParent, err)
 		}
 		parent = newParent

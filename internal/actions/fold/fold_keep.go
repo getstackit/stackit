@@ -49,13 +49,11 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 
 	// The current branch absorbed the parent via merge, so it needs a fresh
 	// merge-base calculation against the grandparent (now its parent).
-	// DeleteBranch preserved the old divergence point, which would cause
-	// restack to drop the merged commits. Using SetParent (not
-	// SetParentPreservingDivergence) is intentional here — we want the
-	// merge-base recalculation to include the absorbed commits.
+	// DeleteBranch preserved the old divergence point, which would drop the
+	// merged commits at restack; DivergenceRecompute pulls them back in.
 	refreshedCurrent := eng.GetBranch(currentBranch.GetName())
 	if grandparent := refreshedCurrent.GetParent(); grandparent != nil {
-		if err := eng.SetParent(gctx, refreshedCurrent, *grandparent); err != nil {
+		if err := eng.SetParent(gctx, refreshedCurrent, *grandparent, engine.DivergenceRecompute); err != nil {
 			return fmt.Errorf("failed to reset divergence for %s: %w", currentBranch.GetName(), err)
 		}
 	}

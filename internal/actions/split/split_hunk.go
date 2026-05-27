@@ -485,7 +485,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Update branchToSplit to have newParentBranch as its parent
-	if err := eng.SetParent(gitCtx, branchToSplit, newParentBranch); err != nil {
+	if err := eng.SetParent(gitCtx, branchToSplit, newParentBranch, engine.DivergenceRecompute); err != nil {
 		return fmt.Errorf("failed to update parent of %s: %w", branchToSplit.GetName(), err)
 	}
 

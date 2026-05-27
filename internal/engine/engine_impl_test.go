@@ -131,7 +131,7 @@ func TestSetParent(t *testing.T) {
 		require.Equal(t, "branch1", parent2.GetName())
 
 		// Change parent of branch2 to main
-		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"))
+		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// Verify new parent
@@ -1367,7 +1367,7 @@ func TestSetParentScenarios(t *testing.T) {
 		s.RunGit("merge", "branch1", "--no-ff", "-m", "Merge branch1")
 
 		// 6. Reparent branch2 to main (what happens during 'stackit merge' or 'stackit sync')
-		err := s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"))
+		err := s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// VERIFY: ParentBranchRevision should still be branch1OriginalSHA
@@ -1395,7 +1395,7 @@ func TestSetParentScenarios(t *testing.T) {
 		s.RunGit("merge", "branch1", "--no-ff", "-m", "Merge branch1 into branch2")
 
 		// 3. Reparent branch2 to main (branch1 will be deleted in a real fold)
-		err := s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"))
+		err := s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// VERIFY: ParentBranchRevision should be updated to main's tip
@@ -1428,7 +1428,7 @@ func TestSetParentScenarios(t *testing.T) {
 		s.RunGit("rebase", "main")
 
 		// 3. Call SetParent with the same parent (main)
-		err := s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch1"), s.Engine.GetBranch("main"))
+		err := s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch1"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// VERIFY: ParentBranchRevision should be updated to mainNewSHA

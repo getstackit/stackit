@@ -3,12 +3,10 @@ package git
 import (
 	"context"
 	"fmt"
-
-	gogit "github.com/go-git/go-git/v6"
 )
 
 func (r *runner) ResetMerge(ctx context.Context, revision string) error {
-	err := r.resetWorktree(ctx, revision, gogit.MergeReset)
+	err := r.resetWorktree(ctx, revision, "--merge")
 	if err != nil {
 		return fmt.Errorf("failed to reset --merge to %s: %w", revision, err)
 	}
@@ -17,7 +15,7 @@ func (r *runner) ResetMerge(ctx context.Context, revision string) error {
 }
 
 func (r *runner) HardReset(ctx context.Context, revision string) error {
-	err := r.resetWorktree(ctx, revision, gogit.HardReset)
+	err := r.resetWorktree(ctx, revision, "--hard")
 	if err != nil {
 		return fmt.Errorf("failed to hard reset to %s: %w", revision, err)
 	}
@@ -26,7 +24,7 @@ func (r *runner) HardReset(ctx context.Context, revision string) error {
 }
 
 func (r *runner) SoftReset(ctx context.Context, revision string) error {
-	err := r.resetWorktree(ctx, revision, gogit.SoftReset)
+	err := r.resetWorktree(ctx, revision, "--soft")
 	if err != nil {
 		return fmt.Errorf("failed to soft reset to %s: %w", revision, err)
 	}
@@ -35,33 +33,22 @@ func (r *runner) SoftReset(ctx context.Context, revision string) error {
 }
 
 func (r *runner) MixedReset(ctx context.Context, revision string) error {
-	err := r.resetWorktree(ctx, revision, gogit.MixedReset)
+	err := r.resetWorktree(ctx, revision, "--mixed")
 	if err == nil {
 		r.revisionCache.InvalidateAll()
 	}
 	return err
 }
 
-func (r *runner) resetWorktree(_ context.Context, revision string, mode gogit.ResetMode) error {
-	repo, err := r.ensureRepo()
-	if err != nil {
-		return err
-	}
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return err
-	}
-
+// resetWorktree shells out to native git so the caller's context (deadline,
+// cancellation) is honored. go-git's worktree.Reset() takes no context, so a
+// hung reset (e.g., huge working tree) could not be interrupted.
+func (r *runner) resetWorktree(ctx context.Context, revision, modeFlag string) error {
 	r.goGitMu.Lock()
 	defer r.goGitMu.Unlock()
 
-	hash, err := r.resolveRefHashInternal(repo, revision)
-	if err != nil {
+	if _, err := r.RunGitCommandWithContext(ctx, "reset", modeFlag, revision); err != nil {
 		return err
 	}
-
-	return worktree.Reset(&gogit.ResetOptions{
-		Commit: hash,
-		Mode:   mode,
-	})
+	return nil
 }

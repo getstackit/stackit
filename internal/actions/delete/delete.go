@@ -189,7 +189,9 @@ func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engin
 		}
 
 		targetParentName := deleted.GetParentOrTrunk()
-		targetParentName = findNearestNonDeletingAncestorForDelete(eng, toDeleteSet, targetParentName)
+		targetParentName = eng.FindNearestNonExcludedAncestor(targetParentName, func(name string) bool {
+			return toDeleteSet[name]
+		})
 
 		for _, child := range graph.ChildBranches(deleted) {
 			childName := child.GetName()
@@ -218,18 +220,6 @@ func shouldPreserveDivergenceOnDelete(kind engine.DeletionReasonKind) bool {
 	default:
 		return false
 	}
-}
-
-func findNearestNonDeletingAncestorForDelete(eng engine.Engine, toDeleteSet map[string]bool, startParent string) string {
-	current := startParent
-	for toDeleteSet[current] {
-		parent := eng.GetBranch(current).GetParent()
-		if parent == nil {
-			return eng.Trunk().GetName()
-		}
-		current = parent.GetName()
-	}
-	return current
 }
 
 func mergeUniqueBranchNames(a []string, b []string) []string {

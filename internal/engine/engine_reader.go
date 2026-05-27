@@ -98,6 +98,23 @@ func (e *engineImpl) GetParent(branch Branch) *Branch {
 	return nil
 }
 
+// FindNearestNonExcludedAncestor walks the parent chain starting from
+// startParent and returns the first branch name for which isExcluded returns
+// false. Falls back to trunk if every ancestor up the chain is excluded.
+// Used by branch-deletion and similar workflows that need to reparent
+// children past a set of branches being removed.
+func (e *engineImpl) FindNearestNonExcludedAncestor(startParent string, isExcluded func(name string) bool) string {
+	current := startParent
+	for isExcluded(current) {
+		parent := e.GetBranch(current).GetParent()
+		if parent == nil {
+			return e.Trunk().GetName()
+		}
+		current = parent.GetName()
+	}
+	return current
+}
+
 // FindMostRecentTrackedAncestors finds the most recent tracked ancestors of a branch
 // by checking the branch's commit history against tracked branch tips.
 // Returns a slice of branch names that point to the most recent tracked commit in history.

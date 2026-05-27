@@ -19,6 +19,10 @@ type StackNavigator interface {
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	SortBranchesTopologically(branches Branches) Branches
 	FindBranchForCommit(commitSHA string) (string, error)
+	// FindNearestNonExcludedAncestor walks the parent chain from startParent
+	// and returns the first ancestor for which isExcluded returns false. Falls
+	// back to trunk if every ancestor up the chain is excluded.
+	FindNearestNonExcludedAncestor(startParent string, isExcluded func(name string) bool) string
 	ValidateOnBranch() (string, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	GetScope(branch Branch) Scope

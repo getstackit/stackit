@@ -254,9 +254,11 @@ type MetadataOperations interface {
 	BatchReadLocalMetadata(branchNames []string) map[string]*LocalMeta
 	WriteLocalMetadata(branchName string, meta *LocalMeta) error
 
-	// Transaction support methods
-	WriteMetadataBlob(meta *Meta) (string, error)
-	WriteLocalMetadataBlob(meta *LocalMeta) (string, error)
+	// Transaction support methods. The batch forms marshal each entry and
+	// forward to CreateBlobsBatch — call them with len(metas) >= 1 from
+	// engine_writer.go and transaction.go's commit path.
+	WriteMetadataBlobsBatch(metas []*Meta) ([]string, error)
+	WriteLocalMetadataBlobsBatch(metas []*LocalMeta) ([]string, error)
 	GetMetadataRefSHA(branchName string) string
 	GetLocalMetadataRefSHA(branchName string) string
 

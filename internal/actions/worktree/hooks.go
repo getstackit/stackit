@@ -45,7 +45,7 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 	approved := make([]string, 0, len(hookCmds))
 
 	for _, hook := range hookCmds {
-		if repoCfg.IsPostWorktreeCreateHookApproved(hook) {
+		if repoCfg.IsHookApproved(config.PhasePostWorktreeCreate, hook) {
 			approved = append(approved, hook)
 			continue
 		}
@@ -63,7 +63,7 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 		}
 
 		// Save approval (writes immediately to git config)
-		if err := repoCfg.AddApprovedPostWorktreeCreateHook(hook); err != nil {
+		if err := repoCfg.AddApprovedHook(config.PhasePostWorktreeCreate, hook); err != nil {
 			out.Warn("Failed to save hook approval: %v", err)
 		}
 		approved = append(approved, hook)

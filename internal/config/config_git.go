@@ -392,63 +392,138 @@ func (c *GitConfig) SetSplitHunkSelector(selector string) error {
 	return c.store.Set(KeySplitHunkSelector, selector)
 }
 
-// ApprovedPostWorktreeCreateHooks returns the list of approved hooks.
-func (c *GitConfig) ApprovedPostWorktreeCreateHooks() []string {
-	hooks, _ := c.store.GetAll(KeyApprovedHooks)
-	return hooks
-}
-
-// IsPostWorktreeCreateHookApproved checks if a hook is approved.
-func (c *GitConfig) IsPostWorktreeCreateHookApproved(hook string) bool {
-	return slices.Contains(c.ApprovedPostWorktreeCreateHooks(), hook)
-}
-
-// AddApprovedPostWorktreeCreateHook adds a hook to the approved list.
-func (c *GitConfig) AddApprovedPostWorktreeCreateHook(hook string) error {
-	if c.IsPostWorktreeCreateHookApproved(hook) {
-		return nil // Already approved
+// ApprovedHooks returns the list of approved hook commands for the given phase.
+//
+// For PhasePostWorktreeCreate, results include any approvals stored under the
+// legacy single-key form (KeyApprovedHooks) in addition to the new per-phase
+// key. Approvals appearing in both keys are deduplicated.
+func (c *GitConfig) ApprovedHooks(phase string) []string {
+	primary, _ := c.store.GetAll(KeyApprovedHookPrefix + phase)
+	if phase != PhasePostWorktreeCreate {
+		return primary
 	}
-	return c.store.Add(KeyApprovedHooks, hook)
-}
-
-// RemoveApprovedPostWorktreeCreateHook removes a hook from the approved list.
-func (c *GitConfig) RemoveApprovedPostWorktreeCreateHook(hook string) error {
-	// Get all current hooks
-	hooks := c.ApprovedPostWorktreeCreateHooks()
-	if !slices.Contains(hooks, hook) {
-		return nil // Not in list
+	legacy, _ := c.store.GetAll(KeyApprovedHooks)
+	if len(legacy) == 0 {
+		return primary
 	}
-
-	// Build the list of hooks to keep
-	hooksToKeep := make([]string, 0, len(hooks)-1)
-	for _, h := range hooks {
-		if h != hook {
-			hooksToKeep = append(hooksToKeep, h)
+	merged := make([]string, 0, len(primary)+len(legacy))
+	seen := make(map[string]bool, len(primary)+len(legacy))
+	for _, h := range primary {
+		if !seen[h] {
+			merged = append(merged, h)
+			seen[h] = true
 		}
 	}
+	for _, h := range legacy {
+		if !seen[h] {
+			merged = append(merged, h)
+			seen[h] = true
+		}
+	}
+	return merged
+}
 
-	// Remove all hooks first
-	if err := c.store.Unset(KeyApprovedHooks); err != nil {
+// IsHookApproved reports whether the command is approved for the given phase.
+func (c *GitConfig) IsHookApproved(phase, command string) bool {
+	return slices.Contains(c.ApprovedHooks(phase), command)
+}
+
+// AddApprovedHook records an approval for the given phase. Approvals are
+// written to the per-phase key; the legacy key is read but never written.
+func (c *GitConfig) AddApprovedHook(phase, command string) error {
+	if c.IsHookApproved(phase, command) {
+		return nil
+	}
+	return c.store.Add(KeyApprovedHookPrefix+phase, command)
+}
+
+// RemoveApprovedHook removes the approval for the given phase. For
+// PhasePostWorktreeCreate, the command is removed from both the per-phase
+// key and the legacy key if present in either.
+func (c *GitConfig) RemoveApprovedHook(phase, command string) error {
+	if err := removeFromMultiKey(c.store, KeyApprovedHookPrefix+phase, command); err != nil {
 		return err
 	}
-
-	// Re-add the ones we want to keep
-	// If this fails, try to restore the original state
-	for _, h := range hooksToKeep {
-		if err := c.store.Add(KeyApprovedHooks, h); err != nil {
-			// Try to restore original hooks
-			for _, original := range hooks {
-				_ = c.store.Add(KeyApprovedHooks, original)
-			}
-			return fmt.Errorf("failed to update hooks, attempted recovery: %w", err)
-		}
+	if phase == PhasePostWorktreeCreate {
+		return removeFromMultiKey(c.store, KeyApprovedHooks, command)
 	}
 	return nil
 }
 
+// ClearApprovedHooks removes all approvals for the given phase. For
+// PhasePostWorktreeCreate, this also clears the legacy key.
+func (c *GitConfig) ClearApprovedHooks(phase string) error {
+	if err := c.store.Unset(KeyApprovedHookPrefix + phase); err != nil {
+		return err
+	}
+	if phase == PhasePostWorktreeCreate {
+		return c.store.Unset(KeyApprovedHooks)
+	}
+	return nil
+}
+
+// ApprovedPostWorktreeCreateHooks returns the list of approved hooks.
+//
+// Deprecated: use ApprovedHooks(PhasePostWorktreeCreate).
+func (c *GitConfig) ApprovedPostWorktreeCreateHooks() []string {
+	return c.ApprovedHooks(PhasePostWorktreeCreate)
+}
+
+// IsPostWorktreeCreateHookApproved checks if a hook is approved.
+//
+// Deprecated: use IsHookApproved(PhasePostWorktreeCreate, hook).
+func (c *GitConfig) IsPostWorktreeCreateHookApproved(hook string) bool {
+	return c.IsHookApproved(PhasePostWorktreeCreate, hook)
+}
+
+// AddApprovedPostWorktreeCreateHook adds a hook to the approved list.
+//
+// Deprecated: use AddApprovedHook(PhasePostWorktreeCreate, hook).
+func (c *GitConfig) AddApprovedPostWorktreeCreateHook(hook string) error {
+	return c.AddApprovedHook(PhasePostWorktreeCreate, hook)
+}
+
+// RemoveApprovedPostWorktreeCreateHook removes a hook from the approved list.
+//
+// Deprecated: use RemoveApprovedHook(PhasePostWorktreeCreate, hook).
+func (c *GitConfig) RemoveApprovedPostWorktreeCreateHook(hook string) error {
+	return c.RemoveApprovedHook(PhasePostWorktreeCreate, hook)
+}
+
 // ClearApprovedPostWorktreeCreateHooks removes all hook approvals.
+//
+// Deprecated: use ClearApprovedHooks(PhasePostWorktreeCreate).
 func (c *GitConfig) ClearApprovedPostWorktreeCreateHooks() error {
-	return c.store.Unset(KeyApprovedHooks)
+	return c.ClearApprovedHooks(PhasePostWorktreeCreate)
+}
+
+// removeFromMultiKey removes a single value from a multi-value git config key
+// by reading all values, unsetting the key, and re-adding the remaining ones.
+// If the value is absent the key is left untouched. On a re-add failure the
+// original values are restored on a best-effort basis.
+func removeFromMultiKey(store *git.ConfigStore, key, value string) error {
+	current, _ := store.GetAll(key)
+	if !slices.Contains(current, value) {
+		return nil
+	}
+	keep := make([]string, 0, len(current)-1)
+	for _, v := range current {
+		if v != value {
+			keep = append(keep, v)
+		}
+	}
+	if err := store.Unset(key); err != nil {
+		return err
+	}
+	for _, v := range keep {
+		if err := store.Add(key, v); err != nil {
+			for _, original := range current {
+				_ = store.Add(key, original)
+			}
+			return fmt.Errorf("failed to update %s, attempted recovery: %w", key, err)
+		}
+	}
+	return nil
 }
 
 // MaxConcurrency returns the maximum number of concurrent validation operations.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 )
 
@@ -538,5 +539,110 @@ func TestConfigApprovedPostWorktreeCreateHooks(t *testing.T) {
 		cfg2, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
 		require.Empty(t, cfg2.ApprovedPostWorktreeCreateHooks())
+	})
+}
+
+func TestConfigApprovedHooks_GenericPhase(t *testing.T) {
+	t.Parallel()
+
+	t.Run("add and read approvals for an arbitrary phase", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+
+		cfg, err := LoadConfig(scene.Dir)
+		require.NoError(t, err)
+
+		require.False(t, cfg.IsHookApproved("pre-modify", "scripts/check.sh"))
+		require.NoError(t, cfg.AddApprovedHook("pre-modify", "scripts/check.sh"))
+		require.True(t, cfg.IsHookApproved("pre-modify", "scripts/check.sh"))
+
+		cfg2, err := LoadConfig(scene.Dir)
+		require.NoError(t, err)
+		require.Equal(t, []string{"scripts/check.sh"}, cfg2.ApprovedHooks("pre-modify"))
+	})
+
+	t.Run("approvals are scoped per phase", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+
+		cfg, err := LoadConfig(scene.Dir)
+		require.NoError(t, err)
+
+		require.NoError(t, cfg.AddApprovedHook("pre-modify", "shared.sh"))
+		require.True(t, cfg.IsHookApproved("pre-modify", "shared.sh"))
+		require.False(t, cfg.IsHookApproved("pre-submit", "shared.sh"))
+	})
+
+	t.Run("remove and clear work for arbitrary phases", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+
+		cfg, err := LoadConfig(scene.Dir)
+		require.NoError(t, err)
+
+		require.NoError(t, cfg.AddApprovedHook("pre-modify", "a"))
+		require.NoError(t, cfg.AddApprovedHook("pre-modify", "b"))
+		require.NoError(t, cfg.RemoveApprovedHook("pre-modify", "a"))
+		require.Equal(t, []string{"b"}, cfg.ApprovedHooks("pre-modify"))
+
+		require.NoError(t, cfg.ClearApprovedHooks("pre-modify"))
+		require.Empty(t, cfg.ApprovedHooks("pre-modify"))
+	})
+}
+
+func TestConfigApprovedHooks_LegacyKeyCompat(t *testing.T) {
+	t.Parallel()
+
+	t.Run("legacy key entries surface via the new generic reader", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+
+		// Write directly to the legacy single-key form.
+		store := git.NewConfigStore(scene.Dir)
+		require.NoError(t, store.Add(KeyApprovedHooks, "legacy-only"))
+
+		cfg, err := LoadConfig(scene.Dir)
+		require.NoError(t, err)
+		require.Equal(t, []string{"legacy-only"}, cfg.ApprovedHooks(PhasePostWorktreeCreate))
+		require.True(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "legacy-only"))
+	})
+
+	t.Run("union of legacy + per-phase keys deduplicates", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+
+		store := git.NewConfigStore(scene.Dir)
+		require.NoError(t, store.Add(KeyApprovedHooks, "shared"))
+		require.NoError(t, store.Add(KeyApprovedHooks, "legacy-only"))
+
+		cfg, err := LoadConfig(scene.Dir)
+		require.NoError(t, err)
+		require.NoError(t, cfg.AddApprovedHook(PhasePostWorktreeCreate, "shared"))
+		require.NoError(t, cfg.AddApprovedHook(PhasePostWorktreeCreate, "new-only"))
+
+		got := cfg.ApprovedHooks(PhasePostWorktreeCreate)
+		require.ElementsMatch(t, []string{"shared", "legacy-only", "new-only"}, got)
+		require.Len(t, got, 3, "shared entry should appear once even though it's in both keys")
+	})
+
+	t.Run("remove for legacy phase strips from both keys", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+
+		store := git.NewConfigStore(scene.Dir)
+		require.NoError(t, store.Add(KeyApprovedHooks, "drop-me"))
+
+		cfg, err := LoadConfig(scene.Dir)
+		require.NoError(t, err)
+		require.NoError(t, cfg.AddApprovedHook(PhasePostWorktreeCreate, "drop-me"))
+
+		require.NoError(t, cfg.RemoveApprovedHook(PhasePostWorktreeCreate, "drop-me"))
+		require.False(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "drop-me"))
+
+		// Verify both stores are empty.
+		legacy, _ := store.GetAll(KeyApprovedHooks)
+		require.Empty(t, legacy)
+		newKey, _ := store.GetAll(KeyApprovedHookPrefix + PhasePostWorktreeCreate)
+		require.Empty(t, newKey)
 	})
 }

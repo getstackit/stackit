@@ -45,6 +45,8 @@ type Configurer interface {
 	NavigationShowMerged() bool
 
 	// Hook approvals
+	ApprovedHooks(phase string) []string
+	IsHookApproved(phase, command string) bool
 	ApprovedPostWorktreeCreateHooks() []string
 	IsPostWorktreeCreateHookApproved(hook string) bool
 

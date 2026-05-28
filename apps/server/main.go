@@ -24,6 +24,15 @@ import (
 //go:embed all:static
 var staticFiles embed.FS
 
+// Build metadata injected via -ldflags by goreleaser (production) and the
+// `mise run build` task (local). Defaults are surfaced by `go run` and bare
+// `go build` so the binary is still self-identifying.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -45,6 +54,8 @@ func run() error {
 		authDisabled    = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
 	)
 	flag.Parse()
+
+	log.Printf("stackit-server version=%s commit=%s built=%s", version, commit, date)
 
 	// Honor $PORT when -port wasn't passed explicitly. PaaS hosts (Railway,
 	// Fly, Heroku) inject the port this way.

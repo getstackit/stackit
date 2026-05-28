@@ -55,9 +55,10 @@ run = """
   mkdir -p bin
   COMMIT=$(git rev-parse --short HEAD)
   DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  go build -ldflags "-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE" -o bin/stackit ./apps/cli
+  LDFLAGS="-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE"
+  go build -ldflags "$LDFLAGS" -o bin/stackit ./apps/cli
   ./scripts/sync-web-static.sh
-  go build -o bin/stackit-server ./apps/server
+  go build -ldflags "$LDFLAGS" -o bin/stackit-server ./apps/server
   if [ -d ./apps/st-tui ]; then
     go build -o bin/st-tui ./apps/st-tui
   fi
@@ -185,7 +186,10 @@ description = "Build stackit-server with embedded exported web assets"
 depends = ["web:sync-static"]
 run = """
   mkdir -p bin
-  go build -o bin/stackit-server ./apps/server
+  COMMIT=$(git rev-parse --short HEAD)
+  DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  LDFLAGS="-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE"
+  go build -ldflags "$LDFLAGS" -o bin/stackit-server ./apps/server
 """
 
 [tasks."server:run:embedded"]

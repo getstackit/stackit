@@ -24,7 +24,7 @@ func TestCreatePullRequest(t *testing.T) {
 			Draft: false,
 		}
 
-		pr, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, opts)
+		_, pr, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, opts)
 		require.NoError(t, err)
 		require.NotNil(t, pr)
 		require.NotNil(t, pr.Number)
@@ -48,7 +48,7 @@ func TestCreatePullRequest(t *testing.T) {
 			Draft: true,
 		}
 
-		pr, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, opts)
+		_, pr, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, opts)
 		require.NoError(t, err)
 		require.NotNil(t, pr)
 		require.True(t, *pr.Draft)
@@ -65,7 +65,7 @@ func TestCreatePullRequest(t *testing.T) {
 			Reviewers: []string{"reviewer1", "reviewer2"},
 		}
 
-		pr, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, opts)
+		_, pr, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, opts)
 		require.NoError(t, err)
 		require.NotNil(t, pr)
 		// Reviewers are requested (non-fatal if it fails, so we just check PR was created)
@@ -83,7 +83,7 @@ func TestCreatePullRequest(t *testing.T) {
 			TeamReviewers: []string{"team1", "team2"},
 		}
 
-		pr, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, opts)
+		_, pr, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, opts)
 		require.NoError(t, err)
 		require.NotNil(t, pr)
 		require.NotNil(t, pr.Number)
@@ -102,7 +102,7 @@ func TestUpdatePullRequest(t *testing.T) {
 			Head:  "feature-branch",
 			Base:  "main",
 		}
-		createdPR, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, createOpts)
+		_, createdPR, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, createOpts)
 		require.NoError(t, err)
 		require.NotNil(t, createdPR.Number)
 
@@ -134,7 +134,7 @@ func TestUpdatePullRequest(t *testing.T) {
 			Head:  "feature-branch",
 			Base:  "main",
 		}
-		createdPR, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, createOpts)
+		_, createdPR, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, createOpts)
 		require.NoError(t, err)
 
 		// Update base branch
@@ -167,7 +167,7 @@ func TestUpdatePullRequest(t *testing.T) {
 			Head:  "feature-branch",
 			Base:  "main",
 		}
-		createdPR, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, createOpts)
+		_, createdPR, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, createOpts)
 		require.NoError(t, err)
 
 		// Update with reviewers
@@ -192,7 +192,7 @@ func TestGetPullRequestByBranch(t *testing.T) {
 			Head:  branchName,
 			Base:  "main",
 		}
-		createdPR, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, createOpts)
+		_, createdPR, err := githubpkg.CreatePullRequest(context.Background(), client, owner, repo, createOpts)
 		require.NoError(t, err)
 
 		// Get PR by branch

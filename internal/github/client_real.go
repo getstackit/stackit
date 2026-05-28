@@ -51,52 +51,11 @@ func (c *StackitGitHubClient) GetOwnerRepo() (string, string) {
 
 // CreatePullRequest creates a new pull request
 func (c *StackitGitHubClient) CreatePullRequest(ctx context.Context, owner, repo string, opts CreatePROptions) (*PullRequestInfo, error) {
-	pr := &github.NewPullRequest{
-		Title: new(opts.Title),
-		Head:  new(opts.Head),
-		Base:  new(opts.Base),
-		Draft: new(opts.Draft),
-	}
-
-	if opts.Body != "" {
-		pr.Body = new(opts.Body)
-	}
-
-	createdPR, _, err := c.client.PullRequests.Create(ctx, owner, repo, pr)
+	warnings, createdPR, err := CreatePullRequest(ctx, c.client, owner, repo, opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pull request: %w", err)
+		return nil, err
 	}
-
 	result := ToPullRequestInfo(createdPR)
-	var warnings []string
-
-	// Add reviewers if specified
-	if len(opts.Reviewers) > 0 || len(opts.TeamReviewers) > 0 {
-		_, _, err := c.client.PullRequests.RequestReviewers(ctx, owner, repo, *createdPR.Number, github.ReviewersRequest{
-			Reviewers:     opts.Reviewers,
-			TeamReviewers: opts.TeamReviewers,
-		})
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add reviewers: %v", err))
-		}
-	}
-
-	// Add labels if specified
-	if len(opts.Labels) > 0 {
-		_, _, err := c.client.Issues.AddLabelsToIssue(ctx, owner, repo, *createdPR.Number, opts.Labels)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add labels: %v", err))
-		}
-	}
-
-	// Add assignees if specified
-	if len(opts.Assignees) > 0 {
-		_, _, err := c.client.Issues.AddAssignees(ctx, owner, repo, *createdPR.Number, opts.Assignees)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add assignees: %v", err))
-		}
-	}
-
 	result.Warnings = warnings
 	return result, nil
 }

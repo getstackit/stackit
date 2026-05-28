@@ -67,8 +67,8 @@ Commit:  ` + commit + `
 	pf.BoolVar(&debug, "debug", false, "Write debug output to the terminal.")
 	pf.BoolVar(&interactive, "interactive", true, "Enable interactive features like prompts, pagers, and editors.")
 	pf.BoolVar(&noInteractive, "no-interactive", false, "Disable interactive features.")
-	pf.BoolVar(&verify, "verify", true, "Enable git hooks.")
-	pf.BoolVar(&noVerify, "no-verify", false, "Disable git hooks.")
+	pf.BoolVar(&verify, "verify", true, "Enable git and stackit hooks.")
+	pf.BoolVar(&noVerify, "no-verify", false, "Disable git and stackit hooks.")
 	pf.BoolVarP(&quiet, "quiet", "q", false, "Minimize output to the terminal. Implies --no-interactive.")
 
 	rootCmd.AddCommand(newAbortCmd())

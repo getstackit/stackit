@@ -952,7 +952,7 @@ func showConfigWithSources(repoRoot string, w io.Writer) error {
 	formatLine("navigation.showMerged", strconv.FormatBool(cfg.NavigationShowMerged()), navShowMergedSource)
 
 	// approved hooks (personal only, no team fallback)
-	approvedHooks := cfg.ApprovedPostWorktreeCreateHooks()
+	approvedHooks := cfg.ApprovedHooks(config.PhasePostWorktreeCreate)
 	if len(approvedHooks) > 0 {
 		formatLine("hooks.approved", strings.Join(approvedHooks, ", "), sourcePersonal)
 	} else {

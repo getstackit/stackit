@@ -51,7 +51,14 @@ func RunWithOptions(cmd *cobra.Command, opts app.GlobalOptions, fn func(ctx *app
 		}
 	}
 
+	if err := RunCommandHooks(ctx, cmd, PhasePre); err != nil {
+		return HandleCommandError(err)
+	}
+
 	err = fn(ctx)
+	// Post-hooks fire regardless of fn outcome so users can observe success
+	// and failure both. Their errors are surfaced as warnings (non-blocking).
+	_ = RunCommandHooks(ctx, cmd, PhasePost)
 	if err != nil {
 		return HandleCommandError(err)
 	}

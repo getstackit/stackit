@@ -26,7 +26,13 @@ const (
 	// KeySplitHunkSelector is the hunk selector mode for split (tui or git).
 	KeySplitHunkSelector = "stackit.split.hunkSelector"
 	// KeyApprovedHooks stores approved post-worktree-create hooks (multi-value).
+	//
+	// Deprecated: kept as a compat read-path. New approvals are written under
+	// the per-phase family KeyApprovedHookPrefix+<phase>.
 	KeyApprovedHooks = "stackit.hooks.approvedPostWorktreeCreate"
+	// KeyApprovedHookPrefix is the prefix for per-phase hook approval keys.
+	// Full key form: <prefix><phase>, e.g. "stackit.hooks.approved.pre-modify".
+	KeyApprovedHookPrefix = "stackit.hooks.approved."
 	// KeyMaxConcurrency is the maximum number of concurrent validation operations.
 	KeyMaxConcurrency = "stackit.maxConcurrency"
 	// KeyNavigationWhen controls when navigation is displayed (always/never/multiple).
@@ -108,3 +114,9 @@ const (
 
 // ValidSubmitWeb contains the allowed submit.web values.
 var ValidSubmitWeb = []string{SubmitWebAlways, SubmitWebCreated, SubmitWebNever}
+
+// Hook phase identifiers. These are the suffix used after KeyApprovedHookPrefix
+// and as the YAML key under .stackit.yaml's `hooks:` block.
+const (
+	PhasePostWorktreeCreate = "post-worktree-create"
+)

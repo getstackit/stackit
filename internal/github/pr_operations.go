@@ -54,8 +54,10 @@ type UpdatePROptions struct {
 	RerequestReview bool
 }
 
-// CreatePullRequest creates a new pull request
-func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo string, opts CreatePROptions) (*github.PullRequest, error) {
+// CreatePullRequest creates a new pull request.
+// Returns warnings (non-fatal issues like failed label/assignee additions) and error,
+// matching the same contract as UpdatePullRequest.
+func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo string, opts CreatePROptions) ([]string, *github.PullRequest, error) {
 	pr := &github.NewPullRequest{
 		Title: new(opts.Title),
 		Head:  new(opts.Head),
@@ -69,28 +71,39 @@ func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo s
 
 	createdPR, _, err := client.PullRequests.Create(ctx, owner, repo, pr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pull request: %w", err)
+		return nil, nil, fmt.Errorf("failed to create pull request: %w", err)
 	}
+
+	var warnings []string
 
 	// Add reviewers if specified
 	if len(opts.Reviewers) > 0 || len(opts.TeamReviewers) > 0 {
-		_, _, _ = client.PullRequests.RequestReviewers(ctx, owner, repo, *createdPR.Number, github.ReviewersRequest{
+		_, _, err := client.PullRequests.RequestReviewers(ctx, owner, repo, *createdPR.Number, github.ReviewersRequest{
 			Reviewers:     opts.Reviewers,
 			TeamReviewers: opts.TeamReviewers,
 		})
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to add reviewers: %v", err))
+		}
 	}
 
 	// Add labels if specified
 	if len(opts.Labels) > 0 {
-		_, _, _ = client.Issues.AddLabelsToIssue(ctx, owner, repo, *createdPR.Number, opts.Labels)
+		_, _, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, *createdPR.Number, opts.Labels)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to add labels: %v", err))
+		}
 	}
 
 	// Add assignees if specified
 	if len(opts.Assignees) > 0 {
-		_, _, _ = client.Issues.AddAssignees(ctx, owner, repo, *createdPR.Number, opts.Assignees)
+		_, _, err := client.Issues.AddAssignees(ctx, owner, repo, *createdPR.Number, opts.Assignees)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to add assignees: %v", err))
+		}
 	}
 
-	return createdPR, nil
+	return warnings, createdPR, nil
 }
 
 // UpdatePullRequest updates an existing pull request

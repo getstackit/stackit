@@ -232,7 +232,7 @@ The table below shows all options available in `.stackit.yaml`. The "Team Fallba
 | `worktree.autoClean` | bool | `true` | Auto-remove clean, empty managed worktrees during sync | Yes |
 | `split.hunkSelector` | string | `tui` | Hunk selector mode (tui/git) | Yes |
 | `maxConcurrency` | int | `0` | Max concurrent operations (0 = auto) | Yes |
-| `hooks.post-worktree-create` | string[] | `[]` | Post-worktree-create commands | No (requires approval) |
+| `hooks.<phase>` | string[] | `[]` | Lifecycle hook commands per phase (e.g. `pre-modify`, `post-submit`, `post-worktree-create`); see `docs/hooks.md` | No (requires approval) |
 
 ### Layered Configuration Example
 
@@ -281,19 +281,24 @@ if cfg.HasTrunk() {
 
 ## Hook Approval System
 
-Post-worktree-create hooks defined in `.stackit.yaml` require user approval before execution. Approvals are stored in git config (not shared).
+Hooks defined in `.stackit.yaml` require per-user approval before they
+execute. Approvals are stored in local git config and never shared.
 
 ### Flow
 
-1. Hook defined in `.stackit.yaml` (shared)
-2. User runs a command that creates a worktree
-3. Stackit prompts for approval if hook not yet approved
-4. Approval saved to `stackit.hooks.approvedPostWorktreeCreate` (local)
-5. Subsequent runs skip the prompt
+1. Hook defined in `.stackit.yaml` (shared, committed).
+2. User runs a command that would fire the hook.
+3. Stackit prompts for approval if the command isn't yet approved.
+4. Approval saved to `stackit.hooks.approved.<phase>` (local git config).
+5. Subsequent runs skip the prompt.
 
-### Implementation
+Approvals stored under the legacy single key
+`stackit.hooks.approvedPostWorktreeCreate` are read transparently for
+backward compatibility.
 
-See `internal/actions/worktree/hooks.go` for the hook execution logic.
+See `docs/hooks.md` for the full reference: phase names, env-var payload,
+`--no-verify` semantics, and example recipes (including the "block modify
+on review" hook).
 
 ## Continuation State
 

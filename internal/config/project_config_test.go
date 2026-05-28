@@ -89,6 +89,57 @@ func TestLoadProjectConfig(t *testing.T) {
 	})
 }
 
+func TestHooksConfigInlinePhases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("inline phase keys parse alongside explicit worktree field", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+
+		configContent := `hooks:
+  post-worktree-create:
+    - mise trust
+  pre-modify:
+    - scripts/check-review.sh
+  post-submit:
+    - scripts/notify.sh
+`
+		err := os.WriteFile(filepath.Join(tmpDir, ProjectConfigFileName), []byte(configContent), 0600)
+		require.NoError(t, err)
+
+		cfg, err := LoadProjectConfig(tmpDir)
+		require.NoError(t, err)
+
+		assert.Equal(t, []string{"mise trust"}, cfg.Hooks.PostWorktreeCreate)
+		assert.Equal(t, []string{"scripts/check-review.sh"}, cfg.Hooks.Phases["pre-modify"])
+		assert.Equal(t, []string{"scripts/notify.sh"}, cfg.Hooks.Phases["post-submit"])
+
+		// For() abstracts the lookup so callers don't care which field a phase lives in.
+		assert.Equal(t, []string{"mise trust"}, cfg.Hooks.For(PhasePostWorktreeCreate))
+		assert.Equal(t, []string{"scripts/check-review.sh"}, cfg.Hooks.For("pre-modify"))
+		assert.Nil(t, cfg.Hooks.For("never-configured"))
+	})
+
+	t.Run("worktree-create does not leak into inline map", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+
+		configContent := `hooks:
+  post-worktree-create:
+    - mise trust
+`
+		err := os.WriteFile(filepath.Join(tmpDir, ProjectConfigFileName), []byte(configContent), 0600)
+		require.NoError(t, err)
+
+		cfg, err := LoadProjectConfig(tmpDir)
+		require.NoError(t, err)
+
+		assert.Equal(t, []string{"mise trust"}, cfg.Hooks.PostWorktreeCreate)
+		_, present := cfg.Hooks.Phases["post-worktree-create"]
+		assert.False(t, present, "explicit field should consume the key, not the inline map")
+	})
+}
+
 func TestHasPostWorktreeCreateHooks(t *testing.T) {
 	t.Run("returns true when hooks exist", func(t *testing.T) {
 		cfg := &ProjectConfig{

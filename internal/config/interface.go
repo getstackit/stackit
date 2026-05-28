@@ -44,9 +44,13 @@ type Configurer interface {
 	NavigationLocation() string
 	NavigationShowMerged() bool
 
+	// Project config access (.stackit.yaml). Returns nil if unloaded.
+	ProjectConfig() *ProjectConfig
+
 	// Hook approvals
-	ApprovedPostWorktreeCreateHooks() []string
-	IsPostWorktreeCreateHookApproved(hook string) bool
+	ApprovedHooks(phase string) []string
+	IsHookApproved(phase, command string) bool
+	AddApprovedHook(phase, command string) error
 
 	// Deprecated methods (for backwards compatibility)
 	CombineCICommand() string

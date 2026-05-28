@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 )
 
@@ -400,143 +401,131 @@ func TestConfigSetCITimeout(t *testing.T) {
 	})
 }
 
-func TestConfigApprovedPostWorktreeCreateHooks(t *testing.T) {
+func TestConfigApprovedHooks_LegacyJSONMigration(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns empty list when nothing configured", func(t *testing.T) {
+	// Legacy .stackit_config JSON files predate per-phase git config keys.
+	// The migration path must surface ApprovedPostWorktreeCreateHooks under
+	// the new per-phase API so older repos keep working.
+	scene := testhelpers.NewSceneParallel(t, nil)
+
+	configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
+	legacy := &RepoConfig{
+		Trunk:                           new("main"),
+		ApprovedPostWorktreeCreateHooks: []string{"mise trust", "npm install"},
+	}
+	configJSON, err := json.MarshalIndent(legacy, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, configJSON, 0600))
+
+	cfg, err := LoadConfig(scene.Dir)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"mise trust", "npm install"}, cfg.ApprovedHooks(PhasePostWorktreeCreate))
+	require.True(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "mise trust"))
+	require.False(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "never-approved"))
+}
+
+func TestConfigApprovedHooks_GenericPhase(t *testing.T) {
+	t.Parallel()
+
+	t.Run("add and read approvals for an arbitrary phase", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		cfg, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
-		require.Empty(t, cfg.ApprovedPostWorktreeCreateHooks())
-	})
 
-	t.Run("returns approved hooks when configured", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
+		require.False(t, cfg.IsHookApproved("pre-modify", "scripts/check.sh"))
+		require.NoError(t, cfg.AddApprovedHook("pre-modify", "scripts/check.sh"))
+		require.True(t, cfg.IsHookApproved("pre-modify", "scripts/check.sh"))
 
-		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
-		config := &RepoConfig{
-			Trunk:                           new("main"),
-			ApprovedPostWorktreeCreateHooks: []string{"mise trust", "npm install"},
-		}
-		configJSON, err := json.MarshalIndent(config, "", "  ")
-		require.NoError(t, err)
-		err = os.WriteFile(configPath, configJSON, 0600)
-		require.NoError(t, err)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.Equal(t, []string{"mise trust", "npm install"}, cfg.ApprovedPostWorktreeCreateHooks())
-	})
-
-	t.Run("IsPostWorktreeCreateHookApproved returns true for approved hook", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
-		config := &RepoConfig{
-			Trunk:                           new("main"),
-			ApprovedPostWorktreeCreateHooks: []string{"mise trust"},
-		}
-		configJSON, err := json.MarshalIndent(config, "", "  ")
-		require.NoError(t, err)
-		err = os.WriteFile(configPath, configJSON, 0600)
-		require.NoError(t, err)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-		require.False(t, cfg.IsPostWorktreeCreateHookApproved("npm install"))
-	})
-
-	t.Run("AddApprovedPostWorktreeCreateHook adds new hook", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.False(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-
-		// Reload to verify persistence (git config writes are immediate)
 		cfg2, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
-		require.True(t, cfg2.IsPostWorktreeCreateHookApproved("mise trust"))
+		require.Equal(t, []string{"scripts/check.sh"}, cfg2.ApprovedHooks("pre-modify"))
 	})
 
-	t.Run("AddApprovedPostWorktreeCreateHook does not duplicate", func(t *testing.T) {
+	t.Run("approvals are scoped per phase", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		cfg, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
 
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust") // Add again - should be no-op
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 1)
+		require.NoError(t, cfg.AddApprovedHook("pre-modify", "shared.sh"))
+		require.True(t, cfg.IsHookApproved("pre-modify", "shared.sh"))
+		require.False(t, cfg.IsHookApproved("pre-submit", "shared.sh"))
 	})
 
-	t.Run("RemoveApprovedPostWorktreeCreateHook removes existing hook", func(t *testing.T) {
+	t.Run("remove and clear work for arbitrary phases", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		cfg, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
 
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		err = cfg.AddApprovedPostWorktreeCreateHook("npm install")
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 2)
+		require.NoError(t, cfg.AddApprovedHook("pre-modify", "a"))
+		require.NoError(t, cfg.AddApprovedHook("pre-modify", "b"))
+		require.NoError(t, cfg.RemoveApprovedHook("pre-modify", "a"))
+		require.Equal(t, []string{"b"}, cfg.ApprovedHooks("pre-modify"))
 
-		err = cfg.RemoveApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 1)
-		require.False(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("npm install"))
+		require.NoError(t, cfg.ClearApprovedHooks("pre-modify"))
+		require.Empty(t, cfg.ApprovedHooks("pre-modify"))
 	})
+}
 
-	t.Run("RemoveApprovedPostWorktreeCreateHook handles non-existent hook", func(t *testing.T) {
+func TestConfigApprovedHooks_LegacyKeyCompat(t *testing.T) {
+	t.Parallel()
+
+	t.Run("legacy key entries surface via the new generic reader", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
+		// Write directly to the legacy single-key form.
+		store := git.NewConfigStore(scene.Dir)
+		require.NoError(t, store.Add(KeyApprovedHooks, "legacy-only"))
+
 		cfg, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
-
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		err = cfg.RemoveApprovedPostWorktreeCreateHook("non-existent") // Should not error
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 1)
+		require.Equal(t, []string{"legacy-only"}, cfg.ApprovedHooks(PhasePostWorktreeCreate))
+		require.True(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "legacy-only"))
 	})
 
-	t.Run("ClearApprovedPostWorktreeCreateHooks removes all hooks", func(t *testing.T) {
+	t.Run("union of legacy + per-phase keys deduplicates", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
+		store := git.NewConfigStore(scene.Dir)
+		require.NoError(t, store.Add(KeyApprovedHooks, "shared"))
+		require.NoError(t, store.Add(KeyApprovedHooks, "legacy-only"))
+
 		cfg, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
+		require.NoError(t, cfg.AddApprovedHook(PhasePostWorktreeCreate, "shared"))
+		require.NoError(t, cfg.AddApprovedHook(PhasePostWorktreeCreate, "new-only"))
 
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		err = cfg.AddApprovedPostWorktreeCreateHook("npm install")
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 2)
+		got := cfg.ApprovedHooks(PhasePostWorktreeCreate)
+		require.ElementsMatch(t, []string{"shared", "legacy-only", "new-only"}, got)
+		require.Len(t, got, 3, "shared entry should appear once even though it's in both keys")
+	})
 
-		err = cfg.ClearApprovedPostWorktreeCreateHooks()
-		require.NoError(t, err)
-		require.Empty(t, cfg.ApprovedPostWorktreeCreateHooks())
+	t.Run("remove for legacy phase strips from both keys", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
 
-		// Verify persistence by reloading
-		cfg2, err := LoadConfig(scene.Dir)
+		store := git.NewConfigStore(scene.Dir)
+		require.NoError(t, store.Add(KeyApprovedHooks, "drop-me"))
+
+		cfg, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
-		require.Empty(t, cfg2.ApprovedPostWorktreeCreateHooks())
+		require.NoError(t, cfg.AddApprovedHook(PhasePostWorktreeCreate, "drop-me"))
+
+		require.NoError(t, cfg.RemoveApprovedHook(PhasePostWorktreeCreate, "drop-me"))
+		require.False(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "drop-me"))
+
+		// Verify both stores are empty.
+		legacy, _ := store.GetAll(KeyApprovedHooks)
+		require.Empty(t, legacy)
+		newKey, _ := store.GetAll(KeyApprovedHookPrefix + PhasePostWorktreeCreate)
+		require.Empty(t, newKey)
 	})
 }

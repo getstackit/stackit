@@ -38,7 +38,7 @@ describe("fetchRepos", () => {
 
     const result = await fetchRepos();
     expect(result).toEqual(data);
-    expect(mockFetch).toHaveBeenCalledWith("http://localhost:8080/api/v1/repos", {
+    expect(mockFetch).toHaveBeenCalledWith("/api/v1/repos", {
       credentials: "include",
     });
   });
@@ -52,7 +52,7 @@ describe("fetchView", () => {
     const result = await fetchView("stackit");
     expect(result).toEqual(data);
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/v1/repos/stackit/view",
+      "/api/v1/repos/stackit/view",
       { credentials: "include" }
     );
   });
@@ -66,7 +66,7 @@ describe("fetchRepo", () => {
     const result = await fetchRepo("stackit");
     expect(result).toEqual(data);
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/v1/repos/stackit/repo",
+      "/api/v1/repos/stackit/repo",
       { credentials: "include" }
     );
   });
@@ -78,7 +78,7 @@ describe("fetchStacks", () => {
     const result = await fetchStacks("stackit");
     expect(result).toEqual([]);
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/v1/repos/stackit/stacks",
+      "/api/v1/repos/stackit/stacks",
       { credentials: "include" }
     );
   });
@@ -90,7 +90,7 @@ describe("fetchStack", () => {
 
     await fetchStack("stackit", "feat/foo");
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/v1/repos/stackit/stacks/feat%2Ffoo",
+      "/api/v1/repos/stackit/stacks/feat%2Ffoo",
       { credentials: "include" }
     );
   });
@@ -102,7 +102,7 @@ describe("fetchBranch", () => {
 
     await fetchBranch("stackit", "feat/bar");
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/v1/repos/stackit/branches/feat%2Fbar",
+      "/api/v1/repos/stackit/branches/feat%2Fbar",
       { credentials: "include" }
     );
   });
@@ -114,7 +114,7 @@ describe("fetchBranchDiff", () => {
 
     await fetchBranchDiff("stackit", "feat/bar");
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/api/v1/repos/stackit/branch-diff?branch=feat%2Fbar",
+      "/api/v1/repos/stackit/branch-diff?branch=feat%2Fbar",
       { credentials: "include" }
     );
   });

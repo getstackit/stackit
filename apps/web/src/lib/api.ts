@@ -1,6 +1,10 @@
 // API client for stackit-web server
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// Empty default = same-origin requests. The embedded production build is
+// served from the Go server itself, so relative URLs hit the right host
+// without baking it in at build time. Set NEXT_PUBLIC_API_URL when running
+// `next dev` against a separate Go server on another port.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 // CSRF_HEADER must be sent on every non-safe request. The server doesn't
 // inspect the value, only the header's presence — see

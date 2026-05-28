@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"sort"
 	"sync"
@@ -125,7 +125,7 @@ func makeWatcherCallback(entry *RepoEntry) func() {
 
 	return func() {
 		if err := entry.Engine.Rebuild(trunkName); err != nil {
-			log.Printf("[%s] engine rebuild failed: %v", entry.ID, err)
+			slog.Error("engine rebuild failed", "repo", entry.ID, "error", err)
 			return
 		}
 

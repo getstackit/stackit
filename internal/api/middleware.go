@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"log"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -39,7 +39,7 @@ func recoverMiddleware(next http.Handler) http.Handler {
 				return
 			}
 			rid := RequestIDFromContext(r.Context())
-			log.Printf("panic recovered request_id=%s %s %s: %v\n%s", rid, r.Method, r.URL.Path, rec, debug.Stack()) //nolint:gosec // method and path are safe to log
+			slog.Error("panic recovered", "request_id", rid, "method", r.Method, "path", r.URL.Path, "panic", rec, "stack", string(debug.Stack())) //nolint:gosec // values emitted as structured slog fields
 			// If the handler already wrote a status, we can't change it.
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}()
@@ -90,25 +90,17 @@ func sanitizeIncomingRequestID(s string) string {
 }
 
 // securityHeadersMiddleware sets the baseline browser security headers we want
-// on every response. CSP here matches the embedded Next.js shell; if the
-// frontend starts pulling third-party scripts/images, tighten or extend
-// connect-src/script-src to match.
-func securityHeadersMiddleware(next http.Handler) http.Handler {
+// on every response. The CSP is computed once at server startup from the
+// embedded static site (see buildCSP) so every web build is allowed without
+// a manual hash paste-in.
+func securityHeadersMiddleware(csp string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
-		h.Set("Content-Security-Policy",
-			"default-src 'self'; "+
-				"img-src 'self' data: https:; "+
-				"style-src 'self' 'unsafe-inline'; "+
-				"script-src 'self'; "+
-				"connect-src 'self'; "+
-				"frame-ancestors 'none'; "+
-				"base-uri 'self'; "+
-				"form-action 'self'")
+		h.Set("Content-Security-Policy", csp)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -157,7 +149,8 @@ func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 }
 
 // loggingMiddleware logs each request with method, path, status, duration,
-// and request ID.
+// and request ID. The level reflects the response status so 5xx surfaces
+// as error and 4xx as warn in log aggregators.
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -165,8 +158,20 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(sw, r)
 
-		rid := RequestIDFromContext(r.Context())
-		log.Printf("%s %s %d %s rid=%s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond), rid) //nolint:gosec // method and path are safe to log
+		level := slog.LevelInfo
+		switch {
+		case sw.status >= 500:
+			level = slog.LevelError
+		case sw.status >= 400:
+			level = slog.LevelWarn
+		}
+		slog.LogAttrs(r.Context(), level, "request",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", sw.status),
+			slog.Duration("duration", time.Since(start).Round(time.Millisecond)),
+			slog.String("request_id", RequestIDFromContext(r.Context())),
+		)
 	})
 }
 

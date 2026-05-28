@@ -109,7 +109,11 @@ All fetch functions live in `src/lib/api.ts`:
 | `fetchBranch(name)` | GET | `/api/branches/{name}` | Single branch detail |
 | `submitStack(root)` | POST | `/api/submit/{root}` | Trigger stack submission |
 
-The API base URL is configured via `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8080`).
+The API base URL is configured via `NEXT_PUBLIC_API_URL`. Default is empty
+(same-origin) so the embedded production build, served by the Go binary,
+hits whatever host the page came from. Set it explicitly when running
+`next dev` on `:3000` against a Go server on a different port — e.g.
+`NEXT_PUBLIC_API_URL=http://localhost:8080` in `apps/web/.env.local`.
 
 ### Type Contracts
 

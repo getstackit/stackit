@@ -38,7 +38,7 @@ export function RepoPicker() {
         <p className="text-destructive">{error}</p>
         <p className="text-muted-foreground">
           Make sure stackit-server is running on{" "}
-          {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}
+          {process.env.NEXT_PUBLIC_API_URL || "the same origin as this page"}
         </p>
       </div>
     );

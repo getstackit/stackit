@@ -6,6 +6,9 @@ STACKIT_NO_LOGGING = "1"                                    # Used for tests
 GOBIN = "{{ config_root }}/bin"
 PROJECT_ROOT = "{{ config_root }}"
 _.path = ["{{ config_root }}/bin", "{{ env.HOME }}/go/bin"]
+# Local secrets / OAuth config for `mise run dev`. .env is gitignored; see
+# .env.template for the full list of variables. Missing file is tolerated.
+_.file = ".env"
 
 [tools]
 # Go toolchain
@@ -21,7 +24,10 @@ pnpm = "10.32.1"
 "go:github.com/DarthSim/overmind/v2" = "latest"
 
 # Linting
-golangci-lint = "latest"
+# Pinned (not "latest") so local matches CI exactly — a drift here means lint
+# passes locally but fails in CI (or vice versa). Keep in sync with the
+# golangci-lint-action version in .github/workflows/{test,release}.yml.
+golangci-lint = "2.11.3"
 
 # Development tools
 "aqua:watchexec/watchexec" = "latest"   # File watcher for dev auto-reload
@@ -52,9 +58,10 @@ run = """
   mkdir -p bin
   COMMIT=$(git rev-parse --short HEAD)
   DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  go build -ldflags "-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE" -o bin/stackit ./apps/cli
+  LDFLAGS="-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE"
+  go build -ldflags "$LDFLAGS" -o bin/stackit ./apps/cli
   ./scripts/sync-web-static.sh
-  go build -o bin/stackit-server ./apps/server
+  go build -ldflags "$LDFLAGS" -o bin/stackit-server ./apps/server
   if [ -d ./apps/st-tui ]; then
     go build -o bin/st-tui ./apps/st-tui
   fi
@@ -177,12 +184,62 @@ run = "pnpm --filter @stackit/web dev"
 description = "Run the server in development mode (auto-reloads on file changes)"
 run = "watchexec -r -e go -w apps/server -w internal -w api -- go run ./apps/server --port 8080"
 
+[tasks."env:init"]
+description = "Generate .env from .env.template, filling values from gh CLI + openssl where possible"
+run = """
+  set -e
+  if [ -f .env ]; then
+    echo ".env already exists. Remove it first to regenerate, or edit it by hand." >&2
+    exit 1
+  fi
+  if [ ! -f .env.template ]; then
+    echo ".env.template not found at project root." >&2
+    exit 1
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "gh CLI not found. Install from https://cli.github.com." >&2
+    exit 1
+  fi
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "gh not authenticated. Run 'gh auth login' first." >&2
+    exit 1
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "openssl not found." >&2
+    exit 1
+  fi
+
+  GH_USER=$(gh api user --jq .login)
+  SESSION_KEY=$(openssl rand -base64 32)
+
+  awk -v user="$GH_USER" -v key="$SESSION_KEY" '
+    /^STACKIT_ALLOWED_GH_USERS=$/ { print "STACKIT_ALLOWED_GH_USERS=" user; next }
+    /^STACKIT_SESSION_KEY=$/      { print "STACKIT_SESSION_KEY=" key; next }
+    { print }
+  ' .env.template > .env
+
+  echo "Wrote .env with:"
+  echo "  STACKIT_ALLOWED_GH_USERS=$GH_USER  (from gh api user)"
+  echo "  STACKIT_SESSION_KEY=<32 random bytes>"
+  echo
+  echo "Still required for public-mode auth (manual — GitHub does not expose these via API):"
+  echo "  STACKIT_GITHUB_CLIENT_ID"
+  echo "  STACKIT_GITHUB_CLIENT_SECRET"
+  echo
+  echo "Create an OAuth app at https://github.com/settings/developers and set"
+  echo "the callback URL to \\$STACKIT_BASE_URL/auth/callback, then paste the"
+  echo "credentials into .env."
+"""
+
 [tasks."server:build:embedded"]
 description = "Build stackit-server with embedded exported web assets"
 depends = ["web:sync-static"]
 run = """
   mkdir -p bin
-  go build -o bin/stackit-server ./apps/server
+  COMMIT=$(git rev-parse --short HEAD)
+  DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  LDFLAGS="-X main.version=dev-local -X main.commit=$COMMIT -X main.date=$DATE"
+  go build -ldflags "$LDFLAGS" -o bin/stackit-server ./apps/server
 """
 
 [tasks."server:run:embedded"]

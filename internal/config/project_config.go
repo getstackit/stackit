@@ -83,10 +83,27 @@ type ProjectConfig struct {
 	Navigation     NavigationConfig `yaml:"navigation,omitempty"`
 }
 
-// HooksConfig contains hook configurations
+// HooksConfig contains hook configurations.
+//
+// PostWorktreeCreate keeps its dedicated field for the legacy worktree-create
+// integration. All other phases (pre-modify, post-submit, ...) flow through
+// the inline Phases map and are matched by their kebab-case phase name.
 type HooksConfig struct {
-	// PostWorktreeCreate contains commands to run after creating a worktree
-	PostWorktreeCreate []string `yaml:"post-worktree-create"`
+	// PostWorktreeCreate contains commands to run after creating a worktree.
+	PostWorktreeCreate []string `yaml:"post-worktree-create,omitempty"`
+	// Phases captures every other hook phase under hooks: in .stackit.yaml.
+	// Keys are phase names like "pre-modify"; values are shell command lists.
+	Phases map[string][]string `yaml:",inline"`
+}
+
+// For returns the hook command list configured for the given phase, looking
+// up both the explicit field for PostWorktreeCreate and the inline Phases map.
+// Returns nil for an unknown phase.
+func (h HooksConfig) For(phase string) []string {
+	if phase == PhasePostWorktreeCreate {
+		return h.PostWorktreeCreate
+	}
+	return h.Phases[phase]
 }
 
 // knownTopLevelKeys contains all valid top-level keys in .stackit.yaml

@@ -44,6 +44,9 @@ type Configurer interface {
 	NavigationLocation() string
 	NavigationShowMerged() bool
 
+	// Project config access (.stackit.yaml). Returns nil if unloaded.
+	ProjectConfig() *ProjectConfig
+
 	// Hook approvals
 	ApprovedHooks(phase string) []string
 	IsHookApproved(phase, command string) bool

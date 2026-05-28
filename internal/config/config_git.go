@@ -62,6 +62,13 @@ func (c *GitConfig) IsInitialized() bool {
 	return c.store.Exists(KeyTrunk)
 }
 
+// ProjectConfig returns the loaded project config (.stackit.yaml) attached to
+// this GitConfig, or nil if this instance was loaded without project fallback.
+// Callers must not mutate the returned value.
+func (c *GitConfig) ProjectConfig() *ProjectConfig {
+	return c.project
+}
+
 // Trunk returns the primary trunk branch name.
 // Priority: personal git config > team project config > default.
 func (c *GitConfig) Trunk() string {

@@ -151,7 +151,7 @@ export function RepoView() {
         <p className="text-destructive">{error}</p>
         <p className="text-sm text-muted-foreground">
           Make sure stackit-web is running on{" "}
-          {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}
+          {process.env.NEXT_PUBLIC_API_URL || "the same origin as this page"}
         </p>
         <button
           onClick={refresh}

@@ -3,7 +3,8 @@
 import { useEffect, useEffectEvent } from "react";
 import type { FeedEvent } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// Empty default = same-origin requests. See api.ts for rationale.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type SSECallback = () => void;
 

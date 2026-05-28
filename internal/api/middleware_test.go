@@ -151,7 +151,7 @@ func TestRequestIDMiddlewareRejectsUnsafeIncomingID(t *testing.T) {
 func TestSecurityHeadersMiddlewareSetsBaseline(t *testing.T) {
 	t.Parallel()
 
-	handler := securityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := securityHeadersMiddleware("default-src 'self'; frame-ancestors 'none'", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

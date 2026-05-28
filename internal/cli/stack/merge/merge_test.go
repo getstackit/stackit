@@ -7,7 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -244,6 +246,122 @@ func TestMergeNextUsesCreateMergePlan(t *testing.T) {
 		require.NotEmpty(t, plan.BranchesToMerge)
 		require.Equal(t, "branch-a", plan.BranchesToMerge[0].BranchName)
 		require.Equal(t, 101, plan.BranchesToMerge[0].PRNumber)
+	})
+}
+
+// stubConfirm replaces tui.PromptConfirm for the duration of a test and
+// restores it on cleanup.
+func stubConfirm(t *testing.T, answer bool) {
+	t.Helper()
+	orig := tui.PromptConfirm
+	tui.PromptConfirm = func(string, bool) (bool, error) { return answer, nil }
+	t.Cleanup(func() { tui.PromptConfirm = orig })
+}
+
+// stubTextInput replaces tui.PromptTextInput for the duration of a test and
+// restores it on cleanup.
+func stubTextInput(t *testing.T, value string) {
+	t.Helper()
+	orig := tui.PromptTextInput
+	tui.PromptTextInput = func(string, string) (string, error) { return value, nil }
+	t.Cleanup(func() { tui.PromptTextInput = orig })
+}
+
+// TestPromptForShipDescription is not parallel: its subtests stub the
+// package-level tui.PromptConfirm/PromptTextInput vars, so they must run
+// sequentially to avoid racing on that shared state.
+func TestPromptForShipDescription(t *testing.T) {
+	newStack := func(t *testing.T) *scenario.Scenario {
+		t.Helper()
+		return scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch-a": "main",
+				"branch-b": "branch-a",
+			})
+	}
+
+	branches := []mergeAction.BranchMergeInfo{
+		{BranchName: "branch-a", PRNumber: 101},
+		{BranchName: "branch-b", PRNumber: 102},
+	}
+
+	t.Run("no-op for empty branch list", func(t *testing.T) {
+		s := newStack(t)
+
+		promptForShipDescription(s.Context, nil, false)
+		require.Empty(t, s.Output.String())
+	})
+
+	t.Run("skips silently when a description is already set", func(t *testing.T) {
+		s := newStack(t)
+		require.NoError(t, s.Engine.SetStackDescription(context.Background(),
+			s.Engine.GetBranch("branch-a"),
+			&git.StackDescription{Title: "Existing title"}))
+
+		// PromptConfirm should never be reached when a description exists.
+		orig := tui.PromptConfirm
+		tui.PromptConfirm = func(string, bool) (bool, error) {
+			t.Fatal("should not prompt when description exists")
+			return false, nil
+		}
+		t.Cleanup(func() { tui.PromptConfirm = orig })
+
+		promptForShipDescription(s.Context, branches, false)
+		require.Empty(t, s.Output.String())
+	})
+
+	t.Run("warns and continues in non-interactive mode", func(t *testing.T) {
+		s := newStack(t)
+		s.Context.Interactive = false
+
+		promptForShipDescription(s.Context, branches, false)
+		require.Contains(t, s.Output.String(), "2 PRs")
+		require.Contains(t, s.Output.String(), "stackit describe")
+
+		// No description should have been set.
+		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+	})
+
+	t.Run("warns and continues when --yes skips the prompt", func(t *testing.T) {
+		s := newStack(t)
+		s.Context.Interactive = true
+
+		promptForShipDescription(s.Context, branches, true)
+		require.Contains(t, s.Output.String(), "stackit describe")
+		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+	})
+
+	t.Run("does not set a description when the user declines", func(t *testing.T) {
+		s := newStack(t)
+		s.Context.Interactive = true
+		stubConfirm(t, false)
+
+		promptForShipDescription(s.Context, branches, false)
+		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
+	})
+
+	t.Run("sets the description from the entered title", func(t *testing.T) {
+		s := newStack(t)
+		s.Context.Interactive = true
+		stubConfirm(t, true)
+		stubTextInput(t, "  My stack title  ")
+
+		promptForShipDescription(s.Context, branches, false)
+
+		desc := s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a"))
+		require.NotNil(t, desc)
+		require.Equal(t, "My stack title", desc.Title)
+		require.Contains(t, s.Output.String(), "My stack title")
+	})
+
+	t.Run("does not set a description for a blank title", func(t *testing.T) {
+		s := newStack(t)
+		s.Context.Interactive = true
+		stubConfirm(t, true)
+		stubTextInput(t, "   ")
+
+		promptForShipDescription(s.Context, branches, false)
+		require.Nil(t, s.Engine.GetStackDescription(s.Engine.GetBranch("branch-a")))
 	})
 }
 

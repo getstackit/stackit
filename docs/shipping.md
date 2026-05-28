@@ -119,6 +119,30 @@ stackit merge ship
 - All-or-nothing deployment semantics
 - Features that must ship together
 
+#### Stack Description Prompt
+
+When shipping a stack with **more than one PR** that has no stack description
+set, `merge ship` prompts you to add a title before the consolidation PR is
+created. The consolidation PR uses the stack title/description for its own
+title and body, so setting one keeps the merged PR readable.
+
+- **Interactive:** you are asked `Add a title for this stack now?`. Entering a
+  title stores it via `stackit describe` semantics; declining or leaving it
+  blank proceeds without a description.
+- **Non-interactive or `--yes`:** a warning is printed
+  (`Run 'stackit describe' to add one.`) and the ship continues unblocked, so
+  CI flows are unaffected.
+
+The prompt is best-effort — cancelling it never aborts the ship.
+
+To skip the prompt entirely, either set a description ahead of time with
+`stackit describe`, or automate it with a `pre-merge-ship` hook. Because the
+hook runs before the ship checks for a description, a hook that sets one causes
+the prompt to be skipped automatically. See
+[Auto-generate a stack description before shipping](hooks.md#auto-generate-a-stack-description-before-shipping)
+in the hooks guide — including an example that uses Claude Code's
+`/stack-describe` command.
+
 ### Octopus Merge
 
 The consolidation strategy uses Git's octopus merge feature. Unlike squashing, octopus merge:

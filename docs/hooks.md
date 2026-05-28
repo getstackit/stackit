@@ -35,6 +35,7 @@ command path without the leading `stackit `, joined by hyphens.
 | `stackit modify` | `pre-modify` | `post-modify` |
 | `stackit submit` | `pre-submit` | `post-submit` |
 | `stackit absorb` | `pre-absorb` | `post-absorb` |
+| `stackit merge ship` | `pre-merge-ship` | `post-merge-ship` |
 | `stackit worktree create` | — | `post-worktree-create` |
 
 Every command that goes through `common.Run` participates in the lifecycle —
@@ -159,6 +160,84 @@ hooks:
   pre-submit:
     - "mise run lint"
 ```
+
+### Auto-generate a stack description before shipping
+
+When `stackit merge ship` runs on a stack with more than one PR that has no
+description, it prompts you to add a title (see
+[Stack Description Prompt](shipping.md#stack-description-prompt)). A
+`pre-merge-ship` hook can fill that description in automatically before the
+consolidation PR is created. Because the hook runs *before* the ship checks for
+a description, setting one in the hook means the interactive prompt is skipped.
+
+**Simple: derive a title from the existing PRs**
+
+```yaml
+hooks:
+  pre-merge-ship:
+    - "scripts/auto-describe.sh"
+```
+
+```sh
+#!/bin/sh
+# scripts/auto-describe.sh
+# Generates a stack description using the GitHub CLI, then applies it with
+# 'stackit describe'.
+set -e
+
+if [ -z "$STACKIT_BRANCH" ]; then
+  exit 0
+fi
+
+# Example: generate a title from the PR titles in the stack
+title=$(gh pr list --head "$STACKIT_BRANCH" --json title --jq '.[0].title' 2>/dev/null || true)
+if [ -n "$title" ]; then
+  stackit describe -m "$title"
+fi
+```
+
+**Smarter: let Claude Code describe the stack**
+
+Stackit ships a `/stack-describe` command for Claude Code (installed via
+`stackit agent install`) that analyzes every branch's commits and diffs,
+generates a title and a structured description, and applies it with
+`stackit describe`. A `pre-merge-ship` hook can run it headlessly so the
+consolidation PR gets a high-quality, AI-written summary with no manual step.
+
+```yaml
+hooks:
+  pre-merge-ship:
+    - "scripts/claude-describe.sh"
+```
+
+```sh
+#!/bin/sh
+# scripts/claude-describe.sh
+# Asks Claude Code to generate and apply a stack description via the
+# /stack-describe command. Requires the `claude` CLI to be installed and
+# authenticated, and the stackit agent commands installed
+# (`stackit agent install`).
+set -e
+
+# Only describe stacks that don't already have one (avoids spending tokens on
+# stacks you've already described by hand). `describe --show` prints a "no
+# description set" line when the stack is undescribed.
+if ! stackit describe --show --no-interactive 2>/dev/null | grep -qi "no description set"; then
+  exit 0
+fi
+
+# Skip gracefully if the CLI isn't available (e.g. in CI).
+command -v claude >/dev/null 2>&1 || exit 0
+
+# Run the slash command non-interactively. The hook is an automated context, so
+# pre-approve the tools /stack-describe needs instead of prompting.
+claude -p "/stack-describe" \
+  --allowedTools "Bash(stackit:*)" "Bash(git:*)" "Read" "Glob" "Grep"
+```
+
+> Tip: the hook runs from the repo root with `STACKIT_BRANCH` and the other
+> `STACKIT_*` variables set, so the same script also works as a `pre-submit`
+> hook if you prefer to describe stacks when first opening PRs.
 
 ### Send a notification after a successful merge
 

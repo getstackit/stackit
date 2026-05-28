@@ -1,0 +1,83 @@
+name: Docker (main)
+
+# Build and publish stackit-server container images on every push to main so
+# Railway (and any other ghcr.io consumer) can auto-deploy without cutting a
+# release tag. Goreleaser builds snapshot images locally with its snapshot
+# version, then we re-tag those as :main and :<short-sha> and push.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run GoReleaser (snapshot, server images only)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --snapshot --clean --skip=archive,homebrew,scoop,nfpm,sbom,announce
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-tag and push main + sha images
+        env:
+          GHCR_IMAGE: ghcr.io/getstackit/stackit-server
+        run: |
+          set -euo pipefail
+          SNAP_VERSION=$(jq -r .version dist/metadata.json)
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "snapshot version: ${SNAP_VERSION}; short sha: ${SHORT_SHA}"
+          for arch in amd64 arm64; do
+            src="${GHCR_IMAGE}:${SNAP_VERSION}-${arch}"
+            docker tag "$src" "${GHCR_IMAGE}:main-${arch}"
+            docker tag "$src" "${GHCR_IMAGE}:${SHORT_SHA}-${arch}"
+            docker push "${GHCR_IMAGE}:main-${arch}"
+            docker push "${GHCR_IMAGE}:${SHORT_SHA}-${arch}"
+          done
+          docker manifest rm "${GHCR_IMAGE}:main" 2>/dev/null || true
+          docker manifest create "${GHCR_IMAGE}:main" \
+            "${GHCR_IMAGE}:main-amd64" "${GHCR_IMAGE}:main-arm64"
+          docker manifest push "${GHCR_IMAGE}:main"
+          docker manifest create "${GHCR_IMAGE}:${SHORT_SHA}" \
+            "${GHCR_IMAGE}:${SHORT_SHA}-amd64" "${GHCR_IMAGE}:${SHORT_SHA}-arm64"
+          docker manifest push "${GHCR_IMAGE}:${SHORT_SHA}"

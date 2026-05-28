@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/getstackit/stackit/internal/api/registry"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // defaultRepoID is the ID assigned to the single bootstrap repo when the
@@ -26,4 +27,16 @@ func resolveRepo(reg *registry.Registry, w http.ResponseWriter, r *http.Request)
 		return nil, false
 	}
 	return entry, true
+}
+
+// validateBranchName runs branch name through the same validator the CLI
+// uses (utils.ValidateBranchName) before any handler hands it to git. The
+// error message intentionally does not include the user-supplied name so
+// the response can't reflect arbitrary content back to a caller.
+func validateBranchName(w http.ResponseWriter, name string) bool {
+	if err := utils.ValidateBranchName(name); err != nil {
+		http.Error(w, "invalid branch name", http.StatusBadRequest)
+		return false
+	}
+	return true
 }

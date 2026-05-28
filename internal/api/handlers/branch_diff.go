@@ -35,6 +35,9 @@ func (h *BranchDiffHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing branch query parameter", http.StatusBadRequest)
 		return
 	}
+	if !validateBranchName(w, branchName) {
+		return
+	}
 
 	branch := entry.Engine.GetBranch(branchName)
 	if !branch.IsTracked() {

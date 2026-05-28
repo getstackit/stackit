@@ -79,6 +79,24 @@ archives:
         formats: [zip]
     files:
       - README.md
+dockers_v2:
+  - id: server
+    ids: [server]
+    dockerfile: Dockerfile.server
+    images:
+      - ghcr.io/getstackit/stackit-server
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.source": "https://github.com/getstackit/stackit"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.revision": "{{.Commit}}"
+      "org.opencontainers.image.created": "{{.Date}}"
+
 checksum:
   name_template: 'checksums.txt'
 

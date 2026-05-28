@@ -35,9 +35,12 @@ func (h *BranchesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	branchName := r.PathValue("name")
 	if branchName == "" {
 		h.listBranches(w, r, entry)
-	} else {
-		h.getBranch(w, r, entry, branchName)
+		return
 	}
+	if !validateBranchName(w, branchName) {
+		return
+	}
+	h.getBranch(w, r, entry, branchName)
 }
 
 func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry) {

@@ -40,3 +40,6 @@ apps/web/.next/
 apps/web/out/
 apps/api/static/assets/
 .overmind.sock
+
+# goreleaser output
+dist/

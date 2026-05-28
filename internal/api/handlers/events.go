@@ -34,6 +34,13 @@ func (h *EventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SSE is long-lived; opt out of the server-wide WriteTimeout so the
+	// connection isn't dropped after the first 30 seconds. Failing here is
+	// not fatal — without it the connection is shorter-lived but otherwise
+	// works.
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
+
 	entry, ok := resolveRepo(h.reg, w, r)
 	if !ok {
 		return

@@ -34,6 +34,7 @@ func main() {
 func run() error {
 	var (
 		port            = flag.Int("port", 8080, "Port to listen on")
+		bind            = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1; switches to 0.0.0.0 when $PORT or $STACKIT_PUBLIC is set.")
 		cwd             = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -repos-config is set)")
 		reposConfigPath = flag.String("repos-config", "", "Path to a JSON file listing repos to serve (mutually exclusive with -cwd)")
 		remote          = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
@@ -41,8 +42,26 @@ func run() error {
 		apiPrefix       = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
 		enableLegacy    = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
 		shutdownGrace   = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
+		authDisabled    = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
 	)
 	flag.Parse()
+
+	// Honor $PORT when -port wasn't passed explicitly. PaaS hosts (Railway,
+	// Fly, Heroku) inject the port this way.
+	portExplicit := false
+	bindExplicit := false
+	flag.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "port":
+			portExplicit = true
+		case "bind":
+			bindExplicit = true
+		}
+	})
+	if err := resolvePort(port, portExplicit, os.Getenv("PORT")); err != nil {
+		return err
+	}
+	resolveBind(bind, bindExplicit, os.Getenv("PORT") != "" || os.Getenv("STACKIT_PUBLIC") != "")
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -85,12 +104,32 @@ func run() error {
 		}
 	}
 
+	publicMode := os.Getenv("PORT") != "" || os.Getenv("STACKIT_PUBLIC") != ""
+	authBuild, err := buildAuthConfig(*authDisabled, publicMode)
+	if err != nil {
+		return err
+	}
+	var authCfg *api.AuthConfig
+	if authBuild != nil {
+		authCfg = authBuild.cfg
+		defer func() {
+			if closeErr := authBuild.store.Close(); closeErr != nil {
+				log.Printf("session store close: %v", closeErr)
+			}
+		}()
+		log.Printf("auth: GitHub OAuth gate enabled")
+	} else {
+		log.Printf("auth: DISABLED (no STACKIT_GITHUB_* env or -auth-disabled set). Do not expose this port publicly.")
+	}
+
 	server := api.NewServer(api.ServerConfig{
+		BindAddr:    *bind,
 		Port:        *port,
 		CORSOrigins: parseCSV(*corsOrigins),
 		APIPrefixes: prefixes,
 		StaticFS:    staticFS,
 		Registry:    reg,
+		Auth:        authCfg,
 	})
 
 	errCh := make(chan error, 1)

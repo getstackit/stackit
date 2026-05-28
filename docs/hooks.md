@@ -37,8 +37,10 @@ command path without the leading `stackit `, joined by hyphens.
 | `stackit absorb` | `pre-absorb` | `post-absorb` |
 | `stackit worktree create` | — | `post-worktree-create` |
 
-Any command that goes through `common.Run` participates in the lifecycle.
-Read-only commands (`log`, `status`, `get`) do not fire hooks today.
+Every command that goes through `common.Run` participates in the lifecycle —
+including read-only commands like `log`, `status`, and `get`. When no hook is
+configured for a given command + phase the runner short-circuits, so the
+practical cost on uninstrumented commands is one slice-length check.
 
 ### Failure semantics
 
@@ -107,7 +109,8 @@ fetch is performed.
 | Variable | Value |
 |---|---|
 | `STACKIT_HOOK_PHASE` | Full phase name, e.g. `pre-modify` |
-| `STACKIT_COMMAND` | Leaf cobra command name, e.g. `modify` |
+| `STACKIT_COMMAND` | Leaf cobra command name, e.g. `create` |
+| `STACKIT_COMMAND_PATH` | Full command path, kebab-cased, e.g. `worktree-create` |
 | `STACKIT_BRANCH` | Current branch name (if available) |
 | `STACKIT_PARENT` | Parent branch name (if available) |
 | `STACKIT_PR_NUMBER` | PR number from local metadata (if submitted) |
@@ -138,7 +141,7 @@ if [ -z "$STACKIT_PR_NUMBER" ]; then
   exit 0  # No PR yet — nothing to protect.
 fi
 
-decision=$(gh pr view "$STACKIT_BRANCH" \
+decision=$(gh pr view "$STACKIT_PR_NUMBER" \
   --json reviewDecision -q .reviewDecision 2>/dev/null || true)
 case "$decision" in
   APPROVED|CHANGES_REQUESTED)

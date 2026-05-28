@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -469,45 +470,12 @@ func (c *GitConfig) ClearApprovedHooks(phase string) error {
 	return nil
 }
 
-// ApprovedPostWorktreeCreateHooks returns the list of approved hooks.
-//
-// Deprecated: use ApprovedHooks(PhasePostWorktreeCreate).
-func (c *GitConfig) ApprovedPostWorktreeCreateHooks() []string {
-	return c.ApprovedHooks(PhasePostWorktreeCreate)
-}
-
-// IsPostWorktreeCreateHookApproved checks if a hook is approved.
-//
-// Deprecated: use IsHookApproved(PhasePostWorktreeCreate, hook).
-func (c *GitConfig) IsPostWorktreeCreateHookApproved(hook string) bool {
-	return c.IsHookApproved(PhasePostWorktreeCreate, hook)
-}
-
-// AddApprovedPostWorktreeCreateHook adds a hook to the approved list.
-//
-// Deprecated: use AddApprovedHook(PhasePostWorktreeCreate, hook).
-func (c *GitConfig) AddApprovedPostWorktreeCreateHook(hook string) error {
-	return c.AddApprovedHook(PhasePostWorktreeCreate, hook)
-}
-
-// RemoveApprovedPostWorktreeCreateHook removes a hook from the approved list.
-//
-// Deprecated: use RemoveApprovedHook(PhasePostWorktreeCreate, hook).
-func (c *GitConfig) RemoveApprovedPostWorktreeCreateHook(hook string) error {
-	return c.RemoveApprovedHook(PhasePostWorktreeCreate, hook)
-}
-
-// ClearApprovedPostWorktreeCreateHooks removes all hook approvals.
-//
-// Deprecated: use ClearApprovedHooks(PhasePostWorktreeCreate).
-func (c *GitConfig) ClearApprovedPostWorktreeCreateHooks() error {
-	return c.ClearApprovedHooks(PhasePostWorktreeCreate)
-}
-
 // removeFromMultiKey removes a single value from a multi-value git config key
 // by reading all values, unsetting the key, and re-adding the remaining ones.
 // If the value is absent the key is left untouched. On a re-add failure the
-// original values are restored on a best-effort basis.
+// original values are restored on a best-effort basis; any errors during
+// recovery are joined into the returned error so the caller can see both the
+// primary failure and any incomplete rollback.
 func removeFromMultiKey(store *git.ConfigStore, key, value string) error {
 	current, _ := store.GetAll(key)
 	if !slices.Contains(current, value) {
@@ -524,10 +492,13 @@ func removeFromMultiKey(store *git.ConfigStore, key, value string) error {
 	}
 	for _, v := range keep {
 		if err := store.Add(key, v); err != nil {
+			recoveryErrs := []error{fmt.Errorf("failed to update %s: %w", key, err)}
 			for _, original := range current {
-				_ = store.Add(key, original)
+				if recoveryErr := store.Add(key, original); recoveryErr != nil {
+					recoveryErrs = append(recoveryErrs, fmt.Errorf("recovery: failed to restore %q: %w", original, recoveryErr))
+				}
 			}
-			return fmt.Errorf("failed to update %s, attempted recovery: %w", key, err)
+			return errors.Join(recoveryErrs...)
 		}
 	}
 	return nil

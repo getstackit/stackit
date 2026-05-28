@@ -401,145 +401,28 @@ func TestConfigSetCITimeout(t *testing.T) {
 	})
 }
 
-func TestConfigApprovedPostWorktreeCreateHooks(t *testing.T) {
+func TestConfigApprovedHooks_LegacyJSONMigration(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns empty list when nothing configured", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
+	// Legacy .stackit_config JSON files predate per-phase git config keys.
+	// The migration path must surface ApprovedPostWorktreeCreateHooks under
+	// the new per-phase API so older repos keep working.
+	scene := testhelpers.NewSceneParallel(t, nil)
 
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.Empty(t, cfg.ApprovedPostWorktreeCreateHooks())
-	})
+	configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
+	legacy := &RepoConfig{
+		Trunk:                           new("main"),
+		ApprovedPostWorktreeCreateHooks: []string{"mise trust", "npm install"},
+	}
+	configJSON, err := json.MarshalIndent(legacy, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, configJSON, 0600))
 
-	t.Run("returns approved hooks when configured", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
-		config := &RepoConfig{
-			Trunk:                           new("main"),
-			ApprovedPostWorktreeCreateHooks: []string{"mise trust", "npm install"},
-		}
-		configJSON, err := json.MarshalIndent(config, "", "  ")
-		require.NoError(t, err)
-		err = os.WriteFile(configPath, configJSON, 0600)
-		require.NoError(t, err)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.Equal(t, []string{"mise trust", "npm install"}, cfg.ApprovedPostWorktreeCreateHooks())
-	})
-
-	t.Run("IsPostWorktreeCreateHookApproved returns true for approved hook", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
-		config := &RepoConfig{
-			Trunk:                           new("main"),
-			ApprovedPostWorktreeCreateHooks: []string{"mise trust"},
-		}
-		configJSON, err := json.MarshalIndent(config, "", "  ")
-		require.NoError(t, err)
-		err = os.WriteFile(configPath, configJSON, 0600)
-		require.NoError(t, err)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-		require.False(t, cfg.IsPostWorktreeCreateHookApproved("npm install"))
-	})
-
-	t.Run("AddApprovedPostWorktreeCreateHook adds new hook", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.False(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-
-		// Reload to verify persistence (git config writes are immediate)
-		cfg2, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.True(t, cfg2.IsPostWorktreeCreateHookApproved("mise trust"))
-	})
-
-	t.Run("AddApprovedPostWorktreeCreateHook does not duplicate", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust") // Add again - should be no-op
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 1)
-	})
-
-	t.Run("RemoveApprovedPostWorktreeCreateHook removes existing hook", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		err = cfg.AddApprovedPostWorktreeCreateHook("npm install")
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 2)
-
-		err = cfg.RemoveApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 1)
-		require.False(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("npm install"))
-	})
-
-	t.Run("RemoveApprovedPostWorktreeCreateHook handles non-existent hook", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		err = cfg.RemoveApprovedPostWorktreeCreateHook("non-existent") // Should not error
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 1)
-	})
-
-	t.Run("ClearApprovedPostWorktreeCreateHooks removes all hooks", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, nil)
-
-		cfg, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
-		require.NoError(t, err)
-		err = cfg.AddApprovedPostWorktreeCreateHook("npm install")
-		require.NoError(t, err)
-		require.Len(t, cfg.ApprovedPostWorktreeCreateHooks(), 2)
-
-		err = cfg.ClearApprovedPostWorktreeCreateHooks()
-		require.NoError(t, err)
-		require.Empty(t, cfg.ApprovedPostWorktreeCreateHooks())
-
-		// Verify persistence by reloading
-		cfg2, err := LoadConfig(scene.Dir)
-		require.NoError(t, err)
-		require.Empty(t, cfg2.ApprovedPostWorktreeCreateHooks())
-	})
+	cfg, err := LoadConfig(scene.Dir)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"mise trust", "npm install"}, cfg.ApprovedHooks(PhasePostWorktreeCreate))
+	require.True(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "mise trust"))
+	require.False(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "never-approved"))
 }
 
 func TestConfigApprovedHooks_GenericPhase(t *testing.T) {

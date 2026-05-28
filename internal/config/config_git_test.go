@@ -328,23 +328,23 @@ func TestGitConfigApprovedHooks(t *testing.T) {
 		cfg, err := LoadGitConfig(scene.Dir)
 		require.NoError(t, err)
 
-		require.Empty(t, cfg.ApprovedPostWorktreeCreateHooks())
+		require.Empty(t, cfg.ApprovedHooks(PhasePostWorktreeCreate))
 
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
+		err = cfg.AddApprovedHook(PhasePostWorktreeCreate, "mise trust")
 		require.NoError(t, err)
 
-		err = cfg.AddApprovedPostWorktreeCreateHook("npm install")
+		err = cfg.AddApprovedHook(PhasePostWorktreeCreate, "npm install")
 		require.NoError(t, err)
 
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("npm install"))
-		require.False(t, cfg.IsPostWorktreeCreateHookApproved("other"))
+		require.True(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "mise trust"))
+		require.True(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "npm install"))
+		require.False(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "other"))
 
-		err = cfg.RemoveApprovedPostWorktreeCreateHook("mise trust")
+		err = cfg.RemoveApprovedHook(PhasePostWorktreeCreate, "mise trust")
 		require.NoError(t, err)
 
-		require.False(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("npm install"))
+		require.False(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "mise trust"))
+		require.True(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "npm install"))
 	})
 
 	t.Run("clears all hooks", func(t *testing.T) {
@@ -354,16 +354,16 @@ func TestGitConfigApprovedHooks(t *testing.T) {
 		cfg, err := LoadGitConfig(scene.Dir)
 		require.NoError(t, err)
 
-		err = cfg.AddApprovedPostWorktreeCreateHook("mise trust")
+		err = cfg.AddApprovedHook(PhasePostWorktreeCreate, "mise trust")
 		require.NoError(t, err)
 
-		err = cfg.AddApprovedPostWorktreeCreateHook("npm install")
+		err = cfg.AddApprovedHook(PhasePostWorktreeCreate, "npm install")
 		require.NoError(t, err)
 
-		err = cfg.ClearApprovedPostWorktreeCreateHooks()
+		err = cfg.ClearApprovedHooks(PhasePostWorktreeCreate)
 		require.NoError(t, err)
 
-		require.Empty(t, cfg.ApprovedPostWorktreeCreateHooks())
+		require.Empty(t, cfg.ApprovedHooks(PhasePostWorktreeCreate))
 	})
 }
 
@@ -415,7 +415,7 @@ func TestMigrationFromJSON(t *testing.T) {
 		require.Equal(t, "/tmp/worktrees", cfg.WorktreeBasePath())
 		require.False(t, cfg.WorktreeAutoClean())
 		require.Equal(t, "git", cfg.SplitHunkSelector())
-		require.True(t, cfg.IsPostWorktreeCreateHookApproved("mise trust"))
+		require.True(t, cfg.IsHookApproved(PhasePostWorktreeCreate, "mise trust"))
 
 		// Verify backup file exists
 		backupPath := filepath.Join(scene.Dir, ".git", ".stackit_config.migrated")

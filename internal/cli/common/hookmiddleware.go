@@ -6,9 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/hooks"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/tui"
 )
 
 // PhasePrefix identifies whether a hook fires before or after the command.
@@ -19,19 +21,25 @@ const (
 	PhasePost PhasePrefix = "post"
 )
 
-// CommandPhase returns the lookup key under hooks: in .stackit.yaml for the
-// given cobra command and phase, e.g. "pre-modify" or "post-worktree-create".
-// The leading "stackit " segment is stripped; remaining path segments are
-// joined by hyphens.
-func CommandPhase(cmd *cobra.Command, phase PhasePrefix) string {
+// commandPath returns the kebab-cased cobra command path with the leading
+// "stackit" segment stripped, e.g. "modify" or "worktree-create". Returns an
+// empty string for the root command.
+func commandPath(cmd *cobra.Command) string {
 	parts := strings.Fields(cmd.CommandPath())
 	if len(parts) > 0 && parts[0] == "stackit" {
 		parts = parts[1:]
 	}
-	if len(parts) == 0 {
+	return strings.Join(parts, "-")
+}
+
+// CommandPhase returns the lookup key under hooks: in .stackit.yaml for the
+// given cobra command and phase, e.g. "pre-modify" or "post-worktree-create".
+func CommandPhase(cmd *cobra.Command, phase PhasePrefix) string {
+	path := commandPath(cmd)
+	if path == "" {
 		return string(phase)
 	}
-	return string(phase) + "-" + strings.Join(parts, "-")
+	return string(phase) + "-" + path
 }
 
 // RunCommandHooks fires the configured hooks for the given lifecycle phase.
@@ -58,7 +66,13 @@ func RunCommandHooks(ctx *app.Context, cmd *cobra.Command, phase PhasePrefix) er
 		return nil
 	}
 
-	approved, err := hooks.ResolveApproved(ctx, phaseKey, hookCmds)
+	approved, err := hooks.ResolveApproved(hooks.ResolveRequest{
+		Phase:    phaseKey,
+		Commands: hookCmds,
+		Config:   ctx.Config,
+		Prompter: defaultPrompter{},
+		Output:   ctx.Output,
+	})
 	if err != nil {
 		return fmt.Errorf("resolve hooks for %s: %w", phaseKey, err)
 	}
@@ -66,10 +80,11 @@ func RunCommandHooks(ctx *app.Context, cmd *cobra.Command, phase PhasePrefix) er
 		return nil
 	}
 
-	return hooks.Run(ctx, approved, ctx.Output, hooks.RunOptions{
+	return hooks.Run(ctx, approved, hooks.RunOptions{
 		Dir:      ctx.RepoRoot,
 		Env:      hookEnv(ctx, cmd, phaseKey),
 		Blocking: phase == PhasePre,
+		Output:   ctx.Output,
 	})
 }
 
@@ -80,10 +95,23 @@ func projectConfigFrom(ctx *app.Context) *config.ProjectConfig {
 	return ctx.Config.ProjectConfig()
 }
 
+// defaultPrompter is a handler.PromptHandler that delegates to the shared
+// TUI confirmation prompt with a default-no answer. Default-no protects users
+// who hit Enter on an unexpected prompt from executing arbitrary commands.
+type defaultPrompter struct{}
+
+func (defaultPrompter) PromptConfirm(message string) (bool, error) {
+	return tui.PromptConfirm(message, false)
+}
+
+// Ensure defaultPrompter satisfies the interface at compile time.
+var _ handler.PromptHandler = defaultPrompter{}
+
 func hookEnv(ctx *app.Context, cmd *cobra.Command, phaseKey string) []string {
 	env := []string{
 		"STACKIT_HOOK_PHASE=" + phaseKey,
 		"STACKIT_COMMAND=" + cmd.Name(),
+		"STACKIT_COMMAND_PATH=" + commandPath(cmd),
 	}
 	if ctx.Engine != nil {
 		if cur := ctx.Engine.CurrentBranch(); cur != nil {

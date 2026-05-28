@@ -50,8 +50,7 @@ type Configurer interface {
 	// Hook approvals
 	ApprovedHooks(phase string) []string
 	IsHookApproved(phase, command string) bool
-	ApprovedPostWorktreeCreateHooks() []string
-	IsPostWorktreeCreateHookApproved(hook string) bool
+	AddApprovedHook(phase, command string) error
 
 	// Deprecated methods (for backwards compatibility)
 	CombineCICommand() string

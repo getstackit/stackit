@@ -185,9 +185,11 @@ func migrateFromJSON(repoRoot string, store *git.ConfigStore) error {
 		}
 	}
 
-	// Migrate approved hooks
+	// Migrate approved hooks. Written under the per-phase key; the read path
+	// still understands the legacy single-key form for older repos that didn't
+	// go through this migration.
 	for _, hook := range oldConfig.ApprovedPostWorktreeCreateHooks {
-		if err := store.Add(KeyApprovedHooks, hook); err != nil {
+		if err := store.Add(KeyApprovedHookPrefix+PhasePostWorktreeCreate, hook); err != nil {
 			return fmt.Errorf("migrate approved hook: %w", err)
 		}
 	}

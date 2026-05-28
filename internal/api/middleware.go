@@ -22,20 +22,6 @@ const requestIDHeader = reqid.HeaderName
 // today; this is defense against runaway uploads against any endpoint.
 const maxRequestBodyBytes = 1 << 20 // 1 MiB
 
-// cspHeader is the Content-Security-Policy applied to every response. The
-// sha256 hash in script-src is the embedded Next.js bootstrap inline script;
-// if a future web build changes that script, the browser will print the new
-// hash in the console — paste it in here. Multiple hashes can be listed
-// space-separated if more inline scripts get added.
-const cspHeader = "default-src 'self'; " +
-	"img-src 'self' data: https:; " +
-	"style-src 'self' 'unsafe-inline'; " +
-	"script-src 'self' 'sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='; " +
-	"connect-src 'self'; " +
-	"frame-ancestors 'none'; " +
-	"base-uri 'self'; " +
-	"form-action 'self'"
-
 // RequestIDFromContext is kept here as a re-export for callers in the api
 // package; handlers in other packages import internal/api/reqid directly.
 func RequestIDFromContext(ctx context.Context) string {
@@ -104,17 +90,17 @@ func sanitizeIncomingRequestID(s string) string {
 }
 
 // securityHeadersMiddleware sets the baseline browser security headers we want
-// on every response. CSP here matches the embedded Next.js shell; if the
-// frontend starts pulling third-party scripts/images, tighten or extend
-// connect-src/script-src to match.
-func securityHeadersMiddleware(next http.Handler) http.Handler {
+// on every response. The CSP is computed once at server startup from the
+// embedded static site (see buildCSP) so every web build is allowed without
+// a manual hash paste-in.
+func securityHeadersMiddleware(csp string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
-		h.Set("Content-Security-Policy", cspHeader)
+		h.Set("Content-Security-Policy", csp)
 		next.ServeHTTP(w, r)
 	})
 }

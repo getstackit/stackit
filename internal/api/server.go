@@ -58,6 +58,11 @@ func NewServer(cfg ServerConfig) *Server {
 
 // Start begins serving HTTP requests. It blocks until the server is stopped.
 func (s *Server) Start() error {
+	csp, err := buildCSP(s.config.StaticFS)
+	if err != nil {
+		return fmt.Errorf("build CSP from static FS: %w", err)
+	}
+
 	apiMux := http.NewServeMux()
 	prefixes := normalizeAPIPrefixes(s.config.APIPrefixes)
 
@@ -156,7 +161,7 @@ func (s *Server) Start() error {
 	handler := loggingMiddleware(root)
 	handler = maxBodyMiddleware(handler)
 	handler = corsMiddleware(s.config.CORSOrigins, handler)
-	handler = securityHeadersMiddleware(handler)
+	handler = securityHeadersMiddleware(csp, handler)
 	handler = requestIDMiddleware(handler)
 	handler = recoverMiddleware(handler)
 

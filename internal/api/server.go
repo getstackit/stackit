@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -169,7 +169,7 @@ func (s *Server) Start() error {
 		MaxHeaderBytes:    1 << 20, // 1 MiB
 	}
 
-	log.Printf("stackit-web server listening on http://%s:%d", displayHost(s.config.BindAddr), s.config.Port)
+	slog.Info("stackit-web server listening", "url", fmt.Sprintf("http://%s:%d", displayHost(s.config.BindAddr), s.config.Port))
 	return s.httpServer.ListenAndServe()
 }
 

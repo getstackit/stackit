@@ -7,6 +7,7 @@ import (
 	"flag"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -35,8 +36,28 @@ var (
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(err)
+		slog.Error("startup failed", "error", err)
+		os.Exit(1)
 	}
+}
+
+// setupLogging configures the default slog logger. Production deploys
+// (PORT or STACKIT_PUBLIC set) emit JSON with a level field so log
+// aggregators tag entries correctly; local runs use the text handler
+// for readability. Output goes to stdout so platforms like Railway
+// don't classify everything as error (which is what happens when the
+// stdlib log package writes to stderr).
+func setupLogging(jsonOutput bool) {
+	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
+	var handler slog.Handler
+	if jsonOutput {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(handler))
+	log.SetFlags(0)
+	log.SetOutput(os.Stdout)
 }
 
 func run() error {
@@ -55,7 +76,10 @@ func run() error {
 	)
 	flag.Parse()
 
-	log.Printf("stackit-server version=%s commit=%s built=%s", version, commit, date)
+	publicMode := os.Getenv("PORT") != "" || os.Getenv("STACKIT_PUBLIC") != ""
+	setupLogging(publicMode)
+
+	slog.Info("stackit-server starting", "version", version, "commit", commit, "built", date)
 
 	// Honor $PORT when -port wasn't passed explicitly. PaaS hosts (Railway,
 	// Fly, Heroku) inject the port this way.
@@ -75,7 +99,7 @@ func run() error {
 	if err := resolvePort(port, portExplicit, os.Getenv("PORT")); err != nil {
 		return err
 	}
-	resolveBind(bind, bindExplicit, os.Getenv("PORT") != "" || os.Getenv("STACKIT_PUBLIC") != "")
+	resolveBind(bind, bindExplicit, publicMode)
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -90,7 +114,7 @@ func run() error {
 	reg := registry.New()
 	defer func() {
 		if closeErr := reg.Close(); closeErr != nil {
-			log.Printf("registry close: %v", closeErr)
+			slog.Error("registry close failed", "error", closeErr)
 		}
 	}()
 
@@ -106,7 +130,7 @@ func run() error {
 				// server — other configured repos may still be usable,
 				// and a future "add repo from GitHub" flow will clone
 				// these on demand. Log and skip instead.
-				log.Printf("repo %q not registered: %v", rc.ID, err)
+				slog.Warn("repo not registered", "repo", rc.ID, "error", err)
 			}
 		}
 	default:
@@ -127,11 +151,10 @@ func run() error {
 			if cwdExplicit {
 				return err
 			}
-			log.Printf("no default repo registered: %v", err)
+			slog.Info("no default repo registered", "error", err)
 		}
 	}
 
-	publicMode := os.Getenv("PORT") != "" || os.Getenv("STACKIT_PUBLIC") != ""
 	authBuild, err := buildAuthConfig(*authDisabled, publicMode)
 	if err != nil {
 		return err
@@ -141,12 +164,12 @@ func run() error {
 		authCfg = authBuild.cfg
 		defer func() {
 			if closeErr := authBuild.store.Close(); closeErr != nil {
-				log.Printf("session store close: %v", closeErr)
+				slog.Error("session store close failed", "error", closeErr)
 			}
 		}()
-		log.Printf("auth: GitHub OAuth gate enabled")
+		slog.Info("auth: GitHub OAuth gate enabled")
 	} else {
-		log.Printf("auth: DISABLED (no STACKIT_GITHUB_* env or -auth-disabled set). Do not expose this port publicly.")
+		slog.Warn("auth: DISABLED (no STACKIT_GITHUB_* env or -auth-disabled set). Do not expose this port publicly.")
 	}
 
 	server := api.NewServer(api.ServerConfig{
@@ -169,7 +192,7 @@ func run() error {
 
 	select {
 	case sig := <-stop:
-		log.Printf("received %s, shutting down", sig)
+		slog.Info("shutting down", "signal", sig.String())
 		ctx, cancel := context.WithTimeout(context.Background(), *shutdownGrace)
 		defer cancel()
 		return server.Shutdown(ctx)
@@ -196,7 +219,7 @@ func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
 
 	gh := runtimeCtx.GitHub()
 	if gh == nil && runtimeCtx.GitHubError() != nil {
-		log.Printf("[%s] GitHub client unavailable: %v", rc.ID, runtimeCtx.GitHubError())
+		slog.Warn("GitHub client unavailable", "repo", rc.ID, "error", runtimeCtx.GitHubError())
 	}
 
 	entry := registry.NewEntry(registry.EntryConfig{

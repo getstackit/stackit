@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
@@ -67,7 +67,7 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if sess := auth.SessionFromContext(r.Context()); sess != nil {
 		actor = sess.GitHubLogin
 	}
-	log.Printf("audit action=submit actor=%q repo=%q branch=%q request_id=%s", actor, entry.ID, rootBranch, reqid.FromContext(r.Context())) //nolint:gosec // values are %q-quoted
+	slog.Info("audit", "action", "submit", "actor", actor, "repo", entry.ID, "branch", rootBranch, "request_id", reqid.FromContext(r.Context())) //nolint:gosec // values emitted as structured slog fields
 
 	ctx := app.NewContext(entry.Engine,
 		app.WithRepoRoot(entry.RepoRoot),

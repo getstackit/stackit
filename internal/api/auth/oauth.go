@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -132,7 +132,7 @@ func (h *Handler) resolveUserInfoURL() string {
 func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	state, err := randomToken(16)
 	if err != nil {
-		log.Printf("login: random state: %v", err)
+		slog.Error("login: random state failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -160,7 +160,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	wantState := readCookie(r, stateCookieName)
 	h.cfg.Cookies.clearState(w)
 	if wantState == "" || gotState == "" || !constantTimeStringEq(gotState, wantState) {
-		log.Printf("auth callback: bad state")
+		slog.Warn("auth callback: bad state")
 		http.Error(w, "invalid auth state", http.StatusBadRequest)
 		return
 	}
@@ -168,7 +168,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	code := q.Get("code")
 	if code == "" {
 		// GitHub redirects here with `error=...` when the user denies.
-		log.Printf("auth callback: missing code (oauth_error=%q)", q.Get("error")) //nolint:gosec // logged value is %q-quoted
+		slog.Warn("auth callback: missing code", "oauth_error", q.Get("error")) //nolint:gosec // value emitted as a structured slog field, not concatenated
 		http.Redirect(w, r, h.cfg.DeniedPath, http.StatusFound)
 		return
 	}
@@ -176,32 +176,32 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tok, err := h.oauth2cfg.Exchange(ctx, code)
 	if err != nil {
-		log.Printf("auth callback: token exchange: %v", err)
+		slog.Warn("auth callback: token exchange failed", "error", err)
 		http.Error(w, "token exchange failed", http.StatusBadGateway)
 		return
 	}
 
 	user, err := h.fetchGitHubUser(ctx, tok.AccessToken)
 	if err != nil {
-		log.Printf("auth callback: fetch user: %v", err)
+		slog.Warn("auth callback: fetch user failed", "error", err)
 		http.Error(w, "github user lookup failed", http.StatusBadGateway)
 		return
 	}
 
 	if err := h.allow.Check(ctx, user.Login, tok.AccessToken); err != nil {
 		if errors.Is(err, ErrDenied) {
-			log.Printf("audit action=denied actor=%q request_id=%s", user.Login, reqid.FromContext(ctx)) //nolint:gosec // login is %q-quoted
+			slog.Info("audit", "action", "denied", "actor", user.Login, "request_id", reqid.FromContext(ctx))
 			http.Redirect(w, r, h.cfg.DeniedPath, http.StatusFound)
 			return
 		}
-		log.Printf("auth callback: allowlist check error: %v", err)
+		slog.Error("auth callback: allowlist check failed", "error", err)
 		http.Error(w, "allowlist check failed", http.StatusBadGateway)
 		return
 	}
 
 	sess, err := h.store.Create(user.Login, user.ID, tok.AccessToken)
 	if err != nil {
-		log.Printf("auth callback: create session: %v", err)
+		slog.Error("auth callback: create session failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -213,7 +213,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	h.cfg.Cookies.clearReturn(w)
 
-	log.Printf("audit action=login actor=%q user_id=%d target=%s request_id=%s", user.Login, user.ID, target, reqid.FromContext(ctx)) //nolint:gosec // logged values are quoted/numeric/safe target
+	slog.Info("audit", "action", "login", "actor", user.Login, "user_id", user.ID, "target", target, "request_id", reqid.FromContext(ctx)) //nolint:gosec // values emitted as structured slog fields
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
@@ -223,7 +223,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	if cookie := readCookie(r, sessionCookieName); cookie != "" {
 		if sess, ok := h.store.Get(cookie); ok {
-			log.Printf("audit action=logout actor=%q request_id=%s", sess.GitHubLogin, reqid.FromContext(r.Context())) //nolint:gosec // login is %q-quoted
+			slog.Info("audit", "action", "logout", "actor", sess.GitHubLogin, "request_id", reqid.FromContext(r.Context())) //nolint:gosec // values emitted as structured slog fields
 		}
 		h.store.Delete(cookie)
 	}

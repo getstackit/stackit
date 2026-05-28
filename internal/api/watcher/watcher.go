@@ -6,7 +6,7 @@ package watcher
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -55,14 +55,14 @@ func (w *RefWatcher) Start() error {
 			continue // Directory may not exist yet
 		}
 		if err := addRecursive(fsw, dir); err != nil {
-			log.Printf("warning: failed to watch %s: %v", dir, err)
+			slog.Warn("failed to watch directory", "dir", dir, "error", err)
 		}
 	}
 
 	// Also watch HEAD for branch switches
 	headPath := filepath.Join(w.repoRoot, ".git", "HEAD")
 	if err := fsw.Add(headPath); err != nil {
-		log.Printf("warning: failed to watch HEAD: %v", err)
+		slog.Warn("failed to watch HEAD", "path", headPath, "error", err)
 	}
 
 	var timer *time.Timer
@@ -100,7 +100,7 @@ func (w *RefWatcher) Start() error {
 			if !ok {
 				return nil
 			}
-			log.Printf("watcher error: %v", err)
+			slog.Error("watcher error", "error", err)
 		}
 	}
 }

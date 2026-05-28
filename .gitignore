@@ -41,6 +41,10 @@ apps/web/out/
 apps/api/static/assets/
 .overmind.sock
 
+# Local env (template lives at .env.template)
+.env
+.env.local
+
 # goreleaser output
 dist/
 

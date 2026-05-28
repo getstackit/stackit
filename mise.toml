@@ -6,6 +6,9 @@ STACKIT_NO_LOGGING = "1"                                    # Used for tests
 GOBIN = "{{ config_root }}/bin"
 PROJECT_ROOT = "{{ config_root }}"
 _.path = ["{{ config_root }}/bin", "{{ env.HOME }}/go/bin"]
+# Local secrets / OAuth config for `mise run dev`. .env is gitignored; see
+# .env.template for the full list of variables. Missing file is tolerated.
+_.file = ".env"
 
 [tools]
 # Go toolchain

@@ -45,13 +45,19 @@ type LogJSONResult struct {
 
 // LogBranchInfo represents a single branch in JSON output
 type LogBranchInfo struct {
-	Name         string     `json:"name"`
-	Parent       string     `json:"parent,omitempty"`
-	IsCurrent    bool       `json:"is_current"`
-	IsTrunk      bool       `json:"is_trunk"`
-	IsLocked     bool       `json:"is_locked,omitempty"`
-	IsFrozen     bool       `json:"is_frozen,omitempty"`
-	NeedsRestack bool       `json:"needs_restack,omitempty"`
+	Name      string `json:"name"`
+	Parent    string `json:"parent,omitempty"`
+	IsCurrent bool   `json:"is_current"`
+	IsTrunk   bool   `json:"is_trunk"`
+	// Status booleans are always emitted (no omitempty) so consumers can rely on
+	// `log --json` as a complete, self-describing status source: an explicit
+	// false is unambiguous, whereas an omitted field is indistinguishable from
+	// "this field isn't reported". This is what lets agents read PR/CI status and
+	// needs_restack/locked/frozen from a single command instead of also querying
+	// `info --stack --json`.
+	IsLocked     bool       `json:"is_locked"`
+	IsFrozen     bool       `json:"is_frozen"`
+	NeedsRestack bool       `json:"needs_restack"`
 	Commits      int        `json:"commits"`
 	Additions    int        `json:"additions,omitempty"`
 	Deletions    int        `json:"deletions,omitempty"`

@@ -216,6 +216,15 @@ func IsTTY() bool {
 	if atomic.LoadInt32(&interactiveMode) == 0 {
 		return false
 	}
+	return TerminalDetected()
+}
+
+// TerminalDetected reports whether a usable interactive terminal is attached,
+// independent of the configured interactive mode. It checks the TERM
+// environment, stdin/stdout isatty, and /dev/tty availability. Use this when
+// resolving the default interactivity before the interactive mode is set (e.g.
+// in the root command), where IsTTY's mode gate would not yet apply.
+func TerminalDetected() bool {
 	if !supportsTerminalControl() {
 		return false
 	}
@@ -231,6 +240,19 @@ func IsTTY() bool {
 	}
 	_ = f.Close()
 	return true
+}
+
+// NonInteractiveEnv reports whether STACKIT_NO_INTERACTIVE requests
+// non-interactive mode. Any value other than empty/"0"/"false"/"no" enables it,
+// letting agents and scripts opt out of prompts once instead of passing
+// --no-interactive on every command.
+func NonInteractiveEnv() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("STACKIT_NO_INTERACTIVE"))) {
+	case "", "0", "false", "no":
+		return false
+	default:
+		return true
+	}
 }
 
 func supportsTerminalControl() bool {

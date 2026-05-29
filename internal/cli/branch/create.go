@@ -14,6 +14,7 @@ import (
 func NewCreateCmd() *cobra.Command {
 	var (
 		all         bool
+		allowEmpty  bool
 		insert      bool
 		message     string
 		messageFile string
@@ -30,8 +31,11 @@ func NewCreateCmd() *cobra.Command {
 		Long: `Create a new branch stacked on top of the current branch and commit staged changes.
 
 If no branch name is specified, generate a branch name from the commit message.
-If your working directory contains no changes, an empty branch will be created.
-If you have any unstaged changes, you will be asked whether you'd like to stage them.
+If your working directory is clean, an empty branch will be created.
+If you have any unstaged changes, you will be asked whether you'd like to stage them
+(interactive). In non-interactive mode, having changes that aren't staged is treated
+as a "forgot to stage" mistake and rejected — stage them, pass --all, or pass
+--allow-empty to create an empty branch anyway.
 
 Examples:
   stackit create -m "feat: add login"             # Inline message
@@ -67,6 +71,7 @@ Examples:
 					Verbose:       verbose,
 					BranchPattern: branchPattern,
 					Worktree:      worktree,
+					AllowEmpty:    allowEmpty,
 				}
 
 				// Create runner and handler
@@ -91,6 +96,7 @@ Examples:
 
 	// Add flags
 	cmd.Flags().BoolVarP(&all, "all", "a", false, "Stage all unstaged changes before creating the branch, including to untracked files")
+	cmd.Flags().BoolVar(&allowEmpty, "allow-empty", false, "Allow creating a branch with no commit even when the working tree has unstaged/untracked changes (otherwise this is rejected in non-interactive mode)")
 	cmd.Flags().BoolVarP(&insert, "insert", "i", false, "Insert this branch between the current branch and its child. If there are multiple children, prompts you to select which should be moved onto the new branch")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "Specify a commit message")
 	cmd.Flags().StringVarP(&messageFile, "message-file", "F", "", "Read commit message from a file (use \"-\" for stdin). Mutually exclusive with --message.")

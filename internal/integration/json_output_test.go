@@ -101,6 +101,24 @@ func TestJSONOutput(t *testing.T) {
 		require.True(t, foundRestackNeeded, "feature-b should show NeedsRestack=true")
 	})
 
+	t.Run("log --json always emits status booleans even when false", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		// A healthy, unlocked branch: the status booleans are all false but must
+		// still appear, so `log --json` is a complete, self-describing status
+		// source (an explicit false is unambiguous; an omitted field is not).
+		sh.Write("feature_a", "content a").
+			Run("create feature-a -m 'Add feature A'")
+
+		sh.Run("log --json")
+		output := sh.Output()
+
+		require.Contains(t, output, "\"needs_restack\": false")
+		require.Contains(t, output, "\"is_locked\": false")
+		require.Contains(t, output, "\"is_frozen\": false")
+	})
+
 	t.Run("log --quiet outputs minimal when healthy", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)

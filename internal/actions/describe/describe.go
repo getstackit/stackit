@@ -90,7 +90,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				return applyStackDescription(ctx, *currentBranch, stackRoot, desc, TruncateDescription(desc.Description, 60))
 			}
 		}
-		return fmt.Errorf("must specify --message or run in interactive mode")
+		return fmt.Errorf("nothing to set: pass --title/-m, --message-file/-F, pipe a description via stdin, or run in interactive mode")
 	}
 
 	existingDesc := eng.GetStackDescription(*currentBranch)

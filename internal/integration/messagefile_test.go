@@ -85,6 +85,38 @@ func TestMessageFile(t *testing.T) {
 			OutputContains("feat: extracted from file")
 	})
 
+	t.Run("describe reads title and body from file", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.Write("feature", "content").
+			Run("create feature -m 'feat: x'")
+
+		msgPath := writeMessageFile(t, "Auth Feature\n\nOAuth2 implementation\n")
+		sh.Run("describe -F " + msgPath).
+			Run("describe --show").
+			OutputContains("Auth Feature").
+			OutputContains("OAuth2 implementation")
+	})
+
+	t.Run("describe errors with no input in non-interactive mode", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.Write("feature", "content").
+			Run("create feature -m 'feat: x'")
+		sh.RunExpectError("describe").
+			OutputContains("nothing to set")
+	})
+
+	t.Run("describe errors when both --title and --message-file are given", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.Write("feature", "content").Run("create feature -m 'feat: x'")
+		msgPath := writeMessageFile(t, "Title\n\nBody")
+		sh.RunExpectError("describe -m 'inline' -F " + msgPath).
+			OutputContains("cannot use --message-file with --title")
+	})
+
 	t.Run("create errors when both --message and --message-file are given", func(t *testing.T) {
 		t.Parallel()
 		runMutexTest(t, "create feature -m 'inline' -F ")

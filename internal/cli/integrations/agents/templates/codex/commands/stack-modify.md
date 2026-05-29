@@ -8,46 +8,46 @@ Amend the current stacked branch or add a follow-up commit to it.
 
 ## Workflow
 
-1. Inspect:
+1. Check for changes first:
 
    ```bash
    git status --short
-   git diff --stat
-   git diff --cached --stat
-   stackit log --no-interactive
-   git log --oneline -5
    ```
 
-2. If there are no changes, stop.
+   If there are no changes, stop.
 
-3. Stage changes unless the user explicitly requested staged-only behavior:
+2. Stage changes unless the user explicitly requested staged-only behavior:
 
    ```bash
    git add -A
    ```
 
-4. Amend by default:
+3. Amend, keeping the existing message (the default — use this when you are only
+   adding code to the current commit):
 
    ```bash
    stackit modify --no-interactive --no-edit
    ```
 
-   If a new message is needed:
+   If the commit's intent changed and the message should be regenerated, pipe it
+   via stdin (keeps permission rules stable across messages):
 
    ```bash
-   stackit modify --no-interactive -m "<message>"
+   printf '%s\n' "<message>" | stackit modify --no-interactive -F -
    ```
 
-   If the user asked for a new commit on this branch:
+   If the user asked for a *new* commit on this branch rather than an amend:
 
    ```bash
-   stackit modify --no-interactive -c -m "<message>"
+   printf '%s\n' "<message>" | stackit modify --no-interactive -c -F -
    ```
 
-5. Verify:
+4. Verify (run `stackit log` only after the mutation):
 
    ```bash
    stackit log --no-interactive
    ```
 
-Never use `git commit --amend`; `stackit modify` handles stack metadata.
+`stackit modify` automatically restacks descendant branches — do not run a manual
+`stackit restack` or `git rebase` afterward. Never use `git commit --amend`;
+`stackit modify` handles stack metadata.

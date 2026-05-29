@@ -31,13 +31,23 @@ Absorb staged fixes into the commits that last touched the changed lines.
 
 5. Determine a verification command from project docs or common files. Prefer the lightest command that covers the changed packages.
 
-6. Verify the stack:
+6. Verify the stack (structured output, stop at the first failing depth):
 
    ```bash
-   stackit foreach --upstack "<check-command>"
+   stackit foreach --stack --json --find-first-failure --no-interactive "<check-command>"
    ```
 
-7. If a branch fails, fix the earliest failing branch from the absorb output sources: unabsorbable hunks, new files, or code absorbed too far upstack. Commit the fix at that source branch, then restack.
+   Parse `results[]` for the first entry with a non-zero exit code — that is the
+   earliest failing branch.
+
+7. If a branch fails, fix the earliest failing branch from the absorb output
+   sources: unabsorbable hunks, new files, or code absorbed too far upstack. Commit
+   the fix at that source branch (`stackit modify --no-interactive`), then restack
+   that branch and its descendants:
+
+   ```bash
+   stackit restack --branch <failing-branch> --upstack --no-interactive
+   ```
 
 8. Finish with:
 

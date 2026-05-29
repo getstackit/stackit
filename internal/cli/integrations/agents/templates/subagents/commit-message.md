@@ -63,7 +63,10 @@ Generate a commit message for the staged changes above.
 1. Check CONTRIBUTING guidelines for commit message requirements
 2. Check README for any commit conventions mentioned
 3. Look at recent commits for the established style
-4. If no conventions are specified, use a clear imperative sentence (e.g., "Add user authentication")
+4. If no conventions are specified, default to Conventional Commits:
+   `<type>: <description>` where type is one of
+   feat, fix, docs, style, refactor, perf, test, chore, ci
+   (e.g., `feat: add user authentication`)
 
 **General guidelines:**
 - First line under 72 characters
@@ -85,3 +88,17 @@ END_MESSAGE
 ## Parsing the Response
 
 Extract the commit message between `MESSAGE:` and `END_MESSAGE` markers. The message may be a single line or include a body separated by a blank line. Trim leading/trailing whitespace from the extracted content.
+
+## Applying the Message
+
+Apply the generated message with stackit — never `git commit` for a new stacked
+branch. Pipe it via `-F -` so the literal message stays off the command line
+(keeps permission rules stable):
+
+```bash
+# New stacked branch (changes already staged)
+printf '%s\n' "<message>" | stackit create -F - --no-interactive
+
+# Amend the current branch's commit with a new message
+printf '%s\n' "<message>" | stackit modify -F - --no-interactive
+```

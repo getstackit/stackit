@@ -38,29 +38,45 @@ echo -e "${BLUE}Current Stack:${NC}"
 stackit log
 echo
 
+# Fetch authoritative stack metadata once as JSON (the source of truth for
+# branch relationships, sizes, and PR state) instead of scraping rendered output.
+STACK_JSON=$(stackit log short --json --no-interactive 2>/dev/null || echo '{}')
+github_available=$(echo "$STACK_JSON" | jq -r '.github_available // false')
+
 echo -e "${BLUE}Health Checks:${NC}"
 
 # Check for uncommitted changes
 if ! git diff-index --quiet HEAD -- 2>/dev/null; then
     echo -e "${YELLOW}⚠️  Uncommitted changes detected${NC}"
     echo "→ Run: git status"
-    echo "→ Consider: git add . (then) stackit modify"
+    echo "→ Consider: git add -A (then) stackit modify"
     echo
 fi
 
-# Check for branches without PRs
-# Count branches marked with ● (no PR) in stackit log output
-branches_no_pr=$(stackit log 2>/dev/null | grep -c "●" || true)
-if [ "$branches_no_pr" -gt 0 ]; then
-    echo -e "${YELLOW}ℹ️  $branches_no_pr branch(es) without PRs${NC}"
-    echo "→ Run: stackit submit --stack"
-    echo
+# Check for branches without PRs (non-trunk branches with no "pr" field).
+# Only meaningful when GitHub data is available.
+branches_no_pr=0
+if [ "$github_available" = "true" ]; then
+    branches_no_pr=$(echo "$STACK_JSON" | jq '[.branches[]? | select((.is_trunk | not) and (has("pr") | not))] | length')
+    if [ "$branches_no_pr" -gt 0 ]; then
+        echo -e "${YELLOW}ℹ️  $branches_no_pr branch(es) without PRs${NC}"
+        echo "→ Run: stackit submit --stack"
+        echo
+    fi
 fi
 
-# Check if sync needed (look for merged PRs)
-if stackit log full 2>&1 | grep -qi "merged\|closed"; then
-    echo -e "${YELLOW}ℹ️  Some PRs have been merged/closed${NC}"
+# Check if sync needed (any PR merged or closed)
+merged_or_closed=$(echo "$STACK_JSON" | jq '[.branches[]? | select(.pr.state == "MERGED" or .pr.state == "CLOSED")] | length')
+if [ "$merged_or_closed" -gt 0 ]; then
+    echo -e "${YELLOW}ℹ️  $merged_or_closed PR(s) have been merged/closed${NC}"
     echo "→ Run: stackit sync --restack"
+    echo
+fi
+
+# Surface failing CI when GitHub data is available
+failing_ci=$(echo "$STACK_JSON" | jq -r '[.branches[]? | select(.pr.ci_status == "failing") | .name] | join(", ")')
+if [ -n "$failing_ci" ]; then
+    echo -e "${RED}⚠️  Failing CI on: $failing_ci${NC}"
     echo
 fi
 
@@ -83,49 +99,20 @@ if [ "$current_branch" = "$trunk_branch" ]; then
     echo
 fi
 
-# Check for large branches that might need splitting
+# Check for large branches that might need splitting, using the additions/deletions
+# already reported per branch in the JSON (>500 changed lines).
 echo -e "${BLUE}Branch Size Analysis:${NC}"
 large_branch_found=false
 
-# Get list of tracked branches (non-trunk branches in the stack)
-tracked_branches=$(stackit log --no-interactive 2>/dev/null | grep -oE '[a-zA-Z0-9_/-]+' | grep -v "^main$\|^master$\|^$trunk_branch$" | sort -u)
-
-for branch in $tracked_branches; do
-    # Skip if branch doesn't exist
-    if ! git rev-parse --verify "$branch" > /dev/null 2>&1; then
-        continue
-    fi
-
-    # Get parent branch (the branch this one is based on)
-    parent=$(git log --format=%D "$branch" -1 2>/dev/null | grep -oE 'origin/[^,]+' | head -1 | sed 's|origin/||' || echo "$trunk_branch")
-    if [ -z "$parent" ]; then
-        parent="$trunk_branch"
-    fi
-
-    # Calculate diff stats against merge-base with trunk
-    merge_base=$(git merge-base "$trunk_branch" "$branch" 2>/dev/null || echo "")
-    if [ -n "$merge_base" ]; then
-        # Get stats: files changed, insertions, deletions
-        stats=$(git diff --shortstat "$merge_base".."$branch" 2>/dev/null || echo "")
-        if [ -n "$stats" ]; then
-            files_changed=$(echo "$stats" | grep -oE '[0-9]+ file' | grep -oE '[0-9]+' || echo "0")
-            insertions=$(echo "$stats" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
-            deletions=$(echo "$stats" | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
-            total_lines=$((insertions + deletions))
-
-            # Warn if branch is large (>500 lines or >10 files)
-            if [ "$total_lines" -gt 500 ] || [ "$files_changed" -gt 10 ]; then
-                if [ "$large_branch_found" = false ]; then
-                    large_branch_found=true
-                fi
-                echo -e "${YELLOW}⚠️  Large branch: $branch${NC}"
-                echo "   $files_changed files, +$insertions/-$deletions lines ($total_lines total)"
-                echo "→ Consider: stackit split (to break into smaller PRs)"
-                echo
-            fi
-        fi
-    fi
-done
+while IFS=$'\t' read -r branch additions deletions; do
+    [ -z "$branch" ] && continue
+    total_lines=$((additions + deletions))
+    large_branch_found=true
+    echo -e "${YELLOW}⚠️  Large branch: $branch${NC}"
+    echo "   +$additions/-$deletions lines ($total_lines total)"
+    echo "→ Consider: stackit split (to break into smaller PRs)"
+    echo
+done < <(echo "$STACK_JSON" | jq -r '.branches[]? | select((.is_trunk | not) and ((.additions + .deletions) > 500)) | "\(.name)\t\(.additions)\t\(.deletions)"')
 
 if [ "$large_branch_found" = false ]; then
     echo -e "${GREEN}✓ All branches are reasonably sized${NC}"
@@ -151,10 +138,10 @@ echo -e "${BLUE}Suggested Next Steps:${NC}"
 
 if [ "$branches_no_pr" -gt 0 ]; then
     echo "1. Submit branches: stackit submit --stack"
-elif stackit log full 2>&1 | grep -qi "merged\|closed"; then
+elif [ "$merged_or_closed" -gt 0 ]; then
     echo "1. Sync with trunk: stackit sync --restack"
 elif ! git diff-index --quiet HEAD -- 2>/dev/null; then
-    echo "1. Commit changes: git add . (then) stackit modify"
+    echo "1. Commit changes: git add -A (then) stackit modify"
 else
     echo -e "${GREEN}✓ Stack is healthy! Ready for development.${NC}"
 fi

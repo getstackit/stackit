@@ -15,18 +15,24 @@ Generate or refresh stack and PR descriptions from the current branch history.
    git log --oneline --decorate -20
    ```
 
-2. Read PR template if present:
+2. Generate a title and description from the history:
+   - **Title** — max 72 chars, imperative mood, summarizes the whole stack.
+   - **Description** — markdown body with a summary paragraph, bullet points of
+     key changes (grouped by branch/concern), and a concrete test plan.
+
+3. Set the description (this is what actually writes it — the bare command only
+   *displays* in non-interactive mode and changes nothing):
 
    ```bash
-   git ls-files .github/pull_request_template.md CONTRIBUTING.md
+   stackit describe -m "<title>" -d "<description>" --no-interactive
    ```
 
-3. Run the Stackit description command available in this repo:
+   `-d` requires `-m`, and the body supports multiline text.
+
+4. Confirm what was set and report it:
 
    ```bash
-   stackit describe --no-interactive
+   stackit describe --show --no-interactive
    ```
-
-4. Report which descriptions were generated or updated.
 
 Descriptions should include a concrete summary and test plan. Do not use placeholders.

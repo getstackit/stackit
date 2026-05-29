@@ -11,7 +11,7 @@ Absorb staged changes into the correct commits, then intelligently fix any broke
 ## Context
 - Current branch: !`git branch --show-current`
 - Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
 
 ## How Absorb Works
 
@@ -26,7 +26,7 @@ Absorb assigns each change to the commit that last modified those lines. This ma
 ### Phase 1: Absorb with JSON Output
 
 ```bash
-stackit absorb --json --force --no-interactive 2>&1
+stackit absorb --json --force --no-interactive
 ```
 
 Parse the JSON output to understand:
@@ -50,7 +50,7 @@ Save this information - you'll need it to find fixes.
      - "Let me specify" - I'll provide the command
 
 ```bash
-stackit foreach --stack --json --find-first-failure --jobs 0 "<build-command>" 2>&1
+stackit foreach --stack --json --find-first-failure --jobs 0 "<build-command>"
 ```
 
 Parse `.results` in the foreach JSON output and find entries whose `status` is not `"done"` or whose `exit_code` is non-zero. `--find-first-failure` stops before descendant depths, so the failed results are the earliest failing branches. The failing branch is where to fix.
@@ -68,7 +68,7 @@ For each broken branch, identify what's missing by reading the error.
   stackit checkout <failing-branch> --no-interactive
   # Edit the file to add the missing code from the unabsorbable hunk content
   git add <files>
-  git commit -m "fix: add <missing-item> dependency"
+  printf 'fix: add <missing-item> dependency' | git commit -F -
   stackit restack --branch <failing-branch> --upstack --no-interactive
   ```
 
@@ -79,7 +79,7 @@ For each broken branch, identify what's missing by reading the error.
   stackit checkout <failing-branch> --no-interactive
   # Copy the relevant code from the new file
   git add <files>
-  git commit -m "fix: add <missing-item> from new file"
+  printf 'fix: add <missing-item> from new file' | git commit -F -
   stackit restack --branch <failing-branch> --upstack --no-interactive
   ```
 
@@ -90,14 +90,14 @@ For each broken branch, identify what's missing by reading the error.
   stackit checkout <failing-branch> --no-interactive
   # Apply the code from the absorbed hunk content
   git add <files>
-  git commit -m "fix: bring down <missing-item> from upstack"
+  printf 'fix: bring down <missing-item> from upstack' | git commit -F -
   stackit restack --branch <failing-branch> --upstack --no-interactive
   ```
 
 ### Phase 4: Verify Fix
 
 ```bash
-stackit foreach --branch <failing-branch> --upstack --json --find-first-failure --jobs 0 "<build-command>" 2>&1
+stackit foreach --branch <failing-branch> --upstack --json --find-first-failure --jobs 0 "<build-command>"
 ```
 
 If another branch fails, repeat Phase 3 for that branch.
@@ -136,7 +136,7 @@ Looking for hashPassword in unabsorbable hunks... Found!
 $ stackit checkout add-login --no-interactive
 # Edit utils/crypto.go to add hashPassword from unabsorbable content
 $ git add utils/crypto.go
-$ git commit -m "fix: add hashPassword dependency"
+$ printf 'fix: add hashPassword dependency' | git commit -F -
 $ stackit restack --branch add-login --upstack --no-interactive
 
 $ stackit foreach --branch add-login --upstack --json --find-first-failure --jobs 0 "<build-command>"

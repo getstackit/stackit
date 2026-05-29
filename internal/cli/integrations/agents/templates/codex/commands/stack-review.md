@@ -33,3 +33,19 @@ Review stack PRs for high-confidence issues and report findings locally.
 5. Return findings first, ordered by severity, with file and line references.
 
 If no issues meet the bar, say so and mention residual test gaps.
+
+## Applying feedback
+
+This skill reports findings; it does not push fixes by default. If the user asks
+you to apply changes, use stackit — never `gh pr` edits or a manual `git rebase`:
+
+```bash
+stackit checkout <reviewed-branch> --no-interactive
+# edit files...
+git add -A
+stackit modify --no-interactive          # amends the branch; auto-restacks descendants
+stackit submit --no-interactive           # update the PRs
+```
+
+For a fix that belongs on a different branch in the stack, use `stackit absorb`
+instead of amending the wrong commit.

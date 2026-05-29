@@ -18,15 +18,16 @@ Move files or commits off the current branch onto a new sibling, parent, or chil
 
 2. Confirm with the user what should be extracted (file list or commit set) and where it should go: a sibling off the same parent, a new parent, or a new child.
 
-3. Choose the split form:
+3. Choose the split form. Pipe the message via `--message-file -` (split has no
+   `-F` shorthand — `-F` means `--by-file-interactive`):
 
    | Goal | Command |
    |---|---|
-   | Extract files to a sibling branch (current branch keeps the files) | `stackit split --by-file <files> --as-sibling --name "<branch>" --message "<message>" --no-interactive` |
-   | Extract files to a new parent (current branch loses the files) | `stackit split --by-file <files> --name "<branch>" --message "<message>" --no-interactive` |
-   | Extract files to a new child branch | `stackit split --by-file <files> --above --name "<branch>" --message "<message>" --no-interactive` |
-   | Split commit history into siblings | `stackit split --by-commit --as-sibling` |
-   | Extract specific hunks via patch | `stackit split --patch <patch-file> --above --name "<branch>" --message "<message>" --no-interactive` |
+   | Extract files to a sibling branch (current branch keeps the files) | `printf '<message>' \| stackit split --by-file <files> --as-sibling --name "<branch>" --message-file - --no-interactive` |
+   | Extract files to a new parent (current branch loses the files) | `printf '<message>' \| stackit split --by-file <files> --name "<branch>" --message-file - --no-interactive` |
+   | Extract files to a new child branch | `printf '<message>' \| stackit split --by-file <files> --above --name "<branch>" --message-file - --no-interactive` |
+   | Split commit history into siblings | `stackit split --by-commit --as-sibling` — **interactive only**: `--by-commit` launches a selection wizard that needs a TTY, so it is unsuitable for autonomous runs. Use `--by-file`/`--patch` instead, or ask the user to run it. |
+   | Extract specific hunks via patch | `printf '<message>' \| stackit split --patch <patch-file> --above --name "<branch>" --message-file - --no-interactive` |
 
 4. Verify:
 

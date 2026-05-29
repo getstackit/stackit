@@ -42,21 +42,24 @@ Absorb Fix Progress:
    - "What command should I use to build the project?"
    - "What command should I use to run tests?"
 
-## Step 2: Build and Test Each Branch
+## Step 2: Build and Test the Whole Stack at Once
 
-Starting from the **bottom** of the stack (earliest branch), build and test each branch:
+Don't check out and build each branch by hand — run the build across the whole
+stack in one pass and let stackit stop at the first failing depth:
 
 ```bash
-# Get list of branches in stack order
-stackit log --no-interactive
-
-# For each branch (bottom to top):
-git checkout <branch-name>
-<build-command>
-<test-command>
+stackit foreach --stack --find-first-failure --no-interactive "<build-command>"
 ```
 
-**Mark which branches fail** - you'll need this for Step 3.
+`--find-first-failure` runs branches depth-by-depth and stops at the first depth
+that fails, so the reported branch is the earliest break — exactly the one to fix.
+Only drop down to a single branch (Step 3) for that reported failure:
+
+```bash
+stackit checkout <failing-branch> --no-interactive
+```
+
+**Note the failing branch and error** - you'll need them for Step 3.
 
 ## Step 3: Identify Failed Branches
 
@@ -64,7 +67,7 @@ For each failed branch, analyze the error:
 
 ```bash
 # Example: Build failed on branch "add-validation"
-git checkout add-validation
+stackit checkout add-validation --no-interactive
 
 # Run build and capture error
 <build-command> 2>&1 | tee build-error.log
@@ -112,8 +115,8 @@ For each missing dependency, move it to the failing branch:
 # If the needed change is in a single commit
 git cherry-pick <commit-hash>
 
-# Resolve conflicts if needed
-git add .
+# Resolve conflicts if needed (cherry-pick has no stackit equivalent)
+git add -A
 git cherry-pick --continue
 ```
 
@@ -133,18 +136,22 @@ git add path/to/file.go
 stackit modify --no-interactive  # Amends current branch's commit
 ```
 
-### Option C: Interactive rebase (advanced)
+### Option C: Reorder branches (advanced)
+
+If the dependency lives on a *later branch* and needs to come earlier, reorder
+the branches with stackit rather than a manual `git rebase -i` (which bypasses
+stackit metadata and hangs a non-interactive agent):
 
 ```bash
-# Reorder commits to move dependencies earlier
-git rebase -i <parent-branch>
+# Opens an editor to reorder the branches between trunk and the current branch,
+# then restacks all descendants. Editor-driven — run it where a human can edit.
+stackit reorder
+```
 
-# In editor, reorder commits so dependencies come first
-# Save and close
+To move a single branch onto a different parent non-interactively:
 
-# Resolve conflicts
-git add .
-git rebase --continue
+```bash
+stackit move --source <branch> --onto <new-parent> -y --no-interactive
 ```
 
 ## Step 6: Verify Entire Stack
@@ -216,7 +223,7 @@ git show abc123
 # → Shows validateUser function definition
 
 # 3. Cherry-pick it
-git checkout add-validation
+stackit checkout add-validation --no-interactive
 git cherry-pick abc123
 
 # 4. Verify fix

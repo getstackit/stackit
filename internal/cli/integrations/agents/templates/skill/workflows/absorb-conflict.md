@@ -93,7 +93,7 @@ The change can be directly applied to the target commit's version:
 
 ```bash
 # 1. Checkout the target branch
-git checkout <target-branch>
+stackit checkout <target-branch> --no-interactive
 
 # 2. Manually apply the semantic change
 # Edit the file to make the same logical change,
@@ -135,9 +135,10 @@ stackit absorb --no-interactive --force
 If the change doesn't belong in any existing commit:
 
 ```bash
-# 1. Keep the staged changes
-# 2. Create a new commit on top
-stackit create --no-interactive "description of change"
+# The change is already staged from the absorb attempt, so create a new branch
+# with a commit on top. Pipe the message via -F - — a bare positional arg is
+# treated as the BRANCH NAME, not the commit message.
+echo "<type>: description of change" | stackit create -F - --no-interactive
 ```
 
 ### Strategy D: Interactive Resolution

@@ -11,7 +11,8 @@ Diagnose and fix stack problems, including build/lint/test failures.
 ## Context
 - Current branch: !`git branch --show-current`
 - Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
+- Diagnostics: !`stackit doctor --no-interactive`
 
 ## Instructions
 
@@ -72,19 +73,20 @@ Fix any lint errors, unused variables, or build failures NOW. This prevents havi
 
 #### Step 4: Stage and continue
 ```bash
-stackit add .
-stackit continue
+git add -A
+stackit continue --no-interactive
 ```
 
-#### Step 5: If you amended a commit, restack children
-If you made additional fixes and amended them into a commit:
+#### Step 5: If you need to amend a commit, use stackit modify
+If you made additional fixes that belong in the current branch's commit, amend with
+`stackit modify` (never `git commit --amend`) — it rewrites the commit AND restacks
+descendants in one step:
 ```bash
 git add -A
-git commit --amend --no-edit
-stackit restack --branch <amended-branch> --upstack --no-interactive
+stackit modify --no-edit --no-interactive
 ```
 
-Child branches need restacking after an amend because the commit SHA changed.
+`stackit modify` auto-restacks children after the amend, so no separate restack is needed.
 
 #### Step 6: Verify
 ```bash
@@ -123,12 +125,12 @@ Prefer JSON output so branch, status, exit code, and command output are machine-
 
 For the current stack:
 ```bash
-stackit foreach --stack --json --find-first-failure --jobs 0 "<check-command>" 2>&1
+stackit foreach --stack --json --find-first-failure --jobs 0 "<check-command>"
 ```
 
 For a known stack root or affected branch, avoid checking out first and anchor traversal explicitly:
 ```bash
-stackit foreach --branch <branch-or-root> --upstack --json --find-first-failure --jobs 0 "<check-command>" 2>&1
+stackit foreach --branch <branch-or-root> --upstack --json --find-first-failure --jobs 0 "<check-command>"
 ```
 
 This starts at the selected root/branch and walks toward leaves. A failing branch at the earliest failing depth is where the bug was introduced. Multiple branches can fail at the same depth; inspect each failed result and fix the branch that matches the reported problem.
@@ -156,10 +158,10 @@ stackit checkout <failing-branch> --no-interactive
 #### Step 4: Fix the issue
 - Read the error output to understand the problem
 - Make the necessary code changes
-- Stage and commit:
+- Stage and commit (pipe the message via stdin so permission rules stay stable):
   ```bash
   git add -A
-  git commit -m "fix: <description>"
+  printf 'fix: <description>' | git commit -F -
   ```
 
 #### Step 5: Propagate the fix via restack
@@ -174,7 +176,7 @@ This rebases all child branches onto the fixed branch, propagating your fix.
 
 #### Step 6: Verify all branches now pass
 ```bash
-stackit foreach --branch <failing-branch> --upstack --json --find-first-failure --jobs 0 "<check-command>" 2>&1
+stackit foreach --branch <failing-branch> --upstack --json --find-first-failure --jobs 0 "<check-command>"
 ```
 
 If it stops at another failure, repeat from Step 2 (there may be multiple independent issues).

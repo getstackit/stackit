@@ -44,7 +44,7 @@ Split uncommitted working-tree changes into multiple stacked branches. Primary o
    BACKUP="stack-plan-backup-$(date +%s)"
    git checkout -b "$BACKUP"
    git add -A
-   git commit -m "stack-plan: backup of all changes"
+   printf 'stack-plan: backup of all changes' | git commit -F -
    BACKUP_SHA=$(git rev-parse HEAD)
    git checkout "$ORIGINAL"
    ```
@@ -53,17 +53,32 @@ Split uncommitted working-tree changes into multiple stacked branches. Primary o
 
    ```bash
    git checkout "$BACKUP_SHA" -- <files-for-this-branch>
-   git diff --cached --stat
+   git diff --cached --stat            # MUST be non-empty before creating
    printf '%s\n' "<message>" | stackit create -F - <name> --no-interactive
-   git log -1 --stat
+   git log -1 --stat                   # verify the new branch actually committed the files
    <check-command>
    ```
 
-8. On full success:
+   **Verify each branch is non-empty.** `stackit create` with nothing staged
+   produces an *empty* branch. If `git diff --cached --stat` is empty before
+   create, or `git log -1 --stat` shows no files after, STOP — do not continue
+   to the next branch. Recover with:
 
    ```bash
-   git branch -D "$BACKUP"
-   stackit log --no-interactive
+   git checkout -B "$ORIGINAL" "$BACKUP_SHA"
    ```
 
-If any execution step fails, stop and point the user at the backup branch. See [stack-plan-recovery.md](../stackit/references/stack-plan-recovery.md).
+8. Stop conditions:
+   - **Success:** every planned branch created non-empty and `<check-command>`
+     passed on each. Then clean up:
+
+     ```bash
+     git branch -D "$BACKUP"
+     stackit log --no-interactive
+     ```
+
+   - **Failure:** any create produced an empty branch, any check failed, or any
+     step errored. STOP immediately, restore the original branch from the backup
+     (`git checkout -B "$ORIGINAL" "$BACKUP_SHA"`), and report what happened. Do
+     not delete the backup branch. See
+     [stack-plan-recovery.md](../stackit/references/stack-plan-recovery.md).

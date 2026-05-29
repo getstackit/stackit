@@ -1,7 +1,7 @@
 ---
 description: Resolve rebase conflicts with AI assistance
 model: claude-sonnet-4-20250514
-allowed-tools: Read, Edit, AskUserQuestion, Bash(git show *), Bash(git diff *), Bash(git add *), Bash(git rebase --continue), Bash(grep *), Bash(stackit *), Bash(make *), Bash(npm *), Bash(yarn *), Bash(pnpm *), Bash(go *), Bash(cargo *), Bash(mise run *)
+allowed-tools: Read, Edit, AskUserQuestion, Bash(git show *), Bash(git diff *), Bash(git add *), Bash(grep *), Bash(stackit *), Bash(make *), Bash(npm *), Bash(yarn *), Bash(pnpm *), Bash(go *), Bash(cargo *), Bash(mise run *)
 ---
 
 # Conflict Resolution
@@ -108,13 +108,17 @@ After all conflicts are resolved:
 
 2. **If validation passes:**
    ```bash
-   git rebase --continue
+   stackit continue --no-interactive
    ```
+   Use `stackit continue` (not raw `git rebase --continue`): it finishes the
+   rebase **and** resumes restacking the remaining branches in the stack, keeping
+   stackit's metadata consistent. Raw git would leave the rest of the stack
+   un-restacked.
 
 3. **If validation fails:**
    - Explain what broke
    - Offer to help fix the issue
-   - Do NOT continue the rebase until tests pass
+   - Do NOT continue until tests pass
 
 ### Phase 6: Post-Resolution
 

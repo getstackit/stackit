@@ -23,4 +23,13 @@ Summarize:
 - Branches needing restack.
 - Failing CI or ready-to-merge signals when present.
 
+When you detect an issue, recommend the matching command (don't invent one):
+
+| Detected | Recommend |
+|---|---|
+| Branches need restack | `stackit restack --branch <root> --upstack --no-interactive` (or `--stacks a,b` for several) |
+| Branch has no PR | `stackit submit --no-interactive` |
+| PR approved / ready to merge | `stackit merge ship --yes --no-interactive` (or `merge next --yes`) |
+| Trunk behind remote | `stackit sync --no-interactive` |
+
 Use plain `stackit log --no-interactive` when the user wants the visual stack.

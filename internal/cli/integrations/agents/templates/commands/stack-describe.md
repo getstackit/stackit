@@ -10,9 +10,9 @@ Generate a comprehensive description for the current stack based on all changes.
 
 ## Context
 - Current branch: !`git branch --show-current`
-- Stack state: !`stackit log --no-interactive 2>&1`
-- Stack info: !`stackit info --stack --json --no-interactive 2>&1`
-- Current description: !`stackit describe --show --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
+- Stack info: !`stackit info --stack --json --no-interactive`
+- Current description: !`stackit describe --show --no-interactive`
 
 ## Instructions
 
@@ -22,7 +22,7 @@ For each branch in the stack (from the stack info JSON), gather:
 
 1. **Commit messages** - Already available in `commit_messages` field
 2. **Diff statistics** - Already available in `diff_stats` field
-3. **File changes** - Use `git diff <parent>..<branch> --stat` for summary
+3. **File changes** - Prefer the loaded `diff_stats`; only run `git diff <parent>..<branch> --stat` if you need per-file detail it doesn't cover
 
 If the stack has complex changes, optionally read key files to understand:
 - What features are being added

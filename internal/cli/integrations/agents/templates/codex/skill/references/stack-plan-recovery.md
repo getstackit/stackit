@@ -12,16 +12,20 @@ A partial run may leave:
 
 ## Start Over
 
+Reset the original branch to the backup in one step (`-B` already moves the branch
+to the given start point, so no separate `git reset` is needed):
+
 ```bash
-git checkout stack-plan-backup-<timestamp>
-git checkout -B <original-branch>
-git reset --hard stack-plan-backup-<timestamp>
+git checkout -B <original-branch> stack-plan-backup-<timestamp>
 ```
 
-Then delete partial stacked branches newest-first with:
+If `stack-plan` created partial stacked branches, unwind them with `stackit undo`.
+Each call reverts one prior Stackit snapshot — run it until the partial-run
+branches are gone, checking after each:
 
 ```bash
 stackit undo --no-interactive --yes
+stackit log --no-interactive
 ```
 
 ## Continue From The Last Successful Branch

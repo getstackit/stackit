@@ -15,21 +15,38 @@ Sync with trunk and clean up branches that have landed.
    stackit log --no-interactive
    ```
 
-2. If there are uncommitted changes, stop and ask whether to stash, commit, or abort.
+2. If there are uncommitted changes, stop and ask the user to commit (via
+   `stackit create`/`stackit modify`) or abort. Do not stash.
 
-3. Run:
-
-   ```bash
-   stackit sync --no-interactive
-   ```
-
-4. If Stackit reports branches needing restack:
+3. Preview what sync would do:
 
    ```bash
-   stackit restack --upstack --no-interactive
+   stackit sync --dry-run --json --restack --no-interactive
    ```
 
-5. Verify:
+   Parse `would_clean` (branches to delete), `would_restack`, and
+   `would_restack_stacks` (independent stack roots) from the JSON.
+
+4. If **all** branches would be deleted, stop and confirm with the user first.
+
+5. Run cleanup without restacking, so restack can use a refreshed scope:
+
+   ```bash
+   stackit sync --no-restack --no-interactive
+   ```
+
+6. Recompute the restack scope (cleanup/reparenting may have changed roots):
+
+   ```bash
+   stackit sync --dry-run --json --restack --no-interactive
+   ```
+
+   Then restack using the refreshed `would_restack_stacks`:
+   - One root → `stackit restack --branch <root> --upstack --no-interactive`
+   - Several roots → `stackit restack --stacks <root-a>,<root-b> --continue-on-conflict --no-interactive`
+   - Roots unavailable / all stacks affected → `stackit restack --all-stacks --continue-on-conflict --no-interactive`
+
+7. Verify:
 
    ```bash
    stackit log --no-interactive

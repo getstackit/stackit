@@ -43,7 +43,9 @@ Present your findings to the user. For each recommendation, include:
 ### 5. Execute Fold
 Wait for user confirmation. If confirmed, perform the fold:
 ```bash
-# Fold branch into parent (keeps parent name)
+# Folds the current branch into its parent; the combined branch takes the PARENT
+# name by default. Do NOT pass --keep unless you specifically want to retain the
+# child (current) branch's name instead.
 stackit checkout <branch-to-fold> --no-interactive
 stackit fold --no-interactive
 ```

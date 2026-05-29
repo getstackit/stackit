@@ -13,7 +13,7 @@ Commands for managing the entire stack or multiple branches.
 | `stackit restack --stacks <root1>,<root2> --continue-on-conflict --no-interactive` | Rebase specific independent stack roots while letting unrelated selected roots continue past conflicts |
 | `stackit sync --no-interactive` | Pull trunk, delete merged branches, restack |
 | `stackit info --stack --json --no-interactive` | Export full stack metadata as JSON for analysis |
-| `stackit merge` | Merge approved PRs and cleanup |
+| `stackit merge ship --yes --no-interactive` | Consolidate the stack into one PR and merge (subcommand required — bare `stackit merge` is a wizard that needs a TTY; `merge next --yes` merges just the bottom PR) |
 | `stackit fold --no-interactive` | Fold current branch into its parent |
 
 ## Bulk Operations
@@ -22,8 +22,8 @@ Commands for managing the entire stack or multiple branches.
 |---------|-------------|
 | `stackit foreach --no-interactive` | Run command on each branch in stack |
 | `stackit submit --no-interactive` | Push branches and create/update PRs |
-| `stackit reorder` | Interactively reorder branches |
-| `stackit move` | Rebase branch onto new parent |
+| `stackit reorder` | Reorder branches (editor-driven — opens an editor, so there is no agent-safe non-interactive form) |
+| `stackit move -y` | Rebase branch onto new parent (`-y/--yes` to skip the prompt) |
 
 ## Common Flag Patterns
 
@@ -72,15 +72,17 @@ stackit foreach --no-interactive "git status --short"
 
 ### Start a feature stack
 ```bash
-git add .
+git add -A
 echo "feat: implement user authentication" | stackit create -F - --no-interactive
 
-# Add tests to the same branch (branches can have multiple commits)
-git add .
-git commit -m "test: add auth tests"
+# Add tests to the same branch (branches can have multiple commits).
+# git commit is allowed for follow-up commits on an existing branch; pipe the
+# message via -F - so permission rules stay stable across messages.
+git add -A
+printf 'test: add auth tests' | git commit -F -
 
 # Work on next part as a separate stacked branch
-git add .
+git add -A
 echo "feat: add JWT token validation" | stackit create -F - --no-interactive
 ```
 
@@ -91,10 +93,9 @@ stackit submit --no-interactive --stack
 
 ### After code review changes
 ```bash
-git add .
+git add -A
 stackit modify --no-interactive
-# Propagate the amend to descendants of this branch only
-stackit restack --branch $(git branch --show-current) --upstack --no-interactive
+# stackit modify automatically restacks descendants — no manual restack needed.
 stackit submit --no-interactive
 ```
 

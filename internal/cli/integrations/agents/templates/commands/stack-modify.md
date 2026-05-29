@@ -9,10 +9,10 @@ argument-hint: [-m "message"] [-a] [-c] [--no-edit]
 
 ## Context
 - Current branch: !`git branch --show-current`
-- Unstaged changes: !`git diff --stat 2>&1 | head -20`
-- Staged changes: !`git diff --cached --stat 2>&1 | head -20`
-- Recent commits on branch: !`git log --oneline -5 2>&1`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Unstaged changes: !`git diff --stat | head -20`
+- Staged changes: !`git diff --cached --stat | head -20`
+- Recent commits on branch: !`git log --oneline -5`
+- Stack state: !`stackit log --no-interactive`
 
 ## Arguments
 $ARGUMENTS
@@ -27,31 +27,31 @@ Modify the current branch by amending its commit or creating a new commit. Autom
 
 ### Steps
 
-1. **Check for changes:**
-   - If no staged changes and no unstaged changes, inform user and stop
-   - If no staged changes but unstaged changes exist, run `git add --all` to stage them
-   - If user provided `-a`, run `git add --all` first
+1. **Check for changes and stage:**
+   - If there are no staged and no unstaged changes, inform user and stop.
+   - Otherwise run `git add -A` once to stage everything (this is the same whether
+     or not the user passed `-a` — don't double-stage). Skip only if the user
+     explicitly asked to amend with the currently-staged set only.
 
 2. **Determine the message:**
-   - If `-m "message"` provided, use that message
-   - If `--no-edit` or `-n` provided, keep the existing commit message (amend mode only)
-   - If neither provided and amending, generate a message describing what changed based on the diff, then use `-m`
-   - If neither provided and creating new commit (`-c`), generate a message based on the diff
+   - If `--no-edit` or `-n` provided, keep the existing commit message (amend mode only).
+   - If `-m "message"` provided, use that message.
+   - If neither provided, generate a message describing the change from the diff
+     (always — both for amend and for a new commit with `-c`).
 
-3. **Run the command:**
+3. **Run the command** (pipe generated messages via stdin so permission rules stay
+   stable across messages):
    ```bash
-   # Amend (default) with message
-   stackit modify -m "<message>"
-
-   # Amend keeping existing message
+   # Amend (default), keeping the existing message
    stackit modify --no-edit
 
-   # New commit
-   stackit modify -c -m "<message>"
+   # Amend with a regenerated message
+   printf '%s\n' "<message>" | stackit modify -F -
 
-   # Stage all + amend
-   stackit modify -a -m "<message>"
+   # New commit on this branch
+   printf '%s\n' "<message>" | stackit modify -c -F -
    ```
+   Changes are already staged from Step 1, so no `-a` is needed.
 
 4. **Handle results:**
    - On success, report what was modified and that descendants were restacked

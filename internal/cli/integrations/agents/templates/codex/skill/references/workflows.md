@@ -20,7 +20,7 @@ If branch config requires a scope, retry with `--scope <value>`.
 
 ## Add Work To An Existing Branch
 
-- Follow-up commit: `git add -A` then `git commit -m "..."`
+- Follow-up commit: `git add -A` then `printf '%s\n' "<message>" | git commit -F -`
 - Amend latest commit: `stackit modify --no-interactive`
 - Distribute fixes through the stack: `stackit absorb --force --no-interactive`
 

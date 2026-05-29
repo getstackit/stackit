@@ -16,7 +16,7 @@ Perform code reviews on PRs in the stack. Finds bugs, checks CLAUDE.md complianc
 ## Context
 - Current branch: !`git branch --show-current`
 - Repo: !`gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
 
 ## Arguments
 $ARGUMENTS
@@ -51,7 +51,7 @@ Perform code reviews on stack PRs in parallel, reporting high-confidence issues 
 Get all branches in the stack that have open PRs:
 
 ```bash
-stackit log --json --no-interactive 2>&1
+stackit log --json --no-interactive
 ```
 
 Parse the JSON to identify branches with PRs. For each branch, check if the PR is reviewable:
@@ -274,10 +274,12 @@ For each actionable comment:
 
 ```bash
 git add -A
-git commit -m "refactor: apply PR review feedback
+git commit -F - <<'EOF'
+refactor: apply PR review feedback
 
 Applied reviewer suggestions:
-- <list of changes>"
+- <list of changes>
+EOF
 ```
 
 Batch-resolve threads:

@@ -17,6 +17,10 @@ interface AuthContextValue {
   isLoading: boolean;
   loginURL: string;
   logout: () => Promise<void>;
+  // disabled mirrors the AuthProvider `disable` prop: true in local/dev mode
+  // where there is no real session. Consumers use it to hide sign-out, which
+  // would be a no-op (and would wrongly flip the app into the login screen).
+  disabled: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -24,6 +28,7 @@ const AuthContext = createContext<AuthContextValue>({
   isLoading: true,
   loginURL: "/auth/login",
   logout: async () => {},
+  disabled: false,
 });
 
 export function useAuth() {
@@ -58,30 +63,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
 
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      const me = await fetchMe();
-      setUser(me);
-      setNeedsLogin(false);
-    } catch (e) {
-      if (e instanceof UnauthorizedError) {
-        setUser(null);
-        setNeedsLogin(true);
-      } else {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
+  // Fetch the current user on mount. The async work lives inside the effect
+  // (not a synchronously-called callback) so all setState happens after an
+  // await — the pattern the set-state-in-effect lint rule expects. The
+  // `active` guard drops results that resolve after unmount.
   useEffect(() => {
     if (disable) {
       return;
     }
-    void refresh();
-  }, [disable, refresh]);
+    let active = true;
+    (async () => {
+      try {
+        const me = await fetchMe();
+        if (!active) return;
+        setUser(me);
+        setNeedsLogin(false);
+        setError(null);
+      } catch (e) {
+        if (!active) return;
+        if (e instanceof UnauthorizedError) {
+          setUser(null);
+          setNeedsLogin(true);
+        } else {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [disable]);
 
   const logout = useCallback(async () => {
     try {
@@ -113,7 +126,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading: false, loginURL, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading: false, loginURL, logout, disabled: Boolean(disable) }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -81,7 +81,7 @@ layout.tsx
 └── ThemeProvider → TooltipProvider
     └── [[...slug]]/page.tsx → AppShell
         └── ConfigProvider → AuthProvider → RepoProvider (per-repo view)
-        ├── Header (repo info, refresh, theme toggle)
+        ├── Header (repo info, refresh, theme toggle, user menu)
         ├── LeftPanel (scrollable)
         │   ├── OwnerSwimlane ("You")
         │   │   └── StackColumn (per stack)

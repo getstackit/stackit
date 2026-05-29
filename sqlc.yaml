@@ -1,0 +1,10 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema: "internal/api/store/migrations"
+    queries: "internal/api/store/queries/"
+    gen:
+      go:
+        package: "reposdb"
+        out: "internal/api/store/reposdb"
+        sql_package: "database/sql"

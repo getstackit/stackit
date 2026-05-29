@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:18
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: stackit
+      POSTGRES_PASSWORD: stackit
+      POSTGRES_DB: stackit
+    volumes:
+      # postgres:18 stores data in a major-version subdirectory and expects the
+      # mount at /var/lib/postgresql (not .../data) for pg_upgrade compatibility.
+      - pgdata_stackit18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stackit"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata_stackit18:

@@ -13,17 +13,18 @@ or would benefit from early review of foundational work.
 
 ### Workflow
 ```bash
-git add -A                        # Stage first
-stackit create -m "feat: ..."     # Create stacked branch
+git add -A                              # Stage first
+echo "feat: ..." | stackit create -F -  # Create stacked branch (message via stdin)
 # ... continue working ...
-stackit submit                    # Submit all PRs
+stackit submit                          # Submit all PRs
 ```
 
 ### Key Commands
 | Command | Purpose |
 |---------|---------|
-| `stackit create -m "msg"` | Create stacked branch |
+| `echo "feat: msg" \| stackit create -F -` | Create stacked branch |
 | `stackit submit` | Push & create/update PRs |
+| `stackit restack --upstack` | Rebase children after editing a branch (never manual `git rebase`) |
 | `stackit sync` | Pull trunk, cleanup merged |
 | `stackit log` | Visualize branch tree |
 

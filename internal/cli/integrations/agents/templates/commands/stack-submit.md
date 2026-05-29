@@ -11,8 +11,8 @@ Submit branches to GitHub and create/update PRs.
 
 ## Context
 - Current branch: !`git branch --show-current`
-- Stack state: !`stackit log --no-interactive 2>&1`
-- Branch info: !`stackit info --json --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
+- Branch info: !`stackit info --json --no-interactive`
 
 ## Arguments
 $ARGUMENTS
@@ -35,21 +35,25 @@ From the stack state, identify which branches need PR descriptions generated:
 
 Run submit command:
 
-**Current branch only:**
+**Current branch and its ancestors (default):**
 ```bash
 stackit submit --no-interactive
 ```
 
-**Entire stack:**
+**Entire stack (also includes descendants):**
 ```bash
 stackit submit --stack --no-interactive
 ```
 
 **As drafts:** add `--draft`
 
-When stackit prompts for title and body (in interactive mode) or when generating PR content:
-- **Title**: Use first commit subject, keep under 72 chars
-- **Body**: Summarize changes with bullet points + include test plan
+Under `--no-interactive`, stackit does **not** prompt for title/body — the PR
+title comes from each branch's commit subject and the stack footer is
+auto-generated. The interactive `--edit-title`/`--edit-description` flags don't
+apply here. To control content non-interactively:
+- **Title**: write a clear commit subject (under 72 chars); it becomes the PR title.
+- **Stack description/footer**: set it before submitting with
+  `stackit describe -m "<title>" -d "<body>" --no-interactive` (see `/stack-describe`).
 
 Check `.github/pull_request_template.md` and `CONTRIBUTING.md` for format requirements.
 

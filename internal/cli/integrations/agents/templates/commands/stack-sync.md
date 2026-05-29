@@ -8,7 +8,7 @@ allowed-tools: Bash(stackit:*), Bash(git:*), AskUserQuestion, Skill
 
 ## Context
 - Current branch: !`git branch --show-current`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
 
 ## Task
 
@@ -28,7 +28,7 @@ Sync the stack with trunk: pull latest, cleanup merged branches, restack.
 
 If `--continue-on-conflict` reports skipped conflicts, no rebase is active for those skipped branches. To resolve one, run `stackit restack --branch <conflicted-branch> --upstack --no-interactive`, then resolve conflicts and run `stackit continue`.
 
-You can call multiple tools in a single response.
+These steps are sequential — each depends on the previous step's result, so run them one at a time rather than batching.
 
 ## Follow-up
 

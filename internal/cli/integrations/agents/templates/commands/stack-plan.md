@@ -14,7 +14,7 @@ Analyze uncommitted working tree changes, suggest a logical stacking structure, 
 ## Context
 - Current branch: !`git branch --show-current`
 - Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
 
 ## Arguments
 $ARGUMENTS
@@ -263,7 +263,7 @@ Dry Run - Setup
 BACKUP_BRANCH="stack-plan-backup-<timestamp>"
 git checkout -b "$BACKUP_BRANCH"
 git add -A
-git commit -m "stack-plan: backup of all changes"
+printf 'stack-plan: backup of all changes' | git commit -F -
 BACKUP_COMMIT=<commit-sha>
 git checkout <original-branch>
 
@@ -300,7 +300,7 @@ git checkout -b "$BACKUP_BRANCH"
 
 # Stage and commit ALL changes (including untracked)
 git add -A
-git commit -m "stack-plan: backup of all changes"
+printf 'stack-plan: backup of all changes' | git commit -F -
 
 # Record the backup commit SHA
 BACKUP_COMMIT=$(git rev-parse HEAD)

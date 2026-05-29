@@ -10,8 +10,8 @@ Fold (squash) granular branches into their parent branches.
 
 ## Context
 - Current branch: !`git branch --show-current`
-- Stack state: !`stackit log --no-interactive 2>&1`
-- Stack info: !`stackit info --stack --json --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
+- Stack info: !`stackit info --stack --json --no-interactive`
 
 ## Instructions
 
@@ -33,8 +33,12 @@ Fold (squash) granular branches into their parent branches.
 5. Before each fold, verify:
    - Branch has no children (fold leaf branches first)
    - Parent still not locked/frozen
-6. Execute: `stackit checkout <branch> --no-interactive && stackit fold --no-interactive`
-7. After each fold, restack only the affected parent and descendants: `stackit restack --branch <parent-branch> --upstack --no-interactive`
+6. Execute as two separate commands (don't chain with `&&` — keeps permission rules stable):
+   ```bash
+   stackit checkout <branch> --no-interactive
+   stackit fold --no-interactive
+   ```
+7. `stackit fold` automatically restacks descendants. Only restack manually if it reports remaining work: `stackit restack --branch <parent-branch> --upstack --no-interactive`
 8. Show final stack state
 
 ## Tool Trust

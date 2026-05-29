@@ -31,7 +31,7 @@ Split the committed changes on the current branch between this branch and a new 
 ## Context
 - Current branch: !`git branch --show-current`
 - Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
 
 ## Arguments
 $ARGUMENTS
@@ -67,8 +67,8 @@ Cannot Split: Working Directory Not Clean
 You have uncommitted changes. Please commit or stash them first.
 
 Options:
-- Commit changes: git add -A && git commit -m "WIP"
 - Stash changes: git stash
+- Commit changes: git add -A, then stackit modify (amend current commit) or stackit create (new branch)
 - Discard changes: git checkout -- .
 
 Then re-run /stack-split
@@ -432,7 +432,7 @@ After the split completes:
 <check-command>
 
 # Switch to parent and verify it also builds
-git checkout <current-branch>
+stackit checkout <current-branch> --no-interactive
 <check-command>
 ```
 
@@ -557,19 +557,20 @@ new file mode 100644
 - `--below` (default): Extract to a new PARENT branch (downstack)
 - `--as-sibling`: Extract to an independent branch on the same parent
 
-**Examples:**
+**Examples** (pipe the message via `-F -`, the `--message-file` shorthand —
+consistent with create/modify/squash):
 ```bash
 # Extract files to child branch (upstack)
-stackit split --by-file internal/utils.go --above -n "refactor-utils" -m "Extract utilities"
+printf 'Extract utilities' | stackit split --by-file internal/utils.go --above -n "refactor-utils" -F -
 
 # Extract files to parent branch (downstack, default)
-stackit split --by-file internal/config.go -n "config-changes" -m "Extract config"
+printf 'Extract config' | stackit split --by-file internal/config.go -n "config-changes" -F -
 
 # Preview a file-level split without executing
 stackit split --by-file internal/utils.go --above --dry-run -n "refactor-utils"
 
 # Hunk-level split using a patch file
-stackit split --patch /tmp/extract.patch --above -n "feature-part-2" -m "Part 2"
+printf 'Part 2' | stackit split --patch /tmp/extract.patch --above -n "feature-part-2" -F -
 ```
 
 **Note:** `--by-file` extracts entire files to the new branch, not just the changes to those files. Use `--patch` or `--by-hunk` for hunk-level splitting within files.

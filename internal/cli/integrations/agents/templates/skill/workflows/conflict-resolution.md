@@ -191,13 +191,12 @@ Once all conflicts are resolved and verified:
 
 ```bash
 # Stage all resolved files
-git add .
+git add -A
 
-# Continue the operation
+# Continue the operation — always use stackit continue, NOT raw git.
+# It finishes the rebase AND resumes restacking the remaining branches,
+# keeping stackit metadata consistent.
 stackit continue --no-interactive
-
-# Or if using git directly
-git rebase --continue
 ```
 
 ## Common Conflict Patterns
@@ -302,13 +301,11 @@ func newFunction() {
 If resolution is too complex or you want to reconsider:
 
 ```bash
-# Abort the operation
+# Abort the operation — use stackit abort, NOT raw git rebase --abort, so the
+# whole halted stackit operation (restack/sync/merge/absorb) is cancelled cleanly.
 stackit abort --no-interactive
 
-# Or with git
-git rebase --abort
-
-# Then undo stackit command
+# Then, if you also want to revert the stackit command's metadata changes:
 stackit undo --no-interactive --yes
 ```
 
@@ -325,7 +322,8 @@ echo "feat: add phone validation" | stackit create -F - --no-interactive
 
 # Also good: Multiple commits in one branch for related work
 echo "feat: add validation helpers" | stackit create -F - --no-interactive
-git add . && git commit -m "test: add validation tests"
+git add -A
+printf 'test: add validation tests' | git commit -F -
 
 # Risky: Large, sweeping changes
 echo "feat: refactor entire validation system" | stackit create -F - --no-interactive
@@ -341,11 +339,10 @@ stackit sync --no-interactive --restack
 ### 3. Restack After Changes
 
 ```bash
-# After modifying a branch, restack only that branch's descendants
+# After modifying a branch, stackit modify automatically restacks its descendants.
 stackit modify --no-interactive
-stackit restack --branch $(git branch --show-current) --upstack --no-interactive
 
-# If modifications affected multiple independent stacks, prefer:
+# Only restack manually if modifications affected multiple independent stacks:
 # stackit restack --all-stacks --continue-on-conflict --no-interactive
 ```
 
@@ -374,7 +371,7 @@ stackit log --no-interactive  # Note branch order
 # Resolve first conflict
 git status  # See conflicted files
 # ... resolve conflicts ...
-git add .
+git add -A
 stackit continue --no-interactive
 
 # Before moving to next conflict, verify
@@ -383,7 +380,7 @@ stackit log --no-interactive  # Confirm structure still correct
 
 # Continue to next conflict
 # ... resolve conflicts ...
-git add .
+git add -A
 stackit continue --no-interactive
 
 # Repeat until complete
@@ -395,7 +392,7 @@ stackit continue --no-interactive
 
 ```bash
 # Stage all resolved files
-git add .
+git add -A
 stackit continue --no-interactive
 ```
 
@@ -416,7 +413,7 @@ stackit undo --no-interactive --yes
 # Or fix the build issue
 <build-command>  # See error (check README.md for project's build command)
 # Fix the issue
-git add .
+git add -A
 stackit continue --no-interactive
 ```
 

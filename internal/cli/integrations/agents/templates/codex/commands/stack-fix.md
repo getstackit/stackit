@@ -18,10 +18,14 @@ Diagnose stack problems and apply the smallest safe repair.
 
 2. If an operation is in progress, inspect conflicts and route to `stack-resolve`.
 
-3. If branches need ancestry repair, run:
+3. If branches need ancestry repair, restack with the narrowest scope that covers
+   the breakage. Anchor with `--branch <root>` when you know which stack is broken;
+   otherwise cover multiple independent stacks:
 
    ```bash
-   stackit restack --upstack --no-interactive
+   stackit restack --branch <root> --upstack --no-interactive          # known stack
+   stackit restack --stacks <root-a>,<root-b> --continue-on-conflict --no-interactive  # several
+   stackit restack --all-stacks --continue-on-conflict --no-interactive               # all stacks
    ```
 
 4. If the last Stackit operation clearly caused the problem and rollback is safest, ask before:

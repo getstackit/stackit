@@ -10,10 +10,15 @@ Clean up commits across the stack by squashing fixup/WIP commits into meaningful
 
 ## Context
 - Current branch: !`git branch --show-current`
-- Stack state: !`stackit log --no-interactive 2>&1`
-- Stack info: !`stackit info --stack --json --no-interactive 2>&1`
+- Uncommitted changes: !`git status --short`
+- Stack state: !`stackit log --no-interactive`
+- Stack info: !`stackit info --stack --json --no-interactive`
 
 ## Task
+
+**Precondition:** if the Context shows uncommitted changes, stop and ask the user
+to commit (via `stackit create`/`stackit modify`), stash, or abort before tidying.
+Squashing checks out and rewrites branches, which fails on a dirty working tree.
 
 ### Step 1: Gather Commit Data
 
@@ -43,7 +48,7 @@ For each commit, classify as **cleanup** or **meaningful**:
 | Condition | Strategy | Action |
 |-----------|----------|--------|
 | 0 or 1 commits | **SKIP** | Nothing to tidy |
-| 1 meaningful + rest noise | **SQUASH** | `stackit squash -m "<meaningful msg>" --no-edit --no-interactive` |
+| 1 meaningful + rest noise | **SQUASH** | `printf '%s\n' "<meaningful msg>" \| stackit squash -F - --no-interactive` |
 | 0 meaningful (all noise) | **SQUASH** | `stackit squash --no-edit --no-interactive` (keeps oldest msg) |
 | 2+ meaningful commits | **REVIEW** | Show commits, suggest manual action |
 

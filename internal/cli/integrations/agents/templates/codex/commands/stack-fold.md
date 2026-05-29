@@ -15,18 +15,32 @@ Fold a branch into its parent when it is too small to review separately.
    stackit log --no-interactive
    ```
 
-2. Confirm the target branch and parent with the user, because folding rewrites stack structure.
+2. Check preconditions before folding (folding rewrites stack structure):
+   - Fold **leaf branches first** — a branch with children cannot be folded until
+     its children are folded or moved.
+   - Skip **locked or frozen** branches, and skip if the **parent** is locked/frozen.
+   - Do **not** fold across different scopes.
+   - Do **not** fold into trunk unless the user explicitly asks (requires `--allow-trunk`).
 
-3. Run the fold command appropriate for the current Stackit CLI:
+3. Confirm the target branch and parent with the user.
+
+4. Preview the fold before applying it:
+
+   ```bash
+   stackit fold --dry-run --no-interactive
+   ```
+
+5. Run the fold:
 
    ```bash
    stackit fold --no-interactive
    ```
 
-4. Restack descendants if Stackit reports they need it:
+6. `stackit fold` automatically restacks descendants — only restack manually if it
+   reports remaining work:
 
    ```bash
-   stackit restack --upstack --no-interactive
+   stackit restack --branch <parent-branch> --upstack --no-interactive
    ```
 
-5. Verify with `stackit log --no-interactive`.
+7. Verify with `stackit log --no-interactive`.

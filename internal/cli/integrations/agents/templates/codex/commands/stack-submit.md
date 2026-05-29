@@ -18,7 +18,8 @@ Submit branches as PRs or update existing PRs. This touches remotes, so confirm 
 
 2. If there are uncommitted changes, warn and stop unless the user asked to submit anyway.
 
-3. Check for PR template:
+3. Check for a PR template, and if one exists, read it and follow its structure
+   when generating PR bodies (otherwise skip straight to submit):
 
    ```bash
    git ls-files .github/pull_request_template.md CONTRIBUTING.md
@@ -44,4 +45,6 @@ Submit branches as PRs or update existing PRs. This touches remotes, so confirm 
 
 5. Report created or updated PR URLs from the command output.
 
-Do not use `gh pr create`; Stackit owns PR parentage and metadata.
+Do not use `gh pr create`; Stackit owns PR parentage and metadata. Do not submit
+PRs with placeholder content (TODO/TBD, empty sections) — generate a real summary
+and test plan, or leave the field for stackit to auto-generate.

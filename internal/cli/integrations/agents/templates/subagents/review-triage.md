@@ -93,6 +93,23 @@ Parse the JSON from the response. Each thread object contains:
 
 Use the `suggested_change` field as guidance when applying edits, but always verify against the actual code.
 
+## After Classification
+
+To get the actionable fixes back onto the PR, use stackit — not `gh` or a manual
+push. On the branch under review:
+
+```bash
+stackit checkout <branch> --no-interactive
+# apply the edits...
+git add -A
+stackit modify --no-interactive          # amends the commit; auto-restacks descendants
+stackit submit --no-interactive           # update the PR(s)
+```
+
+If a fix belongs on a different branch in the stack, route it with `stackit absorb`
+rather than amending the wrong commit. Resolve the GitHub review threads after the
+update lands.
+
 **Error handling - malformed response:** If the subagent returns invalid JSON or an unexpected format:
 1. Log the raw response for debugging
 2. Fall back to classifying threads manually in the main agent

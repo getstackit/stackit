@@ -15,26 +15,22 @@ Rebase stack branches according to Stackit metadata.
    stackit log --no-interactive
    ```
 
-2. For the current stack:
+2. Precondition: if `git status --short` is non-empty, stop and tell the user to
+   commit (via `stackit create`/`stackit modify`) or stash before restacking — a
+   dirty tree will fail the rebase mid-flight.
 
-   ```bash
-   stackit restack --upstack --no-interactive
-   ```
+3. Choose the narrowest scope that covers what changed:
+   - Current stack: `stackit restack --upstack --no-interactive`
+   - A specific root: `stackit restack --branch <root> --upstack --no-interactive`
+   - Several independent roots: `stackit restack --stacks <root-a>,<root-b> --continue-on-conflict --no-interactive`
+   - Every independent stack (only if requested): `stackit restack --all-stacks --continue-on-conflict --no-interactive`
 
-3. For a specific root:
+4. If conflicts occur: resolve the files, stage them, then run
+   `stackit continue --no-interactive` to finish (or invoke `stack-resolve`). Do
+   not use raw `git rebase`. If `--continue-on-conflict` reports skipped branches,
+   no rebase is active for them — restack one with
+   `stackit restack --branch <conflicted-branch> --upstack --no-interactive`, then
+   resolve and `stackit continue`.
 
-   ```bash
-   stackit restack --branch <root> --upstack --no-interactive
-   ```
-
-4. Restack all stacks only if explicitly requested:
-
-   ```bash
-   stackit restack --all-stacks --continue-on-conflict --no-interactive
-   ```
-
-5. If conflicts occur, resolve files and use `stack-resolve`.
-
-6. Verify with `stackit log --no-interactive`.
-
-Do not use raw `git rebase` for stack branches.
+5. Verify with `stackit log --no-interactive`. When done, report the result and
+   suggest `stackit submit` to update PRs, then stop.

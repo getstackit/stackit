@@ -15,6 +15,7 @@ Quick reference for all stackit commands. For detailed documentation, see:
 | `git commit` (new branches) | `stackit create` |
 | `git checkout -b` | `stackit create` |
 | `gh pr create` | `stackit submit` |
+| `git rebase` (stack branches) | `stackit restack --branch <branch> --upstack` (or `--all-stacks`) |
 
 **Required workflow for new stacked branches:**
 ```bash
@@ -71,9 +72,9 @@ bash ~/.claude/skills/stackit/scripts/analyze_stack.sh
 | `stackit foreach` | Run command on each branch in stack |
 | `stackit submit --no-interactive` | Push branches and create/update PRs |
 | `stackit sync --no-interactive` | Pull trunk, delete merged branches, restack |
-| `stackit merge` | Merge approved PRs and cleanup |
-| `stackit reorder` | Interactively reorder branches |
-| `stackit move` | Rebase branch onto new parent |
+| `stackit merge --yes --no-interactive` | Merge the next (bottom) ready PR non-interactively (bare `stackit merge` with no flags opens a TTY wizard); use `stackit merge ship --yes --no-interactive` to consolidate the whole stack into one PR |
+| `stackit reorder` | Reorder branches (editor-driven — no agent-safe non-interactive form) |
+| `stackit move -y` | Rebase branch onto new parent (`-y` skips the prompt) |
 
 ## Recovery & Utilities
 
@@ -91,7 +92,8 @@ bash ~/.claude/skills/stackit/scripts/analyze_stack.sh
 ## Common Flag Patterns
 
 ### stackit create --no-interactive
-- `-m "message"` - Commit message
+- `-F, --message-file` - Read commit message from a file; use `-` for stdin (preferred — keeps permission rules stable across messages)
+- `-m "message"` - Inline commit message (mutually exclusive with `-F`)
 - `--all` - Stage all changes first
 - `--insert` - Insert between current and child
 
@@ -107,21 +109,22 @@ bash ~/.claude/skills/stackit/scripts/analyze_stack.sh
 
 ### Start a new feature
 ```bash
-git add .
+git add -A
 echo "feat: add new feature" | stackit create -F - --no-interactive
 ```
 
 ### Stack another change
 ```bash
-git add .
+git add -A
 echo "feat: extend feature" | stackit create -F - --no-interactive
 ```
 
 ### Add more commits to current branch
 ```bash
-# A stacked branch can have multiple commits - no need to create a new branch
-git add .
-git commit -m "test: add tests for feature"
+# A stacked branch can have multiple commits - no need to create a new branch.
+# git commit is allowed for follow-up commits; pipe the message via stdin.
+git add -A
+printf 'test: add tests for feature' | git commit -F -
 ```
 
 ### Submit for review
@@ -131,10 +134,9 @@ stackit submit --no-interactive --stack
 
 ### After code review changes
 ```bash
-git add .
+git add -A
 stackit modify --no-interactive
-# Scope the restack to just this branch and its descendants
-stackit restack --branch $(git branch --show-current) --upstack --no-interactive
+# stackit modify automatically restacks descendants — no manual restack needed.
 stackit submit --no-interactive
 ```
 

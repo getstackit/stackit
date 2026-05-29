@@ -90,15 +90,18 @@ stackit submit --no-interactive
 ### Uncommitted Changes Blocking Operation
 
 ```bash
-# Option 1: Commit them
-git add .
-stackit modify --no-interactive
-
-# Option 2: Stash them
+# Option 1 (safe default): Stash them, do the operation, then restore
 git stash
-
-# Do operation, then restore
+# ...run the blocked operation...
 git stash pop
+```
+
+```bash
+# Option 2: Commit them — ONLY if the changes belong to the current branch's
+# commit. `stackit modify` amends whatever commit is checked out, so do not use
+# it to park unrelated changes (that silently corrupts an unrelated commit).
+git add -A
+stackit modify --no-interactive
 ```
 
 ## Diagnostic Workflows

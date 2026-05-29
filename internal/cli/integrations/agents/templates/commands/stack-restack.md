@@ -9,7 +9,7 @@ allowed-tools: Bash(stackit:*), Bash(git:*), AskUserQuestion, Skill
 ## Context
 - Current branch: !`git branch --show-current`
 - Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
 
 ## Task
 

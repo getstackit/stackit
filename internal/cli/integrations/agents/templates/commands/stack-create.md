@@ -8,7 +8,7 @@ argument-hint: [-m "message"] [--scope <scope>] [branch-name]
 # Stack Create
 
 ## Context
-- Working tree: !`git status --short --branch 2>&1`
+- Working tree: !`git status --short --branch`
 
 ## Arguments
 $ARGUMENTS

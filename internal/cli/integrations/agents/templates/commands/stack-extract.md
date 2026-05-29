@@ -11,7 +11,7 @@ Extract commits or file changes from the current branch to a new independent bra
 ## Context
 - Current branch: !`git branch --show-current`
 - Recent commits: !`git log --oneline -5`
-- Stack state: !`stackit log --no-interactive 2>&1`
+- Stack state: !`stackit log --no-interactive`
 
 ## Instructions
 

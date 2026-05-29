@@ -11,6 +11,7 @@ Commands for creating, modifying, and managing individual branches.
 | `git commit` (new branches) | `stackit create` |
 | `git checkout -b` | `stackit create` |
 | `gh pr create` | `stackit submit` |
+| `git rebase` (stack branches) | `stackit restack --branch <branch> --upstack` (or `--all-stacks`) |
 
 **Required workflow for new stacked branches:**
 ```bash
@@ -66,7 +67,7 @@ echo "feat: add user authentication" | stackit create -F - --all --no-interactiv
 
 ### Multiple commits per branch
 **A stacked branch can have multiple commits.** You don't need a new branch for every commit:
-- Add another commit: `git add . && git commit -m "message"`
+- Add another commit (run as separate calls; pipe the message via stdin): `git add -A` then `printf 'message' | git commit -F -`
 - Amend current commit: `stackit modify --no-interactive`
 - Absorb fixes to correct commits: `stackit absorb --no-interactive`
 

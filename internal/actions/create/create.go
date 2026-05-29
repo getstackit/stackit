@@ -32,6 +32,10 @@ type Options struct {
 	SelectedChildren []string
 	// Worktree creates a dedicated worktree for this stack (only valid from trunk)
 	Worktree bool
+	// AllowEmpty permits creating a branch with no commit when the working tree
+	// has unstaged/untracked changes in non-interactive mode (otherwise that is
+	// treated as a "forgot to stage" mistake and rejected).
+	AllowEmpty bool
 }
 
 // Action creates a new branch stacked on top of the current branch.
@@ -70,6 +74,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		actions.WithFlag(opts.Patch, "--patch"),
 		actions.WithFlag(opts.Update, "--update"),
 		actions.WithFlag(opts.Worktree, "--worktree"),
+		actions.WithFlag(opts.AllowEmpty, "--allow-empty"),
 	)
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 
@@ -110,6 +115,24 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 				hasStaged = true
 				h.OnStep(StepStaging, handler.StatusCompleted, "Changes staged")
 			}
+		}
+	}
+
+	// Guard against the common non-interactive footgun: the working tree has
+	// changes but nothing is staged (e.g. forgot `git add`), which would
+	// silently produce an empty branch. A genuinely clean tree still allows an
+	// intentional empty scaffolding branch.
+	if !hasStaged && !opts.AllowEmpty && !h.IsInteractive() {
+		hasUnstaged, err := eng.HasUnstagedChanges(ctx.Context)
+		if err != nil {
+			return Result{}, fmt.Errorf("failed to check unstaged changes: %w", err)
+		}
+		hasUntracked, err := eng.HasUntrackedFiles(ctx.Context)
+		if err != nil {
+			return Result{}, fmt.Errorf("failed to check untracked files: %w", err)
+		}
+		if hasUnstaged || hasUntracked {
+			return Result{}, fmt.Errorf("nothing staged but the working tree has changes; stage them with 'git add' (or pass --all/-a), or pass --allow-empty to create an empty branch")
 		}
 	}
 

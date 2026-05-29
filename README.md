@@ -440,6 +440,13 @@ stackit create -F - < msg.txt   # no --no-interactive needed
 
 An explicit `--interactive` always overrides both the env var and TTY detection.
 
+For machine-readable status, `stackit log --json` is a complete, self-describing
+source: each branch reports its structure (`parent`, `children`), PR/CI state
+(`pr.state`, `pr.ci_status`, `pr.review_status`), and stack health
+(`needs_restack`, `is_locked`, `is_frozen`, `scope`). The status booleans are
+always present (an explicit `false`, never omitted), so a single call covers what
+previously required both `log --json` and `info --stack --json`.
+
 ---
 
 ## Configuration

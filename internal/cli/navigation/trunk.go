@@ -92,12 +92,7 @@ func handleAddTrunk(ctx *app.Context, trunkName string) error {
 
 // handleShowAllTrunks shows all configured trunk branches
 func handleShowAllTrunks(ctx *app.Context) error {
-	repoRoot := ctx.RepoRoot
-	cfg, err := config.LoadConfig(repoRoot)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
+	cfg := ctx.Config
 	trunks := cfg.AllTrunks()
 
 	// Get primary trunk to mark it
@@ -134,20 +129,13 @@ func handleShowTrunk(ctx *app.Context) error {
 	}
 
 	// Find the trunk by walking up the parent chain
-	trunk := findTrunkForBranch(eng, currentBranch.GetName(), ctx.RepoRoot)
+	trunk := findTrunkForBranch(eng, currentBranch.GetName(), ctx.Config.AllTrunks())
 	ctx.Output.Info("%s", trunk)
 	return nil
 }
 
 // findTrunkForBranch walks up the parent chain to find the trunk
-func findTrunkForBranch(eng engine.Engine, branchName string, repoRoot string) string {
-	// Get all configured trunks
-	cfg, err := config.LoadConfig(repoRoot)
-	if err != nil {
-		return eng.Trunk().GetName()
-	}
-	trunks := cfg.AllTrunks()
-
+func findTrunkForBranch(eng engine.Engine, branchName string, trunks []string) string {
 	// Walk up the parent chain
 	currentBranch := eng.GetBranch(branchName)
 	visited := make(map[string]bool)

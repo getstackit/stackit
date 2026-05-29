@@ -11,8 +11,7 @@ Run verification across stack branches.
 1. Inspect:
 
    ```bash
-   stackit log --no-interactive
-   git status --short
+   stackit state --json
    ```
 
 2. Determine check command from user input, project docs, or common files. Prefer `mise run check` when available.

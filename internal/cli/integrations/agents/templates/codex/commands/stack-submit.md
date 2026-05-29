@@ -11,9 +11,7 @@ Submit branches as PRs or update existing PRs. This touches remotes, so confirm 
 1. Inspect:
 
    ```bash
-   git status --short
-   stackit log --no-interactive
-   stackit info --json --no-interactive
+   stackit state --json
    ```
 
 2. If there are uncommitted changes, warn and stop unless the user asked to submit anyway.

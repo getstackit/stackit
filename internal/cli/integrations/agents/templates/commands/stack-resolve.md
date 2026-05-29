@@ -9,9 +9,7 @@ allowed-tools: Read, Edit, AskUserQuestion, Bash(git show *), Bash(git diff *), 
 Resolve rebase conflicts during stackit operations with AI assistance.
 
 ## Context
-- Current operation: !`cat .git/rebase-merge/message 2>/dev/null || echo "No rebase in progress"`
-- Conflicted files: !`git diff --name-only --diff-filter=U 2>/dev/null || echo "No conflicts detected"`
-- Current branch: !`git branch --show-current 2>/dev/null || cat .git/rebase-merge/head-name 2>/dev/null | sed 's|refs/heads/||'`
+- State (json — `operation.kind`/`operation.in_progress`, `operation.conflicted_files`, `operation.stackit_halted`, current branch): !`stackit state --json`
 - Project type: !`if [ -f "mise.toml" ]; then echo "mise"; elif [ -f "Makefile" ]; then echo "make"; elif [ -f "package.json" ]; then echo "npm/yarn"; elif [ -f "Cargo.toml" ]; then echo "cargo"; elif [ -f "go.mod" ]; then echo "go"; else echo "unknown"; fi`
 
 ## Instructions

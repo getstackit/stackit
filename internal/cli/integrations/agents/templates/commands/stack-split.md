@@ -29,9 +29,7 @@ Split the committed changes on the current branch between this branch and a new 
 **Primary objective: Never lose someone's work.**
 
 ## Context
-- Current branch: !`git branch --show-current`
-- Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive`
+- State (json — current branch, working tree, in-progress operation, full stack): !`stackit state --json`
 
 ## Arguments
 $ARGUMENTS

@@ -54,12 +54,14 @@ When calling `stackit` commands, **ALWAYS** include the `--no-interactive` flag.
 
 **Run at session start** to proactively identify issues:
 ```bash
-stackit log --json --no-interactive
+stackit state --json
 ```
 
-This returns a JSON report with:
-- `branches`: Array of branch status (current, parent/children, PR status, CI status, needs_restack)
-- `summary`: Counts for total branches, approved branches, and branches in review
+This single call returns a complete JSON snapshot:
+- `current_branch` / `trunk`, and `working_tree` (staged/unstaged/untracked/clean)
+- `operation`: any in-progress rebase/merge with `conflicted_files`
+- `stack.branches`: array of branch status (current, parent/children, PR/CI status, needs_restack/is_locked/is_frozen/scope)
+- `stack.summary`: counts for total branches, approved branches, and branches in review
 
 **When to mention health issues proactively:**
 If the health check reveals issues, inform the user:

@@ -11,8 +11,7 @@ Move files or commits off the current branch onto a new sibling, parent, or chil
 1. Inspect:
 
    ```bash
-   git status --short
-   stackit log --no-interactive
+   stackit state --json
    git log --oneline -5
    ```
 

@@ -12,7 +12,8 @@ Commands for managing the entire stack or multiple branches.
 | `stackit restack --all-stacks --continue-on-conflict --no-interactive` | Rebase every independent stack rooted at trunk, skipping conflicted stacks so unrelated stacks still proceed |
 | `stackit restack --stacks <root1>,<root2> --continue-on-conflict --no-interactive` | Rebase specific independent stack roots while letting unrelated selected roots continue past conflicts |
 | `stackit sync --no-interactive` | Pull trunk, delete merged branches, restack |
-| `stackit info --stack --json --no-interactive` | Export full stack metadata as JSON for analysis |
+| `stackit state --json` | Complete one-call snapshot: current branch, working tree, in-progress operation, and the full stack (PR/CI + needs_restack/locked/frozen/scope) |
+| `stackit info --stack --json --no-interactive` | Export full per-branch metadata incl. commit messages and diff stats (use when you need commit messages, which `state` omits) |
 | `stackit merge --yes --no-interactive` | Merge the next (bottom) ready PR non-interactively (bare `stackit merge` with no flags opens a TTY wizard). Use `stackit merge ship --yes --no-interactive` to consolidate the whole stack into one PR. |
 | `stackit fold --no-interactive` | Fold current branch into its parent |
 

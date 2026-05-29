@@ -11,10 +11,11 @@ Resolve an in-progress Stackit conflict and continue the operation.
 1. Inspect:
 
    ```bash
-   git status --short
-   git diff --name-only --diff-filter=U
-   stackit log --no-interactive
+   stackit state --json
    ```
+
+   `operation.conflicted_files` lists the unmerged paths; `operation.kind` and
+   `operation.stackit_halted` tell you what's in progress.
 
 2. Read each conflicted file and resolve markers.
 

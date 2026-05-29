@@ -11,8 +11,7 @@ Fold a branch into its parent when it is too small to review separately.
 1. Inspect:
 
    ```bash
-   git status --short
-   stackit log --no-interactive
+   stackit state --json
    ```
 
 2. Check preconditions before folding (folding rewrites stack structure):

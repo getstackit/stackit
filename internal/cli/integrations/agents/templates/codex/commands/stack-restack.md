@@ -11,13 +11,13 @@ Rebase stack branches according to Stackit metadata.
 1. Inspect:
 
    ```bash
-   git status --short
-   stackit log --no-interactive
+   stackit state --json
    ```
 
-2. Precondition: if `git status --short` is non-empty, stop and tell the user to
-   commit (via `stackit create`/`stackit modify`) or stash before restacking — a
-   dirty tree will fail the rebase mid-flight.
+2. Precondition: if the state JSON's `working_tree.clean` is false (uncommitted
+   changes), stop and tell the user to commit (via `stackit create`/`stackit
+   modify`) or stash before restacking — a dirty tree will fail the rebase
+   mid-flight.
 
 3. Choose the narrowest scope that covers what changed:
    - Current stack: `stackit restack --upstack --no-interactive`

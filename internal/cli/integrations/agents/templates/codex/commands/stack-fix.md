@@ -11,8 +11,7 @@ Diagnose stack problems and apply the smallest safe repair.
 1. Inspect:
 
    ```bash
-   git status --short
-   stackit log --no-interactive
+   stackit state --json
    stackit doctor --no-interactive
    ```
 

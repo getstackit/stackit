@@ -27,10 +27,13 @@ If there is no work to act on, say so and stop.
 Run once at the start of a Stackit-related session:
 
 ```bash
-stackit log --json --no-interactive
+stackit state --json
 ```
 
-Surface failing CI, branches ready to merge, and branches needing restack when relevant.
+This single call returns the current branch, working-tree state, any in-progress
+operation, and the full `stack` (PR/CI status + per-branch needs_restack/locked/
+frozen/scope). Surface failing CI, branches ready to merge, and branches needing
+restack when relevant.
 
 ## Skill Selection
 

@@ -124,6 +124,7 @@ Commit:  ` + commit + `
 	rootCmd.AddCommand(branch.NewSquashCmd())
 	rootCmd.AddCommand(newScopeCmd())
 	rootCmd.AddCommand(shell.NewShellCmd())
+	rootCmd.AddCommand(newStateCmd())
 	rootCmd.AddCommand(stack.NewSubmitCmd())
 	rootCmd.AddCommand(stack.NewSyncCmd())
 	rootCmd.AddCommand(navigation.NewTopCmd())

@@ -244,6 +244,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 ### Navigation
 | Command | Description |
 |:---|:---|
+| `stackit state` | Snapshot of the stack, working tree, and any in-progress operation (`--json` for a complete machine-readable snapshot) |
 | `stackit log` | Display the branch tree |
 | `stackit checkout` | Interactive branch switcher |
 | `stackit up` / `down` | Move to the child or parent branch |
@@ -440,12 +441,16 @@ stackit create -F - < msg.txt   # no --no-interactive needed
 
 An explicit `--interactive` always overrides both the env var and TTY detection.
 
-For machine-readable status, `stackit log --json` is a complete, self-describing
-source: each branch reports its structure (`parent`, `children`), PR/CI state
-(`pr.state`, `pr.ci_status`, `pr.review_status`), and stack health
-(`needs_restack`, `is_locked`, `is_frozen`, `scope`). The status booleans are
-always present (an explicit `false`, never omitted), so a single call covers what
-previously required both `log --json` and `info --stack --json`.
+For machine-readable status, **`stackit state --json`** is the single snapshot to
+read: the current branch and trunk, working-tree state (`staged`/`unstaged`/
+`untracked`), any in-progress `operation` (`rebase`/`merge`) with its
+`conflicted_files`, and the full `stack`. The embedded `stack` is the same shape as
+`stackit log --json` — each branch reports its structure (`parent`, `children`),
+PR/CI state (`pr.state`, `pr.ci_status`, `pr.review_status`), and stack health
+(`needs_restack`, `is_locked`, `is_frozen`, `scope`), with the status booleans
+always present (an explicit `false`, never omitted). One `stackit state --json`
+call replaces combining `git status`, `stackit log --json`, and `stackit info`
+(and `stackit status` still passes through to `git status`).
 
 ---
 

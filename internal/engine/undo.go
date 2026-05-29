@@ -117,16 +117,10 @@ func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
 	// Get current branch
 	currentBranch := e.currentBranch
 
-	// Get all branch SHAs
-	branchSHAs := make(map[string]string)
-	for _, branchName := range e.state.branches {
-		branch := e.GetBranch(branchName)
-		sha, err := branch.GetRevision()
-		if err != nil {
-			// Skip branches that can't be resolved (might be deleted)
-			continue
-		}
-		branchSHAs[branchName] = sha
+	// Get all branch SHAs in one git rev-parse call; misses (deleted branches) are omitted.
+	branchSHAs, _ := e.git.BatchGetRevisions(e.state.branches)
+	if branchSHAs == nil {
+		branchSHAs = make(map[string]string)
 	}
 
 	// Get all metadata ref SHAs

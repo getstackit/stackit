@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -11,6 +12,21 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+type promptRestackHandler struct {
+	handlers.NullRestackHandler
+	prompted         bool
+	resolveConflicts bool
+	conflicts        []string
+}
+
+func (h *promptRestackHandler) IsInteractive() bool { return true }
+
+func (h *promptRestackHandler) PromptResolveConflicts(conflictBranches []string) (bool, error) {
+	h.prompted = true
+	h.conflicts = append([]string(nil), conflictBranches...)
+	return h.resolveConflicts, nil
+}
 
 func TestRestackAction(t *testing.T) {
 	t.Run("planning from trunk excludes trunk branch", func(t *testing.T) {
@@ -91,5 +107,40 @@ func TestRestackAction(t *testing.T) {
 			conflictBranches,
 		)
 		require.Equal(t, len(conflictBranches), jsonHandler.Result.ConflictCount)
+	})
+
+	t.Run("interactive restack prompts before entering conflict workflow", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		s.Checkout("main")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("base", "conflict"))
+
+		s.CreateBranch("feature")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature change", "conflict"))
+		s.TrackBranch("feature", "main")
+		featureBefore, err := s.Engine.GetRevision(engine.NewBranch("feature", nil))
+		require.NoError(t, err)
+
+		s.Checkout("main")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("main change", "conflict"))
+		s.Checkout("feature")
+
+		plan, err := PlanRestack(s.Context, RestackOptions{
+			BranchName: "feature",
+			Scope:      engine.StackRange{IncludeCurrent: true},
+		})
+		require.NoError(t, err)
+		require.True(t, plan.HasWork())
+
+		handler := &promptRestackHandler{}
+		err = RestackAction(s.Context, plan, handler)
+		require.NoError(t, err)
+		require.True(t, handler.prompted)
+		require.Equal(t, []string{"feature"}, handler.conflicts)
+		require.False(t, s.Engine.Git().IsRebaseInProgress(context.Background()))
+
+		featureRev, err := s.Engine.GetRevision(engine.NewBranch("feature", nil))
+		require.NoError(t, err)
+		require.Equal(t, featureBefore, featureRev)
 	})
 }

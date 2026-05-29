@@ -39,6 +39,11 @@ type RestackPlan struct {
 	groups []restackPlannedGroup
 }
 
+type restackConflictPrompter interface {
+	IsInteractive() bool
+	PromptResolveConflicts(conflictBranches []string) (bool, error)
+}
+
 // restackPlannedGroup pairs an independent stack with the engine plan that
 // describes which of its branches actually need rebasing. enginePlan is nil
 // for empty groups (which never reach the action's main loop).
@@ -163,6 +168,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 
 	var restacked, skipped int
 	var conflicts []string
+	prompter, promptForConflicts := conflictPrompter(handler, opts)
 
 	// Parallel mode: dispatch independent stack groups to separate worktrees.
 	// The pre-computed engine plans are not portable across worktree engines,
@@ -179,7 +185,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	}
 
 	conflictMode := ConflictModeEnterWorkflow
-	if opts.ContinueOnConflict {
+	if opts.ContinueOnConflict || promptForConflicts {
 		conflictMode = ConflictModeContinue
 	}
 
@@ -192,14 +198,45 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		}
 
 		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode); err != nil {
-			handler.OnRestackComplete(restacked, skipped, conflicts)
 			return fmt.Errorf("restack failed: %w", err)
 		}
 	}
 
 	ctx.Logger.Info("restack completed restacked=%v skipped=%v conflicts=%v", restacked, skipped, len(conflicts))
 
+	if promptForConflicts && len(conflicts) > 0 {
+		resolve, err := prompter.PromptResolveConflicts(conflicts)
+		if err != nil {
+			return fmt.Errorf("failed to prompt for conflict resolution: %w", err)
+		}
+		if resolve {
+			return EnterConflictWorkflow(ctx, conflicts[0], branchesForConflict(plan, conflicts[0]))
+		}
+	}
+
 	handler.OnRestackComplete(restacked, skipped, conflicts)
+	return nil
+}
+
+func conflictPrompter(handler handlers.RestackHandler, opts RestackOptions) (restackConflictPrompter, bool) {
+	if opts.ContinueOnConflict {
+		return nil, false
+	}
+	prompter, ok := handler.(restackConflictPrompter)
+	if !ok || !prompter.IsInteractive() {
+		return nil, false
+	}
+	return prompter, true
+}
+
+func branchesForConflict(plan *RestackPlan, conflictBranch string) engine.Branches {
+	for _, group := range plan.groups {
+		for _, branch := range group.sortedBranches {
+			if branch.GetName() == conflictBranch {
+				return group.sortedBranches
+			}
+		}
+	}
 	return nil
 }
 

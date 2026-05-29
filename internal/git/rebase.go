@@ -120,6 +120,16 @@ func AutoContinueRerereRebase(ctx context.Context, r Runner, originalErr error) 
 					continue
 				}
 			}
+			if r.IsRebaseInProgress(ctx) {
+				unmergedFiles, filesErr := r.GetUnmergedFiles(ctx)
+				if filesErr == nil {
+					if len(unmergedFiles) > 0 {
+						return outcome, unmergedFiles, nil
+					}
+					outcome.RerereResolvedCount++
+					continue
+				}
+			}
 			return outcome, nil, fmt.Errorf("rebase --continue failed after rerere replay: %w", err)
 		}
 		if skipNextContinueCount {

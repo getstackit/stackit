@@ -251,6 +251,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | `stackit trunk` | Return to the main/trunk branch |
 | `stackit children` | Show the children of the current branch |
 | `stackit parent` | Show the parent of the current branch |
+| `stackit share` | Print the current stack as Slack-ready markdown for copy-paste |
 
 ### Branch Management
 | Command | Description |

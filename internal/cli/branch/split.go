@@ -39,7 +39,7 @@ Has three forms: split --by-commit, split --by-hunk, and split --by-file.
 split --by-commit slices up the commit history, allowing you to select split points.
 split --by-hunk interactively stages changes to create new single-commit branches.
 split --by-file <files> extracts specified files into a new branch.
-split -F (--by-file-interactive) shows an interactive file selector.
+split --by-file-interactive shows an interactive file selector.
 split without options will launch an interactive wizard.
 
 Direction options (for --by-hunk and --by-file):
@@ -70,7 +70,8 @@ Examples:
   stackit split --by-file path/to/file.go --as-sibling # Extract to sibling branch
   stackit split --by-file path/to/file.go --dry-run   # Preview the split
   stackit split --by-commit --as-sibling              # Split commits as siblings
-  stackit split --by-file file.go --message-file msg.txt  # Read commit message from file (no -F shorthand on split; -F is --by-file-interactive)`,
+  stackit split --by-file file.go -F msg.txt           # Read commit message from a file
+  printf "Extract" | stackit split --by-file file.go -F -  # Read commit message from stdin`,
 		SilenceUsage: true,
 		// Disable default help flag to allow -h for --by-hunk
 		DisableFlagParsing: false,
@@ -175,13 +176,13 @@ Examples:
 	cmd.Flags().BoolVarP(&byCommit, "by-commit", "c", false, "Split by commit - slice up the history of this branch")
 	cmd.Flags().BoolVarP(&byHunk, "by-hunk", "h", false, "Split by hunk - split into new single-commit branches")
 	cmd.Flags().StringSliceVarP(&byFile, "by-file", "f", nil, "Split by file - extracts specified files to a new parent branch")
-	cmd.Flags().BoolVarP(&byFileInteractive, "by-file-interactive", "F", false, "Split by file (interactive) - select files to extract")
+	cmd.Flags().BoolVar(&byFileInteractive, "by-file-interactive", false, "Split by file (interactive) - select files to extract")
 
 	// Additional options
 	cmd.Flags().BoolVar(&asSibling, "as-sibling", false, "Create split branches as siblings instead of a chain")
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Name for the new split branch (default: auto-generated)")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "Commit message for extraction (only with --by-file)")
-	cmd.Flags().StringVar(&messageFile, "message-file", "", "Read commit message from a file (use \"-\" for stdin) (only with --by-file or --by-hunk --patch). Mutually exclusive with --message. Note: split has no -F shorthand for this flag (taken by --by-file-interactive).")
+	cmd.Flags().StringVarP(&messageFile, "message-file", "F", "", "Read commit message from a file (use \"-\" for stdin) (only with --by-file or --by-hunk --patch). Mutually exclusive with --message.")
 
 	// Direction options (for hunk and file modes)
 	cmd.Flags().BoolVar(&above, "above", false, "Insert new branch above current (as child, upstack)")

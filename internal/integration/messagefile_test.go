@@ -79,7 +79,8 @@ func TestMessageFile(t *testing.T) {
 			Run("create feature -m 'Add feature'")
 
 		msgPath := writeMessageFile(t, "feat: extracted from file\n")
-		sh.Run("split --by-file file_test.txt --as-sibling --message-file " + msgPath).
+		// -F is the shorthand for --message-file (consistent with create/modify/squash).
+		sh.Run("split --by-file file_test.txt --as-sibling -F " + msgPath).
 			Checkout("feature_split").
 			Git("log -1 --format=%s").
 			OutputContains("feat: extracted from file")

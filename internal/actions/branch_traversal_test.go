@@ -32,7 +32,9 @@ func (h *testNavigationHandler) Cleanup() {}
 func (h *testNavigationHandler) IsInteractive() bool { return h.isInteractive }
 
 func TestSwitchBranchAction(t *testing.T) {
+	t.Parallel()
 	t.Run("traverses downward to bottom branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -53,6 +55,7 @@ func TestSwitchBranchAction(t *testing.T) {
 	})
 
 	t.Run("traverses upward to top branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -73,6 +76,7 @@ func TestSwitchBranchAction(t *testing.T) {
 	})
 
 	t.Run("returns error when not on a branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Detach HEAD
@@ -83,6 +87,7 @@ func TestSwitchBranchAction(t *testing.T) {
 	})
 
 	t.Run("stays on branch when already at bottom", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -102,6 +107,7 @@ func TestSwitchBranchAction(t *testing.T) {
 	})
 
 	t.Run("stays on branch when already at top", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -121,6 +127,7 @@ func TestSwitchBranchAction(t *testing.T) {
 	})
 
 	t.Run("non-interactive mode with multiple children returns error", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -144,6 +151,7 @@ func TestSwitchBranchAction(t *testing.T) {
 	})
 
 	t.Run("interactive mode with multiple children prompts for selection", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -173,6 +181,7 @@ func TestSwitchBranchAction(t *testing.T) {
 	})
 
 	t.Run("interactive mode follows selected branch recursively", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1":    "main",

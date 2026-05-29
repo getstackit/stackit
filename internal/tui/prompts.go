@@ -248,8 +248,9 @@ func NewConfirmModel(prompt string, defaultValue bool) tea.Model {
 	}
 }
 
-// PromptTextInput prompts the user for text input
-func PromptTextInput(prompt, defaultValue string) (string, error) {
+// PromptTextInput prompts the user for text input. It is a var so tests can
+// stub it, mirroring PromptConfirm.
+var PromptTextInput = func(prompt, defaultValue string) (string, error) {
 	if err := CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}

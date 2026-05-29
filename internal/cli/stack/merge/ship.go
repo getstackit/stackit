@@ -3,6 +3,7 @@ package merge
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/tui"
 )
@@ -149,6 +151,12 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 		return err
 	}
 
+	// Prompt for a stack description on multi-PR stacks that have none set.
+	// Best-effort: a failure here never blocks the ship.
+	if len(plan.BranchesToMerge) > 1 {
+		promptForShipDescription(ctx, plan.BranchesToMerge, opts.yes)
+	}
+
 	// Confirm unless --yes
 	if !opts.yes && ctx.Interactive {
 		confirmed, err := tui.PromptConfirm("Proceed with ship merge?", false)
@@ -204,6 +212,48 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 	}
 
 	return nil
+}
+
+// promptForShipDescription checks whether the stack has a description and, when
+// interactive and not skipped via --yes, prompts the user to set one. For
+// non-interactive or --yes invocations it prints a warning and continues.
+//
+// This is best-effort: any prompt cancellation or failure is treated as
+// "leave the description unset" and never blocks the ship.
+func promptForShipDescription(ctx *app.Context, branches []mergeAction.BranchMergeInfo, skipPrompt bool) {
+	out := ctx.Output
+	if len(branches) == 0 {
+		return
+	}
+
+	rootBranch := ctx.Engine.GetBranch(branches[0].BranchName)
+	desc := ctx.Engine.GetStackDescription(rootBranch)
+	if desc != nil && !desc.IsEmpty() {
+		return
+	}
+
+	if !ctx.Interactive || skipPrompt {
+		out.Warn("Stack has %d PRs but no description is set. Run 'stackit describe' to add one.", len(branches))
+		return
+	}
+
+	out.Warn("This stack has %d PRs but no description is set.", len(branches))
+	addDesc, err := tui.PromptConfirm("Add a title for this stack now?", true)
+	if err != nil || !addDesc {
+		return
+	}
+
+	title, err := tui.PromptTextInput("Stack title:", "")
+	if err != nil || strings.TrimSpace(title) == "" {
+		return
+	}
+
+	newDesc := &git.StackDescription{Title: strings.TrimSpace(title)}
+	if err := ctx.Engine.SetStackDescription(ctx.Context, rootBranch, newDesc); err != nil {
+		out.Warn("Failed to set stack description: %v", err)
+	} else {
+		out.Info("Set stack title: %s", newDesc.Title)
+	}
 }
 
 func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {

@@ -53,6 +53,10 @@ func TestNewMergeCmd(t *testing.T) {
 		waitFlag := cmd.Flags().Lookup("wait")
 		require.NotNil(t, waitFlag)
 
+		yesFlag := cmd.Flags().Lookup("yes")
+		require.NotNil(t, yesFlag)
+		require.Equal(t, "y", yesFlag.Shorthand)
+
 		scopeFlag := cmd.Flags().Lookup("scope")
 		require.NotNil(t, scopeFlag)
 

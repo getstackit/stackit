@@ -23,6 +23,7 @@ func NewMergeCmd(postMergeHandler PostMergeHandler) *cobra.Command {
 		dryRun bool
 		force  bool
 		wait   bool
+		yes    bool
 		scope  string
 		branch string
 	)
@@ -43,8 +44,13 @@ Subcommands:
 
 Use --scope or --branch to skip the initial prompts and go straight to strategy selection.
 
+Without a TTY, pass --yes to merge the next (bottom-most) ready PR without
+prompting (equivalent to 'merge next --yes'); it never consolidates. Use the
+'ship'/'drain' subcommands for other strategies.
+
 Examples:
   stackit merge                    # Launch interactive merge wizard
+  stackit merge --yes              # Non-interactive: merge the next ready PR
   stackit merge --scope=PROJ-100   # Merge all branches in scope PROJ-100
   stackit merge --branch=feature   # Merge from specific branch
   stackit merge status             # Show your mergeable work
@@ -55,9 +61,24 @@ Examples:
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				// Must be interactive for wizard mode
+				// The strategy-selection wizard needs a TTY. Non-interactively we
+				// can't safely guess between consolidating (ship) and incremental
+				// merges, so --yes routes to the conservative default — merge the
+				// next (bottom-most) ready PR, equivalent to `merge next`. It never
+				// consolidates and re-runs to drain the stack one PR at a time.
+				// Other strategies stay explicit via the subcommands.
 				if !ctx.Interactive {
-					return fmt.Errorf("merge wizard requires a TTY. Use 'merge next' or 'merge ship' for non-interactive mode (add --yes to skip prompts)")
+					if !yes && !dryRun {
+						return fmt.Errorf("merge wizard requires a TTY. For non-interactive use pass --yes to merge the next (bottom-most) PR, or use 'merge next'/'merge drain'/'merge ship' (each accepts --yes)")
+					}
+					return runMergeNext(ctx, mergeNextOptions{
+						dryRun: dryRun,
+						yes:    yes,
+						force:  force,
+						wait:   wait,
+						branch: branch,
+						scope:  scope,
+					}, postMergeHandler)
 				}
 
 				// runner.Cleanup is nil-safe so no extra guard is needed.
@@ -95,6 +116,7 @@ Examples:
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show merge plan without executing")
 	cmd.Flags().BoolVar(&force, "force", false, "Skip validation checks (draft PRs, failing CI)")
 	cmd.Flags().BoolVar(&wait, "wait", false, "Wait for merge to complete (default: fire-and-forget)")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Non-interactive: merge the next (bottom-most) ready PR without prompting (equivalent to 'merge next --yes'). Use 'merge ship'/'merge drain' for other strategies.")
 	cmd.Flags().StringVar(&scope, "scope", "", "Pre-select scope to merge (skips scope prompt)")
 	cmd.Flags().StringVar(&branch, "branch", "", "Pre-select target branch to merge from (skips branch prompt)")
 	cmd.MarkFlagsMutuallyExclusive("scope", "branch")

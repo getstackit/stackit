@@ -428,6 +428,25 @@ Stackit is designed to be easily scriptable. Use global flags to control behavio
 stackit sync --cwd /path/to/repo --no-interactive --no-verify
 ```
 
+Interactive features are also disabled automatically when there is no attached
+terminal (pipes, CI, agents). To force non-interactive mode without repeating
+`--no-interactive` on every command — handy for AI agents and scripts — set the
+environment variable once:
+
+```bash
+export STACKIT_NO_INTERACTIVE=1
+stackit create -F - < msg.txt   # no --no-interactive needed
+```
+
+An explicit `--interactive` always overrides both the env var and TTY detection.
+
+For machine-readable status, `stackit log --json` is a complete, self-describing
+source: each branch reports its structure (`parent`, `children`), PR/CI state
+(`pr.state`, `pr.ci_status`, `pr.review_status`), and stack health
+(`needs_restack`, `is_locked`, `is_frozen`, `scope`). The status booleans are
+always present (an explicit `false`, never omitted), so a single call covers what
+previously required both `log --json` and `info --stack --json`.
+
 ---
 
 ## Configuration

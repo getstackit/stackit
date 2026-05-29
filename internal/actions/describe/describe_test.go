@@ -172,7 +172,7 @@ func TestDescribeAction(t *testing.T) {
 		handler := &testDescribeHandler{interactive: false}
 		err := describe.Action(s.Context, describe.Options{}, handler)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "must specify --message or run in interactive mode")
+		require.Contains(t, err.Error(), "nothing to set")
 	})
 }
 

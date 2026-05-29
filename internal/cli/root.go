@@ -11,6 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/cli/shell"
 	"github.com/getstackit/stackit/internal/cli/stack"
 	"github.com/getstackit/stackit/internal/cli/worktree"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewRootCmd creates the root cobra command
@@ -39,15 +40,23 @@ Version: ` + version + `
 Commit:  ` + commit + `
 		Date:    ` + date,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-			if noInteractive {
+			// Resolve interactivity. Precedence:
+			//   1. --no-interactive / --quiet           -> off
+			//   2. explicit --interactive               -> honored as set
+			//   3. STACKIT_NO_INTERACTIVE env, or no TTY -> off
+			// This lets agents, CI, and pipes run without repeating
+			// --no-interactive on every command, while explicit flags always win.
+			switch {
+			case noInteractive || quiet:
+				interactive = false
+			case cmd.Flags().Changed("interactive"):
+				// honor the explicit --interactive value already in `interactive`
+			case utils.NonInteractiveEnv() || !utils.TerminalDetected():
 				interactive = false
 			}
+
 			if noVerify {
 				verify = false
-			}
-			if quiet {
-				// quiet implies no-interactive
-				interactive = false
 			}
 
 			// Sync the boolean values back to the flags so common.GetGlobalOptions works

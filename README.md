@@ -428,6 +428,18 @@ Stackit is designed to be easily scriptable. Use global flags to control behavio
 stackit sync --cwd /path/to/repo --no-interactive --no-verify
 ```
 
+Interactive features are also disabled automatically when there is no attached
+terminal (pipes, CI, agents). To force non-interactive mode without repeating
+`--no-interactive` on every command — handy for AI agents and scripts — set the
+environment variable once:
+
+```bash
+export STACKIT_NO_INTERACTIVE=1
+stackit create -F - < msg.txt   # no --no-interactive needed
+```
+
+An explicit `--interactive` always overrides both the env var and TTY detection.
+
 ---
 
 ## Configuration

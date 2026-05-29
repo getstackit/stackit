@@ -47,6 +47,8 @@ Run `/stackit` for the full guide.
 
 Claude's permission system matches Bash commands by prefix. Every literal piece of a command becomes part of the match string, so commands with a consistent shape across runs let a small number of rules cover everything. Inconsistent shapes blow up `.claude/settings.local.json` (one entry per literal commit message, redirection variant, etc.) and cause redundant approval prompts.
 
+**Drop the per-command `--no-interactive` flag where you can.** Set `STACKIT_NO_INTERACTIVE=1` in the environment once (stackit also auto-disables interactive features when there's no TTY); commands then keep a shorter, more stable shape — `stackit create -F -` instead of `stackit create -F - --no-interactive` on every call — so fewer permission rules cover them. An explicit `--interactive` still overrides the env var when you need it.
+
 **Run one command per Bash call.** Don't chain with `&&`. Each command should match its own rule (`Bash(git add:*)`, `Bash(stackit:*)`) rather than requiring a permission entry for the full compound string — which is what generates entries like `Bash(git add -A && stackit create -m "feat: very specific message" 2>&1)`.
 
 ```bash
@@ -74,7 +76,7 @@ echo "feat: anything" | stackit create -F -
 msg=$(mktemp -t stackit-msg) && printf "feat: anything" > "$msg" && stackit create --message-file "$msg"
 ```
 
-`create`, `modify`, `squash`, and `split --by-file` all accept `--message-file` (`-F`, except for `split` where `-F` is taken). The flag errors loudly on empty input, missing files, or being passed alongside `-m`, so silent fallthrough to other input paths can't mask a typo.
+`create`, `modify`, `squash`, and `split --by-file` all accept `--message-file` with the `-F` shorthand (on `split`, `-F` reads the message; pass `--by-file-interactive` by long name). The flag errors loudly on empty input, missing files, or being passed alongside `-m`, so silent fallthrough to other input paths can't mask a typo.
 
 ## Common Pitfalls
 

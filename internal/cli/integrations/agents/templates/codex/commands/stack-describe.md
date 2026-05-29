@@ -20,14 +20,19 @@ Generate or refresh stack and PR descriptions from the current branch history.
    - **Description** — markdown body with a summary paragraph, bullet points of
      key changes (grouped by branch/concern), and a concrete test plan.
 
-3. Set the description (this is what actually writes it — the bare command only
-   *displays* in non-interactive mode and changes nothing):
+3. Set the description with explicit flags (a bare non-interactive `describe`
+   with no input now errors with "nothing to set" — it does not write anything):
 
    ```bash
    stackit describe -m "<title>" -d "<description>" --no-interactive
    ```
 
-   `-d` requires `-m`, and the body supports multiline text.
+   `-d` requires `-m`, and the body supports multiline text. Alternatively pipe
+   the whole thing in editor format (first line title, blank line, then body):
+
+   ```bash
+   printf '<title>\n\n<description>' | stackit describe -F - --no-interactive
+   ```
 
 4. Confirm what was set and report it:
 

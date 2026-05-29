@@ -10,8 +10,7 @@ Show the current stack state, identify issues, and provide actionable recommenda
 ## Context
 - Current branch: !`git branch --show-current`
 - Git status: !`git status --short`
-- Stack state (json — PR/CI status, structure): !`stackit log --json --no-interactive`
-- Stack info (json — per-branch needs_restack, locked/frozen, scope): !`stackit info --stack --json --no-interactive`
+- Stack state (json — complete: structure, PR/CI status, and per-branch needs_restack/is_locked/is_frozen/scope): !`stackit log --json --no-interactive`
 
 ## Task
 
@@ -26,7 +25,8 @@ If the user wants the visual tree, run `stackit log --no-interactive` and show i
 
 ### Step 2: Health Analysis
 
-Parse the stack state JSON and branch info JSON, then highlight issues:
+Parse the stack JSON (a single `stackit log --json` carries everything — PR/CI
+status plus `needs_restack`/`is_locked`/`is_frozen`/`scope`), then highlight issues:
 
 **High Priority Issues (act now):**
 - CI failing on any branch

@@ -59,10 +59,13 @@ Split uncommitted working-tree changes into multiple stacked branches. Primary o
    <check-command>
    ```
 
-   **Verify each branch is non-empty.** `stackit create` with nothing staged
-   produces an *empty* branch. If `git diff --cached --stat` is empty before
-   create, or `git log -1 --stat` shows no files after, STOP — do not continue
-   to the next branch. Recover with:
+   **Verify each branch is non-empty.** `stackit create` rejects a create when the
+   working tree has unstaged changes but nothing staged, yet it still creates an
+   *empty* branch on a fully clean tree — exactly the case here, where a bad
+   `git checkout <sha> -- <files>` (wrong path, no match) stages nothing. So keep
+   this check: if `git diff --cached --stat` is empty before create, or
+   `git log -1 --stat` shows no files after, STOP — do not continue to the next
+   branch. Recover with:
 
    ```bash
    git checkout -B "$ORIGINAL" "$BACKUP_SHA"

@@ -29,7 +29,7 @@ When you detect an issue, recommend the matching command (don't invent one):
 |---|---|
 | Branches need restack | `stackit restack --branch <root> --upstack --no-interactive` (or `--stacks a,b` for several) |
 | Branch has no PR | `stackit submit --no-interactive` |
-| PR approved / ready to merge | `stackit merge ship --yes --no-interactive` (or `merge next --yes`) |
+| PR approved / ready to merge | `stackit merge --yes --no-interactive` (merge the next ready PR) or `stackit merge ship --yes --no-interactive` (consolidate the whole stack) |
 | Trunk behind remote | `stackit sync --no-interactive` |
 
 Use plain `stackit log --no-interactive` when the user wants the visual stack.

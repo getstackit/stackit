@@ -72,7 +72,7 @@ bash ~/.claude/skills/stackit/scripts/analyze_stack.sh
 | `stackit foreach` | Run command on each branch in stack |
 | `stackit submit --no-interactive` | Push branches and create/update PRs |
 | `stackit sync --no-interactive` | Pull trunk, delete merged branches, restack |
-| `stackit merge ship --yes --no-interactive` | Consolidate stack into one PR and merge (subcommand required — bare `stackit merge` is a TTY wizard; `merge next --yes` merges just the bottom PR) |
+| `stackit merge --yes --no-interactive` | Merge the next (bottom) ready PR non-interactively (bare `stackit merge` with no flags opens a TTY wizard); use `stackit merge ship --yes --no-interactive` to consolidate the whole stack into one PR |
 | `stackit reorder` | Reorder branches (editor-driven — no agent-safe non-interactive form) |
 | `stackit move -y` | Rebase branch onto new parent (`-y` skips the prompt) |
 

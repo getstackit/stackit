@@ -57,7 +57,11 @@ Run the describe command:
 stackit describe -m "<title>" -d "<description>" --no-interactive
 ```
 
-Note: The description argument supports multiline text.
+Note: The description argument supports multiline text. You can also pipe the
+title and body in editor format (first line title, blank line, then body) via
+`-F -`: `printf '<title>\n\n<description>' | stackit describe -F - --no-interactive`.
+A bare non-interactive `describe` with no input errors ("nothing to set") rather
+than silently doing nothing.
 
 ### Step 4: Confirm Success
 

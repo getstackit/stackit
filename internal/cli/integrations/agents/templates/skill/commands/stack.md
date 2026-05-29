@@ -13,7 +13,7 @@ Commands for managing the entire stack or multiple branches.
 | `stackit restack --stacks <root1>,<root2> --continue-on-conflict --no-interactive` | Rebase specific independent stack roots while letting unrelated selected roots continue past conflicts |
 | `stackit sync --no-interactive` | Pull trunk, delete merged branches, restack |
 | `stackit info --stack --json --no-interactive` | Export full stack metadata as JSON for analysis |
-| `stackit merge ship --yes --no-interactive` | Consolidate the stack into one PR and merge (subcommand required — bare `stackit merge` is a wizard that needs a TTY; `merge next --yes` merges just the bottom PR) |
+| `stackit merge --yes --no-interactive` | Merge the next (bottom) ready PR non-interactively (bare `stackit merge` with no flags opens a TTY wizard). Use `stackit merge ship --yes --no-interactive` to consolidate the whole stack into one PR. |
 | `stackit fold --no-interactive` | Fold current branch into its parent |
 
 ## Bulk Operations

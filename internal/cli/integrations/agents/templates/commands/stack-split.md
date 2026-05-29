@@ -557,20 +557,20 @@ new file mode 100644
 - `--below` (default): Extract to a new PARENT branch (downstack)
 - `--as-sibling`: Extract to an independent branch on the same parent
 
-**Examples** (pipe the message via `--message-file -`; note `split` has no `-F`
-shorthand — `-F` means `--by-file-interactive`):
+**Examples** (pipe the message via `-F -`, the `--message-file` shorthand —
+consistent with create/modify/squash):
 ```bash
 # Extract files to child branch (upstack)
-printf 'Extract utilities' | stackit split --by-file internal/utils.go --above -n "refactor-utils" --message-file -
+printf 'Extract utilities' | stackit split --by-file internal/utils.go --above -n "refactor-utils" -F -
 
 # Extract files to parent branch (downstack, default)
-printf 'Extract config' | stackit split --by-file internal/config.go -n "config-changes" --message-file -
+printf 'Extract config' | stackit split --by-file internal/config.go -n "config-changes" -F -
 
 # Preview a file-level split without executing
 stackit split --by-file internal/utils.go --above --dry-run -n "refactor-utils"
 
 # Hunk-level split using a patch file
-printf 'Part 2' | stackit split --patch /tmp/extract.patch --above -n "feature-part-2" --message-file -
+printf 'Part 2' | stackit split --patch /tmp/extract.patch --above -n "feature-part-2" -F -
 ```
 
 **Note:** `--by-file` extracts entire files to the new branch, not just the changes to those files. Use `--patch` or `--by-hunk` for hunk-level splitting within files.

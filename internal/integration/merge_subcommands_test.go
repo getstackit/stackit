@@ -4,6 +4,48 @@ import (
 	"testing"
 )
 
+func TestMergeParentNonInteractive(t *testing.T) {
+	t.Parallel()
+
+	t.Run("errors without --yes in non-interactive mode", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.Write("a.txt", "content-a").
+			Run("create branch-a -m 'Add branch-a'")
+
+		sh.RunExpectError("merge").
+			OutputContains("pass --yes to merge the next")
+	})
+
+	t.Run("--yes --dry-run routes to the next (bottom PR) strategy", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.Write("a.txt", "content-a").
+			Run("create branch-a -m 'Add branch-a'")
+		sh.Write("b.txt", "content-b").
+			Run("create branch-b -m 'Add branch-b'")
+
+		sh.SetPrMetadata("branch-a", PRMetadata{
+			Number: 101,
+			State:  "OPEN",
+			URL:    "https://github.com/owner/repo/pull/101",
+		})
+		sh.SetPrMetadata("branch-b", PRMetadata{
+			Number: 102,
+			State:  "OPEN",
+			URL:    "https://github.com/owner/repo/pull/102",
+		})
+
+		// Parent `merge --yes --dry-run` should behave like `merge next --dry-run`:
+		// target the bottom-most PR (branch-a / #101), not consolidate.
+		sh.Run("merge --yes --dry-run").
+			OutputContains("branch-a").
+			OutputContains("#101").
+			OutputContains("Dry-run mode")
+	})
+}
+
 func TestMergeNext(t *testing.T) {
 	t.Parallel()
 	t.Run("dry-run shows plan for bottom PR", func(t *testing.T) {

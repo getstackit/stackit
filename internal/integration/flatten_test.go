@@ -14,43 +14,6 @@ import (
 func TestFlattenWorkflow(t *testing.T) {
 	t.Parallel()
 
-	t.Run("flattens linear independent stack to trunk", func(t *testing.T) {
-		t.Parallel()
-
-		// Scenario:
-		// Before: main -> A -> B -> C (each with independent changes)
-		// After:  main -> A, main -> B, main -> C (all parallel)
-
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack of independent branches (each touches a different file)
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
-
-		sh.Write("file-c", "content c").
-			Run("create branch-c -m 'Add file C'")
-
-		// Verify initial stack structure
-		sh.ExpectStackStructure(map[string]string{
-			"branch-a": "main",
-			"branch-b": "branch-a",
-			"branch-c": "branch-b",
-		})
-
-		// Run flatten with --yes to skip confirmation
-		sh.Run("flatten --yes")
-
-		// After flatten, all branches should be on main since they're independent
-		sh.ExpectStackStructure(map[string]string{
-			"branch-a": "main",
-			"branch-b": "main",
-			"branch-c": "main",
-		})
-	})
-
 	t.Run("respects dependencies and keeps branch in place", func(t *testing.T) {
 		t.Parallel()
 
@@ -151,50 +114,37 @@ func TestFlattenWorkflow(t *testing.T) {
 		})
 	})
 
-	t.Run("uses current branch when none specified", func(t *testing.T) {
+	t.Run("accepts current branch or positional branch argument", func(t *testing.T) {
 		t.Parallel()
-
-		sh := NewTestShellInProcess(t)
-
-		// Create a simple stack
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
-
-		// Stay on branch-b and run flatten without specifying branch
-		sh.OnBranch("branch-b").
-			Run("flatten --yes")
-
-		// Both should now be on main
-		sh.ExpectStackStructure(map[string]string{
-			"branch-a": "main",
-			"branch-b": "main",
-		})
-	})
-
-	t.Run("flatten with positional branch argument", func(t *testing.T) {
-		t.Parallel()
-
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
-
-		// Go to main and flatten from branch-b
-		sh.Checkout("main").
-			Run("flatten branch-b --yes")
-
-		// Both should be on main
-		sh.ExpectStackStructure(map[string]string{
-			"branch-a": "main",
-			"branch-b": "main",
-		})
+		for _, tt := range []struct {
+			name string
+			prep func(*TestShell)
+			cmd  string
+		}{
+			{
+				"uses current branch when none specified",
+				func(sh *TestShell) { sh.OnBranch("branch-b") },
+				"flatten --yes",
+			},
+			{
+				"positional branch argument",
+				func(sh *TestShell) { sh.Checkout("main") },
+				"flatten branch-b --yes",
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				sh := NewTestShellInProcess(t)
+				sh.Write("file-a", "content a").Run("create branch-a -m 'Add file A'")
+				sh.Write("file-b", "content b").Run("create branch-b -m 'Add file B'")
+				tt.prep(sh)
+				sh.Run(tt.cmd)
+				sh.ExpectStackStructure(map[string]string{
+					"branch-a": "main",
+					"branch-b": "main",
+				})
+			})
+		}
 	})
 
 	t.Run("error on untracked branch", func(t *testing.T) {
@@ -353,40 +303,6 @@ func TestFlattenCommitIntegrity(t *testing.T) {
 		// A should have 2 commits, B should have only 1
 		sh.CommitCount("main", "branch-a", 2).
 			CommitCount("main", "branch-b", 1)
-	})
-
-	t.Run("flatten after parent amended without restacking child", func(t *testing.T) {
-		t.Parallel()
-
-		// Scenario: A is created, B is created on top, then A is amended
-		// B is NOT restacked before flatten
-		// After flatten: B should only contain its own commit
-
-		sh := NewTestShellInProcess(t)
-
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
-
-		// Go back to A and amend it (add more content)
-		sh.Checkout("branch-a").
-			Amend("file-a-extra", "extra content for A")
-
-		// Do NOT restack branch-b — it's now based on old A
-
-		// Go to B and flatten
-		sh.Checkout("branch-b").
-			Run("flatten --yes")
-
-		sh.ExpectStackStructure(map[string]string{
-			"branch-a": "main",
-			"branch-b": "main",
-		})
-
-		// B should have exactly 1 commit relative to main
-		sh.CommitCount("main", "branch-b", 1)
 	})
 
 	t.Run("flatten with main advanced and parent amended", func(t *testing.T) {

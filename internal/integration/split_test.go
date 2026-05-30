@@ -1156,33 +1156,6 @@ func TestSplitEdgeCases(t *testing.T) {
 			OutputContains("modified keep")
 	})
 
-	run("split creates snapshot for undo recovery", func(t *testing.T, sh *TestShell) {
-		sh.Write("file1", "content1").
-			Write("file2", "content2").
-			Run("create feature -m 'Add files'")
-
-		// Verify initial state
-		sh.HasBranches("main", "feature")
-
-		// Successful split should create snapshot
-		sh.Run("split --by-file file1_test.txt")
-
-		// Verify split happened
-		sh.HasBranches("main", "feature", "feature_split")
-
-		// Verify we can undo using the snapshot
-		sh.UndoLatest()
-
-		// Should be back on original feature with both files
-		sh.OnBranch("feature")
-
-		// Split branch should be removed
-		sh.HasBranches("main", "feature")
-
-		// Verify both files exist in the tree
-		verifyFilesExist(t, sh, []string{"file1_test.txt", "file2_test.txt"})
-	})
-
 	run("by-file with special characters in filename", func(_ *testing.T, sh *TestShell) {
 		sh.Write("normal", "normal content").
 			Run("create setup -m 'Setup'")

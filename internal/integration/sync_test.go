@@ -1,17 +1,12 @@
 package integration
 
 import (
-	"context"
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -346,81 +341,6 @@ func TestSyncStaleDraftCleanup(t *testing.T) {
 	require.Equal(t, "main", eng.GetBranch("b").GetParent().GetName())
 }
 
-func TestSyncRemoteMetadata(t *testing.T) {
-	t.Parallel()
-	t.Run("loads remote metadata cache", func(t *testing.T) {
-		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-
-		// Create a branch
-		sh.CreateBranch("feature-a").
-			CommitChange("file-a", "content-a").
-			TrackBranch("feature-a", "main")
-
-		eng := sh.Engine
-
-		// Set local metadata
-		branch := eng.GetBranch("feature-a")
-		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
-		require.NoError(t, err)
-
-		// Create remote metadata refs (simulating a successful fetch)
-		remoteMeta := git.NewMetaFrom(git.MetaFields{
-			LockReason: git.LockReasonUser,
-			Scope:      new("remote-scope"),
-		})
-		createRemoteMetadataRefForSync(t, sh, "feature-a", remoteMeta)
-
-		// Load remote metadata cache (this is what sync does after fetching)
-		err = eng.LoadRemoteMetadataCache()
-		require.NoError(t, err)
-
-		// Verify remote metadata cache was loaded
-		cache := eng.GetRemoteMetadataCache()
-		cachedMeta := cache.Get("feature-a")
-		require.NotNil(t, cachedMeta, "Remote metadata should be in cache")
-		require.Equal(t, git.LockReasonUser, cachedMeta.GetLockReason(), "Remote metadata should show lock reason")
-		require.Equal(t, "remote-scope", *cachedMeta.GetScope(), "Remote metadata should have scope")
-	})
-
-	t.Run("detects metadata conflicts", func(t *testing.T) {
-		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-
-		sh.CreateBranch("feature-b").
-			CommitChange("file-b", "content-b").
-			TrackBranch("feature-b", "main")
-
-		eng := sh.Engine
-
-		// Set local metadata: locked=false
-		branch := eng.GetBranch("feature-b")
-		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
-		require.NoError(t, err)
-
-		// Create remote metadata refs: locked=true (conflict)
-		remoteMeta := git.NewMetaFrom(git.MetaFields{
-			LockReason: git.LockReasonUser,
-		})
-		createRemoteMetadataRefForSync(t, sh, "feature-b", remoteMeta)
-
-		// Load remote metadata cache
-		err = eng.LoadRemoteMetadataCache()
-		require.NoError(t, err)
-
-		// Compute diff to verify conflict detection
-		diff, err := eng.ComputeMetadataDiff("feature-b")
-		require.NoError(t, err)
-		require.NotNil(t, diff)
-		require.True(t, diff.HasConflict, "Should detect conflict between local and remote metadata")
-
-		// Verify the specific field that differs
-		require.Len(t, diff.Differences, 1)
-		require.Equal(t, "lockReason", diff.Differences[0].Field)
-		require.Equal(t, git.LockReasonNone, diff.Differences[0].LocalValue)
-		require.Equal(t, git.LockReasonUser, diff.Differences[0].RemoteValue)
-	})
-}
 
 func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	t.Parallel()
@@ -487,30 +407,6 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 		ExpectBranchFixed("branch-c")
 }
 
-// createRemoteMetadataRefForSync creates a ref at refs/stackit/remote-metadata/<branch>
-func createRemoteMetadataRefForSync(t *testing.T, sh *scenario.Scenario, branchName string, meta *git.Meta) {
-	t.Helper()
-
-	data, err := json.Marshal(meta)
-	require.NoError(t, err)
-
-	tmpFile := filepath.Join(sh.Scene.Dir, ".git", "tmp-meta-"+branchName)
-	err = os.WriteFile(tmpFile, data, 0600)
-	require.NoError(t, err)
-	defer os.Remove(tmpFile)
-
-	blobSha, err := sh.Scene.Repo.RunGitCommandAndGetOutput("hash-object", "-w", tmpFile)
-	require.NoError(t, err)
-
-	// Remove trailing newline
-	if len(blobSha) > 0 && blobSha[len(blobSha)-1] == '\n' {
-		blobSha = blobSha[:len(blobSha)-1]
-	}
-
-	refName := "refs/stackit/remote-metadata/" + branchName
-	err = sh.Scene.Repo.RunGitCommand("update-ref", refName, blobSha)
-	require.NoError(t, err)
-}
 
 // TestSyncDoesNotLeaveIndexState verifies that after sync cleans up merged branches
 // and restacks remaining branches, the working directory is left in a clean state

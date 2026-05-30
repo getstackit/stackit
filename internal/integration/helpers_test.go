@@ -1103,3 +1103,14 @@ func MakeWorktreeDirty(t *testing.T, worktreePath string) {
 		t.Fatalf("failed to make worktree dirty: %v", err)
 	}
 }
+
+// CreateIndependentStack2 creates main->branch-a->branch-b where each branch
+// touches a different file (no file dependencies between branches).
+// Used by flatten tests to verify file-independence detection.
+func (s *TestShell) CreateIndependentStack2() *TestShell {
+	s.t.Helper()
+	return s.Write("file-a", "content a").
+		Run("create branch-a -m 'Add file A'").
+		Write("file-b", "content b").
+		Run("create branch-b -m 'Add file B'")
+}

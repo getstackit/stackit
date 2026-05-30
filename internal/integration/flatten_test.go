@@ -171,11 +171,7 @@ func TestFlattenUndo(t *testing.T) {
 		sh := NewTestShellInProcess(t)
 
 		// Create a stack
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
+		sh.CreateIndependentStack2()
 
 		// Verify initial structure
 		sh.ExpectStackStructure(map[string]string{
@@ -215,11 +211,7 @@ func TestFlattenCommitIntegrity(t *testing.T) {
 
 		sh := NewTestShellInProcess(t)
 
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
+		sh.CreateIndependentStack2()
 
 		sh.Write("file-c", "content c").
 			Run("create branch-c -m 'Add file C'")
@@ -246,11 +238,7 @@ func TestFlattenCommitIntegrity(t *testing.T) {
 
 		sh := NewTestShellInProcess(t)
 
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
+		sh.CreateIndependentStack2()
 
 		// Advance main (simulating a local pull or direct commit)
 		sh.Checkout("main").
@@ -313,11 +301,7 @@ func TestFlattenCommitIntegrity(t *testing.T) {
 
 		sh := NewTestShellInProcess(t)
 
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
+		sh.CreateIndependentStack2()
 
 		// Advance main
 		sh.Checkout("main").
@@ -350,11 +334,7 @@ func TestFlattenCommitIntegrity(t *testing.T) {
 
 		sh := NewTestShellInProcess(t)
 
-		sh.Write("file-a", "content a").
-			Run("create branch-a -m 'Add file A'")
-
-		sh.Write("file-b", "content b").
-			Run("create branch-b -m 'Add file B'")
+		sh.CreateIndependentStack2()
 
 		sh.Write("file-c", "content c").
 			Run("create branch-c -m 'Add file C'")

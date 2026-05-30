@@ -11,8 +11,7 @@ Absorb staged fixes into the commits that last touched the changed lines.
 1. Inspect:
 
    ```bash
-   git status --short
-   stackit log --no-interactive
+   stackit state --json
    ```
 
 2. Stage intended fixes:

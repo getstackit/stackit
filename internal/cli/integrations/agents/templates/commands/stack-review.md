@@ -14,9 +14,8 @@ Perform code reviews on PRs in the stack. Finds bugs, checks CLAUDE.md complianc
 - **Apply mode** (`--apply`): Apply existing review comments from GitHub and mark resolved
 
 ## Context
-- Current branch: !`git branch --show-current`
+- State (json — current branch, working tree, in-progress operation, full stack): !`stackit state --json`
 - Repo: !`gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null`
-- Stack state: !`stackit log --no-interactive`
 
 ## Arguments
 $ARGUMENTS

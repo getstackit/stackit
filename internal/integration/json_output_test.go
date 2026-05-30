@@ -388,3 +388,56 @@ func TestJSONOutput(t *testing.T) {
 		}
 	})
 }
+
+func TestStateJSON(t *testing.T) {
+	t.Parallel()
+
+	t.Run("produces a complete snapshot", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.Write("feature_a", "content a").
+			Run("create feature-a -m 'Add feature A'")
+
+		sh.Run("state --json")
+		var result actions.StateResult
+		require.NoError(t, json.Unmarshal([]byte(sh.Output()), &result), "state --json should be valid JSON")
+
+		require.Equal(t, "feature-a", result.CurrentBranch)
+		require.False(t, result.Detached)
+		require.NotEmpty(t, result.Trunk)
+		// No in-progress operation on a fresh stack.
+		require.Equal(t, "none", result.Operation.Kind)
+		require.False(t, result.Operation.InProgress)
+		require.NotNil(t, result.Operation.ConflictedFiles)
+		// The staged file was committed by create, so the tree is clean.
+		require.True(t, result.WorkingTree.Clean)
+		// The stack is embedded (same shape as log --json).
+		require.GreaterOrEqual(t, result.Stack.Summary.TotalBranches, 1)
+	})
+
+	t.Run("reports a dirty working tree", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.Write("feature_a", "content a").
+			Run("create feature-a -m 'Add feature A'")
+		sh.WriteFile("extra.txt", "x") // WriteFile stages the file
+
+		sh.Run("state --json")
+		var result actions.StateResult
+		require.NoError(t, json.Unmarshal([]byte(sh.Output()), &result))
+
+		require.False(t, result.WorkingTree.Clean)
+		require.True(t, result.WorkingTree.Staged)
+	})
+
+	t.Run("human output summarizes branch and stack", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.Write("feature_a", "content a").
+			Run("create feature-a -m 'Add feature A'")
+
+		sh.Run("state").
+			OutputContains("On feature-a").
+			OutputContains("Stack")
+	})
+}

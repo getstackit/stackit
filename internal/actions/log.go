@@ -289,8 +289,23 @@ func getUntrackedBranchNames(ctx *app.Context) []string {
 	return untracked.Names()
 }
 
-// logActionJSON generates JSON output for the log command
+// logActionJSON generates JSON output for the log command.
 func logActionJSON(ctx *app.Context, opts LogOptions) error {
+	result := BuildLogJSON(ctx, opts)
+
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	ctx.Output.Info("%s", string(data))
+	return nil
+}
+
+// BuildLogJSON builds the structured log result (branch tree, PR/CI status, and
+// per-branch health) without printing it, so other commands — e.g. `status` —
+// can embed the same stack snapshot. The CI status prefetch always runs to
+// provide complete data.
+func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 	eng := ctx.Engine
 	currentBranch := eng.CurrentBranch()
 	currentBranchName := ""
@@ -461,12 +476,5 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 		return cmp.Compare(a.Name, b.Name)
 	})
 
-	// Output JSON
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-	ctx.Output.Info("%s", string(data))
-
-	return nil
+	return result
 }

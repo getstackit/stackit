@@ -11,7 +11,7 @@ Review stack PRs for high-confidence issues and report findings locally.
 1. Gather stack PRs:
 
    ```bash
-   stackit log --json --no-interactive
+   stackit state --json
    ```
 
 2. For each open non-draft PR selected for review:

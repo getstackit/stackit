@@ -17,7 +17,7 @@ Split committed changes on the current branch into another stacked branch.
 2. Inspect branch context:
 
    ```bash
-   stackit log --no-interactive
+   stackit state --json
    git log --oneline <parent-branch>..HEAD
    git diff --name-status <parent-branch>..HEAD
    ```

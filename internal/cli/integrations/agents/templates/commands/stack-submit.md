@@ -10,9 +10,7 @@ argument-hint: [--stack | --draft]
 Submit branches to GitHub and create/update PRs.
 
 ## Context
-- Current branch: !`git branch --show-current`
-- Stack state: !`stackit log --no-interactive`
-- Branch info: !`stackit info --json --no-interactive`
+- State (json — current branch, working tree, in-progress operation, full stack): !`stackit state --json`
 
 ## Arguments
 $ARGUMENTS

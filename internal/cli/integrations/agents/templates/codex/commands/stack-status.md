@@ -11,8 +11,7 @@ Report stack state without mutating anything.
 Run:
 
 ```bash
-git status --short
-stackit log --json --no-interactive
+stackit state --json
 ```
 
 Summarize:

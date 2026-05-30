@@ -35,6 +35,7 @@
 # Undo history
 # undo:
 #   depth: 10 # Max snapshots
+#   enabled: true # Take snapshots before mutations (set false to skip undo overhead)
 
 # Worktree settings
 # worktree:

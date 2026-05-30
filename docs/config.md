@@ -62,6 +62,7 @@ git config --local --add stackit.trunks develop
 | `stackit.submit.reviewers` | string[] | `[]` | Default reviewers for PRs |
 | `stackit.submit.assignees` | string[] | `[]` | Default assignees for PRs |
 | `stackit.undo.depth` | int | `10` | Max undo snapshots to retain |
+| `stackit.undo.enabled` | bool | `true` | Take undo snapshots before mutations (set `false` to eliminate snapshot overhead for users who never run `stackit undo`) |
 | `stackit.worktree.basePath` | string | `""` | Base directory for worktrees |
 | `stackit.worktree.autoClean` | bool | `true` | Auto-remove clean, empty managed worktrees during sync |
 | `stackit.merge.method` | string | `""` | Merge strategy (squash/merge/rebase) |
@@ -228,6 +229,7 @@ The table below shows all options available in `.stackit.yaml`. The "Team Fallba
 | `ci.command` | string | `""` | CI validation command | Yes |
 | `ci.timeout` | int | `600` | CI timeout in seconds | Yes |
 | `undo.depth` | int | `10` | Max undo snapshots to retain | Yes |
+| `undo.enabled` | bool | `true` | Take undo snapshots before mutations | Yes |
 | `worktree.basePath` | string | `""` | Base directory for worktrees | Yes |
 | `worktree.autoClean` | bool | `true` | Auto-remove clean, empty managed worktrees during sync | Yes |
 | `split.hunkSelector` | string | `tui` | Hunk selector mode (tui/git) | Yes |

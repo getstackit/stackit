@@ -249,6 +249,19 @@ func (c *GitConfig) UndoStackDepth() int {
 	return DefaultUndoDepth
 }
 
+// UndoEnabled reports whether undo snapshots should be taken.
+// When false, TakeBestEffortSnapshot is a no-op, eliminating snapshot overhead
+// for users who never run `stackit undo`.
+func (c *GitConfig) UndoEnabled() bool {
+	if c.store.Exists(KeyUndoEnabled) {
+		return c.store.GetBoolWithDefault(KeyUndoEnabled, DefaultUndoEnabled)
+	}
+	if c.project != nil && c.project.Undo.Enabled != nil {
+		return *c.project.Undo.Enabled
+	}
+	return DefaultUndoEnabled
+}
+
 // SetUndoStackDepth sets the max undo depth.
 func (c *GitConfig) SetUndoStackDepth(depth int) error {
 	if depth < 1 {

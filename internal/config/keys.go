@@ -13,6 +13,9 @@ const (
 	KeySubmitFooter = "stackit.submit.footer"
 	// KeyUndoDepth is the maximum number of undo snapshots to keep.
 	KeyUndoDepth = "stackit.undo.depth"
+	// KeyUndoEnabled controls whether undo snapshots are taken at all.
+	// Set to false to skip snapshot overhead for users who never run `stackit undo`.
+	KeyUndoEnabled = "stackit.undo.enabled"
 	// KeyWorktreeBasePath is the base path for worktrees.
 	KeyWorktreeBasePath = "stackit.worktree.basePath"
 	// KeyWorktreeAutoClean controls automatic worktree cleanup during sync.
@@ -63,6 +66,8 @@ const (
 	DefaultSubmitFooter = true
 	// DefaultUndoDepth is the default number of undo snapshots to keep.
 	DefaultUndoDepth = 10
+	// DefaultUndoEnabled is whether undo snapshots are taken by default.
+	DefaultUndoEnabled = true
 	// DefaultWorktreeAutoClean is whether to auto-clean worktrees by default.
 	DefaultWorktreeAutoClean = true
 	// DefaultCITimeout is the default CI timeout in seconds (10 minutes).

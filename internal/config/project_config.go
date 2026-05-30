@@ -42,7 +42,8 @@ type CIConfig struct {
 
 // UndoConfig contains undo settings
 type UndoConfig struct {
-	Depth int `yaml:"depth,omitempty"`
+	Depth   int   `yaml:"depth,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
 // WorktreeConfig contains worktree settings

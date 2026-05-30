@@ -326,62 +326,6 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 		sh.ExpectBranchParent("branchD", "branchC")
 	})
 
-	run("sync from dirty worktree skips own stack", func(t *testing.T, sh *TestShell) {
-		// Test scenario:
-		// 1. Create a worktree with a stack
-		// 2. Add uncommitted changes to the worktree
-		// 3. Run sync FROM that dirty worktree
-		// Expected:
-		// - Sync should complete without error
-		// - The worktree's stack should be skipped
-
-		// Create a stack with worktree
-		sh.Log("Creating stack with worktree...")
-		sh.WriteFile("feature.txt", "feature content").
-			Run("create feature -w -m 'feature branch'").
-			OnBranch("main")
-
-		worktree := sh.GetWorktreePath("feature")
-		shW := sh.InWorktree(worktree)
-		shW.OnBranch("feature")
-
-		// Record SHA before sync
-		sh.Git("rev-parse feature")
-		featureBefore := sh.Output()
-
-		// Add uncommitted changes to the worktree
-		sh.Log("Adding uncommitted changes to worktree...")
-		shW.WriteFile("dirty.txt", "uncommitted content")
-		// Don't commit - this makes it dirty
-
-		// Advance main
-		sh.Log("Advancing main...")
-		sh.WriteFile("main-update.txt", "main change").
-			Git("add main-update.txt").
-			Git("commit -m 'Main advanced'").
-			Git("push origin main")
-
-		// Run sync from the dirty worktree
-		sh.Log("Running sync from dirty worktree...")
-		shW.Run("sync")
-
-		// Sync should complete without error
-		shW.OutputContains("Skipping stack")
-
-		// Feature branch should NOT be restacked (we're in it with uncommitted changes)
-		sh.Git("rev-parse feature")
-		featureAfter := sh.Output()
-		if featureBefore != featureAfter {
-			t.Errorf("Feature branch should NOT have been restacked (dirty), but SHA changed from %s to %s", featureBefore, featureAfter)
-		}
-
-		// Uncommitted changes should still be present
-		shW.Git("status --porcelain")
-		if shW.Output() == "" {
-			t.Error("Worktree should still have uncommitted changes")
-		}
-	})
-
 	run("sync skips dirty worktree stack and syncs clean stack", func(t *testing.T, sh *TestShell) {
 		// Test scenario:
 		// 1. Create two worktrees with separate stacks

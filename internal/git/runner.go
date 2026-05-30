@@ -394,7 +394,14 @@ type Runner interface {
 // NewRunner returns a standard implementation of Runner that uses the current
 // working directory as its repository root.
 func NewRunner(logger DebugLogger) Runner {
-	return &runner{logger: logger}
+	r := &runner{logger: logger}
+	r.objects = newObjectReader(func() (string, error) {
+		if err := r.ensureRepo(); err != nil {
+			return "", err
+		}
+		return r.getRepoRoot(), nil
+	})
+	return r
 }
 
 // NewRunnerWithPath returns a Runner that operates on a specific repo path.
@@ -404,7 +411,12 @@ func NewRunnerWithPath(repoRoot string, logger DebugLogger) Runner {
 	if err == nil {
 		repoRoot = abs
 	}
-	return &runner{repoRoot: repoRoot, logger: logger}
+	root := repoRoot
+	r := &runner{repoRoot: root, logger: logger}
+	r.objects = newObjectReader(func() (string, error) {
+		return root, nil
+	})
+	return r
 }
 
 // runner implements Runner by calling the actual git package functions
@@ -424,6 +436,10 @@ type runner struct {
 	// Keyed by branch name (e.g. "main"), values are SHA strings.
 	// Invalidated by any operation that mutates branch tips.
 	revisionCache revisionCache
+
+	// objects is a persistent git cat-file --batch process for zero-spawn object reads.
+	// Started lazily on first use; lives for the lifetime of the runner.
+	objects *objectReader
 
 	// Cached git version info
 	gitVersionOnce   sync.Once
@@ -968,11 +984,14 @@ func (r *runner) CreateBlobsBatch(ctx context.Context, contents []string) ([]str
 }
 
 func (r *runner) ReadBlob(sha string) (string, error) {
-	out, err := r.RunGitCommandRawWithContext(context.Background(), "cat-file", "blob", sha)
+	content, found, err := r.objects.ReadObject(sha)
 	if err != nil {
 		return "", fmt.Errorf("failed to read blob %s: %w", sha, err)
 	}
-	return out, nil
+	if !found {
+		return "", fmt.Errorf("blob %s not found", sha)
+	}
+	return content, nil
 }
 
 func (r *runner) ListRefs(prefix string) (map[string]string, error) {

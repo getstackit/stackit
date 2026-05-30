@@ -5,10 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // LockReason is an enum for the reason why a branch is locked
@@ -123,34 +120,65 @@ const (
 // Branches that don't have metadata will have an empty Meta struct in the results map.
 // Only actual errors (not missing metadata) will be included in the errors map.
 func (r *runner) BatchReadMetadata(branchNames []string) (map[string]*Meta, map[string]error) {
-	results := make(map[string]*Meta)
+	results := make(map[string]*Meta, len(branchNames))
 	errs := make(map[string]error)
-	resultsMu := sync.Mutex{}
-	errsMu := sync.Mutex{}
 
 	if len(branchNames) == 0 {
 		return results, errs
 	}
 
 	start := time.Now()
-	missesBefore := r.metadataCache.misses.Load()
 
-	utils.Run(branchNames, func(name string) {
-		meta, err := r.ReadMetadata(name)
-		if err != nil {
-			errsMu.Lock()
-			errs[name] = err
-			errsMu.Unlock()
-			return
+	// Separate cache hits from misses up front.
+	var misses []string
+	for _, name := range branchNames {
+		if cached := r.metadataCache.Get(name); cached != nil {
+			results[name] = cached
+		} else {
+			misses = append(misses, name)
 		}
-		resultsMu.Lock()
-		results[name] = meta
-		resultsMu.Unlock()
-	})
+	}
 
-	missed := r.metadataCache.misses.Load() - missesBefore
+	if len(misses) == 0 {
+		r.infoLog("metadata batch-load kind=shared branches=%d cache_misses=0 elapsed_ms=%d",
+			len(branchNames), time.Since(start).Milliseconds())
+		return results, errs
+	}
+
+	// Build ref names for all cache misses.
+	refs := make([]string, len(misses))
+	for i, name := range misses {
+		refs[i] = fmt.Sprintf("%s%s", MetadataRefPrefix, name)
+	}
+
+	// Single burst: all ref lookups + blob reads in one pipe transaction.
+	contents, err := r.objects.ReadObjectsBatch(refs)
+	if err != nil {
+		for _, name := range misses {
+			errs[name] = err
+		}
+		return results, errs
+	}
+
+	for i, name := range misses {
+		content := contents[refs[i]] // empty string when the ref is missing
+		if content == "" {
+			empty := NewMeta()
+			r.metadataCache.Put(name, empty)
+			results[name] = empty
+			continue
+		}
+		var meta Meta
+		if unmarshalErr := json.Unmarshal([]byte(content), &meta); unmarshalErr != nil {
+			errs[name] = fmt.Errorf("failed to unmarshal metadata for %s: %w", name, unmarshalErr)
+			continue
+		}
+		r.metadataCache.Put(name, &meta)
+		results[name] = &meta
+	}
+
 	r.infoLog("metadata batch-load kind=shared branches=%d cache_misses=%d elapsed_ms=%d",
-		len(branchNames), missed, time.Since(start).Milliseconds())
+		len(branchNames), len(misses), time.Since(start).Milliseconds())
 
 	return results, errs
 }
@@ -159,8 +187,7 @@ func (r *runner) BatchReadMetadata(branchNames []string) (map[string]*Meta, map[
 // Returns a map of successfully read metadata. Failures are silently ignored since
 // local metadata is not critical and missing metadata is expected for new branches.
 func (r *runner) BatchReadLocalMetadata(branchNames []string) map[string]*LocalMeta {
-	results := make(map[string]*LocalMeta)
-	resultsMu := sync.Mutex{}
+	results := make(map[string]*LocalMeta, len(branchNames))
 
 	if len(branchNames) == 0 {
 		return results
@@ -168,16 +195,34 @@ func (r *runner) BatchReadLocalMetadata(branchNames []string) map[string]*LocalM
 
 	start := time.Now()
 
-	utils.Run(branchNames, func(name string) {
-		meta, err := r.ReadLocalMetadata(name)
-		if err != nil {
-			// Local metadata failure is not critical, just skip it
-			return
+	refs := make([]string, len(branchNames))
+	for i, name := range branchNames {
+		refs[i] = fmt.Sprintf("%s%s", LocalMetadataRefPrefix, name)
+	}
+
+	// Single burst for all local metadata refs.
+	contents, err := r.objects.ReadObjectsBatch(refs)
+	if err != nil {
+		// Local metadata is non-critical; fall back to empty results on error.
+		r.infoLog("metadata batch-load kind=local branches=%d error=%v elapsed_ms=%d",
+			len(branchNames), err, time.Since(start).Milliseconds())
+		return results
+	}
+
+	for i, name := range branchNames {
+		content := contents[refs[i]]
+		if content == "" {
+			results[name] = &LocalMeta{}
+			continue
 		}
-		resultsMu.Lock()
-		results[name] = meta
-		resultsMu.Unlock()
-	})
+		var meta LocalMeta
+		if err := json.Unmarshal([]byte(content), &meta); err != nil {
+			// Non-critical; treat as missing
+			results[name] = &LocalMeta{}
+			continue
+		}
+		results[name] = &meta
+	}
 
 	r.infoLog("metadata batch-load kind=local branches=%d elapsed_ms=%d",
 		len(branchNames), time.Since(start).Milliseconds())
@@ -194,20 +239,13 @@ func (r *runner) ReadMetadata(branchName string) (*Meta, error) {
 
 	refName := fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
 
-	sha, err := r.GetRef(refName)
+	// Pass the ref name directly to cat-file --batch: it resolves ref → blob in one
+	// step, replacing the two rev-parse subprocesses GetRef previously spawned.
+	content, found, err := r.objects.ReadObject(refName)
 	if err != nil {
-		// If ref doesn't exist, it's not an error, just means no metadata
-		empty := NewMeta()
-		r.metadataCache.Put(branchName, empty)
-		return empty, nil //nolint:nilerr
+		return nil, fmt.Errorf("failed to read metadata for %s: %w", branchName, err)
 	}
-
-	content, err := r.ReadBlob(sha)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read metadata blob %s: %w", sha, err)
-	}
-
-	if content == "" {
+	if !found || content == "" {
 		empty := NewMeta()
 		r.metadataCache.Put(branchName, empty)
 		return empty, nil
@@ -291,18 +329,11 @@ func (r *runner) RenameMetadata(oldName, newName string) error {
 func (r *runner) ReadLocalMetadata(branchName string) (*LocalMeta, error) {
 	refName := fmt.Sprintf("%s%s", LocalMetadataRefPrefix, branchName)
 
-	sha, err := r.GetRef(refName)
+	content, found, err := r.objects.ReadObject(refName)
 	if err != nil {
-		// If ref doesn't exist, it's not an error, just means no local metadata
-		return &LocalMeta{}, nil //nolint:nilerr
+		return nil, fmt.Errorf("failed to read local metadata for %s: %w", branchName, err)
 	}
-
-	content, err := r.ReadBlob(sha)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read local metadata blob %s: %w", sha, err)
-	}
-
-	if content == "" {
+	if !found || content == "" {
 		return &LocalMeta{}, nil
 	}
 

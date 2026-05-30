@@ -80,6 +80,10 @@ type BranchInfo interface {
 	// into their respective caches. Call before parallel annotation building
 	// to eliminate per-branch cache misses and mutex contention.
 	PreloadBranchData()
+	// PreloadBranchStats warms the diff-stats and commit-count caches for all
+	// given branches in parallel. Call before utils.Run iteration so subsequent
+	// GetDiffStats / GetCommitCount calls are instant cache hits.
+	PreloadBranchStats(branches []Branch)
 }
 
 // GitDiffer handles diff and merge operations
@@ -99,6 +103,9 @@ type WorkingTree interface {
 	HasStagedChanges(ctx context.Context) (bool, error)
 	HasUnstagedChanges(ctx context.Context) (bool, error)
 	HasUntrackedFiles(ctx context.Context) (bool, error)
+	// GetWorkingTreeStatus returns all three working-tree flags in one git call.
+	// Prefer this over calling Has* individually when multiple flags are needed.
+	GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUntrackedFileHunks(ctx context.Context) ([]git.Hunk, error)
 	GetPendingChanges(ctx context.Context) ([]PendingChange, error)
@@ -128,6 +135,9 @@ type BranchReader interface {
 type BranchTracking interface {
 	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
 	UntrackBranch(ctx context.Context, branchName string) error
+	// BatchUntrackBranches untracks multiple branches in a single operation,
+	// triggering only one engine rebuild instead of one per branch.
+	BatchUntrackBranches(ctx context.Context, branchNames []string) error
 	SetParent(ctx context.Context, branch Branch, parentBranch Branch, mode DivergenceMode) error
 	// ReparentBranch changes a branch's parent while automatically preserving
 	// its divergence point. Preferred over SetParent for existing branches.
@@ -137,6 +147,9 @@ type BranchTracking interface {
 	// any reparenting begins.
 	ReparentBranches(ctx context.Context, branchNames []string, newParent Branch) error
 	SetScope(ctx context.Context, branch Branch, scope Scope) error
+	// SetScopeAndMarkForUpdate sets the scope and marks the branch as needing a
+	// PR body update in one atomic transaction instead of two separate ref writes.
+	SetScopeAndMarkForUpdate(ctx context.Context, branch Branch, scope Scope) error
 	SetBranchType(branch Branch, branchType git.BranchType) error
 	SetLocked(ctx context.Context, branches Branches, reason LockReason) (BatchLockResult, error)
 	SetFrozen(ctx context.Context, branches Branches, frozen bool) (BatchFreezeResult, error)

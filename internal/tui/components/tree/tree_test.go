@@ -751,3 +751,36 @@ func TestStackTreeRenderer_CacheIsCleared(t *testing.T) {
 		t.Error("expected feature-2 in second render")
 	}
 }
+
+func TestStackTreeRenderer_MergedDownstackDisplay(t *testing.T) {
+	t.Parallel()
+	mock := &MockTreeData{
+		CurrentVal: "branch2",
+		TrunkVal:   "main",
+		ChildrenMap: map[string][]string{
+			"main":    {"branch2"},
+			"branch2": {},
+		},
+		ParentsMap: map[string]string{
+			"branch2": "main",
+		},
+		FixedMap: map[string]bool{
+			"main":    true,
+			"branch2": true,
+		},
+	}
+	renderer := NewRenderer(mock)
+
+	prNum := 123
+	renderer.SetAnnotation("branch2", BranchAnnotation{
+		MergedDownstack: []MergedParentDisplay{
+			{BranchName: "branch1", PRNumber: &prNum, PRState: "MERGED"},
+		},
+	})
+
+	lines := renderer.RenderStack("branch2", RenderOptions{Mode: RenderModeFull})
+	output := strings.Join(lines, "\n")
+	if !strings.Contains(output, "previously based on") {
+		t.Errorf("expected 'previously based on' in merged downstack output, got: %s", output)
+	}
+}

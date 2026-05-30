@@ -94,32 +94,21 @@ func TestFrozenIntegration(t *testing.T) {
 			OutputContains("cannot freeze trunk branch")
 	})
 
-	t.Run("freeze fails on untracked branch", func(t *testing.T) {
+	t.Run("freeze and unfreeze fail on untracked branch", func(t *testing.T) {
 		t.Parallel()
-		s := NewTestShellInProcess(t)
+		for _, cmd := range []string{"freeze", "unfreeze"} {
+			t.Run(cmd, func(t *testing.T) {
+				t.Parallel()
+				s := NewTestShellInProcess(t)
+				s.Git("checkout -b untracked").
+					WriteFile("file", "content").
+					Git("add file").
+					Git("commit -m 'untracked commit'")
 
-		// Create an untracked branch using git directly
-		s.Git("checkout -b untracked").
-			WriteFile("file", "content").
-			Git("add file").
-			Git("commit -m 'untracked commit'")
-
-		s.RunExpectError("freeze untracked").
-			OutputContains("not tracked by stackit")
-	})
-
-	t.Run("unfreeze fails on untracked branch", func(t *testing.T) {
-		t.Parallel()
-		s := NewTestShellInProcess(t)
-
-		// Create an untracked branch using git directly
-		s.Git("checkout -b untracked").
-			WriteFile("file", "content").
-			Git("add file").
-			Git("commit -m 'untracked commit'")
-
-		s.RunExpectError("unfreeze untracked").
-			OutputContains("not tracked by stackit")
+				s.RunExpectError(cmd+" untracked").
+					OutputContains("not tracked by stackit")
+			})
+		}
 	})
 
 	t.Run("frozen branch blocks rename", func(t *testing.T) {

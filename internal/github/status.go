@@ -38,6 +38,9 @@ const (
 	ReviewDecisionReviewRequired   = "REVIEW_REQUIRED"
 )
 
+// graphQLAliasRegex matches characters not valid in GraphQL alias identifiers
+var graphQLAliasRegex = regexp.MustCompile(`[^a-zA-Z0-9]`)
+
 // IsApproved returns true if the review decision indicates approval
 func (s *CheckStatus) IsApproved() bool {
 	return s.ReviewDecision == ReviewDecisionApproved
@@ -68,9 +71,8 @@ func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner git.Runner, owner
 	// Sanitize branch names for GraphQL aliases
 	aliasMap := make(map[string]string)
 	aliasToBranch := make(map[string]string)
-	re := regexp.MustCompile(`[^a-zA-Z0-9]`)
 	for _, name := range branchNames {
-		alias := "b_" + re.ReplaceAllString(name, "_")
+		alias := "b_" + graphQLAliasRegex.ReplaceAllString(name, "_")
 		// Ensure unique aliases if multiple branches map to same sanitized name
 		baseAlias := alias
 		counter := 1

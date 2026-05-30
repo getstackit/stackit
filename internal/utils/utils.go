@@ -26,6 +26,12 @@ var (
 	// BranchNameIgnoreRegex matches trailing slashes and dots that should be removed
 	BranchNameIgnoreRegex = regexp.MustCompile(`[/.]*$`)
 
+	// branchNameHyphenRegex matches consecutive hyphens for collapsing
+	branchNameHyphenRegex = regexp.MustCompile(`-+`)
+
+	// conventionalCommitPrefixRegex matches conventional commit prefixes like "feat:", "fix(scope):", etc.
+	conventionalCommitPrefixRegex = regexp.MustCompile(`^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?:\s*`)
+
 	// interactiveMode is accessed atomically to avoid data races
 	interactiveMode int32 = 1 // 1 = true, 0 = false
 )
@@ -39,8 +45,7 @@ func SanitizeBranchName(name string) string {
 	name = BranchNameReplaceRegex.ReplaceAllString(name, "-")
 
 	// Remove multiple consecutive hyphens
-	hyphenRegex := regexp.MustCompile(`-+`)
-	name = hyphenRegex.ReplaceAllString(name, "-")
+	name = branchNameHyphenRegex.ReplaceAllString(name, "-")
 
 	// Trim leading/trailing hyphens
 	name = strings.Trim(name, "-")
@@ -121,7 +126,7 @@ func GenerateBranchNameFromMessage(message string) string {
 	subject := strings.TrimSpace(lines[0])
 
 	// Remove common prefixes like "feat:", "fix:", etc. if present (with optional scope)
-	subject = regexp.MustCompile(`^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?:\s*`).ReplaceAllString(subject, "")
+	subject = conventionalCommitPrefixRegex.ReplaceAllString(subject, "")
 
 	// Truncate to a reasonable length for branch names (before sanitization)
 	// Aim for ~50 characters to leave room for username/date prefixes

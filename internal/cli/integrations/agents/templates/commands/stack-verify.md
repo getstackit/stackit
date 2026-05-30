@@ -10,9 +10,7 @@ argument-hint: [check-command]
 Run verification checks on all branches in the stack and report results.
 
 ## Context
-- Current branch: !`git branch --show-current`
-- Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive`
+- State (json — current branch, working tree, in-progress operation, full stack): !`stackit state --json`
 
 ## Arguments
 $ARGUMENTS

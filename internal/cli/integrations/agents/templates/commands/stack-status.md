@@ -8,25 +8,24 @@ allowed-tools: Bash(stackit:*), Bash(git:*)
 
 Show the current stack state, identify issues, and provide actionable recommendations.
 ## Context
-- Current branch: !`git branch --show-current`
-- Git status: !`git status --short`
-- Stack state (json — complete: structure, PR/CI status, and per-branch needs_restack/is_locked/is_frozen/scope): !`stackit log --json --no-interactive`
+- State (json — complete snapshot: current branch, working tree, in-progress operation, and the full stack with PR/CI status and per-branch needs_restack/is_locked/is_frozen/scope): !`stackit state --json`
 
 ## Task
 
 ### Step 1: Display Stack Overview
 
-Summarize from the JSON context:
-- Current position in the stack (the branch with `is_current: true`)
-- Parent/child relationships
-- Any branches that need attention
+Summarize from the `stackit state --json` context:
+- Current position (`current_branch`, or the `.stack.branches` entry with `is_current: true`)
+- Working tree (`working_tree`) and any in-progress `operation`
+- Parent/child relationships and any branches that need attention
 
 If the user wants the visual tree, run `stackit log --no-interactive` and show it.
 
 ### Step 2: Health Analysis
 
-Parse the stack JSON (a single `stackit log --json` carries everything — PR/CI
-status plus `needs_restack`/`is_locked`/`is_frozen`/`scope`), then highlight issues:
+Parse the state JSON — a single `stackit state --json` carries everything: the
+working tree, in-progress `operation`, and the full `stack` (PR/CI status plus
+`needs_restack`/`is_locked`/`is_frozen`/`scope` per branch). Highlight issues:
 
 **High Priority Issues (act now):**
 - CI failing on any branch

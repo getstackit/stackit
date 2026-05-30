@@ -9,9 +9,7 @@ allowed-tools: Bash(stackit:*), Bash(git:*), Read, Edit, Glob, Grep, AskUserQues
 Diagnose and fix stack problems, including build/lint/test failures.
 
 ## Context
-- Current branch: !`git branch --show-current`
-- Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive`
+- State (json — current branch, working tree, in-progress operation, full stack): !`stackit state --json`
 - Diagnostics: !`stackit doctor --no-interactive`
 
 ## Instructions

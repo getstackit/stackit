@@ -9,9 +9,8 @@ allowed-tools: Bash(stackit:*), Bash(git:*), Read, Glob, Grep
 Extract commits or file changes from the current branch to a new independent branch.
 
 ## Context
-- Current branch: !`git branch --show-current`
+- State (json — current branch, working tree, in-progress operation, full stack): !`stackit state --json`
 - Recent commits: !`git log --oneline -5`
-- Stack state: !`stackit log --no-interactive`
 
 ## Instructions
 

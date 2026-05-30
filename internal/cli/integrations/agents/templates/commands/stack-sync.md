@@ -7,8 +7,7 @@ allowed-tools: Bash(stackit:*), Bash(git:*), AskUserQuestion, Skill
 # Stack Sync
 
 ## Context
-- Current branch: !`git branch --show-current`
-- Stack state: !`stackit log --no-interactive`
+- State (json — current branch, working tree, in-progress operation, full stack): !`stackit state --json`
 
 ## Task
 

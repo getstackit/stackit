@@ -11,8 +11,7 @@ Sync with trunk and clean up branches that have landed.
 1. Inspect:
 
    ```bash
-   git status --short
-   stackit log --no-interactive
+   stackit state --json
    ```
 
 2. If there are uncommitted changes, stop and ask the user to commit (via

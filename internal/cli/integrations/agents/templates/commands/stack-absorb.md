@@ -9,9 +9,7 @@ allowed-tools: Bash(stackit:*), Bash(git:*), Read, Edit, Glob, Grep, AskUserQues
 Absorb staged changes into the correct commits, then intelligently fix any broken branches by drawing from the right sources.
 
 ## Context
-- Current branch: !`git branch --show-current`
-- Git status: !`git status --short`
-- Stack state: !`stackit log --no-interactive`
+- State (json — current branch, working tree, in-progress operation, full stack): !`stackit state --json`
 
 ## How Absorb Works
 

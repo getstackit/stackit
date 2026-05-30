@@ -211,34 +211,26 @@ func TestWorktreeBasicOperations(t *testing.T) {
 			Run("create dirty-stack -w -m 'dirty stack branch'")
 
 		worktreePath := sh.GetWorktreePath("dirty-stack")
-		uncommittedFile := worktreePath + "/uncommitted.txt"
-		if err := os.WriteFile(uncommittedFile, []byte("uncommitted"), 0644); err != nil {
-			t.Fatalf("Failed to write file: %v", err)
-		}
+		MakeWorktreeDirty(t, worktreePath)
 
 		sh.RunExpectError("worktree remove dirty-stack")
 
 		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-			t.Errorf("Dirty worktree should still exist")
+			t.Errorf("dirty worktree should still exist at %s", worktreePath)
 		}
-
-		sh.Run("worktree list").
-			OutputContains("dirty-stack")
+		sh.Run("worktree list").OutputContains("dirty-stack")
 	})
 
 	run("worktree remove force discards dirty worktree", func(t *testing.T, sh *TestShell) {
 		sh.Run("worktree create force-stack")
 
 		worktreePath := sh.GetWorktreePath("force-stack")
-		uncommittedFile := worktreePath + "/uncommitted.txt"
-		if err := os.WriteFile(uncommittedFile, []byte("uncommitted"), 0644); err != nil {
-			t.Fatalf("Failed to write file: %v", err)
-		}
+		MakeWorktreeDirty(t, worktreePath)
 
 		sh.Run("worktree remove force-stack --force")
 
 		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
-			t.Errorf("Worktree directory should be removed at %s", worktreePath)
+			t.Errorf("worktree directory should be removed at %s", worktreePath)
 		}
 	})
 }
@@ -343,72 +335,52 @@ func TestWorktreeSyncOperations(t *testing.T) {
 		})
 	}
 
-	run("sync from main updates worktree branches", func(t *testing.T, sh *TestShell) {
-		// Create a stack in worktree
-		sh.WriteFile("feature.txt", "feature").
-			Run("create feature -w -m 'feature branch'")
+	run("sync from main or worktree context restacks the stack", func(t *testing.T, sh *TestShell) {
+		for _, tt := range []struct {
+			name             string
+			syncFromWorktree bool
+		}{
+			{"sync from main repo", false},
+			{"sync from worktree context", true},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				sh := sh.WithT(t)
+				sh.ResetRepo()
 
-		worktreePath := sh.GetWorktreePath("feature")
-		shW := sh.InWorktree(worktreePath)
+				sh.WriteFile("feature.txt", "feature").
+					Run("create feature -w -m 'feature branch'")
+				worktreePath := sh.GetWorktreePath("feature")
+				shW := sh.InWorktree(worktreePath)
 
-		// Add child branch in worktree
-		shW.WriteFile("child.txt", "child").
-			Run("create feature-child -m 'child branch'")
+				shW.WriteFile("child.txt", "child").
+					Run("create feature-child -m 'child branch'")
 
-		// Advance main in main repo
-		sh.WriteFile("main-update.txt", "main update").
-			Git("add main-update.txt").
-			Git("commit -m 'Main advanced'").
-			Git("push origin main")
+				AdvanceMain(sh, "main-update.txt")
 
-		// Sync from main with full restack
-		sh.Run("sync --restack")
+				if tt.syncFromWorktree {
+					shW.Run("sync --restack")
+				} else {
+					sh.Run("sync --restack")
+				}
 
-		// Verify stack is restacked
-		sh.ExpectStackStructure(map[string]string{
-			"feature":       "main",
-			"feature-child": "feature",
-		})
+				sh.ExpectStackStructure(map[string]string{
+					"feature":       "main",
+					"feature-child": "feature",
+				})
 
-		// Verify worktree working directory is clean
-		shW.Git("status --porcelain")
-		if output := shW.Output(); output != "" {
-			t.Errorf("Worktree should be clean after sync, but has:\n%s", output)
+				if !tt.syncFromWorktree {
+					// Verify worktree working directory is clean after sync from main.
+					shW.Git("status --porcelain")
+					if output := shW.Output(); output != "" {
+						t.Errorf("worktree should be clean after sync, but has:\n%s", output)
+					}
+					shW.Git("ls-files main-update.txt")
+					if shW.Output() == "" {
+						t.Error("main-update.txt should exist in worktree after sync")
+					}
+				}
+			})
 		}
-
-		// Verify new file from main exists in worktree
-		shW.Git("ls-files main-update.txt")
-		if shW.Output() == "" {
-			t.Error("main-update.txt should exist in worktree after sync")
-		}
-	})
-
-	run("sync from worktree updates main repo branches", func(_ *testing.T, sh *TestShell) {
-		// Create a stack in worktree
-		sh.WriteFile("feature.txt", "feature").
-			Run("create feature -w -m 'feature branch'")
-
-		worktreePath := sh.GetWorktreePath("feature")
-		shW := sh.InWorktree(worktreePath)
-
-		// Add child in worktree
-		shW.WriteFile("child.txt", "child").
-			Run("create feature-child -m 'child branch'")
-
-		// Advance main in main repo
-		sh.WriteFile("main-update.txt", "main update").
-			Git("add main-update.txt").
-			Git("commit -m 'Main advanced'").
-			Git("push origin main")
-
-		// Sync from worktree with full restack
-		shW.Run("sync --restack")
-
-		// Verify stack is restacked
-		sh.ExpectStackStructure(map[string]string{
-			"feature":       "main",
-			"feature-child": "feature",
-		})
 	})
 
 	run("sync cleans orphaned worktrees when branches deleted", func(t *testing.T, sh *TestShell) {
@@ -419,13 +391,7 @@ func TestWorktreeSyncOperations(t *testing.T) {
 		worktreePath := sh.GetWorktreePath("feature")
 		shW := sh.InWorktree(worktreePath)
 
-		// Simulate the branch being merged (fast-forward main to include it)
-		sh.Git("checkout main").
-			Git("merge feature --ff-only").
-			Git("push origin main")
-
-		// Mark PR as merged
-		sh.SetPrState("feature", "MERGED")
+		SimulateMerge(sh, "feature")
 
 		// Checkout main in worktree first (so feature isn't the active branch)
 		// Note: In a real scenario, the worktree would need to be removed manually first
@@ -456,10 +422,7 @@ func TestWorktreeSyncOperations(t *testing.T) {
 		worktreePath := sh.GetWorktreePath("feature")
 		shW := sh.InWorktree(worktreePath)
 
-		sh.Git("checkout main").
-			Git("merge feature --ff-only").
-			Git("push origin main")
-		sh.SetPrState("feature", "MERGED")
+		SimulateMerge(sh, "feature")
 
 		shW.Git("checkout --detach HEAD")
 		shW.Run("sync")
@@ -737,25 +700,18 @@ func TestWorktreeEdgeCases(t *testing.T) {
 		worktreePath := sh.GetWorktreePath("feature")
 		shW := sh.InWorktree(worktreePath)
 
-		// Create child
 		shW.WriteFile("child.txt", "child").Run("create child -m 'child branch'")
 
-		// Make uncommitted change in worktree (on child branch)
-		filePath := filepath.Join(worktreePath, "uncommitted.txt")
-		err := os.WriteFile(filePath, []byte("uncommitted"), 0644)
-		if err != nil {
-			t.Fatalf("Failed to write file: %v", err)
-		}
+		MakeWorktreeDirty(t, worktreePath)
 
-		// Modify parent and trigger restack from main
 		sh.Checkout("feature").
 			WriteFile("feature-update.txt", "update").
 			Run("modify -n").
 			Checkout("main")
 
-		// The uncommitted file should still be in the worktree
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			t.Error("Uncommitted file should still exist in worktree after restack")
+		dirtyFile := filepath.Join(worktreePath, "uncommitted.txt")
+		if _, err := os.Stat(dirtyFile); os.IsNotExist(err) {
+			t.Error("uncommitted file should still exist in worktree after restack")
 		}
 	})
 
@@ -766,11 +722,7 @@ func TestWorktreeEdgeCases(t *testing.T) {
 		sh.WriteFile("stack2.txt", "stack2").
 			Run("create stack2 -w -m 'stack 2'")
 
-		// Advance main
-		sh.WriteFile("main-update.txt", "update").
-			Git("add main-update.txt").
-			Git("commit -m 'Main advanced'").
-			Git("push origin main")
+		AdvanceMain(sh, "main-update.txt")
 
 		// Sync should update both stacks
 		sh.Run("sync --restack")
@@ -790,22 +742,6 @@ func TestWorktreeEdgeCases(t *testing.T) {
 		shW2.Git("ls-files main-update.txt")
 		if shW2.Output() == "" {
 			t.Error("stack2 worktree should have main-update.txt")
-		}
-	})
-
-	run("worktree uses default stacks directory", func(t *testing.T, sh *TestShell) {
-		// Create worktree
-		sh.WriteFile("feature.txt", "feature").
-			Run("create feature -w -m 'feature branch'")
-
-		// Worktree should be created (verify via list)
-		sh.Run("worktree list").
-			OutputContains("feature")
-
-		// Worktree path should exist
-		worktreePath := sh.GetWorktreePath("feature")
-		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-			t.Errorf("Worktree directory should exist at %s", worktreePath)
 		}
 	})
 
@@ -1007,11 +943,7 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 		shA.WriteFile("a-grandchild.txt", "a-gc").Run("create a-grandchild -m 'a grandchild'")
 		shB.WriteFile("b-grandchild.txt", "b-gc").Run("create b-grandchild -m 'b grandchild'")
 
-		// Advance main
-		sh.WriteFile("main-update.txt", "main").
-			Git("add main-update.txt").
-			Git("commit -m 'Main advanced'").
-			Git("push origin main")
+		AdvanceMain(sh, "main-update.txt")
 
 		// Sync from main with full restack
 		sh.Run("sync --restack")
@@ -1048,11 +980,7 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 		shMerged := sh.InWorktree(wtMerged)
 		shActive := sh.InWorktree(wtActive)
 
-		// Simulate merged stack being merged
-		sh.Git("checkout main").
-			Git("merge to-be-merged --ff-only").
-			Git("push origin main")
-		sh.SetPrState("to-be-merged", "MERGED")
+		SimulateMerge(sh, "to-be-merged")
 
 		// Detach head in merged worktree so the branch can be deleted
 		shMerged.Git("checkout --detach HEAD")
@@ -1128,11 +1056,8 @@ func TestWorktreeErrorHandling(t *testing.T) {
 		})
 	}
 
-	run("worktree open with non-existent stack fails gracefully", func(_ *testing.T, sh *TestShell) {
+	run("worktree open and remove with non-existent stack fail gracefully", func(_ *testing.T, sh *TestShell) {
 		sh.RunExpectError("worktree open nonexistent")
-	})
-
-	run("worktree remove with non-existent stack fails gracefully", func(_ *testing.T, sh *TestShell) {
 		sh.RunExpectError("worktree remove nonexistent")
 	})
 
@@ -1211,51 +1136,25 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 		sh.HasBranches("main", "feature", "child")
 	})
 
-	run("worktree prune cleans up missing directories", func(t *testing.T, sh *TestShell) {
-		// Create empty anchored worktree.
+	run("worktree prune dry-run then actual prune clean up missing directories", func(t *testing.T, sh *TestShell) {
 		sh.Run("worktree create test-wt")
-
-		sh.HasBranches("main")
-
 		worktreePath := sh.GetWorktreePath("test-wt")
 
-		// Manually delete the worktree directory (simulating external deletion)
 		if err := os.RemoveAll(worktreePath); err != nil {
-			t.Fatalf("Failed to remove worktree directory: %v", err)
+			t.Fatalf("failed to remove worktree directory: %v", err)
 		}
 
-		// Worktree list should show missing worktree
-		sh.Run("worktree list").
-			OutputContains("missing")
+		sh.Run("worktree list").OutputContains("missing")
 
-		// Prune should clean up the missing worktree
-		sh.Run("worktree prune")
-
-		// Worktree list should be empty
-		sh.Run("worktree list").
-			OutputContains("No managed worktrees")
-
-		// Anchor branch should be deleted
-		sh.HasBranches("main")
-	})
-
-	run("worktree prune dry-run shows what would be cleaned", func(t *testing.T, sh *TestShell) {
-		// Create empty anchored worktree.
-		sh.Run("worktree create test-wt")
-
-		worktreePath := sh.GetWorktreePath("test-wt")
-
-		// Manually delete the worktree directory
-		if err := os.RemoveAll(worktreePath); err != nil {
-			t.Fatalf("Failed to remove worktree directory: %v", err)
-		}
-
-		// Prune with dry-run should show what would be cleaned
+		// Dry-run shows what would be pruned but makes no changes.
 		sh.Run("worktree prune --dry-run").
 			OutputContains("Would prune").
 			OutputContains("test-wt")
+		sh.HasBranches("main") // anchor still exists after dry-run
 
-		// But nothing should actually be deleted
+		// Actual prune removes the missing worktree.
+		sh.Run("worktree prune")
+		sh.Run("worktree list").OutputContains("No managed worktrees")
 		sh.HasBranches("main")
 	})
 

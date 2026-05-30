@@ -31,12 +31,9 @@ func TestWorktreeWorkingDirAfterRestack(t *testing.T) {
 		shW := sh.InWorktree(worktreePath)
 		shW.OnBranch("feature")
 
-		// Advance main with a change to a file that the worktree will see after restack
+		// Advance main with a change that the worktree will see after restack
 		sh.Log("Advancing main with new file...")
-		sh.WriteFile("new-from-main.txt", "content from main").
-			Git("add new-from-main.txt").
-			Git("commit -m 'Add new file from main'").
-			Git("push origin main")
+		AdvanceMain(sh, "new-from-main.txt")
 
 		// Run sync from main repo - this will restack feature onto new main
 		sh.Log("Running sync from main repo...")
@@ -126,13 +123,7 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 		// === Simulate: Stack A gets merged on GitHub ===
 		sh.Log("Simulating Stack A merge on GitHub...")
 
-		// Fast-forward main to include stackA (simulating GitHub squash/merge)
-		sh.Git("checkout main").
-			Git("merge stackA --ff-only").
-			Git("push origin main")
-
-		// Mark stackA PR as merged in metadata
-		sh.SetPrState("stackA", "MERGED")
+		SimulateMerge(sh, "stackA")
 
 		// === Action: Run sync from main repo ===
 		sh.Log("Running sync from main repo...")
@@ -190,10 +181,7 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 
 		// Advance main in the main repo
 		sh.Log("Advancing main...")
-		sh.WriteFile("main-update.txt", "main change").
-			Git("add main-update.txt").
-			Git("commit -m 'Main advanced'").
-			Git("push origin main")
+		AdvanceMain(sh, "main-update.txt")
 
 		// Sync from main - should restack entire worktree stack
 		sh.Log("Running sync from main repo...")
@@ -230,10 +218,7 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 
 		// Advance main in the main repo
 		sh.Log("Advancing main...")
-		sh.WriteFile("main-update.txt", "main change").
-			Git("add main-update.txt").
-			Git("commit -m 'Main advanced'").
-			Git("push origin main")
+		AdvanceMain(sh, "main-update.txt")
 
 		// Sync from the worktree context with full restack
 		sh.Log("Running sync from worktree...")
@@ -285,12 +270,7 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 
 		// Simulate A getting merged on GitHub
 		sh.Log("Simulating branchA merge on GitHub...")
-		sh.Git("checkout main").
-			Git("merge branchA --ff-only").
-			Git("push origin main")
-
-		// Mark branchA PR as merged
-		sh.SetPrState("branchA", "MERGED")
+		SimulateMerge(sh, "branchA")
 
 		// Run sync from main repo
 		sh.Log("Running sync from main repo...")
@@ -369,10 +349,7 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 
 		// Advance main
 		sh.Log("Advancing main...")
-		sh.WriteFile("main-update.txt", "main change").
-			Git("add main-update.txt").
-			Git("commit -m 'Main advanced'").
-			Git("push origin main")
+		AdvanceMain(sh, "main-update.txt")
 
 		// Run sync from main repo
 		sh.Log("Running sync from main repo...")
@@ -441,12 +418,7 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 
 		// Simulate A getting merged on GitHub
 		sh.Log("Simulating branchA merge on GitHub...")
-		sh.Git("checkout main").
-			Git("merge branchA --ff-only").
-			Git("push origin main")
-
-		// Mark branchA PR as merged
-		sh.SetPrState("branchA", "MERGED")
+		SimulateMerge(sh, "branchA")
 
 		// Run sync from main repo
 		sh.Log("Running sync from main repo...")

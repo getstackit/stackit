@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -337,8 +338,32 @@ func (e *engineImpl) validateSingleSpec(
 	rebasedByName *sync.Map,
 	rebasedBySHA *sync.Map,
 ) validationResult {
-	// Create temporary worktree for this validation
-	// Use WorktreePruneSkip since ValidateRebasesParallel already prunes once before parallel execution
+	// Resolve NewParent to handle rebased parents: try branch name first, then SHA lookup.
+	resolvedParent := spec.NewParent
+	if val, ok := rebasedByName.Load(spec.NewParent); ok {
+		if str, ok := val.(string); ok {
+			resolvedParent = str
+		}
+	} else if val, ok := rebasedBySHA.Load(spec.NewParent); ok {
+		if str, ok := val.(string); ok {
+			resolvedParent = str
+		}
+	}
+
+	// Fast path: skip worktree creation for single-commit branches where the
+	// parent and branch changes touch disjoint file sets (conflict impossible).
+	if newSHA, ok := e.tryConflictFreeReplay(ctx, spec, resolvedParent); ok {
+		oldSHA, _ := e.git.GetRevision(spec.Branch)
+		return validationResult{
+			spec:    spec,
+			success: true,
+			newSHA:  newSHA,
+			oldSHA:  oldSHA,
+		}
+	}
+
+	// Slow path: dry-run the rebase inside a temporary worktree.
+	// Use WorktreePruneSkip since ValidateRebasesParallel already prunes once before parallel execution.
 	worktreePath, cleanup, err := e.CreateTemporaryWorktreeWithOptions(ctx, "HEAD", "stackit-validate-*", WorktreeCheckoutFull, WorktreePruneSkip)
 	if err != nil {
 		return validationResult{
@@ -352,33 +377,16 @@ func (e *engineImpl) validateSingleSpec(
 
 	wtGit := git.NewRunnerWithPath(worktreePath, nil)
 
-	// Resolve NewParent to handle rebased parents
-	newParent := spec.NewParent
-
-	// Check if NewParent refers to a branch we already rebased
-	// Try branch name first, then SHA lookup
-	if val, ok := rebasedByName.Load(spec.NewParent); ok {
-		if str, ok := val.(string); ok {
-			newParent = str
-		}
-	} else if val, ok := rebasedBySHA.Load(spec.NewParent); ok {
-		if str, ok := val.(string); ok {
-			newParent = str
-		}
-	}
-
-	// Get the branch's current SHA before rebasing (to track old SHA -> new SHA mapping)
+	// Get the branch's current SHA before rebasing (to track old SHA -> new SHA mapping).
 	oldBranchSHA, err := wtGit.GetRevision(spec.Branch)
 	if err != nil {
-		// Branch may not exist - this is not fatal, just means we can't track SHA mapping
-		// Log for debugging but continue validation
+		// Branch may not exist — not fatal, just means we can't track the SHA mapping.
 		oldBranchSHA = ""
 	}
 
 	// Perform dry-run rebase
-	rebaseResult, newSHA, conflictFiles, err := dryRunRebase(ctx, wtGit, spec.Branch, newParent, spec.OldUpstream)
+	rebaseResult, newSHA, conflictFiles, err := dryRunRebase(ctx, wtGit, spec.Branch, resolvedParent, spec.OldUpstream)
 	if err != nil || rebaseResult.Result == git.RebaseConflict {
-		// Build helpful error message with branch name
 		errorMsg := fmt.Sprintf("conflict rebasing %s onto %s", spec.Branch, spec.NewParent)
 		errorType := ValidationErrorConflict
 		if err != nil {
@@ -386,7 +394,6 @@ func (e *engineImpl) validateSingleSpec(
 			errorType = ValidationErrorSystem
 		}
 
-		// Abort the in-progress rebase if any
 		if wtGit.IsRebaseInProgress(ctx) {
 			_ = wtGit.RebaseAbort(ctx)
 		}
@@ -407,4 +414,105 @@ func (e *engineImpl) validateSingleSpec(
 		oldSHA:         oldBranchSHA,
 		rerereResolved: rebaseResult.RerereResolvedCount,
 	}
+}
+
+// tryConflictFreeReplay tries to produce the rebased SHA without a worktree for
+// single-commit branches where the parent's new changes and the branch's changes
+// touch completely disjoint file sets (a content conflict is therefore impossible).
+//
+// Returns (newSHA, true) on success; returns ("", false) to signal the caller to
+// fall back to the full worktree path.
+func (e *engineImpl) tryConflictFreeReplay(
+	ctx context.Context,
+	spec RebaseSpec,
+	resolvedParent string,
+) (string, bool) {
+	// Only handle single-commit branches — multi-commit replay requires iterating
+	// each commit individually and is deferred to the worktree path.
+	commits, err := e.git.GetCommitRangeSHAs(ctx, spec.OldUpstream, spec.Branch)
+	if err != nil || len(commits) != 1 {
+		return "", false
+	}
+
+	// Get the files changed by the parent's new commits (what we're rebasing onto).
+	parentFiles, err := e.git.GetChangedFiles(ctx, spec.OldUpstream, resolvedParent)
+	if err != nil || len(parentFiles) == 0 {
+		return "", false
+	}
+
+	// Get the files changed by our branch.
+	branchFiles, err := e.git.GetChangedFiles(ctx, spec.OldUpstream, spec.Branch)
+	if err != nil {
+		return "", false
+	}
+
+	// If any file appears in both change sets, a conflict is possible.
+	if rebaseFileOverlap(parentFiles, branchFiles) {
+		return "", false
+	}
+
+	// File sets are disjoint — compute the rebased tree via merge-tree.
+	// git merge-tree --write-tree <base> <ours> <theirs>
+	// OURS  = resolvedParent (the new base we're rebasing onto)
+	// THEIRS = spec.Branch  (carries our changes on top of OldUpstream)
+	treeSHARaw, err := e.git.RunGitCommandWithContext(ctx,
+		"merge-tree", "--write-tree", spec.OldUpstream, resolvedParent, spec.Branch)
+	if err != nil {
+		return "", false
+	}
+	// merge-tree --write-tree may emit additional lines (conflict markers) after
+	// the tree SHA on a conflict; a non-zero exit covers that, but trim just in case.
+	treeSHA := strings.TrimSpace(strings.SplitN(treeSHARaw, "\n", 2)[0])
+	if treeSHA == "" {
+		return "", false
+	}
+
+	// Preserve the original commit's author identity and message.
+	commitSHA := commits[0] // single commit, newest-first list
+	authorName, err := e.git.GetCommitLog(commitSHA, "%an")
+	if err != nil {
+		return "", false
+	}
+	authorEmail, err := e.git.GetCommitLog(commitSHA, "%ae")
+	if err != nil {
+		return "", false
+	}
+	authorDate, err := e.git.GetCommitLog(commitSHA, "%aI")
+	if err != nil {
+		return "", false
+	}
+	msg, err := e.git.GetCommitLog(commitSHA, "%B")
+	if err != nil {
+		return "", false
+	}
+
+	env := []string{
+		"GIT_AUTHOR_NAME=" + strings.TrimSpace(authorName),
+		"GIT_AUTHOR_EMAIL=" + strings.TrimSpace(authorEmail),
+		"GIT_AUTHOR_DATE=" + strings.TrimSpace(authorDate),
+	}
+
+	newSHARaw, err := e.git.RunGitCommandWithEnv(ctx, env,
+		"commit-tree", treeSHA, "-p", resolvedParent, "-m", strings.TrimSpace(msg))
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(newSHARaw), true
+}
+
+// rebaseFileOverlap reports whether two sorted file-path slices share any element.
+// Both slices must be sorted (GetChangedFiles guarantees this).
+func rebaseFileOverlap(a, b []string) bool {
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		switch {
+		case a[i] < b[j]:
+			i++
+		case a[i] > b[j]:
+			j++
+		default:
+			return true
+		}
+	}
+	return false
 }

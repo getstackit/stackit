@@ -55,7 +55,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	allNames = append(allNames, branchName)
 
 	// Delete all metadata refs in one batch and rebuild the engine once.
-	if err := eng.BatchUntrackBranches(ctx.Context, allNames); err != nil {
+	if err := eng.UntrackBranches(ctx.Context, allNames); err != nil {
 		return fmt.Errorf("failed to untrack branches: %w", err)
 	}
 

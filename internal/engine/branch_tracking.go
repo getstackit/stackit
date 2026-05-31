@@ -66,25 +66,22 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 	return e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(parentBranchName), DivergenceRecompute)
 }
 
-// UntrackBranch stops tracking a branch by deleting its metadata
-func (e *engineImpl) UntrackBranch(ctx context.Context, branchName string) error {
-	// Delete metadata
+// untrackBranch stops tracking a single branch by deleting its metadata and rebuilding the cache.
+func (e *engineImpl) untrackBranch(ctx context.Context, branchName string) error {
 	if err := e.git.DeleteMetadata(ctx, branchName); err != nil {
 		return fmt.Errorf("failed to delete metadata ref: %w", err)
 	}
-
-	// Rebuild cache
 	return e.rebuild()
 }
 
-// BatchUntrackBranches untracks multiple branches with a single metadata deletion
+// UntrackBranches removes tracking for multiple branches with a single metadata deletion
 // and a single engine rebuild, rather than one rebuild per branch.
-func (e *engineImpl) BatchUntrackBranches(ctx context.Context, branchNames []string) error {
+func (e *engineImpl) UntrackBranches(ctx context.Context, branchNames []string) error {
 	if len(branchNames) == 0 {
 		return nil
 	}
 	if len(branchNames) == 1 {
-		return e.UntrackBranch(ctx, branchNames[0])
+		return e.untrackBranch(ctx, branchNames[0])
 	}
 
 	refNames := make([]string, len(branchNames))

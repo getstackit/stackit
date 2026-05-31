@@ -134,10 +134,9 @@ type BranchReader interface {
 // BranchTracking handles branch tracking operations
 type BranchTracking interface {
 	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
-	UntrackBranch(ctx context.Context, branchName string) error
-	// BatchUntrackBranches untracks multiple branches in a single operation,
+	// UntrackBranches removes tracking for multiple branches in a single operation,
 	// triggering only one engine rebuild instead of one per branch.
-	BatchUntrackBranches(ctx context.Context, branchNames []string) error
+	UntrackBranches(ctx context.Context, branchNames []string) error
 	SetParent(ctx context.Context, branch Branch, parentBranch Branch, mode DivergenceMode) error
 	// ReparentBranch changes a branch's parent while automatically preserving
 	// its divergence point. Preferred over SetParent for existing branches.

@@ -15,7 +15,7 @@ import (
 func TestPushBranchWithExplicitForceWithLease(t *testing.T) {
 	t.Parallel()
 
-	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	remoteScene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	remotePath, err := remoteScene.Repo.CreateBareRemote("origin")
 	require.NoError(t, err)
 	require.NoError(t, remoteScene.Repo.PushBranch("origin", "main"))

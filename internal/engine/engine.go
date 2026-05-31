@@ -37,6 +37,7 @@ type PRManager interface {
 type SyncManager interface {
 	// Sync operations
 	PullTrunk(ctx context.Context) (PullResult, error)
+	UpdateTrunkFromRemote(ctx context.Context) (PullResult, error)
 	ResetTrunkToRemote(ctx context.Context) error
 	PlanRestack(ctx context.Context, branches Branches) (*RestackPlan, error)
 	RestackBranches(ctx context.Context, branches Branches) (RestackBatchResult, error)

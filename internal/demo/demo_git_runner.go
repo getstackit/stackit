@@ -208,6 +208,10 @@ func (d *demoGitRunner) PullBranch(_ context.Context, _, _ string) (git.PullResu
 	return git.PullDone, nil
 }
 
+func (d *demoGitRunner) UpdateBranchFromRemote(_ context.Context, _, _ string) (git.PullResult, error) {
+	return git.PullDone, nil
+}
+
 func (d *demoGitRunner) PushBranch(_ context.Context, _, _ string, _ git.PushOptions) error {
 	return nil
 }

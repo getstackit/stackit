@@ -38,6 +38,7 @@ type RemoteOperations interface {
 	FindRemoteBranch(ctx context.Context, remote string) (string, error)
 	PushBranch(ctx context.Context, branchName, remote string, opts PushOptions) error
 	PullBranch(ctx context.Context, remote, branchName string) (PullResult, error)
+	UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error)
 	Fetch(ctx context.Context, remote, branch string) error
 	FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error
 	PushMetadataRefs(ctx context.Context, branches []string) error

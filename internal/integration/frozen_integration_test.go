@@ -105,7 +105,7 @@ func TestFrozenIntegration(t *testing.T) {
 					Git("add file").
 					Git("commit -m 'untracked commit'")
 
-				s.RunExpectError(cmd+" untracked").
+				s.RunExpectError(cmd + " untracked").
 					OutputContains("not tracked by stackit")
 			})
 		}

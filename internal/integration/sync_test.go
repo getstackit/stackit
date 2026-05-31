@@ -341,7 +341,6 @@ func TestSyncStaleDraftCleanup(t *testing.T) {
 	require.Equal(t, "main", eng.GetBranch("b").GetParent().GetName())
 }
 
-
 func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	t.Parallel()
 	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
@@ -406,7 +405,6 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	sh.ExpectBranchFixed("branch-b").
 		ExpectBranchFixed("branch-c")
 }
-
 
 // TestSyncDoesNotLeaveIndexState verifies that after sync cleans up merged branches
 // and restacks remaining branches, the working directory is left in a clean state

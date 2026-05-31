@@ -330,33 +330,15 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		}
 	}
 
-	// Fetch and apply remote metadata for all branches in the stack
-	// Configure refspec so future git fetch commands also fetch metadata
-	if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
-		out.Debug("Failed to configure metadata refspec: %v", err)
-	}
-	if err := eng.LoadRemoteMetadataCache(); err != nil {
-		out.Debug("Failed to load remote metadata cache: %v", err)
-	} else {
-		for _, branchName := range branchesToSync {
-			if branchName == eng.Trunk().GetName() {
-				continue
-			}
-			if err := eng.ApplyRemoteMetadataIfExists(branchName); err != nil {
-				out.Debug("Failed to apply metadata for %s: %v", branchName, err)
-			}
-		}
+	// FetchRemote above already brought metadata refs local; apply any matching
+	// remote metadata to the branches we synced.
+	if err := eng.ApplyRemoteMetadataForBranches(ctx.Context, branchesToSync); err != nil {
+		out.Debug("Failed to apply remote metadata: %v", err)
 	}
 
 	// Checkout target branch
 	if err := eng.CheckoutBranch(gctx, eng.GetBranch(targetBranch)); err != nil {
 		return fmt.Errorf("failed to checkout target branch %s: %w", targetBranch, err)
-	}
-
-	// `get` may have created local branches via raw git fetch above; rebuild
-	// so engine's branch list includes those new branches before we proceed.
-	if err := eng.Rebuild(""); err != nil {
-		return fmt.Errorf("failed to refresh engine: %w", err)
 	}
 
 	// Restack if requested

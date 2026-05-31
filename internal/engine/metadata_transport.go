@@ -13,6 +13,22 @@ func (e *engineImpl) TestRemoteMetadataCompatibility(ctx context.Context) error 
 	return e.git.TestRemoteRefCompatibility(ctx)
 }
 
+// PrepareRemoteMetadataPush verifies that the remote accepts metadata refs and
+// records that support locally. Fetch-refspec setup is best-effort because
+// metadata pushes can still succeed when local fetch configuration cannot be
+// updated.
+func (e *engineImpl) PrepareRemoteMetadataPush(ctx context.Context) error {
+	if e.IsRemoteSyncEnabled() {
+		return nil
+	}
+	if err := e.TestRemoteMetadataCompatibility(ctx); err != nil {
+		return err
+	}
+	e.SetRemoteSyncEnabled(true)
+	_ = e.ConfigureRemoteMetadataSync(ctx)
+	return nil
+}
+
 // PushMetadataForBranches pushes metadata refs for the given branch names to
 // origin. A no-op when the list is empty.
 func (e *engineImpl) PushMetadataForBranches(ctx context.Context, branchNames []string) error {

@@ -89,8 +89,11 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	if err := eng.ReparentBranch(gctx, plan.sourceBranch, plan.ontoBranch); err != nil {
 		return fmt.Errorf("failed to set parent: %w", err)
 	}
-
-	updateStackIDsAfterMove(ctx, plan, plan.source, plan.sourceBranch)
+	if eng.IsTrunk(plan.ontoBranch) {
+		if _, err := eng.AssignBranchesToNewStack(gctx, plan.sourceBranch, plan.descendants); err != nil {
+			ctx.Output.Warn("Failed to update stack IDs: %v", err)
+		}
+	}
 
 	if err := restackAndMark(ctx, plan, plan.sourceBranch); err != nil {
 		return err
@@ -300,42 +303,6 @@ func maybeRename(ctx *app.Context, h Handler, opts Options, plan *movePlan) (boo
 	}
 
 	return false, source, sourceBranch
-}
-
-func updateStackIDsAfterMove(ctx *app.Context, plan *movePlan, source string, sourceBranch engine.Branch) {
-	eng := ctx.Engine
-	out := ctx.Output
-
-	if plan.oldParentName == plan.onto {
-		return
-	}
-
-	oldStackID := eng.GetStackID(sourceBranch)
-	if oldStackID == "" {
-		return
-	}
-
-	newStackID := eng.GetStackID(plan.ontoBranch)
-
-	var targetStackID string
-	switch {
-	case eng.IsTrunk(plan.ontoBranch):
-		targetStackID = eng.GenerateStackID(source)
-		if err := eng.CreateStackRef(targetStackID, nil); err != nil {
-			out.Warn("Failed to create stack ref: %v", err)
-		}
-	case newStackID != "" && newStackID != oldStackID:
-		targetStackID = newStackID
-	}
-
-	if targetStackID == "" {
-		return
-	}
-
-	if err := eng.SetStackID(ctx.Context, plan.descendants, targetStackID); err != nil {
-		out.Warn("Failed to update stack IDs: %v", err)
-	}
-	out.Info("Stack membership updated for %s", source)
 }
 
 func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch) error {

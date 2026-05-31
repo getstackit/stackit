@@ -633,16 +633,8 @@ func pushMetadataRefs(ctx *app.Context, branches engine.Branches) error {
 		return fmt.Errorf("failed to update metadata: %w", err)
 	}
 
-	// Check if remote sync is enabled; if not, run compatibility test first
-	if !rm.IsRemoteSyncEnabled() {
-		if err := rm.TestRemoteMetadataCompatibility(ctx.Context); err != nil {
-			return fmt.Errorf("remote does not support metadata refs (GitHub compatibility check failed): %w", err)
-		}
-		rm.SetRemoteSyncEnabled(true)
-		// Configure refspec so future git fetch commands also fetch metadata
-		if err := rm.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
-			ctx.Output.Debug("Failed to configure metadata refspec: %v", err)
-		}
+	if err := rm.PrepareRemoteMetadataPush(ctx.Context); err != nil {
+		return fmt.Errorf("remote does not support metadata refs (GitHub compatibility check failed): %w", err)
 	}
 
 	// Push metadata refs

@@ -588,6 +588,29 @@ func TestRebuild(t *testing.T) {
 	})
 }
 
+func TestCreateBranchUpdatesBranchInventory(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranchQuiet("branch3").
+		Commit("branch3 change").
+		CheckoutQuiet("main")
+
+	require.NoError(t, s.Engine.CreateBranch(context.Background(), "branch2", "main"))
+
+	allBranches := s.Engine.AllBranches()
+	branchNames := make([]string, len(allBranches))
+	for i, b := range allBranches {
+		branchNames[i] = b.GetName()
+	}
+	require.Contains(t, branchNames, "branch2")
+	require.NotContains(t, branchNames, "branch3")
+
+	require.False(t, s.Engine.GetBranch("branch2").IsTracked())
+	require.NoError(t, s.Engine.TrackBranch(context.Background(), "branch2", "main"))
+	require.Equal(t, "main", s.Engine.GetBranch("branch2").GetParentOrTrunk())
+}
+
 func TestIsBranchTracked(t *testing.T) {
 	t.Parallel()
 	t.Run("returns true for tracked branch", func(t *testing.T) {

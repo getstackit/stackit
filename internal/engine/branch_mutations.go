@@ -11,7 +11,14 @@ import (
 
 // CreateBranch creates a new branch at the given start point
 func (e *engineImpl) CreateBranch(ctx context.Context, branchName string, startPoint string) error {
-	return e.git.CreateBranch(ctx, branchName, startPoint)
+	if err := e.git.CreateBranch(ctx, branchName, startPoint); err != nil {
+		return err
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.addKnownBranchLocked(branchName)
+	return nil
 }
 
 // ResetHard performs a hard reset to the given revision
@@ -345,12 +352,20 @@ func (e *engineImpl) CreateAndCheckoutBranch(ctx context.Context, branch Branch)
 	defer e.mu.Unlock()
 
 	e.currentBranch = branchName
-	// Add to branches list if not already there
-	if !slices.Contains(e.state.branches, branchName) {
-		e.state.setBranches(append(e.state.branches, branchName))
-	}
+	e.addKnownBranchLocked(branchName)
 
 	return nil
+}
+
+// addKnownBranchLocked records a branch ref that was created through the
+// engine. Callers must hold e.mu.
+func (e *engineImpl) addKnownBranchLocked(branchName string) {
+	if branchName == "" || slices.Contains(e.state.branches, branchName) {
+		return
+	}
+	branches := append(slices.Clone(e.state.branches), branchName)
+	slices.Sort(branches)
+	e.state.setBranches(branches)
 }
 
 // RenameBranch renames a branch and its metadata

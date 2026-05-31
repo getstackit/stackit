@@ -181,6 +181,9 @@ type BranchTracking interface {
 	EnsureStackID(ctx context.Context, branch Branch) (string, error)
 	// SetStackID sets the stack ID on multiple branches atomically in a single transaction.
 	SetStackID(ctx context.Context, branches Branches, stackID string) error
+	// AssignBranchesToNewStack creates a new stack metadata ref and assigns its
+	// ID to the provided branches atomically.
+	AssignBranchesToNewStack(ctx context.Context, root Branch, branches Branches) (string, error)
 	// CreateStackRef creates a new stack ref with the given metadata.
 	CreateStackRef(stackID string, meta *git.StackMeta) error
 	// GetStackMeta returns the stack metadata for a stack ID.

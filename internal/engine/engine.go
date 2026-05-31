@@ -78,6 +78,7 @@ type RemoteMetadataManager interface {
 	BatchSetLastModifiedBy(branchNames []string) error
 	LoadRemoteMetadataCache() error
 	ApplyRemoteMetadataIfExists(branchName string) error
+	ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
 	GetRemoteMetadataCache() RemoteMetadataView
 	ComputeMetadataDiff(branch string) (*MetadataDiff, error)
 	ComputeAllMetadataDiffs() ([]*MetadataDiff, error)
@@ -93,6 +94,9 @@ type RemoteMetadataManager interface {
 	// accepts the metadata-ref namespace. Adapter code should call this instead
 	// of reaching to the git runner directly.
 	TestRemoteMetadataCompatibility(ctx context.Context) error
+	// PrepareRemoteMetadataPush verifies remote metadata refs are supported and
+	// enables local metadata sync state before pushing metadata refs.
+	PrepareRemoteMetadataPush(ctx context.Context) error
 	// PushMetadataForBranches pushes the metadata refs for the given branch
 	// names to origin.
 	PushMetadataForBranches(ctx context.Context, branchNames []string) error

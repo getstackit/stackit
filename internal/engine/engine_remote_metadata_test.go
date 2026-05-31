@@ -169,6 +169,28 @@ func TestRemoteMetadataSync(t *testing.T) {
 		require.Empty(t, diffs, "expected no diffs for non-existent local branches")
 	})
 
+	t.Run("applies remote metadata for requested branches", func(t *testing.T) {
+		t.Parallel()
+		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		eng := sh.Engine
+
+		sh.CreateBranch("feature-e").
+			CommitChange("file-e", "content-e").
+			TrackBranch("feature-e", "main")
+
+		remoteMeta := git.NewMetaFrom(git.MetaFields{
+			LockReason: git.LockReasonUser,
+			Scope:      new("remote-scope"),
+		})
+		createRemoteMetadataRef(t, sh, "feature-e", remoteMeta)
+
+		require.NoError(t, eng.ApplyRemoteMetadataForBranches(context.Background(), []string{"main", "feature-e", "feature-e"}))
+
+		branch := eng.GetBranch("feature-e")
+		require.True(t, eng.IsLocked(branch))
+		require.Equal(t, "remote-scope", eng.GetScope(branch).String())
+	})
+
 	t.Run("identifies orphaned metadata when local branch is gone", func(t *testing.T) {
 		t.Parallel()
 		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)

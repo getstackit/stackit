@@ -10,6 +10,8 @@ This document collects the wins that remain open across multiple per-command ana
 
 ### 1. Expand lightweight engine load modes to the remaining safe commands
 
+> **Status:** Partially done. Three load modes exist (`LoadModeFull`, `LoadModeShared`, `LoadModeBranchesOnly`). Quiet/exact checkout and several read-only views already opt into `LoadModeBranchesOnly`. Remaining open: `children`, `info`, fuzzy `co`, `up`/`down`/`top`/`bottom`/`main` still use broader bootstrap.
+
 **Files:** `internal/app/context.go`, `internal/engine/engine_impl.go`, command wrappers in `internal/cli`
 
 `engine.LoadModeShared` and `engine.LoadModeBranchesOnly` already exist. Default context creation uses `LoadModeShared`, and exact quiet checkout plus several read-only views now opt into `LoadModeBranchesOnly`.
@@ -55,6 +57,8 @@ Per-branch git invocations are the most pervasive N+1 pattern in the codebase. `
 ---
 
 ### 4. Snapshot taking should batch revisions and be opt-out
+
+> **Status:** Partially done. `BatchGetRevisions` is now used in `TakeSnapshot` (`undo.go`), eliminating the per-branch revision loop. The `undo.enabled` opt-out config flag is not yet implemented.
 
 **Files:** `internal/engine/undo.go`
 
@@ -142,6 +146,8 @@ Commands that mutate both the parent ref and an adjacent metadata field (scope, 
 
 ### 10. Continue gating `IsInManagedWorktree` to commands that need it
 
+> **Status:** Done. Call sites are minimal — only `common.go` + tests. `SkipManagedWorktreeCheck` is applied to read-only commands. Continue applying to any new commands added.
+
 **File:** `internal/cli/common/common.go`
 
 `SkipManagedWorktreeCheck` exists and several read-only commands use it. Continue moving commands that do not branch on managed-worktree state onto this option.
@@ -152,15 +158,19 @@ Commands that mutate both the parent ref and an adjacent metadata field (scope, 
 
 ### 11. Stop calling `ReloadRepository` after every commit
 
+> **Status:** Done. go-git has been completely removed from the codebase. `ReloadRepository()` is now a two-line function that calls `revisionCache.InvalidateAll()` — no repo handle close, no worktree re-scan. The expensive go-git worktree reopen described below no longer exists. The remaining micro-optimisation (invalidating only the affected branch's cache entry rather than all entries) is low priority.
+
 **File:** `internal/git/commit.go`
 
-Closes the entire go-git repo handle to pick up one new commit. Cheaper: invalidate just the affected branch in `revisionCache` and let go-git re-read the new packed ref lazily.
+~~Closes the entire go-git repo handle to pick up one new commit. Cheaper: invalidate just the affected branch in `revisionCache` and let go-git re-read the new packed ref lazily.~~
 
 **Affects:** create.md #3, modify.md #4, absorb.md post-apply, anywhere a commit is created.
 
 ---
 
 ### 12. Replace per-call `config.LoadConfig` with `ctx.Config`
+
+> **Status:** Partially done. `trunk.go` and `hookmiddleware.go` have been updated. Other callers in `internal/cli/` remain.
 
 **Files:** `internal/cli/navigation/trunk.go`, others
 

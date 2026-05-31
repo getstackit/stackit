@@ -365,7 +365,7 @@ func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch
 	if plan.oldParentName != eng.Trunk().GetName() {
 		affectedBranches = append(affectedBranches, plan.oldParentName)
 	}
-	if err := eng.BatchMarkNeedsPRBodyUpdate(ctx, affectedBranches); err != nil {
+	if err := eng.MarkBranchesForPRBodyUpdate(ctx, affectedBranches); err != nil {
 		out.Debug("Failed to mark branches for PR body update: %v", err)
 	}
 

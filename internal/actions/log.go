@@ -140,6 +140,9 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 	// views are faster with lazy lookups than with a repo-wide preload.
 	if shouldPreloadLogBranchData(opts, len(visibleBranches), len(allBranches)) {
 		ctx.Engine.PreloadBranchData()
+		// Also warm diff-stats and commit-count caches so annotation goroutines
+		// get instant cache hits instead of spawning per-branch subprocesses.
+		ctx.Engine.PreloadBranchStats(visibleBranches.All())
 	}
 
 	// Collect annotations only for branches that will be rendered.
@@ -368,6 +371,10 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 	}
 	processableBranches := processable.Build()
 
+	// Warm the diff-stats and commit-count caches in parallel before the main
+	// annotation loop so that GetDiffStats / GetCommitCount are instant cache hits.
+	ctx.Engine.PreloadBranchStats(processableBranches.All())
+
 	if len(processableBranches) > 0 {
 		utils.Run(processableBranches.All(), func(branch engine.Branch) {
 			branchName := branch.GetName()
@@ -399,11 +406,11 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 				}
 			}
 
-			// Commits and diff stats
+			// Commits and diff stats (cache hits from PreloadBranchStats above)
 			if !branch.IsTrunk() {
-				commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
+				count, err := branch.GetCommitCount()
 				if err == nil {
-					info.Commits = len(commits)
+					info.Commits = count
 				}
 
 				added, deleted, err := branch.GetDiffStats()

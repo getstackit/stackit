@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -32,52 +33,61 @@ func (e *engineImpl) GetRevisionForName(branchName string) (string, error) {
 	return e.git.GetRevision(branchName)
 }
 
-// BatchGetRevisions returns the SHAs for multiple branches
-func (e *engineImpl) BatchGetRevisions(branchNames []string) (map[string]string, []error) {
+// GetRevisions returns the SHAs for multiple branches.
+func (e *engineImpl) GetRevisions(branchNames []string) (map[string]string, []error) {
 	return e.git.BatchGetRevisions(branchNames)
 }
 
-// GetCommitCount returns the number of commits for a branch
+// GetCommitCount returns the number of commits for a branch.
+// Results are cached by (base, head) SHA pair and populated by PreloadBranchStats.
 func (e *engineImpl) GetCommitCount(branch Branch) (int, error) {
 	base, branchRev, err := e.resolveBranchComparisonRevisions(branch.GetName())
 	if err != nil {
 		return 0, err
 	}
-
-	// If revisions are same, count is 0
 	if branchRev == base {
 		return 0, nil
 	}
 
-	// For real git, we'd use a git helper. I'll use git.GetCommitRange count.
-	commits, err := e.GetAllCommits(branch, CommitFormatSHA)
+	cacheKey := base + ":" + branchRev
+	if v, ok := e.commitCountCache.Load(cacheKey); ok {
+		return v.(int), nil
+	}
+
+	out, err := e.git.RunGitCommandWithContext(context.Background(), "rev-list", "--count", base+".."+branchRev)
 	if err != nil {
 		return 0, err
 	}
-	return len(commits), nil
+	var count int
+	_, _ = fmt.Sscanf(strings.TrimSpace(out), "%d", &count)
+	e.commitCountCache.Store(cacheKey, count)
+	return count, nil
 }
 
-// GetDiffStats returns diff stats for a branch
+// GetDiffStats returns diff stats for a branch.
+// Results are cached by (base, head) SHA pair and populated by PreloadBranchStats.
 func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
 	base, branchRev, err := e.resolveBranchComparisonRevisions(branch.GetName())
 	if err != nil {
 		return 0, 0, err
 	}
-
-	// If revisions are same, stats are 0
 	if branchRev == base {
 		return 0, 0, nil
 	}
 
-	// Use git diff --numstat
+	cacheKey := base + ":" + branchRev
+	if v, ok := e.diffStatsCache.Load(cacheKey); ok {
+		stats := v.([2]int)
+		return stats[0], stats[1], nil
+	}
+
 	output, err := e.git.GetDiffNumstat(base, branchRev)
 	if err != nil {
 		return 0, 0, err
 	}
 
 	added, deleted := 0, 0
-	lines := strings.SplitSeq(strings.TrimSpace(output), "\n")
-	for line := range lines {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		if line == "" {
 			continue
 		}
@@ -91,7 +101,27 @@ func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
 		}
 	}
 
+	e.diffStatsCache.Store(cacheKey, [2]int{added, deleted})
 	return added, deleted, nil
+}
+
+// PreloadBranchStats warms the diff-stats and commit-count caches for all given
+// branches in parallel. Call this before iterating branches in utils.Run so
+// subsequent GetDiffStats / GetCommitCount calls are instant cache hits.
+func (e *engineImpl) PreloadBranchStats(branches []Branch) {
+	var wg sync.WaitGroup
+	for _, b := range branches {
+		if b.IsTrunk() || b.IsWorktreeAnchor() {
+			continue
+		}
+		wg.Add(1)
+		go func(branch Branch) {
+			defer wg.Done()
+			_, _, _ = e.GetDiffStats(branch)
+			_, _ = e.GetCommitCount(branch)
+		}(b)
+	}
+	wg.Wait()
 }
 
 func (e *engineImpl) resolveBranchComparisonRevisions(branchName string) (base, branchRev string, err error) {

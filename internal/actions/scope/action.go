@@ -64,15 +64,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if isOnTrunk {
 			return fmt.Errorf("cannot unset scope on trunk")
 		}
-		if err := eng.SetScope(ctx.Context, eng.GetBranch(currentBranch), engine.Empty()); err != nil {
+		if err := eng.SetScopeAndMarkForUpdate(ctx.Context, eng.GetBranch(currentBranch), engine.Empty()); err != nil {
 			return fmt.Errorf("failed to unset scope: %w", err)
 		}
 		out.Info("Unset explicit scope for branch %s. It will now inherit from its parent.", style.ColorBranchName(currentBranch, false))
-
-		// Mark branch for PR update and push metadata (defer GitHub API calls to sync)
-		if err := eng.BatchMarkNeedsPRBodyUpdate(ctx, []string{currentBranch}); err != nil {
-			out.Debug("Failed to mark branch for PR body update: %v", err)
-		}
+		// PR body update flag already set atomically inside SetScopeAndMarkForUpdate.
 		if err := actions.PushMetadataOnly(ctx, eng, []string{currentBranch}); err != nil {
 			out.Debug("Failed to push metadata changes: %v", err)
 		}
@@ -89,11 +85,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("cannot set scope on trunk")
 	}
 
-	// Update the current branch's scope
+	// Update the current branch's scope and mark for PR body update in one transaction.
 	currentBranchObj := eng.GetBranch(currentBranch)
 	oldScope := eng.GetScope(currentBranchObj)
 	newScope := engine.NewScope(opts.Scope)
-	if err := eng.SetScope(ctx.Context, eng.GetBranch(currentBranch), newScope); err != nil {
+	if err := eng.SetScopeAndMarkForUpdate(ctx.Context, eng.GetBranch(currentBranch), newScope); err != nil {
 		return fmt.Errorf("failed to set scope: %w", err)
 	}
 
@@ -116,10 +112,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	// Mark branch for PR update and push metadata (defer GitHub API calls to sync)
-	if err := eng.BatchMarkNeedsPRBodyUpdate(ctx, []string{currentBranch}); err != nil {
-		out.Debug("Failed to mark branch for PR body update: %v", err)
-	}
+	// PR body update flag already set atomically inside SetScopeAndMarkForUpdate.
+	// Push metadata refs (fast git operation).
 	if err := actions.PushMetadataOnly(ctx, eng, []string{currentBranch}); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}

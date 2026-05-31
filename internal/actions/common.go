@@ -41,8 +41,11 @@ func printRerereResolved(ctx *app.Context, count int) {
 }
 
 // TakeBestEffortSnapshot records an undo snapshot and logs failures without
-// aborting the action.
+// aborting the action. It is a no-op when undo.enabled is false in config.
 func TakeBestEffortSnapshot(ctx *app.Context, opts engine.SnapshotOptions) {
+	if ctx.Config != nil && !ctx.Config.UndoEnabled() {
+		return
+	}
 	if err := ctx.Undo().TakeSnapshot(opts); err != nil {
 		ctx.Output.Debug("Failed to take snapshot: %v", err)
 	}

@@ -20,6 +20,7 @@ type Configurer interface {
 
 	// Undo settings
 	UndoStackDepth() int
+	UndoEnabled() bool
 
 	// Worktree settings
 	WorktreeBasePath() string

@@ -7,11 +7,11 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 )
 
-// BatchMarkNeedsPRBodyUpdate marks multiple branches as needing PR body update in a single atomic operation.
-// It batch-reads local metadata, sets the flag, writes all the blobs in one
-// `git hash-object` call via WriteLocalMetadataBlobsBatch, and atomically
-// updates all refs.
-func (e *engineImpl) BatchMarkNeedsPRBodyUpdate(ctx context.Context, branchNames []string) error {
+// MarkBranchesForPRBodyUpdate marks multiple branches as needing a PR body update
+// in a single atomic operation. It batch-reads local metadata, sets the flag,
+// writes all the blobs in one `git hash-object` call via WriteLocalMetadataBlobsBatch,
+// and atomically updates all refs.
+func (e *engineImpl) MarkBranchesForPRBodyUpdate(ctx context.Context, branchNames []string) error {
 	if len(branchNames) == 0 {
 		return nil
 	}

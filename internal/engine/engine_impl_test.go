@@ -726,14 +726,14 @@ func TestGetDeletionStatus(t *testing.T) {
 	})
 }
 
-func TestBatchGetDeletionStatuses(t *testing.T) {
+func TestGetDeletionStatuses(t *testing.T) {
 	t.Parallel()
 
 	t.Run("empty list returns empty map", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		statuses, err := s.Engine.BatchGetDeletionStatuses(context.Background(), []string{})
+		statuses, err := s.Engine.GetDeletionStatuses(context.Background(), []string{})
 		require.NoError(t, err)
 		require.Empty(t, statuses)
 	})
@@ -753,7 +753,7 @@ func TestBatchGetDeletionStatuses(t *testing.T) {
 		err := s.Engine.Rebuild("main")
 		require.NoError(t, err)
 
-		statuses, err := s.Engine.BatchGetDeletionStatuses(context.Background(), []string{"main", "branch1", "branch2"})
+		statuses, err := s.Engine.GetDeletionStatuses(context.Background(), []string{"main", "branch1", "branch2"})
 		require.NoError(t, err)
 		require.Len(t, statuses, 3)
 
@@ -787,7 +787,7 @@ func TestBatchGetDeletionStatuses(t *testing.T) {
 		err = s.Engine.SetBranchType(branch, git.BranchTypeWorktreeAnchor)
 		require.NoError(t, err)
 
-		statuses, err := s.Engine.BatchGetDeletionStatuses(context.Background(), []string{"branch1"})
+		statuses, err := s.Engine.GetDeletionStatuses(context.Background(), []string{"branch1"})
 		require.NoError(t, err)
 		require.False(t, statuses["branch1"].SafeToDelete)
 	})

@@ -47,19 +47,21 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	// Untrack recursively (descendants first, then the branch itself)
-	// Actually order doesn't strictly matter for metadata deletion but it's cleaner
-	for _, descendant := range descendants {
-		if err := eng.UntrackBranch(ctx.Context, descendant.GetName()); err != nil {
-			return fmt.Errorf("failed to untrack descendant %s: %w", descendant.GetName(), err)
-		}
-		ctx.Output.Info("Stopped tracking %s.", style.ColorBranchName(descendant.GetName(), false))
+	// Collect all names to untrack (descendants first for display, then the branch itself).
+	allNames := make([]string, 0, len(descendants)+1)
+	for _, d := range descendants {
+		allNames = append(allNames, d.GetName())
+	}
+	allNames = append(allNames, branchName)
+
+	// Delete all metadata refs in one batch and rebuild the engine once.
+	if err := eng.UntrackBranches(ctx.Context, allNames); err != nil {
+		return fmt.Errorf("failed to untrack branches: %w", err)
 	}
 
-	if err := eng.UntrackBranch(ctx.Context, branchName); err != nil {
-		return fmt.Errorf("failed to untrack branch %s: %w", branchName, err)
+	for _, name := range allNames {
+		ctx.Output.Info("Stopped tracking %s.", style.ColorBranchName(name, false))
 	}
-	ctx.Output.Info("Stopped tracking %s.", style.ColorBranchName(branchName, false))
 
 	return nil
 }

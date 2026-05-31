@@ -139,7 +139,7 @@ func markStackAndPushMetadata(ctx *app.Context, eng engine.Engine, stackRoot str
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 	root := eng.GetBranch(stackRoot)
 	if root.IsTracked() {
-		if err := eng.BatchMarkNeedsPRBodyUpdate(ctx, graph.CollectBranches(root).Names()); err != nil {
+		if err := eng.MarkBranchesForPRBodyUpdate(ctx, graph.CollectBranches(root).Names()); err != nil {
 			out.Debug("Failed to mark branches for PR body update: %v", err)
 		}
 	}

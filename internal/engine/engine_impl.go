@@ -42,6 +42,11 @@ type engineImpl struct {
 	// Temporary worktree cleanup tracking.
 	tempWorktreeNeedsPrune bool
 	tempWorktreePrunedOnce bool
+
+	// Per-request caches for expensive git operations.
+	// Key: "base:head" (both are resolved SHAs); value type noted inline.
+	diffStatsCache   sync.Map // value: [2]int{added, deleted}
+	commitCountCache sync.Map // value: int
 }
 
 // WorktreeSnapshot holds a deep copy of engine state for initializing worktree engines.

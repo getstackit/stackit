@@ -207,8 +207,8 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 
 	// Single batch call to engine for deletion statuses
 	batchStart := time.Now()
-	statuses, err := eng.BatchGetDeletionStatuses(c, candidateNames)
-	ctx.Logger.Info("BatchGetDeletionStatuses completed durationMs=%d candidateCount=%d ok=%v",
+	statuses, err := eng.GetDeletionStatuses(c, candidateNames)
+	ctx.Logger.Info("GetDeletionStatuses completed durationMs=%d candidateCount=%d ok=%v",
 		time.Since(batchStart).Milliseconds(), len(candidateNames), err == nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get deletion statuses: %w", err)

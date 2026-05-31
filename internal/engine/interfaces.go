@@ -41,7 +41,7 @@ type BranchStatus interface {
 	IsMergedIntoTrunk(ctx context.Context, branchName string) (bool, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	GetDeletionStatus(ctx context.Context, branchName string) (DeletionStatus, error)
-	BatchGetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
+	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription
 	IsLocked(branch Branch) bool
@@ -69,7 +69,7 @@ type BranchInfo interface {
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetRevisionForName(branchName string) (string, error)
-	BatchGetRevisions(branchNames []string) (map[string]string, []error)
+	GetRevisions(branchNames []string) (map[string]string, []error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
@@ -80,6 +80,10 @@ type BranchInfo interface {
 	// into their respective caches. Call before parallel annotation building
 	// to eliminate per-branch cache misses and mutex contention.
 	PreloadBranchData()
+	// PreloadBranchStats warms the diff-stats and commit-count caches for all
+	// given branches in parallel. Call before utils.Run iteration so subsequent
+	// GetDiffStats / GetCommitCount calls are instant cache hits.
+	PreloadBranchStats(branches []Branch)
 }
 
 // GitDiffer handles diff and merge operations
@@ -99,6 +103,9 @@ type WorkingTree interface {
 	HasStagedChanges(ctx context.Context) (bool, error)
 	HasUnstagedChanges(ctx context.Context) (bool, error)
 	HasUntrackedFiles(ctx context.Context) (bool, error)
+	// GetWorkingTreeStatus returns all three working-tree flags in one git call.
+	// Prefer this over calling Has* individually when multiple flags are needed.
+	GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUntrackedFileHunks(ctx context.Context) ([]git.Hunk, error)
 	GetPendingChanges(ctx context.Context) ([]PendingChange, error)
@@ -127,7 +134,9 @@ type BranchReader interface {
 // BranchTracking handles branch tracking operations
 type BranchTracking interface {
 	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
-	UntrackBranch(ctx context.Context, branchName string) error
+	// UntrackBranches stops tracking multiple branches, deleting their metadata
+	// and triggering a single engine rebuild.
+	UntrackBranches(ctx context.Context, branchNames []string) error
 	SetParent(ctx context.Context, branch Branch, parentBranch Branch, mode DivergenceMode) error
 	// ReparentBranch changes a branch's parent while automatically preserving
 	// its divergence point. Preferred over SetParent for existing branches.
@@ -137,12 +146,16 @@ type BranchTracking interface {
 	// any reparenting begins.
 	ReparentBranches(ctx context.Context, branchNames []string, newParent Branch) error
 	SetScope(ctx context.Context, branch Branch, scope Scope) error
+	// SetScopeAndMarkForUpdate sets the scope and marks the branch as needing a
+	// PR body update in one atomic transaction instead of two separate ref writes.
+	SetScopeAndMarkForUpdate(ctx context.Context, branch Branch, scope Scope) error
 	SetBranchType(branch Branch, branchType git.BranchType) error
 	SetLocked(ctx context.Context, branches Branches, reason LockReason) (BatchLockResult, error)
 	SetFrozen(ctx context.Context, branches Branches, frozen bool) (BatchFreezeResult, error)
 
-	// BatchMarkNeedsPRBodyUpdate marks multiple branches as needing PR body update in a single atomic operation
-	BatchMarkNeedsPRBodyUpdate(ctx context.Context, branchNames []string) error
+	// MarkBranchesForPRBodyUpdate marks multiple branches as needing a PR body
+	// update in a single atomic operation.
+	MarkBranchesForPRBodyUpdate(ctx context.Context, branchNames []string) error
 	// ClearNeedsPRBodyUpdate clears the PR body update flag for a branch
 	ClearNeedsPRBodyUpdate(branchName string) error
 	// GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates

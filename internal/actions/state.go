@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -81,18 +80,12 @@ func BuildState(ctx *app.Context, _ StateOptions) StateResult {
 		result.Detached = true
 	}
 
-	// Working-tree state. A failed check is non-fatal for a read-only snapshot;
-	// log it and fall back to the safe default (false).
-	check := func(name string, fn func(context.Context) (bool, error)) bool {
-		v, err := fn(ctx.Context)
-		if err != nil {
-			ctx.Output.Debug("state: %s check failed: %v", name, err)
-		}
-		return v
+	// Working-tree state via a single git status --porcelain call.
+	// A failed check is non-fatal; log and fall back to the safe default (false).
+	staged, unstaged, untracked, statusErr := eng.GetWorkingTreeStatus(ctx.Context)
+	if statusErr != nil {
+		ctx.Output.Debug("state: working-tree status check failed: %v", statusErr)
 	}
-	staged := check("staged", eng.HasStagedChanges)
-	unstaged := check("unstaged", eng.HasUnstagedChanges)
-	untracked := check("untracked", eng.HasUntrackedFiles)
 	result.WorkingTree = WorkingTreeStatus{
 		Staged:    staged,
 		Unstaged:  unstaged,

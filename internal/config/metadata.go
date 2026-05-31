@@ -157,6 +157,13 @@ var Options = []Option{
 		Default:     DefaultUndoDepth,
 		Section:     "undo",
 	},
+	{
+		YAMLPath:    "undo.enabled",
+		GitKey:      KeyUndoEnabled,
+		Description: "Take snapshots before mutations (set false to skip undo overhead)",
+		Default:     DefaultUndoEnabled,
+		Section:     "undo",
+	},
 
 	// Worktree section
 	{

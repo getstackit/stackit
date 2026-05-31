@@ -299,7 +299,7 @@ func BenchmarkCreateBlobs_Sequential(b *testing.B) {
 }
 
 // BenchmarkCreateBlobsBatch exercises the optimized batched path used by
-// BatchMarkNeedsPRBodyUpdate and transaction commits — temp-file staging
+// MarkBranchesForPRBodyUpdate and transaction commits — temp-file staging
 // plus a single `git hash-object -w --stdin-paths` invocation.
 func BenchmarkCreateBlobsBatch(b *testing.B) {
 	for _, n := range []int{1, 10, 50} {

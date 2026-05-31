@@ -77,6 +77,26 @@ func (e *engineImpl) UntrackBranch(ctx context.Context, branchName string) error
 	return e.rebuild()
 }
 
+// UntrackBranches stops tracking multiple branches with a single metadata deletion
+// and a single engine rebuild, rather than one rebuild per branch.
+func (e *engineImpl) UntrackBranches(ctx context.Context, branchNames []string) error {
+	if len(branchNames) == 0 {
+		return nil
+	}
+	if len(branchNames) == 1 {
+		return e.UntrackBranch(ctx, branchNames[0])
+	}
+
+	refNames := make([]string, len(branchNames))
+	for i, name := range branchNames {
+		refNames[i] = fmt.Sprintf("%s%s", git.MetadataRefPrefix, name)
+	}
+	if err := e.git.DeleteRefsBatch(ctx, refNames); err != nil {
+		return fmt.Errorf("failed to delete metadata refs: %w", err)
+	}
+	return e.rebuild()
+}
+
 // DivergenceMode controls how SetParent updates a branch's recorded divergence
 // point (ParentBranchRevision) when its parent changes.
 type DivergenceMode int
@@ -315,6 +335,42 @@ func (e *engineImpl) SetScope(ctx context.Context, branch Branch, scope Scope) e
 		// Use transaction for atomic update
 		tx := e.BeginTx(fmt.Sprintf("set scope: %s", branchName))
 		if err := tx.UpdateMeta(branchName, meta); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	})
+}
+
+// SetScopeAndMarkForUpdate sets the scope and marks the branch as needing a PR
+// body update in a single atomic transaction, saving one git ref write compared
+// to calling SetScope + MarkBranchesForPRBodyUpdate separately.
+func (e *engineImpl) SetScopeAndMarkForUpdate(ctx context.Context, branch Branch, scope Scope) error {
+	branchName := branch.GetName()
+
+	return e.WithRetry(ctx, func() error {
+		meta, err := e.readMetadata(branchName)
+		if err != nil {
+			return fmt.Errorf("failed to read metadata: %w", err)
+		}
+
+		if scope.IsEmpty() {
+			meta = meta.WithScope(nil)
+		} else {
+			scopeStr := scope.String()
+			meta = meta.WithScope(&scopeStr)
+		}
+
+		localMeta, _ := e.readLocalMetadata(branchName)
+		if localMeta == nil {
+			localMeta = &git.LocalMeta{}
+		}
+		localMeta.NeedsPRBodyUpdate = true
+
+		tx := e.BeginTx(fmt.Sprintf("set scope+mark: %s", branchName))
+		if err := tx.UpdateMeta(branchName, meta); err != nil {
+			return err
+		}
+		if err := tx.UpdateLocalMeta(branchName, localMeta); err != nil {
 			return err
 		}
 		return tx.Commit(ctx)

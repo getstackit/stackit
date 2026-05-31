@@ -515,7 +515,6 @@ func TestMergeSquash(t *testing.T) {
 	})
 }
 
-
 func TestMergeCommand(t *testing.T) {
 	t.Parallel()
 	t.Run("shows help with subcommands", func(t *testing.T) {

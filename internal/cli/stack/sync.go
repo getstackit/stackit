@@ -139,7 +139,7 @@ func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
 
 	// Batch-check deletion status for all candidates
 	if len(candidateNames) > 0 {
-		statuses, err := eng.BatchGetDeletionStatuses(ctx.Context, candidateNames)
+		statuses, err := eng.GetDeletionStatuses(ctx.Context, candidateNames)
 		if err == nil {
 			for _, name := range candidateNames {
 				if status, ok := statuses[name]; ok && status.SafeToDelete {

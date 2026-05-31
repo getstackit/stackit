@@ -79,7 +79,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	// Precompute deletion statuses once (used for confirmation and divergence-preserving reparenting).
 	toDeleteNames := toDelete.Names()
-	statuses, err := eng.BatchGetDeletionStatuses(ctx.Context, toDeleteNames)
+	statuses, err := eng.GetDeletionStatuses(ctx.Context, toDeleteNames)
 	if err != nil {
 		return Result{}, fmt.Errorf("failed to check deletion statuses: %w", err)
 	}

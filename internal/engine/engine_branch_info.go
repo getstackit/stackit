@@ -33,8 +33,8 @@ func (e *engineImpl) GetRevisionForName(branchName string) (string, error) {
 	return e.git.GetRevision(branchName)
 }
 
-// BatchGetRevisions returns the SHAs for multiple branches
-func (e *engineImpl) BatchGetRevisions(branchNames []string) (map[string]string, []error) {
+// GetRevisions returns the SHAs for multiple branches.
+func (e *engineImpl) GetRevisions(branchNames []string) (map[string]string, []error) {
 	return e.git.BatchGetRevisions(branchNames)
 }
 

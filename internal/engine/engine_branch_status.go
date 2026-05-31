@@ -324,9 +324,9 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 }
 
 // GetDeletionStatus checks if a branch should be deleted.
-// Thin wrapper around BatchGetDeletionStatuses for a single branch.
+// Thin wrapper around GetDeletionStatuses for a single branch.
 func (e *engineImpl) GetDeletionStatus(ctx context.Context, branchName string) (DeletionStatus, error) {
-	statuses, err := e.BatchGetDeletionStatuses(ctx, []string{branchName})
+	statuses, err := e.GetDeletionStatuses(ctx, []string{branchName})
 	if err != nil {
 		return DeletionStatus{}, err
 	}
@@ -336,10 +336,10 @@ func (e *engineImpl) GetDeletionStatus(ctx context.Context, branchName string) (
 	return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}, nil
 }
 
-// BatchGetDeletionStatuses checks deletion status for multiple branches in a single batch.
+// GetDeletionStatuses checks deletion status for multiple branches in a single batch.
 // It batch-fetches metadata, revisions, and merged status, then evaluates the canonical
 // deletion policy for each branch.
-func (e *engineImpl) BatchGetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error) {
+func (e *engineImpl) GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error) {
 	results := make(map[string]DeletionStatus, len(branchNames))
 	if len(branchNames) == 0 {
 		return results, nil

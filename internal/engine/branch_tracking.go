@@ -77,9 +77,9 @@ func (e *engineImpl) UntrackBranch(ctx context.Context, branchName string) error
 	return e.rebuild()
 }
 
-// BatchUntrackBranches untracks multiple branches with a single metadata deletion
+// UntrackBranches stops tracking multiple branches with a single metadata deletion
 // and a single engine rebuild, rather than one rebuild per branch.
-func (e *engineImpl) BatchUntrackBranches(ctx context.Context, branchNames []string) error {
+func (e *engineImpl) UntrackBranches(ctx context.Context, branchNames []string) error {
 	if len(branchNames) == 0 {
 		return nil
 	}
@@ -343,7 +343,7 @@ func (e *engineImpl) SetScope(ctx context.Context, branch Branch, scope Scope) e
 
 // SetScopeAndMarkForUpdate sets the scope and marks the branch as needing a PR
 // body update in a single atomic transaction, saving one git ref write compared
-// to calling SetScope + BatchMarkNeedsPRBodyUpdate separately.
+// to calling SetScope + MarkBranchesForPRBodyUpdate separately.
 func (e *engineImpl) SetScopeAndMarkForUpdate(ctx context.Context, branch Branch, scope Scope) error {
 	branchName := branch.GetName()
 

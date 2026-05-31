@@ -41,7 +41,7 @@ type BranchStatus interface {
 	IsMergedIntoTrunk(ctx context.Context, branchName string) (bool, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	GetDeletionStatus(ctx context.Context, branchName string) (DeletionStatus, error)
-	BatchGetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
+	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription
 	IsLocked(branch Branch) bool
@@ -69,7 +69,7 @@ type BranchInfo interface {
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetRevisionForName(branchName string) (string, error)
-	BatchGetRevisions(branchNames []string) (map[string]string, []error)
+	GetRevisions(branchNames []string) (map[string]string, []error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
@@ -134,10 +134,9 @@ type BranchReader interface {
 // BranchTracking handles branch tracking operations
 type BranchTracking interface {
 	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
-	UntrackBranch(ctx context.Context, branchName string) error
-	// BatchUntrackBranches untracks multiple branches in a single operation,
-	// triggering only one engine rebuild instead of one per branch.
-	BatchUntrackBranches(ctx context.Context, branchNames []string) error
+	// UntrackBranches stops tracking multiple branches, deleting their metadata
+	// and triggering a single engine rebuild.
+	UntrackBranches(ctx context.Context, branchNames []string) error
 	SetParent(ctx context.Context, branch Branch, parentBranch Branch, mode DivergenceMode) error
 	// ReparentBranch changes a branch's parent while automatically preserving
 	// its divergence point. Preferred over SetParent for existing branches.
@@ -154,8 +153,9 @@ type BranchTracking interface {
 	SetLocked(ctx context.Context, branches Branches, reason LockReason) (BatchLockResult, error)
 	SetFrozen(ctx context.Context, branches Branches, frozen bool) (BatchFreezeResult, error)
 
-	// BatchMarkNeedsPRBodyUpdate marks multiple branches as needing PR body update in a single atomic operation
-	BatchMarkNeedsPRBodyUpdate(ctx context.Context, branchNames []string) error
+	// MarkBranchesForPRBodyUpdate marks multiple branches as needing a PR body
+	// update in a single atomic operation.
+	MarkBranchesForPRBodyUpdate(ctx context.Context, branchNames []string) error
 	// ClearNeedsPRBodyUpdate clears the PR body update flag for a branch
 	ClearNeedsPRBodyUpdate(branchName string) error
 	// GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates

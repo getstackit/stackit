@@ -246,53 +246,37 @@ func TestWorktreeDetach(t *testing.T) {
 		sh.ExpectBranchParent("feature", "main")
 	})
 
-	run("detach fails with uncommitted changes without force", func(t *testing.T, sh *TestShell) {
-		// Create a stack and attach
-		sh.WriteFile("feature.txt", "feature").
-			Run("create feature -m 'feature branch'")
-		sh.Run("worktree attach feature")
+	run("detach with dirty worktree requires --force", func(t *testing.T, sh *TestShell) {
+		for _, tt := range []struct {
+			name     string
+			cmd      string
+			wantGone bool
+		}{
+			{"fails without force", "worktree detach feature", false},
+			{"removes with force", "worktree detach feature --force", true},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				sh := sh.WithT(t)
+				sh.ResetRepo()
+				sh.WriteFile("feature.txt", "feature").Run("create feature -m 'feature branch'")
+				sh.Run("worktree attach feature")
+				worktreePath := sh.GetWorktreePath("feature")
+				MakeWorktreeDirty(t, worktreePath)
 
-		worktreePath := sh.GetWorktreePath("feature")
-
-		// Create uncommitted changes in worktree
-		uncommittedFile := worktreePath + "/uncommitted.txt"
-		if err := os.WriteFile(uncommittedFile, []byte("uncommitted"), 0644); err != nil {
-			t.Fatalf("Failed to write file: %v", err)
+				if tt.wantGone {
+					sh.Run(tt.cmd)
+					if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+						t.Errorf("worktree directory should be removed at %s", worktreePath)
+					}
+					sh.HasBranches("main", "feature")
+				} else {
+					sh.RunExpectError(tt.cmd)
+					if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+						t.Errorf("worktree should still exist at %s", worktreePath)
+					}
+				}
+			})
 		}
-
-		// Detach without force should fail
-		sh.RunExpectError("worktree detach feature")
-
-		// Worktree should still exist
-		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-			t.Errorf("Worktree should still exist")
-		}
-	})
-
-	run("detach with force removes worktree with uncommitted changes", func(t *testing.T, sh *TestShell) {
-		// Create a stack and attach
-		sh.WriteFile("feature.txt", "feature").
-			Run("create feature -m 'feature branch'")
-		sh.Run("worktree attach feature")
-
-		worktreePath := sh.GetWorktreePath("feature")
-
-		// Create uncommitted changes in worktree
-		uncommittedFile := worktreePath + "/uncommitted.txt"
-		if err := os.WriteFile(uncommittedFile, []byte("uncommitted"), 0644); err != nil {
-			t.Fatalf("Failed to write file: %v", err)
-		}
-
-		// Detach with force should succeed
-		sh.Run("worktree detach feature --force")
-
-		// Worktree should be removed
-		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
-			t.Errorf("Worktree directory should be removed at %s", worktreePath)
-		}
-
-		// Branches should still exist
-		sh.HasBranches("main", "feature")
 	})
 
 	run("detach fails from inside worktree", func(_ *testing.T, sh *TestShell) {

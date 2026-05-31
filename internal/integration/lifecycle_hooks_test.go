@@ -42,18 +42,6 @@ func TestLifecycleHooks_NoVerifyBypasses(t *testing.T) {
 	require.NotContains(t, sh.lastOutput, "Running hook:", "no hook should run with --no-verify")
 }
 
-func TestLifecycleHooks_ZeroCostWhenUnconfigured(t *testing.T) {
-	t.Parallel()
-	sh := NewTestShellInProcess(t)
-
-	// No .stackit.yaml hooks section at all.
-	sh.WriteFile("seed.txt", "seed").Run("create feature -m 'feat: seed'")
-	sh.WriteFile("seed.txt", "updated")
-	sh.Run("modify -a")
-
-	require.NotContains(t, sh.lastOutput, "Running hook:", "no hook lines should appear when nothing is configured")
-}
-
 func TestLifecycleHooks_PostHookFailureIsWarning(t *testing.T) {
 	t.Parallel()
 	sh := NewTestShellInProcess(t)

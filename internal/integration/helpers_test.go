@@ -1071,3 +1071,46 @@ func (s *TestShell) ExpectStackIDsDiffer(branch1, branch2 string) *TestShell {
 		branch1, branch2, stackID1)
 	return s
 }
+
+// =============================================================================
+// Worktree Helpers
+// =============================================================================
+
+// AdvanceMain commits a new file on the main branch and pushes it to origin.
+// Requires the shell to have a remote (WithRemote).
+func AdvanceMain(sh *TestShell, filename string) {
+	sh.t.Helper()
+	sh.WriteFile(filename, "content from main").
+		Git("add " + filename).
+		Git("commit -m 'Advance main: " + filename + "'").
+		Git("push origin main")
+}
+
+// SimulateMerge fast-forward merges the branch into main, pushes, and marks its PR as MERGED.
+// Requires the shell to have a remote (WithRemote).
+func SimulateMerge(sh *TestShell, branchName string) {
+	sh.t.Helper()
+	sh.Git("checkout main").
+		Git("merge " + branchName + " --ff-only").
+		Git("push origin main")
+	sh.SetPrState(branchName, "MERGED")
+}
+
+// MakeWorktreeDirty writes an uncommitted file into a worktree directory.
+func MakeWorktreeDirty(t *testing.T, worktreePath string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(worktreePath, "uncommitted.txt"), []byte("uncommitted"), 0644); err != nil {
+		t.Fatalf("failed to make worktree dirty: %v", err)
+	}
+}
+
+// CreateIndependentStack2 creates main->branch-a->branch-b where each branch
+// touches a different file (no file dependencies between branches).
+// Used by flatten tests to verify file-independence detection.
+func (s *TestShell) CreateIndependentStack2() *TestShell {
+	s.t.Helper()
+	return s.Write("file-a", "content a").
+		Run("create branch-a -m 'Add file A'").
+		Write("file-b", "content b").
+		Run("create branch-b -m 'Add file B'")
+}

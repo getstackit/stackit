@@ -12,6 +12,98 @@ import (
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
+func TestPluckStackID(t *testing.T) {
+	t.Parallel()
+
+	t.Run("plucking to trunk creates new stack ID", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range []struct {
+			name   string
+			pluck  string // which branch to pluck
+			remain string // which branch should retain the old stack ID
+		}{
+			{"pluck root", "a", "c"},
+			{"pluck leaf", "c", "a"},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				ctx := context.Background()
+				s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+					WithStack(map[string]string{
+						"a": "main",
+						"b": "a",
+						"c": "b",
+					})
+
+				// Seed a stack ID on the stack.
+				originalID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch("a"))
+				require.NoError(t, err)
+				require.NotEmpty(t, originalID)
+
+				s.Checkout(tt.pluck)
+				require.NoError(t, Action(s.Context, Options{Source: tt.pluck, Onto: "main"}, nil))
+
+				// After plucking to trunk the plucked branch gets a fresh ID.
+				newID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch(tt.pluck))
+				require.NoError(t, err)
+				require.NotEmpty(t, newID)
+				require.NotEqual(t, originalID, newID, "plucked branch should have a new stack ID")
+
+				// The branch that stayed in the original stack keeps the original ID.
+				require.Equal(t, originalID, s.Engine.GetStackID(s.Engine.GetBranch(tt.remain)))
+			})
+		}
+	})
+
+	t.Run("plucking to different stack inherits that stack ID", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"a": "main",
+				"b": "a",
+				"c": "b",
+				"x": "main",
+			})
+
+		firstID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch("a"))
+		require.NoError(t, err)
+		secondID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch("x"))
+		require.NoError(t, err)
+		require.NotEqual(t, firstID, secondID)
+
+		// Pluck b onto x (from first stack to second stack); c stays in first stack.
+		require.NoError(t, Action(s.Context, Options{Source: "b", Onto: "x"}, nil))
+
+		require.Equal(t, secondID, s.Engine.GetStackID(s.Engine.GetBranch("b")))
+		require.Equal(t, firstID, s.Engine.GetStackID(s.Engine.GetBranch("a")))
+		require.Equal(t, firstID, s.Engine.GetStackID(s.Engine.GetBranch("c")))
+	})
+
+	t.Run("plucking within same stack does not change stack ID", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"a": "main",
+				"b": "a",
+				"c": "b",
+				"d": "c",
+			})
+
+		originalID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch("a"))
+		require.NoError(t, err)
+
+		// Pluck c onto a (within same stack); d is reparented to b.
+		require.NoError(t, Action(s.Context, Options{Source: "c", Onto: "a"}, nil))
+
+		for _, name := range []string{"a", "b", "c", "d"} {
+			require.Equal(t, originalID, s.Engine.GetStackID(s.Engine.GetBranch(name)),
+				"branch %s should keep the original stack ID", name)
+		}
+	})
+}
+
 func TestPluckAction(t *testing.T) {
 	t.Run("plucks branch to new parent and reparents children to grandparent", func(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).

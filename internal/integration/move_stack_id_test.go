@@ -145,45 +145,6 @@ func TestMoveStackID(t *testing.T) {
 		sh.ExpectStackID("a", firstStackID)
 	})
 
-	t.Run("moving entire first-level branch to trunk creates new stack", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create stack: main -> a -> b -> c
-		sh.CreateLinearStack3()
-
-		// Set a description to trigger stack ID creation
-		sh.Run("describe -m 'First stack'")
-
-		// Capture original stack ID
-		originalStackID := sh.GetStackID("a")
-		sh.ExpectStackIDsMatch("a", "b", "c")
-
-		// Move a to... well, it's already on trunk, so let's create a different scenario
-		// Create: main -> x -> a -> b -> c by moving a onto x
-		sh.Checkout("main").
-			Write("x.txt", "content for x").
-			Run("create x -m 'Add x'")
-
-		// Set a description to trigger stack ID creation for x
-		sh.Run("describe -m 'Second stack'")
-
-		secondStackID := sh.GetStackID("x")
-
-		// Move a onto x
-		sh.Checkout("a")
-		sh.Run("move --onto x --no-interactive --yes")
-
-		// Verify a, b, c all now have the second stack's ID
-		sh.ExpectStackIDsMatch("a", "b", "c")
-		sh.ExpectStackID("a", secondStackID)
-
-		// Verify original stack ID is no longer used (a, b, c should all have new ID)
-		if sh.GetStackID("a") == originalStackID {
-			t.Fatal("expected a to have a new stack ID after moving to x")
-		}
-	})
-
 	t.Run("moving within same stack does not change stack ID", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)

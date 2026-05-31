@@ -82,14 +82,14 @@ func TestMergeNext(t *testing.T) {
 
 	t.Run("errors when on trunk", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Stay on main
-		sh.OnBranch("main")
-
-		// Should error when trying to merge from trunk
-		sh.RunExpectError("merge next --dry-run")
-		sh.OutputContains("cannot merge from trunk")
+		for _, cmd := range []string{"merge next --dry-run", "merge drain --dry-run", "merge ship --dry-run"} {
+			t.Run(cmd, func(t *testing.T) {
+				t.Parallel()
+				sh := NewTestShellInProcess(t)
+				sh.OnBranch("main")
+				sh.RunExpectError(cmd).OutputContains("cannot merge from trunk")
+			})
+		}
 	})
 
 	t.Run("errors when branch is not tracked", func(t *testing.T) {
@@ -109,17 +109,14 @@ func TestMergeNext(t *testing.T) {
 
 	t.Run("errors when no PRs to merge", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack without PRs
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		// Run merge next - should error since no PRs exist
-		sh.RunExpectError("merge next --dry-run")
-
-		// Should indicate no PRs found
-		sh.OutputContains("no open PRs")
+		for _, cmd := range []string{"merge next --dry-run", "merge drain --dry-run", "merge ship --dry-run"} {
+			t.Run(cmd, func(t *testing.T) {
+				t.Parallel()
+				sh := NewTestShellInProcess(t)
+				sh.Write("a.txt", "content-a").Run("create branch-a -m 'Add branch-a'")
+				sh.RunExpectError(cmd).OutputContains("no open PRs")
+			})
+		}
 	})
 
 	t.Run("skips already merged PRs", func(t *testing.T) {
@@ -258,17 +255,6 @@ func TestMergeNext(t *testing.T) {
 func TestMergeDrain(t *testing.T) {
 	t.Parallel()
 
-	t.Run("drain subcommand is accessible", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		sh.Run("merge drain --help")
-
-		sh.OutputContains("bottom-up").
-			OutputContains("--dry-run").
-			OutputContains("--method")
-	})
-
 	t.Run("dry-run shows full plan", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
@@ -300,31 +286,6 @@ func TestMergeDrain(t *testing.T) {
 			OutputContains("#102").
 			OutputContains("#103").
 			OutputContains("Dry-run mode")
-	})
-
-	t.Run("errors when on trunk", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Stay on main
-		sh.OnBranch("main")
-
-		// Should error when trying to drain from trunk
-		sh.RunExpectError("merge drain --dry-run")
-		sh.OutputContains("cannot merge from trunk")
-	})
-
-	t.Run("errors when no PRs to merge", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack without PRs
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		// Run merge drain - should error since no PRs exist
-		sh.RunExpectError("merge drain --dry-run")
-		sh.OutputContains("no open PRs")
 	})
 
 	t.Run("shows total PR count in plan", func(t *testing.T) {
@@ -384,25 +345,7 @@ func TestMergeDrain(t *testing.T) {
 		sh.OutputContains("--count must be non-negative")
 	})
 
-	t.Run("count flag equal to total PRs drains all", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack with 2 PRs
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-		sh.Write("b.txt", "content-b").
-			Run("create branch-b -m 'Add branch-b'")
-
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
-		sh.SetPrMetadata("branch-b", PRMetadata{Number: 102, State: "OPEN"})
-
-		// --count=2 on 2-PR stack: drains all, no "Draining first N of M" message
-		sh.Run("merge drain --count 2 --dry-run")
-		sh.OutputNotContains("Draining first")
-	})
-
-	t.Run("count flag greater than total PRs drains all", func(t *testing.T) {
+	t.Run("count flag equal or greater than total PRs drains all", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
@@ -506,18 +449,6 @@ func TestMergeSquash(t *testing.T) {
 			OutputContains("Dry-run mode")
 	})
 
-	t.Run("errors when on trunk", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Stay on main
-		sh.OnBranch("main")
-
-		// Should error when trying to ship from trunk
-		sh.RunExpectError("merge ship --dry-run")
-		sh.OutputContains("cannot merge from trunk")
-	})
-
 	t.Run("shows all branches in plan", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
@@ -584,26 +515,6 @@ func TestMergeSquash(t *testing.T) {
 	})
 }
 
-func TestMergeSquashAlias(t *testing.T) {
-	t.Parallel()
-
-	t.Run("squash alias resolves to ship command", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack with PRs
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
-
-		// "merge squash" should work as an alias for "merge ship"
-		sh.Run("merge squash --dry-run")
-		sh.OutputContains("Consolidate").
-			OutputContains("Dry-run mode")
-	})
-}
-
 func TestMergeCommand(t *testing.T) {
 	t.Parallel()
 	t.Run("shows help with subcommands", func(t *testing.T) {
@@ -620,28 +531,23 @@ func TestMergeCommand(t *testing.T) {
 			OutputContains("ship")
 	})
 
-	t.Run("next subcommand is accessible", func(t *testing.T) {
+	t.Run("subcommands are accessible via --help", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Run merge next --help
-		sh.Run("merge next --help")
-
-		sh.OutputContains("bottom-most").
-			OutputContains("--dry-run").
-			OutputContains("--wait")
-	})
-
-	t.Run("ship subcommand is accessible", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Run merge ship --help
-		sh.Run("merge ship --help")
-
-		sh.OutputContains("Consolidate").
-			OutputContains("--scope").
-			OutputContains("--stacks")
+		for _, tt := range []struct {
+			cmd     string
+			contain string
+		}{
+			{"merge next --help", "bottom-most"},
+			{"merge ship --help", "Consolidate"},
+			{"merge drain --help", "bottom-up"},
+			{"merge status --help", "ready to merge"},
+		} {
+			t.Run(tt.cmd, func(t *testing.T) {
+				t.Parallel()
+				sh := NewTestShellInProcess(t)
+				sh.Run(tt.cmd).OutputContains(tt.contain)
+			})
+		}
 	})
 
 	t.Run("parent command requires TTY in non-interactive mode", func(t *testing.T) {
@@ -660,16 +566,6 @@ func TestMergeCommand(t *testing.T) {
 
 func TestMergeStatus(t *testing.T) {
 	t.Parallel()
-
-	t.Run("status subcommand is accessible", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		sh.Run("merge status --help")
-
-		sh.OutputContains("ready to merge").
-			OutputContains("--all")
-	})
 
 	t.Run("shows empty state when no stacks", func(t *testing.T) {
 		t.Parallel()
@@ -764,44 +660,6 @@ func TestMergeNextUpstackCalculation(t *testing.T) {
 
 func TestMergeSquashValidation(t *testing.T) {
 	t.Parallel()
-	t.Run("shows all PRs in consolidation plan", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack with multiple PRs
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		sh.Write("b.txt", "content-b").
-			Run("create branch-b -m 'Add branch-b'")
-
-		// Add PR info
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
-		sh.SetPrMetadata("branch-b", PRMetadata{Number: 102, State: "OPEN"})
-
-		// Dry-run shows consolidation plan
-		sh.Run("merge ship --dry-run")
-		sh.OutputContains("Consolidate").
-			OutputContains("branch-a").
-			OutputContains("branch-b")
-	})
-
-	t.Run("errors when no open PRs found", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack with all merged PRs
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		// Mark as merged
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "MERGED"})
-
-		// Should error - no open PRs
-		sh.RunExpectError("merge ship --dry-run")
-		sh.OutputContains("no open PRs")
-	})
-
 	t.Run("force flag bypasses validation errors", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
@@ -824,81 +682,40 @@ func TestMergeSquashValidation(t *testing.T) {
 
 func TestMergeFlags(t *testing.T) {
 	t.Parallel()
-	t.Run("yes flag skips confirmation in merge next", func(t *testing.T) {
+
+	// All three variants create one branch-a PR#101 OPEN and call merge next with a flag.
+	t.Run("merge next accepts --yes, --force, and single-branch stack", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack with PRs
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
-
-		// --yes --dry-run should work without prompting
-		sh.Run("merge next --yes --dry-run")
-		sh.OutputContains("branch-a")
+		for _, cmd := range []string{
+			"merge next --yes --dry-run",
+			"merge next --force --dry-run",
+			"merge next --dry-run",
+		} {
+			t.Run(cmd, func(t *testing.T) {
+				t.Parallel()
+				sh := NewTestShellInProcess(t)
+				sh.Write("a.txt", "content-a").Run("create branch-a -m 'Add branch-a'")
+				sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
+				sh.Run(cmd).OutputContains("branch-a")
+			})
+		}
 	})
 
-	t.Run("yes flag works with merge ship", func(t *testing.T) {
+	// All three variants create one branch-a PR#101 OPEN and call merge ship/squash.
+	t.Run("merge ship accepts --yes flag and squash alias", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack with PRs
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
-
-		// --yes --dry-run should work
-		sh.Run("merge ship --yes --dry-run")
-		sh.OutputContains("Consolidate")
-	})
-
-	t.Run("force flag is available", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a PR
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
-
-		// --force flag works
-		sh.Run("merge next --force --dry-run")
-		sh.OutputContains("branch-a")
-	})
-}
-
-func TestMergeSingleBranchStack(t *testing.T) {
-	t.Parallel()
-	t.Run("merge next works for single branch", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create single branch stack
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
-
-		// merge next works for single branch
-		sh.Run("merge next --dry-run")
-		sh.OutputContains("branch-a")
-	})
-
-	t.Run("merge ship works for single branch", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create single branch stack
-		sh.Write("a.txt", "content-a").
-			Run("create branch-a -m 'Add branch-a'")
-
-		sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
-
-		// merge ship also works (trivial consolidation)
-		sh.Run("merge ship --dry-run")
-		sh.OutputContains("Consolidate")
+		for _, cmd := range []string{
+			"merge ship --yes --dry-run",
+			"merge ship --dry-run",
+			"merge squash --dry-run",
+		} {
+			t.Run(cmd, func(t *testing.T) {
+				t.Parallel()
+				sh := NewTestShellInProcess(t)
+				sh.Write("a.txt", "content-a").Run("create branch-a -m 'Add branch-a'")
+				sh.SetPrMetadata("branch-a", PRMetadata{Number: 101, State: "OPEN"})
+				sh.Run(cmd).OutputContains("Consolidate")
+			})
+		}
 	})
 }

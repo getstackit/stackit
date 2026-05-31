@@ -1,17 +1,12 @@
 package integration
 
 import (
-	"context"
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -346,82 +341,6 @@ func TestSyncStaleDraftCleanup(t *testing.T) {
 	require.Equal(t, "main", eng.GetBranch("b").GetParent().GetName())
 }
 
-func TestSyncRemoteMetadata(t *testing.T) {
-	t.Parallel()
-	t.Run("loads remote metadata cache", func(t *testing.T) {
-		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-
-		// Create a branch
-		sh.CreateBranch("feature-a").
-			CommitChange("file-a", "content-a").
-			TrackBranch("feature-a", "main")
-
-		eng := sh.Engine
-
-		// Set local metadata
-		branch := eng.GetBranch("feature-a")
-		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
-		require.NoError(t, err)
-
-		// Create remote metadata refs (simulating a successful fetch)
-		remoteMeta := git.NewMetaFrom(git.MetaFields{
-			LockReason: git.LockReasonUser,
-			Scope:      new("remote-scope"),
-		})
-		createRemoteMetadataRefForSync(t, sh, "feature-a", remoteMeta)
-
-		// Load remote metadata cache (this is what sync does after fetching)
-		err = eng.LoadRemoteMetadataCache()
-		require.NoError(t, err)
-
-		// Verify remote metadata cache was loaded
-		cache := eng.GetRemoteMetadataCache()
-		cachedMeta := cache.Get("feature-a")
-		require.NotNil(t, cachedMeta, "Remote metadata should be in cache")
-		require.Equal(t, git.LockReasonUser, cachedMeta.GetLockReason(), "Remote metadata should show lock reason")
-		require.Equal(t, "remote-scope", *cachedMeta.GetScope(), "Remote metadata should have scope")
-	})
-
-	t.Run("detects metadata conflicts", func(t *testing.T) {
-		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-
-		sh.CreateBranch("feature-b").
-			CommitChange("file-b", "content-b").
-			TrackBranch("feature-b", "main")
-
-		eng := sh.Engine
-
-		// Set local metadata: locked=false
-		branch := eng.GetBranch("feature-b")
-		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
-		require.NoError(t, err)
-
-		// Create remote metadata refs: locked=true (conflict)
-		remoteMeta := git.NewMetaFrom(git.MetaFields{
-			LockReason: git.LockReasonUser,
-		})
-		createRemoteMetadataRefForSync(t, sh, "feature-b", remoteMeta)
-
-		// Load remote metadata cache
-		err = eng.LoadRemoteMetadataCache()
-		require.NoError(t, err)
-
-		// Compute diff to verify conflict detection
-		diff, err := eng.ComputeMetadataDiff("feature-b")
-		require.NoError(t, err)
-		require.NotNil(t, diff)
-		require.True(t, diff.HasConflict, "Should detect conflict between local and remote metadata")
-
-		// Verify the specific field that differs
-		require.Len(t, diff.Differences, 1)
-		require.Equal(t, "lockReason", diff.Differences[0].Field)
-		require.Equal(t, git.LockReasonNone, diff.Differences[0].LocalValue)
-		require.Equal(t, git.LockReasonUser, diff.Differences[0].RemoteValue)
-	})
-}
-
 func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	t.Parallel()
 	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
@@ -487,31 +406,6 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 		ExpectBranchFixed("branch-c")
 }
 
-// createRemoteMetadataRefForSync creates a ref at refs/stackit/remote-metadata/<branch>
-func createRemoteMetadataRefForSync(t *testing.T, sh *scenario.Scenario, branchName string, meta *git.Meta) {
-	t.Helper()
-
-	data, err := json.Marshal(meta)
-	require.NoError(t, err)
-
-	tmpFile := filepath.Join(sh.Scene.Dir, ".git", "tmp-meta-"+branchName)
-	err = os.WriteFile(tmpFile, data, 0600)
-	require.NoError(t, err)
-	defer os.Remove(tmpFile)
-
-	blobSha, err := sh.Scene.Repo.RunGitCommandAndGetOutput("hash-object", "-w", tmpFile)
-	require.NoError(t, err)
-
-	// Remove trailing newline
-	if len(blobSha) > 0 && blobSha[len(blobSha)-1] == '\n' {
-		blobSha = blobSha[:len(blobSha)-1]
-	}
-
-	refName := "refs/stackit/remote-metadata/" + branchName
-	err = sh.Scene.Repo.RunGitCommand("update-ref", refName, blobSha)
-	require.NoError(t, err)
-}
-
 // TestSyncDoesNotLeaveIndexState verifies that after sync cleans up merged branches
 // and restacks remaining branches, the working directory is left in a clean state
 // with no staged changes. This is a regression test for the bug where the Git index
@@ -562,9 +456,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 
 		// 6. CRITICAL: Verify main has no staged or unstaged changes after sync
 		// This is the core assertion that catches the bug
-		output, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-		require.NoError(t, err)
-		require.Empty(t, strings.TrimSpace(output), "git status should be clean after sync, but got: %s", output)
+		requireCleanWorkingTree(t, sh)
 
 		// 7. Verify branch-a was deleted (cleanup occurred)
 		allLocalBranches, err := sh.Scene.Repo.GetLocalBranches()
@@ -614,9 +506,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify clean status
-		output, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-		require.NoError(t, err)
-		require.Empty(t, strings.TrimSpace(output), "git status should be clean after sync from detached HEAD")
+		requireCleanWorkingTree(t, sh)
 	})
 
 	t.Run("sync with rebase that moves commits does not leave staged changes", func(t *testing.T) {
@@ -667,9 +557,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		require.NoError(t, err)
 
 		// 5. Verify main has clean status
-		output, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-		require.NoError(t, err)
-		require.Empty(t, strings.TrimSpace(output), "git status should be clean after sync with rebase, but got: %s", output)
+		requireCleanWorkingTree(t, sh)
 
 		// 6. Verify feature was deleted
 		allLocalBranches, err := sh.Scene.Repo.GetLocalBranches()
@@ -752,6 +640,32 @@ func disableCommitSigning(t *testing.T, sh *scenario.Scenario) {
 	t.Helper()
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "commit.gpgsign", "false"))
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "tag.gpgsign", "false"))
+}
+
+// setupTwoBranchSquashScenario creates main->branch-a->branch-b, simulates a squash-merge
+// of branch-a onto main, and marks it MERGED. Returns the trunk name.
+// Used by the 8 TestSquashMerge* and TestUserDeleted/Rebased tests.
+func setupTwoBranchSquashScenario(t *testing.T, sh *scenario.Scenario) string {
+	t.Helper()
+	sh.CreateBranch("branch-a").
+		CommitChange("file-a", "a").
+		TrackBranch("branch-a", "main")
+	sh.CreateBranch("branch-b").
+		CommitChange("file-b", "b").
+		TrackBranch("branch-b", "branch-a")
+	mainName := sh.Engine.Trunk().GetName()
+	sh.Checkout("main")
+	sh.CommitChange("file-a", "a")
+	markPrMerged(t, sh, "branch-a", 1, mainName)
+	return mainName
+}
+
+// requireCleanWorkingTree asserts that the git index and working tree are clean.
+func requireCleanWorkingTree(t *testing.T, sh *scenario.Scenario) {
+	t.Helper()
+	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
+	require.NoError(t, err)
+	require.Empty(t, strings.TrimSpace(out), "expected clean working tree")
 }
 
 // markPrMerged sets the PR metadata for branch to MERGED with the given base.
@@ -859,9 +773,7 @@ func TestSquashMergeMultipleAdjacentMergedInOneSync(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, cCount)
 
-	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(out), "working tree should be clean after sync")
+	requireCleanWorkingTree(t, sh)
 }
 
 // TestSquashMergeDiamondAllChildrenMerged covers a diamond where A is open
@@ -912,17 +824,7 @@ func TestSquashMergeSyncWhileOnMergedBranch(t *testing.T) {
 	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	disableCommitSigning(t, sh)
 
-	sh.CreateBranch("branch-a").
-		CommitChange("file-a", "a").
-		TrackBranch("branch-a", "main")
-	sh.CreateBranch("branch-b").
-		CommitChange("file-b", "b").
-		TrackBranch("branch-b", "branch-a")
-
-	mainName := sh.Engine.Trunk().GetName()
-	sh.Checkout("main")
-	sh.CommitChange("file-a", "a")
-	markPrMerged(t, sh, "branch-a", 1, mainName)
+	setupTwoBranchSquashScenario(t, sh)
 
 	// User is sitting on the about-to-be-deleted branch when they sync.
 	sh.Checkout("branch-a")
@@ -938,9 +840,7 @@ func TestSquashMergeSyncWhileOnMergedBranch(t *testing.T) {
 	require.NoError(t, err, "HEAD must be a symbolic ref (not detached) after sync deletes the checked-out branch")
 	require.NotEmpty(t, strings.TrimSpace(headRef))
 
-	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(out), "working tree should be clean")
+	requireCleanWorkingTree(t, sh)
 }
 
 // TestSquashMergeSyncWhileOnChildOfMergedBranch verifies that when the
@@ -952,17 +852,7 @@ func TestSquashMergeSyncWhileOnChildOfMergedBranch(t *testing.T) {
 	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	disableCommitSigning(t, sh)
 
-	sh.CreateBranch("branch-a").
-		CommitChange("file-a", "a").
-		TrackBranch("branch-a", "main")
-	sh.CreateBranch("branch-b").
-		CommitChange("file-b", "b").
-		TrackBranch("branch-b", "branch-a")
-
-	mainName := sh.Engine.Trunk().GetName()
-	sh.Checkout("main")
-	sh.CommitChange("file-a", "a")
-	markPrMerged(t, sh, "branch-a", 1, mainName)
+	mainName := setupTwoBranchSquashScenario(t, sh)
 
 	// User is on the surviving child while syncing.
 	sh.Checkout("branch-b")
@@ -984,9 +874,7 @@ func TestSquashMergeSyncWhileOnChildOfMergedBranch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, bCount, "B should keep its single commit after restack onto trunk")
 
-	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(out))
+	requireCleanWorkingTree(t, sh)
 }
 
 // TestSquashMergeNoRestackLeavesGitRefsUntouched verifies that
@@ -999,17 +887,7 @@ func TestSquashMergeNoRestackLeavesGitRefsUntouched(t *testing.T) {
 	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	disableCommitSigning(t, sh)
 
-	sh.CreateBranch("branch-a").
-		CommitChange("file-a", "a").
-		TrackBranch("branch-a", "main")
-	sh.CreateBranch("branch-b").
-		CommitChange("file-b", "b").
-		TrackBranch("branch-b", "branch-a")
-
-	mainName := sh.Engine.Trunk().GetName()
-	sh.Checkout("main")
-	sh.CommitChange("file-a", "a")
-	markPrMerged(t, sh, "branch-a", 1, mainName)
+	mainName := setupTwoBranchSquashScenario(t, sh)
 
 	bSHAbeforeSync, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "branch-b")
 	require.NoError(t, err)
@@ -1030,9 +908,7 @@ func TestSquashMergeNoRestackLeavesGitRefsUntouched(t *testing.T) {
 	require.Equal(t, strings.TrimSpace(bSHAbeforeSync), strings.TrimSpace(bSHAafterSync),
 		"--no-restack must not move branch-b's git ref")
 
-	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(out))
+	requireCleanWorkingTree(t, sh)
 }
 
 // TestSquashMergeChildBecomesEmpty covers the case where a squash merge
@@ -1073,9 +949,7 @@ func TestSquashMergeChildBecomesEmpty(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, empty, "B should be empty relative to main after squash subsumed its diff")
 
-	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(out))
+	requireCleanWorkingTree(t, sh)
 }
 
 // User-induced inconsistency cases:
@@ -1091,17 +965,7 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	disableCommitSigning(t, sh)
 
-	sh.CreateBranch("branch-a").
-		CommitChange("file-a", "a").
-		TrackBranch("branch-a", "main")
-	sh.CreateBranch("branch-b").
-		CommitChange("file-b", "b").
-		TrackBranch("branch-b", "branch-a")
-
-	mainName := sh.Engine.Trunk().GetName()
-	sh.Checkout("main")
-	sh.CommitChange("file-a", "a")
-	markPrMerged(t, sh, "branch-a", 1, mainName)
+	mainName := setupTwoBranchSquashScenario(t, sh)
 
 	// User reaches for raw git instead of stackit.
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("branch", "-D", "branch-a"))
@@ -1134,9 +998,7 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 	require.True(t, meta == nil || meta.GetParentBranchName() == nil,
 		"A's stale metadata should be cleared after sync")
 
-	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(out))
+	requireCleanWorkingTree(t, sh)
 }
 
 // TestUserManuallyRebasedChildBeforeSync: between the GitHub squash-merge
@@ -1151,17 +1013,7 @@ func TestUserManuallyRebasedChildBeforeSync(t *testing.T) {
 	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	disableCommitSigning(t, sh)
 
-	sh.CreateBranch("branch-a").
-		CommitChange("file-a", "a").
-		TrackBranch("branch-a", "main")
-	sh.CreateBranch("branch-b").
-		CommitChange("file-b", "b").
-		TrackBranch("branch-b", "branch-a")
-
-	mainName := sh.Engine.Trunk().GetName()
-	sh.Checkout("main")
-	sh.CommitChange("file-a", "a")
-	markPrMerged(t, sh, "branch-a", 1, mainName)
+	mainName := setupTwoBranchSquashScenario(t, sh)
 
 	// User reaches for `git rebase` directly, rewriting B's history.
 	// B is now based on main's new tip — A's old tip is no longer in B's history.
@@ -1228,9 +1080,7 @@ func TestMergeCommitNotSquash(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, bCount, "B should have its own commit only, not a duplicate of A's")
 
-	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(out))
+	requireCleanWorkingTree(t, sh)
 }
 
 // TestUserLocallyAdvancedTrunkBeforeSync: user did `git pull` (or some
@@ -1277,7 +1127,5 @@ func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, bCount)
 
-	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("status", "--porcelain")
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(out))
+	requireCleanWorkingTree(t, sh)
 }

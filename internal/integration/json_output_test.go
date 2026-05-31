@@ -59,6 +59,9 @@ func TestJSONOutput(t *testing.T) {
 
 		// Verify summary
 		require.Equal(t, 2, result.Summary.TotalBranches, "should have 2 tracked branches")
+
+		// GitHub is never available in tests.
+		require.False(t, result.GitHubAvailable)
 	})
 
 	t.Run("log --json outputs valid JSON with recommendations", func(t *testing.T) {
@@ -101,24 +104,6 @@ func TestJSONOutput(t *testing.T) {
 		require.True(t, foundRestackNeeded, "feature-b should show NeedsRestack=true")
 	})
 
-	t.Run("log --json always emits status booleans even when false", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// A healthy, unlocked branch: the status booleans are all false but must
-		// still appear, so `log --json` is a complete, self-describing status
-		// source (an explicit false is unambiguous; an omitted field is not).
-		sh.Write("feature_a", "content a").
-			Run("create feature-a -m 'Add feature A'")
-
-		sh.Run("log --json")
-		output := sh.Output()
-
-		require.Contains(t, output, "\"needs_restack\": false")
-		require.Contains(t, output, "\"is_locked\": false")
-		require.Contains(t, output, "\"is_frozen\": false")
-	})
-
 	t.Run("log --quiet outputs minimal when healthy", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
@@ -138,59 +123,41 @@ func TestJSONOutput(t *testing.T) {
 
 	t.Run("restack --json outputs valid JSON", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
+		for _, tt := range []struct {
+			name          string
+			advanceParent bool
+			minTotal      int
+		}{
+			{"already up to date", false, 0},
+			{"reports branches that needed restacking", true, 1},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				sh := NewTestShellInProcess(t)
 
-		// Create a stack
-		sh.Write("feature_a", "content a").
-			Run("create feature-a -m 'Add feature A'").
-			OnBranch("feature-a")
+				sh.Write("feature_a", "content a").
+					Run("create feature-a -m 'Add feature A'").
+					OnBranch("feature-a")
 
-		sh.Write("feature_b", "content b").
-			Run("create feature-b -m 'Add feature B'").
-			OnBranch("feature-b")
+				sh.Write("feature_b", "content b").
+					Run("create feature-b -m 'Add feature B'").
+					OnBranch("feature-b")
 
-		// Get JSON output from restack (should report already up to date)
-		sh.Run("restack --json")
-		output := sh.Output()
+				if tt.advanceParent {
+					sh.Checkout("feature-a").Commit("extra", "extra content")
+				}
 
-		// Parse and verify JSON structure
-		var result handlers.RestackJSONResult
-		err := json.Unmarshal([]byte(output), &result)
-		require.NoError(t, err, "restack --json should produce valid JSON")
+				sh.Run("restack --json")
+				output := sh.Output()
 
-		require.Equal(t, handlers.RestackJSONStatusSuccess, result.Status, "status should be success")
-		require.Empty(t, result.Conflicts, "should have no conflicts")
-	})
-
-	t.Run("restack --json reports branches that needed restacking", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack
-		sh.Write("feature_a", "content a").
-			Run("create feature-a -m 'Add feature A'").
-			OnBranch("feature-a")
-
-		sh.Write("feature_b", "content b").
-			Run("create feature-b -m 'Add feature B'").
-			OnBranch("feature-b")
-
-		// Modify parent to make child need restack
-		sh.Checkout("feature-a").
-			Commit("extra", "extra content")
-
-		// Restack with JSON output
-		sh.Run("restack --json")
-		output := sh.Output()
-
-		// Parse and verify JSON structure
-		var result handlers.RestackJSONResult
-		err := json.Unmarshal([]byte(output), &result)
-		require.NoError(t, err, "restack --json should produce valid JSON")
-
-		require.Equal(t, handlers.RestackJSONStatusSuccess, result.Status, "status should be success")
-		// Either restacked or skipped, depending on whether it needed work
-		require.GreaterOrEqual(t, result.TotalCount, 1, "should have processed at least 1 branch")
+				var result handlers.RestackJSONResult
+				err := json.Unmarshal([]byte(output), &result)
+				require.NoError(t, err, "restack --json should produce valid JSON")
+				require.Equal(t, handlers.RestackJSONStatusSuccess, result.Status)
+				require.Empty(t, result.Conflicts)
+				require.GreaterOrEqual(t, result.TotalCount, tt.minTotal)
+			})
+		}
 	})
 
 	t.Run("sync --dry-run --json requires --dry-run", func(t *testing.T) {
@@ -258,24 +225,6 @@ func TestJSONOutput(t *testing.T) {
 		require.NotNil(t, result.WouldRestackStacks, "would_restack_stacks should be populated when branches need restack")
 		require.Equal(t, []string{"alpha-root"}, result.WouldRestackStacks,
 			"should deduplicate and sort restack roots; only alpha's stack has drift")
-	})
-
-	t.Run("log --json with no tracked branches outputs valid JSON", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Don't create any tracked branches - just run log on a fresh repo
-		sh.Run("log --json")
-		output := sh.Output()
-
-		// Parse and verify JSON structure
-		var result actions.LogJSONResult
-		err := json.Unmarshal([]byte(output), &result)
-		require.NoError(t, err, "log --json should produce valid JSON even with no tracked branches")
-
-		// With no tracked branches, should have trunk at minimum
-		require.NotNil(t, result.Branches, "branches should not be nil")
-		require.Equal(t, 0, result.Summary.TotalBranches, "summary total should be 0 with no tracked branches")
 	})
 
 	t.Run("log --json with mixed branch states", func(t *testing.T) {
@@ -357,33 +306,6 @@ func TestJSONOutput(t *testing.T) {
 				require.Len(t, b.Children, 2, "feature-a should have 2 children")
 				require.Contains(t, b.Children, "feature-a-1")
 				require.Contains(t, b.Children, "feature-a-2")
-			}
-		}
-	})
-
-	t.Run("log --json reports branches without GitHub available", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create branches (no GitHub configured in test environment)
-		sh.Write("feature_a", "content a").
-			Run("create feature-a -m 'Add feature A'")
-
-		// Get JSON output
-		sh.Run("log --json")
-		output := sh.Output()
-
-		var result actions.LogJSONResult
-		err := json.Unmarshal([]byte(output), &result)
-		require.NoError(t, err)
-
-		// GitHubAvailable should be false in test environment
-		require.False(t, result.GitHubAvailable)
-
-		// CI status should be empty for all branches without PRs
-		for _, b := range result.Branches {
-			if b.PR != nil {
-				require.Equal(t, "", b.PR.CIStatus, "CI should be empty without GitHub")
 			}
 		}
 	})

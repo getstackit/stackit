@@ -323,19 +323,6 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 	return e.git.IsDiffEmpty(ctx, branchName, parentRev)
 }
 
-// GetDeletionStatus checks if a branch should be deleted.
-// Thin wrapper around GetDeletionStatuses for a single branch.
-func (e *engineImpl) GetDeletionStatus(ctx context.Context, branchName string) (DeletionStatus, error) {
-	statuses, err := e.GetDeletionStatuses(ctx, []string{branchName})
-	if err != nil {
-		return DeletionStatus{}, err
-	}
-	if status, ok := statuses[branchName]; ok {
-		return status, nil
-	}
-	return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}, nil
-}
-
 // GetDeletionStatuses checks deletion status for multiple branches in a single batch.
 // It batch-fetches metadata, revisions, and merged status, then evaluates the canonical
 // deletion policy for each branch.

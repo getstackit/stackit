@@ -28,7 +28,7 @@ func TestMetadataCleanup(t *testing.T) {
 		require.Contains(t, refs, "temp-branch")
 
 		// 2. Simulate it was synced (sets LocalOnlyHash)
-		err = s.Engine.SetLastModifiedBy("temp-branch")
+		err = s.Engine.BatchSetLastModifiedBy([]string{"temp-branch"})
 		require.NoError(t, err)
 
 		// 3. Delete the git branch but keep the metadata ref

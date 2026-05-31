@@ -206,50 +206,61 @@ func (e *engineImpl) EnsureStackID(ctx context.Context, branch Branch) (string, 
 	return stackID, nil
 }
 
-// propagateStackID sets the stack ID on a branch and all its descendants.
-func (e *engineImpl) propagateStackID(ctx context.Context, branchName string, stackID string) error {
-	branch := e.GetBranch(branchName)
-	if err := e.SetStackID(ctx, branch, stackID); err != nil {
-		return err
-	}
-
-	// Get children from the map
-	e.mu.RLock()
-	children := make([]string, len(e.state.childrenMap[branchName]))
-	copy(children, e.state.childrenMap[branchName])
-	e.mu.RUnlock()
-
-	// Recursively set on children
-	for _, childName := range children {
-		if err := e.propagateStackID(ctx, childName, stackID); err != nil {
-			return err
+// collectSubtree returns all branch names in the subtree rooted at branchName,
+// including branchName itself, via depth-first traversal of childrenMap.
+func (e *engineImpl) collectSubtree(branchName string) []string {
+	var names []string
+	var visit func(name string)
+	visit = func(name string) {
+		names = append(names, name)
+		e.mu.RLock()
+		children := make([]string, len(e.state.childrenMap[name]))
+		copy(children, e.state.childrenMap[name])
+		e.mu.RUnlock()
+		for _, child := range children {
+			visit(child)
 		}
 	}
-
-	return nil
+	visit(branchName)
+	return names
 }
 
-// SetStackID sets the stack ID on a branch's metadata.
-func (e *engineImpl) SetStackID(ctx context.Context, branch Branch, stackID string) error {
-	branchName := branch.GetName()
+// batchSetStackID sets the stack ID on all given branches in a single atomic transaction.
+func (e *engineImpl) batchSetStackID(ctx context.Context, branchNames []string, stackID string) error {
+	if len(branchNames) == 0 {
+		return nil
+	}
 
 	return e.WithRetry(ctx, func() error {
-		meta, err := e.readMetadata(branchName)
-		if err != nil {
-			return fmt.Errorf("failed to read metadata: %w", err)
-		}
-		if meta == nil {
-			meta = git.NewMeta()
-		}
+		metas, _ := e.batchReadMetadata(branchNames)
 
-		meta = meta.WithStackID(&stackID)
-
-		tx := e.BeginTx(fmt.Sprintf("set stack ID: %s -> %s", branchName, stackID))
-		if err := tx.UpdateMeta(branchName, meta); err != nil {
-			return err
+		tx := e.BeginTx(fmt.Sprintf("set stack ID: %d branches -> %s", len(branchNames), stackID))
+		for _, name := range branchNames {
+			meta := metas[name]
+			if meta == nil {
+				meta = git.NewMeta()
+			}
+			meta = meta.WithStackID(&stackID)
+			if err := tx.UpdateMeta(name, meta); err != nil {
+				return err
+			}
 		}
 		return tx.Commit(ctx)
 	})
+}
+
+// propagateStackID sets the stack ID on a branch and all its descendants in a single transaction.
+func (e *engineImpl) propagateStackID(ctx context.Context, branchName string, stackID string) error {
+	return e.batchSetStackID(ctx, e.collectSubtree(branchName), stackID)
+}
+
+// SetStackID sets the stack ID on multiple branches atomically in a single transaction.
+func (e *engineImpl) SetStackID(ctx context.Context, branches Branches, stackID string) error {
+	names := make([]string, len(branches))
+	for i, b := range branches {
+		names[i] = b.GetName()
+	}
+	return e.batchSetStackID(ctx, names, stackID)
 }
 
 // CreateStackRef creates a new stack ref with the given metadata.

@@ -227,7 +227,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Update stack ID if needed (pluck only moves the source, not descendants)
 	if targetStackID != "" {
-		if err := eng.SetStackID(gctx, sourceBranch, targetStackID); err != nil {
+		if err := eng.SetStackID(gctx, engine.BranchesOf(sourceBranch), targetStackID); err != nil {
 			out.Warn("Failed to update stack ID for %s: %v", source, err)
 		}
 		out.Info("Stack membership updated for %s", source)

@@ -61,22 +61,6 @@ func (e *engineImpl) SetRemoteSyncEnabled(enabled bool) {
 	_ = e.git.SetConfig("stackit.metadata-sync-enabled", val)
 }
 
-// SetLastModifiedBy updates the metadata for a branch with the current user's information
-func (e *engineImpl) SetLastModifiedBy(branchName string) error {
-	name, err := e.git.GetConfig("user.name")
-	if err != nil {
-		return fmt.Errorf("git user.name is required but not set: %w", err)
-	}
-	email, _ := e.git.GetConfig("user.email")
-
-	modifiedBy := &git.ModifiedBy{
-		GitName:  name,
-		GitEmail: email,
-	}
-
-	return e.setLastModifiedByInternal(branchName, modifiedBy)
-}
-
 // BatchSetLastModifiedBy updates metadata for multiple branches in parallel
 // with a single git config lookup
 func (e *engineImpl) BatchSetLastModifiedBy(branchNames []string) error {

@@ -153,29 +153,42 @@ func TestTrackIntegration(t *testing.T) {
 			OutputContains("feature-b")
 	})
 
-	t.Run("track with force finds most recent ancestor in complex stack", func(t *testing.T) {
+	t.Run("track with force finds most recent tracked ancestor", func(t *testing.T) {
 		t.Parallel()
-		shell := NewTestShellInProcess(t)
-
-		// Create a complex stack
-		shell.Write("a.go", "package main").
-			Run("create feature-a -m 'Add feature A'").
-			Write("b.go", "package main").
-			Run("create feature-b -m 'Add feature B'").
-			Write("c.go", "package main").
-			Run("create feature-c -m 'Add feature C'")
-
-		// Create an untracked branch from feature-c
-		shell.Git("checkout -b feature-d").
-			Write("d.go", "package main").
-			Commit("d.go", "Add feature D")
-
-		// Track with --force should find feature-c as most recent ancestor
-		shell.Run("track feature-d --force")
-
-		// Verify it found the correct parent
-		shell.Run("parent").
-			OutputContains("feature-c")
+		for _, tt := range []struct {
+			name  string
+			setup func(*TestShell) // builds the tracked branches; feature-d is always untracked
+		}{
+			{
+				"linear stack — finds direct parent",
+				func(sh *TestShell) {
+					sh.Write("a.go", "package main").Run("create feature-a -m 'Add feature A'").
+						Write("b.go", "package main").Run("create feature-b -m 'Add feature B'").
+						Write("c.go", "package main").Run("create feature-c -m 'Add feature C'")
+					sh.Git("checkout -b feature-d").Write("d.go", "package main").Commit("d.go", "Add feature D")
+				},
+			},
+			{
+				"diamond topology — finds correct parent among siblings",
+				func(sh *TestShell) {
+					sh.Write("a.go", "package main").Run("create feature-a -m 'Add feature A'").
+						Checkout("main").
+						Write("b.go", "package main").Run("create feature-b -m 'Add feature B'").
+						Checkout("feature-a").
+						Write("c.go", "package main").Run("create feature-c -m 'Add feature C'")
+					sh.Checkout("feature-c").Git("checkout -b feature-d").
+						Write("d.go", "package main").Commit("d.go", "Add feature D")
+				},
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				shell := NewTestShellInProcess(t)
+				tt.setup(shell)
+				shell.Run("track feature-d --force")
+				shell.Run("parent").OutputContains("feature-c")
+			})
+		}
 	})
 
 	t.Run("track branches after split operation", func(t *testing.T) {
@@ -291,35 +304,6 @@ func TestTrackIntegration(t *testing.T) {
 		// Verify relationship restored
 		shell.Run("parent").
 			OutputContains("feature-a")
-	})
-
-	t.Run("track with force handles multiple potential ancestors correctly", func(t *testing.T) {
-		t.Parallel()
-		shell := NewTestShellInProcess(t)
-
-		// Create a complex branching structure
-		shell.Write("a.go", "package main").
-			Run("create feature-a -m 'Add feature A'").
-			Checkout("main").
-			Write("b.go", "package main").
-			Run("create feature-b -m 'Add feature B'").
-			Checkout("feature-a").
-			Write("c.go", "package main").
-			Run("create feature-c -m 'Add feature C'")
-
-		// Create a branch that could be based on either feature-a or feature-b
-		// But it's actually based on feature-c (most recent)
-		shell.Checkout("feature-c").
-			Git("checkout -b feature-d").
-			Write("d.go", "package main").
-			Commit("d.go", "Add feature D")
-
-		// Track with --force should find feature-c (most recent tracked ancestor)
-		shell.Run("track feature-d --force")
-
-		// Verify it found the correct parent
-		shell.Run("parent").
-			OutputContains("feature-c")
 	})
 
 	t.Run("track can recover entire corrupted stack", func(t *testing.T) {

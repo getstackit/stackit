@@ -13,6 +13,7 @@ import (
 // This command displays the shippability status of stacks without entering the merge wizard.
 func NewStatusCmd() *cobra.Command {
 	var showAll bool
+	var jsonOutput bool
 
 	cmd := &cobra.Command{
 		Use:   "status",
@@ -22,8 +23,9 @@ func NewStatusCmd() *cobra.Command {
 By default, shows only your own stacks. Use --all to see the entire team's work.
 
 Examples:
-  stackit merge status        # Show your mergeable work
-  stackit merge status --all  # Show entire team's mergeable work`,
+  stackit merge status         # Show your mergeable work
+  stackit merge status --all   # Show entire team's mergeable work
+  stackit merge status --json  # Machine-readable JSON output`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
@@ -41,6 +43,10 @@ Examples:
 					}
 				}
 
+				if jsonOutput {
+					return PrintMergeStatusJSON(ctx.Output, analysisResult)
+				}
+
 				DisplayMergeStatus(ctx.Output, analysisResult)
 				return nil
 			})
@@ -48,6 +54,7 @@ Examples:
 	}
 
 	cmd.Flags().BoolVar(&showAll, "all", false, "Show all team members' stacks (default: your stacks only)")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON for machine consumption")
 
 	return cmd
 }

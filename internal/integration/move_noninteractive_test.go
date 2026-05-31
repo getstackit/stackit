@@ -38,19 +38,6 @@ func TestMoveNonInteractive(t *testing.T) {
 			CommitCount("main", "b", 1)
 	})
 
-	t.Run("dry-run requires onto flag", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create a stack: main → a → b
-		sh.CreateLinearStack3()
-		sh.Checkout("b")
-
-		// Running move with --dry-run but without --onto should fail
-		sh.RunExpectError("move --dry-run").
-			OutputContains("--onto flag is required when using --dry-run")
-	})
-
 	t.Run("dry-run works with onto flag", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)

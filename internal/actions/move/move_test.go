@@ -587,3 +587,63 @@ func TestMoveAction(t *testing.T) {
 			"rebase should be complete after stackit continue")
 	})
 }
+
+func TestMoveMarksBranchesForPRBodyUpdate(t *testing.T) {
+	t.Parallel()
+
+	needsPRUpdate := func(t *testing.T, s *scenario.Scenario, branch string) bool {
+		t.Helper()
+		meta, err := s.Engine.Git().ReadLocalMetadata(branch)
+		require.NoError(t, err)
+		return meta != nil && meta.NeedsPRBodyUpdate
+	}
+
+	t.Run("marks moved branch and old parent for PR body update", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"feature-a": "main",
+				"feature-b": "feature-a",
+			})
+
+		require.False(t, needsPRUpdate(t, s, "feature-a"))
+		require.False(t, needsPRUpdate(t, s, "feature-b"))
+
+		require.NoError(t, Action(s.Context, Options{Source: "feature-b", Onto: "main"}, nil))
+
+		require.True(t, needsPRUpdate(t, s, "feature-b"), "moved branch should be marked")
+		require.True(t, needsPRUpdate(t, s, "feature-a"), "old parent should be marked")
+	})
+
+	t.Run("does not mark trunk as old parent", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"feature-a": "main",
+				"feature-b": "main",
+			})
+
+		// Move feature-b (parented to trunk) onto feature-a.
+		require.NoError(t, Action(s.Context, Options{Source: "feature-b", Onto: "feature-a"}, nil))
+
+		require.True(t, needsPRUpdate(t, s, "feature-b"), "moved branch should be marked")
+		require.False(t, needsPRUpdate(t, s, "feature-a"), "new parent (not old) should not be marked")
+	})
+
+	t.Run("marks old non-trunk parent when moving off it", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"feature-a": "main",
+				"feature-b": "feature-a",
+				"feature-c": "feature-b",
+			})
+
+		// Move feature-c from feature-b to feature-a.
+		require.NoError(t, Action(s.Context, Options{Source: "feature-c", Onto: "feature-a"}, nil))
+
+		require.True(t, needsPRUpdate(t, s, "feature-c"), "moved branch should be marked")
+		require.True(t, needsPRUpdate(t, s, "feature-b"), "old parent should be marked")
+		require.False(t, needsPRUpdate(t, s, "feature-a"), "new parent should not be marked")
+	})
+}

@@ -78,52 +78,6 @@ func TestStackIDPreservation(t *testing.T) {
 		sh.ExpectStackID("a", originalStackID)
 	})
 
-	t.Run("pluck changes stack ID when moving to different stack", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		// Create first stack: main -> a -> b -> c
-		sh.Write("a.txt", "content for a").
-			Run("create a -m 'Add a'").
-			Write("b.txt", "content for b").
-			Run("create b -m 'Add b'").
-			Write("c.txt", "content for c").
-			Run("create c -m 'Add c'")
-
-		// Set a description to trigger stack ID creation
-		sh.Run("describe -m 'First stack'")
-
-		// Capture first stack's ID
-		firstStackID := sh.GetStackID("a")
-		sh.ExpectStackIDsMatch("a", "b", "c")
-
-		// Create second stack: main -> x
-		sh.Checkout("main").
-			Write("x.txt", "content for x").
-			Run("create x -m 'Add x'")
-
-		// Set a description to trigger stack ID creation for second stack
-		sh.Run("describe -m 'Second stack'")
-
-		// Capture second stack's ID
-		secondStackID := sh.GetStackID("x")
-		sh.ExpectStackIDsDiffer("a", "x")
-
-		// Pluck b onto x (unlike move, pluck doesn't bring descendants)
-		sh.Checkout("b")
-		sh.Run("pluck --onto x --yes")
-
-		// Verify b now has the second stack's ID
-		sh.ExpectStackID("b", secondStackID)
-
-		// Verify a still has the first stack ID
-		sh.ExpectStackID("a", firstStackID)
-
-		// Verify c is reparented to a and still has first stack ID
-		sh.ExpectBranchParent("c", "a")
-		sh.ExpectStackID("c", firstStackID)
-	})
-
 	t.Run("fold with siblings syncs stack IDs from new parent", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)

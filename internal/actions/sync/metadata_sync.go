@@ -156,7 +156,7 @@ func resolveOrphanedMetadata(ctx *app.Context, info engine.OrphanedMetadataInfo,
 
 	if pushLocal {
 		// Push local metadata to remote
-		if err := eng.SetLastModifiedBy(info.BranchName); err != nil {
+		if err := eng.BatchSetLastModifiedBy([]string{info.BranchName}); err != nil {
 			out.Debug("Failed to set last modified by: %v", err)
 		}
 		if err := actions.PushMetadataAndSyncPRs(ctx, []string{info.BranchName}); err != nil {

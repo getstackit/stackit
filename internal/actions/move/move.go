@@ -332,10 +332,8 @@ func updateStackIDsAfterMove(ctx *app.Context, plan *movePlan, source string, so
 		return
 	}
 
-	for _, d := range plan.descendants {
-		if err := eng.SetStackID(ctx.Context, d, targetStackID); err != nil {
-			out.Warn("Failed to update stack ID for %s: %v", d.GetName(), err)
-		}
+	if err := eng.SetStackID(ctx.Context, plan.descendants, targetStackID); err != nil {
+		out.Warn("Failed to update stack IDs: %v", err)
 	}
 	out.Info("Stack membership updated for %s", source)
 }

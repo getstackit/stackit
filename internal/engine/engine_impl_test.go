@@ -670,15 +670,16 @@ func TestIsMergedIntoTrunk(t *testing.T) {
 	})
 }
 
-func TestGetDeletionStatus(t *testing.T) {
+func TestGetDeletionStatusesSingleBranch(t *testing.T) {
 	t.Parallel()
 
 	t.Run("never considers trunk for deletion", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		status, err := s.Engine.GetDeletionStatus(context.Background(), "main")
+		statuses, err := s.Engine.GetDeletionStatuses(context.Background(), []string{"main"})
 		require.NoError(t, err)
+		status := statuses["main"]
 		require.False(t, status.SafeToDelete)
 	})
 
@@ -696,8 +697,9 @@ func TestGetDeletionStatus(t *testing.T) {
 		err := s.Engine.Rebuild("main")
 		require.NoError(t, err)
 
-		status, err := s.Engine.GetDeletionStatus(context.Background(), "branch1")
+		statuses, err := s.Engine.GetDeletionStatuses(context.Background(), []string{"branch1"})
 		require.NoError(t, err)
+		status := statuses["branch1"]
 		require.True(t, status.SafeToDelete)
 	})
 
@@ -720,8 +722,9 @@ func TestGetDeletionStatus(t *testing.T) {
 		err = s.Engine.SetBranchType(branch, git.BranchTypeWorktreeAnchor)
 		require.NoError(t, err)
 
-		status, err := s.Engine.GetDeletionStatus(context.Background(), "branch1")
+		statuses, err := s.Engine.GetDeletionStatuses(context.Background(), []string{"branch1"})
 		require.NoError(t, err)
+		status := statuses["branch1"]
 		require.False(t, status.SafeToDelete, "worktree anchor should not be deletable even if merged")
 	})
 }

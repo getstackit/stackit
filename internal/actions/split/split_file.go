@@ -315,7 +315,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	// TrackBranch may generate a new ID if parent is trunk, but split branches
 	// should stay in the same stack as the branch being split
 	if originalStackID != "" {
-		if err := eng.SetStackID(ctx, newBranch, originalStackID); err != nil {
+		if err := eng.SetStackID(ctx, engine.BranchesOf(newBranch), originalStackID); err != nil {
 			return nil, recoverWithRef(fmt.Errorf("failed to preserve stack ID: %w", err))
 		}
 	}
@@ -512,7 +512,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 
 	// Preserve stack ID from original branch
 	if originalStackID != "" {
-		if err := eng.SetStackID(ctx, childBranch, originalStackID); err != nil {
+		if err := eng.SetStackID(ctx, engine.BranchesOf(childBranch), originalStackID); err != nil {
 			return nil, fmt.Errorf("failed to preserve stack ID: %w", err)
 		}
 	}
@@ -593,7 +593,7 @@ func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parent
 
 	// Preserve stack ID from original branch
 	if originalStackID != "" {
-		if err := eng.SetStackID(ctx, newBranch, originalStackID); err != nil {
+		if err := eng.SetStackID(ctx, engine.BranchesOf(newBranch), originalStackID); err != nil {
 			_ = eng.DeleteBranch(ctx, newBranch)
 			_ = eng.CheckoutBranch(ctx, branchToSplit)
 			return nil, fmt.Errorf("failed to preserve stack ID: %w", err)

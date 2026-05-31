@@ -114,7 +114,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
-		err = eng.SetLastModifiedBy("feature-c")
+		err = eng.BatchSetLastModifiedBy([]string{"feature-c"})
 		require.NoError(t, err)
 
 		err = eng.LoadRemoteMetadataCache()
@@ -139,7 +139,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 
 		require.False(t, eng.HasLocalModifications("feature-d"))
 
-		err := eng.SetLastModifiedBy("feature-d")
+		err := eng.BatchSetLastModifiedBy([]string{"feature-d"})
 		require.NoError(t, err)
 
 		require.False(t, eng.HasLocalModifications("feature-d"))

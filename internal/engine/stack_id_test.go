@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -142,7 +143,7 @@ func TestSetStackID(t *testing.T) {
 		branch := s.Engine.GetBranch("feature")
 		newStackID := "new-stack-id"
 
-		err := s.Engine.SetStackID(context.Background(), branch, newStackID)
+		err := s.Engine.SetStackID(context.Background(), engine.BranchesOf(branch), newStackID)
 		require.NoError(t, err)
 
 		// Verify it was set

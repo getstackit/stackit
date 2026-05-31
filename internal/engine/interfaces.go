@@ -40,7 +40,6 @@ type BranchStatus interface {
 	ReadBranchStatuses(branches Branches) BranchStatuses
 	IsMergedIntoTrunk(ctx context.Context, branchName string) (bool, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
-	GetDeletionStatus(ctx context.Context, branchName string) (DeletionStatus, error)
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription
@@ -180,8 +179,8 @@ type BranchTracking interface {
 	// EnsureStackID returns the stack ID for a branch, creating one if it doesn't exist.
 	// This is used for lazy creation of stack metadata when setting descriptions or scopes.
 	EnsureStackID(ctx context.Context, branch Branch) (string, error)
-	// SetStackID sets the stack ID on a branch's metadata.
-	SetStackID(ctx context.Context, branch Branch, stackID string) error
+	// SetStackID sets the stack ID on multiple branches atomically in a single transaction.
+	SetStackID(ctx context.Context, branches Branches, stackID string) error
 	// CreateStackRef creates a new stack ref with the given metadata.
 	CreateStackRef(stackID string, meta *git.StackMeta) error
 	// GetStackMeta returns the stack metadata for a stack ID.

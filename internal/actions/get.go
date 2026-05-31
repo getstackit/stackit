@@ -155,6 +155,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// Identify branches to sync (ancestors + descendants)
 	branchesToSync := []string{targetBranch}
 	parentMap := make(map[string]string)
+	branchPRInfo := make(map[string]*int) // branch -> PR number
 
 	// Crawl ancestors using GitHub PR info if possible
 	if ctx.GitHub() != nil {
@@ -165,6 +166,8 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			if err != nil || pr == nil {
 				break
 			}
+			prNum := pr.Number
+			branchPRInfo[current] = &prNum
 
 			base := pr.Base
 			if base == "" || base == eng.Trunk().GetName() {
@@ -230,7 +233,6 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 
 	// Track statistics for summary
 	var branchesCreated, branchesUpdated int
-	branchPRInfo := make(map[string]*int)       // branch -> PR number
 	branchFrozenStatus := make(map[string]bool) // branch -> is frozen
 
 	// Fetch PR info for branches in parallel if possible
@@ -241,6 +243,9 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		// Filter out trunk before parallel fetch
 		branchesToFetch := make([]string, 0, len(branchesToSync))
 		for _, branchName := range branchesToSync {
+			if _, ok := branchPRInfo[branchName]; ok {
+				continue
+			}
 			if branchName != trunkName {
 				branchesToFetch = append(branchesToFetch, branchName)
 			}

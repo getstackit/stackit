@@ -95,9 +95,9 @@ type RemoteMetadataManager interface {
 	// PushMetadataForBranches pushes the metadata refs for the given branch
 	// names to origin.
 	PushMetadataForBranches(ctx context.Context, branchNames []string) error
-	// ConfigureStackMetadataSync adds the stack-metadata refspec to origin.
+	// ConfigureStackMetadataSync adds the stack-metadata refspec to the configured remote.
 	ConfigureStackMetadataSync(ctx context.Context) error
-	// FetchStackMetadata fetches stack-metadata refs from origin.
+	// FetchStackMetadata fetches stack-metadata refs from the configured remote.
 	FetchStackMetadata(ctx context.Context) error
 	// ListStackMetadata returns a map of local stack IDs to their ref SHAs.
 	ListStackMetadata() (map[string]string, error)
@@ -108,6 +108,20 @@ type RemoteMetadataManager interface {
 	// GetStackIDsForBranches returns the unique stack IDs for the given branches.
 	// This is used to determine which stack refs need to be pushed to remote.
 	GetStackIDsForBranches(branches Branches) []string
+}
+
+// RemoteFetchRequest describes a single remote fetch that may update several
+// branch and Stackit metadata namespaces in one network round trip.
+type RemoteFetchRequest struct {
+	Remote               string
+	Branches             []string
+	IncludeMetadata      bool
+	IncludeStackMetadata bool
+}
+
+// RemoteFetcher provides batched remote fetch operations.
+type RemoteFetcher interface {
+	FetchRemote(ctx context.Context, req RemoteFetchRequest) error
 }
 
 // ApplySplitOptions contains options for applying a split
@@ -194,6 +208,7 @@ type Engine interface {
 	Absorber
 	UndoManager
 	RemoteMetadataManager
+	RemoteFetcher
 	WorktreeRegistry
 	Git() git.Runner
 

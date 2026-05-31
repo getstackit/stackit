@@ -114,3 +114,7 @@ func (r *runner) Fetch(ctx context.Context, remote, branch string) error {
 	}
 	return nil
 }
+
+func (r *runner) FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error {
+	return r.fetchRemoteRefSpecs(ctx, remote, refspecs)
+}

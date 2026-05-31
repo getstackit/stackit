@@ -149,19 +149,8 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		Type:  GetEventStarted,
 	})
 
-	// Fetch target branch from origin
 	remote := eng.GetRemote()
-	if err := eng.Fetch(gctx, remote, targetBranch); err != nil {
-		return fmt.Errorf("failed to fetch branch %s from %s: %w", targetBranch, remote, err)
-	}
-
-	// Emit trunk status (main/master)
 	trunkName := eng.Trunk().GetName()
-	handler.EmitEvent(GetEvent{
-		Phase:  GetPhaseFetch,
-		Type:   GetEventCompleted,
-		Branch: trunkName,
-	})
 
 	// Identify branches to sync (ancestors + descendants)
 	branchesToSync := []string{targetBranch}
@@ -205,6 +194,34 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		}
 	}
 
+	branchesToFetch := make([]string, 0, len(branchesToSync))
+	seenFetchBranch := make(map[string]bool, len(branchesToSync))
+	for _, branchName := range branchesToSync {
+		if branchName == trunkName && branchName != targetBranch {
+			continue
+		}
+		if seenFetchBranch[branchName] {
+			continue
+		}
+		seenFetchBranch[branchName] = true
+		branchesToFetch = append(branchesToFetch, branchName)
+	}
+
+	if err := eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+		Remote:          remote,
+		Branches:        branchesToFetch,
+		IncludeMetadata: true,
+	}); err != nil {
+		return fmt.Errorf("failed to fetch branches from %s: %w", remote, err)
+	}
+
+	// Emit trunk status (main/master)
+	handler.EmitEvent(GetEvent{
+		Phase:  GetPhaseFetch,
+		Type:   GetEventCompleted,
+		Branch: trunkName,
+	})
+
 	// Emit sync phase started
 	handler.EmitEvent(GetEvent{
 		Phase: GetPhaseSync,
@@ -245,9 +262,6 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		if branchName == eng.Trunk().GetName() {
 			continue
 		}
-
-		// Fetch if not already fetched
-		_ = eng.Fetch(gctx, remote, branchName)
 
 		branch := eng.GetBranch(branchName)
 		isNew := !branch.IsTracked()
@@ -312,23 +326,19 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	}
 
 	// Fetch and apply remote metadata for all branches in the stack
-	if err := eng.FetchRemoteMetadata(ctx.Context); err != nil {
-		out.Debug("No remote metadata to fetch: %v", err)
+	// Configure refspec so future git fetch commands also fetch metadata
+	if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
+		out.Debug("Failed to configure metadata refspec: %v", err)
+	}
+	if err := eng.LoadRemoteMetadataCache(); err != nil {
+		out.Debug("Failed to load remote metadata cache: %v", err)
 	} else {
-		// Configure refspec so future git fetch commands also fetch metadata
-		if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
-			out.Debug("Failed to configure metadata refspec: %v", err)
-		}
-		if err := eng.LoadRemoteMetadataCache(); err != nil {
-			out.Debug("Failed to load remote metadata cache: %v", err)
-		} else {
-			for _, branchName := range branchesToSync {
-				if branchName == eng.Trunk().GetName() {
-					continue
-				}
-				if err := eng.ApplyRemoteMetadataIfExists(branchName); err != nil {
-					out.Debug("Failed to apply metadata for %s: %v", branchName, err)
-				}
+		for _, branchName := range branchesToSync {
+			if branchName == eng.Trunk().GetName() {
+				continue
+			}
+			if err := eng.ApplyRemoteMetadataIfExists(branchName); err != nil {
+				out.Debug("Failed to apply metadata for %s: %v", branchName, err)
 			}
 		}
 	}

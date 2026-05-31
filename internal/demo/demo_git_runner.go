@@ -256,6 +256,10 @@ func (d *demoGitRunner) Fetch(_ context.Context, _, _ string) error {
 	return nil
 }
 
+func (d *demoGitRunner) FetchRefSpecs(_ context.Context, _ string, _ []string) error {
+	return nil
+}
+
 func (d *demoGitRunner) CreateBranch(_ context.Context, _, _ string) error {
 	return nil
 }

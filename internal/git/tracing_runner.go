@@ -190,6 +190,13 @@ func (t *tracingRunner) Fetch(ctx context.Context, remote, branch string) error 
 	return err
 }
 
+func (t *tracingRunner) FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error {
+	start := time.Now()
+	err := t.inner.FetchRefSpecs(ctx, remote, refspecs)
+	t.trace("FetchRefSpecs", time.Since(start), err == nil, err, slog.String("remote", remote), slog.Int("count", len(refspecs)))
+	return err
+}
+
 func (t *tracingRunner) PushMetadataRefs(ctx context.Context, branches []string) error {
 	start := time.Now()
 	err := t.inner.PushMetadataRefs(ctx, branches)

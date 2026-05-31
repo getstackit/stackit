@@ -19,16 +19,16 @@ func (e *engineImpl) PushMetadataForBranches(ctx context.Context, branchNames []
 	return e.git.PushMetadataRefs(ctx, branchNames)
 }
 
-// ConfigureStackMetadataSync adds the stack-metadata refspec to origin so
-// subsequent `git fetch origin` invocations pick up stack-ref changes.
+// ConfigureStackMetadataSync adds the stack-metadata refspec to the configured
+// remote so subsequent git fetches pick up stack-ref changes.
 func (e *engineImpl) ConfigureStackMetadataSync(_ context.Context) error {
 	return e.git.EnsureStackMetaRefspecConfigured()
 }
 
-// FetchStackMetadata fetches stack-metadata refs from origin into the
+// FetchStackMetadata fetches stack-metadata refs into the
 // remote-stacks namespace.
 func (e *engineImpl) FetchStackMetadata(ctx context.Context) error {
-	return e.git.FetchStackMetaRefs(ctx)
+	return e.FetchRemote(ctx, RemoteFetchRequest{IncludeStackMetadata: true})
 }
 
 // ListStackMetadata returns a map of local stack IDs to their ref SHAs. Used

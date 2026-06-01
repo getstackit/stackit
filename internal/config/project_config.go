@@ -84,27 +84,15 @@ type ProjectConfig struct {
 	Navigation     NavigationConfig `yaml:"navigation,omitempty"`
 }
 
-// HooksConfig contains hook configurations.
-//
-// PostWorktreeCreate keeps its dedicated field for the legacy worktree-create
-// integration. All other phases (pre-modify, post-submit, ...) flow through
-// the inline Phases map and are matched by their kebab-case phase name.
-type HooksConfig struct {
-	// PostWorktreeCreate contains commands to run after creating a worktree.
-	PostWorktreeCreate []string `yaml:"post-worktree-create,omitempty"`
-	// Phases captures every other hook phase under hooks: in .stackit.yaml.
-	// Keys are phase names like "pre-modify"; values are shell command lists.
-	Phases map[string][]string `yaml:",inline"`
-}
+// HooksConfig contains hook configurations keyed by lifecycle phase.
+// Keys are phase names like "pre-modify" or "post-worktree-create"; values
+// are shell command lists.
+type HooksConfig map[string][]string
 
-// For returns the hook command list configured for the given phase, looking
-// up both the explicit field for PostWorktreeCreate and the inline Phases map.
+// For returns the hook command list configured for the given phase.
 // Returns nil for an unknown phase.
 func (h HooksConfig) For(phase string) []string {
-	if phase == PhasePostWorktreeCreate {
-		return h.PostWorktreeCreate
-	}
-	return h.Phases[phase]
+	return h[phase]
 }
 
 // knownTopLevelKeys contains all valid top-level keys in .stackit.yaml
@@ -162,7 +150,7 @@ func LoadProjectConfig(repoRoot string) (*ProjectConfig, error) {
 
 // HasPostWorktreeCreateHooks returns true if there are any post-worktree-create hooks configured
 func (c *ProjectConfig) HasPostWorktreeCreateHooks() bool {
-	return len(c.Hooks.PostWorktreeCreate) > 0
+	return len(c.Hooks.For(PhasePostWorktreeCreate)) > 0
 }
 
 // HasTrunk returns true if a trunk branch is configured

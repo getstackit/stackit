@@ -25,7 +25,7 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 	}
 	return hooks.ResolveApproved(hooks.ResolveRequest{
 		Phase:    config.PhasePostWorktreeCreate,
-		Commands: projectCfg.Hooks.PostWorktreeCreate,
+		Commands: projectCfg.Hooks.For(config.PhasePostWorktreeCreate),
 		Config:   ctx.Config,
 		Prompter: worktreePrompter{},
 		Output:   ctx.Output,

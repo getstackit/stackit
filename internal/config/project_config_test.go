@@ -23,7 +23,7 @@ func TestLoadProjectConfig(t *testing.T) {
 
 		cfg, err := LoadProjectConfig(tmpDir)
 		require.NoError(t, err)
-		assert.Equal(t, []string{"mise trust", "npm install"}, cfg.Hooks.PostWorktreeCreate)
+		assert.Equal(t, []string{"mise trust", "npm install"}, cfg.Hooks.For(PhasePostWorktreeCreate))
 	})
 
 	t.Run("returns empty config when file does not exist", func(t *testing.T) {
@@ -31,7 +31,7 @@ func TestLoadProjectConfig(t *testing.T) {
 
 		cfg, err := LoadProjectConfig(tmpDir)
 		require.NoError(t, err)
-		assert.Empty(t, cfg.Hooks.PostWorktreeCreate)
+		assert.Empty(t, cfg.Hooks.For(PhasePostWorktreeCreate))
 	})
 
 	t.Run("returns error for malformed YAML", func(t *testing.T) {
@@ -59,7 +59,7 @@ func TestLoadProjectConfig(t *testing.T) {
 
 		cfg, err := LoadProjectConfig(tmpDir)
 		require.NoError(t, err)
-		assert.Empty(t, cfg.Hooks.PostWorktreeCreate)
+		assert.Empty(t, cfg.Hooks.For(PhasePostWorktreeCreate))
 	})
 
 	t.Run("handles empty config file", func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestLoadProjectConfig(t *testing.T) {
 
 		cfg, err := LoadProjectConfig(tmpDir)
 		require.NoError(t, err)
-		assert.Empty(t, cfg.Hooks.PostWorktreeCreate)
+		assert.Empty(t, cfg.Hooks.For(PhasePostWorktreeCreate))
 	})
 
 	t.Run("rejects config with unknown top-level keys", func(t *testing.T) {
@@ -89,10 +89,10 @@ func TestLoadProjectConfig(t *testing.T) {
 	})
 }
 
-func TestHooksConfigInlinePhases(t *testing.T) {
+func TestHooksConfigPhases(t *testing.T) {
 	t.Parallel()
 
-	t.Run("inline phase keys parse alongside explicit worktree field", func(t *testing.T) {
+	t.Run("phase keys parse into one map", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
 
@@ -110,17 +110,17 @@ func TestHooksConfigInlinePhases(t *testing.T) {
 		cfg, err := LoadProjectConfig(tmpDir)
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{"mise trust"}, cfg.Hooks.PostWorktreeCreate)
-		assert.Equal(t, []string{"scripts/check-review.sh"}, cfg.Hooks.Phases["pre-modify"])
-		assert.Equal(t, []string{"scripts/notify.sh"}, cfg.Hooks.Phases["post-submit"])
+		assert.Equal(t, []string{"mise trust"}, cfg.Hooks.For(PhasePostWorktreeCreate))
+		assert.Equal(t, []string{"scripts/check-review.sh"}, cfg.Hooks.For("pre-modify"))
+		assert.Equal(t, []string{"scripts/notify.sh"}, cfg.Hooks.For("post-submit"))
 
-		// For() abstracts the lookup so callers don't care which field a phase lives in.
+		// For() abstracts the lookup so callers do not reach into the map directly.
 		assert.Equal(t, []string{"mise trust"}, cfg.Hooks.For(PhasePostWorktreeCreate))
 		assert.Equal(t, []string{"scripts/check-review.sh"}, cfg.Hooks.For("pre-modify"))
 		assert.Nil(t, cfg.Hooks.For("never-configured"))
 	})
 
-	t.Run("worktree-create does not leak into inline map", func(t *testing.T) {
+	t.Run("worktree-create uses the same phase map", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
 
@@ -134,18 +134,15 @@ func TestHooksConfigInlinePhases(t *testing.T) {
 		cfg, err := LoadProjectConfig(tmpDir)
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{"mise trust"}, cfg.Hooks.PostWorktreeCreate)
-		_, present := cfg.Hooks.Phases["post-worktree-create"]
-		assert.False(t, present, "explicit field should consume the key, not the inline map")
+		assert.Equal(t, []string{"mise trust"}, cfg.Hooks.For(PhasePostWorktreeCreate))
+		assert.Equal(t, []string{"mise trust"}, cfg.Hooks[PhasePostWorktreeCreate])
 	})
 }
 
 func TestHasPostWorktreeCreateHooks(t *testing.T) {
 	t.Run("returns true when hooks exist", func(t *testing.T) {
 		cfg := &ProjectConfig{
-			Hooks: HooksConfig{
-				PostWorktreeCreate: []string{"mise trust"},
-			},
+			Hooks: HooksConfig{PhasePostWorktreeCreate: []string{"mise trust"}},
 		}
 		assert.True(t, cfg.HasPostWorktreeCreateHooks())
 	})
@@ -157,9 +154,7 @@ func TestHasPostWorktreeCreateHooks(t *testing.T) {
 
 	t.Run("returns false when hooks list is empty", func(t *testing.T) {
 		cfg := &ProjectConfig{
-			Hooks: HooksConfig{
-				PostWorktreeCreate: []string{},
-			},
+			Hooks: HooksConfig{PhasePostWorktreeCreate: []string{}},
 		}
 		assert.False(t, cfg.HasPostWorktreeCreateHooks())
 	})
@@ -204,7 +199,7 @@ hooks:
 		assert.Equal(t, "squash", cfg.Merge.Method)
 		assert.Equal(t, "make test", cfg.CI.Command)
 		assert.Equal(t, 300, cfg.CI.Timeout)
-		assert.Equal(t, []string{"npm install"}, cfg.Hooks.PostWorktreeCreate)
+		assert.Equal(t, []string{"npm install"}, cfg.Hooks.For(PhasePostWorktreeCreate))
 	})
 
 	t.Run("loads partial config", func(t *testing.T) {

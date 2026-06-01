@@ -78,6 +78,7 @@ func RunCommandHooks(ctx *app.Context, cmd *cobra.Command, phase PhasePrefix) er
 		Config:   ctx.Config,
 		Prompter: defaultPrompter{},
 		Output:   ctx.Output,
+		Required: phase == PhasePre,
 	})
 	if err != nil {
 		return fmt.Errorf("resolve hooks for %s: %w", phaseKey, err)

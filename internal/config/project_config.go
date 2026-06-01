@@ -246,6 +246,11 @@ func (c *ProjectConfig) HasUndoDepth() bool {
 	return c.Undo.Depth > 0
 }
 
+// HasUndoEnabled returns true if undo enabled is configured
+func (c *ProjectConfig) HasUndoEnabled() bool {
+	return c.Undo.Enabled != nil
+}
+
 // HasWorktreeBasePath returns true if worktree base path is configured
 func (c *ProjectConfig) HasWorktreeBasePath() bool {
 	return c.Worktree.BasePath != ""

@@ -173,4 +173,39 @@ func TestConfigCommand(t *testing.T) {
 		require.NoError(t, err, "config get command failed: %s", output)
 		require.Equal(t, "true", strings.TrimSpace(output))
 	})
+
+	t.Run("config set get and unset undo.enabled", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
+
+		output, err := s.RunCliAndGetOutput("config", "get", "undo.enabled")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "true", strings.TrimSpace(output))
+
+		output, err = s.RunCliAndGetOutput("config", "set", "undo.enabled", "false")
+		require.NoError(t, err, "config set command failed: %s", output)
+		require.Contains(t, output, "Set undo.enabled to: false")
+
+		output, err = s.RunCliAndGetOutput("config", "get", "undo.enabled")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "false", strings.TrimSpace(output))
+
+		output, err = s.RunCliAndGetOutput("config", "unset", "undo.enabled")
+		require.NoError(t, err, "config unset command failed: %s", output)
+		require.Contains(t, output, "Unset undo.enabled")
+
+		output, err = s.RunCliAndGetOutput("config", "get", "undo.enabled")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "true", strings.TrimSpace(output))
+	})
+
+	t.Run("config list includes undo.enabled", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
+
+		output, err := s.RunCliAndGetOutput("config", "list")
+		require.NoError(t, err, "config list command failed: %s", output)
+		require.Contains(t, output, "undo.enabled")
+		require.Contains(t, output, "true")
+	})
 }

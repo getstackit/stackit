@@ -69,6 +69,7 @@ func ConfigListAction(repoRoot string, writer io.Writer) error {
 
 	// Undo settings
 	lines = append(lines, fmt.Sprintf("%s: %d", style.ColorCyan("undo.depth"), cfg.UndoStackDepth()))
+	lines = append(lines, fmt.Sprintf("%s: %v", style.ColorCyan("undo.enabled"), cfg.UndoEnabled()))
 
 	// Worktree settings
 	worktreeBasePath := cfg.WorktreeBasePath()

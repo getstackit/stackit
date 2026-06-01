@@ -270,6 +270,11 @@ func (c *GitConfig) SetUndoStackDepth(depth int) error {
 	return c.store.SetInt(KeyUndoDepth, depth)
 }
 
+// SetUndoEnabled sets whether undo snapshots are taken before mutations.
+func (c *GitConfig) SetUndoEnabled(enabled bool) error {
+	return c.store.SetBool(KeyUndoEnabled, enabled)
+}
+
 // WorktreeBasePath returns the worktree base path.
 // Priority: personal git config > team project config > empty (not set).
 func (c *GitConfig) WorktreeBasePath() string {
@@ -913,6 +918,11 @@ func (c *GitConfig) UnsetSplitHunkSelector() error {
 // UnsetUndoStackDepth removes the personal undo stack depth setting, reverting to project/default.
 func (c *GitConfig) UnsetUndoStackDepth() error {
 	return c.store.Unset(KeyUndoDepth)
+}
+
+// UnsetUndoEnabled removes the personal undo enabled setting, reverting to project/default.
+func (c *GitConfig) UnsetUndoEnabled() error {
+	return c.store.Unset(KeyUndoEnabled)
 }
 
 // UnsetCICommand removes the personal CI command setting, reverting to project/default.

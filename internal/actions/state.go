@@ -81,16 +81,18 @@ func BuildState(ctx *app.Context, _ StateOptions) StateResult {
 	}
 
 	// Working-tree state via a single git status --porcelain call.
-	// A failed check is non-fatal; log and fall back to the safe default (false).
+	// A failed check is non-fatal; log and avoid reporting a clean tree.
 	staged, unstaged, untracked, statusErr := eng.GetWorkingTreeStatus(ctx.Context)
+	clean := !staged && !unstaged && !untracked
 	if statusErr != nil {
 		ctx.Output.Debug("state: working-tree status check failed: %v", statusErr)
+		clean = false
 	}
 	result.WorkingTree = WorkingTreeStatus{
 		Staged:    staged,
 		Unstaged:  unstaged,
 		Untracked: untracked,
-		Clean:     !staged && !unstaged && !untracked,
+		Clean:     clean,
 	}
 
 	// In-progress operation + conflicts.

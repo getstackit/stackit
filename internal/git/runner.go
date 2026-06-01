@@ -858,7 +858,7 @@ func (r *runner) GetCommitLog(sha, format string) (string, error) {
 }
 
 func (r *runner) GetStatusPorcelain(ctx context.Context) (string, error) {
-	return r.RunGitCommandWithContext(ctx, "status", "--porcelain")
+	return r.RunGitCommandRawWithContext(ctx, "status", "--porcelain")
 }
 
 func (r *runner) GetCommitTemplate(ctx context.Context) (string, error) {

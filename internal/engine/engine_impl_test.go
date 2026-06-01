@@ -100,6 +100,57 @@ func TestTrackBranch(t *testing.T) {
 	})
 }
 
+func TestGetWorkingTreeStatus(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clean repo", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		staged, unstaged, untracked, err := s.Engine.GetWorkingTreeStatus(context.Background())
+		require.NoError(t, err)
+		require.False(t, staged)
+		require.False(t, unstaged)
+		require.False(t, untracked)
+	})
+
+	t.Run("unstaged tracked change", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		require.NoError(t, s.Scene.Repo.CreateChange("2", "1", true))
+
+		staged, unstaged, untracked, err := s.Engine.GetWorkingTreeStatus(context.Background())
+		require.NoError(t, err)
+		require.False(t, staged)
+		require.True(t, unstaged)
+		require.False(t, untracked)
+	})
+
+	t.Run("staged tracked change", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		require.NoError(t, s.Scene.Repo.CreateChange("2", "1", false))
+
+		staged, unstaged, untracked, err := s.Engine.GetWorkingTreeStatus(context.Background())
+		require.NoError(t, err)
+		require.True(t, staged)
+		require.False(t, unstaged)
+		require.False(t, untracked)
+	})
+
+	t.Run("untracked file", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		require.NoError(t, s.Scene.Repo.CreateChange("new", "untracked", true))
+
+		staged, unstaged, untracked, err := s.Engine.GetWorkingTreeStatus(context.Background())
+		require.NoError(t, err)
+		require.False(t, staged)
+		require.False(t, unstaged)
+		require.True(t, untracked)
+	})
+}
+
 func TestSetParent(t *testing.T) {
 	t.Parallel()
 	t.Run("updates parent relationship", func(t *testing.T) {
@@ -885,7 +936,8 @@ func TestUpsertPrInfo(t *testing.T) {
 				"branch1": "main",
 			})
 
-		prInfo := testhelpers.NewTestPrInfoWithTitle(123, "Original Title")
+		prInfo := testhelpers.NewTestPrInfoWithTitle(123, "Original Title").
+			WithMergeBranch("stackit-merge-branch")
 
 		branch := s.Engine.GetBranch("branch1")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
@@ -902,6 +954,7 @@ func TestUpsertPrInfo(t *testing.T) {
 		require.NotNil(t, retrieved)
 		require.Equal(t, "Updated Title", retrieved.Title())
 		require.Equal(t, "Updated body", retrieved.Body())
+		require.Equal(t, "stackit-merge-branch", retrieved.MergeBranch())
 	})
 }
 

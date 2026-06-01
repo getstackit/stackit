@@ -8,7 +8,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
@@ -18,7 +17,7 @@ func TestSync(t *testing.T) {
 	t.Parallel()
 	t.Run("local parent is authoritative over GitHub PR base", func(t *testing.T) {
 		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		sh := scenario.NewRemoteScenario(t)
 
 		// 1. Create a diamond-like structure:
 		// main -> feature-a -> feature-b
@@ -68,7 +67,7 @@ func TestSync(t *testing.T) {
 
 	t.Run("handles consolidation and deletion of merged branches", func(t *testing.T) {
 		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		sh := scenario.NewRemoteScenario(t)
 
 		// 1. Create a chain of branches: main -> branch-a -> branch-b -> branch-c
 		branchNames := []string{"branch-a", "branch-b", "branch-c"}
@@ -145,7 +144,7 @@ func TestSync(t *testing.T) {
 
 	t.Run("handles diamond dependency during sync", func(t *testing.T) {
 		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		sh := scenario.NewRemoteScenario(t)
 
 		// Create: main -> a -> b
 		//                \-> c
@@ -200,7 +199,7 @@ func TestSync(t *testing.T) {
 
 func TestSyncDraftPRs(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 
 	// Create branch-a on main
 	sh.CreateBranch("branch-a").
@@ -245,7 +244,7 @@ func TestSyncDraftPRs(t *testing.T) {
 
 func TestSyncCleanupDiamond(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 
 	// Create: main -> a -> b
 	//                \-> c
@@ -299,7 +298,7 @@ func TestSyncStaleDraftCleanup(t *testing.T) {
 	t.Parallel()
 	// Tests the fix for the "stale draft" bug where empty branches
 	// weren't being cleaned up if they were ancestors of other branches.
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 
 	// Create: main -> a -> b
 	sh.CreateBranch("a").CommitChange("a", "a").TrackBranch("a", "main")
@@ -343,7 +342,7 @@ func TestSyncStaleDraftCleanup(t *testing.T) {
 
 func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 
 	// Create stack: main -> A(2 commits) -> B -> C
 	sh.CreateBranch("branch-a").
@@ -414,7 +413,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 	t.Parallel()
 	t.Run("sync from main does not leave staged changes after cleanup and restack", func(t *testing.T) {
 		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		sh := scenario.NewRemoteScenario(t)
 
 		// 1. Create a chain: main -> branch-a -> branch-b
 		sh.CreateBranch("branch-a").
@@ -471,7 +470,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 
 	t.Run("sync from detached HEAD does not leave staged changes", func(t *testing.T) {
 		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		sh := scenario.NewRemoteScenario(t)
 
 		// Create a simple stack
 		sh.CreateBranch("feature").
@@ -513,7 +512,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		t.Parallel()
 		// This test creates a scenario where the rebase actually moves commits,
 		// which is more likely to trigger index state issues.
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		sh := scenario.NewRemoteScenario(t)
 
 		// 1. Create initial stack: main -> feature -> child
 		sh.CreateBranch("feature").
@@ -572,7 +571,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 
 	t.Run("sync skips deletion of branch with unpushed commits", func(t *testing.T) {
 		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		sh := scenario.NewRemoteScenario(t)
 
 		// Create a branch and track it
 		sh.CreateBranch("feature").
@@ -582,14 +581,9 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		eng := sh.Engine
 		mainBranchName := eng.Trunk().GetName()
 
-		// Set up remote and push everything
-		_, err := sh.Scene.Repo.CreateBareRemote("origin")
-		require.NoError(t, err)
-		sh.Checkout("main")
-		err = sh.Scene.Repo.PushBranch("origin", "main")
-		require.NoError(t, err)
+		// Push the branch once so the extra commit below is detected as unpushed.
 		sh.Checkout("feature")
-		err = sh.Scene.Repo.PushBranch("origin", "feature")
+		err := sh.Scene.Repo.PushBranch("origin", "feature")
 		require.NoError(t, err)
 
 		// Add an unpushed local commit
@@ -687,7 +681,7 @@ func markPrMerged(t *testing.T, sh *scenario.Scenario, branch string, prNumber i
 // not skip over to trunk.
 func TestSquashMergeMiddleOfStack(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	// main -> A -> B -> C
@@ -731,7 +725,7 @@ func TestSquashMergeMiddleOfStack(t *testing.T) {
 // deletions to main in a single pass.
 func TestSquashMergeMultipleAdjacentMergedInOneSync(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	sh.CreateBranch("branch-a").
@@ -777,7 +771,7 @@ func TestSquashMergeMultipleAdjacentMergedInOneSync(t *testing.T) {
 // should be cleaned up; A is unaffected.
 func TestSquashMergeDiamondAllChildrenMerged(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	// main -> A -> {B, C}
@@ -817,7 +811,7 @@ func TestSquashMergeDiamondAllChildrenMerged(t *testing.T) {
 // Per .claude/rules/safety-invariants.md "No Detached HEAD State".
 func TestSquashMergeSyncWhileOnMergedBranch(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	setupTwoBranchSquashScenario(t, sh)
@@ -845,7 +839,7 @@ func TestSquashMergeSyncWhileOnMergedBranch(t *testing.T) {
 // onto trunk.
 func TestSquashMergeSyncWhileOnChildOfMergedBranch(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	mainName := setupTwoBranchSquashScenario(t, sh)
@@ -880,7 +874,7 @@ func TestSquashMergeSyncWhileOnChildOfMergedBranch(t *testing.T) {
 // only cleanup.
 func TestSquashMergeNoRestackLeavesGitRefsUntouched(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	mainName := setupTwoBranchSquashScenario(t, sh)
@@ -914,7 +908,7 @@ func TestSquashMergeNoRestackLeavesGitRefsUntouched(t *testing.T) {
 // for B.
 func TestSquashMergeChildBecomesEmpty(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	// A introduces shared=v1; B advances it to v2.
@@ -958,7 +952,7 @@ func TestSquashMergeChildBecomesEmpty(t *testing.T) {
 // recover gracefully and reparent the child rather than crash.
 func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	mainName := setupTwoBranchSquashScenario(t, sh)
@@ -1006,7 +1000,7 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 // either to a clearer error message or to graceful auto-recovery.
 func TestUserManuallyRebasedChildBeforeSync(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	mainName := setupTwoBranchSquashScenario(t, sh)
@@ -1044,7 +1038,7 @@ func TestUserManuallyRebasedChildBeforeSync(t *testing.T) {
 // cleanup runs cleanly.
 func TestMergeCommitNotSquash(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	sh.CreateBranch("branch-a").
@@ -1085,7 +1079,7 @@ func TestMergeCommitNotSquash(t *testing.T) {
 // double-application or restack churn on the surviving child.
 func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
 
 	sh.CreateBranch("branch-a").

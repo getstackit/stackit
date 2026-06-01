@@ -116,6 +116,10 @@ func runMergeNext(ctx *app.Context, opts mergeNextOptions, postMergeHandler Post
 		return nil
 	}
 
+	if err := requireYesInNonInteractive(ctx, "merge next", opts.yes, opts.dryRun); err != nil {
+		return err
+	}
+
 	// Fail fast if no GitHub client
 	if _, err := ctx.RequireGitHub(); err != nil {
 		return err

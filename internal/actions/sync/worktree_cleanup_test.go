@@ -9,14 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 	t.Run("cleans worktree when stack root branch is deleted", func(t *testing.T) {
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
+		s := scenario.NewRemoteScenario(t)
 
 		// Create a branch that will become a stack root
 		s.CreateBranch("feature-branch").Commit("feature change")
@@ -48,8 +46,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 	})
 
 	t.Run("preserves worktree when stack root branch still exists", func(t *testing.T) {
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
+		s := scenario.NewRemoteScenario(t)
 
 		// Create and track a branch
 		s.CreateBranch("feature-branch").Commit("feature change")
@@ -72,8 +69,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 	})
 
 	t.Run("preserves registration when worktree removal fails", func(t *testing.T) {
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
+		s := scenario.NewRemoteScenario(t)
 
 		worktreePath := filepath.Join(t.TempDir(), "not-a-git-worktree")
 		require.NoError(t, os.MkdirAll(worktreePath, 0o755))

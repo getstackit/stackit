@@ -146,15 +146,13 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 		return nil
 	}
 
-	// Fail fast if no GitHub client
-	if _, err := ctx.RequireGitHub(); err != nil {
+	if err := requireYesInNonInteractive(ctx, "merge ship", opts.yes, opts.dryRun); err != nil {
 		return err
 	}
 
-	// Prompt for a stack description on multi-PR stacks that have none set.
-	// Best-effort: a failure here never blocks the ship.
-	if len(plan.BranchesToMerge) > 1 {
-		promptForShipDescription(ctx, plan.BranchesToMerge, opts.yes)
+	// Fail fast if no GitHub client
+	if _, err := ctx.RequireGitHub(); err != nil {
+		return err
 	}
 
 	// Confirm unless --yes
@@ -167,6 +165,12 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 			out.Info("Merge canceled")
 			return nil
 		}
+	}
+
+	// Prompt for a stack description on multi-PR stacks that have none set.
+	// Best-effort: a failure here never blocks the ship.
+	if len(plan.BranchesToMerge) > 1 {
+		promptForShipDescription(ctx, plan.BranchesToMerge, opts.yes)
 	}
 
 	// Get config values

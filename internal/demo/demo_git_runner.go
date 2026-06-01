@@ -208,6 +208,10 @@ func (d *demoGitRunner) PullBranch(_ context.Context, _, _ string) (git.PullResu
 	return git.PullDone, nil
 }
 
+func (d *demoGitRunner) UpdateBranchFromRemote(_ context.Context, _, _ string) (git.PullResult, error) {
+	return git.PullDone, nil
+}
+
 func (d *demoGitRunner) PushBranch(_ context.Context, _, _ string, _ git.PushOptions) error {
 	return nil
 }
@@ -253,6 +257,10 @@ func (d *demoGitRunner) StashPop(_ context.Context) error {
 }
 
 func (d *demoGitRunner) Fetch(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (d *demoGitRunner) FetchRefSpecs(_ context.Context, _ string, _ []string) error {
 	return nil
 }
 

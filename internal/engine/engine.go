@@ -24,7 +24,7 @@ import (
 type PRManager interface {
 	UpsertPrInfo(ctx context.Context, branch Branch, prInfo *PrInfo) error
 	GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error)
-	PopulateRemoteShas() error
+	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) map[string]BranchRemoteStatus
 	PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error
 	// Navigation comment ID caching (stored in local metadata)
 	GetNavigationCommentID(branch Branch) (int64, error)
@@ -37,6 +37,7 @@ type PRManager interface {
 type SyncManager interface {
 	// Sync operations
 	PullTrunk(ctx context.Context) (PullResult, error)
+	UpdateTrunkFromRemote(ctx context.Context) (PullResult, error)
 	ResetTrunkToRemote(ctx context.Context) error
 	PlanRestack(ctx context.Context, branches Branches) (*RestackPlan, error)
 	RestackBranches(ctx context.Context, branches Branches) (RestackBatchResult, error)
@@ -77,6 +78,7 @@ type RemoteMetadataManager interface {
 	BatchSetLastModifiedBy(branchNames []string) error
 	LoadRemoteMetadataCache() error
 	ApplyRemoteMetadataIfExists(branchName string) error
+	ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
 	GetRemoteMetadataCache() RemoteMetadataView
 	ComputeMetadataDiff(branch string) (*MetadataDiff, error)
 	ComputeAllMetadataDiffs() ([]*MetadataDiff, error)
@@ -92,12 +94,15 @@ type RemoteMetadataManager interface {
 	// accepts the metadata-ref namespace. Adapter code should call this instead
 	// of reaching to the git runner directly.
 	TestRemoteMetadataCompatibility(ctx context.Context) error
+	// PrepareRemoteMetadataPush verifies remote metadata refs are supported and
+	// enables local metadata sync state before pushing metadata refs.
+	PrepareRemoteMetadataPush(ctx context.Context) error
 	// PushMetadataForBranches pushes the metadata refs for the given branch
 	// names to origin.
 	PushMetadataForBranches(ctx context.Context, branchNames []string) error
-	// ConfigureStackMetadataSync adds the stack-metadata refspec to origin.
+	// ConfigureStackMetadataSync adds the stack-metadata refspec to the configured remote.
 	ConfigureStackMetadataSync(ctx context.Context) error
-	// FetchStackMetadata fetches stack-metadata refs from origin.
+	// FetchStackMetadata fetches stack-metadata refs from the configured remote.
 	FetchStackMetadata(ctx context.Context) error
 	// ListStackMetadata returns a map of local stack IDs to their ref SHAs.
 	ListStackMetadata() (map[string]string, error)
@@ -108,6 +113,20 @@ type RemoteMetadataManager interface {
 	// GetStackIDsForBranches returns the unique stack IDs for the given branches.
 	// This is used to determine which stack refs need to be pushed to remote.
 	GetStackIDsForBranches(branches Branches) []string
+}
+
+// RemoteFetchRequest describes a single remote fetch that may update several
+// branch and Stackit metadata namespaces in one network round trip.
+type RemoteFetchRequest struct {
+	Remote               string
+	Branches             []string
+	IncludeMetadata      bool
+	IncludeStackMetadata bool
+}
+
+// RemoteFetcher provides batched remote fetch operations.
+type RemoteFetcher interface {
+	FetchRemote(ctx context.Context, req RemoteFetchRequest) error
 }
 
 // ApplySplitOptions contains options for applying a split
@@ -194,6 +213,7 @@ type Engine interface {
 	Absorber
 	UndoManager
 	RemoteMetadataManager
+	RemoteFetcher
 	WorktreeRegistry
 	Git() git.Runner
 

@@ -15,7 +15,6 @@ type BranchState struct {
 	LockReason           git.LockReason // Lock reason (empty if not locked)
 	Frozen               bool           // Whether branch is frozen (local-only state)
 	BranchType           git.BranchType // Branch type (worktree-anchor, utility, etc.)
-	RemoteSHA            string         // Remote SHA (populated by PopulateRemoteShas)
 	LocalModified        bool           // Has local metadata changes not yet pushed
 }
 

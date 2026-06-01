@@ -173,28 +173,15 @@ func (e *engineImpl) EnsureStackID(ctx context.Context, branch Branch) (string, 
 		return existingID, nil
 	}
 
-	// Need to create a new stack ID
-	// Find the stack root to generate the ID
+	// Need to create a new stack ID.
+	// Find the stack root to generate the ID.
 	rootName := e.GetStackRootForBranch(branch)
 	if rootName == "" {
 		return "", fmt.Errorf("cannot determine stack root for branch %s", branch.GetName())
 	}
 
-	// Generate new stack ID based on the root branch
 	stackID := e.GenerateStackID(rootName)
-
-	// Create the stack metadata ref
-	stackMeta := &git.StackMeta{
-		ID:        stackID,
-		CreatedAt: timeNow(),
-	}
-
-	// Try to get user name for CreatedBy
-	if userName, err := e.git.GetUserName(ctx); err == nil {
-		stackMeta.CreatedBy = userName
-	}
-
-	if err := e.git.WriteStackMeta(stackID, stackMeta); err != nil {
+	if err := e.writeNewStackMeta(ctx, stackID); err != nil {
 		return "", fmt.Errorf("failed to create stack ref: %w", err)
 	}
 
@@ -254,6 +241,36 @@ func (e *engineImpl) propagateStackID(ctx context.Context, branchName string, st
 	return e.batchSetStackID(ctx, e.collectSubtree(branchName), stackID)
 }
 
+func (e *engineImpl) writeNewStackMeta(ctx context.Context, stackID string) error {
+	stackMeta := &git.StackMeta{
+		ID:        stackID,
+		CreatedAt: timeNow(),
+	}
+	if userName, err := e.git.GetUserName(ctx); err == nil {
+		stackMeta.CreatedBy = userName
+	}
+	return e.git.WriteStackMeta(stackID, stackMeta)
+}
+
+// AssignBranchesToNewStack creates a new stack metadata ref and assigns its ID
+// to the provided branches. Use this for operations that intentionally extract
+// a branch or subtree into an independent stack; plain reparenting preserves
+// existing stack membership unless the new parent belongs to another stack.
+func (e *engineImpl) AssignBranchesToNewStack(ctx context.Context, root Branch, branches Branches) (string, error) {
+	if len(branches) == 0 {
+		return "", nil
+	}
+
+	stackID := e.GenerateStackID(root.GetName())
+	if err := e.writeNewStackMeta(ctx, stackID); err != nil {
+		return "", fmt.Errorf("failed to create stack ref: %w", err)
+	}
+	if err := e.SetStackID(ctx, branches, stackID); err != nil {
+		return "", fmt.Errorf("failed to assign stack ID: %w", err)
+	}
+	return stackID, nil
+}
+
 // SetStackID sets the stack ID on multiple branches atomically in a single transaction.
 func (e *engineImpl) SetStackID(ctx context.Context, branches Branches, stackID string) error {
 	names := make([]string, len(branches))
@@ -285,12 +302,11 @@ func (e *engineImpl) GetStackMeta(stackID string) (*git.StackMeta, error) {
 // exported because external callers should reparent via ReparentBranch instead
 // of poking the stack ID directly.
 //
-// Returns nil if the parent is trunk (keeps existing stack ID), the parent has
-// no stack ID (legacy branch), or the branch is already in sync.
+// Returns nil if the parent is trunk (keeps existing stack membership), the
+// parent has no stack ID (legacy branch), or the branch is already in sync.
 func (e *engineImpl) syncStackIDFromParent(ctx context.Context, branch Branch) error {
 	parent := branch.GetParent()
-	if parent == nil {
-		// Parent is trunk - keep existing stack ID
+	if parent == nil || e.IsTrunk(*parent) {
 		return nil
 	}
 

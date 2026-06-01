@@ -84,15 +84,8 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		// For remote branches, fetch metadata to show the latest info
 		if err := eng.FetchRemoteMetadata(ctx.Context); err != nil {
 			out.Debug("Failed to fetch remote metadata: %v", err)
-		} else {
-			if err := eng.LoadRemoteMetadataCache(); err != nil {
-				out.Debug("Failed to load remote metadata cache: %v", err)
-			} else {
-				// Apply remote metadata if available
-				if err := eng.ApplyRemoteMetadataIfExists(branchName); err != nil {
-					out.Debug("Failed to apply remote metadata for %s: %v", branchName, err)
-				}
-			}
+		} else if err := eng.ApplyRemoteMetadataForBranches(ctx.Context, []string{branchName}); err != nil {
+			out.Debug("Failed to apply remote metadata for %s: %v", branchName, err)
 		}
 	}
 

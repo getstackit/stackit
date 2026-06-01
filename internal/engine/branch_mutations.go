@@ -11,7 +11,14 @@ import (
 
 // CreateBranch creates a new branch at the given start point
 func (e *engineImpl) CreateBranch(ctx context.Context, branchName string, startPoint string) error {
-	return e.git.CreateBranch(ctx, branchName, startPoint)
+	if err := e.git.CreateBranch(ctx, branchName, startPoint); err != nil {
+		return err
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.addKnownBranchLocked(branchName)
+	return nil
 }
 
 // ResetHard performs a hard reset to the given revision
@@ -45,7 +52,44 @@ func (e *engineImpl) MergeMultiple(ctx context.Context, branches []string, opts 
 
 // Fetch fetches from a remote
 func (e *engineImpl) Fetch(ctx context.Context, remote string, branch string) error {
-	return e.git.Fetch(ctx, remote, branch)
+	return e.FetchRemote(ctx, RemoteFetchRequest{
+		Remote:   remote,
+		Branches: []string{branch},
+	})
+}
+
+// FetchRemote fetches branches and Stackit metadata refs from a remote in a
+// single git fetch invocation.
+func (e *engineImpl) FetchRemote(ctx context.Context, req RemoteFetchRequest) error {
+	remote := req.Remote
+	if remote == "" {
+		remote = e.GetRemote()
+	}
+
+	refspecs := make([]string, 0, len(req.Branches)+2)
+	seen := make(map[string]bool, len(req.Branches)+2)
+	add := func(refspec string) {
+		if refspec == "" || seen[refspec] {
+			return
+		}
+		seen[refspec] = true
+		refspecs = append(refspecs, refspec)
+	}
+
+	for _, branch := range req.Branches {
+		if branch == "" {
+			continue
+		}
+		add(fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch))
+	}
+	if req.IncludeMetadata {
+		add("+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")
+	}
+	if req.IncludeStackMetadata {
+		add("+refs/stackit/stacks/*:refs/stackit/remote-stacks/*")
+	}
+
+	return e.git.FetchRefSpecs(ctx, remote, refspecs)
 }
 
 // InteractiveRebase starts an interactive rebase
@@ -308,12 +352,20 @@ func (e *engineImpl) CreateAndCheckoutBranch(ctx context.Context, branch Branch)
 	defer e.mu.Unlock()
 
 	e.currentBranch = branchName
-	// Add to branches list if not already there
-	if !slices.Contains(e.state.branches, branchName) {
-		e.state.setBranches(append(e.state.branches, branchName))
-	}
+	e.addKnownBranchLocked(branchName)
 
 	return nil
+}
+
+// addKnownBranchLocked records a branch ref that was created through the
+// engine. Callers must hold e.mu.
+func (e *engineImpl) addKnownBranchLocked(branchName string) {
+	if branchName == "" || slices.Contains(e.state.branches, branchName) {
+		return
+	}
+	branches := append(slices.Clone(e.state.branches), branchName)
+	slices.Sort(branches)
+	e.state.setBranches(branches)
 }
 
 // RenameBranch renames a branch and its metadata

@@ -18,6 +18,26 @@ func (e *engineImpl) PullTrunk(ctx context.Context) (PullResult, error) {
 		return PullConflict, err
 	}
 
+	return e.finishTrunkPull(gitResult)
+}
+
+// UpdateTrunkFromRemote updates trunk from the already-fetched remote-tracking
+// branch. Callers that need to batch the network fetch with other refspecs can
+// use FetchRemote first, then call this local update step.
+func (e *engineImpl) UpdateTrunkFromRemote(ctx context.Context) (PullResult, error) {
+	remote := e.git.GetRemote()
+	e.mu.RLock()
+	trunk := e.trunk
+	e.mu.RUnlock()
+	gitResult, err := e.git.UpdateBranchFromRemote(ctx, remote, trunk)
+	if err != nil {
+		return PullConflict, err
+	}
+
+	return e.finishTrunkPull(gitResult)
+}
+
+func (e *engineImpl) finishTrunkPull(gitResult git.PullResult) (PullResult, error) {
 	// Convert git.PullResult to engine.PullResult
 	var result PullResult
 	switch gitResult {

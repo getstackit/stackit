@@ -199,6 +199,40 @@ func (e *engineImpl) ApplyRemoteMetadataIfExists(branchName string) error {
 	return e.writeMetadata(branchName, local)
 }
 
+// ApplyRemoteMetadataForBranches applies the latest fetched remote metadata to
+// the requested local branches. It owns the cache/refspec setup so callers
+// don't need to sequence ConfigureRemoteMetadataSync, LoadRemoteMetadataCache,
+// and per-branch application themselves.
+func (e *engineImpl) ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error {
+	if len(branchNames) == 0 {
+		return nil
+	}
+
+	if err := e.ConfigureRemoteMetadataSync(ctx); err != nil {
+		return fmt.Errorf("configure metadata sync: %w", err)
+	}
+	if err := e.LoadRemoteMetadataCache(); err != nil {
+		return fmt.Errorf("load remote metadata cache: %w", err)
+	}
+
+	var firstErr error
+	seen := make(map[string]struct{}, len(branchNames))
+	trunkName := e.Trunk().GetName()
+	for _, branchName := range branchNames {
+		if branchName == "" || branchName == trunkName {
+			continue
+		}
+		if _, ok := seen[branchName]; ok {
+			continue
+		}
+		seen[branchName] = struct{}{}
+		if err := e.ApplyRemoteMetadataIfExists(branchName); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // GetRemoteMetadataCache returns a read-only view of the remote metadata cache.
 // Returns RemoteMetadataView instead of a raw map to prevent external mutation
 // and provide a stable snapshot even if the cache is reloaded concurrently.
@@ -472,14 +506,14 @@ func (e *engineImpl) DeleteMetadata(ctx context.Context, branchName string) erro
 	})
 }
 
-// FetchRemoteMetadata fetches metadata refs from origin into the remote-metadata
+// FetchRemoteMetadata fetches metadata refs into the remote-metadata
 // namespace, so the cache loader sees the latest authored values.
 func (e *engineImpl) FetchRemoteMetadata(ctx context.Context) error {
-	return e.git.FetchMetadataRefs(ctx)
+	return e.FetchRemote(ctx, RemoteFetchRequest{IncludeMetadata: true})
 }
 
-// ConfigureRemoteMetadataSync adds the metadata refspec to origin so subsequent
-// `git fetch origin` invocations pick up metadata changes automatically.
+// ConfigureRemoteMetadataSync adds the metadata refspec to the configured
+// remote so subsequent git fetches pick up metadata changes automatically.
 func (e *engineImpl) ConfigureRemoteMetadataSync(_ context.Context) error {
 	return e.git.EnsureMetadataRefspecConfigured()
 }

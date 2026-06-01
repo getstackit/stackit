@@ -88,7 +88,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.Start(totalOps)
 
 	// Phase 1: Parallel network operations
-	// Run trunk pull, metadata fetch, and GitHub PR info sync concurrently
+	// Fetch trunk and metadata refs, and sync GitHub PR info concurrently.
 	handler.EmitEvent(Event{Phase: PhaseTrunk, Type: EventStarted})
 	handler.EmitEvent(Event{Phase: PhaseGitHub, Type: EventStarted})
 
@@ -103,30 +103,24 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	g, _ := errgroup.WithContext(gctx)
 
-	// Goroutine 1: Pull trunk
+	// Goroutine 1: Fetch trunk and Stackit metadata refs in one network round trip.
 	g.Go(func() error {
-		ctx.Logger.Info("goroutine trunk started delayMs=%v", time.Since(parallelStart).Milliseconds())
-		trunkErr = syncTrunk(ctx, &opts, handler, &trunkSummary)
-		return nil // Don't fail the group, handle error after Wait
-	})
-
-	// Goroutine 2: Fetch remote metadata refs (network operation only)
-	g.Go(func() error {
-		ctx.Logger.Info("goroutine metadata started delayMs=%v", time.Since(parallelStart).Milliseconds())
+		ctx.Logger.Info("goroutine remote fetch started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		fetchStart := time.Now()
-		metadataFetchErr = ctx.RemoteMetadata().FetchRemoteMetadata(gctx)
-		ctx.Logger.Info("fetch remote metadata refs completed durationMs=%v", time.Since(fetchStart).Milliseconds())
-
-		// Also fetch stack metadata refs (stack-level descriptions, etc.)
-		stackFetchStart := time.Now()
-		if err := ctx.Engine.FetchStackMetadata(gctx); err != nil {
-			ctx.Logger.Debug("fetch stack metadata refs failed (non-fatal) error=%v", err)
+		metadataFetchErr = eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+			Remote:               eng.GetRemote(),
+			Branches:             []string{eng.Trunk().GetName()},
+			IncludeMetadata:      true,
+			IncludeStackMetadata: true,
+		})
+		ctx.Logger.Info("fetch trunk and metadata refs completed durationMs=%v", time.Since(fetchStart).Milliseconds())
+		if metadataFetchErr != nil {
+			ctx.Logger.Debug("fetch trunk and metadata refs failed (non-fatal) error=%v", metadataFetchErr)
 		}
-		ctx.Logger.Info("fetch stack metadata refs completed durationMs=%v", time.Since(stackFetchStart).Milliseconds())
 		return nil
 	})
 
-	// Goroutine 3: Sync PR info from GitHub (network operation only)
+	// Goroutine 2: Sync PR info from GitHub (network operation only)
 	g.Go(func() error {
 		ctx.Logger.Info("goroutine github started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		var err error
@@ -138,7 +132,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	_ = g.Wait()
 	ctx.Logger.Info("parallel phase completed durationMs=%v", time.Since(parallelStart).Milliseconds())
 
-	// Handle errors from parallel operations
+	trunkErr = syncFetchedTrunk(ctx, &opts, handler, &trunkSummary)
 	if trunkErr != nil {
 		return trunkErr
 	}

@@ -18,24 +18,20 @@ const (
 )
 
 func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (PullResult, error) {
-	// Save current branch/detached HEAD
-	currentBranch, err := r.GetCurrentBranch()
-	var currentRev string
-	if err != nil {
-		currentBranch = ""
-		currentRev, _ = r.GetCurrentRevision(ctx)
-	}
+	// Fetch with explicit refspec to update the remote-tracking branch.
+	// This ensures refs/remotes/<remote>/<branch> is actually updated.
+	refspec := fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branchName, remote, branchName)
+	_ = r.fetchRemoteRefSpecs(ctx, remote, []string{refspec})
 
+	return r.UpdateBranchFromRemote(ctx, remote, branchName)
+}
+
+func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error) {
 	// Get the SHA of the local branch
 	oldRev, err := r.GetRevision(branchName)
 	if err != nil {
 		return PullConflict, fmt.Errorf("failed to get local revision for %s: %w", branchName, err)
 	}
-
-	// Fetch with explicit refspec to update the remote-tracking branch.
-	// This ensures refs/remotes/origin/<branch> is actually updated.
-	refspec := fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branchName, remote, branchName)
-	_ = r.fetchRemoteRefSpecs(ctx, remote, []string{refspec})
 
 	// Get the SHA of the remote branch
 	remoteRev, err := r.GetRemoteSha(remote, branchName)
@@ -51,6 +47,14 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 	// Check if it's a fast-forward (remote is ahead of local)
 	isRemoteAhead, err := r.IsAncestor(ctx, oldRev, remoteRev)
 	if err == nil && isRemoteAhead {
+		// Save current branch/detached HEAD immediately before mutating refs.
+		currentBranch, err := r.GetCurrentBranch()
+		var currentRev string
+		if err != nil {
+			currentBranch = ""
+			currentRev, _ = r.GetCurrentRevision(ctx)
+		}
+
 		// Before updating the ref, check if this branch is checked out in another worktree.
 		// update-ref is global and will affect all worktrees, so we need to sync any
 		// worktree that has this branch checked out to avoid corrupting its index/working tree.
@@ -113,4 +117,8 @@ func (r *runner) Fetch(ctx context.Context, remote, branch string) error {
 		return fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 	}
 	return nil
+}
+
+func (r *runner) FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error {
+	return r.fetchRemoteRefSpecs(ctx, remote, refspecs)
 }

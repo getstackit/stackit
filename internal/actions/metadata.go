@@ -1,16 +1,16 @@
 package actions
 
 import (
+	"context"
+
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/git"
 )
 
 // MetadataPushEngine defines the engine capabilities needed for pushing metadata.
 type MetadataPushEngine interface {
 	BatchSetLastModifiedBy(branchNames []string) error
-	IsRemoteSyncEnabled() bool
-	SetRemoteSyncEnabled(enabled bool)
-	Git() git.Runner
+	PrepareRemoteMetadataPush(ctx context.Context) error
+	PushMetadataForBranches(ctx context.Context, branchNames []string) error
 }
 
 // PushMetadataOnly pushes metadata refs without updating GitHub PRs.
@@ -23,21 +23,13 @@ func PushMetadataOnly(ctx *app.Context, eng MetadataPushEngine, branchNames []st
 		out.Debug("Failed to update metadata: %v", err)
 	}
 
-	// Check if remote sync is enabled; if not, run compatibility test first
-	if !eng.IsRemoteSyncEnabled() {
-		if err := eng.Git().TestRemoteRefCompatibility(ctx.Context); err != nil {
-			out.Debug("Remote metadata sync not supported: %v", err)
-			return nil // Non-fatal
-		}
-		eng.SetRemoteSyncEnabled(true)
-		// Configure refspec so future git fetch commands also fetch metadata
-		if err := eng.Git().EnsureMetadataRefspecConfigured(); err != nil {
-			out.Debug("Failed to configure metadata refspec: %v", err)
-		}
+	if err := eng.PrepareRemoteMetadataPush(ctx.Context); err != nil {
+		out.Debug("Remote metadata sync not supported: %v", err)
+		return nil // Non-fatal
 	}
 
 	// Push metadata refs
-	if err := eng.Git().PushMetadataRefs(ctx.Context, branchNames); err != nil {
+	if err := eng.PushMetadataForBranches(ctx.Context, branchNames); err != nil {
 		out.Debug("Failed to push metadata refs: %v", err)
 		return err
 	}

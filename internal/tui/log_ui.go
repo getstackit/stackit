@@ -238,7 +238,7 @@ func (m *LogModel) log(msg string, args ...any) {
 }
 
 // enrichData returns a command that fetches full annotation data in the background.
-// This includes git operations and network calls (remote SHAs, CI status).
+// This includes git operations and CI status network calls.
 func (m *LogModel) enrichData() tea.Cmd {
 	// Capture values needed by the goroutine to avoid races on struct fields
 	ctx := m.context
@@ -271,27 +271,6 @@ func (m *LogModel) enrichData() tea.Cmd {
 			err      error
 		}
 		ciChan := make(chan ciResult, 1)
-		remoteShasDone := make(chan struct{}, 1)
-
-		// Run PopulateRemoteShas and BatchGetPRChecksStatus in parallel
-		if style == logStyleFull {
-			go func() {
-				defer func() {
-					if p := recover(); p != nil {
-						logError("PopulateRemoteShas panicked: %v", p)
-					}
-					remoteShasDone <- struct{}{}
-				}()
-				start := time.Now()
-				if err := eng.PopulateRemoteShas(); err != nil {
-					logError("PopulateRemoteShas failed: %v", err)
-				}
-				logDebug("PopulateRemoteShas completed in %v", time.Since(start))
-			}()
-		} else {
-			remoteShasDone <- struct{}{}
-		}
-
 		if style == logStyleFull && ghClient != nil {
 			branchNames := engine.Branches(allBranches).Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 			if len(branchNames) > 0 {
@@ -318,8 +297,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 			ciChan <- ciResult{}
 		}
 
-		// Wait for both operations to complete
-		<-remoteShasDone
+		// Wait for CI status fetch to complete
 		ciRes := <-ciChan
 		if ciRes.err != nil {
 			logError("CI status fetch failed, skipping CI annotations: %v", ciRes.err)

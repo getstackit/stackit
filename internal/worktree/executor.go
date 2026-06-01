@@ -105,10 +105,6 @@ func (e *Executor) CreateSession(ctx context.Context, opts CreateSessionOptions)
 
 // pullTrunk updates trunk in the worktree to match remote.
 func (s *Session) pullTrunk(ctx context.Context) error {
-	if err := s.Engine.PopulateRemoteShas(); err != nil {
-		s.output.Debug("Failed to populate remote SHAs in worktree: %v", err)
-	}
-
 	pullResult, err := s.Engine.PullTrunk(ctx)
 	if err != nil {
 		return errors.FailedTo("update", "trunk in worktree", err)

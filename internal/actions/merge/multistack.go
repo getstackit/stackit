@@ -231,11 +231,18 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 // will use local SHAs but PRs track remote SHAs, so GitHub won't auto-close them.
 func validateBranchesMatchRemote(ctx context.Context, eng engine.Engine, stacks []MultiStackInfo, out interface{ Warn(string, ...any) }) error {
 	var mismatchedBranches []string
+	branchBuilder := engine.NewBranchesBuilder(0)
+	for _, stack := range stacks {
+		for _, branchName := range stack.AllBranches {
+			branchBuilder.Add(eng.GetBranch(branchName))
+		}
+	}
+	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx, branchBuilder.Build())
 
 	for _, stack := range stacks {
 		for _, branchName := range stack.AllBranches {
 			branch := eng.GetBranch(branchName)
-			if !eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(branch)).ForBranch(branch).Matches() {
+			if !remoteStatuses.ForBranch(branch).Matches() {
 				mismatchedBranches = append(mismatchedBranches, branchName)
 			}
 		}

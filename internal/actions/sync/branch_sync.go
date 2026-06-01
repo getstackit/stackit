@@ -23,6 +23,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 
 	// Get all tracked branches
 	allBranches := nav.AllBranches()
+	remoteStatuses := eng.ReadBranchRemoteStatuses(gctx, allBranches)
 
 	syncStart := time.Now()
 	var statusCheckTotalMs int64
@@ -68,13 +69,9 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 
 		// Check if branch is behind remote
 		statusStart := time.Now()
-		status, err := eng.GetBranchRemoteStatus(branch)
+		status := remoteStatuses[branchName]
 		statusCheckTotalMs += time.Since(statusStart).Milliseconds()
 		statusCheckCount++
-		if err != nil {
-			// Can't determine status, skip
-			continue
-		}
 
 		// Skip if not behind remote
 		if !status.Behind() {

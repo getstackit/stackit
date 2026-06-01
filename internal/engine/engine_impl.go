@@ -413,30 +413,3 @@ func (e *engineImpl) Rebuild(newTrunkName string) error {
 
 	return e.rebuild()
 }
-
-// PopulateRemoteShas populates remote branch information by fetching SHAs from remote
-func (e *engineImpl) PopulateRemoteShas() error {
-	remote := e.git.GetRemote()
-	remoteShas, err := e.git.FetchRemoteShas(context.Background(), remote)
-
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	// Clear existing remote SHAs
-	for _, state := range e.state.branchState {
-		state.RemoteSHA = ""
-	}
-
-	if err != nil {
-		// Don't fail if we can't fetch remote SHAs (e.g., offline)
-		return nil
-	}
-
-	// Set RemoteSHA for tracked branches that have a remote
-	for branchName, sha := range remoteShas {
-		if state := e.readState(branchName); state != nil {
-			state.RemoteSHA = sha
-		}
-	}
-	return nil
-}

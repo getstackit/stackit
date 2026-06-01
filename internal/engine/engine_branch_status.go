@@ -240,53 +240,62 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 	return newBranchStatuses(results)
 }
 
-// GetBranchRemoteStatus returns the relationship between a local branch and its remote
+// GetBranchRemoteStatus returns the relationship between a local branch and its remote.
 func (e *engineImpl) GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error) {
-	branchName := branch.GetName()
-	e.mu.RLock()
-	state := e.readState(branch.GetName())
-	var remoteSha string
-	if state != nil {
-		remoteSha = state.RemoteSHA
-	}
-	e.mu.RUnlock()
+	return e.ReadBranchRemoteStatuses(context.Background(), BranchesOf(branch))[branch.GetName()], nil
+}
 
-	localSha, err := e.git.GetRevision(branchName)
-	if err != nil {
-		localSha = "" // Branch doesn't exist locally
+// ReadBranchRemoteStatuses returns the local/remote relationship for the
+// requested branches. It lists remote branch SHAs once and does not mutate
+// engine state.
+func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Branches) map[string]BranchRemoteStatus {
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	if remoteSha == "" {
-		// Fall back to local remote tracking branch
-		remoteSha, err = e.git.GetRemoteRevision(branchName)
-		if err != nil {
-			remoteSha = "" // No remote tracking branch
-		}
+	results := make(map[string]BranchRemoteStatus, len(branches))
+	if len(branches) == 0 {
+		return results
 	}
 
-	status := BranchRemoteStatus{
-		LocalSha:  localSha,
-		RemoteSha: remoteSha,
-	}
+	branchNames := branches.Names()
+	localShas, _ := e.git.BatchGetRevisions(branchNames)
 
-	if localSha == "" || remoteSha == "" {
-		return status, nil
-	}
-
-	if localSha == remoteSha {
-		status.CommonAncestor = localSha
-		return status, nil
-	}
-
-	// They differ, compute common ancestor to determine relation
 	remote := e.git.GetRemote()
-	remoteBranchRef := "refs/remotes/" + remote + "/" + branchName
-	commonAncestor, err := e.git.GetMergeBaseByRef(context.Background(), branchName, remoteBranchRef)
-	if err == nil {
-		status.CommonAncestor = commonAncestor
+	remoteShas, err := e.git.FetchRemoteShas(ctx, remote)
+	if err != nil {
+		remoteShas = map[string]string{}
 	}
 
-	return status, nil
+	for _, branch := range branches {
+		branchName := branch.GetName()
+		localSha := localShas[branchName]
+		remoteSha := remoteShas[branchName]
+		if remoteSha == "" {
+			if sha, err := e.git.GetRemoteRevision(branchName); err == nil {
+				remoteSha = sha
+			}
+		}
+
+		status := BranchRemoteStatus{
+			LocalSha:  localSha,
+			RemoteSha: remoteSha,
+		}
+
+		switch {
+		case localSha == "" || remoteSha == "":
+		case localSha == remoteSha:
+			status.CommonAncestor = localSha
+		default:
+			if commonAncestor, err := e.git.GetMergeBaseByRef(ctx, localSha, remoteSha); err == nil {
+				status.CommonAncestor = commonAncestor
+			}
+		}
+
+		results[branchName] = status
+	}
+
+	return results
 }
 
 // GetMergedBranches returns a map of branches merged into the target branch

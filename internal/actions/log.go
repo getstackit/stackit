@@ -105,13 +105,6 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 		return err
 	}
 
-	// Populate remote SHAs if needed (only for FULL mode)
-	if opts.Style == LogStyleFull {
-		if err := ctx.Engine.PopulateRemoteShas(); err != nil {
-			ctx.Output.Debug("Failed to populate remote SHAs: %v", err)
-		}
-	}
-
 	// Detect worktrees (builds both empty and stack-root maps in one call)
 	wtData := tui.GetWorktreeData(ctx.Engine)
 

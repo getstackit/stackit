@@ -612,10 +612,6 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		// Go back to main for sync
 		sh.Checkout("main")
 
-		// Populate remote SHAs so GetBranchRemoteStatus can detect ahead
-		err = eng.PopulateRemoteShas()
-		require.NoError(t, err)
-
 		// Run sync (non-interactive - should skip unpushed branches)
 		err = sync.Action(sh.Context, sync.Options{}, nil)
 		require.NoError(t, err)

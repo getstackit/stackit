@@ -30,11 +30,6 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 	out.Debug("merge wizard: starting with opts=%+v", opts)
 
-	// Populate remote SHAs so we can accurately check if branches match remote
-	if err := eng.PopulateRemoteShas(); err != nil {
-		out.Debug("merge wizard: failed to populate remote SHAs: %v", err)
-	}
-
 	// Determine what to merge if not pre-selected
 	scope := opts.Scope
 	targetBranch := opts.TargetBranch

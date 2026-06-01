@@ -82,8 +82,6 @@ func TestCleanBranchesInteractiveDoesNotAutoDeleteUnpushedUtilityBranch(t *testi
 	require.NoError(t, err)
 	err = s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("util-branch"), testhelpers.NewTestPrInfoMerged(1, "main"))
 	require.NoError(t, err)
-	err = s.Engine.PopulateRemoteShas()
-	require.NoError(t, err)
 
 	s.Checkout("main")
 

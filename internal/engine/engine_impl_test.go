@@ -980,10 +980,6 @@ func TestGetBranchRemoteStatus(t *testing.T) {
 		require.NoError(t, err)
 		s.Checkout("main")
 
-		// Populate remote SHAs
-		err = s.Engine.PopulateRemoteShas()
-		require.NoError(t, err)
-
 		// Verify GetBranchRemoteStatus
 		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("feature"))
 		require.NoError(t, err)
@@ -1015,10 +1011,6 @@ func TestGetBranchRemoteStatus(t *testing.T) {
 		s.Commit("local change").
 			Checkout("main")
 
-		// Populate remote SHAs
-		err = s.Engine.PopulateRemoteShas()
-		require.NoError(t, err)
-
 		// Verify GetBranchRemoteStatus
 		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("feature"))
 		require.NoError(t, err)
@@ -1044,10 +1036,6 @@ func TestGetBranchRemoteStatus(t *testing.T) {
 		s.CreateBranch("feature").
 			Commit("feature change").
 			Checkout("main")
-
-		// Populate remote SHAs
-		err = s.Engine.PopulateRemoteShas()
-		require.NoError(t, err)
 
 		// Verify GetBranchRemoteStatus
 		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("feature"))
@@ -1080,10 +1068,6 @@ func TestGetBranchRemoteStatus(t *testing.T) {
 
 		s.Checkout("main")
 
-		// Populate remote SHAs
-		err = s.Engine.PopulateRemoteShas()
-		require.NoError(t, err)
-
 		// Verify GetBranchRemoteStatus
 		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("feature"))
 		require.NoError(t, err)
@@ -1094,9 +1078,9 @@ func TestGetBranchRemoteStatus(t *testing.T) {
 	})
 }
 
-func TestPopulateRemoteShas(t *testing.T) {
+func TestReadBranchRemoteStatuses(t *testing.T) {
 	t.Parallel()
-	t.Run("populates SHAs for all remote branches", func(t *testing.T) {
+	t.Run("reads statuses for all requested remote branches", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
@@ -1121,14 +1105,14 @@ func TestPopulateRemoteShas(t *testing.T) {
 		require.NoError(t, err)
 		s.Checkout("main")
 
-		// Populate remote SHAs
-		err = s.Engine.PopulateRemoteShas()
-		require.NoError(t, err)
-
-		// All branches should match remote
+		branches := engine.BranchesOf(
+			s.Engine.GetBranch("main"),
+			s.Engine.GetBranch("feature1"),
+			s.Engine.GetBranch("feature2"),
+		)
+		statuses := s.Engine.ReadBranchRemoteStatuses(context.Background(), branches)
 		for _, branchName := range []string{"main", "feature1", "feature2"} {
-			status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch(branchName))
-			require.NoError(t, err)
+			status := statuses[branchName]
 			require.True(t, status.Matches(), "branch %s should match remote", branchName)
 		}
 	})
@@ -1139,10 +1123,6 @@ func TestPopulateRemoteShas(t *testing.T) {
 
 		// Create a bare remote but don't push anything
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
-		require.NoError(t, err)
-
-		// Populate should not fail
-		err = s.Engine.PopulateRemoteShas()
 		require.NoError(t, err)
 
 		// Branches should not match (nothing on remote)

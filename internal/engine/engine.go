@@ -24,7 +24,7 @@ import (
 type PRManager interface {
 	UpsertPrInfo(ctx context.Context, branch Branch, prInfo *PrInfo) error
 	GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error)
-	PopulateRemoteShas() error
+	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) map[string]BranchRemoteStatus
 	PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error
 	// Navigation comment ID caching (stored in local metadata)
 	GetNavigationCommentID(branch Branch) (int64, error)

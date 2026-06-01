@@ -221,10 +221,6 @@ func TestCleanBranches(t *testing.T) {
 		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
 		require.NoError(t, err)
 
-		// Populate remote SHAs so GetBranchRemoteStatus works
-		err = s.Engine.PopulateRemoteShas()
-		require.NoError(t, err)
-
 		s.Checkout("main")
 
 		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{
@@ -255,10 +251,6 @@ func TestCleanBranches(t *testing.T) {
 		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
 		branch := s.Engine.GetBranch("branch1")
 		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
-		require.NoError(t, err)
-
-		// Populate remote SHAs
-		err = s.Engine.PopulateRemoteShas()
 		require.NoError(t, err)
 
 		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{

@@ -115,7 +115,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	nav := ctx.Navigator()
-	pr := ctx.PR()
 	eng := ctx.Engine
 
 	// Determine target branch (explicit --branch flag or current branch)
@@ -174,11 +173,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	currentBranchName := ""
 	if currentBranch != nil {
 		currentBranchName = currentBranch.GetName()
-	}
-
-	// Populate remote SHAs early for accurate display
-	if err := pr.PopulateRemoteShas(); err != nil {
-		ctx.Output.Debug("Failed to populate remote SHAs: %v", err)
 	}
 
 	// Build tree structure for display

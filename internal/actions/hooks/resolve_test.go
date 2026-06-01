@@ -1,6 +1,7 @@
 package hooks_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,10 +17,14 @@ import (
 type fakePrompter struct {
 	answers []bool
 	calls   []string
+	err     error
 }
 
 func (p *fakePrompter) PromptConfirm(message string) (bool, error) {
 	p.calls = append(p.calls, message)
+	if p.err != nil {
+		return false, p.err
+	}
 	if len(p.answers) == 0 {
 		return false, nil
 	}
@@ -80,4 +85,49 @@ func TestResolveApproved_EmptyCommandsIsZeroCost(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, approved)
 	require.Empty(t, prompter.calls)
+}
+
+func TestResolveApproved_RequiredHookFailsClosedOnPromptFailure(t *testing.T) {
+	t.Parallel()
+
+	scene := testhelpers.NewSceneParallel(t, nil)
+	cfg, err := config.LoadConfig(scene.Dir)
+	require.NoError(t, err)
+
+	prompter := &fakePrompter{err: errors.New("interactive disabled")}
+
+	approved, err := hooks.ResolveApproved(hooks.ResolveRequest{
+		Phase:    "pre-submit",
+		Commands: []string{"scripts/check.sh"},
+		Config:   cfg,
+		Prompter: prompter,
+		Required: true,
+	})
+	require.Error(t, err)
+	require.Empty(t, approved)
+	require.Contains(t, err.Error(), "hook \"scripts/check.sh\" at pre-submit is not approved")
+	require.Contains(t, err.Error(), "--no-verify")
+	require.Len(t, prompter.calls, 1)
+}
+
+func TestResolveApproved_RequiredHookFailsClosedOnDecline(t *testing.T) {
+	t.Parallel()
+
+	scene := testhelpers.NewSceneParallel(t, nil)
+	cfg, err := config.LoadConfig(scene.Dir)
+	require.NoError(t, err)
+
+	prompter := &fakePrompter{answers: []bool{false}}
+
+	approved, err := hooks.ResolveApproved(hooks.ResolveRequest{
+		Phase:    "pre-modify",
+		Commands: []string{"scripts/check.sh"},
+		Config:   cfg,
+		Prompter: prompter,
+		Required: true,
+	})
+	require.Error(t, err)
+	require.Empty(t, approved)
+	require.Contains(t, err.Error(), "hook \"scripts/check.sh\" at pre-modify is not approved")
+	require.Len(t, prompter.calls, 1)
 }

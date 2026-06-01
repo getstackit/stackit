@@ -38,6 +38,10 @@ type ResolveRequest struct {
 	Prompter handler.PromptHandler
 	// Output sinks user-facing skip/warn messages. nil is permitted.
 	Output output.Output
+	// Required makes unapproved hooks fail closed. Use this for blocking
+	// pre-command hooks: if the approval prompt fails or the user declines,
+	// the caller should abort rather than silently skipping the hook.
+	Required bool
 }
 
 // ResolveApproved filters Commands down to the list the user has approved for
@@ -71,10 +75,16 @@ func ResolveApproved(req ResolveRequest) ([]string, error) {
 
 		allow, promptErr := req.Prompter.PromptConfirm(promptMessage(req.Phase, hook))
 		if promptErr != nil {
+			if req.Required {
+				return nil, unapprovedRequiredHookError(req.Phase, hook, promptErr)
+			}
 			info(req.Output, "Skipping hook (prompt failed): %s", hook)
 			continue
 		}
 		if !allow {
+			if req.Required {
+				return nil, unapprovedRequiredHookError(req.Phase, hook, nil)
+			}
 			info(req.Output, "Skipping hook: %s", hook)
 			continue
 		}
@@ -86,6 +96,14 @@ func ResolveApproved(req ResolveRequest) ([]string, error) {
 	}
 
 	return approved, nil
+}
+
+func unapprovedRequiredHookError(phase, hook string, cause error) error {
+	msg := fmt.Sprintf("hook %q at %s is not approved; rerun interactively to approve it, or pass --no-verify to skip stackit hooks", hook, phase)
+	if cause != nil {
+		return fmt.Errorf("%s: %w", msg, cause)
+	}
+	return fmt.Errorf("%s", msg)
 }
 
 // RunOptions controls how a list of resolved hooks is executed.

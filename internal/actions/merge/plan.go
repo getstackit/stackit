@@ -272,6 +272,14 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		allCheckStatuses, _ = githubClient.BatchGetPRChecksStatus(ctx, allBranches)
 	}
 
+	statusBranchBuilder := engine.NewBranchesBuilder(len(allBranches) + 1)
+	for _, name := range allBranches {
+		statusBranchBuilder.Add(eng.GetBranch(name))
+	}
+	statusBranchBuilder.Add(eng.Trunk())
+	statusBranches := statusBranchBuilder.Build()
+	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx, statusBranches)
+
 	// 5. For each branch: fetch PR info, check status, CI checks in parallel
 	branchesToMerge := make([]BranchMergeInfo, len(allBranches))
 	branchErrors := make([]string, len(allBranches))
@@ -326,11 +334,12 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 		// Check if local matches remote
 		branchObj := eng.GetBranch(name)
-		matchesRemote := eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(branchObj)).ForBranch(branchObj).Matches()
+		remoteStatus := remoteStatuses.ForBranch(branchObj)
+		matchesRemote := remoteStatus.Matches()
 
 		if !matchesRemote {
 			// Get detailed difference information
-			diffInfo, _ := eng.GetBranchRemoteDifference(name)
+			diffInfo := formatBranchRemoteDifference(remoteStatus)
 			if diffInfo != "" {
 				branchWarnings[idx] = append(branchWarnings[idx], fmt.Sprintf("Branch %s differs from remote: %s", name, diffInfo))
 			} else {
@@ -380,7 +389,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 	// Pre-flight check: Check if trunk is in sync with remote
 	trunk := eng.Trunk()
-	if eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(trunk)).ForBranch(trunk).Diverged() {
+	if remoteStatuses.ForBranch(trunk).Diverged() {
 		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Trunk branch %s has diverged from remote. You may need to sync it manually or use --force during merge.", trunk.GetName()))
 	}
 
@@ -426,6 +435,39 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		CurrentBranch:   planCurrentBranch,
 		Validation:      validation,
 	}, nil
+}
+
+func formatBranchRemoteDifference(status engine.BranchRemoteStatus) string {
+	if status.LocalSha == "" {
+		return "(branch not found locally)"
+	}
+
+	localShort := shortSHA(status.LocalSha)
+	if status.RemoteSha == "" {
+		return fmt.Sprintf("local: %s (branch not found on remote)", localShort)
+	}
+	if status.Matches() {
+		return ""
+	}
+
+	remoteShort := shortSHA(status.RemoteSha)
+	switch {
+	case status.Behind():
+		return fmt.Sprintf("local is behind remote (local: %s, remote: %s)", localShort, remoteShort)
+	case status.Ahead():
+		return fmt.Sprintf("local is ahead of remote (local: %s, remote: %s)", localShort, remoteShort)
+	case status.Diverged():
+		return fmt.Sprintf("local and remote have diverged (local: %s, remote: %s)", localShort, remoteShort)
+	default:
+		return fmt.Sprintf("local: %s, remote: %s", localShort, remoteShort)
+	}
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // BuildMergePlan builds a Plan with strategy-specific steps from collected branch data.

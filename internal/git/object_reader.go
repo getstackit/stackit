@@ -44,9 +44,11 @@ func (r *objectReader) start() error {
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		_ = stdin.Close()
 		return fmt.Errorf("object reader stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
+		_ = stdin.Close()
 		return fmt.Errorf("object reader start: %w", err)
 	}
 	r.cmd = cmd
@@ -125,6 +127,9 @@ func (r *objectReader) ReadObjectsBatch(refs []string) (map[string]string, error
 	}
 	for _, ref := range refs {
 		if _, err := fmt.Fprintf(r.stdin, "%s\n", ref); err != nil {
+			// Process died; clear it so the next call restarts, mirroring ReadObject.
+			_ = r.cmd.Process.Kill()
+			r.cmd = nil
 			return nil, fmt.Errorf("object reader write: %w", err)
 		}
 	}
@@ -132,6 +137,9 @@ func (r *objectReader) ReadObjectsBatch(refs []string) (map[string]string, error
 	for _, ref := range refs {
 		content, found, err := r.readResponse(ref)
 		if err != nil {
+			// Stdout stream is broken; discard the process so the next call restarts.
+			_ = r.cmd.Process.Kill()
+			r.cmd = nil
 			return nil, err
 		}
 		if found {

@@ -95,6 +95,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var trunkSummary Summary
 	var githubSyncResult *GitHubSyncResult
 	var metadataFetchErr error
+	var trunkFetchErr error
 	var trunkErr error
 	var githubErr error
 
@@ -103,19 +104,30 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	g, _ := errgroup.WithContext(gctx)
 
-	// Goroutine 1: Fetch trunk and Stackit metadata refs in one network round trip.
+	// Goroutine 1: Fetch trunk as a required operation, then refresh Stackit
+	// metadata refs on a best-effort basis.
 	g.Go(func() error {
 		ctx.Logger.Info("goroutine remote fetch started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		fetchStart := time.Now()
+		trunkFetchErr = eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+			Remote:   eng.GetRemote(),
+			Branches: []string{eng.Trunk().GetName()},
+		})
+		ctx.Logger.Info("fetch trunk completed durationMs=%v", time.Since(fetchStart).Milliseconds())
+		if trunkFetchErr != nil {
+			ctx.Logger.Debug("fetch trunk failed error=%v", trunkFetchErr)
+			return trunkFetchErr
+		}
+
+		metadataFetchStart := time.Now()
 		metadataFetchErr = eng.FetchRemote(gctx, engine.RemoteFetchRequest{
 			Remote:               eng.GetRemote(),
-			Branches:             []string{eng.Trunk().GetName()},
 			IncludeMetadata:      true,
 			IncludeStackMetadata: true,
 		})
-		ctx.Logger.Info("fetch trunk and metadata refs completed durationMs=%v", time.Since(fetchStart).Milliseconds())
+		ctx.Logger.Info("fetch metadata refs completed durationMs=%v", time.Since(metadataFetchStart).Milliseconds())
 		if metadataFetchErr != nil {
-			ctx.Logger.Debug("fetch trunk and metadata refs failed (non-fatal) error=%v", metadataFetchErr)
+			ctx.Logger.Debug("fetch metadata refs failed (non-fatal) error=%v", metadataFetchErr)
 		}
 		return nil
 	})
@@ -129,8 +141,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return nil
 	})
 
-	_ = g.Wait()
+	parallelErr := g.Wait()
 	ctx.Logger.Info("parallel phase completed durationMs=%v", time.Since(parallelStart).Milliseconds())
+
+	if trunkFetchErr != nil {
+		return fmt.Errorf("failed to fetch trunk from %s: %w", eng.GetRemote(), trunkFetchErr)
+	}
+	if parallelErr != nil {
+		return parallelErr
+	}
 
 	trunkErr = syncFetchedTrunk(ctx, &opts, handler, &trunkSummary)
 	if trunkErr != nil {

@@ -155,12 +155,6 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 		return err
 	}
 
-	// Prompt for a stack description on multi-PR stacks that have none set.
-	// Best-effort: a failure here never blocks the ship.
-	if len(plan.BranchesToMerge) > 1 {
-		promptForShipDescription(ctx, plan.BranchesToMerge, opts.yes)
-	}
-
 	// Confirm unless --yes
 	if !opts.yes && ctx.Interactive {
 		confirmed, err := tui.PromptConfirm("Proceed with ship merge?", false)
@@ -171,6 +165,12 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 			out.Info("Merge canceled")
 			return nil
 		}
+	}
+
+	// Prompt for a stack description on multi-PR stacks that have none set.
+	// Best-effort: a failure here never blocks the ship.
+	if len(plan.BranchesToMerge) > 1 {
+		promptForShipDescription(ctx, plan.BranchesToMerge, opts.yes)
 	}
 
 	// Get config values

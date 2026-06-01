@@ -20,9 +20,6 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature1"))
 		s.Rebuild()
 
-		// Populate remote SHAs so GetBranchRemoteStatus works
-		require.NoError(t, s.Engine.PopulateRemoteShas())
-
 		stacks := []MultiStackInfo{
 			{RootBranch: "feature1", AllBranches: []string{"feature1"}},
 		}
@@ -45,9 +42,6 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		// Make a local change (branch now differs from remote)
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("local-only-change", "file2"))
 		s.Rebuild()
-
-		// Populate remote SHAs
-		require.NoError(t, s.Engine.PopulateRemoteShas())
 
 		stacks := []MultiStackInfo{
 			{RootBranch: "feature1", AllBranches: []string{"feature1"}},
@@ -86,9 +80,6 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("local-change-2", "file4"))
 		s.Rebuild()
 
-		// Populate remote SHAs
-		require.NoError(t, s.Engine.PopulateRemoteShas())
-
 		stacks := []MultiStackInfo{
 			{RootBranch: "feature1", AllBranches: []string{"feature1", "feature2"}},
 		}
@@ -116,9 +107,6 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("s2-content", "s2file"))
 		require.NoError(t, s.Scene.Repo.PushBranch("origin", "stack2-b1"))
 		s.Rebuild()
-
-		// Populate remote SHAs
-		require.NoError(t, s.Engine.PopulateRemoteShas())
 
 		stacks := []MultiStackInfo{
 			{RootBranch: "stack1-b1", AllBranches: []string{"stack1-b1"}},
@@ -152,9 +140,6 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("local-change", "s2file2"))
 		s.Rebuild()
 
-		// Populate remote SHAs
-		require.NoError(t, s.Engine.PopulateRemoteShas())
-
 		stacks := []MultiStackInfo{
 			{RootBranch: "stack1-b1", AllBranches: []string{"stack1-b1"}},
 			{RootBranch: "stack2-b1", AllBranches: []string{"stack2-b1"}},
@@ -174,9 +159,6 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 			TrackBranch("feature1", s.Engine.Trunk().GetName())
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature1-content", "file1"))
 		s.Rebuild()
-
-		// Populate remote SHAs
-		require.NoError(t, s.Engine.PopulateRemoteShas())
 
 		stacks := []MultiStackInfo{
 			{RootBranch: "feature1", AllBranches: []string{"feature1"}},

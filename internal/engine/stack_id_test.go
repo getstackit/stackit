@@ -238,6 +238,38 @@ func TestStackIDInheritance(t *testing.T) {
 		require.NotEmpty(t, id2)
 		require.NotEqual(t, id1, id2)
 	})
+
+	t.Run("assigning branches to a new stack creates a new stack ID", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit().
+			CreateBranch("root").
+			Commit("root commit").
+			TrackBranch("root", "main").
+			CreateBranch("child").
+			Commit("child commit").
+			TrackBranch("child", "root").
+			CreateBranch("grandchild").
+			Commit("grandchild commit").
+			TrackBranch("grandchild", "child")
+
+		root := s.Engine.GetBranch("root")
+		child := s.Engine.GetBranch("child")
+		rootID, err := s.Engine.EnsureStackID(context.Background(), root)
+		require.NoError(t, err)
+		require.Equal(t, rootID, s.Engine.GetStackID(child))
+
+		_, err = s.Engine.AssignBranchesToNewStack(context.Background(), child, engine.Branches{child, s.Engine.GetBranch("grandchild")})
+		require.NoError(t, err)
+
+		child = s.Engine.GetBranch("child")
+		grandchild := s.Engine.GetBranch("grandchild")
+		childID := s.Engine.GetStackID(child)
+		require.NotEmpty(t, childID)
+		require.NotEqual(t, rootID, childID)
+		require.Equal(t, childID, s.Engine.GetStackID(grandchild))
+		require.Equal(t, rootID, s.Engine.GetStackID(root))
+	})
 }
 
 func TestCreateStackRef(t *testing.T) {

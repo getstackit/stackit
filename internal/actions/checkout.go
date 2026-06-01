@@ -70,12 +70,6 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 			return CheckoutResult{}, err
 		}
 	default:
-		// Only populate remote SHAs when entering interactive mode
-		// (the selector may need remote information for display)
-		if err := eng.PopulateRemoteShas(); err != nil {
-			return CheckoutResult{}, fmt.Errorf("failed to populate remote SHAs: %w", err)
-		}
-
 		branchName, err = handler.SelectBranch(ctx, opts)
 		if err != nil {
 			return CheckoutResult{}, err

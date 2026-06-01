@@ -55,11 +55,6 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	worktreeCtx.RepoRoot = worktreePath
 
 	// 4. Pre-flight operations in the worktree
-	// Populate remote SHAs so we can accurately check if branches match remote
-	if err := worktreeEng.PopulateRemoteShas(); err != nil {
-		out.Debug("Failed to populate remote SHAs in worktree: %v", err)
-	}
-
 	// Pull trunk in the worktree to ensure we have latest changes
 	pullResult, err := worktreeEng.PullTrunk(ctx.Context)
 	if err != nil {

@@ -87,3 +87,49 @@ func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestFetchRefSpecsFetchesBranchAndMetadataFromCustomRemote(t *testing.T) {
+	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+
+	_, err := scene.Repo.CreateBareRemote("upstream")
+	require.NoError(t, err)
+
+	err = scene.Repo.RunGitCommand("checkout", "-b", "feature")
+	require.NoError(t, err)
+	err = scene.Repo.RunGitCommand("commit", "--allow-empty", "-m", "feature")
+	require.NoError(t, err)
+	err = scene.Repo.PushBranch("upstream", "feature")
+	require.NoError(t, err)
+
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	metadataRef := "refs/stackit/metadata/feature"
+	sha, err := runner.CreateBlob(`{"branch":"feature"}`)
+	require.NoError(t, err)
+	err = scene.Repo.RunGitCommand("update-ref", metadataRef, sha)
+	require.NoError(t, err)
+	err = scene.Repo.RunGitCommand("push", "upstream", metadataRef)
+	require.NoError(t, err)
+
+	err = scene.Repo.RunGitCommand("update-ref", "-d", "refs/remotes/upstream/feature")
+	require.NoError(t, err)
+
+	err = runner.FetchRefSpecs(context.Background(), "upstream", []string{
+		"refs/heads/feature:refs/remotes/upstream/feature",
+		"+refs/stackit/metadata/*:refs/stackit/remote-metadata/*",
+	})
+	require.NoError(t, err)
+
+	branchSHA, err := scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", "refs/remotes/upstream/feature")
+	require.NoError(t, err)
+	require.NotEmpty(t, branchSHA)
+
+	remoteMetadataSHA, err := scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", "refs/stackit/remote-metadata/feature")
+	require.NoError(t, err)
+	require.NotEmpty(t, remoteMetadataSHA)
+
+	err = runner.EnsureMetadataRefspecConfigured()
+	require.NoError(t, err)
+	upstreamRefspecs, err := runner.GetConfigAll("remote.upstream.fetch")
+	require.NoError(t, err)
+	require.Contains(t, upstreamRefspecs, "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")
+}

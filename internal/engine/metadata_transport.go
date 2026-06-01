@@ -13,22 +13,38 @@ func (e *engineImpl) TestRemoteMetadataCompatibility(ctx context.Context) error 
 	return e.git.TestRemoteRefCompatibility(ctx)
 }
 
+// PrepareRemoteMetadataPush verifies that the remote accepts metadata refs and
+// records that support locally. Fetch-refspec setup is best-effort because
+// metadata pushes can still succeed when local fetch configuration cannot be
+// updated.
+func (e *engineImpl) PrepareRemoteMetadataPush(ctx context.Context) error {
+	if e.IsRemoteSyncEnabled() {
+		return nil
+	}
+	if err := e.TestRemoteMetadataCompatibility(ctx); err != nil {
+		return err
+	}
+	e.SetRemoteSyncEnabled(true)
+	_ = e.ConfigureRemoteMetadataSync(ctx)
+	return nil
+}
+
 // PushMetadataForBranches pushes metadata refs for the given branch names to
 // origin. A no-op when the list is empty.
 func (e *engineImpl) PushMetadataForBranches(ctx context.Context, branchNames []string) error {
 	return e.git.PushMetadataRefs(ctx, branchNames)
 }
 
-// ConfigureStackMetadataSync adds the stack-metadata refspec to origin so
-// subsequent `git fetch origin` invocations pick up stack-ref changes.
+// ConfigureStackMetadataSync adds the stack-metadata refspec to the configured
+// remote so subsequent git fetches pick up stack-ref changes.
 func (e *engineImpl) ConfigureStackMetadataSync(_ context.Context) error {
 	return e.git.EnsureStackMetaRefspecConfigured()
 }
 
-// FetchStackMetadata fetches stack-metadata refs from origin into the
+// FetchStackMetadata fetches stack-metadata refs into the
 // remote-stacks namespace.
 func (e *engineImpl) FetchStackMetadata(ctx context.Context) error {
-	return e.git.FetchStackMetaRefs(ctx)
+	return e.FetchRemote(ctx, RemoteFetchRequest{IncludeStackMetadata: true})
 }
 
 // ListStackMetadata returns a map of local stack IDs to their ref SHAs. Used

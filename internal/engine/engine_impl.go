@@ -334,7 +334,8 @@ func (e *engineImpl) ensureLocalLoaded() {
 func (e *engineImpl) maybeAutoFetchRemoteMetadata() {
 	// Fast path: Check if refspec is already configured (most common case)
 	// This avoids expensive git config reads and network fetches for normal operations
-	refspecs, err := e.git.GetConfigAll("remote.origin.fetch")
+	remote := e.GetRemote()
+	refspecs, err := e.git.GetConfigAll(fmt.Sprintf("remote.%s.fetch", remote))
 	if err == nil {
 		metadataRefspec := "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*"
 		if slices.Contains(refspecs, metadataRefspec) {
@@ -348,7 +349,10 @@ func (e *engineImpl) maybeAutoFetchRemoteMetadata() {
 	// Not configured yet - this might be a fresh clone
 	// Try to fetch metadata refs (this is a network operation, so it's slow)
 	// Only do this if refspec isn't configured to avoid slowing down every command
-	if err := e.git.FetchMetadataRefs(context.Background()); err != nil {
+	if err := e.FetchRemote(context.Background(), RemoteFetchRequest{
+		Remote:          remote,
+		IncludeMetadata: true,
+	}); err != nil {
 		// No remote metadata available, or error fetching - that's okay
 		return
 	}
@@ -408,31 +412,4 @@ func (e *engineImpl) Rebuild(newTrunkName string) error {
 	e.mu.Unlock()
 
 	return e.rebuild()
-}
-
-// PopulateRemoteShas populates remote branch information by fetching SHAs from remote
-func (e *engineImpl) PopulateRemoteShas() error {
-	remote := e.git.GetRemote()
-	remoteShas, err := e.git.FetchRemoteShas(context.Background(), remote)
-
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	// Clear existing remote SHAs
-	for _, state := range e.state.branchState {
-		state.RemoteSHA = ""
-	}
-
-	if err != nil {
-		// Don't fail if we can't fetch remote SHAs (e.g., offline)
-		return nil
-	}
-
-	// Set RemoteSHA for tracked branches that have a remote
-	for branchName, sha := range remoteShas {
-		if state := e.readState(branchName); state != nil {
-			state.RemoteSHA = sha
-		}
-	}
-	return nil
 }

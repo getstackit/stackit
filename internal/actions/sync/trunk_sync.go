@@ -8,21 +8,27 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 )
 
-// syncTrunk handles pulling the trunk and resolving any conflicts
-func syncTrunk(ctx *app.Context, opts *Options, handler Handler, summary *Summary) error {
+func syncFetchedTrunk(ctx *app.Context, opts *Options, handler Handler, summary *Summary) error {
+	eng := ctx.Sync()
+	gctx := ctx.Context
+
+	updateStart := time.Now()
+	pullResult, err := eng.UpdateTrunkFromRemote(gctx)
+	ctx.Logger.Info("update trunk from remote completed durationMs=%d", time.Since(updateStart).Milliseconds())
+	if err != nil {
+		return fmt.Errorf("failed to update trunk from remote: %w", err)
+	}
+
+	return handleTrunkPullResult(ctx, opts, handler, summary, pullResult)
+}
+
+func handleTrunkPullResult(ctx *app.Context, opts *Options, handler Handler, summary *Summary, pullResult engine.PullResult) error {
 	eng := ctx.Sync()
 	nav := ctx.Navigator()
 	out := ctx.Output
 	gctx := ctx.Context
 	trunk := nav.Trunk()
 	trunkName := trunk.GetName()
-
-	pullStart := time.Now()
-	pullResult, err := eng.PullTrunk(gctx)
-	ctx.Logger.Info("pull trunk completed durationMs=%d", time.Since(pullStart).Milliseconds())
-	if err != nil {
-		return fmt.Errorf("failed to pull trunk: %w", err)
-	}
 
 	switch pullResult {
 	case engine.PullDone:

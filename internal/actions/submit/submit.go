@@ -115,7 +115,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	nav := ctx.Navigator()
-	pr := ctx.PR()
 	eng := ctx.Engine
 
 	// Determine target branch (explicit --branch flag or current branch)
@@ -174,11 +173,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	currentBranchName := ""
 	if currentBranch != nil {
 		currentBranchName = currentBranch.GetName()
-	}
-
-	// Populate remote SHAs early for accurate display
-	if err := pr.PopulateRemoteShas(); err != nil {
-		ctx.Output.Debug("Failed to populate remote SHAs: %v", err)
 	}
 
 	// Build tree structure for display
@@ -633,16 +627,8 @@ func pushMetadataRefs(ctx *app.Context, branches engine.Branches) error {
 		return fmt.Errorf("failed to update metadata: %w", err)
 	}
 
-	// Check if remote sync is enabled; if not, run compatibility test first
-	if !rm.IsRemoteSyncEnabled() {
-		if err := rm.TestRemoteMetadataCompatibility(ctx.Context); err != nil {
-			return fmt.Errorf("remote does not support metadata refs (GitHub compatibility check failed): %w", err)
-		}
-		rm.SetRemoteSyncEnabled(true)
-		// Configure refspec so future git fetch commands also fetch metadata
-		if err := rm.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
-			ctx.Output.Debug("Failed to configure metadata refspec: %v", err)
-		}
+	if err := rm.PrepareRemoteMetadataPush(ctx.Context); err != nil {
+		return fmt.Errorf("remote does not support metadata refs (GitHub compatibility check failed): %w", err)
 	}
 
 	// Push metadata refs

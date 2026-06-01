@@ -1,15 +1,45 @@
 package actions_test
 
 import (
+	"context"
+	"sync"
 	"testing"
 
 	"github.com/google/go-github/v67/github"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
+	stackitgithub "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+type countingGitHubClient struct {
+	stackitgithub.Client
+	mu          sync.Mutex
+	branchCalls map[string]int
+}
+
+func newCountingGitHubClient(client stackitgithub.Client) *countingGitHubClient {
+	return &countingGitHubClient{
+		Client:      client,
+		branchCalls: make(map[string]int),
+	}
+}
+
+func (c *countingGitHubClient) GetPullRequestByBranch(ctx context.Context, owner, repo, branchName string) (*stackitgithub.PullRequestInfo, error) {
+	c.mu.Lock()
+	c.branchCalls[branchName]++
+	c.mu.Unlock()
+
+	return c.Client.GetPullRequestByBranch(ctx, owner, repo, branchName)
+}
+
+func (c *countingGitHubClient) branchCallCount(branchName string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.branchCalls[branchName]
+}
 
 func TestGetAction(t *testing.T) {
 	t.Run("resolves PR number and fetches branches", func(t *testing.T) {
@@ -68,7 +98,8 @@ func TestGetAction(t *testing.T) {
 		ghConfig.PRs["feature-b"] = prB
 		ghConfig.PRs["feature-a"] = prA
 		ghClient, owner, repo := testhelpers.NewMockGitHubClient(t, ghConfig)
-		s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(ghClient, owner, repo, ghConfig)
+		countingClient := newCountingGitHubClient(testhelpers.NewMockGitHubClientInterface(ghClient, owner, repo, ghConfig))
+		s.Context.GitHubClient = countingClient
 
 		// Create a bare repository to act as the remote
 		remoteDir := t.TempDir()
@@ -93,6 +124,8 @@ func TestGetAction(t *testing.T) {
 		require.True(t, s.Engine.GetBranch("feature-b").IsTracked())
 		require.Equal(t, "main", s.Engine.GetBranch("feature-a").GetParent().GetName())
 		require.Equal(t, "feature-a", s.Engine.GetBranch("feature-b").GetParent().GetName())
+		require.Equal(t, 1, countingClient.branchCallCount("feature-a"))
+		require.Equal(t, 1, countingClient.branchCallCount("feature-b"))
 	})
 
 	t.Run("identifies and syncs local descendants", func(t *testing.T) {

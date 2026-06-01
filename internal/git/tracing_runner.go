@@ -183,10 +183,24 @@ func (t *tracingRunner) PullBranch(ctx context.Context, remote, branchName strin
 	return result, err
 }
 
+func (t *tracingRunner) UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error) {
+	start := time.Now()
+	result, err := t.inner.UpdateBranchFromRemote(ctx, remote, branchName)
+	t.trace("UpdateBranchFromRemote", time.Since(start), err == nil, err, slog.String("remote", remote), slog.String("branch", branchName))
+	return result, err
+}
+
 func (t *tracingRunner) Fetch(ctx context.Context, remote, branch string) error {
 	start := time.Now()
 	err := t.inner.Fetch(ctx, remote, branch)
 	t.trace("Fetch", time.Since(start), err == nil, err, slog.String("remote", remote), slog.String("branch", branch))
+	return err
+}
+
+func (t *tracingRunner) FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error {
+	start := time.Now()
+	err := t.inner.FetchRefSpecs(ctx, remote, refspecs)
+	t.trace("FetchRefSpecs", time.Since(start), err == nil, err, slog.String("remote", remote), slog.Int("count", len(refspecs)))
 	return err
 }
 

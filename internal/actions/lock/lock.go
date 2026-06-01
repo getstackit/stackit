@@ -41,16 +41,15 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 
 	// Check for unpushed commits
 	unpushedBranches := []string{}
-	if err := eng.PopulateRemoteShas(); err == nil {
-		for _, b := range branches {
-			if b.IsTrunk() {
-				continue
-			}
-			status, err := eng.GetBranchRemoteStatus(b)
-			if err == nil && !status.Matches() {
-				if status.Ahead() || status.MissingRemote() || status.Diverged() {
-					unpushedBranches = append(unpushedBranches, b.GetName())
-				}
+	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx.Context, branches)
+	for _, b := range branches {
+		if b.IsTrunk() {
+			continue
+		}
+		status := remoteStatuses[b.GetName()]
+		if !status.Matches() {
+			if status.Ahead() || status.MissingRemote() || status.Diverged() {
+				unpushedBranches = append(unpushedBranches, b.GetName())
 			}
 		}
 	}

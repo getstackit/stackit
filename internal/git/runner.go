@@ -613,7 +613,8 @@ func (r *runner) GetUserName(ctx context.Context) (string, error) {
 func (r *runner) EnsureMetadataRefspecConfigured() error {
 	const metadataRefspec = "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*"
 
-	refspecs, err := r.GetConfigAll("remote.origin.fetch")
+	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote())
+	refspecs, err := r.GetConfigAll(fetchConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get fetch refspecs: %w", err)
 	}
@@ -624,13 +625,14 @@ func (r *runner) EnsureMetadataRefspecConfigured() error {
 	}
 
 	// Add refspec for metadata refs
-	return r.AddConfigValue("remote.origin.fetch", metadataRefspec)
+	return r.AddConfigValue(fetchConfigKey, metadataRefspec)
 }
 
 func (r *runner) EnsureStackMetaRefspecConfigured() error {
 	const stackMetaRefspec = "+refs/stackit/stacks/*:refs/stackit/remote-stacks/*"
 
-	refspecs, err := r.GetConfigAll("remote.origin.fetch")
+	fetchConfigKey := fmt.Sprintf("remote.%s.fetch", r.GetRemote())
+	refspecs, err := r.GetConfigAll(fetchConfigKey)
 	if err != nil {
 		return fmt.Errorf("failed to get fetch refspecs: %w", err)
 	}
@@ -641,7 +643,7 @@ func (r *runner) EnsureStackMetaRefspecConfigured() error {
 	}
 
 	// Add refspec for stack metadata refs
-	return r.AddConfigValue("remote.origin.fetch", stackMetaRefspec)
+	return r.AddConfigValue(fetchConfigKey, stackMetaRefspec)
 }
 
 func (r *runner) FindRemoteBranch(ctx context.Context, remote string) (string, error) {
@@ -1036,7 +1038,7 @@ func (r *runner) PushMetadataRefs(ctx context.Context, branches []string) error 
 }
 
 func (r *runner) FetchMetadataRefs(ctx context.Context) error {
-	return r.fetchRemoteRefSpecs(ctx, "origin", []string{
+	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(), []string{
 		"+refs/stackit/metadata/*:refs/stackit/remote-metadata/*",
 	})
 }
@@ -1053,7 +1055,7 @@ func (r *runner) PushStackMetaRefs(ctx context.Context, stackIDs []string) error
 }
 
 func (r *runner) FetchStackMetaRefs(ctx context.Context) error {
-	return r.fetchRemoteRefSpecs(ctx, "origin", []string{
+	return r.fetchRemoteRefSpecs(ctx, r.GetRemote(), []string{
 		"+refs/stackit/stacks/*:refs/stackit/remote-stacks/*",
 	})
 }

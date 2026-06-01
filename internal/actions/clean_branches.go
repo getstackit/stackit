@@ -217,6 +217,7 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 	deleteStatuses := make(map[string]engine.DeletionStatus) // name -> status
 	utilityBranches := make(map[string]bool)                 // branches that are utility type
 	var skippedInWorktree []string
+	remoteStatuses := eng.ReadBranchRemoteStatuses(c, allTrackedBranches.WithoutTrunk())
 
 	for _, name := range candidateNames {
 		status := statuses[name]
@@ -233,8 +234,8 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 
 		// Check if local branch has unpushed changes relative to remote
 		branch := eng.GetBranch(name)
-		remoteStatus, err := eng.GetBranchRemoteStatus(branch)
-		if err == nil && (remoteStatus.Ahead() || remoteStatus.Diverged()) {
+		remoteStatus := remoteStatuses[name]
+		if remoteStatus.Ahead() || remoteStatus.Diverged() {
 			status.HasUnpushedChanges = true
 			ctx.Logger.Info("identifyBranchesToDelete branch has unpushed changes branch=%v ahead=%v diverged=%v", name, remoteStatus.Ahead(), remoteStatus.Diverged())
 		}

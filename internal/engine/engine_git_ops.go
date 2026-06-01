@@ -18,7 +18,7 @@ func (e *engineImpl) GetPendingChanges(ctx context.Context) ([]PendingChange, er
 	}
 
 	var changes []PendingChange
-	lines := strings.SplitSeq(strings.TrimSpace(output), "\n")
+	lines := strings.SplitSeq(strings.TrimSuffix(output, "\n"), "\n")
 	for line := range lines {
 		if len(line) < 4 {
 			continue
@@ -79,7 +79,7 @@ func (e *engineImpl) GetWorkingTreeStatus(ctx context.Context) (staged, unstaged
 	if err != nil {
 		return false, false, false, err
 	}
-	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSuffix(output, "\n"), "\n") {
 		if len(line) < 2 {
 			continue
 		}

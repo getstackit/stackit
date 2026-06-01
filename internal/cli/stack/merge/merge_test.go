@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/tui"
@@ -151,6 +152,36 @@ func TestNewDrainCmd(t *testing.T) {
 		waitFlag := cmd.Flags().Lookup("wait")
 		require.Nil(t, waitFlag)
 	})
+}
+
+func TestRequireYesInNonInteractive(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		interactive bool
+		yes         bool
+		dryRun      bool
+		wantErr     bool
+	}{
+		{name: "interactive prompts later", interactive: true},
+		{name: "non-interactive with yes", yes: true},
+		{name: "non-interactive dry run", dryRun: true},
+		{name: "non-interactive without yes", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := &app.Context{Interactive: tt.interactive}
+			err := requireYesInNonInteractive(ctx, "merge next", tt.yes, tt.dryRun)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--yes")
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestMergeNextUsesCreateMergePlan(t *testing.T) {

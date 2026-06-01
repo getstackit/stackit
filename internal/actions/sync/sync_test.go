@@ -15,7 +15,7 @@ import (
 
 func TestSyncAction(t *testing.T) {
 	t.Run("syncs when trunk is up to date", func(t *testing.T) {
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s := scenario.NewRemoteScenario(t)
 
 		err := Action(s.Context, Options{
 			All:     false,
@@ -25,11 +25,19 @@ func TestSyncAction(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("fails when required trunk fetch fails", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		err := Action(s.Context, Options{}, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to fetch trunk from")
+	})
+
 	// Note: uncommitted changes check moved to CLI layer (sync.go) to run
 	// before TUI initialization. Tested in internal/cli/stack/sync_test.go.
 
 	t.Run("syncs with restack flag", func(t *testing.T) {
-		s := scenario.NewScenario(t, nil).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch1": "main",
 			})
@@ -44,7 +52,7 @@ func TestSyncAction(t *testing.T) {
 	})
 
 	t.Run("restacks branches in topological order (parents before children)", func(t *testing.T) {
-		s := scenario.NewScenario(t, nil).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch1": "main",
 				"branch2": "branch1",
@@ -61,7 +69,7 @@ func TestSyncAction(t *testing.T) {
 	})
 
 	t.Run("restacks branching stacks in topological order", func(t *testing.T) {
-		s := scenario.NewScenario(t, nil).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"stackA":        "main",
 				"stackA-child1": "stackA",
@@ -89,7 +97,7 @@ func TestSyncAction(t *testing.T) {
 	})
 
 	t.Run("restacks multiple deep subtrees correctly", func(t *testing.T) {
-		s := scenario.NewScenario(t, nil).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"P":   "main",
 				"C1":  "P",
@@ -120,7 +128,7 @@ func TestSyncAction(t *testing.T) {
 	})
 
 	t.Run("partial success in branching restack (one child succeeds, one fails)", func(t *testing.T) {
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s := scenario.NewRemoteScenario(t)
 
 		// Create: main -> P -> [0-Success, 1-Failure]
 		// We use these names because siblings are sorted ascending by name by default,
@@ -169,7 +177,7 @@ func TestSyncAction(t *testing.T) {
 	})
 
 	t.Run("sync mode aborts unexpected runtime restack conflict and restores branch", func(t *testing.T) {
-		s := scenario.NewScenario(t, nil).
+		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch1": "main",
 			})

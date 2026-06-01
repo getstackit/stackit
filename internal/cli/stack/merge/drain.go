@@ -142,6 +142,10 @@ func runMergeDrain(ctx *app.Context, opts mergeDrainOptions) error {
 		return nil
 	}
 
+	if err := requireYesInNonInteractive(ctx, "merge drain", opts.yes, opts.dryRun); err != nil {
+		return err
+	}
+
 	// Fail fast if no GitHub client
 	if _, err := ctx.RequireGitHub(); err != nil {
 		return err

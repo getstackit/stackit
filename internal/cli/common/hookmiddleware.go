@@ -61,6 +61,12 @@ func RunCommandHooks(ctx *app.Context, cmd *cobra.Command, phase PhasePrefix) er
 	}
 
 	phaseKey := CommandPhase(cmd, phase)
+	if phaseKey == config.PhasePostWorktreeCreate {
+		// post-worktree-create is the legacy worktree hook. Worktree create/attach
+		// run it explicitly inside the target worktree; the generic command
+		// lifecycle runner would run the same hook again from the original repo.
+		return nil
+	}
 	hookCmds := projectCfg.Hooks.For(phaseKey)
 	if len(hookCmds) == 0 {
 		return nil

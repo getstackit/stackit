@@ -14,7 +14,7 @@ func TestStackMetadataGC(t *testing.T) {
 
 	t.Run("orphaned stack ref is cleaned after all branches deleted", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
+		sh := NewTestShellInProcess(t, WithRemote())
 
 		// Create a stack: main -> a -> b
 		sh.CreateLinearStack("a", "b")
@@ -42,7 +42,7 @@ func TestStackMetadataGC(t *testing.T) {
 
 	t.Run("active stack refs are NOT deleted", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
+		sh := NewTestShellInProcess(t, WithRemote())
 
 		// Create a stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
@@ -67,7 +67,7 @@ func TestStackMetadataGC(t *testing.T) {
 
 	t.Run("stack ref survives when some branches remain after partial deletion", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
+		sh := NewTestShellInProcess(t, WithRemote())
 
 		// Create a stack: main -> a -> b -> c
 		sh.CreateLinearStack3()
@@ -100,7 +100,7 @@ func TestStackMetadataGC(t *testing.T) {
 
 	t.Run("multiple orphaned stacks are cleaned in one sync", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t)
+		sh := NewTestShellInProcess(t, WithRemote())
 
 		// Create first stack: main -> a
 		sh.Write("a.txt", "content for a").

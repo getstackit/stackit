@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
@@ -15,12 +14,11 @@ func TestSyncUIReporting(t *testing.T) {
 	t.Parallel()
 	t.Run("reports locked and frozen branches during sync", func(t *testing.T) {
 		t.Parallel()
-		sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		sh := scenario.NewRemoteScenario(t).
 			WithInProcess(true)
 
 		// Create a stack: main -> feature-a -> feature-b -> feature-c
-		sh.WithInitialCommit().
-			CreateBranch("feature-a").Commit("a1").TrackBranch("feature-a", "main").
+		sh.CreateBranch("feature-a").Commit("a1").TrackBranch("feature-a", "main").
 			CreateBranch("feature-b").Commit("b1").TrackBranch("feature-b", "feature-a").
 			CreateBranch("feature-c").Commit("c1").TrackBranch("feature-c", "feature-b")
 

@@ -44,6 +44,7 @@ const (
 	keyWorktreeAutoClean    = "worktree.autoClean"
 	keySplitHunkSelector    = "split.hunkSelector"
 	keyUndoDepth            = "undo.depth"
+	keyUndoEnabled          = "undo.enabled"
 	keyCICommand            = "ci.command"
 	keyCITimeout            = "ci.timeout"
 	keyMaxConcurrency       = "maxConcurrency"
@@ -191,6 +192,8 @@ func newConfigGetCmd() *cobra.Command {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.SplitHunkSelector())
 			case keyUndoDepth:
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.UndoStackDepth())
+			case keyUndoEnabled:
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.UndoEnabled())
 			case keyCICommand:
 				ciCmd := cfg.CICommand()
 				if ciCmd == "" {
@@ -361,6 +364,15 @@ func newConfigSetCmd() *cobra.Command {
 					return fmt.Errorf("failed to set %s: %w", keyUndoDepth, err)
 				}
 				splog.Info("Set %s to: %d", keyUndoDepth, depth)
+			case keyUndoEnabled:
+				enabled, err := strconv.ParseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid value for %s: %s (must be 'true' or 'false')", keyUndoEnabled, value)
+				}
+				if err := cfg.SetUndoEnabled(enabled); err != nil {
+					return fmt.Errorf("failed to set %s: %w", keyUndoEnabled, err)
+				}
+				splog.Info("Set %s to: %v", keyUndoEnabled, enabled)
 			case keyCICommand:
 				if err := cfg.SetCICommand(value); err != nil {
 					return fmt.Errorf("failed to set %s: %w", keyCICommand, err)
@@ -543,6 +555,11 @@ Examples:
 					return fmt.Errorf("failed to unset %s: %w", keyUndoDepth, err)
 				}
 				splog.Info("Unset %s (now using: %d)", keyUndoDepth, cfg.UndoStackDepth())
+			case keyUndoEnabled:
+				if err := cfg.UnsetUndoEnabled(); err != nil {
+					return fmt.Errorf("failed to unset %s: %w", keyUndoEnabled, err)
+				}
+				splog.Info("Unset %s (now using: %v)", keyUndoEnabled, cfg.UndoEnabled())
 			case keyCICommand:
 				if err := cfg.UnsetCICommand(); err != nil {
 					return fmt.Errorf("failed to unset %s: %w", keyCICommand, err)
@@ -914,6 +931,10 @@ func showConfigWithSources(repoRoot string, w io.Writer) error {
 	// undo.depth
 	undoSource := getIntSource(config.KeyUndoDepth, projectCfg != nil && projectCfg.HasUndoDepth())
 	formatLine("undo.depth", fmt.Sprintf("%d", cfg.UndoStackDepth()), undoSource)
+
+	// undo.enabled
+	undoEnabledSource := getBoolSource(config.KeyUndoEnabled, projectCfg != nil && projectCfg.HasUndoEnabled())
+	formatLine("undo.enabled", strconv.FormatBool(cfg.UndoEnabled()), undoEnabledSource)
 
 	// worktree.basePath
 	basePath := cfg.WorktreeBasePath()

@@ -77,7 +77,7 @@ func TestScopeRequiredInPattern(t *testing.T) {
 
 func TestScopeSubmitSyncFlow(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	sh := scenario.NewRemoteScenario(t)
 
 	// 1. Create a branch
 	sh.CreateBranch("feature").
@@ -91,30 +91,26 @@ func TestScopeSubmitSyncFlow(t *testing.T) {
 	require.NoError(t, eng.SetScope(context.Background(), branch, engine.NewScope("JIRA-123")))
 	require.Equal(t, "JIRA-123", eng.GetScope(branch).String())
 
-	// 3. Setup a local remote to simulate "origin"
-	_, err := sh.Scene.Repo.CreateBareRemote("origin")
-	require.NoError(t, err)
-
-	// 4. Setup mocked GitHub client for submit
+	// 3. Setup mocked GitHub client for submit
 	config := testhelpers.NewMockGitHubServerConfig()
 	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
 	githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
 	sh.Context.GitHubClient = githubClient
 
-	// 5. Submit the branch (this should push the metadata ref)
+	// 4. Submit the branch (this should push the metadata ref)
 	opts := submit.Options{
 		NoEdit: true,
 		Draft:  true,
 	}
-	err = submit.Action(sh.Context, opts, &noopHandler{})
+	err := submit.Action(sh.Context, opts, &noopHandler{})
 	require.NoError(t, err)
 
-	// 6. Run sync to fetch remote metadata
+	// 5. Run sync to fetch remote metadata
 	// This will fetch refs/stackit/metadata/*:refs/stackit/remote-metadata/*
 	err = sync.Action(sh.Context, sync.Options{}, nil)
 	require.NoError(t, err)
 
-	// 7. Verify the scope is now in the remote metadata cache
+	// 6. Verify the scope is now in the remote metadata cache
 	err = eng.LoadRemoteMetadataCache()
 	require.NoError(t, err)
 

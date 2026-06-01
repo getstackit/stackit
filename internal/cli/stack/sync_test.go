@@ -26,6 +26,8 @@ func TestSyncCommand(t *testing.T) {
 		// Create a remote to avoid sync errors related to missing remote
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)
+		err = s.Scene.Repo.PushBranch("origin", "main")
+		require.NoError(t, err)
 
 		s.RunCli("init")
 		s.RunCli("create", "branch1", "-m", "branch1")
@@ -84,6 +86,8 @@ func TestSyncCommand(t *testing.T) {
 
 		// Create a remote to avoid sync errors related to missing remote
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
+		require.NoError(t, err)
+		err = s.Scene.Repo.PushBranch("origin", "main")
 		require.NoError(t, err)
 
 		s.RunCli("init")

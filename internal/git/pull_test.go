@@ -85,6 +85,82 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.Equal(t, newRemoteSha, localSha, "Local branch should match remote after pull")
 }
 
+func TestBranchFetchRefspec_ForcesUpdate(t *testing.T) {
+	// The refspec must carry a leading '+' so that force-pushed (non-fast-forward)
+	// remote branches still update the remote-tracking ref. A missing '+' is the
+	// difference between a successful fetch and a non-fast-forward rejection.
+	require.Equal(t,
+		"+refs/heads/feature:refs/remotes/origin/feature",
+		git.BranchFetchRefspec("origin", "feature"),
+	)
+}
+
+func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
+	// Regression: fetching an explicit branch refspec must tolerate a remote
+	// branch that was force-pushed to a divergent history after the local
+	// remote-tracking ref already saw the previous tip. Without the '+' force
+	// prefix, `git fetch origin refs/heads/feature:refs/remotes/origin/feature`
+	// exits non-zero as a non-fast-forward update.
+
+	// 1. Setup a "remote" repository
+	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
+	require.NoError(t, err)
+	err = remoteScene.Repo.PushBranch("upstream", "main")
+	require.NoError(t, err)
+
+	// 2. Push an initial feature branch (commit A) to the remote
+	err = remoteScene.Repo.CreateAndCheckoutBranch("feature")
+	require.NoError(t, err)
+	err = remoteScene.Repo.CreateChangeAndCommit("feature change A", "feature")
+	require.NoError(t, err)
+	err = remoteScene.Repo.PushBranch("upstream", "feature")
+	require.NoError(t, err)
+	shaA, err := remoteScene.Repo.GetRevision("feature")
+	require.NoError(t, err)
+
+	// 3. Clone locally and prime the remote-tracking ref at commit A
+	localDir, err := os.MkdirTemp("", "stackit-test-local-*")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(localDir) })
+
+	cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	runner := git.NewRunnerWithPath(localDir, nil)
+	err = runner.InitDefaultRepo()
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	err = runner.Fetch(ctx, "origin", "feature")
+	require.NoError(t, err)
+	trackedA, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/feature")
+	require.NoError(t, err)
+	require.Equal(t, shaA, trackedA, "remote-tracking ref should point at commit A after first fetch")
+
+	// 4. Force-push a divergent rewrite (commit B) over feature on the remote.
+	// Resetting to main before committing makes B share a parent with A but be
+	// neither ancestor nor descendant — a true non-fast-forward update.
+	err = remoteScene.Repo.RunGitCommand("reset", "--hard", "main")
+	require.NoError(t, err)
+	err = remoteScene.Repo.CreateChangeAndCommit("feature change B", "feature")
+	require.NoError(t, err)
+	err = remoteScene.Repo.ForcePushBranch("upstream", "feature")
+	require.NoError(t, err)
+	shaB, err := remoteScene.Repo.GetRevision("feature")
+	require.NoError(t, err)
+	require.NotEqual(t, shaA, shaB, "force push should have rewritten feature to a new tip")
+
+	// 5. Fetch again — with the '+' force prefix this succeeds and advances the
+	// remote-tracking ref to B instead of failing as non-fast-forward.
+	err = runner.Fetch(ctx, "origin", "feature")
+	require.NoError(t, err, "fetch should tolerate force-updated remote branch")
+	trackedB, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/feature")
+	require.NoError(t, err)
+	require.Equal(t, shaB, trackedB, "remote-tracking ref should update to force-pushed commit B")
+}
+
 func TestReloadRepository(t *testing.T) {
 	// Test that the runner can resolve commits created externally — the
 	// revision cache must invalidate / pass through to git for unknown SHAs.

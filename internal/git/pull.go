@@ -17,10 +17,20 @@ const (
 	PullConflict
 )
 
+// BranchFetchRefspec builds the refspec used to fetch a remote branch into its
+// remote-tracking ref. The leading '+' forces the update so a force-pushed
+// remote branch (whose new tip is not a descendant of the previously fetched
+// tip) still updates refs/remotes/<remote>/<branch>, instead of failing the
+// fetch as a non-fast-forward update. This mirrors the '+' in Git's default
+// "+refs/heads/*:refs/remotes/origin/*" fetch refspec.
+func BranchFetchRefspec(remote, branch string) string {
+	return fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch)
+}
+
 func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (PullResult, error) {
 	// Fetch with explicit refspec to update the remote-tracking branch.
 	// This ensures refs/remotes/<remote>/<branch> is actually updated.
-	refspec := fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branchName, remote, branchName)
+	refspec := BranchFetchRefspec(remote, branchName)
 	_ = r.fetchRemoteRefSpecs(ctx, remote, []string{refspec})
 
 	return r.UpdateBranchFromRemote(ctx, remote, branchName)
@@ -112,7 +122,7 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 }
 
 func (r *runner) Fetch(ctx context.Context, remote, branch string) error {
-	refspec := fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch)
+	refspec := BranchFetchRefspec(remote, branch)
 	if err := r.fetchRemoteRefSpecs(ctx, remote, []string{refspec}); err != nil {
 		return fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
 	}

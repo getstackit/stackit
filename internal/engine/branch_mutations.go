@@ -80,7 +80,7 @@ func (e *engineImpl) FetchRemote(ctx context.Context, req RemoteFetchRequest) er
 		if branch == "" {
 			continue
 		}
-		add(fmt.Sprintf("refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch))
+		add(git.BranchFetchRefspec(remote, branch))
 	}
 	if req.IncludeMetadata {
 		add("+refs/stackit/metadata/*:refs/stackit/remote-metadata/*")

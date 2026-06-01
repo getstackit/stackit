@@ -137,42 +137,45 @@ func (p *PrInfo) MarshalJSON() ([]byte, error) {
 // WithNumber returns a new PrInfo with the number field updated
 func (p *PrInfo) WithNumber(number *int) *PrInfo {
 	return &PrInfo{
-		number:     number,
-		title:      p.title,
-		body:       p.body,
-		isDraft:    p.isDraft,
-		state:      p.state,
-		base:       p.base,
-		url:        p.url,
-		lockReason: p.lockReason,
+		number:      number,
+		title:       p.title,
+		body:        p.body,
+		isDraft:     p.isDraft,
+		state:       p.state,
+		base:        p.base,
+		url:         p.url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
 	}
 }
 
 // WithTitle returns a new PrInfo with the title field updated
 func (p *PrInfo) WithTitle(title string) *PrInfo {
 	return &PrInfo{
-		number:     p.number,
-		title:      title,
-		body:       p.body,
-		isDraft:    p.isDraft,
-		state:      p.state,
-		base:       p.base,
-		url:        p.url,
-		lockReason: p.lockReason,
+		number:      p.number,
+		title:       title,
+		body:        p.body,
+		isDraft:     p.isDraft,
+		state:       p.state,
+		base:        p.base,
+		url:         p.url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
 	}
 }
 
 // WithBody returns a new PrInfo with the body field updated
 func (p *PrInfo) WithBody(body string) *PrInfo {
 	return &PrInfo{
-		number:     p.number,
-		title:      p.title,
-		body:       body,
-		isDraft:    p.isDraft,
-		state:      p.state,
-		base:       p.base,
-		url:        p.url,
-		lockReason: p.lockReason,
+		number:      p.number,
+		title:       p.title,
+		body:        body,
+		isDraft:     p.isDraft,
+		state:       p.state,
+		base:        p.base,
+		url:         p.url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
 	}
 }
 
@@ -180,70 +183,75 @@ func (p *PrInfo) WithBody(body string) *PrInfo {
 // This is more efficient than chaining WithTitle().WithBody() as it only creates one copy
 func (p *PrInfo) WithTitleAndBody(title, body string) *PrInfo {
 	return &PrInfo{
-		number:     p.number,
-		title:      title,
-		body:       body,
-		isDraft:    p.isDraft,
-		state:      p.state,
-		base:       p.base,
-		url:        p.url,
-		lockReason: p.lockReason,
+		number:      p.number,
+		title:       title,
+		body:        body,
+		isDraft:     p.isDraft,
+		state:       p.state,
+		base:        p.base,
+		url:         p.url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
 	}
 }
 
 // WithIsDraft returns a new PrInfo with the isDraft field updated
 func (p *PrInfo) WithIsDraft(isDraft bool) *PrInfo {
 	return &PrInfo{
-		number:     p.number,
-		title:      p.title,
-		body:       p.body,
-		isDraft:    isDraft,
-		state:      p.state,
-		base:       p.base,
-		url:        p.url,
-		lockReason: p.lockReason,
+		number:      p.number,
+		title:       p.title,
+		body:        p.body,
+		isDraft:     isDraft,
+		state:       p.state,
+		base:        p.base,
+		url:         p.url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
 	}
 }
 
 // WithState returns a new PrInfo with the state field updated
 func (p *PrInfo) WithState(state string) *PrInfo {
 	return &PrInfo{
-		number:     p.number,
-		title:      p.title,
-		body:       p.body,
-		isDraft:    p.isDraft,
-		state:      state,
-		base:       p.base,
-		url:        p.url,
-		lockReason: p.lockReason,
+		number:      p.number,
+		title:       p.title,
+		body:        p.body,
+		isDraft:     p.isDraft,
+		state:       state,
+		base:        p.base,
+		url:         p.url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
 	}
 }
 
 // WithBase returns a new PrInfo with the base field updated
 func (p *PrInfo) WithBase(base string) *PrInfo {
 	return &PrInfo{
-		number:     p.number,
-		title:      p.title,
-		body:       p.body,
-		isDraft:    p.isDraft,
-		state:      p.state,
-		base:       base,
-		url:        p.url,
-		lockReason: p.lockReason,
+		number:      p.number,
+		title:       p.title,
+		body:        p.body,
+		isDraft:     p.isDraft,
+		state:       p.state,
+		base:        base,
+		url:         p.url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
 	}
 }
 
 // WithURL returns a new PrInfo with the url field updated
 func (p *PrInfo) WithURL(url string) *PrInfo {
 	return &PrInfo{
-		number:     p.number,
-		title:      p.title,
-		body:       p.body,
-		isDraft:    p.isDraft,
-		state:      p.state,
-		base:       p.base,
-		url:        url,
-		lockReason: p.lockReason,
+		number:      p.number,
+		title:       p.title,
+		body:        p.body,
+		isDraft:     p.isDraft,
+		state:       p.state,
+		base:        p.base,
+		url:         url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
 	}
 }
 

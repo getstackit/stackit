@@ -885,7 +885,8 @@ func TestUpsertPrInfo(t *testing.T) {
 				"branch1": "main",
 			})
 
-		prInfo := testhelpers.NewTestPrInfoWithTitle(123, "Original Title")
+		prInfo := testhelpers.NewTestPrInfoWithTitle(123, "Original Title").
+			WithMergeBranch("stackit-merge-branch")
 
 		branch := s.Engine.GetBranch("branch1")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
@@ -902,6 +903,7 @@ func TestUpsertPrInfo(t *testing.T) {
 		require.NotNil(t, retrieved)
 		require.Equal(t, "Updated Title", retrieved.Title())
 		require.Equal(t, "Updated body", retrieved.Body())
+		require.Equal(t, "stackit-merge-branch", retrieved.MergeBranch())
 	})
 }
 

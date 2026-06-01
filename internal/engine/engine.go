@@ -23,8 +23,7 @@ import (
 // Thread-safe: All methods are safe for concurrent use
 type PRManager interface {
 	UpsertPrInfo(ctx context.Context, branch Branch, prInfo *PrInfo) error
-	GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error)
-	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) map[string]BranchRemoteStatus
+	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
 	PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error
 	// Navigation comment ID caching (stored in local metadata)
 	GetNavigationCommentID(branch Branch) (int64, error)

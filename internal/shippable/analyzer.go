@@ -181,8 +181,7 @@ func (a *Analyzer) analyzeBranch(branchName string, statusMap map[string]*github
 	// Check if local branch matches remote
 	// This is critical for shipping: if local differs from remote, the octopus merge
 	// will use local SHAs but PRs track remote SHAs, so GitHub won't auto-close them
-	remoteStatus, err := a.eng.GetBranchRemoteStatus(branch)
-	if err == nil && !remoteStatus.Matches() {
+	if !a.eng.ReadBranchRemoteStatuses(context.Background(), engine.BranchesOf(branch)).ForBranch(branch).Matches() {
 		return &BlockingPR{
 			Branch:   branchName,
 			PRNumber: prNumber,

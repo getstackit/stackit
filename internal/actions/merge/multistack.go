@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -53,7 +54,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	// This is critical: if branches differ from remote, the octopus merge uses local SHAs
 	// but PRs track remote SHAs, so GitHub won't auto-close individual PRs
 	out.Debug("multistack: validating branches match remote")
-	if err := validateBranchesMatchRemote(eng, stacks, out); err != nil {
+	if err := validateBranchesMatchRemote(ctx.Context, eng, stacks, out); err != nil {
 		out.Debug("multistack: branch validation failed: %v", err)
 		return nil, err
 	}
@@ -228,18 +229,13 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 // validateBranchesMatchRemote checks that all branches in the stacks match their remote.
 // This is critical for shipping: if local differs from remote, the octopus merge
 // will use local SHAs but PRs track remote SHAs, so GitHub won't auto-close them.
-func validateBranchesMatchRemote(eng engine.Engine, stacks []MultiStackInfo, out interface{ Warn(string, ...any) }) error {
+func validateBranchesMatchRemote(ctx context.Context, eng engine.Engine, stacks []MultiStackInfo, out interface{ Warn(string, ...any) }) error {
 	var mismatchedBranches []string
 
 	for _, stack := range stacks {
 		for _, branchName := range stack.AllBranches {
 			branch := eng.GetBranch(branchName)
-			status, err := eng.GetBranchRemoteStatus(branch)
-			if err != nil {
-				continue // Skip branches we can't check
-			}
-
-			if !status.Matches() {
+			if !eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(branch)).ForBranch(branch).Matches() {
 				mismatchedBranches = append(mismatchedBranches, branchName)
 			}
 		}

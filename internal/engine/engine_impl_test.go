@@ -959,30 +959,29 @@ func TestConcurrentAccess(t *testing.T) {
 	})
 }
 
-func TestGetBranchRemoteStatus(t *testing.T) {
+func TestBranchRemoteStatuses(t *testing.T) {
 	t.Parallel()
+
+	getBranchStatus := func(s *scenario.Scenario, name string) engine.BranchRemoteStatus {
+		branch := s.Engine.GetBranch(name)
+		return s.Engine.ReadBranchRemoteStatuses(context.Background(), engine.BranchesOf(branch)).ForBranch(branch)
+	}
+
 	t.Run("returns true when branch matches remote", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		// Create a bare remote
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)
-
-		// Push main first
 		err = s.Scene.Repo.PushBranch("origin", "main")
 		require.NoError(t, err)
 
-		// Create and push a branch
-		s.CreateBranch("feature").
-			Commit("feature change")
+		s.CreateBranch("feature").Commit("feature change")
 		err = s.Scene.Repo.PushBranch("origin", "feature")
 		require.NoError(t, err)
 		s.Checkout("main")
 
-		// Verify GetBranchRemoteStatus
-		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("feature"))
-		require.NoError(t, err)
+		status := getBranchStatus(s, "feature")
 		require.True(t, status.Matches(), "branch should match remote after push")
 		require.False(t, status.Ahead())
 		require.False(t, status.Behind())
@@ -993,27 +992,17 @@ func TestGetBranchRemoteStatus(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		// Create a bare remote
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)
-
-		// Push main first
 		err = s.Scene.Repo.PushBranch("origin", "main")
 		require.NoError(t, err)
 
-		// Create and push a branch
-		s.CreateBranch("feature").
-			Commit("feature change")
+		s.CreateBranch("feature").Commit("feature change")
 		err = s.Scene.Repo.PushBranch("origin", "feature")
 		require.NoError(t, err)
+		s.Commit("local change").Checkout("main")
 
-		// Make local change (not pushed)
-		s.Commit("local change").
-			Checkout("main")
-
-		// Verify GetBranchRemoteStatus
-		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("feature"))
-		require.NoError(t, err)
+		status := getBranchStatus(s, "feature")
 		require.False(t, status.Matches(), "branch should not match remote with local changes")
 		require.True(t, status.Ahead())
 		require.False(t, status.Behind())
@@ -1024,22 +1013,14 @@ func TestGetBranchRemoteStatus(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		// Create a bare remote
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)
-
-		// Push main (but not feature)
 		err = s.Scene.Repo.PushBranch("origin", "main")
 		require.NoError(t, err)
 
-		// Create a branch locally but don't push it
-		s.CreateBranch("feature").
-			Commit("feature change").
-			Checkout("main")
+		s.CreateBranch("feature").Commit("feature change").Checkout("main")
 
-		// Verify GetBranchRemoteStatus
-		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("feature"))
-		require.NoError(t, err)
+		status := getBranchStatus(s, "feature")
 		require.False(t, status.Matches(), "branch should not match when it doesn't exist on remote")
 		require.True(t, status.MissingRemote())
 	})
@@ -1048,29 +1029,20 @@ func TestGetBranchRemoteStatus(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		// Create a bare remote
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)
-
-		// Push main first
 		err = s.Scene.Repo.PushBranch("origin", "main")
 		require.NoError(t, err)
 
-		// Create and push a branch
-		s.CreateBranch("feature").
-			Commit("feature change")
+		s.CreateBranch("feature").Commit("feature change")
 		err = s.Scene.Repo.PushBranch("origin", "feature")
 		require.NoError(t, err)
 
-		// Amend the commit locally (simulates squash or rebase)
 		err = s.Scene.Repo.CreateChangeAndAmend("amended change", "amended")
 		require.NoError(t, err)
-
 		s.Checkout("main")
 
-		// Verify GetBranchRemoteStatus
-		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("feature"))
-		require.NoError(t, err)
+		status := getBranchStatus(s, "feature")
 		require.False(t, status.Matches(), "branch should not match remote after amend")
 		require.True(t, status.Diverged())
 		require.False(t, status.Ahead())
@@ -1126,8 +1098,8 @@ func TestReadBranchRemoteStatuses(t *testing.T) {
 		require.NoError(t, err)
 
 		// Branches should not match (nothing on remote)
-		status, err := s.Engine.GetBranchRemoteStatus(s.Engine.GetBranch("main"))
-		require.NoError(t, err)
+		main := s.Engine.GetBranch("main")
+		status := s.Engine.ReadBranchRemoteStatuses(context.Background(), engine.BranchesOf(main)).ForBranch(main)
 		require.False(t, status.Matches(), "main should not match empty remote")
 	})
 }

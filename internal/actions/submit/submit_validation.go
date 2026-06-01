@@ -92,11 +92,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 			}
 		default:
 			// Parent is not in submission list
-			status, err := eng.GetBranchRemoteStatus(parentBranch)
-			if err != nil {
-				return fmt.Errorf("failed to check if parent branch matches remote: %w", err)
-			}
-			if !status.Matches() {
+			if !eng.ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(parentBranch)).ForBranch(parentBranch).Matches() {
 				return fmt.Errorf("you are trying to submit at least one branch whose base does not match its parent remotely, without including its parent. You may want to use 'stackit submit --stack' to ensure that the ancestors of %s are included in your submission",
 					style.ColorBranchName(branchName, false))
 			}

@@ -263,7 +263,7 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*CreateResult, error) {
 	trunk := eng.Trunk()
 
 	// Check if trunk is behind remote and warn
-	if status, err := eng.GetBranchRemoteStatus(trunk); err == nil && status.Behind() {
+	if eng.ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(trunk)).ForBranch(trunk).Behind() {
 		out.Warn("Local %s is behind remote. Consider running 'st sync' first.", trunk.GetName())
 	}
 

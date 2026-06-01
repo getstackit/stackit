@@ -325,13 +325,8 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		}
 
 		// Check if local matches remote
-		status, err := eng.GetBranchRemoteStatus(eng.GetBranch(name))
-		matchesRemote := true
-		if err != nil {
-			splog.Debug("Failed to get branch remote status: %v", err)
-		} else {
-			matchesRemote = status.Matches()
-		}
+		branchObj := eng.GetBranch(name)
+		matchesRemote := eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(branchObj)).ForBranch(branchObj).Matches()
 
 		if !matchesRemote {
 			// Get detailed difference information
@@ -385,7 +380,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 	// Pre-flight check: Check if trunk is in sync with remote
 	trunk := eng.Trunk()
-	if status, err := eng.GetBranchRemoteStatus(trunk); err == nil && status.Diverged() {
+	if eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(trunk)).ForBranch(trunk).Diverged() {
 		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Trunk branch %s has diverged from remote. You may need to sync it manually or use --force during merge.", trunk.GetName()))
 	}
 

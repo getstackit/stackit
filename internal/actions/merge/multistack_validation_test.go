@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +26,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should pass - branch matches remote
-		err := validateBranchesMatchRemote(s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
 		assert.NoError(t, err)
 	})
 
@@ -48,7 +49,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should fail - branch differs from remote
-		err := validateBranchesMatchRemote(s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot ship")
 		assert.Contains(t, err.Error(), "differ from remote")
@@ -85,7 +86,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should fail with count of 2
-		err := validateBranchesMatchRemote(s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "2 branch")
 	})
@@ -114,7 +115,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should pass - all branches match remote
-		err := validateBranchesMatchRemote(s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
 		assert.NoError(t, err)
 	})
 
@@ -146,7 +147,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should fail - stack2 branch differs from remote
-		err := validateBranchesMatchRemote(s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "1 branch")
 	})
@@ -165,7 +166,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 		}
 
 		// Should fail - branch doesn't exist on remote (doesn't match)
-		err := validateBranchesMatchRemote(s.Engine, stacks, s.Context.Output)
+		err := validateBranchesMatchRemote(context.Background(), s.Engine, stacks, s.Context.Output)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "differ from remote")
 	})

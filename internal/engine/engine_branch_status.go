@@ -240,15 +240,10 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 	return newBranchStatuses(results)
 }
 
-// GetBranchRemoteStatus returns the relationship between a local branch and its remote.
-func (e *engineImpl) GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error) {
-	return e.ReadBranchRemoteStatuses(context.Background(), BranchesOf(branch))[branch.GetName()], nil
-}
-
 // ReadBranchRemoteStatuses returns the local/remote relationship for the
 // requested branches. It lists remote branch SHAs once and does not mutate
 // engine state.
-func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Branches) map[string]BranchRemoteStatus {
+func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -468,10 +463,7 @@ func (e *engineImpl) GetRemote() string {
 // GetBranchRemoteDifference returns a string describing the difference between local and remote branch
 func (e *engineImpl) GetBranchRemoteDifference(branchName string) (string, error) {
 	branch := e.GetBranch(branchName)
-	status, err := e.GetBranchRemoteStatus(branch)
-	if err != nil {
-		return "", err
-	}
+	status := e.ReadBranchRemoteStatuses(context.Background(), BranchesOf(branch)).ForBranch(branch)
 
 	if status.LocalSha == "" {
 		return "(branch not found locally)", nil

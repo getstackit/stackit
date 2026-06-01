@@ -444,14 +444,13 @@ func pushBranchIfNeeded(ctx *app.Context, submissionInfo Info, opts Options, rem
 	branch := ctx.Navigator().GetBranch(submissionInfo.BranchName)
 	leaseExpectedSHA := ""
 	if forceWithLease {
-		if status, err := ctx.PR().GetBranchRemoteStatus(branch); err == nil {
-			// Remote already has this exact SHA — skip the push to avoid a spurious
-			// "cannot lock ref: reference already exists" rejection from the server.
-			if status.Matches() {
-				return nil
-			}
-			leaseExpectedSHA = status.RemoteSha
+		status := ctx.PR().ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(branch)).ForBranch(branch)
+		// Remote already has this exact SHA — skip the push to avoid a spurious
+		// "cannot lock ref: reference already exists" rejection from the server.
+		if status.Matches() {
+			return nil
 		}
+		leaseExpectedSHA = status.RemoteSha
 	}
 	if err := ctx.PR().PushBranch(ctx.Context, branch, remote, git.PushOptions{
 		Force:                     opts.Force,

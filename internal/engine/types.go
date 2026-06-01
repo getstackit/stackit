@@ -227,6 +227,14 @@ func (s BranchRemoteStatus) MissingRemote() bool {
 	return s.RemoteSha == ""
 }
 
+// BranchRemoteStatuses maps branch names to their remote sync status.
+type BranchRemoteStatuses map[string]BranchRemoteStatus
+
+// ForBranch returns the remote status for the given branch.
+func (s BranchRemoteStatuses) ForBranch(branch Branch) BranchRemoteStatus {
+	return s[branch.GetName()]
+}
+
 // ValidationResult represents the validation state of a branch
 type ValidationResult int
 

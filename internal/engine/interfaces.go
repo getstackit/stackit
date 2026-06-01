@@ -53,8 +53,7 @@ type BranchStatus interface {
 	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)
 	GetBranchRemoteDifference(branchName string) (string, error)
-	GetBranchRemoteStatus(branch Branch) (BranchRemoteStatus, error)
-	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) map[string]BranchRemoteStatus
+	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
 }
 

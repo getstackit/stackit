@@ -1,6 +1,7 @@
 package httpcontract
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"time"
@@ -71,13 +72,12 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 	}
 
 	// Map remote status
-	if remoteStatus, err := eng.GetBranchRemoteStatus(branch); err == nil {
-		resp.RemoteStatus = &RemoteStatus{
-			Ahead:         remoteStatus.Ahead(),
-			Behind:        remoteStatus.Behind(),
-			Diverged:      remoteStatus.Diverged(),
-			MissingRemote: remoteStatus.MissingRemote(),
-		}
+	remoteStatus := eng.ReadBranchRemoteStatuses(context.Background(), engine.BranchesOf(branch)).ForBranch(branch)
+	resp.RemoteStatus = &RemoteStatus{
+		Ahead:         remoteStatus.Ahead(),
+		Behind:        remoteStatus.Behind(),
+		Diverged:      remoteStatus.Diverged(),
+		MissingRemote: remoteStatus.MissingRemote(),
 	}
 
 	return resp

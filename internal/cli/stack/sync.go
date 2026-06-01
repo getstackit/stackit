@@ -11,6 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // NewSyncCmd creates the sync command
@@ -101,8 +102,8 @@ func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
 
 	// Check if trunk needs to be pulled from remote
 	trunk := eng.Trunk()
-	remoteStatus, err := eng.GetBranchRemoteStatus(trunk)
-	if err == nil && remoteStatus.Behind() {
+	remoteStatus := eng.ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(trunk)).ForBranch(trunk)
+	if remoteStatus.Behind() {
 		result.WouldPull = trunk.GetName()
 	}
 

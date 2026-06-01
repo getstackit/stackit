@@ -452,11 +452,11 @@ func (e *engineImpl) tryConflictFreeReplay(
 	}
 
 	// File sets are disjoint — compute the rebased tree via merge-tree.
-	// git merge-tree --write-tree <base> <ours> <theirs>
+	// git merge-tree --write-tree --merge-base <base> <ours> <theirs>
 	// OURS  = resolvedParent (the new base we're rebasing onto)
 	// THEIRS = spec.Branch  (carries our changes on top of OldUpstream)
 	treeSHARaw, err := e.git.RunGitCommandWithContext(ctx,
-		"merge-tree", "--write-tree", spec.OldUpstream, resolvedParent, spec.Branch)
+		"merge-tree", "--write-tree", "--merge-base", spec.OldUpstream, resolvedParent, spec.Branch)
 	if err != nil {
 		return "", false
 	}

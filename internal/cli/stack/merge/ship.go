@@ -146,6 +146,10 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 		return nil
 	}
 
+	if err := requireYesInNonInteractive(ctx, "merge ship", opts.yes, opts.dryRun); err != nil {
+		return err
+	}
+
 	// Fail fast if no GitHub client
 	if _, err := ctx.RequireGitHub(); err != nil {
 		return err

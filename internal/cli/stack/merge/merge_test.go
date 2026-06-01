@@ -541,3 +541,25 @@ func TestShipDefaultWait(t *testing.T) {
 		require.Equal(t, "false", waitFlag.DefValue)
 	})
 }
+
+func TestRunMultiStackShip_DryRunDoesNotRequireYes(t *testing.T) {
+	t.Parallel()
+
+	// runMultiStackShip with dryRun=true and no stacks specified should
+	// succeed without --yes, even in non-interactive mode. Before the fix,
+	// the --yes guard ran before the dry-run early-return, causing
+	//   "no stacks specified. Use --stacks ... or --yes ..."
+	// in non-interactive CI environments.
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"stack-a": "main",
+		})
+
+	// Context is non-interactive (scenario sets Interactive: false)
+	err := runMultiStackShip(s.Context, shipMultiStackOptions{
+		dryRun: true,
+		// stacks is nil: no specific stacks selected, meaning "all stacks"
+	})
+	require.NoError(t, err, "dry-run must not require --yes in non-interactive mode")
+	require.Contains(t, s.Output.String(), "Dry-run mode")
+}

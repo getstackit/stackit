@@ -294,27 +294,8 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 	}
 	out.Newline()
 
-	// If no stacks specified, confirm proceeding with all stacks
-	if len(opts.stacks) == 0 {
-		if !ctx.Interactive {
-			// Non-interactive mode requires explicit stack selection or --yes
-			if !opts.yes {
-				return fmt.Errorf("no stacks specified. Use --stacks to select stacks or --yes to combine all %d stacks", len(availableStacks))
-			}
-			out.Info("Combining all %d stacks (--yes specified)", len(availableStacks))
-		} else {
-			confirmed, err := tui.PromptConfirm(fmt.Sprintf("Combine all %d stacks?", len(availableStacks)), true)
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				out.Info("Canceled. Use --stacks to select specific stacks.")
-				return nil
-			}
-		}
-	}
-
-	// Dry-run mode: show the plan and exit without side effects
+	// Dry-run mode: show the plan and exit without side effects. Evaluated
+	// before the --yes check so it is usable non-interactively without flags.
 	if opts.dryRun {
 		selected := availableStacks
 		if len(opts.stacks) > 0 {
@@ -337,6 +318,26 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 		}
 		out.Info("Dry-run mode: No changes were made.")
 		return nil
+	}
+
+	// If no stacks specified, confirm proceeding with all stacks
+	if len(opts.stacks) == 0 {
+		if !ctx.Interactive {
+			// Non-interactive mode requires explicit stack selection or --yes
+			if !opts.yes {
+				return fmt.Errorf("no stacks specified. Use --stacks to select stacks or --yes to combine all %d stacks", len(availableStacks))
+			}
+			out.Info("Combining all %d stacks (--yes specified)", len(availableStacks))
+		} else {
+			confirmed, err := tui.PromptConfirm(fmt.Sprintf("Combine all %d stacks?", len(availableStacks)), true)
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				out.Info("Canceled. Use --stacks to select specific stacks.")
+				return nil
+			}
+		}
 	}
 
 	// Execute multi-stack merge

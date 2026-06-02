@@ -5,6 +5,7 @@ package hooks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -53,7 +54,7 @@ func ResolveApproved(req ResolveRequest) ([]string, error) {
 	filtered := make([]string, 0, len(req.Commands))
 	for _, hook := range req.Commands {
 		if trimmed := strings.TrimSpace(hook); trimmed != "" {
-			filtered = append(filtered, hook)
+			filtered = append(filtered, trimmed)
 		}
 	}
 	if len(filtered) == 0 {
@@ -103,7 +104,7 @@ func unapprovedRequiredHookError(phase, hook string, cause error) error {
 	if cause != nil {
 		return fmt.Errorf("%s: %w", msg, cause)
 	}
-	return fmt.Errorf("%s", msg)
+	return errors.New(msg)
 }
 
 // RunOptions controls how a list of resolved hooks is executed.

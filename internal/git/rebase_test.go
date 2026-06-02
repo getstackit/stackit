@@ -2,6 +2,8 @@ package git_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -468,4 +470,75 @@ func TestGetRebaseHead(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, rebaseHead)
 	})
+}
+
+// rerereLagRunner simulates the timing-dependent git behavior behind the flaky
+// TestRebase failure: when `git rebase --continue` replays a commit that hits a
+// conflict rerere can resolve, rerere.autoupdate writes the resolution to the
+// working tree but does not always stage it before the command returns.
+// GetUnmergedFiles therefore still reports the path as conflicted until an
+// explicit `git rerere` stages the resolution. The bug was that the error path
+// after `rebase --continue` bailed on that transient unmerged state without
+// giving rerere the chance to stage it (which the top of the loop already did).
+type rerereLagRunner struct {
+	git.Runner // embedded: only the methods AutoContinueRerereRebase uses are implemented
+
+	inProgress    bool
+	unmerged      []string
+	continueCalls int
+	rerereCalls   int
+}
+
+func (r *rerereLagRunner) IsRebaseInProgress(context.Context) bool {
+	return r.inProgress
+}
+
+func (r *rerereLagRunner) GetUnmergedFiles(context.Context) ([]string, error) {
+	return append([]string(nil), r.unmerged...), nil
+}
+
+func (r *rerereLagRunner) RunGitCommandWithContext(_ context.Context, args ...string) (string, error) {
+	if len(args) > 0 && args[0] == "rerere" {
+		r.rerereCalls++
+		// Explicit rerere applies the recorded resolution and, with autoupdate
+		// on, stages it -- clearing the conflict from the index.
+		r.unmerged = nil
+		return "", nil
+	}
+	return "", fmt.Errorf("unexpected git command: %v", args)
+}
+
+func (r *rerereLagRunner) RunGitCommandWithEnv(_ context.Context, _ []string, args ...string) (string, error) {
+	if len(args) == 2 && args[0] == "rebase" && args[1] == "--continue" {
+		r.continueCalls++
+		if r.continueCalls == 1 {
+			// Applying the next commit hits a conflict rerere can resolve, but
+			// autoupdate has not staged it by the time the command returns.
+			r.unmerged = []string{"fileB_test.txt"}
+			return "", errors.New("CONFLICT (content): merge conflict in fileB_test.txt")
+		}
+		// No commits remain; the rebase completes.
+		r.inProgress = false
+		r.unmerged = nil
+		return "", nil
+	}
+	return "", fmt.Errorf("unexpected git command: %v", args)
+}
+
+// TestAutoContinueRerereRebaseRecoversFromAutoupdateLag is the deterministic
+// regression test for the flaky "continues after rebase continue advances into
+// rerere-staged conflict" case. It pins the fix: when `rebase --continue`
+// returns an unmerged path that rerere can resolve, auto-continue must replay
+// rerere and keep going rather than reporting a spurious conflict.
+func TestAutoContinueRerereRebaseRecoversFromAutoupdateLag(t *testing.T) {
+	t.Parallel()
+
+	r := &rerereLagRunner{inProgress: true}
+	outcome, unmerged, err := git.AutoContinueRerereRebase(context.Background(), r, nil)
+
+	require.NoError(t, err)
+	require.Empty(t, unmerged)
+	require.Equal(t, git.RebaseDone, outcome.Result)
+	require.GreaterOrEqual(t, outcome.RerereResolvedCount, 1)
+	require.Equal(t, 1, r.rerereCalls, "auto-continue should replay rerere to stage the lagged resolution before bailing")
 }

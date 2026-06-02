@@ -131,3 +131,44 @@ func TestResolveApproved_RequiredHookFailsClosedOnDecline(t *testing.T) {
 	require.Contains(t, err.Error(), "hook \"scripts/check.sh\" at pre-modify is not approved")
 	require.Len(t, prompter.calls, 1)
 }
+
+func TestResolveApproved_WhitespaceNormalizedBeforeApproval(t *testing.T) {
+	t.Parallel()
+
+	// Commands configured with surrounding whitespace (e.g. from multi-line
+	// YAML or hand-edited git config) must be trimmed before being passed to
+	// IsHookApproved / AddApprovedHook, so that an approval stored for
+	// "scripts/ok.sh" matches a subsequent lookup for "  scripts/ok.sh  ".
+	scene := testhelpers.NewSceneParallel(t, nil)
+	cfg, err := config.LoadConfig(scene.Dir)
+	require.NoError(t, err)
+
+	prompter := &fakePrompter{answers: []bool{true}}
+
+	approved, err := hooks.ResolveApproved(hooks.ResolveRequest{
+		Phase:    "pre-modify",
+		Commands: []string{"  scripts/ok.sh  "},
+		Config:   cfg,
+		Prompter: prompter,
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"scripts/ok.sh"}, approved, "returned command must be trimmed")
+	require.Len(t, prompter.calls, 1)
+
+	// Approval was stored under the trimmed key.
+	cfg2, err := config.LoadConfig(scene.Dir)
+	require.NoError(t, err)
+	require.True(t, cfg2.IsHookApproved("pre-modify", "scripts/ok.sh"))
+
+	// Re-running with the same padded command must not re-prompt.
+	prompter2 := &fakePrompter{}
+	approved2, err := hooks.ResolveApproved(hooks.ResolveRequest{
+		Phase:    "pre-modify",
+		Commands: []string{"  scripts/ok.sh  "},
+		Config:   cfg2,
+		Prompter: prompter2,
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"scripts/ok.sh"}, approved2)
+	require.Empty(t, prompter2.calls, "already-approved trimmed command must not re-prompt")
+}

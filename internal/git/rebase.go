@@ -92,17 +92,9 @@ func AutoContinueRerereRebase(ctx context.Context, r Runner, originalErr error) 
 			return outcome, nil, nil
 		}
 
-		unmergedFiles, err := r.GetUnmergedFiles(ctx)
+		unmergedFiles, err := applyRerereToUnmerged(ctx, r)
 		if err != nil {
 			return outcome, nil, originalErr
-		}
-		if len(unmergedFiles) > 0 {
-			if _, rerereErr := r.RunGitCommandWithContext(ctx, "rerere"); rerereErr == nil {
-				unmergedFiles, err = r.GetUnmergedFiles(ctx)
-				if err != nil {
-					return outcome, nil, originalErr
-				}
-			}
 		}
 		if len(unmergedFiles) > 0 {
 			return outcome, unmergedFiles, nil
@@ -121,7 +113,12 @@ func AutoContinueRerereRebase(ctx context.Context, r Runner, originalErr error) 
 				}
 			}
 			if r.IsRebaseInProgress(ctx) {
-				unmergedFiles, filesErr := r.GetUnmergedFiles(ctx)
+				// rerere.autoupdate may not have staged the replayed
+				// resolution by the time `rebase --continue` returns, so give
+				// rerere the same explicit chance to apply (and, with
+				// autoupdate, stage) a known resolution as the top of the loop
+				// before treating this as an unresolved conflict.
+				unmergedFiles, filesErr := applyRerereToUnmerged(ctx, r)
 				if filesErr == nil {
 					if len(unmergedFiles) > 0 {
 						return outcome, unmergedFiles, nil
@@ -140,6 +137,32 @@ func AutoContinueRerereRebase(ctx context.Context, r Runner, originalErr error) 
 	}
 
 	return outcome, nil, fmt.Errorf("rerere auto-continue exceeded %d iterations: %w", MaxRerereContinueIterations, originalErr)
+}
+
+// applyRerereToUnmerged replays any recorded rerere resolutions for the
+// currently-conflicted paths (staging them when rerere.autoupdate is on) and
+// returns the paths that remain unmerged afterwards. It is a no-op when nothing
+// is unmerged. Callers use the returned slice to decide whether a conflict is
+// genuinely unresolved: a non-empty result means rerere had no resolution to
+// apply (or one that did not fully clear the conflict).
+func applyRerereToUnmerged(ctx context.Context, r Runner) ([]string, error) {
+	unmerged, err := r.GetUnmergedFiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(unmerged) == 0 {
+		return unmerged, nil
+	}
+	// A failed `git rerere` simply means no resolution was applied; keep the
+	// current unmerged set so the caller treats it as a genuine conflict.
+	if _, rerereErr := r.RunGitCommandWithContext(ctx, "rerere"); rerereErr == nil {
+		refreshed, refreshErr := r.GetUnmergedFiles(ctx)
+		if refreshErr != nil {
+			return nil, refreshErr
+		}
+		unmerged = refreshed
+	}
+	return unmerged, nil
 }
 
 func isRebaseContinueStagedChangesError(err error) bool {

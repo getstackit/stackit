@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
@@ -13,16 +12,20 @@ import (
 )
 
 func TestListAction(t *testing.T) {
+	t.Parallel()
+
 	t.Run("returns empty list when no worktrees registered", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
 		require.NoError(t, err)
-		assert.Empty(t, result.Worktrees)
+		require.Empty(t, result.Worktrees)
 	})
 
 	t.Run("lists registered worktrees", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -33,17 +36,18 @@ func TestListAction(t *testing.T) {
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, result.Worktrees, 1)
-		assert.Equal(t, "feature-stack", result.Worktrees[0].AnchorBranch)
-		assert.Equal(t, "/tmp/fake-worktree", result.Worktrees[0].Path)
-		assert.False(t, result.Worktrees[0].Exists) // Path doesn't actually exist
-		assert.Equal(t, worktree.RegistrationStateInvalid, result.Worktrees[0].RegistrationState)
-		assert.True(t, result.Worktrees[0].NeedsRepair)
+		require.Equal(t, "feature-stack", result.Worktrees[0].AnchorBranch)
+		require.Equal(t, "/tmp/fake-worktree", result.Worktrees[0].Path)
+		require.False(t, result.Worktrees[0].Exists) // Path doesn't actually exist
+		require.Equal(t, worktree.RegistrationStateInvalid, result.Worktrees[0].RegistrationState)
+		require.True(t, result.Worktrees[0].NeedsRepair)
 
 		// Clean up
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
 	})
 
 	t.Run("marks legacy registrations", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -56,16 +60,19 @@ func TestListAction(t *testing.T) {
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, result.Worktrees, 1)
-		assert.Equal(t, worktree.RegistrationStateLegacy, result.Worktrees[0].RegistrationState)
-		assert.True(t, result.Worktrees[0].NeedsRepair)
-		assert.Equal(t, []string{"feature"}, result.Worktrees[0].RootBranches)
+		require.Equal(t, worktree.RegistrationStateLegacy, result.Worktrees[0].RegistrationState)
+		require.True(t, result.Worktrees[0].NeedsRepair)
+		require.Equal(t, []string{"feature"}, result.Worktrees[0].RootBranches)
 
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature")
 	})
 }
 
 func TestRemoveAction(t *testing.T) {
+	t.Parallel()
+
 	t.Run("fails when worktree not found", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -73,10 +80,11 @@ func TestRemoveAction(t *testing.T) {
 			AnchorBranch: "nonexistent-stack",
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no worktree found")
+		require.Contains(t, err.Error(), "no worktree found")
 	})
 
 	t.Run("removes worktree registration", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -98,10 +106,11 @@ func TestRemoveAction(t *testing.T) {
 		// Verify it's gone
 		wt, err = s.Engine.GetWorktreeForStack("feature-stack")
 		require.NoError(t, err)
-		assert.Nil(t, wt)
+		require.Nil(t, wt)
 	})
 
 	t.Run("removes stale invalid registration without repair", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -115,12 +124,15 @@ func TestRemoveAction(t *testing.T) {
 
 		wt, err := s.Engine.GetWorktreeForStack("feature-stack")
 		require.NoError(t, err)
-		assert.Nil(t, wt)
+		require.Nil(t, wt)
 	})
 }
 
 func TestOpenAction(t *testing.T) {
+	t.Parallel()
+
 	t.Run("fails when worktree not found", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -128,10 +140,11 @@ func TestOpenAction(t *testing.T) {
 			AnchorBranch: "nonexistent-stack",
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no worktree found")
+		require.Contains(t, err.Error(), "no worktree found")
 	})
 
 	t.Run("fails when path does not exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -143,13 +156,14 @@ func TestOpenAction(t *testing.T) {
 			AnchorBranch: "feature-stack",
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "does not exist")
+		require.Contains(t, err.Error(), "does not exist")
 
 		// Clean up
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
 	})
 
 	t.Run("returns path when worktree exists", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -162,7 +176,7 @@ func TestOpenAction(t *testing.T) {
 			AnchorBranch: "feature-stack",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, repoRoot, path)
+		require.Equal(t, repoRoot, path)
 
 		// Clean up
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
@@ -170,7 +184,10 @@ func TestOpenAction(t *testing.T) {
 }
 
 func TestCreateAction(t *testing.T) {
+	t.Parallel()
+
 	t.Run("succeeds when not on trunk and creates worktree from trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -187,7 +204,7 @@ func TestCreateAction(t *testing.T) {
 		anchorBranch := s.Engine.GetBranch(result.AnchorBranch)
 		parent := anchorBranch.GetParent()
 		require.NotNil(t, parent)
-		assert.True(t, parent.IsTrunk())
+		require.True(t, parent.IsTrunk())
 
 		// Clean up worktree
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
@@ -195,6 +212,7 @@ func TestCreateAction(t *testing.T) {
 	})
 
 	t.Run("fails when name is empty", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -202,10 +220,11 @@ func TestCreateAction(t *testing.T) {
 			Name: "",
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "name is required")
+		require.Contains(t, err.Error(), "name is required")
 	})
 
 	t.Run("fails when name contains invalid characters", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -213,10 +232,11 @@ func TestCreateAction(t *testing.T) {
 			Name: "my/worktree",
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "path separators")
+		require.Contains(t, err.Error(), "path separators")
 	})
 
 	t.Run("fails when worktree name already exists", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -231,7 +251,7 @@ func TestCreateAction(t *testing.T) {
 			Name: "duplicate-name",
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "already exists")
+		require.Contains(t, err.Error(), "already exists")
 
 		// Clean up
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
@@ -239,6 +259,7 @@ func TestCreateAction(t *testing.T) {
 	})
 
 	t.Run("creates worktree with anchor branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -249,20 +270,20 @@ func TestCreateAction(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Verify result fields
-		assert.Equal(t, "my-feature", result.Name)
-		assert.NotEmpty(t, result.AnchorBranch)
-		assert.Contains(t, result.AnchorBranch, "-wt")
-		assert.NotEmpty(t, result.Path)
+		require.Equal(t, "my-feature", result.Name)
+		require.NotEmpty(t, result.AnchorBranch)
+		require.Contains(t, result.AnchorBranch, "-wt")
+		require.NotEmpty(t, result.Path)
 
 		// Verify the anchor branch exists and is a worktree anchor
 		anchorBranch := s.Engine.GetBranch(result.AnchorBranch)
-		assert.True(t, anchorBranch.IsTracked())
-		assert.True(t, anchorBranch.IsWorktreeAnchor())
+		require.True(t, anchorBranch.IsTracked())
+		require.True(t, anchorBranch.IsWorktreeAnchor())
 
 		// Verify parent is trunk
 		parent := anchorBranch.GetParent()
 		require.NotNil(t, parent)
-		assert.True(t, parent.IsTrunk())
+		require.True(t, parent.IsTrunk())
 
 		// Clean up worktree
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
@@ -270,6 +291,7 @@ func TestCreateAction(t *testing.T) {
 	})
 
 	t.Run("creates worktree with scope", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -283,7 +305,7 @@ func TestCreateAction(t *testing.T) {
 		// Verify scope is set on anchor branch
 		anchorBranch := s.Engine.GetBranch(result.AnchorBranch)
 		scope := s.Engine.GetScope(anchorBranch)
-		assert.Equal(t, "backend", scope.String())
+		require.Equal(t, "backend", scope.String())
 
 		// Clean up worktree
 		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
@@ -292,7 +314,10 @@ func TestCreateAction(t *testing.T) {
 }
 
 func TestRepairAction(t *testing.T) {
+	t.Parallel()
+
 	t.Run("converts legacy registration to hidden anchor", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -311,14 +336,14 @@ func TestRepairAction(t *testing.T) {
 
 		legacy, err := s.Engine.GetWorktreeForStack("feature")
 		require.NoError(t, err)
-		assert.Nil(t, legacy)
+		require.Nil(t, legacy)
 
 		repaired, err := s.Engine.GetWorktreeForStack(result.Repaired[0].AnchorBranch)
 		require.NoError(t, err)
 		require.NotNil(t, repaired)
-		assert.Equal(t, worktreeDir, repaired.Path)
-		assert.True(t, s.Engine.GetBranch(result.Repaired[0].AnchorBranch).IsWorktreeAnchor())
-		assert.Equal(t, result.Repaired[0].AnchorBranch, s.Engine.GetBranch("feature").GetParent().GetName())
+		require.Equal(t, worktreeDir, repaired.Path)
+		require.True(t, s.Engine.GetBranch(result.Repaired[0].AnchorBranch).IsWorktreeAnchor())
+		require.Equal(t, result.Repaired[0].AnchorBranch, s.Engine.GetBranch("feature").GetParent().GetName())
 
 		_ = s.Engine.UnregisterWorktree(s.Context, result.Repaired[0].AnchorBranch)
 	})

@@ -194,7 +194,10 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	if hasStaged {
 		h.OnStep(StepCommit, handler.StatusStarted, "Committing changes")
 		if err := eng.Commit(ctx.Context, commitMessage, opts.Verbose, !ctx.Verify); err != nil {
-			// Clean up branch on commit failure
+			// Restore the original branch before deleting the new one so that
+			// DeleteBranch doesn't fall back to trunk when cleaning up the
+			// currently-checked-out branch (e.g. a git pre-commit hook failure).
+			_ = eng.CheckoutBranch(ctx.Context, eng.GetBranch(currentBranch))
 			_ = eng.DeleteBranch(ctx.Context, branch)
 			h.OnStep(StepCommit, handler.StatusFailed, err.Error())
 			return Result{}, fmt.Errorf("failed to commit: %w", err)

@@ -574,11 +574,35 @@ const (
 	PRStateClosed = "CLOSED"
 )
 
+// mergeableMergeable is the GraphQL `mergeable` field value indicating a PR can
+// be merged without conflicts. The field's possible values are MERGEABLE,
+// CONFLICTING, and UNKNOWN.
+const mergeableMergeable = "MERGEABLE"
+
 // PRMergeableState represents the mergeable state of a PR
 type PRMergeableState struct {
 	Mergeable      bool   // True if PR can be merged without conflicts
-	MergeStateText string // MERGEABLE, CONFLICTING, UNKNOWN
+	MergeStateText string // mergeStateStatus value: CLEAN, DIRTY, BLOCKED, UNKNOWN, etc.
 	State          string // OPEN, CLOSED, MERGED
+}
+
+// isMergeStateStatusUnsupported returns true when the error indicates the mergeStateStatus
+// field is not available on the GitHub instance (e.g. older GitHub Enterprise versions).
+func isMergeStateStatusUnsupported(err error) bool {
+	return strings.Contains(err.Error(), "mergeStateStatus")
+}
+
+// mergeableToMergeStateText maps GitHub's mergeable field to an equivalent MergeStateStatus
+// value. Used on GitHub Enterprise instances that don't support mergeStateStatus.
+func mergeableToMergeStateText(mergeable string) string {
+	switch mergeable {
+	case mergeableMergeable:
+		return "CLEAN"
+	case "CONFLICTING":
+		return "DIRTY"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // GetPRMergeableState checks if a PR has merge conflicts.
@@ -599,6 +623,9 @@ func GetPRMergeableState(ctx context.Context, runner git.Runner, prNodeID string
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
 	if err != nil {
+		if isMergeStateStatusUnsupported(err) {
+			return getPRMergeableStateBasic(ctx, runner, prNodeID)
+		}
 		return nil, fmt.Errorf("failed to get PR mergeable state: %w", err)
 	}
 
@@ -617,8 +644,49 @@ func GetPRMergeableState(ctx context.Context, runner git.Runner, prNodeID string
 	}
 
 	return &PRMergeableState{
-		Mergeable:      response.Data.Node.Mergeable == "MERGEABLE",
+		Mergeable:      response.Data.Node.Mergeable == mergeableMergeable,
 		MergeStateText: response.Data.Node.MergeStateStatus,
+		State:          response.Data.Node.State,
+	}, nil
+}
+
+// getPRMergeableStateBasic fetches PR mergeable state without the mergeStateStatus field,
+// used as a fallback for GitHub Enterprise instances that don't support that field.
+func getPRMergeableStateBasic(ctx context.Context, runner git.Runner, prNodeID string) (*PRMergeableState, error) {
+	query := `query GetPRMergeableState($nodeId: ID!) {
+		node(id: $nodeId) {
+			... on PullRequest {
+				mergeable
+				state
+			}
+		}
+	}`
+
+	variables := map[string]any{
+		"nodeId": prNodeID,
+	}
+
+	body, err := executeGraphQLQuery(ctx, runner, query, variables)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR mergeable state: %w", err)
+	}
+
+	var response struct {
+		Data struct {
+			Node struct {
+				Mergeable string `json:"mergeable"`
+				State     string `json:"state"`
+			} `json:"node"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse PR mergeable state response: %w", err)
+	}
+
+	return &PRMergeableState{
+		Mergeable:      response.Data.Node.Mergeable == mergeableMergeable,
+		MergeStateText: mergeableToMergeStateText(response.Data.Node.Mergeable),
 		State:          response.Data.Node.State,
 	}, nil
 }
@@ -659,6 +727,9 @@ func BatchGetPRMergeableStates(ctx context.Context, runner git.Runner, prNodeIDs
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
 	if err != nil {
+		if isMergeStateStatusUnsupported(err) {
+			return batchGetPRMergeableStatesBasic(ctx, runner, prNodeIDs)
+		}
 		return nil, fmt.Errorf("failed to batch get PR mergeable states: %w", err)
 	}
 
@@ -683,8 +754,67 @@ func BatchGetPRMergeableStates(ctx context.Context, runner git.Runner, prNodeIDs
 			continue // Skip null nodes
 		}
 		result[prData.ID] = &PRMergeableState{
-			Mergeable:      prData.Mergeable == "MERGEABLE",
+			Mergeable:      prData.Mergeable == mergeableMergeable,
 			MergeStateText: prData.MergeStateStatus,
+			State:          prData.State,
+		}
+	}
+
+	return result, nil
+}
+
+// batchGetPRMergeableStatesBasic fetches PR mergeable states without the mergeStateStatus field,
+// used as a fallback for GitHub Enterprise instances that don't support that field.
+func batchGetPRMergeableStatesBasic(ctx context.Context, runner git.Runner, prNodeIDs []string) (map[string]*PRMergeableState, error) {
+	queryParts := make([]string, 0, len(prNodeIDs))
+	variables := make(map[string]any, len(prNodeIDs))
+	for i, nodeID := range prNodeIDs {
+		alias := fmt.Sprintf("pr%d", i)
+		varName := fmt.Sprintf("nodeId%d", i)
+		queryParts = append(queryParts, fmt.Sprintf(`%s: node(id: $%s) {
+			... on PullRequest {
+				id
+				mergeable
+				state
+			}
+		}`, alias, varName))
+		variables[varName] = nodeID
+	}
+
+	varDecls := make([]string, 0, len(prNodeIDs))
+	for i := range prNodeIDs {
+		varDecls = append(varDecls, fmt.Sprintf("$nodeId%d: ID!", i))
+	}
+
+	query := fmt.Sprintf("query BatchGetPRMergeableStates(%s) { %s }",
+		strings.Join(varDecls, ", "),
+		strings.Join(queryParts, " "))
+
+	body, err := executeGraphQLQuery(ctx, runner, query, variables)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch get PR mergeable states: %w", err)
+	}
+
+	var response struct {
+		Data map[string]struct {
+			ID        string `json:"id"`
+			Mergeable string `json:"mergeable"`
+			State     string `json:"state"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse batch PR mergeable state response: %w", err)
+	}
+
+	result := make(map[string]*PRMergeableState, len(prNodeIDs))
+	for _, prData := range response.Data {
+		if prData.ID == "" {
+			continue
+		}
+		result[prData.ID] = &PRMergeableState{
+			Mergeable:      prData.Mergeable == mergeableMergeable,
+			MergeStateText: mergeableToMergeStateText(prData.Mergeable),
 			State:          prData.State,
 		}
 	}

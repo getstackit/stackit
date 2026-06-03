@@ -46,13 +46,32 @@ func handlePostMergeAction(ctx *app.Context, action mergeAction.PostMergeAction)
 		runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
 		defer runner.Cleanup()
 
+		// Wrap the handler to prevent entering the conflict resolution workflow.
+		// EnterConflictWorkflow detaches HEAD, which violates the safety invariant
+		// that merge next must never leave the user in detached HEAD state.
+		// Conflicts are reported in the sync summary with instructions to run
+		// 'stackit restack' manually.
 		return sync.Action(ctx, sync.Options{
 			Restack: true,
-		}, handler)
+		}, &postMergeSyncHandler{Handler: handler})
 
 	case mergeAction.PostMergeDone:
 		return nil
 	}
 
 	return nil
+}
+
+// postMergeSyncHandler wraps a sync handler to prevent entering the conflict
+// resolution workflow after merge next. EnterConflictWorkflow detaches HEAD,
+// which would leave the user in an unexpected state after a merge operation.
+type postMergeSyncHandler struct {
+	sync.Handler
+}
+
+// PromptResolveConflicts always returns false to skip entering the conflict
+// workflow. Conflicts are shown in the summary with instructions to run
+// 'stackit restack' manually.
+func (h *postMergeSyncHandler) PromptResolveConflicts(_ []string) (bool, error) {
+	return false, nil
 }

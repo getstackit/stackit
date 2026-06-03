@@ -574,10 +574,15 @@ const (
 	PRStateClosed = "CLOSED"
 )
 
+// mergeableMergeable is the GraphQL `mergeable` field value indicating a PR can
+// be merged without conflicts. The field's possible values are MERGEABLE,
+// CONFLICTING, and UNKNOWN.
+const mergeableMergeable = "MERGEABLE"
+
 // PRMergeableState represents the mergeable state of a PR
 type PRMergeableState struct {
 	Mergeable      bool   // True if PR can be merged without conflicts
-	MergeStateText string // MERGEABLE, CONFLICTING, UNKNOWN
+	MergeStateText string // mergeStateStatus value: CLEAN, DIRTY, BLOCKED, UNKNOWN, etc.
 	State          string // OPEN, CLOSED, MERGED
 }
 
@@ -591,7 +596,7 @@ func isMergeStateStatusUnsupported(err error) bool {
 // value. Used on GitHub Enterprise instances that don't support mergeStateStatus.
 func mergeableToMergeStateText(mergeable string) string {
 	switch mergeable {
-	case "MERGEABLE":
+	case mergeableMergeable:
 		return "CLEAN"
 	case "CONFLICTING":
 		return "DIRTY"
@@ -639,7 +644,7 @@ func GetPRMergeableState(ctx context.Context, runner git.Runner, prNodeID string
 	}
 
 	return &PRMergeableState{
-		Mergeable:      response.Data.Node.Mergeable == "MERGEABLE",
+		Mergeable:      response.Data.Node.Mergeable == mergeableMergeable,
 		MergeStateText: response.Data.Node.MergeStateStatus,
 		State:          response.Data.Node.State,
 	}, nil
@@ -680,7 +685,7 @@ func getPRMergeableStateBasic(ctx context.Context, runner git.Runner, prNodeID s
 	}
 
 	return &PRMergeableState{
-		Mergeable:      response.Data.Node.Mergeable == "MERGEABLE",
+		Mergeable:      response.Data.Node.Mergeable == mergeableMergeable,
 		MergeStateText: mergeableToMergeStateText(response.Data.Node.Mergeable),
 		State:          response.Data.Node.State,
 	}, nil
@@ -749,7 +754,7 @@ func BatchGetPRMergeableStates(ctx context.Context, runner git.Runner, prNodeIDs
 			continue // Skip null nodes
 		}
 		result[prData.ID] = &PRMergeableState{
-			Mergeable:      prData.Mergeable == "MERGEABLE",
+			Mergeable:      prData.Mergeable == mergeableMergeable,
 			MergeStateText: prData.MergeStateStatus,
 			State:          prData.State,
 		}
@@ -808,7 +813,7 @@ func batchGetPRMergeableStatesBasic(ctx context.Context, runner git.Runner, prNo
 			continue
 		}
 		result[prData.ID] = &PRMergeableState{
-			Mergeable:      prData.Mergeable == "MERGEABLE",
+			Mergeable:      prData.Mergeable == mergeableMergeable,
 			MergeStateText: mergeableToMergeStateText(prData.Mergeable),
 			State:          prData.State,
 		}

@@ -70,7 +70,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		All:   opts.All,
 		Patch: opts.Patch,
 	}
-	if err := ctx.Git().StageChanges(ctx.Context, stagingOpts); err != nil {
+	if err := ctx.Engine.StageChanges(ctx.Context, stagingOpts); err != nil {
 		return err
 	}
 

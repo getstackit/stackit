@@ -208,7 +208,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 			}
 
 			ctx.Logger.Warn("unexpected rebase state after sync restack; aborting branch=%v", conflictBranch)
-			if abortErr := ctx.Engine.Git().RebaseAbort(ctx.Context); abortErr != nil {
+			if abortErr := ctx.Engine.RebaseAbort(ctx.Context); abortErr != nil {
 				return fmt.Errorf("unexpected restack conflict on %s: failed to abort rebase: %w", conflictBranch, abortErr)
 			}
 
@@ -218,7 +218,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 						conflictBranch, originalBranch.GetName(), checkoutErr)
 				}
 			} else if originalRev != "" {
-				if detachErr := ctx.Engine.Git().CheckoutDetached(ctx.Context, originalRev); detachErr != nil {
+				if detachErr := ctx.Engine.Detach(ctx.Context, originalRev); detachErr != nil {
 					return fmt.Errorf("unexpected restack conflict on %s: aborted rebase but failed to restore detached HEAD %s: %w",
 						conflictBranch, originalRev, detachErr)
 				}
@@ -436,7 +436,7 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 		if revErr != nil {
 			return fmt.Errorf("failed to read HEAD before conflict workflow: %w", revErr)
 		}
-		if detachErr := ctx.Engine.Git().CheckoutDetached(ctx.Context, currentRev); detachErr != nil {
+		if detachErr := ctx.Engine.Detach(ctx.Context, currentRev); detachErr != nil {
 			return fmt.Errorf("failed to detach HEAD before conflict workflow: %w", detachErr)
 		}
 	}

@@ -43,7 +43,7 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 
 	// Soft reset to parent - this uncommits the current branch's changes
 	// and stages them, keeping the working tree unchanged
-	if err := eng.Git().SoftReset(ctx.Context, parentRev); err != nil {
+	if err := eng.SoftReset(ctx.Context, parentRev); err != nil {
 		return fmt.Errorf("failed to reset to parent: %w", err)
 	}
 

@@ -72,7 +72,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 		Update: opts.Update,
 		Patch:  opts.Patch,
 	}
-	if err := ctx.Git().StageChanges(gctx, stagingOpts); err != nil {
+	if err := ctx.Engine.StageChanges(gctx, stagingOpts); err != nil {
 		return err
 	}
 

@@ -225,6 +225,11 @@ func (e *engineImpl) IsRebaseInProgress(ctx context.Context) bool {
 	return e.git.IsRebaseInProgress(ctx)
 }
 
+// IsMergeInProgress checks if a merge is in progress
+func (e *engineImpl) IsMergeInProgress(ctx context.Context) bool {
+	return e.git.IsMergeInProgress(ctx)
+}
+
 // GetRebaseHead returns the current rebase head
 func (e *engineImpl) GetRebaseHead() (string, error) {
 	return e.git.GetRebaseHead()

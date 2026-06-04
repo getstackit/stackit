@@ -35,6 +35,11 @@ func (e *engineImpl) StageHunks(ctx context.Context, hunks []git.Hunk) error {
 	return e.git.StageHunks(ctx, hunks)
 }
 
+// StageChanges stages changes according to the given staging options.
+func (e *engineImpl) StageChanges(ctx context.Context, opts git.StagingOptions) error {
+	return e.git.StageChanges(ctx, opts)
+}
+
 // StashPush pushes current changes to the stash
 func (e *engineImpl) StashPush(ctx context.Context, message string) (string, error) {
 	return e.git.StashPush(ctx, message)

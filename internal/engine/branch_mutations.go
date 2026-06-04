@@ -31,6 +31,22 @@ func (e *engineImpl) ResetMerge(ctx context.Context, revision string) error {
 	return e.git.ResetMerge(ctx, revision)
 }
 
+// SoftReset moves HEAD to the given revision, keeping the index and working
+// tree intact (git reset --soft).
+func (e *engineImpl) SoftReset(ctx context.Context, revision string) error {
+	return e.git.SoftReset(ctx, revision)
+}
+
+// RebaseAbort aborts an in-progress rebase, restoring the pre-rebase HEAD.
+func (e *engineImpl) RebaseAbort(ctx context.Context) error {
+	return e.git.RebaseAbort(ctx)
+}
+
+// MergeAbort aborts an in-progress merge, restoring the pre-merge state.
+func (e *engineImpl) MergeAbort(ctx context.Context) error {
+	return e.git.MergeAbort(ctx)
+}
+
 // Merge merges a revision into the current branch
 func (e *engineImpl) Merge(ctx context.Context, revision string, opts MergeOptions) error {
 	return e.git.Merge(ctx, revision, git.MergeOptions{

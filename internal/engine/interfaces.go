@@ -114,6 +114,7 @@ type WorkingTree interface {
 	ParseStagedHunks(ctx context.Context) ([]git.Hunk, error)
 	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
 	IsRebaseInProgress(ctx context.Context) bool
+	IsMergeInProgress(ctx context.Context) bool
 	GetRebaseHead() (string, error)
 	HasUncommittedChanges(ctx context.Context) bool
 	CheckoutPaths(ctx context.Context, branch string, pathspecs []string) error
@@ -202,10 +203,13 @@ type BranchMutations interface {
 	CreateBranch(ctx context.Context, branchName string, startPoint string) error
 	ResetHard(ctx context.Context, revision string) error
 	ResetMerge(ctx context.Context, revision string) error
+	SoftReset(ctx context.Context, revision string) error
 	Merge(ctx context.Context, revision string, opts MergeOptions) error
 	MergeMultiple(ctx context.Context, branches []string, opts MergeOptions) error
 	Fetch(ctx context.Context, remote string, branch string) error
 	InteractiveRebase(ctx context.Context, onto string) error
+	RebaseAbort(ctx context.Context) error
+	MergeAbort(ctx context.Context) error
 }
 
 // CommitOperations handles staging and committing
@@ -215,6 +219,7 @@ type CommitOperations interface {
 	StageAll(ctx context.Context) error
 	StagePatch(ctx context.Context) error
 	StageHunks(ctx context.Context, hunks []git.Hunk) error
+	StageChanges(ctx context.Context, opts git.StagingOptions) error
 	StashPush(ctx context.Context, message string) (string, error)
 	StashPushStaged(ctx context.Context, message string) (string, error)
 	StashPop(ctx context.Context) error

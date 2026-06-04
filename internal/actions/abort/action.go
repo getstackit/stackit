@@ -23,7 +23,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	out := ctx.Output
 
 	rebaseInProgress := eng.IsRebaseInProgress(ctx.Context)
-	mergeInProgress := eng.Git().IsMergeInProgress(ctx.Context)
+	mergeInProgress := eng.IsMergeInProgress(ctx.Context)
 
 	// Check for continuation state
 	hasContinuation := false
@@ -51,13 +51,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Abort Git operations
 	if rebaseInProgress {
 		out.Info("Aborting rebase...")
-		if err := eng.Git().RebaseAbort(ctx.Context); err != nil {
+		if err := eng.RebaseAbort(ctx.Context); err != nil {
 			return fmt.Errorf("failed to abort rebase: %w", err)
 		}
 	}
 	if mergeInProgress {
 		out.Info("Aborting merge...")
-		if err := eng.Git().MergeAbort(ctx.Context); err != nil {
+		if err := eng.MergeAbort(ctx.Context); err != nil {
 			return fmt.Errorf("failed to abort merge: %w", err)
 		}
 	}

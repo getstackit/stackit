@@ -126,14 +126,14 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	// Abort any in-progress Git operations that might interfere with restoration
 	if eng.IsRebaseInProgress(ctx.Context) {
 		h.OnStep("Aborting in-progress rebase before undo...", handler.StatusStarted)
-		if err := eng.Git().RebaseAbort(ctx.Context); err != nil {
+		if err := eng.RebaseAbort(ctx.Context); err != nil {
 			return fmt.Errorf("failed to abort rebase: %w", err)
 		}
 		h.OnStep("Aborted in-progress rebase", handler.StatusCompleted)
 	}
-	if eng.Git().IsMergeInProgress(ctx.Context) {
+	if eng.IsMergeInProgress(ctx.Context) {
 		h.OnStep("Aborting in-progress merge before undo...", handler.StatusStarted)
-		if err := eng.Git().MergeAbort(ctx.Context); err != nil {
+		if err := eng.MergeAbort(ctx.Context); err != nil {
 			return fmt.Errorf("failed to abort merge: %w", err)
 		}
 		h.OnStep("Aborted in-progress merge", handler.StatusCompleted)

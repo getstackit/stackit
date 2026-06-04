@@ -23,8 +23,8 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 		validation.MustBeOnBranch(eng),
 		validation.CurrentBranchMustNotBeTrunk(eng, "pop"),
 		validation.CurrentBranchMustBeTracked(eng),
-		validation.MustNotHaveRebaseInProgress(ctx.Context, ctx.Git()),
-		validation.MustNotHaveUncommittedChanges(ctx.Context, ctx.Git()),
+		validation.MustNotHaveRebaseInProgress(ctx.Context, eng),
+		validation.MustNotHaveUncommittedChanges(ctx.Context, eng),
 	}).Validate(); err != nil {
 		return err
 	}

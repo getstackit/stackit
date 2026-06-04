@@ -42,7 +42,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.Start(opts.DryRun)
 
 	// Validate preconditions
-	if err := validation.AbsorbChain(ctx.Context, eng, ctx.Git(), "absorb into").Validate(); err != nil {
+	if err := validation.AbsorbChain(ctx.Context, eng, "absorb into").Validate(); err != nil {
 		return err
 	}
 	currentBranch := eng.CurrentBranch()

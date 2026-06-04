@@ -382,7 +382,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		// Snapshot the worktree list once for this batch instead of
 		// re-running `git worktree list --porcelain` per branch.
 		listStart := time.Now()
-		worktrees, err := eng.Git().ListWorktrees(c)
+		worktrees, err := eng.ListWorktrees(c)
 		ctx.Logger.Info("list worktrees for cleanup batch completed durationMs=%d batch=%d worktreeCount=%d",
 			time.Since(listStart).Milliseconds(), batchIdx, len(worktrees))
 		if err != nil {
@@ -624,7 +624,7 @@ func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktree
 
 	out.Debug("Removing worktree at %s for branch %s", worktreePath, branchName)
 
-	if err := eng.Git().RemoveWorktree(ctx, worktreePath); err != nil {
+	if err := eng.RemoveWorktree(ctx, worktreePath); err != nil {
 		return worktreePath, fmt.Errorf("failed to remove worktree at %s for branch %s: %w", worktreePath, branchName, err)
 	}
 

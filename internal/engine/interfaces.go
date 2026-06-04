@@ -102,6 +102,7 @@ type WorkingTree interface {
 	HasStagedChanges(ctx context.Context) (bool, error)
 	HasUnstagedChanges(ctx context.Context) (bool, error)
 	HasUntrackedFiles(ctx context.Context) (bool, error)
+	GetUntrackedFiles(ctx context.Context) ([]string, error)
 	// GetWorkingTreeStatus returns all three working-tree flags in one git call.
 	// Prefer this over calling Has* individually when multiple flags are needed.
 	GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error)
@@ -224,6 +225,8 @@ type WorktreeOperations interface {
 	AddWorktree(ctx context.Context, path string, branch string, detach bool) error
 	RemoveWorktree(ctx context.Context, path string) error
 	ForceRemoveWorktree(ctx context.Context, path string) error
+	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
+	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
 	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string) (path string, cleanup func(), err error)
 	// CreateTemporaryWorktreeSkipPrune is like CreateTemporaryWorktree but skips the automatic
 	// PruneWorktrees() call. Use this when creating multiple worktrees in parallel after

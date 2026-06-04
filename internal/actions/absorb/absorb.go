@@ -197,7 +197,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Output JSON if requested (works with dry-run for preview)
 		if opts.JSON {
-			newFiles, err := ctx.Git().GetUntrackedFiles(ctx.Context)
+			newFiles, err := ctx.Engine.GetUntrackedFiles(ctx.Context)
 			if err != nil {
 				out.Debug("Failed to get untracked files: %v", err)
 			}
@@ -320,7 +320,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Output JSON summary if requested
 	if opts.JSON {
-		newFiles, err := ctx.Git().GetUntrackedFiles(ctx.Context)
+		newFiles, err := ctx.Engine.GetUntrackedFiles(ctx.Context)
 		if err != nil {
 			out.Debug("Failed to get untracked files: %v", err)
 		}

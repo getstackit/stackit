@@ -202,7 +202,7 @@ func executeSteps(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOptions)
 	// list` per step via removeWorktreeForBranch; the snapshot covers every
 	// step in this run. Safe to reuse: deleting a branch can only invalidate
 	// its own entry, and we only ever read each entry once.
-	worktrees, err := eng.Git().ListWorktrees(ctx.Context)
+	worktrees, err := eng.ListWorktrees(ctx.Context)
 	if err != nil {
 		ctx.Output.Debug("Failed to list worktrees for merge plan: %v", err)
 		worktrees = git.WorktreeList{}
@@ -466,7 +466,7 @@ func removeWorktreeForBranch(ctx context.Context, branchName string, worktrees g
 
 	out.Debug("Removing worktree at %s for branch %s", worktreePath, branchName)
 
-	if err := eng.Git().RemoveWorktree(ctx, worktreePath); err != nil {
+	if err := eng.RemoveWorktree(ctx, worktreePath); err != nil {
 		return fmt.Errorf("failed to remove worktree at %s for branch %s: %w", worktreePath, branchName, err)
 	}
 

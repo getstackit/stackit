@@ -58,7 +58,7 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 	}
 
 	// Check how many changes are staged
-	hasStaged, err := eng.Git().HasStagedChanges(ctx.Context)
+	hasStaged, err := eng.HasStagedChanges(ctx.Context)
 	if err == nil && hasStaged {
 		out.Info("Popped branch %s. Changes are now staged on %s.",
 			style.ColorBranchName(currentBranch, false),

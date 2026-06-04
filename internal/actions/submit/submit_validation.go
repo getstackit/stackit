@@ -18,7 +18,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 	nav := ctx.Navigator()
 
 	// Sync PR info first
-	repoOwner, repoName, err := ctx.Git().GetRepoInfo(ctx.Context)
+	repoOwner, repoName, err := ctx.Engine.GetRepoInfo(ctx.Context)
 	if err != nil {
 		return err
 	}

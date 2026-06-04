@@ -72,6 +72,11 @@ func (e *engineImpl) HasUntrackedFiles(ctx context.Context) (bool, error) {
 	return e.git.HasUntrackedFiles(ctx)
 }
 
+// GetUntrackedFiles returns the paths of untracked files in the working tree.
+func (e *engineImpl) GetUntrackedFiles(ctx context.Context) ([]string, error) {
+	return e.git.GetUntrackedFiles(ctx)
+}
+
 // GetWorkingTreeStatus returns staged, unstaged, and untracked status in a
 // single git status --porcelain call instead of three separate subprocesses.
 func (e *engineImpl) GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error) {

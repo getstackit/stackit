@@ -22,7 +22,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
 	out := ctx.Output
 
-	rebaseInProgress := eng.Git().IsRebaseInProgress(ctx.Context)
+	rebaseInProgress := eng.IsRebaseInProgress(ctx.Context)
 	mergeInProgress := eng.Git().IsMergeInProgress(ctx.Context)
 
 	// Check for continuation state

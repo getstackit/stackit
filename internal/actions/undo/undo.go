@@ -124,7 +124,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	}
 
 	// Abort any in-progress Git operations that might interfere with restoration
-	if eng.Git().IsRebaseInProgress(ctx.Context) {
+	if eng.IsRebaseInProgress(ctx.Context) {
 		h.OnStep("Aborting in-progress rebase before undo...", handler.StatusStarted)
 		if err := eng.Git().RebaseAbort(ctx.Context); err != nil {
 			return fmt.Errorf("failed to abort rebase: %w", err)

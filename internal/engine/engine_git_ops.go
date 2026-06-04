@@ -245,6 +245,16 @@ func (e *engineImpl) GetRepoInfo(ctx context.Context) (string, string, error) {
 	return e.git.GetRepoInfo(ctx)
 }
 
+// GetRepoRoot returns the absolute path to the repository root.
+func (e *engineImpl) GetRepoRoot() string {
+	return e.git.GetRepoRoot()
+}
+
+// GetUserName returns the configured git user.name.
+func (e *engineImpl) GetUserName(ctx context.Context) (string, error) {
+	return e.git.GetUserName(ctx)
+}
+
 // IsInsideRepo checks if the current directory is inside a git repository
 func (e *engineImpl) IsInsideRepo() bool {
 	return e.git.IsInsideRepo()

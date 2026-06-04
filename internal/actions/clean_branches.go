@@ -353,7 +353,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 			return
 		}
 		pushStart := time.Now()
-		err := eng.Git().BatchDeleteRemoteMetadataRefs(c, deletedBranchNames)
+		err := eng.DeleteRemoteMetadataForBranches(c, deletedBranchNames)
 		ctx.Logger.Info("delete remote metadata refs completed durationMs=%d branchCount=%d ok=%v",
 			time.Since(pushStart).Milliseconds(), len(deletedBranchNames), err == nil)
 		if err != nil {
@@ -614,7 +614,7 @@ func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktree
 	}
 
 	// Don't remove main worktree (resolve symlinks for comparison, e.g., /var vs /private/var on macOS)
-	repoRoot := eng.Git().GetRepoRoot()
+	repoRoot := eng.GetRepoRoot()
 	resolvedWorktree, _ := filepath.EvalSymlinks(worktreePath)
 	resolvedRoot, _ := filepath.EvalSymlinks(repoRoot)
 	if resolvedWorktree == resolvedRoot {

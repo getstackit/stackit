@@ -28,6 +28,8 @@ type StackNavigator interface {
 	GetScope(branch Branch) Scope
 	GetRemote() string
 	GetRepoInfo(ctx context.Context) (string, string, error)
+	GetRepoRoot() string
+	GetUserName(ctx context.Context) (string, error)
 	IsInsideRepo() bool
 }
 

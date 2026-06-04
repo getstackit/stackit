@@ -404,7 +404,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 			} else {
 				// Drop the remote metadata ref so it doesn't linger on origin and surface as
 				// a phantom conflict next time someone runs sync.
-				if err := eng.Git().BatchDeleteRemoteMetadataRefs(ctx.Context, []string{step.BranchName}); err != nil {
+				if err := eng.DeleteRemoteMetadataForBranches(ctx.Context, []string{step.BranchName}); err != nil {
 					out.Debug("Failed to delete remote metadata ref for %s: %v", step.BranchName, err)
 				}
 			}
@@ -456,7 +456,7 @@ func removeWorktreeForBranch(ctx context.Context, branchName string, worktrees g
 	}
 
 	// Don't remove main worktree (resolve symlinks for comparison, e.g., /var vs /private/var on macOS)
-	repoRoot := eng.Git().GetRepoRoot()
+	repoRoot := eng.GetRepoRoot()
 	resolvedWorktree, _ := filepath.EvalSymlinks(worktreePath)
 	resolvedRoot, _ := filepath.EvalSymlinks(repoRoot)
 	if resolvedWorktree == resolvedRoot {

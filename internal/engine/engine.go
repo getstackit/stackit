@@ -99,6 +99,12 @@ type RemoteMetadataManager interface {
 	// PushMetadataForBranches pushes the metadata refs for the given branch
 	// names to origin.
 	PushMetadataForBranches(ctx context.Context, branchNames []string) error
+	// DeleteRemoteMetadataForBranches pushes ref-deletions for the given
+	// branches' metadata refs to origin.
+	DeleteRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
+	// PushStackMetadata pushes the stack-metadata refs for the given stack IDs
+	// to origin.
+	PushStackMetadata(ctx context.Context, stackIDs []string) error
 	// ConfigureStackMetadataSync adds the stack-metadata refspec to the configured remote.
 	ConfigureStackMetadataSync(ctx context.Context) error
 	// FetchStackMetadata fetches stack-metadata refs from the configured remote.

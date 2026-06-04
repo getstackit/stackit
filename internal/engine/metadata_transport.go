@@ -35,6 +35,19 @@ func (e *engineImpl) PushMetadataForBranches(ctx context.Context, branchNames []
 	return e.git.PushMetadataRefs(ctx, branchNames)
 }
 
+// DeleteRemoteMetadataForBranches pushes ref-deletions for the given branches'
+// metadata refs to origin. Best-effort: callers typically treat failure as
+// non-fatal because the remote refs may already be absent.
+func (e *engineImpl) DeleteRemoteMetadataForBranches(ctx context.Context, branchNames []string) error {
+	return e.git.BatchDeleteRemoteMetadataRefs(ctx, branchNames)
+}
+
+// PushStackMetadata pushes the stack-metadata refs for the given stack IDs to
+// origin. A no-op when the list is empty.
+func (e *engineImpl) PushStackMetadata(ctx context.Context, stackIDs []string) error {
+	return e.git.PushStackMetaRefs(ctx, stackIDs)
+}
+
 // ConfigureStackMetadataSync adds the stack-metadata refspec to the configured
 // remote so subsequent git fetches pick up stack-ref changes.
 func (e *engineImpl) ConfigureStackMetadataSync(_ context.Context) error {

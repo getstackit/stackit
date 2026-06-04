@@ -264,7 +264,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	involvedBranches := append(append([]string{}, allBranches...), upstackBranches...)
 	allMeta, _ := eng.Git().BatchReadMetadata(involvedBranches)
 	// We don't strictly need allRevisions here yet, but it's good for cache
-	_, _ = eng.Git().BatchGetRevisions(involvedBranches)
+	_, _ = eng.GetRevisions(involvedBranches)
 
 	// Fetch CI statuses in batch if possible
 	var allCheckStatuses map[string]*github.CheckStatus

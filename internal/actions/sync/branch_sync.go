@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // syncStackBranches pulls stack branches that are behind their remote counterparts.
@@ -80,7 +80,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 
 		// Pull the branch
 		pullStart := time.Now()
-		result, err := ctx.Git().PullBranch(gctx, remote, branchName)
+		result, err := eng.PullBranch(gctx, remote, branchName)
 		ctx.Logger.Info("pull branch completed branch=%v durationMs=%v", branchName, time.Since(pullStart).Milliseconds())
 
 		if err != nil {
@@ -97,7 +97,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 		}
 
 		switch result {
-		case git.PullDone:
+		case engine.PullDone:
 			// Get the new revision
 			rev, _ := branch.GetRevision()
 			revShort := rev
@@ -112,7 +112,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 				NewRevision: revShort,
 			})
 
-		case git.PullUnneeded:
+		case engine.PullUnneeded:
 			// Already up to date (shouldn't happen since we checked Behind(), but handle it)
 			handler.EmitEvent(Event{
 				Phase:  PhaseBranches,
@@ -120,7 +120,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 				Branch: branchName,
 			})
 
-		case git.PullConflict:
+		case engine.PullConflict:
 			// Branches have diverged
 			summary.ConflictBranches = append(summary.ConflictBranches, branchName)
 			handler.EmitEvent(Event{

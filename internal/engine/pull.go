@@ -37,19 +37,20 @@ func (e *engineImpl) UpdateTrunkFromRemote(ctx context.Context) (PullResult, err
 	return e.finishTrunkPull(gitResult)
 }
 
-func (e *engineImpl) finishTrunkPull(gitResult git.PullResult) (PullResult, error) {
-	// Convert git.PullResult to engine.PullResult
-	var result PullResult
-	switch gitResult {
-	case git.PullDone:
-		result = PullDone
-	case git.PullUnneeded:
-		result = PullUnneeded
-	case git.PullConflict:
-		result = PullConflict
-	default:
-		result = PullConflict
+// PullBranch fast-forwards a single branch from its remote counterpart. Unlike
+// PullTrunk it does not rebuild engine state, so it is safe to call in a loop;
+// callers should rebuild once after the batch if downstream reads need the
+// refreshed revisions.
+func (e *engineImpl) PullBranch(ctx context.Context, remote, branchName string) (PullResult, error) {
+	gitResult, err := e.git.PullBranch(ctx, remote, branchName)
+	if err != nil {
+		return PullConflict, err
 	}
+	return pullResultFromGit(gitResult), nil
+}
+
+func (e *engineImpl) finishTrunkPull(gitResult git.PullResult) (PullResult, error) {
+	result := pullResultFromGit(gitResult)
 
 	// Rebuild to refresh branch cache
 	if err := e.rebuild(); err != nil {
@@ -57,6 +58,20 @@ func (e *engineImpl) finishTrunkPull(gitResult git.PullResult) (PullResult, erro
 	}
 
 	return result, nil
+}
+
+// pullResultFromGit maps a git.PullResult onto the engine's PullResult.
+func pullResultFromGit(gitResult git.PullResult) PullResult {
+	switch gitResult {
+	case git.PullDone:
+		return PullDone
+	case git.PullUnneeded:
+		return PullUnneeded
+	case git.PullConflict:
+		return PullConflict
+	default:
+		return PullConflict
+	}
 }
 
 // ResetTrunkToRemote resets trunk to match remote

@@ -36,6 +36,7 @@ type PRManager interface {
 type SyncManager interface {
 	// Sync operations
 	PullTrunk(ctx context.Context) (PullResult, error)
+	PullBranch(ctx context.Context, remote, branchName string) (PullResult, error)
 	UpdateTrunkFromRemote(ctx context.Context) (PullResult, error)
 	ResetTrunkToRemote(ctx context.Context) error
 	PlanRestack(ctx context.Context, branches Branches) (*RestackPlan, error)
@@ -113,6 +114,9 @@ type RemoteMetadataManager interface {
 	ListStackMetadata() (map[string]string, error)
 	// DeleteStackMetadata removes a single local stack-metadata ref.
 	DeleteStackMetadata(ctx context.Context, stackID string) error
+	// DeleteStackMetadataBatch removes the local stack-metadata refs for the
+	// given stack IDs in a single batched ref update.
+	DeleteStackMetadataBatch(ctx context.Context, stackIDs []string) error
 	// DeleteRemoteStackMetadata pushes ref-deletions for the given stack IDs.
 	DeleteRemoteStackMetadata(ctx context.Context, stackIDs []string) error
 	// GetStackIDsForBranches returns the unique stack IDs for the given branches.

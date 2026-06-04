@@ -1,6 +1,10 @@
 package engine
 
-import "context"
+import (
+	"context"
+
+	"github.com/getstackit/stackit/internal/git"
+)
 
 // Metadata transport methods. Engine owns the metadata-ref namespace
 // (refs/stackit/metadata/* and refs/stackit/stacks/*) and is the single point
@@ -70,6 +74,17 @@ func (e *engineImpl) ListStackMetadata() (map[string]string, error) {
 // per-ref fallback in the GC path when the batched ref-update fails.
 func (e *engineImpl) DeleteStackMetadata(ctx context.Context, stackID string) error {
 	return e.git.DeleteStackMeta(ctx, stackID)
+}
+
+// DeleteStackMetadataBatch removes the local stack-metadata refs for the given
+// stack IDs in a single update-ref --stdin batch. The engine owns the
+// stack-ref name format, so callers pass stack IDs rather than raw ref names.
+func (e *engineImpl) DeleteStackMetadataBatch(ctx context.Context, stackIDs []string) error {
+	refs := make([]string, 0, len(stackIDs))
+	for _, stackID := range stackIDs {
+		refs = append(refs, git.StackMetaRefName(stackID))
+	}
+	return e.git.DeleteRefsBatch(ctx, refs)
 }
 
 // DeleteRemoteStackMetadata pushes ref-deletions for the given stack IDs to

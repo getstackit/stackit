@@ -91,7 +91,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	}
 
 	// Success - checkout the branch (rebase leaves us in detached HEAD)
-	if err := eng.Git().CheckoutBranch(ctx.Context, result.BranchName); err != nil {
+	if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(result.BranchName)); err != nil {
 		return fmt.Errorf("failed to checkout branch %s: %w", result.BranchName, err)
 	}
 

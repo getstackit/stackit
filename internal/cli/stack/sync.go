@@ -154,7 +154,7 @@ func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
 	managedWorktrees, err := eng.ListManagedWorktrees()
 	if err == nil {
 		for _, wt := range managedWorktrees {
-			if hasChanges, _ := eng.Git().WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
+			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
 				result.SkippedStacks = append(result.SkippedStacks, wt.AnchorBranch)
 			}
 		}

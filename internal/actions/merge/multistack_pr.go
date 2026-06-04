@@ -126,7 +126,7 @@ func (p *MultiStackPRCreator) EnableAutoMerge(ctx context.Context, pr *github.Pu
 		return fmt.Errorf("failed to get merge method: %w", err)
 	}
 
-	return github.EnableAutoMerge(ctx, p.ctx.Git(), pr.NodeID, github.EnableAutoMergeOptions{
+	return github.EnableAutoMerge(ctx, p.ctx.Git(), pr.NodeID, github.EnableAutoMergeOptions{ //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 		MergeMethod: mergeMethod,
 		CommitBody:  commitBody,
 	})

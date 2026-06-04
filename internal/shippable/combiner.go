@@ -271,9 +271,8 @@ func (c *Combiner) tryMergeStacks(
 
 		if err != nil {
 			// Abort merge if in progress
-			git := session.Engine.Git()
-			if git.IsMergeInProgress(ctx) {
-				_ = git.MergeAbort(ctx)
+			if session.Engine.IsMergeInProgress(ctx) {
+				_ = session.Engine.MergeAbort(ctx)
 			}
 
 			// Reset to baseline

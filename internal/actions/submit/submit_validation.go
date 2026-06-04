@@ -23,7 +23,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 		return err
 	}
 	if repoOwner != "" && repoName != "" {
-		if err := github.SyncPrInfo(ctx.Context, ctx.Git(), branches, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) {
+		if err := github.SyncPrInfo(ctx.Context, ctx.Git(), branches, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 			branch := nav.GetBranch(name)
 
 			// Preserve existing locked status

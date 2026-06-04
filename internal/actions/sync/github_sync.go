@@ -54,7 +54,7 @@ func syncGitHubPRInfo(ctx *app.Context) (*GitHubSyncResult, error) {
 
 	// Sync PR info from GitHub (this is already parallelized internally)
 	syncPrStart := time.Now()
-	if err := github.SyncPrInfo(gctx, ctx.Git(), branchNames, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) {
+	if err := github.SyncPrInfo(gctx, ctx.Git(), branchNames, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 		result.mu.Lock()
 		result.PRInfos[name] = prInfo
 		result.mu.Unlock()

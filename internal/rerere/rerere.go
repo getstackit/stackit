@@ -4,11 +4,18 @@ import (
 	"context"
 	"strings"
 
-	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui"
 )
 
 const declinedKey = "stackit.rerere.declined"
+
+// GitConfigurer reads and writes git configuration values. Both git.Runner and
+// engine.Engine satisfy it, so callers can pass the engine rather than reaching
+// for the raw git runner.
+type GitConfigurer interface {
+	GetConfig(key string) (string, error)
+	SetConfig(key, value string) error
+}
 
 // ConfirmFunc prompts the user for a yes/no answer. Matches the signature
 // of tui.PromptConfirm.
@@ -31,21 +38,21 @@ type Pauser interface {
 //
 // If pauser is non-nil, it is paused around the confirmation prompt so a
 // surrounding TUI does not contend for stdin/stdout.
-func EnsureEnabled(ctx context.Context, runner git.Runner, interactive bool, pauser Pauser) (bool, error) {
-	return ensureEnabled(ctx, runner, interactive, pauser, tui.PromptConfirm)
+func EnsureEnabled(ctx context.Context, cfg GitConfigurer, interactive bool, pauser Pauser) (bool, error) {
+	return ensureEnabled(ctx, cfg, interactive, pauser, tui.PromptConfirm)
 }
 
-func ensureEnabled(_ context.Context, runner git.Runner, interactive bool, pauser Pauser, confirm ConfirmFunc) (bool, error) {
-	if configBool(runner, "rerere.enabled") {
-		if !configBool(runner, "rerere.autoupdate") {
-			if err := runner.SetConfig("rerere.autoupdate", "true"); err != nil {
+func ensureEnabled(_ context.Context, cfg GitConfigurer, interactive bool, pauser Pauser, confirm ConfirmFunc) (bool, error) {
+	if configBool(cfg, "rerere.enabled") {
+		if !configBool(cfg, "rerere.autoupdate") {
+			if err := cfg.SetConfig("rerere.autoupdate", "true"); err != nil {
 				return false, err
 			}
 		}
 		return false, nil
 	}
 
-	if configBool(runner, declinedKey) || !interactive {
+	if configBool(cfg, declinedKey) || !interactive {
 		return false, nil
 	}
 
@@ -54,14 +61,14 @@ func ensureEnabled(_ context.Context, runner git.Runner, interactive bool, pause
 		return false, nil //nolint:nilerr // prompt cancel (Ctrl+C) should not error — treat as decline without persisting
 	}
 	if !ok {
-		_ = runner.SetConfig(declinedKey, "true")
+		_ = cfg.SetConfig(declinedKey, "true")
 		return false, nil
 	}
 
-	if err := runner.SetConfig("rerere.enabled", "true"); err != nil {
+	if err := cfg.SetConfig("rerere.enabled", "true"); err != nil {
 		return false, err
 	}
-	if err := runner.SetConfig("rerere.autoupdate", "true"); err != nil {
+	if err := cfg.SetConfig("rerere.autoupdate", "true"); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -75,8 +82,8 @@ func promptWithPause(pauser Pauser, confirm ConfirmFunc, prompt string, defaultV
 	return confirm(prompt, defaultValue)
 }
 
-func configBool(runner git.Runner, key string) bool {
-	value, err := runner.GetConfig(key)
+func configBool(cfg GitConfigurer, key string) bool {
+	value, err := cfg.GetConfig(key)
 	if err != nil {
 		return false
 	}

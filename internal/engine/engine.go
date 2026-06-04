@@ -225,6 +225,7 @@ type Engine interface {
 	RemoteFetcher
 	WorktreeRegistry
 	MetadataInspector
+	GitConfig
 	Git() git.Runner
 
 	// SnapshotForWorktree creates a deep copy of engine state for initializing

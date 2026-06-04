@@ -255,6 +255,16 @@ func (e *engineImpl) GetUserName(ctx context.Context) (string, error) {
 	return e.git.GetUserName(ctx)
 }
 
+// GetConfig reads a git configuration value.
+func (e *engineImpl) GetConfig(key string) (string, error) {
+	return e.git.GetConfig(key)
+}
+
+// SetConfig writes a git configuration value.
+func (e *engineImpl) SetConfig(key, value string) error {
+	return e.git.SetConfig(key, value)
+}
+
 // GetAllBranchNames returns the names of all local branches, including ones not
 // tracked by stackit.
 func (e *engineImpl) GetAllBranchNames(ctx context.Context) ([]string, error) {

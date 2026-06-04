@@ -312,6 +312,14 @@ type MetadataInspector interface {
 	DeleteMetadataRef(ctx context.Context, branchName string) error
 }
 
+// GitConfig provides access to git configuration values. Exposed so helpers
+// that only need config access (e.g. rerere setup) can take the engine instead
+// of the raw git runner.
+type GitConfig interface {
+	GetConfig(key string) (string, error)
+	SetConfig(key, value string) error
+}
+
 // Absorber applies staged hunks to appropriate commits
 type Absorber interface {
 	ApplyHunksToBranch(ctx context.Context, branch Branch, hunksByCommit map[string][]git.Hunk) error

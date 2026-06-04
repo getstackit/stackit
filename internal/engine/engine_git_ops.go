@@ -255,6 +255,37 @@ func (e *engineImpl) GetUserName(ctx context.Context) (string, error) {
 	return e.git.GetUserName(ctx)
 }
 
+// GetAllBranchNames returns the names of all local branches, including ones not
+// tracked by stackit.
+func (e *engineImpl) GetAllBranchNames(ctx context.Context) ([]string, error) {
+	return e.git.GetAllBranchNames(ctx)
+}
+
+// ListMetadataRefs returns a map of branch name to metadata-ref SHA for every
+// stackit metadata ref, including refs whose branches no longer exist.
+func (e *engineImpl) ListMetadataRefs() (map[string]string, error) {
+	return e.git.ListMetadata()
+}
+
+// ReadMetadataRaw reads a single branch's metadata directly from its ref,
+// bypassing the engine's tracked-branch cache.
+func (e *engineImpl) ReadMetadataRaw(branchName string) (*git.Meta, error) {
+	return e.git.ReadMetadata(branchName)
+}
+
+// BatchReadMetadataRaw reads raw metadata for many branches in one pass,
+// returning per-branch errors so callers can detect corrupted refs.
+func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error) {
+	return e.git.BatchReadMetadata(branchNames)
+}
+
+// DeleteMetadataRef deletes a single branch's metadata ref directly, without
+// the transactional rebuild performed by DeleteMetadata. Intended for pruning
+// orphaned refs whose branches no longer exist.
+func (e *engineImpl) DeleteMetadataRef(ctx context.Context, branchName string) error {
+	return e.git.DeleteMetadata(ctx, branchName)
+}
+
 // IsInsideRepo checks if the current directory is inside a git repository
 func (e *engineImpl) IsInsideRepo() bool {
 	return e.git.IsInsideRepo()

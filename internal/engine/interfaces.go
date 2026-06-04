@@ -19,6 +19,10 @@ type StackNavigator interface {
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	SortBranchesTopologically(branches Branches) Branches
 	FindBranchForCommit(commitSHA string) (string, error)
+	// GetAllBranchNames returns the names of all local branches, including ones
+	// not tracked by stackit. Used by diagnostics that must see untracked or
+	// orphaned branches.
+	GetAllBranchNames(ctx context.Context) ([]string, error)
 	// FindNearestNonExcludedAncestor walks the parent chain from startParent
 	// and returns the first ancestor for which isExcluded returns false. Falls
 	// back to trunk if every ancestor up the chain is excluded.
@@ -284,6 +288,28 @@ type BranchWriter interface {
 	CommitOperations
 	WorktreeOperations
 	Initializer
+}
+
+// MetadataInspector exposes raw, below-abstraction reads of the stackit branch
+// metadata-ref store. It is the low-level escape valve for diagnostic and
+// repair commands (doctor, debug) that must observe metadata the engine's
+// tracked-branch view cannot see — orphaned, corrupted, or untracked-branch
+// refs. Prefer the higher-level branch accessors for normal flows; reach for
+// this only when raw ref access is genuinely required.
+type MetadataInspector interface {
+	// ListMetadataRefs returns a map of branch name to metadata-ref SHA for
+	// every stackit metadata ref, including refs whose branches no longer exist.
+	ListMetadataRefs() (map[string]string, error)
+	// ReadMetadataRaw reads a single branch's metadata directly from its ref,
+	// bypassing the engine's tracked-branch cache.
+	ReadMetadataRaw(branchName string) (*git.Meta, error)
+	// BatchReadMetadataRaw reads raw metadata for many branches in one pass,
+	// returning per-branch errors so callers can detect corrupted refs.
+	BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error)
+	// DeleteMetadataRef deletes a single branch's metadata ref directly, without
+	// the transactional rebuild performed by DeleteMetadata. Intended for
+	// pruning orphaned refs whose branches no longer exist.
+	DeleteMetadataRef(ctx context.Context, branchName string) error
 }
 
 // Absorber applies staged hunks to appropriate commits

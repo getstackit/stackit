@@ -147,7 +147,7 @@ type mergePlanEngine interface {
 	engine.BranchReader
 	engine.PRManager
 	engine.SyncManager
-	Git() git.Runner
+	engine.MetadataInspector
 }
 
 // CreateMergePlan analyzes the current state and builds a merge plan.
@@ -262,7 +262,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 	// 4. Batch fetch metadata and revisions for all involved branches
 	involvedBranches := append(append([]string{}, allBranches...), upstackBranches...)
-	allMeta, _ := eng.Git().BatchReadMetadata(involvedBranches)
+	allMeta, _ := eng.BatchReadMetadataRaw(involvedBranches)
 	// We don't strictly need allRevisions here yet, but it's good for cache
 	_, _ = eng.GetRevisions(involvedBranches)
 

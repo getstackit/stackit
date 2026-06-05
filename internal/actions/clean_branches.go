@@ -12,7 +12,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // CleanBranchesOptions contains options for cleaning branches
@@ -453,7 +452,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 
 		// Cleanup plan and update parent blockers
 		for _, name := range batchNames {
-			out.Info("Deleted branch %s", style.ColorBranchName(name, false))
+			out.Info("Deleted branch %s", output.Branch(name, false))
 			delete(plan.branches, name)
 
 			parentName := parents[name]
@@ -552,8 +551,8 @@ func reparentBranchIfNecessary(ctx context.Context, branch engine.Branch, plan *
 			return "", fmt.Errorf("failed to set parent for %s: %w", branchName, err)
 		}
 		out.Info("Set parent of %s to %s.",
-			style.ColorBranchName(branchName, false),
-			style.ColorBranchName(newParentName, false))
+			output.Branch(branchName, false),
+			output.Branch(newParentName, false))
 
 		// Remove this branch as a blocker for its old parent in the plan
 		plan.removeBlocker(parentName, branchName)

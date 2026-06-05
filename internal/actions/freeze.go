@@ -5,7 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // FreezeAction freezes the specified branch and all branches downstack of it (recursive parents)
@@ -49,7 +49,7 @@ func FreezeAction(ctx *app.Context, branchName string) error {
 		}
 
 		for _, name := range res.AffectedBranches {
-			out.Info("Frozen %s locally.", style.ColorBranchName(name, name == branchName))
+			out.Info("Frozen %s locally.", output.Branch(name, name == branchName))
 		}
 	}
 

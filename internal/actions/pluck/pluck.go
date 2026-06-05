@@ -9,7 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for the pluck command
@@ -188,9 +188,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			handler.OnChildReparented(child.GetName(), source, grandparentBranch.GetName())
 			reparentedChildren = append(reparentedChildren, child.GetName())
 			out.Info("Reparented %s from %s to %s.",
-				style.ColorBranchName(child.GetName(), false),
-				style.ColorBranchName(source, false),
-				style.ColorBranchName(grandparentBranch.GetName(), false))
+				output.Branch(child.GetName(), false),
+				output.Branch(source, false),
+				output.Branch(grandparentBranch.GetName(), false))
 		}
 
 		handler.OnStep(StepReparentingChild, basehandler.StatusCompleted, "Children reparented")
@@ -211,9 +211,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	out.Info("Plucked %s from %s to %s.",
-		style.ColorBranchName(source, true),
-		style.ColorBranchName(oldParentName, false),
-		style.ColorBranchName(onto, false))
+		output.Branch(source, true),
+		output.Branch(oldParentName, false),
+		output.Branch(onto, false))
 	handler.OnStep(StepMovingSource, basehandler.StatusCompleted, "Source branch moved")
 
 	// Step 3: Restack all affected branches

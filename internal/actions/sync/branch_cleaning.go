@@ -9,7 +9,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // cleanBranches handles cleaning merged/closed branches
@@ -91,7 +91,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool
 				// Utility branch with no unpushed local changes - auto-confirm without prompting.
 				branchesToDelete[name] = true
 				ctx.Output.Info("Auto-deleting utility branch %s (%s)",
-					style.ColorBranchName(name, false), reason)
+					output.Branch(name, false), reason)
 			} else {
 				// Regular branch - add to prompt list
 				branchesToPrompt[name] = reason
@@ -143,13 +143,13 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool
 	// Warn about branches that couldn't be deleted from worktree
 	for _, name := range result.SkippedInWorktree {
 		ctx.Output.Warn("Cannot delete %s from worktree. Run sync from the main repository to clean up.",
-			style.ColorBranchName(name, true))
+			output.Branch(name, true))
 	}
 
 	// Warn about branches skipped due to unpushed changes
 	for _, name := range result.SkippedUnpushed {
 		ctx.Output.Warn("Skipped %s — has unpushed local changes. Push first or delete manually with 'git branch -D %s'.",
-			style.ColorBranchName(name, false), name)
+			output.Branch(name, false), name)
 	}
 
 	return result, nil

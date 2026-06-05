@@ -9,8 +9,8 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/tui/style"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -64,7 +64,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if err := eng.ClearStackDescription(ctx.Context, *currentBranch); err != nil {
 			return fmt.Errorf("failed to clear stack description: %w", err)
 		}
-		out.Info("Cleared stack description for stack rooted at %s.", style.ColorBranchName(stackRoot, false))
+		out.Info("Cleared stack description for stack rooted at %s.", output.Branch(stackRoot, false))
 
 		// Mark stack for PR updates and push metadata
 		if err := markStackAndPushMetadata(ctx, eng, stackRoot); err != nil {
@@ -118,10 +118,10 @@ func applyStackDescription(ctx *app.Context, branch engine.Branch, stackRoot str
 		return fmt.Errorf("failed to set stack description: %w", err)
 	}
 
-	out.Info("Set stack description for stack rooted at %s:", style.ColorBranchName(stackRoot, false))
-	out.Info("  Title: %s", style.ColorDim(desc.Title))
+	out.Info("Set stack description for stack rooted at %s:", output.Branch(stackRoot, false))
+	out.Info("  Title: %s", output.Dim(desc.Title))
 	if displayDesc != "" {
-		out.Info("  Description: %s", style.ColorDim(displayDesc))
+		out.Info("  Description: %s", output.Dim(displayDesc))
 	}
 
 	if err := markStackAndPushMetadata(ctx, eng, stackRoot); err != nil {
@@ -153,11 +153,11 @@ func showDescription(ctx *app.Context, branch engine.Branch, stackRoot string) e
 	desc := ctx.Engine.GetStackDescription(branch)
 
 	if desc == nil || desc.IsEmpty() {
-		out.Info("Stack rooted at %s has no description set.", style.ColorBranchName(stackRoot, false))
+		out.Info("Stack rooted at %s has no description set.", output.Branch(stackRoot, false))
 		return nil
 	}
 
-	out.Info("Stack description for %s:", style.ColorBranchName(stackRoot, false))
+	out.Info("Stack description for %s:", output.Branch(stackRoot, false))
 	out.Info("")
 	out.Info("  Title: %s", desc.Title)
 	if desc.Description != "" {

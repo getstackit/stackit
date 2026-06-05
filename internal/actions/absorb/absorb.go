@@ -11,7 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 const (
@@ -279,7 +279,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		for commitSHA := range branchHunks {
 			handler.OnApply(branch.GetName(), commitSHA[:8])
-			out.Info("Absorbed changes into commit %s in %s", commitSHA[:8], style.ColorBranchName(branch.GetName(), false))
+			out.Info("Absorbed changes into commit %s in %s", commitSHA[:8], output.Branch(branch.GetName(), false))
 		}
 	}
 

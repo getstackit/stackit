@@ -12,9 +12,9 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
-	"github.com/getstackit/stackit/internal/tui/style"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -205,7 +205,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 			summaryParts = append(summaryParts, fmt.Sprintf("%d in review", inReviewCount))
 		}
 		stackLines = append(stackLines, "")
-		stackLines = append(stackLines, style.ColorDim(strings.Join(summaryParts, " · ")))
+		stackLines = append(stackLines, output.Dim(strings.Join(summaryParts, " · ")))
 	}
 
 	// Add untracked branches if requested

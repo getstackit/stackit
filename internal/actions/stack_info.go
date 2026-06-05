@@ -8,8 +8,8 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
-	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // StackBranchInfo represents JSON-serializable info for a single branch in a stack
@@ -139,7 +139,7 @@ func StackInfoAction(ctx *app.Context, opts StackInfoOptions) error {
 			} else {
 				markdown = "# " + stackDesc.Title
 			}
-			rendered := style.RenderMarkdown(markdown)
+			rendered := output.RenderMarkdown(markdown)
 			ctx.Output.Info("%s", rendered)
 			ctx.Output.Info("")
 			ctx.Output.Info(strings.Repeat("─", 40))

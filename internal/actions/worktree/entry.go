@@ -6,7 +6,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // ListOptions contains options for the list action
@@ -209,7 +209,7 @@ func findWorktreeByNameOrBranch(ctx *app.Context, nameOrBranch string) (*engine.
 		}
 	}
 
-	return nil, fmt.Errorf("no worktree found for %s", style.ColorBranchName(nameOrBranch, false))
+	return nil, fmt.Errorf("no worktree found for %s", output.Branch(nameOrBranch, false))
 }
 
 func getWorktreeEntry(ctx *app.Context, nameOrBranch string) (*Entry, error) {
@@ -218,7 +218,7 @@ func getWorktreeEntry(ctx *app.Context, nameOrBranch string) (*Entry, error) {
 		return nil, err
 	}
 	if len(result.Worktrees) == 0 {
-		return nil, fmt.Errorf("no worktree found for %s", style.ColorBranchName(nameOrBranch, false))
+		return nil, fmt.Errorf("no worktree found for %s", output.Branch(nameOrBranch, false))
 	}
 	entry := result.Worktrees[0]
 	return &entry, nil

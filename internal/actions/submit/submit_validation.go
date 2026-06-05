@@ -9,7 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // ValidateBranchesToSubmit validates that branches are ready to submit
@@ -82,19 +82,19 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 		case parentBranch.IsTrunk():
 			if !branch.IsBranchUpToDate() {
 				ctx.Output.Info("Note that %s has fallen behind trunk. You may encounter conflicts if you attempt to merge it.",
-					style.ColorBranchName(branchName, false))
+					output.Branch(branchName, false))
 			}
 		case validatedBranches[parentBranchName]:
 			// Parent is in the submission list
 			if !branch.IsBranchUpToDate() {
 				return fmt.Errorf("you are trying to submit at least one branch that has not been restacked on its parent. To resolve this, check out %s and run 'stackit restack'",
-					style.ColorBranchName(branchName, false))
+					output.Branch(branchName, false))
 			}
 		default:
 			// Parent is not in submission list
 			if !eng.ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(parentBranch)).ForBranch(parentBranch).Matches() {
 				return fmt.Errorf("you are trying to submit at least one branch whose base does not match its parent remotely, without including its parent. You may want to use 'stackit submit --stack' to ensure that the ancestors of %s are included in your submission",
-					style.ColorBranchName(branchName, false))
+					output.Branch(branchName, false))
 			}
 		}
 

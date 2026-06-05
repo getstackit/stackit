@@ -5,7 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for the untrack command
@@ -60,7 +60,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	for _, name := range allNames {
-		ctx.Output.Info("Stopped tracking %s.", style.ColorBranchName(name, false))
+		ctx.Output.Info("Stopped tracking %s.", output.Branch(name, false))
 	}
 
 	return nil

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for the track command
@@ -67,7 +67,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", style.ColorBranchName(branchName, false), style.ColorBranchName(parent, false))
+		ctx.Output.Info("Tracked %s with parent %s.", output.Branch(branchName, false), output.Branch(parent, false))
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", style.ColorBranchName(branchName, false), style.ColorBranchName(parentBranch, false))
+		ctx.Output.Info("Tracked %s with parent %s.", output.Branch(branchName, false), output.Branch(parentBranch, false))
 		return nil
 	}
 
@@ -106,7 +106,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 	// Check if branch is already tracked
 	branch := eng.GetBranch(branchName)
 	if branch.IsTracked() {
-		ctx.Output.Info("%s is already tracked.", style.ColorBranchName(branchName, false))
+		ctx.Output.Info("%s is already tracked.", output.Branch(branchName, false))
 		// Still ask if user wants to track descendants
 	} else {
 		// Try auto-detection (single unambiguous non-trunk tracked ancestor)
@@ -118,7 +118,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 			// Skip worktree anchors for auto-detection
 			if !candidateBranch.IsWorktreeAnchor() {
 				parentBranch = candidate
-				ctx.Output.Info("Auto-detected parent %s for %s.", style.ColorBranchName(parentBranch, false), style.ColorBranchName(branchName, false))
+				ctx.Output.Info("Auto-detected parent %s for %s.", output.Branch(parentBranch, false), output.Branch(branchName, false))
 			}
 		}
 
@@ -152,7 +152,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", style.ColorBranchName(branchName, false), style.ColorBranchName(parentBranch, false))
+		ctx.Output.Info("Tracked %s with parent %s.", output.Branch(branchName, false), output.Branch(parentBranch, false))
 	}
 
 	// Find untracked children and ask to track them

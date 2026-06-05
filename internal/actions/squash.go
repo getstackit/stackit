@@ -6,7 +6,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // SquashOptions contains options for the squash command
@@ -50,7 +50,7 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 		return fmt.Errorf("failed to squash branch: %w", err)
 	}
 
-	out.Info("Squashed commits in %s.", style.ColorBranchName(currentBranch.GetName(), true))
+	out.Info("Squashed commits in %s.", output.Branch(currentBranch.GetName(), true))
 	ctx.Logger.Info("squash completed branch=%v", currentBranch.GetName())
 
 	// Get upstack branches (recursive children only, excluding current branch)

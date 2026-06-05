@@ -9,7 +9,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/tui/style"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -57,12 +56,12 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 	}
 
 	// Show initial info
-	splog.Info("Splitting the commits of %s into multiple branches.", style.ColorBranchName(branchToSplit, true))
+	splog.Info("Splitting the commits of %s into multiple branches.", output.Branch(branchToSplit, true))
 	branch := eng.GetBranch(branchToSplit)
 	prInfo, _ := branch.GetPrInfo()
 	if prInfo != nil && prInfo.Number() != nil {
 		splog.Info("If any of the new branches keeps the name %s, it will be linked to PR #%d.",
-			style.ColorBranchName(branchToSplit, true), *prInfo.Number())
+			output.Branch(branchToSplit, true), *prInfo.Number())
 	}
 	splog.Info("")
 
@@ -173,7 +172,7 @@ func selectSplitPoint(readableCommits []string, branchToSplit string) (int, erro
 		// Skip commit lines - they're not selectable options
 	}
 
-	title := fmt.Sprintf("Select where to split %s (commits above the line stay):", style.ColorBranchName(branchToSplit, true))
+	title := fmt.Sprintf("Select where to split %s (commits above the line stay):", output.Branch(branchToSplit, true))
 	selected, err := tui.PromptSelect(title, options, 0)
 	if err != nil {
 		return 0, err
@@ -220,7 +219,7 @@ func groupRemainingCommits(
 			}
 			existingNames = append(existingNames, name)
 
-			splog.Info("New branch: %s", style.ColorBranchName(name, false))
+			splog.Info("New branch: %s", output.Branch(name, false))
 			splog.Info("  %s", remaining[0])
 			splog.Info("")
 
@@ -262,7 +261,7 @@ func groupRemainingCommits(
 			existingNames = append(existingNames, name)
 
 			if groupSize == 1 {
-				splog.Info("New branch: %s", style.ColorBranchName(name, false))
+				splog.Info("New branch: %s", output.Branch(name, false))
 				splog.Info("  %s", groupReadable[0])
 				splog.Info("")
 			}

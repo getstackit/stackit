@@ -174,8 +174,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 				branchInfo.ParentRevision = *rev
 			}
 
-			branch := eng.GetBranch(branchName)
-			prInfo, err := branch.GetPrInfo()
+			prInfo, err := branchObj.GetPrInfo()
 			if err == nil && prInfo != nil {
 				branchInfo.PRInfo = prInfo
 			}
@@ -186,8 +185,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 		}
 
 		if !branchInfo.IsTrunk {
-			branch := eng.GetBranch(branchName)
-			branchInfo.IsFixed = branch.IsBranchUpToDate()
+			branchInfo.IsFixed = branchObj.IsBranchUpToDate()
 		} else {
 			branchInfo.IsFixed = true
 		}

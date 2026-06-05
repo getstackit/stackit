@@ -9,7 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for deleting branches
@@ -133,7 +133,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	for _, name := range branchNames {
 		handler.OnBranch(name, StatusDeleted, nil)
-		out.Info("Deleted branch %s", style.ColorBranchName(name, false))
+		out.Info("Deleted branch %s", output.Branch(name, false))
 	}
 
 	// Identify stack roots that were deleted (branches whose parent is trunk)
@@ -262,7 +262,7 @@ func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []stri
 			mainRepoDir = wt.MainRepoDir
 		}
 
-		ctx.Output.Info("Removing worktree for deleted stack %s", style.ColorBranchName(stackRoot, false))
+		ctx.Output.Info("Removing worktree for deleted stack %s", output.Branch(stackRoot, false))
 
 		// Remove worktree directory if it exists
 		if _, statErr := os.Stat(wt.Path); statErr == nil {

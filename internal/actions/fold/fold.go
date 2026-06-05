@@ -8,7 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for the fold command
@@ -22,19 +22,19 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 	eng := ctx.Engine
 	out := ctx.Output
 
-	out.Info("%s", style.ColorYellow("Dry Run: Folding plan"))
-	out.Info("  Fold branch: %s", style.ColorBranchName(current.GetName(), true))
-	out.Info("  Into parent: %s", style.ColorBranchName(parent.GetName(), false))
+	out.Info("%s", output.Yellow("Dry Run: Folding plan"))
+	out.Info("  Fold branch: %s", output.Branch(current.GetName(), true))
+	out.Info("  Into parent: %s", output.Branch(parent.GetName(), false))
 	out.Newline()
 
 	// Show combined commit messages
-	out.Info("%s", style.ColorCyan("Proposed Commit History:"))
+	out.Info("%s", output.Cyan("Proposed Commit History:"))
 	parentCommits, err := parent.GetAllCommits(engine.CommitFormatReadable)
 	if err != nil {
 		out.Debug("Failed to get parent commits for %s: %v", parent.GetName(), err)
 	}
 	for _, commit := range parentCommits {
-		out.Info("  %s", style.ColorDim(commit))
+		out.Info("  %s", output.Dim(commit))
 	}
 
 	currentCommits, err := current.GetAllCommits(engine.CommitFormatReadable)
@@ -47,7 +47,7 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 	out.Newline()
 
 	// Show combined diff stat
-	out.Info("%s", style.ColorCyan("Combined Diff Stat:"))
+	out.Info("%s", output.Cyan("Combined Diff Stat:"))
 	// Base is parent's parent (or trunk)
 	grandparentName := parent.GetParentOrTrunk()
 	baseRev, err := eng.GetRevision(eng.GetBranch(grandparentName))
@@ -76,7 +76,7 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 	}
 
 	out.Newline()
-	out.Info("%s", style.ColorDim("No changes were applied."))
+	out.Info("%s", output.Dim("No changes were applied."))
 }
 
 // Action performs the fold operation

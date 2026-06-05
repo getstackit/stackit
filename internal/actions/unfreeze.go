@@ -5,7 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // UnfreezeAction unfreezes the specified branch and all branches upstack of it (recursive children)
@@ -45,7 +45,7 @@ func UnfreezeAction(ctx *app.Context, branchName string) error {
 		}
 
 		for _, name := range res.AffectedBranches {
-			out.Info("Unfrozen %s locally.", style.ColorBranchName(name, name == branchName))
+			out.Info("Unfrozen %s locally.", output.Branch(name, name == branchName))
 		}
 	}
 

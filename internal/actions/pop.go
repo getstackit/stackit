@@ -5,7 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // PopOptions contains options for the pop command
@@ -61,12 +61,12 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 	hasStaged, err := eng.HasStagedChanges(ctx.Context)
 	if err == nil && hasStaged {
 		out.Info("Popped branch %s. Changes are now staged on %s.",
-			style.ColorBranchName(currentBranch, false),
-			style.ColorBranchName(parentName, false))
+			output.Branch(currentBranch, false),
+			output.Branch(parentName, false))
 	} else {
 		out.Info("Popped branch %s. Switched to %s.",
-			style.ColorBranchName(currentBranch, false),
-			style.ColorBranchName(parentName, false))
+			output.Branch(currentBranch, false),
+			output.Branch(parentName, false))
 	}
 
 	return nil

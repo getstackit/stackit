@@ -7,7 +7,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -121,9 +121,9 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 
 	// Log success
 	if opts.CreateCommit {
-		out.Info("Created new commit in %s.", style.ColorBranchName(currentBranch, true))
+		out.Info("Created new commit in %s.", output.Branch(currentBranch, true))
 	} else {
-		out.Info("Amended commit in %s.", style.ColorBranchName(currentBranch, true))
+		out.Info("Amended commit in %s.", output.Branch(currentBranch, true))
 	}
 
 	// Restack upstack branches
@@ -158,8 +158,8 @@ func interactiveRebaseAction(ctx *app.Context, _ ModifyOptions) error {
 	}
 
 	out.Info("Starting interactive rebase for %s onto %s...",
-		style.ColorBranchName(currentBranch.GetName(), true),
-		style.ColorBranchName(parentName, false))
+		output.Branch(currentBranch.GetName(), true),
+		output.Branch(parentName, false))
 
 	// Run interactive rebase
 	if err := eng.InteractiveRebase(gctx, parentName); err != nil {

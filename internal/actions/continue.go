@@ -8,7 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // ContinueOptions contains options for the continue command
@@ -95,7 +95,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		return fmt.Errorf("failed to checkout branch %s: %w", result.BranchName, err)
 	}
 
-	out.Info("Resolved rebase conflict for %s.", style.ColorBranchName(result.BranchName, true))
+	out.Info("Resolved rebase conflict for %s.", output.Branch(result.BranchName, true))
 	if result.RerereResolvedCount > 0 {
 		printRerereResolved(ctx, result.RerereResolvedCount)
 	}

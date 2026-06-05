@@ -8,7 +8,7 @@ import (
 	basehandler "github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for the flatten command
@@ -227,9 +227,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		handler.OnBranchMoved(move.Branch, move.OldParent, move.NewParent)
 		out.Info("  %s: %s -> %s",
-			style.ColorBranchName(move.Branch, false),
-			style.ColorDim(move.OldParent),
-			style.ColorBranchName(move.NewParent, false))
+			output.Branch(move.Branch, false),
+			output.Dim(move.OldParent),
+			output.Branch(move.NewParent, false))
 	}
 
 	handler.OnStep(StepFlattening, basehandler.StatusCompleted, "Parent pointers updated")

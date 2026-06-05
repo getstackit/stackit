@@ -8,7 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for the scope command
@@ -47,14 +47,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		switch {
 		case !explicitScope.IsEmpty():
 			if explicitScope.IsNone() {
-				out.Info("Branch %s has scope inheritance DISABLED (explicitly set to '%s').", style.ColorBranchName(currentBranch, false), explicitScope.String())
+				out.Info("Branch %s has scope inheritance DISABLED (explicitly set to '%s').", output.Branch(currentBranch, false), explicitScope.String())
 			} else {
-				out.Info("Branch %s has explicit scope: %s", style.ColorBranchName(currentBranch, false), style.ColorDim(explicitScope.String()))
+				out.Info("Branch %s has explicit scope: %s", output.Branch(currentBranch, false), output.Dim(explicitScope.String()))
 			}
 		case !resolvedScope.IsEmpty():
-			out.Info("Branch %s inherits scope: %s", style.ColorBranchName(currentBranch, false), style.ColorDim(resolvedScope.String()))
+			out.Info("Branch %s inherits scope: %s", output.Branch(currentBranch, false), output.Dim(resolvedScope.String()))
 		default:
-			out.Info("Branch %s has no scope set.", style.ColorBranchName(currentBranch, false))
+			out.Info("Branch %s has no scope set.", output.Branch(currentBranch, false))
 		}
 		return nil
 	}
@@ -67,7 +67,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if err := eng.SetScopeAndMarkForUpdate(ctx.Context, eng.GetBranch(currentBranch), engine.Empty()); err != nil {
 			return fmt.Errorf("failed to unset scope: %w", err)
 		}
-		out.Info("Unset explicit scope for branch %s. It will now inherit from its parent.", style.ColorBranchName(currentBranch, false))
+		out.Info("Unset explicit scope for branch %s. It will now inherit from its parent.", output.Branch(currentBranch, false))
 		// PR body update flag already set atomically inside SetScopeAndMarkForUpdate.
 		if err := actions.PushMetadataOnly(ctx, eng, []string{currentBranch}); err != nil {
 			out.Debug("Failed to push metadata changes: %v", err)
@@ -94,9 +94,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	if newScope.IsNone() {
-		out.Info("Disabled scope for branch %s (breaks inheritance).", style.ColorBranchName(currentBranch, false))
+		out.Info("Disabled scope for branch %s (breaks inheritance).", output.Branch(currentBranch, false))
 	} else {
-		out.Info("Set scope for branch %s to: %s", style.ColorBranchName(currentBranch, false), style.ColorDim(opts.Scope))
+		out.Info("Set scope for branch %s to: %s", output.Branch(currentBranch, false), output.Dim(opts.Scope))
 
 		// Rename prompt - only if scope changed and branch name contains old scope
 		if oldScope.IsDefined() && !oldScope.Equal(newScope) && strings.Contains(currentBranch, oldScope.String()) {
@@ -106,7 +106,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				if err := eng.RenameBranch(ctx.Context, eng.GetBranch(currentBranch), eng.GetBranch(newName)); err != nil {
 					out.Info("Warning: failed to rename branch: %v", err)
 				} else {
-					out.Info("Renamed branch %s to %s.", style.ColorBranchName(currentBranch, false), style.ColorBranchName(newName, true))
+					out.Info("Renamed branch %s to %s.", output.Branch(currentBranch, false), output.Branch(newName, true))
 				}
 			}
 		}

@@ -8,7 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Action locks the specified branch and all branches downstack of it
@@ -80,7 +80,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 			continue
 		}
 		if b.IsLocked() {
-			out.Info("Branch %s is already locked.", style.ColorBranchName(b.GetName(), b.GetName() == branchName))
+			out.Info("Branch %s is already locked.", output.Branch(b.GetName(), b.GetName() == branchName))
 			continue
 		}
 		branchesToLock = branchesToLock.Append(b)
@@ -97,7 +97,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 		}
 
 		for _, name := range res.AffectedBranches {
-			out.Info("Locked %s.", style.ColorBranchName(name, name == branchName))
+			out.Info("Locked %s.", output.Branch(name, name == branchName))
 			affectedBranches = append(affectedBranches, name)
 		}
 	}
@@ -163,7 +163,7 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 			continue
 		}
 		if !b.IsLocked() {
-			out.Info("Branch %s is already unlocked.", style.ColorBranchName(b.GetName(), b.GetName() == branchName))
+			out.Info("Branch %s is already unlocked.", output.Branch(b.GetName(), b.GetName() == branchName))
 			continue
 		}
 		branchesToUnlock = branchesToUnlock.Append(b)
@@ -180,7 +180,7 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 		}
 
 		for _, name := range res.AffectedBranches {
-			out.Info("Unlocked %s.", style.ColorBranchName(name, name == branchName))
+			out.Info("Unlocked %s.", output.Branch(name, name == branchName))
 			affectedBranches = append(affectedBranches, name)
 		}
 	}

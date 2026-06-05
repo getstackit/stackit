@@ -11,7 +11,6 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/tui/style"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -657,17 +656,17 @@ func promptForFiles(ctx context.Context, branchToSplit engine.Branch, eng splitB
 	}
 
 	// Show instructions based on mode
-	splog.Info("Splitting %s by file.", style.ColorBranchName(branchToSplit.GetName(), true))
+	splog.Info("Splitting %s by file.", output.Branch(branchToSplit.GetName(), true))
 	switch {
 	case asSibling:
 		splog.Info("Select the files to extract to a new sibling branch.")
 		splog.Info("The original branch will remain unchanged.")
 	case direction == DirectionAbove:
 		splog.Info("Select the files to extract to a new child branch.")
-		splog.Info("The remaining files will stay on %s.", style.ColorBranchName(branchToSplit.GetName(), true))
+		splog.Info("The remaining files will stay on %s.", output.Branch(branchToSplit.GetName(), true))
 	default:
 		splog.Info("Select the files to extract to a new parent branch.")
-		splog.Info("The remaining files will stay on %s.", style.ColorBranchName(branchToSplit.GetName(), true))
+		splog.Info("The remaining files will stay on %s.", output.Branch(branchToSplit.GetName(), true))
 	}
 	splog.Info("")
 

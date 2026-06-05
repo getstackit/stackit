@@ -9,7 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -229,9 +229,9 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		}
 
 		out.Info("Updated PR base for %s: %s → %s",
-			style.ColorBranchName(u.branchName, false),
-			style.ColorDim(u.oldBase),
-			style.ColorBranchName(u.localParentName, false))
+			output.Branch(u.branchName, false),
+			output.Dim(u.oldBase),
+			output.Branch(u.localParentName, false))
 
 		mu.Lock()
 		updated = append(updated, u.branchName)

@@ -8,7 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // SingleBranchInfo represents JSON-serializable info for a single branch (used by info --json)
@@ -104,21 +104,21 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	isCurrent := branchName == currentBranch.GetName()
 	isTrunk := branch.IsTrunk()
 
-	coloredBranchName := style.ColorBranchNameWithTrunk(branchName, isCurrent, isTrunk)
+	coloredBranchName := output.BranchWithTrunk(branchName, isCurrent, isTrunk)
 
 	if branch.IsLocked() {
-		coloredBranchName += " " + style.IconLocked() + " " + style.ColorDim("(locked)")
+		coloredBranchName += " " + output.IconLocked() + " " + output.Dim("(locked)")
 	}
 	if branch.IsFrozen() {
-		coloredBranchName += " " + style.IconFrozen() + " " + style.ColorDim("(frozen)")
+		coloredBranchName += " " + output.IconFrozen() + " " + output.Dim("(frozen)")
 	}
 
 	if !isTrunk && !branch.IsBranchUpToDate() {
-		coloredBranchName += " " + style.ColorNeedsRestack("(needs restack)")
+		coloredBranchName += " " + output.NeedsRestack("(needs restack)")
 	}
 
 	if scope := branch.GetScope(); !scope.IsNone() {
-		coloredBranchName += " " + style.ColorScope(scope.String())
+		coloredBranchName += " " + output.Scope(scope.String())
 	}
 
 	outputLines = append(outputLines, coloredBranchName)
@@ -134,14 +134,14 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		} else {
 			markdown = "# " + stackDesc.Title
 		}
-		rendered := style.RenderMarkdown(markdown)
+		rendered := output.RenderMarkdown(markdown)
 		outputLines = append(outputLines, rendered)
 	}
 
 	commitDate, err := branch.GetCommitDate()
 	if err == nil {
 		dateStr := commitDate.Format(time.RFC3339)
-		outputLines = append(outputLines, style.ColorDim(dateStr))
+		outputLines = append(outputLines, output.Dim(dateStr))
 	}
 
 	var prInfo *engine.PrInfo
@@ -155,7 +155,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 				outputLines = append(outputLines, prTitleLine)
 			}
 			if prInfo.URL() != "" {
-				outputLines = append(outputLines, style.ColorMagenta(prInfo.URL()))
+				outputLines = append(outputLines, output.Magenta(prInfo.URL()))
 			}
 		}
 	}
@@ -164,15 +164,15 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	parentBranch := branchObj.GetParent()
 	if parentBranch != nil {
 		outputLines = append(outputLines, "")
-		outputLines = append(outputLines, fmt.Sprintf("%s: %s", style.ColorCyan("Parent"), style.ColorBranchNameWithTrunk(parentBranch.GetName(), false, parentBranch.IsTrunk())))
+		outputLines = append(outputLines, fmt.Sprintf("%s: %s", output.Cyan("Parent"), output.BranchWithTrunk(parentBranch.GetName(), false, parentBranch.IsTrunk())))
 	}
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 	children := graph.ChildBranches(branchObj)
 	if len(children) > 0 {
-		outputLines = append(outputLines, fmt.Sprintf("%s:", style.ColorCyan("Children")))
+		outputLines = append(outputLines, fmt.Sprintf("%s:", output.Cyan("Children")))
 		for _, child := range children {
-			outputLines = append(outputLines, fmt.Sprintf("▸ %s", style.ColorBranchNameWithTrunk(child.GetName(), false, child.IsTrunk())))
+			outputLines = append(outputLines, fmt.Sprintf("▸ %s", output.BranchWithTrunk(child.GetName(), false, child.IsTrunk())))
 		}
 	}
 
@@ -204,7 +204,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
 		if err == nil {
 			for _, commit := range commits {
-				outputLines = append(outputLines, style.ColorDim(commit))
+				outputLines = append(outputLines, output.Dim(commit))
 			}
 		}
 	}
@@ -245,7 +245,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	)
 	if prInfo != nil && (prInfo.State() == prStateMerged || prInfo.State() == prStateClosed) {
 		for i := range outputLines {
-			outputLines[i] = style.ColorDim(outputLines[i])
+			outputLines[i] = output.Dim(outputLines[i])
 		}
 	}
 
@@ -267,15 +267,15 @@ func getPRTitleLine(prInfo *engine.PrInfo) string {
 		prStateClosed = "CLOSED"
 	)
 
-	prNumber := style.ColorPRNumber(*prInfo.Number())
+	prNumber := output.PRNumber(*prInfo.Number())
 
 	switch state {
 	case prStateMerged:
 		return fmt.Sprintf("%s (Merged) %s", prNumber, prInfo.Title())
 	case prStateClosed:
-		return fmt.Sprintf("%s (Abandoned) %s", prNumber, style.ColorDim(prInfo.Title()))
+		return fmt.Sprintf("%s (Abandoned) %s", prNumber, output.Dim(prInfo.Title()))
 	default:
-		prState := style.ColorPRState(state, prInfo.IsDraft())
+		prState := output.PRState(state, prInfo.IsDraft())
 		return fmt.Sprintf("%s %s %s", prNumber, prState, prInfo.Title())
 	}
 }

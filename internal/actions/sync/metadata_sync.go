@@ -8,7 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // syncRemoteMetadata fetches and processes remote metadata.
@@ -109,11 +109,11 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) er
 		for _, info := range orphaned {
 			switch {
 			case !info.ExistsLocally:
-				out.Info("  %s: local branch gone, would delete metadata", style.ColorBranchName(info.BranchName, false))
+				out.Info("  %s: local branch gone, would delete metadata", output.Branch(info.BranchName, false))
 			case info.HasLocalChanges:
-				out.Info("  %s: has local changes, would prompt", style.ColorBranchName(info.BranchName, false))
+				out.Info("  %s: has local changes, would prompt", output.Branch(info.BranchName, false))
 			default:
-				out.Info("  %s: no local changes, would delete sync state", style.ColorBranchName(info.BranchName, false))
+				out.Info("  %s: no local changes, would delete sync state", output.Branch(info.BranchName, false))
 			}
 		}
 		return nil
@@ -162,7 +162,7 @@ func resolveOrphanedMetadata(ctx *app.Context, info engine.OrphanedMetadataInfo,
 		if err := actions.PushMetadataAndSyncPRs(ctx, []string{info.BranchName}); err != nil {
 			out.Debug("Failed to push metadata: %v", err)
 		} else {
-			out.Info("Pushed metadata for %s", style.ColorBranchName(info.BranchName, false))
+			out.Info("Pushed metadata for %s", output.Branch(info.BranchName, false))
 		}
 	} else {
 		// Accept deletion - remove sync state
@@ -178,7 +178,7 @@ func resolveOrphanedMetadata(ctx *app.Context, info engine.OrphanedMetadataInfo,
 func printMetadataDiffs(diffs []*engine.MetadataDiff, splog interface{ Info(string, ...any) }) {
 	splog.Info("\n=== Metadata changes (dry run) ===")
 	for _, diff := range diffs {
-		splog.Info("\nBranch: %s", style.ColorBranchName(diff.Branch, false))
+		splog.Info("\nBranch: %s", output.Branch(diff.Branch, false))
 		for _, fd := range diff.Differences {
 			splog.Info("  %s: %v → %v", fd.Field, fd.LocalValue, fd.RemoteValue)
 		}

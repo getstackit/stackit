@@ -11,7 +11,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Options contains options for the move command
@@ -294,7 +293,7 @@ func maybeRename(ctx *app.Context, h Handler, opts Options, plan *movePlan) (boo
 				out.Info("Warning: failed to rename branch: %v", err)
 			} else {
 				h.OnRename(source, newName)
-				out.Info("Renamed branch %s to %s.", style.ColorBranchName(source, false), style.ColorBranchName(newName, true))
+				out.Info("Renamed branch %s to %s.", output.Branch(source, false), output.Branch(newName, true))
 				source = newName
 				sourceBranch = eng.GetBranch(source)
 				return true, source, sourceBranch
@@ -312,9 +311,9 @@ func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 
 	out.Info("Moved %s from %s to %s.",
-		style.ColorBranchName(plan.source, true),
-		style.ColorBranchName(plan.oldParentName, false),
-		style.ColorBranchName(plan.onto, false))
+		output.Branch(plan.source, true),
+		output.Branch(plan.oldParentName, false),
+		output.Branch(plan.onto, false))
 
 	branchesToRestack := graph.Range(sourceBranch, engine.StackRange{
 		RecursiveChildren: true,
@@ -370,9 +369,9 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	out.Info("Dry-run: showing what would happen without making changes\n")
 
 	// Print move summary
-	out.Info("Move: %s", style.ColorBranchName(source, true))
-	out.Info("  From: %s", style.ColorBranchName(oldParentName, false))
-	out.Info("  To:   %s", style.ColorBranchName(onto, false))
+	out.Info("Move: %s", output.Branch(source, true))
+	out.Info("  From: %s", output.Branch(oldParentName, false))
+	out.Info("  To:   %s", output.Branch(onto, false))
 
 	// Print commits that would be moved
 	if len(commits) > 0 {
@@ -388,21 +387,21 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	if len(descNames) > 0 {
 		out.Info("\nDescendant branches to restack (%d):", len(descNames))
 		for _, name := range descNames {
-			out.Info("  • %s", style.ColorBranchName(name, false))
+			out.Info("  • %s", output.Branch(name, false))
 		}
 	}
 
 	// Print validation result
 	out.Info("")
 	if validationErr != nil {
-		out.Info("Validation: %s", style.ColorRed("failed"))
+		out.Info("Validation: %s", output.Red("failed"))
 		out.Info("  Error: %s", validationErr.Error())
 		return fmt.Errorf("validation failed: %w", validationErr)
 	}
 
 	if !validation.Success {
-		out.Info("Validation: %s", style.ColorRed("conflicts detected"))
-		out.Info("  Branch: %s", style.ColorBranchName(validation.FailedBranch, false))
+		out.Info("Validation: %s", output.Red("conflicts detected"))
+		out.Info("  Branch: %s", output.Branch(validation.FailedBranch, false))
 		out.Info("  Error: %s", validation.ErrorMessage)
 		if len(validation.ConflictingFiles) > 0 {
 			out.Info("  Conflicting files:")
@@ -413,7 +412,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 		return fmt.Errorf("move would cause conflicts: %s on branch %s", validation.ErrorMessage, validation.FailedBranch)
 	}
 
-	out.Info("Validation: %s", style.ColorGreen("passed"))
+	out.Info("Validation: %s", output.Green("passed"))
 	out.Info("\nRun without --dry-run to execute the move.")
 	return nil
 }

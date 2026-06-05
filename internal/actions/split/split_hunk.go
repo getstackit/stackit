@@ -15,7 +15,6 @@ import (
 	sterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // hunkOptions contains options for hunk-based splitting
@@ -80,12 +79,12 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	defaultCommitMessage := strings.Join(commitMessages, "\n\n")
 
 	// Show instructions
-	splog.Info("Splitting %s into multiple single-commit branches.", style.ColorBranchName(branchToSplit.GetName(), true))
+	splog.Info("Splitting %s into multiple single-commit branches.", output.Branch(branchToSplit.GetName(), true))
 	branch := eng.GetBranch(branchToSplit.GetName())
 	prInfo, _ := branch.GetPrInfo()
 	if prInfo != nil && prInfo.Number() != nil {
 		splog.Info("If any of the new branches keeps the name %s, it will be linked to PR #%d.",
-			style.ColorBranchName(branchToSplit.GetName(), true), *prInfo.Number())
+			output.Branch(branchToSplit.GetName(), true), *prInfo.Number())
 	}
 	splog.Info("")
 	splog.Info("For each branch you'd like to create:")
@@ -499,7 +498,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 		return fmt.Errorf("failed to checkout original branch: %w", err)
 	}
 
-	splog.Info("Created branch %s as parent of %s", style.ColorBranchName(newParentName, true), style.ColorBranchName(branchToSplit.GetName(), true))
+	splog.Info("Created branch %s as parent of %s", output.Branch(newParentName, true), output.Branch(branchToSplit.GetName(), true))
 
 	return nil
 }
@@ -543,10 +542,10 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 	// Show instructions (only for interactive mode)
 	if handler != nil {
-		splog.Info("Splitting %s - extracting changes to a new child branch.", style.ColorBranchName(branchToSplit.GetName(), true))
+		splog.Info("Splitting %s - extracting changes to a new child branch.", output.Branch(branchToSplit.GetName(), true))
 		splog.Info("")
 		splog.Info("Stage the changes you want to EXTRACT to the new child branch.")
-		splog.Info("The remaining changes will stay on %s.", style.ColorBranchName(branchToSplit.GetName(), true))
+		splog.Info("The remaining changes will stay on %s.", output.Branch(branchToSplit.GetName(), true))
 		splog.Info("")
 		handler.OnStep(StepStagingHunks, handlerBase.StatusStarted, "Stage changes to extract")
 	}
@@ -834,7 +833,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		})
 	} else {
 		// Non-interactive mode (patch file): print completion message
-		splog.Info("Created branch %s as child of %s", style.ColorBranchName(childBranchName, true), style.ColorBranchName(branchToSplit.GetName(), true))
+		splog.Info("Created branch %s as child of %s", output.Branch(childBranchName, true), output.Branch(branchToSplit.GetName(), true))
 	}
 
 	return nil

@@ -25,7 +25,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 var pluralizeClient = pluralize.NewClient()
@@ -383,9 +383,9 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 	if result.Reparented {
 		isCurrent := branchName == currentBranchName
 		ctx.Output.Info("Reparented %s from %s to %s (parent was merged/deleted).",
-			style.ColorBranchName(branchName, isCurrent),
-			style.ColorBranchName(result.OldParent, false),
-			style.ColorBranchName(result.NewParent, false))
+			output.Branch(branchName, isCurrent),
+			output.Branch(result.OldParent, false),
+			output.Branch(result.NewParent, false))
 	}
 
 	switch result.Result {
@@ -393,28 +393,28 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 		parentName := branch.GetParentOrTrunk()
 		isCurrent := branchName == currentBranchName
 		ctx.Output.Info("Restacked %s on %s.",
-			style.ColorBranchName(branchName, isCurrent),
-			style.ColorBranchName(parentName, false))
+			output.Branch(branchName, isCurrent),
+			output.Branch(parentName, false))
 		if result.RerereResolvedCount > 0 {
 			printRerereResolved(ctx, result.RerereResolvedCount)
 		}
 	case engine.RestackUnneeded:
 		switch {
 		case result.LockReason.IsLocked():
-			ctx.Output.Info("%s locked: %s", style.ColorBranchName(branchName, branchName == currentBranchName), result.LockReason)
+			ctx.Output.Info("%s locked: %s", output.Branch(branchName, branchName == currentBranchName), result.LockReason)
 		case result.Frozen:
-			ctx.Output.Info("%s frozen", style.ColorBranchName(branchName, branchName == currentBranchName))
+			ctx.Output.Info("%s frozen", output.Branch(branchName, branchName == currentBranchName))
 		case !branch.CanModify():
 			if branch.IsLocked() {
-				ctx.Output.Info("%s locked: %s", style.ColorBranchName(branchName, branchName == currentBranchName), branch.GetLockReason())
+				ctx.Output.Info("%s locked: %s", output.Branch(branchName, branchName == currentBranchName), branch.GetLockReason())
 			} else {
-				ctx.Output.Info("%s frozen", style.ColorBranchName(branchName, branchName == currentBranchName))
+				ctx.Output.Info("%s frozen", output.Branch(branchName, branchName == currentBranchName))
 			}
 		case branch.IsTrunk():
-			ctx.Output.Info("%s up to date", style.ColorBranchName(branchName, false))
+			ctx.Output.Info("%s up to date", output.Branch(branchName, false))
 		default:
 			isCurrent := branchName == currentBranchName
-			ctx.Output.Info("%s up to date", style.ColorBranchName(branchName, isCurrent))
+			ctx.Output.Info("%s up to date", output.Branch(branchName, isCurrent))
 		}
 	}
 }
@@ -618,23 +618,23 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 	reader := ctx.Reader()
 	out := ctx.Output
 
-	msg := style.ColorRed(fmt.Sprintf("Hit conflict restacking %s", branchName))
+	msg := output.Red(fmt.Sprintf("Hit conflict restacking %s", branchName))
 	out.Info("%s", msg)
 	out.Newline()
 
 	// Get unmerged files
 	unmergedFiles, err := reader.GetUnmergedFiles(ctx.Context)
 	if err == nil && len(unmergedFiles) > 0 {
-		out.Info("%s", style.ColorYellow("Conflicted files:"))
+		out.Info("%s", output.Yellow("Conflicted files:"))
 		for _, file := range unmergedFiles {
 			sections, sectionErr := conflictMarkerSectionsForFile(ctx.RepoRoot, file)
 			if sectionErr != nil || len(sections) == 0 {
-				out.Info("  %s", style.ColorRed(file))
+				out.Info("  %s", output.Red(file))
 				continue
 			}
 			for _, section := range sections {
 				out.Info("  %s (lines %d-%d)",
-					style.ColorRed(file),
+					output.Red(file),
 					section.StartLine,
 					section.EndLine,
 				)
@@ -650,7 +650,7 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 		if len(rebaseHead) > 7 {
 			rebaseHeadShort = rebaseHead[:7]
 		}
-		msg := style.ColorYellow(fmt.Sprintf("You are here (resolving %s):", rebaseHeadShort))
+		msg := output.Yellow(fmt.Sprintf("You are here (resolving %s):", rebaseHeadShort))
 		out.Info("%s", msg)
 		// Could show log here if needed
 		out.Newline()
@@ -661,15 +661,15 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 		parentBranch = branch.GetParentOrTrunk()
 	}
 
-	out.Info("%s", style.ColorYellow("To resolve:"))
+	out.Info("%s", output.Yellow("To resolve:"))
 	out.Info("  1. Open each conflicted file and remove conflict markers:")
-	out.Info("     %s  (incoming changes from %s)", style.ColorCyan("<<<<<<< HEAD"), parentBranch)
-	out.Info("     %s", style.ColorCyan("======="))
-	out.Info("     %s  (changes from %s)", style.ColorCyan(">>>>>>>"), branchName)
-	out.Info("  2. Stage resolved files: %s", style.ColorCyan("stackit add <file>"))
-	out.Info("  3. Continue the previous Stackit command: %s", style.ColorCyan("stackit continue"))
-	out.Info("  4. Abort and restore the pre-command snapshot: %s", style.ColorCyan("stackit abort"))
-	out.Info("Tip: %s stages all resolved files before continuing.", style.ColorCyan("stackit continue --all"))
+	out.Info("     %s  (incoming changes from %s)", output.Cyan("<<<<<<< HEAD"), parentBranch)
+	out.Info("     %s", output.Cyan("======="))
+	out.Info("     %s  (changes from %s)", output.Cyan(">>>>>>>"), branchName)
+	out.Info("  2. Stage resolved files: %s", output.Cyan("stackit add <file>"))
+	out.Info("  3. Continue the previous Stackit command: %s", output.Cyan("stackit continue"))
+	out.Info("  4. Abort and restore the pre-command snapshot: %s", output.Cyan("stackit abort"))
+	out.Info("Tip: %s stages all resolved files before continuing.", output.Cyan("stackit continue --all"))
 
 	return nil
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // CheckoutOptions contains options for the checkout command
@@ -81,7 +80,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 			if currentBranch != nil {
 				currentBranchName = currentBranch.GetName()
 			}
-			out.Info("No branch selected; staying on %s.", style.ColorBranchName(currentBranchName, true))
+			out.Info("No branch selected; staying on %s.", output.Branch(currentBranchName, true))
 			return CheckoutResult{}, nil
 		}
 	}
@@ -89,7 +88,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 	currentBranch := eng.CurrentBranch()
 	if currentBranch != nil && branchName == currentBranch.GetName() {
 		if !ctx.Quiet {
-			out.Info("Already on %s.", style.ColorBranchName(branchName, true))
+			out.Info("Already on %s.", output.Branch(branchName, true))
 		}
 		return CheckoutResult{}, nil
 	}
@@ -132,7 +131,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 	}
 	ctx.Logger.Info("branch changed from=%v to=%v", previousBranch, branchName)
 
-	out.Info("Checked out %s.", style.ColorBranchName(branchName, false))
+	out.Info("Checked out %s.", output.Branch(branchName, false))
 
 	// Skip branch info in quiet mode for faster checkout
 	if !ctx.Quiet {
@@ -170,8 +169,8 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 	if !statuses.IsUpToDate(branch) {
 		parent := branch.GetParentOrTrunk()
 		ctx.Output.Info("This branch has fallen behind %s - you may want to %s.",
-			style.ColorBranchName(parent, false),
-			style.ColorCyan("stackit upstack restack"))
+			output.Branch(parent, false),
+			output.Cyan("stackit upstack restack"))
 		return
 	}
 
@@ -180,9 +179,9 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 		if !statuses.IsUpToDate(ancestor) {
 			parent := ancestor.GetParentOrTrunk()
 			ctx.Output.Info("The downstack branch %s has fallen behind %s - you may want to %s.",
-				style.ColorBranchName(ancestor.GetName(), false),
-				style.ColorBranchName(parent, false),
-				style.ColorCyan("stackit stack restack"))
+				output.Branch(ancestor.GetName(), false),
+				output.Branch(parent, false),
+				output.Cyan("stackit stack restack"))
 			return
 		}
 	}
@@ -218,7 +217,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 
 		if switchTarget != "" {
 			if targetStack != "" {
-				ctx.Output.Info("Switching to worktree for stack %s.", style.ColorBranchName(targetStack, false))
+				ctx.Output.Info("Switching to worktree for stack %s.", output.Branch(targetStack, false))
 			} else {
 				ctx.Output.Info("Switching to main repository.")
 			}
@@ -240,12 +239,12 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 
 	if _, err := os.Stat(targetWorktree.Path); os.IsNotExist(err) {
 		ctx.Output.Warn("Worktree for stack %s is registered but path does not exist: %s",
-			style.ColorBranchName(targetStackRoot, false), targetWorktree.Path)
+			output.Branch(targetStackRoot, false), targetWorktree.Path)
 		ctx.Output.Tip("stackit worktree remove %s", targetStackRoot)
 		return "", nil, nil
 	}
 
-	ctx.Output.Info("Switching to worktree for stack %s.", style.ColorBranchName(targetStackRoot, false))
+	ctx.Output.Info("Switching to worktree for stack %s.", output.Branch(targetStackRoot, false))
 	fallbackTips := []string{
 		fmt.Sprintf("cd %s && stackit co %s", targetWorktree.Path, branchName),
 		"For automatic worktree switching, enable shell integration: eval \"$(stackit shell zsh)\"",
@@ -273,7 +272,7 @@ func resolveBranchName(eng engine.Engine, out output.Output, input string) (stri
 	if len(scopeBranches) > 0 {
 		sorted := eng.SortBranchesTopologically(scopeBranches)
 		topmost := sorted[len(sorted)-1].GetName()
-		out.Info("Matched scope %s.", style.ColorDim(input))
+		out.Info("Matched scope %s.", output.Dim(input))
 		return topmost, nil
 	}
 
@@ -281,7 +280,7 @@ func resolveBranchName(eng engine.Engine, out output.Output, input string) (stri
 	names := branchNames.Names()
 	matches := fuzzy.Find(input, names)
 	if len(matches) == 1 {
-		out.Info("Fuzzy matched to %s.", style.ColorBranchName(matches[0].Str, false))
+		out.Info("Fuzzy matched to %s.", output.Branch(matches[0].Str, false))
 		return matches[0].Str, nil
 	} else if len(matches) > 1 {
 		// Multiple matches - return error with suggestions

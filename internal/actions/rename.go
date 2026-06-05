@@ -5,8 +5,8 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/tui/style"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -82,7 +82,7 @@ func RenameAction(ctx *app.Context, opts RenameOptions) error {
 		return fmt.Errorf("failed to rename branch: %w", err)
 	}
 
-	out.Info("Renamed %s to %s.", style.ColorBranchName(currentBranch, false), style.ColorBranchName(newName, true))
+	out.Info("Renamed %s to %s.", output.Branch(currentBranch, false), output.Branch(newName, true))
 
 	return nil
 }

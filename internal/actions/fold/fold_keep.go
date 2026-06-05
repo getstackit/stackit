@@ -8,7 +8,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentBranch engine.Branch, eng engine.Engine, splog output.Output, _ Options) error {
@@ -67,9 +66,9 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 	}
 
 	splog.Info("Folded %s into %s (kept %s).",
-		style.ColorBranchName(parentBranch.GetName(), true),
-		style.ColorBranchName(currentBranch.GetName(), false),
-		style.ColorBranchName(currentBranch.GetName(), false))
+		output.Branch(parentBranch.GetName(), true),
+		output.Branch(currentBranch.GetName(), false),
+		output.Branch(currentBranch.GetName(), false))
 
 	// Rebuild graph with fresh engine state after deletion
 	graph = eng.Graph(engine.SortStrategyAlphabetical)

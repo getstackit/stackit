@@ -43,7 +43,7 @@ func TestGitOperationChain(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3().Checkout("b")
 
-		chain := validation.GitOperationChain(s.Context.Context, s.Engine, s.Context.Git(), "fold")
+		chain := validation.GitOperationChain(s.Context.Context, s.Engine, "fold")
 		err := chain.Validate()
 		require.NoError(t, err)
 	})
@@ -53,7 +53,7 @@ func TestGitOperationChain(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3().Checkout("main")
 
-		chain := validation.GitOperationChain(s.Context.Context, s.Engine, s.Context.Git(), "fold")
+		chain := validation.GitOperationChain(s.Context.Context, s.Engine, "fold")
 		err := chain.Validate()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "trunk")
@@ -64,7 +64,7 @@ func TestGitOperationChain(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3().Checkout("b").WithUncommittedChange("dirty")
 
-		chain := validation.GitOperationChain(s.Context.Context, s.Engine, s.Context.Git(), "fold")
+		chain := validation.GitOperationChain(s.Context.Context, s.Engine, "fold")
 		err := chain.Validate()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "uncommitted")
@@ -79,7 +79,7 @@ func TestAbsorbChain(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3().Checkout("b")
 
-		chain := validation.AbsorbChain(s.Context.Context, s.Engine, s.Context.Git(), "absorb into")
+		chain := validation.AbsorbChain(s.Context.Context, s.Engine, "absorb into")
 		err := chain.Validate()
 		require.NoError(t, err)
 	})
@@ -89,7 +89,7 @@ func TestAbsorbChain(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3().Checkout("main")
 
-		chain := validation.AbsorbChain(s.Context.Context, s.Engine, s.Context.Git(), "absorb into")
+		chain := validation.AbsorbChain(s.Context.Context, s.Engine, "absorb into")
 		err := chain.Validate()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "trunk")

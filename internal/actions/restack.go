@@ -159,7 +159,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		interactiveRererePrompt = false
 	}
 	pauser, _ := handler.(rerere.Pauser)
-	if _, err := rerere.EnsureEnabled(ctx.Context, ctx.Git(), interactiveRererePrompt, pauser); err != nil {
+	if _, err := rerere.EnsureEnabled(ctx.Context, ctx.Engine, interactiveRererePrompt, pauser); err != nil {
 		out.Warn("Failed to enable git rerere: %v", err)
 	}
 

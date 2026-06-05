@@ -92,7 +92,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 			Update: opts.Update,
 			Patch:  opts.Patch,
 		}
-		if err := ctx.Git().StageChanges(ctx.Context, stagingOpts); err != nil {
+		if err := ctx.Engine.StageChanges(ctx.Context, stagingOpts); err != nil {
 			h.OnStep(StepStaging, handler.StatusFailed, err.Error())
 			return Result{}, err
 		}

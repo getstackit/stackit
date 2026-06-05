@@ -96,7 +96,7 @@ func (c *ConsolidateMergeExecutor) Execute(ctx context.Context, opts ExecuteOpti
 
 		// Store consolidation info for footer updates
 		c.consolidationPR = pr
-		if userName, err := c.ctx.Git().GetUserName(ctx); err == nil && userName != "" {
+		if userName, err := c.ctx.Engine.GetUserName(ctx); err == nil && userName != "" {
 			c.consolidationUser = userName
 		}
 
@@ -110,7 +110,7 @@ func (c *ConsolidateMergeExecutor) Execute(ctx context.Context, opts ExecuteOpti
 			return nil, fmt.Errorf("failed to get merge method: %w", err)
 		}
 		metadata := c.buildStackMetadata()
-		if err := github.EnableAutoMerge(ctx, c.engine.Git(), pr.NodeID, github.EnableAutoMergeOptions{
+		if err := github.EnableAutoMerge(ctx, c.engine.Git(), pr.NodeID, github.EnableAutoMergeOptions{ //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 			MergeMethod: mergeMethod,
 			CommitBody:  metadata.ToTrailers(),
 		}); err != nil {

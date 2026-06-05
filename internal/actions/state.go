@@ -96,18 +96,17 @@ func BuildState(ctx *app.Context, _ StateOptions) StateResult {
 	}
 
 	// In-progress operation + conflicts.
-	g := eng.Git()
 	op := OperationStatus{Kind: "none", ConflictedFiles: []string{}}
 	switch {
-	case g.IsRebaseInProgress(ctx.Context):
+	case eng.IsRebaseInProgress(ctx.Context):
 		op.Kind = "rebase"
 		op.InProgress = true
-	case g.IsMergeInProgress(ctx.Context):
+	case eng.IsMergeInProgress(ctx.Context):
 		op.Kind = "merge"
 		op.InProgress = true
 	}
 	if op.InProgress {
-		files, err := g.GetUnmergedFiles(ctx.Context)
+		files, err := eng.GetUnmergedFiles(ctx.Context)
 		if err != nil {
 			ctx.Output.Debug("state: failed to list unmerged files: %v", err)
 		} else {

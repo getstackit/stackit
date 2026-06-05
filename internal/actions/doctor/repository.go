@@ -11,7 +11,7 @@ import (
 func checkRepository(ctx *app.Context, handler Handler, warnings int, errors int, trunk string) (int, int) {
 	// Check if we're in a git repository
 	if ctx.RepoRoot == "" {
-		if !ctx.Engine.Git().IsInsideRepo() {
+		if !ctx.Engine.IsInsideRepo() {
 			errors++
 			handler.OnCheck("git_repo", CheckError, "not in a git repository")
 			return warnings, errors

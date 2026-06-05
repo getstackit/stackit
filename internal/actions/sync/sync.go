@@ -66,7 +66,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	managedWorktrees, err := eng.ListManagedWorktrees()
 	if err == nil {
 		for _, wt := range managedWorktrees {
-			if hasChanges, _ := eng.Git().WorktreeHasUncommittedChanges(gctx, wt.Path); hasChanges {
+			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(gctx, wt.Path); hasChanges {
 				if dirtyAnchors == nil {
 					dirtyAnchors = make(map[string]bool)
 				}
@@ -260,7 +260,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	pauser, _ := handler.(rerere.Pauser)
-	if _, err := rerere.EnsureEnabled(gctx, ctx.Git(), ctx.Interactive && !ctx.Quiet && handler.IsInteractive(), pauser); err != nil {
+	if _, err := rerere.EnsureEnabled(gctx, ctx.Engine, ctx.Interactive && !ctx.Quiet && handler.IsInteractive(), pauser); err != nil {
 		out.Warn("Failed to enable git rerere: %v", err)
 	}
 

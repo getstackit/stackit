@@ -19,6 +19,10 @@ type StackNavigator interface {
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	SortBranchesTopologically(branches Branches) Branches
 	FindBranchForCommit(commitSHA string) (string, error)
+	// GetAllBranchNames returns the names of all local branches, including ones
+	// not tracked by stackit. Used by diagnostics that must see untracked or
+	// orphaned branches.
+	GetAllBranchNames(ctx context.Context) ([]string, error)
 	// FindNearestNonExcludedAncestor walks the parent chain from startParent
 	// and returns the first ancestor for which isExcluded returns false. Falls
 	// back to trunk if every ancestor up the chain is excluded.
@@ -28,6 +32,8 @@ type StackNavigator interface {
 	GetScope(branch Branch) Scope
 	GetRemote() string
 	GetRepoInfo(ctx context.Context) (string, string, error)
+	GetRepoRoot() string
+	GetUserName(ctx context.Context) (string, error)
 	IsInsideRepo() bool
 }
 
@@ -102,6 +108,7 @@ type WorkingTree interface {
 	HasStagedChanges(ctx context.Context) (bool, error)
 	HasUnstagedChanges(ctx context.Context) (bool, error)
 	HasUntrackedFiles(ctx context.Context) (bool, error)
+	GetUntrackedFiles(ctx context.Context) ([]string, error)
 	// GetWorkingTreeStatus returns all three working-tree flags in one git call.
 	// Prefer this over calling Has* individually when multiple flags are needed.
 	GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error)
@@ -113,6 +120,7 @@ type WorkingTree interface {
 	ParseStagedHunks(ctx context.Context) ([]git.Hunk, error)
 	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
 	IsRebaseInProgress(ctx context.Context) bool
+	IsMergeInProgress(ctx context.Context) bool
 	GetRebaseHead() (string, error)
 	HasUncommittedChanges(ctx context.Context) bool
 	CheckoutPaths(ctx context.Context, branch string, pathspecs []string) error
@@ -201,10 +209,13 @@ type BranchMutations interface {
 	CreateBranch(ctx context.Context, branchName string, startPoint string) error
 	ResetHard(ctx context.Context, revision string) error
 	ResetMerge(ctx context.Context, revision string) error
+	SoftReset(ctx context.Context, revision string) error
 	Merge(ctx context.Context, revision string, opts MergeOptions) error
 	MergeMultiple(ctx context.Context, branches []string, opts MergeOptions) error
 	Fetch(ctx context.Context, remote string, branch string) error
 	InteractiveRebase(ctx context.Context, onto string) error
+	RebaseAbort(ctx context.Context) error
+	MergeAbort(ctx context.Context) error
 }
 
 // CommitOperations handles staging and committing
@@ -214,6 +225,7 @@ type CommitOperations interface {
 	StageAll(ctx context.Context) error
 	StagePatch(ctx context.Context) error
 	StageHunks(ctx context.Context, hunks []git.Hunk) error
+	StageChanges(ctx context.Context, opts git.StagingOptions) error
 	StashPush(ctx context.Context, message string) (string, error)
 	StashPushStaged(ctx context.Context, message string) (string, error)
 	StashPop(ctx context.Context) error
@@ -224,6 +236,8 @@ type WorktreeOperations interface {
 	AddWorktree(ctx context.Context, path string, branch string, detach bool) error
 	RemoveWorktree(ctx context.Context, path string) error
 	ForceRemoveWorktree(ctx context.Context, path string) error
+	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
+	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
 	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string) (path string, cleanup func(), err error)
 	// CreateTemporaryWorktreeSkipPrune is like CreateTemporaryWorktree but skips the automatic
 	// PruneWorktrees() call. Use this when creating multiple worktrees in parallel after
@@ -274,6 +288,36 @@ type BranchWriter interface {
 	CommitOperations
 	WorktreeOperations
 	Initializer
+}
+
+// MetadataInspector exposes raw, below-abstraction reads of the stackit branch
+// metadata-ref store. It is the low-level escape valve for diagnostic and
+// repair commands (doctor, debug) that must observe metadata the engine's
+// tracked-branch view cannot see — orphaned, corrupted, or untracked-branch
+// refs. Prefer the higher-level branch accessors for normal flows; reach for
+// this only when raw ref access is genuinely required.
+type MetadataInspector interface {
+	// ListMetadataRefs returns a map of branch name to metadata-ref SHA for
+	// every stackit metadata ref, including refs whose branches no longer exist.
+	ListMetadataRefs() (map[string]string, error)
+	// ReadMetadataRaw reads a single branch's metadata directly from its ref,
+	// bypassing the engine's tracked-branch cache.
+	ReadMetadataRaw(branchName string) (*git.Meta, error)
+	// BatchReadMetadataRaw reads raw metadata for many branches in one pass,
+	// returning per-branch errors so callers can detect corrupted refs.
+	BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error)
+	// DeleteMetadataRef deletes a single branch's metadata ref directly, without
+	// the transactional rebuild performed by DeleteMetadata. Intended for
+	// pruning orphaned refs whose branches no longer exist.
+	DeleteMetadataRef(ctx context.Context, branchName string) error
+}
+
+// GitConfig provides access to git configuration values. Exposed so helpers
+// that only need config access (e.g. rerere setup) can take the engine instead
+// of the raw git runner.
+type GitConfig interface {
+	GetConfig(key string) (string, error)
+	SetConfig(key, value string) error
 }
 
 // Absorber applies staged hunks to appropriate commits

@@ -203,7 +203,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 			branchNames = append(branchNames, stack.AllBranches...)
 		}
 
-		userName, _ := eng.Git().GetUserName(ctx.Context)
+		userName, _ := eng.GetUserName(ctx.Context)
 		cleaner := NewPRCleaner(ctx, eng, PRCleanupConfig{
 			Source:                CleanupSourceMultiStack,
 			ConsolidationPRNumber: pr.Number,

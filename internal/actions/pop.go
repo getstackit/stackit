@@ -23,8 +23,8 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 		validation.MustBeOnBranch(eng),
 		validation.CurrentBranchMustNotBeTrunk(eng, "pop"),
 		validation.CurrentBranchMustBeTracked(eng),
-		validation.MustNotHaveRebaseInProgress(ctx.Context, ctx.Git()),
-		validation.MustNotHaveUncommittedChanges(ctx.Context, ctx.Git()),
+		validation.MustNotHaveRebaseInProgress(ctx.Context, eng),
+		validation.MustNotHaveUncommittedChanges(ctx.Context, eng),
 	}).Validate(); err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 
 	// Soft reset to parent - this uncommits the current branch's changes
 	// and stages them, keeping the working tree unchanged
-	if err := eng.Git().SoftReset(ctx.Context, parentRev); err != nil {
+	if err := eng.SoftReset(ctx.Context, parentRev); err != nil {
 		return fmt.Errorf("failed to reset to parent: %w", err)
 	}
 
@@ -58,7 +58,7 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 	}
 
 	// Check how many changes are staged
-	hasStaged, err := eng.Git().HasStagedChanges(ctx.Context)
+	hasStaged, err := eng.HasStagedChanges(ctx.Context)
 	if err == nil && hasStaged {
 		out.Info("Popped branch %s. Changes are now staged on %s.",
 			style.ColorBranchName(currentBranch, false),

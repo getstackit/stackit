@@ -110,7 +110,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	out := ctx.Output
 	gctx := ctx.Context
 
-	if err := validation.MustNotHaveUncommittedChanges(gctx, ctx.Git()).Validate(); err != nil {
+	if err := validation.MustNotHaveUncommittedChanges(gctx, eng).Validate(); err != nil {
 		return err
 	}
 

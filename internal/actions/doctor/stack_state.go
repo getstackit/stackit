@@ -11,7 +11,7 @@ import (
 // checkStackState performs stack state and metadata integrity checks
 func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, warnings int, errors int, fix bool) (int, int) {
 	// Get all branches
-	allBranches, err := eng.Git().GetAllBranchNames(ctx)
+	allBranches, err := eng.GetAllBranchNames(ctx)
 	if err != nil {
 		errors++
 		handler.OnCheck("branch_list", CheckError, fmt.Sprintf("failed to get branch names: %v", err))
@@ -19,7 +19,7 @@ func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, wa
 	}
 
 	// Get all metadata refs
-	metadataRefs, err := eng.Git().ListMetadata()
+	metadataRefs, err := eng.ListMetadataRefs()
 	if err != nil {
 		errors++
 		handler.OnCheck("metadata_list", CheckError, fmt.Sprintf("failed to get metadata refs: %v", err))
@@ -38,7 +38,7 @@ func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, wa
 		if !branchSet[branchName] {
 			orphanedCount++
 			if fix {
-				if err := eng.Git().DeleteMetadata(ctx, branchName); err != nil {
+				if err := eng.DeleteMetadataRef(ctx, branchName); err != nil {
 					warnings++
 					handler.OnCheck("orphaned_metadata", CheckWarning, fmt.Sprintf("orphaned metadata for '%s' (fix failed: %v)", branchName, err))
 				} else {
@@ -70,7 +70,7 @@ func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, wa
 	for branchName := range metadataRefs {
 		metadataRefNames = append(metadataRefNames, branchName)
 	}
-	allMeta, allMetaErrs := eng.Git().BatchReadMetadata(metadataRefNames)
+	allMeta, allMetaErrs := eng.BatchReadMetadataRaw(metadataRefNames)
 
 	corruptedCount := 0
 	for _, branchName := range metadataRefNames {

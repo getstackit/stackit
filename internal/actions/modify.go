@@ -49,7 +49,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 	}
 
 	// Check if rebase is in progress (only for non-interactive mode)
-	if err := validation.MustNotHaveRebaseInProgress(gctx, ctx.Git()).Validate(); err != nil {
+	if err := validation.MustNotHaveRebaseInProgress(gctx, eng).Validate(); err != nil {
 		return err
 	}
 
@@ -72,7 +72,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 		Update: opts.Update,
 		Patch:  opts.Patch,
 	}
-	if err := ctx.Git().StageChanges(gctx, stagingOpts); err != nil {
+	if err := ctx.Engine.StageChanges(gctx, stagingOpts); err != nil {
 		return err
 	}
 

@@ -1,6 +1,10 @@
 package engine
 
-import "context"
+import (
+	"context"
+
+	"github.com/getstackit/stackit/internal/git"
+)
 
 // Metadata transport methods. Engine owns the metadata-ref namespace
 // (refs/stackit/metadata/* and refs/stackit/stacks/*) and is the single point
@@ -35,6 +39,19 @@ func (e *engineImpl) PushMetadataForBranches(ctx context.Context, branchNames []
 	return e.git.PushMetadataRefs(ctx, branchNames)
 }
 
+// DeleteRemoteMetadataForBranches pushes ref-deletions for the given branches'
+// metadata refs to origin. Best-effort: callers typically treat failure as
+// non-fatal because the remote refs may already be absent.
+func (e *engineImpl) DeleteRemoteMetadataForBranches(ctx context.Context, branchNames []string) error {
+	return e.git.BatchDeleteRemoteMetadataRefs(ctx, branchNames)
+}
+
+// PushStackMetadata pushes the stack-metadata refs for the given stack IDs to
+// origin. A no-op when the list is empty.
+func (e *engineImpl) PushStackMetadata(ctx context.Context, stackIDs []string) error {
+	return e.git.PushStackMetaRefs(ctx, stackIDs)
+}
+
 // ConfigureStackMetadataSync adds the stack-metadata refspec to the configured
 // remote so subsequent git fetches pick up stack-ref changes.
 func (e *engineImpl) ConfigureStackMetadataSync(_ context.Context) error {
@@ -57,6 +74,17 @@ func (e *engineImpl) ListStackMetadata() (map[string]string, error) {
 // per-ref fallback in the GC path when the batched ref-update fails.
 func (e *engineImpl) DeleteStackMetadata(ctx context.Context, stackID string) error {
 	return e.git.DeleteStackMeta(ctx, stackID)
+}
+
+// DeleteStackMetadataBatch removes the local stack-metadata refs for the given
+// stack IDs in a single update-ref --stdin batch. The engine owns the
+// stack-ref name format, so callers pass stack IDs rather than raw ref names.
+func (e *engineImpl) DeleteStackMetadataBatch(ctx context.Context, stackIDs []string) error {
+	refs := make([]string, 0, len(stackIDs))
+	for _, stackID := range stackIDs {
+		refs = append(refs, git.StackMetaRefName(stackID))
+	}
+	return e.git.DeleteRefsBatch(ctx, refs)
 }
 
 // DeleteRemoteStackMetadata pushes ref-deletions for the given stack IDs to

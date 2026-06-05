@@ -128,7 +128,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	currentBranch := eng.CurrentBranch()
 	allBranches := eng.AllBranches()
 
-	metadataRefs, err := eng.Git().ListMetadata()
+	metadataRefs, err := eng.ListMetadataRefs()
 	if err != nil {
 		metadataRefs = make(map[string]string)
 	}
@@ -137,7 +137,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	for i, b := range allBranches {
 		branchNames[i] = b.GetName()
 	}
-	allMeta, _ := eng.Git().BatchReadMetadata(branchNames)
+	allMeta, _ := eng.BatchReadMetadataRaw(branchNames)
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 	branchInfos := make([]BranchInfo, 0, len(allBranches))

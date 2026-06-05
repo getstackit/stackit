@@ -58,11 +58,12 @@ func (p BranchPattern) WithDefault() BranchPattern {
 	return p
 }
 
-// GitContext is a minimal interface that provides a git runner and context.
-// This matches app.Context but avoids a circular dependency.
+// GitContext is a minimal interface that provides the git user name and a
+// context. This matches app.Context but avoids a circular dependency and keeps
+// branch-name generation from depending on the full git runner.
 type GitContext interface {
 	context.Context
-	Git() git.Runner
+	GetUserName(ctx context.Context) (string, error)
 }
 
 // GetBranchName generates a branch name from the pattern using the provided commit message and optional scope.
@@ -81,7 +82,7 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 	// Define all available placeholder replacement functions
 	placeholderFuncs := map[string]func() string{
 		"{username}": func() string {
-			username, err := ctx.Git().GetUserName(ctx)
+			username, err := ctx.GetUserName(ctx)
 			if err != nil {
 				// If we can't get username, use empty string (will be sanitized)
 				return ""

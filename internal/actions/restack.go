@@ -11,7 +11,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/rerere"
-	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -178,7 +177,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	}
 
 	_, jsonOutput := handler.(*handlers.JSONRestackHandler)
-	interactiveRererePrompt := ctx.Interactive && !ctx.Quiet && tui.IsTTY() && !jsonOutput
+	interactiveRererePrompt := ctx.Interactive && !ctx.Quiet && utils.IsTTY() && !jsonOutput
 	pauser, _ := handler.(rerere.Pauser)
 	if _, err := rerere.EnsureEnabled(ctx.Context, ctx.Engine, interactiveRererePrompt, pauser); err != nil {
 		out.Warn("Failed to enable git rerere: %v", err)

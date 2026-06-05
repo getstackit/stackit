@@ -79,6 +79,13 @@ func (c *Context) Git() git.Runner {
 	return c.Engine.Git()
 }
 
+// GetUserName returns the configured git user name. Forwards to the engine so
+// callers that only need the username (e.g. branch-name patterns) can depend on
+// this instead of the full git runner.
+func (c *Context) GetUserName(ctx context.Context) (string, error) {
+	return c.Engine.GetUserName(ctx)
+}
+
 // GitHub returns the GitHub client, lazily initializing it on first access.
 // If GitHubClient was set directly (e.g. in tests), it is returned immediately.
 // Returns nil if initialization failed; use GitHubError() to get the reason.

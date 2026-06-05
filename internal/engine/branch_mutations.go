@@ -420,7 +420,7 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 		}
 		childMeta = childMeta.WithParentBranchName(&newName)
 		if err := e.writeMetadata(child, childMeta); err != nil {
-			continue
+			return fmt.Errorf("update parent metadata for child %s: %w", child, err)
 		}
 	}
 

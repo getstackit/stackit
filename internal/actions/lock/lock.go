@@ -102,8 +102,11 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 		}
 	}
 
-	// Push metadata changes to remote and update PRs to trigger CI re-evaluation
-	if err := actions.PushMetadataAndSyncPRs(ctx, affectedBranches); err != nil {
+	// Mark branches for PR body update; sync will handle the GitHub API calls
+	if err := eng.MarkBranchesForPRBodyUpdate(ctx.Context, affectedBranches); err != nil {
+		out.Debug("Failed to mark branches for PR body update: %v", err)
+	}
+	if err := actions.PushMetadataOnly(ctx, eng, affectedBranches); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}
 
@@ -185,8 +188,11 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 		}
 	}
 
-	// Push metadata changes to remote and update PRs to trigger CI re-evaluation
-	if err := actions.PushMetadataAndSyncPRs(ctx, affectedBranches); err != nil {
+	// Mark branches for PR body update; sync will handle the GitHub API calls
+	if err := eng.MarkBranchesForPRBodyUpdate(ctx.Context, affectedBranches); err != nil {
+		out.Debug("Failed to mark branches for PR body update: %v", err)
+	}
+	if err := actions.PushMetadataOnly(ctx, eng, affectedBranches); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}
 

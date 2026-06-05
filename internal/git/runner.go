@@ -328,69 +328,6 @@ type MergeOptions struct {
 	Message string
 }
 
-// Runner defines the interface for git operations used by the engine.
-// This allows the engine to be used with both real git and mock implementations.
-//
-// Runner is a composite interface that embeds smaller, focused interfaces for better
-// modularity and testability. Each embedded interface represents a logical grouping
-// of related git operations.
-type Runner interface {
-	// Repository access and configuration
-	RepositoryReader
-	RepositoryWriter
-
-	// Remote operations
-	RemoteOperations
-
-	// Branch operations
-	BranchReader
-	BranchWriter
-
-	// Commit and revision access
-	CommitReader
-
-	// Diff and comparison
-	DiffOperations
-
-	// Staging area
-	StagingOperations
-
-	// Commit creation
-	CommitWriter
-
-	// Advanced git operations
-	RebaseOperations
-	MergeOperations
-	CherryPickOperations
-	StashOperations
-	ResetOperations
-	PathOperations
-	PatchOperations
-
-	// Worktree management
-	WorktreeOperations
-	WorktreeRegistryOperations
-
-	// Repository status
-	StatusOperations
-
-	// Low-level operations
-	RefOperations
-	ObjectOperations
-	MetadataOperations
-	StackMetadataOperations
-
-	// Raw command execution
-	RunGitCommandWithContext(ctx context.Context, args ...string) (string, error)
-	RunGitCommandRawWithContext(ctx context.Context, args ...string) (string, error)
-	RunGitCommandWithEnv(ctx context.Context, env []string, args ...string) (string, error)
-	RunGitCommandInteractive(args ...string) error
-	RunGHCommandWithContext(ctx context.Context, args ...string) (string, error)
-
-	// Logging
-	SetLogger(logger DebugLogger)
-}
-
 // NewRunner returns a standard implementation of Runner that uses the current
 // working directory as its repository root.
 func NewRunner(logger DebugLogger) Runner {

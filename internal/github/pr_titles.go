@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-
-	"github.com/getstackit/stackit/internal/git"
 )
 
 // BatchGetPRTitlesGraphQL fetches PR titles for multiple PR numbers using a single GraphQL query.
-func BatchGetPRTitlesGraphQL(ctx context.Context, runner git.Runner, owner, repo string, prNumbers []int) (map[int]string, error) {
+func BatchGetPRTitlesGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, prNumbers []int) (map[int]string, error) {
 	if len(prNumbers) == 0 {
 		return make(map[int]string), nil
 	}

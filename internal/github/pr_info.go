@@ -11,12 +11,11 @@ import (
 	"github.com/google/go-github/v67/github"
 	"golang.org/x/oauth2"
 
-	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
 // SyncPrInfo syncs PR information for branches from GitHub
-func SyncPrInfo(ctx context.Context, runner git.Runner, branchNames []string, repoOwner, repoName string, onUpdate func(string, *PullRequestInfo)) error {
+func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []string, repoOwner, repoName string, onUpdate func(string, *PullRequestInfo)) error {
 	// Get GitHub token
 	token, err := getGitHubToken(runner)
 	if err != nil {
@@ -122,7 +121,7 @@ func createGitHubClient(ctx context.Context, hostname, token string) (*github.Cl
 }
 
 // getGitHubToken gets GitHub token from environment or gh CLI
-func getGitHubToken(runner git.Runner) (string, error) {
+func getGitHubToken(runner GitCommandRunner) (string, error) {
 	// Try environment variable first
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		// Trim whitespace to handle cases where secrets might have leading/trailing spaces
@@ -229,7 +228,7 @@ func ParseGitHubRemoteURL(remoteURL string) (*RepoInfo, error) {
 }
 
 // getRepoInfoWithHostname gets repository hostname, owner, and name from git remote
-func getRepoInfoWithHostname(_ context.Context, runner git.Runner) (*RepoInfo, error) {
+func getRepoInfoWithHostname(_ context.Context, runner GitCommandRunner) (*RepoInfo, error) {
 	// Get remote URL
 	remoteURL, err := runner.GetConfig("remote.origin.url")
 	if err != nil {

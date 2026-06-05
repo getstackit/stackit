@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/getstackit/stackit/internal/git"
 )
 
 // Status check constants
@@ -63,7 +61,7 @@ func (s *CheckStatus) IsReady() bool {
 
 // BatchGetPRChecksStatusGraphQL returns the check status for multiple branches using a single GraphQL query.
 // This function fetches both CI check status and PR review decisions in a single request for efficiency.
-func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner git.Runner, owner, repo string, branchNames []string) (map[string]*CheckStatus, error) {
+func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, branchNames []string) (map[string]*CheckStatus, error) {
 	if len(branchNames) == 0 {
 		return make(map[string]*CheckStatus), nil
 	}

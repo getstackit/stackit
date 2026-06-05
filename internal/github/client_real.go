@@ -7,20 +7,18 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v67/github"
-
-	"github.com/getstackit/stackit/internal/git"
 )
 
 // StackitGitHubClient implements Client using the real GitHub API
 type StackitGitHubClient struct {
 	client *github.Client
-	runner git.Runner
+	runner GitCommandRunner
 	owner  string
 	repo   string
 }
 
 // NewGitHubClient creates a new RealGitHubClient
-func NewGitHubClient(ctx context.Context, runner git.Runner) (*StackitGitHubClient, error) {
+func NewGitHubClient(ctx context.Context, runner GitCommandRunner) (*StackitGitHubClient, error) {
 	token, err := getGitHubToken(runner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get GitHub token: %w", err)

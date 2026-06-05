@@ -14,8 +14,6 @@ import (
 
 	"github.com/google/go-github/v67/github"
 	"golang.org/x/oauth2"
-
-	"github.com/getstackit/stackit/internal/git"
 )
 
 var (
@@ -108,7 +106,7 @@ func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo s
 
 // UpdatePullRequest updates an existing pull request
 // Returns warnings (non-fatal issues like failed label/assignee additions) and error
-func UpdatePullRequest(ctx context.Context, client *github.Client, runner git.Runner, owner, repo string, prNumber int, opts UpdatePROptions) ([]string, error) {
+func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCommandRunner, owner, repo string, prNumber int, opts UpdatePROptions) ([]string, error) {
 	var warnings []string
 
 	// Handle draft status changes separately using GraphQL API, as the REST API
@@ -239,7 +237,7 @@ func GetPullRequestByBranch(ctx context.Context, client *github.Client, owner, r
 }
 
 // GetGitHubClient creates a GitHub client with authentication
-func GetGitHubClient(ctx context.Context, runner git.Runner) (*github.Client, string, string, error) {
+func GetGitHubClient(ctx context.Context, runner GitCommandRunner) (*github.Client, string, string, error) {
 	token, err := getGitHubToken(runner)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to get GitHub token: %w", err)
@@ -313,7 +311,7 @@ func MergePullRequest(ctx context.Context, client *github.Client, owner, repo, b
 }
 
 // executeGraphQLQuery executes a GraphQL query and returns the response body
-func executeGraphQLQuery(ctx context.Context, runner git.Runner, query string, variables map[string]any) ([]byte, error) {
+func executeGraphQLQuery(ctx context.Context, runner GitCommandRunner, query string, variables map[string]any) ([]byte, error) {
 	// Get GitHub token
 	token, err := getGitHubToken(runner)
 	if err != nil {
@@ -411,7 +409,7 @@ type EnableAutoMergeOptions struct {
 
 // EnableAutoMerge enables GitHub's auto-merge feature on a PR.
 // This requires the repository to have auto-merge enabled in settings.
-func EnableAutoMerge(ctx context.Context, runner git.Runner, prNodeID string, opts EnableAutoMergeOptions) error {
+func EnableAutoMerge(ctx context.Context, runner GitCommandRunner, prNodeID string, opts EnableAutoMergeOptions) error {
 	// We use two separate mutations because GitHub's GraphQL API treats
 	// `commitBody: null` differently from omitting commitBody entirely.
 	// When omitted, GitHub uses its default commit message (e.g., PR body).
@@ -487,7 +485,7 @@ func EnableAutoMerge(ctx context.Context, runner git.Runner, prNodeID string, op
 }
 
 // DisableAutoMerge disables GitHub's auto-merge feature on a PR.
-func DisableAutoMerge(ctx context.Context, runner git.Runner, prNodeID string) error {
+func DisableAutoMerge(ctx context.Context, runner GitCommandRunner, prNodeID string) error {
 	mutation := `mutation DisableAutoMerge($pullRequestId: ID!) {
 		disablePullRequestAutoMerge(input: {
 			pullRequestId: $pullRequestId
@@ -511,7 +509,7 @@ func DisableAutoMerge(ctx context.Context, runner git.Runner, prNodeID string) e
 }
 
 // GetAutoMergeStatus checks if auto-merge is enabled on a PR and returns its status.
-func GetAutoMergeStatus(ctx context.Context, runner git.Runner, prNodeID string) (*AutoMergeStatus, error) {
+func GetAutoMergeStatus(ctx context.Context, runner GitCommandRunner, prNodeID string) (*AutoMergeStatus, error) {
 	query := `query GetAutoMergeStatus($nodeId: ID!) {
 		node(id: $nodeId) {
 			... on PullRequest {
@@ -606,7 +604,7 @@ func mergeableToMergeStateText(mergeable string) string {
 }
 
 // GetPRMergeableState checks if a PR has merge conflicts.
-func GetPRMergeableState(ctx context.Context, runner git.Runner, prNodeID string) (*PRMergeableState, error) {
+func GetPRMergeableState(ctx context.Context, runner GitCommandRunner, prNodeID string) (*PRMergeableState, error) {
 	query := `query GetPRMergeableState($nodeId: ID!) {
 		node(id: $nodeId) {
 			... on PullRequest {
@@ -652,7 +650,7 @@ func GetPRMergeableState(ctx context.Context, runner git.Runner, prNodeID string
 
 // getPRMergeableStateBasic fetches PR mergeable state without the mergeStateStatus field,
 // used as a fallback for GitHub Enterprise instances that don't support that field.
-func getPRMergeableStateBasic(ctx context.Context, runner git.Runner, prNodeID string) (*PRMergeableState, error) {
+func getPRMergeableStateBasic(ctx context.Context, runner GitCommandRunner, prNodeID string) (*PRMergeableState, error) {
 	query := `query GetPRMergeableState($nodeId: ID!) {
 		node(id: $nodeId) {
 			... on PullRequest {
@@ -693,7 +691,7 @@ func getPRMergeableStateBasic(ctx context.Context, runner git.Runner, prNodeID s
 
 // BatchGetPRMergeableStates checks mergeable state for multiple PRs in a single GraphQL query.
 // Returns a map from node ID to PRMergeableState. If a PR fails to fetch, it won't be in the map.
-func BatchGetPRMergeableStates(ctx context.Context, runner git.Runner, prNodeIDs []string) (map[string]*PRMergeableState, error) {
+func BatchGetPRMergeableStates(ctx context.Context, runner GitCommandRunner, prNodeIDs []string) (map[string]*PRMergeableState, error) {
 	if len(prNodeIDs) == 0 {
 		return make(map[string]*PRMergeableState), nil
 	}
@@ -765,7 +763,7 @@ func BatchGetPRMergeableStates(ctx context.Context, runner git.Runner, prNodeIDs
 
 // batchGetPRMergeableStatesBasic fetches PR mergeable states without the mergeStateStatus field,
 // used as a fallback for GitHub Enterprise instances that don't support that field.
-func batchGetPRMergeableStatesBasic(ctx context.Context, runner git.Runner, prNodeIDs []string) (map[string]*PRMergeableState, error) {
+func batchGetPRMergeableStatesBasic(ctx context.Context, runner GitCommandRunner, prNodeIDs []string) (map[string]*PRMergeableState, error) {
 	queryParts := make([]string, 0, len(prNodeIDs))
 	variables := make(map[string]any, len(prNodeIDs))
 	for i, nodeID := range prNodeIDs {
@@ -824,7 +822,7 @@ func batchGetPRMergeableStatesBasic(ctx context.Context, runner git.Runner, prNo
 
 // WaitForPRMerge polls until a PR is merged or times out.
 // Returns nil if the PR is merged, error otherwise.
-func WaitForPRMerge(ctx context.Context, runner git.Runner, prNodeID string, timeout time.Duration, pollInterval time.Duration) error {
+func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID string, timeout time.Duration, pollInterval time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
@@ -873,7 +871,7 @@ func WaitForPRMerge(ctx context.Context, runner git.Runner, prNodeID string, tim
 // Returns the final PRMergeableState when ready.
 // Returns ErrPRAlreadyMerged if the PR is merged during polling.
 // Returns an error if the PR is CLOSED, DIRTY (conflicts), times out, or the context is canceled.
-func WaitForMergeable(ctx context.Context, runner git.Runner, prNodeID string, timeout time.Duration, pollInterval time.Duration) (*PRMergeableState, error) {
+func WaitForMergeable(ctx context.Context, runner GitCommandRunner, prNodeID string, timeout time.Duration, pollInterval time.Duration) (*PRMergeableState, error) {
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
@@ -910,7 +908,7 @@ func WaitForMergeable(ctx context.Context, runner git.Runner, prNodeID string, t
 }
 
 // updatePRDraftStatus updates the draft status of a PR using GitHub's GraphQL API
-func updatePRDraftStatus(ctx context.Context, runner git.Runner, pullRequestID string, isDraft bool) error {
+func updatePRDraftStatus(ctx context.Context, runner GitCommandRunner, pullRequestID string, isDraft bool) error {
 	// Determine which mutation to use
 	var mutation string
 	var mutationName string

@@ -82,6 +82,11 @@ func (h *SimpleCreateHandler) PromptScope(_ string) (string, error) {
 	return "", nil
 }
 
+// PromptChildToMove returns "all" for the simple handler (non-interactive).
+func (h *SimpleCreateHandler) PromptChildToMove(_ []string) (string, error) {
+	return "all", nil
+}
+
 func (h *SimpleCreateHandler) printStepCompleted(_ create.Step, _ string) {
 	// Most steps are silent - output is handled in Complete
 	// Only show certain steps for verbose feedback
@@ -112,4 +117,15 @@ func (h *InteractiveCreateHandler) PromptStageChanges() (bool, error) {
 func (h *InteractiveCreateHandler) PromptScope(patternHint string) (string, error) {
 	prompt := fmt.Sprintf("Branch pattern uses {scope}: %s\nEnter scope (or Enter to skip):", patternHint)
 	return tui.PromptTextInput(prompt, "")
+}
+
+// PromptChildToMove asks which child branch to move onto the newly inserted
+// branch, offering an "All children" option plus each child individually.
+func (h *InteractiveCreateHandler) PromptChildToMove(children []string) (string, error) {
+	options := make([]tui.SelectOption, 0, 1+len(children))
+	options = append(options, tui.SelectOption{Label: "All children", Value: "all"})
+	for _, child := range children {
+		options = append(options, tui.SelectOption{Label: child, Value: child})
+	}
+	return tui.PromptSelect("Which child should be moved onto the new branch?", options, 0)
 }

@@ -6,11 +6,9 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
-func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeCtx *app.Context, opts *Options) error {
+func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeCtx *app.Context, opts *Options, h Handler) error {
 	// Build StackGraph for efficient traversals
 	graph := runtimeCtx.Engine.Graph(engine.SortStrategyAlphabetical)
 
@@ -39,16 +37,9 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 				}
 			}
 		}
-	case len(siblings) > 1 && utils.IsInteractive():
+	case len(siblings) > 1 && h.IsInteractive():
 		runtimeCtx.Output.Info("Current branch has multiple children. Select which should be moved onto the new branch:")
-		options := []tui.SelectOption{
-			{Label: "All children", Value: "all"},
-		}
-		for _, child := range siblings {
-			options = append(options, tui.SelectOption{Label: child, Value: child})
-		}
-
-		selected, err := tui.PromptSelect("Which child should be moved onto the new branch?", options, 0)
+		selected, err := h.PromptChildToMove(siblings)
 		if err != nil {
 			return err
 		}

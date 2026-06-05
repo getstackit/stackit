@@ -11,6 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/actions/split"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -199,7 +200,7 @@ func (h *TUISplitHandler) PromptCommitMessage(defaultMsg string) (string, error)
 		defer h.runner.Resume()
 	}
 
-	msg, err := tui.OpenEditor(defaultMsg, "COMMIT_EDITMSG-*")
+	msg, err := editor.Open(defaultMsg, "COMMIT_EDITMSG-*")
 	if err != nil {
 		return "", err
 	}

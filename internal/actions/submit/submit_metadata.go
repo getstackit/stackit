@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/pr"
@@ -36,7 +37,7 @@ func GetPRBody(branch engine.Branch, editInline bool, existingBody string) (stri
 		return body, nil
 	}
 
-	return tui.OpenEditor(body, "stackit-pr-description-*.md")
+	return editor.Open(body, "stackit-pr-description-*.md")
 }
 
 // GetReviewers gets reviewers from flag or prompts user

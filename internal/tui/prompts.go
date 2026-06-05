@@ -116,15 +116,15 @@ var defaultSelectionKeys = selectionKeys{
 	),
 }
 
-// ErrInteractiveDisabled is returned when interactive prompts are disabled
-var ErrInteractiveDisabled = fmt.Errorf("interactive prompts are disabled (running with --no-interactive or not in a TTY)")
+// ErrInteractiveDisabled is returned when interactive prompts are disabled.
+// Re-exported from utils so existing tui callers (and errors.Is checks) keep
+// working while the canonical definition lives in the lower layer.
+var ErrInteractiveDisabled = utils.ErrInteractiveDisabled
 
-// CheckInteractiveAllowed returns an error if interactive mode is disabled
+// CheckInteractiveAllowed returns an error if interactive mode is disabled.
+// Delegates to utils.CheckInteractiveAllowed.
 func CheckInteractiveAllowed() error {
-	if !utils.IsInteractive() {
-		return ErrInteractiveDisabled
-	}
-	return nil
+	return utils.CheckInteractiveAllowed()
 }
 
 // textInputModel is a simple text input prompt model

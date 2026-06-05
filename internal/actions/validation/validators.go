@@ -15,7 +15,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/git"
 )
 
 // Validator validates a single precondition.
@@ -55,6 +54,17 @@ type BranchValidationEngine interface {
 	AllBranches() engine.Branches
 }
 
+// GitStateReader is the minimal git-state contract the git-aware validators
+// need. engine.Engine satisfies it, so callers pass the engine instead of the
+// raw git runner — keeping validation in the domain layer rather than reaching
+// through Engine.Git().
+type GitStateReader interface {
+	IsRebaseInProgress(ctx context.Context) bool
+	HasUncommittedChanges(ctx context.Context) bool
+	HasStagedChanges(ctx context.Context) (bool, error)
+	GetRevisionForName(branchName string) (string, error)
+}
+
 // MustBeOnBranch validates that HEAD is on a branch (not detached).
 // Returns a Validator that checks the engine's current branch state.
 func MustBeOnBranch(eng BranchValidationEngine) Validator {
@@ -65,14 +75,17 @@ func MustBeOnBranch(eng BranchValidationEngine) Validator {
 }
 
 // MustNotHaveRebaseInProgress validates that no rebase operation is in progress.
-func MustNotHaveRebaseInProgress(ctx context.Context, g git.Runner) Validator {
+func MustNotHaveRebaseInProgress(ctx context.Context, g GitStateReader) Validator {
 	return ValidatorFunc(func() error {
-		return g.CheckRebaseInProgress(ctx)
+		if g.IsRebaseInProgress(ctx) {
+			return fmt.Errorf("a rebase is already in progress. Please finish or abort it first")
+		}
+		return nil
 	})
 }
 
 // MustNotHaveUncommittedChanges validates that there are no uncommitted changes.
-func MustNotHaveUncommittedChanges(ctx context.Context, g git.Runner) Validator {
+func MustNotHaveUncommittedChanges(ctx context.Context, g GitStateReader) Validator {
 	return ValidatorFunc(func() error {
 		if g.HasUncommittedChanges(ctx) {
 			return fmt.Errorf("cannot perform operation with uncommitted changes; please commit or stash them first")
@@ -82,7 +95,7 @@ func MustNotHaveUncommittedChanges(ctx context.Context, g git.Runner) Validator 
 }
 
 // MustHaveStagedChanges validates that there are staged changes ready to commit.
-func MustHaveStagedChanges(ctx context.Context, g git.Runner) Validator {
+func MustHaveStagedChanges(ctx context.Context, g GitStateReader) Validator {
 	return ValidatorFunc(func() error {
 		hasStagedChanges, err := g.HasStagedChanges(ctx)
 		if err != nil {
@@ -96,10 +109,10 @@ func MustHaveStagedChanges(ctx context.Context, g git.Runner) Validator {
 }
 
 // BranchMustExist validates that a branch exists in git.
-// Uses git.Runner to check if the branch ref exists.
-func BranchMustExist(g git.Runner, branchName string) Validator {
+// Checks that the branch ref resolves to a revision.
+func BranchMustExist(g GitStateReader, branchName string) Validator {
 	return ValidatorFunc(func() error {
-		_, err := g.GetRevision(branchName)
+		_, err := g.GetRevisionForName(branchName)
 		if err != nil {
 			return fmt.Errorf("branch %s does not exist", branchName)
 		}

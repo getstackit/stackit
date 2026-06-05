@@ -39,7 +39,16 @@ linters:
     - errorlint
     - copyloopvar
     - tparallel
+    - forbidigo
   settings:
+    forbidigo:
+      forbid:
+        - pattern: '\.Git\(\)'
+          msg: >-
+            Do not reach through Engine.Git()/Context.Git() to the raw git
+            runner. Add or use an engine method for domain operations. The only
+            allowed uses are passing the runner to integration helpers (github,
+            etc.), which must be annotated with //nolint:forbidigo and a reason.
     misspell:
       locale: US
     gosec:
@@ -63,6 +72,16 @@ linters:
       - path: _test\.go
         linters:
           - lll
+      # Tests use Engine.Git() freely for setup/assertions.
+      - path: _test\.go
+        linters:
+          - forbidigo
+      # Bootstrap and core own the git runner: app/config wire it, engine
+      # implements and returns it. The escape-hatch guard targets the
+      # action/adapter/business layers.
+      - path: internal/(app|config|engine)/
+        linters:
+          - forbidigo
 
 issues:
   max-issues-per-linter: 0

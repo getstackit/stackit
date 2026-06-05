@@ -76,12 +76,12 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 	}
 
 	if entry.Exists {
-		currentBranch, err := ctx.Git().GetWorktreeCurrentBranch(ctx.Context, wt.Path)
+		currentBranch, err := ctx.Engine.GetWorktreeCurrentBranch(ctx.Context, wt.Path)
 		if err == nil && currentBranch != "" {
 			entry.CurrentBranch = currentBranch
 		}
 
-		isDirty, err := ctx.Git().WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+		isDirty, err := ctx.Engine.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
 		if err == nil {
 			entry.IsDirty = isDirty
 		}

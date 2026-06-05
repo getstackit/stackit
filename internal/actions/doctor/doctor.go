@@ -29,7 +29,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Environment checks
 	handler.OnCategory(CategoryEnvironment)
-	warningCount, errorCount = checkEnvironment(ctx.Git(), handler, warningCount, errorCount)
+	warningCount, errorCount = checkEnvironment(ctx.Git(), handler, warningCount, errorCount) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 
 	// Repository checks
 	handler.OnCategory(CategoryRepository)

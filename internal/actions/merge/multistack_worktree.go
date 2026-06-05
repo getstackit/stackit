@@ -127,9 +127,8 @@ func (w *MultiStackWorktreeExecutor) tryGlobalOctopusMerge(ctx context.Context, 
 	})
 	if err != nil {
 		// Abort the merge if it's in progress
-		git := eng.Git()
-		if git.IsMergeInProgress(ctx) {
-			if abortErr := git.MergeAbort(ctx); abortErr != nil {
+		if eng.IsMergeInProgress(ctx) {
+			if abortErr := eng.MergeAbort(ctx); abortErr != nil {
 				w.output.Debug("Failed to abort merge: %v", abortErr)
 			}
 		}
@@ -153,9 +152,8 @@ func (w *MultiStackWorktreeExecutor) tryMergeStack(ctx context.Context, eng engi
 	})
 	if err != nil {
 		// Abort the merge if it's in progress
-		git := eng.Git()
-		if git.IsMergeInProgress(ctx) {
-			if abortErr := git.MergeAbort(ctx); abortErr != nil {
+		if eng.IsMergeInProgress(ctx) {
+			if abortErr := eng.MergeAbort(ctx); abortErr != nil {
 				w.output.Debug("Failed to abort merge: %v", abortErr)
 			}
 		}

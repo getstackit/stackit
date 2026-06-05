@@ -92,7 +92,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	defer handler.Cleanup()
 
 	// Validate preconditions
-	if err := validation.GitOperationChain(gctx, eng, ctx.Git(), "fold").Validate(); err != nil {
+	if err := validation.GitOperationChain(gctx, eng, "fold").Validate(); err != nil {
 		return err
 	}
 	currentBranch := eng.CurrentBranch().GetName()

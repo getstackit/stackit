@@ -24,8 +24,8 @@ func ReorderAction(ctx *app.Context) error {
 	// Pre-checks using validation chain
 	if err := (validation.Chain{
 		validation.MustBeOnBranch(eng),
-		validation.MustNotHaveRebaseInProgress(gctx, ctx.Git()),
-		validation.MustNotHaveUncommittedChanges(gctx, ctx.Git()),
+		validation.MustNotHaveRebaseInProgress(gctx, eng),
+		validation.MustNotHaveUncommittedChanges(gctx, eng),
 		validation.CurrentBranchMustNotBeTrunk(eng, "reorder"),
 	}).Validate(); err != nil {
 		out.Debug("reorder: validation failed: %v", err)

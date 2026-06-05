@@ -353,7 +353,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 			return
 		}
 		pushStart := time.Now()
-		err := eng.Git().BatchDeleteRemoteMetadataRefs(c, deletedBranchNames)
+		err := eng.DeleteRemoteMetadataForBranches(c, deletedBranchNames)
 		ctx.Logger.Info("delete remote metadata refs completed durationMs=%d branchCount=%d ok=%v",
 			time.Since(pushStart).Milliseconds(), len(deletedBranchNames), err == nil)
 		if err != nil {
@@ -382,7 +382,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		// Snapshot the worktree list once for this batch instead of
 		// re-running `git worktree list --porcelain` per branch.
 		listStart := time.Now()
-		worktrees, err := eng.Git().ListWorktrees(c)
+		worktrees, err := eng.ListWorktrees(c)
 		ctx.Logger.Info("list worktrees for cleanup batch completed durationMs=%d batch=%d worktreeCount=%d",
 			time.Since(listStart).Milliseconds(), batchIdx, len(worktrees))
 		if err != nil {
@@ -512,7 +512,7 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 			}
 			kind := engine.DeletionReasonGhost
 			reason := "branch no longer exists locally"
-			if meta, err := eng.Git().ReadMetadata(ghostName); err == nil && meta != nil {
+			if meta, err := eng.ReadMetadataRaw(ghostName); err == nil && meta != nil {
 				if pr := meta.GetPrInfo(); pr != nil && pr.State != nil && *pr.State == "MERGED" {
 					kind = engine.DeletionReasonMergedPR
 					reason = "branch deleted locally; PR was merged"
@@ -614,7 +614,7 @@ func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktree
 	}
 
 	// Don't remove main worktree (resolve symlinks for comparison, e.g., /var vs /private/var on macOS)
-	repoRoot := eng.Git().GetRepoRoot()
+	repoRoot := eng.GetRepoRoot()
 	resolvedWorktree, _ := filepath.EvalSymlinks(worktreePath)
 	resolvedRoot, _ := filepath.EvalSymlinks(repoRoot)
 	if resolvedWorktree == resolvedRoot {
@@ -624,7 +624,7 @@ func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktree
 
 	out.Debug("Removing worktree at %s for branch %s", worktreePath, branchName)
 
-	if err := eng.Git().RemoveWorktree(ctx, worktreePath); err != nil {
+	if err := eng.RemoveWorktree(ctx, worktreePath); err != nil {
 		return worktreePath, fmt.Errorf("failed to remove worktree at %s for branch %s: %w", worktreePath, branchName, err)
 	}
 

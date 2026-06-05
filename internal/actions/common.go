@@ -188,7 +188,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 		originalBranch := ctx.Engine.CurrentBranch()
 		originalRev := ""
 		if originalBranch == nil {
-			originalRev, _ = ctx.Engine.Git().GetCurrentRevision(ctx.Context)
+			originalRev, _ = ctx.Engine.GetCurrentRevision(ctx.Context)
 		}
 
 		currentBranchName := getCurrentBranchName(ctx.Engine)
@@ -201,14 +201,14 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 
 		// Sync mode should never leave the repo in a conflict workflow unless explicitly requested.
 		// If a runtime conflict occurred despite validation, clean it up and restore checkout state.
-		if mode == ConflictModeContinue && ctx.Engine.Git().IsRebaseInProgress(ctx.Context) {
+		if mode == ConflictModeContinue && ctx.Engine.IsRebaseInProgress(ctx.Context) {
 			conflictBranch := batchResult.ConflictBranch
 			if conflictBranch == "" {
 				conflictBranch = "unknown"
 			}
 
 			ctx.Logger.Warn("unexpected rebase state after sync restack; aborting branch=%v", conflictBranch)
-			if abortErr := ctx.Engine.Git().RebaseAbort(ctx.Context); abortErr != nil {
+			if abortErr := ctx.Engine.RebaseAbort(ctx.Context); abortErr != nil {
 				return fmt.Errorf("unexpected restack conflict on %s: failed to abort rebase: %w", conflictBranch, abortErr)
 			}
 
@@ -218,7 +218,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 						conflictBranch, originalBranch.GetName(), checkoutErr)
 				}
 			} else if originalRev != "" {
-				if detachErr := ctx.Engine.Git().CheckoutDetached(ctx.Context, originalRev); detachErr != nil {
+				if detachErr := ctx.Engine.Detach(ctx.Context, originalRev); detachErr != nil {
 					return fmt.Errorf("unexpected restack conflict on %s: aborted rebase but failed to restore detached HEAD %s: %w",
 						conflictBranch, originalRev, detachErr)
 				}
@@ -432,11 +432,11 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 	// abort can only touch HEAD, never a branch ref. `st continue` already
 	// re-attaches to the conflict branch on success.
 	if currentBranch := ctx.Engine.CurrentBranch(); currentBranch != nil {
-		currentRev, revErr := ctx.Engine.Git().GetCurrentRevision(ctx.Context)
+		currentRev, revErr := ctx.Engine.GetCurrentRevision(ctx.Context)
 		if revErr != nil {
 			return fmt.Errorf("failed to read HEAD before conflict workflow: %w", revErr)
 		}
-		if detachErr := ctx.Engine.Git().CheckoutDetached(ctx.Context, currentRev); detachErr != nil {
+		if detachErr := ctx.Engine.Detach(ctx.Context, currentRev); detachErr != nil {
 			return fmt.Errorf("failed to detach HEAD before conflict workflow: %w", detachErr)
 		}
 	}
@@ -449,7 +449,7 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 	}
 
 	// Verify we're actually in conflict state
-	if !ctx.Engine.Git().IsRebaseInProgress(ctx.Context) {
+	if !ctx.Engine.IsRebaseInProgress(ctx.Context) {
 		return fmt.Errorf("expected conflict on %s but rebase completed successfully", firstConflict)
 	}
 
@@ -523,7 +523,7 @@ func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 			}
 
 			// Parent exists - verify they have a common ancestor
-			_, err = ctx.Engine.Git().GetMergeBase(ctx.Context, parentRev, branchRev)
+			_, err = ctx.Engine.GetMergeBase(ctx.Context, parentRev, branchRev)
 			if err != nil {
 				return fmt.Errorf("branch %s and parent %s have no common ancestor: %w",
 					branchName, parentName, err)

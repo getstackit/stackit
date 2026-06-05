@@ -47,6 +47,18 @@ func (e *engineImpl) ForceRemoveWorktree(ctx context.Context, path string) error
 	return e.git.ForceRemoveWorktree(ctx, path)
 }
 
+// GetWorktreeCurrentBranch returns the branch currently checked out in the
+// worktree at worktreePath.
+func (e *engineImpl) GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error) {
+	return e.git.GetWorktreeCurrentBranch(ctx, worktreePath)
+}
+
+// WorktreeHasUncommittedChanges reports whether the worktree at worktreePath has
+// staged, unstaged, or untracked changes.
+func (e *engineImpl) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error) {
+	return e.git.WorktreeHasUncommittedChanges(ctx, worktreePath)
+}
+
 // PruneWorktrees removes stale worktree entries from .git/worktrees.
 // This cleans up worktree information for worktrees whose working directory
 // has been deleted or is otherwise unavailable.

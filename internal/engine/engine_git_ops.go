@@ -72,6 +72,11 @@ func (e *engineImpl) HasUntrackedFiles(ctx context.Context) (bool, error) {
 	return e.git.HasUntrackedFiles(ctx)
 }
 
+// GetUntrackedFiles returns the paths of untracked files in the working tree.
+func (e *engineImpl) GetUntrackedFiles(ctx context.Context) ([]string, error) {
+	return e.git.GetUntrackedFiles(ctx)
+}
+
 // GetWorkingTreeStatus returns staged, unstaged, and untracked status in a
 // single git status --porcelain call instead of three separate subprocesses.
 func (e *engineImpl) GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error) {
@@ -220,6 +225,11 @@ func (e *engineImpl) IsRebaseInProgress(ctx context.Context) bool {
 	return e.git.IsRebaseInProgress(ctx)
 }
 
+// IsMergeInProgress checks if a merge is in progress
+func (e *engineImpl) IsMergeInProgress(ctx context.Context) bool {
+	return e.git.IsMergeInProgress(ctx)
+}
+
 // GetRebaseHead returns the current rebase head
 func (e *engineImpl) GetRebaseHead() (string, error) {
 	return e.git.GetRebaseHead()
@@ -233,6 +243,57 @@ func (e *engineImpl) HasUncommittedChanges(ctx context.Context) bool {
 // GetRepoInfo returns the repository owner and name
 func (e *engineImpl) GetRepoInfo(ctx context.Context) (string, string, error) {
 	return e.git.GetRepoInfo(ctx)
+}
+
+// GetRepoRoot returns the absolute path to the repository root.
+func (e *engineImpl) GetRepoRoot() string {
+	return e.git.GetRepoRoot()
+}
+
+// GetUserName returns the configured git user.name.
+func (e *engineImpl) GetUserName(ctx context.Context) (string, error) {
+	return e.git.GetUserName(ctx)
+}
+
+// GetConfig reads a git configuration value.
+func (e *engineImpl) GetConfig(key string) (string, error) {
+	return e.git.GetConfig(key)
+}
+
+// SetConfig writes a git configuration value.
+func (e *engineImpl) SetConfig(key, value string) error {
+	return e.git.SetConfig(key, value)
+}
+
+// GetAllBranchNames returns the names of all local branches, including ones not
+// tracked by stackit.
+func (e *engineImpl) GetAllBranchNames(ctx context.Context) ([]string, error) {
+	return e.git.GetAllBranchNames(ctx)
+}
+
+// ListMetadataRefs returns a map of branch name to metadata-ref SHA for every
+// stackit metadata ref, including refs whose branches no longer exist.
+func (e *engineImpl) ListMetadataRefs() (map[string]string, error) {
+	return e.git.ListMetadata()
+}
+
+// ReadMetadataRaw reads a single branch's metadata directly from its ref,
+// bypassing the engine's tracked-branch cache.
+func (e *engineImpl) ReadMetadataRaw(branchName string) (*git.Meta, error) {
+	return e.git.ReadMetadata(branchName)
+}
+
+// BatchReadMetadataRaw reads raw metadata for many branches in one pass,
+// returning per-branch errors so callers can detect corrupted refs.
+func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error) {
+	return e.git.BatchReadMetadata(branchNames)
+}
+
+// DeleteMetadataRef deletes a single branch's metadata ref directly, without
+// the transactional rebuild performed by DeleteMetadata. Intended for pruning
+// orphaned refs whose branches no longer exist.
+func (e *engineImpl) DeleteMetadataRef(ctx context.Context, branchName string) error {
+	return e.git.DeleteMetadata(ctx, branchName)
 }
 
 // IsInsideRepo checks if the current directory is inside a git repository

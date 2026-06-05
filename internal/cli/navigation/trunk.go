@@ -59,10 +59,9 @@ Use --all to see all configured trunk branches, or --add to add an additional tr
 
 // handleAddTrunk adds a new trunk branch
 func handleAddTrunk(ctx *app.Context, trunkName string) error {
-	runner := ctx.Git()
 	repoRoot := ctx.RepoRoot
 	// Verify the branch exists
-	branches, err := runner.GetAllBranchNames(ctx)
+	branches, err := ctx.Engine.GetAllBranchNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}

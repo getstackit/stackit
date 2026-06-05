@@ -22,7 +22,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	out := ctx.Output
 
 	// Check if rebase is in progress
-	if !eng.Git().IsRebaseInProgress(ctx.Context) {
+	if !eng.IsRebaseInProgress(ctx.Context) {
 		// Clear any stale continuation state
 		_ = config.ClearContinuationState(ctx.RepoRoot)
 		return fmt.Errorf("no rebase in progress. Nothing to continue")
@@ -55,7 +55,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 
 	// Stage all changes if --all flag is set
 	if opts.AddAll {
-		if err := eng.Git().StageAll(ctx.Context); err != nil {
+		if err := eng.StageAll(ctx.Context); err != nil {
 			return fmt.Errorf("failed to stage changes: %w", err)
 		}
 	}
@@ -91,7 +91,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	}
 
 	// Success - checkout the branch (rebase leaves us in detached HEAD)
-	if err := eng.Git().CheckoutBranch(ctx.Context, result.BranchName); err != nil {
+	if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(result.BranchName)); err != nil {
 		return fmt.Errorf("failed to checkout branch %s: %w", result.BranchName, err)
 	}
 

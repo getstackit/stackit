@@ -2,7 +2,6 @@ package sync
 
 import (
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/git"
 )
 
 // StackMetadataGCResult contains the results of stack metadata garbage collection.
@@ -59,12 +58,9 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 	// per-orphan DeleteStackMeta loop spawned 2 git subprocesses per ref
 	// (update-ref -d + show-ref --verify) — same N+1 pattern fixed for branch
 	// deletion. If the atomic batch fails, fall back to per-ref so partial
-	// progress is still reported.
-	refs := make([]string, 0, len(orphaned))
-	for _, stackID := range orphaned {
-		refs = append(refs, git.StackMetaRefName(stackID))
-	}
-	if err := ctx.Git().DeleteRefsBatch(ctx.Context, refs); err != nil {
+	// progress is still reported. The engine owns the stack-ref name format, so
+	// we pass stack IDs rather than building ref names here.
+	if err := ctx.Engine.DeleteStackMetadataBatch(ctx.Context, orphaned); err != nil {
 		ctx.Logger.Debug("batch delete of local stack refs failed, falling back per-ref error=%v", err)
 		for _, stackID := range orphaned {
 			if perRefErr := ctx.Engine.DeleteStackMetadata(ctx.Context, stackID); perRefErr != nil {

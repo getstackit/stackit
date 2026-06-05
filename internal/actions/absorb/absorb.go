@@ -42,7 +42,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.Start(opts.DryRun)
 
 	// Validate preconditions
-	if err := validation.AbsorbChain(ctx.Context, eng, ctx.Git(), "absorb into").Validate(); err != nil {
+	if err := validation.AbsorbChain(ctx.Context, eng, "absorb into").Validate(); err != nil {
 		return err
 	}
 	currentBranch := eng.CurrentBranch()
@@ -70,7 +70,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		All:   opts.All,
 		Patch: opts.Patch,
 	}
-	if err := ctx.Git().StageChanges(ctx.Context, stagingOpts); err != nil {
+	if err := ctx.Engine.StageChanges(ctx.Context, stagingOpts); err != nil {
 		return err
 	}
 
@@ -197,7 +197,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Output JSON if requested (works with dry-run for preview)
 		if opts.JSON {
-			newFiles, err := ctx.Git().GetUntrackedFiles(ctx.Context)
+			newFiles, err := ctx.Engine.GetUntrackedFiles(ctx.Context)
 			if err != nil {
 				out.Debug("Failed to get untracked files: %v", err)
 			}
@@ -320,7 +320,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Output JSON summary if requested
 	if opts.JSON {
-		newFiles, err := ctx.Git().GetUntrackedFiles(ctx.Context)
+		newFiles, err := ctx.Engine.GetUntrackedFiles(ctx.Context)
 		if err != nil {
 			out.Debug("Failed to get untracked files: %v", err)
 		}

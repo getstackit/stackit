@@ -553,23 +553,26 @@ func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parent
 		return nil, fmt.Errorf("failed to create branch: %w", err)
 	}
 
+	// On any subsequent failure, delete the partially-created branch and restore the original.
+	var succeeded bool
+	defer func() {
+		if !succeeded {
+			_ = eng.DeleteBranch(ctx, newBranch)
+			_ = eng.CheckoutBranch(ctx, branchToSplit)
+		}
+	}()
+
 	// Stage the hunks directly
 	if err := eng.StageHunks(ctx, hunks); err != nil {
-		_ = eng.DeleteBranch(ctx, newBranch)
-		_ = eng.CheckoutBranch(ctx, branchToSplit)
 		return nil, fmt.Errorf("failed to stage hunks: %w", err)
 	}
 
 	// Check if anything was staged
 	hasStaged, err := eng.HasStagedChanges(ctx)
 	if err != nil {
-		_ = eng.DeleteBranch(ctx, newBranch)
-		_ = eng.CheckoutBranch(ctx, branchToSplit)
 		return nil, fmt.Errorf("failed to check staged changes: %w", err)
 	}
 	if !hasStaged {
-		_ = eng.DeleteBranch(ctx, newBranch)
-		_ = eng.CheckoutBranch(ctx, branchToSplit)
 		return nil, fmt.Errorf("no changes staged")
 	}
 
@@ -578,28 +581,22 @@ func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parent
 		Message:  commitMessage,
 		NoVerify: true,
 	}); err != nil {
-		_ = eng.DeleteBranch(ctx, newBranch)
-		_ = eng.CheckoutBranch(ctx, branchToSplit)
 		return nil, fmt.Errorf("failed to commit: %w", err)
 	}
 
 	// Track the new branch
 	if err := eng.TrackBranch(ctx, newBranchName, parentBranch.GetName()); err != nil {
-		_ = eng.DeleteBranch(ctx, newBranch)
-		_ = eng.CheckoutBranch(ctx, branchToSplit)
 		return nil, fmt.Errorf("failed to track branch: %w", err)
 	}
 
 	// Preserve stack ID from original branch
 	if originalStackID != "" {
 		if err := eng.SetStackID(ctx, engine.BranchesOf(newBranch), originalStackID); err != nil {
-			_ = eng.DeleteBranch(ctx, newBranch)
-			_ = eng.CheckoutBranch(ctx, branchToSplit)
 			return nil, fmt.Errorf("failed to preserve stack ID: %w", err)
 		}
 	}
 
-	// Return to original branch
+	succeeded = true
 	if err := eng.CheckoutBranch(ctx, branchToSplit); err != nil {
 		return nil, fmt.Errorf("failed to checkout original branch: %w", err)
 	}

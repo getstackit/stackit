@@ -158,32 +158,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	branchPRInfo := make(map[string]*int) // branch -> PR number
 
 	// Crawl ancestors using GitHub PR info if possible
-	if ctx.GitHub() != nil {
-		current := targetBranch
-		owner, repo := ctx.GitHub().GetOwnerRepo()
-		for {
-			pr, err := ctx.GitHub().GetPullRequestByBranch(gctx, owner, repo, current)
-			if err != nil || pr == nil {
-				break
-			}
-			prNum := pr.Number
-			branchPRInfo[current] = &prNum
-
-			base := pr.Base
-			if base == "" || base == eng.Trunk().GetName() {
-				parentMap[current] = eng.Trunk().GetName()
-				break
-			}
-
-			parentMap[current] = base
-			if !slices.Contains(branchesToSync, base) {
-				branchesToSync = append([]string{base}, branchesToSync...)
-				current = base
-			} else {
-				break // Avoid cycles
-			}
-		}
-	}
+	branchesToSync = crawlAncestorsViaGitHub(ctx, targetBranch, branchesToSync, parentMap, branchPRInfo)
 
 	// If target branch exists locally, identify local descendants
 	targetBranchObj := eng.GetBranch(targetBranch)
@@ -408,6 +383,44 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	})
 
 	return nil
+}
+
+// crawlAncestorsViaGitHub walks the parent chain of targetBranch using GitHub PR
+// information. It prepends discovered ancestors to branchesToSync (trunk-first) and
+// records each branch's parent in parentMap and PR number in branchPRInfo. It is a
+// no-op when no GitHub client is configured. The (possibly grown) branchesToSync slice
+// is returned because ancestors are prepended.
+func crawlAncestorsViaGitHub(ctx *app.Context, targetBranch string, branchesToSync []string, parentMap map[string]string, branchPRInfo map[string]*int) []string {
+	if ctx.GitHub() == nil {
+		return branchesToSync
+	}
+	eng := ctx.Engine
+	gctx := ctx.Context
+	owner, repo := ctx.GitHub().GetOwnerRepo()
+	current := targetBranch
+	for {
+		pr, err := ctx.GitHub().GetPullRequestByBranch(gctx, owner, repo, current)
+		if err != nil || pr == nil {
+			break
+		}
+		prNum := pr.Number
+		branchPRInfo[current] = &prNum
+
+		base := pr.Base
+		if base == "" || base == eng.Trunk().GetName() {
+			parentMap[current] = eng.Trunk().GetName()
+			break
+		}
+
+		parentMap[current] = base
+		if !slices.Contains(branchesToSync, base) {
+			branchesToSync = append([]string{base}, branchesToSync...)
+			current = base
+		} else {
+			break // Avoid cycles
+		}
+	}
+	return branchesToSync
 }
 
 // getPRNumber returns the PR number for a branch, or nil if not available

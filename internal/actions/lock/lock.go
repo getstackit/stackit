@@ -102,7 +102,11 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 		}
 	}
 
-	// Push metadata changes to remote and update PRs to trigger CI re-evaluation
+	// Lock/unlock intentionally sync GitHub PRs immediately instead of using the
+	// mark-and-sync pattern (see .claude/rules/safety-invariants.md, "GitHub Writes
+	// Only During Sync"). A lock is shared state: it must reflect for other
+	// collaborators and re-trigger PR CI right away, not on this user's next sync.
+	// Do not convert this to MarkBranchesForPRBodyUpdate + PushMetadataOnly.
 	if err := actions.PushMetadataAndSyncPRs(ctx, affectedBranches); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}
@@ -185,7 +189,11 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 		}
 	}
 
-	// Push metadata changes to remote and update PRs to trigger CI re-evaluation
+	// Lock/unlock intentionally sync GitHub PRs immediately instead of using the
+	// mark-and-sync pattern (see .claude/rules/safety-invariants.md, "GitHub Writes
+	// Only During Sync"). A lock is shared state: it must reflect for other
+	// collaborators and re-trigger PR CI right away, not on this user's next sync.
+	// Do not convert this to MarkBranchesForPRBodyUpdate + PushMetadataOnly.
 	if err := actions.PushMetadataAndSyncPRs(ctx, affectedBranches); err != nil {
 		out.Debug("Failed to push metadata changes: %v", err)
 	}

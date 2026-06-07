@@ -87,7 +87,9 @@ session.Engine.PushBranch(ctx, tempBranch, remote, opts)
 
 **Commands must NOT directly update GitHub PRs. Instead, mark branches for update and let `sync` handle it.**
 
-This applies to: describe, scope, lock, and any command that changes metadata affecting PR display.
+This applies to: describe, scope, and any command that changes metadata affecting PR display.
+
+**Exception:** `lock`/`unlock` deliberately do NOT follow this pattern — see the Exceptions section below.
 
 ### Why This Matters
 
@@ -101,6 +103,7 @@ This applies to: describe, scope, lock, and any command that changes metadata af
 1. **Read-only for display**: `log` showing CI status, `get` showing PR info
 2. **Primary purpose is GitHub**: `submit` creating/updating PRs, `merge` creating consolidation PRs
 3. **During sync**: All PR body/title updates should happen here
+4. **Lock/unlock**: `lock` and `unlock` call GitHub directly (`PushMetadataAndSyncPRs`), on purpose. A lock is a shared state change: it must reflect for other collaborators and re-evaluate PR CI **immediately**, not on the locking user's next `sync`. Deferring it would let others keep merging a branch the user just locked. The performance/offline tradeoffs above are outweighed by the need for an immediate, visible effect. Do not migrate `lock`/`unlock` to the mark-and-sync pattern.
 
 ### Implementation Pattern
 
@@ -137,4 +140,4 @@ if len(flaggedBranches) > 0 {
 |---------|-----------------|------------------------------|
 | `describe` | Stack description in footer | ✅ Fixed |
 | `scope` | PR title prefix | ❌ TODO |
-| `lock` | Lock section in PR body | ❌ TODO |
+| `lock` | Lock section in PR body | ⛔ Exception — syncs immediately (see Exceptions above) |

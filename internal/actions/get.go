@@ -157,8 +157,30 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	parentMap := make(map[string]string)
 	branchPRInfo := make(map[string]*int) // branch -> PR number
 
-	// Crawl ancestors using GitHub PR info if possible
-	branchesToSync = crawlAncestorsViaGitHub(ctx, targetBranch, branchesToSync, parentMap, branchPRInfo)
+	// First fetch: the target's head plus all stack metadata. The metadata refspec is a
+	// wildcard independent of which branch heads we request, so this single round trip
+	// brings down the entire stack's parent chain — letting us discover ancestors from
+	// local metadata instead of a serial, blocking GitHub crawl.
+	if err := eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+		Remote:          remote,
+		Branches:        []string{targetBranch},
+		IncludeMetadata: true,
+	}); err != nil {
+		return fmt.Errorf("failed to fetch %s from %s: %w", targetBranch, remote, err)
+	}
+
+	// Discover ancestors. Prefer the fetched metadata (no network); fall back to a GitHub
+	// crawl only when the target has no stackit metadata (e.g. a branch never submitted
+	// via stackit, or when the metadata cache fails to load).
+	usedMetadata := false
+	if err := eng.LoadRemoteMetadataCache(); err != nil {
+		out.Debug("failed to load remote metadata cache: %v", err)
+	} else {
+		branchesToSync, usedMetadata = crawlAncestorsViaMetadata(eng, targetBranch, branchesToSync, parentMap, branchPRInfo)
+	}
+	if !usedMetadata {
+		branchesToSync = crawlAncestorsViaGitHub(ctx, targetBranch, branchesToSync, parentMap, branchPRInfo)
+	}
 
 	// If target branch exists locally, identify local descendants
 	targetBranchObj := eng.GetBranch(targetBranch)
@@ -172,8 +194,12 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		}
 	}
 
+	// Second fetch: heads of any ancestors/descendants not already fetched. The metadata
+	// wildcard already came down in the first fetch, so this only needs branch heads. The
+	// target was fetched above, so it is pre-seeded as seen and skipped here. For a single
+	// branch whose parent is trunk this list is empty, leaving exactly one fetch total.
 	branchesToFetch := make([]string, 0, len(branchesToSync))
-	seenFetchBranch := make(map[string]bool, len(branchesToSync))
+	seenFetchBranch := map[string]bool{targetBranch: true}
 	for _, branchName := range branchesToSync {
 		if branchName == trunkName && branchName != targetBranch {
 			continue
@@ -185,12 +211,13 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		branchesToFetch = append(branchesToFetch, branchName)
 	}
 
-	if err := eng.FetchRemote(gctx, engine.RemoteFetchRequest{
-		Remote:          remote,
-		Branches:        branchesToFetch,
-		IncludeMetadata: true,
-	}); err != nil {
-		return fmt.Errorf("failed to fetch branches from %s: %w", remote, err)
+	if len(branchesToFetch) > 0 {
+		if err := eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+			Remote:   remote,
+			Branches: branchesToFetch,
+		}); err != nil {
+			return fmt.Errorf("failed to fetch branches from %s: %w", remote, err)
+		}
 	}
 
 	// Emit trunk status (main/master)
@@ -337,7 +364,13 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			handler.OnRestackStart(len(sorted))
 
 			if err := RestackBranchesWithHandler(ctx, sorted, func(p RestackProgress) {
-				prNumber := getPRNumber(eng, p.Branch)
+				// Prefer the PR number discovered during sync (which may have come
+				// from remote metadata not copied into local metadata); fall back to
+				// local metadata otherwise.
+				prNumber := branchPRInfo[p.Branch]
+				if prNumber == nil {
+					prNumber = getPRNumber(eng, p.Branch)
+				}
 
 				parentName := ""
 				br := eng.GetBranch(p.Branch)
@@ -383,6 +416,60 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	})
 
 	return nil
+}
+
+// crawlAncestorsViaMetadata walks the parent chain of targetBranch using the fetched
+// remote metadata cache (refs/stackit/remote-metadata/*), avoiding GitHub calls. It
+// prepends discovered ancestors to branchesToSync (trunk-first) and records each branch's
+// parent in parentMap and any known PR number in branchPRInfo. The second return value
+// reports whether the target had usable metadata; when false the caller should fall back
+// to a GitHub crawl. Callers must have populated the cache via LoadRemoteMetadataCache.
+func crawlAncestorsViaMetadata(eng engine.Engine, targetBranch string, branchesToSync []string, parentMap map[string]string, branchPRInfo map[string]*int) ([]string, bool) {
+	view := eng.GetRemoteMetadataCache()
+	trunkName := eng.Trunk().GetName()
+
+	// No usable metadata for the target: signal a fallback to the GitHub crawl.
+	if meta := view.Get(targetBranch); meta == nil || meta.GetParentBranchName() == nil {
+		return branchesToSync, false
+	}
+
+	discoveredBranches := slices.Clone(branchesToSync)
+	discoveredParents := make(map[string]string)
+	discoveredPRs := make(map[string]*int)
+
+	current := targetBranch
+	for {
+		meta := view.Get(current)
+		if meta == nil {
+			// A partial metadata chain is not safe to use: falling back lets GitHub
+			// recover the full ancestry instead of syncing only part of the stack.
+			return branchesToSync, false
+		}
+		if pr := meta.GetPrInfo(); pr != nil && pr.Number != nil {
+			discoveredPRs[current] = pr.Number
+		}
+
+		parent := meta.GetParentBranchName()
+		if parent == nil || *parent == "" || *parent == trunkName {
+			discoveredParents[current] = trunkName
+			break
+		}
+
+		discoveredParents[current] = *parent
+		if slices.Contains(discoveredBranches, *parent) {
+			break // Avoid cycles
+		}
+		discoveredBranches = append([]string{*parent}, discoveredBranches...)
+		current = *parent
+	}
+
+	for branch, parent := range discoveredParents {
+		parentMap[branch] = parent
+	}
+	for branch, prNumber := range discoveredPRs {
+		branchPRInfo[branch] = prNumber
+	}
+	return discoveredBranches, true
 }
 
 // crawlAncestorsViaGitHub walks the parent chain of targetBranch using GitHub PR

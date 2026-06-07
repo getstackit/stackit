@@ -51,7 +51,7 @@ type BranchValidationEngine interface {
 	ValidateOnBranch() (string, error)
 	GetBranch(branchName string) engine.Branch
 	CurrentBranch() *engine.Branch
-	AllBranches() engine.Branches
+	BranchNames() *engine.BranchSet
 }
 
 // GitStateReader is the minimal git-state contract the git-aware validators
@@ -262,18 +262,8 @@ func ValidateTargetBranch(eng BranchValidationEngine, sourceName, targetName, op
 	targetBranch := eng.GetBranch(targetName)
 
 	// Target must exist - check if it's trunk, tracked, or at least a git branch
-	if !targetBranch.IsTrunk() && !targetBranch.IsTracked() {
-		allBranches := eng.AllBranches()
-		found := false
-		for _, branch := range allBranches {
-			if branch.GetName() == targetName {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("branch %s does not exist", targetName)
-		}
+	if !targetBranch.IsTrunk() && !targetBranch.IsTracked() && !eng.BranchNames().Contains(targetName) {
+		return fmt.Errorf("branch %s does not exist", targetName)
 	}
 
 	if targetBranch.IsWorktreeAnchor() {

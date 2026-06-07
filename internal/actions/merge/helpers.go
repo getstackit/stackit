@@ -2,7 +2,6 @@ package merge
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -76,6 +75,6 @@ func isCIFailure(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := fmt.Sprintf("%v", err)
-	return strings.Contains(errStr, "CI checks failed") || strings.Contains(errStr, "failing CI checks") || strings.Contains(errStr, "pending CI checks")
+	msg := err.Error()
+	return strings.Contains(msg, "CI checks failed") || strings.Contains(msg, "failing CI checks") || strings.Contains(msg, "pending CI checks")
 }

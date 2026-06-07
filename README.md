@@ -573,6 +573,8 @@ The `hooks.post-worktree-create` option allows you to run commands automatically
 
 Stackit uses parallel validation for rebase operations, providing 2-3x speedup for wide stacks with many sibling branches. Branches at the same depth are validated concurrently, with automatic early exit on first conflict to save resources.
 
+For tuning remote operations (SSH connection reuse) and diagnosing a slow command with the built-in tracer, see [docs/performance.md](docs/performance.md).
+
 ---
 
 ## Troubleshooting

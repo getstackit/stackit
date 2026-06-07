@@ -42,13 +42,10 @@ func promptBranchName(existingNames []string, originalBranchName string, branchN
 	// Allow reusing the original branch name being split (it will be replaced)
 	// but don't allow other existing branch names
 	if branchName != originalBranchName {
-		allBranches := eng.AllBranches()
-		branchNames := make([]string, len(allBranches))
-		for i, b := range allBranches {
-			branchNames[i] = b.GetName()
-		}
-		if slices.Contains(branchNames, branchName) {
-			return "", fmt.Errorf("branch name %s is already in use", branchName)
+		for _, b := range eng.AllBranches() {
+			if b.GetName() == branchName {
+				return "", fmt.Errorf("branch name %s is already in use", branchName)
+			}
 		}
 	}
 

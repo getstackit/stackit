@@ -107,6 +107,7 @@ api/openapi/       API contract source of truth
 
 - `docs/config.md` - Configuration system, keys, layered config
 - `docs/hooks.md` - Lifecycle hook configuration, env vars, approval flow, recipes
+- `docs/performance.md` - Remote-operation tuning (SSH reuse), diagnosing slow commands with the tracer
 - `docs/recipes.md` - Step-by-step file lists for cross-cutting changes
 - `docs/shipping.md` - Merge strategies, consolidation, multi-stack shipping
 - `docs/tui.md` - TUI patterns, BaseModel, styling, components

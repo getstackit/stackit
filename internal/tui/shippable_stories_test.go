@@ -7,6 +7,7 @@ import (
 )
 
 func TestShippableStoriesRegistered(t *testing.T) {
+	t.Parallel()
 	// Verify shippable stories are registered
 	shippableCount := 0
 	mergeFlowCount := 0
@@ -25,6 +26,7 @@ func TestShippableStoriesRegistered(t *testing.T) {
 }
 
 func TestShippableStoryModelCreation(t *testing.T) {
+	t.Parallel()
 	// Verify each scenario creates a valid model
 	for _, scenario := range shippableScenarios {
 		model := newShippableStoryModel(scenario)
@@ -37,6 +39,7 @@ func TestShippableStoryModelCreation(t *testing.T) {
 }
 
 func TestMergeProgressSimulationCreation(t *testing.T) {
+	t.Parallel()
 	scenarios := []mergeScenarioType{
 		mergeScenarioHappyPath,
 		mergeScenarioWaitingCI,

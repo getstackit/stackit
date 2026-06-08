@@ -454,10 +454,12 @@ func buildGoldenTests() []goldenTest {
 }
 
 func TestStackTreeRenderer_Golden(t *testing.T) {
+	t.Parallel()
 	tests := buildGoldenTests()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			renderer := NewRenderer(tt.mock)
 
 			// Apply annotations if provided
@@ -532,6 +534,7 @@ func diffStrings(expected, actual string) string {
 // TestStackTreeRenderer_GoldenWithColors tests that colors are applied correctly
 // This test verifies ANSI codes are present without checking exact sequences
 func TestStackTreeRenderer_GoldenWithColors(t *testing.T) {
+	t.Parallel()
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 

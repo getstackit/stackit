@@ -16,17 +16,30 @@ import (
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-// countingRunner wraps a git.Runner and counts FetchRemoteShas calls. It lets
-// tests assert that submit reads the remote ref list once for the whole stack
-// rather than once per branch (a full `git ls-remote` each time).
+// countingRunner wraps a git.Runner and counts the network-bound operations
+// submit fans out over a stack. It lets tests assert that submit reads the
+// remote ref list once (not once per branch) and pushes the whole stack in a
+// single batched invocation rather than one `git push` per branch.
 type countingRunner struct {
 	git.Runner
 	fetchRemoteShas atomic.Int64
+	pushBranches    atomic.Int64
+	pushBranch      atomic.Int64
 }
 
 func (c *countingRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
 	c.fetchRemoteShas.Add(1)
 	return c.Runner.FetchRemoteShas(ctx, remote)
+}
+
+func (c *countingRunner) PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) map[string]error {
+	c.pushBranches.Add(1)
+	return c.Runner.PushBranches(ctx, remote, specs, opts)
+}
+
+func (c *countingRunner) PushBranch(ctx context.Context, branchName, remote string, opts git.PushOptions) error {
+	c.pushBranch.Add(1)
+	return c.Runner.PushBranch(ctx, branchName, remote, opts)
 }
 
 // noopHandler is a test handler that ignores all events
@@ -364,6 +377,63 @@ func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
 
 	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
 		"submit must read remote status once for the whole stack, not once per branch")
+}
+
+func TestSubmitPushesStackInSingleBatch(t *testing.T) {
+	t.Parallel()
+	// Regression test for the per-branch push N+1: submitting a stack must push
+	// every branch in one `git push` invocation, not one push per branch.
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"P":  "main",
+			"C1": "P",
+			"C2": "C1",
+		})
+
+	s.Checkout("P")
+
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot: s.Scene.Dir,
+		Trunk:    "main",
+		Git:      counting,
+	})
+	require.NoError(t, err)
+
+	config := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
+	githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
+
+	ctx := app.NewContext(eng,
+		app.WithRepoRoot(s.Scene.Dir),
+		app.WithWriter(&bytes.Buffer{}),
+		app.WithGlobalOptions(app.GlobalOptions{Verify: true}),
+	)
+	ctx.GitHubClient = githubClient
+
+	opts := submit.Options{
+		StackRange: engine.StackRangeFull(),
+		NoEdit:     true,
+		Draft:      true,
+	}
+
+	err = submit.Action(ctx, opts, &noopHandler{})
+	require.NoError(t, err)
+	require.Equal(t, 3, len(config.CreatedPRs), "should create a PR for each of P, C1, C2")
+
+	require.Equal(t, int64(1), counting.pushBranches.Load(),
+		"submit must push the whole stack in a single batched push")
+	require.Equal(t, int64(0), counting.pushBranch.Load(),
+		"submit must not fall back to per-branch pushes")
+
+	// Every branch landed on the remote.
+	for _, branch := range []string{"P", "C1", "C2"} {
+		require.NoError(t, s.Scene.Repo.RunGitCommand("rev-parse", "--verify", "refs/remotes/origin/"+branch),
+			"branch %s should be pushed to origin", branch)
+	}
 }
 
 func TestSubmitPreservesLockStatus(t *testing.T) {

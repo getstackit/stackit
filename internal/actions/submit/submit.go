@@ -279,12 +279,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	remote := nav.GetRemote()
 
 	// Read remote status for every branch once, up front. The force-with-lease
-	// pre-check in pushBranchIfNeeded needs each branch's remote SHA, and reading
-	// it per branch would run a full `git ls-remote` for the entire remote N
-	// times. A single batched read does one ls-remote and indexes every branch
-	// from it. Branches push to independent refs, so this snapshot stays valid
-	// across the parallel update path.
+	// guards below need each branch's remote SHA; reading per branch would run a
+	// full `git ls-remote` over the entire remote N times. One batched read does
+	// a single ls-remote and indexes every branch from it.
 	remoteStatuses := ctx.PR().ReadBranchRemoteStatuses(ctx.Context, branchObjs)
+
+	// Push every branch that needs it in a single git invocation instead of one
+	// `git push` per branch (N network round trips). The push runs before the
+	// create/update loop so every ref exists on the remote before its PR is
+	// created; the per-branch result is consumed by submitBranch below.
+	pushResults := pushSubmittedBranches(ctx, opts, submissionInfos, remote, remoteStatuses)
 
 	var submitErr error
 	var errMu sync.Mutex
@@ -293,7 +297,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if allCreates {
 			// Sequential submission for new stacks - ensures sequential PR numbers
 			for _, info := range submissionInfos {
-				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, remote, remoteStatuses); err != nil {
+				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, pushResults); err != nil {
 					errMu.Lock()
 					if submitErr == nil {
 						submitErr = err
@@ -304,7 +308,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		} else {
 			// Parallel submission for updates (faster when PRs already exist)
 			utils.Run(submissionInfos, func(info Info) {
-				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, remote, remoteStatuses); err != nil {
+				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, pushResults); err != nil {
 					errMu.Lock()
 					if submitErr == nil {
 						submitErr = err
@@ -366,14 +370,19 @@ func normalizeDisplayTreeParents(nav engine.StackNavigator, stackTree *tree.Stac
 	stackTree.ChildrenMap = childrenMap
 }
 
-// submitBranch submits a single branch
-func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, repoOwner, repoName, remote string, remoteStatuses engine.BranchRemoteStatuses) error {
+// submitBranch creates or updates the PR for a single branch. The branch has
+// already been pushed as part of the batched push in Action; pushResults carries
+// that branch's push outcome.
+func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, repoOwner, repoName string, pushResults map[string]error) error {
 	handler.OnEvent(BranchProgressEvent{
 		BranchName: info.BranchName,
 		Status:     StatusSubmitting,
 	})
 
-	if err := pushBranchIfNeeded(ctx, info, opts, remote, remoteStatuses); err != nil {
+	if err := pushResults[info.BranchName]; err != nil {
+		if errors.Is(err, git.ErrStaleRemoteInfo) {
+			err = fmt.Errorf("force-with-lease push of %s failed due to external changes to the remote branch. If you are collaborating on this stack, try 'stackit sync' to pull in changes. Alternatively, use the --force option to bypass the stale info warning", info.BranchName)
+		}
 		handler.OnEvent(BranchProgressEvent{
 			BranchName: info.BranchName,
 			Status:     StatusError,
@@ -442,39 +451,38 @@ func getGitHubClient(ctx *app.Context) (github.Client, error) {
 	return nil, fmt.Errorf("no GitHub client available - check your GITHUB_TOKEN")
 }
 
-// pushBranchIfNeeded pushes a branch to remote if needed. remoteStatuses is the
-// batched snapshot read once in Action, so this does not hit the network per
-// branch.
-func pushBranchIfNeeded(ctx *app.Context, submissionInfo Info, opts Options, remote string, remoteStatuses engine.BranchRemoteStatuses) error {
-	// Skip if dry run
-	if opts.DryRun {
-		return nil
+// pushSubmittedBranches pushes every branch that needs it in a single git
+// invocation and returns a per-branch result map (nil entry = success). A branch
+// already in sync with the remote is skipped (unless --force) to avoid a
+// spurious "cannot lock ref: reference already exists" rejection, and is absent
+// from the map — callers treat a missing entry as success. remoteStatuses is the
+// batched snapshot read once in Action, so building the push specs hits no
+// network per branch.
+func pushSubmittedBranches(ctx *app.Context, opts Options, infos []Info, remote string, remoteStatuses engine.BranchRemoteStatuses) map[string]error {
+	nav := ctx.Navigator()
+	forceWithLease := !opts.Force
+
+	specs := make([]git.PushSpec, 0, len(infos))
+	for _, info := range infos {
+		branch := nav.GetBranch(info.BranchName)
+		status := remoteStatuses.ForBranch(branch)
+		if forceWithLease && status.Matches() {
+			continue
+		}
+		specs = append(specs, git.PushSpec{
+			BranchName:        info.BranchName,
+			ExpectedRemoteSHA: status.RemoteSha,
+		})
 	}
 
-	forceWithLease := !opts.Force
-	branch := ctx.Navigator().GetBranch(submissionInfo.BranchName)
-	leaseExpectedSHA := ""
-	if forceWithLease {
-		status := remoteStatuses.ForBranch(branch)
-		// Remote already has this exact SHA — skip the push to avoid a spurious
-		// "cannot lock ref: reference already exists" rejection from the server.
-		if status.Matches() {
-			return nil
-		}
-		leaseExpectedSHA = status.RemoteSha
+	if len(specs) == 0 {
+		return map[string]error{}
 	}
-	if err := ctx.PR().PushBranch(ctx.Context, branch, remote, git.PushOptions{
-		Force:                     opts.Force,
-		ForceWithLease:            forceWithLease,
-		ForceWithLeaseExpectedSHA: leaseExpectedSHA,
-		NoVerify:                  !ctx.Verify,
-	}); err != nil {
-		if errors.Is(err, git.ErrStaleRemoteInfo) {
-			return fmt.Errorf("force-with-lease push of %s failed due to external changes to the remote branch. If you are collaborating on this stack, try 'stackit sync' to pull in changes. Alternatively, use the --force option to bypass the stale info warning", submissionInfo.BranchName)
-		}
-		return fmt.Errorf("failed to push branch %s: %w", submissionInfo.BranchName, err)
-	}
-	return nil
+
+	return ctx.PR().PushBranches(ctx.Context, remote, specs, git.PushOptions{
+		Force:    opts.Force,
+		NoVerify: !ctx.Verify,
+	})
 }
 
 // createPullRequestQuiet creates a new pull request without logging

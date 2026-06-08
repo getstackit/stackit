@@ -60,4 +60,6 @@ const (
 	SkipReasonNoChanges = "no changes"
 	// ActionUpdate indicates the branch will update an existing PR
 	ActionUpdate = "update"
+	// ActionCreate indicates the branch will create a new PR
+	ActionCreate = "create"
 )

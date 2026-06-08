@@ -151,7 +151,7 @@ func rowParts(item Item, spinnerView string, styles Styles) (string, string) {
 
 func actionLabel(action string) string {
 	switch action {
-	case "create":
+	case ActionCreate:
 		return "create"
 	case ActionUpdate:
 		return "update"
@@ -164,7 +164,7 @@ func actionLabel(action string) string {
 
 func pastTense(action string) string {
 	switch action {
-	case "create":
+	case ActionCreate:
 		return "created"
 	case ActionUpdate:
 		return "updated"

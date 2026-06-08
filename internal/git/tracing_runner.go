@@ -176,6 +176,19 @@ func (t *tracingRunner) PushBranch(ctx context.Context, branchName, remote strin
 	return err
 }
 
+func (t *tracingRunner) PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) map[string]error {
+	start := time.Now()
+	results := t.inner.PushBranches(ctx, remote, specs, opts)
+	failed := 0
+	for _, err := range results {
+		if err != nil {
+			failed++
+		}
+	}
+	t.trace("PushBranches", time.Since(start), failed == 0, nil, slog.String("remote", remote), slog.Int("branches", len(specs)), slog.Int("failed", failed))
+	return results
+}
+
 func (t *tracingRunner) PullBranch(ctx context.Context, remote, branchName string) (PullResult, error) {
 	start := time.Now()
 	result, err := t.inner.PullBranch(ctx, remote, branchName)

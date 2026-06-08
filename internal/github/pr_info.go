@@ -14,63 +14,59 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-// SyncPrInfo syncs PR information for branches from GitHub
+// SyncPrInfo syncs PR information for branches from GitHub. It fetches every
+// branch's PR in a single GraphQL query rather than one REST call per branch.
 func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []string, repoOwner, repoName string, onUpdate func(string, *PullRequestInfo)) error {
-	// Get GitHub token
-	token, err := getGitHubToken(runner)
-	if err != nil {
-		// If no token, skip PR syncing (non-fatal)
-		return nil //nolint:nilerr
-	}
-
-	// Get repository info if not provided
-	var repoInfo *RepoInfo
-	if repoOwner == "" || repoName == "" {
-		repoInfo, err = getRepoInfoWithHostname(ctx, runner)
-		if err != nil {
-			return nil //nolint:nilerr // Skip if can't determine repo
-		}
-		repoOwner = repoInfo.Owner
-		repoName = repoInfo.Repo
-	} else {
-		// Still need hostname for client configuration
-		repoInfo, err = getRepoInfoWithHostname(ctx, runner)
-		if err != nil {
-			return nil //nolint:nilerr // Skip if can't determine repo
-		}
-	}
-
-	// Create GitHub client with Enterprise support
-	client, err := createGitHubClient(ctx, repoInfo.Hostname, token)
-	if err != nil {
-		return nil //nolint:nilerr // Skip if can't create client
-	}
-
-	// Fetch PR info for each branch in parallel using a worker pool
 	if len(branchNames) == 0 {
 		return nil
 	}
 
-	utils.Run(branchNames, func(name string) {
-		pr, err := getPRInfoForBranch(ctx, client, repoOwner, repoName, name)
-		if err != nil {
-			return
-		}
+	// If no token, skip PR syncing (non-fatal).
+	token, err := getGitHubToken(runner)
+	if err != nil {
+		return nil //nolint:nilerr
+	}
 
-		if pr != nil {
-			info := ToPullRequestInfo(pr)
-			if onUpdate != nil {
+	// Resolve repository info. Even when owner/repo are provided, the hostname is
+	// needed for the REST fallback on GitHub Enterprise.
+	repoInfo, err := getRepoInfoWithHostname(ctx, runner)
+	if err != nil {
+		return nil //nolint:nilerr // Skip if can't determine repo
+	}
+	if repoOwner == "" || repoName == "" {
+		repoOwner = repoInfo.Owner
+		repoName = repoInfo.Repo
+	}
+
+	infos, err := batchGetPRInfoByBranchGraphQL(ctx, runner, repoOwner, repoName, branchNames)
+	if err == nil {
+		for name, info := range infos {
+			if info != nil && onUpdate != nil {
 				onUpdate(name, info)
 			}
 		}
+		return nil
+	}
+
+	client, err := createGitHubClient(ctx, repoInfo.Hostname, token)
+	if err != nil {
+		return nil //nolint:nilerr // Preserve best-effort PR sync behavior.
+	}
+
+	utils.Run(branchNames, func(name string) {
+		pr, err := getPRInfoForBranch(ctx, client, repoOwner, repoName, name)
+		if err != nil || pr == nil || onUpdate == nil {
+			return
+		}
+		onUpdate(name, ToPullRequestInfo(pr))
 	})
 
 	return nil
 }
 
-// getPRInfoForBranch gets PR info for a branch
+// getPRInfoForBranch gets PR info for a branch using the REST API. This is the
+// compatibility fallback when the batched GraphQL sync fails.
 func getPRInfoForBranch(ctx context.Context, client *github.Client, owner, repo, branchName string) (*github.PullRequest, error) {
-	// List PRs for this branch
 	prs, _, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
 		Head:  fmt.Sprintf("%s:%s", owner, branchName),
 		State: "all",
@@ -81,11 +77,9 @@ func getPRInfoForBranch(ctx context.Context, client *github.Client, owner, repo,
 	if err != nil {
 		return nil, err
 	}
-
 	if len(prs) == 0 {
 		return nil, nil
 	}
-
 	return prs[0], nil
 }
 

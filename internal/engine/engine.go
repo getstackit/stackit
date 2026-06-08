@@ -25,6 +25,7 @@ type PRManager interface {
 	UpsertPrInfo(ctx context.Context, branch Branch, prInfo *PrInfo) error
 	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
 	PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error
+	PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) map[string]error
 	// Navigation comment ID caching (stored in local metadata)
 	GetNavigationCommentID(branch Branch) (int64, error)
 	SetNavigationCommentID(branch Branch, commentID int64) error

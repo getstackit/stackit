@@ -118,6 +118,12 @@ func (e *engineImpl) PushBranch(ctx context.Context, branch Branch, remote strin
 	return e.git.PushBranch(ctx, branch.GetName(), remote, opts)
 }
 
+// PushBranches pushes multiple branches to the remote in a single git
+// invocation, returning a per-branch result map (nil entry = success).
+func (e *engineImpl) PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) map[string]error {
+	return e.git.PushBranches(ctx, remote, specs, opts)
+}
+
 // DeleteBranch deletes a branch and its metadata
 func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	branchName := branch.GetName()

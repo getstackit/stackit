@@ -132,6 +132,14 @@ func (e *engineImpl) BatchGetPRSubmissionStatus(branches Branches) (map[string]P
 		}
 	}
 
+	return e.BatchGetPRSubmissionStatusWithRemote(branches, remoteStatuses)
+}
+
+// BatchGetPRSubmissionStatusWithRemote is like BatchGetPRSubmissionStatus but
+// uses a caller-supplied remote-status snapshot. This lets a caller read the
+// remote once and reuse it — e.g. concurrently with other network work, or
+// across planning and the later push — instead of reading it again here.
+func (e *engineImpl) BatchGetPRSubmissionStatusWithRemote(branches Branches, remoteStatuses BranchRemoteStatuses) (map[string]PRSubmissionStatus, error) {
 	results := make(map[string]PRSubmissionStatus, len(branches))
 	for _, branch := range branches {
 		status, err := e.prSubmissionStatus(branch, remoteStatuses.ForBranch(branch))

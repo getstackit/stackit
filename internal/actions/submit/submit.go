@@ -219,12 +219,26 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Validate and prepare branches
 	handler.OnEvent(PreparingEvent{})
 
+	// Read remote branch status (one `git ls-remote`) concurrently with
+	// validation's PR-info sync (one GraphQL query). Both are independent network
+	// round trips, and overlapping them roughly halves the latency of a no-op
+	// submit, where these two reads dominate. The snapshot reflects post-restack
+	// local SHAs and is reused by planning and the push below, so the whole
+	// submit reads the remote ref list exactly once. The channel is buffered so
+	// the goroutine never blocks even if validation returns early.
+	remoteStatusCh := make(chan engine.BranchRemoteStatuses, 1)
+	go func() {
+		remoteStatusCh <- eng.ReadBranchRemoteStatuses(ctx.Context, branchObjs)
+	}()
+
 	if err := ValidateBranchesToSubmit(ctx, branches); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
+	remoteStatuses := <-remoteStatusCh
+
 	// Prepare branches for submit (show planning phase with current indicator)
-	submissionInfos, err := prepareBranchesForSubmit(ctx, branchObjs, opts, currentBranchName, handler)
+	submissionInfos, err := prepareBranchesForSubmit(ctx, branchObjs, opts, currentBranchName, remoteStatuses, handler)
 	if err != nil {
 		return fmt.Errorf("failed to prepare branches: %w", err)
 	}
@@ -278,16 +292,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	remote := nav.GetRemote()
 
-	// Read remote status for every branch once, up front. The force-with-lease
-	// guards below need each branch's remote SHA; reading per branch would run a
-	// full `git ls-remote` over the entire remote N times. One batched read does
-	// a single ls-remote and indexes every branch from it.
-	remoteStatuses := ctx.PR().ReadBranchRemoteStatuses(ctx.Context, branchObjs)
-
 	// Push every branch that needs it in a single git invocation instead of one
-	// `git push` per branch (N network round trips). The push runs before the
-	// create/update loop so every ref exists on the remote before its PR is
-	// created; the per-branch result is consumed by submitBranch below.
+	// `git push` per branch (N network round trips). The force-with-lease guards
+	// reuse remoteStatuses prefetched above, so no further `git ls-remote` runs.
+	// The push runs before the create/update loop so every ref exists on the
+	// remote before its PR is created; the per-branch result is consumed by
+	// submitBranch below.
 	pushResults := pushSubmittedBranches(ctx, opts, submissionInfos, remote, remoteStatuses)
 
 	var submitErr error

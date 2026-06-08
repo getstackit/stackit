@@ -436,6 +436,62 @@ func TestSubmitPushesStackInSingleBatch(t *testing.T) {
 	}
 }
 
+func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
+	t.Parallel()
+	// A second submit of an unchanged, in-sync stack must do no pushes and read
+	// the remote ref list exactly once (the shared prefetch), not per branch.
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"P":  "main",
+			"C1": "P",
+			"C2": "C1",
+		})
+
+	s.Checkout("P")
+
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot: s.Scene.Dir,
+		Trunk:    "main",
+		Git:      counting,
+	})
+	require.NoError(t, err)
+
+	config := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
+	githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
+
+	ctx := app.NewContext(eng,
+		app.WithRepoRoot(s.Scene.Dir),
+		app.WithWriter(&bytes.Buffer{}),
+		app.WithGlobalOptions(app.GlobalOptions{Verify: true}),
+	)
+	ctx.GitHubClient = githubClient
+
+	// First submit: creates the PRs and pushes the branches. Use non-draft so a
+	// subsequent submit with the same options has genuinely nothing to do.
+	firstOpts := submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true}
+	require.NoError(t, submit.Action(ctx, firstOpts, &noopHandler{}))
+	require.Equal(t, 3, len(config.CreatedPRs))
+
+	// Second submit: nothing changed, so it should be a no-op.
+	counting.fetchRemoteShas.Store(0)
+	counting.pushBranches.Store(0)
+	counting.pushBranch.Store(0)
+	createdBefore := len(config.CreatedPRs)
+
+	require.NoError(t, submit.Action(ctx, firstOpts, &noopHandler{}))
+
+	require.Equal(t, createdBefore, len(config.CreatedPRs), "no-op submit must not create PRs")
+	require.Equal(t, int64(0), counting.pushBranches.Load(), "no-op submit must not push")
+	require.Equal(t, int64(0), counting.pushBranch.Load(), "no-op submit must not push")
+	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
+		"no-op submit must read the remote ref list exactly once")
+}
+
 func TestSubmitPreservesLockStatus(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{

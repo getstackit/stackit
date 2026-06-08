@@ -58,6 +58,9 @@ type BranchStatus interface {
 	// BatchGetPRSubmissionStatus returns submission status for many branches,
 	// reading remote status once for the whole set instead of per branch.
 	BatchGetPRSubmissionStatus(branches Branches) (map[string]PRSubmissionStatus, error)
+	// BatchGetPRSubmissionStatusWithRemote is BatchGetPRSubmissionStatus with a
+	// caller-supplied remote-status snapshot, so the remote read can be shared.
+	BatchGetPRSubmissionStatusWithRemote(branches Branches, remoteStatuses BranchRemoteStatuses) (map[string]PRSubmissionStatus, error)
 	FindMostRecentTrackedAncestors(ctx context.Context, branchName string) ([]string, error)
 	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)

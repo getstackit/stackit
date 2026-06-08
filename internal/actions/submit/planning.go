@@ -8,15 +8,15 @@ import (
 	"github.com/getstackit/stackit/internal/errors"
 )
 
-// prepareBranchesForSubmit prepares submission info for each branch, emitting events via handler
-func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, handler Handler) ([]Info, error) {
+// prepareBranchesForSubmit prepares submission info for each branch, emitting
+// events via handler. remoteStatuses is the snapshot prefetched once in Action,
+// so this reads no remote state per branch.
+func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, remoteStatuses engine.BranchRemoteStatuses, handler Handler) ([]Info, error) {
 	submissionInfos := make([]Info, 0, len(branches))
 	nav := ctx.Navigator()
 
-	// Read submission status for every branch at once. This reads remote status
-	// a single time for the whole stack instead of a full `git ls-remote` per
-	// branch inside the loop.
-	statuses, err := ctx.Engine.BatchGetPRSubmissionStatus(branches)
+	// Compute submission status for every branch from the shared remote snapshot.
+	statuses, err := ctx.Engine.BatchGetPRSubmissionStatusWithRemote(branches, remoteStatuses)
 	if err != nil {
 		return nil, err
 	}

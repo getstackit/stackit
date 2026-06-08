@@ -46,6 +46,9 @@ type BranchStatus interface {
 	ReadBranchStatuses(branches Branches) BranchStatuses
 	IsMergedIntoTrunk(ctx context.Context, branchName string) (bool, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
+	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
+	// SHAs in one batched rev-parse instead of a diff per branch.
+	BatchIsBranchEmpty(branchNames []string) map[string]bool
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription

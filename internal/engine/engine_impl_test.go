@@ -896,6 +896,25 @@ func TestIsBranchEmpty(t *testing.T) {
 	})
 }
 
+func TestBatchIsBranchEmpty(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		CreateBranch("withchanges").
+		CommitChange("file1", "real change").
+		Checkout("main").
+		CreateBranch("emptycommit").
+		Commit("empty commit"). // --allow-empty: tree matches parent
+		Checkout("main").
+		CreateBranch("nochanges"). // no commit at all: tree matches parent
+		Checkout("main")
+
+	result := s.Engine.BatchIsBranchEmpty([]string{"withchanges", "emptycommit", "nochanges"})
+
+	require.False(t, result["withchanges"], "branch with real changes is not empty")
+	require.True(t, result["emptycommit"], "branch with an empty commit is empty")
+	require.True(t, result["nochanges"], "branch with no commits is empty")
+}
+
 func TestUpsertPrInfo(t *testing.T) {
 	t.Parallel()
 	t.Run("creates PR info for branch", func(t *testing.T) {

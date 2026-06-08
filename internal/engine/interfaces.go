@@ -55,6 +55,9 @@ type BranchStatus interface {
 	IsWorktreeAnchor(branch Branch) bool
 	GetBranchType(branch Branch) git.BranchType
 	GetPrInfo(branch Branch) (*PrInfo, error)
+	// BatchGetPRSubmissionStatus returns submission status for many branches,
+	// reading remote status once for the whole set instead of per branch.
+	BatchGetPRSubmissionStatus(branches Branches) (map[string]PRSubmissionStatus, error)
 	FindMostRecentTrackedAncestors(ctx context.Context, branchName string) ([]string, error)
 	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)

@@ -13,12 +13,17 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	submissionInfos := make([]Info, 0, len(branches))
 	nav := ctx.Navigator()
 
+	// Read submission status for every branch at once. This reads remote status
+	// a single time for the whole stack instead of a full `git ls-remote` per
+	// branch inside the loop.
+	statuses, err := ctx.Engine.BatchGetPRSubmissionStatus(branches)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, branch := range branches {
 		branchName := branch.GetName()
-		status, err := branch.GetPRSubmissionStatus()
-		if err != nil {
-			return nil, err
-		}
+		status := statuses[branchName]
 
 		action := status.Action
 		prNumber := status.PRNumber

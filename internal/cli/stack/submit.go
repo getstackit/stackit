@@ -141,20 +141,9 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			ConfigAssignees: configAssignees,
 		}
 
-		// Pre-flight: skip the TUI when there's no submittable scope. The
-		// runner sets output to quiet, so without this check the
-		// "No branches to submit" CompletionEvent races with the deferred
-		// Cleanup and the user only sees bubbletea startup/teardown codes.
-		hasWork, err := submit.HasSubmitWork(ctx, opts)
-		if err != nil {
-			return err
-		}
-		if !hasWork {
-			ctx.Output.Info("No branches to submit.")
-			return nil
-		}
-
-		// Create runner (manages terminal state) and handler (processes events)
+		// Action is the single source of truth for what to submit. The runner
+		// starts lazily (on the first stack-display event), so calling Action
+		// unconditionally no longer flashes the TUI when there's nothing to do.
 		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger)
 		defer runner.Cleanup()
 		return submit.Action(ctx, opts, handler)
@@ -210,19 +199,22 @@ func NewSubmitUI(out output.Output, logger output.Logger) (*tui.Runner, submit.H
 	if tui.IsTTY() {
 		model := submitComponent.NewModel(nil)
 		runner := tui.NewRunner(model, out, logger)
-		runner.Start()
-		return runner, NewInteractiveSubmitHandler(runner, model)
+		// Start lazily on the first stack-display event rather than here, so a
+		// submit that turns out to have nothing to do never flashes the bubbletea
+		// startup/teardown sequence. See InteractiveSubmitHandler.OnEvent.
+		return runner, NewInteractiveSubmitHandler(runner, model, out)
 	}
 	return nil, NewSimpleSubmitHandler(out)
 }
 
 // SimpleSubmitHandler implements submit.Handler with line-by-line output
 type SimpleSubmitHandler struct {
-	splog   output.Output
-	out     io.Writer
-	items   map[string]*branchItem
-	mu      sync.Mutex
-	started bool
+	splog     output.Output
+	out       io.Writer
+	items     map[string]*branchItem
+	mu        sync.Mutex
+	started   bool
+	displayed bool
 }
 
 type branchItem struct {
@@ -246,6 +238,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 
 	switch ev := e.(type) {
 	case submit.StackDisplayEvent:
+		h.displayed = true
 		h.splog.Info("Stack to submit:")
 		for _, branch := range ev.Stack.Branches {
 			marker := "  "
@@ -328,7 +321,14 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		}
 
 	case submit.CompletionEvent:
-		if !ev.Success && ev.Message != "" {
+		switch {
+		case !ev.Success && ev.Message != "":
+			h.splog.Info("%s", ev.Message)
+		case ev.Success && !h.displayed && ev.Message != "":
+			// No stack was ever displayed (empty scope / nothing to submit).
+			// Surface the outcome that the CLI used to print before delegating
+			// work-detection to Action. Cases that show a stack first (dry run,
+			// all up to date) already convey the outcome via the plan lines.
 			h.splog.Info("%s", ev.Message)
 		}
 	}
@@ -349,14 +349,15 @@ func (h *SimpleSubmitHandler) IsInteractive() bool {
 type InteractiveSubmitHandler struct {
 	runner        *tui.Runner
 	model         *submitComponent.Model
+	out           output.Output
 	inSubmitPhase bool
 	stack         *tree.StackTree
 	fixedMap      map[string]bool
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
-func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model) *InteractiveSubmitHandler {
-	return &InteractiveSubmitHandler{runner: runner, model: model}
+func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output) *InteractiveSubmitHandler {
+	return &InteractiveSubmitHandler{runner: runner, model: model, out: out}
 }
 
 // findRootBranch finds the root branch of the stack (the one whose parent is trunk)
@@ -425,6 +426,10 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		h.model.Renderer = renderer
 		h.model.RootBranch = h.findRootBranch()
 
+		// Start the TUI now that there's a populated stack to show. Idempotent,
+		// so later events that arrive after this are safe.
+		h.runner.Start()
+
 	case submit.RestackEvent:
 		if ev.Started {
 			h.runner.Send(submitComponent.GlobalMessageMsg("Restacking branches..."))
@@ -488,6 +493,15 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		})
 
 	case submit.CompletionEvent:
+		// If no stack was ever displayed (e.g. nothing to submit), the TUI was
+		// never started — print the outcome plainly instead of routing it
+		// through a runner that isn't running.
+		if !h.runner.IsRunning() {
+			if ev.Message != "" {
+				h.out.Info("%s", ev.Message)
+			}
+			return
+		}
 		if ev.Message != "" && ev.Message != "Submit complete" {
 			h.runner.Send(submitComponent.GlobalMessageMsg(ev.Message))
 		} else {

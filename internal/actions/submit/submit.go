@@ -73,40 +73,6 @@ type Info struct {
 	Metadata   *PRMetadata
 }
 
-// HasSubmitWork reports whether Action might do anything worth showing a
-// progress TUI for. Use this from the CLI to gate TUI initialization — when
-// the answer is no, starting the bubbletea runner only flashes its
-// startup/teardown escape codes and races with the deferred Cleanup before
-// the "no branches to submit" message can render.
-//
-// Returns true if the target branch is untracked (Action will prompt or
-// print a tracking hint, both of which need the TUI lifecycle to behave),
-// or if there is at least one branch in the resolved scope. Returns false
-// only when the scope is verifiably empty for a tracked target.
-func HasSubmitWork(ctx *app.Context, opts Options) (bool, error) {
-	nav := ctx.Navigator()
-	var targetBranch engine.Branch
-	switch {
-	case opts.Branch != "":
-		targetBranch = nav.GetBranch(opts.Branch)
-	default:
-		if cb := nav.CurrentBranch(); cb != nil {
-			targetBranch = *cb
-		}
-	}
-	// Untracked non-trunk targets reach the prompt/hint path inside Action;
-	// keep the TUI alive so the interactive flow works as designed.
-	if targetBranch.GetName() != "" && !targetBranch.IsTracked() && !targetBranch.IsTrunk() {
-		return true, nil
-	}
-
-	branches, err := getBranchesToSubmit(ctx, opts)
-	if err != nil {
-		return false, err
-	}
-	return len(branches) > 0, nil
-}
-
 // Action performs the submit operation with an event handler for progress feedback.
 func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Validate flags

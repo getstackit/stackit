@@ -2,7 +2,6 @@
 package submit
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -53,7 +52,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 	}
 
 	// Validate no empty branches
-	if err := validateNoEmptyBranches(ctx.Context, branches, ctx.Navigator(), ctx); err != nil {
+	if err := validateNoEmptyBranches(branches, ctx); err != nil {
 		return err
 	}
 
@@ -105,14 +104,13 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 }
 
 // validateNoEmptyBranches checks for empty branches and prompts user if found
-func validateNoEmptyBranches(ctx context.Context, branches []string, nav engine.StackNavigator, runtimeCtx *app.Context) error {
+func validateNoEmptyBranches(branches []string, runtimeCtx *app.Context) error {
+	// Resolve emptiness for the whole set in one batched rev-parse rather than a
+	// diff per branch.
+	empty := runtimeCtx.Engine.BatchIsBranchEmpty(branches)
 	emptyBranches := []string{}
 	for _, branchName := range branches {
-		isEmpty, err := nav.IsBranchEmpty(ctx, branchName)
-		if err != nil {
-			continue
-		}
-		if isEmpty {
+		if empty[branchName] {
 			emptyBranches = append(emptyBranches, branchName)
 		}
 	}

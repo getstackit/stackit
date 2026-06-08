@@ -46,6 +46,9 @@ type BranchStatus interface {
 	ReadBranchStatuses(branches Branches) BranchStatuses
 	IsMergedIntoTrunk(ctx context.Context, branchName string) (bool, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
+	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
+	// SHAs in one batched rev-parse instead of a diff per branch.
+	BatchIsBranchEmpty(branchNames []string) map[string]bool
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription
@@ -55,6 +58,12 @@ type BranchStatus interface {
 	IsWorktreeAnchor(branch Branch) bool
 	GetBranchType(branch Branch) git.BranchType
 	GetPrInfo(branch Branch) (*PrInfo, error)
+	// BatchGetPRSubmissionStatus returns submission status for many branches,
+	// reading remote status once for the whole set instead of per branch.
+	BatchGetPRSubmissionStatus(branches Branches) (map[string]PRSubmissionStatus, error)
+	// BatchGetPRSubmissionStatusWithRemote is BatchGetPRSubmissionStatus with a
+	// caller-supplied remote-status snapshot, so the remote read can be shared.
+	BatchGetPRSubmissionStatusWithRemote(branches Branches, remoteStatuses BranchRemoteStatuses) (map[string]PRSubmissionStatus, error)
 	FindMostRecentTrackedAncestors(ctx context.Context, branchName string) ([]string, error)
 	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)

@@ -327,6 +327,59 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 	return e.git.IsDiffEmpty(ctx, branchName, parentRev)
 }
 
+// BatchIsBranchEmpty reports, for each branch, whether it has no changes against
+// its parent. A branch is empty iff its tree matches its parent's tree (trees
+// are content-addressed, so equal SHA ⇔ no diff). All branch and parent tree
+// SHAs are resolved in a single batched rev-parse rather than a `git diff` per
+// branch. Branches whose trees cannot be resolved are omitted from the result.
+func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) map[string]bool {
+	result := make(map[string]bool, len(branchNames))
+	if len(branchNames) == 0 {
+		return result
+	}
+
+	e.mu.RLock()
+	trunk := e.trunk
+	parents := make(map[string]string, len(branchNames))
+	for _, name := range branchNames {
+		parent := trunk
+		if state := e.readState(name); state != nil {
+			parent = state.Parent
+		}
+		parents[name] = parent
+	}
+	e.mu.RUnlock()
+
+	// Collect each distinct ref's tree spec for one batched rev-parse.
+	treeRefs := make([]string, 0, len(branchNames)*2)
+	seen := make(map[string]struct{}, len(branchNames)*2)
+	addRef := func(ref string) {
+		spec := ref + "^{tree}"
+		if _, ok := seen[spec]; ok {
+			return
+		}
+		seen[spec] = struct{}{}
+		treeRefs = append(treeRefs, spec)
+	}
+	for _, name := range branchNames {
+		addRef(name)
+		addRef(parents[name])
+	}
+
+	trees, _ := e.git.BatchGetRevisions(treeRefs)
+
+	for _, name := range branchNames {
+		branchTree, ok1 := trees[name+"^{tree}"]
+		parentTree, ok2 := trees[parents[name]+"^{tree}"]
+		if !ok1 || !ok2 {
+			continue
+		}
+		result[name] = branchTree == parentTree
+	}
+
+	return result
+}
+
 // GetDeletionStatuses checks deletion status for multiple branches in a single batch.
 // It batch-fetches metadata, revisions, and merged status, then evaluates the canonical
 // deletion policy for each branch.

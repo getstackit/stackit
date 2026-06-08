@@ -8,17 +8,30 @@ import (
 	"github.com/getstackit/stackit/internal/errors"
 )
 
-// prepareBranchesForSubmit prepares submission info for each branch, emitting events via handler
-func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, handler Handler) ([]Info, error) {
+// prepareBranchesForSubmit prepares submission info for each branch, emitting
+// events via handler. When remoteStatuses is provided, planning reuses that
+// snapshot; otherwise it asks the engine for lazily batched status so create-only
+// dry runs do not read remote state.
+func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, remoteStatuses engine.BranchRemoteStatuses, handler Handler) ([]Info, error) {
 	submissionInfos := make([]Info, 0, len(branches))
 	nav := ctx.Navigator()
 
+	var (
+		statuses map[string]engine.PRSubmissionStatus
+		err      error
+	)
+	if remoteStatuses == nil {
+		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(branches)
+	} else {
+		statuses, err = ctx.Engine.BatchGetPRSubmissionStatusWithRemote(branches, remoteStatuses)
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	for _, branch := range branches {
 		branchName := branch.GetName()
-		status, err := branch.GetPRSubmissionStatus()
-		if err != nil {
-			return nil, err
-		}
+		status := statuses[branchName]
 
 		action := status.Action
 		prNumber := status.PRNumber

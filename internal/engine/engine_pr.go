@@ -112,6 +112,48 @@ func (e *engineImpl) UpsertPrInfo(ctx context.Context, branch Branch, prInfo *Pr
 
 // GetPRSubmissionStatus returns the submission status of a branch
 func (e *engineImpl) GetPRSubmissionStatus(branch Branch) (PRSubmissionStatus, error) {
+	remoteStatus := e.ReadBranchRemoteStatuses(context.Background(), BranchesOf(branch)).ForBranch(branch)
+	return e.prSubmissionStatus(branch, remoteStatus)
+}
+
+// BatchGetPRSubmissionStatus returns the submission status for every branch,
+// reading remote status once for the whole set instead of once per branch (a
+// full `git ls-remote` each time). Results are keyed by branch name.
+func (e *engineImpl) BatchGetPRSubmissionStatus(branches Branches) (map[string]PRSubmissionStatus, error) {
+	// Only branches with an existing PR consult remote status; creates return
+	// early without it. Read the remote a single time, and only if at least one
+	// branch needs it, so an all-creates stack stays fully offline here.
+	remoteStatuses := BranchRemoteStatuses{}
+	for _, branch := range branches {
+		prInfo, err := e.GetPrInfo(branch)
+		if err == nil && prInfo != nil && prInfo.Number() != nil {
+			remoteStatuses = e.ReadBranchRemoteStatuses(context.Background(), branches)
+			break
+		}
+	}
+
+	return e.BatchGetPRSubmissionStatusWithRemote(branches, remoteStatuses)
+}
+
+// BatchGetPRSubmissionStatusWithRemote is like BatchGetPRSubmissionStatus but
+// uses a caller-supplied remote-status snapshot. This lets a caller read the
+// remote once and reuse it — e.g. concurrently with other network work, or
+// across planning and the later push — instead of reading it again here.
+func (e *engineImpl) BatchGetPRSubmissionStatusWithRemote(branches Branches, remoteStatuses BranchRemoteStatuses) (map[string]PRSubmissionStatus, error) {
+	results := make(map[string]PRSubmissionStatus, len(branches))
+	for _, branch := range branches {
+		status, err := e.prSubmissionStatus(branch, remoteStatuses.ForBranch(branch))
+		if err != nil {
+			return nil, err
+		}
+		results[branch.GetName()] = status
+	}
+	return results, nil
+}
+
+// prSubmissionStatus computes a branch's submission status from a precomputed
+// remote status, so batched callers read the remote once.
+func (e *engineImpl) prSubmissionStatus(branch Branch, remoteStatus BranchRemoteStatus) (PRSubmissionStatus, error) {
 	prInfo, err := e.GetPrInfo(branch)
 	if err != nil {
 		return PRSubmissionStatus{}, err
@@ -135,8 +177,7 @@ func (e *engineImpl) GetPRSubmissionStatus(branch Branch) (PRSubmissionStatus, e
 
 	// It's an update
 	baseChanged := prInfo.Base() != parentBranchName
-	status := e.ReadBranchRemoteStatuses(context.Background(), BranchesOf(branch)).ForBranch(branch)
-	branchMatches := status.Matches()
+	branchMatches := remoteStatus.Matches()
 
 	// Check if PR title needs update due to scope changes
 	titleNeedsUpdate := e.prTitleNeedsUpdate(branch, prInfo)

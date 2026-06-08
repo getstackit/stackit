@@ -216,6 +216,14 @@ func (d *demoGitRunner) PushBranch(_ context.Context, _, _ string, _ git.PushOpt
 	return nil
 }
 
+func (d *demoGitRunner) PushBranches(_ context.Context, _ string, specs []git.PushSpec, _ git.PushOptions) map[string]error {
+	results := make(map[string]error, len(specs))
+	for _, s := range specs {
+		results[s.BranchName] = nil
+	}
+	return results
+}
+
 func (d *demoGitRunner) Rebase(_ context.Context, _, _, _ string) (git.RebaseOutcome, error) {
 	return git.RebaseOutcome{Result: git.RebaseDone}, nil
 }

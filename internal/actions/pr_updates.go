@@ -10,18 +10,55 @@ import (
 
 // UpdateStackPRMetadata updates PR titles and body footers for a list of branches
 func UpdateStackPRMetadata(ctx *app.Context, branches []string, repoOwner, repoName string) {
-	// Update PRs in parallel using a worker pool
 	if len(branches) == 0 {
 		return
 	}
 
+	// Fetch every PR's current title/body in one GraphQL query instead of one
+	// GetPullRequest per branch, then update each in parallel.
+	current := FetchPRContentForBranches(ctx, branches, repoOwner, repoName)
+
 	utils.Run(branches, func(name string) {
-		UpdateBranchPRMetadata(ctx, name, repoOwner, repoName)
+		UpdateBranchPRMetadataWithContent(ctx, name, repoOwner, repoName, current)
 	})
 }
 
-// UpdateBranchPRMetadata updates PR title and body footer for a single branch
+// FetchPRContentForBranches fetches the current title and body for the PRs of
+// the given branches in a single GraphQL query, keyed by PR number. Branches
+// without a known PR number are skipped. On failure it returns an empty map; the
+// per-branch update then falls back to a direct GetPullRequest.
+func FetchPRContentForBranches(ctx *app.Context, branches []string, repoOwner, repoName string) map[int]github.PRContent {
+	prNumbers := make([]int, 0, len(branches))
+	for _, name := range branches {
+		prInfo, err := ctx.Engine.GetBranch(name).GetPrInfo()
+		if err != nil || prInfo == nil || prInfo.Number() == nil {
+			continue
+		}
+		prNumbers = append(prNumbers, *prInfo.Number())
+	}
+	if len(prNumbers) == 0 {
+		return map[int]github.PRContent{}
+	}
+
+	content, err := github.BatchGetPRContentGraphQL(ctx.Context, ctx.Git(), repoOwner, repoName, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	if err != nil {
+		ctx.Output.Debug("Failed to batch-fetch PR content: %v", err)
+		return map[int]github.PRContent{}
+	}
+	return content
+}
+
+// UpdateBranchPRMetadata updates PR title and body footer for a single branch.
 func UpdateBranchPRMetadata(ctx *app.Context, name string, repoOwner, repoName string) {
+	current := FetchPRContentForBranches(ctx, []string{name}, repoOwner, repoName)
+	UpdateBranchPRMetadataWithContent(ctx, name, repoOwner, repoName, current)
+}
+
+// UpdateBranchPRMetadataWithContent updates PR title and body footer for a single
+// branch, using PR content pre-fetched in bulk by FetchPRContentForBranches. If
+// the branch's PR is not present in current (a batch miss or fetch failure), it
+// falls back to a direct GetPullRequest so the freshness guarantee is preserved.
+func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, repoOwner, repoName string, current map[int]github.PRContent) {
 	branch := ctx.Engine.GetBranch(name)
 	prInfo, err := branch.GetPrInfo()
 	if err != nil || prInfo == nil || prInfo.Number() == nil {
@@ -31,17 +68,21 @@ func UpdateBranchPRMetadata(ctx *app.Context, name string, repoOwner, repoName s
 
 	prNumber := *prInfo.Number()
 
-	// 1. Fetch latest PR state from GitHub (Option 1)
-	latestPR, err := ctx.GitHub().GetPullRequest(ctx.Context, repoOwner, repoName, prNumber)
-	if err != nil {
-		ctx.Output.Debug("Failed to fetch PR #%d for %s: %v", prNumber, name, err)
-		return
+	// Use the bulk-fetched current state, falling back to a single GET on a miss.
+	content, ok := current[prNumber]
+	if !ok {
+		latestPR, err := ctx.GitHub().GetPullRequest(ctx.Context, repoOwner, repoName, prNumber)
+		if err != nil {
+			ctx.Output.Debug("Failed to fetch PR #%d for %s: %v", prNumber, name, err)
+			return
+		}
+		content = github.PRContent{Title: latestPR.Title, Body: latestPR.Body}
 	}
 
-	// 2. Calculate updates
+	// Calculate updates
 	scope := ctx.Engine.GetScope(branch)
-	currentTitle := latestPR.Title
-	currentBody := latestPR.Body
+	currentTitle := content.Title
+	currentBody := content.Body
 
 	updatedTitle := scope.ApplyToTitle(currentTitle)
 

@@ -324,14 +324,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return submitErr
 	}
 
-	// Update PR body footers with per-branch progress
+	// Update PR body footers with per-branch progress. Fetch every PR's current
+	// content in one GraphQL query up front (instead of a GET per branch), then
+	// apply each footer/title update in parallel.
 	if opts.SubmitFooter {
+		prContent := actions.FetchPRContentForBranches(ctx, branches, repoOwner, repoName)
 		utils.Run(branches, func(name string) {
 			handler.OnEvent(BranchProgressEvent{
 				BranchName: name,
 				Status:     StatusSyncing,
 			})
-			actions.UpdateBranchPRMetadata(ctx, name, repoOwner, repoName)
+			actions.UpdateBranchPRMetadataWithContent(ctx, name, repoOwner, repoName, prContent)
 			handler.OnEvent(BranchProgressEvent{
 				BranchName: name,
 				Status:     StatusDone,

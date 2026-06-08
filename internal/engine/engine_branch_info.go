@@ -2,7 +2,7 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -58,8 +58,7 @@ func (e *engineImpl) GetCommitCount(branch Branch) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	var count int
-	_, _ = fmt.Sscanf(strings.TrimSpace(out), "%d", &count)
+	count, _ := strconv.Atoi(strings.TrimSpace(out))
 	e.commitCountCache.Store(cacheKey, count)
 	return count, nil
 }
@@ -93,9 +92,8 @@ func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
 		}
 		fields := strings.Fields(line)
 		if len(fields) >= 2 {
-			var a, d int
-			_, _ = fmt.Sscanf(fields[0], "%d", &a)
-			_, _ = fmt.Sscanf(fields[1], "%d", &d)
+			a, _ := strconv.Atoi(fields[0])
+			d, _ := strconv.Atoi(fields[1])
 			added += a
 			deleted += d
 		}

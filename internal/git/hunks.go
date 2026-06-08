@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -179,11 +180,7 @@ func ParseDiffOutput(diffOutput string) ([]Hunk, error) {
 
 // parseInt parses a string to int, returns 0 if empty or invalid
 func parseInt(s string) int {
-	if s == "" {
-		return 0
-	}
-	var result int
-	_, _ = fmt.Sscanf(s, "%d", &result)
+	result, _ := strconv.Atoi(s)
 	return result
 }
 

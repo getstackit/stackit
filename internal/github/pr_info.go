@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/go-github/v67/github"
 	"golang.org/x/oauth2"
+
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // SyncPrInfo syncs PR information for branches from GitHub. It fetches every
@@ -20,35 +22,65 @@ func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 	}
 
 	// If no token, skip PR syncing (non-fatal).
-	if _, err := getGitHubToken(runner); err != nil {
+	token, err := getGitHubToken(runner)
+	if err != nil {
 		return nil //nolint:nilerr
 	}
 
-	// Resolve repository info if not provided.
+	// Resolve repository info. Even when owner/repo are provided, the hostname is
+	// needed for the REST fallback on GitHub Enterprise.
+	repoInfo, err := getRepoInfoWithHostname(ctx, runner)
+	if err != nil {
+		return nil //nolint:nilerr // Skip if can't determine repo
+	}
 	if repoOwner == "" || repoName == "" {
-		repoInfo, err := getRepoInfoWithHostname(ctx, runner)
-		if err != nil {
-			return nil //nolint:nilerr // Skip if can't determine repo
-		}
 		repoOwner = repoInfo.Owner
 		repoName = repoInfo.Repo
 	}
 
 	infos, err := batchGetPRInfoByBranchGraphQL(ctx, runner, repoOwner, repoName, branchNames)
-	if err != nil {
-		return err
-	}
-
-	if onUpdate == nil {
+	if err == nil {
+		for name, info := range infos {
+			if info != nil && onUpdate != nil {
+				onUpdate(name, info)
+			}
+		}
 		return nil
 	}
-	for name, info := range infos {
-		if info != nil {
-			onUpdate(name, info)
-		}
+
+	client, err := createGitHubClient(ctx, repoInfo.Hostname, token)
+	if err != nil {
+		return nil //nolint:nilerr // Preserve best-effort PR sync behavior.
 	}
 
+	utils.Run(branchNames, func(name string) {
+		pr, err := getPRInfoForBranch(ctx, client, repoOwner, repoName, name)
+		if err != nil || pr == nil || onUpdate == nil {
+			return
+		}
+		onUpdate(name, ToPullRequestInfo(pr))
+	})
+
 	return nil
+}
+
+// getPRInfoForBranch gets PR info for a branch using the REST API. This is the
+// compatibility fallback when the batched GraphQL sync fails.
+func getPRInfoForBranch(ctx context.Context, client *github.Client, owner, repo, branchName string) (*github.PullRequest, error) {
+	prs, _, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
+		Head:  fmt.Sprintf("%s:%s", owner, branchName),
+		State: "all",
+		ListOptions: github.ListOptions{
+			PerPage: 1,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(prs) == 0 {
+		return nil, nil
+	}
+	return prs[0], nil
 }
 
 // createGitHubClient creates a GitHub client configured for the given hostname

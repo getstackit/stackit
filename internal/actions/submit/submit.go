@@ -186,22 +186,28 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.OnEvent(PreparingEvent{})
 
 	// Read remote branch status (one `git ls-remote`) concurrently with
-	// validation's PR-info sync (one GraphQL query). Both are independent network
-	// round trips, and overlapping them roughly halves the latency of a no-op
-	// submit, where these two reads dominate. The snapshot reflects post-restack
-	// local SHAs and is reused by planning and the push below, so the whole
-	// submit reads the remote ref list exactly once. The channel is buffered so
-	// the goroutine never blocks even if validation returns early.
-	remoteStatusCh := make(chan engine.BranchRemoteStatuses, 1)
-	go func() {
-		remoteStatusCh <- eng.ReadBranchRemoteStatuses(ctx.Context, branchObjs)
-	}()
+	// validation's PR-info sync (one GraphQL query) for real submits. Dry runs use
+	// the engine's lazy batched status path below so create-only stacks stay
+	// offline. The snapshot reflects post-restack local SHAs and is reused by
+	// planning and the push below, so a real submit reads the remote ref list
+	// exactly once. The channel is buffered so the goroutine never blocks even if
+	// validation returns early.
+	var remoteStatusCh chan engine.BranchRemoteStatuses
+	if !opts.DryRun {
+		remoteStatusCh = make(chan engine.BranchRemoteStatuses, 1)
+		go func() {
+			remoteStatusCh <- eng.ReadBranchRemoteStatuses(ctx.Context, branchObjs)
+		}()
+	}
 
 	if err := ValidateBranchesToSubmit(ctx, branches); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	remoteStatuses := <-remoteStatusCh
+	var remoteStatuses engine.BranchRemoteStatuses
+	if remoteStatusCh != nil {
+		remoteStatuses = <-remoteStatusCh
+	}
 
 	// Prepare branches for submit (show planning phase with current indicator)
 	submissionInfos, err := prepareBranchesForSubmit(ctx, branchObjs, opts, currentBranchName, remoteStatuses, handler)

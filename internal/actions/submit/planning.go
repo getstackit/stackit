@@ -9,14 +9,22 @@ import (
 )
 
 // prepareBranchesForSubmit prepares submission info for each branch, emitting
-// events via handler. remoteStatuses is the snapshot prefetched once in Action,
-// so this reads no remote state per branch.
+// events via handler. When remoteStatuses is provided, planning reuses that
+// snapshot; otherwise it asks the engine for lazily batched status so create-only
+// dry runs do not read remote state.
 func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, remoteStatuses engine.BranchRemoteStatuses, handler Handler) ([]Info, error) {
 	submissionInfos := make([]Info, 0, len(branches))
 	nav := ctx.Navigator()
 
-	// Compute submission status for every branch from the shared remote snapshot.
-	statuses, err := ctx.Engine.BatchGetPRSubmissionStatusWithRemote(branches, remoteStatuses)
+	var (
+		statuses map[string]engine.PRSubmissionStatus
+		err      error
+	)
+	if remoteStatuses == nil {
+		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(branches)
+	} else {
+		statuses, err = ctx.Engine.BatchGetPRSubmissionStatusWithRemote(branches, remoteStatuses)
+	}
 	if err != nil {
 		return nil, err
 	}

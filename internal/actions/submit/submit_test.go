@@ -379,6 +379,49 @@ func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
 		"submit must read remote status once for the whole stack, not once per branch")
 }
 
+func TestSubmitDryRunCreateOnlySkipsRemoteStatusRead(t *testing.T) {
+	t.Parallel()
+	// A create-only dry run can compute every action locally; it should not pay a
+	// remote ls-remote round trip when no push will happen.
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"P":  "main",
+			"C1": "P",
+			"C2": "C1",
+		})
+
+	s.Checkout("P")
+
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot: s.Scene.Dir,
+		Trunk:    "main",
+		Git:      counting,
+	})
+	require.NoError(t, err)
+
+	ctx := app.NewContext(eng,
+		app.WithRepoRoot(s.Scene.Dir),
+		app.WithWriter(&bytes.Buffer{}),
+		app.WithGlobalOptions(app.GlobalOptions{Verify: true}),
+	)
+
+	opts := submit.Options{
+		StackRange: engine.StackRangeFull(),
+		NoEdit:     true,
+		DryRun:     true,
+	}
+
+	require.NoError(t, submit.Action(ctx, opts, &noopHandler{}))
+	require.Equal(t, int64(0), counting.fetchRemoteShas.Load(),
+		"create-only dry runs must not read remote status")
+	require.Equal(t, int64(0), counting.pushBranches.Load(), "dry runs must not push")
+	require.Equal(t, int64(0), counting.pushBranch.Load(), "dry runs must not push")
+}
+
 func TestSubmitPushesStackInSingleBatch(t *testing.T) {
 	t.Parallel()
 	// Regression test for the per-branch push N+1: submitting a stack must push

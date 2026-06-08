@@ -15,7 +15,9 @@ func viewString(v tea.View) string {
 }
 
 func TestModel_EmptyPlan(t *testing.T) {
+	t.Parallel()
 	t.Run("empty plan shows initializing message", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 
 		// Before any plan is loaded, groups is empty
@@ -34,6 +36,7 @@ func TestModel_EmptyPlan(t *testing.T) {
 	})
 
 	t.Run("empty plan with done shows complete", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 		model.Done = true
 
@@ -46,6 +49,7 @@ func TestModel_EmptyPlan(t *testing.T) {
 	})
 
 	t.Run("empty plan with summary shows summary", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 		model.Done = true
 		model.Summary = "Created PR #123"
@@ -57,7 +61,9 @@ func TestModel_EmptyPlan(t *testing.T) {
 }
 
 func TestModel_PlanLoadedMsg(t *testing.T) {
+	t.Parallel()
 	t.Run("loads plan with groups", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 
 		msg := PlanLoadedMsg{
@@ -78,6 +84,7 @@ func TestModel_PlanLoadedMsg(t *testing.T) {
 	})
 
 	t.Run("creates default groups when none provided", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 
 		msg := PlanLoadedMsg{
@@ -98,7 +105,9 @@ func TestModel_PlanLoadedMsg(t *testing.T) {
 }
 
 func TestModel_View_ProgressIndicator(t *testing.T) {
+	t.Parallel()
 	t.Run("shows correct progress", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 
 		// Load a plan with 3 groups
@@ -138,7 +147,9 @@ func TestModel_View_ProgressIndicator(t *testing.T) {
 }
 
 func TestModel_View_StepStatuses(t *testing.T) {
+	t.Parallel()
 	t.Run("shows running step with spinner", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 
 		loadMsg := PlanLoadedMsg{
@@ -161,6 +172,7 @@ func TestModel_View_StepStatuses(t *testing.T) {
 	})
 
 	t.Run("shows completed step with checkmark", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 
 		loadMsg := PlanLoadedMsg{
@@ -182,6 +194,7 @@ func TestModel_View_StepStatuses(t *testing.T) {
 	})
 
 	t.Run("shows failed step with error mark", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 
 		loadMsg := PlanLoadedMsg{
@@ -204,7 +217,9 @@ func TestModel_View_StepStatuses(t *testing.T) {
 }
 
 func TestModel_Quitting(t *testing.T) {
+	t.Parallel()
 	t.Run("returns empty view when quitting", func(t *testing.T) {
+		t.Parallel()
 		model := NewModel()
 		model.Quitting = true
 

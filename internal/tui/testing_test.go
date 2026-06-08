@@ -9,7 +9,9 @@ import (
 )
 
 func TestMockRunner(t *testing.T) {
+	t.Parallel()
 	t.Run("tracks started and stopped state", func(t *testing.T) {
+		t.Parallel()
 		runner := NewMockRunner()
 		assert.False(t, runner.IsHealthy())
 
@@ -21,6 +23,7 @@ func TestMockRunner(t *testing.T) {
 	})
 
 	t.Run("records messages", func(t *testing.T) {
+		t.Parallel()
 		runner := NewMockRunner()
 		runner.Start()
 
@@ -35,6 +38,7 @@ func TestMockRunner(t *testing.T) {
 	})
 
 	t.Run("reset clears state", func(t *testing.T) {
+		t.Parallel()
 		runner := NewMockRunner()
 		runner.Start()
 		runner.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -46,6 +50,7 @@ func TestMockRunner(t *testing.T) {
 	})
 
 	t.Run("is thread-safe", func(t *testing.T) {
+		t.Parallel()
 		runner := NewMockRunner()
 		runner.Start()
 
@@ -64,7 +69,9 @@ func TestMockRunner(t *testing.T) {
 }
 
 func TestMessageRecorder(t *testing.T) {
+	t.Parallel()
 	t.Run("records messages", func(t *testing.T) {
+		t.Parallel()
 		recorder := NewMessageRecorder()
 
 		type testMsg struct{ id string }
@@ -75,6 +82,7 @@ func TestMessageRecorder(t *testing.T) {
 	})
 
 	t.Run("HasMessage finds matching messages", func(t *testing.T) {
+		t.Parallel()
 		recorder := NewMessageRecorder()
 
 		type testMsg struct{ id string }
@@ -99,6 +107,7 @@ func TestMessageRecorder(t *testing.T) {
 	})
 
 	t.Run("reset clears messages", func(t *testing.T) {
+		t.Parallel()
 		recorder := NewMessageRecorder()
 		recorder.Record(tea.KeyPressMsg{Code: tea.KeyEnter})
 
@@ -107,6 +116,7 @@ func TestMessageRecorder(t *testing.T) {
 	})
 
 	t.Run("is thread-safe", func(t *testing.T) {
+		t.Parallel()
 		recorder := NewMessageRecorder()
 
 		var wg sync.WaitGroup

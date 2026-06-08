@@ -8,7 +8,9 @@ import (
 )
 
 func TestBaseModel_SignalReady(t *testing.T) {
+	t.Parallel()
 	t.Run("closes channel on first call", func(t *testing.T) {
+		t.Parallel()
 		b := &BaseModel{}
 		ch := make(chan struct{})
 		b.SetReadyChan(ch)
@@ -31,7 +33,8 @@ func TestBaseModel_SignalReady(t *testing.T) {
 		}
 	})
 
-	t.Run("is idempotent - second call is no-op", func(_ *testing.T) {
+	t.Run("is idempotent - second call is no-op", func(t *testing.T) {
+		t.Parallel()
 		b := &BaseModel{}
 		ch := make(chan struct{})
 		b.SetReadyChan(ch)
@@ -41,7 +44,8 @@ func TestBaseModel_SignalReady(t *testing.T) {
 		b.SignalReady()
 	})
 
-	t.Run("handles nil channel gracefully", func(_ *testing.T) {
+	t.Run("handles nil channel gracefully", func(t *testing.T) {
+		t.Parallel()
 		b := &BaseModel{}
 		// Should not panic
 		b.SignalReady()
@@ -49,6 +53,7 @@ func TestBaseModel_SignalReady(t *testing.T) {
 }
 
 func TestBaseModel_HandleCommonMsg_KeyMsg(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		msg         tea.Msg
@@ -63,6 +68,7 @@ func TestBaseModel_HandleCommonMsg_KeyMsg(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := &BaseModel{}
 
 			handled, cmd := b.HandleCommonMsg(tt.msg)
@@ -81,6 +87,7 @@ func TestBaseModel_HandleCommonMsg_KeyMsg(t *testing.T) {
 }
 
 func TestBaseModel_HandleCommonMsg_WindowSizeMsg(t *testing.T) {
+	t.Parallel()
 	b := &BaseModel{}
 	msg := tea.WindowSizeMsg{Width: 100, Height: 50}
 
@@ -102,6 +109,7 @@ func TestBaseModel_HandleCommonMsg_WindowSizeMsg(t *testing.T) {
 }
 
 func TestBaseModel_HandleCommonMsg_SpinnerTickMsg(t *testing.T) {
+	t.Parallel()
 	b := &BaseModel{}
 	// Initialize spinner first
 	b.InitSpinner()
@@ -118,6 +126,7 @@ func TestBaseModel_HandleCommonMsg_SpinnerTickMsg(t *testing.T) {
 }
 
 func TestBaseModel_HandleCommonMsg_UnknownMsg(t *testing.T) {
+	t.Parallel()
 	b := &BaseModel{}
 	msg := struct{ custom string }{custom: "test"}
 
@@ -132,6 +141,7 @@ func TestBaseModel_HandleCommonMsg_UnknownMsg(t *testing.T) {
 }
 
 func TestBaseModel_DoneState(t *testing.T) {
+	t.Parallel()
 	b := &BaseModel{}
 
 	if b.IsDone() {
@@ -151,6 +161,7 @@ func TestBaseModel_DoneState(t *testing.T) {
 }
 
 func TestBaseModel_InitSpinner(t *testing.T) {
+	t.Parallel()
 	b := &BaseModel{}
 	cmd := b.InitSpinner()
 
@@ -166,6 +177,7 @@ func TestBaseModel_InitSpinner(t *testing.T) {
 }
 
 func TestBaseModel_SetReadyChan(t *testing.T) {
+	t.Parallel()
 	b := &BaseModel{}
 	ch := make(chan struct{})
 

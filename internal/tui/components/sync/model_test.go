@@ -17,6 +17,7 @@ func viewString(v tea.View) string {
 }
 
 func TestNewModel(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 
 	assert.Equal(t, 10, model.TotalOps)
@@ -26,6 +27,7 @@ func TestNewModel(t *testing.T) {
 }
 
 func TestModel_Init(t *testing.T) {
+	t.Parallel()
 	model := NewModel(0)
 
 	// Set up ready channel to capture signal
@@ -47,6 +49,7 @@ func TestModel_Init(t *testing.T) {
 }
 
 func TestModel_Update_PhaseStartMsg(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -60,6 +63,7 @@ func TestModel_Update_PhaseStartMsg(t *testing.T) {
 }
 
 func TestModel_Update_PhaseTransition(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -75,6 +79,7 @@ func TestModel_Update_PhaseTransition(t *testing.T) {
 }
 
 func TestModel_Update_PhaseDetailMsg(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -94,6 +99,7 @@ func TestModel_Update_PhaseDetailMsg(t *testing.T) {
 }
 
 func TestModel_Update_PhaseDetailMsg_WithWarn(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -110,6 +116,7 @@ func TestModel_Update_PhaseDetailMsg_WithWarn(t *testing.T) {
 }
 
 func TestModel_Update_ProgressTickMsg(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -126,6 +133,7 @@ func TestModel_Update_ProgressTickMsg(t *testing.T) {
 }
 
 func TestModel_Update_CompleteMsg(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -143,6 +151,7 @@ func TestModel_Update_CompleteMsg(t *testing.T) {
 }
 
 func TestModel_Update_KeyMsg_Quit(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		msg  tea.Msg
@@ -153,6 +162,7 @@ func TestModel_Update_KeyMsg_Quit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			model := NewModel(10)
 			model.Init()
 
@@ -164,6 +174,7 @@ func TestModel_Update_KeyMsg_Quit(t *testing.T) {
 }
 
 func TestModel_Update_WindowSizeMsg(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -177,6 +188,7 @@ func TestModel_Update_WindowSizeMsg(t *testing.T) {
 }
 
 func TestModel_Update_WindowSizeMsg_NarrowTerminal(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -190,6 +202,7 @@ func TestModel_Update_WindowSizeMsg_NarrowTerminal(t *testing.T) {
 }
 
 func TestModel_View_InProgress(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -210,6 +223,7 @@ func TestModel_View_InProgress(t *testing.T) {
 }
 
 func TestModel_View_Completed(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -224,6 +238,7 @@ func TestModel_View_Completed(t *testing.T) {
 }
 
 func TestModel_Update_SpinnerTickMsg(t *testing.T) {
+	t.Parallel()
 	model := NewModel(10)
 	model.Init()
 
@@ -237,6 +252,7 @@ func TestModel_Update_SpinnerTickMsg(t *testing.T) {
 // TestMessageRecorder_Usage demonstrates how MessageRecorder can be used
 // to test message flow in more complex scenarios
 func TestMessageRecorder_Usage(t *testing.T) {
+	t.Parallel()
 	recorder := tui.NewMessageRecorder()
 
 	// Record some messages
@@ -265,6 +281,7 @@ func TestMessageRecorder_Usage(t *testing.T) {
 }
 
 func TestModel_GetStatusText(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		phase    Phase
@@ -280,6 +297,7 @@ func TestModel_GetStatusText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			model := NewModel(10)
 			model.CurrentPhase = tt.phase
 			text := model.getStatusText()

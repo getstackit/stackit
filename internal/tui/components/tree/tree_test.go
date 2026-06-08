@@ -10,6 +10,7 @@ import (
 )
 
 func TestStackTreeRenderer_RenderStack_LinearStack(t *testing.T) {
+	t.Parallel()
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 
@@ -32,6 +33,7 @@ func TestStackTreeRenderer_RenderStack_LinearStack(t *testing.T) {
 }
 
 func TestStackTreeRenderer_RenderStack_WithAnnotations(t *testing.T) {
+	t.Parallel()
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 
@@ -53,6 +55,7 @@ func TestStackTreeRenderer_RenderStack_WithAnnotations(t *testing.T) {
 }
 
 func TestStackTreeRenderer_RenderStack_BranchingStack(t *testing.T) {
+	t.Parallel()
 	mock := &MockTreeData{
 		CurrentVal: "feature-1a",
 		TrunkVal:   "main",
@@ -91,6 +94,7 @@ func TestStackTreeRenderer_RenderStack_BranchingStack(t *testing.T) {
 }
 
 func TestStackTreeRenderer_RenderStack_FullFormat(t *testing.T) {
+	t.Parallel()
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 
@@ -111,6 +115,7 @@ func TestStackTreeRenderer_RenderStack_FullFormat(t *testing.T) {
 }
 
 func TestStackTreeRenderer_RenderBranchList(t *testing.T) {
+	t.Parallel()
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 
@@ -132,6 +137,7 @@ func TestStackTreeRenderer_RenderBranchList(t *testing.T) {
 }
 
 func TestStackTreeRenderer_NeedsRestack(t *testing.T) {
+	t.Parallel()
 	mock := &MockTreeData{
 		CurrentVal: "feature-1",
 		TrunkVal:   "main",
@@ -161,6 +167,7 @@ func TestStackTreeRenderer_NeedsRestack(t *testing.T) {
 }
 
 func TestBranchAnnotation_CheckStatus(t *testing.T) {
+	t.Parallel()
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 
@@ -186,6 +193,7 @@ func TestBranchAnnotation_CheckStatus(t *testing.T) {
 }
 
 func TestStackTreeRenderer_ScopeColoring(t *testing.T) {
+	t.Parallel()
 	mock := &MockTreeData{
 		CurrentVal: "feature-login",
 		TrunkVal:   "main",
@@ -241,6 +249,7 @@ func TestStackTreeRenderer_ScopeColoring(t *testing.T) {
 }
 
 func TestStackTreeRenderer_InheritedScopeColoring(t *testing.T) {
+	t.Parallel()
 	mock := &MockTreeData{
 		CurrentVal: "feature-login",
 		TrunkVal:   "main",
@@ -314,6 +323,7 @@ func TestStackTreeRenderer_InheritedScopeColoring(t *testing.T) {
 }
 
 func TestStackTreeRenderer_BranchingScopeColoring(t *testing.T) {
+	t.Parallel()
 	mock := &MockTreeData{
 		CurrentVal: "feature-1a",
 		TrunkVal:   "main",
@@ -356,6 +366,7 @@ func TestStackTreeRenderer_BranchingScopeColoring(t *testing.T) {
 }
 
 func TestStackTreeRenderer_ScopeColoringBoundaries(t *testing.T) {
+	t.Parallel()
 	// Setup a branching structure where one branch has a scope
 	// main
 	//   └─ base (A)
@@ -449,6 +460,7 @@ func TestStackTreeRenderer_ScopeColoringBoundaries(t *testing.T) {
 // Edge case tests
 
 func TestStackTreeRenderer_EmptyTree(t *testing.T) {
+	t.Parallel()
 	// A tree with just the trunk and no children
 	mock := &MockTreeData{
 		CurrentVal: "main",
@@ -476,6 +488,7 @@ func TestStackTreeRenderer_EmptyTree(t *testing.T) {
 }
 
 func TestStackTreeRenderer_SingleBranch(t *testing.T) {
+	t.Parallel()
 	// A tree with trunk -> one branch
 	mock := &MockTreeData{
 		CurrentVal: "feature",
@@ -508,6 +521,7 @@ func TestStackTreeRenderer_SingleBranch(t *testing.T) {
 }
 
 func TestStackTreeRenderer_DeeplyNested(t *testing.T) {
+	t.Parallel()
 	// A deeply nested linear tree with 15 levels
 	depth := 15
 	childrenMap := make(map[string][]string)
@@ -554,6 +568,7 @@ func TestStackTreeRenderer_DeeplyNested(t *testing.T) {
 }
 
 func TestStackTreeRenderer_CollapsedBranch(t *testing.T) {
+	t.Parallel()
 	mock := &MockTreeData{
 		CurrentVal: "feature-1",
 		TrunkVal:   "main",
@@ -612,6 +627,7 @@ func TestStackTreeRenderer_CollapsedBranch(t *testing.T) {
 }
 
 func TestStackTreeRenderer_WideBranching(t *testing.T) {
+	t.Parallel()
 	// A tree where main has 5 direct children
 	mock := &MockTreeData{
 		CurrentVal: "branch-1",
@@ -665,6 +681,7 @@ func TestStackTreeRenderer_WideBranching(t *testing.T) {
 }
 
 func TestStackTreeRenderer_RenderFromMiddleBranch(t *testing.T) {
+	t.Parallel()
 	// Test rendering from a branch in the middle of the stack
 	mock := &MockTreeData{
 		CurrentVal: "feature-2",
@@ -710,6 +727,7 @@ func TestStackTreeRenderer_RenderFromMiddleBranch(t *testing.T) {
 }
 
 func TestStackTreeRenderer_CacheIsCleared(t *testing.T) {
+	t.Parallel()
 	// Test that cache is properly cleared between renders
 	mock := &MockTreeData{
 		CurrentVal: "feature-1",

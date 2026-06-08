@@ -1,17 +1,33 @@
 package submit_test
 
 import (
+	"bytes"
 	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+// countingRunner wraps a git.Runner and counts FetchRemoteShas calls. It lets
+// tests assert that submit reads the remote ref list once for the whole stack
+// rather than once per branch (a full `git ls-remote` each time).
+type countingRunner struct {
+	git.Runner
+	fetchRemoteShas atomic.Int64
+}
+
+func (c *countingRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
+	c.fetchRemoteShas.Add(1)
+	return c.Runner.FetchRemoteShas(ctx, remote)
+}
 
 // noopHandler is a test handler that ignores all events
 type noopHandler struct{}
@@ -297,6 +313,57 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		err = submit.Action(s.Context, opts, &noopHandler{})
 		require.NoError(t, err, "submit should succeed when branch is already in sync with remote")
 	})
+}
+
+func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
+	t.Parallel()
+	// Regression test for the per-branch ls-remote N+1: submitting a stack must
+	// read remote ref status once for the whole stack, not once per branch.
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"P":  "main",
+			"C1": "P",
+			"C2": "C1",
+		})
+
+	s.Checkout("P")
+
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	// Build a second engine over the same repo with a runner that counts
+	// FetchRemoteShas, then drive submit through it.
+	counting := &countingRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot: s.Scene.Dir,
+		Trunk:    "main",
+		Git:      counting,
+	})
+	require.NoError(t, err)
+
+	config := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
+	githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
+
+	ctx := app.NewContext(eng,
+		app.WithRepoRoot(s.Scene.Dir),
+		app.WithWriter(&bytes.Buffer{}),
+		app.WithGlobalOptions(app.GlobalOptions{Verify: true}),
+	)
+	ctx.GitHubClient = githubClient
+
+	opts := submit.Options{
+		StackRange: engine.StackRangeFull(),
+		NoEdit:     true,
+		Draft:      true,
+	}
+
+	err = submit.Action(ctx, opts, &noopHandler{})
+	require.NoError(t, err)
+	require.Equal(t, 3, len(config.CreatedPRs), "should create a PR for each of P, C1, C2")
+
+	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
+		"submit must read remote status once for the whole stack, not once per branch")
 }
 
 func TestSubmitPreservesLockStatus(t *testing.T) {

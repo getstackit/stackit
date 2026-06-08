@@ -277,6 +277,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	repoOwner, repoName := githubClient.GetOwnerRepo()
 
 	remote := nav.GetRemote()
+
+	// Read remote status for every branch once, up front. The force-with-lease
+	// pre-check in pushBranchIfNeeded needs each branch's remote SHA, and reading
+	// it per branch would run a full `git ls-remote` for the entire remote N
+	// times. A single batched read does one ls-remote and indexes every branch
+	// from it. Branches push to independent refs, so this snapshot stays valid
+	// across the parallel update path.
+	remoteStatuses := ctx.PR().ReadBranchRemoteStatuses(ctx.Context, branchObjs)
+
 	var submitErr error
 	var errMu sync.Mutex
 
@@ -284,7 +293,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if allCreates {
 			// Sequential submission for new stacks - ensures sequential PR numbers
 			for _, info := range submissionInfos {
-				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, remote); err != nil {
+				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, remote, remoteStatuses); err != nil {
 					errMu.Lock()
 					if submitErr == nil {
 						submitErr = err
@@ -295,7 +304,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		} else {
 			// Parallel submission for updates (faster when PRs already exist)
 			utils.Run(submissionInfos, func(info Info) {
-				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, remote); err != nil {
+				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, remote, remoteStatuses); err != nil {
 					errMu.Lock()
 					if submitErr == nil {
 						submitErr = err
@@ -358,13 +367,13 @@ func normalizeDisplayTreeParents(nav engine.StackNavigator, stackTree *tree.Stac
 }
 
 // submitBranch submits a single branch
-func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, repoOwner, repoName, remote string) error {
+func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, repoOwner, repoName, remote string, remoteStatuses engine.BranchRemoteStatuses) error {
 	handler.OnEvent(BranchProgressEvent{
 		BranchName: info.BranchName,
 		Status:     StatusSubmitting,
 	})
 
-	if err := pushBranchIfNeeded(ctx, info, opts, remote); err != nil {
+	if err := pushBranchIfNeeded(ctx, info, opts, remote, remoteStatuses); err != nil {
 		handler.OnEvent(BranchProgressEvent{
 			BranchName: info.BranchName,
 			Status:     StatusError,
@@ -433,8 +442,10 @@ func getGitHubClient(ctx *app.Context) (github.Client, error) {
 	return nil, fmt.Errorf("no GitHub client available - check your GITHUB_TOKEN")
 }
 
-// pushBranchIfNeeded pushes a branch to remote if needed
-func pushBranchIfNeeded(ctx *app.Context, submissionInfo Info, opts Options, remote string) error {
+// pushBranchIfNeeded pushes a branch to remote if needed. remoteStatuses is the
+// batched snapshot read once in Action, so this does not hit the network per
+// branch.
+func pushBranchIfNeeded(ctx *app.Context, submissionInfo Info, opts Options, remote string, remoteStatuses engine.BranchRemoteStatuses) error {
 	// Skip if dry run
 	if opts.DryRun {
 		return nil
@@ -444,7 +455,7 @@ func pushBranchIfNeeded(ctx *app.Context, submissionInfo Info, opts Options, rem
 	branch := ctx.Navigator().GetBranch(submissionInfo.BranchName)
 	leaseExpectedSHA := ""
 	if forceWithLease {
-		status := ctx.PR().ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(branch)).ForBranch(branch)
+		status := remoteStatuses.ForBranch(branch)
 		// Remote already has this exact SHA — skip the push to avoid a spurious
 		// "cannot lock ref: reference already exists" rejection from the server.
 		if status.Matches() {

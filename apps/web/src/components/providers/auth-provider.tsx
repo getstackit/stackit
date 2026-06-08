@@ -45,7 +45,9 @@ const PLACEHOLDER_LOCAL_USER: MeResponse = { login: "local", id: 0 };
 // context. Network failures other than 401 render a small error message
 // so the app doesn't silently hang on a broken backend.
 export function AuthProvider({ children, disable }: AuthProviderProps) {
-  const [user, setUser] = useState<MeResponse | null>(null);
+  const [user, setUser] = useState<MeResponse | null>(() =>
+    disable ? PLACEHOLDER_LOCAL_USER : null
+  );
   const [isLoading, setIsLoading] = useState(!disable);
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
@@ -70,7 +72,6 @@ export function AuthProvider({ children, disable }: AuthProviderProps) {
 
   useEffect(() => {
     if (disable) {
-      setUser(PLACEHOLDER_LOCAL_USER);
       return;
     }
     void refresh();

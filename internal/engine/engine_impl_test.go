@@ -235,11 +235,7 @@ func TestDeleteBranch(t *testing.T) {
 		// Verify branch1 is removed
 		require.False(t, s.Engine.GetBranch("branch1").IsTracked())
 		allBranches := s.Engine.AllBranches()
-		branchNames := make([]string, len(allBranches))
-		for i, b := range allBranches {
-			branchNames[i] = b.GetName()
-		}
-		require.NotContains(t, branchNames, "branch1")
+		require.NotContains(t, allBranches.Names(), "branch1")
 
 		// Verify children now point to main
 		branchparent2 := s.Engine.GetBranch("branch2")
@@ -608,11 +604,7 @@ func TestRebuild(t *testing.T) {
 
 		// Verify initial state
 		allBranches := s.Engine.AllBranches()
-		branchNames := make([]string, len(allBranches))
-		for i, b := range allBranches {
-			branchNames[i] = b.GetName()
-		}
-		require.Contains(t, branchNames, "branch1")
+		require.Contains(t, allBranches.Names(), "branch1")
 		branchparent1 := s.Engine.GetBranch("branch1")
 		parent1 := branchparent1.GetParent()
 		require.NotNil(t, parent1)
@@ -650,12 +642,8 @@ func TestCreateBranchUpdatesBranchInventory(t *testing.T) {
 	require.NoError(t, s.Engine.CreateBranch(context.Background(), "branch2", "main"))
 
 	allBranches := s.Engine.AllBranches()
-	branchNames := make([]string, len(allBranches))
-	for i, b := range allBranches {
-		branchNames[i] = b.GetName()
-	}
-	require.Contains(t, branchNames, "branch2")
-	require.NotContains(t, branchNames, "branch3")
+	require.Contains(t, allBranches.Names(), "branch2")
+	require.NotContains(t, allBranches.Names(), "branch3")
 
 	require.False(t, s.Engine.GetBranch("branch2").IsTracked())
 	require.NoError(t, s.Engine.TrackBranch(context.Background(), "branch2", "main"))
@@ -992,11 +980,7 @@ func TestReset(t *testing.T) {
 
 		// Branch should still exist but not be tracked
 		allBranches := s.Engine.AllBranches()
-		branchNames := make([]string, len(allBranches))
-		for i, b := range allBranches {
-			branchNames[i] = b.GetName()
-		}
-		require.Contains(t, branchNames, "branch1")
+		require.Contains(t, allBranches.Names(), "branch1")
 		require.False(t, s.Engine.GetBranch("branch1").IsTracked())
 	})
 }

@@ -259,7 +259,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Start submission phase with a worker pool to avoid spawning too many goroutines
-	handler.OnEvent(SubmissionStartEvent{Branches: branchInfos, IsSequential: allCreates})
+	handler.OnEvent(SubmissionStartEvent{Branches: branchInfos})
 
 	githubClient, err := getGitHubClient(ctx)
 	if err != nil {

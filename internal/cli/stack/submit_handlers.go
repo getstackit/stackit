@@ -6,30 +6,8 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
-	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
-
-// snapshotToStackTree converts a submit stack snapshot into a tree.StackTree for
-// rendering by the handlers.
-func snapshotToStackTree(snapshot submit.StackSnapshot) *tree.StackTree {
-	childrenMap := make(map[string][]string, len(snapshot.Branches))
-	for _, branchName := range snapshot.Branches {
-		parentName := snapshot.ParentMap[branchName]
-		if parentName != "" {
-			childrenMap[parentName] = append(childrenMap[parentName], branchName)
-		}
-	}
-
-	return &tree.StackTree{
-		Branches:       snapshot.Branches,
-		CurrentBranchV: snapshot.CurrentBranch,
-		TrunkBranch:    snapshot.TrunkBranch,
-		ParentMap:      snapshot.ParentMap,
-		ChildrenMap:    childrenMap,
-		FixedMap:       snapshot.FixedMap,
-	}
-}
 
 // NewSubmitUI creates a runner and handler pair for submit operations.
 // The runner manages terminal state; the handler processes events.
@@ -79,11 +57,10 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 	switch ev := e.(type) {
 	case submit.StackDisplayEvent:
 		h.displayed = true
-		stackTree := snapshotToStackTree(ev.Stack)
 		h.Output.Info("Stack to submit:")
 		for _, branch := range ev.Stack.Branches {
 			marker := "  "
-			if branch == stackTree.CurrentBranch() {
+			if branch == ev.Stack.CurrentBranch {
 				marker = "● "
 			}
 			scope := ev.Stack.ScopeMap[branch]
@@ -240,8 +217,6 @@ type InteractiveSubmitHandler struct {
 	model         *submitComponent.Model
 	out           output.Output
 	inSubmitPhase bool
-	stack         *tree.StackTree
-	fixedMap      map[string]bool
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
@@ -249,59 +224,16 @@ func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Mode
 	return &InteractiveSubmitHandler{runner: runner, model: model, out: out}
 }
 
-// findRootBranch finds the root branch of the stack (the one whose parent is trunk)
-func (h *InteractiveSubmitHandler) findRootBranch() string {
-	if h.stack == nil || len(h.stack.Branches) == 0 {
-		return ""
-	}
-
-	// If we're on the trunk branch, show everything from trunk down
-	if h.stack.CurrentBranch() == h.stack.TrunkBranch {
-		return h.stack.TrunkBranch
-	}
-
-	// The root is the branch whose parent is trunk
-	for _, branch := range h.stack.Branches {
-		parent := h.stack.ParentMap[branch]
-		if parent == h.stack.TrunkBranch {
-			return branch
-		}
-	}
-	// Fallback to first branch
-	return h.stack.Branches[0]
-}
-
 // OnEvent handles events from the submit action
 func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 	switch ev := e.(type) {
 	case submit.StackDisplayEvent:
-		h.stack = snapshotToStackTree(ev.Stack)
-		h.fixedMap = ev.Stack.FixedMap
-
-		// Build a tree renderer from the stack with custom fixed logic
-		renderer := h.stack.ToRendererWithFixed(func(branchName string) bool {
-			// Trunk is always "fixed" (never needs restack)
-			if branchName == h.stack.TrunkBranch {
-				return true
-			}
-			return h.fixedMap[branchName]
-		})
-
-		// Set scopes and other annotations
 		items := make([]submitComponent.Item, 0, len(ev.Stack.Branches))
 		for _, branchName := range ev.Stack.Branches {
 			// Skip trunk - we don't submit it
 			if branchName == ev.Stack.TrunkBranch {
 				continue
 			}
-
-			scope := ev.Stack.ScopeMap[branchName]
-			worktreePath := ev.Stack.WorktreeMap[branchName]
-			renderer.SetAnnotation(branchName, tree.BranchAnnotation{
-				Scope:         scope,
-				ExplicitScope: scope,
-				WorktreePath:  worktreePath,
-			})
 
 			items = append(items, submitComponent.Item{
 				BranchName: branchName,
@@ -310,10 +242,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			})
 		}
 
-		// Update model with tree renderer and initial items
 		h.model.Items = items
-		h.model.Renderer = renderer
-		h.model.RootBranch = h.findRootBranch()
 
 		// Start the TUI now that there's a populated stack to show. Idempotent,
 		// so later events that arrive after this are safe.
@@ -360,11 +289,6 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			if !found {
 				h.model.Items = append(h.model.Items, item)
 			}
-		}
-
-		// Set sequential mode if all PRs are being created (preserves PR number ordering)
-		if ev.IsSequential {
-			h.runner.Send(submitComponent.SetSequentialMsg{IsSequential: true})
 		}
 
 		h.runner.Send(submitComponent.GlobalMessageMsg("Submitting..."))

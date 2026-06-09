@@ -53,8 +53,7 @@ func (BranchPlanEvent) submitEvent() {}
 
 // SubmissionStartEvent indicates the submission phase is beginning.
 type SubmissionStartEvent struct {
-	Branches     []BranchInfo
-	IsSequential bool // Sequential submission mode (all creates) for PR ordering
+	Branches []BranchInfo
 }
 
 func (SubmissionStartEvent) submitEvent() {}

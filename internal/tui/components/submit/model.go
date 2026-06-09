@@ -8,7 +8,6 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/tui/core"
 )
 
@@ -17,12 +16,9 @@ import (
 type Model struct {
 	core.BaseModel // Embedded for ReadySignaler interface
 	Items          []Item
-	Renderer       *tree.StackTreeRenderer
-	RootBranch     string
 	spinner        spinner.Model // lowercase for custom style
 	Styles         Styles
 	GlobalMessage  string
-	IsSequential   bool // Sequential submission mode for PR ordering
 }
 
 // ProgressUpdateMsg is sent to update the status of a specific branch submission
@@ -31,11 +27,6 @@ type ProgressUpdateMsg struct {
 	Status     string
 	URL        string
 	Err        error
-}
-
-// StartSubmitMsg is sent when the submission phase begins
-type StartSubmitMsg struct {
-	Items []Item
 }
 
 // PlanUpdateMsg is sent when a branch plan is updated
@@ -52,11 +43,6 @@ type GlobalMessageMsg string
 
 // ProgressCompleteMsg is sent when all submissions are finished
 type ProgressCompleteMsg struct{}
-
-// SetSequentialMsg indicates sequential submission mode for PR ordering
-type SetSequentialMsg struct {
-	IsSequential bool
-}
 
 // NewModel creates a new submit model
 func NewModel(items []Item) *Model {
@@ -93,29 +79,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case SetSequentialMsg:
-		m.IsSequential = msg.IsSequential
-		return m, nil
-
-	case StartSubmitMsg:
-		// Update status for items that are in msg.Items
-		for _, newItem := range msg.Items {
-			found := false
-			for i, item := range m.Items {
-				if item.BranchName == newItem.BranchName {
-					m.Items[i].Status = newItem.Status
-					m.Items[i].Action = newItem.Action
-					m.Items[i].PRNumber = newItem.PRNumber
-					found = true
-					break
-				}
-			}
-			if !found {
-				m.Items = append(m.Items, newItem)
-			}
-		}
-		return m, nil
-
 	case PlanUpdateMsg:
 		// Update existing item or add new one
 		found := false
@@ -181,48 +144,6 @@ func (m *Model) View() tea.View {
 	}
 
 	var b strings.Builder
-
-	if m.Renderer != nil {
-		// Update annotations based on items
-		for _, item := range m.Items {
-			ann := m.Renderer.Annotations[item.BranchName]
-
-			// Update PR action if known
-			if item.Action != "" {
-				ann.PRAction = item.Action
-			}
-
-			// Update custom label for status
-			if item.IsSkipped {
-				if item.SkipReason == SkipReasonNoChanges {
-					ann.PRAction = SkipReasonNoChanges
-					ann.CustomLabel = ""
-				} else {
-					ann.CustomLabel = m.Styles.DimStyle.Render("(skipped: " + item.SkipReason + ")")
-				}
-			} else {
-				switch item.Status {
-				case StatusSubmitting:
-					ann.CustomLabel = m.Styles.SpinnerStyle.Render(m.spinner.View() + " submitting...")
-				case StatusSyncing:
-					ann.CustomLabel = m.Styles.SpinnerStyle.Render(m.spinner.View() + " syncing...")
-				case StatusDone:
-					ann.PRAction = "" // Clear action since we're showing the result
-					ann.CustomLabel = m.Styles.DoneStyle.Render("✓")
-					if item.URL != "" {
-						ann.CustomLabel += " " + m.Styles.URLStyle.Render("→ "+item.URL)
-					}
-				case StatusError:
-					ann.PRAction = "" // Clear action since we're showing the result
-					ann.CustomLabel = m.Styles.ErrorStyle.Render("✗")
-					if item.Error != nil {
-						ann.CustomLabel += " " + m.Styles.ErrorStyle.Render(item.Error.Error())
-					}
-				}
-			}
-			m.Renderer.SetAnnotation(item.BranchName, ann)
-		}
-	}
 
 	header := m.header()
 	if header != "" {

@@ -219,3 +219,37 @@ func FormatURLSummary(items []Item) string {
 	}
 	return "Pull requests\n\n" + strings.Join(rows, "\n")
 }
+
+// FormatFailureSummary renders failed branches with their errors. The progress
+// view is cleared when the TUI exits, so failures must be re-emitted as
+// persistent output or they vanish from the terminal.
+func FormatFailureSummary(items []Item) string {
+	rows := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Status != StatusError {
+			continue
+		}
+		detail := "failed"
+		if item.Error != nil {
+			detail = item.Error.Error()
+		}
+		rows = append(rows, fmt.Sprintf("✗ %s — %s", DisplayBranchName(item.BranchName), detail))
+	}
+	if len(rows) == 0 {
+		return ""
+	}
+	return strings.Join(rows, "\n")
+}
+
+// FormatCompletionSummary renders the persistent post-submit output: PR URLs
+// for submitted branches followed by errors for failed ones.
+func FormatCompletionSummary(items []Item) string {
+	sections := make([]string, 0, 2)
+	if urls := FormatURLSummary(items); urls != "" {
+		sections = append(sections, urls)
+	}
+	if failures := FormatFailureSummary(items); failures != "" {
+		sections = append(sections, failures)
+	}
+	return strings.Join(sections, "\n\n")
+}

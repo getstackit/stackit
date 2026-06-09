@@ -161,7 +161,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ProgressCompleteMsg:
 		m.Done = true
-		summary := FormatURLSummary(m.Items)
+		summary := FormatCompletionSummary(m.Items)
 		if summary != "" {
 			return m, tea.Sequence(
 				tea.Printf("\n%s", summary),

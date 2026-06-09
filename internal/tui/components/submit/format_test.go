@@ -1,6 +1,7 @@
 package submit
 
 import (
+	"errors"
 	"regexp"
 	"testing"
 
@@ -51,6 +52,46 @@ func TestFormatURLSummaryRendersClickableRows(t *testing.T) {
 
 #934 guard-runner.repoRoot-reads-with-repoMu-to-fix
      https://github.com/getstackit/stackit/pull/934`, summary)
+}
+
+func TestFormatCompletionSummaryIncludesFailures(t *testing.T) {
+	t.Parallel()
+
+	summary := FormatCompletionSummary([]Item{
+		{
+			BranchName: "jonnii/20260511011552/add-feature",
+			Action:     ActionCreate,
+			Status:     StatusDone,
+			URL:        "https://github.com/getstackit/stackit/pull/935",
+		},
+		{
+			BranchName: "jonnii/20260511011552/fix-bug",
+			Action:     ActionUpdate,
+			Status:     StatusError,
+			Error:      errors.New("failed to push branch: remote rejected"),
+		},
+	})
+
+	require.Equal(t, `Pull requests
+
+#935 add-feature
+     https://github.com/getstackit/stackit/pull/935
+
+✗ fix-bug — failed to push branch: remote rejected`, summary)
+}
+
+func TestFormatCompletionSummaryFailuresWithoutURLs(t *testing.T) {
+	t.Parallel()
+
+	summary := FormatCompletionSummary([]Item{
+		{
+			BranchName: "jonnii/20260511011552/fix-bug",
+			Action:     ActionUpdate,
+			Status:     StatusError,
+		},
+	})
+
+	require.Equal(t, "✗ fix-bug — failed", summary)
 }
 
 func TestModelPreservesURLAcrossFooterSyncDone(t *testing.T) {

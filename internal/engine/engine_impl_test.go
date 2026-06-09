@@ -291,7 +291,7 @@ func TestDeleteBranch(t *testing.T) {
 		require.NotNil(t, parentC1After)
 		require.Equal(t, "main", parentC1After.GetName())
 		branchparentC2After := s.Engine.GetBranch("C2")
-		parentC2After := branchparentC2After.GetParent()
+		parentC2After := branchparentC2After.GetParent()  
 		require.NotNil(t, parentC2After)
 		require.Equal(t, "main", parentC2After.GetName())
 		branchparentC3After := s.Engine.GetBranch("C3")
@@ -621,11 +621,7 @@ func TestRebuild(t *testing.T) {
 
 		// New branch should be in list
 		allBranches2 := s.Engine.AllBranches()
-		branchNames2 := make([]string, len(allBranches2))
-		for i, b := range allBranches2 {
-			branchNames2[i] = b.GetName()
-		}
-		require.Contains(t, branchNames2, "branch2")
+		require.Contains(t, allBranches2.Names(), "branch2")
 		// But not tracked yet
 		require.False(t, s.Engine.GetBranch("branch2").IsTracked())
 	})

@@ -154,10 +154,7 @@ func checkEmptyBranches(ctx context.Context, eng engine.Engine) []string {
 func detectCycles(eng engine.Engine) [][]string {
 	var cycles [][]string
 	allBranches := eng.AllBranches()
-	branchNames := make([]string, len(allBranches))
-	for i, b := range allBranches {
-		branchNames[i] = b.GetName()
-	}
+	branchNames := allBranches.Names()
 	visited := make(map[string]bool)
 	recStack := make(map[string]bool)
 	parentMap := make(map[string]string)

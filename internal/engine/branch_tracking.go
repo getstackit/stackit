@@ -390,10 +390,7 @@ func (e *engineImpl) SetLocked(ctx context.Context, branches Branches, reason Lo
 	}
 
 	// Extract branch names for batch read (preserves order for deterministic results)
-	branchNames := make([]string, len(branches))
-	for i, b := range branches {
-		branchNames[i] = b.GetName()
-	}
+	branchNames := branches.Names()
 
 	err := e.WithRetry(ctx, func() error {
 		// Reset result for retry
@@ -476,10 +473,7 @@ func (e *engineImpl) SetFrozen(ctx context.Context, branches Branches, frozen bo
 	}
 
 	// Extract branch names for batch read (preserves order for deterministic results)
-	branchNames := make([]string, len(branches))
-	for i, b := range branches {
-		branchNames[i] = b.GetName()
-	}
+	branchNames := branches.Names()
 
 	err := e.WithRetry(ctx, func() error {
 		// Reset result for retry

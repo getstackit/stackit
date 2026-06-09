@@ -31,14 +31,10 @@ func DiscoverIndependentStacksWithSort(eng BranchReader, strategy SortStrategy) 
 		}
 
 		branches := graph.CollectBranches(rootNode.Branch)
-		branchNames := make([]string, len(branches))
-		for i, branch := range branches {
-			branchNames[i] = branch.GetName()
-		}
 
 		stacks = append(stacks, IndependentStack{
 			RootBranch: rootName,
-			Branches:   branchNames,
+			Branches:   branches.Names(),
 		})
 	}
 

@@ -11,6 +11,7 @@ type PrInfo struct {
 	isDraft     bool
 	state       string     // MERGED, CLOSED, OPEN
 	base        string     // Base branch name
+	baseSHA     string     // Tip SHA of base branch at last submit (used to detect stale base.sha on GitHub)
 	url         string     // PR URL
 	lockReason  LockReason // Why the PR is locked (empty if not locked)
 	mergeBranch string     // Name of the merge branch this PR is part of
@@ -88,6 +89,13 @@ func (p *PrInfo) Base() string {
 	return p.base
 }
 
+// BaseSHA returns the tip SHA of the base branch at the time of the last submit.
+// Used to detect when a parent branch has been force-pushed, making GitHub's
+// stored base.sha stale.
+func (p *PrInfo) BaseSHA() string {
+	return p.baseSHA
+}
+
 // URL returns the PR URL
 func (p *PrInfo) URL() string {
 	return p.url
@@ -143,6 +151,7 @@ func (p *PrInfo) WithNumber(number *int) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       p.state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         p.url,
 		lockReason:  p.lockReason,
 		mergeBranch: p.mergeBranch,
@@ -158,6 +167,7 @@ func (p *PrInfo) WithTitle(title string) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       p.state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         p.url,
 		lockReason:  p.lockReason,
 		mergeBranch: p.mergeBranch,
@@ -173,6 +183,7 @@ func (p *PrInfo) WithBody(body string) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       p.state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         p.url,
 		lockReason:  p.lockReason,
 		mergeBranch: p.mergeBranch,
@@ -189,6 +200,7 @@ func (p *PrInfo) WithTitleAndBody(title, body string) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       p.state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         p.url,
 		lockReason:  p.lockReason,
 		mergeBranch: p.mergeBranch,
@@ -204,6 +216,7 @@ func (p *PrInfo) WithIsDraft(isDraft bool) *PrInfo {
 		isDraft:     isDraft,
 		state:       p.state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         p.url,
 		lockReason:  p.lockReason,
 		mergeBranch: p.mergeBranch,
@@ -219,6 +232,7 @@ func (p *PrInfo) WithState(state string) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         p.url,
 		lockReason:  p.lockReason,
 		mergeBranch: p.mergeBranch,
@@ -234,6 +248,23 @@ func (p *PrInfo) WithBase(base string) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       p.state,
 		base:        base,
+		baseSHA:     p.baseSHA,
+		url:         p.url,
+		lockReason:  p.lockReason,
+		mergeBranch: p.mergeBranch,
+	}
+}
+
+// WithBaseSHA returns a new PrInfo with the baseSHA field updated
+func (p *PrInfo) WithBaseSHA(sha string) *PrInfo {
+	return &PrInfo{
+		number:      p.number,
+		title:       p.title,
+		body:        p.body,
+		isDraft:     p.isDraft,
+		state:       p.state,
+		base:        p.base,
+		baseSHA:     sha,
 		url:         p.url,
 		lockReason:  p.lockReason,
 		mergeBranch: p.mergeBranch,
@@ -249,6 +280,7 @@ func (p *PrInfo) WithURL(url string) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       p.state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         url,
 		lockReason:  p.lockReason,
 		mergeBranch: p.mergeBranch,
@@ -264,6 +296,7 @@ func (p *PrInfo) WithLockReason(reason LockReason) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       p.state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         p.url,
 		lockReason:  reason,
 		mergeBranch: p.mergeBranch,
@@ -279,6 +312,7 @@ func (p *PrInfo) WithMergeBranch(branch string) *PrInfo {
 		isDraft:     p.isDraft,
 		state:       p.state,
 		base:        p.base,
+		baseSHA:     p.baseSHA,
 		url:         p.url,
 		lockReason:  p.lockReason,
 		mergeBranch: branch,

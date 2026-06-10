@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -66,5 +67,63 @@ func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
 	})
 	handler.OnEvent(submitAction.CompletionEvent{Success: true, Message: "Submit complete"})
 
-	require.Contains(t, out.String(), "https://github.com/getstackit/stackit/pull/934")
+	got := out.String()
+	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/934")
+	require.NotContains(t, got, "syncing")
+	require.Equal(t, 1, strings.Count(got, "✓"), "footer sync must not re-report a finished branch")
+}
+
+func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+	current := "jonnii/20260511011552/current-branch"
+	skipped := "jonnii/20260511011552/skipped-branch"
+
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:      []string{skipped, current},
+		CurrentBranch: current,
+		TrunkBranch:   "main",
+		ScopeMap:      map[string]string{current: "CORE"},
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{
+		BranchName: skipped,
+		Skipped:    true,
+		SkipReason: "no changes",
+	})
+	handler.OnEvent(submitAction.BranchPlanEvent{
+		BranchName: current,
+		Action:     "create",
+		IsCurrent:  true,
+	})
+
+	got := out.String()
+	require.Equal(t, 1, strings.Count(got, "Stack to submit:"))
+	require.Contains(t, got, "● current-branch [CORE] → create")
+	require.Contains(t, got, "skipped-branch")
+	require.Contains(t, got, "— no changes")
+	require.Equal(t, 1, strings.Count(got, "current-branch"), "stack and plan must print as one merged list")
+}
+
+func TestSimpleSubmitHandlerPrintsOutcomeWhenNothingSubmitted(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+	branch := "jonnii/20260511011552/up-to-date-branch"
+
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:      []string{branch},
+		CurrentBranch: branch,
+		TrunkBranch:   "main",
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{
+		BranchName: branch,
+		Skipped:    true,
+		SkipReason: "no changes",
+	})
+	handler.OnEvent(submitAction.CompletionEvent{Success: true, Message: "All PRs up to date"})
+
+	require.Contains(t, out.String(), "All PRs up to date")
 }

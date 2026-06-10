@@ -34,33 +34,30 @@ func TestSubmitCommand(t *testing.T) {
 		// 1. Basic submit (downstack)
 		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
 		expected := testhelpers.NormalizeOutput(`
-Stack to submit:
-  branch-a
-● branch-b
 ⚠️  The following branches have no changes:
 ⚠️  ▸ branch-a
 ⚠️  ▸ branch-b
 ⚠️  Are you sure you want to submit them?
-  ▸ branch-a → create
-  ▸ branch-b (current) → create
+Stack to submit:
+  branch-a → create
+● branch-b → create
+Dry run complete
 `)
 		require.Equal(t, expected, testhelpers.NormalizeOutput(output))
 
 		// 2. Submit --stack (full stack)
 		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--stack", "--dry-run", "--no-edit", "--draft", "--no-interactive")
 		expectedStack := testhelpers.NormalizeOutput(`
-Stack to submit:
-  branch-a
-● branch-b
-  branch-c
 ⚠️  The following branches have no changes:
 ⚠️  ▸ branch-a
 ⚠️  ▸ branch-b
 ⚠️  ▸ branch-c
 ⚠️  Are you sure you want to submit them?
-  ▸ branch-a → create
-  ▸ branch-b (current) → create
-  ▸ branch-c → create
+Stack to submit:
+  branch-a → create
+● branch-b → create
+  branch-c → create
+Dry run complete
 `)
 		require.Equal(t, expectedStack, testhelpers.NormalizeOutput(output))
 

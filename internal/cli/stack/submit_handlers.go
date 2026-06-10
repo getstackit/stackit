@@ -24,27 +24,71 @@ func NewSubmitUI(out output.Output, logger output.Logger) (*tui.Runner, submit.H
 	return nil, NewSimpleSubmitHandler(out)
 }
 
+// planPrinter prints the stack and per-branch plan as a single merged list,
+// shared by both submit handlers.
+type planPrinter struct {
+	out         output.Output
+	scopes      map[string]string
+	worktrees   map[string]string
+	headerShown bool
+}
+
+// SetStack stashes the stack annotations so plan lines can include them.
+func (p *planPrinter) SetStack(stack submit.StackSnapshot) {
+	p.scopes = stack.ScopeMap
+	p.worktrees = stack.WorktreeMap
+}
+
+// PrintLine prints one branch of the plan, with the stack header before the
+// first line.
+func (p *planPrinter) PrintLine(ev submit.BranchPlanEvent) {
+	if !p.headerShown {
+		p.headerShown = true
+		p.out.Info("Stack to submit:")
+	}
+
+	marker := "  "
+	if ev.IsCurrent {
+		marker = "● "
+	}
+	name := submitComponent.DisplayBranchName(ev.BranchName)
+	if scope := p.scopes[ev.BranchName]; scope != "" {
+		name += " [" + scope + "]"
+	}
+	if p.worktrees[ev.BranchName] != "" {
+		name += " 📂 worktree"
+	}
+
+	if ev.Skipped {
+		p.out.Info("%s%s %s", marker, style.ColorDim(name), style.ColorDim("— "+ev.SkipReason))
+	} else {
+		p.out.Info("%s%s → %s", marker, name, ev.Action)
+	}
+}
+
 // SimpleSubmitHandler implements submit.Handler with line-by-line output
 type SimpleSubmitHandler struct {
 	common.BaseHandler
-	items     map[string]*branchItem
-	order     []string
-	displayed bool
+	plan  planPrinter
+	items map[string]*branchItem
+	order []string
 }
 
 type branchItem struct {
-	name     string
-	action   string
-	prNumber *int
-	url      string
-	status   string
-	err      error
+	name         string
+	action       string
+	prNumber     *int
+	url          string
+	status       string
+	err          error
+	reportedDone bool
 }
 
 // NewSimpleSubmitHandler creates a new simple submit handler
 func NewSimpleSubmitHandler(out output.Output) *SimpleSubmitHandler {
 	return &SimpleSubmitHandler{
 		BaseHandler: common.NewBaseHandler(out),
+		plan:        planPrinter{out: out},
 		items:       make(map[string]*branchItem),
 	}
 }
@@ -56,28 +100,8 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 
 	switch ev := e.(type) {
 	case submit.StackDisplayEvent:
-		h.displayed = true
-		h.Output.Info("Stack to submit:")
-		for _, branch := range ev.Stack.Branches {
-			marker := "  "
-			if branch == ev.Stack.CurrentBranch {
-				marker = "● "
-			}
-			scope := ev.Stack.ScopeMap[branch]
-			worktree := ev.Stack.WorktreeMap[branch]
-
-			var line string
-			if scope != "" {
-				line = marker + submitComponent.DisplayBranchName(branch) + " [" + scope + "]"
-			} else {
-				line = marker + submitComponent.DisplayBranchName(branch)
-			}
-			if worktree != "" {
-				line += " 📂 worktree"
-			}
-			h.Output.Info("%s", line)
-		}
-		h.Output.Newline()
+		// The stack and plan print as one merged list once plan events arrive.
+		h.plan.SetStack(ev.Stack)
 
 	case submit.RestackEvent:
 		if ev.Started {
@@ -89,15 +113,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		// Skip - we'll show progress during actual submission
 
 	case submit.BranchPlanEvent:
-		displayName := submitComponent.DisplayBranchName(ev.BranchName)
-		if ev.IsCurrent {
-			displayName += " (current)"
-		}
-		if ev.Skipped {
-			h.Output.Info("  ▸ %s %s", style.ColorDim(displayName), style.ColorDim("— "+ev.SkipReason))
-		} else {
-			h.Output.Info("  ▸ %s → %s", displayName, ev.Action)
-		}
+		h.plan.PrintLine(ev)
 
 	case submit.SubmissionStartEvent:
 		h.order = h.order[:0]
@@ -135,9 +151,15 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			h.Output.Info("  ⋯ %s %s...", submitComponent.DisplayBranchName(ev.BranchName), action)
 
 		case submit.StatusSyncing:
-			h.Output.Info("  ⋯ %s syncing...", submitComponent.DisplayBranchName(ev.BranchName))
+			// Quiet: the metadata footer sync carries no new information; the
+			// branch result was already reported when it first reached done.
 
 		case submit.StatusDone:
+			// The footer sync re-emits done; only report a branch once.
+			if item.reportedDone {
+				return
+			}
+			item.reportedDone = true
 			actionDone := "created"
 			if item.action == "update" {
 				actionDone = "updated"
@@ -162,11 +184,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				h.Output.Newline()
 				h.Output.Info("%s", summary)
 			}
-		case ev.Success && !h.displayed && ev.Message != "":
-			// No stack was ever displayed (empty scope / nothing to submit).
-			// Surface the outcome that the CLI used to print before delegating
-			// work-detection to Action. Cases that show a stack first (dry run,
-			// all up to date) already convey the outcome via the plan lines.
+		case ev.Success && ev.Message != "":
+			// Dry run, all up to date, nothing to submit: print the outcome so
+			// the run doesn't end silently.
 			h.Output.Info("%s", ev.Message)
 		}
 	}

@@ -8,6 +8,7 @@ import (
 
 	submitAction "github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/output"
+	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
 )
 
 func TestSimpleSubmitHandlerPrintsFinalURLSummary(t *testing.T) {
@@ -104,6 +105,35 @@ func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
 	require.Contains(t, got, "skipped-branch")
 	require.Contains(t, got, "— no changes")
 	require.Equal(t, 1, strings.Count(got, "current-branch"), "stack and plan must print as one merged list")
+}
+
+func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	// A nil runner stands in for a TUI that was never started; every runner
+	// method is nil-safe. Plan output must not depend on the TUI running.
+	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out)
+	branch := "jonnii/20260511011552/up-to-date-branch"
+
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:      []string{branch},
+		CurrentBranch: branch,
+		TrunkBranch:   "main",
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{
+		BranchName: branch,
+		Skipped:    true,
+		SkipReason: "no changes",
+		IsCurrent:  true,
+	})
+	handler.OnEvent(submitAction.CompletionEvent{Success: true, Message: "All PRs up to date"})
+
+	got := out.String()
+	require.Contains(t, got, "Stack to submit:")
+	require.Contains(t, got, "up-to-date-branch")
+	require.Contains(t, got, "— no changes")
+	require.Contains(t, got, "All PRs up to date")
 }
 
 func TestSimpleSubmitHandlerPrintsOutcomeWhenNothingSubmitted(t *testing.T) {

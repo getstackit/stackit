@@ -155,8 +155,6 @@ func actionLabel(action string) string {
 		return "create"
 	case ActionUpdate:
 		return "update"
-	case "thinking...":
-		return "planning"
 	default:
 		return action
 	}

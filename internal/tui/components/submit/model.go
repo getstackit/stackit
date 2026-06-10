@@ -29,15 +29,6 @@ type ProgressUpdateMsg struct {
 	Err        error
 }
 
-// PlanUpdateMsg is sent when a branch plan is updated
-type PlanUpdateMsg struct {
-	BranchName string
-	Action     string
-	IsCurrent  bool
-	Skip       bool
-	SkipReason string
-}
-
 // GlobalMessageMsg is sent to display a global message (e.g., "Submitting...")
 type GlobalMessageMsg string
 
@@ -79,29 +70,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case PlanUpdateMsg:
-		// Update existing item or add new one
-		found := false
-		for i, item := range m.Items {
-			if item.BranchName == msg.BranchName {
-				m.Items[i].Action = msg.Action
-				m.Items[i].IsSkipped = msg.Skip
-				m.Items[i].SkipReason = msg.SkipReason
-				found = true
-				break
-			}
-		}
-		if !found {
-			m.Items = append(m.Items, Item{
-				BranchName: msg.BranchName,
-				Action:     msg.Action,
-				IsSkipped:  msg.Skip,
-				SkipReason: msg.SkipReason,
-				Status:     StatusPending,
-			})
-		}
-		return m, nil
-
 	case GlobalMessageMsg:
 		m.GlobalMessage = string(msg)
 		return m, nil
@@ -190,16 +158,10 @@ func (m *Model) header() string {
 		return fmt.Sprintf("Submit %d %s", count, pluralBranch(count))
 	}
 
-	switch strings.TrimSuffix(message, "...") {
-	case "Submitting":
+	if strings.TrimSuffix(message, "...") == "Submitting" {
 		return fmt.Sprintf("Submitting %d %s", count, pluralBranch(count))
-	case "Preparing branches":
-		return fmt.Sprintf("Preparing %d %s", count, pluralBranch(count))
-	case "Restacking branches":
-		return fmt.Sprintf("Restacking %d %s", count, pluralBranch(count))
-	default:
-		return message
 	}
+	return message
 }
 
 func pluralBranch(count int) string {

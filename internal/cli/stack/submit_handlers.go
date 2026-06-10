@@ -16,9 +16,10 @@ func NewSubmitUI(out output.Output, logger output.Logger) (*tui.Runner, submit.H
 	if tui.IsTTY() {
 		model := submitComponent.NewModel(nil)
 		runner := tui.NewRunner(model, out, logger)
-		// Start lazily on the first stack-display event rather than here, so a
-		// submit that turns out to have nothing to do never flashes the bubbletea
-		// startup/teardown sequence. See InteractiveSubmitHandler.OnEvent.
+		// Start lazily when the submission phase begins rather than here: the
+		// stack and plan print as plain lines, so a submit that turns out to
+		// have nothing to do never flashes the bubbletea startup/teardown
+		// sequence. See InteractiveSubmitHandler.OnEvent.
 		return runner, NewInteractiveSubmitHandler(runner, model, out)
 	}
 	return nil, NewSimpleSubmitHandler(out)
@@ -236,81 +237,53 @@ type InteractiveSubmitHandler struct {
 	runner        *tui.Runner
 	model         *submitComponent.Model
 	out           output.Output
+	plan          planPrinter
 	inSubmitPhase bool
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
 func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output) *InteractiveSubmitHandler {
-	return &InteractiveSubmitHandler{runner: runner, model: model, out: out}
+	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out}}
 }
 
 // OnEvent handles events from the submit action
 func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 	switch ev := e.(type) {
 	case submit.StackDisplayEvent:
-		items := make([]submitComponent.Item, 0, len(ev.Stack.Branches))
-		for _, branchName := range ev.Stack.Branches {
-			// Skip trunk - we don't submit it
-			if branchName == ev.Stack.TrunkBranch {
-				continue
-			}
-
-			items = append(items, submitComponent.Item{
-				BranchName: branchName,
-				Action:     "thinking...",
-				Status:     submitComponent.StatusPending,
-			})
-		}
-
-		h.model.Items = items
-
-		// Start the TUI now that there's a populated stack to show. Idempotent,
-		// so later events that arrive after this are safe.
-		h.runner.Start()
+		// The stack and plan print as plain lines (see planPrinter); the TUI
+		// only starts once there are branches to submit, so runs with no work
+		// to do never flash the bubbletea startup/teardown sequence.
+		h.plan.SetStack(ev.Stack)
 
 	case submit.RestackEvent:
 		if ev.Started {
-			h.runner.Send(submitComponent.GlobalMessageMsg("Restacking branches..."))
-		} else if ev.Completed {
-			h.runner.Send(submitComponent.GlobalMessageMsg(""))
+			h.out.Info("Restacking branches before submitting...")
 		}
+		// No output for completion
 
 	case submit.PreparingEvent:
-		h.runner.Send(submitComponent.GlobalMessageMsg("Preparing branches..."))
+		// Quiet - the plan lines follow immediately
 
 	case submit.BranchPlanEvent:
-		h.runner.Send(submitComponent.PlanUpdateMsg{
-			BranchName: ev.BranchName,
-			Action:     ev.Action,
-			IsCurrent:  ev.IsCurrent,
-			Skip:       ev.Skipped,
-			SkipReason: ev.SkipReason,
-		})
+		h.plan.PrintLine(ev)
 
 	case submit.SubmissionStartEvent:
 		h.inSubmitPhase = true
 
-		// Update items in the model
-		for _, branch := range ev.Branches {
-			item := submitComponent.Item{
+		items := make([]submitComponent.Item, len(ev.Branches))
+		for i, branch := range ev.Branches {
+			items[i] = submitComponent.Item{
 				BranchName: branch.Name,
 				Action:     branch.Action,
 				PRNumber:   branch.PRNumber,
-				Status:     "pending",
-			}
-			found := false
-			for i, existing := range h.model.Items {
-				if existing.BranchName == branch.Name {
-					h.model.Items[i] = item
-					found = true
-					break
-				}
-			}
-			if !found {
-				h.model.Items = append(h.model.Items, item)
+				Status:     submitComponent.StatusPending,
 			}
 		}
+		h.model.Items = items
 
+		// Start the TUI now that there's real submission work to animate.
+		// Idempotent, so later events that arrive after this are safe.
+		h.runner.Start()
 		h.runner.Send(submitComponent.GlobalMessageMsg("Submitting..."))
 
 	case submit.BranchProgressEvent:

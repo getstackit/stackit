@@ -373,6 +373,15 @@ func registerTreeStories() {
 	})
 }
 
+// newSimulationSubmitModel builds the submit model as it looks when the TUI
+// starts: the submission set is known and every branch is pending.
+func newSimulationSubmitModel() *submit.Model {
+	return submit.NewModel([]submit.Item{
+		{BranchName: "feature-2", Action: submit.ActionUpdate, Status: submit.StatusPending},
+		{BranchName: "feature-3", Action: submit.ActionCreate, Status: submit.StatusPending},
+	})
+}
+
 func registerSubmitStories() {
 	RegisterStory(Story{
 		Name:        "Full Submission",
@@ -380,7 +389,7 @@ func registerSubmitStories() {
 		Description: "A simulated full submission process with state transitions",
 		CreateModel: func() tea.Model {
 			return &submitSimulationModel{
-				submitModel: submit.NewModel(nil),
+				submitModel: newSimulationSubmitModel(),
 				startTime:   time.Now(),
 			}
 		},
@@ -433,7 +442,7 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if int(msg) == -1 {
 			// Reset simulation
 			m.step = 0
-			m.submitModel = submit.NewModel(nil)
+			m.submitModel = newSimulationSubmitModel()
 			return m, m.nextTick()
 		}
 
@@ -442,22 +451,18 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch m.step {
 		case 1:
-			_, c := m.submitModel.Update(submit.GlobalMessageMsg("Preparing branches..."))
+			// The TUI only exists during the submission phase; the stack and
+			// plan print as plain lines before it starts.
+			_, c := m.submitModel.Update(submit.GlobalMessageMsg("Submitting..."))
 			cmds = append(cmds, c, m.nextTick())
 		case 2:
-			m.submitModel.Update(submit.PlanUpdateMsg{BranchName: "feature-1", Action: "update", Skip: true, SkipReason: "already up to date"})
-			m.submitModel.Update(submit.PlanUpdateMsg{BranchName: "feature-2", Action: "update"})
-			_, c := m.submitModel.Update(submit.PlanUpdateMsg{BranchName: "feature-3", Action: "create"})
-			cmds = append(cmds, c, m.nextTick())
-		case 3:
-			m.submitModel.Update(submit.GlobalMessageMsg("Submitting..."))
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-2", Status: submit.StatusSubmitting})
 			cmds = append(cmds, c, m.nextTick())
-		case 4:
+		case 3:
 			m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-2", Status: submit.StatusDone, URL: "https://github.com/owner/repo/pull/102"})
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-3", Status: submit.StatusSubmitting})
 			cmds = append(cmds, c, m.nextTick())
-		case 5:
+		case 4:
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-3", Status: submit.StatusDone, URL: "https://github.com/owner/repo/pull/103"})
 			cmds = append(cmds, c, m.nextTick())
 			m.submitModel.Update(submit.GlobalMessageMsg("✓ All branches submitted"))
@@ -484,6 +489,6 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *submitSimulationModel) View() tea.View {
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
 	return tea.NewView(fmt.Sprint(m.submitModel.View().Content) + "\n" +
-		helpStyle.Render(fmt.Sprintf("Simulation step: %d/6", m.step)) + "\n" +
+		helpStyle.Render(fmt.Sprintf("Simulation step: %d/4", m.step)) + "\n" +
 		helpStyle.Render("q: back"))
 }

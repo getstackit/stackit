@@ -124,7 +124,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ProgressCompleteMsg:
 		m.Done = true
-		summary := FormatCompletionSummary(m.Items)
+		summary := m.completionSummary()
 		if summary != "" {
 			return m, tea.Sequence(
 				tea.Printf("\n%s", summary),
@@ -142,7 +142,11 @@ func (m *Model) View() tea.View {
 	if m.Done {
 		return tea.NewView("")
 	}
+	return tea.NewView(m.content() + "\n")
+}
 
+// content renders the header and per-branch progress rows.
+func (m *Model) content() string {
 	var b strings.Builder
 
 	header := m.header()
@@ -162,8 +166,18 @@ func (m *Model) View() tea.View {
 		}
 	}
 
-	b.WriteString("\n")
-	return tea.NewView(b.String())
+	return b.String()
+}
+
+// completionSummary is the output persisted to the terminal when the TUI
+// exits. After a submission it lists PR URLs and failures; when nothing was
+// submitted (dry run, all up to date) it falls back to the final plan view,
+// which would otherwise be erased with the progress display.
+func (m *Model) completionSummary() string {
+	if summary := FormatCompletionSummary(m.Items); summary != "" {
+		return summary
+	}
+	return m.content()
 }
 
 func (m *Model) header() string {

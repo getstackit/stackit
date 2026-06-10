@@ -118,6 +118,39 @@ func TestModelPreservesURLAcrossFooterSyncDone(t *testing.T) {
 	require.Equal(t, "https://github.com/getstackit/stackit/pull/934", m.Items[0].URL)
 }
 
+func TestModelCompletionSummaryFallsBackToPlanView(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel([]Item{
+		{BranchName: "feature-1", Action: ActionUpdate, Status: StatusPending, IsSkipped: true, SkipReason: "no changes"},
+		{BranchName: "feature-2", Action: ActionCreate, Status: StatusPending},
+	})
+	updated, _ := m.Update(GlobalMessageMsg("Dry run complete"))
+	m = updated.(*Model)
+
+	summary := stripANSIEscape(m.completionSummary())
+	require.Contains(t, summary, "Dry run complete")
+	require.Contains(t, summary, "feature-1")
+	require.Contains(t, summary, "no changes")
+	require.Contains(t, summary, "feature-2")
+	require.Contains(t, summary, "create")
+}
+
+func TestModelCompletionSummaryPrefersSubmissionResults(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel([]Item{{
+		BranchName: "feature-1",
+		Action:     ActionUpdate,
+		Status:     StatusDone,
+		URL:        "https://github.com/getstackit/stackit/pull/934",
+	}})
+
+	summary := m.completionSummary()
+	require.Contains(t, summary, "Pull requests")
+	require.Contains(t, summary, "https://github.com/getstackit/stackit/pull/934")
+}
+
 func stripANSIEscape(s string) string {
 	return ansiPattern.ReplaceAllString(s, "")
 }

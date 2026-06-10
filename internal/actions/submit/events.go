@@ -44,12 +44,26 @@ func (PreparingEvent) submitEvent() {}
 type BranchPlanEvent struct {
 	BranchName string
 	Action     string // "create" or "update"
+	PRNumber   *int   // existing PR number for updates, nil for creates
 	IsCurrent  bool
+	Empty      bool // branch has no commits relative to its parent
 	Skipped    bool
 	SkipReason string
 }
 
 func (BranchPlanEvent) submitEvent() {}
+
+// BranchWarningEvent surfaces a non-fatal warning raised while submitting a
+// branch (e.g. labels or reviewers could not be applied). Warnings must flow
+// through the handler rather than direct console output: the interactive
+// runner quiets the console while the TUI is active, so direct writes during
+// the submission phase are silently dropped.
+type BranchWarningEvent struct {
+	BranchName string
+	Warning    string
+}
+
+func (BranchWarningEvent) submitEvent() {}
 
 // SubmissionStartEvent indicates the submission phase is beginning.
 type SubmissionStartEvent struct {
@@ -68,10 +82,29 @@ type BranchProgressEvent struct {
 
 func (BranchProgressEvent) submitEvent() {}
 
+// CompletionOutcome classifies how a submit run ended, so handlers can decide
+// presentation without string-matching messages.
+type CompletionOutcome string
+
+// CompletionOutcome values.
+const (
+	OutcomeComplete        CompletionOutcome = "complete"          // branches were submitted
+	OutcomeUpToDate        CompletionOutcome = "up-to-date"        // nothing needed submitting
+	OutcomeDryRun          CompletionOutcome = "dry-run"           // plan reported, nothing submitted
+	OutcomeCanceled        CompletionOutcome = "canceled"          // user declined a confirmation
+	OutcomeNothingToSubmit CompletionOutcome = "nothing-to-submit" // no branches in scope / untracked
+	OutcomeFailed          CompletionOutcome = "failed"            // at least one branch failed
+)
+
 // CompletionEvent indicates the action has finished.
 type CompletionEvent struct {
-	Success bool
-	Message string // "All PRs up to date", "Dry run complete", etc.
+	Outcome CompletionOutcome
+	Message string // human-readable detail, e.g. "All PRs up to date"
+}
+
+// Success reports whether the run ended without failure or cancellation.
+func (e CompletionEvent) Success() bool {
+	return e.Outcome != OutcomeFailed && e.Outcome != OutcomeCanceled
 }
 
 func (CompletionEvent) submitEvent() {}

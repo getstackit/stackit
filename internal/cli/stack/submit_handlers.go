@@ -1,6 +1,8 @@
 package stack
 
 import (
+	"fmt"
+
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/output"
@@ -62,9 +64,18 @@ func (p *planPrinter) PrintLine(ev submit.BranchPlanEvent) {
 
 	if ev.Skipped {
 		p.out.Info("%s%s %s", marker, style.ColorDim(name), style.ColorDim("— "+ev.SkipReason))
-	} else {
-		p.out.Info("%s%s → %s", marker, name, ev.Action)
+		return
 	}
+
+	action := ev.Action
+	if ev.PRNumber != nil {
+		action = fmt.Sprintf("%s #%d", action, *ev.PRNumber)
+	}
+	line := fmt.Sprintf("%s%s → %s", marker, name, action)
+	if ev.Empty {
+		line += " " + style.ColorDim("(empty)")
+	}
+	p.out.Info("%s", line)
 }
 
 // SimpleSubmitHandler implements submit.Handler with line-by-line output
@@ -145,11 +156,8 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 
 		switch ev.Status {
 		case submit.StatusSubmitting:
-			action := "Creating"
-			if item.action == "update" {
-				action = "Updating"
-			}
-			h.Output.Info("  ⋯ %s %s...", submitComponent.DisplayBranchName(ev.BranchName), action)
+			// Quiet: line-by-line output has no animation, so the transitional
+			// state adds noise without information; only terminal states print.
 
 		case submit.StatusSyncing:
 			// Quiet: the metadata footer sync carries no new information; the
@@ -165,30 +173,35 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			if item.action == "update" {
 				actionDone = "updated"
 			}
-			ref := submitComponent.PRRef(item.toSubmitItem())
-			if ref != "" {
-				h.Output.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), ref)
-			} else {
-				h.Output.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), actionDone)
+			detail := actionDone
+			if ref := submitComponent.PRRef(item.toSubmitItem()); ref != "" {
+				detail = ref + " " + actionDone
 			}
+			h.Output.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), detail)
 
 		case submit.StatusError:
 			h.Output.Info("  ✗ %s failed: %v", submitComponent.DisplayBranchName(ev.BranchName), ev.Error)
 		}
 
+	case submit.BranchWarningEvent:
+		h.Output.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
+
 	case submit.CompletionEvent:
-		switch {
-		case !ev.Success && ev.Message != "":
-			h.Output.Info("%s", ev.Message)
-		case ev.Success && ev.Message == "Submit complete":
+		switch ev.Outcome {
+		case submit.OutcomeComplete:
 			if summary := submitComponent.FormatURLSummary(h.submitItems()); summary != "" {
 				h.Output.Newline()
 				h.Output.Info("%s", summary)
 			}
-		case ev.Success && ev.Message != "":
-			// Dry run, all up to date, nothing to submit: print the outcome so
-			// the run doesn't end silently.
-			h.Output.Info("%s", ev.Message)
+		case submit.OutcomeFailed:
+			// Quiet: the returned error is reported by the CLI; printing the
+			// generic message here would double-report the failure.
+		default:
+			// Dry run, all up to date, canceled, nothing to submit: print the
+			// outcome so the run doesn't end silently.
+			if ev.Message != "" {
+				h.Output.Info("%s", ev.Message)
+			}
 		}
 	}
 }
@@ -284,7 +297,6 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		// Start the TUI now that there's real submission work to animate.
 		// Idempotent, so later events that arrive after this are safe.
 		h.runner.Start()
-		h.runner.Send(submitComponent.GlobalMessageMsg("Submitting..."))
 
 	case submit.BranchProgressEvent:
 		if !h.inSubmitPhase {
@@ -298,20 +310,26 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			Err:        ev.Error,
 		})
 
+	case submit.BranchWarningEvent:
+		// The runner quiets console output while the TUI runs, so warnings must
+		// flow through the model to be rendered and persisted.
+		if h.runner.IsRunning() {
+			h.runner.Send(submitComponent.WarningMsg{
+				BranchName: ev.BranchName,
+				Warning:    ev.Warning,
+			})
+			return
+		}
+		h.out.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
+
 	case submit.CompletionEvent:
-		// If no stack was ever displayed (e.g. nothing to submit), the TUI was
-		// never started — print the outcome plainly instead of routing it
-		// through a runner that isn't running.
+		// If the submission phase never started (nothing to submit, dry run,
+		// canceled), the TUI isn't running — print the outcome plainly.
 		if !h.runner.IsRunning() {
-			if ev.Message != "" {
+			if ev.Outcome != submit.OutcomeFailed && ev.Message != "" {
 				h.out.Info("%s", ev.Message)
 			}
 			return
-		}
-		if ev.Message != "" && ev.Message != "Submit complete" {
-			h.runner.Send(submitComponent.GlobalMessageMsg(ev.Message))
-		} else {
-			h.runner.Send(submitComponent.GlobalMessageMsg(""))
 		}
 		h.runner.Send(submitComponent.ProgressCompleteMsg{})
 		h.runner.Wait()

@@ -97,7 +97,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			// Non-interactive: inform and exit gracefully
 			ctx.Output.Info("Branch %s is not tracked by stackit.", branchName)
 			ctx.Output.Tip("Run 'stackit track' to track this branch, then try again.")
-			handler.OnEvent(CompletionEvent{Success: true, Message: "Branch not tracked"})
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeNothingToSubmit, Message: "Branch not tracked"})
 			return nil
 		}
 
@@ -110,7 +110,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 		if !shouldTrack {
 			ctx.Output.Info("Skipping. Use 'stackit track --parent <branch>' for a different parent.")
-			handler.OnEvent(CompletionEvent{Success: true, Message: "Tracking declined"})
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeNothingToSubmit, Message: "Tracking declined"})
 			return nil
 		}
 
@@ -127,7 +127,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return err
 	}
 	if len(branches) == 0 {
-		handler.OnEvent(CompletionEvent{Success: true, Message: "No branches to submit"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeNothingToSubmit, Message: "No branches to submit"})
 		return nil
 	}
 
@@ -214,31 +214,58 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		remoteStatuses = <-remoteStatusCh
 	}
 
+	// Branches with no commits still submit (an empty PR can be a placeholder),
+	// but the plan flags them and interactive runs confirm first.
+	emptyMap := eng.BatchIsBranchEmpty(branches)
+
 	// Prepare branches for submit (show planning phase with current indicator)
-	submissionInfos, err := prepareBranchesForSubmit(ctx, branchObjs, opts, currentBranchName, remoteStatuses, handler)
+	submissionInfos, err := prepareBranchesForSubmit(ctx, branchObjs, opts, currentBranchName, remoteStatuses, emptyMap, handler)
 	if err != nil {
 		return fmt.Errorf("failed to prepare branches: %w", err)
 	}
 
 	// Check if we should abort
 	if opts.DryRun {
-		handler.OnEvent(CompletionEvent{Success: true, Message: "Dry run complete"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeDryRun, Message: "Dry run complete"})
 		return nil
 	}
 
 	if len(submissionInfos) == 0 {
-		handler.OnEvent(CompletionEvent{Success: true, Message: "All PRs up to date"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeUpToDate, Message: "All PRs up to date"})
 		return nil
 	}
 
-	// Handle interactive confirmation
-	if opts.Confirm {
-		confirmed, err := handler.Confirm("Proceed with submit?", true)
+	// Confirm empty branches interactively. --confirm already prompts below
+	// with the full plan visible, so don't ask twice.
+	emptyCount := 0
+	for _, info := range submissionInfos {
+		if emptyMap[info.BranchName] {
+			emptyCount++
+		}
+	}
+	if emptyCount > 0 && handler.IsInteractive() && !opts.Confirm {
+		message := fmt.Sprintf("%d branches have no commits — submit anyway?", emptyCount)
+		if emptyCount == 1 {
+			message = "1 branch has no commits — submit anyway?"
+		}
+		confirmed, err := handler.Confirm(message, true)
 		if err != nil {
 			return fmt.Errorf("confirmation canceled: %w", err)
 		}
 		if !confirmed {
-			handler.OnEvent(CompletionEvent{Success: false, Message: "Submit canceled"})
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeCanceled, Message: "Submit canceled"})
+			return nil
+		}
+	}
+
+	// Handle interactive confirmation
+	if opts.Confirm {
+		confirmed, err := handler.Confirm(confirmPrompt(submissionInfos), true)
+		if err != nil {
+			return fmt.Errorf("confirmation canceled: %w", err)
+		}
+		if !confirmed {
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeCanceled, Message: "Submit canceled"})
 			return nil
 		}
 	}
@@ -307,7 +334,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	if submitErr != nil {
-		handler.OnEvent(CompletionEvent{Success: false, Message: "Submit failed"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
 		return submitErr
 	}
 
@@ -331,13 +358,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Push metadata refs for successfully submitted branches
 	if err := pushMetadataRefs(ctx, branchObjs); err != nil {
-		handler.OnEvent(CompletionEvent{Success: false, Message: "Submit failed"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
 		return fmt.Errorf("failed to push metadata to remote: %w. Your PRs were created/updated successfully, but metadata sync failed. Run 'st sync' and try submitting again", err)
 	}
 
 	ctx.Logger.Info("submit completed branchCount=%v", len(branches))
 
-	handler.OnEvent(CompletionEvent{Success: true, Message: "Submit complete"})
+	handler.OnEvent(CompletionEvent{Outcome: OutcomeComplete, Message: "Submit complete"})
 	return nil
 }
 
@@ -395,9 +422,9 @@ func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, re
 	var prURL string
 	var err error
 	if info.Action == actionCreate {
-		prURL, err = createPullRequestQuiet(ctx, info, repoOwner, repoName)
+		prURL, err = createPullRequestQuiet(ctx, info, repoOwner, repoName, handler)
 	} else {
-		prURL, err = updatePullRequestQuiet(ctx, info, opts, repoOwner, repoName)
+		prURL, err = updatePullRequestQuiet(ctx, info, opts, repoOwner, repoName, handler)
 	}
 
 	if err != nil {
@@ -487,7 +514,7 @@ func pushSubmittedBranches(ctx *app.Context, opts Options, infos []Info, remote 
 }
 
 // createPullRequestQuiet creates a new pull request without logging
-func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, repoName string) (string, error) {
+func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, repoName string, handler Handler) (string, error) {
 	pr := ctx.PR()
 	nav := ctx.Navigator()
 
@@ -516,9 +543,9 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 		return "", fmt.Errorf("failed to create PR for %s: %w", submissionInfo.BranchName, err)
 	}
 
-	// Log any warnings from PR creation (e.g., failed to add labels/assignees)
+	// Surface any warnings from PR creation (e.g., failed to add labels/assignees)
 	for _, warning := range prResult.Warnings {
-		ctx.Output.Warn("%s: %s", submissionInfo.BranchName, warning)
+		handler.OnEvent(BranchWarningEvent{BranchName: submissionInfo.BranchName, Warning: warning})
 	}
 
 	// Update PR info
@@ -543,7 +570,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 }
 
 // updatePullRequestQuiet updates an existing pull request without logging
-func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options, repoOwner, repoName string) (string, error) {
+func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options, repoOwner, repoName string, handler Handler) (string, error) {
 	pr := ctx.PR()
 	nav := ctx.Navigator()
 
@@ -642,9 +669,9 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		return "", fmt.Errorf("failed to update PR for %s: %w", submissionInfo.BranchName, err)
 	}
 
-	// Log any warnings from PR update (e.g., failed to add labels/assignees)
+	// Surface any warnings from PR update (e.g., failed to add labels/assignees)
 	for _, warning := range updateWarnings {
-		ctx.Output.Warn("%s: %s", submissionInfo.BranchName, warning)
+		handler.OnEvent(BranchWarningEvent{BranchName: submissionInfo.BranchName, Warning: warning})
 	}
 
 	// If the base.sha refresh was needed but failed, keep the previously stored BaseSHA

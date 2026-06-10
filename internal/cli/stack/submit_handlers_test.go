@@ -29,11 +29,11 @@ func TestSimpleSubmitHandlerPrintsFinalURLSummary(t *testing.T) {
 		Status:     submitAction.StatusDone,
 		URL:        "https://github.com/getstackit/stackit/pull/934",
 	})
-	handler.OnEvent(submitAction.CompletionEvent{Success: true, Message: "Submit complete"})
+	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Message: "Submit complete"})
 
 	got := out.String()
 	require.Contains(t, got, "Submitting 1 branch")
-	require.Contains(t, got, "✓ guard-runner.repoRoot-reads-with-repoMu-to-fix #934")
+	require.Contains(t, got, "✓ guard-runner.repoRoot-reads-with-repoMu-to-fix #934 updated")
 	require.Contains(t, got, "Pull requests")
 	require.Contains(t, got, "#934 guard-runner.repoRoot-reads-with-repoMu-to-fix")
 	require.Contains(t, got, "     https://github.com/getstackit/stackit/pull/934")
@@ -66,7 +66,7 @@ func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
 		BranchName: branch,
 		Status:     submitAction.StatusDone,
 	})
-	handler.OnEvent(submitAction.CompletionEvent{Success: true, Message: "Submit complete"})
+	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Message: "Submit complete"})
 
 	got := out.String()
 	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/934")
@@ -127,13 +127,67 @@ func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {
 		SkipReason: "no changes",
 		IsCurrent:  true,
 	})
-	handler.OnEvent(submitAction.CompletionEvent{Success: true, Message: "All PRs up to date"})
+	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "All PRs up to date"})
 
 	got := out.String()
 	require.Contains(t, got, "Stack to submit:")
 	require.Contains(t, got, "up-to-date-branch")
 	require.Contains(t, got, "— no changes")
 	require.Contains(t, got, "All PRs up to date")
+}
+
+func TestPlanPrinterShowsPRNumbersAndEmptyAnnotation(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+	prNumber := 1189
+
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:    []string{"update-me", "empty-one"},
+		TrunkBranch: "main",
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{
+		BranchName: "update-me",
+		Action:     "update",
+		PRNumber:   &prNumber,
+	})
+	handler.OnEvent(submitAction.BranchPlanEvent{
+		BranchName: "empty-one",
+		Action:     "create",
+		Empty:      true,
+	})
+
+	got := out.String()
+	require.Contains(t, got, "update-me → update #1189")
+	require.Contains(t, got, "empty-one → create")
+	require.Contains(t, got, "(empty)")
+}
+
+func TestSimpleSubmitHandlerPrintsBranchWarnings(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+
+	handler.OnEvent(submitAction.BranchWarningEvent{
+		BranchName: "jonnii/20260511011552/add-feature",
+		Warning:    "failed to add labels: not found",
+	})
+
+	require.Contains(t, out.String(), "add-feature: failed to add labels: not found")
+}
+
+func TestSimpleSubmitHandlerStaysQuietOnFailureOutcome(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+
+	// The CLI prints the returned error; the handler must not double-report.
+	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeFailed, Message: "Submit failed"})
+
+	require.NotContains(t, out.String(), "Submit failed")
 }
 
 func TestSimpleSubmitHandlerPrintsOutcomeWhenNothingSubmitted(t *testing.T) {
@@ -153,7 +207,7 @@ func TestSimpleSubmitHandlerPrintsOutcomeWhenNothingSubmitted(t *testing.T) {
 		Skipped:    true,
 		SkipReason: "no changes",
 	})
-	handler.OnEvent(submitAction.CompletionEvent{Success: true, Message: "All PRs up to date"})
+	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "All PRs up to date"})
 
 	require.Contains(t, out.String(), "All PRs up to date")
 }

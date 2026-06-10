@@ -405,7 +405,6 @@ func registerSubmitStories() {
 				{BranchName: "feature-2", Action: "update", Status: submit.StatusError, Error: fmt.Errorf("failed to push branch: remote rejected")},
 				{BranchName: "feature-3", Action: "create", Status: submit.StatusPending},
 			})
-			m.GlobalMessage = "Submitting 3 branches..."
 			return m
 		},
 	})
@@ -451,21 +450,16 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch m.step {
 		case 1:
-			// The TUI only exists during the submission phase; the stack and
-			// plan print as plain lines before it starts.
-			_, c := m.submitModel.Update(submit.GlobalMessageMsg("Submitting..."))
-			cmds = append(cmds, c, m.nextTick())
-		case 2:
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-2", Status: submit.StatusSubmitting})
 			cmds = append(cmds, c, m.nextTick())
-		case 3:
+		case 2:
 			m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-2", Status: submit.StatusDone, URL: "https://github.com/owner/repo/pull/102"})
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-3", Status: submit.StatusSubmitting})
 			cmds = append(cmds, c, m.nextTick())
-		case 4:
+		case 3:
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-3", Status: submit.StatusDone, URL: "https://github.com/owner/repo/pull/103"})
 			cmds = append(cmds, c, m.nextTick())
-			m.submitModel.Update(submit.GlobalMessageMsg("✓ All branches submitted"))
+			// The final state stays visible until the reset tick.
 			// We don't send ProgressCompleteMsg because it would trigger tea.Quit,
 			// and we don't set Done because the view blanks once Done is set.
 			cmds = append(cmds, tea.Tick(3*time.Second, func(_ time.Time) tea.Msg {
@@ -489,6 +483,6 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *submitSimulationModel) View() tea.View {
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
 	return tea.NewView(fmt.Sprint(m.submitModel.View().Content) + "\n" +
-		helpStyle.Render(fmt.Sprintf("Simulation step: %d/4", m.step)) + "\n" +
+		helpStyle.Render(fmt.Sprintf("Simulation step: %d/3", m.step)) + "\n" +
 		helpStyle.Render("q: back"))
 }

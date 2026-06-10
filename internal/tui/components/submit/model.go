@@ -16,9 +16,9 @@ import (
 type Model struct {
 	core.BaseModel // Embedded for ReadySignaler interface
 	Items          []Item
+	Warnings       []string      // formatted warning lines, rendered after the rows and persisted on exit
 	spinner        spinner.Model // lowercase for custom style
 	Styles         Styles
-	GlobalMessage  string
 }
 
 // ProgressUpdateMsg is sent to update the status of a specific branch submission
@@ -29,8 +29,12 @@ type ProgressUpdateMsg struct {
 	Err        error
 }
 
-// GlobalMessageMsg is sent to display a global message (e.g., "Submitting...")
-type GlobalMessageMsg string
+// WarningMsg surfaces a non-fatal warning for a branch (e.g. labels could not
+// be applied). Warnings render below the progress rows and persist on exit.
+type WarningMsg struct {
+	BranchName string
+	Warning    string
+}
 
 // ProgressCompleteMsg is sent when all submissions are finished
 type ProgressCompleteMsg struct{}
@@ -70,8 +74,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case GlobalMessageMsg:
-		m.GlobalMessage = string(msg)
+	case WarningMsg:
+		m.Warnings = append(m.Warnings, fmt.Sprintf("⚠️  %s: %s", DisplayBranchName(msg.BranchName), msg.Warning))
 		return m, nil
 
 	case ProgressUpdateMsg:
@@ -134,34 +138,42 @@ func (m *Model) content() string {
 		}
 	}
 
+	for _, warning := range m.Warnings {
+		b.WriteString("\n")
+		b.WriteString(warning)
+	}
+
 	return b.String()
 }
 
 // completionSummary is the output persisted to the terminal when the TUI
 // exits. After a submission it lists PR URLs and failures; when nothing was
 // submitted (dry run, all up to date) it falls back to the final plan view,
-// which would otherwise be erased with the progress display.
+// which would otherwise be erased with the progress display. Warnings are
+// appended in either case so they survive the screen clear.
 func (m *Model) completionSummary() string {
-	if summary := FormatCompletionSummary(m.Items); summary != "" {
-		return summary
+	summary := FormatLinkedURLSummary(m.Items)
+	if failures := FormatFailureSummary(m.Items); failures != "" {
+		if summary != "" {
+			summary += "\n\n"
+		}
+		summary += failures
 	}
-	return m.content()
+	if summary == "" {
+		return m.content()
+	}
+	if len(m.Warnings) > 0 {
+		summary += "\n\n" + strings.Join(m.Warnings, "\n")
+	}
+	return summary
 }
 
 func (m *Model) header() string {
-	message := strings.TrimSpace(m.GlobalMessage)
 	count := len(m.Items)
-	if message == "" {
-		if count == 0 {
-			return ""
-		}
-		return fmt.Sprintf("Submit %d %s", count, pluralBranch(count))
+	if count == 0 {
+		return ""
 	}
-
-	if strings.TrimSuffix(message, "...") == "Submitting" {
-		return fmt.Sprintf("Submitting %d %s", count, pluralBranch(count))
-	}
-	return message
+	return fmt.Sprintf("Submitting %d %s", count, pluralBranch(count))
 }
 
 func pluralBranch(count int) string {

@@ -133,7 +133,7 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		}
 
 		// Action is the single source of truth for what to submit. The runner
-		// starts lazily (on the first stack-display event), so calling Action
+		// starts lazily (when the submission phase begins), so calling Action
 		// unconditionally no longer flashes the TUI when there's nothing to do.
 		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger)
 		defer runner.Cleanup()

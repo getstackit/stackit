@@ -31,7 +31,7 @@ func TestFormatCompactRowOmitsInlineURL(t *testing.T) {
 	}, 60, "", DefaultStyles())
 
 	require.Contains(t, row, "guard-runner")
-	require.Contains(t, row, "#934")
+	require.Contains(t, row, "#934 updated")
 	require.NotContains(t, row, "https://github.com/getstackit/stackit/pull/934")
 	require.LessOrEqual(t, lipgloss.Width(stripANSIEscape(row)), 60)
 }
@@ -54,10 +54,27 @@ func TestFormatURLSummaryRendersClickableRows(t *testing.T) {
      https://github.com/getstackit/stackit/pull/934`, summary)
 }
 
-func TestFormatCompletionSummaryIncludesFailures(t *testing.T) {
+func TestFormatLinkedURLSummaryEmitsHyperlinks(t *testing.T) {
 	t.Parallel()
 
-	summary := FormatCompletionSummary([]Item{
+	summary := FormatLinkedURLSummary([]Item{
+		{
+			BranchName: "jonnii/20260511011552/add-feature",
+			Action:     ActionCreate,
+			Status:     StatusDone,
+			URL:        "https://github.com/getstackit/stackit/pull/935",
+		},
+	})
+
+	require.Equal(t, "Pull requests\n\n"+
+		"\x1b]8;;https://github.com/getstackit/stackit/pull/935\x1b\\#935 add-feature\x1b]8;;\x1b\\",
+		summary)
+}
+
+func TestModelCompletionSummaryIncludesFailuresAndWarnings(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel([]Item{
 		{
 			BranchName: "jonnii/20260511011552/add-feature",
 			Action:     ActionCreate,
@@ -71,19 +88,23 @@ func TestFormatCompletionSummaryIncludesFailures(t *testing.T) {
 			Error:      errors.New("failed to push branch: remote rejected"),
 		},
 	})
+	updated, _ := m.Update(WarningMsg{
+		BranchName: "jonnii/20260511011552/add-feature",
+		Warning:    "failed to add labels",
+	})
+	m = updated.(*Model)
 
-	require.Equal(t, `Pull requests
-
-#935 add-feature
-     https://github.com/getstackit/stackit/pull/935
-
-✗ fix-bug — failed to push branch: remote rejected`, summary)
+	summary := m.completionSummary()
+	require.Contains(t, summary, "Pull requests")
+	require.Contains(t, summary, "#935 add-feature")
+	require.Contains(t, summary, "✗ fix-bug — failed to push branch: remote rejected")
+	require.Contains(t, summary, "⚠️  add-feature: failed to add labels")
 }
 
-func TestFormatCompletionSummaryFailuresWithoutURLs(t *testing.T) {
+func TestFormatFailureSummaryWithoutErrorDetail(t *testing.T) {
 	t.Parallel()
 
-	summary := FormatCompletionSummary([]Item{
+	summary := FormatFailureSummary([]Item{
 		{
 			BranchName: "jonnii/20260511011552/fix-bug",
 			Action:     ActionUpdate,
@@ -125,11 +146,9 @@ func TestModelCompletionSummaryFallsBackToPlanView(t *testing.T) {
 		{BranchName: "feature-1", Action: ActionUpdate, Status: StatusPending, IsSkipped: true, SkipReason: "no changes"},
 		{BranchName: "feature-2", Action: ActionCreate, Status: StatusPending},
 	})
-	updated, _ := m.Update(GlobalMessageMsg("Dry run complete"))
-	m = updated.(*Model)
 
 	summary := stripANSIEscape(m.completionSummary())
-	require.Contains(t, summary, "Dry run complete")
+	require.Contains(t, summary, "Submitting 2 branches")
 	require.Contains(t, summary, "feature-1")
 	require.Contains(t, summary, "no changes")
 	require.Contains(t, summary, "feature-2")

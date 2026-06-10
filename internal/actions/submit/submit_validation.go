@@ -62,11 +62,6 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 		return err
 	}
 
-	// Validate no empty branches
-	if err := validateNoEmptyBranches(branches, ctx); err != nil {
-		return err
-	}
-
 	// Validate no merged/closed branches
 	if err := validateNoMergedOrClosedBranches(branches, ctx.Status(), ctx); err != nil {
 		return err
@@ -128,7 +123,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 		switch {
 		case parentBranch.IsTrunk():
 			if !statuses.IsUpToDate(branch) {
-				ctx.Output.Info("Note that %s has fallen behind trunk. You may encounter conflicts if you attempt to merge it.",
+				ctx.Output.Warn("%s is behind trunk and may conflict on merge — run 'stackit sync' and 'stackit restack' to update it.",
 					output.Branch(branchName, false))
 			}
 		case validatedBranches[parentBranchName]:
@@ -147,36 +142,6 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 
 		validatedBranches[branchName] = true
 	}
-
-	return nil
-}
-
-// validateNoEmptyBranches checks for empty branches and prompts user if found
-func validateNoEmptyBranches(branches []string, runtimeCtx *app.Context) error {
-	// Resolve emptiness for the whole set in one batched rev-parse rather than a
-	// diff per branch.
-	empty := runtimeCtx.Engine.BatchIsBranchEmpty(branches)
-	emptyBranches := []string{}
-	for _, branchName := range branches {
-		if empty[branchName] {
-			emptyBranches = append(emptyBranches, branchName)
-		}
-	}
-
-	if len(emptyBranches) == 0 {
-		return nil
-	}
-
-	hasMultiple := len(emptyBranches) > 1
-	runtimeCtx.Output.Warn("The following branch%s have no changes:", actions.PluralSuffix("branch", hasMultiple))
-	for _, b := range emptyBranches {
-		runtimeCtx.Output.Warn("▸ %s", b)
-	}
-	runtimeCtx.Output.Warn("Are you sure you want to submit %s?", actions.PluralIt(hasMultiple))
-
-	// For now, we'll allow empty branches (non-interactive mode)
-	// In interactive mode, we would prompt here
-	// TODO: Add interactive prompt when needed
 
 	return nil
 }
@@ -200,11 +165,11 @@ func validateNoMergedOrClosedBranches(branches []string, eng engine.BranchStatus
 	}
 
 	hasMultiple := len(mergedOrClosedBranches) > 1
-	ctx.Output.Tip("You can use 'stackit sync' to find and delete all merged/closed branches automatically and rebase their children.")
 	ctx.Output.Warn("PR%s for the following branch%s already been merged or closed:", actions.PluralSuffix("PR", hasMultiple), actions.PluralSuffix("branch", hasMultiple))
 	for _, b := range mergedOrClosedBranches {
 		ctx.Output.Warn("▸ %s", b)
 	}
+	ctx.Output.Tip("Run 'stackit sync' to delete merged/closed branches and rebase their children.")
 
 	// For now, we'll allow creating new PRs (non-interactive mode)
 	// In interactive mode, we would prompt here

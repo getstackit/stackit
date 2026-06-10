@@ -120,11 +120,11 @@ func rowParts(item Item, spinnerView string, styles Styles) (string, string) {
 	case StatusSyncing:
 		return spinnerView, styles.SpinnerStyle.Render("syncing")
 	case StatusDone:
-		ref := PRRef(item)
-		if ref == "" {
-			ref = pastTense(item.Action)
+		detail := pastTense(item.Action)
+		if ref := PRRef(item); ref != "" {
+			detail = ref + " " + detail
 		}
-		return styles.DoneStyle.Render("✓"), styles.DoneStyle.Render(ref)
+		return styles.DoneStyle.Render("✓"), styles.DoneStyle.Render(detail)
 	case StatusError:
 		detail := "failed"
 		if item.Error != nil {
@@ -218,6 +218,34 @@ func FormatURLSummary(items []Item) string {
 	return "Pull requests\n\n" + strings.Join(rows, "\n")
 }
 
+// hyperlink wraps text in an OSC 8 terminal hyperlink escape sequence.
+// Terminals without OSC 8 support ignore the sequence and show the plain text.
+func hyperlink(url, text string) string {
+	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+}
+
+// FormatLinkedURLSummary renders the post-submit PR list as one clickable
+// OSC 8 hyperlink per PR. Only for terminal output — non-TTY consumers should
+// use FormatURLSummary, which keeps raw URLs greppable.
+func FormatLinkedURLSummary(items []Item) string {
+	rows := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.URL == "" {
+			continue
+		}
+		ref := PRRef(item)
+		if ref == "" {
+			ref = "-"
+		}
+		name := DisplayBranchName(item.BranchName)
+		rows = append(rows, hyperlink(item.URL, fmt.Sprintf("%s %s", ref, name)))
+	}
+	if len(rows) == 0 {
+		return ""
+	}
+	return "Pull requests\n\n" + strings.Join(rows, "\n")
+}
+
 // FormatFailureSummary renders failed branches with their errors. The progress
 // view is cleared when the TUI exits, so failures must be re-emitted as
 // persistent output or they vanish from the terminal.
@@ -237,17 +265,4 @@ func FormatFailureSummary(items []Item) string {
 		return ""
 	}
 	return strings.Join(rows, "\n")
-}
-
-// FormatCompletionSummary renders the persistent post-submit output: PR URLs
-// for submitted branches followed by errors for failed ones.
-func FormatCompletionSummary(items []Item) string {
-	sections := make([]string, 0, 2)
-	if urls := FormatURLSummary(items); urls != "" {
-		sections = append(sections, urls)
-	}
-	if failures := FormatFailureSummary(items); failures != "" {
-		sections = append(sections, failures)
-	}
-	return strings.Join(sections, "\n\n")
 }

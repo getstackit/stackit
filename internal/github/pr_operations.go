@@ -113,8 +113,6 @@ func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo s
 // UpdatePullRequest updates an existing pull request
 // Returns warnings (non-fatal issues like failed label/assignee additions) and error
 func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCommandRunner, owner, repo string, prNumber int, opts UpdatePROptions) ([]string, error) {
-	var warnings []string
-
 	// Handle draft status changes separately using GraphQL API, as the REST API
 	// doesn't support updating draft status. We need to use GraphQL mutation
 	// markPullRequestReadyForReview or convertPullRequestToDraft.
@@ -161,8 +159,8 @@ func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCom
 		return nil, fmt.Errorf("failed to update pull request: %w", err)
 	}
 
-	warnings = append(warnings, applyPRMetadata(ctx, client, owner, repo, prNumber,
-		opts.Reviewers, opts.TeamReviewers, opts.Labels, opts.Assignees)...)
+	warnings := applyPRMetadata(ctx, client, owner, repo, prNumber,
+		opts.Reviewers, opts.TeamReviewers, opts.Labels, opts.Assignees)
 
 	// Rerequest review if specified
 	if opts.RerequestReview {

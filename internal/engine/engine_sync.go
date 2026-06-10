@@ -57,10 +57,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	}()
 
 	// 1. Collect all the data required for the restack (in bulk)
-	branchNames := make([]string, len(branches))
-	for i, b := range branches {
-		branchNames[i] = b.GetName()
-	}
+	branchNames := branches.Names()
 
 	// Identify all potential parents and ancestors to fetch their metadata and revisions too
 	e.mu.RLock()

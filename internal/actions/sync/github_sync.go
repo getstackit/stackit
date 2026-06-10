@@ -30,10 +30,7 @@ func syncGitHubPRInfo(ctx *app.Context) (*GitHubSyncResult, error) {
 
 	setupStart := time.Now()
 	allBranches := nav.AllBranches()
-	branchNames := make([]string, len(allBranches))
-	for i, b := range allBranches {
-		branchNames[i] = b.GetName()
-	}
+	branchNames := allBranches.Names()
 
 	repoOwner, repoName, err := nav.GetRepoInfo(gctx)
 	if err != nil {

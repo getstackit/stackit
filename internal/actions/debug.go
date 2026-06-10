@@ -133,10 +133,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 		metadataRefs = make(map[string]string)
 	}
 
-	branchNames := make([]string, len(allBranches))
-	for i, b := range allBranches {
-		branchNames[i] = b.GetName()
-	}
+	branchNames := allBranches.Names()
 	allMeta, _ := eng.BatchReadMetadataRaw(branchNames)
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)

@@ -74,12 +74,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		s.Rebuild()
 
 		// Verify the merge branch is gone from the branch list
-		allBranches := s.Engine.AllBranches()
-		branchNames := make([]string, len(allBranches))
-		for i, b := range allBranches {
-			branchNames[i] = b.GetName()
-		}
-		require.NotContains(t, branchNames, "branch-a")
+		require.NotContains(t, s.Engine.AllBranches().Names(), "branch-a")
 
 		// Verify your main workspace remains on main
 		currentBranch := s.Engine.CurrentBranch()
@@ -162,12 +157,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		s.Rebuild()
 
 		// Verify the merged branch is gone from the branch list
-		allBranches := s.Engine.AllBranches()
-		branchNames := make([]string, len(allBranches))
-		for i, b := range allBranches {
-			branchNames[i] = b.GetName()
-		}
-		require.NotContains(t, branchNames, "branch-a", "branch-a should be deleted after merge")
+		require.NotContains(t, s.Engine.AllBranches().Names(), "branch-a", "branch-a should be deleted after merge")
 
 		// Verify the worktree was removed (branch-a is no longer in any worktree)
 		worktreeForBranch, err = s.Engine.Git().GetWorktreePathForBranch(s.Context.Context, "branch-a")

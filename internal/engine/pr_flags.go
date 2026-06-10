@@ -65,10 +65,7 @@ func (e *engineImpl) ClearNeedsPRBodyUpdate(branchName string) error {
 // GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates
 func (e *engineImpl) GetBranchesNeedingPRBodyUpdate() []string {
 	allBranches := e.AllBranches()
-	branchNames := make([]string, len(allBranches))
-	for i, b := range allBranches {
-		branchNames[i] = b.GetName()
-	}
+	branchNames := allBranches.Names()
 
 	localMetas := e.batchReadLocalMetadata(branchNames)
 	var result []string

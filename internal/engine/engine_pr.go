@@ -39,7 +39,7 @@ func NewPrInfoFromMeta(meta *git.Meta) *PrInfo {
 		getBoolValue(prInfo.IsDraft),
 		LockReason(lockReason),
 		getStringValue(prInfo.MergeBranch),
-	)
+	).WithBaseSHA(getStringValue(prInfo.BaseSHA))
 }
 
 // GetMergedDownstack returns the merged downstack history for a branch
@@ -92,6 +92,10 @@ func (e *engineImpl) UpsertPrInfo(ctx context.Context, branch Branch, prInfo *Pr
 			if prInfo.Base() != "" {
 				base := prInfo.Base()
 				existing.Base = &base
+			}
+			if prInfo.BaseSHA() != "" {
+				baseSHA := prInfo.BaseSHA()
+				existing.BaseSHA = &baseSHA
 			}
 			if prInfo.URL() != "" {
 				url := prInfo.URL()

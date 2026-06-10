@@ -99,6 +99,7 @@ type ModifiedBy struct {
 type PrInfoPersistence struct {
 	Number      *int        `json:"number,omitempty"`
 	Base        *string     `json:"base,omitempty"`
+	BaseSHA     *string     `json:"baseSHA,omitempty"`
 	URL         *string     `json:"url,omitempty"`
 	Title       *string     `json:"title,omitempty"`
 	Body        *string     `json:"body,omitempty"`

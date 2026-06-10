@@ -519,7 +519,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 		submissionInfo.Base,
 		prURL,
 		submissionInfo.Metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason()))
+	).WithLockReason(branch.GetLockReason()).WithBaseSHA(submissionInfo.BaseSHA))
 
 	return prURL, nil
 }
@@ -533,6 +533,17 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 	branch := nav.GetBranch(submissionInfo.BranchName)
 	prInfo, _ := branch.GetPrInfo()
 	baseChanged := prInfo != nil && prInfo.Base() != submissionInfo.Base
+
+	// Detect stale base.sha: base branch name is the same but the parent was force-pushed.
+	// After a restack, GitHub retains the old parent tip SHA in base.sha, causing the child
+	// PR to show the parent's tip commit in its diff. Fix by temporarily changing the PR base
+	// to trunk before setting it back to the actual parent — this forces GitHub to recompute
+	// base.sha to the current parent tip.
+	baseSHAStale := !baseChanged &&
+		prInfo != nil &&
+		prInfo.BaseSHA() != "" &&
+		prInfo.BaseSHA() != submissionInfo.BaseSHA &&
+		submissionInfo.Base != ctx.Engine.Trunk().GetName()
 
 	updateOpts := github.UpdatePROptions{
 		Title:           &submissionInfo.Metadata.Title,
@@ -580,6 +591,21 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		}
 	}
 
+	// When the parent was force-pushed (stale base.sha), temporarily retarget the PR
+	// to trunk and then back to the actual parent. GitHub recomputes base.sha on each
+	// base change, so the second change sets it to the current parent tip.
+	if baseSHAStale {
+		trunkName := ctx.Engine.Trunk().GetName()
+		trunkOpts := github.UpdatePROptions{Base: &trunkName}
+		if _, err := ctx.GitHub().UpdatePullRequest(ctx.Context, repoOwner, repoName, *submissionInfo.PRNumber, trunkOpts); err != nil {
+			ctx.Output.Debug("Failed to refresh stale base.sha for %s: %v", submissionInfo.BranchName, err)
+		} else {
+			// The main update below will set it back to the actual parent, causing GitHub
+			// to recompute base.sha to the current parent tip.
+			updateOpts.Base = &submissionInfo.Base
+		}
+	}
+
 	updateWarnings, err := ctx.GitHub().UpdatePullRequest(ctx.Context, repoOwner, repoName, *submissionInfo.PRNumber, updateOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to update PR for %s: %w", submissionInfo.BranchName, err)
@@ -611,7 +637,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		baseToStore,
 		prURL,
 		submissionInfo.Metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason()))
+	).WithLockReason(branch.GetLockReason()).WithBaseSHA(submissionInfo.BaseSHA))
 
 	return prURL, nil
 }

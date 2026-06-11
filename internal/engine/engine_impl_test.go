@@ -1362,6 +1362,51 @@ func TestDetachAndResetBranchChanges(t *testing.T) {
 
 func TestSetParentScenarios(t *testing.T) {
 	t.Parallel()
+	t.Run("preserves divergence point when multi-commit parent was squash-merged", func(t *testing.T) {
+		t.Parallel()
+		// Scenario: main -> branch1 (3 commits) -> branch2. GitHub
+		// squash-merges branch1, so no individual commit patch-matches the
+		// squashed result and patch-id detection (git cherry) cannot see the
+		// merge. Only the MERGED PR state in metadata can.
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		s.CreateBranch("branch1").
+			CommitChange("file1.txt", "v1").
+			CommitChange("file1.txt", "v1\nv2").
+			CommitChange("file1.txt", "v1\nv2\nv3").
+			TrackBranch("branch1", "main")
+
+		branch1SHA, _ := s.Engine.GetBranch("branch1").GetRevision()
+
+		s.CreateBranch("branch2").
+			CommitChange("file2.txt", "feat: branch2").
+			TrackBranch("branch2", "branch1")
+
+		// Squash commit lands on main; record the MERGED PR state.
+		s.Checkout("main").
+			CommitChange("file1.txt", "v1\nv2\nv3")
+
+		meta, err := s.Engine.Git().ReadMetadata("branch1")
+		require.NoError(t, err)
+		prNumber := 1
+		state := prStateMerged
+		base := "main"
+		meta = meta.WithPrInfo(&git.PrInfoPersistence{Number: &prNumber, State: &state, Base: &base})
+		require.NoError(t, s.Engine.Git().WriteMetadata("branch1", meta))
+		s.Rebuild()
+
+		// Reparent branch2 to main (what restack/sync do after the merge).
+		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
+		require.NoError(t, err)
+
+		// The divergence point must stay at branch1's pre-merge tip so a
+		// restack replays only branch2's own commits, not branch1's.
+		meta2, err := s.Engine.Git().ReadMetadata("branch2")
+		require.NoError(t, err)
+		require.Equal(t, branch1SHA, *meta2.GetParentBranchRevision(),
+			"divergence point should be preserved for a squash-merged parent")
+	})
+
 	t.Run("preserves divergence point when parent is rebased and merged into trunk", func(t *testing.T) {
 		t.Parallel()
 		// Scenario: main -> branch1 -> branch2

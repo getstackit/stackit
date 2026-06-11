@@ -79,6 +79,14 @@ func (e *engineImpl) rebuild() error {
 // prStateMerged is the GitHub PR state recorded in metadata once a PR merges.
 const prStateMerged = "MERGED"
 
+// prStateIsMerged reports whether a branch's PR was recorded as merged in
+// metadata. Works even when the branch ref itself no longer exists, since
+// PR info lives on the metadata ref.
+func (e *engineImpl) prStateIsMerged(branchName string) bool {
+	prInfo, err := e.GetPrInfo(e.GetBranch(branchName))
+	return err == nil && prInfo != nil && prInfo.State() == prStateMerged
+}
+
 // shouldReparentBranch checks if a parent branch should be reparented
 // Returns true if the parent branch:
 // - No longer exists locally
@@ -121,13 +129,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 	}
 
 	// Fall back to engine cache/disk if not in metaMap or state unknown
-	parentBranch := e.GetBranch(parentBranchName)
-	prInfo, err := e.GetPrInfo(parentBranch)
-	if err == nil && prInfo != nil && prInfo.State() == prStateMerged {
-		return true
-	}
-
-	return false
+	return e.prStateIsMerged(parentBranchName)
 }
 
 // findNearestValidAncestor finds the nearest ancestor that hasn't been merged/deleted

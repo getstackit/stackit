@@ -172,8 +172,15 @@ func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch 
 		if oldParent != "" && oldParent != parentBranchName && meta.GetParentBranchRevision() != nil && *meta.GetParentBranchRevision() != "" {
 			// Check if existing revision is still a valid ancestor of the branch
 			if isAncestor, _ := e.git.IsAncestor(ctx, *meta.GetParentBranchRevision(), branchName); isAncestor {
-				// Check if the old parent was merged into the new parent (the "merge" case)
-				if merged, _ := e.git.IsMerged(ctx, oldParent, parentBranchName); merged {
+				// Check if the old parent was merged into the new parent (the
+				// "merge" case). The PR state is checked first: patch-id
+				// detection (git cherry inside IsMerged) cannot recognize a
+				// multi-commit squash merge, and errors when the old parent
+				// ref is already deleted — clobbering the divergence point
+				// would make the next restack replay the merged commits.
+				if e.prStateIsMerged(oldParent) {
+					shouldUpdateRevision = false
+				} else if merged, _ := e.git.IsMerged(ctx, oldParent, parentBranchName); merged {
 					shouldUpdateRevision = false
 				}
 			}

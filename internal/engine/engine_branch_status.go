@@ -443,10 +443,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	if meta != nil {
 		prInfo := NewPrInfoFromMeta(meta)
 		if prInfo != nil {
-			const (
-				prStateClosed = "CLOSED"
-				prStateMerged = "MERGED"
-			)
+			const prStateClosed = "CLOSED"
 			if prInfo.State() == prStateClosed {
 				return DeletionStatus{SafeToDelete: true, Reason: "closed on GitHub", Kind: DeletionReasonClosedPR}
 			}

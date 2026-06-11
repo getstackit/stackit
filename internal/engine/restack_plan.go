@@ -62,6 +62,17 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		return item, true
 	}
 
+	// A branch whose PR was already merged is awaiting sync cleanup. Rebasing
+	// it onto trunk would replay commits the merge already applied — for a
+	// multi-commit squash merge that conflicts on every commit, since no
+	// individual commit patch-matches the squashed result. Skip it;
+	// descendants still reparent past it via shouldReparentBranch.
+	if prInfo, err := e.GetPrInfo(branch); err == nil && prInfo != nil && prInfo.State() == prStateMerged {
+		item.Skip = true
+		item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
+		return item, true
+	}
+
 	parent := branch.GetParent()
 	parentName := e.trunk
 	e.mu.RLock()

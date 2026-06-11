@@ -30,35 +30,6 @@ func NewPrInfo(number *int, title, body, state, base, url string, isDraft bool) 
 	}
 }
 
-// NewPrInfoWithLockReason creates a new PrInfo instance including lock reason
-func NewPrInfoWithLockReason(number *int, title, body, state, base, url string, isDraft bool, lockReason LockReason) *PrInfo {
-	return &PrInfo{
-		number:     number,
-		title:      title,
-		body:       body,
-		isDraft:    isDraft,
-		state:      state,
-		base:       base,
-		url:        url,
-		lockReason: lockReason,
-	}
-}
-
-// NewPrInfoFull creates a new PrInfo instance with all fields
-func NewPrInfoFull(number *int, title, body, state, base, url string, isDraft bool, lockReason LockReason, mergeBranch string) *PrInfo {
-	return &PrInfo{
-		number:      number,
-		title:       title,
-		body:        body,
-		isDraft:     isDraft,
-		state:       state,
-		base:        base,
-		url:         url,
-		lockReason:  lockReason,
-		mergeBranch: mergeBranch,
-	}
-}
-
 // Number returns the PR number
 func (p *PrInfo) Number() *int {
 	return p.number

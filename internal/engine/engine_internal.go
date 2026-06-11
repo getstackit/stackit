@@ -76,6 +76,9 @@ func (e *engineImpl) rebuild() error {
 	return nil
 }
 
+// prStateMerged is the GitHub PR state recorded in metadata once a PR merges.
+const prStateMerged = "MERGED"
+
 // shouldReparentBranch checks if a parent branch should be reparented
 // Returns true if the parent branch:
 // - No longer exists locally
@@ -109,7 +112,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 	if metaMap != nil {
 		if meta, ok := metaMap[parentBranchName]; ok && meta != nil {
 			prInfo := meta.GetPrInfo()
-			if prInfo != nil && prInfo.State != nil && *prInfo.State == "MERGED" {
+			if prInfo != nil && prInfo.State != nil && *prInfo.State == prStateMerged {
 				return true
 			}
 			// If metadata exists but state isn't MERGED, we don't need to check further
@@ -120,7 +123,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 	// Fall back to engine cache/disk if not in metaMap or state unknown
 	parentBranch := e.GetBranch(parentBranchName)
 	prInfo, err := e.GetPrInfo(parentBranch)
-	if err == nil && prInfo != nil && prInfo.State() == "MERGED" {
+	if err == nil && prInfo != nil && prInfo.State() == prStateMerged {
 		return true
 	}
 

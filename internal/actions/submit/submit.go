@@ -534,16 +534,19 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 	prInfo, _ := branch.GetPrInfo()
 	baseChanged := prInfo != nil && prInfo.Base() != submissionInfo.Base
 
-	// Detect stale base.sha: base branch name is the same but the parent was force-pushed.
-	// After a restack, GitHub retains the old parent tip SHA in base.sha, causing the child
-	// PR to show the parent's tip commit in its diff. Fix by temporarily changing the PR base
-	// to trunk before setting it back to the actual parent — this forces GitHub to recompute
-	// base.sha to the current parent tip.
-	baseSHAStale := !baseChanged &&
-		prInfo != nil &&
-		prInfo.BaseSHA() != "" &&
-		prInfo.BaseSHA() != submissionInfo.BaseSHA &&
-		submissionInfo.Base != ctx.Engine.Trunk().GetName()
+	// Detect stale base.sha: base branch name is the same but the parent was rewritten
+	// (rebased/force-pushed) since the last submit. GitHub retains the old parent tip SHA
+	// in base.sha, causing the child PR to show the parent's tip commit in its diff. A
+	// fast-forward of the parent does NOT make base.sha stale, so only treat it as stale
+	// when the stored BaseSHA is no longer an ancestor of the current parent tip. Fix by
+	// temporarily changing the PR base to trunk before setting it back to the actual
+	// parent — this forces GitHub to recompute base.sha to the current parent tip.
+	parentRewritten := false
+	if !baseChanged && prInfo != nil && prInfo.BaseSHA() != "" && prInfo.BaseSHA() != submissionInfo.BaseSHA {
+		isAncestor, err := ctx.Engine.IsAncestor(ctx.Context, prInfo.BaseSHA(), submissionInfo.BaseSHA)
+		parentRewritten = err == nil && !isAncestor
+	}
+	baseSHAStale := baseSHAIsStale(prInfo, submissionInfo, ctx.Engine.Trunk().GetName(), parentRewritten)
 
 	updateOpts := github.UpdatePROptions{
 		Title:           &submissionInfo.Metadata.Title,
@@ -591,9 +594,10 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		}
 	}
 
-	// When the parent was force-pushed (stale base.sha), temporarily retarget the PR
+	// When the parent was rewritten (stale base.sha), temporarily retarget the PR
 	// to trunk and then back to the actual parent. GitHub recomputes base.sha on each
 	// base change, so the second change sets it to the current parent tip.
+	retargetedToTrunk := false
 	if baseSHAStale {
 		trunkName := ctx.Engine.Trunk().GetName()
 		trunkOpts := github.UpdatePROptions{Base: &trunkName}
@@ -603,17 +607,34 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 			// The main update below will set it back to the actual parent, causing GitHub
 			// to recompute base.sha to the current parent tip.
 			updateOpts.Base = &submissionInfo.Base
+			retargetedToTrunk = true
 		}
 	}
 
 	updateWarnings, err := ctx.GitHub().UpdatePullRequest(ctx.Context, repoOwner, repoName, *submissionInfo.PRNumber, updateOpts)
 	if err != nil {
+		if retargetedToTrunk {
+			// The PR is currently targeting trunk from the base.sha refresh above; restore
+			// the real parent so a failed update doesn't strand it showing the full stack diff.
+			rollbackOpts := github.UpdatePROptions{Base: &submissionInfo.Base}
+			if _, rollbackErr := ctx.GitHub().UpdatePullRequest(ctx.Context, repoOwner, repoName, *submissionInfo.PRNumber, rollbackOpts); rollbackErr != nil {
+				ctx.Output.Debug("Failed to restore PR base for %s after update error: %v", submissionInfo.BranchName, rollbackErr)
+			}
+		}
 		return "", fmt.Errorf("failed to update PR for %s: %w", submissionInfo.BranchName, err)
 	}
 
 	// Log any warnings from PR update (e.g., failed to add labels/assignees)
 	for _, warning := range updateWarnings {
 		ctx.Output.Warn("%s: %s", submissionInfo.BranchName, warning)
+	}
+
+	// If the base.sha refresh was needed but failed, keep the previously stored BaseSHA
+	// so the next submit detects the rewrite again and retries the refresh. Storing the
+	// current tip would make the stale diff permanent.
+	baseSHAToStore := submissionInfo.BaseSHA
+	if baseSHAStale && !retargetedToTrunk {
+		baseSHAToStore = prInfo.BaseSHA()
 	}
 
 	// Get PR URL
@@ -637,9 +658,36 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		baseToStore,
 		prURL,
 		submissionInfo.Metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason()).WithBaseSHA(submissionInfo.BaseSHA))
+	).WithLockReason(branch.GetLockReason()).WithBaseSHA(baseSHAToStore))
 
 	return prURL, nil
+}
+
+// baseSHAIsStale reports whether GitHub's stored base.sha for an existing PR is stale
+// and needs the trunk-and-back retarget to be refreshed. It is stale only when the base
+// branch name is unchanged but the parent was rewritten (rebased/force-pushed) since the
+// last submit — a fast-forward of the parent keeps GitHub's base.sha valid.
+// parentRewritten is whether the stored BaseSHA is no longer an ancestor of the current
+// parent tip.
+func baseSHAIsStale(prInfo *engine.PrInfo, info Info, trunkName string, parentRewritten bool) bool {
+	if prInfo == nil || prInfo.BaseSHA() == "" {
+		return false
+	}
+	// A base branch name change is handled by the regular base update, which already
+	// makes GitHub recompute base.sha.
+	if prInfo.Base() != info.Base {
+		return false
+	}
+	if info.Base == trunkName {
+		return false
+	}
+	// An empty child (no commits between parent and head) can't be retargeted back to
+	// its parent — GitHub rejects base updates with no commits between base and head,
+	// which would strand the PR targeting trunk.
+	if info.BaseSHA == info.HeadSHA {
+		return false
+	}
+	return prInfo.BaseSHA() != info.BaseSHA && parentRewritten
 }
 
 // pushMetadataRefs pushes metadata refs for submitted branches to remote

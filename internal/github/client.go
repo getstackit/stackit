@@ -161,6 +161,13 @@ func ToPullRequestInfo(pr *github.PullRequest) *PullRequestInfo {
 	if pr.State != nil {
 		info.State = strings.ToUpper(*pr.State)
 	}
+	// The REST API reports merged PRs as state "closed" with a separate merged
+	// indicator; normalize to MERGED so this path matches the GraphQL
+	// PullRequestState enum. List responses omit the `merged` boolean and only
+	// populate `merged_at`, so check both.
+	if pr.GetMerged() || pr.MergedAt != nil {
+		info.State = PRStateMerged
+	}
 	if pr.Draft != nil {
 		info.Draft = *pr.Draft
 	}

@@ -52,6 +52,39 @@ type UpdatePROptions struct {
 	RerequestReview bool
 }
 
+// applyPRMetadata requests reviewers, adds labels, and adds assignees on an existing PR.
+// Failures are collected as warnings rather than hard errors, matching the non-fatal
+// contract used by both CreatePullRequest and UpdatePullRequest.
+func applyPRMetadata(ctx context.Context, client *github.Client, owner, repo string, prNumber int, reviewers, teamReviewers, labels, assignees []string) []string {
+	var warnings []string
+
+	if len(reviewers) > 0 || len(teamReviewers) > 0 {
+		_, _, err := client.PullRequests.RequestReviewers(ctx, owner, repo, prNumber, github.ReviewersRequest{
+			Reviewers:     reviewers,
+			TeamReviewers: teamReviewers,
+		})
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to add reviewers: %v", err))
+		}
+	}
+
+	if len(labels) > 0 {
+		_, _, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, prNumber, labels)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to add labels: %v", err))
+		}
+	}
+
+	if len(assignees) > 0 {
+		_, _, err := client.Issues.AddAssignees(ctx, owner, repo, prNumber, assignees)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to add assignees: %v", err))
+		}
+	}
+
+	return warnings
+}
+
 // CreatePullRequest creates a new pull request.
 // Returns warnings (non-fatal issues like failed label/assignee additions) and error,
 // matching the same contract as UpdatePullRequest.
@@ -72,35 +105,7 @@ func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo s
 		return nil, nil, fmt.Errorf("failed to create pull request: %w", err)
 	}
 
-	var warnings []string
-
-	// Add reviewers if specified
-	if len(opts.Reviewers) > 0 || len(opts.TeamReviewers) > 0 {
-		_, _, err := client.PullRequests.RequestReviewers(ctx, owner, repo, *createdPR.Number, github.ReviewersRequest{
-			Reviewers:     opts.Reviewers,
-			TeamReviewers: opts.TeamReviewers,
-		})
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add reviewers: %v", err))
-		}
-	}
-
-	// Add labels if specified
-	if len(opts.Labels) > 0 {
-		_, _, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, *createdPR.Number, opts.Labels)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add labels: %v", err))
-		}
-	}
-
-	// Add assignees if specified
-	if len(opts.Assignees) > 0 {
-		_, _, err := client.Issues.AddAssignees(ctx, owner, repo, *createdPR.Number, opts.Assignees)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add assignees: %v", err))
-		}
-	}
-
+	warnings := applyPRMetadata(ctx, client, owner, repo, *createdPR.Number, opts.Reviewers, opts.TeamReviewers, opts.Labels, opts.Assignees)
 	return warnings, createdPR, nil
 }
 
@@ -155,32 +160,7 @@ func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCom
 		return nil, fmt.Errorf("failed to update pull request: %w", err)
 	}
 
-	// Update reviewers if specified
-	if len(opts.Reviewers) > 0 || len(opts.TeamReviewers) > 0 {
-		_, _, err := client.PullRequests.RequestReviewers(ctx, owner, repo, prNumber, github.ReviewersRequest{
-			Reviewers:     opts.Reviewers,
-			TeamReviewers: opts.TeamReviewers,
-		})
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add reviewers: %v", err))
-		}
-	}
-
-	// Add labels if specified
-	if len(opts.Labels) > 0 {
-		_, _, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, prNumber, opts.Labels)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add labels: %v", err))
-		}
-	}
-
-	// Add assignees if specified
-	if len(opts.Assignees) > 0 {
-		_, _, err := client.Issues.AddAssignees(ctx, owner, repo, prNumber, opts.Assignees)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("failed to add assignees: %v", err))
-		}
-	}
+	warnings = append(warnings, applyPRMetadata(ctx, client, owner, repo, prNumber, opts.Reviewers, opts.TeamReviewers, opts.Labels, opts.Assignees)...)
 
 	// Rerequest review if specified
 	if opts.RerequestReview {

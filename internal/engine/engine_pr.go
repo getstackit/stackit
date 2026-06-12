@@ -29,7 +29,7 @@ func NewPrInfoFromMeta(meta *git.Meta) *PrInfo {
 		lockReason = string(*prInfo.LockReason)
 	}
 
-	return NewPrInfoFull(
+	return NewPrInfo(
 		prInfo.Number,
 		getStringValue(prInfo.Title),
 		getStringValue(prInfo.Body),
@@ -37,9 +37,9 @@ func NewPrInfoFromMeta(meta *git.Meta) *PrInfo {
 		getStringValue(prInfo.Base),
 		getStringValue(prInfo.URL),
 		getBoolValue(prInfo.IsDraft),
-		LockReason(lockReason),
-		getStringValue(prInfo.MergeBranch),
-	).WithBaseSHA(getStringValue(prInfo.BaseSHA))
+	).WithLockReason(LockReason(lockReason)).
+		WithMergeBranch(getStringValue(prInfo.MergeBranch)).
+		WithBaseSHA(getStringValue(prInfo.BaseSHA))
 }
 
 // GetMergedDownstack returns the merged downstack history for a branch

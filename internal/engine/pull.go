@@ -37,6 +37,20 @@ func (e *engineImpl) UpdateTrunkFromRemote(ctx context.Context) (PullResult, err
 	return e.finishTrunkPull(gitResult)
 }
 
+// UpdateBranchFromRemote fast-forwards a single branch from its already-fetched
+// remote-tracking ref. Unlike PullBranch it performs no network fetch — callers
+// batch the fetch via FetchRemote first, then call this per branch. Like
+// PullBranch it does not rebuild engine state, so it is safe to call in a loop;
+// callers should rebuild once after the batch if downstream reads need the
+// refreshed revisions.
+func (e *engineImpl) UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error) {
+	gitResult, err := e.git.UpdateBranchFromRemote(ctx, remote, branchName)
+	if err != nil {
+		return PullConflict, err
+	}
+	return pullResultFromGit(gitResult), nil
+}
+
 // PullBranch fast-forwards a single branch from its remote counterpart. Unlike
 // PullTrunk it does not rebuild engine state, so it is safe to call in a loop;
 // callers should rebuild once after the batch if downstream reads need the

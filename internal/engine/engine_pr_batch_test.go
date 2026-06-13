@@ -69,6 +69,71 @@ func TestBatchGetPRSubmissionStatusReadsRemoteOnceForUpdates(t *testing.T) {
 		"submission status for an update stack must read remote once, not per branch")
 }
 
+func TestBatchUpsertPrInfo(t *testing.T) {
+	t.Parallel()
+
+	t.Run("writes all branches in one transaction", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{"P": "main", "C1": "P", "C2": "C1"})
+
+		eng := s.Engine
+
+		updates := map[string]*engine.PrInfo{
+			"P":  testhelpers.NewTestPrInfoWithTitle(101, "PR for P").WithMergeBranch("consolidation"),
+			"C1": testhelpers.NewTestPrInfoWithTitle(102, "PR for C1").WithMergeBranch("consolidation"),
+			"C2": testhelpers.NewTestPrInfoWithTitle(103, "PR for C2").WithMergeBranch("consolidation"),
+		}
+
+		require.NoError(t, eng.BatchUpsertPrInfo(context.Background(), updates))
+
+		for name, want := range updates {
+			got, err := eng.GetBranch(name).GetPrInfo()
+			require.NoError(t, err)
+			require.NotNil(t, got, "branch %s should have PR info", name)
+			require.Equal(t, want.Title(), got.Title(), "branch %s title", name)
+			require.Equal(t, want.MergeBranch(), got.MergeBranch(), "branch %s merge branch", name)
+		}
+	})
+
+	t.Run("preserves existing fields when merging", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{"A": "main"})
+
+		eng := s.Engine
+		branch := eng.GetBranch("A")
+
+		// Set initial PR info with a title and state
+		require.NoError(t, eng.UpsertPrInfo(context.Background(), branch,
+			testhelpers.NewTestPrInfoFull(200, "original title", "body", "OPEN", "main", "https://example.com", false)))
+
+		// Batch upsert only updates MergeBranch; other fields should be preserved
+		prInfo, err := branch.GetPrInfo()
+		require.NoError(t, err)
+		require.NoError(t, eng.BatchUpsertPrInfo(context.Background(), map[string]*engine.PrInfo{
+			"A": prInfo.WithMergeBranch("my-consolidation"),
+		}))
+
+		got, err := branch.GetPrInfo()
+		require.NoError(t, err)
+		require.Equal(t, "original title", got.Title())
+		require.Equal(t, "my-consolidation", got.MergeBranch())
+	})
+
+	t.Run("no-op on empty map", func(t *testing.T) {
+		t.Parallel()
+
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{"A": "main"})
+
+		require.NoError(t, s.Engine.BatchUpsertPrInfo(context.Background(), nil))
+		require.NoError(t, s.Engine.BatchUpsertPrInfo(context.Background(), map[string]*engine.PrInfo{}))
+	})
+}
+
 func TestBatchGetPRSubmissionStatusSkipsRemoteForCreates(t *testing.T) {
 	t.Parallel()
 

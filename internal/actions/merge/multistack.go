@@ -284,12 +284,16 @@ func lockAndNotifyMultiStackPRs(ctx *app.Context, eng engine.Engine, includedSta
 	}
 
 	// Update PR info with consolidation branch
+	prUpdates := make(map[string]*engine.PrInfo, len(branchesToLock))
 	for _, b := range branchesToLock {
 		prInfo, _ := b.GetPrInfo()
 		if prInfo != nil {
-			if err := eng.UpsertPrInfo(ctx.Context, b, prInfo.WithMergeBranch(consolidationBranch)); err != nil {
-				out.Debug("Failed to upsert PR info for %s: %v", b.GetName(), err)
-			}
+			prUpdates[b.GetName()] = prInfo.WithMergeBranch(consolidationBranch)
+		}
+	}
+	if len(prUpdates) > 0 {
+		if err := eng.BatchUpsertPrInfo(ctx.Context, prUpdates); err != nil {
+			out.Debug("Failed to batch upsert PR info: %v", err)
 		}
 	}
 

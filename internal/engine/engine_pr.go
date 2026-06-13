@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -57,61 +58,99 @@ func (e *engineImpl) UpsertPrInfo(ctx context.Context, branch Branch, prInfo *Pr
 	branchName := branch.GetName()
 
 	return e.WithRetry(ctx, func() error {
-		// Read existing metadata (outside lock for performance)
 		meta, err := e.readMetadata(branchName)
 		if err != nil {
 			meta = git.NewMeta()
 		}
-
-		if prInfo == nil {
-			meta = meta.WithPrInfo(nil)
-		} else {
-			existing := meta.GetPrInfo()
-			if existing == nil {
-				existing = &git.PrInfoPersistence{}
-			}
-
-			// Update PR info fields
-			if prInfo.Number() != nil {
-				existing.Number = prInfo.Number()
-			}
-			if prInfo.Title() != "" {
-				title := prInfo.Title()
-				existing.Title = &title
-			}
-			if prInfo.Body() != "" {
-				body := prInfo.Body()
-				existing.Body = &body
-			}
-			isDraft := prInfo.IsDraft()
-			existing.IsDraft = &isDraft
-			if prInfo.State() != "" {
-				state := prInfo.State()
-				existing.State = &state
-			}
-			if prInfo.Base() != "" {
-				base := prInfo.Base()
-				existing.Base = &base
-			}
-			if prInfo.BaseSHA() != "" {
-				baseSHA := prInfo.BaseSHA()
-				existing.BaseSHA = &baseSHA
-			}
-			if prInfo.URL() != "" {
-				url := prInfo.URL()
-				existing.URL = &url
-			}
-			lr := prInfo.LockReason()
-			existing.LockReason = &lr
-			mergeBranch := prInfo.MergeBranch()
-			existing.MergeBranch = &mergeBranch
-			meta = meta.WithPrInfo(existing)
-		}
-
+		meta = mergePrInfoIntoMeta(meta, prInfo)
 		return e.withMetadataTx(ctx, fmt.Sprintf("upsert PR info: %s", branchName), func(tx *MetadataTx) error {
 			return tx.UpdateMeta(branchName, meta)
 		})
 	})
+}
+
+// BatchUpsertPrInfo updates PR information for multiple branches in one atomic
+// transaction, replacing N serial git ref writes with a single batched write.
+// The updates map is keyed by branch name; nil PrInfo clears the PR info.
+func (e *engineImpl) BatchUpsertPrInfo(ctx context.Context, updates map[string]*PrInfo) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	branchNames := make([]string, 0, len(updates))
+	for name := range updates {
+		branchNames = append(branchNames, name)
+	}
+	slices.Sort(branchNames)
+
+	return e.WithRetry(ctx, func() error {
+		metas, _ := e.batchReadMetadata(branchNames)
+
+		tx := e.BeginTx(fmt.Sprintf("batch upsert PR info: %d branches", len(updates)))
+
+		for _, name := range branchNames {
+			meta, ok := metas[name]
+			if !ok || meta == nil {
+				meta = git.NewMeta()
+			}
+			meta = mergePrInfoIntoMeta(meta, updates[name])
+			if err := tx.UpdateMeta(name, meta); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+
+		return tx.Commit(ctx)
+	})
+}
+
+// mergePrInfoIntoMeta applies prInfo fields to meta's stored PR info and
+// returns the updated meta. Non-zero fields in prInfo overwrite existing values.
+func mergePrInfoIntoMeta(meta *git.Meta, prInfo *PrInfo) *git.Meta {
+	if prInfo == nil {
+		return meta.WithPrInfo(nil)
+	}
+
+	existing := meta.GetPrInfo()
+	if existing == nil {
+		existing = &git.PrInfoPersistence{}
+	}
+
+	if prInfo.Number() != nil {
+		existing.Number = prInfo.Number()
+	}
+	if prInfo.Title() != "" {
+		title := prInfo.Title()
+		existing.Title = &title
+	}
+	if prInfo.Body() != "" {
+		body := prInfo.Body()
+		existing.Body = &body
+	}
+	isDraft := prInfo.IsDraft()
+	existing.IsDraft = &isDraft
+	if prInfo.State() != "" {
+		state := prInfo.State()
+		existing.State = &state
+	}
+	if prInfo.Base() != "" {
+		base := prInfo.Base()
+		existing.Base = &base
+	}
+	if prInfo.BaseSHA() != "" {
+		baseSHA := prInfo.BaseSHA()
+		existing.BaseSHA = &baseSHA
+	}
+	if prInfo.URL() != "" {
+		url := prInfo.URL()
+		existing.URL = &url
+	}
+	lr := prInfo.LockReason()
+	existing.LockReason = &lr
+	mergeBranch := prInfo.MergeBranch()
+	existing.MergeBranch = &mergeBranch
+
+	return meta.WithPrInfo(existing)
 }
 
 // GetPRSubmissionStatus returns the submission status of a branch

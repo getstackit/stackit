@@ -318,12 +318,16 @@ func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(_ context.Context,
 		}
 	}
 
+	prUpdates := make(map[string]*engine.PrInfo, len(branchesToLock))
 	for _, b := range branchesToLock {
 		prInfo, _ := b.GetPrInfo()
 		if prInfo != nil {
-			if err := c.engine.UpsertPrInfo(c.ctx.Context, b, prInfo.WithMergeBranch(consolidationBranch)); err != nil {
-				splog.Debug("Failed to upsert PR info for %s: %v", b.GetName(), err)
-			}
+			prUpdates[b.GetName()] = prInfo.WithMergeBranch(consolidationBranch)
+		}
+	}
+	if len(prUpdates) > 0 {
+		if err := c.engine.BatchUpsertPrInfo(c.ctx.Context, prUpdates); err != nil {
+			splog.Debug("Failed to batch upsert PR info: %v", err)
 		}
 	}
 

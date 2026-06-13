@@ -23,6 +23,10 @@ import (
 // Thread-safe: All methods are safe for concurrent use
 type PRManager interface {
 	UpsertPrInfo(ctx context.Context, branch Branch, prInfo *PrInfo) error
+	// BatchUpsertPrInfo updates PR information for multiple branches atomically,
+	// replacing N serial git ref writes with one transaction. The updates map is
+	// keyed by branch name.
+	BatchUpsertPrInfo(ctx context.Context, updates map[string]*PrInfo) error
 	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
 	PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error
 	PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) map[string]error

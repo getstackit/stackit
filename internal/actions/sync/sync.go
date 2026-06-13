@@ -98,6 +98,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var trunkFetchErr error
 	var trunkErr error
 	var githubErr error
+	var remoteStatuses engine.BranchRemoteStatuses
+
+	// Snapshot the branch set for the remote-status probe below. The set is
+	// stable through the parallel phase (no branches are created or deleted
+	// until later), so reading it once here is safe.
+	branchesForStatus := ctx.Navigator().AllBranches()
 
 	parallelStart := time.Now()
 	ctx.Logger.Info("starting parallel phase")
@@ -138,6 +144,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		var err error
 		githubSyncResult, err = syncGitHubPRInfo(ctx)
 		githubErr = err
+		return nil
+	})
+
+	// Goroutine 3: Probe remote branch statuses (a single ls-remote) so this
+	// network round trip overlaps the trunk fetch and GitHub call instead of
+	// running serially later in syncStackBranches.
+	g.Go(func() error {
+		ctx.Logger.Info("goroutine remote statuses started delayMs=%v", time.Since(parallelStart).Milliseconds())
+		statusStart := time.Now()
+		remoteStatuses = eng.ReadBranchRemoteStatuses(gctx, branchesForStatus)
+		ctx.Logger.Info("prefetch remote branch statuses completed durationMs=%v branchCount=%v", time.Since(statusStart).Milliseconds(), len(remoteStatuses))
 		return nil
 	})
 
@@ -188,7 +205,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Phase 2.5: Sync stack branches from remote
-	if err := syncStackBranches(ctx, dirtyAnchors, handler, summary); err != nil {
+	if err := syncStackBranches(ctx, dirtyAnchors, remoteStatuses, handler, summary); err != nil {
 		return err
 	}
 

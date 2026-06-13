@@ -12,7 +12,7 @@ import (
 // It skips branches that are trunk, locked, frozen, or in a dirty stack.
 // This allows the sync command to fast-forward branches when someone else pushes
 // commits to a stack branch from another machine.
-func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler Handler, summary *Summary) error {
+func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) error {
 	eng := ctx.Engine
 	nav := ctx.Navigator()
 	gctx := ctx.Context
@@ -23,7 +23,12 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 
 	// Get all tracked branches
 	allBranches := nav.AllBranches()
-	remoteStatuses := eng.ReadBranchRemoteStatuses(gctx, allBranches)
+	// Remote statuses are normally prefetched in sync's parallel phase so the
+	// ls-remote overlaps the trunk fetch and GitHub call. Fall back to computing
+	// them here when the caller didn't supply them.
+	if remoteStatuses == nil {
+		remoteStatuses = eng.ReadBranchRemoteStatuses(gctx, allBranches)
+	}
 
 	syncStart := time.Now()
 	var statusCheckTotalMs int64

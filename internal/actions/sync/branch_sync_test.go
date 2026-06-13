@@ -47,7 +47,8 @@ func TestSyncStackBranchesBatchFastForward(t *testing.T) {
 	s.Checkout("main")
 
 	summary := &Summary{}
-	require.NoError(t, syncStackBranches(s.Context, nil, &NullHandler{}, summary))
+	// Pass nil statuses to exercise the on-demand fallback path.
+	require.NoError(t, syncStackBranches(s.Context, nil, nil, &NullHandler{}, summary))
 
 	require.Equal(t, 3, summary.BranchesSynced, "all three behind branches should be synced")
 	require.Empty(t, summary.ConflictBranches, "no branch should conflict")
@@ -81,7 +82,8 @@ func TestSyncStackBranchesSkipsDiverged(t *testing.T) {
 	s.Rebuild()
 
 	summary := &Summary{}
-	require.NoError(t, syncStackBranches(s.Context, nil, &NullHandler{}, summary))
+	// Pass nil statuses to exercise the on-demand fallback path.
+	require.NoError(t, syncStackBranches(s.Context, nil, nil, &NullHandler{}, summary))
 
 	require.Equal(t, 0, summary.BranchesSynced, "diverged branch should not be synced")
 	require.NotContains(t, summary.ConflictBranches, "d", "diverged branch is skipped, not flagged as conflict")

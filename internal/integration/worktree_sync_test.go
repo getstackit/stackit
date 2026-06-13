@@ -62,13 +62,11 @@ func TestWorktreeWorkingDirAfterRestack(t *testing.T) {
 // with multiple worktrees and stacked branches.
 func TestSyncWithMultipleWorktrees(t *testing.T) {
 	t.Parallel()
-	shared := NewTestShellInProcess(t, WithRemote())
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t, WithRemote())
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}

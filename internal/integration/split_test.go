@@ -20,13 +20,11 @@ import (
 func TestSplitWorkflow(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -203,13 +201,11 @@ func TestSplitWorkflow(t *testing.T) {
 func TestSplitAsSibling(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -359,13 +355,11 @@ func TestSplitAsSibling(t *testing.T) {
 func TestSplitUndo(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -459,13 +453,11 @@ func verifyFilesNotExist(t *testing.T, sh *TestShell, filenames []string) {
 func TestSplitByFileExtractsChanges(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -567,13 +559,11 @@ func TestSplitByFileExtractsChanges(t *testing.T) {
 func TestSplitByHunkWithPatch(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -1087,13 +1077,11 @@ new file mode 100644
 func TestSplitEdgeCases(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -1242,13 +1230,11 @@ func TestSplitEdgeCases(t *testing.T) {
 func TestSplitByFileAbove(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -1398,13 +1384,11 @@ func TestSplitByFileAbove(t *testing.T) {
 func TestSplitDryRun(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}

@@ -15,13 +15,11 @@ import (
 func TestWorktreeAttach(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -164,13 +162,11 @@ func TestWorktreeAttach(t *testing.T) {
 func TestWorktreeDetach(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -304,13 +300,11 @@ func TestWorktreeDetach(t *testing.T) {
 func TestWorktreeAttachDetachRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -377,13 +371,11 @@ func TestWorktreeAttachDetachRoundTrip(t *testing.T) {
 func TestWorktreeAttachDetachEdgeCases(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}
@@ -440,13 +432,11 @@ func TestWorktreeAttachDetachEdgeCases(t *testing.T) {
 func TestWorktreeRepair(t *testing.T) {
 	t.Parallel()
 
-	shared := NewTestShellInProcess(t)
-	shared.SetWorktreeBasePath(t.TempDir())
-
 	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
 		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			sh.SetWorktreeBasePath(t.TempDir())
 			fn(t, sh)
 		})
 	}

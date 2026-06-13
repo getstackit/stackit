@@ -106,12 +106,62 @@ are usually the biggest wall-time win:
 - 3+ hand-rolled `CreateAndCheckoutBranch` calls → a fixture
   (`CreateLinearStack3()`, `CreateDiamondStack()`).
 
-After this batch, run the affected packages green (`mise run test:pkg ./pkg`).
-No coverage re-check is needed for Tier A.
+After this batch, **validate parallelization with the race detector using the
+flags CI actually uses** (check `.github/workflows/` — here it's
+`go test -race -p=1 -parallel=2`). Do NOT trust a default-`GOMAXPROCS` run:
+default over-parallelism crashes subprocess-heavy tests under `-race` (git child
+processes segfault) in ways CI never reproduces, AND a plain run can pass a
+genuinely broken parallel test by luck of timing. Match CI, and re-run 2-3× —
+parallel/subprocess bugs are probabilistic.
 
-> Watch for shared mutable state when adding `t.Parallel()` — package-level vars,
-> `t.Setenv`, shared temp dirs. If a test mutates global state it can't be
-> parallel as written; leave a note rather than introduce a flake.
+> **Exclude global-state mutators — they cannot be parallel.** `scan-antipatterns.sh`
+> lists these under "⚠ PARALLEL HAZARDS". A test that touches process-global state
+> must stay serial (no `t.Parallel()` on it OR its parent, so it runs in the
+> sequential phase with nothing else live):
+> - `t.Setenv` / `os.Setenv` — panics under `t.Parallel`; env is process-wide.
+> - `os.Stdin` / `os.Stdout` / `os.Stderr` swap — a concurrent test's **child
+>   process inherits the wrong pipe and blocks forever** (this is the real cause
+>   of a parallel test suite hanging for minutes; it surfaced as a 660s timeout).
+> - `os.Chdir` — races the working directory across goroutines.
+>
+> Also watch for package-level vars and shared fixtures. When in doubt, leave it
+> serial and note it — a flake costs more than the saved second.
+
+#### Parallelization playbook
+
+In practice, adding `t.Parallel()` to serial-by-omission tests is the single
+biggest win (this suite's `internal/actions/*` tests were ~5× over-serial). Work
+in safe batches:
+
+1. **Know what's already safe.** In this repo `scenario.NewScenario` /
+   `NewRemoteScenario` are ALREADY parallel-safe (they use `NewSceneParallel` —
+   isolated temp dir, engine bound to `scene.Dir`, no `os.Chdir`). So most serial
+   action tests are serial only by omission. (The raw `testhelpers.NewScene` does
+   `os.Chdir` and is NOT safe.)
+
+2. **Screen each candidate file** before editing:
+   ```bash
+   # per file: subtests, existing parallel, scenario builds, hazards
+   rg -c 't\.Run\(' f_test.go; rg -c 't\.Parallel\(\)' f_test.go
+   rg -c 'scenario\.New' f_test.go
+   rg -n 't\.Setenv|os\.Setenv|os\.Chdir|os\.Std(in|out|err)' f_test.go   # exclude if any
+   rg -n '^\ts :?= scenario\.New' f_test.go   # 1-tab = scenario SHARED across subtests → race; skip
+   ```
+   A file is a clean candidate when subtests ≈ scenario builds (each subtest makes
+   its own), `t.Parallel` count is low, and there are no hazards or shared (1-tab)
+   scenarios.
+
+3. **Transform** (idempotent — won't double-add to already-parallel subtests):
+   ```bash
+   perl -0777 -pi -e 's/^(\t+)(t\.Run\([^\n]*func\(t \*testing\.T\) \{\n)(?!\s*t\.Parallel\(\))/$1$2$1\tt.Parallel()\n/gm' f_test.go
+   perl -0777 -pi -e 's/^(func Test\w+\(t \*testing\.T\) \{\n)(?!\s*t\.Parallel\(\))/$1\tt.Parallel()\n/gm' f_test.go
+   gofmt -w f_test.go && go vet ./pkg/...
+   ```
+
+4. **Validate with the race detector under CI's flags, 2–3×** (see the warning
+   above). If a package hangs/segfaults, bisect: revert the file with the hazard,
+   keep the rest. A 660s timeout almost always means an `os.Std*`/`t.Setenv`
+   mutator slipped through the screen.
 
 ### Step 3 — Analyze hotspots for consolidation (Tier B/C)
 
@@ -159,10 +209,17 @@ bash .claude/skills/optimize-tests/scripts/coverage-guard.sh "$D/before.cover" "
 - **Fail** → the guard names the lost blocks. Revert the edit that dropped them,
   or restore the assertion that exercised them, then re-run. Loop until green.
 
-> Flaky-coverage caveat: a 1–2 block "regression" on a timing-dependent
-> integration path can be nondeterministic. Re-run `after.cover` once; if it
-> clears, it wasn't a real loss. The guard fails closed (errs toward flagging) —
-> that's the safe direction; always look before dismissing.
+> Flaky-coverage caveat: a 1–2 block "regression" can be nondeterministic — e.g.
+> a sort comparator fed by Go's randomized map iteration, which is covered only on
+> some runs. Capture a second after-run and pass BOTH to the guard; it uses the
+> union, so a block covered in either run counts:
+> ```bash
+> bash .../measure-cover.sh "$SCOPE" "$D/after2.cover"
+> bash .../coverage-guard.sh "$D/before.cover" "$D/after.cover" "$D/after2.cover"
+> ```
+> A real regression is a block covered before that NO after-run covers. The guard
+> fails closed (errs toward flagging) — that's the safe direction; always look
+> before dismissing.
 
 ### Step 6 — Re-measure and report
 

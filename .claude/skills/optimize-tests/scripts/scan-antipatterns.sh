@@ -22,6 +22,23 @@ hr "Files with 3+ manual CreateAndCheckoutBranch calls — candidates for a fixt
 rg -c '\.CreateAndCheckoutBranch\(' -g '*_test.go' \
   | awk -F: '$2>=3 {printf "  %s (%d calls)\n", $1, $2}' || echo "  none"
 
+hr "⚠ PARALLEL HAZARDS — test files that mutate process-global state"
+# These mutate state shared by the whole process, so they CANNOT be made parallel
+# (and a concurrent test inheriting that state can hang or flake). t.Setenv panics
+# under t.Parallel; os.Stdin/out/err swaps let a concurrent test's child process
+# inherit the wrong pipe and block forever; os.Chdir/os.Setenv race the cwd/env.
+# EXCLUDE these files (or just the offending func) when parallelizing — same class
+# as the t.Setenv rule. Leave them serial.
+rg -ln 't\.Setenv\(|os\.Setenv\(|os\.Chdir\(|os\.Stdin\b|os\.Stdout\b|os\.Stderr\b' -g '*_test.go' \
+  | sed 's/^/  exclude: /' || echo "  none"
+
+hr "⚠ SHARED SCENARIO — one scenario built at func level, reused across subtests"
+# A scenario declared at the function body (1-tab indent), not inside each t.Run,
+# is shared mutable state: making the subtests parallel races on it. Either give
+# each subtest its own scenario or keep the func serial. (Stackit-specific to the
+# scenario.New* helpers; adapt the pattern to your fixture constructor.)
+rg -n '^\t[a-zA-Z_]+ :?= .*scenario\.New' -g '*_test.go' | sed 's/^/  review: /' || echo "  none"
+
 hr "Serial top-level Test funcs — no .Parallel() anywhere in the body"
 # Heuristic brace-depth scan: flag func TestX(... that never calls .Parallel().
 # Advisory only (braces inside strings can fool the depth counter) — the agent

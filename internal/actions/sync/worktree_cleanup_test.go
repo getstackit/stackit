@@ -13,7 +13,9 @@ import (
 )
 
 func TestSyncCleansOrphanedWorktrees(t *testing.T) {
+	t.Parallel()
 	t.Run("cleans worktree when stack root branch is deleted", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		// Create a branch that will become a stack root
@@ -46,6 +48,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 	})
 
 	t.Run("preserves worktree when stack root branch still exists", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		// Create and track a branch
@@ -69,6 +72,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 	})
 
 	t.Run("preserves registration when worktree removal fails", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		worktreePath := filepath.Join(t.TempDir(), "not-a-git-worktree")

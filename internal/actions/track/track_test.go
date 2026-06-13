@@ -40,7 +40,9 @@ func (h *testTrackHandler) Cleanup() {}
 func (h *testTrackHandler) IsInteractive() bool { return h.isInteractive }
 
 func TestTrackAction(t *testing.T) {
+	t.Parallel()
 	t.Run("track with --parent flag validates parent exists", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("feature")
@@ -54,6 +56,7 @@ func TestTrackAction(t *testing.T) {
 	})
 
 	t.Run("track with --parent flag validates parent is tracked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("untracked-parent").
@@ -69,6 +72,7 @@ func TestTrackAction(t *testing.T) {
 	})
 
 	t.Run("track with --force succeeds using trunk as ancestor", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("feature")
@@ -84,6 +88,7 @@ func TestTrackAction(t *testing.T) {
 	})
 
 	t.Run("non-interactive mode requires --parent or --force", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("feature")
@@ -97,6 +102,7 @@ func TestTrackAction(t *testing.T) {
 	})
 
 	t.Run("interactive mode calls PromptSelectParent when auto-detection fails", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("feature")
@@ -114,6 +120,7 @@ func TestTrackAction(t *testing.T) {
 	})
 
 	t.Run("interactive mode handles user cancellation (empty parent)", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("feature")
@@ -132,6 +139,7 @@ func TestTrackAction(t *testing.T) {
 	})
 
 	t.Run("interactive mode auto-detects parent when unambiguous", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("base").
@@ -153,6 +161,7 @@ func TestTrackAction(t *testing.T) {
 	})
 
 	t.Run("PromptTrackChild is called for untracked children", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("feature").

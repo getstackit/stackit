@@ -31,7 +31,9 @@ func (h *testAbortHandler) Cleanup() {}
 func (h *testAbortHandler) IsInteractive() bool { return h.isInteractive }
 
 func TestAbortAction(t *testing.T) {
+	t.Parallel()
 	t.Run("reports when no operation is in progress", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -40,6 +42,7 @@ func TestAbortAction(t *testing.T) {
 	})
 
 	t.Run("aborts when continuation state exists", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -79,6 +82,7 @@ func TestAbortAction(t *testing.T) {
 	})
 
 	t.Run("non-interactive handler without force does not abort", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -106,6 +110,7 @@ func TestAbortAction(t *testing.T) {
 	})
 
 	t.Run("interactive handler with confirmation proceeds with abort", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -140,6 +145,7 @@ func TestAbortAction(t *testing.T) {
 	})
 
 	t.Run("interactive handler with decline cancels abort", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -167,6 +173,7 @@ func TestAbortAction(t *testing.T) {
 	})
 
 	t.Run("force flag bypasses handler prompt", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").

@@ -15,7 +15,9 @@ import (
 )
 
 func TestAbsorbScopeBoundaries(t *testing.T) {
+	t.Parallel()
 	t.Run("absorb stops at scope boundaries", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"scoped-a":   "main",
@@ -91,6 +93,7 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 	})
 
 	t.Run("absorb includes all branches when no scope set", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch-a": "main",
@@ -133,6 +136,7 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 	})
 
 	t.Run("absorb stops at first scope boundary encountered", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"scoped-a":    "main",
@@ -188,7 +192,9 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 }
 
 func TestAbsorbWithInterveningCommits(t *testing.T) {
+	t.Parallel()
 	t.Run("absorb handles changes when intervening commits modify same file", func(t *testing.T) {
+		t.Parallel()
 		// This test verifies that absorb can apply changes to an earlier commit
 		// even when later commits have modified the same file, using three-way merge.
 		// The key is having enough separation between sections so commutation check
@@ -415,6 +421,7 @@ func sectionB() {
 	})
 
 	t.Run("absorb cleans up on failure and restores original branch", func(t *testing.T) {
+		t.Parallel()
 		// This test verifies that when absorb fails, it cleans up properly
 		// and returns the user to their original branch without leaving
 		// the repository in a detached HEAD or unmerged state.
@@ -484,6 +491,7 @@ func example() {
 	})
 
 	t.Run("absorb with three-way merge when context lines differ", func(t *testing.T) {
+		t.Parallel()
 		// This test specifically verifies the --3way merge functionality:
 		// We create a scenario where the patch context doesn't match exactly
 		// because an intervening commit has modified lines far away in the same file.
@@ -704,7 +712,9 @@ func DefaultConfig() *Config {
 }
 
 func TestAbsorbConflictHandling(t *testing.T) {
+	t.Parallel()
 	t.Run("IsAbsorbInProgress returns false in normal state", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a branch with a commit
@@ -721,6 +731,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 	})
 
 	t.Run("IsAbsorbInProgress returns true in detached HEAD state", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a branch with a commit
@@ -740,6 +751,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 	})
 
 	t.Run("ShowConflict displays staged changes info", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a branch with a commit
@@ -762,6 +774,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 	})
 
 	t.Run("ShowConflict handles no staged changes", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a branch with a commit but no staged changes
@@ -779,6 +792,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 	})
 
 	t.Run("Abort handles normal state", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a branch with a commit
@@ -796,6 +810,7 @@ func TestAbsorbConflictHandling(t *testing.T) {
 	})
 
 	t.Run("Abort recovers from detached HEAD state", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a branch with a commit

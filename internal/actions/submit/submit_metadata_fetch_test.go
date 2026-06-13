@@ -13,7 +13,9 @@ import (
 )
 
 func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
+	t.Parallel()
 	t.Run("fetches body from GitHub when local body is empty", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
 		prNumber := 123
@@ -55,6 +57,7 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 	})
 
 	t.Run("GetPRBody uses existingBody when not empty", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branch := s.Engine.GetBranch("main") // just need a branch object
 

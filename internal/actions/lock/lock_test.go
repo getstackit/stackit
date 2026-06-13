@@ -43,7 +43,9 @@ func (h *testLockHandler) Cleanup()                         {}
 func (h *testLockHandler) IsInteractive() bool              { return h.isInteractive }
 
 func TestLockUnlockAction(t *testing.T) {
+	t.Parallel()
 	t.Run("LockAction locks branch and ancestors", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -63,6 +65,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("LockAction indicates already locked branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -85,6 +88,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("UnlockAction unlocks branch and descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -108,6 +112,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("UnlockAction indicates already unlocked branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -128,6 +133,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("LockAction fails on untracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("untracked")
@@ -138,6 +144,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("LockAction fails on trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -147,6 +154,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("LockAction with unpushed commits in non-interactive mode", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -176,6 +184,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("LockAction prompts for new branch not on remote", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("new-feature").
@@ -199,6 +208,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("UnlockAction prompts for downstack and unlocks it if confirmed", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -232,6 +242,7 @@ func TestLockUnlockAction(t *testing.T) {
 	})
 
 	t.Run("UnlockAction prompts for downstack and does not unlock it if declined", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").

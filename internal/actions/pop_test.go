@@ -14,7 +14,9 @@ import (
 )
 
 func TestPopAction(t *testing.T) {
+	t.Parallel()
 	t.Run("pops branch and retains changes as staged", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -44,6 +46,7 @@ func TestPopAction(t *testing.T) {
 	})
 
 	t.Run("reparents children when popping branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -70,6 +73,7 @@ func TestPopAction(t *testing.T) {
 	})
 
 	t.Run("fails when trying to pop trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Try to pop trunk (main)
@@ -79,6 +83,7 @@ func TestPopAction(t *testing.T) {
 	})
 
 	t.Run("fails when trying to pop untracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("untracked")
 
@@ -89,6 +94,7 @@ func TestPopAction(t *testing.T) {
 	})
 
 	t.Run("fails when rebase is in progress", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -109,6 +115,7 @@ func TestPopAction(t *testing.T) {
 	})
 
 	t.Run("fails when there are uncommitted changes", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",

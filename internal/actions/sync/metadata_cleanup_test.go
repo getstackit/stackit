@@ -14,7 +14,9 @@ import (
 )
 
 func TestMetadataCleanup(t *testing.T) {
+	t.Parallel()
 	t.Run("silently cleans up metadata for deleted local branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// 1. Create a branch and metadata
@@ -50,6 +52,7 @@ func TestMetadataCleanup(t *testing.T) {
 	})
 
 	t.Run("does not prompt for remote metadata on non-existent branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// 1. Simulate remote metadata for a branch that doesn't exist locally

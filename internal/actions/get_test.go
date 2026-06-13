@@ -42,7 +42,9 @@ func (c *countingGitHubClient) branchCallCount(branchName string) int {
 }
 
 func TestGetAction(t *testing.T) {
+	t.Parallel()
 	t.Run("resolves PR number and fetches branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -80,6 +82,7 @@ func TestGetAction(t *testing.T) {
 	})
 
 	t.Run("crawls ancestors via GitHub PRs", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -129,6 +132,7 @@ func TestGetAction(t *testing.T) {
 	})
 
 	t.Run("identifies and syncs local descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -159,6 +163,7 @@ func TestGetAction(t *testing.T) {
 	})
 
 	t.Run("fails if uncommitted changes exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			WithUncommittedChange("dirty.txt")

@@ -13,7 +13,9 @@ import (
 )
 
 func TestStackInfoAction(t *testing.T) {
+	t.Parallel()
 	t.Run("returns JSON info for the current stack", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -60,6 +62,7 @@ func TestStackInfoAction(t *testing.T) {
 	})
 
 	t.Run("fails when not on a branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		// Detach HEAD
 		s.RunGit("checkout", "--detach", "main")
@@ -70,6 +73,7 @@ func TestStackInfoAction(t *testing.T) {
 	})
 
 	t.Run("returns tree view with commit messages when JSON flag is false", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -89,6 +93,7 @@ func TestStackInfoAction(t *testing.T) {
 	})
 
 	t.Run("includes lock and frozen state", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",

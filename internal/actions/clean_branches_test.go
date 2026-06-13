@@ -13,7 +13,9 @@ import (
 )
 
 func TestCleanBranches(t *testing.T) {
+	t.Parallel()
 	t.Run("deletes merged branch and updates children", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -51,6 +53,7 @@ func TestCleanBranches(t *testing.T) {
 	})
 
 	t.Run("handles multiple children when parent is deleted", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -91,6 +94,7 @@ func TestCleanBranches(t *testing.T) {
 	})
 
 	t.Run("does not delete branch without PR when not merged", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -107,6 +111,7 @@ func TestCleanBranches(t *testing.T) {
 	})
 
 	t.Run("deletes locked branch when merged", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -142,6 +147,7 @@ func TestCleanBranches(t *testing.T) {
 	})
 
 	t.Run("never considers trunk for deletion", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -174,6 +180,7 @@ func TestCleanBranches(t *testing.T) {
 	})
 
 	t.Run("deletes merged child even if parent is NOT merged", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -198,6 +205,7 @@ func TestCleanBranches(t *testing.T) {
 	})
 
 	t.Run("marks branch with unpushed changes when merged", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -234,6 +242,7 @@ func TestCleanBranches(t *testing.T) {
 	})
 
 	t.Run("does not mark branch without unpushed changes as unpushed", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -264,6 +273,7 @@ func TestCleanBranches(t *testing.T) {
 	})
 
 	t.Run("preserves divergence when reparenting after squash-merged parent deletion", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create main -> branch1 (2 commits) -> branch2.

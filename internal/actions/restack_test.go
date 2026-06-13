@@ -29,7 +29,9 @@ func (h *promptRestackHandler) PromptResolveConflicts(conflictBranches []string)
 }
 
 func TestRestackAction(t *testing.T) {
+	t.Parallel()
 	t.Run("planning from trunk excludes trunk branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		plan, err := PlanRestack(s.Context, RestackOptions{
@@ -42,6 +44,7 @@ func TestRestackAction(t *testing.T) {
 	})
 
 	t.Run("planning from trunk keeps descendants but not trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"feature":       "main",
@@ -67,6 +70,7 @@ func TestRestackAction(t *testing.T) {
 	})
 
 	t.Run("parallel multi-stack restack returns worker errors", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"alpha-root":  "main",
@@ -110,6 +114,7 @@ func TestRestackAction(t *testing.T) {
 	})
 
 	t.Run("interactive restack prompts before entering conflict workflow", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.Checkout("main")

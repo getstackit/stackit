@@ -45,7 +45,9 @@ func writeAndCommit(t *testing.T, s *scenario.Scenario, file, content, message s
 }
 
 func TestMoveAction(t *testing.T) {
+	t.Parallel()
 	t.Run("moves branch downstack and restacks descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -89,6 +91,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("moves branch upstack and restacks descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branchA":  "main",
@@ -122,6 +125,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("moves branch across different stack trees", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branchA1": "main",
@@ -150,6 +154,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("defaults source to current branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -174,6 +179,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("prevents moving trunk branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		err := Action(s.Context, Options{
@@ -185,6 +191,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("prevents moving onto itself", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -199,6 +206,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("prevents moving onto descendant (cycle detection)", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -217,6 +225,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("fails when source branch is not tracked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("untracked").
 			Checkout("main")
@@ -230,6 +239,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("fails when onto branch does not exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -244,6 +254,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("fails when not on branch and no source specified", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Detach HEAD
@@ -263,6 +274,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("allows moving onto untracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -285,6 +297,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("restacks all descendants after move", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -325,6 +338,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("fails when onto is not specified", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -339,6 +353,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("moves branch downstack without pulling along intermediate commits", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a clean stack: main -> branch1 -> branch2
@@ -372,6 +387,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("preserves PR information after move", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -402,6 +418,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("moves branch after it has been amended", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -426,6 +443,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("moves branch across stacks without pulling old parent's commits", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Stack 1: main -> branchA1 -> branchA2
@@ -462,6 +480,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("moving middle branch to trunk does not affect downstack branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a linear stack: main -> A -> B -> C
@@ -511,6 +530,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("interactive cancel does not move", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -532,6 +552,7 @@ func TestMoveAction(t *testing.T) {
 	})
 
 	t.Run("interactive proceed on conflict enters conflict workflow", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInitialCommit()
 
 		// Restack invokes git commit without stripping global config, so any

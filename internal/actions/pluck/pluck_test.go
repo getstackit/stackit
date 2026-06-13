@@ -105,7 +105,9 @@ func TestPluckStackID(t *testing.T) {
 }
 
 func TestPluckAction(t *testing.T) {
+	t.Parallel()
 	t.Run("plucks branch to new parent and reparents children to grandparent", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -135,6 +137,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("plucks branch with no children", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -162,6 +165,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("plucks branch with multiple children", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -207,6 +211,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("defaults source to current branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -231,6 +236,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("prevents plucking trunk branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		err := Action(s.Context, Options{
@@ -242,6 +248,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("prevents plucking onto itself", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -256,6 +263,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("prevents plucking onto descendant (cycle detection)", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -274,6 +282,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("fails when source branch is not tracked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("untracked").
 			Checkout("main")
@@ -287,6 +296,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("fails when onto branch does not exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -301,6 +311,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("fails when onto is not specified", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -315,6 +326,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("fails when not on branch and no source specified", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Detach HEAD
@@ -332,6 +344,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("restacks all affected branches after pluck", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -356,6 +369,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("preserves commits on plucked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create branch1 with a commit
@@ -381,6 +395,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("preserves PR information after pluck", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -411,6 +426,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("pluck differs from move by not bringing descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -443,6 +459,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("allows plucking onto untracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -465,6 +482,7 @@ func TestPluckAction(t *testing.T) {
 	})
 
 	t.Run("plucks from middle of stack correctly", func(t *testing.T) {
+		t.Parallel()
 		// main -> A -> B -> C -> D
 		// Pluck B to main
 		// Result: B is on main, C is on A (not B!)

@@ -11,7 +11,9 @@ import (
 )
 
 func TestUndoAction(t *testing.T) {
+	t.Parallel()
 	t.Run("returns error when no snapshots exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -20,6 +22,7 @@ func TestUndoAction(t *testing.T) {
 	})
 
 	t.Run("restores to snapshot when only one exists", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -63,6 +66,7 @@ func TestUndoAction(t *testing.T) {
 	})
 
 	t.Run("returns error for invalid snapshot ID", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -78,6 +82,7 @@ func TestUndoAction(t *testing.T) {
 	})
 
 	t.Run("restores after multiple operations", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature1").
@@ -140,7 +145,9 @@ func TestUndoAction(t *testing.T) {
 }
 
 func TestUndoAfterCreate(t *testing.T) {
+	t.Parallel()
 	t.Run("undoes branch creation", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -186,7 +193,9 @@ func TestUndoAfterCreate(t *testing.T) {
 }
 
 func TestUndoAfterMove(t *testing.T) {
+	t.Parallel()
 	t.Run("undoes branch move operation", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature1").

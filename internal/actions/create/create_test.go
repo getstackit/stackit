@@ -11,6 +11,9 @@ import (
 )
 
 func TestCreateAction_Stdin(t *testing.T) {
+	// NOT parallel: this test swaps the process-global os.Stdin for a pipe. Under
+	// t.Parallel(), a concurrent test's git subprocess inherits that pipe as stdin
+	// and blocks forever (same global-state hazard class as t.Setenv).
 	t.Run("reads commit message from stdin in non-interactive mode", func(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
@@ -50,7 +53,9 @@ func TestCreateAction_Stdin(t *testing.T) {
 }
 
 func TestCreateAction_Insert(t *testing.T) {
+	t.Parallel()
 	t.Run("inserts branch between parent and children", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -97,6 +102,7 @@ func TestCreateAction_Insert(t *testing.T) {
 	})
 
 	t.Run("inserts branch in the middle of a stack", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -147,6 +153,7 @@ func TestCreateAction_Insert(t *testing.T) {
 	})
 
 	t.Run("inserts branch into a branching stack (multiple children)", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -205,6 +212,7 @@ func TestCreateAction_Insert(t *testing.T) {
 	})
 
 	t.Run("restores original branch after insert", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -236,7 +244,9 @@ func TestCreateAction_Insert(t *testing.T) {
 }
 
 func TestCreateAction_Insert_Deep(t *testing.T) {
+	t.Parallel()
 	t.Run("restacks descendants deep into the stack", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -286,7 +296,9 @@ func TestCreateAction_Insert_Deep(t *testing.T) {
 }
 
 func TestCreateAction_Worktree(t *testing.T) {
+	t.Parallel()
 	t.Run("creates worktree when -w flag is used from trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -329,6 +341,7 @@ func TestCreateAction_Worktree(t *testing.T) {
 	})
 
 	t.Run("fails with -w flag when not on trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 

@@ -43,6 +43,7 @@ type SyncManager interface {
 	PullTrunk(ctx context.Context) (PullResult, error)
 	PullBranch(ctx context.Context, remote, branchName string) (PullResult, error)
 	UpdateTrunkFromRemote(ctx context.Context) (PullResult, error)
+	UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error)
 	ResetTrunkToRemote(ctx context.Context) error
 	PlanRestack(ctx context.Context, branches Branches) (*RestackPlan, error)
 	RestackBranches(ctx context.Context, branches Branches) (RestackBatchResult, error)

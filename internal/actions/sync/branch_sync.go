@@ -12,7 +12,7 @@ import (
 // It skips branches that are trunk, locked, frozen, or in a dirty stack.
 // This allows the sync command to fast-forward branches when someone else pushes
 // commits to a stack branch from another machine.
-func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler Handler, summary *Summary) error {
+func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) error {
 	eng := ctx.Engine
 	nav := ctx.Navigator()
 	gctx := ctx.Context
@@ -23,7 +23,12 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 
 	// Get all tracked branches
 	allBranches := nav.AllBranches()
-	remoteStatuses := eng.ReadBranchRemoteStatuses(gctx, allBranches)
+	// Remote statuses are normally prefetched in sync's parallel phase so the
+	// ls-remote overlaps the trunk fetch and GitHub call. Fall back to computing
+	// them here when the caller didn't supply them.
+	if remoteStatuses == nil {
+		remoteStatuses = eng.ReadBranchRemoteStatuses(gctx, allBranches)
+	}
 
 	syncStart := time.Now()
 	var statusCheckTotalMs int64
@@ -34,6 +39,9 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 			time.Since(syncStart).Milliseconds(), len(allBranches), branchesSynced, statusCheckTotalMs, statusCheckCount)
 	}()
 
+	// Pass 1: collect branches that are behind their remote, applying the same
+	// skip rules as before (trunk / untracked / locked / frozen / dirty stack).
+	var behind engine.Branches
 	for _, branch := range allBranches {
 		// Check for context cancellation
 		if err := gctx.Err(); err != nil {
@@ -78,60 +86,114 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, handler H
 			continue
 		}
 
-		// Pull the branch
-		pullStart := time.Now()
-		result, err := eng.PullBranch(gctx, remote, branchName)
-		ctx.Logger.Info("pull branch completed branch=%v durationMs=%v", branchName, time.Since(pullStart).Milliseconds())
+		behind = append(behind, branch)
+	}
 
-		if err != nil {
-			// Treat errors as conflicts - warn and continue
-			summary.ConflictBranches = append(summary.ConflictBranches, branchName)
-			handler.EmitEvent(Event{
-				Phase:    PhaseBranches,
-				Type:     EventSkipped,
-				Branch:   branchName,
-				Conflict: true,
-				Message:  err.Error(),
-			})
-			continue
+	if len(behind) == 0 {
+		summary.BranchesSynced = 0
+		return nil
+	}
+
+	// Fetch every behind branch in a single git fetch, replacing the previous
+	// N per-branch fetches (one network round trip instead of N).
+	behindNames := behind.Names()
+	fetchStart := time.Now()
+	fetchErr := eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+		Remote:   remote,
+		Branches: behindNames,
+	})
+	ctx.Logger.Info("batch fetch stack branches completed durationMs=%d branchCount=%d fetchErr=%v",
+		time.Since(fetchStart).Milliseconds(), len(behindNames), fetchErr)
+
+	// Pass 2: apply the fast-forward for each branch. When the batch fetch
+	// succeeded, UpdateBranchFromRemote does the local-only update (no network).
+	// If the batch fetch failed, fall back to the per-branch PullBranch, which
+	// re-fetches individually — preserving sync's warn-and-continue behavior
+	// rather than failing the whole sync.
+	for _, branch := range behind {
+		// Check for context cancellation
+		if err := gctx.Err(); err != nil {
+			return context.Cause(gctx)
 		}
 
-		switch result {
-		case engine.PullDone:
-			// Get the new revision
-			rev, _ := branch.GetRevision()
-			revShort := rev
-			if len(rev) > 7 {
-				revShort = rev[:7]
-			}
+		branchName := branch.GetName()
+
+		pullStart := time.Now()
+		var result engine.PullResult
+		var err error
+		if fetchErr != nil {
+			result, err = eng.PullBranch(gctx, remote, branchName)
+		} else {
+			result, err = eng.UpdateBranchFromRemote(gctx, remote, branchName)
+		}
+		ctx.Logger.Info("update branch from remote completed branch=%v durationMs=%v", branchName, time.Since(pullStart).Milliseconds())
+
+		if applyBranchSyncResult(branch, result, err, handler, summary) {
 			branchesSynced++
-			handler.EmitEvent(Event{
-				Phase:       PhaseBranches,
-				Type:        EventCompleted,
-				Branch:      branchName,
-				NewRevision: revShort,
-			})
-
-		case engine.PullUnneeded:
-			// Already up to date (shouldn't happen since we checked Behind(), but handle it)
-			handler.EmitEvent(Event{
-				Phase:  PhaseBranches,
-				Type:   EventCompleted,
-				Branch: branchName,
-			})
-
-		case engine.PullConflict:
-			// Branches have diverged
-			summary.ConflictBranches = append(summary.ConflictBranches, branchName)
-			handler.EmitEvent(Event{
-				Phase:    PhaseBranches,
-				Type:     EventSkipped,
-				Branch:   branchName,
-				Conflict: true,
-			})
 		}
 	}
 
 	summary.BranchesSynced = branchesSynced
 	return nil
+}
+
+// applyBranchSyncResult emits the PhaseBranches event for a single branch's
+// pull/update result and reports whether the branch was fast-forwarded. It is
+// shared by the batched local-update path and the per-branch fetch fallback so
+// both behave identically.
+func applyBranchSyncResult(branch engine.Branch, result engine.PullResult, err error, handler Handler, summary *Summary) (synced bool) {
+	branchName := branch.GetName()
+
+	if err != nil {
+		// Treat errors as conflicts - warn and continue
+		summary.ConflictBranches = append(summary.ConflictBranches, branchName)
+		handler.EmitEvent(Event{
+			Phase:    PhaseBranches,
+			Type:     EventSkipped,
+			Branch:   branchName,
+			Conflict: true,
+			Message:  err.Error(),
+		})
+		return false
+	}
+
+	switch result {
+	case engine.PullDone:
+		// Get the new revision (GetRevision reads live git, so it reflects the
+		// just-applied fast-forward without an engine rebuild).
+		rev, _ := branch.GetRevision()
+		revShort := rev
+		if len(rev) > 7 {
+			revShort = rev[:7]
+		}
+		handler.EmitEvent(Event{
+			Phase:       PhaseBranches,
+			Type:        EventCompleted,
+			Branch:      branchName,
+			NewRevision: revShort,
+		})
+		return true
+
+	case engine.PullUnneeded:
+		// Already up to date (shouldn't happen since we checked Behind(), but handle it)
+		handler.EmitEvent(Event{
+			Phase:  PhaseBranches,
+			Type:   EventCompleted,
+			Branch: branchName,
+		})
+		return false
+
+	case engine.PullConflict:
+		// Branches have diverged
+		summary.ConflictBranches = append(summary.ConflictBranches, branchName)
+		handler.EmitEvent(Event{
+			Phase:    PhaseBranches,
+			Type:     EventSkipped,
+			Branch:   branchName,
+			Conflict: true,
+		})
+		return false
+	}
+
+	return false
 }

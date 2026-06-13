@@ -32,7 +32,9 @@ func (h *testScopeHandler) Cleanup() {}
 func (h *testScopeHandler) IsInteractive() bool { return h.isInteractive }
 
 func TestScopeAction(t *testing.T) {
+	t.Parallel()
 	t.Run("show scope when no args provided", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -46,6 +48,7 @@ func TestScopeAction(t *testing.T) {
 	})
 
 	t.Run("set scope on branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -62,6 +65,7 @@ func TestScopeAction(t *testing.T) {
 	})
 
 	t.Run("unset scope on branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -82,6 +86,7 @@ func TestScopeAction(t *testing.T) {
 	})
 
 	t.Run("cannot set scope on trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -93,6 +98,7 @@ func TestScopeAction(t *testing.T) {
 	})
 
 	t.Run("PromptConfirmRename is called when scope changes and branch name contains old scope", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("JIRA-100-feature").
@@ -120,6 +126,7 @@ func TestScopeAction(t *testing.T) {
 	})
 
 	t.Run("PromptConfirmRename is not called when branch name does not contain old scope", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -145,6 +152,7 @@ func TestScopeAction(t *testing.T) {
 	})
 
 	t.Run("non-interactive handler does not rename branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("JIRA-100-feature").

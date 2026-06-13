@@ -14,7 +14,9 @@ import (
 )
 
 func TestGeneratePlanJSON(t *testing.T) {
+	t.Parallel()
 	t.Run("generates valid JSON with absorbed and unabsorbable hunks", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch-a": "main",
@@ -112,6 +114,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 	})
 
 	t.Run("handles empty inputs", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch-a": "main",
@@ -141,6 +144,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 }
 
 func TestFormatLines(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		start    int
 		count    int

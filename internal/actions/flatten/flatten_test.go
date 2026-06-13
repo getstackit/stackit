@@ -19,7 +19,9 @@ func writeFile(t *testing.T, s *scenario.Scenario, name, content string) {
 }
 
 func TestFlattenAction(t *testing.T) {
+	t.Parallel()
 	t.Run("flattens linear independent stack to trunk", func(t *testing.T) {
+		t.Parallel()
 		// main -> A -> B -> C
 		// WithStack creates independent changes (separate files)
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
@@ -44,6 +46,7 @@ func TestFlattenAction(t *testing.T) {
 	})
 
 	t.Run("respects dependencies", func(t *testing.T) {
+		t.Parallel()
 		// main -> A -> B
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
@@ -74,6 +77,7 @@ func TestFlattenAction(t *testing.T) {
 	})
 
 	t.Run("partial flatten", func(t *testing.T) {
+		t.Parallel()
 		// main -> A -> B -> C
 		// A independent
 		// B depends on A
@@ -119,6 +123,7 @@ func TestFlattenAction(t *testing.T) {
 	})
 
 	t.Run("handles already flat stack", func(t *testing.T) {
+		t.Parallel()
 		// main -> A, main -> B (already flat)
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
@@ -140,6 +145,7 @@ func TestFlattenAction(t *testing.T) {
 	})
 
 	t.Run("uses current branch when none specified", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"A": "main",
@@ -163,6 +169,7 @@ func TestFlattenAction(t *testing.T) {
 	})
 
 	t.Run("returns error for untracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create an untracked branch
@@ -175,6 +182,7 @@ func TestFlattenAction(t *testing.T) {
 	})
 
 	t.Run("excludes move when descendant would conflict", func(t *testing.T) {
+		t.Parallel()
 		// This test verifies that flatten correctly validates descendant branches
 		// in a CHAINED manner and excludes moves that would cause conflicts.
 		//
@@ -239,6 +247,7 @@ func TestFlattenAction(t *testing.T) {
 	})
 
 	t.Run("fallback to parent revision when metadata missing", func(t *testing.T) {
+		t.Parallel()
 		// This test verifies the fix for the bug where getOldUpstream() was using
 		// GetMergeBase as a fallback, which could include parent commits when
 		// flattening. The fix uses the parent's current revision instead.

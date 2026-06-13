@@ -14,7 +14,9 @@ import (
 )
 
 func TestFoldAction(t *testing.T) {
+	t.Parallel()
 	t.Run("folds branch into parent", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -46,6 +48,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("reparents children when folding branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -73,6 +76,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("folds with --keep flag", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -110,6 +114,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("folds with --keep and reparents siblings", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -143,6 +148,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when trying to fold trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Try to fold trunk (main)
@@ -152,6 +158,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when trying to fold untracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("untracked")
 
@@ -162,6 +169,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when trying to fold into trunk with --keep", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -174,6 +182,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when there are uncommitted changes", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -187,6 +196,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("returns clear error message on merge conflict", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil)
 
 		// Create conflicting changes manually
@@ -216,6 +226,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("restacks descendants after folding", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -251,6 +262,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("folding middle branch preserves all commits when folded branch has multiple commits", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -296,6 +308,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("folding middle branch moves no-op descendants to new parent tip", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Build main -> branch1 -> branch2 -> branch3, and create branch4 from branch3 with no unique commits.
@@ -335,6 +348,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("folding middle branch preserves folded commits for descendants that diverged earlier", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Build main -> branch1 -> branch2 -> branch3.
@@ -371,6 +385,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when rebase is in progress", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -390,6 +405,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("folds branch with no unique commits", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -409,6 +425,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("takes snapshot before folding", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -427,6 +444,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("takes snapshot with --keep flag", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -446,6 +464,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when folding into trunk without --allow-trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -458,6 +477,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("folds bottom branch into trunk with --allow-trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -481,6 +501,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when folding branches with different scopes", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -505,6 +526,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when current branch is locked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -522,6 +544,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when parent branch is locked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -539,6 +562,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("fails when branch is frozen", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -556,6 +580,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("dry-run does not modify repository", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -584,6 +609,7 @@ func TestFoldAction(t *testing.T) {
 	})
 
 	t.Run("dry-run fails if branch is locked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",

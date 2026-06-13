@@ -32,7 +32,9 @@ func (h *testUntrackHandler) Cleanup() {}
 func (h *testUntrackHandler) IsInteractive() bool { return h.isInteractive }
 
 func TestUntrackAction(t *testing.T) {
+	t.Parallel()
 	t.Run("fails for untracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranchQuiet("untracked")
@@ -45,6 +47,7 @@ func TestUntrackAction(t *testing.T) {
 	})
 
 	t.Run("succeeds for branch without descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -61,6 +64,7 @@ func TestUntrackAction(t *testing.T) {
 	})
 
 	t.Run("force flag bypasses confirmation for descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -90,6 +94,7 @@ func TestUntrackAction(t *testing.T) {
 	})
 
 	t.Run("prompts for confirmation when descendants exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -117,6 +122,7 @@ func TestUntrackAction(t *testing.T) {
 	})
 
 	t.Run("cancels when user declines confirmation", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -143,6 +149,7 @@ func TestUntrackAction(t *testing.T) {
 	})
 
 	t.Run("nil handler cancels when descendants exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -164,6 +171,7 @@ func TestUntrackAction(t *testing.T) {
 	})
 
 	t.Run("untracks multiple descendants", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").

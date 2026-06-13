@@ -12,7 +12,9 @@ import (
 )
 
 func TestDelete(t *testing.T) {
+	t.Parallel()
 	t.Run("deletes a single branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -35,6 +37,7 @@ func TestDelete(t *testing.T) {
 	})
 
 	t.Run("deletes upstack", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -56,6 +59,7 @@ func TestDelete(t *testing.T) {
 	})
 
 	t.Run("deletes downstack", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -77,6 +81,7 @@ func TestDelete(t *testing.T) {
 	})
 
 	t.Run("fails without force if not merged", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -95,6 +100,7 @@ func TestDelete(t *testing.T) {
 	})
 
 	t.Run("deletes current branch and switches to trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -117,6 +123,7 @@ func TestDelete(t *testing.T) {
 	})
 
 	t.Run("deletes a branch in a branching stack", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, nil).
 			WithStack(map[string]string{
 				"parent": "main",
@@ -147,6 +154,7 @@ func TestDelete(t *testing.T) {
 	})
 
 	t.Run("preserves child commit boundaries when deleting squash-merged parent", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.CreateBranch("branch1").
@@ -185,7 +193,9 @@ func TestDelete(t *testing.T) {
 }
 
 func TestDeleteCleansUpWorktrees(t *testing.T) {
+	t.Parallel()
 	t.Run("cleans worktree when stack root is deleted", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a stack root branch
@@ -216,6 +226,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 	})
 
 	t.Run("does not clean worktree when non-root branch is deleted", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a stack with two branches
@@ -248,6 +259,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 	})
 
 	t.Run("cleans worktree when upstack deletes entire stack including root", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a stack with multiple branches

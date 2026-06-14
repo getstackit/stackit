@@ -2,6 +2,7 @@ package stack
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	stdsync "sync"
 
@@ -660,25 +661,47 @@ func (h *InteractiveSyncHandler) Pause() { h.runner.Pause() }
 // Resume restores the TUI after Pause. Implements rerere.Pauser.
 func (h *InteractiveSyncHandler) Resume() { h.runner.Resume() }
 
+// describeMetadataConflict writes the human-readable details of a metadata
+// conflict to out. Shared by the interactive handler and the golden transcript
+// harness so both render identical text.
+func describeMetadataConflict(out output.Output, diff *engine.MetadataDiff) {
+	out.Info("\nMetadata differs for branch '%s':", style.ColorBranchName(diff.Branch, false))
+	for _, fd := range diff.Differences {
+		out.Info("  %s: %v (local) → %v (remote)", fd.Field, fd.LocalValue, fd.RemoteValue)
+	}
+	if diff.RemoteMeta != nil {
+		if modBy := diff.RemoteMeta.GetLastModifiedBy(); modBy != nil {
+			out.Info("  Last modified by: %s <%s>",
+				modBy.GitName,
+				modBy.GitEmail)
+		}
+	}
+}
+
 // PromptMetadataConflict implements Handler. Pauses TUI, displays conflict, prompts user.
 func (h *InteractiveSyncHandler) PromptMetadataConflict(diff *engine.MetadataDiff) (bool, error) {
 	h.runner.Pause()
 	defer h.runner.Resume()
 
-	// Display the conflict details
-	h.output.Info("\nMetadata differs for branch '%s':", style.ColorBranchName(diff.Branch, false))
-	for _, fd := range diff.Differences {
-		h.output.Info("  %s: %v (local) → %v (remote)", fd.Field, fd.LocalValue, fd.RemoteValue)
-	}
-	if diff.RemoteMeta != nil {
-		if modBy := diff.RemoteMeta.GetLastModifiedBy(); modBy != nil {
-			h.output.Info("  Last modified by: %s <%s>",
-				modBy.GitName,
-				modBy.GitEmail)
-		}
-	}
+	describeMetadataConflict(h.output, diff)
 
 	return tui.PromptConfirm("Accept remote metadata?", false)
+}
+
+// describeOrphanedMetadata writes the human-readable details of orphaned local
+// metadata to out. Shared by the interactive handler and the golden transcript
+// harness so both render identical text.
+func describeOrphanedMetadata(out output.Output, info engine.OrphanedMetadataInfo) {
+	out.Info("\nRemote metadata for '%s' was deleted, but you have local changes:",
+		style.ColorBranchName(info.BranchName, false))
+	if info.LocalMeta != nil {
+		if info.LocalMeta.GetLockReason().IsLocked() {
+			out.Info("  lockReason: %s", info.LocalMeta.GetLockReason())
+		}
+		if info.LocalMeta.GetScope() != nil {
+			out.Info("  scope: %s", *info.LocalMeta.GetScope())
+		}
+	}
 }
 
 // PromptOrphanedMetadata implements Handler. Pauses TUI, displays info, prompts user.
@@ -686,18 +709,25 @@ func (h *InteractiveSyncHandler) PromptOrphanedMetadata(info engine.OrphanedMeta
 	h.runner.Pause()
 	defer h.runner.Resume()
 
-	h.output.Info("\nRemote metadata for '%s' was deleted, but you have local changes:",
-		style.ColorBranchName(info.BranchName, false))
-	if info.LocalMeta != nil {
-		if info.LocalMeta.GetLockReason().IsLocked() {
-			h.output.Info("  lockReason: %s", info.LocalMeta.GetLockReason())
-		}
-		if info.LocalMeta.GetScope() != nil {
-			h.output.Info("  scope: %s", *info.LocalMeta.GetScope())
-		}
-	}
+	describeOrphanedMetadata(h.output, info)
 
 	return tui.PromptConfirm("Push your local metadata to remote?", false)
+}
+
+// describeRestackConflicts writes the human-readable summary of restack
+// conflicts to out. Shared by the interactive handler and the golden transcript
+// harness so both render identical text.
+func describeRestackConflicts(out output.Output, conflictBranches []string) {
+	out.Newline()
+	out.Warn("⚠️  Found conflicts in %d %s during restack:",
+		len(conflictBranches),
+		map[bool]string{true: "branch", false: "branches"}[len(conflictBranches) == 1])
+	for _, name := range conflictBranches {
+		out.Warn("  • %s", style.ColorBranchName(name, false))
+	}
+	out.Newline()
+	out.Info("Branches that could be restacked cleanly have been restacked.")
+	out.Newline()
 }
 
 // PromptResolveConflicts implements Handler. Pauses TUI, displays conflicts, prompts user.
@@ -705,18 +735,34 @@ func (h *InteractiveSyncHandler) PromptResolveConflicts(conflictBranches []strin
 	h.runner.Pause()
 	defer h.runner.Resume()
 
-	h.output.Newline()
-	h.output.Warn("⚠️  Found conflicts in %d %s during restack:",
-		len(conflictBranches),
-		map[bool]string{true: "branch", false: "branches"}[len(conflictBranches) == 1])
-	for _, name := range conflictBranches {
-		h.output.Warn("  • %s", style.ColorBranchName(name, false))
-	}
-	h.output.Newline()
-	h.output.Info("Branches that could be restacked cleanly have been restacked.")
-	h.output.Newline()
+	describeRestackConflicts(h.output, conflictBranches)
 
 	return tui.PromptConfirm("Resolve conflicts now?", false)
+}
+
+// buildDeletionOptions returns the alphabetically sorted branch names alongside
+// the parallel multi-select option labels (branch name + reason, with an
+// "unpushed changes" note) and their default pre-selection state (unpushed
+// branches are not pre-selected). Shared by the interactive handler and the
+// golden transcript harness so both render identical option labels.
+func buildDeletionOptions(branches map[string]string, unpushedBranches map[string]bool) (names, options []string, preSelected []bool) {
+	names = make([]string, 0, len(branches))
+	for name := range branches {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	options = make([]string, len(names))
+	preSelected = make([]bool, len(names))
+	for i, name := range names {
+		reason := branches[name]
+		if unpushedBranches[name] {
+			reason += " — has unpushed changes"
+		}
+		options[i] = fmt.Sprintf("%s (%s)", style.ColorBranchName(name, false), style.ColorDim(reason))
+		preSelected[i] = !unpushedBranches[name] // Don't pre-select branches with unpushed changes
+	}
+	return names, options, preSelected
 }
 
 // PromptBranchDeletions implements Handler. Pauses TUI, displays planned deletions, prompts for each.
@@ -730,31 +776,7 @@ func (h *InteractiveSyncHandler) PromptBranchDeletions(branches map[string]strin
 		return confirmed, nil
 	}
 
-	// Sort branch names for consistent ordering
-	names := make([]string, 0, len(branches))
-	for name := range branches {
-		names = append(names, name)
-	}
-	// Sort alphabetically
-	for i := 0; i < len(names)-1; i++ {
-		for j := i + 1; j < len(names); j++ {
-			if names[i] > names[j] {
-				names[i], names[j] = names[j], names[i]
-			}
-		}
-	}
-
-	// Build options for multi-select with branch name and reason
-	options := make([]string, len(names))
-	preSelected := make([]bool, len(names))
-	for i, name := range names {
-		reason := branches[name]
-		if unpushedBranches[name] {
-			reason += " — has unpushed changes"
-		}
-		options[i] = fmt.Sprintf("%s (%s)", style.ColorBranchName(name, false), style.ColorDim(reason))
-		preSelected[i] = !unpushedBranches[name] // Don't pre-select branches with unpushed changes
-	}
+	names, options, preSelected := buildDeletionOptions(branches, unpushedBranches)
 
 	h.output.Newline()
 	selected, err := tui.PromptMultiSelectWithDefaults("Select branches to delete:", options, preSelected)

@@ -215,16 +215,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Execute the flatten
 	handler.OnStep(StepFlattening, basehandler.StatusStarted, "Moving branches...")
 
-	// Update parent pointers for all planned moves
+	// Update parent pointers for all planned moves in one batch. Each branch
+	// moves to a different parent, so use the per-branch reparent batch; it
+	// captures every divergence point before mutating.
+	moves := make([]engine.BranchParentMove, len(filteredPlan.Moves))
+	for i, move := range filteredPlan.Moves {
+		moves[i] = engine.BranchParentMove{Branch: move.Branch, NewParent: move.NewParent}
+	}
+	if err := eng.ReparentBranchesToParents(gctx, moves); err != nil {
+		handler.OnStep(StepFlattening, basehandler.StatusFailed, err.Error())
+		return fmt.Errorf("failed to update flattened parent relationships: %w", err)
+	}
 	for _, move := range filteredPlan.Moves {
-		moveBranch := eng.GetBranch(move.Branch)
-		newParentBranch := eng.GetBranch(move.NewParent)
-
-		if err := eng.ReparentBranch(gctx, moveBranch, newParentBranch); err != nil {
-			handler.OnStep(StepFlattening, basehandler.StatusFailed, err.Error())
-			return fmt.Errorf("failed to set parent for %s to %s: %w", move.Branch, move.NewParent, err)
-		}
-
 		handler.OnBranchMoved(move.Branch, move.OldParent, move.NewParent)
 		out.Info("  %s: %s -> %s",
 			output.Branch(move.Branch, false),

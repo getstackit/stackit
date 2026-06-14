@@ -161,6 +161,10 @@ type BranchTracking interface {
 	// preserving divergence points. All divergence points are captured before
 	// any reparenting begins.
 	ReparentBranches(ctx context.Context, branchNames []string, newParent Branch) error
+	// ReparentBranchesToParents reparents each branch onto its own designated
+	// parent (per-branch, unlike ReparentBranches) while preserving divergence
+	// points, all captured before any mutation begins.
+	ReparentBranchesToParents(ctx context.Context, moves []BranchParentMove) error
 	SetScope(ctx context.Context, branch Branch, scope Scope) error
 	// SetScopeAndMarkForUpdate sets the scope and marks the branch as needing a
 	// PR body update in one atomic transaction instead of two separate ref writes.

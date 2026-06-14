@@ -57,11 +57,12 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 		}
 	}
 
-	// Reparent each sibling onto the current branch. Stack ID is propagated
-	// automatically by ReparentBranch.
-	for _, sibling := range siblings {
-		if err := eng.ReparentBranch(gctx, sibling, refreshedCurrent); err != nil {
-			return fmt.Errorf("failed to reparent %s to %s: %w", sibling.GetName(), currentBranch.GetName(), err)
+	// Reparent all siblings onto the current branch in one batch. Stack ID is
+	// propagated automatically, and capturing divergence points up front keeps
+	// related siblings correct.
+	if len(siblings) > 0 {
+		if err := eng.ReparentBranches(gctx, siblings.Names(), refreshedCurrent); err != nil {
+			return fmt.Errorf("failed to reparent siblings to %s: %w", currentBranch.GetName(), err)
 		}
 	}
 

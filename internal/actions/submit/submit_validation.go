@@ -3,6 +3,7 @@ package submit
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
@@ -22,16 +23,20 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 		return err
 	}
 	if repoOwner != "" && repoName != "" {
+		// Collect updates from the callback (which may be called concurrently in the
+		// REST fallback) then write all PR info in one atomic batch.
+		var mu sync.Mutex
+		updates := make(map[string]*engine.PrInfo)
 		if err := github.SyncPrInfo(ctx.Context, ctx.Git(), branches, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 			branch := nav.GetBranch(name)
 
-			// Preserve existing locked status
 			lockReason := engine.LockReasonNone
 			if existing, err := branch.GetPrInfo(); err == nil && existing != nil {
 				lockReason = existing.LockReason()
 			}
 
-			_ = pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
+			mu.Lock()
+			updates[name] = engine.NewPrInfo(
 				&prInfo.Number,
 				prInfo.Title,
 				prInfo.Body,
@@ -39,10 +44,14 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 				prInfo.Base,
 				prInfo.HTMLURL,
 				prInfo.Draft,
-			).WithLockReason(lockReason))
+			).WithLockReason(lockReason)
+			mu.Unlock()
 		}); err != nil {
 			// Non-fatal, continue
 			ctx.Output.Debug("Failed to sync PR info: %v", err)
+		}
+		if err := pr.BatchUpsertPrInfo(ctx.Context, updates); err != nil {
+			ctx.Output.Debug("Failed to update PR info: %v", err)
 		}
 	}
 

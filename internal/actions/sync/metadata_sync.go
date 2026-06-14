@@ -119,15 +119,16 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) er
 		return nil
 	}
 
+	// Collect the auto-delete actions so they apply in one batched transaction;
+	// branches with local changes still prompt per-branch.
+	var deleteRefs, clearLocalHash []string
 	for _, info := range orphaned {
 		if info.Action == engine.OrphanedActionDelete {
 			// No local changes - silently remove sync state or delete ref if branch is gone
 			if !info.ExistsLocally {
-				if err := eng.DeleteMetadata(ctx.Context, info.BranchName); err != nil {
-					out.Debug("Failed to delete orphaned metadata ref for %s: %v", info.BranchName, err)
-				}
-			} else if err := eng.DeleteLocalMetadataHash(info.BranchName); err != nil {
-				out.Debug("Failed to delete metadata hash for %s: %v", info.BranchName, err)
+				deleteRefs = append(deleteRefs, info.BranchName)
+			} else {
+				clearLocalHash = append(clearLocalHash, info.BranchName)
 			}
 		} else {
 			// Has local changes - prompt user via handler
@@ -135,6 +136,10 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) er
 				return err
 			}
 		}
+	}
+
+	if err := eng.CleanOrphanedMetadata(ctx.Context, deleteRefs, clearLocalHash); err != nil {
+		out.Debug("Failed to clean orphaned metadata: %v", err)
 	}
 
 	return nil

@@ -506,6 +506,40 @@ func (e *engineImpl) DeleteMetadata(ctx context.Context, branchName string) erro
 	})
 }
 
+// CleanOrphanedMetadata reconciles branches whose remote metadata was deleted in
+// a single transaction: it deletes the metadata ref entirely for branches whose
+// local branch is also gone (deleteRefs) and clears just the local-only hash for
+// branches that still exist locally (clearLocalHash). This replaces one git ref
+// write per orphaned branch with a single batched write.
+func (e *engineImpl) CleanOrphanedMetadata(ctx context.Context, deleteRefs []string, clearLocalHash []string) error {
+	if len(deleteRefs) == 0 && len(clearLocalHash) == 0 {
+		return nil
+	}
+
+	return e.WithRetry(ctx, func() error {
+		metas, _ := e.batchReadMetadata(clearLocalHash)
+
+		tx := e.BeginTx(fmt.Sprintf("clean orphaned metadata: %d deleted, %d cleared", len(deleteRefs), len(clearLocalHash)))
+		for _, name := range deleteRefs {
+			if err := tx.DeleteMeta(name); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		for _, name := range clearLocalHash {
+			meta := metas[name]
+			if meta == nil {
+				continue
+			}
+			if err := tx.UpdateMeta(name, meta.WithLocalOnlyHash(nil)); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		return tx.Commit(ctx)
+	})
+}
+
 // FetchRemoteMetadata fetches metadata refs into the remote-metadata
 // namespace, so the cache loader sees the latest authored values.
 func (e *engineImpl) FetchRemoteMetadata(ctx context.Context) error {

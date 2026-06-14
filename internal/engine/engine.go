@@ -94,6 +94,10 @@ type RemoteMetadataManager interface {
 	FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)
 	DeleteLocalMetadataHash(branchName string) error
 	DeleteMetadata(ctx context.Context, branchName string) error
+	// CleanOrphanedMetadata deletes metadata refs for branches whose local
+	// branch is gone (deleteRefs) and clears the local-only hash for branches
+	// that remain (clearLocalHash), in a single transaction.
+	CleanOrphanedMetadata(ctx context.Context, deleteRefs []string, clearLocalHash []string) error
 	FetchRemoteMetadata(ctx context.Context) error
 	ConfigureRemoteMetadataSync(ctx context.Context) error
 	// TestRemoteMetadataCompatibility probes the configured remote to verify it

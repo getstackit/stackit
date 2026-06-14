@@ -449,6 +449,11 @@ func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branc
 	// Starts with trunk, and grows as we process branches
 	potentialParents := []string{trunk.GetName()}
 
+	// Warm the revision and metadata caches once so the per-branch
+	// GetDivergencePoint and GetRevision calls below hit memory instead of
+	// spawning a git rev-parse each.
+	eng.PreloadBranchData()
+
 	for i, b := range branches {
 		bName := b.GetName()
 

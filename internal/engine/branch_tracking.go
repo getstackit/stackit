@@ -323,6 +323,26 @@ func (e *engineImpl) ReparentBranchesToParents(ctx context.Context, moves []Bran
 	return nil
 }
 
+// ReparentBranchesRecompute reparents each branch onto the same new parent and
+// recomputes its divergence point against that parent (a fresh merge-base)
+// rather than preserving the existing one. Use when the branches are moving
+// under a newly created/inserted parent and should replay their own commits
+// onto it — the batch counterpart to SetParent(..., DivergenceRecompute).
+//
+// Automatically propagates the new parent's stack ID when a move crosses a
+// stack boundary.
+func (e *engineImpl) ReparentBranchesRecompute(ctx context.Context, branchNames []string, newParent Branch) error {
+	for _, name := range branchNames {
+		if err := e.SetParent(ctx, e.GetBranch(name), newParent, DivergenceRecompute); err != nil {
+			return fmt.Errorf("failed to reparent %s to %s: %w", name, newParent.GetName(), err)
+		}
+		if err := e.syncStackIDFromParent(ctx, e.GetBranch(name)); err != nil {
+			return fmt.Errorf("failed to sync stack ID for %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
 // updateParentRevision updates the parent revision in metadata using transaction API
 // with retry logic for concurrent modification resilience.
 func (e *engineImpl) updateParentRevision(ctx context.Context, branchName string, parentRev string) error {

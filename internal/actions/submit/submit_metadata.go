@@ -68,7 +68,6 @@ func GetReviewersWithPrompt(reviewersFlag string) ([]string, []string, error) {
 func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Context) (*PRMetadata, error) {
 	prInfo, _ := branch.GetPrInfo()
 	nav := ctx.Navigator()
-	pr := ctx.PR()
 
 	metadata := &PRMetadata{
 		Title:   getStringValue(prInfo, "Title"),
@@ -156,8 +155,16 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 	// Set assignees from config
 	metadata.Assignees = opts.ConfigAssignees
 
-	// Save metadata to engine in case command fails
-	if err := pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
+	// The prepared title/body/draft are persisted by the caller in one batch
+	// after planning (see prepareBranchesForSubmit), so a later submit failure
+	// can still recover them. PreparePRMetadata itself stays side-effect free.
+	return metadata, nil
+}
+
+// pendingPrInfo builds the PR info to persist for a branch from its prepared
+// metadata, matching what was previously written inline by PreparePRMetadata.
+func pendingPrInfo(branch engine.Branch, metadata *PRMetadata) *engine.PrInfo {
+	return engine.NewPrInfo(
 		nil,
 		metadata.Title,
 		metadata.Body,
@@ -165,11 +172,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 		"",
 		"",
 		metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason())); err != nil {
-		ctx.Output.Debug("Failed to save PR metadata: %v", err)
-	}
-
-	return metadata, nil
+	).WithLockReason(branch.GetLockReason())
 }
 
 // MetadataOptions contains options for PR metadata collection

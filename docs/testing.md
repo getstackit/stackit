@@ -61,3 +61,33 @@ Core package tests should focus on engine, metadata, and Git-backed domain behav
 
 - prefer package unit tests for pure logic
 - use git-backed scenario tests only for repository behaviors that need a real repo
+
+## Golden Output Transcripts
+
+Golden transcripts let you review and iterate on a command's user-facing output as a
+checked-in artifact, without running the real command against a git repository. They run in
+microseconds and capture the full streamed output **including interactive prompts and the
+user's scripted answer**.
+
+The first harness covers `sync` (`internal/cli/stack/sync_golden_test.go`, transcripts in
+`internal/cli/stack/testdata/sync/*.golden`). A scenario is a declarative list of steps —
+phase starts, progress events, prompts + the user's answer — plus a final summary. Each
+scenario is played through sync's **real** renderer (`SimpleSyncHandler` for events/summary;
+the shared `describe*` helpers for prompt descriptions) and the output is ANSI-stripped and
+compared to its golden file.
+
+This tests **presentation**, not which events the action decides to emit (that is covered by
+the action/integration tests). Because the real renderer is exercised, the transcripts also
+make latent output formatting issues visible in review.
+
+Regenerate after intentionally changing output:
+
+```bash
+go test ./internal/cli/stack -run Golden -update   # rewrite .golden files
+go test ./internal/cli/stack -run Golden            # CI-style check (no -update)
+```
+
+To extend the pattern to another command, reuse the generic `testhelpers/golden` helper
+(the `-update` flag, ANSI stripping, file compare with a line diff) and add a thin
+transcript handler plus step constructors for that command's `Handler`. Use
+`internal/cli/stack/sync_golden_test.go` as the template.

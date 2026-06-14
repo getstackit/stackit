@@ -1,0 +1,11 @@
+
+📥 Pulling from remote...
+  main fast-forwarded to a1b2c3d
+
+Remote metadata for 'feat-wip' was deleted, but you have local changes:
+  lockReason: user
+  scope: WIP
+? Push your local metadata to remote? [y/N]
+› user answers: yes
+
+✅ Summary: pulled trunk

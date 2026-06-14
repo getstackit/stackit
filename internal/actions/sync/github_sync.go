@@ -72,19 +72,18 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 	nav := ctx.Navigator()
 	out := ctx.Output
 
-	prsUpdated := 0
-
-	// Update local PR info from GitHub results
+	// Update local PR info from GitHub results, preserving lock reasons.
+	// Collect into a map first so we can write all updates in one atomic batch.
+	updates := make(map[string]*engine.PrInfo, len(result.PRInfos))
 	for name, prInfo := range result.PRInfos {
 		branch := nav.GetBranch(name)
 
-		// Try to preserve existing locked status
 		lockReason := engine.LockReasonNone
 		if existing, err := branch.GetPrInfo(); err == nil && existing != nil {
 			lockReason = existing.LockReason()
 		}
 
-		_ = eng.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
+		updates[name] = engine.NewPrInfo(
 			&prInfo.Number,
 			prInfo.Title,
 			prInfo.Body,
@@ -92,9 +91,13 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 			prInfo.Base,
 			prInfo.HTMLURL,
 			prInfo.Draft,
-		).WithLockReason(lockReason))
-		prsUpdated++
+		).WithLockReason(lockReason)
 	}
+
+	if err := eng.BatchUpsertPrInfo(ctx.Context, updates); err != nil {
+		out.Debug("Failed to update PR info: %v", err)
+	}
+	prsUpdated := len(updates)
 
 	// Emit completion event with count
 	if prsUpdated > 0 {

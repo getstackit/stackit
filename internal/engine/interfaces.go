@@ -18,7 +18,7 @@ type StackNavigator interface {
 	Graph(strategy SortStrategy) *StackGraph
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	SortBranchesTopologically(branches Branches) Branches
-	FindBranchForCommit(commitSHA string) (string, error)
+	FindBranchesForCommits(commitSHAs []string) map[string]string
 	// GetAllBranchNames returns the names of all local branches, including ones
 	// not tracked by stackit. Used by diagnostics that must see untracked or
 	// orphaned branches.

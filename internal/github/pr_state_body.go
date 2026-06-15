@@ -2,9 +2,6 @@ package github
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
 )
 
 // PRStateBody holds the subset of pull-request fields needed to append a
@@ -22,15 +19,7 @@ func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, ow
 		return make(map[int]PRStateBody), nil
 	}
 
-	// Deduplicate PR numbers
-	seen := make(map[int]struct{}, len(prNumbers))
-	unique := make([]int, 0, len(prNumbers))
-	for _, n := range prNumbers {
-		if _, ok := seen[n]; !ok {
-			seen[n] = struct{}{}
-			unique = append(unique, n)
-		}
-	}
+	unique := uniquePRNumbers(prNumbers)
 
 	query := buildPRStateBodyQuery(unique)
 	variables := map[string]any{
@@ -48,42 +37,12 @@ func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, ow
 
 // buildPRStateBodyQuery builds a GraphQL query to fetch state and body for multiple PRs by number.
 func buildPRStateBodyQuery(prNumbers []int) string {
-	var b strings.Builder
-	b.WriteString("query($owner: String!, $repo: String!) {\n")
-	b.WriteString("  repository(owner: $owner, name: $repo) {\n")
-	for _, n := range prNumbers {
-		fmt.Fprintf(&b, "    pr_%d: pullRequest(number: %d) { state body }\n", n, n)
-	}
-	b.WriteString("  }\n")
-	b.WriteString("}\n")
-	return b.String()
+	return buildPRNumberQuery(prNumbers, "state body")
 }
 
 // parsePRStateBodyResponse parses the GraphQL response for PR state/body queries.
 func parsePRStateBodyResponse(body []byte, prNumbers []int) (map[int]PRStateBody, error) {
-	var graphqlResponse struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(body, &graphqlResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse GraphQL response: %w", err)
-	}
-
-	repository, ok := graphqlResponse.Data["repository"].(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("invalid GraphQL response format: missing repository")
-	}
-
-	results := make(map[int]PRStateBody, len(prNumbers))
-	for _, n := range prNumbers {
-		alias := fmt.Sprintf("pr_%d", n)
-		data, ok := repository[alias]
-		if !ok || data == nil {
-			continue
-		}
-		prData, ok := data.(map[string]any)
-		if !ok {
-			continue
-		}
+	return parsePRNumberQueryResponse(body, prNumbers, func(prData map[string]any) (PRStateBody, bool) {
 		var entry PRStateBody
 		if state, ok := prData["state"].(string); ok {
 			entry.State = state
@@ -91,8 +50,6 @@ func parsePRStateBodyResponse(body []byte, prNumbers []int) (map[int]PRStateBody
 		if prBody, ok := prData["body"].(string); ok {
 			entry.Body = prBody
 		}
-		results[n] = entry
-	}
-
-	return results, nil
+		return entry, true
+	})
 }

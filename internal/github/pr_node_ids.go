@@ -2,9 +2,6 @@ package github
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
 )
 
 // BatchGetPRNodeIDsGraphQL fetches PR node IDs for multiple PR numbers using a
@@ -15,15 +12,7 @@ func BatchGetPRNodeIDsGraphQL(ctx context.Context, runner GitCommandRunner, owne
 		return make(map[int]string), nil
 	}
 
-	// Deduplicate PR numbers
-	seen := make(map[int]struct{}, len(prNumbers))
-	unique := make([]int, 0, len(prNumbers))
-	for _, n := range prNumbers {
-		if _, ok := seen[n]; !ok {
-			seen[n] = struct{}{}
-			unique = append(unique, n)
-		}
-	}
+	unique := uniquePRNumbers(prNumbers)
 
 	query := buildPRNodeIDsQuery(unique)
 	variables := map[string]any{
@@ -41,46 +30,15 @@ func BatchGetPRNodeIDsGraphQL(ctx context.Context, runner GitCommandRunner, owne
 
 // buildPRNodeIDsQuery builds a GraphQL query to fetch node IDs for multiple PRs by number.
 func buildPRNodeIDsQuery(prNumbers []int) string {
-	var b strings.Builder
-	b.WriteString("query($owner: String!, $repo: String!) {\n")
-	b.WriteString("  repository(owner: $owner, name: $repo) {\n")
-	for _, n := range prNumbers {
-		fmt.Fprintf(&b, "    pr_%d: pullRequest(number: %d) { id }\n", n, n)
-	}
-	b.WriteString("  }\n")
-	b.WriteString("}\n")
-	return b.String()
+	return buildPRNumberQuery(prNumbers, "id")
 }
 
 // parsePRNodeIDsResponse parses the GraphQL response for PR node ID queries.
 func parsePRNodeIDsResponse(body []byte, prNumbers []int) (map[int]string, error) {
-	var graphqlResponse struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(body, &graphqlResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse GraphQL response: %w", err)
-	}
-
-	repository, ok := graphqlResponse.Data["repository"].(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("invalid GraphQL response format: missing repository")
-	}
-
-	results := make(map[int]string, len(prNumbers))
-	for _, n := range prNumbers {
-		alias := fmt.Sprintf("pr_%d", n)
-		data, ok := repository[alias]
-		if !ok || data == nil {
-			continue
-		}
-		prData, ok := data.(map[string]any)
-		if !ok {
-			continue
-		}
+	return parsePRNumberQueryResponse(body, prNumbers, func(prData map[string]any) (string, bool) {
 		if id, ok := prData["id"].(string); ok {
-			results[n] = id
+			return id, true
 		}
-	}
-
-	return results, nil
+		return "", false
+	})
 }

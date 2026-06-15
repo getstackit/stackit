@@ -171,7 +171,7 @@ func resolveOrphanedMetadata(ctx *app.Context, info engine.OrphanedMetadataInfo,
 		}
 	} else {
 		// Accept deletion - remove sync state
-		if err := eng.DeleteLocalMetadataHash(info.BranchName); err != nil {
+		if err := eng.CleanOrphanedMetadata(ctx.Context, nil, []string{info.BranchName}); err != nil {
 			out.Debug("Failed to delete metadata hash: %v", err)
 		}
 	}

@@ -23,7 +23,6 @@ type branchReader interface {
 	GetParent(branch Branch) *Branch
 	GetMergedDownstack(branch Branch) []git.MergedParent
 	GetExplicitScope(branch Branch) Scope
-	GetPRSubmissionStatus(branch Branch) (PRSubmissionStatus, error)
 }
 
 // NewBranch creates a new immutable Branch
@@ -191,11 +190,6 @@ func (b Branch) EnsureCanModify() error {
 		return nil
 	}
 	return errors.NewBranchModificationError(b.name, b.GetLockReason(), b.IsFrozen())
-}
-
-// GetPRSubmissionStatus returns the PR submission status for this branch
-func (b Branch) GetPRSubmissionStatus() (PRSubmissionStatus, error) {
-	return b.reader.GetPRSubmissionStatus(b)
 }
 
 // DefaultPRTitle returns the default PR title for this branch.

@@ -1,26 +1,25 @@
-
 📥 Pulling from remote...
-  main fast-forwarded to 9f8e7d6
+  ✓ main fast-forwarded to 9f8e7d6
 
 🔄 Fetching PR info from GitHub...
-  Updated 2 PR descriptions
+  ✓ Updated 2 PR descriptions
 
 📥 Syncing stack branches...
-  feat-api fast-forwarded to e4f5a6b
+  ✓ feat-api fast-forwarded to e4f5a6b
 
 🧹 Cleaning branches...
 
 ? Select branches to delete:
     [x] feat-old (#99 merged)
 › user selects: feat-old
-  Deleted feat-old (PR #99) merged
+  ✓ Deleted feat-old (PR #99) merged
 
 📚 Restacking branches...
-  Restacked feat-ui (PR #202) on feat-api -> c3d4e5f
-⚠️  Skipped feat-report (PR #203) (conflict)
+  ✓ Restacked feat-ui (PR #202) on feat-api → c3d4e5f
+  ⚠️ Skipped feat-report (PR #203) (conflict)
 
-⚠️  ⚠️  Found conflicts in 1 branch during restack:
-⚠️    • feat-report
+⚠️  Found conflicts in 1 branch during restack:
+  • feat-report
 
 Branches that could be restacked cleanly have been restacked.
 

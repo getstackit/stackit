@@ -1,6 +1,5 @@
-
 📥 Pulling from remote...
-  main fast-forwarded to a1b2c3d
+  ✓ main fast-forwarded to a1b2c3d
 
 Remote metadata for 'feat-wip' was deleted, but you have local changes:
   lockReason: user

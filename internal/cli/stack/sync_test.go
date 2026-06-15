@@ -38,14 +38,12 @@ func TestSyncCommand(t *testing.T) {
 		output, err := s.RunCliAndGetOutput("sync", "--no-restack")
 		require.NoError(t, err, "sync --no-restack failed: %s", output)
 		normalized := testhelpers.NormalizeOutput(output)
-		// Note: trunk and GitHub operations run in parallel, so their output interleaves
+		// Empty phases (branches, clean) are suppressed; completed items carry a ✓.
 		require.Equal(t, testhelpers.NormalizeOutput(`
 📥 Pulling from remote...
+  ✓ main is up to date
 🔄 Fetching PR info from GitHub...
-  main is up to date
-  PR info up to date
-📥 Syncing stack branches...
-🧹 Cleaning branches...
+  ✓ PR info up to date
 ✨ Everything is up to date!
 `), normalized)
 
@@ -53,16 +51,13 @@ func TestSyncCommand(t *testing.T) {
 		output, err = s.RunCliAndGetOutput("sync", "--restack")
 		require.NoError(t, err, "sync --restack (not needed) failed: %s", output)
 		normalized = testhelpers.NormalizeOutput(output)
-		// Note: trunk and GitHub operations run in parallel, so their output interleaves
 		require.Equal(t, testhelpers.NormalizeOutput(`
 📥 Pulling from remote...
+  ✓ main is up to date
 🔄 Fetching PR info from GitHub...
-  main is up to date
-  PR info up to date
-📥 Syncing stack branches...
-🧹 Cleaning branches...
+  ✓ PR info up to date
 📚 Restacking branches...
-  branch1 (current) up to date
+  ✓ branch1 (current) up to date
 ✨ Everything is up to date!
 `), normalized)
 
@@ -76,7 +71,7 @@ func TestSyncCommand(t *testing.T) {
 		normalized = testhelpers.NormalizeOutput(output)
 		// We don't know the exact revision, so we'll check the structure
 		require.Contains(t, normalized, "Restacked branch1")
-		require.Contains(t, normalized, "->")
+		require.Contains(t, normalized, "→")
 		require.Contains(t, normalized, "✅ Summary: restacked 1")
 	})
 
@@ -106,13 +101,11 @@ Error: you have uncommitted changes. Please commit or stash them before syncing
 
 		output, err = s.RunCliAndGetOutput("sync", "--no-restack")
 		require.NoError(t, err, "sync --no-restack failed: %s", output)
-		// Note: trunk and GitHub operations run in parallel, so their output interleaves
 		require.Equal(t, testhelpers.NormalizeOutput(`
 📥 Pulling from remote...
+  ✓ main is up to date
 🔄 Fetching PR info from GitHub...
-  main is up to date
-  PR info up to date
-📥 Syncing stack branches...
+  ✓ PR info up to date
 ✨ Everything is up to date!
 `), testhelpers.NormalizeOutput(output))
 	})

@@ -60,6 +60,9 @@ func (h *transcriptSyncHandler) renderBranchDeletions(branches map[string]string
 	names, options, _ := buildDeletionOptions(branches, unpushed)
 	selected := toSet(selects)
 
+	// The deletion prompt belongs to the clean phase; emit that header first so
+	// the transcript matches the real ordering (header, then prompt, then items).
+	h.ensurePhaseHeader(syncAction.PhaseClean)
 	h.Output.Newline()
 	h.Output.Info("? Select branches to delete:")
 	for i, name := range names {
@@ -172,6 +175,17 @@ func syncGoldenCases() []syncGoldenCase {
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
 				trunkUpToDate(),
+			},
+			summary: syncAction.Summary{UpToDate: true},
+		},
+		{
+			// Phases that start but emit nothing must not print a header.
+			name: "empty_phases_suppressed",
+			steps: []step{
+				phaseStarted(syncAction.PhaseTrunk),
+				trunkUpToDate(),
+				phaseStarted(syncAction.PhaseBranches), // no items -> header suppressed
+				phaseStarted(syncAction.PhaseClean),    // no items -> header suppressed
 			},
 			summary: syncAction.Summary{UpToDate: true},
 		},

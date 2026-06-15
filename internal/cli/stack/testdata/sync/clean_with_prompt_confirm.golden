@@ -1,6 +1,5 @@
-
 📥 Pulling from remote...
-  main fast-forwarded to a1b2c3d
+  ✓ main fast-forwarded to a1b2c3d
 
 🧹 Cleaning branches...
 
@@ -8,6 +7,6 @@
     [x] feat-login (#123 merged)
     [ ] feat-wip (#130 closed — has unpushed changes)
 › user selects: feat-login
-  Deleted feat-login (PR #123) merged
+  ✓ Deleted feat-login (PR #123) merged
 
 ✅ Summary: pulled trunk, deleted 1

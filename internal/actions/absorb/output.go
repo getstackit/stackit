@@ -11,10 +11,11 @@ func printDryRunOutput(hunksByCommit map[string][]git.Hunk, unabsorbedHunks []gi
 	splog.Info("Would absorb the following changes:")
 	splog.Newline()
 
-	// Get commit info for display
+	// Get commit info for display. Resolve owning branches in one batched scan.
+	commitBranches := eng.FindBranchesForCommits(commitSHAKeys(hunksByCommit))
 	for commitSHA, hunks := range hunksByCommit {
-		branchName, err := eng.FindBranchForCommit(commitSHA)
-		if err != nil {
+		branchName := commitBranches[commitSHA]
+		if branchName == "" {
 			branchName = unknown
 		}
 
@@ -42,14 +43,25 @@ func printDryRunOutput(hunksByCommit map[string][]git.Hunk, unabsorbedHunks []gi
 	}
 }
 
+// commitSHAKeys returns the commit SHAs keying the hunks-by-commit map, for a
+// single batched branch lookup instead of one resolution per commit.
+func commitSHAKeys(hunksByCommit map[string][]git.Hunk) []string {
+	shas := make([]string, 0, len(hunksByCommit))
+	for sha := range hunksByCommit {
+		shas = append(shas, sha)
+	}
+	return shas
+}
+
 // printAbsorbPlan prints the plan for absorbing changes
 func printAbsorbPlan(hunksByCommit map[string][]git.Hunk, unabsorbedHunks []git.Hunk, eng engine.Engine, splog output.Output) {
 	splog.Info("Will absorb the following changes:")
 	splog.Newline()
 
+	commitBranches := eng.FindBranchesForCommits(commitSHAKeys(hunksByCommit))
 	for commitSHA, hunks := range hunksByCommit {
-		branchName, err := eng.FindBranchForCommit(commitSHA)
-		if err != nil {
+		branchName := commitBranches[commitSHA]
+		if branchName == "" {
 			branchName = unknown
 		}
 

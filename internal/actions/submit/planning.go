@@ -16,6 +16,14 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	submissionInfos := make([]Info, 0, len(branches))
 	nav := ctx.Navigator()
 
+	// Warm revision and metadata caches so the per-branch GetRevision calls in
+	// the loop are cache hits rather than a git rev-parse each.
+	ctx.Engine.PreloadBranchData()
+
+	// PR-info writes are collected here and persisted in one batched ref write
+	// after planning, instead of a git ref write per branch.
+	prUpdates := make(map[string]*engine.PrInfo, len(branches))
+
 	var (
 		statuses map[string]engine.PRSubmissionStatus
 		err      error
@@ -107,6 +115,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		if err != nil {
 			return nil, fmt.Errorf("failed to prepare metadata for %s: %w", branchName, err)
 		}
+		prUpdates[branchName] = pendingPrInfo(branch, metadata)
 
 		// Get SHAs
 		headSHA, _ := branch.GetRevision()
@@ -133,6 +142,15 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		})
 
 		submissionInfos = append(submissionInfos, submissionInfo)
+	}
+
+	// Persist all prepared PR info in one batched write so a later submit
+	// failure can recover the titles/bodies. Non-fatal, like the per-branch
+	// write it replaces.
+	if len(prUpdates) > 0 {
+		if err := ctx.Engine.BatchUpsertPrInfo(ctx.Context, prUpdates); err != nil {
+			ctx.Output.Debug("Failed to save PR metadata: %v", err)
+		}
 	}
 
 	return submissionInfos, nil

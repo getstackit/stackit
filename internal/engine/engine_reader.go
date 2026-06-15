@@ -181,25 +181,47 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 	return nil, nil
 }
 
-// FindBranchForCommit finds which branch a commit belongs to
-func (e *engineImpl) FindBranchForCommit(commitSHA string) (string, error) {
+// FindBranchesForCommits maps each requested commit SHA to the tracked branch
+// that owns it (the branch whose parent..tip range contains the commit). It
+// scans each branch at most once, so the cost is O(branches) git-log
+// invocations regardless of how many SHAs are requested — the batch counterpart
+// to looking up commits one at a time. Commits not owned by any branch are
+// simply absent from the returned map.
+func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) map[string]string {
+	result := make(map[string]string, len(commitSHAs))
+	if len(commitSHAs) == 0 {
+		return result
+	}
+
+	want := make(map[string]struct{}, len(commitSHAs))
+	for _, sha := range commitSHAs {
+		want[sha] = struct{}{}
+	}
+
 	e.mu.RLock()
 	branches := make([]string, len(e.state.branches))
 	copy(branches, e.state.branches)
 	e.mu.RUnlock()
 
 	for _, branchName := range branches {
+		if len(result) == len(want) {
+			break
+		}
 		commits, err := e.GetAllCommits(NewBranch(branchName, e), CommitFormatSHA)
 		if err != nil {
 			continue
 		}
-
-		if slices.Contains(commits, commitSHA) {
-			return branchName, nil
+		for _, sha := range commits {
+			if _, ok := want[sha]; !ok {
+				continue
+			}
+			if _, mapped := result[sha]; !mapped {
+				result[sha] = branchName
+			}
 		}
 	}
 
-	return "", nil
+	return result
 }
 
 // SortBranchesTopologically sorts branches so parents come before children.

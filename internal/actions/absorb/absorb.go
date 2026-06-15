@@ -152,13 +152,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		})
 	}
 
-	// Group hunks by branch, then by commit
+	// Group hunks by branch, then by commit. Resolve every target commit's
+	// owning branch in one batched scan instead of a git-log sweep per hunk.
+	commitBranches := eng.FindBranchesForCommits(targetCommitSHAs(hunkTargets))
 	hunksByBranch := make(map[string]map[string][]git.Hunk)
 	for _, target := range hunkTargets {
-		branchName, err := eng.FindBranchForCommit(target.CommitSHA)
-		if err != nil {
-			continue
-		}
+		branchName := commitBranches[target.CommitSHA]
 		if hunksByBranch[branchName] == nil {
 			hunksByBranch[branchName] = make(map[string][]git.Hunk)
 		}

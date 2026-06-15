@@ -89,6 +89,22 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 
 	affectedBranches := make([]string, 0, len(branchNames))
 
+	// Fetch every PR's state and body in one GraphQL query instead of a REST
+	// GetPullRequest per branch.
+	prNumbers := make([]int, 0, len(branchNames))
+	for _, branchName := range branchNames {
+		prInfo, err := c.engine.GetBranch(branchName).GetPrInfo()
+		if err != nil || prInfo == nil || prInfo.Number() == nil {
+			continue
+		}
+		prNumbers = append(prNumbers, *prInfo.Number())
+	}
+	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.Git(), repoOwner, repoName, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	if err != nil {
+		out.Debug("Failed to batch fetch PR details: %v", err)
+		prDetails = map[int]github.PRStateBody{}
+	}
+
 	for _, branchName := range branchNames {
 		branch := c.engine.GetBranch(branchName)
 		prInfo, err := branch.GetPrInfo()
@@ -98,10 +114,10 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 
 		prNumber := *prInfo.Number()
 
-		// Get current PR state from GitHub
-		existingPR, err := githubClient.GetPullRequest(ctx, repoOwner, repoName, prNumber)
-		if err != nil {
-			out.Debug("Failed to get PR #%d for %s: %v", prNumber, branchName, err)
+		// Get current PR state/body from the batched fetch
+		existingPR, ok := prDetails[prNumber]
+		if !ok {
+			out.Debug("Failed to get PR #%d for %s", prNumber, branchName)
 			continue
 		}
 

@@ -62,6 +62,14 @@ func StackInfoAction(ctx *app.Context, opts StackInfoOptions) error {
 	})
 	result := make([]StackBranchInfo, 0, len(stackBranches))
 
+	// Warm the revision/metadata and diff-stat caches once, and read PR
+	// submission status for the whole stack in a single batch, so the loop
+	// below does not spawn a git rev-parse, git diff, and (most costly) a
+	// git ls-remote per branch.
+	eng.PreloadBranchData()
+	eng.PreloadBranchStats(stackBranches)
+	prStatuses, _ := eng.BatchGetPRSubmissionStatus(stackBranches)
+
 	for _, branch := range stackBranches {
 		if branch.IsTrunk() {
 			continue
@@ -103,8 +111,8 @@ func StackInfoAction(ctx *app.Context, opts StackInfoOptions) error {
 		}
 
 		// PR info
-		prStatus, err := branch.GetPRSubmissionStatus()
-		if err == nil && prStatus.PRNumber != nil {
+		prStatus := prStatuses[branch.GetName()]
+		if prStatus.PRNumber != nil {
 			info.PRNumber = prStatus.PRNumber
 			if prStatus.PRInfo != nil {
 				info.PRURL = prStatus.PRInfo.URL()

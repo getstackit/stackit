@@ -59,10 +59,11 @@ func GeneratePlanJSON(
 		Stack:         buildStackNodes(eng, currentBranch),
 	}
 
-	// Convert absorbed hunks
+	// Convert absorbed hunks. Resolve all target branches in one batched scan.
+	commitBranches := eng.FindBranchesForCommits(targetCommitSHAs(hunkTargets))
 	for _, target := range hunkTargets {
-		branchName, err := eng.FindBranchForCommit(target.CommitSHA)
-		if err != nil {
+		branchName := commitBranches[target.CommitSHA]
+		if branchName == "" {
 			branchName = "unknown"
 		}
 
@@ -132,6 +133,21 @@ func buildStackNodes(eng engine.Engine, currentBranch string) []StackNode {
 	}
 
 	return nodes
+}
+
+// targetCommitSHAs returns the unique commit SHAs referenced by the hunk
+// targets, preserving first-seen order, for a single batched branch lookup.
+func targetCommitSHAs(targets []git.HunkTarget) []string {
+	seen := make(map[string]struct{}, len(targets))
+	shas := make([]string, 0, len(targets))
+	for _, t := range targets {
+		if _, ok := seen[t.CommitSHA]; ok {
+			continue
+		}
+		seen[t.CommitSHA] = struct{}{}
+		shas = append(shas, t.CommitSHA)
+	}
+	return shas
 }
 
 // formatLines formats line range as "start-end" or just "start" for single lines

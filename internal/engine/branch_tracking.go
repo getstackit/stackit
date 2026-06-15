@@ -271,6 +271,13 @@ func (e *engineImpl) ReparentBranch(ctx context.Context, branch Branch, newParen
 	return e.syncStackIDFromParent(ctx, e.GetBranch(branch.GetName()))
 }
 
+// BranchParentMove pairs a branch with the name of the new parent it should
+// adopt. It is the unit of work for ReparentBranchesToParents.
+type BranchParentMove struct {
+	Branch    string
+	NewParent string
+}
+
 // ReparentBranches changes multiple branches to the same new parent while
 // preserving each branch's divergence point. Divergence points are captured
 // for all branches before any reparenting begins, ensuring correctness when
@@ -279,17 +286,54 @@ func (e *engineImpl) ReparentBranch(ctx context.Context, branch Branch, newParen
 // Automatically propagates the new parent's stack ID to each branch when the
 // move crosses a stack boundary.
 func (e *engineImpl) ReparentBranches(ctx context.Context, branchNames []string, newParent Branch) error {
-	divPoints := make(map[string]string, len(branchNames))
-	for _, name := range branchNames {
-		div, err := e.GetDivergencePoint(name)
+	moves := make([]BranchParentMove, len(branchNames))
+	for i, name := range branchNames {
+		moves[i] = BranchParentMove{Branch: name, NewParent: newParent.GetName()}
+	}
+	return e.ReparentBranchesToParents(ctx, moves)
+}
+
+// ReparentBranchesToParents reparents each branch onto its own designated parent
+// while preserving every branch's divergence point. Like ReparentBranches, all
+// divergence points are captured before any mutation so related branches in the
+// set stay correct; unlike it, each branch may move to a different parent — the
+// shape needed by whole-stack rewrites such as reorder and flatten.
+//
+// Automatically propagates each new parent's stack ID when a move crosses a
+// stack boundary.
+func (e *engineImpl) ReparentBranchesToParents(ctx context.Context, moves []BranchParentMove) error {
+	divPoints := make(map[string]string, len(moves))
+	for _, m := range moves {
+		div, err := e.GetDivergencePoint(m.Branch)
 		if err != nil {
-			return fmt.Errorf("failed to determine divergence point for %s: %w", name, err)
+			return fmt.Errorf("failed to determine divergence point for %s: %w", m.Branch, err)
 		}
-		divPoints[name] = div
+		divPoints[m.Branch] = div
 	}
 
+	for _, m := range moves {
+		newParent := e.GetBranch(m.NewParent)
+		if err := e.setParentPreservingDivergence(ctx, e.GetBranch(m.Branch), newParent, divPoints[m.Branch]); err != nil {
+			return fmt.Errorf("failed to reparent %s to %s: %w", m.Branch, m.NewParent, err)
+		}
+		if err := e.syncStackIDFromParent(ctx, e.GetBranch(m.Branch)); err != nil {
+			return fmt.Errorf("failed to sync stack ID for %s: %w", m.Branch, err)
+		}
+	}
+	return nil
+}
+
+// ReparentBranchesRecompute reparents each branch onto the same new parent and
+// recomputes its divergence point against that parent (a fresh merge-base)
+// rather than preserving the existing one. Use when the branches are moving
+// under a newly created/inserted parent and should replay their own commits
+// onto it — the batch counterpart to SetParent(..., DivergenceRecompute).
+//
+// Automatically propagates the new parent's stack ID when a move crosses a
+// stack boundary.
+func (e *engineImpl) ReparentBranchesRecompute(ctx context.Context, branchNames []string, newParent Branch) error {
 	for _, name := range branchNames {
-		if err := e.setParentPreservingDivergence(ctx, e.GetBranch(name), newParent, divPoints[name]); err != nil {
+		if err := e.SetParent(ctx, e.GetBranch(name), newParent, DivergenceRecompute); err != nil {
 			return fmt.Errorf("failed to reparent %s to %s: %w", name, newParent.GetName(), err)
 		}
 		if err := e.syncStackIDFromParent(ctx, e.GetBranch(name)); err != nil {

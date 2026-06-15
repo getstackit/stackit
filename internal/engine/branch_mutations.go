@@ -418,15 +418,24 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 		}
 	}
 
-	// Update children to point to the new branch name
-	for _, child := range children {
-		childMeta, err := e.readMetadata(child)
-		if err != nil {
-			continue
-		}
-		childMeta = childMeta.WithParentBranchName(&newName)
-		if err := e.writeMetadata(child, childMeta); err != nil {
-			return fmt.Errorf("update parent metadata for child %s: %w", child, err)
+	// Update children to point to the new branch name. Batch the reads and
+	// stage every write in a single metadata transaction so a wide root costs
+	// one atomic ref update instead of two git processes per child.
+	if len(children) > 0 {
+		childMetas, _ := e.batchReadMetadata(children)
+		if err := e.withMetadataTx(ctx, fmt.Sprintf("rename %s to %s: reparent children", oldName, newName), func(tx *MetadataTx) error {
+			for _, child := range children {
+				childMeta := childMetas[child]
+				if childMeta == nil {
+					continue
+				}
+				if err := tx.UpdateMeta(child, childMeta.WithParentBranchName(&newName)); err != nil {
+					return fmt.Errorf("update parent metadata for child %s: %w", child, err)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 

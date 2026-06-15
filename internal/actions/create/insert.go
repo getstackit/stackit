@@ -63,12 +63,14 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 		toMove = siblings
 	}
 
-	// Update parent for each child to move
+	// Reparent every moving child onto the new branch in one batch, recomputing
+	// each child's divergence against it.
+	if err := runtimeCtx.Engine.ReparentBranchesRecompute(ctx, toMove, runtimeCtx.Engine.GetBranch(newBranch)); err != nil {
+		return fmt.Errorf("failed to update parents onto %s: %w", newBranch, err)
+	}
+
 	allToRestack := engine.NewBranchesBuilder(len(toMove) * 2)
 	for _, child := range toMove {
-		if err := runtimeCtx.Engine.TrackBranch(ctx, child, newBranch); err != nil {
-			return fmt.Errorf("failed to update parent for %s: %w", child, err)
-		}
 		childBranch := runtimeCtx.Engine.GetBranch(child)
 		allToRestack.Add(childBranch)
 

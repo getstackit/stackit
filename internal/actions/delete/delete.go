@@ -180,6 +180,7 @@ func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engin
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 	reparentedChildren := make([]string, 0)
 	reparentedSet := make(map[string]bool)
+	var moves []engine.BranchParentMove
 
 	for _, deleted := range toDelete {
 		deletedName := deleted.GetName()
@@ -199,14 +200,20 @@ func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engin
 				continue
 			}
 
-			if err := eng.ReparentBranch(gctx, child, eng.GetBranch(targetParentName)); err != nil {
-				return nil, fmt.Errorf("failed to reparent %s to %s: %w", childName, targetParentName, err)
-			}
-			out.Debug("Pre-reparented %s to %s while preserving divergence", childName, targetParentName)
+			moves = append(moves, engine.BranchParentMove{Branch: childName, NewParent: targetParentName})
+			out.Debug("Will pre-reparent %s to %s while preserving divergence", childName, targetParentName)
 			if !reparentedSet[childName] {
 				reparentedSet[childName] = true
 				reparentedChildren = append(reparentedChildren, childName)
 			}
+		}
+	}
+
+	// Apply every pre-reparent in one batch; divergence points are captured
+	// before any mutation.
+	if len(moves) > 0 {
+		if err := eng.ReparentBranchesToParents(gctx, moves); err != nil {
+			return nil, fmt.Errorf("failed to pre-reparent children: %w", err)
 		}
 	}
 

@@ -180,11 +180,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if len(children) > 0 {
 		handler.OnStep(StepReparentingChild, basehandler.StatusStarted, "Reparenting children...")
 
+		// All children move to the same grandparent, so reparent them in one
+		// batch instead of a per-child engine call.
+		if err := eng.ReparentBranches(gctx, children.Names(), grandparentBranch); err != nil {
+			handler.OnStep(StepReparentingChild, basehandler.StatusFailed, err.Error())
+			return fmt.Errorf("failed to reparent children to %s: %w", grandparentBranch.GetName(), err)
+		}
 		for _, child := range children {
-			if err := eng.ReparentBranch(gctx, child, grandparentBranch); err != nil {
-				handler.OnStep(StepReparentingChild, basehandler.StatusFailed, err.Error())
-				return fmt.Errorf("failed to reparent %s to %s: %w", child.GetName(), grandparentBranch.GetName(), err)
-			}
 			handler.OnChildReparented(child.GetName(), source, grandparentBranch.GetName())
 			reparentedChildren = append(reparentedChildren, child.GetName())
 			out.Info("Reparented %s from %s to %s.",

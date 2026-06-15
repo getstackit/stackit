@@ -81,6 +81,32 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 	validatedBranches := make(map[string]bool)
 	nav := ctx.Navigator()
 
+	// Read remote status for every parent at most once, and only if a branch
+	// actually needs it, so a stack whose parents are all trunk or in-list stays
+	// offline. When needed, all parents are read in a single ls-remote instead
+	// of one per branch.
+	var (
+		remoteStatuses engine.BranchRemoteStatuses
+		remoteRead     bool
+	)
+	parentRemoteStatuses := func() engine.BranchRemoteStatuses {
+		if !remoteRead {
+			parentBranches := engine.Branches{}
+			seen := make(map[string]bool)
+			for _, branchName := range branches {
+				parentName := resolveSubmitParentName(nav, eng.GetBranch(branchName))
+				if seen[parentName] {
+					continue
+				}
+				seen[parentName] = true
+				parentBranches = parentBranches.Append(eng.GetBranch(parentName))
+			}
+			remoteStatuses = eng.ReadBranchRemoteStatuses(ctx.Context, parentBranches)
+			remoteRead = true
+		}
+		return remoteStatuses
+	}
+
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)
 		parentBranchName := resolveSubmitParentName(nav, branch)
@@ -100,7 +126,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 			}
 		default:
 			// Parent is not in submission list
-			if !eng.ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(parentBranch)).ForBranch(parentBranch).Matches() {
+			if !parentRemoteStatuses().ForBranch(parentBranch).Matches() {
 				return fmt.Errorf("you are trying to submit at least one branch whose base does not match its parent remotely, without including its parent. You may want to use 'stackit submit --stack' to ensure that the ancestors of %s are included in your submission",
 					output.Branch(branchName, false))
 			}

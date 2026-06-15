@@ -457,6 +457,17 @@ func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string,
 	// For descendants, each will be rebased onto its parent (which is part of the moving stack)
 	// Since these are topologically ordered, each parent will be rebased before its children
 	sortedDescendants := eng.SortBranchesTopologically(descendants)
+
+	// Prefetch every descendant's parent revision in one batch instead of a
+	// git rev-parse per descendant.
+	parentNames := make([]string, 0, len(sortedDescendants))
+	for _, d := range sortedDescendants {
+		if parent := d.GetParent(); parent != nil {
+			parentNames = append(parentNames, parent.GetName())
+		}
+	}
+	parentRevs, _ := eng.GetRevisions(parentNames)
+
 	for _, d := range sortedDescendants {
 		if d.GetName() == source {
 			continue // Already handled above
@@ -465,9 +476,9 @@ func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string,
 		if parent == nil {
 			continue
 		}
-		parentRev, revErr := eng.GetRevision(*parent)
-		if revErr != nil {
-			out.Debug("Failed to get revision for parent %s of %s: %v", parent.GetName(), d.GetName(), revErr)
+		parentRev, ok := parentRevs[parent.GetName()]
+		if !ok {
+			out.Debug("Failed to get revision for parent %s of %s", parent.GetName(), d.GetName())
 		}
 
 		// Get the old upstream (divergence point)

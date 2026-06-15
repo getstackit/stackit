@@ -256,20 +256,19 @@ func updateParentRelationships(ctx context.Context, eng reorderUpdateEngine, new
 	trunk := eng.Trunk()
 	out.Debug("reorder: updateParentRelationships: trunk is %s", trunk.GetName())
 
+	moves := make([]engine.BranchParentMove, len(newOrder))
 	for i, branchName := range newOrder {
-		branch := eng.GetBranch(branchName)
-		var parent engine.Branch
-		if i == 0 {
-			parent = trunk
-		} else {
-			parent = eng.GetBranch(newOrder[i-1])
+		parentName := trunk.GetName()
+		if i > 0 {
+			parentName = newOrder[i-1]
 		}
-
 		out.Debug("reorder: updateParentRelationships: setting parent of %s to %s",
-			branchName, parent.GetName())
-		if err := eng.ReparentBranch(ctx, branch, parent); err != nil {
-			return fmt.Errorf("failed to set parent of %s to %s: %w", branchName, parent.GetName(), err)
-		}
+			branchName, parentName)
+		moves[i] = engine.BranchParentMove{Branch: branchName, NewParent: parentName}
+	}
+
+	if err := eng.ReparentBranchesToParents(ctx, moves); err != nil {
+		return fmt.Errorf("failed to update reordered parent relationships: %w", err)
 	}
 
 	out.Debug("reorder: updateParentRelationships: all parent relationships updated")

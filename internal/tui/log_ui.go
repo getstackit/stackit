@@ -308,8 +308,11 @@ func (m *LogModel) enrichData() tea.Cmd {
 		wtData := GetWorktreeData(eng)
 
 		// Pre-load metadata and revisions for all branches to eliminate per-branch
-		// cache misses during parallel annotation building.
+		// cache misses during parallel annotation building. PreloadBranchStats
+		// additionally warms the diff-stat and commit-count caches that
+		// BuildFullAnnotation reads, which PreloadBranchData does not cover.
 		eng.PreloadBranchData()
+		eng.PreloadBranchStats(allBranches)
 
 		// Collect full annotations
 		start := time.Now()

@@ -58,18 +58,14 @@ const (
 func (r *runner) ReadStackMeta(stackID string) (*StackMeta, error) {
 	refName := StackMetaRefName(stackID)
 
-	sha, err := r.GetRef(refName)
+	// Resolve the ref and read its blob in a single cat-file --batch lookup
+	// (which accepts ref names) instead of a rev-parse followed by a blob read.
+	content, found, err := r.objects.ReadObject(refName)
 	if err != nil {
-		// If ref doesn't exist, it's not an error, just means no metadata
-		return nil, nil //nolint:nilerr
+		return nil, fmt.Errorf("failed to read stack metadata for %s: %w", stackID, err)
 	}
-
-	content, err := r.ReadBlob(sha)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read stack metadata blob %s: %w", sha, err)
-	}
-
-	if content == "" {
+	if !found || content == "" {
+		// Ref doesn't exist or is empty: no metadata, not an error.
 		return nil, nil
 	}
 

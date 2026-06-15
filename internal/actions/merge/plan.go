@@ -771,24 +771,27 @@ func CanMergeIndividually(ctx context.Context, gitRunner git.Runner, githubClien
 	}
 
 	// Check 2: All PRs must have MERGEABLE state
-	// First, collect all PR NodeIDs (still requires N API calls)
+	// Resolve all PR node IDs in a single GraphQL query instead of one REST call per PR.
 	owner, repo := githubClient.GetOwnerRepo()
+	prNumbers := make([]int, 0, len(branches))
+	for _, branchInfo := range branches {
+		prNumbers = append(prNumbers, branchInfo.PRNumber)
+	}
+	nodeIDByNumber, err := github.BatchGetPRNodeIDsGraphQL(ctx, gitRunner, owner, repo, prNumbers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch get PR node IDs: %w", err)
+	}
+
 	nodeIDToBranch := make(map[string]string, len(branches))
 	nodeIDs := make([]string, 0, len(branches))
-
 	for _, branchInfo := range branches {
-		prInfo, err := githubClient.GetPullRequest(ctx, owner, repo, branchInfo.PRNumber)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get PR #%d for %s: %w", branchInfo.PRNumber, branchInfo.BranchName, err)
-		}
-
-		if prInfo == nil || prInfo.NodeID == "" {
+		nodeID := nodeIDByNumber[branchInfo.PRNumber]
+		if nodeID == "" {
 			status.BlockingReason = fmt.Sprintf("branch %s has no PR node ID", branchInfo.BranchName)
 			return status, nil
 		}
-
-		nodeIDToBranch[prInfo.NodeID] = branchInfo.BranchName
-		nodeIDs = append(nodeIDs, prInfo.NodeID)
+		nodeIDToBranch[nodeID] = branchInfo.BranchName
+		nodeIDs = append(nodeIDs, nodeID)
 	}
 
 	// Batch fetch all mergeable states in a single GraphQL query

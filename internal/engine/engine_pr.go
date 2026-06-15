@@ -153,12 +153,6 @@ func mergePrInfoIntoMeta(meta *git.Meta, prInfo *PrInfo) *git.Meta {
 	return meta.WithPrInfo(existing)
 }
 
-// GetPRSubmissionStatus returns the submission status of a branch
-func (e *engineImpl) GetPRSubmissionStatus(branch Branch) (PRSubmissionStatus, error) {
-	remoteStatus := e.ReadBranchRemoteStatuses(context.Background(), BranchesOf(branch)).ForBranch(branch)
-	return e.prSubmissionStatus(branch, remoteStatus)
-}
-
 // BatchGetPRSubmissionStatus returns the submission status for every branch,
 // reading remote status once for the whole set instead of once per branch (a
 // full `git ls-remote` each time). Results are keyed by branch name.

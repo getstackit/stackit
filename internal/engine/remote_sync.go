@@ -478,29 +478,35 @@ func (e *engineImpl) FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)
 	return orphaned, nil
 }
 
-// DeleteLocalMetadataHash removes the LocalOnlyHash from a branch's metadata
-// This effectively "un-syncs" the branch so it won't be considered orphaned
-func (e *engineImpl) DeleteLocalMetadataHash(branchName string) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	local, err := e.readMetadata(branchName)
-	if err != nil {
-		return err
+// CleanOrphanedMetadata reconciles branches whose remote metadata was deleted in
+// a single transaction: it deletes the metadata ref entirely for branches whose
+// local branch is also gone (deleteRefs) and clears just the local-only hash for
+// branches that still exist locally (clearLocalHash). This replaces one git ref
+// write per orphaned branch with a single batched write.
+func (e *engineImpl) CleanOrphanedMetadata(ctx context.Context, deleteRefs []string, clearLocalHash []string) error {
+	if len(deleteRefs) == 0 && len(clearLocalHash) == 0 {
+		return nil
 	}
 
-	local = local.WithLocalOnlyHash(nil)
-	return e.writeMetadata(branchName, local)
-}
-
-// DeleteMetadata deletes the metadata ref for a branch with retry logic.
-// Uses the transaction API to ensure concurrent modification resilience
-// and proper in-memory cache cleanup.
-func (e *engineImpl) DeleteMetadata(ctx context.Context, branchName string) error {
 	return e.WithRetry(ctx, func() error {
-		tx := e.BeginTx(fmt.Sprintf("delete metadata: %s", branchName))
-		if err := tx.DeleteMeta(branchName); err != nil {
-			return err
+		metas, _ := e.batchReadMetadata(clearLocalHash)
+
+		tx := e.BeginTx(fmt.Sprintf("clean orphaned metadata: %d deleted, %d cleared", len(deleteRefs), len(clearLocalHash)))
+		for _, name := range deleteRefs {
+			if err := tx.DeleteMeta(name); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		for _, name := range clearLocalHash {
+			meta := metas[name]
+			if meta == nil {
+				continue
+			}
+			if err := tx.UpdateMeta(name, meta.WithLocalOnlyHash(nil)); err != nil {
+				tx.Rollback()
+				return err
+			}
 		}
 		return tx.Commit(ctx)
 	})

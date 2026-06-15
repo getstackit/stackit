@@ -43,6 +43,14 @@ type Model struct {
 	Progress       progress.Model
 	spinner        spinner.Model
 	Summary        string
+
+	// Phase headers commit to scrollback lazily: only when a phase emits its
+	// first detail. Phases that do nothing (nothing to sync/clean/restack) never
+	// print an empty header. CurrentPhase still updates eagerly so the live
+	// spinner reflects what's happening during slow phases.
+	phaseHeaders       map[Phase]string
+	committedPhases    map[Phase]bool
+	anyHeaderCommitted bool
 }
 
 // PhaseStartMsg indicates a phase has started
@@ -88,9 +96,11 @@ func NewModel(totalOps int) *Model {
 	s.Style = commonStyles.Spinner
 
 	m := &Model{
-		TotalOps: totalOps,
-		Progress: p,
-		spinner:  s,
+		TotalOps:        totalOps,
+		Progress:        p,
+		spinner:         s,
+		phaseHeaders:    make(map[Phase]string),
+		committedPhases: make(map[Phase]bool),
 	}
 	m.Width = 80 // Set BaseModel's Width
 	return m
@@ -130,10 +140,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case PhaseStartMsg:
-		// Print the phase header above the TUI
+		// Mark the phase active (drives the live spinner) and remember its
+		// header, but don't commit it to scrollback yet — the header prints
+		// lazily when the phase emits its first detail, so empty phases stay
+		// silent.
 		m.CurrentPhase = msg.Phase
 		m.CurrentDetail = ""
-		return m, tea.Printf("%s", msg.Message)
+		m.phaseHeaders[msg.Phase] = msg.Message
+		return m, nil
 
 	case PhaseCompleteMsg:
 		// Phase completed - nothing to do, next phase will start
@@ -146,7 +160,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.IsWarn {
 			mark = warnMark.String()
 		}
-		return m, tea.Printf("  %s %s", mark, msg.Message)
+		detail := tea.Printf("  %s %s", mark, msg.Message)
+
+		// Commit the phase header the first time the phase produces a detail,
+		// separated from the previous phase group by a blank line. A detail for
+		// a phase that was never started (e.g. standalone restack) just prints
+		// without a header.
+		if header, started := m.phaseHeaders[msg.Phase]; started && !m.committedPhases[msg.Phase] {
+			m.committedPhases[msg.Phase] = true
+			var cmds []tea.Cmd
+			if m.anyHeaderCommitted {
+				cmds = append(cmds, tea.Printf(""))
+			}
+			m.anyHeaderCommitted = true
+			cmds = append(cmds, tea.Printf("%s", header), detail)
+			return m, tea.Sequence(cmds...)
+		}
+		return m, detail
 
 	case ProgressTickMsg:
 		m.CompletedOps = msg.Completed

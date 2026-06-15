@@ -644,7 +644,7 @@ func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncA
 		if parent != "" {
 			msg += fmt.Sprintf(" on %s", parent)
 		}
-		msg += fmt.Sprintf(" -> %s", newRev)
+		msg += fmt.Sprintf(" → %s", newRev)
 		if rerereResolvedCount > 0 {
 			msg += " " + actions.FormatRerereResolved(rerereResolvedCount)
 		}

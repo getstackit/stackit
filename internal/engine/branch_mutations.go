@@ -162,18 +162,16 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	}
 	e.mu.Unlock()
 
-	// Delete git branch (no lock needed for git operations)
-	if err := e.git.DeleteBranch(ctx, branch.GetName()); err != nil {
-		if !git.IsBranchNotFoundError(err) {
-			return fmt.Errorf("failed to delete branch: %w", err)
-		}
+	// Delete the head ref and both metadata refs atomically in one git invocation.
+	// update-ref --stdin tolerates missing refs, so this is safe even if the
+	// branch or its metadata refs were already absent.
+	if err := e.git.DeleteRefsBatch(ctx, []string{
+		"refs/heads/" + branchName,
+		git.MetadataRefPrefix + branchName,
+		git.LocalMetadataRefPrefix + branchName,
+	}); err != nil {
+		return fmt.Errorf("failed to delete branch refs: %w", err)
 	}
-
-	// Best-effort metadata cleanup. The branch ref is already gone, so any
-	// remaining metadata refs are orphans that `sync` reconciles later — no
-	// user-actionable signal here.
-	_ = e.git.DeleteMetadata(ctx, branchName)
-	_ = e.git.DeleteRef(ctx, fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, branchName))
 
 	// Reparent children to grandparent, preserving divergence points so
 	// children don't carry the deleted branch's commits after restacking.

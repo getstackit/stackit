@@ -1,0 +1,11 @@
+🔍 Dry run — no changes will be made.
+
+Would pull from remote:
+  main
+
+Would delete (merged or closed PRs):
+  feat-login
+  feat-old
+
+Restacking is previewed only with --restack.
+Run stackit sync to apply.

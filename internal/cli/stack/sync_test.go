@@ -116,4 +116,36 @@ Error: you have uncommitted changes. Please commit or stash them before syncing
 ✨ Everything is up to date!
 `), testhelpers.NormalizeOutput(output))
 	})
+
+	t.Run("dry-run previews without mutating", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
+		require.NoError(t, err)
+		require.NoError(t, s.Scene.Repo.PushBranch("origin", "main"))
+
+		s.RunCli("init")
+		s.RunCli("create", "branch1", "-m", "branch1")
+		s.RunGit("commit", "--allow-empty", "-m", "work on branch1")
+
+		// Make branch1 need a restack by advancing main behind it.
+		s.RunGit("checkout", "main")
+		s.Scene.Repo.CreateChangeAndCommit("main update", "main-file")
+		s.RunCli("checkout", "branch1")
+
+		// --dry-run must PREVIEW the restack, not perform it.
+		output, err := s.RunCliAndGetOutput("sync", "--dry-run", "--restack")
+		require.NoError(t, err, "sync --dry-run failed: %s", output)
+		normalized := testhelpers.NormalizeOutput(output)
+		require.Contains(t, normalized, "Dry run")
+		require.Contains(t, normalized, "Would restack")
+		require.Contains(t, normalized, "branch1")
+
+		// Proof it didn't mutate: the real sync still has the restack to do.
+		// (If dry-run had restacked, this would report "up to date" instead.)
+		output, err = s.RunCliAndGetOutput("sync", "--restack")
+		require.NoError(t, err, "sync --restack failed: %s", output)
+		require.Contains(t, testhelpers.NormalizeOutput(output), "Restacked branch1")
+	})
 }

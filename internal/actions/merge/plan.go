@@ -104,6 +104,15 @@ func AnyPRHasChecks(branches []BranchMergeInfo) bool {
 	return false
 }
 
+// BranchNames returns the names of all branches to be merged, in order.
+func (p *Plan) BranchNames() []string {
+	names := make([]string, len(p.BranchesToMerge))
+	for i, b := range p.BranchesToMerge {
+		names[i] = b.BranchName
+	}
+	return names
+}
+
 // Plan is the complete plan for a merge operation
 type Plan struct {
 	Strategy        Strategy

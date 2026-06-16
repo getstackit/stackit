@@ -123,10 +123,21 @@ func shareLabel(name string, prNumber *int, prTitle, prURL string) string {
 
 	text := fmt.Sprintf("#%d", *prNumber)
 	if prTitle != "" {
-		text = fmt.Sprintf("#%d %s", *prNumber, prTitle)
+		text = fmt.Sprintf("#%d %s", *prNumber, sanitizeSlackText(prTitle))
 	}
 	if prURL == "" {
 		return text
 	}
 	return fmt.Sprintf("<%s|%s>", prURL, text)
+}
+
+// sanitizeSlackText escapes characters that have special meaning in Slack's
+// mrkdwn format so that PR titles containing angle brackets or ampersands don't
+// produce malformed links (e.g. "<url|#1 Add <T> support>" would break the
+// link because the inner "<T>" looks like a nested mrkdwn element).
+func sanitizeSlackText(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
 }

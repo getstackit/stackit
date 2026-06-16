@@ -13,7 +13,25 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         go-version: ['stable']
-    
+
+    services:
+      # Postgres backs the API server's repo store (internal/api/store). Store
+      # tests connect directly via STACKIT_TEST_DATABASE_URL (no testcontainers
+      # / Docker-in-Docker needed); other packages ignore it.
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: stackit
+          POSTGRES_PASSWORD: stackit
+          POSTGRES_DB: stackit_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stackit"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,6 +59,7 @@ jobs:
       - name: Run tests
         env:
           STACKIT_NO_LOGGING: "1"
+          STACKIT_TEST_DATABASE_URL: postgres://stackit:stackit@localhost:5432/stackit_test?sslmode=disable
         run: |
           PACKAGES="$(bash scripts/go-test-packages.sh all)"
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then

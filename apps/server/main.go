@@ -17,6 +17,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/api"
 	"github.com/getstackit/stackit/internal/api/registry"
+	"github.com/getstackit/stackit/internal/api/store"
 	"github.com/getstackit/stackit/internal/app"
 )
 
@@ -62,17 +63,17 @@ func setupLogging(jsonOutput bool) {
 
 func run() error {
 	var (
-		port            = flag.Int("port", 8080, "Port to listen on")
-		bind            = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1; switches to 0.0.0.0 when $PORT or $STACKIT_PUBLIC is set.")
-		cwd             = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -repos-config is set)")
-		reposConfigPath = flag.String("repos-config", "", "Path to a JSON file listing repos to serve (mutually exclusive with -cwd)")
-		reposRoot       = flag.String("repos-root", os.Getenv("STACKIT_REPOS_ROOT"), "Base directory under which per-repo checkouts live (<reposRoot>/<owner>/<name>). Overrides reposRoot in -repos-config.")
-		remote          = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
-		corsOrigins     = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
-		apiPrefix       = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
-		enableLegacy    = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
-		shutdownGrace   = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
-		authDisabled    = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
+		port          = flag.Int("port", 8080, "Port to listen on")
+		bind          = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1; switches to 0.0.0.0 when $PORT or $STACKIT_PUBLIC is set.")
+		cwd           = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -database-url is set)")
+		databaseURL   = flag.String("database-url", os.Getenv("STACKIT_DATABASE_URL"), "PostgreSQL connection string. When set, repos are served from the DB instead of the -cwd single-repo shortcut.")
+		reposRoot     = flag.String("repos-root", os.Getenv("STACKIT_REPOS_ROOT"), "Base directory under which per-repo checkouts live (<reposRoot>/<owner>/<name>) for DB-sourced repos.")
+		remote        = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
+		corsOrigins   = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
+		apiPrefix     = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
+		enableLegacy  = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
+		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
+		authDisabled  = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
 	)
 	flag.Parse()
 
@@ -119,12 +120,22 @@ func run() error {
 	}()
 
 	switch {
-	case *reposConfigPath != "":
-		cfg, err := loadReposConfig(*reposConfigPath, *reposRoot)
+	case *databaseURL != "":
+		st, err := store.Open(context.Background(), *databaseURL)
 		if err != nil {
 			return err
 		}
-		for _, rc := range cfg.Repos {
+		defer func() {
+			if closeErr := st.Close(); closeErr != nil {
+				slog.Error("repo store close failed", "error", closeErr)
+			}
+		}()
+
+		repos, err := loadReposFromDB(context.Background(), st, *reposRoot)
+		if err != nil {
+			return err
+		}
+		for _, rc := range repos {
 			if err := addRegistryEntry(reg, rc); err != nil {
 				// A missing checkout shouldn't take down the whole
 				// server — other configured repos may still be usable,

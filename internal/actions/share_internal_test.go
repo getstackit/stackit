@@ -52,6 +52,30 @@ func TestShareLabel(t *testing.T) {
 			prNumber: ptr(9),
 			want:     "#9",
 		},
+		{
+			name:     "angle brackets in title are escaped",
+			branch:   "feature-x",
+			prNumber: ptr(42),
+			prTitle:  "Add <T> generic support",
+			prURL:    "https://github.com/o/r/pull/42",
+			want:     "<https://github.com/o/r/pull/42|#42 Add &lt;T&gt; generic support>",
+		},
+		{
+			name:     "ampersand in title is escaped",
+			branch:   "feature-x",
+			prNumber: ptr(43),
+			prTitle:  "Fix auth & session handling",
+			prURL:    "https://github.com/o/r/pull/43",
+			want:     "<https://github.com/o/r/pull/43|#43 Fix auth &amp; session handling>",
+		},
+		{
+			name:     "multiple special chars in title are all escaped",
+			branch:   "feature-x",
+			prNumber: ptr(44),
+			prTitle:  "Support <A> & <B> types",
+			prURL:    "https://github.com/o/r/pull/44",
+			want:     "<https://github.com/o/r/pull/44|#44 Support &lt;A&gt; &amp; &lt;B&gt; types>",
+		},
 	}
 
 	for _, tt := range tests {

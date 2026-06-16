@@ -187,10 +187,7 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 	}
 
 	// Collect branch names for octopus merge
-	branches := make([]string, len(c.plan.BranchesToMerge))
-	for i, branchInfo := range c.plan.BranchesToMerge {
-		branches[i] = branchInfo.BranchName
-	}
+	branches := c.plan.BranchNames()
 
 	// Build commit message listing all branches
 	commitMsg := fmt.Sprintf("Consolidate stack [%s]", scope)
@@ -281,12 +278,6 @@ func (c *ConsolidateMergeExecutor) updateIndividualPRs() {
 		return
 	}
 
-	// Collect branch names
-	branchNames := make([]string, len(c.plan.BranchesToMerge))
-	for i, b := range c.plan.BranchesToMerge {
-		branchNames[i] = b.BranchName
-	}
-
 	// Use shared PR cleaner
 	cleaner := NewPRCleaner(c.ctx, c.engine, PRCleanupConfig{
 		Source:                CleanupSourceConsolidate,
@@ -294,7 +285,7 @@ func (c *ConsolidateMergeExecutor) updateIndividualPRs() {
 		UserName:              c.consolidationUser,
 	})
 
-	result := cleaner.CleanupBranches(c.ctx.Context, branchNames)
+	result := cleaner.CleanupBranches(c.ctx.Context, c.plan.BranchNames())
 	cleaner.LogResult(result)
 }
 
@@ -303,14 +294,13 @@ func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(_ context.Context,
 	splog.Info("🔒 Locking individual PRs and updating status...")
 
 	branchesToLock := engine.Branches{}
-	branchNames := make([]string, 0, len(c.plan.BranchesToMerge))
 	for _, b := range c.plan.BranchesToMerge {
 		branch := c.engine.GetBranch(b.BranchName)
 		if !branch.IsLocked() {
 			branchesToLock = branchesToLock.Append(branch)
 		}
-		branchNames = append(branchNames, b.BranchName)
 	}
+	branchNames := c.plan.BranchNames()
 
 	if len(branchesToLock) > 0 {
 		if _, err := c.engine.SetLocked(c.ctx, branchesToLock, engine.LockReasonConsolidating); err != nil {

@@ -68,12 +68,19 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		return fmt.Errorf("failed to detach and reset: %w", err)
 	}
 
+	// On any error, restore the original branch to avoid leaving the user in detached HEAD.
+	success := false
+	defer func() {
+		if !success {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		}
+	}()
+
 	branchNames := []string{}
 
 	// Get default commit message
 	commitMessages, err := branchToSplit.GetAllCommits(engine.CommitFormatMessage)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to get commit messages: %w", err)
 	}
 	defaultCommitMessage := strings.Join(commitMessages, "\n\n")
@@ -97,18 +104,10 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	// Get existing branch names for validation
 	existingBranchNames := eng.BranchNames()
 
-	// cancelWithRestore restores the original branch and returns ErrCanceled.
-	// This ensures the working directory is left in a clean state on user cancel.
-	cancelWithRestore := func() error {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-		return sterrors.ErrCanceled
-	}
-
 	// Loop while there are unstaged changes
 	for {
 		hasUnstaged, err := eng.HasUnstagedChanges(gitCtx)
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to check unstaged changes: %w", err)
 		}
 		if !hasUnstaged {
@@ -120,21 +119,18 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 
 		unstagedDiff, err := eng.GetUnstagedDiff(gitCtx)
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to get unstaged diff: %w", err)
 		}
 
 		// Parse the diff into hunks
 		hunks, err := git.ParseDiffOutput(unstagedDiff)
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to parse diff: %w", err)
 		}
 
 		// Also get hunks for untracked (new) files
 		untrackedHunks, err := eng.GetUntrackedFileHunks(gitCtx)
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to get untracked file hunks: %w", err)
 		}
 		hunks = append(hunks, untrackedHunks...)
@@ -148,19 +144,18 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		if opts.useGitAddP {
 			// Use git's built-in interactive staging
 			if err := eng.StagePatch(gitCtx); err != nil {
-				return cancelWithRestore()
+				return sterrors.ErrCanceled
 			}
 		} else {
 			// Use the TUI hunk selector
 			selectedHunks, err := handler.PromptSelectHunks(hunks)
 			if err != nil {
-				return cancelWithRestore()
+				return sterrors.ErrCanceled
 			}
 
 			// Stage the selected hunks
 			if len(selectedHunks) > 0 {
 				if err := eng.StageHunks(gitCtx, selectedHunks); err != nil {
-					_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 					return fmt.Errorf("failed to stage hunks: %w", err)
 				}
 			}
@@ -169,18 +164,16 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		// Check if anything was staged
 		hasStaged, err := eng.HasStagedChanges(gitCtx)
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to check staged changes: %w", err)
 		}
 		if !hasStaged {
 			// Nothing was staged - ask user if they want to continue or cancel via handler
 			continueAgain, err := handler.PromptContinueOrCancel()
 			if err != nil {
-				_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 				return err
 			}
 			if !continueAgain {
-				return cancelWithRestore()
+				return sterrors.ErrCanceled
 			}
 			continue
 		}
@@ -193,7 +186,6 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		defaultName := generateDefaultBranchName(branchToSplit.GetName(), branchNames)
 		branchName, err := handler.PromptBranchName(defaultName, branchNames, existingBranchNames, branchToSplit.GetName())
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return err
 		}
 
@@ -204,7 +196,6 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 
 		editMessage, err := handler.PromptEditCommitMessage()
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return err
 		}
 
@@ -212,7 +203,6 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		if editMessage {
 			commitMessage, err = handler.PromptCommitMessage(defaultCommitMessage)
 			if err != nil {
-				_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 				return err
 			}
 		}
@@ -224,7 +214,6 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 			Message:  commitMessage,
 			NoVerify: true, // Split hunk commits are internal, hooks usually shouldn't run
 		}); err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to create commit: %w", err)
 		}
 
@@ -276,6 +265,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		Style:          StyleHunk,
 	})
 
+	success = true
 	return nil
 }
 
@@ -356,54 +346,53 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 		return fmt.Errorf("failed to detach and reset: %w", err)
 	}
 
+	// On any error, restore the original branch to avoid leaving the user in detached HEAD.
+	success := false
+	defer func() {
+		if !success {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		}
+	}()
+
 	// Read and parse patch file
 	patchContent, err := readPatchFile(opts.patchFile)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to read patch file %q: %w", opts.patchFile, err)
 	}
 
 	patchHunks, err := git.ParseDiffOutput(patchContent)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to parse patch file %q: %w", opts.patchFile, err)
 	}
 
 	if len(patchHunks) == 0 {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("patch file %q contains no hunks", opts.patchFile)
 	}
 
 	// Stage the hunks from the patch (these will go to the new parent branch)
 	if err := eng.StageHunks(gitCtx, patchHunks); err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to stage hunks from patch file %q: %w", opts.patchFile, err)
 	}
 
 	// Check if anything was staged
 	hasStaged, err := eng.HasStagedChanges(gitCtx)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to check staged changes: %w", err)
 	}
 	if !hasStaged {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("no changes staged from patch file %q", opts.patchFile)
 	}
 
 	// Check if there are unstaged changes or untracked files (to keep on branchToSplit)
 	hasUnstaged, err := eng.HasUnstagedChanges(gitCtx)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to check unstaged changes: %w", err)
 	}
 	hasUntracked, err := eng.HasUntrackedFiles(gitCtx)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to check untracked files: %w", err)
 	}
 	if !hasUnstaged && !hasUntracked {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("all changes were staged from patch - nothing would remain on %s", branchToSplit.GetName())
 	}
 
@@ -411,7 +400,6 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	stashName := fmt.Sprintf("stackit-split-below-parent-%d", time.Now().UnixNano())
 	_, err = eng.StashPushStaged(gitCtx, stashName)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to stash staged changes: %w", err)
 	}
 
@@ -427,7 +415,6 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	// Stage and commit remaining changes - these stay on branchToSplit
 	if err := eng.StageAll(gitCtx); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to stage remaining changes: %w", err)
 	}
 
@@ -436,21 +423,18 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 		NoVerify: true,
 	}); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to commit remaining changes: %w", err)
 	}
 
 	// Update branchToSplit to point to this commit (contains remaining changes)
 	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.GetName(), "HEAD"); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to update branch reference: %w", err)
 	}
 
 	// Reset to original parent to create the new parent branch
 	if err := eng.ResetHard(gitCtx, originalParent.GetName()); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to reset to original parent: %w", err)
 	}
 
@@ -500,6 +484,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 
 	splog.Info("Created branch %s as parent of %s", output.Branch(newParentName, true), output.Branch(branchToSplit.GetName(), true))
 
+	success = true
 	return nil
 }
 
@@ -529,10 +514,17 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		return fmt.Errorf("failed to detach and reset: %w", err)
 	}
 
+	// On any error, restore the original branch to avoid leaving the user in detached HEAD.
+	success := false
+	defer func() {
+		if !success {
+			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
+		}
+	}()
+
 	// Get default commit message
 	commitMessages, err := branchToSplit.GetAllCommits(engine.CommitFormatMessage)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to get commit messages: %w", err)
 	}
 	defaultCommitMessage := strings.Join(commitMessages, "\n\n")
@@ -552,27 +544,23 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 	unstagedDiff, err := eng.GetUnstagedDiff(gitCtx)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to get unstaged diff: %w", err)
 	}
 
 	// Parse the diff into hunks
 	hunks, err := git.ParseDiffOutput(unstagedDiff)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to parse diff: %w", err)
 	}
 
 	// Also get hunks for untracked (new) files
 	untrackedHunks, err := eng.GetUntrackedFileHunks(gitCtx)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to get untracked file hunks: %w", err)
 	}
 	hunks = append(hunks, untrackedHunks...)
 
 	if len(hunks) == 0 {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("no changes to extract")
 	}
 
@@ -582,31 +570,26 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		// Non-interactive mode: read hunks from patch file
 		patchContent, err := readPatchFile(opts.patchFile)
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to read patch file %q: %w", opts.patchFile, err)
 		}
 
 		patchHunks, err := git.ParseDiffOutput(patchContent)
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to parse patch file %q: %w", opts.patchFile, err)
 		}
 
 		if len(patchHunks) == 0 {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("patch file %q contains no hunks", opts.patchFile)
 		}
 
 		// Stage the hunks from the patch
 		if err := eng.StageHunks(gitCtx, patchHunks); err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("failed to stage hunks from patch file %q: %w", opts.patchFile, err)
 		}
 
 	case opts.useGitAddP:
 		// Use git's built-in interactive staging
 		if err := eng.StagePatch(gitCtx); err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return sterrors.ErrCanceled
 		}
 
@@ -614,14 +597,12 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		// Use the TUI hunk selector (user selects what to EXTRACT)
 		selectedHunks, err := handler.PromptSelectHunks(hunks)
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return sterrors.ErrCanceled
 		}
 
 		// Stage the selected hunks
 		if len(selectedHunks) > 0 {
 			if err := eng.StageHunks(gitCtx, selectedHunks); err != nil {
-				_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 				return fmt.Errorf("failed to stage hunks: %w", err)
 			}
 		}
@@ -630,27 +611,22 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	// Check if anything was staged
 	hasStaged, err := eng.HasStagedChanges(gitCtx)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to check staged changes: %w", err)
 	}
 	if !hasStaged {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("no changes staged to extract")
 	}
 
 	// Check if there are unstaged changes or untracked files (to keep on current)
 	hasUnstaged, err := eng.HasUnstagedChanges(gitCtx)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to check unstaged changes: %w", err)
 	}
 	hasUntracked, err := eng.HasUntrackedFiles(gitCtx)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to check untracked files: %w", err)
 	}
 	if !hasUnstaged && !hasUntracked {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("all changes were staged - nothing would remain on %s", branchToSplit.GetName())
 	}
 
@@ -670,7 +646,6 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		}
 		// Validate branch name doesn't already exist
 		if existingBranches.Contains(childBranchName) {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return fmt.Errorf("branch %q already exists", childBranchName)
 		}
 
@@ -686,7 +661,6 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		var err error
 		childBranchName, err = handler.PromptBranchName(defaultName, []string{}, existingBranches, branchToSplit.GetName())
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return err
 		}
 
@@ -697,7 +671,6 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 		editMessage, err := handler.PromptEditCommitMessage()
 		if err != nil {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 			return err
 		}
 
@@ -705,7 +678,6 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		if editMessage {
 			childCommitMessage, err = handler.PromptCommitMessage(defaultCommitMessage)
 			if err != nil {
-				_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 				return err
 			}
 		}
@@ -718,7 +690,6 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	stashName := fmt.Sprintf("stackit-split-above-extract-%d", time.Now().UnixNano())
 	_, err = eng.StashPushStaged(gitCtx, stashName)
 	if err != nil {
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to stash staged changes: %w", err)
 	}
 
@@ -735,7 +706,6 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	// Stage and commit them as the new current branch content
 	if err := eng.StageAll(gitCtx); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to stage remaining changes: %w", err)
 	}
 
@@ -744,28 +714,24 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		NoVerify: true,
 	}); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to commit remaining changes: %w", err)
 	}
 
 	// Update the original branch ref to point to this new commit (the "keep" content)
 	if err := eng.UpdateBranchRef(gitCtx, branchToSplit.GetName(), "HEAD"); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to update branch reference: %w", err)
 	}
 
 	// Checkout the updated branch
 	if err := eng.CheckoutBranch(gitCtx, branchToSplit); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to checkout branch: %w", err)
 	}
 
 	// Create the child branch at the current position
 	if err := eng.CreateBranch(gitCtx, childBranchName, "HEAD"); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to create child branch: %w", err)
 	}
 
@@ -773,7 +739,6 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	childBranch := eng.GetBranch(childBranchName)
 	if err := eng.CheckoutBranch(gitCtx, childBranch); err != nil {
 		cleanupStash()
-		_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
 		return fmt.Errorf("failed to checkout child branch: %w", err)
 	}
 
@@ -836,6 +801,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		splog.Info("Created branch %s as child of %s", output.Branch(childBranchName, true), output.Branch(branchToSplit.GetName(), true))
 	}
 
+	success = true
 	return nil
 }
 

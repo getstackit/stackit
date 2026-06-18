@@ -108,6 +108,7 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors map[string]bool) *Wor
 				result.Errors = append(result.Errors,
 					"failed to delete anchor branch "+wt.AnchorBranch+": "+deleteErr.Error())
 				ctx.Output.Debug("Failed to delete anchor branch %s: %v", wt.AnchorBranch, deleteErr)
+				continue
 			}
 		}
 		result.RemovedWorktrees = append(result.RemovedWorktrees, wt.AnchorBranch)

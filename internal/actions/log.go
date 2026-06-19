@@ -129,13 +129,12 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 	}
 	visibleBranches := visibleLogBranches(renderer, opts.BranchName, renderOpts, allBranches)
 
-	// Pre-load branch data only when most branches will be annotated. Bounded log
-	// views are faster with lazy lookups than with a repo-wide preload.
-	if shouldPreloadLogBranchData(opts, len(visibleBranches), len(allBranches)) {
-		ctx.Engine.PreloadBranchData()
-		// Also warm diff-stats and commit-count caches so annotation goroutines
-		// get instant cache hits instead of spawning per-branch subprocesses.
-		ctx.Engine.PreloadBranchStats(visibleBranches.All())
+	// Resolve the git-computed annotation stats (short SHA, commit count, diff
+	// stats) for just the visible branches as one batched value. Scoped to the
+	// visible set, so bounded views stay cheap; the short style needs none.
+	var stats map[string]engine.BranchStat
+	if opts.Style != LogStyleShort {
+		stats = ctx.Engine.BatchBranchStats(visibleBranches)
 	}
 
 	// Collect annotations only for branches that will be rendered.
@@ -164,7 +163,11 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 
 	if len(visibleBranches) > 0 {
 		utils.Run(visibleBranches.All(), func(branchObj engine.Branch) {
-			annotation := buildLogAnnotation(ctx.Engine, branchObj, opts, wtData, enrichment)
+			var stat *engine.BranchStat
+			if s, ok := stats[branchObj.GetName()]; ok {
+				stat = &s
+			}
+			annotation := buildLogAnnotation(ctx.Engine, branchObj, stat, opts, wtData, enrichment)
 			results <- result{branchObj.GetName(), annotation}
 		})
 	}
@@ -246,32 +249,25 @@ func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opt
 	return visible.Build()
 }
 
-func shouldPreloadLogBranchData(opts LogOptions, visibleCount, totalCount int) bool {
-	if opts.Style == LogStyleShort {
-		return false
-	}
-	if visibleCount == 0 || totalCount == 0 {
-		return false
-	}
-	return visibleCount*2 >= totalCount
-}
-
 func buildLogAnnotation(
 	eng engine.Engine,
 	branch engine.Branch,
+	stat *engine.BranchStat,
 	opts LogOptions,
 	wtData *tui.WorktreeData,
 	enrichment *tui.AnnotationEnrichment,
 ) tree.BranchAnnotation {
 	if opts.Style != LogStyleShort {
-		return tui.BuildFullAnnotation(eng, branch, nil, enrichment, tui.AnnotationOptions{
+		return tui.BuildFullAnnotation(eng, branch, stat, enrichment, tui.AnnotationOptions{
 			SkipCommitMessages: true,
 		})
 	}
 
 	annotation := tui.GetMinimalAnnotationWithWorktreeAndEmpty(eng, branch, wtData)
 	if opts.ShowSHAs {
-		if sha, err := branch.GetRevision(); err == nil && len(sha) >= 7 {
+		if stat != nil {
+			annotation.LocalSHA = stat.ShortSHA
+		} else if sha, err := branch.GetRevision(); err == nil && len(sha) >= 7 {
 			annotation.LocalSHA = sha[:7]
 		}
 	}
@@ -327,10 +323,6 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 		branchesToInclude = eng.AllBranches()
 	}
 
-	// Pre-load metadata and revisions for all branches to eliminate per-branch
-	// cache misses during annotation building.
-	eng.PreloadBranchData()
-
 	// Prefetch CI status for JSON output (always fetched to provide complete data)
 	ghClient := ctx.GitHub()
 	var ciStatuses map[string]*github.CheckStatus
@@ -364,9 +356,9 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 	}
 	processableBranches := processable.Build()
 
-	// Warm the diff-stats and commit-count caches in parallel before the main
-	// annotation loop so that GetDiffStats / GetCommitCount are instant cache hits.
-	ctx.Engine.PreloadBranchStats(processableBranches.All())
+	// Resolve commit count and diff stats for all processable branches as one
+	// batched value, read in the loop below.
+	stats := eng.BatchBranchStats(processableBranches)
 
 	if len(processableBranches) > 0 {
 		utils.Run(processableBranches.All(), func(branch engine.Branch) {
@@ -399,18 +391,12 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 				}
 			}
 
-			// Commits and diff stats (cache hits from PreloadBranchStats above)
+			// Commits and diff stats from the batched stats resolved above.
 			if !branch.IsTrunk() {
-				count, err := branch.GetCommitCount()
-				if err == nil {
-					info.Commits = count
-				}
-
-				added, deleted, err := branch.GetDiffStats()
-				if err == nil {
-					info.Additions = added
-					info.Deletions = deleted
-				}
+				stat := stats[branchName]
+				info.Commits = stat.CommitCount
+				info.Additions = stat.LinesAdded
+				info.Deletions = stat.LinesDeleted
 			}
 
 			// PR info

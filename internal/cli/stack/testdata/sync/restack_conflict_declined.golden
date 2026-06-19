@@ -1,6 +1,6 @@
 📚 Restacking branches...
   ✓ Restacked feat-api (PR #201) on main → b2c3d4e
-  ⚠️ Skipped feat-ui (PR #202) (conflict)
+  ⚠ Skipped feat-ui (PR #202) (conflict)
 
 ⚠️  Found conflicts in 1 branch during restack:
   • feat-ui

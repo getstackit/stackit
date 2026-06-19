@@ -14,6 +14,7 @@ import (
 	"github.com/getstackit/stackit/internal/tui"
 	syncComponent "github.com/getstackit/stackit/internal/tui/components/sync"
 	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewSyncUI creates a runner and handler pair for sync operations.
@@ -33,25 +34,21 @@ func NewSyncUI(out output.Output, logger output.Logger) (*tui.Runner, syncAction
 //
 // Phase headers are printed lazily: a header is emitted the first time its phase
 // produces an actual line, so phases that do nothing (e.g. nothing to clean or
-// restack) stay silent instead of printing an empty header. Completed items are
-// prefixed with a green ✓ and warnings with ⚠️, matching the interactive TUI.
+// restack) stay silent instead of printing an empty header. Item rows are led by
+// a single-width status marker (✓ done, ⚠ skipped, → in progress) from
+// internal/tui/style, so they align in one column and match the interactive TUI.
 type SimpleSyncHandler struct {
 	common.BaseHandler
-	totalOps      int
-	currentOp     int
-	startedPhases map[syncAction.Phase]bool
-	headerPrinted map[syncAction.Phase]bool
-	anyHeader     bool
+	totalOps  int
+	currentOp int
+	headers   *utils.LazyHeaders[syncAction.Phase]
 }
-
-// successTick is the green ✓ used to prefix completed sync items, matching the
-// interactive TUI's check mark.
-func successTick() string { return style.ColorGreen("✓") }
 
 // NewSimpleSyncHandler creates a new SimpleSyncHandler
 func NewSimpleSyncHandler(out output.Output) *SimpleSyncHandler {
 	return &SimpleSyncHandler{
 		BaseHandler: common.NewBaseHandler(out),
+		headers:     utils.NewLazyHeaders[syncAction.Phase](),
 	}
 }
 
@@ -72,10 +69,7 @@ func (h *SimpleSyncHandler) EmitEvent(event syncAction.Event) {
 	// the header is emitted lazily by item() the first time the phase produces a
 	// real line, so phases that do nothing stay silent.
 	if event.Type == syncAction.EventStarted {
-		if h.startedPhases == nil {
-			h.startedPhases = make(map[syncAction.Phase]bool)
-		}
-		h.startedPhases[event.Phase] = true
+		h.headers.Start(event.Phase)
 		return
 	}
 
@@ -89,7 +83,7 @@ func (h *SimpleSyncHandler) Complete(summary syncAction.Summary) {
 	defer h.Unlock()
 
 	// Separate phase activity from the final line (only if anything printed).
-	if h.anyHeader {
+	if h.headers.Any() {
 		h.Output.Newline()
 	}
 
@@ -107,21 +101,14 @@ func (h *SimpleSyncHandler) Complete(summary syncAction.Summary) {
 // restack drives items via OnRestackBranch without starting a phase, so it keeps
 // its headerless output while still gaining the ✓/→ item polish.
 func (h *SimpleSyncHandler) ensurePhaseHeader(phase syncAction.Phase) {
-	if !h.startedPhases[phase] {
+	emit, separate := h.headers.CommitOnItem(phase)
+	if !emit {
 		return
 	}
-	if h.headerPrinted == nil {
-		h.headerPrinted = make(map[syncAction.Phase]bool)
-	}
-	if h.headerPrinted[phase] {
-		return
-	}
-	if h.anyHeader {
+	if separate {
 		h.Output.Newline()
 	}
 	h.printPhaseHeader(phase)
-	h.headerPrinted[phase] = true
-	h.anyHeader = true
 }
 
 // item prints one phase line, emitting the phase header first if needed.
@@ -211,11 +198,11 @@ func (h *SimpleSyncHandler) printTrunkEvent(event syncAction.Event) {
 	if event.Type == syncAction.EventCompleted {
 		if event.NewRevision != "" {
 			h.item(event.Phase, "  %s %s fast-forwarded to %s",
-				successTick(),
+				style.MarkSuccess(),
 				style.ColorBranchName(event.Branch, false),
 				style.ColorDim(event.NewRevision))
 		} else {
-			h.item(event.Phase, "  %s %s is up to date", successTick(), style.ColorBranchName(event.Branch, false))
+			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch, false))
 		}
 	}
 }
@@ -225,15 +212,16 @@ func (h *SimpleSyncHandler) printBranchSyncEvent(event syncAction.Event) {
 	case syncAction.EventCompleted:
 		if event.NewRevision != "" {
 			h.item(event.Phase, "  %s %s fast-forwarded to %s",
-				successTick(),
+				style.MarkSuccess(),
 				style.ColorBranchName(event.Branch, false),
 				style.ColorDim(event.NewRevision))
 		} else {
-			h.item(event.Phase, "  %s %s is up to date", successTick(), style.ColorBranchName(event.Branch, false))
+			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch, false))
 		}
 	case syncAction.EventSkipped:
 		if event.Conflict {
-			h.item(event.Phase, "  ⚠️ %s diverged from remote (skipping)",
+			h.item(event.Phase, "  %s %s diverged from remote (skipping)",
+				style.MarkWarning(),
 				style.ColorBranchName(event.Branch, false))
 		}
 	}
@@ -243,11 +231,11 @@ func (h *SimpleSyncHandler) printGitHubEvent(event syncAction.Event) {
 	switch event.Type {
 	case syncAction.EventProgress:
 		if event.Branch != "" {
-			h.item(event.Phase, "  Updating PR for %s", style.ColorBranchName(event.Branch, false))
+			h.item(event.Phase, "  %s Updating PR for %s", style.MarkProgress(), style.ColorBranchName(event.Branch, false))
 		}
 	case syncAction.EventCompleted:
 		if event.Message != "" {
-			h.item(event.Phase, "  %s %s", successTick(), event.Message)
+			h.item(event.Phase, "  %s %s", style.MarkSuccess(), event.Message)
 		}
 	}
 }
@@ -259,7 +247,7 @@ func (h *SimpleSyncHandler) printCleanEvent(event syncAction.Event) {
 			prInfo = fmt.Sprintf(" (PR #%d)", *event.PRNumber)
 		}
 		h.item(event.Phase, "  %s Deleted %s%s %s",
-			successTick(),
+			style.MarkSuccess(),
 			style.ColorBranchName(event.Branch, false),
 			prInfo,
 			style.ColorDim(event.Message))
@@ -282,7 +270,7 @@ func (h *SimpleSyncHandler) printRestackEvent(event syncAction.Event) {
 	case syncAction.EventCompleted:
 		switch {
 		case event.NewRevision != "":
-			msg := fmt.Sprintf("  %s Restacked %s%s", successTick(), branchStr, prInfo)
+			msg := fmt.Sprintf("  %s Restacked %s%s", style.MarkSuccess(), branchStr, prInfo)
 			if event.Parent != "" {
 				msg += fmt.Sprintf(" on %s", style.ColorBranchName(event.Parent, false))
 			}
@@ -296,11 +284,11 @@ func (h *SimpleSyncHandler) printRestackEvent(event syncAction.Event) {
 		case event.Frozen:
 			h.item(event.Phase, "  %s%s %s", branchStr, prInfo, common.ReasonFrozen)
 		default:
-			h.item(event.Phase, "  %s %s%s up to date", successTick(), branchStr, prInfo)
+			h.item(event.Phase, "  %s %s%s up to date", style.MarkSuccess(), branchStr, prInfo)
 		}
 	case syncAction.EventSkipped:
 		if event.Conflict {
-			h.item(event.Phase, "  ⚠️ Skipped %s%s (conflict)", branchStr, prInfo)
+			h.item(event.Phase, "  %s Skipped %s%s (conflict)", style.MarkWarning(), branchStr, prInfo)
 		} else {
 			h.item(event.Phase, "  Skipped %s%s %s", branchStr, prInfo, style.ColorDim(event.Message))
 		}
@@ -454,12 +442,12 @@ func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 	}
 
 	// Build detail message and determine status
-	detail, isWarn := h.formatEventDetail(event)
+	detail, mark := h.formatEventDetail(event)
 	if detail != "" {
 		h.runner.Send(syncComponent.PhaseDetailMsg{
 			Phase:   syncComponent.Phase(event.Phase),
 			Message: detail,
-			IsWarn:  isWarn,
+			Mark:    mark,
 		})
 	}
 
@@ -471,37 +459,38 @@ func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 	})
 }
 
-// formatEventDetail formats an event into a detail string with warning status
-func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (detail string, isWarn bool) {
+// formatEventDetail formats an event into a detail string and the status mark
+// that should lead its row in the TUI.
+func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (detail string, mark syncComponent.DetailMark) {
 	switch event.Phase {
 	case syncAction.PhaseTrunk:
 		if event.Type == syncAction.EventCompleted {
 			if event.NewRevision != "" {
-				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), false
+				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), syncComponent.MarkDone
 			}
-			return fmt.Sprintf("%s is up to date", event.Branch), false
+			return fmt.Sprintf("%s is up to date", event.Branch), syncComponent.MarkDone
 		}
 	case syncAction.PhaseBranches:
 		switch event.Type {
 		case syncAction.EventCompleted:
 			if event.NewRevision != "" {
-				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), false
+				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), syncComponent.MarkDone
 			}
-			return fmt.Sprintf("%s is up to date", event.Branch), false
+			return fmt.Sprintf("%s is up to date", event.Branch), syncComponent.MarkDone
 		case syncAction.EventSkipped:
 			if event.Conflict {
-				return fmt.Sprintf("%s diverged from remote (skipping)", event.Branch), true
+				return fmt.Sprintf("%s diverged from remote (skipping)", event.Branch), syncComponent.MarkWarn
 			}
 		}
 	case syncAction.PhaseGitHub:
 		switch event.Type {
 		case syncAction.EventProgress:
 			if event.Branch != "" {
-				return fmt.Sprintf("Updating PR for %s", event.Branch), false
+				return fmt.Sprintf("Updating PR for %s", event.Branch), syncComponent.MarkInProgress
 			}
 		case syncAction.EventCompleted:
 			if event.Message != "" {
-				return event.Message, false
+				return event.Message, syncComponent.MarkDone
 			}
 		}
 	case syncAction.PhaseClean:
@@ -510,11 +499,11 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			if event.PRNumber != nil {
 				prInfo = fmt.Sprintf(" (PR #%d)", *event.PRNumber)
 			}
-			return fmt.Sprintf("Deleted %s%s %s", event.Branch, prInfo, event.Message), false
+			return fmt.Sprintf("Deleted %s%s %s", event.Branch, prInfo, event.Message), syncComponent.MarkDone
 		}
 	case syncAction.PhaseRestack:
 		if event.Branch == "" {
-			return "", false
+			return "", syncComponent.MarkDone
 		}
 		prInfo := ""
 		if event.PRNumber != nil {
@@ -530,8 +519,8 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 				if event.Parent != "" {
 					msg += fmt.Sprintf(" on %s", event.Parent)
 				}
-				msg += fmt.Sprintf(" -> %s", event.NewRevision)
-				return msg, false
+				msg += fmt.Sprintf(" → %s", event.NewRevision)
+				return msg, syncComponent.MarkDone
 			}
 			reason := common.ReasonNoRestackNeeded
 			if event.IsLocked() {
@@ -541,17 +530,17 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			}
 
 			if reason == common.ReasonNoRestackNeeded {
-				return fmt.Sprintf("%s%s up to date", displayName, prInfo), false
+				return fmt.Sprintf("%s%s up to date", displayName, prInfo), syncComponent.MarkDone
 			}
-			return fmt.Sprintf("%s%s %s", displayName, prInfo, reason), false
+			return fmt.Sprintf("%s%s %s", displayName, prInfo, reason), syncComponent.MarkDone
 		case syncAction.EventSkipped:
 			if event.Conflict {
-				return fmt.Sprintf("Skipped %s%s (conflict)", displayName, prInfo), true
+				return fmt.Sprintf("Skipped %s%s (conflict)", displayName, prInfo), syncComponent.MarkWarn
 			}
-			return fmt.Sprintf("Skipped %s%s %s", displayName, prInfo, event.Message), false
+			return fmt.Sprintf("Skipped %s%s %s", displayName, prInfo, event.Message), syncComponent.MarkDone
 		}
 	}
-	return "", false
+	return "", syncComponent.MarkDone
 }
 
 // Complete is called when sync finishes
@@ -610,14 +599,15 @@ func (h *InteractiveSyncHandler) OnRestackBranch(branch string, result syncActio
 	defer h.mu.Unlock()
 
 	// Build detail message
-	detail := h.formatRestackDetail(branch, result, newRev, prNumber, lockReason, frozen, isCurrent, parent, rerereResolvedCount)
+	detail, mark := h.formatRestackDetail(branch, result, newRev, prNumber, lockReason, frozen, isCurrent, parent, rerereResolvedCount)
 	if detail != "" {
 		if reparented {
-			detail = fmt.Sprintf("Reparented %s -> %s. %s", oldParent, newParent, detail)
+			detail = fmt.Sprintf("Reparented %s → %s. %s", oldParent, newParent, detail)
 		}
 		h.runner.Send(syncComponent.PhaseDetailMsg{
 			Phase:   syncComponent.Phase(syncAction.PhaseRestack),
 			Message: detail,
+			Mark:    mark,
 		})
 	}
 
@@ -629,8 +619,11 @@ func (h *InteractiveSyncHandler) OnRestackBranch(branch string, result syncActio
 	})
 }
 
-// formatRestackDetail formats a restack event into a detail string
-func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncAction.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, rerereResolvedCount int) string {
+// formatRestackDetail formats a restack event into a detail string and the
+// status mark that should lead its row. The conflict case returns MarkWarn
+// rather than baking a glyph into the string, so the model owns the marker (the
+// streaming handler does the same).
+func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncAction.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, rerereResolvedCount int) (string, syncComponent.DetailMark) {
 	prInfo := ""
 	if prNumber != nil {
 		prInfo = fmt.Sprintf(" (PR #%d)", *prNumber)
@@ -648,7 +641,7 @@ func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncA
 		if rerereResolvedCount > 0 {
 			msg += " " + actions.FormatRerereResolved(rerereResolvedCount)
 		}
-		return msg
+		return msg, syncComponent.MarkDone
 	case syncAction.RestackUnneeded:
 		reason := common.ReasonNoRestackNeeded
 		if lockReason.IsLocked() {
@@ -658,13 +651,13 @@ func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncA
 		}
 
 		if reason == common.ReasonNoRestackNeeded {
-			return fmt.Sprintf("%s%s up to date", displayName, prInfo)
+			return fmt.Sprintf("%s%s up to date", displayName, prInfo), syncComponent.MarkDone
 		}
-		return fmt.Sprintf("%s%s %s", displayName, prInfo, reason)
+		return fmt.Sprintf("%s%s %s", displayName, prInfo, reason), syncComponent.MarkDone
 	case syncAction.RestackConflict:
-		return fmt.Sprintf("⚠️ Skipped %s%s (conflict)", displayName, prInfo)
+		return fmt.Sprintf("Skipped %s%s (conflict)", displayName, prInfo), syncComponent.MarkWarn
 	}
-	return ""
+	return "", syncComponent.MarkDone
 }
 
 // OnRestackComplete implements RestackHandler for standalone restack operations

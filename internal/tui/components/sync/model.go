@@ -12,6 +12,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/tui/core"
 	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Phase represents a sync phase
@@ -26,10 +27,31 @@ const (
 	PhaseRestack  Phase = "restack"
 )
 
-var (
-	checkMark = lipgloss.NewStyle().Foreground(lipgloss.Color(style.ColorSuccess)).SetString("✓")
-	warnMark  = lipgloss.NewStyle().Foreground(lipgloss.Color(style.ColorWarning)).SetString("⚠")
+// DetailMark selects the status glyph shown on a detail row. Using a typed
+// constant (rather than a bare bool) keeps the three states distinct at the call
+// site and matches the streaming handler's markers.
+type DetailMark int
+
+const (
+	// MarkDone shows a green ✓ for a completed item.
+	MarkDone DetailMark = iota
+	// MarkWarn shows an orange ⚠ for a skipped/attention item.
+	MarkWarn
+	// MarkInProgress shows a dim → for an item still in flight.
+	MarkInProgress
 )
+
+// glyph returns the colored marker string for this status.
+func (d DetailMark) glyph() string {
+	switch d {
+	case MarkWarn:
+		return style.MarkWarning()
+	case MarkInProgress:
+		return style.MarkProgress()
+	default:
+		return style.MarkSuccess()
+	}
+}
 
 // Model is the bubbletea model for sync progress.
 // It embeds core.BaseModel for standard lifecycle handling.
@@ -48,9 +70,11 @@ type Model struct {
 	// first detail. Phases that do nothing (nothing to sync/clean/restack) never
 	// print an empty header. CurrentPhase still updates eagerly so the live
 	// spinner reflects what's happening during slow phases.
-	phaseHeaders       map[Phase]string
-	committedPhases    map[Phase]bool
-	anyHeaderCommitted bool
+	//
+	// phaseHeaders holds each phase's pending header text; headers tracks the
+	// commit decision (the same utils.LazyHeaders rule the streaming handler uses).
+	phaseHeaders map[Phase]string
+	headers      *utils.LazyHeaders[Phase]
 }
 
 // PhaseStartMsg indicates a phase has started
@@ -68,7 +92,7 @@ type PhaseCompleteMsg struct {
 type PhaseDetailMsg struct {
 	Phase   Phase
 	Message string
-	IsWarn  bool // If true, shows ⚠ instead of ✓
+	Mark    DetailMark // Status glyph for the row (defaults to MarkDone)
 }
 
 // ProgressTickMsg updates the progress bar
@@ -96,11 +120,11 @@ func NewModel(totalOps int) *Model {
 	s.Style = commonStyles.Spinner
 
 	m := &Model{
-		TotalOps:        totalOps,
-		Progress:        p,
-		spinner:         s,
-		phaseHeaders:    make(map[Phase]string),
-		committedPhases: make(map[Phase]bool),
+		TotalOps:     totalOps,
+		Progress:     p,
+		spinner:      s,
+		phaseHeaders: make(map[Phase]string),
+		headers:      utils.NewLazyHeaders[Phase](),
 	}
 	m.Width = 80 // Set BaseModel's Width
 	return m
@@ -147,6 +171,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.CurrentPhase = msg.Phase
 		m.CurrentDetail = ""
 		m.phaseHeaders[msg.Phase] = msg.Message
+		m.headers.Start(msg.Phase)
 		return m, nil
 
 	case PhaseCompleteMsg:
@@ -156,24 +181,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case PhaseDetailMsg:
 		// Print completed item above the TUI (package-manager pattern)
 		m.CurrentDetail = msg.Message
-		mark := checkMark.String()
-		if msg.IsWarn {
-			mark = warnMark.String()
-		}
-		detail := tea.Printf("  %s %s", mark, msg.Message)
+		detail := tea.Printf("  %s %s", msg.Mark.glyph(), msg.Message)
 
 		// Commit the phase header the first time the phase produces a detail,
 		// separated from the previous phase group by a blank line. A detail for
 		// a phase that was never started (e.g. standalone restack) just prints
 		// without a header.
-		if header, started := m.phaseHeaders[msg.Phase]; started && !m.committedPhases[msg.Phase] {
-			m.committedPhases[msg.Phase] = true
+		if emit, separate := m.headers.CommitOnItem(msg.Phase); emit {
 			var cmds []tea.Cmd
-			if m.anyHeaderCommitted {
+			if separate {
 				cmds = append(cmds, tea.Printf(""))
 			}
-			m.anyHeaderCommitted = true
-			cmds = append(cmds, tea.Printf("%s", header), detail)
+			cmds = append(cmds, tea.Printf("%s", m.phaseHeaders[msg.Phase]), detail)
 			return m, tea.Sequence(cmds...)
 		}
 		return m, detail

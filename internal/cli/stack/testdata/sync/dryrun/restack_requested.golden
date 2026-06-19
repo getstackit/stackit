@@ -1,7 +1,8 @@
 🔍 Dry run — no changes will be made.
 
 Would restack:
-  feat-api
-  feat-ui
+  feat-api on main
+  feat-ui on feat-api
 
+Summary: would restack 2
 Run stackit sync to apply.

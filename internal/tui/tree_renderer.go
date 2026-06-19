@@ -294,8 +294,8 @@ type AnnotationOptions struct {
 // git operations (SHA, commits, diff stats), CI status, review status, and worktree info.
 // Pass nil for enrichment to get just the base annotation without CI/worktree enrichment.
 // Pass AnnotationOptions{} for the full annotation, or set Skip* flags to skip work.
-func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, enrichment *AnnotationEnrichment, opts AnnotationOptions) tree.BranchAnnotation {
-	ann := GetBranchAnnotation(eng, branch, opts)
+func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, stat *engine.BranchStat, enrichment *AnnotationEnrichment, opts AnnotationOptions) tree.BranchAnnotation {
+	ann := GetBranchAnnotation(eng, branch, stat, opts)
 
 	if enrichment == nil {
 		return ann
@@ -334,7 +334,11 @@ func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, enrichment *An
 // GetBranchAnnotation returns a tree.BranchAnnotation populated with standard branch metadata.
 // This includes git operations (SHA, commit count, diff stats) which may be slow.
 // Pass AnnotationOptions{} for the full annotation, or set Skip* flags to skip work.
-func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch, opts AnnotationOptions) tree.BranchAnnotation {
+// GetBranchAnnotation populates a tree.BranchAnnotation. When stat is non-nil
+// the git-computed fields (short SHA, commit count, diff stats) are read from it
+// — a batched, passed-around value — instead of per-branch engine reads; when
+// nil it falls back to reading them from the engine.
+func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch, stat *engine.BranchStat, opts AnnotationOptions) tree.BranchAnnotation {
 	ann := tree.BranchAnnotation{
 		IsLocked:      branch.IsLocked(),
 		IsFrozen:      branch.IsFrozen(),
@@ -343,7 +347,9 @@ func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch, opts Ann
 	}
 
 	// Get short SHA for the branch
-	if sha, err := branch.GetRevision(); err == nil && len(sha) >= 7 {
+	if stat != nil {
+		ann.LocalSHA = stat.ShortSHA
+	} else if sha, err := branch.GetRevision(); err == nil && len(sha) >= 7 {
 		ann.LocalSHA = sha[:7]
 	}
 
@@ -356,14 +362,19 @@ func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch, opts Ann
 			ann.PRURL = prInfo.URL()
 		}
 
-		if !opts.SkipCommitMessages {
+		switch {
+		case !opts.SkipCommitMessages:
 			// Commit messages for detailed view
 			if commits, err := branch.GetAllCommits(engine.CommitFormatReadable); err == nil {
 				ann.CommitMessages = commits
 				ann.CommitCount = len(commits)
 			}
-		} else if count, err := eng.GetCommitCount(branch); err == nil {
-			ann.CommitCount = count
+		case stat != nil:
+			ann.CommitCount = stat.CommitCount
+		default:
+			if count, err := eng.GetCommitCount(branch); err == nil {
+				ann.CommitCount = count
+			}
 		}
 
 		// Merged downstack history
@@ -382,7 +393,10 @@ func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch, opts Ann
 
 		// Local stats
 		if !opts.SkipDiffStats {
-			if added, deleted, err := branch.GetDiffStats(); err == nil {
+			if stat != nil {
+				ann.LinesAdded = stat.LinesAdded
+				ann.LinesDeleted = stat.LinesDeleted
+			} else if added, deleted, err := branch.GetDiffStats(); err == nil {
 				ann.LinesAdded = added
 				ann.LinesDeleted = deleted
 			}

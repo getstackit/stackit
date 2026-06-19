@@ -171,7 +171,7 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 		return false // No stored revision, needs restack
 	}
 
-	// Get current parent revision (cached via revisionCache after first read).
+	// Get current parent revision.
 	parentRev, err := e.git.GetRevision(state.Parent)
 	if err != nil {
 		return false // Can't determine, assume needs restack

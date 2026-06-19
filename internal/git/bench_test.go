@@ -97,14 +97,10 @@ func BenchmarkGetRecentCommits(b *testing.B) {
 	}
 }
 
-// BenchmarkGetRevision measures the cache-warm path — the realistic case in
-// production where engine bootstrap preloads all branch revisions via
-// LoadAllBranchRevisions before any individual lookup.
+// BenchmarkGetRevision measures a single branch revision lookup, which resolves
+// fresh via `git rev-parse` on every call.
 func BenchmarkGetRevision(b *testing.B) {
 	br := newBenchRepo(b, 5, 1)
-	if err := br.runner.LoadAllBranchRevisions(); err != nil {
-		b.Fatalf("LoadAllBranchRevisions: %v", err)
-	}
 	for b.Loop() {
 		if _, err := br.runner.GetRevision("branch-0"); err != nil {
 			b.Fatalf("GetRevision: %v", err)
@@ -112,21 +108,9 @@ func BenchmarkGetRevision(b *testing.B) {
 	}
 }
 
-// BenchmarkGetRevisionCold measures the cache-miss path. The cache is only
-// populated by LoadAllBranchRevisions (not on individual misses) so repeated
-// calls without a preload always pay the subprocess cost.
-func BenchmarkGetRevisionCold(b *testing.B) {
-	br := newBenchRepo(b, 5, 1)
-	for b.Loop() {
-		if _, err := br.runner.GetRevision("branch-0"); err != nil {
-			b.Fatalf("GetRevision: %v", err)
-		}
-	}
-}
-
-// BenchmarkBatchGetRevisions measures bulk revision resolution with a cold
-// cache so we see the actual shell-out cost (Phase 2 batches all misses into
-// a single `git rev-parse` invocation rather than N parallel subprocesses).
+// BenchmarkBatchGetRevisions measures bulk revision resolution, batching all
+// branches into a single `git rev-parse` invocation rather than N parallel
+// subprocesses.
 func BenchmarkBatchGetRevisions(b *testing.B) {
 	const branches = 20
 	br := newBenchRepo(b, 5, branches)
@@ -137,18 +121,6 @@ func BenchmarkBatchGetRevisions(b *testing.B) {
 	for b.Loop() {
 		if _, errs := br.runner.BatchGetRevisions(names); len(errs) > 0 {
 			b.Fatalf("BatchGetRevisions: %v", errs[0])
-		}
-	}
-}
-
-// BenchmarkLoadAllBranchRevisions measures the cache-preload path used by
-// engine startup. One `git for-each-ref` invocation fills the revision cache
-// for all local branches.
-func BenchmarkLoadAllBranchRevisions(b *testing.B) {
-	br := newBenchRepo(b, 5, 20)
-	for b.Loop() {
-		if err := br.runner.LoadAllBranchRevisions(); err != nil {
-			b.Fatalf("LoadAllBranchRevisions: %v", err)
 		}
 	}
 }
@@ -335,8 +307,8 @@ func BenchmarkReadBlob(b *testing.B) {
 }
 
 // BenchmarkParallelGetRevision measures the parallel-resolution path: N
-// goroutines resolving distinct branch names concurrently. With the revision
-// cache warm, this is dominated by cache hits and should scale near-linearly.
+// goroutines resolving distinct branch names concurrently. Each call spawns its
+// own `git rev-parse` subprocess and there's no process-wide lock in the runner.
 func BenchmarkParallelGetRevision(b *testing.B) {
 	const branches = 20
 	br := newBenchRepo(b, 5, branches)

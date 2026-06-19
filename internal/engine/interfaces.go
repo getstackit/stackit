@@ -93,18 +93,9 @@ type BranchInfo interface {
 	// BatchDivergencePoints returns the divergence point for every branch in one
 	// batched (git-free when metadata is cached) pass, keyed by branch name.
 	BatchDivergencePoints(branches Branches) map[string]string
-	// PreloadBranchData batch-loads metadata and revisions for all branches
-	// into their respective caches. Call before parallel annotation building
-	// to eliminate per-branch cache misses and mutex contention.
-	PreloadBranchData()
-	// PreloadBranchStats warms the diff-stats and commit-count caches for all
-	// given branches in parallel. Call before utils.Run iteration so subsequent
-	// GetDiffStats / GetCommitCount calls are instant cache hits.
-	PreloadBranchStats(branches []Branch)
 	// BatchDiffStats, BatchCommits, and BatchChangedFileCounts each resolve one
 	// per-branch concern across the whole set in a single batched pass, returning
-	// a value map — the per-concern alternative to warming engine-global caches
-	// with PreloadBranchData/PreloadBranchStats.
+	// a value map.
 	BatchDiffStats(branches Branches) map[string]DiffStat
 	BatchCommits(branches Branches, format CommitFormat) map[string][]string
 	BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int

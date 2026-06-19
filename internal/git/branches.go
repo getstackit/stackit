@@ -66,7 +66,6 @@ func (r *runner) DeleteBranch(ctx context.Context, branchName string) error {
 		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
 	}
 
-	r.revisionCache.Delete(branchName)
 	return nil
 }
 
@@ -86,8 +85,6 @@ func (r *runner) RenameBranch(ctx context.Context, oldName, newName string) erro
 	if err != nil {
 		return fmt.Errorf("failed to rename branch %s to %s: %w", oldName, newName, err)
 	}
-	r.revisionCache.Delete(oldName)
-	r.revisionCache.Delete(newName)
 	return nil
 }
 
@@ -124,7 +121,6 @@ func (r *runner) CreateBranchForce(ctx context.Context, branchName, revision str
 	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", refName, sha); err != nil {
 		return fmt.Errorf("failed to force-create branch %s at %s: %w", branchName, revision, err)
 	}
-	r.revisionCache.Delete(branchName)
 	return nil
 }
 
@@ -144,7 +140,6 @@ func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision strin
 	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", refName, sha); err != nil {
 		return fmt.Errorf("failed to update branch ref: %w", err)
 	}
-	r.revisionCache.Delete(branchName)
 	return nil
 }
 

@@ -136,9 +136,11 @@ func (e *engineImpl) resolveBranchComparisonRevisions(branchName string) (base, 
 		parent = state.Parent
 	}
 
-	// Get base revision (stored parent revision)
+	// Get base revision (stored parent revision). An empty stored revision is
+	// treated as unset and falls back to the parent's current tip, matching
+	// statBase, which the batched diff-stat/commit-count readers use.
 	meta, err := e.readMetadata(branchName)
-	if rev := meta.GetParentBranchRevision(); err == nil && rev != nil {
+	if rev := meta.GetParentBranchRevision(); err == nil && rev != nil && *rev != "" {
 		base = *rev
 	} else {
 		baseRev, err := e.git.GetRevision(parent)

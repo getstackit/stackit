@@ -188,7 +188,7 @@ func TestResolveExternallyCreatedCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	// SHAs created outside the runner resolve by falling through to git. The
-	// full fetch flow is exercised in TestPullBranch_WithReload below.
+	// full fetch flow is exercised in TestPullBranch_FetchResolvesNewCommits below.
 
 	// Verify the new commit is resolvable
 	_, err = runner.GetCommitAuthor(newSha)
@@ -199,8 +199,9 @@ func TestResolveExternallyCreatedCommits(t *testing.T) {
 	require.NoError(t, err, "runner should still resolve old commits")
 }
 
-func TestPullBranch_WithReload(t *testing.T) {
-	// Test that PullBranch works correctly with the refspec fix and reload mechanism
+func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
+	// Test that PullBranch works correctly with the refspec fix: a commit fetched
+	// from the remote is resolvable through the long-lived runner afterward.
 
 	// 1. Setup a "remote" repository
 	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
@@ -247,7 +248,7 @@ func TestPullBranch_WithReload(t *testing.T) {
 	require.Equal(t, remoteSha, localSha, "Local branch should match remote")
 
 	// 6. Verify the newly fetched commit is resolvable through the runner
-	// (this exercises the reload mechanism in PullBranch).
+	// (it falls through to git since the runner holds no per-process cache).
 	_, err = runner.GetCommitAuthor(remoteSha)
 	require.NoError(t, err, "runner should resolve the newly fetched commit")
 

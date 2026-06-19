@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewSyncCmd creates the sync command
@@ -39,15 +43,25 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 			}
 
 			return common.Run(cmd, func(ctx *app.Context) error {
-				// JSON output for dry-run mode
-				if jsonOutput && dryRun {
-					return syncDryRunJSON(ctx, sync.Options{
-						All:       all,
-						Force:     force,
-						Restack:   restack,
-						NoRestack: noRestack,
-						DryRun:    true,
-					})
+				opts := sync.Options{
+					All:       all,
+					Force:     force,
+					Restack:   restack,
+					NoRestack: noRestack,
+					DryRun:    dryRun,
+				}
+
+				// --dry-run is a read-only PREVIEW. Compute the plan from the
+				// current (remote-aware) state and render it without ever calling
+				// sync.Action, so nothing is fast-forwarded, deleted, restacked,
+				// or pushed to GitHub. This is the whole contract of --dry-run.
+				if dryRun {
+					plan := computeSyncDryRun(ctx, opts)
+					if jsonOutput {
+						return renderSyncDryRunJSON(ctx.Output, plan.toResult())
+					}
+					renderSyncDryRunText(ctx.Output, plan)
+					return nil
 				}
 
 				// Check for uncommitted changes BEFORE starting TUI to avoid
@@ -61,13 +75,7 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 				defer runner.Cleanup()
 
 				// Run sync action with handler
-				return sync.Action(ctx, sync.Options{
-					All:       all,
-					Force:     force,
-					Restack:   restack,
-					NoRestack: noRestack,
-					DryRun:    dryRun,
-				}, handler)
+				return sync.Action(ctx, opts, handler)
 			})
 		},
 	}
@@ -76,35 +84,74 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Don't prompt for confirmation before overwriting or deleting a branch")
 	cmd.Flags().BoolVar(&restack, "restack", false, "Restack all branches in the current stack")
 	cmd.Flags().BoolVar(&noRestack, "no-restack", false, "Skip restacking branches entirely")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview metadata changes without applying them")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview what sync would do without making any changes")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format (requires --dry-run)")
 
 	return cmd
 }
 
-// syncDryRunJSON generates JSON output for sync --dry-run.
-//
-// This function intentionally duplicates some logic from sync.Action rather than
-// calling the action with a special handler. This is because:
-//  1. sync.Action has complex interactive behavior (prompts, confirmations) that
-//     doesn't make sense for a pure dry-run query
-//  2. The dry-run JSON output needs to be a simple snapshot of current state,
-//     not a simulation of the full sync process
-//  3. Keeping this separate makes it easier to extend the JSON output without
-//     affecting the main sync action's behavior
-func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
-	eng := ctx.Engine
+// dryRunPlan is the read-only snapshot of what a sync WOULD do, built from the
+// current (remote-aware) state. It carries enough detail to render a preview
+// that mirrors the live run — target revision, deletion reasons, restack
+// parents. The JSON contract is a stable, names-only projection (see toResult);
+// the richer fields here exist only to make the human-readable preview as
+// informative as the real sync.
+type dryRunPlan struct {
+	pullBranch    string              // trunk that would be pulled (empty if up to date)
+	pullRev       string              // short remote SHA the trunk would move to
+	clean         []dryRunCleanItem   // branches that would be deleted
+	restack       []dryRunRestackItem // branches that would be restacked
+	restackStacks []string            // deduped stack roots covering the restack set (JSON only)
+	skipped       []string            // dirty-worktree anchors whose stacks are skipped
+	restacked     bool                // whether --restack was requested
+}
 
+type dryRunCleanItem struct {
+	branch string
+	reason string // e.g. "merged into main", "closed on GitHub"
+}
+
+type dryRunRestackItem struct {
+	branch string
+	parent string
+}
+
+// toResult projects the plan onto the stable JSON contract (branch names only).
+// The shape is byte-compatible with what scripts already consume, so the richer
+// preview fields are deliberately dropped here.
+func (p dryRunPlan) toResult() sync.DryRunResult {
 	result := sync.DryRunResult{
-		WouldClean:   []string{},
-		WouldRestack: []string{},
+		WouldPull:          p.pullBranch,
+		WouldClean:         []string{},
+		WouldRestack:       []string{},
+		WouldRestackStacks: p.restackStacks,
+		SkippedStacks:      p.skipped,
 	}
+	for _, c := range p.clean {
+		result.WouldClean = append(result.WouldClean, c.branch)
+	}
+	for _, r := range p.restack {
+		result.WouldRestack = append(result.WouldRestack, r.branch)
+	}
+	return result
+}
+
+// computeSyncDryRun builds a read-only snapshot of what a sync WOULD do from the
+// current (remote-aware) state. It never mutates: it probes remote status and
+// reads PR/deletion state, but performs no fetch-and-merge, deletion, restack,
+// or GitHub write. It intentionally reimplements a slice of sync.Action's
+// planning rather than running the action with a special handler, because a
+// dry-run is a query, not a simulation of the full interactive process.
+func computeSyncDryRun(ctx *app.Context, opts sync.Options) dryRunPlan {
+	eng := ctx.Engine
+	plan := dryRunPlan{restacked: opts.Restack}
 
 	// Check if trunk needs to be pulled from remote
 	trunk := eng.Trunk()
 	remoteStatus := eng.ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(trunk)).ForBranch(trunk)
 	if remoteStatus.Behind() {
-		result.WouldPull = trunk.GetName()
+		plan.pullBranch = trunk.GetName()
+		plan.pullRev = shortSHA(remoteStatus.RemoteSha)
 	}
 
 	// Collect candidate branches for deletion and restack checks
@@ -119,7 +166,10 @@ func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
 
 		// Check restack status while iterating
 		if opts.Restack && !branch.IsBranchUpToDate() {
-			result.WouldRestack = append(result.WouldRestack, branch.GetName())
+			plan.restack = append(plan.restack, dryRunRestackItem{
+				branch: branch.GetName(),
+				parent: branch.GetParentOrTrunk(),
+			})
 			if root := eng.GetStackRootForBranch(branch); root != "" {
 				restackRootSet[root] = struct{}{}
 			}
@@ -135,7 +185,7 @@ func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
 			roots = append(roots, root)
 		}
 		sort.Strings(roots)
-		result.WouldRestackStacks = roots
+		plan.restackStacks = roots
 	}
 
 	// Batch-check deletion status for all candidates
@@ -144,7 +194,7 @@ func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
 		if err == nil {
 			for _, name := range candidateNames {
 				if status, ok := statuses[name]; ok && status.SafeToDelete {
-					result.WouldClean = append(result.WouldClean, name)
+					plan.clean = append(plan.clean, dryRunCleanItem{branch: name, reason: status.Reason})
 				}
 			}
 		}
@@ -155,17 +205,122 @@ func syncDryRunJSON(ctx *app.Context, opts sync.Options) error {
 	if err == nil {
 		for _, wt := range managedWorktrees {
 			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
-				result.SkippedStacks = append(result.SkippedStacks, wt.AnchorBranch)
+				plan.skipped = append(plan.skipped, wt.AnchorBranch)
 			}
 		}
 	}
 
-	// Output JSON
+	return plan
+}
+
+// renderSyncDryRunJSON prints the dry-run snapshot as indented JSON. The shape
+// is a stable contract for scripting, so keep it byte-compatible.
+func renderSyncDryRunJSON(out output.Output, result sync.DryRunResult) error {
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-	ctx.Output.Info("%s", string(data))
-
+	out.Info("%s", string(data))
 	return nil
+}
+
+// renderSyncDryRunText prints a human-readable preview of what a sync would do,
+// mirroring the live run's shape: grouped sections, then a one-line summary, then
+// the command to apply it. Secondary detail (target revision, deletion reason,
+// restack parent) is dimmed so branch names stay scannable.
+func renderSyncDryRunText(out output.Output, plan dryRunPlan) {
+	out.Info("🔍 Dry run — no changes will be made.")
+
+	printed := false
+
+	if plan.pullBranch != "" {
+		out.Newline()
+		out.Info("Would pull from remote:")
+		line := "  " + style.ColorBranchName(plan.pullBranch, false)
+		if plan.pullRev != "" {
+			line += " → " + style.ColorDim(plan.pullRev)
+		}
+		out.Info("%s", line)
+		printed = true
+	}
+
+	if len(plan.clean) > 0 {
+		out.Newline()
+		out.Info("Would delete (merged or closed PRs):")
+		for _, c := range plan.clean {
+			line := "  " + style.ColorBranchName(c.branch, false)
+			if c.reason != "" {
+				line += " " + style.ColorDim("("+c.reason+")")
+			}
+			out.Info("%s", line)
+		}
+		printed = true
+	}
+
+	if len(plan.restack) > 0 {
+		out.Newline()
+		out.Info("Would restack:")
+		for _, r := range plan.restack {
+			line := "  " + style.ColorBranchName(r.branch, false)
+			if r.parent != "" {
+				line += " " + style.ColorDim("on "+r.parent)
+			}
+			out.Info("%s", line)
+		}
+		printed = true
+	}
+
+	if len(plan.skipped) > 0 {
+		out.Newline()
+		out.Info("Skipped (worktree has uncommitted changes):")
+		for _, name := range plan.skipped {
+			out.Info("  %s", style.ColorBranchName(name, false))
+		}
+		printed = true
+	}
+
+	if !printed {
+		out.Newline()
+		out.Info("Everything is up to date — sync would make no changes.")
+		return
+	}
+
+	out.Newline()
+	if summary := dryRunSummaryLine(plan); summary != "" {
+		out.Info("Summary: %s", summary)
+	}
+	if !plan.restacked {
+		out.Info("%s", style.ColorDim("Restacking is previewed only with --restack."))
+	}
+	out.Info("Run %s to apply.", style.ColorCyan("stackit sync"))
+}
+
+// dryRunSummaryLine renders the one-line "would …" tally that mirrors the live
+// sync's "✅ Summary:" line, so a preview and a real run read the same shape.
+func dryRunSummaryLine(plan dryRunPlan) string {
+	var parts []string
+	if plan.pullBranch != "" {
+		parts = append(parts, "pull trunk")
+	}
+	if n := len(plan.clean); n > 0 {
+		parts = append(parts, fmt.Sprintf("delete %d", n))
+	}
+	if n := len(plan.restack); n > 0 {
+		parts = append(parts, fmt.Sprintf("restack %d", n))
+	}
+	if n := len(plan.skipped); n > 0 {
+		parts = append(parts, fmt.Sprintf("skip %d %s", n, actions.Pluralize("stack", n)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "would " + strings.Join(parts, ", ")
+}
+
+// shortSHA truncates a full git SHA to its 7-character short form for display.
+func shortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }

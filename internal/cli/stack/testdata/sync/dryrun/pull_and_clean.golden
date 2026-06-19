@@ -1,0 +1,12 @@
+🔍 Dry run — no changes will be made.
+
+Would pull from remote:
+  main → abc1234
+
+Would delete (merged or closed PRs):
+  feat-login (merged into main)
+  feat-old (closed on GitHub)
+
+Summary: would pull trunk, delete 2
+Restacking is previewed only with --restack.
+Run stackit sync to apply.

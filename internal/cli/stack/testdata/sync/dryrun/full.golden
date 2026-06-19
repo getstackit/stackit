@@ -1,0 +1,17 @@
+🔍 Dry run — no changes will be made.
+
+Would pull from remote:
+  main → abc1234
+
+Would delete (merged or closed PRs):
+  feat-old (merged into main)
+
+Would restack:
+  feat-api on main
+  feat-ui on feat-api
+
+Skipped (worktree has uncommitted changes):
+  feat-wip
+
+Summary: would pull trunk, delete 1, restack 2, skip 1 stack
+Run stackit sync to apply.

@@ -161,9 +161,9 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 	require.Equal(t, shaB, trackedB, "remote-tracking ref should update to force-pushed commit B")
 }
 
-func TestReloadRepository(t *testing.T) {
-	// Test that the runner can resolve commits created externally — the
-	// revision cache must invalidate / pass through to git for unknown SHAs.
+func TestResolveExternallyCreatedCommits(t *testing.T) {
+	// The runner resolves commits created outside it (e.g. by a fetch) by
+	// passing through to git; there is no per-process cache to invalidate.
 
 	// 1. Setup a repository
 	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
@@ -187,9 +187,8 @@ func TestReloadRepository(t *testing.T) {
 	newSha, err := scene.Repo.GetCurrentSHA()
 	require.NoError(t, err)
 
-	// PullBranch normally triggers the reload after fetch; this test verifies
-	// the runner falls through to git for SHAs that aren't in its cache. The
-	// full fetch+reload flow is exercised in TestPullBranch_WithReload below.
+	// SHAs created outside the runner resolve by falling through to git. The
+	// full fetch flow is exercised in TestPullBranch_WithReload below.
 
 	// Verify the new commit is resolvable
 	_, err = runner.GetCommitAuthor(newSha)

@@ -419,13 +419,18 @@ func (m *shippableModel) rebuildCache() {
 			}
 		}
 
-		// Compute annotations for all branches in the stack
+		// Compute annotations for all branches in the stack, reading their
+		// git-computed stats from one batch rather than per branch (this runs on
+		// every refresh and on the auto-refresh timer).
+		stackBranches := engine.Branches{}
 		for _, branchName := range stack.Stack.AllBranches {
-			branch := m.engine.GetBranch(branchName)
-			if branch.GetName() != "" {
-				ann := tui.GetBranchAnnotation(m.engine, branch, nil, tui.AnnotationOptions{})
-				m.cache.branchAnnotations[branchName] = ann
+			if branch := m.engine.GetBranch(branchName); branch.GetName() != "" {
+				stackBranches = stackBranches.Append(branch)
 			}
+		}
+		stats := m.engine.BatchBranchStats(stackBranches)
+		for _, branch := range stackBranches {
+			m.cache.branchAnnotations[branch.GetName()] = tui.GetBranchAnnotation(m.engine, branch, stats[branch.GetName()], tui.AnnotationOptions{})
 		}
 
 		// Cache blocking reasons per branch

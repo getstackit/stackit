@@ -53,14 +53,14 @@ func (r *runner) CommitWithOptions(opts CommitOptions) error {
 		if err != nil {
 			return err
 		}
-		return r.ReloadRepository()
+		return nil
 	}
 
 	err := r.RunGitCommandInteractive(args...)
 	if err != nil {
 		return err
 	}
-	return r.ReloadRepository()
+	return nil
 }
 
 func (r *runner) Commit(message string, verbose int, noVerify bool) error {
@@ -76,5 +76,5 @@ func (r *runner) CommitAmendNoEdit(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return r.ReloadRepository()
+	return nil
 }

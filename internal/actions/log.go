@@ -163,11 +163,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 
 	if len(visibleBranches) > 0 {
 		utils.Run(visibleBranches.All(), func(branchObj engine.Branch) {
-			var stat *engine.BranchStat
-			if s, ok := stats[branchObj.GetName()]; ok {
-				stat = &s
-			}
-			annotation := buildLogAnnotation(ctx.Engine, branchObj, stat, opts, wtData, enrichment)
+			annotation := buildLogAnnotation(ctx.Engine, branchObj, stats[branchObj.GetName()], opts, wtData, enrichment)
 			results <- result{branchObj.GetName(), annotation}
 		})
 	}
@@ -252,7 +248,7 @@ func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opt
 func buildLogAnnotation(
 	eng engine.Engine,
 	branch engine.Branch,
-	stat *engine.BranchStat,
+	stat engine.BranchStat,
 	opts LogOptions,
 	wtData *tui.WorktreeData,
 	enrichment *tui.AnnotationEnrichment,
@@ -265,7 +261,8 @@ func buildLogAnnotation(
 
 	annotation := tui.GetMinimalAnnotationWithWorktreeAndEmpty(eng, branch, wtData)
 	if opts.ShowSHAs {
-		if stat != nil {
+		// The short style does not batch stats, so resolve the SHA directly.
+		if stat.ShortSHA != "" {
 			annotation.LocalSHA = stat.ShortSHA
 		} else if sha, err := branch.GetRevision(); err == nil && len(sha) >= 7 {
 			annotation.LocalSHA = sha[:7]

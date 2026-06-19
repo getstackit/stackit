@@ -324,8 +324,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 		// shared map, then assemble the map serially.
 		built := make([]tree.BranchAnnotation, len(allBranches))
 		utils.Run(indexedBranches(allBranches), func(item indexedBranch) {
-			stat := stats[item.branch.GetName()]
-			built[item.index] = BuildFullAnnotation(eng, item.branch, &stat, enrichment, AnnotationOptions{
+			built[item.index] = BuildFullAnnotation(eng, item.branch, stats[item.branch.GetName()], enrichment, AnnotationOptions{
 				SkipCommitMessages: true,
 			})
 		})

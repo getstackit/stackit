@@ -745,10 +745,12 @@ func PromptBranchCheckout(branches []engine.Branch, eng engine.BranchReader) (st
 	trunk := eng.Trunk()
 	renderer := NewStackTreeRenderer(eng)
 
-	// Add annotations for all branches
+	// Add annotations for all branches, reading their git-computed stats from a
+	// single batch rather than per branch.
+	stats := eng.BatchBranchStats(engine.Branches(branches))
 	annotations := make(map[string]tree.BranchAnnotation)
 	for _, branch := range branches {
-		annotations[branch.GetName()] = GetBranchAnnotation(eng, branch, nil, AnnotationOptions{})
+		annotations[branch.GetName()] = GetBranchAnnotation(eng, branch, stats[branch.GetName()], AnnotationOptions{})
 	}
 	renderer.SetAnnotations(annotations)
 

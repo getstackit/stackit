@@ -487,14 +487,6 @@ func (r *runner) ensureRepo() error {
 	return nil
 }
 
-// ReloadRepository is a no-op retained for callers that expect a post-fetch
-// reload hook. The cached repo root is stable for the life of the process
-// (stackit doesn't change the working directory), so there is nothing to
-// invalidate.
-func (r *runner) ReloadRepository() error {
-	return nil
-}
-
 func (r *runner) InitDefaultRepo() error {
 	return r.ensureRepo()
 }
@@ -1097,7 +1089,7 @@ func (r *runner) fetchRemoteRefSpecs(ctx context.Context, remote string, refspec
 	if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
 		return fmt.Errorf("git fetch failed: %w", err)
 	}
-	return r.ReloadRepository()
+	return nil
 }
 
 func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) error {

@@ -42,6 +42,10 @@ const (
 | `UpdateRef` in a loop | `UpdateRefsBatch(ctx, updates)` |
 | `DeleteRef` in a loop | `DeleteRefsBatch(ctx, refNames)` |
 | `PushBranch` in a loop | `PushMetadataRefs(ctx, branches)` |
+| `GetRevision` in a loop | `GetRevisions(branchNames)` |
+| `GetDiffStats` / `GetCommitCount` in a loop | `BatchDiffStats(branches)` / `BatchBranchStats(branches)` |
+| `GetAllCommits` in a loop | `BatchCommits(branches, format)` |
+| `GetDivergencePoint` in a loop | `BatchDivergencePoints(branches)` |
 
 **Why:** Each git command spawns a process (~2-5ms overhead). Each GitHub API call takes ~200-500ms. For N branches, a loop costs O(N × overhead) while a batch costs O(1) or O(N) with parallelism.
 
@@ -56,6 +60,12 @@ _ = eng.BatchMarkNeedsPRBodyUpdate(branchNames)
 ```
 
 When adding new operations that touch multiple branches or refs, prefer designing batch APIs from the start. Use `UpdateRefsBatch` for atomic multi-ref writes and `BatchReadLocalMetadata` / `BatchReadMetadata` for parallel reads.
+
+### Branch-state reads return values, not a global cache
+
+Multi-branch reads of revisions, commits, diff stats, and divergence points go through the `Batch*` readers above, which return value maps you resolve once and pass around (often composed at the call site, e.g. `commits := eng.BatchCommits(...)`). Do **not** reintroduce an ambient/global revision cache or a `PreloadBranchData`-style warm-up. That pattern was removed deliberately: a globally cached revision could go stale between a read and a later read within the same operation (a correctness hazard, not just a perf concern), and explicit passed-around values are far easier to reason about. The revision-keyed diff-stat/commit-count memoization that remains is safe precisely because it is keyed by content, not warmed globally.
+
+Forge status (CI, checks, review state) is a **separate concern** from branch state. Fetch it once via the GitHub batchers and join it to branch data at the consumer/render layer; never fold live forge status into the branch-state readers.
 
 ## Error Handling
 

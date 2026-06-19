@@ -2,7 +2,8 @@ package engine
 
 import (
 	"context"
-	"sync"
+
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // DiffStat is a branch's additions/deletions relative to its divergence point.
@@ -23,11 +24,16 @@ type BranchStat struct {
 
 // batchByBranch is the shared scaffold behind the per-concern batch readers. It
 // resolves every branch's head revision, parent revision, and stored divergence
-// base in two batched, cache-backed reads, then runs fn for each branch in
-// parallel and collects the results by branch name. Callers supply only the
-// per-concern computation; the (otherwise duplicated) batched resolution lives
-// here once. storedBase is the metadata ParentBranchRevision ("" when unset);
-// each concern decides how to derive its base from storedBase/parentRev.
+// base in two batched, cache-backed reads, then runs fn for each branch on a
+// bounded worker pool and collects the results by branch name. Callers supply
+// only the per-concern computation; the (otherwise duplicated) batched
+// resolution lives here once. storedBase is the metadata ParentBranchRevision
+// ("" when unset); each concern decides how to derive its base from
+// storedBase/parentRev.
+//
+// Concurrency is bounded by utils.Run (GOMAXPROCS workers) rather than spawning
+// one goroutine per branch, so a large stack does not fan out to hundreds of
+// concurrent git subprocesses on a cold cache.
 func batchByBranch[T any](e *engineImpl, branches Branches, fn func(b Branch, head, parentRev, storedBase string) T) map[string]T {
 	result := make(map[string]T, len(branches))
 	if len(branches) == 0 {
@@ -43,30 +49,31 @@ func batchByBranch[T any](e *engineImpl, branches Branches, fn func(b Branch, he
 	revs, _ := e.GetRevisions(revNames)
 	metas, _ := e.batchReadMetadata(branchNames)
 
-	type entry struct {
-		name string
-		val  T
+	// Each worker writes only its own index, so the slice is filled without
+	// synchronization and assembled into the result map serially afterward.
+	type indexedBranch struct {
+		index  int
+		branch Branch
 	}
-	entries := make([]entry, len(branches))
-	var wg sync.WaitGroup
+	indexed := make([]indexedBranch, len(branches))
+	values := make([]T, len(branches))
 	for i, b := range branches {
-		wg.Add(1)
-		go func(i int, b Branch) {
-			defer wg.Done()
-			name := b.GetName()
-			storedBase := ""
-			if m := metas[name]; m != nil {
-				if rev := m.GetParentBranchRevision(); rev != nil && *rev != "" {
-					storedBase = *rev
-				}
-			}
-			entries[i] = entry{name: name, val: fn(b, revs[name], revs[b.GetParentOrTrunk()], storedBase)}
-		}(i, b)
+		indexed[i] = indexedBranch{index: i, branch: b}
 	}
-	wg.Wait()
 
-	for _, en := range entries {
-		result[en.name] = en.val
+	utils.Run(indexed, func(item indexedBranch) {
+		name := item.branch.GetName()
+		storedBase := ""
+		if m := metas[name]; m != nil {
+			if rev := m.GetParentBranchRevision(); rev != nil && *rev != "" {
+				storedBase = *rev
+			}
+		}
+		values[item.index] = fn(item.branch, revs[name], revs[item.branch.GetParentOrTrunk()], storedBase)
+	})
+
+	for i, b := range branches {
+		result[b.GetName()] = values[i]
 	}
 	return result
 }

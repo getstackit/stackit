@@ -667,6 +667,29 @@ func getPRMergeableStateBasic(ctx context.Context, runner GitCommandRunner, prNo
 	}, nil
 }
 
+// buildBatchPRNodeQuery builds a batch GraphQL query for fetching multiple PR nodes by ID.
+// fields is the space-separated list of GraphQL field names to select within the PullRequest fragment.
+func buildBatchPRNodeQuery(queryName string, prNodeIDs []string, fields string) (string, map[string]any) {
+	queryParts := make([]string, 0, len(prNodeIDs))
+	variables := make(map[string]any, len(prNodeIDs))
+	for i, nodeID := range prNodeIDs {
+		alias := fmt.Sprintf("pr%d", i)
+		varName := fmt.Sprintf("nodeId%d", i)
+		queryParts = append(queryParts, fmt.Sprintf(`%s: node(id: $%s) { ... on PullRequest { %s } }`, alias, varName, fields))
+		variables[varName] = nodeID
+	}
+
+	varDecls := make([]string, 0, len(prNodeIDs))
+	for i := range prNodeIDs {
+		varDecls = append(varDecls, fmt.Sprintf("$nodeId%d: ID!", i))
+	}
+
+	return fmt.Sprintf("query %s(%s) { %s }",
+		queryName,
+		strings.Join(varDecls, ", "),
+		strings.Join(queryParts, " ")), variables
+}
+
 // BatchGetPRMergeableStates checks mergeable state for multiple PRs in a single GraphQL query.
 // Returns a map from node ID to PRMergeableState. If a PR fails to fetch, it won't be in the map.
 func BatchGetPRMergeableStates(ctx context.Context, runner GitCommandRunner, prNodeIDs []string) (map[string]*PRMergeableState, error) {
@@ -674,32 +697,7 @@ func BatchGetPRMergeableStates(ctx context.Context, runner GitCommandRunner, prN
 		return make(map[string]*PRMergeableState), nil
 	}
 
-	// Build query with aliases for each PR
-	queryParts := make([]string, 0, len(prNodeIDs))
-	variables := make(map[string]any, len(prNodeIDs))
-	for i, nodeID := range prNodeIDs {
-		alias := fmt.Sprintf("pr%d", i)
-		varName := fmt.Sprintf("nodeId%d", i)
-		queryParts = append(queryParts, fmt.Sprintf(`%s: node(id: $%s) {
-			... on PullRequest {
-				id
-				mergeable
-				mergeStateStatus
-				state
-			}
-		}`, alias, varName))
-		variables[varName] = nodeID
-	}
-
-	// Build variable declarations
-	varDecls := make([]string, 0, len(prNodeIDs))
-	for i := range prNodeIDs {
-		varDecls = append(varDecls, fmt.Sprintf("$nodeId%d: ID!", i))
-	}
-
-	query := fmt.Sprintf("query BatchGetPRMergeableStates(%s) { %s }",
-		strings.Join(varDecls, ", "),
-		strings.Join(queryParts, " "))
+	query, variables := buildBatchPRNodeQuery("BatchGetPRMergeableStates", prNodeIDs, "id mergeable mergeStateStatus state")
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
 	if err != nil {
@@ -742,29 +740,7 @@ func BatchGetPRMergeableStates(ctx context.Context, runner GitCommandRunner, prN
 // batchGetPRMergeableStatesBasic fetches PR mergeable states without the mergeStateStatus field,
 // used as a fallback for GitHub Enterprise instances that don't support that field.
 func batchGetPRMergeableStatesBasic(ctx context.Context, runner GitCommandRunner, prNodeIDs []string) (map[string]*PRMergeableState, error) {
-	queryParts := make([]string, 0, len(prNodeIDs))
-	variables := make(map[string]any, len(prNodeIDs))
-	for i, nodeID := range prNodeIDs {
-		alias := fmt.Sprintf("pr%d", i)
-		varName := fmt.Sprintf("nodeId%d", i)
-		queryParts = append(queryParts, fmt.Sprintf(`%s: node(id: $%s) {
-			... on PullRequest {
-				id
-				mergeable
-				state
-			}
-		}`, alias, varName))
-		variables[varName] = nodeID
-	}
-
-	varDecls := make([]string, 0, len(prNodeIDs))
-	for i := range prNodeIDs {
-		varDecls = append(varDecls, fmt.Sprintf("$nodeId%d: ID!", i))
-	}
-
-	query := fmt.Sprintf("query BatchGetPRMergeableStates(%s) { %s }",
-		strings.Join(varDecls, ", "),
-		strings.Join(queryParts, " "))
+	query, variables := buildBatchPRNodeQuery("BatchGetPRMergeableStates", prNodeIDs, "id mergeable state")
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
 	if err != nil {

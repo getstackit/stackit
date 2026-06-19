@@ -13,6 +13,83 @@ type DiffSummary struct {
 	FilesChanged int
 }
 
+// BranchStat holds the git-computed fields a branch annotation needs (short SHA,
+// commit count, additions/deletions), resolved in batch so annotation builders
+// do no per-branch git.
+type BranchStat struct {
+	ShortSHA     string
+	CommitCount  int
+	LinesAdded   int
+	LinesDeleted int
+}
+
+// BatchBranchStats resolves the annotation stats for every branch in batched
+// reads (one revision resolve + one cached metadata read, then parallel
+// per-branch count and diff), keyed by branch name. It is the branch-state
+// counterpart that lets annotation builders drop PreloadBranchData /
+// PreloadBranchStats; forge status (CI, reviews) is a separate concern joined at
+// render time, not part of this.
+func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
+	result := make(map[string]BranchStat, len(branches))
+	if len(branches) == 0 {
+		return result
+	}
+
+	branchNames := make([]string, 0, len(branches))
+	revNames := make([]string, 0, len(branches)*2)
+	for _, b := range branches {
+		branchNames = append(branchNames, b.GetName())
+		revNames = append(revNames, b.GetName(), b.GetParentOrTrunk())
+	}
+	revs, _ := e.GetRevisions(revNames)
+	metas, _ := e.batchReadMetadata(branchNames)
+
+	type entry struct {
+		name string
+		stat BranchStat
+	}
+	entries := make([]entry, len(branches))
+	var wg sync.WaitGroup
+	for i, b := range branches {
+		wg.Add(1)
+		go func(i int, b Branch) {
+			defer wg.Done()
+			name := b.GetName()
+			head := revs[name]
+			st := BranchStat{}
+			if len(head) >= 7 {
+				st.ShortSHA = head[:7]
+			}
+			// Trunk has no parent comparison; only its short SHA is meaningful.
+			if !e.IsTrunk(b) {
+				base := ""
+				if m := metas[name]; m != nil {
+					if rev := m.GetParentBranchRevision(); rev != nil && *rev != "" {
+						base = *rev
+					}
+				}
+				if base == "" {
+					base = revs[b.GetParentOrTrunk()]
+				}
+				if c, err := e.commitCountBetween(base, head); err == nil {
+					st.CommitCount = c
+				}
+				if a, d, err := e.diffStatsBetween(base, head); err == nil {
+					st.LinesAdded = a
+					st.LinesDeleted = d
+				}
+			}
+			entries[i] = entry{name: name, stat: st}
+		}(i, b)
+	}
+	wg.Wait()
+
+	for _, en := range entries {
+		result[en.name] = en.stat
+	}
+	return result
+}
+
 // BranchView is an immutable, point-in-time snapshot of per-branch read data,
 // materialized in batched and parallel git reads when it is built. Consumers
 // read plain values from it — there is no engine callback or global cache

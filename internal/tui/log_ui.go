@@ -307,12 +307,11 @@ func (m *LogModel) enrichData() tea.Cmd {
 		// Detect worktrees (builds both empty and stack-root maps in one call)
 		wtData := GetWorktreeData(eng)
 
-		// Pre-load metadata and revisions for all branches to eliminate per-branch
-		// cache misses during parallel annotation building. PreloadBranchStats
-		// additionally warms the diff-stat and commit-count caches that
-		// BuildFullAnnotation reads, which PreloadBranchData does not cover.
-		eng.PreloadBranchData()
-		eng.PreloadBranchStats(allBranches)
+		// Resolve the git-computed annotation stats (short SHA, commit count, diff
+		// stats) for all branches as one batched value, instead of warming the
+		// engine-global caches. Forge status (CI) and worktree data above are
+		// separate concerns, joined into the annotation below.
+		stats := eng.BatchBranchStats(allBranches)
 
 		// Collect full annotations
 		start := time.Now()
@@ -325,7 +324,8 @@ func (m *LogModel) enrichData() tea.Cmd {
 		// shared map, then assemble the map serially.
 		built := make([]tree.BranchAnnotation, len(allBranches))
 		utils.Run(indexedBranches(allBranches), func(item indexedBranch) {
-			built[item.index] = BuildFullAnnotation(eng, item.branch, enrichment, AnnotationOptions{
+			stat := stats[item.branch.GetName()]
+			built[item.index] = BuildFullAnnotation(eng, item.branch, &stat, enrichment, AnnotationOptions{
 				SkipCommitMessages: true,
 			})
 		})

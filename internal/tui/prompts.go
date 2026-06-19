@@ -748,7 +748,7 @@ func PromptBranchCheckout(branches []engine.Branch, eng engine.BranchReader) (st
 	// Add annotations for all branches
 	annotations := make(map[string]tree.BranchAnnotation)
 	for _, branch := range branches {
-		annotations[branch.GetName()] = GetBranchAnnotation(eng, branch, AnnotationOptions{})
+		annotations[branch.GetName()] = GetBranchAnnotation(eng, branch, nil, AnnotationOptions{})
 	}
 	renderer.SetAnnotations(annotations)
 

@@ -264,7 +264,7 @@ func buildLogAnnotation(
 	enrichment *tui.AnnotationEnrichment,
 ) tree.BranchAnnotation {
 	if opts.Style != LogStyleShort {
-		return tui.BuildFullAnnotation(eng, branch, enrichment, tui.AnnotationOptions{
+		return tui.BuildFullAnnotation(eng, branch, nil, enrichment, tui.AnnotationOptions{
 			SkipCommitMessages: true,
 		})
 	}

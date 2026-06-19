@@ -105,6 +105,10 @@ type BranchInfo interface {
 	// data (revisions, commits, diff summary) in batched/parallel reads, instead
 	// of warming engine-global caches with PreloadBranchData/PreloadBranchStats.
 	ViewBranches(ctx context.Context, branches Branches, format CommitFormat) *BranchView
+	// BatchBranchStats resolves annotation stats (short SHA, commit count,
+	// additions/deletions) for every branch in batch, so annotation builders need
+	// no per-branch git and no PreloadBranchData/PreloadBranchStats.
+	BatchBranchStats(branches Branches) map[string]BranchStat
 }
 
 // GitDiffer handles diff and merge operations

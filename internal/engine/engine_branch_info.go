@@ -77,16 +77,23 @@ func (e *engineImpl) GetCommitCount(branch Branch) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if branchRev == base {
+	return e.commitCountBetween(base, branchRev)
+}
+
+// commitCountBetween returns the commit count in (base, head], using the
+// (base, head)-keyed cache. It takes pre-resolved revisions so batched callers
+// need not re-resolve a branch's head.
+func (e *engineImpl) commitCountBetween(base, head string) (int, error) {
+	if head == base {
 		return 0, nil
 	}
 
-	cacheKey := base + ":" + branchRev
+	cacheKey := base + ":" + head
 	if v, ok := e.commitCountCache.Load(cacheKey); ok {
 		return v.(int), nil
 	}
 
-	out, err := e.git.RunGitCommandWithContext(context.Background(), "rev-list", "--count", base+".."+branchRev)
+	out, err := e.git.RunGitCommandWithContext(context.Background(), "rev-list", "--count", base+".."+head)
 	if err != nil {
 		return 0, err
 	}

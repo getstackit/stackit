@@ -62,56 +62,40 @@ func StackInfoAction(ctx *app.Context, opts StackInfoOptions) error {
 	})
 	result := make([]StackBranchInfo, 0, len(stackBranches))
 
-	// Warm the revision/metadata and diff-stat caches once, and read PR
-	// submission status for the whole stack in a single batch, so the loop
-	// below does not spawn a git rev-parse, git diff, and (most costly) a
-	// git ls-remote per branch.
-	eng.PreloadBranchData()
-	eng.PreloadBranchStats(stackBranches)
+	// Read each per-branch concern the loop needs as its own batched value map —
+	// commits, diff stats, changed-file counts, and PR submission status — instead
+	// of warming an engine-global cache. The loop is a projection over these maps.
+	commits := eng.BatchCommits(stackBranches, engine.CommitFormatReadable)
+	diffs := eng.BatchDiffStats(stackBranches)
+	fileCounts := eng.BatchChangedFileCounts(ctx.Context, stackBranches)
 	prStatuses, _ := eng.BatchGetPRSubmissionStatus(stackBranches)
 
 	for _, branch := range stackBranches {
 		if branch.IsTrunk() {
 			continue
 		}
+		name := branch.GetName()
 
+		diff := diffs[name]
 		info := StackBranchInfo{
-			Name:           branch.GetName(),
+			Name:           name,
 			Parent:         branch.GetParentOrTrunk(),
 			IsLocked:       branch.IsLocked(),
 			IsFrozen:       branch.IsFrozen(),
 			Scope:          branch.GetScope().String(),
-			CommitMessages: []string{},
+			CommitMessages: commits[name],
+			DiffStats: DiffStats{
+				Additions:    diff.Added,
+				Deletions:    diff.Deleted,
+				FilesChanged: fileCounts[name],
+			},
 		}
-
-		// Commit messages
-		commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
-		if err == nil {
-			info.CommitMessages = commits
-		}
-
-		// Diff stats
-		added, deleted, err := branch.GetDiffStats()
-		if err == nil {
-			info.DiffStats.Additions = added
-			info.DiffStats.Deletions = deleted
-		}
-
-		// Files changed
-		parentName := branch.GetParentOrTrunk()
-		parentRev, err := eng.GetRevision(eng.GetBranch(parentName))
-		if err == nil {
-			branchRev, err := branch.GetRevision()
-			if err == nil {
-				files, err := eng.GetChangedFiles(ctx.Context, parentRev, branchRev)
-				if err == nil {
-					info.DiffStats.FilesChanged = len(files)
-				}
-			}
+		if info.CommitMessages == nil {
+			info.CommitMessages = []string{}
 		}
 
 		// PR info
-		prStatus := prStatuses[branch.GetName()]
+		prStatus := prStatuses[name]
 		if prStatus.PRNumber != nil {
 			info.PRNumber = prStatus.PRNumber
 			if prStatus.PRInfo != nil {

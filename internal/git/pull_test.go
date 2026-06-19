@@ -161,9 +161,9 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 	require.Equal(t, shaB, trackedB, "remote-tracking ref should update to force-pushed commit B")
 }
 
-func TestReloadRepository(t *testing.T) {
-	// Test that the runner can resolve commits created externally — the
-	// revision cache must invalidate / pass through to git for unknown SHAs.
+func TestResolveExternallyCreatedCommits(t *testing.T) {
+	// The runner resolves commits created outside it (e.g. by a fetch) by
+	// passing through to git; there is no per-process cache to invalidate.
 
 	// 1. Setup a repository
 	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
@@ -187,9 +187,8 @@ func TestReloadRepository(t *testing.T) {
 	newSha, err := scene.Repo.GetCurrentSHA()
 	require.NoError(t, err)
 
-	// PullBranch normally triggers the reload after fetch; this test verifies
-	// the runner falls through to git for SHAs that aren't in its cache. The
-	// full fetch+reload flow is exercised in TestPullBranch_WithReload below.
+	// SHAs created outside the runner resolve by falling through to git. The
+	// full fetch flow is exercised in TestPullBranch_FetchResolvesNewCommits below.
 
 	// Verify the new commit is resolvable
 	_, err = runner.GetCommitAuthor(newSha)
@@ -200,8 +199,9 @@ func TestReloadRepository(t *testing.T) {
 	require.NoError(t, err, "runner should still resolve old commits")
 }
 
-func TestPullBranch_WithReload(t *testing.T) {
-	// Test that PullBranch works correctly with the refspec fix and reload mechanism
+func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
+	// Test that PullBranch works correctly with the refspec fix: a commit fetched
+	// from the remote is resolvable through the long-lived runner afterward.
 
 	// 1. Setup a "remote" repository
 	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
@@ -248,7 +248,7 @@ func TestPullBranch_WithReload(t *testing.T) {
 	require.Equal(t, remoteSha, localSha, "Local branch should match remote")
 
 	// 6. Verify the newly fetched commit is resolvable through the runner
-	// (this exercises the reload mechanism in PullBranch).
+	// (it falls through to git since the runner holds no per-process cache).
 	_, err = runner.GetCommitAuthor(remoteSha)
 	require.NoError(t, err, "runner should resolve the newly fetched commit")
 

@@ -344,13 +344,15 @@ func outputBranchInfoJSON(ctx *app.Context, branch engine.Branch) error {
 		info.DiffStats.Deletions = deleted
 	}
 
-	// Files changed
-	if info.Parent != "" {
-		parentRev, err := eng.GetRevision(eng.GetBranch(info.Parent))
-		if err == nil {
+	// Files changed — measured against the branch's divergence point, the same
+	// base GetDiffStats uses above, so the file count stays consistent with the
+	// additions/deletions when the parent has advanced since the branch diverged.
+	if !isTrunk {
+		base, err := eng.GetDivergencePoint(branchName)
+		if err == nil && base != "" {
 			branchRev, err := branch.GetRevision()
 			if err == nil {
-				files, err := eng.GetChangedFiles(ctx.Context, parentRev, branchRev)
+				files, err := eng.GetChangedFiles(ctx.Context, base, branchRev)
 				if err == nil {
 					info.DiffStats.FilesChanged = len(files)
 				}

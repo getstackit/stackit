@@ -54,12 +54,6 @@ func (r *runner) getCommitAuthor(branchName string) (string, error) {
 }
 
 func (r *runner) getRevision(branchName string) (string, error) {
-	// Check revision cache first to avoid spawning git rev-parse. The cache
-	// is populated by LoadAllBranchRevisions (batch preload) but not on
-	// individual misses, to avoid stale entries from external mutations.
-	if cached, ok := r.revisionCache.Get(branchName); ok {
-		return cached, nil
-	}
 	return r.resolveRefSHA(branchName)
 }
 
@@ -71,32 +65,6 @@ func (r *runner) getRemoteRevision(branchName string) (string, error) {
 	return r.resolveRefSHA("origin/" + branchName)
 }
 
-// LoadAllBranchRevisions populates the revision cache for all local branches
-// with one `git for-each-ref` invocation, replacing N individual ref lookups
-// during engine startup.
-func (r *runner) LoadAllBranchRevisions() error {
-	out, err := r.RunGitCommandWithContext(context.Background(),
-		"for-each-ref",
-		"--format=%(refname:short)%00%(objectname)",
-		"refs/heads/",
-	)
-	if err != nil {
-		return fmt.Errorf("failed to list branch revisions: %w", err)
-	}
-
-	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
-		if line == "" {
-			continue
-		}
-		name, sha, ok := strings.Cut(line, "\x00")
-		if !ok || sha == "" {
-			continue
-		}
-		r.revisionCache.Put(name, sha)
-	}
-	return nil
-}
-
 func (r *runner) batchGetRevisions(branchNames []string) (map[string]string, []error) {
 	results := make(map[string]string)
 	var errs []error
@@ -105,29 +73,16 @@ func (r *runner) batchGetRevisions(branchNames []string) (map[string]string, []e
 		return results, errs
 	}
 
-	// Serve cache hits first; collect misses for a single shell-out.
-	var misses []string
-	for _, name := range branchNames {
-		if sha, ok := r.revisionCache.Get(name); ok {
-			results[name] = sha
-			continue
-		}
-		misses = append(misses, name)
-	}
-	if len(misses) == 0 {
-		return results, errs
-	}
-
-	// Resolve all misses in one `git rev-parse` invocation. Each ref is
+	// Resolve all branches in one `git rev-parse` invocation. Each ref is
 	// printed on its own line in the same order as the args, so we can map
 	// back by index. `--verify` would short-circuit on the first bad ref, so
 	// omit it and detect failures via empty/short output.
-	args := append([]string{"rev-parse"}, misses...)
+	args := append([]string{"rev-parse"}, branchNames...)
 	out, err := r.RunGitCommandWithContext(context.Background(), args...)
 	if err != nil {
 		// Fall back to per-ref resolution so we can attribute errors to
 		// specific branch names rather than a single bulk failure.
-		for _, name := range misses {
+		for _, name := range branchNames {
 			sha, e := r.resolveRefSHA(name)
 			if e != nil {
 				errs = append(errs, fmt.Errorf("failed to get revision for %s: %w", name, e))
@@ -139,11 +94,11 @@ func (r *runner) batchGetRevisions(branchNames []string) (map[string]string, []e
 	}
 
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != len(misses) {
+	if len(lines) != len(branchNames) {
 		// Output shape mismatch: surface a single error rather than misalign.
-		return results, []error{fmt.Errorf("batch rev-parse returned %d lines for %d refs", len(lines), len(misses))}
+		return results, []error{fmt.Errorf("batch rev-parse returned %d lines for %d refs", len(lines), len(branchNames))}
 	}
-	for i, name := range misses {
+	for i, name := range branchNames {
 		sha := strings.TrimSpace(lines[i])
 		if sha == "" {
 			errs = append(errs, fmt.Errorf("failed to get revision for %s: empty output", name))

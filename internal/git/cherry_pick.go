@@ -12,11 +12,8 @@ func (r *runner) CherryPick(ctx context.Context, commitSHA, onto string) (string
 
 	if _, err := r.RunGitCommandWithContext(ctx, "cherry-pick", commitSHA); err != nil {
 		_, _ = r.RunGitCommandWithContext(ctx, "cherry-pick", "--abort")
-		r.revisionCache.InvalidateAll()
 		return "", fmt.Errorf("failed to cherry-pick %s: %w", commitSHA, err)
 	}
-
-	r.revisionCache.InvalidateAll()
 
 	newSHA, err := r.GetCurrentRevision(ctx)
 	if err != nil {
@@ -28,12 +25,10 @@ func (r *runner) CherryPick(ctx context.Context, commitSHA, onto string) (string
 
 func (r *runner) CherryPickSimple(ctx context.Context, commitSHA string) error {
 	_, err := r.RunGitCommandWithContext(ctx, "cherry-pick", commitSHA)
-	r.revisionCache.InvalidateAll()
 	return err
 }
 
 func (r *runner) CherryPickAbort(ctx context.Context) error {
 	_, err := r.RunGitCommandWithContext(ctx, "cherry-pick", "--abort")
-	r.revisionCache.InvalidateAll()
 	return err
 }

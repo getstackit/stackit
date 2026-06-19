@@ -28,7 +28,6 @@ func (r *runner) Merge(ctx context.Context, branchName string, opts MergeOptions
 	if err != nil {
 		return fmt.Errorf("failed to merge %s: %w", branchName, err)
 	}
-	r.revisionCache.InvalidateAll()
 	return nil
 }
 
@@ -55,7 +54,6 @@ func (r *runner) MergeMultiple(ctx context.Context, branches []string, opts Merg
 	if err != nil {
 		return fmt.Errorf("failed to merge branches: %w", err)
 	}
-	r.revisionCache.InvalidateAll()
 	return nil
 }
 
@@ -70,7 +68,6 @@ func (r *runner) IsMergeInProgress(ctx context.Context) bool {
 
 func (r *runner) MergeAbort(ctx context.Context) error {
 	_, err := r.RunGitCommandWithContext(ctx, "merge", "--abort")
-	r.revisionCache.InvalidateAll()
 	if err != nil {
 		return fmt.Errorf("merge abort failed: %w", err)
 	}

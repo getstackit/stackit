@@ -391,13 +391,6 @@ func (t *tracingRunner) BatchGetRevisions(branchNames []string) (map[string]stri
 	return result, errs
 }
 
-func (t *tracingRunner) LoadAllBranchRevisions() error {
-	start := time.Now()
-	err := t.inner.LoadAllBranchRevisions()
-	t.trace("LoadAllBranchRevisions", time.Since(start), err == nil, err)
-	return err
-}
-
 func (t *tracingRunner) GetCommitDate(branchName string) (time.Time, error) {
 	start := time.Now()
 	result, err := t.inner.GetCommitDate(branchName)

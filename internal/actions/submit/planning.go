@@ -16,9 +16,13 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	submissionInfos := make([]Info, 0, len(branches))
 	nav := ctx.Navigator()
 
-	// Warm revision and metadata caches so the per-branch GetRevision calls in
-	// the loop are cache hits rather than a git rev-parse each.
-	ctx.Engine.PreloadBranchData()
+	// Resolve every branch and parent revision in one batched call so the head
+	// and base SHAs below are map lookups, not a git rev-parse per branch.
+	revNames := make([]string, 0, len(branches)*2)
+	for _, branch := range branches {
+		revNames = append(revNames, branch.GetName(), resolveSubmitParentName(nav, branch))
+	}
+	revisions, _ := ctx.Engine.GetRevisions(revNames)
 
 	// PR-info writes are collected here and persisted in one batched ref write
 	// after planning, instead of a git ref write per branch.
@@ -117,11 +121,10 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		}
 		prUpdates[branchName] = pendingPrInfo(branch, metadata)
 
-		// Get SHAs
-		headSHA, _ := branch.GetRevision()
+		// Get SHAs from the batched revisions resolved above.
 		parentBranchName := resolveSubmitParentName(nav, branch)
-		parentBranch := nav.GetBranch(parentBranchName)
-		baseSHA, _ := parentBranch.GetRevision()
+		headSHA := revisions[branchName]
+		baseSHA := revisions[parentBranchName]
 
 		submissionInfo := Info{
 			BranchName: branchName,

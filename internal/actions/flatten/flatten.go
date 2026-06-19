@@ -438,23 +438,25 @@ func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branc
 		RebaseSpecs: make([]engine.RebaseSpec, 0),
 	}
 
-	// Track the current revision of each potential parent (including trunk)
-	// This is needed to build accurate rebase specs
-	parentRevisions := make(map[string]string)
-	trunkRev, err := trunk.GetRevision()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get trunk revision: %w", err)
+	// Resolve every branch and trunk revision, plus every divergence point, in
+	// batched reads up front (passed-around values, no engine-global cache). The
+	// revision map doubles as the parent-revision lookup the planning loop used
+	// to accumulate one entry at a time.
+	revNames := make([]string, 0, len(branches)+1)
+	revNames = append(revNames, trunk.GetName())
+	for _, b := range branches {
+		revNames = append(revNames, b.GetName())
 	}
-	parentRevisions[trunk.GetName()] = trunkRev
+	revisions, _ := eng.GetRevisions(revNames)
+	divergence := eng.BatchDivergencePoints(branches)
+
+	if revisions[trunk.GetName()] == "" {
+		return nil, fmt.Errorf("failed to get trunk revision")
+	}
 
 	// potentialParents tracks branches that can serve as parents for subsequent branches
 	// Starts with trunk, and grows as we process branches
 	potentialParents := []string{trunk.GetName()}
-
-	// Warm the revision and metadata caches once so the per-branch
-	// GetDivergencePoint and GetRevision calls below hit memory instead of
-	// spawning a git rev-parse each.
-	eng.PreloadBranchData()
 
 	for i, b := range branches {
 		bName := b.GetName()
@@ -467,21 +469,11 @@ func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branc
 		// Get current parent info
 		origParentName := b.GetParentOrTrunk()
 
-		// Get the branch's base (divergence point from parent)
-		oldUpstream, err := eng.GetDivergencePoint(bName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get base for %s: %w", bName, err)
-		}
+		// The branch's base (divergence point from parent)
+		oldUpstream := divergence[bName]
 
 		// Try to find the best (closest to trunk) parent this branch can move to
-		newParent := findBestParent(ctx, eng, bName, oldUpstream, potentialParents, parentRevisions)
-
-		// Track this branch's revision for subsequent branches
-		bRev, err := b.GetRevision()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get revision for %s: %w", bName, err)
-		}
-		parentRevisions[bName] = bRev
+		newParent := findBestParent(ctx, eng, bName, oldUpstream, potentialParents, revisions)
 
 		// Add this branch as a potential parent for subsequent branches
 		potentialParents = append(potentialParents, bName)
@@ -495,7 +487,7 @@ func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branc
 			})
 
 			// Add rebase spec for this move
-			newParentRev := parentRevisions[newParent]
+			newParentRev := revisions[newParent]
 			plan.RebaseSpecs = append(plan.RebaseSpecs, engine.RebaseSpec{
 				Branch:      bName,
 				NewParent:   newParentRev,

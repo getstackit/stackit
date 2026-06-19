@@ -172,10 +172,6 @@ func (d *demoGitRunner) BatchGetRevisions(branchNames []string) (map[string]stri
 	return results, nil
 }
 
-func (d *demoGitRunner) LoadAllBranchRevisions() error {
-	return nil
-}
-
 func (d *demoGitRunner) GetMergeBase(_ context.Context, _, _ string) (string, error) {
 	return "merge-base-sha", nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -38,23 +37,39 @@ func (e *engineImpl) GetRevisions(branchNames []string) (map[string]string, []er
 	return e.git.BatchGetRevisions(branchNames)
 }
 
+// BatchDivergencePoints returns each branch's divergence point keyed by branch
+// name, matching GetDivergencePoint (the stored parent revision when present,
+// else the parent's current tip) but resolving the whole set in one batched pass.
+func (e *engineImpl) BatchDivergencePoints(branches Branches) map[string]string {
+	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) string {
+		return statBase(parentRev, storedBase)
+	})
+}
+
 // GetCommitCount returns the number of commits for a branch.
-// Results are cached by (base, head) SHA pair and populated by PreloadBranchStats.
+// Results are cached by (base, head) SHA pair.
 func (e *engineImpl) GetCommitCount(branch Branch) (int, error) {
 	base, branchRev, err := e.resolveBranchComparisonRevisions(branch.GetName())
 	if err != nil {
 		return 0, err
 	}
-	if branchRev == base {
+	return e.commitCountBetween(base, branchRev)
+}
+
+// commitCountBetween returns the commit count in (base, head], using the
+// (base, head)-keyed cache. It takes pre-resolved revisions so batched callers
+// need not re-resolve a branch's head.
+func (e *engineImpl) commitCountBetween(base, head string) (int, error) {
+	if head == base {
 		return 0, nil
 	}
 
-	cacheKey := base + ":" + branchRev
+	cacheKey := base + ":" + head
 	if v, ok := e.commitCountCache.Load(cacheKey); ok {
 		return v.(int), nil
 	}
 
-	out, err := e.git.RunGitCommandWithContext(context.Background(), "rev-list", "--count", base+".."+branchRev)
+	out, err := e.git.RunGitCommandWithContext(context.Background(), "rev-list", "--count", base+".."+head)
 	if err != nil {
 		return 0, err
 	}
@@ -64,23 +79,30 @@ func (e *engineImpl) GetCommitCount(branch Branch) (int, error) {
 }
 
 // GetDiffStats returns diff stats for a branch.
-// Results are cached by (base, head) SHA pair and populated by PreloadBranchStats.
+// Results are cached by (base, head) SHA pair.
 func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
 	base, branchRev, err := e.resolveBranchComparisonRevisions(branch.GetName())
 	if err != nil {
 		return 0, 0, err
 	}
-	if branchRev == base {
+	return e.diffStatsBetween(base, branchRev)
+}
+
+// diffStatsBetween returns the additions/deletions between two revisions, using
+// the (base, head)-keyed cache. It takes pre-resolved revisions so batched
+// callers (the Batch* readers) need not re-resolve a branch's head.
+func (e *engineImpl) diffStatsBetween(base, head string) (int, int, error) {
+	if head == base {
 		return 0, 0, nil
 	}
 
-	cacheKey := base + ":" + branchRev
+	cacheKey := base + ":" + head
 	if v, ok := e.diffStatsCache.Load(cacheKey); ok {
 		stats := v.([2]int)
 		return stats[0], stats[1], nil
 	}
 
-	output, err := e.git.GetDiffNumstat(base, branchRev)
+	output, err := e.git.GetDiffNumstat(base, head)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -103,25 +125,6 @@ func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
 	return added, deleted, nil
 }
 
-// PreloadBranchStats warms the diff-stats and commit-count caches for all given
-// branches in parallel. Call this before iterating branches in utils.Run so
-// subsequent GetDiffStats / GetCommitCount calls are instant cache hits.
-func (e *engineImpl) PreloadBranchStats(branches []Branch) {
-	var wg sync.WaitGroup
-	for _, b := range branches {
-		if b.IsTrunk() || b.IsWorktreeAnchor() {
-			continue
-		}
-		wg.Add(1)
-		go func(branch Branch) {
-			defer wg.Done()
-			_, _, _ = e.GetDiffStats(branch)
-			_, _ = e.GetCommitCount(branch)
-		}(b)
-	}
-	wg.Wait()
-}
-
 func (e *engineImpl) resolveBranchComparisonRevisions(branchName string) (base, branchRev string, err error) {
 	e.mu.RLock()
 	trunk := e.trunk
@@ -133,9 +136,11 @@ func (e *engineImpl) resolveBranchComparisonRevisions(branchName string) (base, 
 		parent = state.Parent
 	}
 
-	// Get base revision (stored parent revision)
+	// Get base revision (stored parent revision). An empty stored revision is
+	// treated as unset and falls back to the parent's current tip, matching
+	// statBase, which the batched diff-stat/commit-count readers use.
 	meta, err := e.readMetadata(branchName)
-	if rev := meta.GetParentBranchRevision(); err == nil && rev != nil {
+	if rev := meta.GetParentBranchRevision(); err == nil && rev != nil && *rev != "" {
 		base = *rev
 	} else {
 		baseRev, err := e.git.GetRevision(parent)
@@ -151,31 +156,6 @@ func (e *engineImpl) resolveBranchComparisonRevisions(branchName string) (base, 
 	}
 
 	return base, branchRev, nil
-}
-
-// PreloadBranchData batch-loads metadata and revisions for all tracked branches
-// into their respective caches. This replaces N individual lookups (each requiring
-// mutex acquisition or subprocess spawning) with two bulk operations:
-//   - one batched branch-ref load for all branch SHAs
-//   - BatchReadMetadata (parallel metadata reads, cached via sync.Map)
-//
-// After calling this, parallel annotation building via utils.Run will find all
-// data cached, eliminating go-git mutex contention for revision lookups.
-func (e *engineImpl) PreloadBranchData() {
-	e.mu.RLock()
-	branches := make([]string, 0, len(e.state.branchState))
-	for name := range e.state.branchState {
-		branches = append(branches, name)
-	}
-	e.mu.RUnlock()
-
-	// Batch load all branch revisions in one pass
-	_ = e.git.LoadAllBranchRevisions()
-
-	// Batch load all metadata (populates metadataCache via sync.Map)
-	if len(branches) > 0 {
-		e.batchReadMetadata(branches)
-	}
 }
 
 // GetRecentTrunkCommits returns the most recent commits on the trunk branch,
@@ -208,13 +188,30 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 		return nil, err
 	}
 
-	// Get parent revision (base)
+	// Base for the commit range: the stored divergence point, or the parent's
+	// current tip when none is recorded. Falling back to the parent tip — not an
+	// empty base, which lists the branch's entire history back to the repo root —
+	// keeps the result to the branch's own commits and consistent with the base
+	// GetDiffStats / GetCommitCount use.
 	var baseRevision string
-	if rev := meta.GetParentBranchRevision(); rev != nil {
+	if rev := meta.GetParentBranchRevision(); rev != nil && *rev != "" {
 		baseRevision = *rev
+	} else {
+		parent := e.trunk
+		if state := e.readState(branchName); state != nil {
+			parent = state.Parent
+		}
+		if parentRev, err := e.git.GetRevision(parent); err == nil {
+			baseRevision = parentRev
+		}
 	}
 
-	// Use GetCommitRange directly to handle formatting in-process via go-git,
-	// avoiding per-commit git process spawns.
-	return e.git.GetCommitRange(context.Background(), baseRevision, branchRevision, string(format))
+	return e.commitsBetween(baseRevision, branchRevision, format)
+}
+
+// commitsBetween returns the formatted commits in (base, head]. It handles
+// formatting in-process via go-git, avoiding per-commit git process spawns, and
+// takes pre-resolved revisions so batched callers need not re-resolve the head.
+func (e *engineImpl) commitsBetween(base, head string, format CommitFormat) ([]string, error) {
+	return e.git.GetCommitRange(context.Background(), base, head, string(format))
 }

@@ -419,13 +419,27 @@ func (m *shippableModel) rebuildCache() {
 			}
 		}
 
-		// Compute annotations for all branches in the stack
+		// Compute annotations for all branches in the stack, reading their
+		// git-computed stats from batched value maps rather than per branch (this
+		// runs on every refresh and on the auto-refresh timer). The view renders
+		// with ShowCommitMessages, so resolve commit messages once via BatchCommits
+		// and skip the per-branch GetAllCommits inside GetBranchAnnotation.
+		stackBranches := engine.Branches{}
 		for _, branchName := range stack.Stack.AllBranches {
-			branch := m.engine.GetBranch(branchName)
-			if branch.GetName() != "" {
-				ann := tui.GetBranchAnnotation(m.engine, branch, tui.AnnotationOptions{})
-				m.cache.branchAnnotations[branchName] = ann
+			if branch := m.engine.GetBranch(branchName); branch.GetName() != "" {
+				stackBranches = stackBranches.Append(branch)
 			}
+		}
+		stats := m.engine.BatchBranchStats(stackBranches)
+		commits := m.engine.BatchCommits(stackBranches, engine.CommitFormatReadable)
+		for _, branch := range stackBranches {
+			name := branch.GetName()
+			ann := tui.GetBranchAnnotation(m.engine, branch, stats[name], tui.AnnotationOptions{SkipCommitMessages: true})
+			if msgs := commits[name]; msgs != nil {
+				ann.CommitMessages = msgs
+				ann.CommitCount = len(msgs)
+			}
+			m.cache.branchAnnotations[name] = ann
 		}
 
 		// Cache blocking reasons per branch

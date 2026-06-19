@@ -90,14 +90,19 @@ type BranchInfo interface {
 	// GetDivergencePoint returns the divergence point of a branch from its parent.
 	// Returns the ParentBranchRevision from metadata if valid, otherwise the parent's current revision.
 	GetDivergencePoint(branchName string) (string, error)
-	// PreloadBranchData batch-loads metadata and revisions for all branches
-	// into their respective caches. Call before parallel annotation building
-	// to eliminate per-branch cache misses and mutex contention.
-	PreloadBranchData()
-	// PreloadBranchStats warms the diff-stats and commit-count caches for all
-	// given branches in parallel. Call before utils.Run iteration so subsequent
-	// GetDiffStats / GetCommitCount calls are instant cache hits.
-	PreloadBranchStats(branches []Branch)
+	// BatchDivergencePoints returns the divergence point for every branch in one
+	// batched (git-free when metadata is cached) pass, keyed by branch name.
+	BatchDivergencePoints(branches Branches) map[string]string
+	// BatchDiffStats, BatchCommits, and BatchChangedFileCounts each resolve one
+	// per-branch concern across the whole set in a single batched pass, returning
+	// a value map.
+	BatchDiffStats(branches Branches) map[string]DiffStat
+	BatchCommits(branches Branches, format CommitFormat) map[string][]string
+	BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int
+	// BatchBranchStats resolves annotation stats (short SHA, commit count,
+	// additions/deletions) for every branch in one batched pass — a use-case
+	// bundle over the per-concern readers, for annotation builders.
+	BatchBranchStats(branches Branches) map[string]BranchStat
 }
 
 // GitDiffer handles diff and merge operations

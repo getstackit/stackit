@@ -105,15 +105,21 @@ func (e *engineImpl) BatchCommits(branches Branches, format CommitFormat) map[st
 	})
 }
 
-// BatchChangedFileCounts returns each non-trunk branch's number of changed files
-// against its parent's current tip (matching the existing stack-info behavior),
-// keyed by branch name, resolved in one batched pass.
+// BatchChangedFileCounts returns each non-trunk branch's number of files changed
+// in its own range — measured against its divergence point, the same base
+// BatchDiffStats uses — keyed by branch name, resolved in one batched pass. This
+// keeps the file count consistent with the additions/deletions for a branch
+// whose parent has advanced since it diverged.
 func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int {
 	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) int {
-		if e.IsTrunk(b) || parentRev == "" || head == "" {
+		if e.IsTrunk(b) {
 			return 0
 		}
-		files, err := e.GetChangedFiles(ctx, parentRev, head)
+		base := statBase(parentRev, storedBase)
+		if base == "" || head == "" {
+			return 0
+		}
+		files, err := e.GetChangedFiles(ctx, base, head)
 		if err != nil {
 			return 0
 		}

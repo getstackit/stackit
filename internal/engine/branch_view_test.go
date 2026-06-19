@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -44,6 +45,29 @@ func TestBatchBranchStats(t *testing.T) {
 		require.Equal(t, wantAdded, stat.LinesAdded, "LinesAdded for %s", name)
 		require.Equal(t, wantDeleted, stat.LinesDeleted, "LinesDeleted for %s", name)
 	}
+}
+
+// TestBatchChangedFileCountsUsesDivergenceBase verifies the file count is
+// measured against the branch's divergence point (the same base as diff stats),
+// not its parent's current tip — so it stays consistent when the parent advances
+// past the branch without a restack.
+func TestBatchChangedFileCountsUsesDivergenceBase(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithLinearStack3() // main -> a -> b -> c
+
+	b := engine.BranchesOf(s.Engine.GetBranch("b"))
+
+	before := s.Engine.BatchChangedFileCounts(context.Background(), b)["b"]
+	require.GreaterOrEqual(t, before, 1)
+
+	// Advance b's parent (a) with a new commit touching a different file, without
+	// restacking b, so a's current tip moves past b's divergence point.
+	s.Checkout("a").CommitChange("a-advanced.txt", "advance a past b's divergence")
+
+	after := s.Engine.BatchChangedFileCounts(context.Background(), b)["b"]
+	require.Equal(t, before, after,
+		"files-changed must use the divergence base, not the parent's current tip")
 }
 
 // TestPerConcernBatchReaders asserts each per-concern batch reader matches the

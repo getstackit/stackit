@@ -78,7 +78,6 @@ func (r *runner) UpdateRefsBatch(ctx context.Context, updates []RefUpdate) error
 		return fmt.Errorf("atomic ref update failed: %w", err)
 	}
 	r.metadataCache.InvalidateForRefs(updates)
-	r.invalidateRevisionCacheForRefs(updates)
 	return nil
 }
 
@@ -108,7 +107,6 @@ func (r *runner) UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate
 		return fmt.Errorf("atomic ref update failed: %w", err)
 	}
 	r.metadataCache.InvalidateForRefs(updates)
-	r.invalidateRevisionCacheForRefs(updates)
 	return nil
 }
 
@@ -132,28 +130,7 @@ func (r *runner) DeleteRefsBatch(ctx context.Context, refNames []string) error {
 		return fmt.Errorf("atomic ref delete failed: %w", err)
 	}
 	r.metadataCache.InvalidateForRefNames(refNames)
-	r.invalidateRevisionCacheForRefNames(refNames)
 	return nil
-}
-
-// invalidateRevisionCacheForRefs invalidates revision cache entries for any
-// refs/heads/* updates in the given ref updates.
-func (r *runner) invalidateRevisionCacheForRefs(updates []RefUpdate) {
-	for _, update := range updates {
-		if branchName, ok := strings.CutPrefix(update.RefName, "refs/heads/"); ok {
-			r.revisionCache.Delete(branchName)
-		}
-	}
-}
-
-// invalidateRevisionCacheForRefNames invalidates revision cache entries for any
-// refs/heads/* ref names in the given list.
-func (r *runner) invalidateRevisionCacheForRefNames(refNames []string) {
-	for _, refName := range refNames {
-		if branchName, ok := strings.CutPrefix(refName, "refs/heads/"); ok {
-			r.revisionCache.Delete(branchName)
-		}
-	}
 }
 
 func (r *runner) RunGitCommandWithEnv(ctx context.Context, env []string, args ...string) (string, error) {
@@ -431,12 +408,6 @@ type runner struct {
 	// Thread-safe: sync.Map handles concurrent reads from worker pools.
 	metadataCache metadataCache
 
-	// Cached branch revisions to avoid spawning a `git rev-parse` per branch.
-	// Thread-safe: sync.Map handles concurrent reads from worker pools.
-	// Keyed by branch name (e.g. "main"), values are SHA strings.
-	// Invalidated by any operation that mutates branch tips.
-	revisionCache revisionCache
-
 	// objects is a persistent git cat-file --batch process for zero-spawn object reads.
 	// Started lazily on first use; lives for the lifetime of the runner.
 	objects *objectReader
@@ -513,14 +484,6 @@ func (r *runner) ensureRepo() error {
 	}
 	r.repoRoot = root
 	r.repoChecked = true
-	return nil
-}
-
-// ReloadRepository invalidates the revision cache. The cached repo root is
-// kept (it's stable for the life of the process unless the user changes the
-// working directory, which stackit doesn't do).
-func (r *runner) ReloadRepository() error {
-	r.revisionCache.InvalidateAll()
 	return nil
 }
 
@@ -895,7 +858,6 @@ func (r *runner) UpdateRef(name, sha string) error {
 		return fmt.Errorf("failed to update ref %s: %w", name, err)
 	}
 	r.metadataCache.InvalidateForRefNames([]string{name})
-	r.invalidateRevisionCacheForRefNames([]string{name})
 	return nil
 }
 
@@ -911,7 +873,6 @@ func (r *runner) DeleteRef(ctx context.Context, name string) error {
 	}
 
 	r.metadataCache.InvalidateForRefNames([]string{name})
-	r.invalidateRevisionCacheForRefNames([]string{name})
 	return nil
 }
 
@@ -1128,7 +1089,7 @@ func (r *runner) fetchRemoteRefSpecs(ctx context.Context, remote string, refspec
 	if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
 		return fmt.Errorf("git fetch failed: %w", err)
 	}
-	return r.ReloadRepository()
+	return nil
 }
 
 func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) error {

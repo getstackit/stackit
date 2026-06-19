@@ -50,19 +50,17 @@ func (r *runner) CommitWithOptions(opts CommitOptions) error {
 	// use the streaming runner to show hook output while capturing for error handling.
 	if !utils.IsInteractive() || (opts.Message != "" && !opts.Edit) || (opts.Amend && opts.NoEdit) {
 		_, err := r.runGitStreaming(context.Background(), args...)
-		r.revisionCache.InvalidateAll()
 		if err != nil {
 			return err
 		}
-		return r.ReloadRepository()
+		return nil
 	}
 
 	err := r.RunGitCommandInteractive(args...)
-	r.revisionCache.InvalidateAll()
 	if err != nil {
 		return err
 	}
-	return r.ReloadRepository()
+	return nil
 }
 
 func (r *runner) Commit(message string, verbose int, noVerify bool) error {
@@ -75,9 +73,8 @@ func (r *runner) Commit(message string, verbose int, noVerify bool) error {
 
 func (r *runner) CommitAmendNoEdit(ctx context.Context) error {
 	_, err := r.RunGitCommandWithContext(ctx, "commit", "-a", "--amend", "--no-edit", "--no-verify")
-	r.revisionCache.InvalidateAll()
 	if err != nil {
 		return err
 	}
-	return r.ReloadRepository()
+	return nil
 }

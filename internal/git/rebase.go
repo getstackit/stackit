@@ -33,7 +33,6 @@ func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream s
 	// We use branchName~0 to force a detached checkout of the branch tip
 	_, err := r.RunGitCommandWithContext(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
 	if err != nil {
-		r.revisionCache.InvalidateAll()
 		if r.IsRebaseInProgress(ctx) {
 			autoOutcome, autoErr := r.continueRerereResolvedRebase(ctx, err)
 			if autoErr != nil || autoOutcome.Result == RebaseConflict {
@@ -47,8 +46,6 @@ func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream s
 			return RebaseOutcome{Result: RebaseConflict}, err
 		}
 	}
-
-	r.revisionCache.InvalidateAll()
 
 	// Since we rebased in detached HEAD, we must manually update the branch ref
 	newRev, err := r.GetCurrentRevision(ctx)
@@ -65,7 +62,6 @@ func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream s
 
 func (r *runner) rebaseContinueOnce(ctx context.Context) error {
 	_, err := r.RunGitCommandWithEnv(ctx, []string{"GIT_EDITOR=true"}, "rebase", "--continue")
-	r.revisionCache.InvalidateAll()
 	return err
 }
 
@@ -175,7 +171,6 @@ func isRebaseContinueStagedChangesError(err error) bool {
 
 func (r *runner) continueRerereResolvedRebase(ctx context.Context, originalErr error) (RebaseOutcome, error) {
 	outcome, _, err := AutoContinueRerereRebase(ctx, r, originalErr)
-	r.revisionCache.InvalidateAll()
 	return outcome, err
 }
 
@@ -210,7 +205,6 @@ func (r *runner) RebaseContinue(ctx context.Context) (RebaseOutcome, error) {
 
 func (r *runner) RebaseAbort(ctx context.Context) error {
 	_, err := r.RunGitCommandWithContext(ctx, "rebase", "--abort")
-	r.revisionCache.InvalidateAll()
 	if err != nil {
 		return fmt.Errorf("rebase abort failed: %w", err)
 	}

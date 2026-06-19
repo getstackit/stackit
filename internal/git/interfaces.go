@@ -77,10 +77,6 @@ type CommitReader interface {
 	GetRevision(branchName string) (string, error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	BatchGetRevisions(branchNames []string) (map[string]string, []error)
-	// LoadAllBranchRevisions populates the revision cache for all local branches
-	// using one `git for-each-ref` invocation. Subsequent GetRevision calls
-	// for cached branches resolve in-process without spawning git.
-	LoadAllBranchRevisions() error
 	GetCommitDate(branchName string) (time.Time, error)
 	GetCommitAuthor(branchName string) (string, error)
 	GetCommitRange(ctx context.Context, base, head, format string) ([]string, error)

@@ -70,17 +70,24 @@ func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	if branchRev == base {
+	return e.diffStatsBetween(base, branchRev)
+}
+
+// diffStatsBetween returns the additions/deletions between two revisions, using
+// the (base, head)-keyed cache. It takes pre-resolved revisions so batched
+// callers (e.g. ViewBranches) need not re-resolve a branch's head.
+func (e *engineImpl) diffStatsBetween(base, head string) (int, int, error) {
+	if head == base {
 		return 0, 0, nil
 	}
 
-	cacheKey := base + ":" + branchRev
+	cacheKey := base + ":" + head
 	if v, ok := e.diffStatsCache.Load(cacheKey); ok {
 		stats := v.([2]int)
 		return stats[0], stats[1], nil
 	}
 
-	output, err := e.git.GetDiffNumstat(base, branchRev)
+	output, err := e.git.GetDiffNumstat(base, head)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -214,7 +221,12 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 		baseRevision = *rev
 	}
 
-	// Use GetCommitRange directly to handle formatting in-process via go-git,
-	// avoiding per-commit git process spawns.
-	return e.git.GetCommitRange(context.Background(), baseRevision, branchRevision, string(format))
+	return e.commitsBetween(baseRevision, branchRevision, format)
+}
+
+// commitsBetween returns the formatted commits in (base, head]. It handles
+// formatting in-process via go-git, avoiding per-commit git process spawns, and
+// takes pre-resolved revisions so batched callers need not re-resolve the head.
+func (e *engineImpl) commitsBetween(base, head string, format CommitFormat) ([]string, error) {
+	return e.git.GetCommitRange(context.Background(), base, head, string(format))
 }

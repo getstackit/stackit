@@ -98,6 +98,10 @@ type BranchInfo interface {
 	// given branches in parallel. Call before utils.Run iteration so subsequent
 	// GetDiffStats / GetCommitCount calls are instant cache hits.
 	PreloadBranchStats(branches []Branch)
+	// ViewBranches builds an explicit, immutable BranchView of per-branch read
+	// data (revisions, commits, diff summary) in batched/parallel reads, instead
+	// of warming engine-global caches with PreloadBranchData/PreloadBranchStats.
+	ViewBranches(ctx context.Context, branches Branches, format CommitFormat) *BranchView
 }
 
 // GitDiffer handles diff and merge operations

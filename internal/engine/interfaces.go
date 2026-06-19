@@ -90,6 +90,9 @@ type BranchInfo interface {
 	// GetDivergencePoint returns the divergence point of a branch from its parent.
 	// Returns the ParentBranchRevision from metadata if valid, otherwise the parent's current revision.
 	GetDivergencePoint(branchName string) (string, error)
+	// BatchDivergencePoints returns the divergence point for every branch in one
+	// batched (git-free when metadata is cached) pass, keyed by branch name.
+	BatchDivergencePoints(branches Branches) map[string]string
 	// PreloadBranchData batch-loads metadata and revisions for all branches
 	// into their respective caches. Call before parallel annotation building
 	// to eliminate per-branch cache misses and mutex contention.

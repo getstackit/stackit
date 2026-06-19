@@ -38,6 +38,38 @@ func (e *engineImpl) GetRevisions(branchNames []string) (map[string]string, []er
 	return e.git.BatchGetRevisions(branchNames)
 }
 
+// BatchDivergencePoints returns each branch's divergence point keyed by branch
+// name, matching GetDivergencePoint (the stored parent revision when present,
+// else the parent's current tip) but resolving the whole set with one batched
+// metadata read and one batched revision lookup instead of per-branch git.
+func (e *engineImpl) BatchDivergencePoints(branches Branches) map[string]string {
+	result := make(map[string]string, len(branches))
+	if len(branches) == 0 {
+		return result
+	}
+
+	names := make([]string, 0, len(branches))
+	parentNames := make([]string, 0, len(branches))
+	for _, b := range branches {
+		names = append(names, b.GetName())
+		parentNames = append(parentNames, b.GetParentOrTrunk())
+	}
+	metas, _ := e.batchReadMetadata(names)
+	parentRevs, _ := e.GetRevisions(parentNames)
+
+	for _, b := range branches {
+		name := b.GetName()
+		if m := metas[name]; m != nil {
+			if rev := m.GetParentBranchRevision(); rev != nil && *rev != "" {
+				result[name] = *rev
+				continue
+			}
+		}
+		result[name] = parentRevs[b.GetParentOrTrunk()]
+	}
+	return result
+}
+
 // GetCommitCount returns the number of commits for a branch.
 // Results are cached by (base, head) SHA pair and populated by PreloadBranchStats.
 func (e *engineImpl) GetCommitCount(branch Branch) (int, error) {

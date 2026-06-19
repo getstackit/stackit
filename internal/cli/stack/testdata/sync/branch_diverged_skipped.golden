@@ -1,8 +1,7 @@
-
 📥 Pulling from remote...
-  main fast-forwarded to a1b2c3d
+  ✓ main fast-forwarded to a1b2c3d
 
 📥 Syncing stack branches...
-⚠️    ⚠️ feat-api diverged from remote (skipping)
+  ⚠ feat-api diverged from remote (skipping)
 
 ✅ Summary: pulled trunk

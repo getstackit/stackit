@@ -1,9 +1,8 @@
-
 📥 Pulling from remote...
-  main fast-forwarded to a1b2c3d
+  ✓ main fast-forwarded to a1b2c3d
 
 📥 Syncing stack branches...
-  feat-api fast-forwarded to e4f5a6b
-  feat-ui is up to date
+  ✓ feat-api fast-forwarded to e4f5a6b
+  ✓ feat-ui is up to date
 
 ✅ Summary: pulled trunk, synced 1 branch

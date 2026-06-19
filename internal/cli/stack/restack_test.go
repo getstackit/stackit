@@ -157,9 +157,9 @@ func TestRestackCommand(t *testing.T) {
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
-  feature (current) up to date
+  ✓ feature (current) up to date
 
-✨ All branches are up to date!
+✨ Everything is up to date!
 		`)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 	})
@@ -215,10 +215,10 @@ No branches to restack.
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
-  branch1 up to date
-  branch2 (current) up to date
+  ✓ branch1 up to date
+  ✓ branch2 (current) up to date
 
-✨ All branches are up to date!
+✨ Everything is up to date!
 `)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 	})
@@ -261,10 +261,10 @@ No branches to restack.
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
-  branch1 (current) up to date
-  branch2 up to date
+  ✓ branch1 (current) up to date
+  ✓ branch2 up to date
 
-✨ All branches are up to date!
+✨ Everything is up to date!
 `)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 	})
@@ -298,9 +298,9 @@ No branches to restack.
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
-  branch1 up to date
+  ✓ branch1 up to date
 
-✨ All branches are up to date!
+✨ Everything is up to date!
 `)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 	})

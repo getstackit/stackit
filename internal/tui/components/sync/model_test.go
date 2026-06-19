@@ -9,7 +9,28 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
+
+func TestDetailMark_Glyph(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		mark DetailMark
+		want string
+	}{
+		{"done shows ✓", MarkDone, style.GlyphSuccess},
+		{"warn shows ⚠", MarkWarn, style.GlyphWarning},
+		{"in progress shows →", MarkInProgress, style.GlyphProgress},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// glyph() wraps the rune in color codes; assert the rune is present.
+			assert.Contains(t, tt.mark.glyph(), tt.want)
+		})
+	}
+}
 
 // viewString extracts the string content from a tea.View for test assertions.
 func viewString(v tea.View) string {
@@ -53,13 +74,31 @@ func TestModel_Update_PhaseStartMsg(t *testing.T) {
 	model := NewModel(10)
 	model.Init()
 
-	// Start trunk phase - returns a tea.Printf command
+	// Start trunk phase - the header is deferred (committed lazily on the first
+	// detail), so no command is returned yet.
 	newModel, cmd := model.Update(PhaseStartMsg{Phase: PhaseTrunk, Message: "📥 Pulling from remote..."})
 	m := newModel.(*Model)
 
 	assert.Equal(t, PhaseTrunk, m.CurrentPhase)
 	assert.Equal(t, "", m.CurrentDetail) // Detail cleared on phase start
-	assert.NotNil(t, cmd, "should return print command")
+	assert.Nil(t, cmd, "phase start should defer its header until the first detail")
+	assert.False(t, m.headers.Committed(PhaseTrunk), "header should not be committed before any detail")
+}
+
+func TestModel_Update_EmptyPhaseSuppressed(t *testing.T) {
+	t.Parallel()
+	model := NewModel(10)
+	model.Init()
+
+	// A phase that starts but never emits a detail must not commit a header.
+	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseBranches, Message: "📥 Syncing stack branches..."})
+	m := newModel.(*Model)
+	newModel, _ = m.Update(PhaseStartMsg{Phase: PhaseClean, Message: "🧹 Cleaning branches..."})
+	m = newModel.(*Model)
+
+	assert.False(t, m.headers.Committed(PhaseBranches), "empty branches phase should not commit a header")
+	assert.False(t, m.headers.Committed(PhaseClean), "empty clean phase should not commit a header")
+	assert.False(t, m.headers.Any(), "no headers should have been committed")
 }
 
 func TestModel_Update_PhaseTransition(t *testing.T) {
@@ -96,6 +135,7 @@ func TestModel_Update_PhaseDetailMsg(t *testing.T) {
 
 	assert.Equal(t, "main fast-forwarded to abc1234", m.CurrentDetail)
 	assert.NotNil(t, cmd, "should return print command")
+	assert.True(t, m.headers.Committed(PhaseTrunk), "first detail should commit the phase header")
 }
 
 func TestModel_Update_PhaseDetailMsg_WithWarn(t *testing.T) {
@@ -103,11 +143,11 @@ func TestModel_Update_PhaseDetailMsg_WithWarn(t *testing.T) {
 	model := NewModel(10)
 	model.Init()
 
-	// Add a detail with warning flag
+	// Add a detail with warning mark
 	newModel, cmd := model.Update(PhaseDetailMsg{
 		Phase:   PhaseTrunk,
 		Message: "branch diverged",
-		IsWarn:  true,
+		Mark:    MarkWarn,
 	})
 	m := newModel.(*Model)
 

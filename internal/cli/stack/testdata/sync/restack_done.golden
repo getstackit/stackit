@@ -1,10 +1,9 @@
-
 📥 Pulling from remote...
-  main fast-forwarded to a1b2c3d
+  ✓ main fast-forwarded to a1b2c3d
 
 📚 Restacking branches...
-  Restacked feat-api (PR #201) on main -> b2c3d4e
-  Restacked feat-ui (PR #202) on feat-api -> c3d4e5f
-  feat-docs up to date
+  ✓ Restacked feat-api (PR #201) on main → b2c3d4e
+  ✓ Restacked feat-ui (PR #202) on feat-api → c3d4e5f
+  ✓ feat-docs up to date
 
 ✅ Summary: pulled trunk, restacked 2

@@ -1,6 +1,5 @@
-
 📥 Pulling from remote...
-  main fast-forwarded to a1b2c3d
+  ✓ main fast-forwarded to a1b2c3d
 
 Metadata differs for branch 'feat-auth':
   scope: AUTH (local) → AUTHN (remote)

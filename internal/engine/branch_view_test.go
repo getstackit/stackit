@@ -102,3 +102,36 @@ func TestPerConcernBatchReaders(t *testing.T) {
 		require.Equal(t, wantCommits, commits[name], "commits for %s", name)
 	}
 }
+
+// TestCommitsFallBackToParentTipWithoutStoredDivergence verifies that a branch
+// with no recorded ParentBranchRevision lists only its own commits — measured
+// against the parent's current tip — rather than its entire history back to the
+// repo root (which an empty base would produce). Both GetAllCommits and the
+// batched BatchCommits must agree with the commit count on this fallback.
+func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithLinearStack3() // main -> a -> b -> c
+
+	// Clear b's stored divergence point but keep its parent (a), so the commit
+	// base must fall back to the parent tip rather than an empty base.
+	meta, err := s.Engine.Git().ReadMetadata("b")
+	require.NoError(t, err)
+	require.NoError(t, s.Engine.Git().WriteMetadata("b", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild("main"))
+
+	b := s.Engine.GetBranch("b")
+
+	commits, err := s.Engine.GetAllCommits(b, engine.CommitFormatReadable)
+	require.NoError(t, err)
+
+	// Without the fallback, GetAllCommits walks b's whole history to the repo
+	// root while GetCommitCount walks only parent..b, so the two disagree.
+	count, err := s.Engine.GetCommitCount(b)
+	require.NoError(t, err)
+	require.Equal(t, count, len(commits),
+		"commit messages and count must use the same base when no divergence is stored")
+
+	batched := s.Engine.BatchCommits(engine.BranchesOf(b), engine.CommitFormatReadable)["b"]
+	require.Equal(t, commits, batched, "batched commits must match the single-branch accessor")
+}

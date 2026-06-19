@@ -100,14 +100,16 @@ func (e *engineImpl) BatchDiffStats(branches Branches) map[string]DiffStat {
 }
 
 // BatchCommits returns each non-trunk branch's formatted commits, keyed by
-// branch name, resolved in one batched pass. It matches GetAllCommits, which
-// compares against the stored divergence base (empty when unset).
+// branch name, resolved in one batched pass. It matches GetAllCommits: the base
+// is the stored divergence point, or the parent's current tip when none is
+// recorded — never an empty base, which would list a branch's entire history
+// back to the repo root.
 func (e *engineImpl) BatchCommits(branches Branches, format CommitFormat) map[string][]string {
 	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) []string {
 		if e.IsTrunk(b) {
 			return nil
 		}
-		commits, _ := e.commitsBetween(storedBase, head, format)
+		commits, _ := e.commitsBetween(statBase(parentRev, storedBase), head, format)
 		return commits
 	})
 }

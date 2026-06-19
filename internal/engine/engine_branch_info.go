@@ -188,10 +188,22 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 		return nil, err
 	}
 
-	// Get parent revision (base)
+	// Base for the commit range: the stored divergence point, or the parent's
+	// current tip when none is recorded. Falling back to the parent tip — not an
+	// empty base, which lists the branch's entire history back to the repo root —
+	// keeps the result to the branch's own commits and consistent with the base
+	// GetDiffStats / GetCommitCount use.
 	var baseRevision string
-	if rev := meta.GetParentBranchRevision(); rev != nil {
+	if rev := meta.GetParentBranchRevision(); rev != nil && *rev != "" {
 		baseRevision = *rev
+	} else {
+		parent := e.trunk
+		if state := e.readState(branchName); state != nil {
+			parent = state.Parent
+		}
+		if parentRev, err := e.git.GetRevision(parent); err == nil {
+			baseRevision = parentRev
+		}
 	}
 
 	return e.commitsBetween(baseRevision, branchRevision, format)

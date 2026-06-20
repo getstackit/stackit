@@ -127,6 +127,20 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return err
 	}
 	if len(branches) == 0 {
+		// Standing on trunk is the most common reason there is nothing in scope:
+		// submit defaults to downstack, and downstack from trunk is just trunk
+		// (filtered out above). Surface a distinct outcome so the adapter can
+		// point the user at creating or checking out a branch rather than
+		// printing a bare "nothing to submit".
+		if opts.Branch == "" {
+			if cb := nav.CurrentBranch(); cb != nil && cb.IsTrunk() {
+				handler.OnEvent(CompletionEvent{
+					Outcome: OutcomeOnTrunk,
+					Message: fmt.Sprintf("You're on %s — nothing to submit from here.", cb.GetName()),
+				})
+				return nil
+			}
+		}
 		handler.OnEvent(CompletionEvent{Outcome: OutcomeNothingToSubmit, Message: "No branches to submit"})
 		return nil
 	}

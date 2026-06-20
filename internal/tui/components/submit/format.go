@@ -109,6 +109,17 @@ func FormatCompactRow(item Item, width int, spinnerView string, styles Styles) s
 	return fmt.Sprintf("  %s %s%s%s", icon, name, strings.Repeat(" ", gapWidth), detail)
 }
 
+// FormatSoloRow renders the progress row for a single-branch submit. The branch
+// name is omitted — the plan line already named it — so the row is just the
+// status icon and detail (e.g. "  ✓ #1270 created").
+func FormatSoloRow(item Item, spinnerView string, styles Styles) string {
+	icon, detail := rowParts(item, spinnerView, styles)
+	if detail == "" {
+		return "  " + icon
+	}
+	return "  " + icon + " " + detail
+}
+
 func rowParts(item Item, spinnerView string, styles Styles) (string, string) {
 	switch item.Status {
 	case StatusSubmitting:
@@ -244,6 +255,20 @@ func FormatLinkedURLSummary(items []Item) string {
 		return ""
 	}
 	return "Pull requests\n\n" + strings.Join(rows, "\n")
+}
+
+// FormatSoloSummary renders the post-submit result for a single-branch submit:
+// the PR ref and action on one line, the URL on the next, both indented. Unlike
+// the stack summary there is no "Pull requests" header — one PR needs no list.
+func FormatSoloSummary(items []Item) string {
+	for _, item := range items {
+		if item.URL == "" {
+			continue
+		}
+		label := strings.TrimSpace(PRRef(item) + " " + pastTense(item.Action))
+		return "  " + label + "\n  " + item.URL
+	}
+	return ""
 }
 
 // FormatFailureSummary renders failed branches with their errors. The progress

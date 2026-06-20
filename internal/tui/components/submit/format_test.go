@@ -36,6 +36,61 @@ func TestFormatCompactRowOmitsInlineURL(t *testing.T) {
 	require.LessOrEqual(t, lipgloss.Width(stripANSIEscape(row)), 60)
 }
 
+func TestFormatSoloRowOmitsBranchName(t *testing.T) {
+	t.Parallel()
+
+	pr := 1270
+	row := stripANSIEscape(FormatSoloRow(Item{
+		BranchName: "jonnii/20260511011552/tighten-submit-output",
+		Action:     ActionCreate,
+		Status:     StatusDone,
+		PRNumber:   &pr,
+		URL:        "https://github.com/getstackit/stackit/pull/1270",
+	}, "", DefaultStyles()))
+
+	require.Equal(t, "  ✓ #1270 created", row)
+	require.NotContains(t, row, "tighten-submit-output")
+}
+
+func TestFormatSoloSummaryShowsRefAndURL(t *testing.T) {
+	t.Parallel()
+
+	pr := 1270
+	summary := FormatSoloSummary([]Item{{
+		BranchName: "jonnii/20260511011552/tighten-submit-output",
+		Action:     ActionCreate,
+		Status:     StatusDone,
+		PRNumber:   &pr,
+		URL:        "https://github.com/getstackit/stackit/pull/1270",
+	}})
+
+	require.Equal(t, "  #1270 created\n  https://github.com/getstackit/stackit/pull/1270", summary)
+	require.NotContains(t, summary, "Pull requests")
+}
+
+func TestModelSoloDropsHeaderAndName(t *testing.T) {
+	t.Parallel()
+
+	pr := 1270
+	m := NewModel([]Item{{
+		BranchName: "jonnii/20260511011552/tighten-submit-output",
+		Action:     ActionCreate,
+		Status:     StatusDone,
+		PRNumber:   &pr,
+		URL:        "https://github.com/getstackit/stackit/pull/1270",
+	}})
+	m.Solo = true
+
+	content := stripANSIEscape(m.content())
+	require.NotContains(t, content, "Submitting")
+	require.NotContains(t, content, "tighten-submit-output")
+	require.Contains(t, content, "#1270 created")
+
+	summary := stripANSIEscape(m.completionSummary())
+	require.NotContains(t, summary, "Pull requests")
+	require.Contains(t, summary, "https://github.com/getstackit/stackit/pull/1270")
+}
+
 func TestFormatURLSummaryRendersClickableRows(t *testing.T) {
 	t.Parallel()
 

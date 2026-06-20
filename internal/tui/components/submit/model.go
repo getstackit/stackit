@@ -17,6 +17,7 @@ type Model struct {
 	core.BaseModel // Embedded for ReadySignaler interface
 	Items          []Item
 	Warnings       []string      // formatted warning lines, rendered after the rows and persisted on exit
+	Solo           bool          // single-branch submit — drop the count header and per-row name
 	spinner        spinner.Model // lowercase for custom style
 	Styles         Styles
 }
@@ -132,7 +133,11 @@ func (m *Model) content() string {
 		width = defaultSubmitWidth
 	}
 	for i, item := range m.Items {
-		b.WriteString(FormatCompactRow(item, width, m.spinner.View(), m.Styles))
+		if m.Solo {
+			b.WriteString(FormatSoloRow(item, m.spinner.View(), m.Styles))
+		} else {
+			b.WriteString(FormatCompactRow(item, width, m.spinner.View(), m.Styles))
+		}
 		if i < len(m.Items)-1 {
 			b.WriteString("\n")
 		}
@@ -152,7 +157,12 @@ func (m *Model) content() string {
 // which would otherwise be erased with the progress display. Warnings are
 // appended in either case so they survive the screen clear.
 func (m *Model) completionSummary() string {
-	summary := FormatLinkedURLSummary(m.Items)
+	var summary string
+	if m.Solo {
+		summary = FormatSoloSummary(m.Items)
+	} else {
+		summary = FormatLinkedURLSummary(m.Items)
+	}
 	if failures := FormatFailureSummary(m.Items); failures != "" {
 		if summary != "" {
 			summary += "\n\n"
@@ -169,6 +179,11 @@ func (m *Model) completionSummary() string {
 }
 
 func (m *Model) header() string {
+	// A solo submit is framed by the plan line printed above the TUI; a count
+	// header would just restate it.
+	if m.Solo {
+		return ""
+	}
 	count := len(m.Items)
 	if count == 0 {
 		return ""

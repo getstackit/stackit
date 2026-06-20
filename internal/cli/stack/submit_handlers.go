@@ -2,6 +2,9 @@ package stack
 
 import (
 	"fmt"
+	"strings"
+
+	"charm.land/lipgloss/v2"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/cli/common"
@@ -28,39 +31,71 @@ func NewSubmitUI(out output.Output, logger output.Logger) (*tui.Runner, submit.H
 }
 
 // planPrinter prints the stack and per-branch plan as a single merged list,
-// shared by both submit handlers.
+// shared by both submit handlers. It adapts its framing to the shape of the
+// work: a lone branch off trunk reads as a single PR, while a real stack keeps
+// the stack header and aligned columns.
 type planPrinter struct {
 	out         output.Output
 	scopes      map[string]string
 	worktrees   map[string]string
+	parents     map[string]string
+	trunk       string
+	solo        bool // exactly one submittable branch — drop the stack framing
+	nameWidth   int  // widest decorated branch name, for column alignment
 	headerShown bool
 }
 
-// SetStack stashes the stack annotations so plan lines can include them.
+// SetStack stashes the stack annotations so plan lines can include them, and
+// derives the framing (solo vs stack) and column width from the full branch set
+// — both are known before the first plan line streams in.
 func (p *planPrinter) SetStack(stack submit.StackSnapshot) {
 	p.scopes = stack.ScopeMap
 	p.worktrees = stack.WorktreeMap
+	p.parents = stack.ParentMap
+	p.trunk = stack.TrunkBranch
+	p.solo = len(stack.Branches) == 1
+
+	for _, name := range stack.Branches {
+		if w := lipgloss.Width(p.decoratedName(name)); w > p.nameWidth {
+			p.nameWidth = w
+		}
+	}
+}
+
+// decoratedName is the display name plus scope and worktree annotations.
+func (p *planPrinter) decoratedName(branchName string) string {
+	name := submitComponent.DisplayBranchName(branchName)
+	if scope := p.scopes[branchName]; scope != "" {
+		name += " [" + scope + "]"
+	}
+	if p.worktrees[branchName] != "" {
+		name += " 📂 worktree"
+	}
+	return name
 }
 
 // PrintLine prints one branch of the plan, with the stack header before the
-// first line.
+// first line. A solo branch routes to the leaner single-PR rendering.
 func (p *planPrinter) PrintLine(ev submit.BranchPlanEvent) {
+	if p.solo {
+		p.printSoloLine(ev)
+		return
+	}
+
 	if !p.headerShown {
 		p.headerShown = true
-		p.out.Info("Stack to submit:")
+		header := "Stack to submit"
+		if p.trunk != "" {
+			header += " → " + p.trunk
+		}
+		p.out.Info("%s", header)
 	}
 
 	marker := "  "
 	if ev.IsCurrent {
 		marker = "● "
 	}
-	name := submitComponent.DisplayBranchName(ev.BranchName)
-	if scope := p.scopes[ev.BranchName]; scope != "" {
-		name += " [" + scope + "]"
-	}
-	if p.worktrees[ev.BranchName] != "" {
-		name += " 📂 worktree"
-	}
+	name := p.pad(p.decoratedName(ev.BranchName))
 
 	if ev.Skipped {
 		p.out.Info("%s%s %s", marker, style.ColorDim(name), style.ColorDim("— "+ev.SkipReason))
@@ -76,6 +111,48 @@ func (p *planPrinter) PrintLine(ev submit.BranchPlanEvent) {
 		line += " " + style.ColorDim("(empty)")
 	}
 	p.out.Info("%s", line)
+}
+
+// printSoloLine renders the plan for a single branch as "name → base action",
+// without the stack header — there is no stack to frame.
+func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
+	name := p.decoratedName(ev.BranchName)
+	base := p.soloBase(ev.BranchName)
+
+	if ev.Skipped {
+		p.out.Info("%s → %s %s", name, base, style.ColorDim("— "+ev.SkipReason))
+		return
+	}
+
+	action := ev.Action
+	if ev.PRNumber != nil {
+		action = fmt.Sprintf("%s #%d", action, *ev.PRNumber)
+	}
+	line := fmt.Sprintf("%s → %s  %s", name, base, style.ColorDim(action))
+	if ev.Empty {
+		line += " " + style.ColorDim("(empty)")
+	}
+	p.out.Info("%s", line)
+}
+
+// soloBase is the display name of the branch's parent (its PR base), falling
+// back to the trunk name.
+func (p *planPrinter) soloBase(branchName string) string {
+	if parent := p.parents[branchName]; parent != "" {
+		return submitComponent.DisplayBranchName(parent)
+	}
+	if p.trunk != "" {
+		return p.trunk
+	}
+	return "trunk"
+}
+
+// pad right-pads name with spaces to nameWidth so the action column aligns.
+func (p *planPrinter) pad(name string) string {
+	if gap := p.nameWidth - lipgloss.Width(name); gap > 0 {
+		return name + strings.Repeat(" ", gap)
+	}
+	return name
 }
 
 // SimpleSubmitHandler implements submit.Handler with line-by-line output
@@ -139,7 +216,11 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			h.order = append(h.order, branch.Name)
 		}
 		h.Output.Newline()
-		h.Output.Info("Submitting %d %s", len(ev.Branches), pluralizeBranches(len(ev.Branches)))
+		// A solo branch was already named in the plan line; the count header
+		// would just restate it.
+		if !h.plan.solo {
+			h.Output.Info("Submitting %d %s", len(ev.Branches), pluralizeBranches(len(ev.Branches)))
+		}
 
 	case submit.BranchProgressEvent:
 		item := h.items[ev.BranchName]
@@ -169,6 +250,11 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				return
 			}
 			item.reportedDone = true
+			// A solo branch reports its result in the completion summary
+			// (ref + URL together); a per-branch line here would duplicate it.
+			if h.plan.solo {
+				return
+			}
 			actionDone := "created"
 			if item.action == "update" {
 				actionDone = "updated"
@@ -180,6 +266,10 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			h.Output.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), detail)
 
 		case submit.StatusError:
+			if h.plan.solo {
+				h.Output.Info("  ✗ failed: %v", ev.Error)
+				return
+			}
 			h.Output.Info("  ✗ %s failed: %v", submitComponent.DisplayBranchName(ev.BranchName), ev.Error)
 		}
 
@@ -189,10 +279,12 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 	case submit.CompletionEvent:
 		switch ev.Outcome {
 		case submit.OutcomeComplete:
-			if summary := submitComponent.FormatURLSummary(h.submitItems()); summary != "" {
+			if summary := h.completionSummary(); summary != "" {
 				h.Output.Newline()
 				h.Output.Info("%s", summary)
 			}
+		case submit.OutcomeOnTrunk:
+			printOnTrunkGuidance(h.Output, ev.Message)
 		case submit.OutcomeFailed:
 			// Quiet: the returned error is reported by the CLI; printing the
 			// generic message here would double-report the failure.
@@ -204,6 +296,27 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			}
 		}
 	}
+}
+
+// completionSummary renders the post-submit PR list, leaning on the solo
+// formatting when only one branch was submitted.
+func (h *SimpleSubmitHandler) completionSummary() string {
+	if h.plan.solo {
+		return submitComponent.FormatSoloSummary(h.submitItems())
+	}
+	return submitComponent.FormatURLSummary(h.submitItems())
+}
+
+// printOnTrunkGuidance explains that submit does nothing from trunk and points
+// the user at the next step. headline carries the trunk-aware first line from
+// the action.
+func printOnTrunkGuidance(out output.Output, headline string) {
+	if headline != "" {
+		out.Info("%s", headline)
+	}
+	out.Tip("Check out a branch to submit its stack, or create one:")
+	out.Info("  stackit checkout <branch>")
+	out.Info("  stackit create -m \"feat: ...\"")
 }
 
 func (h *SimpleSubmitHandler) submitItems() []submitComponent.Item {
@@ -293,6 +406,9 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			}
 		}
 		h.model.Items = items
+		// The plan already named a solo branch and printed its base, so the TUI
+		// drops the count header and the per-row branch name.
+		h.model.Solo = h.plan.solo
 
 		// Start the TUI now that there's real submission work to animate.
 		// Idempotent, so later events that arrive after this are safe.
@@ -326,6 +442,10 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		// If the submission phase never started (nothing to submit, dry run,
 		// canceled), the TUI isn't running — print the outcome plainly.
 		if !h.runner.IsRunning() {
+			if ev.Outcome == submit.OutcomeOnTrunk {
+				printOnTrunkGuidance(h.out, ev.Message)
+				return
+			}
 			if ev.Outcome != submit.OutcomeFailed && ev.Message != "" {
 				h.out.Info("%s", ev.Message)
 			}

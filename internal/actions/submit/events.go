@@ -93,6 +93,7 @@ const (
 	OutcomeDryRun          CompletionOutcome = "dry-run"           // plan reported, nothing submitted
 	OutcomeCanceled        CompletionOutcome = "canceled"          // user declined a confirmation
 	OutcomeNothingToSubmit CompletionOutcome = "nothing-to-submit" // no branches in scope / untracked
+	OutcomeOnTrunk         CompletionOutcome = "on-trunk"          // checked out on trunk; nothing to submit from here
 	OutcomeFailed          CompletionOutcome = "failed"            // at least one branch failed
 )
 

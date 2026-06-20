@@ -100,7 +100,7 @@ func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
 	})
 
 	got := out.String()
-	require.Equal(t, 1, strings.Count(got, "Stack to submit:"))
+	require.Contains(t, got, "Stack to submit → main")
 	require.Contains(t, got, "● current-branch [CORE] → create")
 	require.Contains(t, got, "skipped-branch")
 	require.Contains(t, got, "— no changes")
@@ -130,8 +130,10 @@ func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {
 	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "All PRs up to date"})
 
 	got := out.String()
-	require.Contains(t, got, "Stack to submit:")
-	require.Contains(t, got, "up-to-date-branch")
+	// A lone branch drops the stack framing: no "Stack to submit" header, the
+	// branch reads as "name → base".
+	require.NotContains(t, got, "Stack to submit")
+	require.Contains(t, got, "up-to-date-branch → main")
 	require.Contains(t, got, "— no changes")
 	require.Contains(t, got, "All PRs up to date")
 }
@@ -162,6 +164,60 @@ func TestPlanPrinterShowsPRNumbersAndEmptyAnnotation(t *testing.T) {
 	require.Contains(t, got, "update-me → update #1189")
 	require.Contains(t, got, "empty-one → create")
 	require.Contains(t, got, "(empty)")
+}
+
+func TestSimpleSubmitHandlerSoloSubmitDropsStackFraming(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+	branch := "jonnii/20260511011552/tighten-submit-output"
+
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:      []string{branch},
+		CurrentBranch: branch,
+		TrunkBranch:   "main",
+		ParentMap:     map[string]string{branch: "main"},
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{
+		BranchName: branch,
+		Action:     "create",
+		IsCurrent:  true,
+	})
+	handler.OnEvent(submitAction.SubmissionStartEvent{
+		Branches: []submitAction.BranchInfo{{Name: branch, Action: "create"}},
+	})
+	handler.OnEvent(submitAction.BranchProgressEvent{
+		BranchName: branch,
+		Status:     submitAction.StatusDone,
+		URL:        "https://github.com/getstackit/stackit/pull/1270",
+	})
+	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Message: "Submit complete"})
+
+	got := out.String()
+	require.Contains(t, got, "tighten-submit-output → main")
+	require.NotContains(t, got, "Stack to submit")
+	require.NotContains(t, got, "Submitting 1 branch")
+	require.NotContains(t, got, "Pull requests")
+	require.Contains(t, got, "#1270 created")
+	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/1270")
+}
+
+func TestSimpleSubmitHandlerOnTrunkGuidance(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+
+	handler.OnEvent(submitAction.CompletionEvent{
+		Outcome: submitAction.OutcomeOnTrunk,
+		Message: "You're on main — nothing to submit from here.",
+	})
+
+	got := out.String()
+	require.Contains(t, got, "You're on main — nothing to submit from here.")
+	require.Contains(t, got, "stackit checkout <branch>")
+	require.Contains(t, got, "stackit create")
 }
 
 func TestSimpleSubmitHandlerPrintsBranchWarnings(t *testing.T) {

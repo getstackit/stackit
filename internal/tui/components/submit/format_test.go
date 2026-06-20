@@ -122,7 +122,8 @@ func TestFormatLinkedURLSummaryEmitsHyperlinks(t *testing.T) {
 	})
 
 	require.Equal(t, "Pull requests\n\n"+
-		"\x1b]8;;https://github.com/getstackit/stackit/pull/935\x1b\\#935 add-feature\x1b]8;;\x1b\\",
+		"\x1b]8;;https://github.com/getstackit/stackit/pull/935\x1b\\#935 add-feature\x1b]8;;\x1b\\\n"+
+		"     https://github.com/getstackit/stackit/pull/935",
 		summary)
 }
 

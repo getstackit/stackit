@@ -237,6 +237,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err != nil {
 		return fmt.Errorf("failed to prepare branches: %w", err)
 	}
+	handler.OnEvent(PlanningCompleteEvent{})
 
 	// Check if we should abort
 	if opts.DryRun {

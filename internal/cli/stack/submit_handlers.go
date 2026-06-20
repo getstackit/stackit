@@ -35,14 +35,15 @@ func NewSubmitUI(out output.Output, logger output.Logger) (*tui.Runner, submit.H
 // work: a lone branch off trunk reads as a single PR, while a real stack keeps
 // the stack header and aligned columns.
 type planPrinter struct {
-	out         output.Output
-	scopes      map[string]string
-	worktrees   map[string]string
-	parents     map[string]string
-	trunk       string
-	solo        bool // exactly one submittable branch — drop the stack framing
-	nameWidth   int  // widest decorated branch name, for column alignment
-	headerShown bool
+	out       output.Output
+	scopes    map[string]string
+	worktrees map[string]string
+	parents   map[string]string
+	trunk     string
+	solo      bool // exactly one submittable branch — drop the stack framing
+	nameWidth int  // widest decorated branch name, for column alignment
+	events    []submit.BranchPlanEvent
+	printed   bool
 }
 
 // SetStack stashes the stack annotations so plan lines can include them, and
@@ -54,6 +55,9 @@ func (p *planPrinter) SetStack(stack submit.StackSnapshot) {
 	p.parents = stack.ParentMap
 	p.trunk = stack.TrunkBranch
 	p.solo = len(stack.Branches) == 1
+	p.events = p.events[:0]
+	p.printed = false
+	p.nameWidth = 0
 
 	for _, name := range stack.Branches {
 		if w := lipgloss.Width(p.decoratedName(name)); w > p.nameWidth {
@@ -74,43 +78,73 @@ func (p *planPrinter) decoratedName(branchName string) string {
 	return name
 }
 
-// PrintLine prints one branch of the plan, with the stack header before the
-// first line. A solo branch routes to the leaner single-PR rendering.
-func (p *planPrinter) PrintLine(ev submit.BranchPlanEvent) {
+// AddLine records one branch of the plan. The plan renders once all rows are
+// known so skipped branches can be grouped instead of repeating the same reason
+// on every line.
+func (p *planPrinter) AddLine(ev submit.BranchPlanEvent) {
+	p.events = append(p.events, ev)
+}
+
+// Flush renders the buffered submit plan.
+func (p *planPrinter) Flush() {
+	if p.printed || len(p.events) == 0 {
+		return
+	}
+	p.printed = true
+
 	if p.solo {
-		p.printSoloLine(ev)
+		p.printSoloLine(p.events[0])
 		return
 	}
 
-	if !p.headerShown {
-		p.headerShown = true
-		header := "Stack to submit"
-		if p.trunk != "" {
-			header += " → " + p.trunk
-		}
-		p.out.Info("%s", header)
+	header := style.ColorMagenta("Submit plan")
+	if p.trunk != "" {
+		header += " → " + style.ColorBranchNameWithTrunk(p.trunk, false, true)
 	}
+	p.out.Info("%s", header)
 
+	active, skipped := p.partition()
+	if len(active) > 0 {
+		p.out.Info("%s", sectionHeader("Will submit", len(active), false))
+		for _, ev := range active {
+			p.printActiveLine(ev)
+		}
+	}
+	for _, group := range skipped {
+		p.out.Info("%s", sectionHeader(skipGroupTitle(group.reason), len(group.events), true))
+		if len(active) > 0 {
+			continue
+		}
+		for _, ev := range group.events {
+			p.printSkippedName(ev)
+		}
+	}
+}
+
+func (p *planPrinter) printActiveLine(ev submit.BranchPlanEvent) {
 	marker := "  "
 	if ev.IsCurrent {
 		marker = "● "
 	}
-	name := p.pad(p.decoratedName(ev.BranchName))
-
-	if ev.Skipped {
-		p.out.Info("%s%s %s", marker, style.ColorDim(name), style.ColorDim("— "+ev.SkipReason))
-		return
-	}
+	name := p.pad(p.decoratedName(ev.BranchName), false, ev.IsCurrent)
 
 	action := ev.Action
 	if ev.PRNumber != nil {
-		action = fmt.Sprintf("%s #%d", action, *ev.PRNumber)
+		action = fmt.Sprintf("%s %s", action, style.ColorYellow(fmt.Sprintf("#%d", *ev.PRNumber)))
 	}
-	line := fmt.Sprintf("%s%s → %s", marker, name, action)
+	line := fmt.Sprintf("%s%s → %s", marker, name, colorAction(ev.Action, action))
 	if ev.Empty {
 		line += " " + style.ColorDim("(empty)")
 	}
 	p.out.Info("%s", line)
+}
+
+func (p *planPrinter) printSkippedName(ev submit.BranchPlanEvent) {
+	marker := "  "
+	if ev.IsCurrent {
+		marker = style.ColorGreen("● ")
+	}
+	p.out.Info("%s%s", marker, p.pad(p.decoratedName(ev.BranchName), true, ev.IsCurrent))
 }
 
 // printSoloLine renders the plan for a single branch as "name → base action",
@@ -120,15 +154,18 @@ func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
 	base := p.soloBase(ev.BranchName)
 
 	if ev.Skipped {
-		p.out.Info("%s → %s %s", name, base, style.ColorDim("— "+ev.SkipReason))
+		p.out.Info("%s → %s %s",
+			style.ColorBranchNameBold(name, ev.IsCurrent),
+			style.ColorBranchNameWithTrunk(base, false, base == p.trunk),
+			style.ColorDim("— "+ev.SkipReason))
 		return
 	}
 
 	action := ev.Action
 	if ev.PRNumber != nil {
-		action = fmt.Sprintf("%s #%d", action, *ev.PRNumber)
+		action = fmt.Sprintf("%s %s", action, style.ColorYellow(fmt.Sprintf("#%d", *ev.PRNumber)))
 	}
-	line := fmt.Sprintf("%s → %s  %s", name, base, style.ColorDim(action))
+	line := fmt.Sprintf("%s → %s  %s", style.ColorBranchNameBold(name, ev.IsCurrent), style.ColorBranchNameWithTrunk(base, false, base == p.trunk), colorAction(ev.Action, action))
 	if ev.Empty {
 		line += " " + style.ColorDim("(empty)")
 	}
@@ -148,11 +185,76 @@ func (p *planPrinter) soloBase(branchName string) string {
 }
 
 // pad right-pads name with spaces to nameWidth so the action column aligns.
-func (p *planPrinter) pad(name string) string {
+func (p *planPrinter) pad(name string, dim bool, current bool) string {
+	padded := name
 	if gap := p.nameWidth - lipgloss.Width(name); gap > 0 {
-		return name + strings.Repeat(" ", gap)
+		padded += strings.Repeat(" ", gap)
 	}
-	return name
+	if dim {
+		return style.ColorDim(padded)
+	}
+	return style.ColorBranchNameBold(padded, current)
+}
+
+type skippedPlanGroup struct {
+	reason string
+	events []submit.BranchPlanEvent
+}
+
+func (p *planPrinter) partition() ([]submit.BranchPlanEvent, []skippedPlanGroup) {
+	active := make([]submit.BranchPlanEvent, 0, len(p.events))
+	groups := []skippedPlanGroup{}
+	groupIndex := map[string]int{}
+	for _, ev := range p.events {
+		if !ev.Skipped {
+			active = append(active, ev)
+			continue
+		}
+		reason := ev.SkipReason
+		if reason == "" {
+			reason = "skipped"
+		}
+		idx, ok := groupIndex[reason]
+		if !ok {
+			idx = len(groups)
+			groupIndex[reason] = idx
+			groups = append(groups, skippedPlanGroup{reason: reason})
+		}
+		groups[idx].events = append(groups[idx].events, ev)
+	}
+	return active, groups
+}
+
+func sectionHeader(label string, count int, muted bool) string {
+	text := fmt.Sprintf("%s (%d)", label, count)
+	if muted {
+		return style.ColorDim(text)
+	}
+	return style.ColorCyan(text)
+}
+
+func skipGroupTitle(reason string) string {
+	switch reason {
+	case "no changes":
+		return "No changes"
+	case "no existing PR":
+		return "No existing PR"
+	case "":
+		return "Skipped"
+	default:
+		return "Skipped: " + reason
+	}
+}
+
+func colorAction(action, text string) string {
+	switch action {
+	case "create":
+		return style.ColorGreen(text)
+	case "update":
+		return style.ColorCyan(text)
+	default:
+		return style.ColorDim(text)
+	}
 }
 
 // SimpleSubmitHandler implements submit.Handler with line-by-line output
@@ -202,9 +304,13 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		// Skip - we'll show progress during actual submission
 
 	case submit.BranchPlanEvent:
-		h.plan.PrintLine(ev)
+		h.plan.AddLine(ev)
+
+	case submit.PlanningCompleteEvent:
+		h.plan.Flush()
 
 	case submit.SubmissionStartEvent:
+		h.plan.Flush()
 		h.order = h.order[:0]
 		for _, branch := range ev.Branches {
 			h.items[branch.Name] = &branchItem{
@@ -277,6 +383,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		h.Output.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
 
 	case submit.CompletionEvent:
+		h.plan.Flush()
 		switch ev.Outcome {
 		case submit.OutcomeComplete:
 			if summary := h.completionSummary(); summary != "" {
@@ -391,9 +498,13 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		// Quiet - the plan lines follow immediately
 
 	case submit.BranchPlanEvent:
-		h.plan.PrintLine(ev)
+		h.plan.AddLine(ev)
+
+	case submit.PlanningCompleteEvent:
+		h.plan.Flush()
 
 	case submit.SubmissionStartEvent:
+		h.plan.Flush()
 		h.inSubmitPhase = true
 
 		items := make([]submitComponent.Item, len(ev.Branches))
@@ -439,6 +550,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		h.out.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
 
 	case submit.CompletionEvent:
+		h.plan.Flush()
 		// If the submission phase never started (nothing to submit, dry run,
 		// canceled), the TUI isn't running — print the outcome plainly.
 		if !h.runner.IsRunning() {

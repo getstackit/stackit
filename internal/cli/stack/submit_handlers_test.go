@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
 	submitAction "github.com/getstackit/stackit/internal/actions/submit"
@@ -98,12 +99,15 @@ func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
 		Action:     "create",
 		IsCurrent:  true,
 	})
+	handler.OnEvent(submitAction.PlanningCompleteEvent{})
 
-	got := out.String()
-	require.Contains(t, got, "Stack to submit → main")
+	got := ansi.Strip(out.String())
+	require.Contains(t, got, "Submit plan → main")
+	require.Contains(t, got, "Will submit (1)")
 	require.Contains(t, got, "● current-branch [CORE] → create")
-	require.Contains(t, got, "skipped-branch")
-	require.Contains(t, got, "— no changes")
+	require.Contains(t, got, "No changes (1)")
+	require.NotContains(t, got, "skipped-branch")
+	require.NotContains(t, got, "skipped-branch — no changes")
 	require.Equal(t, 1, strings.Count(got, "current-branch"), "stack and plan must print as one merged list")
 }
 
@@ -129,10 +133,10 @@ func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {
 	})
 	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "All PRs up to date"})
 
-	got := out.String()
-	// A lone branch drops the stack framing: no "Stack to submit" header, the
+	got := ansi.Strip(out.String())
+	// A lone branch drops the stack framing: no "Submit plan" header, the
 	// branch reads as "name → base".
-	require.NotContains(t, got, "Stack to submit")
+	require.NotContains(t, got, "Submit plan")
 	require.Contains(t, got, "up-to-date-branch → main")
 	require.Contains(t, got, "— no changes")
 	require.Contains(t, got, "All PRs up to date")
@@ -159,8 +163,11 @@ func TestPlanPrinterShowsPRNumbersAndEmptyAnnotation(t *testing.T) {
 		Action:     "create",
 		Empty:      true,
 	})
+	handler.OnEvent(submitAction.PlanningCompleteEvent{})
 
-	got := out.String()
+	got := ansi.Strip(out.String())
+	require.Contains(t, got, "Submit plan → main")
+	require.Contains(t, got, "Will submit (2)")
 	require.Contains(t, got, "update-me → update #1189")
 	require.Contains(t, got, "empty-one → create")
 	require.Contains(t, got, "(empty)")
@@ -194,9 +201,9 @@ func TestSimpleSubmitHandlerSoloSubmitDropsStackFraming(t *testing.T) {
 	})
 	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Message: "Submit complete"})
 
-	got := out.String()
+	got := ansi.Strip(out.String())
 	require.Contains(t, got, "tighten-submit-output → main")
-	require.NotContains(t, got, "Stack to submit")
+	require.NotContains(t, got, "Submit plan")
 	require.NotContains(t, got, "Submitting 1 branch")
 	require.NotContains(t, got, "Pull requests")
 	require.Contains(t, got, "#1270 created")

@@ -235,9 +235,9 @@ func hyperlink(url, text string) string {
 	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
 }
 
-// FormatLinkedURLSummary renders the post-submit PR list as one clickable
-// OSC 8 hyperlink per PR. Only for terminal output — non-TTY consumers should
-// use FormatURLSummary, which keeps raw URLs greppable.
+// FormatLinkedURLSummary renders the post-submit PR list with clickable labels
+// and visible URLs. Keeping the URL visible matters for copy/paste, logs, and
+// terminals that do not expose OSC 8 links clearly.
 func FormatLinkedURLSummary(items []Item) string {
 	rows := make([]string, 0, len(items))
 	for _, item := range items {
@@ -249,7 +249,7 @@ func FormatLinkedURLSummary(items []Item) string {
 			ref = "-"
 		}
 		name := DisplayBranchName(item.BranchName)
-		rows = append(rows, hyperlink(item.URL, fmt.Sprintf("%s %s", ref, name)))
+		rows = append(rows, fmt.Sprintf("%s\n     %s", hyperlink(item.URL, fmt.Sprintf("%s %s", ref, name)), item.URL))
 	}
 	if len(rows) == 0 {
 		return ""

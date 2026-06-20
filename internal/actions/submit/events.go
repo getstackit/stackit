@@ -53,6 +53,13 @@ type BranchPlanEvent struct {
 
 func (BranchPlanEvent) submitEvent() {}
 
+// PlanningCompleteEvent indicates that all BranchPlanEvents have been emitted.
+// Handlers that buffer plan rows can render the complete plan before any
+// confirmation prompt or submission starts.
+type PlanningCompleteEvent struct{}
+
+func (PlanningCompleteEvent) submitEvent() {}
+
 // BranchWarningEvent surfaces a non-fatal warning raised while submitting a
 // branch (e.g. labels or reviewers could not be applied). Warnings must flow
 // through the handler rather than direct console output: the interactive

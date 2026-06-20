@@ -146,7 +146,6 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 
 	var prInfo *engine.PrInfo
 	if !isTrunk {
-		branch := eng.GetBranch(branchName)
 		prInfo, _ = branch.GetPrInfo()
 		if prInfo != nil && prInfo.Number() != nil {
 			prTitleLine := getPRTitleLine(prInfo)
@@ -160,15 +159,14 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		}
 	}
 
-	branchObj := eng.GetBranch(branchName)
-	parentBranch := branchObj.GetParent()
+	parentBranch := branch.GetParent()
 	if parentBranch != nil {
 		outputLines = append(outputLines, "")
 		outputLines = append(outputLines, fmt.Sprintf("%s: %s", output.Cyan("Parent"), output.BranchWithTrunk(parentBranch.GetName(), false, parentBranch.IsTrunk())))
 	}
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	children := graph.ChildBranches(branchObj)
+	children := graph.ChildBranches(branch)
 	if len(children) > 0 {
 		outputLines = append(outputLines, fmt.Sprintf("%s:", output.Cyan("Children")))
 		for _, child := range children {
@@ -187,7 +185,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		if isTrunk {
 			baseRevision = branchName + "~"
 		} else {
-			commits, err := branchObj.GetAllCommits(engine.CommitFormatSHA)
+			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
 			if err == nil && len(commits) > 0 {
 				oldestSHA := commits[0]
 				baseRevision, _ = eng.GetParentCommitSHA(oldestSHA)
@@ -223,7 +221,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 				}
 			}
 		} else {
-			commits, err := branchObj.GetAllCommits(engine.CommitFormatSHA)
+			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
 			if err == nil && len(commits) > 0 {
 				oldestSHA := commits[0]
 				parentSHA, _ := eng.GetParentCommitSHA(oldestSHA)

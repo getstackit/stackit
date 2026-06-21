@@ -718,11 +718,7 @@ func (r *runner) GetCommitRange(ctx context.Context, base, head, format string) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to walk commits %s: %w", rangeArg, err)
 		}
-		raw := strings.TrimRight(out, "\x00")
-		if raw == "" {
-			return nil, nil
-		}
-		records := strings.Split(raw, "\x00")
+		records := splitNulTerminated(out)
 		result := make([]string, 0, len(records))
 		for _, rec := range records {
 			rec = strings.TrimSpace(rec)
@@ -757,6 +753,23 @@ func (r *runner) gitLogLines(ctx context.Context, rangeArg, format string) ([]st
 		}
 	}
 	return result, nil
+}
+
+// splitNulTerminated splits a NUL-terminated string (as produced by git -z)
+// into non-empty records. The trailing NUL appended by git is stripped first.
+func splitNulTerminated(s string) []string {
+	s = strings.TrimRight(s, "\x00")
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, "\x00")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 func (r *runner) GetCommitRangeSHAs(ctx context.Context, base, head string) ([]string, error) {

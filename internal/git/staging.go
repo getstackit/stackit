@@ -103,18 +103,7 @@ func (r *runner) listUntrackedFiles(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list untracked files: %w", err)
 	}
-	out = strings.TrimRight(out, "\x00")
-	if out == "" {
-		return nil, nil
-	}
-	files := strings.Split(out, "\x00")
-	result := make([]string, 0, len(files))
-	for _, f := range files {
-		if f != "" {
-			result = append(result, f)
-		}
-	}
-	return result, nil
+	return splitNulTerminated(out), nil
 }
 
 func (r *runner) ParseStagedHunks(ctx context.Context) ([]Hunk, error) {

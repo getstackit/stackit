@@ -71,17 +71,13 @@ func (r *runner) GetRecentCommits(ctx context.Context, branchName string, count 
 		return nil, fmt.Errorf("failed to walk recent commits on %s: %w", branchName, err)
 	}
 
-	raw := strings.TrimRight(out, "\x00")
-	if raw == "" {
+	records := splitNulTerminated(out)
+	if len(records) == 0 {
 		return nil, nil
 	}
 
-	records := strings.Split(raw, "\x00")
 	commits := make([]RecentCommit, 0, len(records))
 	for _, rec := range records {
-		if rec == "" {
-			continue
-		}
 		fields := strings.SplitN(rec, commitFieldSep, 4)
 		if len(fields) < 4 {
 			return nil, fmt.Errorf("malformed git log record: %q", rec)

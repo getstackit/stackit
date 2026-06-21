@@ -75,17 +75,7 @@ func (r *runner) changedFilesBetween(ctx context.Context, base, head string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff %s..%s: %w", base, head, err)
 	}
-	out = strings.TrimRight(out, "\x00")
-	if out == "" {
-		return []string{}, nil
-	}
-	files := strings.Split(out, "\x00")
-	result := make([]string, 0, len(files))
-	for _, f := range files {
-		if f != "" {
-			result = append(result, f)
-		}
-	}
+	result := splitNulTerminated(out)
 	slices.Sort(result)
 	return result, nil
 }

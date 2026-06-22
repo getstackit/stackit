@@ -41,6 +41,7 @@ func loadReposFromDB(ctx context.Context, st *store.Store, reposRoot string) ([]
 			Name:        r.Name,
 			Path:        r.Path,
 			Remote:      r.Remote,
+			AddedBy:     r.AddedBy,
 		}
 		if err := normalizeRepoEntry(&rc, reposRoot); err != nil {
 			slog.Warn("repo skipped (invalid config)", "repo", r.ID, "error", err)

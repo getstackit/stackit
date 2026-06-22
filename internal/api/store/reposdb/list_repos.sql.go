@@ -10,7 +10,7 @@ import (
 )
 
 const listRepos = `-- name: ListRepos :many
-SELECT id, display_name, owner, name, path, remote, created_at, updated_at
+SELECT id, display_name, owner, name, path, remote, created_at, updated_at, added_by
 FROM repos
 ORDER BY id
 `
@@ -33,6 +33,7 @@ func (q *Queries) ListRepos(ctx context.Context) ([]Repo, error) {
 			&i.Remote,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AddedBy,
 		); err != nil {
 			return nil, err
 		}

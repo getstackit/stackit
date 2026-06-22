@@ -17,4 +17,5 @@ type Repo struct {
 	Remote      string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	AddedBy     string
 }

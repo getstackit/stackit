@@ -21,6 +21,10 @@ type EntryParams struct {
 	DisplayName string
 	Path        string
 	Remote      string
+	// AddedBy is the GitHub login of the user who onboarded this repo, or
+	// empty for operator-seeded repos. Carried onto the registry entry for
+	// per-user visibility scoping.
+	AddedBy string
 }
 
 // BuildEntry resolves p into a runtime context via app.GetContext and returns a
@@ -48,6 +52,7 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 		DisplayName: p.DisplayName,
 		RepoRoot:    runtimeCtx.RepoRoot,
 		Remote:      p.Remote,
+		AddedBy:     p.AddedBy,
 		Engine:      runtimeCtx.Engine,
 		GitHub:      gh,
 	})

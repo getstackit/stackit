@@ -36,8 +36,12 @@ type EntryConfig struct {
 	DisplayName string
 	RepoRoot    string
 	Remote      string
-	Engine      engine.Engine
-	GitHub      github.Client
+	// AddedBy is the GitHub login of the user who onboarded this repo, or
+	// empty for operator-seeded repos. Handlers use it to scope per-user
+	// visibility so a user only sees repos they added.
+	AddedBy string
+	Engine  engine.Engine
+	GitHub  github.Client
 }
 
 // RepoEntry is the per-repository state required to serve API requests for
@@ -49,8 +53,11 @@ type RepoEntry struct {
 	DisplayName string
 	RepoRoot    string
 	Remote      string
-	Engine      engine.Engine
-	GitHub      github.Client
+	// AddedBy is the GitHub login of the user who onboarded this repo, or
+	// empty for operator-seeded repos visible to everyone.
+	AddedBy string
+	Engine  engine.Engine
+	GitHub  github.Client
 
 	Broadcaster *Broadcaster
 	Watcher     *watcher.RefWatcher
@@ -67,6 +74,7 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 		DisplayName: cfg.DisplayName,
 		RepoRoot:    cfg.RepoRoot,
 		Remote:      cfg.Remote,
+		AddedBy:     cfg.AddedBy,
 		Engine:      cfg.Engine,
 		GitHub:      cfg.GitHub,
 		Broadcaster: NewBroadcaster(),

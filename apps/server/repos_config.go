@@ -32,6 +32,11 @@ type repoConfig struct {
 	Path string
 
 	Remote string
+
+	// AddedBy is the GitHub login of the user who onboarded this repo, or
+	// empty for operator-seeded rows. Carried through to the registry entry so
+	// the server can scope per-user visibility.
+	AddedBy string
 }
 
 // repoIDPattern restricts repo IDs to characters that survive in URL paths

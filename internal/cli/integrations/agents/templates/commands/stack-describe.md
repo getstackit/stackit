@@ -10,8 +10,7 @@ Generate a comprehensive description for the current stack based on all changes.
 
 ## Context
 - Current branch: !`git branch --show-current`
-- Stack state: !`stackit tree --no-interactive`
-- Stack info: !`stackit info --stack --json --no-interactive`
+- Stack info (branches, parents, commit messages, diff stats): !`stackit info --stack --json --no-interactive`
 - Current description: !`stackit describe --show --no-interactive`
 
 ## Instructions

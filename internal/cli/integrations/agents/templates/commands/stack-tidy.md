@@ -11,8 +11,7 @@ Clean up commits across the stack by squashing fixup/WIP commits into meaningful
 ## Context
 - Current branch: !`git branch --show-current`
 - Uncommitted changes: !`git status --short`
-- Stack state: !`stackit tree --no-interactive`
-- Stack info: !`stackit info --stack --json --no-interactive`
+- Stack info (branches, parents, commit messages, diff stats): !`stackit info --stack --json --no-interactive`
 
 ## Task
 

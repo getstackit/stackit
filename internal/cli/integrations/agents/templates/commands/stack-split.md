@@ -84,8 +84,11 @@ Get the commits on the current branch that will be analyzed for splitting:
 # Get parent branch from stackit metadata
 stackit tree --no-interactive
 
-# Get the diff between parent and current branch HEAD
-# This shows all changes that could be split
+# Survey size first (bounded), then read what you need
+git diff --stat <parent-branch>..HEAD
+# Full diff of all changes that could be split. For a large diff, avoid dumping
+# everything into context — read per-file instead:
+#   git diff <parent-branch>..HEAD -- <path>
 git diff <parent-branch>..HEAD
 
 # Also get commit history for context

@@ -38,18 +38,7 @@ func EnsureClone(ctx context.Context, p CloneParams) error {
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "clone", "--", p.CloneURL, p.Dest)
-	// GIT_TERMINAL_PROMPT=0 makes a bad/empty token fail fast instead of
-	// blocking on an interactive credential prompt.
-	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	if p.Token != "" {
-		header := "Authorization: Basic " + basicAuthHeader("x-access-token", p.Token)
-		env = append(env,
-			"GIT_CONFIG_COUNT=1",
-			"GIT_CONFIG_KEY_0=http.extraHeader",
-			"GIT_CONFIG_VALUE_0="+header,
-		)
-	}
-	cmd.Env = env
+	cmd.Env = gitEnv(p.Token)
 
 	if out, err := cmd.CombinedOutput(); err != nil {
 		// Leave no half-written checkout behind so a retry starts clean.
@@ -70,4 +59,21 @@ func isGitRepo(dir string) bool {
 
 func basicAuthHeader(user, pass string) string {
 	return base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
+}
+
+// gitEnv returns the environment for a git subprocess: the process environment,
+// a disabled credential prompt (so a bad/empty token fails fast instead of
+// blocking on input), and — when token is non-empty — an Authorization header
+// supplied via GIT_CONFIG so the token never appears in argv or the repo config.
+func gitEnv(token string) []string {
+	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	if token != "" {
+		header := "Authorization: Basic " + basicAuthHeader("x-access-token", token)
+		env = append(env,
+			"GIT_CONFIG_COUNT=1",
+			"GIT_CONFIG_KEY_0=http.extraHeader",
+			"GIT_CONFIG_VALUE_0="+header,
+		)
+	}
+	return env
 }

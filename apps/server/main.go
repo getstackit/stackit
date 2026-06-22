@@ -121,12 +121,16 @@ func run() error {
 		}
 	}()
 
+	// repoStore is non-nil only in DB-backed mode; it is handed to the server
+	// so runtime onboarding can persist newly added repos.
+	var repoStore *store.Store
 	switch {
 	case *databaseURL != "":
 		st, err := store.Open(context.Background(), *databaseURL)
 		if err != nil {
 			return err
 		}
+		repoStore = st
 		defer func() {
 			if closeErr := st.Close(); closeErr != nil {
 				slog.Error("repo store close failed", "error", closeErr)
@@ -194,6 +198,7 @@ func run() error {
 		Registry:    reg,
 		Auth:        authCfg,
 		ReadOnly:    *readOnly,
+		RepoStore:   repoStore,
 	})
 
 	errCh := make(chan error, 1)

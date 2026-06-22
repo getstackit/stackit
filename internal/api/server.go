@@ -13,6 +13,7 @@ import (
 	"github.com/getstackit/stackit/internal/api/auth"
 	"github.com/getstackit/stackit/internal/api/handlers"
 	"github.com/getstackit/stackit/internal/api/registry"
+	"github.com/getstackit/stackit/internal/api/store"
 )
 
 // ServerConfig holds configuration for the API server.
@@ -55,6 +56,12 @@ type ServerConfig struct {
 	// start unauthenticated when STACKIT_PUBLIC or $PORT are set unless
 	// -auth-disabled is passed explicitly.
 	Auth *AuthConfig
+
+	// RepoStore is the persistence backend for repo configuration. It is set
+	// only when the server runs in DB-backed mode (-database-url). Runtime
+	// repo onboarding persists new repos here so they survive a restart; when
+	// nil, onboarding is unavailable and the registry is fixed at boot.
+	RepoStore *store.Store
 }
 
 // AuthConfig is the runtime auth setup. SessionStore must outlive the

@@ -14,6 +14,7 @@ import (
 	"github.com/getstackit/stackit/internal/api/handlers"
 	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/api/store"
+	githubpkg "github.com/getstackit/stackit/internal/github"
 )
 
 // ServerConfig holds configuration for the API server.
@@ -67,6 +68,12 @@ type ServerConfig struct {
 	// checked out (<ReposRoot>/<owner>/<name>). Required for runtime
 	// onboarding; when empty, onboarding is refused.
 	ReposRoot string
+
+	// RepoSyncTokens mints GitHub App installation tokens for git operations on
+	// managed repos. It authenticates onboarding clones and background syncs.
+	// Nil when no GitHub App is configured, in which case onboarding is refused
+	// and the sync loop can only fetch public repos.
+	RepoSyncTokens *githubpkg.AppTokenProvider
 }
 
 // AuthConfig is the runtime auth setup. SessionStore must outlive the
@@ -176,7 +183,11 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	if s.config.RepoStore != nil {
 		persister = s.config.RepoStore
 	}
-	var onboardHandler http.Handler = handlers.NewOnboardHandler(reg, persister, cipher, s.config.ReposRoot)
+	var tokens handlers.InstallationTokenProvider
+	if s.config.RepoSyncTokens != nil {
+		tokens = s.config.RepoSyncTokens
+	}
+	var onboardHandler http.Handler = handlers.NewOnboardHandler(reg, persister, cipher, s.config.ReposRoot, tokens)
 	if s.config.ReadOnly {
 		onboardHandler = readOnlyWriteHandler()
 	}

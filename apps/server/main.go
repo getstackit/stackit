@@ -190,6 +190,16 @@ func run() error {
 		slog.Warn("auth: DISABLED (no STACKIT_GITHUB_* env or -auth-disabled set). Do not expose this port publicly.")
 	}
 
+	// GitHub App provider authenticates onboarding clones and background syncs.
+	// Nil when no App is configured.
+	appProvider, err := buildAppProvider()
+	if err != nil {
+		return err
+	}
+	if appProvider != nil {
+		slog.Info("github app: installation-token provider enabled")
+	}
+
 	// Resolve the repos root to an absolute path so onboarded checkouts land
 	// in the same place boot-loaded repos resolve to (loadReposFromDB also
 	// makes it absolute), keeping persisted repos host-portable.
@@ -201,16 +211,17 @@ func run() error {
 	}
 
 	server := api.NewServer(api.ServerConfig{
-		BindAddr:    *bind,
-		Port:        *port,
-		CORSOrigins: parseCSV(*corsOrigins),
-		APIPrefixes: prefixes,
-		StaticFS:    staticFS,
-		Registry:    reg,
-		Auth:        authCfg,
-		ReadOnly:    *readOnly,
-		RepoStore:   repoStore,
-		ReposRoot:   absReposRoot,
+		BindAddr:       *bind,
+		Port:           *port,
+		CORSOrigins:    parseCSV(*corsOrigins),
+		APIPrefixes:    prefixes,
+		StaticFS:       staticFS,
+		Registry:       reg,
+		Auth:           authCfg,
+		ReadOnly:       *readOnly,
+		RepoStore:      repoStore,
+		ReposRoot:      absReposRoot,
+		RepoSyncTokens: appProvider,
 	})
 
 	errCh := make(chan error, 1)

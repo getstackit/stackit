@@ -3,8 +3,10 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,6 +30,15 @@ func (f *fakeRepoStore) AddRepo(_ context.Context, r store.Repo) (store.Repo, er
 	}
 	f.added = append(f.added, r)
 	return r, nil
+}
+
+type fakeTokenProvider struct {
+	token string
+	err   error
+}
+
+func (f fakeTokenProvider) InstallationToken(_ context.Context, _, _ string) (string, error) {
+	return f.token, f.err
 }
 
 func onboardCipher(t *testing.T) *auth.Cipher {
@@ -55,13 +66,17 @@ func doOnboard(t *testing.T, h *OnboardHandler, cipher *auth.Cipher, body string
 func TestOnboardHandlerSuccess(t *testing.T) {
 	t.Parallel()
 	src := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+	blob, err := src.Repo.RunGitCommandAndGetOutput("hash-object", "-w", "--stdin")
+	require.NoError(t, err)
+	require.NoError(t, src.Repo.RunGitCommand("update-ref", "refs/stackit/stacks/test-stack", blob))
+
 	reg := registry.New()
 	t.Cleanup(func() { _ = reg.Close() })
 	repoStore := &fakeRepoStore{}
 	cipher := onboardCipher(t)
 	reposRoot := t.TempDir()
 
-	h := NewOnboardHandler(reg, repoStore, cipher, reposRoot)
+	h := NewOnboardHandler(reg, repoStore, cipher, reposRoot, fakeTokenProvider{token: "inst-token"})
 	h.checkAccess = func(_ context.Context, token, owner, name string) (*github.RepoAccess, error) {
 		require.Equal(t, "user-token", token)
 		return &github.RepoAccess{Owner: owner, Name: name, CloneURL: src.Dir, DefaultBranch: "main"}, nil
@@ -84,6 +99,8 @@ func TestOnboardHandlerSuccess(t *testing.T) {
 	require.Empty(t, repoStore.added[0].Path, "path is stored empty so it re-derives under the host's repos root")
 
 	require.DirExists(t, filepath.Join(reposRoot, "octo", "widget", ".git"))
+	err = exec.Command("git", "-C", filepath.Join(reposRoot, "octo", "widget"), "rev-parse", "--verify", "--quiet", "refs/stackit/stacks/test-stack").Run()
+	require.NoError(t, err, "onboarding should mirror stack metadata before serving the repo")
 }
 
 func TestOnboardHandlerAccessDenied(t *testing.T) {
@@ -92,7 +109,7 @@ func TestOnboardHandlerAccessDenied(t *testing.T) {
 	t.Cleanup(func() { _ = reg.Close() })
 	cipher := onboardCipher(t)
 
-	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir())
+	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir(), fakeTokenProvider{token: "inst-token"})
 	h.checkAccess = func(_ context.Context, _, _, _ string) (*github.RepoAccess, error) {
 		return nil, github.ErrRepoAccessDenied
 	}
@@ -109,7 +126,7 @@ func TestOnboardHandlerDuplicate(t *testing.T) {
 	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "octo-widget", AddedBy: "alice"}))
 	cipher := onboardCipher(t)
 
-	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir())
+	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir(), fakeTokenProvider{token: "inst-token"})
 	rec := doOnboard(t, h, cipher, `{"owner":"octo","name":"widget"}`)
 	require.Equal(t, http.StatusConflict, rec.Code)
 }
@@ -120,7 +137,7 @@ func TestOnboardHandlerInvalidCoords(t *testing.T) {
 	t.Cleanup(func() { _ = reg.Close() })
 	cipher := onboardCipher(t)
 
-	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir())
+	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir(), fakeTokenProvider{token: "inst-token"})
 	rec := doOnboard(t, h, cipher, `{"owner":"../etc","name":"passwd"}`)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
@@ -129,7 +146,7 @@ func TestOnboardHandlerRequiresSession(t *testing.T) {
 	t.Parallel()
 	reg := registry.New()
 	t.Cleanup(func() { _ = reg.Close() })
-	h := NewOnboardHandler(reg, &fakeRepoStore{}, onboardCipher(t), t.TempDir())
+	h := NewOnboardHandler(reg, &fakeRepoStore{}, onboardCipher(t), t.TempDir(), fakeTokenProvider{token: "inst-token"})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos", strings.NewReader(`{"owner":"octo","name":"widget"}`))
 	rec := httptest.NewRecorder()
@@ -141,10 +158,41 @@ func TestOnboardHandlerRequiresStore(t *testing.T) {
 	t.Parallel()
 	reg := registry.New()
 	t.Cleanup(func() { _ = reg.Close() })
-	h := NewOnboardHandler(reg, nil, onboardCipher(t), t.TempDir())
+	h := NewOnboardHandler(reg, nil, onboardCipher(t), t.TempDir(), fakeTokenProvider{token: "inst-token"})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos", strings.NewReader(`{"owner":"octo","name":"widget"}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestOnboardHandlerRequiresGitHubApp(t *testing.T) {
+	t.Parallel()
+	reg := registry.New()
+	t.Cleanup(func() { _ = reg.Close() })
+	// nil token provider => no GitHub App configured.
+	h := NewOnboardHandler(reg, &fakeRepoStore{}, onboardCipher(t), t.TempDir(), nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos", strings.NewReader(`{"owner":"octo","name":"widget"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestOnboardHandlerAppNotInstalled(t *testing.T) {
+	t.Parallel()
+	reg := registry.New()
+	t.Cleanup(func() { _ = reg.Close() })
+	cipher := onboardCipher(t)
+
+	// User can see the repo, but the App isn't installed on the owner.
+	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir(), fakeTokenProvider{err: errors.New("installation not found")})
+	h.checkAccess = func(_ context.Context, _, owner, name string) (*github.RepoAccess, error) {
+		return &github.RepoAccess{Owner: owner, Name: name}, nil
+	}
+
+	rec := doOnboard(t, h, cipher, `{"owner":"octo","name":"widget"}`)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "GitHub App")
+	require.Empty(t, reg.List())
 }

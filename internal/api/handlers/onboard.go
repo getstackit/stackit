@@ -27,15 +27,26 @@ type RepoPersister interface {
 	AddRepo(ctx context.Context, r store.Repo) (store.Repo, error)
 }
 
+// InstallationTokenProvider mints a durable GitHub App installation token for a
+// repo. Onboarding clones with it (not the user's token) so the same credential
+// works for the background sync loop later. The concrete implementation is
+// *github.AppTokenProvider.
+type InstallationTokenProvider interface {
+	InstallationToken(ctx context.Context, owner, name string) (string, error)
+}
+
 // OnboardHandler serves POST /api/v1/repos: a logged-in user asks the server to
-// clone a GitHub repo and start serving it. The user's own token both
-// authorizes the request (they must be able to see the repo) and clones it, and
-// the repo is recorded against their login so only they see it (see visibleTo).
+// clone a GitHub repo and start serving it. The user's token authorizes the
+// request (they must be able to see the repo); the clone itself uses a durable
+// GitHub App installation token so the same credential serves later background
+// syncs. The repo is recorded against the user's login so only they see it
+// (see visibleTo).
 type OnboardHandler struct {
 	reg       *registry.Registry
 	store     RepoPersister
 	cipher    *auth.Cipher
 	reposRoot string
+	tokens    InstallationTokenProvider
 
 	// checkAccess is the one network dependency; it is an injectable seam so
 	// tests can authorize without reaching GitHub. Clone/init/build are local
@@ -43,16 +54,17 @@ type OnboardHandler struct {
 	checkAccess func(ctx context.Context, token, owner, name string) (*github.RepoAccess, error)
 }
 
-// NewOnboardHandler wires an onboarding handler. store and cipher may be nil
-// (persistence/auth not configured), in which case requests are refused with a
-// clear 503; the handler guards at request time so it is safe to mount
-// unconditionally.
-func NewOnboardHandler(reg *registry.Registry, st RepoPersister, cipher *auth.Cipher, reposRoot string) *OnboardHandler {
+// NewOnboardHandler wires an onboarding handler. store, cipher, and tokens may
+// be nil (persistence / auth / GitHub App not configured), in which case
+// requests are refused with a clear 503; the handler guards at request time so
+// it is safe to mount unconditionally.
+func NewOnboardHandler(reg *registry.Registry, st RepoPersister, cipher *auth.Cipher, reposRoot string, tokens InstallationTokenProvider) *OnboardHandler {
 	return &OnboardHandler{
 		reg:         reg,
 		store:       st,
 		cipher:      cipher,
 		reposRoot:   reposRoot,
+		tokens:      tokens,
 		checkAccess: github.CheckRepoAccess,
 	}
 }
@@ -85,6 +97,9 @@ func (h *OnboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	case h.store == nil:
 		writeJSONError(w, http.StatusServiceUnavailable, "onboarding requires a database (-database-url)")
+		return
+	case h.tokens == nil:
+		writeJSONError(w, http.StatusServiceUnavailable, "onboarding requires a configured GitHub App")
 		return
 	case h.reposRoot == "":
 		writeJSONError(w, http.StatusServiceUnavailable, "onboarding requires a repos root (-repos-root)")
@@ -145,11 +160,26 @@ func (h *OnboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cloneURL = "https://github.com/" + owner + "/" + name + ".git"
 	}
 
+	// Clone with a durable GitHub App installation token (not the user's
+	// session token), so the same credential serves later background syncs. This
+	// requires the App to be installed on the owner.
+	instToken, err := h.tokens.InstallationToken(r.Context(), owner, name)
+	if err != nil {
+		slog.Warn("onboard: installation token unavailable", "owner", owner, "name", name, "error", err)
+		writeJSONError(w, http.StatusBadRequest, "the Stackit GitHub App is not installed on "+owner+"; install it and try again")
+		return
+	}
+
 	slog.Info("audit", "action", "onboard", "actor", sess.GitHubLogin, "repo", id, "request_id", reqid.FromContext(r.Context())) //nolint:gosec // structured slog fields
 
-	if err := provision.EnsureClone(r.Context(), provision.CloneParams{CloneURL: cloneURL, Token: token, Dest: dest}); err != nil {
+	if err := provision.EnsureClone(r.Context(), provision.CloneParams{CloneURL: cloneURL, Token: instToken, Dest: dest}); err != nil {
 		slog.Error("onboard: clone failed", "repo", id, "error", err)
 		writeJSONError(w, http.StatusBadGateway, "failed to clone repository")
+		return
+	}
+	if err := provision.MirrorFetch(r.Context(), dest, "origin", instToken); err != nil {
+		slog.Error("onboard: mirror fetch failed", "repo", id, "error", err)
+		writeJSONError(w, http.StatusBadGateway, "failed to fetch repository metadata")
 		return
 	}
 

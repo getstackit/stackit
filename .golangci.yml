@@ -58,6 +58,7 @@ linters:
         - G702
         - G703
         - G704
+        - G124  # Cookies intentionally allow Secure: false for local dev (controlled via CookieOptions)
     revive:
       rules:
         - name: var-naming
@@ -69,6 +70,7 @@ linters:
         linters:
           - gosec
           - errcheck
+          - goconst
       - path: _test\.go
         linters:
           - lll

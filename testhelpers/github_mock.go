@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v73/github"
 )
 
 // MockGitHubServerConfig configures the behavior of a mock GitHub server

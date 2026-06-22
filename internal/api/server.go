@@ -69,6 +69,12 @@ type ServerConfig struct {
 type AuthConfig struct {
 	Handler      *auth.Handler
 	SessionStore auth.Store
+
+	// Cipher decrypts the GitHub access token stored on a session. Handlers
+	// that act as the requesting user (e.g. runtime repo onboarding verifying
+	// the user's access to a repo) need it to recover the token from
+	// SessionFromContext. It is the same cipher the OAuth handler sealed with.
+	Cipher *auth.Cipher
 }
 
 // Server is the stackit-web HTTP server. Per-repo state (engine, watcher,

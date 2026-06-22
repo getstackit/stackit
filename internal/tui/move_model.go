@@ -162,7 +162,7 @@ func NewMoveModel(eng engine.Engine, config MoveModelConfig) *MoveModel {
 	}
 	renderer.SetAnnotations(annotations)
 
-	// Render the tree (trunk at bottom to match st log)
+	// Render the tree (trunk at bottom to match st tree)
 	// Use SkipSelectionPrefix so we can add our own cursor indicators in viewSelecting
 	opts := tree.RenderOptions{
 		Mode:                tree.RenderModeSelect,

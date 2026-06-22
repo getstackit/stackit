@@ -48,7 +48,7 @@ stackit abort --no-interactive
 stackit undo --no-interactive --yes
 
 # Check if it worked
-stackit log --no-interactive
+stackit tree --no-interactive
 ```
 
 ### Branch Needs Restack
@@ -110,7 +110,7 @@ stackit modify --no-interactive
 
 ```bash
 # View structure
-stackit log --no-interactive
+stackit tree --no-interactive
 
 # Get detailed info
 stackit info --no-interactive
@@ -135,7 +135,7 @@ stackit debug --no-interactive
 ## Troubleshooting Checklist
 
 When things go wrong:
-1. Check status: `git status` and `stackit log --no-interactive`
+1. Check status: `git status` and `stackit tree --no-interactive`
 2. Look for interrupted operations (rebase, merge)
 3. Try `stackit doctor --no-interactive` for automatic fixes
 4. If stuck, `stackit abort --no-interactive` then `stackit undo --no-interactive --yes`

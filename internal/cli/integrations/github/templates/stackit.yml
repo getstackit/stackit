@@ -101,5 +101,5 @@ jobs:
             exit 0
           fi
 
-          echo "::error::This PR is not at the bottom of the stack. Please merge the parent PR first.%0AParent branch: $PARENT_BRANCH%0A%0AUse 'st log' to view the full stack."
+          echo "::error::This PR is not at the bottom of the stack. Please merge the parent PR first.%0AParent branch: $PARENT_BRANCH%0A%0AUse 'st tree' to view the full stack."
           exit 1

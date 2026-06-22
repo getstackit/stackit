@@ -1,92 +1,94 @@
-package navigation_test
+package navigation
 
 import (
+	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/testhelpers"
-	"github.com/getstackit/stackit/testhelpers/scenario"
+	"github.com/getstackit/stackit/internal/actions/trunklog"
 )
 
-func TestLogCommand(t *testing.T) {
+func TestBuildLogRequest(t *testing.T) {
 	t.Parallel()
-	// Build the stackit binary first
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
+
+	tests := []struct {
+		name    string
+		args    []string
+		since   string
+		count   int
+		want    trunklog.Request
+		wantErr string
+	}{
+		{name: "default count view", count: 25, want: trunklog.Request{Count: 25}},
+		{name: "explicit range", args: []string{"v1..main"}, want: trunklog.Request{From: "v1", To: "main"}},
+		{name: "open-ended range to trunk", args: []string{"v1.."}, want: trunklog.Request{From: "v1"}},
+		{name: "since shorthand", since: "v1", want: trunklog.Request{From: "v1"}},
+		{name: "range and since conflict", args: []string{"v1..main"}, since: "v1", wantErr: "cannot combine"},
+		{name: "missing range separator", args: []string{"foo"}, wantErr: "expected a range"},
+		{name: "missing lower bound", args: []string{"..main"}, wantErr: "missing a lower bound"},
 	}
 
-	t.Run("log in empty repo", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := buildLogRequest(tt.args, tt.since, tt.count)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
 
-		// Run log command
-		output, err := s.RunCliAndGetOutput("log")
+func TestRenderLogUsesColorAndPlainStructure(t *testing.T) {
+	t.Parallel()
 
-		// Should succeed and show trunk branch
-		require.NoError(t, err, "log command failed: %s", output)
-		require.Contains(t, output, "main")
-	})
+	got := renderLog(trunklog.Result{Commits: []trunklog.Commit{
+		{
+			SHA:      "abcdef1234567890",
+			Message:  "feat: standalone",
+			PRNumber: 42,
+		},
+		{
+			SHA:           "1234567890abcdef",
+			Message:       "Sync output quality",
+			PRNumber:      99,
+			StackSize:     2,
+			StackScope:    "CLI",
+			StackPRs:      []int{10, 11},
+			StackPRTitles: map[int]string{10: "first", 11: "second"},
+		},
+	}})
 
-	t.Run("log with branches", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+	require.Contains(t, got, "\x1b[")
+	plain := ansi.Strip(got)
+	require.Equal(t, strings.Join([]string{
+		"abcdef1  feat: standalone (#42)",
+		"1234567  Sync output quality  (#99 · 2 PRs · CLI)",
+		"    #10 first",
+		"    #11 second",
+	}, "\n"), plain)
+}
 
-		// Create a branch
-		s.CreateBranch("feature").
-			CommitChange("feature", "feature commit")
+func TestRenderLogEmpty(t *testing.T) {
+	t.Parallel()
 
-		// Checkout main
-		s.Checkout("main")
+	require.Empty(t, renderLog(trunklog.Result{}))
+}
 
-		// Run log command with --show-untracked to see untracked branches
-		output, err := s.RunCliAndGetOutput("log", "--show-untracked")
+func TestLogPagerViewUsesAltScreen(t *testing.T) {
+	t.Parallel()
 
-		require.NoError(t, err, "log command failed: %s", output)
-		require.Contains(t, output, "main")
-		require.Contains(t, output, "feature")
-	})
+	model := newLogPagerModel("abcdef1  feat: test", 1)
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	view := updated.(*logPagerModel).View()
 
-	t.Run("log with --stack flag", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
-
-		// Create and checkout a branch
-		s.CreateBranch("feature")
-
-		// Run log command with stack
-		output, err := s.RunCliAndGetOutput("log", "--stack")
-
-		require.NoError(t, err, "log command failed: %s", output)
-		require.Contains(t, output, "feature")
-	})
-
-	t.Run("log shows worktree indicator for stack with worktree", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
-		s.WithInitialCommit()
-
-		// Create a staged change for the branch
-		s.CommitChange("feature-file", "feature content")
-
-		// Go back to main to create branch with worktree
-		s.Checkout("main")
-
-		// Stage a change for the worktree branch
-		err := s.Scene.Repo.CreateChange("worktree-content", "worktree-file", false)
-		require.NoError(t, err)
-
-		// Create branch with worktree using CLI
-		output, err := s.RunCliAndGetOutput("create", "-m", "worktree feature", "-w")
-		require.NoError(t, err, "create with worktree failed: %s", output)
-
-		// Run log command - should show worktree indicator
-		output, err = s.RunCliAndGetOutput("log")
-		require.NoError(t, err, "log command failed: %s", output)
-		require.Contains(t, output, "worktree", "log should show worktree indicator for branch with managed worktree")
-	})
+	require.True(t, view.AltScreen)
+	require.Contains(t, view.Content, "Stackit Log | 1 commits")
+	require.Contains(t, ansi.Strip(view.Content), "abcdef1  feat: test")
 }

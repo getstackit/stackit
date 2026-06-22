@@ -51,16 +51,16 @@ var DefaultReorder = ReorderKeyMap{
 	),
 }
 
-// LogKeyMap extends NavigationKeyMap with log-specific operations.
-type LogKeyMap struct {
+// TreeKeyMap extends NavigationKeyMap with tree-specific operations.
+type TreeKeyMap struct {
 	NavigationKeyMap
 	Search key.Binding
 	Expand key.Binding
 	Quit   key.Binding
 }
 
-// DefaultLog returns keybindings for log views.
-var DefaultLog = LogKeyMap{
+// DefaultTree returns keybindings for log views.
+var DefaultTree = TreeKeyMap{
 	NavigationKeyMap: DefaultNavigation,
 	Search: key.NewBinding(
 		key.WithKeys("/"),

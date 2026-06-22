@@ -44,7 +44,7 @@ stackit create add-logic -m "feat: implement logic"
 See your current position in the stack:
 
 ```bash
-stackit log
+stackit tree
 ```
 
 ```

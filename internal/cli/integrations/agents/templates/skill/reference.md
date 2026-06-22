@@ -37,8 +37,9 @@ bash ~/.claude/skills/stackit/scripts/analyze_stack.sh
 | Command | Description |
 |---------|-------------|
 | `stackit state --json` | Complete one-call snapshot (branch, working tree, in-progress operation, full stack) — preferred for programmatic reads |
-| `stackit log` | Display the branch tree visualization |
-| `stackit log full` | Show tree with GitHub PR status and CI checks |
+| `stackit tree` | Display the branch tree visualization |
+| `stackit t` | Display the short branch tree (`stackit tree short`) |
+| `stackit tree full` | Show tree with GitHub PR status and CI checks |
 | `stackit checkout [branch]` | Switch to a specific branch |
 | `stackit up` | Move to the child branch |
 | `stackit down` | Move to the parent branch |

@@ -58,7 +58,7 @@ stackit create add-logic -m "feat: implement logic"
 ### 5. Visualize the stack
 
 ```bash
-stackit log
+stackit tree
 ```
 
 ```

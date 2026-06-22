@@ -7,7 +7,7 @@ These notes support the narrow Codex skills. Prefer the narrow skill body when i
 ```bash
 git add -A
 printf '%s\n' "feat: add auth middleware" | stackit create -F - --no-interactive
-stackit log --no-interactive
+stackit tree --no-interactive
 ```
 
 With an explicit branch name:
@@ -29,7 +29,7 @@ Use another stacked branch when the work is a separate reviewable unit.
 ## Submit PRs
 
 ```bash
-stackit log --no-interactive
+stackit tree --no-interactive
 stackit submit --no-interactive
 stackit submit --stack --no-interactive
 stackit submit --draft --no-interactive

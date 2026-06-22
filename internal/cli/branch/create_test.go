@@ -230,11 +230,11 @@ func TestCreateCommand(t *testing.T) {
 		require.Equal(t, "feature", currentBranch)
 
 		// Verify stackit is now initialized by running a command that requires init
-		// The log command would fail if not initialized, so success here proves auto-init worked
-		cmd = exec.Command(binaryPath, "log", "--stack")
+		// The tree command would fail if not initialized, so success here proves auto-init worked
+		cmd = exec.Command(binaryPath, "tree", "--stack")
 		cmd.Dir = scene.Dir
 		output, err = cmd.CombinedOutput()
-		require.NoError(t, err, "log command failed after auto-init: %s", string(output))
+		require.NoError(t, err, "tree command failed after auto-init: %s", string(output))
 		require.Contains(t, string(output), "feature")
 	})
 

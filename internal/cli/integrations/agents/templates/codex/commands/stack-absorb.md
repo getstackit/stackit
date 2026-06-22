@@ -51,7 +51,7 @@ Absorb staged fixes into the commits that last touched the changed lines.
 8. Finish with:
 
    ```bash
-   stackit log --no-interactive
+   stackit tree --no-interactive
    ```
 
 Do not continue past repeated verification failures; report the failing branch and recovery options.

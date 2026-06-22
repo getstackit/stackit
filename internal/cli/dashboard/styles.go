@@ -45,7 +45,7 @@ var (
 // lipgloss.HasDarkBackground (via DimStyle/SubtleStyle), which writes an
 // OSC 11 + DA1 query pair to stdout to ask the terminal for its background
 // color. Loading at package-init time means those queries leak as visible
-// escape codes on every CLI invocation — even ones like `stackit log` or
+// escape codes on every CLI invocation — even ones like `stackit tree` or
 // `stackit version` that don't render adaptive styles at all — because the
 // dashboard package is transitively imported by the root command.
 var (

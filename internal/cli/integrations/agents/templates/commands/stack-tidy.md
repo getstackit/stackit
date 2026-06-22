@@ -11,7 +11,7 @@ Clean up commits across the stack by squashing fixup/WIP commits into meaningful
 ## Context
 - Current branch: !`git branch --show-current`
 - Uncommitted changes: !`git status --short`
-- Stack state: !`stackit log --no-interactive`
+- Stack state: !`stackit tree --no-interactive`
 - Stack info: !`stackit info --stack --json --no-interactive`
 
 ## Task
@@ -85,7 +85,7 @@ Skip REVIEW and SKIP branches.
 
 ### Step 7: Show Results
 
-Show final stack state with `stackit log --no-interactive`.
+Show final stack state with `stackit tree --no-interactive`.
 
 ## Tool Trust
 
@@ -113,5 +113,5 @@ After successful tidy, use `AskUserQuestion`:
 
 Based on response:
 - **"Submit changes"**: Invoke `/stack-submit` skill using the `Skill` tool
-- **"View final stack"**: Run `stackit log --no-interactive` and display
+- **"View final stack"**: Run `stackit tree --no-interactive` and display
 - **"Done for now"**: End with summary of what was tidied

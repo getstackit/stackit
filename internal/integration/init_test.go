@@ -38,8 +38,8 @@ func TestInitIntegration(t *testing.T) {
 
 		// Any stackit command should trigger migration.
 		cli := inprocess.NewInProcessCLI()
-		result := cli.Run(scene.Dir, "log")
-		require.NoError(t, result.Err, "log should succeed: %s", result.Output)
+		result := cli.Run(scene.Dir, "tree")
+		require.NoError(t, result.Err, "tree should succeed: %s", result.Output)
 
 		backupPath := filepath.Join(scene.Dir, ".git", ".stackit_config.migrated")
 		_, err = os.Stat(backupPath)

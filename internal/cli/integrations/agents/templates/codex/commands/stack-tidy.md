@@ -12,7 +12,7 @@ Squash branches whose history is dominated by fixup, WIP, or noise commits, leav
 
    ```bash
    git status --short
-   stackit log --no-interactive
+   stackit tree --no-interactive
    stackit info --stack --json --no-interactive
    ```
 
@@ -58,7 +58,7 @@ Squash branches whose history is dominated by fixup, WIP, or noise commits, leav
 9. Verify:
 
    ```bash
-   stackit log --no-interactive
+   stackit tree --no-interactive
    ```
 
 ## Do Not

@@ -79,7 +79,7 @@ This installs Go, gotestsum, goimports, golangci-lint, and CLI utilities (ripgre
 
 4. View your stack:
    ```bash
-   stackit log
+   stackit tree
    ```
 
 5. Submit your changes:

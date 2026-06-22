@@ -285,25 +285,12 @@ func computeStackStatus(graph *engine.StackGraph, branchNames []string) string {
 // filtered out so that consolidated stacks don't show duplicate entries.
 // prTitles is an optional map of PR number to title; pass nil if unavailable.
 func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []TrunkCommitResponse {
-	// Collect all PR numbers that are covered by stack-merge consolidation commits.
-	coveredPRs := make(map[int]struct{})
-	for _, c := range commits {
-		if c.StackSize > 0 {
-			for _, pr := range c.StackPRNumbers {
-				coveredPRs[pr] = struct{}{}
-			}
-		}
-	}
+	// Drop constituent-PR commits already represented by a stack-merge. The
+	// collapse logic is shared with the `stackit log` command via internal/git.
+	collapsed := git.CollapseStackMerges(commits)
 
-	result := make([]TrunkCommitResponse, 0, len(commits))
-	for _, c := range commits {
-		// Skip commits whose PR is already represented by a stack-merge.
-		if c.PRNumber != 0 && c.StackSize == 0 {
-			if _, covered := coveredPRs[c.PRNumber]; covered {
-				continue
-			}
-		}
-
+	result := make([]TrunkCommitResponse, 0, len(collapsed))
+	for _, c := range collapsed {
 		message := c.Subject
 		// For stack-merge commits, use the consolidation PR's title from GitHub
 		// instead of the raw "Merge pull request #N from ..." subject

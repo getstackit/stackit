@@ -28,14 +28,14 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
 fi
 
 # Check if stackit is initialized
-if ! stackit log > /dev/null 2>&1; then
+if ! stackit tree > /dev/null 2>&1; then
     echo -e "${RED}❌ Stackit not initialized in this repository${NC}"
     echo "→ Run: stackit init"
     exit 1
 fi
 
 echo -e "${BLUE}Current Stack:${NC}"
-stackit log
+stackit tree
 echo
 
 # Fetch one authoritative snapshot as JSON: the working tree, any in-progress

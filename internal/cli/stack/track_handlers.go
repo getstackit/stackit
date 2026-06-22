@@ -64,7 +64,7 @@ func (h *InteractiveTrackHandler) IsInteractive() bool {
 // PromptSelectParent prompts user to select a parent for the branch
 func (h *InteractiveTrackHandler) PromptSelectParent(ctx context.Context, eng engine.Engine, ghClient github.Client, logger output.Logger, branchName string) (string, error) {
 	// Show interactive selector
-	selected, err := tui.PromptLogSelect(ctx, eng, ghClient, tui.LogOptions{
+	selected, err := tui.PromptTreeSelect(ctx, eng, ghClient, tui.TreeOptions{
 		Style:  "FULL",
 		Logger: logger,
 		Exclude: map[string]bool{

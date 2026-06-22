@@ -32,5 +32,5 @@ Rebase stack branches according to Stackit metadata.
    `stackit restack --branch <conflicted-branch> --upstack --no-interactive`, then
    resolve and `stackit continue`.
 
-5. Verify with `stackit log --no-interactive`. When done, report the result and
+5. Verify with `stackit tree --no-interactive`. When done, report the result and
    suggest `stackit submit` to update PRs, then stop.

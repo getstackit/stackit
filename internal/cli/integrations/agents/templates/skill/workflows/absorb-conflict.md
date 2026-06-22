@@ -50,7 +50,7 @@ When absorb fails with a conflict, identify where the change should go:
 stackit absorb --dry-run --no-interactive
 
 # View commits in current branch's stack
-stackit log --no-interactive
+stackit tree --no-interactive
 
 # See what each commit changed
 git log --oneline --stat HEAD~5..HEAD
@@ -171,7 +171,7 @@ After resolution:
 
 ```bash
 # 1. Verify the stack structure
-stackit log --no-interactive
+stackit tree --no-interactive
 
 # 2. Build/test each affected branch (use project's commands from README.md)
 stackit foreach --no-interactive "<build-command>"
@@ -298,4 +298,4 @@ Check `git stash list` - absorb stashes changes before starting. Use `git stash 
 - All staged changes applied to appropriate commits
 - No conflict markers in any files
 - Stack builds and tests pass
-- `stackit log --no-interactive` shows clean structure
+- `stackit tree --no-interactive` shows clean structure

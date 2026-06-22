@@ -25,13 +25,13 @@ branches are gone, checking after each:
 
 ```bash
 stackit undo --no-interactive --yes
-stackit log --no-interactive
+stackit tree --no-interactive
 ```
 
 ## Continue From The Last Successful Branch
 
 ```bash
-stackit log --no-interactive
+stackit tree --no-interactive
 git checkout stack-plan-backup-<timestamp>
 git diff <last-created-branch>..stack-plan-backup-<timestamp> --stat
 git checkout <last-created-branch>

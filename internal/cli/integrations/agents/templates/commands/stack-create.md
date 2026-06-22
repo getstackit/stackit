@@ -46,7 +46,7 @@ Create a new stacked branch with the current changes.
      - Options: Generate 2-3 sensible suggestions based on the codebase + user can type custom
    - Retry with `--scope <value>`
 10. If creation fails because Git cannot write under `.git/refs/heads` or create a `.lock` file, retry the exact same command with the required permission or approval. Do not change the branch name just to work around that failure.
-11. After success, run `stackit log --no-interactive` and report:
+11. After success, run `stackit tree --no-interactive` and report:
    - branch name
    - parent branch
    - commit subject

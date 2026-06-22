@@ -24,7 +24,7 @@ type StateResult struct {
 	Trunk         string            `json:"trunk"`
 	WorkingTree   WorkingTreeStatus `json:"working_tree"`
 	Operation     OperationStatus   `json:"operation"`
-	Stack         LogJSONResult     `json:"stack"`
+	Stack         TreeJSONResult    `json:"stack"`
 }
 
 // WorkingTreeStatus reports the staged/unstaged/untracked state of the worktree.
@@ -71,7 +71,7 @@ func BuildState(ctx *app.Context, _ StateOptions) StateResult {
 
 	result := StateResult{
 		Trunk: eng.Trunk().GetName(),
-		Stack: BuildLogJSON(ctx, LogOptions{Style: LogStyleNormal, JSON: true}),
+		Stack: BuildTreeJSON(ctx, TreeOptions{Style: TreeStyleNormal, JSON: true}),
 	}
 
 	if cur := eng.CurrentBranch(); cur != nil {

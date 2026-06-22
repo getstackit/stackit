@@ -214,7 +214,7 @@ When you create a worktree with `wt create`, Stackit creates an **anchor branch*
 
 Anchor branches are automatically hidden from most UI surfaces:
 
-- **`stackit log`** — Anchors are filtered out of the tree. A stack like `main → wt-anchor → feature` renders as `main → feature`.
+- **`stackit tree`** — Anchors are filtered out of the tree. A stack like `main → wt-anchor → feature` renders as `main → feature`.
 - **Navigation (`up`, `down`, `top`, `bottom`)** — Navigation commands skip over anchors. Moving "down" from a feature branch in a worktree goes straight to trunk, not to the anchor.
 - **`stackit submit`** — PR parent resolution skips anchors. A branch parented to an anchor will have its PR base set to trunk (or the nearest real ancestor), not the anchor branch.
 

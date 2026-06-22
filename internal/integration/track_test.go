@@ -18,7 +18,7 @@ func TestTrackIntegration(t *testing.T) {
 			Run("create feature2 -m 'Add feature2'")
 
 		// Verify stack is working
-		shell.Run("log --stack").
+		shell.Run("tree --stack").
 			OutputContains("feature1").
 			OutputContains("feature2")
 
@@ -34,7 +34,7 @@ func TestTrackIntegration(t *testing.T) {
 		shell.Run("track feature2 --parent feature1")
 
 		// Verify stack is restored
-		shell.Run("log --stack").
+		shell.Run("tree --stack").
 			OutputContains("feature1").
 			OutputContains("feature2").
 			Checkout("feature2").
@@ -82,7 +82,7 @@ func TestTrackIntegration(t *testing.T) {
 			OutputContains("feature-a")
 
 		// Verify stack operations work
-		shell.Run("log").
+		shell.Run("tree").
 			OutputContains("feature-a").
 			OutputContains("feature-b").
 			OutputContains("feature-c")
@@ -109,7 +109,7 @@ func TestTrackIntegration(t *testing.T) {
 			Run("track layer3 --parent layer2")
 
 		// Verify the complete stack
-		shell.Run("log --stack").
+		shell.Run("tree --stack").
 			OutputContains("layer1").
 			OutputContains("layer2").
 			OutputContains("layer3").
@@ -215,7 +215,7 @@ func TestTrackIntegration(t *testing.T) {
 			Run("track --parent feature_split --force")
 
 		// Verify the stack
-		shell.Run("log").
+		shell.Run("tree").
 			OutputContains("feature").
 			OutputContains("feature_split")
 	})
@@ -333,7 +333,7 @@ func TestTrackIntegration(t *testing.T) {
 			Run("track feature-d --force")
 
 		// Verify the entire stack is restored (single log call checks all)
-		shell.Run("log --stack").
+		shell.Run("tree --stack").
 			OutputContains("feature-a").
 			OutputContains("feature-b").
 			OutputContains("feature-c").

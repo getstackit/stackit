@@ -1,5 +1,5 @@
 ---
-description: Use when the user wants to inspect stack health and state. Trigger phrases include "show the stack", "what's in my stack", "stack status", and "stack health". Reads `stackit log` and reports.
+description: Use when the user wants to inspect stack health and state. Trigger phrases include "show the stack", "what's in my stack", "stack status", and "stack health". Reads `stackit tree` and reports.
 ---
 
 # Stack Status
@@ -31,4 +31,4 @@ When you detect an issue, recommend the matching command (don't invent one):
 | PR approved / ready to merge | `stackit merge --yes --no-interactive` (merge the next ready PR) or `stackit merge ship --yes --no-interactive` (consolidate the whole stack) |
 | Trunk behind remote | `stackit sync --no-interactive` |
 
-Use plain `stackit log --no-interactive` when the user wants the visual stack.
+Use plain `stackit tree --no-interactive` when the user wants the visual stack.

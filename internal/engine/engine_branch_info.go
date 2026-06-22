@@ -164,6 +164,16 @@ func (e *engineImpl) GetRecentTrunkCommits(count int) ([]git.RecentCommit, error
 	return e.git.GetRecentCommits(context.Background(), e.trunk, count)
 }
 
+// GetTrunkCommitsInRange returns the commits in the revision range from..to with
+// stack trailer metadata. An empty `to` defaults to the trunk branch tip. Use it
+// to build a changelog over a tag range (e.g. from "v1.4.0" to trunk).
+func (e *engineImpl) GetTrunkCommitsInRange(from, to string) ([]git.RecentCommit, error) {
+	if to == "" {
+		to = e.trunk
+	}
+	return e.git.GetRecentCommitsInRange(context.Background(), from+".."+to)
+}
+
 // GetAllCommits returns commits for a branch in various formats
 func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string, error) {
 	branchName := branch.GetName()

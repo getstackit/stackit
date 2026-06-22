@@ -443,6 +443,13 @@ func (t *tracingRunner) GetRecentCommits(ctx context.Context, branchName string,
 	return result, err
 }
 
+func (t *tracingRunner) GetRecentCommitsInRange(ctx context.Context, revRange string) ([]RecentCommit, error) {
+	start := time.Now()
+	result, err := t.inner.GetRecentCommitsInRange(ctx, revRange)
+	t.trace("GetRecentCommitsInRange", time.Since(start), err == nil, err, slog.String("range", revRange))
+	return result, err
+}
+
 func (t *tracingRunner) GetCommitTemplate(ctx context.Context) (string, error) {
 	start := time.Now()
 	result, err := t.inner.GetCommitTemplate(ctx)

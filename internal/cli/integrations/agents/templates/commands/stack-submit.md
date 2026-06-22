@@ -78,5 +78,5 @@ After successful submit, use `AskUserQuestion`:
 
 Based on response:
 - **"Sync with trunk"**: Invoke `/stack-sync` skill using the `Skill` tool
-- **"Check PR status"**: Run `stackit log full --no-interactive`
+- **"Check PR status"**: Run `stackit tree full --no-interactive`
 - **"Done for now"**: End with summary including PR URLs from the submit output

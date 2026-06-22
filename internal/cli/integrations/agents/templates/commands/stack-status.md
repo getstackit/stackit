@@ -19,7 +19,7 @@ Summarize from the `stackit state --json` context:
 - Working tree (`working_tree`) and any in-progress `operation`
 - Parent/child relationships and any branches that need attention
 
-If the user wants the visual tree, run `stackit log --no-interactive` and show it.
+If the user wants the visual tree, run `stackit tree --no-interactive` and show it.
 
 ### Step 2: Health Analysis
 

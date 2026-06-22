@@ -153,5 +153,5 @@ After verification completes, use `AskUserQuestion` based on results:
 Based on response:
 - **"Submit PRs"**: Invoke `/stack-submit` skill using the `Skill` tool
 - **"Fix issues"**: Invoke `/stack-fix` skill using the `Skill` tool
-- **"View stack"** / **"View details"**: Run `stackit log --no-interactive`
+- **"View stack"** / **"View details"**: Run `stackit tree --no-interactive`
 - **"Done for now"**: End with summary of verification results

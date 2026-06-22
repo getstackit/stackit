@@ -77,7 +77,7 @@ Split uncommitted working-tree changes into multiple stacked branches. Primary o
 
      ```bash
      git branch -D "$BACKUP"
-     stackit log --no-interactive
+     stackit tree --no-interactive
      ```
 
    - **Failure:** any create produced an empty branch, any check failed, or any

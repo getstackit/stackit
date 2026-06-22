@@ -31,7 +31,7 @@ Move files or commits off the current branch onto a new sibling, parent, or chil
 4. Verify:
 
    ```bash
-   stackit log --no-interactive
+   stackit tree --no-interactive
    git status --short
    ```
 

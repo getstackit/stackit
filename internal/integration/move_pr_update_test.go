@@ -20,7 +20,7 @@ func TestMoveMarksPRBodyUpdateFlagPersists(t *testing.T) {
 		sh.ExpectNeedsPRBodyUpdate("feature-a", true)
 
 		// log and info must not clear the flag.
-		sh.Run("log")
+		sh.Run("tree")
 		sh.Run("info")
 
 		sh.ExpectNeedsPRBodyUpdate("feature-b", true)

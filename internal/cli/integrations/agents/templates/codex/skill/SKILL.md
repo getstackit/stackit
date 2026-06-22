@@ -12,7 +12,7 @@ Stackit manages stacked Git branches: small dependent PRs instead of one large r
 - Pass `--no-interactive` on Stackit commands (or set `STACKIT_NO_INTERACTIVE=1` once in the environment instead of repeating the flag — interactive features also auto-disable when there's no TTY). Add `--force` for absorb and `--yes` for undo. Bare `stackit merge` (no flags) opens a TTY wizard; non-interactively, `stackit merge --yes` merges the next (bottom) ready PR, or `stackit merge ship --yes` consolidates the whole stack into one PR.
 - Stage changes before `stackit create`.
 - Pipe commit messages via `-F -`: `printf '%s\n' "feat: x" | stackit create -F - --no-interactive`.
-- After any mutation, run `stackit log --no-interactive` and report the resulting stack.
+- After any mutation, run `stackit tree --no-interactive` and report the resulting stack.
 
 ## Asking Policy
 

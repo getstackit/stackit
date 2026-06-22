@@ -10,7 +10,7 @@ Fold (squash) granular branches into their parent branches.
 
 ## Context
 - Current branch: !`git branch --show-current`
-- Stack state: !`stackit log --no-interactive`
+- Stack state: !`stackit tree --no-interactive`
 - Stack info: !`stackit info --stack --json --no-interactive`
 
 ## Instructions

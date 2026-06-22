@@ -42,4 +42,4 @@ Fold a branch into its parent when it is too small to review separately.
    stackit restack --branch <parent-branch> --upstack --no-interactive
    ```
 
-7. Verify with `stackit log --no-interactive`.
+7. Verify with `stackit tree --no-interactive`.

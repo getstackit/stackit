@@ -50,7 +50,7 @@ Perform code reviews on stack PRs in parallel, reporting high-confidence issues 
 Get all branches in the stack that have open PRs:
 
 ```bash
-stackit log --json --no-interactive
+stackit tree --json --no-interactive
 ```
 
 Parse the JSON to identify branches with PRs. For each branch, check if the PR is reviewable:

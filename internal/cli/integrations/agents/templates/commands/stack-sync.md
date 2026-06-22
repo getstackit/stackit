@@ -23,7 +23,7 @@ Sync the stack with trunk: pull latest, cleanup merged branches, restack.
    - If refreshed `would_restack_stacks` has exactly one root, run `stackit restack --branch <that-root> --upstack --no-interactive`.
    - If refreshed `would_restack_stacks` lists several roots, run `stackit restack --stacks <root-a>,<root-b> --continue-on-conflict --no-interactive`.
    - If every remaining independent stack needs restack or the refreshed root list is unavailable, run `stackit restack --all-stacks --continue-on-conflict --no-interactive`.
-8. Show final state with `stackit log --json --no-interactive`.
+8. Show final state with `stackit tree --json --no-interactive`.
 
 If `--continue-on-conflict` reports skipped conflicts, no rebase is active for those skipped branches. To resolve one, run `stackit restack --branch <conflicted-branch> --upstack --no-interactive`, then resolve conflicts and run `stackit continue`.
 

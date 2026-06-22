@@ -68,7 +68,7 @@ git add feature.go
 stackit create add-feature -m "feat: add new feature"
 
 # View the stack
-stackit log
+stackit tree
 
 # Submit PRs
 stackit submit

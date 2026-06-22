@@ -37,7 +37,7 @@ You are an expert at using Stackit to manage stacked Git branches. Stackit helps
 
 ## Before Any Operation
 
-**Always run `stackit log --no-interactive` first** to understand:
+**Always run `stackit tree --no-interactive` first** to understand:
 - Current branch position in the stack
 - Parent/child relationships
 - Which branches need attention
@@ -100,7 +100,7 @@ bash ~/.claude/skills/stackit/scripts/analyze_stack.sh
    echo "feat: add user authentication" | stackit create -F - --all --no-interactive
    ```
 4. If currently on trunk (e.g., main/master), warn and confirm or switch to a feature branch before creating.
-5. Show stack: `stackit log --no-interactive`
+5. Show stack: `stackit tree --no-interactive`
 
 ### Adding More Commits to a Branch
 
@@ -116,7 +116,7 @@ When to use multiple commits vs new branches:
 
 ### Submitting PRs
 
-1. Check stack state: `stackit log --no-interactive`
+1. Check stack state: `stackit tree --no-interactive`
 2. Submit options:
    - Current + ancestors: `stackit submit --no-interactive`
    - Entire stack: `stackit submit --stack --no-interactive`
@@ -246,7 +246,7 @@ When working with stacks, NEVER use these git commands:
 
 1. **NEVER use `git commit` to create new stacked branches** - always use `stackit create`
 2. **Stage changes BEFORE running `stackit create`** - it requires staged changes to work correctly
-3. **Check state before destructive operations** - run `stackit log` first
+3. **Check state before destructive operations** - run `stackit tree` first
 4. **Always validate after absorb** - absorb can cause compilation errors, see fix-absorb workflow
 5. **Handle conflicts gracefully** - guide user through resolution, see conflict-resolution workflow
 6. **Keep PRs small and focused** - suggest splitting if too large

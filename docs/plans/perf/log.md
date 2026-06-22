@@ -6,7 +6,7 @@
 
 ```
 executeLog → common.Run                          (same bootstrap family as co)
-  └─ actions.LogAction
+  └─ actions.TreeAction
        ├─ if --json:        logActionJSON
        ├─ if interactive:   tui.NewLogModel + tea.Run      (separate TUI path)
        │
@@ -68,9 +68,9 @@ A TTL cache (say 30s) keyed on the sorted branch name list would make repeated `
 
 ```
 STACKIT_NO_LOGGING=1 hyperfine \
-  'stackit log' \
-  'stackit log short' \
-  'stackit log full'
+  'stackit tree' \
+  'stackit tree short' \
+  'stackit tree full'
 ```
 
-Instrument: `BatchGetPRChecksStatus`, the `utils.Run` block in `LogAction`, individual `GetDiffStats` calls, and commit count calls. The cross-section between FULL and short is the GitHub cost; the cross-section between log and log short is the per-branch annotation work.
+Instrument: `BatchGetPRChecksStatus`, the `utils.Run` block in `TreeAction`, individual `GetDiffStats` calls, and commit count calls. The cross-section between FULL and short is the GitHub cost; the cross-section between log and log short is the per-branch annotation work.

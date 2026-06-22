@@ -20,19 +20,19 @@ func TestLogCommand(t *testing.T) {
 		t.Fatal("stackit binary not built")
 	}
 
-	t.Run("log in empty repo", func(t *testing.T) {
+	t.Run("tree in empty repo", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
 
-		// Run log command
-		output, err := s.RunCliAndGetOutput("log")
+		// Run tree command
+		output, err := s.RunCliAndGetOutput("tree")
 
 		// Should succeed and show trunk branch
-		require.NoError(t, err, "log command failed: %s", output)
+		require.NoError(t, err, "tree command failed: %s", output)
 		require.Contains(t, output, "main")
 	})
 
-	t.Run("log with branches", func(t *testing.T) {
+	t.Run("tree with branches", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
 
@@ -43,29 +43,29 @@ func TestLogCommand(t *testing.T) {
 		// Checkout main
 		s.Checkout("main")
 
-		// Run log command with --show-untracked to see untracked branches
-		output, err := s.RunCliAndGetOutput("log", "--show-untracked")
+		// Run tree command with --show-untracked to see untracked branches
+		output, err := s.RunCliAndGetOutput("tree", "--show-untracked")
 
-		require.NoError(t, err, "log command failed: %s", output)
+		require.NoError(t, err, "tree command failed: %s", output)
 		require.Contains(t, output, "main")
 		require.Contains(t, output, "feature")
 	})
 
-	t.Run("log with --stack flag", func(t *testing.T) {
+	t.Run("tree with --stack flag", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
 
 		// Create and checkout a branch
 		s.CreateBranch("feature")
 
-		// Run log command with stack
-		output, err := s.RunCliAndGetOutput("log", "--stack")
+		// Run tree command with stack
+		output, err := s.RunCliAndGetOutput("tree", "--stack")
 
-		require.NoError(t, err, "log command failed: %s", output)
+		require.NoError(t, err, "tree command failed: %s", output)
 		require.Contains(t, output, "feature")
 	})
 
-	t.Run("log shows worktree indicator for stack with worktree", func(t *testing.T) {
+	t.Run("tree shows worktree indicator for stack with worktree", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
 		s.WithInitialCommit()
@@ -84,9 +84,9 @@ func TestLogCommand(t *testing.T) {
 		output, err := s.RunCliAndGetOutput("create", "-m", "worktree feature", "-w")
 		require.NoError(t, err, "create with worktree failed: %s", output)
 
-		// Run log command - should show worktree indicator
-		output, err = s.RunCliAndGetOutput("log")
-		require.NoError(t, err, "log command failed: %s", output)
-		require.Contains(t, output, "worktree", "log should show worktree indicator for branch with managed worktree")
+		// Run tree command - should show worktree indicator
+		output, err = s.RunCliAndGetOutput("tree")
+		require.NoError(t, err, "tree command failed: %s", output)
+		require.Contains(t, output, "worktree", "tree should show worktree indicator for branch with managed worktree")
 	})
 }

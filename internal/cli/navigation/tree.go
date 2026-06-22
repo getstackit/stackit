@@ -10,57 +10,57 @@ import (
 	"github.com/getstackit/stackit/internal/errors"
 )
 
-// NewLogCmd creates the log command
-func NewLogCmd() *cobra.Command {
-	f := &logFlags{}
+// NewTreeCmd creates the tree command
+func NewTreeCmd() *cobra.Command {
+	f := &treeFlags{}
 
 	cmd := &cobra.Command{
-		Use:          "log",
-		Short:        "Log all branches tracked by Stackit, showing dependencies and info for each",
+		Use:          "tree",
+		Short:        "Display the branch tree: all branches tracked by Stackit, with dependencies and info for each",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeLog(cmd, f, actions.LogStyleNormal)
+			return executeTree(cmd, f, actions.TreeStyleNormal)
 		},
 	}
 
-	addLogFlags(cmd, f)
+	addTreeFlags(cmd, f)
 
 	// Add subcommands
-	cmd.AddCommand(newLogFullCmd())
-	cmd.AddCommand(newLogShortCmd())
+	cmd.AddCommand(newTreeFullCmd())
+	cmd.AddCommand(newTreeShortCmd())
 
 	return cmd
 }
 
-func newLogFullCmd() *cobra.Command {
-	f := &logFlags{}
+func newTreeFullCmd() *cobra.Command {
+	f := &treeFlags{}
 	cmd := &cobra.Command{
 		Use:          "full",
-		Short:        "Log branches with GitHub state (PR status, CI checks)",
+		Short:        "Display the branch tree with GitHub state (PR status, CI checks)",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeLog(cmd, f, actions.LogStyleFull)
+			return executeTree(cmd, f, actions.TreeStyleFull)
 		},
 	}
-	addLogFlags(cmd, f)
+	addTreeFlags(cmd, f)
 	return cmd
 }
 
-func newLogShortCmd() *cobra.Command {
-	f := &logFlags{}
+func newTreeShortCmd() *cobra.Command {
+	f := &treeFlags{}
 	cmd := &cobra.Command{
 		Use:          "short",
-		Short:        "Log branches showing only the branch tree (no stats or PR info)",
+		Short:        "Display only the branch tree (no stats or PR info)",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeLog(cmd, f, actions.LogStyleShort)
+			return executeTree(cmd, f, actions.TreeStyleShort)
 		},
 	}
-	addLogFlags(cmd, f)
+	addTreeFlags(cmd, f)
 	return cmd
 }
 
-type logFlags struct {
+type treeFlags struct {
 	stack         bool
 	steps         int
 	showUntracked bool
@@ -69,7 +69,7 @@ type logFlags struct {
 	jsonOutput    bool
 }
 
-func addLogFlags(cmd *cobra.Command, f *logFlags) {
+func addTreeFlags(cmd *cobra.Command, f *treeFlags) {
 	cmd.Flags().BoolVarP(&f.stack, "stack", "s", false, "Only show ancestors and descendants of the current branch")
 	cmd.Flags().IntVarP(&f.steps, "steps", "n", 0, "Only show this many levels upstack and downstack. Implies --stack")
 	cmd.Flags().BoolVarP(&f.showUntracked, "show-untracked", "u", false, "Include untracked branches in interactive selection")
@@ -78,7 +78,7 @@ func addLogFlags(cmd *cobra.Command, f *logFlags) {
 	cmd.Flags().BoolVar(&f.jsonOutput, "json", false, "Output in JSON format")
 }
 
-func executeLog(cmd *cobra.Command, f *logFlags, style string) error {
+func executeTree(cmd *cobra.Command, f *treeFlags, style string) error {
 	return common.Run(cmd, func(ctx *app.Context) error {
 		eng := ctx.Engine
 
@@ -94,7 +94,7 @@ func executeLog(cmd *cobra.Command, f *logFlags, style string) error {
 		}
 
 		// Prepare options
-		opts := actions.LogOptions{
+		opts := actions.TreeOptions{
 			Style:         style,
 			BranchName:    branchName,
 			ShowUntracked: f.showUntracked,
@@ -107,7 +107,7 @@ func executeLog(cmd *cobra.Command, f *logFlags, style string) error {
 			opts.Steps = &f.steps
 		}
 
-		// Execute log action
-		return actions.LogAction(ctx, opts)
+		// Execute tree action
+		return actions.TreeAction(ctx, opts)
 	})
 }

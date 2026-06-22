@@ -18,16 +18,16 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-// LogStyle defines the output style for the log command
+// TreeStyle defines the output style for the tree command
 const (
-	LogStyleNormal = "NORMAL"
-	LogStyleFull   = "FULL"
-	LogStyleShort  = "SHORT"
+	TreeStyleNormal = "NORMAL"
+	TreeStyleFull   = "FULL"
+	TreeStyleShort  = "SHORT"
 )
 
-// LogOptions contains options for the log command
-type LogOptions struct {
-	Style         string // LogStyleNormal, LogStyleFull, or LogStyleShort
+// TreeOptions contains options for the tree command
+type TreeOptions struct {
+	Style         string // TreeStyleNormal, TreeStyleFull, or TreeStyleShort
 	Steps         *int
 	BranchName    string
 	ShowUntracked bool
@@ -36,15 +36,15 @@ type LogOptions struct {
 	JSON          bool // Output in JSON format
 }
 
-// LogJSONResult represents the JSON output for the log command
-type LogJSONResult struct {
-	Branches        []LogBranchInfo `json:"branches"`
-	Summary         LogSummary      `json:"summary"`
-	GitHubAvailable bool            `json:"github_available"`
+// TreeJSONResult represents the JSON output for the tree command
+type TreeJSONResult struct {
+	Branches        []TreeBranchInfo `json:"branches"`
+	Summary         TreeSummary      `json:"summary"`
+	GitHubAvailable bool             `json:"github_available"`
 }
 
-// LogBranchInfo represents a single branch in JSON output
-type LogBranchInfo struct {
+// TreeBranchInfo represents a single branch in JSON output
+type TreeBranchInfo struct {
 	Name      string `json:"name"`
 	Parent    string `json:"parent,omitempty"`
 	IsCurrent bool   `json:"is_current"`
@@ -55,19 +55,19 @@ type LogBranchInfo struct {
 	// "this field isn't reported". This is what lets agents read PR/CI status and
 	// needs_restack/locked/frozen from a single command instead of also querying
 	// `info --stack --json`.
-	IsLocked     bool       `json:"is_locked"`
-	IsFrozen     bool       `json:"is_frozen"`
-	NeedsRestack bool       `json:"needs_restack"`
-	Commits      int        `json:"commits"`
-	Additions    int        `json:"additions,omitempty"`
-	Deletions    int        `json:"deletions,omitempty"`
-	PR           *LogPRInfo `json:"pr,omitempty"`
-	Scope        string     `json:"scope,omitempty"`
-	Children     []string   `json:"children,omitempty"`
+	IsLocked     bool        `json:"is_locked"`
+	IsFrozen     bool        `json:"is_frozen"`
+	NeedsRestack bool        `json:"needs_restack"`
+	Commits      int         `json:"commits"`
+	Additions    int         `json:"additions,omitempty"`
+	Deletions    int         `json:"deletions,omitempty"`
+	PR           *TreePRInfo `json:"pr,omitempty"`
+	Scope        string      `json:"scope,omitempty"`
+	Children     []string    `json:"children,omitempty"`
 }
 
-// LogPRInfo represents PR information in JSON output
-type LogPRInfo struct {
+// TreePRInfo represents PR information in JSON output
+type TreePRInfo struct {
 	Number       int    `json:"number"`
 	URL          string `json:"url,omitempty"`
 	Title        string `json:"title,omitempty"`
@@ -77,24 +77,24 @@ type LogPRInfo struct {
 	CIStatus     string `json:"ci_status,omitempty"`
 }
 
-// LogSummary represents summary statistics in JSON output
-type LogSummary struct {
+// TreeSummary represents summary statistics in JSON output
+type TreeSummary struct {
 	TotalBranches int `json:"total_branches"`
 	ApprovedCount int `json:"approved_count"`
 	InReviewCount int `json:"in_review_count"`
 }
 
-// LogAction displays the branch tree
-func LogAction(ctx *app.Context, opts LogOptions) error {
+// TreeAction displays the branch tree
+func TreeAction(ctx *app.Context, opts TreeOptions) error {
 	// JSON output mode
 	if opts.JSON {
-		return logActionJSON(ctx, opts)
+		return treeActionJSON(ctx, opts)
 	}
 
 	// If interactive mode is requested or auto-detected
 	if opts.Interactive || (utils.IsInteractive() && opts.Steps == nil) {
 		// Run interactive TUI
-		m := tui.NewLogModel(ctx.Context, ctx.Engine, ctx.GitHub(), tui.LogOptions{
+		m := tui.NewTreeModel(ctx.Context, ctx.Engine, ctx.GitHub(), tui.TreeOptions{
 			Style:         opts.Style,
 			ShowUntracked: opts.ShowUntracked,
 			Logger:        ctx.Logger,
@@ -125,15 +125,15 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 		Mode:        tree.RenderModeFull, // We want the full tree characters with stats
 		Steps:       opts.Steps,
 		ShowSHAs:    opts.ShowSHAs,
-		HideSummary: opts.Style == LogStyleShort,
+		HideSummary: opts.Style == TreeStyleShort,
 	}
-	visibleBranches := visibleLogBranches(renderer, opts.BranchName, renderOpts, allBranches)
+	visibleBranches := visibleTreeBranches(renderer, opts.BranchName, renderOpts, allBranches)
 
 	// Resolve the git-computed annotation stats (short SHA, commit count, diff
 	// stats) for just the visible branches as one batched value. Scoped to the
 	// visible set, so bounded views stay cheap; the short style needs none.
 	var stats map[string]engine.BranchStat
-	if opts.Style != LogStyleShort {
+	if opts.Style != TreeStyleShort {
 		stats = ctx.Engine.BatchBranchStats(visibleBranches)
 	}
 
@@ -142,7 +142,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 
 	// Prefetch CI status in batch if in FULL style
 	var ciStatuses map[string]*github.CheckStatus
-	if opts.Style == LogStyleFull && ctx.GitHub() != nil {
+	if opts.Style == TreeStyleFull && ctx.GitHub() != nil {
 		branchNames := visibleBranches.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 		if len(branchNames) > 0 {
 			ciStatuses, _ = ctx.GitHub().BatchGetPRChecksStatus(ctx.Context, branchNames)
@@ -163,7 +163,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 
 	if len(visibleBranches) > 0 {
 		utils.Run(visibleBranches.All(), func(branchObj engine.Branch) {
-			annotation := buildLogAnnotation(ctx.Engine, branchObj, stats[branchObj.GetName()], opts, wtData, enrichment)
+			annotation := buildTreeAnnotation(ctx.Engine, branchObj, stats[branchObj.GetName()], opts, wtData, enrichment)
 			results <- result{branchObj.GetName(), annotation}
 		})
 	}
@@ -224,7 +224,7 @@ func LogAction(ctx *app.Context, opts LogOptions) error {
 	return nil
 }
 
-func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opts tree.RenderOptions, branches engine.Branches) engine.Branches {
+func visibleTreeBranches(renderer *tree.StackTreeRenderer, branchName string, opts tree.RenderOptions, branches engine.Branches) engine.Branches {
 	branchByName := make(map[string]engine.Branch, len(branches))
 	for _, b := range branches {
 		branchByName[b.GetName()] = b
@@ -245,15 +245,15 @@ func visibleLogBranches(renderer *tree.StackTreeRenderer, branchName string, opt
 	return visible.Build()
 }
 
-func buildLogAnnotation(
+func buildTreeAnnotation(
 	eng engine.Engine,
 	branch engine.Branch,
 	stat engine.BranchStat,
-	opts LogOptions,
+	opts TreeOptions,
 	wtData *tui.WorktreeData,
 	enrichment *tui.AnnotationEnrichment,
 ) tree.BranchAnnotation {
-	if opts.Style != LogStyleShort {
+	if opts.Style != TreeStyleShort {
 		return tui.BuildFullAnnotation(eng, branch, stat, enrichment, tui.AnnotationOptions{
 			SkipCommitMessages: true,
 		})
@@ -278,9 +278,9 @@ func getUntrackedBranchNames(ctx *app.Context) []string {
 	return untracked.Names()
 }
 
-// logActionJSON generates JSON output for the log command.
-func logActionJSON(ctx *app.Context, opts LogOptions) error {
-	result := BuildLogJSON(ctx, opts)
+// treeActionJSON generates JSON output for the tree command.
+func treeActionJSON(ctx *app.Context, opts TreeOptions) error {
+	result := BuildTreeJSON(ctx, opts)
 
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
@@ -290,11 +290,11 @@ func logActionJSON(ctx *app.Context, opts LogOptions) error {
 	return nil
 }
 
-// BuildLogJSON builds the structured log result (branch tree, PR/CI status, and
+// BuildTreeJSON builds the structured log result (branch tree, PR/CI status, and
 // per-branch health) without printing it, so other commands — e.g. `status` —
 // can embed the same stack snapshot. The CI status prefetch always runs to
 // provide complete data.
-func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
+func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 	eng := ctx.Engine
 	currentBranch := eng.CurrentBranch()
 	currentBranchName := ""
@@ -331,16 +331,16 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 	}
 
 	// Build result
-	result := LogJSONResult{
-		Branches:        []LogBranchInfo{},
-		Summary:         LogSummary{},
+	result := TreeJSONResult{
+		Branches:        []TreeBranchInfo{},
+		Summary:         TreeSummary{},
 		GitHubAvailable: ghClient != nil,
 	}
 
 	// Collect branch info in parallel using worker pool (each branch requires
 	// git subprocesses for commits and diff stats)
 	type branchResult struct {
-		info LogBranchInfo
+		info TreeBranchInfo
 	}
 	branchResults := make(chan branchResult, len(branchesToInclude))
 
@@ -361,7 +361,7 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 		utils.Run(processableBranches.All(), func(branch engine.Branch) {
 			branchName := branch.GetName()
 
-			info := LogBranchInfo{
+			info := TreeBranchInfo{
 				Name:         branchName,
 				IsCurrent:    branchName == currentBranchName,
 				IsTrunk:      branch.IsTrunk(),
@@ -400,7 +400,7 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 			if !branch.IsTrunk() {
 				prInfo, _ := branch.GetPrInfo()
 				if prInfo != nil && prInfo.Number() != nil {
-					info.PR = &LogPRInfo{
+					info.PR = &TreePRInfo{
 						Number:  *prInfo.Number(),
 						URL:     prInfo.URL(),
 						Title:   prInfo.Title(),
@@ -455,7 +455,7 @@ func BuildLogJSON(ctx *app.Context, opts LogOptions) LogJSONResult {
 	}
 
 	// Keep output stable across runs even when collection happens in parallel.
-	slices.SortFunc(result.Branches, func(a, b LogBranchInfo) int {
+	slices.SortFunc(result.Branches, func(a, b TreeBranchInfo) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
 

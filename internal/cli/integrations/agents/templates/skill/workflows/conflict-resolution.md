@@ -366,7 +366,7 @@ When restacking affects multiple branches:
 
 ```bash
 # Example workflow
-stackit log --no-interactive  # Note branch order
+stackit tree --no-interactive  # Note branch order
 
 # Resolve first conflict
 git status  # See conflicted files
@@ -376,7 +376,7 @@ stackit continue --no-interactive
 
 # Before moving to next conflict, verify
 <build-command>
-stackit log --no-interactive  # Confirm structure still correct
+stackit tree --no-interactive  # Confirm structure still correct
 
 # Continue to next conflict
 # ... resolve conflicts ...
@@ -400,7 +400,7 @@ stackit continue --no-interactive
 
 ```bash
 # Operation already completed or aborted
-stackit log --no-interactive  # Check current state
+stackit tree --no-interactive  # Check current state
 ```
 
 ### "Conflict resolution broke the build"
@@ -452,7 +452,7 @@ stackit continue --no-interactive
 # → Restack completes
 
 # 8. Verify final state
-stackit log --no-interactive
+stackit tree --no-interactive
 # → Stack structure correct
 ```
 
@@ -462,4 +462,4 @@ stackit log --no-interactive
 - ✓ Project builds successfully
 - ✓ Tests pass
 - ✓ Operation completed (not still in progress)
-- ✓ Stack structure is correct (`stackit log --no-interactive`)
+- ✓ Stack structure is correct (`stackit tree --no-interactive`)

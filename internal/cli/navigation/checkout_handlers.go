@@ -24,7 +24,7 @@ type InteractiveCheckoutHandler struct{}
 
 // SelectBranch prompts the user to select a branch using the interactive log selector
 func (h *InteractiveCheckoutHandler) SelectBranch(ctx *app.Context, opts actions.CheckoutOptions) (string, error) {
-	branchName, err := tui.PromptLogSelect(ctx.Context, ctx.Engine, ctx.GitHub(), tui.LogOptions{
+	branchName, err := tui.PromptTreeSelect(ctx.Context, ctx.Engine, ctx.GitHub(), tui.TreeOptions{
 		ShowUntracked:  opts.ShowUntracked,
 		SkipEnrichment: true, // Skip GitHub/git enrichment for faster startup
 		Inline:         true, // Run inline without taking over the terminal

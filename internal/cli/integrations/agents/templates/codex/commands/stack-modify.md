@@ -42,10 +42,10 @@ Amend the current stacked branch or add a follow-up commit to it.
    printf '%s\n' "<message>" | stackit modify --no-interactive -c -F -
    ```
 
-4. Verify (run `stackit log` only after the mutation):
+4. Verify (run `stackit tree` only after the mutation):
 
    ```bash
-   stackit log --no-interactive
+   stackit tree --no-interactive
    ```
 
 `stackit modify` automatically restacks descendant branches — do not run a manual

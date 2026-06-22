@@ -13,7 +13,7 @@ description: Stackit is a CLI tool for managing stacked Git branches. Break larg
 
     ---
 
-    See your entire stack at a glance with $$stackit log$$
+    See your entire stack at a glance with $$stackit tree$$
 
 -   :material-refresh-auto:{ .lg .middle } **Automatic restacking**
 

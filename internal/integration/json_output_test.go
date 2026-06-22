@@ -20,7 +20,7 @@ import (
 func TestJSONOutput(t *testing.T) {
 	t.Parallel()
 
-	t.Run("log --json outputs valid JSON with branch info", func(t *testing.T) {
+	t.Run("tree --json outputs valid JSON with branch info", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
@@ -34,13 +34,13 @@ func TestJSONOutput(t *testing.T) {
 			OnBranch("feature-b")
 
 		// Get JSON output
-		sh.Run("log --json")
+		sh.Run("tree --json")
 		output := sh.Output()
 
 		// Parse and verify JSON structure
-		var result actions.LogJSONResult
+		var result actions.TreeJSONResult
 		err := json.Unmarshal([]byte(output), &result)
-		require.NoError(t, err, "log --json should produce valid JSON")
+		require.NoError(t, err, "tree --json should produce valid JSON")
 
 		// Verify branches are present
 		require.GreaterOrEqual(t, len(result.Branches), 2, "should have at least 2 branches")
@@ -64,7 +64,7 @@ func TestJSONOutput(t *testing.T) {
 		require.False(t, result.GitHubAvailable)
 	})
 
-	t.Run("log --json outputs valid JSON with recommendations", func(t *testing.T) {
+	t.Run("tree --json outputs valid JSON with recommendations", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
@@ -82,13 +82,13 @@ func TestJSONOutput(t *testing.T) {
 			Commit("extra", "extra content")
 
 		// Get JSON output
-		sh.Run("log --json")
+		sh.Run("tree --json")
 		output := sh.Output()
 
 		// Parse and verify JSON structure
-		var result actions.LogJSONResult
+		var result actions.TreeJSONResult
 		err := json.Unmarshal([]byte(output), &result)
-		require.NoError(t, err, "log --json should produce valid JSON")
+		require.NoError(t, err, "tree --json should produce valid JSON")
 
 		// Verify branches are present
 		require.GreaterOrEqual(t, len(result.Branches), 2, "should have at least 2 branches")
@@ -104,7 +104,7 @@ func TestJSONOutput(t *testing.T) {
 		require.True(t, foundRestackNeeded, "feature-b should show NeedsRestack=true")
 	})
 
-	t.Run("log --quiet outputs minimal when healthy", func(t *testing.T) {
+	t.Run("tree --quiet outputs minimal when healthy", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
@@ -113,7 +113,7 @@ func TestJSONOutput(t *testing.T) {
 			Run("create feature-a -m 'Add feature A'")
 
 		// Get output with --quiet
-		sh.Run("log --quiet")
+		sh.Run("tree --quiet")
 		output := sh.Output()
 
 		// Should be empty or minimal when healthy
@@ -227,7 +227,7 @@ func TestJSONOutput(t *testing.T) {
 			"should deduplicate and sort restack roots; only alpha's stack has drift")
 	})
 
-	t.Run("log --json with mixed branch states", func(t *testing.T) {
+	t.Run("tree --json with mixed branch states", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
@@ -254,10 +254,10 @@ func TestJSONOutput(t *testing.T) {
 			Commit("main-update", "updating main")
 
 		// Get JSON output
-		sh.Run("log --json")
+		sh.Run("tree --json")
 		output := sh.Output()
 
-		var result actions.LogJSONResult
+		var result actions.TreeJSONResult
 		err := json.Unmarshal([]byte(output), &result)
 		require.NoError(t, err)
 
@@ -275,7 +275,7 @@ func TestJSONOutput(t *testing.T) {
 		require.True(t, foundLocked, "should find locked branch")
 	})
 
-	t.Run("log --json includes children relationships", func(t *testing.T) {
+	t.Run("tree --json includes children relationships", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
@@ -293,10 +293,10 @@ func TestJSONOutput(t *testing.T) {
 			Run("create feature-a-2 -m 'Add feature A2'")
 
 		// Get JSON output
-		sh.Run("log --json")
+		sh.Run("tree --json")
 		output := sh.Output()
 
-		var result actions.LogJSONResult
+		var result actions.TreeJSONResult
 		err := json.Unmarshal([]byte(output), &result)
 		require.NoError(t, err)
 

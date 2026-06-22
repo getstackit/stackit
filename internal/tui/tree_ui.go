@@ -28,18 +28,18 @@ const (
 	validationDebounceTime = 300 * time.Millisecond
 )
 
-// LogMode defines how the log is used
-type LogMode int
+// TreeMode defines how the log is used
+type TreeMode int
 
 const (
-	// LogModeView is the default view mode for browsing the log
-	LogModeView LogMode = iota
-	// LogModeSelect is the selection mode for choosing a branch
-	LogModeSelect
+	// TreeModeView is the default view mode for browsing the log
+	TreeModeView TreeMode = iota
+	// TreeModeSelect is the selection mode for choosing a branch
+	TreeModeSelect
 )
 
-// LogModel is the bubbletea model for the interactive log
-type LogModel struct {
+// TreeModel is the bubbletea model for the interactive log
+type TreeModel struct {
 	context      context.Context
 	engine       engine.Engine
 	githubClient github.Client
@@ -53,11 +53,11 @@ type LogModel struct {
 	logger       output.Logger
 
 	// Keys
-	logKeys    keys.LogKeyMap
+	treeKeys   keys.TreeKeyMap
 	selectKeys keys.SelectKeyMap
 
 	// State
-	mode           LogMode
+	mode           TreeMode
 	branches       []tree.RenderedBranch // Visible branches with their lines
 	selectedIndex  int
 	selectedBranch string
@@ -92,17 +92,17 @@ type LogModel struct {
 	lastValidatedBranch string               // Branch that was last validated
 }
 
-// NewLogModel creates a new LogModel
-func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client, opts LogOptions) *LogModel {
+// NewTreeModel creates a new TreeModel
+func NewTreeModel(ctx context.Context, eng engine.Engine, ghClient github.Client, opts TreeOptions) *TreeModel {
 	logger := opts.Logger
-	logDebug := func(msg string, args ...any) {
+	treeDebug := func(msg string, args ...any) {
 		if logger != nil {
 			logger.Debug(msg, args...)
 		}
 	}
 
 	initStart := time.Now()
-	logDebug("NewLogModel started")
+	treeDebug("NewTreeModel started")
 
 	// Build filter function
 	var filter func(string) bool
@@ -122,12 +122,12 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 			emptyWorktreeNames[name] = true
 		}
 	}
-	logDebug("GetWorktreeData completed in %v, found %d empty worktrees", time.Since(start), len(wtData.EmptyWorktrees))
+	treeDebug("GetWorktreeData completed in %v, found %d empty worktrees", time.Since(start), len(wtData.EmptyWorktrees))
 
 	// Create renderer synchronously for instant display
 	start = time.Now()
 	renderer := NewStackTreeRendererWithOptions(eng, engine.SortStrategySmart, filter, emptyWorktreeNames)
-	logDebug("NewStackTreeRendererWithOptions completed in %v", time.Since(start))
+	treeDebug("NewStackTreeRendererWithOptions completed in %v", time.Since(start))
 
 	// Build minimal annotations synchronously (includes worktree info, no git/network calls)
 	start = time.Now()
@@ -147,7 +147,7 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 		}
 	}
 	renderer.SetAnnotations(annotations)
-	logDebug("Minimal annotations with worktree completed in %v", time.Since(start))
+	treeDebug("Minimal annotations with worktree completed in %v", time.Since(start))
 
 	// Set initial selection
 	start = time.Now()
@@ -158,7 +158,7 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 	} else {
 		selectedBranch = trunkName
 	}
-	logDebug("Initial selection completed in %v", time.Since(start))
+	treeDebug("Initial selection completed in %v", time.Since(start))
 
 	// Initialize search matches (all branches match when no search query)
 	searchMatches := make(map[string]bool)
@@ -166,9 +166,9 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 		searchMatches[b.GetName()] = true
 	}
 
-	logDebug("NewLogModel completed in %v", time.Since(initStart))
+	treeDebug("NewTreeModel completed in %v", time.Since(initStart))
 
-	m := &LogModel{
+	m := &TreeModel{
 		context:           ctx,
 		engine:            eng,
 		githubClient:      ghClient,
@@ -177,7 +177,7 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 		allBranches:       allBranches,
 		trunkName:         trunkName,
 		selectedBranch:    selectedBranch,
-		logKeys:           keys.DefaultLog,
+		treeKeys:          keys.DefaultTree,
 		selectKeys:        keys.DefaultSelect,
 		style:             opts.Style,
 		showUntracked:     opts.ShowUntracked,
@@ -189,26 +189,26 @@ func NewLogModel(ctx context.Context, eng engine.Engine, ghClient github.Client,
 		validateSelection: opts.ValidateSelection,
 		collapsed:         make(map[string]bool),
 		searchMatches:     searchMatches,
-		mode:              LogModeView,
+		mode:              TreeModeView,
 	}
 
 	return m
 }
 
-// newLogSelectModel creates a new LogModel in selection mode
-func newLogSelectModel(ctx context.Context, eng engine.Engine, ghClient github.Client, opts LogOptions) *LogModel {
-	m := NewLogModel(ctx, eng, ghClient, opts)
-	m.mode = LogModeSelect
+// newTreeSelectModel creates a new TreeModel in selection mode
+func newTreeSelectModel(ctx context.Context, eng engine.Engine, ghClient github.Client, opts TreeOptions) *TreeModel {
+	m := NewTreeModel(ctx, eng, ghClient, opts)
+	m.mode = TreeModeSelect
 	return m
 }
 
 // SetAltScreen sets whether the model should use alt screen mode
-func (m *LogModel) SetAltScreen(enabled bool) {
+func (m *TreeModel) SetAltScreen(enabled bool) {
 	m.altScreen = enabled
 }
 
 // Init initializes the bubbletea model
-func (m *LogModel) Init() tea.Cmd {
+func (m *TreeModel) Init() tea.Cmd {
 	// For inline mode, pre-render the tree immediately since we won't wait for WindowSizeMsg
 	if m.inline {
 		m.renderTree()
@@ -221,7 +221,7 @@ func (m *LogModel) Init() tea.Cmd {
 		}
 	}
 
-	// Renderer is already created with minimal data in NewLogModel.
+	// Renderer is already created with minimal data in NewTreeModel.
 	// Skip enrichment if requested (e.g., for checkout where GitHub data isn't needed).
 	if m.skipEnrichment {
 		return nil
@@ -231,7 +231,7 @@ func (m *LogModel) Init() tea.Cmd {
 }
 
 // log logs a message if logger is available
-func (m *LogModel) log(msg string, args ...any) {
+func (m *TreeModel) log(msg string, args ...any) {
 	if m.logger != nil {
 		m.logger.Debug(msg, args...)
 	}
@@ -239,7 +239,7 @@ func (m *LogModel) log(msg string, args ...any) {
 
 // enrichData returns a command that fetches full annotation data in the background.
 // This includes git operations and CI status network calls.
-func (m *LogModel) enrichData() tea.Cmd {
+func (m *TreeModel) enrichData() tea.Cmd {
 	// Capture values needed by the goroutine to avoid races on struct fields
 	ctx := m.context
 	eng := m.engine
@@ -248,7 +248,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 	style := m.style
 	logger := m.logger
 
-	logDebug := func(msg string, args ...any) {
+	treeDebug := func(msg string, args ...any) {
 		if logger != nil {
 			logger.Debug(msg, args...)
 		}
@@ -263,7 +263,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 	// Wrap with panic recovery
 	return SafeCmdFunc("TUI enrichment", logger, func() tea.Msg {
 		enrichStart := time.Now()
-		logDebug("TUI enrichment started")
+		treeDebug("TUI enrichment started")
 
 		// Channels for parallel results (buffered so goroutines don't block)
 		type ciResult struct {
@@ -287,7 +287,7 @@ func (m *LogModel) enrichData() tea.Cmd {
 					if err != nil {
 						logError("BatchGetPRChecksStatus failed: %v", err)
 					}
-					logDebug("BatchGetPRChecksStatus for %d branches completed in %v", len(branchNames), time.Since(start))
+					treeDebug("BatchGetPRChecksStatus for %d branches completed in %v", len(branchNames), time.Since(start))
 					ciChan <- ciResult{statuses: statuses, err: err}
 				}()
 			} else {
@@ -332,9 +332,9 @@ func (m *LogModel) enrichData() tea.Cmd {
 		for i, b := range allBranches {
 			annotations[b.GetName()] = built[i]
 		}
-		logDebug("Collected full annotations for %d branches in %v", len(allBranches), time.Since(start))
+		treeDebug("Collected full annotations for %d branches in %v", len(allBranches), time.Since(start))
 
-		logDebug("TUI enrichment completed in %v", time.Since(enrichStart))
+		treeDebug("TUI enrichment completed in %v", time.Since(enrichStart))
 
 		return enrichDataMsg{annotations: annotations}
 	})
@@ -348,7 +348,7 @@ type enrichDataMsg struct {
 // invalidateTreeCache marks the cached tree data as stale.
 // Call this when the tree structure or display changes (collapse, search, data enrichment).
 // Navigation (up/down) does NOT invalidate the cache - it uses the fast path.
-func (m *LogModel) invalidateTreeCache() {
+func (m *TreeModel) invalidateTreeCache() {
 	m.cachedTreeValid = false
 }
 
@@ -364,7 +364,7 @@ type validationResultMsg struct {
 }
 
 // Update handles message updates for the bubbletea model
-func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *TreeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -406,20 +406,20 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Normal mode key handling - use shared keys with vim support
 		switch {
-		case m.mode == LogModeView && key.Matches(msg, m.logKeys.Quit):
+		case m.mode == TreeModeView && key.Matches(msg, m.treeKeys.Quit):
 			m.canceled = true
 			return m, tea.Quit
-		case m.mode == LogModeSelect && key.Matches(msg, m.selectKeys.Cancel):
+		case m.mode == TreeModeSelect && key.Matches(msg, m.selectKeys.Cancel):
 			m.canceled = true
 			return m, tea.Quit
-		case m.mode == LogModeSelect && key.Matches(msg, m.selectKeys.Search):
+		case m.mode == TreeModeSelect && key.Matches(msg, m.selectKeys.Search):
 			// Enter search mode (only in select mode)
 			m.inSearchMode = true
 			m.searchQuery = ""
 			m.updateSearchMatches()
 			m.invalidateTreeCache() // Search affects display
 			m.renderTree()
-		case key.Matches(msg, m.logKeys.Up):
+		case key.Matches(msg, m.treeKeys.Up):
 			if len(m.branches) > 0 {
 				newIndex := m.selectedIndex
 				// Try to find the next selectable branch going up
@@ -443,7 +443,7 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, cmd)
 				}
 			}
-		case key.Matches(msg, m.logKeys.Down):
+		case key.Matches(msg, m.treeKeys.Down):
 			if len(m.branches) > 0 {
 				newIndex := m.selectedIndex
 				// Try to find the next selectable branch going down
@@ -468,7 +468,7 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.selectKeys.Select):
-			if m.mode == LogModeSelect {
+			if m.mode == TreeModeSelect {
 				return m, tea.Quit
 			}
 			if m.selectedBranch != "" {
@@ -561,13 +561,13 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renderTree updates the cached branches and viewport content with the current tree state.
 // In inline mode or before the viewport is ready, View() uses the cached branches directly.
 // Uses two-phase rendering for fast navigation: if only selection changed, reuses cached tree data.
-func (m *LogModel) renderTree() {
+func (m *TreeModel) renderTree() {
 	if m.renderer == nil {
 		return
 	}
 
 	mode := tree.RenderModeFull
-	if m.mode == LogModeSelect {
+	if m.mode == TreeModeSelect {
 		mode = tree.RenderModeSelect
 	}
 	opts := tree.RenderOptions{
@@ -610,7 +610,7 @@ func (m *LogModel) renderTree() {
 	}
 }
 
-func (m *LogModel) ensureVisible() {
+func (m *TreeModel) ensureVisible() {
 	if m.selectedIndex < 0 || m.selectedIndex >= len(m.branches) {
 		return
 	}
@@ -631,7 +631,7 @@ func (m *LogModel) ensureVisible() {
 }
 
 // updateSearchMatches updates the searchMatches map based on current searchQuery
-func (m *LogModel) updateSearchMatches() {
+func (m *TreeModel) updateSearchMatches() {
 	m.searchMatches = make(map[string]bool)
 
 	if m.searchQuery == "" {
@@ -650,7 +650,7 @@ func (m *LogModel) updateSearchMatches() {
 }
 
 // moveToFirstMatch moves selection to the first matching branch
-func (m *LogModel) moveToFirstMatch() {
+func (m *TreeModel) moveToFirstMatch() {
 	if m.searchQuery == "" {
 		return
 	}
@@ -666,7 +666,7 @@ func (m *LogModel) moveToFirstMatch() {
 }
 
 // scheduleValidation returns a command that triggers validation after debounce delay
-func (m *LogModel) scheduleValidation(branchName string) tea.Cmd {
+func (m *TreeModel) scheduleValidation(branchName string) tea.Cmd {
 	if m.validateSelection == nil {
 		return nil
 	}
@@ -681,7 +681,7 @@ func (m *LogModel) scheduleValidation(branchName string) tea.Cmd {
 }
 
 // runValidation runs the validation callback in a goroutine and returns a command
-func (m *LogModel) runValidation(branchName string) tea.Cmd {
+func (m *TreeModel) runValidation(branchName string) tea.Cmd {
 	if m.validateSelection == nil {
 		return nil
 	}
@@ -705,14 +705,14 @@ func (m *LogModel) runValidation(branchName string) tea.Cmd {
 }
 
 // View renders the bubbletea model
-func (m *LogModel) View() tea.View {
+func (m *TreeModel) View() tea.View {
 	if m.renderer == nil {
 		return tea.NewView("")
 	}
 
-	title := "Stackit Log"
+	title := "Stackit Tree"
 	help := "'q' quit, 'enter' expand/collapse, '↑/k' '↓/j' navigate"
-	if m.mode == LogModeSelect {
+	if m.mode == TreeModeSelect {
 		if m.header != "" {
 			title = m.header
 		} else {
@@ -738,7 +738,7 @@ func (m *LogModel) View() tea.View {
 	default:
 		// Fallback: render tree directly for immediate display before first renderTree call
 		mode := tree.RenderModeFull
-		if m.mode == LogModeSelect {
+		if m.mode == TreeModeSelect {
 			mode = tree.RenderModeSelect
 		}
 		opts := tree.RenderOptions{
@@ -761,7 +761,7 @@ func (m *LogModel) View() tea.View {
 	parts := []string{header, "", content}
 
 	// Add validation status footer if validation is enabled
-	if m.validateSelection != nil && m.mode == LogModeSelect {
+	if m.validateSelection != nil && m.mode == TreeModeSelect {
 		footer := m.renderValidationFooter()
 		if footer != "" {
 			parts = append(parts, "", footer)
@@ -776,7 +776,7 @@ func (m *LogModel) View() tea.View {
 }
 
 // renderValidationFooter renders the validation status footer
-func (m *LogModel) renderValidationFooter() string {
+func (m *TreeModel) renderValidationFooter() string {
 	if m.validationPending {
 		return style.ColorDim(" ⏳ Checking for conflicts...")
 	}
@@ -791,13 +791,13 @@ func (m *LogModel) renderValidationFooter() string {
 	return ""
 }
 
-// PromptLogSelect runs the interactive log in selection mode and returns the selected branch name
-func PromptLogSelect(ctx context.Context, eng engine.Engine, ghClient github.Client, opts LogOptions) (string, error) {
+// PromptTreeSelect runs the interactive log in selection mode and returns the selected branch name
+func PromptTreeSelect(ctx context.Context, eng engine.Engine, ghClient github.Client, opts TreeOptions) (string, error) {
 	if err := CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}
 
-	m := newLogSelectModel(ctx, eng, ghClient, opts)
+	m := newTreeSelectModel(ctx, eng, ghClient, opts)
 
 	m.altScreen = !opts.Inline
 
@@ -807,7 +807,7 @@ func PromptLogSelect(ctx context.Context, eng engine.Engine, ghClient github.Cli
 		return "", err
 	}
 
-	res := finalModel.(*LogModel)
+	res := finalModel.(*TreeModel)
 	if res.canceled {
 		return "", errors.ErrCanceled
 	}
@@ -836,9 +836,9 @@ type SelectionValidation struct {
 	Message string // Status message to display (e.g., "Move will complete without conflicts")
 }
 
-// LogOptions repeated here to avoid circular dependency if needed,
-// but we'll probably use actions.LogOptions
-type LogOptions struct {
+// TreeOptions repeated here to avoid circular dependency if needed,
+// but we'll probably use actions.TreeOptions
+type TreeOptions struct {
 	Style               string
 	ShowUntracked       bool
 	Exclude             map[string]bool                  // Branches to exclude from selection

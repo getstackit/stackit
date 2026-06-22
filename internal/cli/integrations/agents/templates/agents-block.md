@@ -26,7 +26,7 @@ stackit submit                          # Submit all PRs
 | `stackit submit` | Push & create/update PRs |
 | `stackit restack --upstack` | Rebase children after editing a branch (never manual `git rebase`) |
 | `stackit sync` | Pull trunk, cleanup merged |
-| `stackit log` | Visualize branch tree |
+| `stackit tree` | Visualize branch tree |
 
 Run `/stackit` for the full skill, or `/stack-status` to check current state.
 <!-- stackit:end -->

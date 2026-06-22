@@ -12,7 +12,7 @@ argument-hint: [-m "message"] [-a] [-c] [--no-edit]
 - Unstaged changes: !`git diff --stat | head -20`
 - Staged changes: !`git diff --cached --stat | head -20`
 - Recent commits on branch: !`git log --oneline -5`
-- Stack state: !`stackit log --no-interactive`
+- Stack state: !`stackit tree --no-interactive`
 
 ## Arguments
 $ARGUMENTS

@@ -441,7 +441,7 @@ After all branches are created successfully:
 git branch -D "$BACKUP_BRANCH"
 
 # Show the final stack
-stackit log --no-interactive
+stackit tree --no-interactive
 ```
 
 Present a summary:
@@ -458,7 +458,7 @@ Created N branches from Y files:
 Backup branch deleted (changes now live in stack).
 
 Stack structure:
-<stackit log output>
+<stackit tree output>
 
 Next steps:
 - Run /stack-submit to create PRs

@@ -126,7 +126,7 @@ After rebase continues successfully:
 
 2. **If clean:**
    ```bash
-   stackit log --no-interactive
+   stackit tree --no-interactive
    ```
    Show the updated stack state.
 

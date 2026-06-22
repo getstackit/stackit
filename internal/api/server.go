@@ -32,6 +32,15 @@ type ServerConfig struct {
 	// use but cap the blast radius of a public deployment.
 	SSELimits handlers.SSELimits
 
+	// RateLimit configures the per-IP request rate limiter applied to the
+	// API. Zero fields take the defaults; a negative RequestsPerSecond
+	// disables limiting.
+	RateLimit RateLimitConfig
+
+	// BranchDiffConcurrency caps how many branch-diff requests run their git
+	// subprocesses at once. Zero takes the handler default.
+	BranchDiffConcurrency int
+
 	// ReadOnly puts the server into a public read-only posture: the
 	// mutating submit route is replaced with a handler that refuses with
 	// 405 so writes are impossible by construction, not just by policy.
@@ -118,7 +127,7 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	repoHandler := handlers.NewRepoHandler(reg)
 	stacksHandler := handlers.NewStacksHandler(reg)
 	branchesHandler := handlers.NewBranchesHandler(reg)
-	branchDiffHandler := handlers.NewBranchDiffHandler(reg)
+	branchDiffHandler := handlers.NewBranchDiffHandler(reg, s.config.BranchDiffConcurrency)
 	eventsHandler := handlers.NewEventsHandler(reg, s.config.SSELimits)
 	reposListHandler := handlers.NewReposListHandler(reg)
 
@@ -180,6 +189,13 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	// methods (GET/HEAD/OPTIONS) pass through untouched, so the read API
 	// is unaffected.
 	protectedAPI = auth.RequireCSRFHeader(protectedAPI)
+
+	// Per-IP rate limiting guards the public API surface. A negative RPS
+	// disables it; otherwise it wraps the API so a single client can't flood
+	// the server with reads.
+	if s.config.RateLimit.RequestsPerSecond >= 0 {
+		protectedAPI = rateLimitMiddleware(newRateLimiter(s.config.RateLimit), protectedAPI)
+	}
 
 	authMux := http.NewServeMux()
 	if s.config.Auth != nil {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -61,7 +62,7 @@ func TestBranchDiffHandler_ReturnsDiff(t *testing.T) {
 	branchName := "feature"
 	s := setupTrackedBranchScenario(t, branchName)
 	reg := singleEntryRegistry(t, s)
-	handler := NewBranchDiffHandler(reg)
+	handler := NewBranchDiffHandler(reg, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff?branch="+url.QueryEscape(branchName), nil)
 	rr := httptest.NewRecorder()
@@ -77,12 +78,38 @@ func TestBranchDiffHandler_ReturnsDiff(t *testing.T) {
 	require.Contains(t, resp.Patch, "diff --git")
 }
 
+func TestBranchDiffHandler_ThrottleGateRespectsContext(t *testing.T) {
+	t.Parallel()
+
+	branchName := "feature"
+	s := setupTrackedBranchScenario(t, branchName)
+	reg := singleEntryRegistry(t, s)
+	handler := NewBranchDiffHandler(reg, 1)
+
+	// Saturate the single concurrency slot so the next request must wait for
+	// it to free.
+	handler.sem <- struct{}{}
+
+	// A canceled context stands in for a client that has gone away while
+	// queued behind the throttle.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff?branch="+url.QueryEscape(branchName), nil).WithContext(ctx)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// The handler returns from the throttle gate without computing a diff,
+	// rather than spawning git anyway.
+	require.Empty(t, rr.Body.String(), "no diff should be computed when throttled and the client is gone")
+}
+
 func TestBranchDiffHandler_RequiresBranchQuery(t *testing.T) {
 	t.Parallel()
 
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	reg := singleEntryRegistry(t, s)
-	handler := NewBranchDiffHandler(reg)
+	handler := NewBranchDiffHandler(reg, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff", nil)
 	rr := httptest.NewRecorder()
@@ -98,7 +125,7 @@ func TestBranchDiffHandler_RejectsUntrackedBranch(t *testing.T) {
 
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	reg := singleEntryRegistry(t, s)
-	handler := NewBranchDiffHandler(reg)
+	handler := NewBranchDiffHandler(reg, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff?branch=main", nil)
 	rr := httptest.NewRecorder()

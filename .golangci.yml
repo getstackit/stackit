@@ -84,6 +84,15 @@ linters:
       - path: internal/(app|config|engine)/
         linters:
           - forbidigo
+      # TUI storyboard files contain fixture data with repeated string literals
+      # that don't benefit from extraction into constants.
+      - path: internal/tui/.*stories\.go
+        linters:
+          - goconst
+      # Benchmark mock data file with many repeated fixture strings.
+      - path: internal/tui/components/tree/tree_mock\.go
+        linters:
+          - goconst
 
 issues:
   max-issues-per-linter: 0

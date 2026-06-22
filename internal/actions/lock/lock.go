@@ -42,10 +42,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 	// Check for unpushed commits
 	unpushedBranches := []string{}
 	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx.Context, branches)
-	for _, b := range branches {
-		if b.IsTrunk() {
-			continue
-		}
+	for _, b := range branches.WithoutTrunk() {
 		status := remoteStatuses[b.GetName()]
 		if !status.Matches() {
 			if status.Ahead() || status.MissingRemote() || status.Diverged() {
@@ -75,10 +72,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 
 	affectedBranches := []string{}
 	branchesToLock := engine.Branches{}
-	for _, b := range branches {
-		if b.IsTrunk() {
-			continue
-		}
+	for _, b := range branches.WithoutTrunk() {
 		if b.IsLocked() {
 			out.Info("Branch %s is already locked.", output.Branch(b.GetName(), b.GetName() == branchName))
 			continue
@@ -143,12 +137,9 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 		RecursiveParents: true,
 	})
 
-	lockedDownstack := engine.Branches{}
-	for _, b := range downstack {
-		if !b.IsTrunk() && b.IsLocked() {
-			lockedDownstack = lockedDownstack.Append(b)
-		}
-	}
+	lockedDownstack := downstack.WithoutTrunk().Filter(func(b engine.Branch) bool {
+		return b.IsLocked()
+	})
 
 	if len(lockedDownstack) > 0 && handler.IsInteractive() {
 		// Collect branch names for the prompt
@@ -162,10 +153,7 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 
 	affectedBranches := []string{}
 	branchesToUnlock := engine.Branches{}
-	for _, b := range branches {
-		if b.IsTrunk() {
-			continue
-		}
+	for _, b := range branches.WithoutTrunk() {
 		if !b.IsLocked() {
 			out.Info("Branch %s is already unlocked.", output.Branch(b.GetName(), b.GetName() == branchName))
 			continue

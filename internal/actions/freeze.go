@@ -31,13 +31,7 @@ func FreezeAction(ctx *app.Context, branchName string) error {
 		IncludeCurrent:   true,
 	})
 
-	branchesToFreeze := engine.Branches{}
-	for _, b := range branches {
-		if b.IsTrunk() {
-			continue
-		}
-		branchesToFreeze = branchesToFreeze.Append(b)
-	}
+	branchesToFreeze := branches.WithoutTrunk()
 
 	if len(branchesToFreeze) > 0 {
 		res, err := eng.SetFrozen(ctx, branchesToFreeze, true)

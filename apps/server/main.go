@@ -245,6 +245,7 @@ func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
 		Path:        rc.Path,
 		Remote:      rc.Remote,
 		AddedBy:     rc.AddedBy,
+		Managed:     rc.Managed,
 	})
 	if err != nil {
 		return err

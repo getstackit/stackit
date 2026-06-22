@@ -184,6 +184,7 @@ func (h *OnboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Path:        dest,
 		Remote:      "origin",
 		AddedBy:     sess.GitHubLogin,
+		Managed:     true, // onboarded checkouts are server-owned mirrors.
 	})
 	if err != nil {
 		slog.Error("onboard: engine build failed (persisted; will load on restart)", "repo", id, "error", err)

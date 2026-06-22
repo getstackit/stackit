@@ -25,6 +25,9 @@ type EntryParams struct {
 	// empty for operator-seeded repos. Carried onto the registry entry for
 	// per-user visibility scoping.
 	AddedBy string
+	// Managed marks a server-owned mirror checkout the sync loop may
+	// mirror-fetch (see registry.EntryConfig.Managed).
+	Managed bool
 }
 
 // BuildEntry resolves p into a runtime context via app.GetContext and returns a
@@ -53,6 +56,7 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 		RepoRoot:    runtimeCtx.RepoRoot,
 		Remote:      p.Remote,
 		AddedBy:     p.AddedBy,
+		Managed:     p.Managed,
 		Engine:      runtimeCtx.Engine,
 		GitHub:      gh,
 	})

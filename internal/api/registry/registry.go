@@ -40,6 +40,10 @@ type EntryConfig struct {
 	// empty for operator-seeded repos. Handlers use it to scope per-user
 	// visibility so a user only sees repos they added.
 	AddedBy string
+	// Managed marks a server-owned mirror checkout (DB-backed / onboarded under
+	// the repos root) that the sync loop may mirror-fetch. The -cwd dev repo is
+	// the operator's own working tree and is left unmanaged.
+	Managed bool
 	Engine  engine.Engine
 	GitHub  github.Client
 }
@@ -56,6 +60,9 @@ type RepoEntry struct {
 	// AddedBy is the GitHub login of the user who onboarded this repo, or
 	// empty for operator-seeded repos visible to everyone.
 	AddedBy string
+	// Managed marks a server-owned mirror checkout the sync loop may
+	// mirror-fetch (see EntryConfig.Managed).
+	Managed bool
 	Engine  engine.Engine
 	GitHub  github.Client
 
@@ -83,6 +90,7 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 		RepoRoot:    cfg.RepoRoot,
 		Remote:      cfg.Remote,
 		AddedBy:     cfg.AddedBy,
+		Managed:     cfg.Managed,
 		Engine:      cfg.Engine,
 		GitHub:      cfg.GitHub,
 		Broadcaster: NewBroadcaster(),

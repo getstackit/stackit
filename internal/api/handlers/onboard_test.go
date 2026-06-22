@@ -74,6 +74,7 @@ func TestOnboardHandlerSuccess(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "alice", entry.AddedBy)
 	require.Equal(t, "octo/widget", entry.DisplayName)
+	require.True(t, entry.Managed, "onboarded repos are server-managed mirrors")
 
 	require.Len(t, repoStore.added, 1)
 	require.Equal(t, "octo-widget", repoStore.added[0].ID)

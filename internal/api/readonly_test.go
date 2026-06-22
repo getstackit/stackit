@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/api/auth"
 	"github.com/getstackit/stackit/internal/api/registry"
+	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
 )
 
 // newTestHandler builds the full handler chain for a server with the given
@@ -127,4 +129,42 @@ func TestReadWriteModeRequiresSessionForReads(t *testing.T) {
 
 	// With auth configured and read-only off, anonymous reads are rejected.
 	require.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+func fetchConfig(t *testing.T, handler http.Handler) httpcontract.ConfigResponse {
+	t.Helper()
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/config", nil))
+	require.Equal(t, http.StatusOK, rr.Code)
+	var cfg httpcontract.ConfigResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &cfg))
+	return cfg
+}
+
+func TestConfigEndpointReadOnly(t *testing.T) {
+	t.Parallel()
+
+	cfg := fetchConfig(t, newTestHandler(t, true))
+	require.True(t, cfg.ReadOnly)
+	require.False(t, cfg.AuthRequired, "read-only servers serve reads anonymously")
+}
+
+func TestConfigEndpointReachableWithoutSession(t *testing.T) {
+	t.Parallel()
+
+	// Auth configured, read-only off: reads require a session, but /config
+	// must still be reachable anonymously so the client can discover that a
+	// login is required.
+	cfg := fetchConfig(t, newTestHandlerWithAuth(t, false, newTestAuthConfig(t)))
+	require.False(t, cfg.ReadOnly)
+	require.True(t, cfg.AuthRequired)
+}
+
+func TestConfigEndpointAuthDisabled(t *testing.T) {
+	t.Parallel()
+
+	// No auth configured: neither read-only nor auth-required.
+	cfg := fetchConfig(t, newTestHandler(t, false))
+	require.False(t, cfg.ReadOnly)
+	require.False(t, cfg.AuthRequired)
 }

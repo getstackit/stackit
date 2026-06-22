@@ -131,6 +131,11 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	eventsHandler := handlers.NewEventsHandler(reg, s.config.SSELimits)
 	reposListHandler := handlers.NewReposListHandler(reg)
 
+	// authRequired tells the client whether reads need a login. Read-only
+	// mode and auth-disabled both serve reads anonymously.
+	authRequired := s.config.Auth != nil && !s.config.ReadOnly
+	configHandler := handlers.NewConfigHandler(s.config.ReadOnly, authRequired)
+
 	// The submit route is the server's only mutating endpoint. In
 	// read-only mode it is replaced with a handler that refuses every
 	// request, so a public deployment cannot push branches or touch
@@ -181,14 +186,34 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	// repo is meant to be publicly viewable without a login. Without this,
 	// a read-only server with Auth configured would still 401 anonymous
 	// readers and defeat the purpose of the mode.
-	var protectedAPI http.Handler = apiMux
+	var sessionGated http.Handler = apiMux
 	if s.config.Auth != nil && !s.config.ReadOnly {
-		protectedAPI = auth.RequireSession(s.config.Auth.SessionStore, apiMux)
+		sessionGated = auth.RequireSession(s.config.Auth.SessionStore, apiMux)
 	}
-	// CSRF header check wraps protectedAPI so it covers POST /submit. Safe
-	// methods (GET/HEAD/OPTIONS) pass through untouched, so the read API
-	// is unaffected.
-	protectedAPI = auth.RequireCSRFHeader(protectedAPI)
+	// CSRF header check wraps the session-gated API so it covers POST
+	// /submit. Safe methods (GET/HEAD/OPTIONS) pass through untouched, so the
+	// read API is unaffected.
+	sessionGated = auth.RequireCSRFHeader(sessionGated)
+
+	// /config advertises server capabilities and must be reachable without a
+	// session so the client can learn whether a login is required before
+	// attempting one. It bypasses the session gate but still gets the outer
+	// middleware (and rate limiting below).
+	publicAPIMux := http.NewServeMux()
+	for _, prefix := range prefixes {
+		publicAPIMux.Handle("GET "+prefix+"/config", configHandler)
+	}
+
+	// Combined API dispatch: public capability routes bypass the session
+	// gate; everything else is session-gated. Rate limiting wraps both so the
+	// public endpoint is protected from floods too.
+	var protectedAPI http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isConfigPath(r.URL.Path, prefixes) {
+			publicAPIMux.ServeHTTP(w, r)
+			return
+		}
+		sessionGated.ServeHTTP(w, r)
+	})
 
 	// Per-IP rate limiting guards the public API surface. A negative RPS
 	// disables it; otherwise it wraps the API so a single client can't flood
@@ -300,6 +325,17 @@ func displayHost(bind string) string {
 func isAPIPath(path string, prefixes []string) bool {
 	for _, prefix := range prefixes {
 		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// isConfigPath reports whether path is the unauthenticated capabilities
+// endpoint for any configured prefix (e.g. /api/v1/config or /api/config).
+func isConfigPath(path string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if path == prefix+"/config" {
 			return true
 		}
 	}

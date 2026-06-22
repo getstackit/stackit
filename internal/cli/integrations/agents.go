@@ -110,6 +110,12 @@ func runAgentInstall(runner git.Runner, force bool, formats []string, version st
 				return err
 			}
 		}
+
+		// Remove leftovers from older bundle layouts so stale skill files (e.g. a
+		// renamed command's preload) can't linger after an upgrade.
+		if err := pruneStaleSkillFiles(baseDir, target); err != nil {
+			return err
+		}
 	}
 
 	// Install workflow block to CLAUDE.md or AGENTS.md if in a git repo

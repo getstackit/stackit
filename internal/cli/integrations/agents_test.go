@@ -1171,3 +1171,137 @@ func extractRawFrontmatterValue(frontmatter, key string) (string, bool) {
 func testSkillContent(version string) string {
 	return "---\nversion: " + version + "\n---\n"
 }
+
+// installSkillsForTarget runs the per-target install steps the way runAgentInstall
+// does (file groups + command skills + prune), so prune tests exercise the real flow.
+func installSkillsForTarget(t *testing.T, baseDir string, target agentInstallTarget) {
+	t.Helper()
+	for _, g := range buildAgentFileGroups(target) {
+		require.NoError(t, installFileGroup(baseDir, g, "test"))
+	}
+	render := renderClaudeSkillContent
+	if target.format == agentSkillFormatCodex {
+		render = renderCodexSkillContent
+	}
+	require.NoError(t, installCommandSkills(baseDir, target.skillsBaseDir, commandTemplateFiles, render, target.format))
+	require.NoError(t, pruneStaleSkillFiles(baseDir, target))
+}
+
+func seedFile(t *testing.T, path string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0750))
+	require.NoError(t, os.WriteFile(path, []byte("stale"), 0600))
+}
+
+func TestPruneStaleSkillFilesCodexLayoutChange(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	target := installTargetForFormat(agentSkillFormatCodex)
+	bundleDir := filepath.Join(baseDir, target.skillDir)
+
+	// Seed orphans from the old codex bundle layout that shipped commands/,
+	// workflows/, scripts/, subagents/, reference.md, and references/repo-defaults.md.
+	orphans := []string{
+		filepath.Join(bundleDir, "commands", "navigation.md"),
+		filepath.Join(bundleDir, "workflows", "conflict-resolution.md"),
+		filepath.Join(bundleDir, "scripts", "analyze_stack.sh"),
+		filepath.Join(bundleDir, "subagents", "review-triage.md"),
+		filepath.Join(bundleDir, "reference.md"),
+		filepath.Join(bundleDir, "references", "repo-defaults.md"),
+		// Orphan inside a current per-command skill dir (old stack-split/references/).
+		filepath.Join(baseDir, target.skillsBaseDir, "stack-split", "references", "execution.md"),
+	}
+	for _, path := range orphans {
+		seedFile(t, path)
+	}
+
+	// A sibling, non-stackit skill in the shared skills base dir must survive.
+	userSkill := filepath.Join(baseDir, target.skillsBaseDir, "my-tool", "SKILL.md")
+	seedFile(t, userSkill)
+
+	installSkillsForTarget(t, baseDir, target)
+
+	for _, path := range orphans {
+		require.NoFileExists(t, path, "stale file should be pruned")
+	}
+	// Emptied orphan directories should be removed entirely.
+	require.NoDirExists(t, filepath.Join(bundleDir, "commands"))
+	require.NoDirExists(t, filepath.Join(bundleDir, "workflows"))
+	require.NoDirExists(t, filepath.Join(bundleDir, "scripts"))
+	require.NoDirExists(t, filepath.Join(bundleDir, "subagents"))
+	require.NoDirExists(t, filepath.Join(baseDir, target.skillsBaseDir, "stack-split", "references"))
+
+	// Current files survive.
+	require.FileExists(t, filepath.Join(bundleDir, "SKILL.md"))
+	require.FileExists(t, filepath.Join(bundleDir, "references", "workflows.md"))
+	require.FileExists(t, filepath.Join(bundleDir, "agents", "openai.yaml"))
+	require.FileExists(t, filepath.Join(baseDir, target.skillsBaseDir, "stack-split", "SKILL.md"))
+	require.FileExists(t, filepath.Join(baseDir, target.skillsBaseDir, "stack-split", "agents", "openai.yaml"))
+
+	// The unrelated user skill is untouched.
+	require.FileExists(t, userSkill)
+}
+
+func TestPruneStaleSkillFilesClaudeOrphans(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	target := installTargetForFormat(agentSkillFormatClaude)
+	bundleDir := filepath.Join(baseDir, target.skillDir)
+
+	// Orphans the claude bundle stopped shipping after trimming subagentFiles
+	// and skillScriptFiles.
+	staleScript := filepath.Join(bundleDir, "scripts", "validate_pr.sh")
+	staleSubagent := filepath.Join(bundleDir, "subagents", "pr-description.md")
+	seedFile(t, staleScript)
+	seedFile(t, staleSubagent)
+
+	installSkillsForTarget(t, baseDir, target)
+
+	require.NoFileExists(t, staleScript, "dropped script should be pruned")
+	require.NoFileExists(t, staleSubagent, "dropped subagent should be pruned")
+
+	// Files still shipped survive, and their directories aren't removed.
+	require.FileExists(t, filepath.Join(bundleDir, "scripts", "analyze_stack.sh"))
+	require.FileExists(t, filepath.Join(bundleDir, "subagents", "commit-message.md"))
+	require.FileExists(t, filepath.Join(bundleDir, "subagents", "review-triage.md"))
+	require.FileExists(t, filepath.Join(bundleDir, "SKILL.md"))
+	require.FileExists(t, filepath.Join(bundleDir, "reference.md"))
+}
+
+func TestPruneStaleSkillFilesNoopOnCleanInstall(t *testing.T) {
+	t.Parallel()
+
+	for _, format := range []agentSkillFormat{agentSkillFormatClaude, agentSkillFormatCodex} {
+		baseDir := t.TempDir()
+		target := installTargetForFormat(format)
+
+		// Two installs back to back: the second must leave the file set unchanged.
+		installSkillsForTarget(t, baseDir, target)
+		before := snapshotFiles(t, filepath.Join(baseDir, target.skillDir))
+		installSkillsForTarget(t, baseDir, target)
+		after := snapshotFiles(t, filepath.Join(baseDir, target.skillDir))
+
+		require.Equal(t, before, after, "re-install should not add or drop files for %s", format)
+	}
+}
+
+func snapshotFiles(t *testing.T, root string) []string {
+	t.Helper()
+	var files []string
+	require.NoError(t, filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			rel, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				return relErr
+			}
+			files = append(files, rel)
+		}
+		return nil
+	}))
+	return files
+}

@@ -44,8 +44,13 @@ type EntryConfig struct {
 	// the repos root) that the sync loop may mirror-fetch. The -cwd dev repo is
 	// the operator's own working tree and is left unmanaged.
 	Managed bool
-	Engine  engine.Engine
-	GitHub  github.Client
+	// Owner and Name are the GitHub coordinates, set for managed repos. The
+	// sync loop uses them to resolve a GitHub App installation token for the
+	// fetch.
+	Owner  string
+	Name   string
+	Engine engine.Engine
+	GitHub github.Client
 }
 
 // RepoEntry is the per-repository state required to serve API requests for
@@ -63,8 +68,12 @@ type RepoEntry struct {
 	// Managed marks a server-owned mirror checkout the sync loop may
 	// mirror-fetch (see EntryConfig.Managed).
 	Managed bool
-	Engine  engine.Engine
-	GitHub  github.Client
+	// Owner and Name are the GitHub coordinates, set for managed repos; the
+	// sync loop resolves an installation token from them.
+	Owner  string
+	Name   string
+	Engine engine.Engine
+	GitHub github.Client
 
 	Broadcaster *Broadcaster
 	Watcher     *watcher.RefWatcher
@@ -91,6 +100,8 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 		Remote:      cfg.Remote,
 		AddedBy:     cfg.AddedBy,
 		Managed:     cfg.Managed,
+		Owner:       cfg.Owner,
+		Name:        cfg.Name,
 		Engine:      cfg.Engine,
 		GitHub:      cfg.GitHub,
 		Broadcaster: NewBroadcaster(),
@@ -102,7 +113,7 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 		if cb := cfg.Engine.CurrentBranch(); cb != nil {
 			entry.lastCurrentBranch = cb.GetName()
 		}
-		entry.Watcher = watcher.NewRefWatcher(cfg.RepoRoot, watcherDebounce, entry.refresh)
+		entry.Watcher = watcher.NewRefWatcher(cfg.RepoRoot, watcherDebounce, entry.Refresh)
 		watcherDone := make(chan error, 1)
 		go func() {
 			watcherDone <- entry.Watcher.Start()
@@ -140,12 +151,12 @@ func (e *RepoEntry) close() error {
 	return errors.Join(errs...)
 }
 
-// refresh rebuilds the engine from current refs and broadcasts a "refresh"
+// Refresh rebuilds the engine from current refs and broadcasts a "refresh"
 // event (plus "branch_switched" when the served HEAD changed) so connected SSE
 // clients refetch. It is the shared post-change path invoked by both the ref
 // watcher (local changes) and the sync loop (remote changes); refreshMu
 // serializes the two so the engine isn't rebuilt concurrently.
-func (e *RepoEntry) refresh() {
+func (e *RepoEntry) Refresh() {
 	if e.Engine == nil {
 		return
 	}

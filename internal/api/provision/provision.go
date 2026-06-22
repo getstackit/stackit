@@ -28,6 +28,10 @@ type EntryParams struct {
 	// Managed marks a server-owned mirror checkout the sync loop may
 	// mirror-fetch (see registry.EntryConfig.Managed).
 	Managed bool
+	// Owner and Name are the GitHub coordinates carried onto the entry so the
+	// sync loop can resolve an installation token.
+	Owner string
+	Name  string
 }
 
 // BuildEntry resolves p into a runtime context via app.GetContext and returns a
@@ -57,6 +61,8 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 		Remote:      p.Remote,
 		AddedBy:     p.AddedBy,
 		Managed:     p.Managed,
+		Owner:       p.Owner,
+		Name:        p.Name,
 		Engine:      runtimeCtx.Engine,
 		GitHub:      gh,
 	})

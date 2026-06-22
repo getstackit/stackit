@@ -26,6 +26,41 @@ func newTestHandler(t *testing.T, readOnly bool) http.Handler {
 	return handler
 }
 
+// newTestHandlerWithAuth is newTestHandler with an AuthConfig attached so
+// session enforcement is in play.
+func newTestHandlerWithAuth(t *testing.T, readOnly bool, authCfg *AuthConfig) http.Handler {
+	t.Helper()
+	srv := NewServer(ServerConfig{
+		APIPrefixes: []string{"/api/v1"},
+		Registry:    registry.New(),
+		ReadOnly:    readOnly,
+		Auth:        authCfg,
+	})
+	handler, err := srv.buildHandler()
+	require.NoError(t, err)
+	return handler
+}
+
+// newTestAuthConfig builds an AuthConfig backed by an in-memory session
+// store. No session is ever created, so requests are effectively anonymous —
+// which is exactly what we want to assert read-only mode lets through.
+func newTestAuthConfig(t *testing.T) *AuthConfig {
+	t.Helper()
+	key, err := auth.GenerateSessionKey()
+	require.NoError(t, err)
+	cipher, err := auth.NewCipher(key)
+	require.NoError(t, err)
+	store := auth.NewMemoryStore(cipher)
+	t.Cleanup(func() { _ = store.Close() })
+	handler, err := auth.NewHandler(auth.Config{
+		ClientID:     "test-client",
+		ClientSecret: "test-secret",
+		BaseURL:      "http://localhost",
+	}, store, nil, cipher)
+	require.NoError(t, err)
+	return &AuthConfig{Handler: handler, SessionStore: store}
+}
+
 // submitRequest builds a POST to the submit route with the CSRF header set,
 // so it clears RequireCSRFHeader and reaches the routed handler.
 func submitRequest() *http.Request {
@@ -69,4 +104,27 @@ func TestReadWriteModeKeepsSubmitRoute(t *testing.T) {
 	// resolves to an unknown repo instead.
 	require.NotEqual(t, http.StatusMethodNotAllowed, rr.Code)
 	require.NotContains(t, rr.Body.String(), "server is read-only")
+}
+
+func TestReadOnlyModeAllowsAnonymousReadsWithAuthConfigured(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandlerWithAuth(t, true, newTestAuthConfig(t))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/repos", nil))
+
+	// Read-only mode skips session enforcement, so an anonymous reader
+	// gets the repos index even though auth is configured.
+	require.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestReadWriteModeRequiresSessionForReads(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandlerWithAuth(t, false, newTestAuthConfig(t))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/repos", nil))
+
+	// With auth configured and read-only off, anonymous reads are rejected.
+	require.Equal(t, http.StatusUnauthorized, rr.Code)
 }

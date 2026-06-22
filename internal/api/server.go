@@ -153,8 +153,14 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	// Apply session enforcement to /api/* only. /auth/* and static assets
 	// stay unauthenticated so the user can complete the login flow and
 	// land on the SPA shell.
+	//
+	// Read-only mode skips session enforcement entirely: the API is all
+	// reads (the lone write route is the read-only refusal handler), so the
+	// repo is meant to be publicly viewable without a login. Without this,
+	// a read-only server with Auth configured would still 401 anonymous
+	// readers and defeat the purpose of the mode.
 	var protectedAPI http.Handler = apiMux
-	if s.config.Auth != nil {
+	if s.config.Auth != nil && !s.config.ReadOnly {
 		protectedAPI = auth.RequireSession(s.config.Auth.SessionStore, apiMux)
 	}
 	// CSRF header check wraps protectedAPI so it covers POST /submit. Safe

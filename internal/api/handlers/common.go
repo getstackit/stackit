@@ -12,6 +12,23 @@ import (
 // substituted on the unscoped legacy routes that don't carry {repoID}.
 const defaultRepoID = "default"
 
+// Visibility controls whether a handler may expose operator- or
+// viewer-identifying fields in its response. A public (read-only) server
+// must not leak who is running it, so identity fields like currentUser are
+// omitted under VisibilityPublic.
+type Visibility int
+
+const (
+	// VisibilityPrivate is the authenticated/local posture: responses may
+	// include the operator/viewer identity.
+	VisibilityPrivate Visibility = iota
+	// VisibilityPublic is the anonymous read-only posture: identity fields
+	// are omitted so an unauthenticated caller can't learn who runs the
+	// server (and so reads don't trigger GitHub calls on the operator's
+	// token).
+	VisibilityPublic
+)
+
 // resolveRepo looks up the repo entry for the {repoID} path value on r.
 // If the path value is empty (legacy/unscoped route or direct test call)
 // it falls back to defaultRepoID. Returns false and writes a 404 when the

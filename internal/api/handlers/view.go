@@ -8,14 +8,16 @@ import (
 
 // ViewHandler serves the combined view payload for the frontend.
 type ViewHandler struct {
-	reg *registry.Registry
+	reg        *registry.Registry
+	visibility Visibility
 }
 
 // NewViewHandler creates a handler that resolves the per-request repo from
 // the registry. Assembly logic lives in ViewAssembler so this handler stays
-// transport-focused.
-func NewViewHandler(reg *registry.Registry) *ViewHandler {
-	return &ViewHandler{reg: reg}
+// transport-focused. visibility controls whether the operator identity is
+// included in the payload (omitted for a public read-only server).
+func NewViewHandler(reg *registry.Registry, visibility Visibility) *ViewHandler {
+	return &ViewHandler{reg: reg, visibility: visibility}
 }
 
 // ServeHTTP handles GET view endpoints.
@@ -30,7 +32,7 @@ func (h *ViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assembler := NewViewAssembler(entry.Engine, entry.GitHub, entry.Remote)
+	assembler := NewViewAssembler(entry.Engine, entry.GitHub, entry.Remote, h.visibility)
 	view, err := assembler.Build(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

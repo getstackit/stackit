@@ -101,7 +101,15 @@ func (s *Server) buildHandler() (http.Handler, error) {
 
 	reg := s.config.Registry
 
-	viewHandler := handlers.NewViewHandler(reg)
+	// A read-only server is meant to be public, so handlers must omit
+	// operator-identifying fields (and skip the GitHub calls that would
+	// fetch them on the operator's token).
+	visibility := handlers.VisibilityPrivate
+	if s.config.ReadOnly {
+		visibility = handlers.VisibilityPublic
+	}
+
+	viewHandler := handlers.NewViewHandler(reg, visibility)
 	repoHandler := handlers.NewRepoHandler(reg)
 	stacksHandler := handlers.NewStacksHandler(reg)
 	branchesHandler := handlers.NewBranchesHandler(reg)

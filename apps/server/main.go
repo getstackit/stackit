@@ -17,9 +17,9 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/api"
+	"github.com/getstackit/stackit/internal/api/provision"
 	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/api/store"
-	"github.com/getstackit/stackit/internal/app"
 )
 
 // all: is required because Next static exports use underscore-prefixed paths like _next/.
@@ -218,36 +218,19 @@ func run() error {
 	}
 }
 
-// addRegistryEntry resolves rc into an engine via app.GetContext and adds
-// the resulting RepoEntry to reg, registering a logger-close callback so
-// reg.Close releases the file handle on shutdown.
+// addRegistryEntry resolves rc into a RepoEntry via provision.BuildEntry and
+// adds it to reg. The build path is shared with runtime onboarding so startup
+// and "add a repo" can't drift.
 func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
-	opts := app.GetDefaultGlobalOptions()
-	opts.Cwd = rc.Path
-	opts.Interactive = false
-
-	runtimeCtx, err := app.GetContext(context.Background(), opts)
+	entry, err := provision.BuildEntry(context.Background(), provision.EntryParams{
+		ID:          rc.ID,
+		DisplayName: rc.DisplayName,
+		Path:        rc.Path,
+		Remote:      rc.Remote,
+	})
 	if err != nil {
 		return err
 	}
-
-	gh := runtimeCtx.GitHub()
-	if gh == nil && runtimeCtx.GitHubError() != nil {
-		slog.Warn("GitHub client unavailable", "repo", rc.ID, "error", runtimeCtx.GitHubError())
-	}
-
-	entry := registry.NewEntry(registry.EntryConfig{
-		ID:          rc.ID,
-		DisplayName: rc.DisplayName,
-		RepoRoot:    runtimeCtx.RepoRoot,
-		Remote:      rc.Remote,
-		Engine:      runtimeCtx.Engine,
-		GitHub:      gh,
-	})
-	if runtimeCtx.Logger != nil {
-		entry.AddCloser(runtimeCtx.Logger.Close)
-	}
-
 	return reg.Add(entry)
 }
 

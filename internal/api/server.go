@@ -27,6 +27,13 @@ type ServerConfig struct {
 	StaticFS    fs.FS
 	Registry    *registry.Registry
 
+	// ReadOnly puts the server into a public read-only posture: the
+	// mutating submit route is replaced with a handler that refuses with
+	// 405 so writes are impossible by construction, not just by policy.
+	// This is the safety floor for exposing a repo publicly — a read-only
+	// server cannot push branches or touch GitHub no matter who calls it.
+	ReadOnly bool
+
 	// Auth bundles the OAuth handler, session store, and surrounding state
 	// needed to gate /api/* routes behind GitHub login. When nil the server
 	// runs without authentication; that mode is only safe on a private
@@ -58,9 +65,35 @@ func NewServer(cfg ServerConfig) *Server {
 
 // Start begins serving HTTP requests. It blocks until the server is stopped.
 func (s *Server) Start() error {
+	handler, err := s.buildHandler()
+	if err != nil {
+		return err
+	}
+
+	s.httpServer = &http.Server{
+		Addr:              fmt.Sprintf("%s:%d", s.config.BindAddr, s.config.Port),
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MiB
+	}
+
+	mode := "read-write"
+	if s.config.ReadOnly {
+		mode = "read-only"
+	}
+	slog.Info("stackit-web server listening", "url", fmt.Sprintf("http://%s:%d", displayHost(s.config.BindAddr), s.config.Port), "mode", mode)
+	return s.httpServer.ListenAndServe()
+}
+
+// buildHandler assembles the full HTTP handler chain (routes + middleware)
+// without binding a listener, so tests can exercise routing and read-only
+// behavior via httptest. Start wraps the result in an *http.Server.
+func (s *Server) buildHandler() (http.Handler, error) {
 	csp, err := buildCSP(s.config.StaticFS)
 	if err != nil {
-		return fmt.Errorf("build CSP from static FS: %w", err)
+		return nil, fmt.Errorf("build CSP from static FS: %w", err)
 	}
 
 	apiMux := http.NewServeMux()
@@ -73,9 +106,17 @@ func (s *Server) Start() error {
 	stacksHandler := handlers.NewStacksHandler(reg)
 	branchesHandler := handlers.NewBranchesHandler(reg)
 	branchDiffHandler := handlers.NewBranchDiffHandler(reg)
-	submitHandler := handlers.NewSubmitHandler(reg)
 	eventsHandler := handlers.NewEventsHandler(reg)
 	reposListHandler := handlers.NewReposListHandler(reg)
+
+	// The submit route is the server's only mutating endpoint. In
+	// read-only mode it is replaced with a handler that refuses every
+	// request, so a public deployment cannot push branches or touch
+	// GitHub regardless of who calls it.
+	var submitHandler http.Handler = handlers.NewSubmitHandler(reg)
+	if s.config.ReadOnly {
+		submitHandler = readOnlyWriteHandler()
+	}
 
 	for _, prefix := range prefixes {
 		// Unscoped index of available repos.
@@ -165,17 +206,7 @@ func (s *Server) Start() error {
 	handler = requestIDMiddleware(handler)
 	handler = recoverMiddleware(handler)
 
-	s.httpServer = &http.Server{
-		Addr:              fmt.Sprintf("%s:%d", s.config.BindAddr, s.config.Port),
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20, // 1 MiB
-	}
-
-	slog.Info("stackit-web server listening", "url", fmt.Sprintf("http://%s:%d", displayHost(s.config.BindAddr), s.config.Port))
-	return s.httpServer.ListenAndServe()
+	return handler, nil
 }
 
 // Shutdown gracefully stops the server. The registry's watchers and

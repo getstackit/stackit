@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -74,6 +75,7 @@ func run() error {
 		enableLegacy  = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
 		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
 		authDisabled  = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
+		readOnly      = flag.Bool("read-only", envBool("STACKIT_READ_ONLY"), "Serve in read-only mode: the submit endpoint is disabled so the repo can be exposed publicly without write access. Also set via STACKIT_READ_ONLY.")
 	)
 	flag.Parse()
 
@@ -191,6 +193,7 @@ func run() error {
 		StaticFS:    staticFS,
 		Registry:    reg,
 		Auth:        authCfg,
+		ReadOnly:    *readOnly,
 	})
 
 	errCh := make(chan error, 1)
@@ -246,6 +249,15 @@ func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
 	}
 
 	return reg.Add(entry)
+}
+
+// envBool reports whether the named environment variable is set to a truthy
+// value (1, t, true, etc. per strconv.ParseBool). Unset or unparseable
+// values are false, so STACKIT_READ_ONLY=0 disables the mode rather than
+// tripping it the way a bare presence check would.
+func envBool(name string) bool {
+	v, err := strconv.ParseBool(os.Getenv(name))
+	return err == nil && v
 }
 
 func parseCSV(raw string) []string {

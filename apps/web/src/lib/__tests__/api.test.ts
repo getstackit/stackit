@@ -7,6 +7,7 @@ import {
   fetchStack,
   fetchBranch,
   fetchBranchDiff,
+  fetchConfig,
 } from "../api";
 
 const mockFetch = vi.fn();
@@ -117,6 +118,19 @@ describe("fetchBranchDiff", () => {
       "/api/v1/repos/stackit/branch-diff?branch=feat%2Fbar",
       { credentials: "include" }
     );
+  });
+});
+
+describe("fetchConfig", () => {
+  it("reads the unauthenticated capabilities endpoint", async () => {
+    const data = { readOnly: true, authRequired: false };
+    mockOk(data);
+
+    const result = await fetchConfig();
+    expect(result).toEqual(data);
+    expect(mockFetch).toHaveBeenCalledWith("/api/v1/config", {
+      credentials: "include",
+    });
   });
 });
 

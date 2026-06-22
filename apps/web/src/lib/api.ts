@@ -136,6 +136,16 @@ export interface ViewResponse {
   recentlyMerged?: TrunkCommitResponse[];
 }
 
+// --- Server Capabilities ---
+
+// ConfigResponse mirrors httpcontract.ConfigResponse. It advertises server
+// capabilities so the UI can adapt at runtime instead of relying on
+// build-time flags.
+export interface ConfigResponse {
+  readOnly: boolean;
+  authRequired: boolean;
+}
+
 // --- Auth Types ---
 
 export interface MeResponse {
@@ -171,6 +181,12 @@ async function fetchAPI<T>(path: string): Promise<T> {
 
 export function fetchMe(): Promise<MeResponse> {
   return fetchAPI<MeResponse>("/auth/me");
+}
+
+// fetchConfig reads server capabilities. It is served unauthenticated, so
+// the client can call it before deciding whether to attempt a login.
+export function fetchConfig(): Promise<ConfigResponse> {
+  return fetchAPI<ConfigResponse>("/api/v1/config");
 }
 
 export function authLoginURL(returnTo?: string): string {

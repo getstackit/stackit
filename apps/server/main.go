@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -189,6 +190,16 @@ func run() error {
 		slog.Warn("auth: DISABLED (no STACKIT_GITHUB_* env or -auth-disabled set). Do not expose this port publicly.")
 	}
 
+	// Resolve the repos root to an absolute path so onboarded checkouts land
+	// in the same place boot-loaded repos resolve to (loadReposFromDB also
+	// makes it absolute), keeping persisted repos host-portable.
+	absReposRoot := *reposRoot
+	if absReposRoot != "" {
+		if abs, absErr := filepath.Abs(absReposRoot); absErr == nil {
+			absReposRoot = abs
+		}
+	}
+
 	server := api.NewServer(api.ServerConfig{
 		BindAddr:    *bind,
 		Port:        *port,
@@ -199,6 +210,7 @@ func run() error {
 		Auth:        authCfg,
 		ReadOnly:    *readOnly,
 		RepoStore:   repoStore,
+		ReposRoot:   absReposRoot,
 	})
 
 	errCh := make(chan error, 1)

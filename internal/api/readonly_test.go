@@ -82,6 +82,25 @@ func TestReadOnlyModeRefusesSubmit(t *testing.T) {
 	require.JSONEq(t, `{"error":"server is read-only"}`, rr.Body.String())
 }
 
+// onboardRequest builds a POST to the onboarding route with the CSRF header
+// set so it clears RequireCSRFHeader and reaches the routed handler.
+func onboardRequest() *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos", nil)
+	req.Header.Set(auth.CSRFHeader, "1")
+	return req
+}
+
+func TestReadOnlyModeRefusesOnboard(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t, true)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, onboardRequest())
+
+	require.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	require.JSONEq(t, `{"error":"server is read-only"}`, rr.Body.String())
+}
+
 func TestReadOnlyModeAllowsReads(t *testing.T) {
 	t.Parallel()
 

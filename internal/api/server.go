@@ -62,6 +62,11 @@ type ServerConfig struct {
 	// repo onboarding persists new repos here so they survive a restart; when
 	// nil, onboarding is unavailable and the registry is fixed at boot.
 	RepoStore *store.Store
+
+	// ReposRoot is the absolute base directory under which onboarded repos are
+	// checked out (<ReposRoot>/<owner>/<name>). Required for runtime
+	// onboarding; when empty, onboarding is refused.
+	ReposRoot string
 }
 
 // AuthConfig is the runtime auth setup. SessionStore must outlive the
@@ -158,9 +163,28 @@ func (s *Server) buildHandler() (http.Handler, error) {
 		submitHandler = readOnlyWriteHandler()
 	}
 
+	// Runtime onboarding (POST /repos) acts as the requesting user, so it needs
+	// the session cipher and the persistence store. Both may be absent
+	// (auth-disabled / no DB); the handler refuses with a clear 503 in that
+	// case. Read-only mode replaces it with the write-refusal handler, exactly
+	// like submit.
+	var cipher *auth.Cipher
+	if s.config.Auth != nil {
+		cipher = s.config.Auth.Cipher
+	}
+	var persister handlers.RepoPersister
+	if s.config.RepoStore != nil {
+		persister = s.config.RepoStore
+	}
+	var onboardHandler http.Handler = handlers.NewOnboardHandler(reg, persister, cipher, s.config.ReposRoot)
+	if s.config.ReadOnly {
+		onboardHandler = readOnlyWriteHandler()
+	}
+
 	for _, prefix := range prefixes {
 		// Unscoped index of available repos.
 		apiMux.Handle("GET "+prefix+"/repos", reposListHandler)
+		apiMux.Handle("POST "+prefix+"/repos", onboardHandler)
 
 		// New multi-repo routes. {repoID} resolves through the registry;
 		// unknown IDs return 404 from inside the handler.

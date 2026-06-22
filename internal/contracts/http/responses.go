@@ -33,6 +33,16 @@ type ReposListResponse struct {
 	Repos []RepoSummary `json:"repos"`
 }
 
+// OnboardRepoRequest is the body for POST /api/v1/repos — a request to clone a
+// GitHub repository and start serving it. Provide either Owner+Name or URL;
+// URL is a convenience that is parsed into owner/name. On success the server
+// responds 201 with a RepoSummary for the newly served repo.
+type OnboardRepoRequest struct {
+	Owner string `json:"owner,omitempty"`
+	Name  string `json:"name,omitempty"`
+	URL   string `json:"url,omitempty"`
+}
+
 // ViewResponse is the combined response for the frontend view.
 // It bundles repo metadata and all stack details into a single payload
 // to avoid N+1 API calls.

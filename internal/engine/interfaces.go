@@ -86,6 +86,7 @@ type BranchInfo interface {
 	GetRevisions(branchNames []string) (map[string]string, []error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
+	GetTrunkCommitsInRange(from, to string) ([]git.RecentCommit, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
 	// GetDivergencePoint returns the divergence point of a branch from its parent.
 	// Returns the ParentBranchRevision from metadata if valid, otherwise the parent's current revision.

@@ -105,6 +105,7 @@ Commit:  ` + commit + `
 	rootCmd.AddCommand(newInitCmd(version))
 	rootCmd.AddCommand(integrations.NewGithubCmd())
 	rootCmd.AddCommand(branch.NewLockCmd())
+	rootCmd.AddCommand(navigation.NewLogCmd())
 	rootCmd.AddCommand(navigation.NewTreeCmd())
 	rootCmd.AddCommand(navigation.NewMainCmd())
 	rootCmd.AddCommand(stack.NewMergeCmd())

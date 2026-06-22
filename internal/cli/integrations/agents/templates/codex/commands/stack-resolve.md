@@ -33,6 +33,6 @@ Resolve an in-progress Stackit conflict and continue the operation.
 
 5. If another conflict appears, repeat.
 
-6. Verify with `stackit log --no-interactive` and the relevant check command.
+6. Verify with `stackit tree --no-interactive` and the relevant check command.
 
 Use `stackit abort --no-interactive` only if the user asks to abort.

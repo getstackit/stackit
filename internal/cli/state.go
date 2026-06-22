@@ -22,7 +22,7 @@ untracked), any in-progress rebase/merge with its conflicted files, and the full
 stack (structure, PR/CI status, and per-branch needs_restack/locked/frozen/scope).
 
 Use --json for one machine-readable snapshot — agents and scripts read everything
-from a single call instead of combining git status, stackit log, and stackit info.
+from a single call instead of combining git status, stackit tree, and stackit info.
 
 Examples:
   stackit state            # Human-readable summary

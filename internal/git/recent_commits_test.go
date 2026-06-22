@@ -178,3 +178,71 @@ func TestGetRecentCommits_MergeCommitWithTitleBeforeTrailers(t *testing.T) {
 	require.Equal(t, "Consolidate auth stack", commits[0].Subject)
 	require.Equal(t, 786, commits[0].PRNumber)
 }
+
+func TestGetRecentCommitsInRange(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+	// Tag the baseline, then add two commits past it.
+	require.NoError(t, scene.Repo.RunGitCommand("tag", "v0"))
+
+	require.NoError(t, scene.Repo.CreateChange("file1", "content1", false))
+	require.NoError(t, scene.Repo.RunGitCommand("add", "."))
+	require.NoError(t, scene.Repo.RunGitCommand("commit", "-m", "First past baseline"))
+
+	require.NoError(t, scene.Repo.CreateChange("file2", "content2", false))
+	require.NoError(t, scene.Repo.RunGitCommand("add", "."))
+	require.NoError(t, scene.Repo.RunGitCommand(
+		"commit",
+		"-m", "Consolidate stack",
+		"-m", "Stackit-Stack-Size: 2\nStackit-PRs: 7,8\nStackit-Scope: FEAT-9",
+	))
+
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+
+	// Range excludes the tagged baseline; newest first, parses trailers.
+	commits, err := runner.GetRecentCommitsInRange(context.Background(), "v0..main")
+	require.NoError(t, err)
+	require.Len(t, commits, 2)
+	require.Equal(t, "Consolidate stack", commits[0].Subject)
+	require.Equal(t, 2, commits[0].StackSize)
+	require.Equal(t, []int{7, 8}, commits[0].StackPRNumbers)
+	require.Equal(t, git.RecentCommitKindStackMerge, commits[0].Kind)
+	require.Equal(t, "First past baseline", commits[1].Subject)
+}
+
+func TestGetRecentCommitsInRange_FirstParentOnly(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+	require.NoError(t, scene.Repo.RunGitCommand("tag", "v0"))
+
+	require.NoError(t, scene.Repo.RunGitCommand("checkout", "-b", "feature"))
+	require.NoError(t, scene.Repo.CreateChange("feature", "feature.txt", false))
+	require.NoError(t, scene.Repo.RunGitCommand("add", "."))
+	require.NoError(t, scene.Repo.RunGitCommand("commit", "-m", "feature implementation"))
+
+	require.NoError(t, scene.Repo.RunGitCommand("checkout", "main"))
+	require.NoError(t, scene.Repo.RunGitCommand(
+		"merge", "--no-ff", "feature",
+		"-m", "Merge pull request #42 from owner/feature",
+		"-m", "Feature title (#42)",
+	))
+
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	commits, err := runner.GetRecentCommitsInRange(context.Background(), "v0..main")
+	require.NoError(t, err)
+	require.Len(t, commits, 1)
+	require.Equal(t, "Feature title (#42)", commits[0].Subject)
+	require.Equal(t, 42, commits[0].PRNumber)
+}
+
+func TestGetRecentCommitsInRange_Empty(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	commits, err := runner.GetRecentCommitsInRange(context.Background(), "")
+	require.NoError(t, err)
+	require.Empty(t, commits)
+}

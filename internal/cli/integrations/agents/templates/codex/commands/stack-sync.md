@@ -48,5 +48,5 @@ Sync with trunk and clean up branches that have landed.
 7. Verify:
 
    ```bash
-   stackit log --no-interactive
+   stackit tree --no-interactive
    ```

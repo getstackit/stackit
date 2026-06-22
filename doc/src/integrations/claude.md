@@ -159,7 +159,7 @@ Agent skills complement regular stackit commands. You can mix and match:
 stack-create my-feature
 
 # Use regular commands for simple tasks
-stackit log
+stackit tree
 stackit checkout parent-branch
 
 # Back to an agent skill for multi-branch operations
@@ -169,7 +169,7 @@ stack-absorb
 ## Best practices
 
 1. **Let the agent handle complexity**: Use agent skills for operations involving multiple branches
-2. **Use regular commands for navigation**: Simple operations like $$stackit log$$ don't need AI assistance
+2. **Use regular commands for navigation**: Simple operations like $$stackit tree$$ don't need AI assistance
 3. **Review suggestions**: The agent will explain what it's doing—review before proceeding
 4. **Leverage context awareness**: The skills understand your stack structure and can make intelligent decisions
 

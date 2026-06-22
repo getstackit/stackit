@@ -441,6 +441,10 @@ func (d *demoGitRunner) GetRecentCommits(_ context.Context, _ string, _ int) ([]
 	return nil, nil
 }
 
+func (d *demoGitRunner) GetRecentCommitsInRange(_ context.Context, _ string) ([]git.RecentCommit, error) {
+	return nil, nil
+}
+
 func (d *demoGitRunner) GetStatusPorcelain(_ context.Context) (string, error) {
 	return "M  test.txt", nil
 }

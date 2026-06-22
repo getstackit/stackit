@@ -55,20 +55,34 @@ func (r *runner) GetRecentCommits(ctx context.Context, branchName string, count 
 	if count <= 0 {
 		return nil, nil
 	}
+	return r.recentCommits(ctx, fmt.Sprintf("-n%d", count), branchName)
+}
 
+// GetRecentCommitsInRange returns the commits in a revision range (e.g.
+// "v1.4.0..main"), newest first, with the same stack trailer parsing as
+// GetRecentCommits. An empty range returns no commits.
+func (r *runner) GetRecentCommitsInRange(ctx context.Context, revRange string) ([]RecentCommit, error) {
+	if strings.TrimSpace(revRange) == "" {
+		return nil, nil
+	}
+	return r.recentCommits(ctx, revRange)
+}
+
+// recentCommits runs `git log -z` with the trailer-aware format over the given
+// log selector args (e.g. "-n10","main" or "v1.4.0..main") and parses the
+// records into RecentCommit values. It is the shared core of GetRecentCommits
+// and GetRecentCommitsInRange.
+func (r *runner) recentCommits(ctx context.Context, revArgs ...string) ([]RecentCommit, error) {
 	format := strings.Join([]string{
 		"%H", "%an", "%aI", "%B",
 	}, commitFieldSep)
 
-	out, err := r.RunGitCommandRawWithContext(ctx,
-		"log",
-		fmt.Sprintf("-n%d", count),
-		"-z",
-		"--format="+format,
-		branchName,
-	)
+	args := append([]string{"log", "--first-parent"}, revArgs...)
+	args = append(args, "-z", "--format="+format)
+
+	out, err := r.RunGitCommandRawWithContext(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to walk recent commits on %s: %w", branchName, err)
+		return nil, fmt.Errorf("failed to walk recent commits (%v): %w", revArgs, err)
 	}
 
 	records := splitNulTerminated(out)

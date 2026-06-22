@@ -40,7 +40,7 @@ Per-spec diff-file overlap check turns most stack restacks into "0 validation wo
 
 ### 2. Pre-warm revision cache before `PlanRestack` *(small, free)*
 
-`engine.PlanRestack` does ~3 SHA lookups per branch. After `eng.LoadAllBranchRevisions()` (already exists, called from `log`), all lookups hit cache. Add the call before `PlanRestack` in `actions.PlanRestack` (`internal/actions/restack.go:92`). Same fix benefits `modify` indirectly through `RestackBranches`.
+`engine.PlanRestack` does ~3 SHA lookups per branch. After a batched revision preload (the same pattern used by tree stats), all lookups hit cache. Add the call before `PlanRestack` in `actions.PlanRestack` (`internal/actions/restack.go:92`). Same fix benefits `modify` indirectly through `RestackBranches`.
 
 ### 3. Reuse validation worktree per depth level *(shared with modify.md #2)*
 

@@ -24,14 +24,14 @@ Check the context and look for these indicators:
 **Build/lint/test failures** (user reports build errors, or you see compiler errors):
 - Follow the Build Failure Workflow below
 
-**Branches need restack** (stackit log shows "needs restack" or branches are out of sync):
+**Branches need restack** (stackit tree shows "needs restack" or branches are out of sync):
 - Restack only the affected independent stack:
   - If the affected branch is known, run `stackit restack --branch <affected-branch> --upstack --no-interactive`.
   - If only the stack root is known, run `stackit restack --branch <stack-root> --upstack --no-interactive`.
   - If several independent stack roots are known, run `stackit restack --stacks <root-a>,<root-b> --continue-on-conflict --no-interactive`.
   - If every independent stack should be processed, run `stackit restack --all-stacks --continue-on-conflict --no-interactive`.
 
-**Orphaned branches** (stackit log shows branch with no parent, or parent was merged):
+**Orphaned branches** (stackit tree shows branch with no parent, or parent was merged):
 - Run `stackit sync --no-interactive`
 
 **Uncommitted changes** (git status shows modified/untracked files):
@@ -43,7 +43,7 @@ Check the context and look for these indicators:
     - "I'll commit them" - Wait for user to commit
     - "Discard them" - Reset working tree (destructive)
 
-**Not on tracked branch** (current branch not shown in stackit log with ◉):
+**Not on tracked branch** (current branch not shown in stackit tree with ◉):
 - Guide user to checkout a tracked branch first
 
 ### 2. Rebase Conflict Resolution Workflow
@@ -88,7 +88,7 @@ stackit modify --no-edit --no-interactive
 
 #### Step 6: Verify
 ```bash
-stackit log  # Should show clean tree, no "needs restack"
+stackit tree  # Should show clean tree, no "needs restack"
 <build-command>      # All checks should pass
 ```
 
@@ -182,7 +182,7 @@ If it stops at another failure, repeat from Step 2 (there may be multiple indepe
 ### 4. After Fixes
 
 Verify stack is healthy:
-- `stackit log` shows clean tree
+- `stackit tree` shows clean tree
 - All branches pass checks
 
 ## Key Insight

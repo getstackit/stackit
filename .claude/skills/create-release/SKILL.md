@@ -27,8 +27,8 @@ The deterministic steps live in `.claude/skills/create-release/scripts/`. Use th
 |--------|---------|
 | `preflight.sh` | Verify on main, clean tree, in sync with origin |
 | `last-tag.sh` | Print the latest release tag (or `git describe` fallback) |
-| `gather-prs.sh <tag>` | List PRs merged into main since `<tag>` as JSON |
-| `gather-commits.sh <tag>` | Sanity-check commit list since `<tag>` (catches direct pushes) |
+| `gather-changelog.sh <tag>` | Build stackit from source and print the stack-aware changelog since `<tag>` as JSON (`{commits: [...]}`) — collapses consolidated stacks into one entry listing their constituent PRs |
+| `gather-commits.sh <tag>` | Direct-push backstop: list commits since `<tag>` to spot pushes that bypassed PR review |
 | `bump-version.sh <current> <patch\|minor\|major>` | Compute next semver tag |
 | `tag-and-push.sh <tag>` | Create annotated tag + push to origin |
 | `wait-for-release.sh <tag> [timeout]` | Poll until goreleaser materializes the release (default 1200s; goreleaser typically takes 9-11 minutes) |
@@ -56,15 +56,39 @@ LAST_TAG=$(bash .claude/skills/create-release/scripts/last-tag.sh)
 ### Step 3: Gather Changes
 
 ```bash
-bash .claude/skills/create-release/scripts/gather-prs.sh "$LAST_TAG" > /tmp/stackit-release-prs.json
+bash .claude/skills/create-release/scripts/gather-changelog.sh "$LAST_TAG" > /tmp/stackit-release-changelog.json
 bash .claude/skills/create-release/scripts/gather-commits.sh "$LAST_TAG"
 ```
 
-Read the JSON. If the PR list is empty, stop — nothing to release.
+`gather-changelog.sh` builds stackit from the current source (≈30s) and runs
+`stackit log --json`, so it works even when the installed stackit predates the
+new `log` command.
 
-### Step 4: Categorize PRs (Model Judgment)
+Read the JSON. If `.commits` is empty, stop — nothing to release. Use
+`gather-commits.sh` only as a sanity check: if it shows non-merge commits with no
+corresponding PR (and not part of a stack), flag those as possible direct pushes.
 
-PR titles follow Conventional Commits. Bucket each PR:
+### Step 4: Derive the PR List and Categorize (Model Judgment)
+
+Each entry in `.commits` is either a `regular` commit or a `stack-merge` (a
+consolidated stack). Flatten them into a deduplicated list of merged PRs:
+
+- **`kind: "stack-merge"`** — emit each PR in `stackPRs`, titled from
+  `stackPRTitles` (keyed by PR number). These are the real shipped PRs. Do **not**
+  emit the entry's own `prNumber` — that's the "Merging N PRs" consolidation
+  rollup, not a changelog item. Note `stackScope`: PRs sharing a scope shipped
+  together as one stack.
+- **`kind: "regular"` with `prNumber` set** — emit `(prNumber, message)`.
+- **`kind: "regular"` with no `prNumber`** — skip. These are raw squashed commits
+  already represented by a stack-merge's constituents (or a direct push, which
+  `gather-commits.sh` surfaces separately).
+- **Dedup by PR number** — the same PR can appear via both a merge commit and a
+  consolidation commit.
+
+Flattening stack-merges into `stackPRs` handles rollup-dropping automatically: the
+"Merging N PRs" PR is the stack-merge's own `prNumber`, which we never emit.
+
+Titles follow Conventional Commits. Bucket each PR by its title prefix:
 
 | Bucket | Conventional types |
 |--------|--------------------|
@@ -75,9 +99,10 @@ PR titles follow Conventional Commits. Bucket each PR:
 | Docs | `docs` |
 | Chore | `chore`, `ci`, `test`, `style` |
 
-Drop "Merging N PRs" rollup PRs — they're submission artifacts of stackit's multi-PR submit flow, and their child PRs already appear individually.
-
-Write each PR as a past-tense one-liner ending with `(#NNN).` — matching v0.17.11 / v0.17.13 style. Combine related PRs onto one line when natural (e.g., dependency bumps → `(#NNN, #MMM)`).
+Write each PR as a past-tense one-liner ending with `(#NNN).` — matching v0.17.11 /
+v0.17.13 style. Combine related PRs onto one line when natural (e.g., dependency
+bumps → `(#NNN, #MMM)`). When several PRs share a `stackScope`, prefer grouping
+them adjacently so the stack reads as one feature.
 
 ### Step 5: Pick Highlights (Model Judgment)
 
@@ -200,7 +225,7 @@ Calling the scripts (rather than inlining `gh`/`git` commands) keeps the command
 | Forgetting to push the tag | `tag-and-push.sh` does both atomically |
 | Overwriting goreleaser's release body before it's created | `wait-for-release.sh` polls until ready |
 | Patch bump when adding a user-visible feature | Re-check Step 6 — feat-level changes warrant a minor bump |
-| Including "Merging N PRs" rollups in buckets | Drop them; their children are already listed |
+| Emitting a stack-merge's own `prNumber` (the "Merging N PRs" rollup) | Emit its `stackPRs` children instead; never the consolidation number |
 | Skipping version confirmation | Step 6 requires `AskUserQuestion` every time |
 
 ## Notes
@@ -208,3 +233,4 @@ Calling the scripts (rather than inlining `gh`/`git` commands) keeps the command
 - Pre-1.0: minor bumps can carry breaking changes. Confirm with the user before assuming major.
 - The release workflow is `.github/workflows/release.yml`. If it fails (lint, build, or goreleaser step), the tag still exists — the user must either fix forward (next patch) or delete the tag and re-push.
 - `gh release edit` overwrites the body, not the title or assets. Goreleaser owns those.
+- `gather-changelog.sh` runs `stackit log --json`, whose shape (`commits[]` with `sha`, `message`, `kind`, `prNumber`, `stackSize`, `stackPRs`, `stackPRTitles`, `stackScope`) is a stability contract this skill depends on. Treat field changes in that command as breaking for the release flow.

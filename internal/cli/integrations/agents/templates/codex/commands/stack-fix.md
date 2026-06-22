@@ -33,6 +33,6 @@ Diagnose stack problems and apply the smallest safe repair.
    stackit undo --no-interactive --yes
    ```
 
-5. Verify with `stackit log --no-interactive` and the lightest relevant build/test command.
+5. Verify with `stackit tree --no-interactive` and the lightest relevant build/test command.
 
 Do not delete branches or undo work without explicit user approval.

@@ -43,6 +43,6 @@ Split committed changes on the current branch into another stacked branch.
 
 7. Verify both resulting branches with the detected check command.
 
-8. Finish with `stackit log --no-interactive`.
+8. Finish with `stackit tree --no-interactive`.
 
 Use `stackit undo --no-interactive --yes` only after explicit rollback approval.

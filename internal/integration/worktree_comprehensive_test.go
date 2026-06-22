@@ -649,7 +649,7 @@ func TestWorktreeNavigation(t *testing.T) {
 		shW.Run("up").OnBranch("c")
 	})
 
-	run("log command works in worktree", func(_ *testing.T, sh *TestShell) {
+	run("tree command works in worktree", func(_ *testing.T, sh *TestShell) {
 		sh.WriteFile("feature.txt", "feature").
 			Run("create feature -w -m 'feature branch'")
 
@@ -660,7 +660,7 @@ func TestWorktreeNavigation(t *testing.T) {
 		shW.WriteFile("child.txt", "child").Run("create child -m 'child branch'")
 
 		// Log should show stack
-		shW.Run("log").
+		shW.Run("tree").
 			OutputContains("feature").
 			OutputContains("child")
 	})
@@ -894,7 +894,7 @@ func TestWorktreeUndoOperations(t *testing.T) {
 
 		// Verify stack log shows the branches from main repo
 		sh.Checkout("child")
-		sh.Run("log").
+		sh.Run("tree").
 			OutputContains("feature").
 			OutputContains("child")
 	})

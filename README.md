@@ -50,7 +50,7 @@ Stacks naturally form a tree structure—a single branch can have multiple child
 
 ## Features
 
-- 🌳 **Visual branch tree** — See your entire stack at a glance with `stackit log`
+- 🌳 **Visual branch tree** — See your entire stack at a glance with `stackit tree`
 - 🔄 **Automatic restacking** — Keep all branches up to date when you rebase or modify a parent
 - 📤 **Submit entire stacks** — Push all branches and create/update PRs in one command with progress tracking
 - 🔀 **Smart merging** — Merge stacks bottom-up or squash top-down
@@ -139,7 +139,7 @@ stackit create add-logic -m "feat: implement logic"
 ### 4. Visualize the stack
 See your current position in the stack:
 ```bash
-stackit log
+stackit tree
 ```
 ```
 ● add-logic ← you are here
@@ -245,7 +245,9 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | Command | Description |
 |:---|:---|
 | `stackit state` | Snapshot of the stack, working tree, and any in-progress operation (`--json` for a complete machine-readable snapshot) |
-| `stackit log` | Display the branch tree |
+| `stackit tree` | Display the branch tree |
+| `stackit t` | Display the short branch tree (`stackit tree short`) |
+| `stackit log` | Show trunk commit history with consolidated stacks collapsed |
 | `stackit checkout` | Interactive branch switcher |
 | `stackit up` / `down` | Move to the child or parent branch |
 | `stackit top` / `bottom` | Move to the top or bottom of the stack |
@@ -446,12 +448,15 @@ For machine-readable status, **`stackit state --json`** is the single snapshot t
 read: the current branch and trunk, working-tree state (`staged`/`unstaged`/
 `untracked`), any in-progress `operation` (`rebase`/`merge`) with its
 `conflicted_files`, and the full `stack`. The embedded `stack` is the same shape as
-`stackit log --json` — each branch reports its structure (`parent`, `children`),
+`stackit tree --json` — each branch reports its structure (`parent`, `children`),
 PR/CI state (`pr.state`, `pr.ci_status`, `pr.review_status`), and stack health
 (`needs_restack`, `is_locked`, `is_frozen`, `scope`), with the status booleans
 always present (an explicit `false`, never omitted). One `stackit state --json`
-call replaces combining `git status`, `stackit log --json`, and `stackit info`
+call replaces combining `git status`, `stackit tree --json`, and `stackit info`
 (and `stackit status` still passes through to `git status`).
+
+`stackit log --json` is a separate trunk-history feed for release tooling. It
+emits collapsed recently merged commits, not the branch tree shape.
 
 ---
 

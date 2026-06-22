@@ -11,7 +11,7 @@ Generate or refresh stack and PR descriptions from the current branch history.
 1. Inspect:
 
    ```bash
-   stackit log --no-interactive
+   stackit tree --no-interactive
    git log --oneline --decorate -20
    ```
 

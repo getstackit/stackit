@@ -243,5 +243,5 @@ stackit foreach --no-interactive "<build-command>"
 
 - ✓ All branches build without errors
 - ✓ All branches pass tests
-- ✓ Stack structure is clean (`stackit log --no-interactive` shows proper tree)
+- ✓ Stack structure is clean (`stackit tree --no-interactive` shows proper tree)
 - ✓ No git conflicts or issues

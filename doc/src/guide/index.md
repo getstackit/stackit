@@ -34,7 +34,7 @@ This guide covers core concepts and troubleshooting for stackit. For practical u
 
 ### Essential Commands
 
-- $$stackit log$$ - View your stack
+- $$stackit tree$$ - View your stack
 - $$stackit create$$ - Create a new branch
 - $$stackit submit$$ - Create/update PRs
 - $$stackit sync$$ - Update from trunk

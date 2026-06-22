@@ -107,7 +107,7 @@ func interactivePluckOntoSelection(ctx *app.Context, sourceBranch string) (strin
 
 	// Show interactive selector
 	header := fmt.Sprintf("Select new parent for '%s' (children will be reparented to grandparent)", sourceBranch)
-	selected, err := tui.PromptLogSelect(ctx.Context, ctx.Engine, ctx.GitHub(), tui.LogOptions{
+	selected, err := tui.PromptTreeSelect(ctx.Context, ctx.Engine, ctx.GitHub(), tui.TreeOptions{
 		Style:   "FULL",
 		Exclude: excludedBranches,
 		Logger:  ctx.Logger,

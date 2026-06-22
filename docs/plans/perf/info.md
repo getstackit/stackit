@@ -59,7 +59,7 @@ A single `git rev-list --parents` over the range produces both. Or read `meta.Ge
 
 ### 4. `GetCommitDate` could come from the engine state cache *(trivial)*
 
-The branch SHA is cached after bootstrap. A `git log -1 --format=%ct <sha>` is needed once per HEAD — could be batched into a `branchState` field at rebuild time if `info`/`log` become hot enough to care.
+The branch SHA is cached after bootstrap. A `git log -1 --format=%ct <sha>` is needed once per HEAD — could be batched into a `branchState` field at rebuild time if `info`/`tree` become hot enough to care.
 
 ### 5. Skip the second `eng.GetBranch(branchName)` calls *(trivial)*
 

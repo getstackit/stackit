@@ -27,7 +27,7 @@ func DiscoverStacks(eng engine.BranchReader) ([]MultiStackInfo, error) {
 }
 
 // DiscoverStacksWithSort is like DiscoverStacks but allows specifying the sort strategy.
-// Use SortStrategySmart to match the ordering of `stackit log`.
+// Use SortStrategySmart to match the ordering of `stackit tree`.
 func DiscoverStacksWithSort(eng engine.BranchReader, strategy engine.SortStrategy) ([]MultiStackInfo, error) {
 	independentStacks := engine.DiscoverIndependentStacksWithSort(eng, strategy)
 

@@ -36,7 +36,9 @@ Complete command-line reference for stackit.
 
 Move around your stack efficiently.
 
-- $$stackit log$$ - Display the branch tree
+- $$stackit tree$$ - Display the branch tree
+- $$stackit t$$ - Display the short branch tree
+- $$stackit log$$ - Show trunk commit history with consolidated stacks collapsed
 - $$stackit checkout$$ - Interactive branch switcher
 - $$stackit up$$ / $$stackit down$$ - Move between parent/child branches
 - $$stackit top$$ / $$stackit bottom$$ - Jump to extremes

@@ -103,9 +103,9 @@ Restacked branch3 on branch1.
 		require.Contains(t, output, "Run without --dry-run to execute")
 
 		// Verify branch was NOT actually moved (still has branch1 as parent)
-		logOutput := runCliCommandSuccess(t, binaryPath, scene.Dir, "log")
-		require.Contains(t, logOutput, "branch2")
-		require.Contains(t, logOutput, "branch1")
+		treeOutput := runCliCommandSuccess(t, binaryPath, scene.Dir, "tree")
+		require.Contains(t, treeOutput, "branch2")
+		require.Contains(t, treeOutput, "branch1")
 	})
 
 	t.Run("dry-run requires --onto flag", func(t *testing.T) {

@@ -67,7 +67,7 @@ Use a staged preflight. Do not eagerly gather every git view up front.
 9. Verify after mutation, not before:
 
    ```bash
-   stackit log --no-interactive
+   stackit tree --no-interactive
    ```
 
 10. Report:
@@ -84,5 +84,5 @@ Use a staged preflight. Do not eagerly gather every git view up front.
 - Use `git commit` to create the branch.
 - Use `git checkout -b`.
 - Chain staging and creation in one shell command.
-- Run `git status`, multiple `git diff` variants, `git log`, and `stackit log` all up front when one or two targeted checks would do.
+- Run `git status`, multiple `git diff` variants, `git log`, and `stackit tree` all up front when one or two targeted checks would do.
 - Introduce a fallback branch name after a permission failure. Preserve the pattern-driven command and retry it with approval instead.

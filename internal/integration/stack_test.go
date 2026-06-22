@@ -32,7 +32,7 @@ func TestStackWorkflow(t *testing.T) {
 			Run("create feature-c -m 'Add feature C'").
 			OnBranch("feature-c")
 
-		sh.Run("log --stack").
+		sh.Run("tree --stack").
 			OutputContains("feature-a").
 			OutputContains("feature-b").
 			OutputContains("feature-c")

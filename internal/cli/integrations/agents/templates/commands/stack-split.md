@@ -82,7 +82,7 @@ Get the commits on the current branch that will be analyzed for splitting:
 
 ```bash
 # Get parent branch from stackit metadata
-stackit log --no-interactive
+stackit tree --no-interactive
 
 # Get the diff between parent and current branch HEAD
 # This shows all changes that could be split
@@ -442,7 +442,7 @@ After both branches are verified successfully:
 
 ```bash
 # Show the final stack
-stackit log --no-interactive
+stackit tree --no-interactive
 ```
 
 Present a summary:
@@ -459,7 +459,7 @@ Child branch [<child-branch>]:
   - A hunks, B files
 
 Stack structure:
-<stackit log output>
+<stackit tree output>
 
 Recovery: If anything is wrong, run `stackit undo` to restore.
 

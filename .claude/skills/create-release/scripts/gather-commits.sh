@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sanity-check companion to gather-prs.sh: prints commits on main since the
+# Direct-push backstop for gather-changelog.sh: prints commits on main since the
 # given tag. Non-merge commits first, then merges. Use to spot direct
 # pushes that bypass PR review.
 # Usage: gather-commits.sh <tag>

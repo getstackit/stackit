@@ -50,7 +50,7 @@ type TreeBranchInfo struct {
 	IsCurrent bool   `json:"is_current"`
 	IsTrunk   bool   `json:"is_trunk"`
 	// Status booleans are always emitted (no omitempty) so consumers can rely on
-	// `log --json` as a complete, self-describing status source: an explicit
+	// `tree --json` as a complete, self-describing status source: an explicit
 	// false is unambiguous, whereas an omitted field is indistinguishable from
 	// "this field isn't reported". This is what lets agents read PR/CI status and
 	// needs_restack/locked/frozen from a single command instead of also querying
@@ -290,7 +290,7 @@ func treeActionJSON(ctx *app.Context, opts TreeOptions) error {
 	return nil
 }
 
-// BuildTreeJSON builds the structured log result (branch tree, PR/CI status, and
+// BuildTreeJSON builds the structured tree result (branch tree, PR/CI status, and
 // per-branch health) without printing it, so other commands — e.g. `status` —
 // can embed the same stack snapshot. The CI status prefetch always runs to
 // provide complete data.

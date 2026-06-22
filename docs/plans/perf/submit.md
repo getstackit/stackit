@@ -51,9 +51,9 @@ Local (non-network) overhead is small compared to remote calls. The dominant loc
 
 `internal/actions/submit/submit.go` calls `branch.IsBranchUpToDate()` for every branch in the stack. Route this through `ReadBranchStatuses` or an equivalent batched parent-revision lookup so the submit planning path does one grouped read instead of N individual checks.
 
-### 2. Cache PR check status reads (shared with log.md #4)
+### 2. Cache PR check status reads (shared with tree.md #4)
 
-`prepareBranchesForSubmit` reads existing PR info per branch. If `log full` ran recently or if the user invoked `submit` after a `status`/`log` view, a process-level TTL cache (~30s) on `BatchGetPRChecksStatus` and per-PR info reads would skip redundant GraphQL calls.
+`prepareBranchesForSubmit` reads existing PR info per branch. If `tree full` ran recently or if the user invoked `submit` after a `state`/`tree` view, a process-level TTL cache (~30s) on `BatchGetPRChecksStatus` and per-PR info reads would skip redundant GraphQL calls.
 
 ### 3. Pre-build worktrees for parallel update path *(low impact today, useful for `--restack` path)*
 

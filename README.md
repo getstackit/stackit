@@ -246,6 +246,8 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 |:---|:---|
 | `stackit state` | Snapshot of the stack, working tree, and any in-progress operation (`--json` for a complete machine-readable snapshot) |
 | `stackit tree` | Display the branch tree |
+| `stackit t` | Display the short branch tree (`stackit tree short`) |
+| `stackit log` | Show trunk commit history with consolidated stacks collapsed |
 | `stackit checkout` | Interactive branch switcher |
 | `stackit up` / `down` | Move to the child or parent branch |
 | `stackit top` / `bottom` | Move to the top or bottom of the stack |
@@ -452,6 +454,9 @@ PR/CI state (`pr.state`, `pr.ci_status`, `pr.review_status`), and stack health
 always present (an explicit `false`, never omitted). One `stackit state --json`
 call replaces combining `git status`, `stackit tree --json`, and `stackit info`
 (and `stackit status` still passes through to `git status`).
+
+`stackit log --json` is a separate trunk-history feed for release tooling. It
+emits collapsed recently merged commits, not the branch tree shape.
 
 ---
 

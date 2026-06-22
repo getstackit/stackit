@@ -9,6 +9,7 @@ Commands for moving through your stack and viewing stack state.
 | Command | Description |
 |---------|-------------|
 | `stackit tree --no-interactive` | Display the branch tree visualization |
+| `stackit t --no-interactive` | Display the short branch tree |
 | `stackit tree full --no-interactive` | Show tree with GitHub PR status and CI checks |
 | `stackit checkout [branch] --no-interactive` | Switch to a specific branch |
 

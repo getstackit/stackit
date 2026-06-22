@@ -333,7 +333,7 @@ func TestStateJSON(t *testing.T) {
 		require.NotNil(t, result.Operation.ConflictedFiles)
 		// The staged file was committed by create, so the tree is clean.
 		require.True(t, result.WorkingTree.Clean)
-		// The stack is embedded (same shape as log --json).
+		// The stack is embedded (same shape as tree --json).
 		require.GreaterOrEqual(t, result.Stack.Summary.TotalBranches, 1)
 	})
 

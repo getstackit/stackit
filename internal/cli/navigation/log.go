@@ -2,7 +2,11 @@ package navigation
 
 import (
 	"fmt"
+	"os"
 	"strings"
+
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/spf13/cobra"
 
@@ -57,6 +61,9 @@ field changes as breaking.`,
 				if jsonOut {
 					return printLogJSON(ctx.Output, res)
 				}
+				if ctx.Interactive {
+					return displayLogPager(res)
+				}
 				displayLog(ctx.Output, res)
 				return nil
 			})
@@ -98,9 +105,18 @@ func buildLogRequest(args []string, since string, count int) (trunklog.Request, 
 // web "Recently Merged" panel: one line per collapsed commit, with stack-merges
 // expanding into their constituent PRs.
 func displayLog(out output.Output, res trunklog.Result) {
-	if len(res.Commits) == 0 {
+	rendered := renderLog(res)
+	if rendered == "" {
 		out.Println(output.Dim("No commits."))
 		return
+	}
+	out.Print(rendered)
+	out.Newline()
+}
+
+func renderLog(res trunklog.Result) string {
+	if len(res.Commits) == 0 {
+		return ""
 	}
 
 	var b strings.Builder
@@ -108,7 +124,7 @@ func displayLog(out output.Output, res trunklog.Result) {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(output.Dim(shortSHA(c.SHA)))
+		b.WriteString(output.Yellow(shortSHA(c.SHA)))
 		b.WriteString("  ")
 		b.WriteString(c.Message)
 
@@ -126,20 +142,93 @@ func displayLog(out output.Output, res trunklog.Result) {
 			b.WriteString(output.Dim("(" + strings.Join(meta, " · ") + ")"))
 			for _, pr := range c.StackPRs {
 				b.WriteString("\n    ")
-				line := fmt.Sprintf("#%d", pr)
+				b.WriteString(output.Cyan(fmt.Sprintf("#%d", pr)))
 				if title, ok := c.StackPRTitles[pr]; ok && title != "" {
-					line += " " + title
+					b.WriteString(" ")
+					b.WriteString(output.Dim(title))
 				}
-				b.WriteString(output.Dim(line))
 			}
 		case c.PRNumber != 0 && !strings.Contains(c.Message, fmt.Sprintf("(#%d)", c.PRNumber)):
 			b.WriteString(" ")
-			b.WriteString(output.Dim(fmt.Sprintf("(#%d)", c.PRNumber)))
+			b.WriteString(output.Cyan(fmt.Sprintf("(#%d)", c.PRNumber)))
 		}
 	}
 
-	out.Print(b.String())
-	out.Newline()
+	return b.String()
+}
+
+func displayLogPager(res trunklog.Result) error {
+	content := renderLog(res)
+	if content == "" {
+		content = output.Dim("No commits.")
+	}
+	model := newLogPagerModel(content, len(res.Commits))
+	_, err := tea.NewProgram(model, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout)).Run()
+	return err
+}
+
+type logPagerModel struct {
+	content     string
+	commitCount int
+	viewport    viewport.Model
+	ready       bool
+}
+
+func newLogPagerModel(content string, commitCount int) *logPagerModel {
+	vp := viewport.New()
+	vp.MouseWheelEnabled = true
+	return &logPagerModel{
+		content:     content,
+		commitCount: commitCount,
+		viewport:    vp,
+	}
+}
+
+func (m *logPagerModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m *logPagerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		viewportHeight := max(1, msg.Height-2)
+		if !m.ready {
+			m.viewport = viewport.New(viewport.WithWidth(msg.Width), viewport.WithHeight(viewportHeight))
+			m.viewport.MouseWheelEnabled = true
+			m.viewport.SetContent(m.content)
+			m.ready = true
+		} else {
+			m.viewport.SetWidth(msg.Width)
+			m.viewport.SetHeight(viewportHeight)
+		}
+		return m, nil
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "q", "esc", "ctrl+c":
+			return m, tea.Quit
+		case "g", "home":
+			m.viewport.GotoTop()
+			return m, nil
+		case "G", "end":
+			m.viewport.GotoBottom()
+			return m, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
+}
+
+func (m *logPagerModel) View() tea.View {
+	title := output.Dim(fmt.Sprintf(" Stackit Log | %d commits | q quit, ↑/k ↓/j scroll, f/space page, b back, g/G top/bottom", m.commitCount))
+	content := m.content
+	if m.ready {
+		content = m.viewport.View()
+	}
+	v := tea.NewView(title + "\n\n" + content)
+	v.AltScreen = true
+	return v
 }
 
 // shortSHA truncates a commit SHA to the conventional 7-character form.

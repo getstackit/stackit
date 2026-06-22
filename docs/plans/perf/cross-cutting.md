@@ -44,15 +44,15 @@ The remaining win is broader adoption and a true lazy-by-branch path:
 
 **Files:** `internal/engine/engine_branch_info.go`, `internal/git/commit_info.go`
 
-Per-branch git invocations are the most pervasive N+1 pattern in the codebase. `log` and `submit` already preload revisions via `LoadAllBranchRevisions`. The same pattern needs to extend to:
+Per-branch git invocations are the most pervasive N+1 pattern in the codebase. `tree` and `submit` already batch several revision/stat reads. The same pattern needs to extend to:
 
-- **diff stats**: currently one `git diff --numstat` per branch in `log`.
-- **commit counts/ranges**: normal/full `log` no longer loads commit messages, but still counts commits per branch.
+- **diff stats**: keep branch-tree views on one batched stat path.
+- **commit counts/ranges**: normal/full `tree` no longer loads commit messages, but still needs counts per branch.
 - **diff content** for `info --diff` / `info --patch`: only on demand, but should be cached once computed.
 
-**Proposal:** introduce `eng.PreloadStackStats(branches)` that does one combined git pass and populates a per-branch cache. `log` calls it once; `info`, `submit`, etc., consult the same cache when set.
+**Proposal:** keep expanding `eng.BatchBranchStats(branches)`/future preload helpers so tree calls it once and `info`, `submit`, etc., consult the same cache when set.
 
-**Affects:** log.md #1, info.md #3, absorb.md #4, modify.md #6.
+**Affects:** tree.md #1, info.md #3, absorb.md #4, modify.md #6.
 
 ---
 
@@ -186,7 +186,7 @@ For maximum impact per engineering hour:
 
 1. **#1 (expand lightweight load modes)** — biggest perceived speedup on read-only/common commands.
 2. **#6 (safe validation fast path)** — biggest single win for `modify`, the second most-run hot-path mutating command.
-3. **#3 (preload stack stats)** — turns `log` from O(N git processes) into O(1) on the diff-stats axis.
+3. **#3 (preload stack stats)** — keeps `tree` on an O(1) batched stats path instead of per-branch git processes.
 4. **#8 (`RebuildBranches`)** — fixes the `untrack` N+1 and improves `absorb` / `modify` cleanup.
 5. **#4 (snapshot batching / opt-out)** — small but hits every mutating command.
 6. **#5 (coalesce status checks)** — removes duplicate working-tree scans that still remain outside checkout.
@@ -200,7 +200,7 @@ These are back-of-envelope guesses to size effort vs reward, not measured:
 |---|---|---|
 | #1 expand load modes | read-only/common commands | remaining bootstrap cost (50-500ms depending on branch count) |
 | #6 safe validation fast path | modify, restack, absorb | N x ~300ms worktree creation |
-| #3 preload stack stats | log, info | N x ~5ms `git diff --numstat` processes |
+| #3 preload stack stats | tree, info | N x ~5ms `git diff --numstat` processes |
 | #8 RebuildBranches | untrack, absorb, modify, sync | K x full rebuild on multi-branch operations |
 | #4 snapshot batching | every mutating command | 5-15ms |
 | #5 coalesce Status | create, modify, absorb | duplicate Status walks |
@@ -210,5 +210,5 @@ These are back-of-envelope guesses to size effort vs reward, not measured:
 ## What not to touch
 
 - **`git commit` itself and pre-commit hooks.** The user owns hook cost.
-- **GitHub API latency.** Batching is already in place; further wins are caching with TTL (`log.md`, `submit.md`) which is bounded by correctness.
+- **GitHub API latency.** Batching is already in place; further wins are caching with TTL (`tree.md`, `submit.md`) which is bounded by correctness.
 - **go-git's internals.** Checkout is already a native-Git exception because the go-git checkout/status path was materially slower on large working trees. Keep the broader default as go-git where it is correct and fast enough; do not rewrite go-git internals.

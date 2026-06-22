@@ -77,7 +77,7 @@ func (r *runner) recentCommits(ctx context.Context, revArgs ...string) ([]Recent
 		"%H", "%an", "%aI", "%B",
 	}, commitFieldSep)
 
-	args := append([]string{"log"}, revArgs...)
+	args := append([]string{"log", "--first-parent"}, revArgs...)
 	args = append(args, "-z", "--format="+format)
 
 	out, err := r.RunGitCommandRawWithContext(ctx, args...)

@@ -16,7 +16,7 @@ Stackit manages stacked Git branches: small dependent PRs instead of one large r
 
 ## Asking Policy
 
-Act without asking on local reversible operations: create, modify, absorb, restack of one stack, log, and status.
+Act without asking on local reversible operations: create, modify, absorb, restack of one stack, tree, and status.
 
 Confirm before remote-affecting or destructive operations: submit, merge, restack of all stacks, anything that pushes, and anything that touches GitHub PRs.
 

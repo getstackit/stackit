@@ -32,6 +32,21 @@ func NewTreeCmd() *cobra.Command {
 	return cmd
 }
 
+// NewTreeShortAliasCmd creates the short tree alias used as `st t`.
+func NewTreeShortAliasCmd() *cobra.Command {
+	f := &treeFlags{}
+	cmd := &cobra.Command{
+		Use:          "t",
+		Short:        "Display the short branch tree",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return executeTree(cmd, f, actions.TreeStyleShort)
+		},
+	}
+	addTreeFlags(cmd, f)
+	return cmd
+}
+
 func newTreeFullCmd() *cobra.Command {
 	f := &treeFlags{}
 	cmd := &cobra.Command{

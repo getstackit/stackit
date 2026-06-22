@@ -80,7 +80,7 @@ Invalidate just the affected branch's revision rather than dropping the whole go
 
 ### 6. Pre-warm the revision cache before restack *(trivial)*
 
-Call `LoadAllBranchRevisions` (already exists, used by `log`) before `PlanRestack` so its per-branch SHA lookups are all cache hits. One go-git ref iter vs. N individual lookups.
+Call `LoadAllBranchRevisions` (the same revision-batching pattern used by tree stats) before `PlanRestack` so its per-branch SHA lookups are all cache hits. One go-git ref iter vs. N individual lookups.
 
 ## Validation
 

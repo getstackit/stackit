@@ -173,7 +173,7 @@ chore: update dependencies and refactor errors
 ## Command Reference
 
 For detailed command information, see:
-- **Navigation:** [commands/navigation.md](commands/navigation.md) - log, checkout, up, down, trunk
+- **Navigation:** [commands/navigation.md](commands/navigation.md) - tree, checkout, up, down, trunk
 - **Branch operations:** [commands/branch.md](commands/branch.md) - create, modify, absorb, delete
 - **Stack operations:** [commands/stack.md](commands/stack.md) - restack, submit, sync, foreach
 - **Recovery & utilities:** [commands/recovery.md](commands/recovery.md) - undo, continue, abort, doctor

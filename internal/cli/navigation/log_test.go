@@ -1,8 +1,11 @@
 package navigation
 
 import (
+	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/trunklog"
@@ -40,4 +43,52 @@ func TestBuildLogRequest(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestRenderLogUsesColorAndPlainStructure(t *testing.T) {
+	t.Parallel()
+
+	got := renderLog(trunklog.Result{Commits: []trunklog.Commit{
+		{
+			SHA:      "abcdef1234567890",
+			Message:  "feat: standalone",
+			PRNumber: 42,
+		},
+		{
+			SHA:           "1234567890abcdef",
+			Message:       "Sync output quality",
+			PRNumber:      99,
+			StackSize:     2,
+			StackScope:    "CLI",
+			StackPRs:      []int{10, 11},
+			StackPRTitles: map[int]string{10: "first", 11: "second"},
+		},
+	}})
+
+	require.Contains(t, got, "\x1b[")
+	plain := ansi.Strip(got)
+	require.Equal(t, strings.Join([]string{
+		"abcdef1  feat: standalone (#42)",
+		"1234567  Sync output quality  (#99 · 2 PRs · CLI)",
+		"    #10 first",
+		"    #11 second",
+	}, "\n"), plain)
+}
+
+func TestRenderLogEmpty(t *testing.T) {
+	t.Parallel()
+
+	require.Empty(t, renderLog(trunklog.Result{}))
+}
+
+func TestLogPagerViewUsesAltScreen(t *testing.T) {
+	t.Parallel()
+
+	model := newLogPagerModel("abcdef1  feat: test", 1)
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	view := updated.(*logPagerModel).View()
+
+	require.True(t, view.AltScreen)
+	require.Contains(t, view.Content, "Stackit Log | 1 commits")
+	require.Contains(t, ansi.Strip(view.Content), "abcdef1  feat: test")
 }

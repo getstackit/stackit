@@ -65,6 +65,21 @@ func TestLogCommand(t *testing.T) {
 		require.Contains(t, output, "feature")
 	})
 
+	t.Run("t aliases tree short", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s.CreateBranch("feature")
+
+		shortOutput, err := s.RunCliAndGetOutput("tree", "short")
+		require.NoError(t, err, "tree short command failed: %s", shortOutput)
+
+		aliasOutput, err := s.RunCliAndGetOutput("t")
+		require.NoError(t, err, "t command failed: %s", aliasOutput)
+
+		require.Equal(t, shortOutput, aliasOutput)
+		require.Contains(t, aliasOutput, "main")
+	})
+
 	t.Run("tree shows worktree indicator for stack with worktree", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)

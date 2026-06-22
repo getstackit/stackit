@@ -211,6 +211,32 @@ func TestGetRecentCommitsInRange(t *testing.T) {
 	require.Equal(t, "First past baseline", commits[1].Subject)
 }
 
+func TestGetRecentCommitsInRange_FirstParentOnly(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+	require.NoError(t, scene.Repo.RunGitCommand("tag", "v0"))
+
+	require.NoError(t, scene.Repo.RunGitCommand("checkout", "-b", "feature"))
+	require.NoError(t, scene.Repo.CreateChange("feature", "feature.txt", false))
+	require.NoError(t, scene.Repo.RunGitCommand("add", "."))
+	require.NoError(t, scene.Repo.RunGitCommand("commit", "-m", "feature implementation"))
+
+	require.NoError(t, scene.Repo.RunGitCommand("checkout", "main"))
+	require.NoError(t, scene.Repo.RunGitCommand(
+		"merge", "--no-ff", "feature",
+		"-m", "Merge pull request #42 from owner/feature",
+		"-m", "Feature title (#42)",
+	))
+
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	commits, err := runner.GetRecentCommitsInRange(context.Background(), "v0..main")
+	require.NoError(t, err)
+	require.Len(t, commits, 1)
+	require.Equal(t, "Feature title (#42)", commits[0].Subject)
+	require.Equal(t, 42, commits[0].PRNumber)
+}
+
 func TestGetRecentCommitsInRange_Empty(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)

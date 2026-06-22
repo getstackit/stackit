@@ -11,7 +11,7 @@ Per-command analysis of where `stackit` spends time, with proposed wins. All cla
 | Command | Tier | Page |
 |---|---|---|
 | `co` / `checkout` | deep | [co.md](co.md) |
-| `log` (+ `full`, `short`) | deep | [log.md](log.md) |
+| `tree` (+ `full`, `short`) | deep | [tree.md](tree.md) |
 | `create` | deep | [create.md](create.md) |
 | `modify` | deep | [modify.md](modify.md) |
 | `up`, `down`, `parent`, `children`, `top`, `bottom`, `trunk`, `main` | medium | [navigation.md](navigation.md) |
@@ -36,7 +36,7 @@ See [cross-cutting.md → Recommended attack order](cross-cutting.md#recommended
 
 1. Expand lightweight load modes
 2. Conflict-impossible validation for restack
-3. Preload stack stats for `log`
+3. Preload stack stats for `tree`
 4. `RebuildBranches([]string)` for `untrack` + `absorb` cleanup
 5. Snapshot batching / undo opt-out
 6. Coalesce remaining staging `worktree.Status()` calls

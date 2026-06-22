@@ -124,6 +124,50 @@ paths:
             text/event-stream:
               schema:
                 type: string
+  /api/v1/repos:
+    get:
+      summary: List repositories the server is serving (filtered to the caller).
+      operationId: listRepos
+      responses:
+        "200":
+          description: Repository index.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReposListResponse"
+    post:
+      summary: Onboard a GitHub repository (clone and start serving it).
+      description: >
+        Clones a GitHub repository the authenticated user can access and starts
+        serving it, recorded against that user so only they see it. Requires an
+        authenticated, writable, DB-backed server with a repos root configured;
+        read-only servers refuse with 405.
+      operationId: onboardRepo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardRepoRequest"
+      responses:
+        "201":
+          description: The newly served repository.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoSummary"
+        "400":
+          description: Missing or invalid owner/name.
+        "401":
+          description: Authentication required.
+        "404":
+          description: Repository not found or not accessible to the caller.
+        "405":
+          description: Server is read-only.
+        "409":
+          description: Repository already onboarded.
+        "503":
+          description: Onboarding not available (no auth, database, or repos root).
 components:
   schemas:
     ViewResponse:
@@ -322,4 +366,34 @@ components:
           additionalProperties:
             type: string
         stackScope:
+          type: string
+    RepoSummary:
+      type: object
+      required: [id, displayName, trunk]
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        trunk:
+          type: string
+        currentBranch:
+          type: string
+    ReposListResponse:
+      type: object
+      required: [repos]
+      properties:
+        repos:
+          type: array
+          items:
+            $ref: "#/components/schemas/RepoSummary"
+    OnboardRepoRequest:
+      type: object
+      description: Provide either owner and name, or a github url.
+      properties:
+        owner:
+          type: string
+        name:
+          type: string
+        url:
           type: string

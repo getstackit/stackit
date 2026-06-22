@@ -45,9 +45,11 @@ The container reads its repo list from a JSON file. Mount a volume at `/data`
 | `displayName` | no | Human label shown in the web UI; defaults to `id` |
 | `remote` | no | Git remote name; defaults to `origin` |
 
-You are responsible for cloning the repos into the mounted volume and
-running `stackit init` inside each one before starting the container.
-(Clone-from-URL + auto-init are Phase 4.)
+For DB-backed deployments (`-database-url`), repos can instead be added at
+runtime by logged-in users — the server clones and initializes them for you.
+See [Repository onboarding](#repository-onboarding). You can still pre-seed
+repos by inserting rows directly; a row with an empty `added_by` is shared
+with every authenticated user.
 
 ### Environment
 
@@ -56,6 +58,8 @@ running `stackit init` inside each one before starting the container.
 | `PORT` | Listen port. Honored when `-port` isn't passed explicitly — needed for Railway, Fly, Heroku. Defaults to `8080`. Setting this also implicitly switches the server into "public mode" (binds `0.0.0.0`, requires auth env). |
 | `STACKIT_PUBLIC` | Explicit version of the same signal. Set when you mean to expose the server publicly without `$PORT` (e.g. behind a tunnel). |
 | `STACKIT_READ_ONLY` | Set to `1`/`true` to serve in read-only mode: the submit endpoint is disabled and reads are served anonymously, so a configured repo can be exposed to the public without write access. See [Read-only public mode](#read-only-public-mode). Equivalent to `-read-only`. |
+| `STACKIT_DATABASE_URL` | PostgreSQL connection string. When set, repos are served from the DB (and runtime [onboarding](#repository-onboarding) can persist new ones) instead of the `-cwd` single-repo shortcut. Equivalent to `-database-url`. |
+| `STACKIT_REPOS_ROOT` | Base directory under which per-repo checkouts live (`<root>/<owner>/<name>`). Required for DB-backed serving and onboarding. Equivalent to `-repos-root`. |
 | `STACKIT_BASE_URL` | The canonical https:// URL the server is reachable at. Required when auth is enabled (used to build the OAuth callback URL). |
 | `STACKIT_GITHUB_CLIENT_ID` | GitHub OAuth App client ID. |
 | `STACKIT_GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret. |
@@ -69,7 +73,9 @@ The most useful flags:
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `-repos-config` | _(empty)_ | Path to the JSON repos file. Required for multi-repo mode. |
+| `-database-url` | _(empty)_ | PostgreSQL connection string. Enables DB-backed multi-repo serving and runtime [onboarding](#repository-onboarding). Also settable via `STACKIT_DATABASE_URL`. |
+| `-repos-root` | _(empty)_ | Base directory for per-repo checkouts (`<root>/<owner>/<name>`). Required with `-database-url` and for onboarding. Also settable via `STACKIT_REPOS_ROOT`. |
+| `-cwd` | _(empty)_ | Single-repo shortcut: serve the repo discovered from this path as `default`. Ignored when `-database-url` is set. |
 | `-port` | `8080` | Listen port; overrides `$PORT`. |
 | `-bind` | `127.0.0.1` (or `0.0.0.0` if `$PORT`/`$STACKIT_PUBLIC` are set) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server on a host where the heuristics don't fire. |
 | `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. Loopback origins are **not** allowed implicitly — list each origin you want to accept. |
@@ -150,6 +156,44 @@ A public endpoint needs limits even when it only serves reads:
 The defaults are generous enough for normal use. A deployment fronted by a
 CDN/proxy should ensure `X-Forwarded-For` is set so the per-IP limits key on
 the real client rather than collapsing every visitor onto the proxy IP.
+
+## Repository onboarding
+
+On a DB-backed server, logged-in users can add their own repos through the web
+app (the "Add a repository" form on the picker) or `POST /api/v1/repos`. The
+server:
+
+1. Verifies the **requesting user's** GitHub token can access the repo — not
+   the server's token — so a user can only add repos they can already see. A
+   repo they can't see returns `404` (indistinguishable from "not found", by
+   design).
+2. Clones it to `<repos-root>/<owner>/<name>` using that user's token (passed
+   to git via env, never written to `.git/config`).
+3. Initializes stackit on the fresh checkout (trunk = the GitHub default
+   branch) and starts serving it.
+4. Records the repo against the user's login, so **each user sees only the
+   repos they added**. A repo with an empty `added_by` (operator-seeded) is
+   shared with everyone.
+
+### Requirements
+
+Onboarding is refused (`503`) unless all of these hold; it is also disabled
+(`405`) in read-only mode, since it is a write:
+
+- **Auth is configured** (GitHub OAuth) — the flow acts as the requesting user.
+- **`-database-url`** is set — the new repo is persisted so it survives a
+  restart.
+- **`-repos-root`** is set — somewhere to put the checkout.
+
+### Limitations (current)
+
+- **Trusted users.** The model assumes everyone who can sign in is trusted;
+  the repo ID is `<owner>-<name>` globally, so two users adding the same repo
+  collide (`409`).
+- **No automatic refresh yet.** The server reacts to local filesystem changes
+  but does not `git fetch` on its own, so an onboarded repo only updates when
+  something pulls it locally. A background fetch loop needs durable
+  credentials (a user's session token expires in 30 days), tracked separately.
 
 ## Security posture
 

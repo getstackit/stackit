@@ -77,6 +77,7 @@ func run() error {
 		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
 		authDisabled  = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
 		readOnly      = flag.Bool("read-only", envBool("STACKIT_READ_ONLY"), "Serve in read-only mode: the submit endpoint is disabled so the repo can be exposed publicly without write access. Also set via STACKIT_READ_ONLY.")
+		syncInterval  = flag.Duration("sync-interval", envDuration("STACKIT_SYNC_INTERVAL"), "How often to mirror-fetch managed repos from their remotes so served state stays current. 0 disables the loop. Also set via STACKIT_SYNC_INTERVAL (e.g. 60s).")
 	)
 	flag.Parse()
 
@@ -222,6 +223,7 @@ func run() error {
 		RepoStore:      repoStore,
 		ReposRoot:      absReposRoot,
 		RepoSyncTokens: appProvider,
+		SyncInterval:   *syncInterval,
 	})
 
 	errCh := make(chan error, 1)
@@ -273,6 +275,16 @@ func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
 func envBool(name string) bool {
 	v, err := strconv.ParseBool(os.Getenv(name))
 	return err == nil && v
+}
+
+// envDuration parses the named environment variable as a Go duration (e.g.
+// "60s"). Unset or unparseable values yield 0, which disables the sync loop.
+func envDuration(name string) time.Duration {
+	d, err := time.ParseDuration(strings.TrimSpace(os.Getenv(name)))
+	if err != nil {
+		return 0
+	}
+	return d
 }
 
 func parseCSV(raw string) []string {

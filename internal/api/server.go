@@ -13,6 +13,7 @@ import (
 	"github.com/getstackit/stackit/internal/api/auth"
 	"github.com/getstackit/stackit/internal/api/handlers"
 	"github.com/getstackit/stackit/internal/api/registry"
+	"github.com/getstackit/stackit/internal/api/reposync"
 	"github.com/getstackit/stackit/internal/api/store"
 	githubpkg "github.com/getstackit/stackit/internal/github"
 )
@@ -74,6 +75,11 @@ type ServerConfig struct {
 	// Nil when no GitHub App is configured, in which case onboarding is refused
 	// and the sync loop can only fetch public repos.
 	RepoSyncTokens *githubpkg.AppTokenProvider
+
+	// SyncInterval, when > 0, enables the background sync loop: every interval
+	// each managed repo is mirror-fetched from its remote so the served state
+	// stays current without a local actor. Zero disables it.
+	SyncInterval time.Duration
 }
 
 // AuthConfig is the runtime auth setup. SessionStore must outlive the
@@ -95,6 +101,7 @@ type AuthConfig struct {
 type Server struct {
 	config     ServerConfig
 	httpServer *http.Server
+	syncCancel context.CancelFunc
 }
 
 // NewServer creates a new API server backed by the given registry.
@@ -118,12 +125,35 @@ func (s *Server) Start() error {
 		MaxHeaderBytes:    1 << 20, // 1 MiB
 	}
 
+	s.startSyncLoop()
+
 	mode := "read-write"
 	if s.config.ReadOnly {
 		mode = "read-only"
 	}
 	slog.Info("stackit-web server listening", "url", fmt.Sprintf("http://%s:%d", displayHost(s.config.BindAddr), s.config.Port), "mode", mode)
 	return s.httpServer.ListenAndServe()
+}
+
+// startSyncLoop launches the background repo sync loop when SyncInterval > 0.
+// It runs until Shutdown cancels its context. With no GitHub App configured the
+// loop still runs but can only refresh public repos.
+func (s *Server) startSyncLoop() {
+	if s.config.SyncInterval <= 0 {
+		return
+	}
+	var provider reposync.TokenProvider
+	if s.config.RepoSyncTokens != nil {
+		provider = s.config.RepoSyncTokens
+	} else {
+		slog.Warn("repo sync: no GitHub App configured; only public repos will refresh")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.syncCancel = cancel
+	syncer := reposync.New(s.config.Registry, provider, s.config.SyncInterval)
+	go syncer.Run(ctx)
+	slog.Info("repo sync loop enabled", "interval", s.config.SyncInterval.String())
 }
 
 // buildHandler assembles the full HTTP handler chain (routes + middleware)
@@ -320,6 +350,9 @@ func (s *Server) buildHandler() (http.Handler, error) {
 // Shutdown gracefully stops the server. The registry's watchers and
 // broadcasters are torn down separately by main.go's defer reg.Close().
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.syncCancel != nil {
+		s.syncCancel()
+	}
 	if s.httpServer != nil {
 		return s.httpServer.Shutdown(ctx)
 	}

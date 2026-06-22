@@ -27,6 +27,11 @@ type ServerConfig struct {
 	StaticFS    fs.FS
 	Registry    *registry.Registry
 
+	// SSELimits bounds concurrent Server-Sent Events connections. Zero
+	// fields take the package defaults, which are generous enough for normal
+	// use but cap the blast radius of a public deployment.
+	SSELimits handlers.SSELimits
+
 	// ReadOnly puts the server into a public read-only posture: the
 	// mutating submit route is replaced with a handler that refuses with
 	// 405 so writes are impossible by construction, not just by policy.
@@ -114,7 +119,7 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	stacksHandler := handlers.NewStacksHandler(reg)
 	branchesHandler := handlers.NewBranchesHandler(reg)
 	branchDiffHandler := handlers.NewBranchDiffHandler(reg)
-	eventsHandler := handlers.NewEventsHandler(reg)
+	eventsHandler := handlers.NewEventsHandler(reg, s.config.SSELimits)
 	reposListHandler := handlers.NewReposListHandler(reg)
 
 	// The submit route is the server's only mutating endpoint. In

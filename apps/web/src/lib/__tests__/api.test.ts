@@ -8,6 +8,8 @@ import {
   fetchBranch,
   fetchBranchDiff,
   fetchConfig,
+  onboardRepo,
+  UnauthorizedError,
 } from "../api";
 
 const mockFetch = vi.fn();
@@ -42,6 +44,52 @@ describe("fetchRepos", () => {
     expect(mockFetch).toHaveBeenCalledWith("/api/v1/repos", {
       credentials: "include",
     });
+  });
+});
+
+describe("onboardRepo", () => {
+  it("POSTs owner/name with the CSRF header and returns the summary", async () => {
+    const repo = { id: "octo-widget", displayName: "octo/widget", trunk: "main" };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve(repo),
+    });
+
+    const result = await onboardRepo("octo", "widget");
+    expect(result).toEqual(repo);
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/v1/repos");
+    expect(init.method).toBe("POST");
+    expect(init.headers["X-Stackit-CSRF"]).toBe("1");
+    expect(JSON.parse(init.body)).toEqual({ owner: "octo", name: "widget" });
+  });
+
+  it("throws the server's error message on failure", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      json: () => Promise.resolve({ error: "repository not found or not accessible" }),
+    });
+
+    await expect(onboardRepo("octo", "ghost")).rejects.toThrow(
+      "repository not found or not accessible"
+    );
+  });
+
+  it("throws UnauthorizedError on 401", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: () => Promise.resolve({}),
+    });
+
+    await expect(onboardRepo("octo", "widget")).rejects.toBeInstanceOf(
+      UnauthorizedError
+    );
   });
 });
 

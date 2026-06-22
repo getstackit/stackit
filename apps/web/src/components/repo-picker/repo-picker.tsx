@@ -10,11 +10,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fetchRepos, type RepoSummary } from "@/lib/api";
+import { AddRepository } from "./add-repository";
 
 export function RepoPicker() {
   const router = useRouter();
   const [repos, setRepos] = useState<RepoSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const openRepo = (id: string) =>
+    router.push(`/?repo=${encodeURIComponent(id)}`);
 
   useEffect(() => {
     let active = true;
@@ -54,12 +58,14 @@ export function RepoPicker() {
 
   if (repos.length === 0) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-2 text-sm">
-        <p className="font-medium">No repositories configured</p>
-        <p className="text-muted-foreground">
-          Pass <code className="rounded bg-muted px-1 py-0.5">-repos-config</code>{" "}
-          when starting the server, or use <code className="rounded bg-muted px-1 py-0.5">-cwd .</code> for single-repo mode.
-        </p>
+      <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-6 px-6 py-12">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold">No repositories configured</h1>
+          <p className="text-sm text-muted-foreground">
+            Add a GitHub repository to get started.
+          </p>
+        </header>
+        <AddRepository onAdded={(repo) => openRepo(repo.id)} />
       </div>
     );
   }
@@ -80,7 +86,7 @@ export function RepoPicker() {
             <button
               type="button"
               data-testid={`repo-card-${repo.id}`}
-              onClick={() => router.push(`/?repo=${encodeURIComponent(repo.id)}`)}
+              onClick={() => openRepo(repo.id)}
               className="block w-full text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
             >
               <Card>
@@ -105,6 +111,8 @@ export function RepoPicker() {
           </li>
         ))}
       </ul>
+
+      <AddRepository onAdded={(repo) => openRepo(repo.id)} />
     </div>
   );
 }

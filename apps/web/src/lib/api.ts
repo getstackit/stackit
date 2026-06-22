@@ -216,6 +216,34 @@ export function fetchRepos(): Promise<ReposListResponse> {
   return fetchAPI<ReposListResponse>("/api/v1/repos");
 }
 
+// onboardRepo asks the server to clone a GitHub repo and start serving it,
+// returning the newly served repo's summary. The caller's session must be able
+// to access owner/name; the server verifies that and 404s otherwise.
+export async function onboardRepo(owner: string, name: string): Promise<RepoSummary> {
+  const res = await fetch(`${API_BASE}/api/v1/repos`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      [CSRF_HEADER]: CSRF_HEADER_VALUE,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ owner, name }),
+  });
+  if (res.status === 401) {
+    throw new UnauthorizedError();
+  }
+  if (!res.ok) {
+    // The server returns {"error": "..."} for handled failures; surface it.
+    const detail = await res.json().catch(() => null);
+    const message =
+      detail && typeof detail.error === "string"
+        ? detail.error
+        : `API error: ${res.status} ${res.statusText}`;
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 export function fetchView(repoId: string): Promise<ViewResponse> {
   return fetchAPI<ViewResponse>(repoPath(repoId, "view"));
 }

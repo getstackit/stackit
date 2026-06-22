@@ -55,6 +55,7 @@ running `stackit init` inside each one before starting the container.
 |-----|---------|
 | `PORT` | Listen port. Honored when `-port` isn't passed explicitly — needed for Railway, Fly, Heroku. Defaults to `8080`. Setting this also implicitly switches the server into "public mode" (binds `0.0.0.0`, requires auth env). |
 | `STACKIT_PUBLIC` | Explicit version of the same signal. Set when you mean to expose the server publicly without `$PORT` (e.g. behind a tunnel). |
+| `STACKIT_READ_ONLY` | Set to `1`/`true` to serve in read-only mode: the submit endpoint is disabled and reads are served anonymously, so a configured repo can be exposed to the public without write access. See [Read-only public mode](#read-only-public-mode). Equivalent to `-read-only`. |
 | `STACKIT_BASE_URL` | The canonical https:// URL the server is reachable at. Required when auth is enabled (used to build the OAuth callback URL). |
 | `STACKIT_GITHUB_CLIENT_ID` | GitHub OAuth App client ID. |
 | `STACKIT_GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret. |
@@ -73,6 +74,7 @@ The most useful flags:
 | `-bind` | `127.0.0.1` (or `0.0.0.0` if `$PORT`/`$STACKIT_PUBLIC` are set) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server on a host where the heuristics don't fire. |
 | `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. Loopback origins are **not** allowed implicitly — list each origin you want to accept. |
 | `-auth-disabled` | `false` | Skip the GitHub OAuth gate. **Refused** when `$PORT` or `$STACKIT_PUBLIC` is set. Use only for local dev or when fronted by platform auth (Tailscale, Cloudflare Access). |
+| `-read-only` | `false` | Serve in read-only mode: disable the submit endpoint and serve reads anonymously. Safe to expose publicly. See [Read-only public mode](#read-only-public-mode). Also settable via `STACKIT_READ_ONLY`. |
 
 Run `stackit-server -h` inside the container for the full list.
 
@@ -93,6 +95,62 @@ Run `stackit-server -h` inside the container for the full list.
    ```
 5. Boot the server. The startup log prints `auth: GitHub OAuth gate enabled` when configured correctly.
 
+## Read-only public mode
+
+Read-only mode turns the configured repos into a publicly viewable
+dashboard with no write access. Enable it with `-read-only` (or
+`STACKIT_READ_ONLY=1`).
+
+In this mode:
+
+- **The submit endpoint is removed.** `POST .../submit` — the server's only
+  mutating route — is replaced with a handler that refuses with `405`. No
+  code path can push branches or touch GitHub, regardless of who calls it or
+  whether auth is configured. This is the key difference from
+  `-auth-disabled`, which opens reads to everyone *and* leaves the write
+  endpoint reachable.
+- **Reads are anonymous.** The session gate is skipped, so anyone can load
+  the stacks, branches, commits, diffs, and PR/CI status. The web app
+  detects this via `/api/v1/config` and hides the submit button and the
+  login prompt, showing a read-only banner instead.
+- **The operator identity is withheld.** `currentUser` is omitted and the
+  per-request GitHub "who am I" lookup is skipped, so anonymous visitors
+  can't learn who runs the server and can't spend the operator's GitHub
+  rate limit.
+
+### What is exposed
+
+Everything needed to render the dashboard: branch structure, commit
+SHAs/messages/authors (git author *name* only, no email), diff patches, and
+PR/CI status. For a public repo this is the same information already visible
+on GitHub. **Do not point read-only mode at a private repo you don't intend
+to make public** — the diff and branch data will be served to anyone who can
+reach the port.
+
+Not exposed: filesystem paths, GitHub tokens, session data, local config
+values, or author emails.
+
+### Still required for a public deployment
+
+- **TLS termination** in front (the server speaks plain HTTP).
+- The abuse bounds below stay on in read-only mode — keep them.
+
+### Abuse bounds (on by default)
+
+A public endpoint needs limits even when it only serves reads:
+
+- **Per-IP rate limiting** on the API (token bucket; `429` with
+  `Retry-After` when exceeded). Honors `X-Forwarded-For` from a trusted
+  proxy.
+- **Concurrent SSE caps** (global + per-IP) on `/events`, with a bounded
+  connection lifetime and a keepalive so dead clients are reclaimed.
+- **Branch-diff throttle** bounding concurrent `git` subprocesses; excess
+  requests queue rather than fan out.
+
+The defaults are generous enough for normal use. A deployment fronted by a
+CDN/proxy should ensure `X-Forwarded-For` is set so the per-IP limits key on
+the real client rather than collapsing every visitor onto the proxy IP.
+
 ## Security posture
 
 The container is safe to run on a public hostname **only** behind:
@@ -101,11 +159,15 @@ The container is safe to run on a public hostname **only** behind:
    proxy in front (Railway, Fly, Cloudflare, Caddy, nginx) must terminate
    HTTPS. The `Strict-Transport-Security` header the server emits assumes
    this.
-2. **An authentication gateway** until in-process auth lands. Use Tailscale,
-   Cloudflare Access, an oauth2-proxy sidecar, or similar. Without one,
-   any caller can read every repo's branches/diffs and trigger
+2. **An access control** for write-capable deployments. Either the built-in
+   GitHub OAuth gate (`STACKIT_GITHUB_*` + an allowlist) or an external
+   gateway (Tailscale, Cloudflare Access, an oauth2-proxy sidecar). Without
+   one, any caller can trigger
    `POST /api/v1/repos/{id}/stacks/{branch}/submit`, which pushes branches
-   and creates PRs using the container's GitHub credentials.
+   and creates PRs using the container's GitHub credentials. To expose a
+   repo publicly *without* this risk, run in
+   [read-only mode](#read-only-public-mode), which removes the write
+   endpoint entirely.
 
 Built-in security controls (the server hardening pass that lands with
 this doc revision and follow-on PRs):
@@ -123,6 +185,12 @@ this doc revision and follow-on PRs):
   `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `HSTS` with a
   two-year max-age, and a CSP locked to `'self'` for scripts/connects.
 - CORS allowlist is exact-match; no implicit loopback bypass.
+- Per-IP request rate limiting (token bucket), concurrent-SSE caps
+  (global + per-IP) with bounded lifetime, and a branch-diff concurrency
+  throttle — abuse bounds for a public deployment, on by default.
+- Read-only mode (`-read-only`) removes the write endpoint and serves reads
+  anonymously while withholding the operator identity — see
+  [Read-only public mode](#read-only-public-mode).
 - Branch names supplied via path/query are validated against the same
   rules `stackit` enforces locally before reaching git.
 - GitHub OAuth gate via `STACKIT_GITHUB_*` + an allowlist. Every

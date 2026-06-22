@@ -289,7 +289,7 @@ func (h *InteractiveMergeEventHandler) PromptStacks(availableStacks []mergeActio
 		// Add "Done" option if at least one stack is selected
 		if len(selectedStacks) > 0 {
 			doneLabel := fmt.Sprintf("✓ Done — Merge %d selected stack(s)", len(selectedStacks))
-			options = append(options, tui.SelectOption{Label: doneLabel, Value: "done"})
+			options = append(options, tui.SelectOption{Label: doneLabel, Value: mergeStrategyDone})
 		}
 
 		// Add unselected stacks
@@ -311,7 +311,7 @@ func (h *InteractiveMergeEventHandler) PromptStacks(availableStacks []mergeActio
 			return nil, err
 		}
 
-		if selected == "done" {
+		if selected == mergeStrategyDone {
 			break
 		}
 
@@ -334,14 +334,14 @@ func (h *InteractiveMergeEventHandler) PromptStrategy(plan *mergeAction.Plan, re
 	// Build options based on recommended strategy
 	if recommended == mergeAction.StrategyShip {
 		strategyOptions = []tui.SelectOption{
-			{Label: "🔀 Ship — Create single PR with all stack commits for atomic merge (recommended)", Value: "ship"},
-			{Label: "🔄 Bottom-up — Merge PRs one at a time from bottom", Value: "bottom-up"},
+			{Label: "🔀 Ship — Create single PR with all stack commits for atomic merge (recommended)", Value: mergeStrategyShip},
+			{Label: "🔄 Bottom-up — Merge PRs one at a time from bottom", Value: mergeStrategyBottomUp},
 		}
 		defaultIndex = 0
 	} else {
 		strategyOptions = []tui.SelectOption{
-			{Label: "🔄 Bottom-up — Merge PRs one at a time from bottom (recommended)", Value: "bottom-up"},
-			{Label: "🔀 Ship — Create single PR with all stack commits for atomic merge", Value: "ship"},
+			{Label: "🔄 Bottom-up — Merge PRs one at a time from bottom (recommended)", Value: mergeStrategyBottomUp},
+			{Label: "🔀 Ship — Create single PR with all stack commits for atomic merge", Value: mergeStrategyShip},
 		}
 		defaultIndex = 0
 	}
@@ -361,9 +361,9 @@ func (h *InteractiveMergeEventHandler) PromptStrategy(plan *mergeAction.Plan, re
 	var wait bool
 
 	switch selectedStrategy {
-	case "bottom-up":
+	case mergeStrategyBottomUp:
 		strategy = mergeAction.StrategyBottomUp
-	case "ship":
+	case mergeStrategyShip:
 		strategy = mergeAction.StrategyShip
 		// Default to waiting (matches `merge ship --wait=true` CLI default)
 		wait = true
@@ -415,7 +415,7 @@ func (h *InteractiveMergeEventHandler) PromptPostMerge(hasUncommittedChanges boo
 
 	options := []tui.SelectOption{
 		{Label: trunkLabel, Value: "trunk-sync"},
-		{Label: "Done", Value: "done"},
+		{Label: "Done", Value: mergeStrategyDone},
 	}
 
 	selected, err := tui.PromptSelect("What would you like to do in your main workspace?", options, 0)

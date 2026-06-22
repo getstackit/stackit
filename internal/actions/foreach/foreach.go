@@ -17,6 +17,8 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
+const executionCompleteMsg = "Execution complete"
+
 // Options contains options for the foreach command
 type Options struct {
 	Command          string
@@ -273,7 +275,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 		// With --no-fail-fast, continue and return nil (errors are in results)
 		handler.OnEvent(CompletionEvent{
 			Success: true,
-			Message: "Execution complete",
+			Message: executionCompleteMsg,
 			Results: allResults,
 		})
 		return nil
@@ -281,7 +283,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 
 	handler.OnEvent(CompletionEvent{
 		Success: true,
-		Message: "Execution complete",
+		Message: executionCompleteMsg,
 		Results: allResults,
 	})
 	return nil
@@ -295,7 +297,7 @@ func foreachParallel(ctx *app.Context, opts Options, branches engine.Branches, h
 		if !opts.FailFast {
 			handler.OnEvent(CompletionEvent{
 				Success: true,
-				Message: "Execution complete",
+				Message: executionCompleteMsg,
 				Results: sortedResults,
 			})
 			return nil
@@ -310,7 +312,7 @@ func foreachParallel(ctx *app.Context, opts Options, branches engine.Branches, h
 
 	handler.OnEvent(CompletionEvent{
 		Success: true,
-		Message: "Execution complete",
+		Message: executionCompleteMsg,
 		Results: sortedResults,
 	})
 	return nil
@@ -362,7 +364,7 @@ func foreachFindFirstFailure(ctx *app.Context, opts Options, branches engine.Bra
 
 	handler.OnEvent(CompletionEvent{
 		Success: true,
-		Message: "Execution complete",
+		Message: executionCompleteMsg,
 		Results: allResults,
 	})
 	return nil

@@ -15,9 +15,9 @@ func promptBranchName(existingNames []string, originalBranchName string, branchN
 	}
 	defaultName := originalBranchName
 	if slices.Contains(existingNames, defaultName) {
-		defaultName = originalBranchName + "_split"
+		defaultName = originalBranchName + splitSuffix
 		for slices.Contains(existingNames, defaultName) {
-			defaultName += "_split"
+			defaultName += splitSuffix
 		}
 	}
 

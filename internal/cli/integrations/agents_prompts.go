@@ -39,8 +39,8 @@ func selectInstallTargets(baseDir string, formats []string) ([]agentInstallTarge
 	selected, err := promptMultiSelectWithDefault(
 		"Which skill format(s) would you like to install?",
 		[]string{
-			"Claude Code - Claude Code CLI skill format (~/.claude/skills/stackit)",
-			"Codex - Codex skill format (~/.codex/skills/stackit)",
+			claudeFormatLabel,
+			codexFormatLabel,
 		},
 		preSelected,
 	)
@@ -263,9 +263,9 @@ func promptAndInstallWorkflowBlock(repoRoot string, force bool) (bool, string, e
 		selected, err := promptSelect(
 			"Both CLAUDE.md and AGENTS.md exist. Which file should receive the stacking workflow block?",
 			[]tui.SelectOption{
-				{Label: "Skip (don't add workflow block)", Value: "skip"},
-				{Label: "CLAUDE.md", Value: "CLAUDE.md"},
-				{Label: "AGENTS.md", Value: "AGENTS.md"},
+				{Label: "Skip (don't add workflow block)", Value: skipValue},
+				{Label: claudeMDFile, Value: claudeMDFile},
+				{Label: agentsMDFile, Value: agentsMDFile},
 			},
 			0,
 		)
@@ -276,7 +276,7 @@ func promptAndInstallWorkflowBlock(repoRoot string, force bool) (bool, string, e
 		if err != nil {
 			return false, "", fmt.Errorf("failed to prompt for file selection: %w", err)
 		}
-		if selected == "skip" {
+		if selected == skipValue {
 			return false, "", nil
 		}
 		targetFile = selected
@@ -330,12 +330,12 @@ func promptAndInstallWorkflowBlock(repoRoot string, force bool) (bool, string, e
 		if !confirmed {
 			return false, "", nil
 		}
-		targetFile = "CLAUDE.md"
+		targetFile = claudeMDFile
 	}
 
 	// Get the file info for the selected file
 	var fileInfo agentsFileInfo
-	if targetFile == "CLAUDE.md" {
+	if targetFile == claudeMDFile {
 		fileInfo = claude
 	} else {
 		fileInfo = agents

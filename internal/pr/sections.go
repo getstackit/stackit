@@ -89,12 +89,12 @@ func countStackBranches(branch string, eng engine.BranchReader) int {
 // ShouldShowNavigation determines if navigation should be displayed based on options.
 func ShouldShowNavigation(opts NavigationOptions, branch string, eng engine.BranchReader) bool {
 	switch opts.When {
-	case "never":
+	case config.NavigationWhenNever:
 		return false
-	case "multiple":
+	case config.NavigationWhenMultiple:
 		// Only show navigation if there are 2 or more branches in the stack
 		return countStackBranches(branch, eng) >= 2
-	case "always":
+	case config.NavigationWhenAlways:
 		fallthrough
 	default:
 		return true

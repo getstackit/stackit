@@ -9,7 +9,7 @@ import (
 )
 
 func (r *runner) StashPush(ctx context.Context, message string) (string, error) {
-	args := []string{"stash", "push", "-u"}
+	args := []string{"stash", gitCmdPush, "-u"}
 	if message != "" {
 		args = append(args, "-m", message)
 	}
@@ -29,7 +29,7 @@ func (r *runner) StashPushStaged(ctx context.Context, message string) (string, e
 		return "", fmt.Errorf("git stash --staged requires Git 2.35 or later; please upgrade your Git installation")
 	}
 
-	args := []string{"stash", "push", "--staged"}
+	args := []string{"stash", gitCmdPush, "--staged"}
 	if message != "" {
 		args = append(args, "-m", message)
 	}

@@ -99,14 +99,14 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	// Generate new branch name
 	newBranchName := opts.Name
 	if newBranchName == "" {
-		newBranchName = branchToSplit.GetName() + "_split"
+		newBranchName = branchToSplit.GetName() + splitSuffix
 	}
 	allBranches := eng.AllBranches()
 	branchNames := allBranches.Names()
 	// Ensure unique name (only if we're auto-generating)
 	if opts.Name == "" {
 		for slices.Contains(branchNames, newBranchName) {
-			newBranchName += "_split"
+			newBranchName += splitSuffix
 		}
 	} else if slices.Contains(branchNames, newBranchName) {
 		return nil, fmt.Errorf("branch %s already exists", newBranchName)

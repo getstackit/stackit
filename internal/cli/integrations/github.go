@@ -35,7 +35,7 @@ func newGithubInstallCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "install",
+		Use:   cmdInstall,
 		Short: "Install GitHub Action workflows for stackit",
 		Long: `Install GitHub Action workflow for stackit CI checks.
 

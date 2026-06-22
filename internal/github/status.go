@@ -21,6 +21,9 @@ const (
 	checkStateError               = "ERROR"
 	checkStatePending             = "PENDING"
 	checkStatusInProgress         = "IN_PROGRESS"
+	checkStatusCompleted          = "COMPLETED"
+	checkConclusionSuccess        = "SUCCESS"
+	checkTypeCheckRun             = "CheckRun"
 
 	// Stackit check names - these checks are excluded from CI status evaluation
 	// because they are part of stackit's own workflow and expected to fail
@@ -89,8 +92,8 @@ func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner,
 	query := buildPRStatusQuery(aliasMap)
 
 	variables := map[string]any{
-		"owner": owner,
-		"repo":  repo,
+		graphqlVarOwner: owner,
+		graphqlVarRepo:  repo,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
@@ -315,7 +318,7 @@ func parseCheckNode(n map[string]any) *CheckDetail {
 	}
 
 	switch typeName {
-	case "CheckRun":
+	case checkTypeCheckRun:
 		if name, ok := n["name"].(string); ok {
 			detail.Name = name
 		}
@@ -337,7 +340,7 @@ func parseCheckNode(n map[string]any) *CheckDetail {
 		if context, ok := n["context"].(string); ok {
 			detail.Name = context
 		}
-		detail.Status = "COMPLETED"
+		detail.Status = checkStatusCompleted
 		if state, ok := n["state"].(string); ok {
 			state = strings.ToUpper(state)
 			switch state {
@@ -345,8 +348,8 @@ func parseCheckNode(n map[string]any) *CheckDetail {
 				detail.Status = checkStatusInProgress
 			case checkStateFailure, checkStateError:
 				detail.Conclusion = checkConclusionFailure
-			case "SUCCESS":
-				detail.Conclusion = "SUCCESS"
+			case checkConclusionSuccess:
+				detail.Conclusion = checkConclusionSuccess
 			}
 		}
 		if createdAt, ok := n["createdAt"].(string); ok {

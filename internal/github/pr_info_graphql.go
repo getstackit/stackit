@@ -58,8 +58,8 @@ func buildPRInfoByBranchQuery(owner, repo string, branches []string) (string, ma
 	b.WriteString("}\n")
 
 	variables := map[string]any{
-		"owner": owner,
-		"repo":  repo,
+		graphqlVarOwner: owner,
+		graphqlVarRepo:  repo,
 	}
 	for i, name := range branches {
 		variables[fmt.Sprintf("b%d", i)] = "refs/heads/" + name

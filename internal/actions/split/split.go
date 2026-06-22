@@ -14,6 +14,9 @@ import (
 // Style specifies the split mode
 type Style string
 
+// splitSuffix is appended to a branch name when generating a default split branch name.
+const splitSuffix = "_split"
+
 const (
 	// StyleCommit splits by selecting commit points
 	StyleCommit Style = "commit"

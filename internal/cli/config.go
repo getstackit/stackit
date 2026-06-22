@@ -53,6 +53,7 @@ const (
 	keyNavigationLocation   = "navigation.location"
 	keyNavigationShowMerged = "navigation.showMerged"
 	valueNotSet             = "(not set)"
+	cmdReset                = "reset"
 )
 
 // newConfigCmd creates the config command
@@ -644,7 +645,7 @@ layered configuration system:
 // newConfigResetCmd creates the config reset command
 func newConfigResetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "reset",
+		Use:   cmdReset,
 		Short: "Reset all personal configuration overrides",
 		Long: `Reset all personal configuration overrides, reverting to team project config or defaults.
 

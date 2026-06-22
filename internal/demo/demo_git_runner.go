@@ -17,8 +17,8 @@ type demoGitRunner struct {
 // NewDemoGitRunner creates a new demo git runner with simulated data.
 func NewDemoGitRunner() git.Runner {
 	return &demoGitRunner{
-		trunk:         "main",
-		currentBranch: "main",
+		trunk:         demoTrunkBranch,
+		currentBranch: demoTrunkBranch,
 		branches:      demoBranches,
 	}
 }

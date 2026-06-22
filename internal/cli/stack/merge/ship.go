@@ -33,8 +33,8 @@ func NewShipCmd(postMergeHandler PostMergeHandler) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "ship",
-		Aliases: []string{"squash"},
+		Use:     mergeStrategyShip,
+		Aliases: []string{mergeStrategySquash},
 		Short:   "Consolidate all stack branches into a single PR and merge atomically",
 		Long: `Consolidate all branches in the stack into a single PR for atomic merging.
 

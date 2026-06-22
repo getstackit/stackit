@@ -10,6 +10,9 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 )
 
+// cmdInstall is the subcommand name shared across all integrations.
+const cmdInstall = "install"
+
 // InstallGitHub installs GitHub Actions workflow for stackit CI checks.
 // This is a convenience wrapper for use during init.
 // When called from init, skipIfExists is true to avoid errors if workflows already exist.
@@ -55,18 +58,18 @@ func InstallAgents(runner git.Runner, force bool, version string, out io.Writer)
 func autoDetectFormats() []string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return []string{"claude", "codex"}
+		return []string{string(agentSkillFormatClaude), string(agentSkillFormatCodex)}
 	}
 
 	var formats []string
 	if dirExists(filepath.Join(homeDir, ".claude")) {
-		formats = append(formats, "claude")
+		formats = append(formats, string(agentSkillFormatClaude))
 	}
 	if dirExists(filepath.Join(homeDir, ".codex")) {
-		formats = append(formats, "codex")
+		formats = append(formats, string(agentSkillFormatCodex))
 	}
 	if len(formats) == 0 {
-		formats = []string{"claude", "codex"}
+		formats = []string{string(agentSkillFormatClaude), string(agentSkillFormatCodex)}
 	}
 	return formats
 }

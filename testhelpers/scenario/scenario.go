@@ -31,6 +31,12 @@ var (
 	globalRunnerMu        sync.RWMutex
 )
 
+// flagNoInteractive is the CLI flag used to suppress interactive prompts in tests.
+const flagNoInteractive = "--no-interactive"
+
+// branchParent is the default parent branch name used in diamond stack fixtures.
+const branchParent = "parent"
+
 // SetGlobalInProcessRunner sets the global in-process runner in a thread-safe way.
 func SetGlobalInProcessRunner(runner InProcessRunner) {
 	globalRunnerMu.Lock()
@@ -337,7 +343,7 @@ func (s *Scenario) RunCli(args ...string) *Scenario {
 		s.T.Fatal("BinaryPath not set. Call WithBinaryPath or WithInProcess(true) first.")
 	}
 	// Add --no-interactive to all CLI commands in tests
-	fullArgs := append([]string{"--no-interactive"}, args...)
+	fullArgs := append([]string{flagNoInteractive}, args...)
 	cmd := exec.Command(s.BinaryPath, fullArgs...)
 	cmd.Dir = s.Scene.Dir
 	cmd.Env = os.Environ()
@@ -366,7 +372,7 @@ func (s *Scenario) RunCliAndGetOutput(args ...string) (string, error) {
 		return "", fmt.Errorf("BinaryPath not set")
 	}
 	// Add --no-interactive to all CLI commands in tests
-	fullArgs := append([]string{"--no-interactive"}, args...)
+	fullArgs := append([]string{flagNoInteractive}, args...)
 	cmd := exec.Command(s.BinaryPath, fullArgs...)
 	cmd.Dir = s.Scene.Dir
 	cmd.Env = os.Environ()
@@ -399,7 +405,7 @@ func (s *Scenario) RunExpectError(args ...string) *Scenario {
 		s.T.Fatal("BinaryPath not set")
 	}
 	// Add --no-interactive to all CLI commands in tests
-	fullArgs := append([]string{"--no-interactive"}, args...)
+	fullArgs := append([]string{flagNoInteractive}, args...)
 	cmd := exec.Command(s.BinaryPath, fullArgs...)
 	cmd.Dir = s.Scene.Dir
 	cmd.Env = os.Environ()
@@ -479,8 +485,8 @@ func (s *Scenario) WithLinearStack(names ...string) *Scenario {
 func (s *Scenario) WithDiamondStack() *Scenario {
 	s.T.Helper()
 	return s.WithStack(map[string]string{
-		"parent": s.Engine.Trunk().GetName(),
-		"child1": "parent",
-		"child2": "parent",
+		branchParent: s.Engine.Trunk().GetName(),
+		"child1":     branchParent,
+		"child2":     branchParent,
 	})
 }

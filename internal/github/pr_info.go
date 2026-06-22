@@ -69,7 +69,7 @@ func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 func getPRInfoForBranch(ctx context.Context, client *github.Client, owner, repo, branchName string) (*github.PullRequest, error) {
 	prs, _, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
 		Head:  fmt.Sprintf("%s:%s", owner, branchName),
-		State: "all",
+		State: prStateAll,
 		ListOptions: github.ListOptions{
 			PerPage: 1,
 		},

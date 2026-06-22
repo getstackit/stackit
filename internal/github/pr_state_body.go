@@ -23,8 +23,8 @@ func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, ow
 
 	query := buildPRStateBodyQuery(unique)
 	variables := map[string]any{
-		"owner": owner,
-		"repo":  repo,
+		graphqlVarOwner: owner,
+		graphqlVarRepo:  repo,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)

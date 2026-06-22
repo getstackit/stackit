@@ -35,7 +35,7 @@ func newAgentInstallCmd(version string) *cobra.Command {
 	var formats []string
 
 	cmd := &cobra.Command{
-		Use:   "install",
+		Use:   cmdInstall,
 		Short: "Install agent integration files",
 		Long: `Install agent integration files for AI assistants.
 
@@ -169,12 +169,18 @@ func printStackSkillList(out io.Writer, title, prefix string) {
 	}
 }
 
+// Skill name constants for stack skill summaries used in help output.
+const (
+	skillStackCreate = "stack-create"
+	skillStackSync   = "stack-sync"
+)
+
 var stackSkillSummaries = []struct {
 	name        string
 	description string
 }{
 	{"stack-absorb", "Intelligently absorb changes into commits"},
-	{"stack-create", "Create branch with auto-naming"},
+	{skillStackCreate, "Create branch with auto-naming"},
 	{"stack-describe", "Generate PR descriptions from git history"},
 	{"stack-extract", "Extract commits/files to independent branch"},
 	{"stack-fix", "Diagnose and fix stack issues"},
@@ -187,7 +193,7 @@ var stackSkillSummaries = []struct {
 	{"stack-split", "Split changes between current and new child branch"},
 	{"stack-status", "View stack state and health"},
 	{"stack-submit", "Submit PRs with generated descriptions"},
-	{"stack-sync", "Sync with trunk and cleanup"},
+	{skillStackSync, "Sync with trunk and cleanup"},
 	{"stack-tidy", "Clean up fixup/WIP commits across the stack"},
 	{"stack-verify", "Verify stack health by running checks"},
 }

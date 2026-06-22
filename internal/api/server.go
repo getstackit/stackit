@@ -18,6 +18,9 @@ import (
 	githubpkg "github.com/getstackit/stackit/internal/github"
 )
 
+// apiPathPrefix is the default URL path prefix for API routes.
+const apiPathPrefix = "/api"
+
 // ServerConfig holds configuration for the API server.
 type ServerConfig struct {
 	// BindAddr is the host/IP to listen on. Empty means "all interfaces".
@@ -361,7 +364,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 func normalizeAPIPrefixes(prefixes []string) []string {
 	if len(prefixes) == 0 {
-		return []string{"/api/v1", "/api"}
+		return []string{apiPathPrefix + "/v1", apiPathPrefix}
 	}
 
 	seen := make(map[string]struct{}, len(prefixes))
@@ -387,7 +390,7 @@ func normalizeAPIPrefixes(prefixes []string) []string {
 	}
 
 	if len(normalized) == 0 {
-		return []string{"/api/v1", "/api"}
+		return []string{apiPathPrefix + "/v1", apiPathPrefix}
 	}
 	return normalized
 }

@@ -13,6 +13,9 @@ import (
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
+// answerYes is the prompt value returned when the user selects "Yes".
+const answerYes = "yes"
+
 // NewTrackUI creates a handler for track operations.
 // Caller must defer handler.Cleanup() to restore terminal on exit.
 func NewTrackUI(out output.Output, interactive bool) track.Handler {
@@ -82,7 +85,7 @@ func (h *InteractiveTrackHandler) PromptSelectParent(ctx context.Context, eng en
 func (h *InteractiveTrackHandler) PromptTrackChild(childName, parentName string) (bool, error) {
 	message := fmt.Sprintf("Found untracked child branch %s of %s. Track it?", style.ColorBranchName(childName, false), style.ColorBranchName(parentName, false))
 	options := []tui.SelectOption{
-		{Label: "Yes", Value: "yes"},
+		{Label: "Yes", Value: answerYes},
 		{Label: "No", Value: "no"},
 	}
 
@@ -91,5 +94,5 @@ func (h *InteractiveTrackHandler) PromptTrackChild(childName, parentName string)
 		return false, err
 	}
 
-	return selected == "yes", nil
+	return selected == answerYes, nil
 }

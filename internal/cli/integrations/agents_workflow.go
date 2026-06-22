@@ -11,6 +11,17 @@ import (
 const (
 	workflowBlockStart = "<!-- stackit:start -->"
 	workflowBlockEnd   = "<!-- stackit:end -->"
+
+	// Agent instruction file names
+	claudeMDFile = "CLAUDE.md"
+	agentsMDFile = "AGENTS.md"
+
+	// Format label strings used in multi-select prompts
+	claudeFormatLabel = "Claude Code - Claude Code CLI skill format (~/.claude/skills/stackit)"
+	codexFormatLabel  = "Codex - Codex skill format (~/.codex/skills/stackit)"
+
+	// skipValue is the prompt value for skipping workflow block installation
+	skipValue = "skip"
 )
 
 // agentsFileInfo holds information about a potential agents file
@@ -24,8 +35,8 @@ type agentsFileInfo struct {
 
 // discoverAgentsFiles checks for CLAUDE.md and AGENTS.md in the repo root.
 func discoverAgentsFiles(repoRoot string) (claude, agents agentsFileInfo) {
-	claude = checkAgentsFile(repoRoot, "CLAUDE.md")
-	agents = checkAgentsFile(repoRoot, "AGENTS.md")
+	claude = checkAgentsFile(repoRoot, claudeMDFile)
+	agents = checkAgentsFile(repoRoot, agentsMDFile)
 	return claude, agents
 }
 

@@ -29,7 +29,7 @@ func NewMergeCmd(postMergeHandler PostMergeHandler) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "merge",
+		Use:   mergeStrategyMerge,
 		Short: "Merge pull requests for a stack",
 		Long: `Merge pull requests associated with your stack.
 

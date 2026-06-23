@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -223,6 +224,25 @@ func (r *Registry) Get(id string) (*RepoEntry, bool) {
 	defer r.mu.RUnlock()
 	e, ok := r.entries[id]
 	return e, ok
+}
+
+// FindManaged returns the managed entry whose GitHub owner/name match the
+// arguments case-insensitively, or false when none does. The interval sync
+// loop and the webhook receiver use it to map a remote-change signal (a push
+// for owner/name) onto the local checkout to refresh.
+//
+// Only managed mirrors are considered: the unmanaged -cwd working repo must
+// never be selected here, because the sync path mirror-fetches into a detached
+// HEAD and would corrupt a real working tree (see safety-invariants.md).
+func (r *Registry) FindManaged(owner, name string) (*RepoEntry, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, e := range r.entries {
+		if e.Managed && strings.EqualFold(e.Owner, owner) && strings.EqualFold(e.Name, name) {
+			return e, true
+		}
+	}
+	return nil, false
 }
 
 // List returns every entry sorted by ID so callers (and tests) get a stable

@@ -79,6 +79,32 @@ func TestRegistry_ListReturnsSortedByID(t *testing.T) {
 	require.Equal(t, "c", got[2].ID)
 }
 
+func TestRegistry_FindManaged(t *testing.T) {
+	t.Parallel()
+	r := New()
+	require.NoError(t, r.Add(&RepoEntry{ID: "managed", Managed: true, Owner: "Octo", Name: "Widget"}))
+	require.NoError(t, r.Add(&RepoEntry{ID: "unmanaged", Owner: "octo", Name: "dev"}))
+
+	t.Run("matches owner/name case-insensitively", func(t *testing.T) {
+		t.Parallel()
+		e, ok := r.FindManaged("octo", "widget")
+		require.True(t, ok)
+		require.Equal(t, "managed", e.ID)
+	})
+
+	t.Run("skips unmanaged entries", func(t *testing.T) {
+		t.Parallel()
+		_, ok := r.FindManaged("octo", "dev")
+		require.False(t, ok, "the unmanaged -cwd repo must never be selected for mirror-fetch")
+	})
+
+	t.Run("returns false when no repo matches", func(t *testing.T) {
+		t.Parallel()
+		_, ok := r.FindManaged("octo", "missing")
+		require.False(t, ok)
+	})
+}
+
 func TestRegistry_Len(t *testing.T) {
 	t.Parallel()
 	r := New()

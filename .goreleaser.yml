@@ -91,6 +91,12 @@ dockers_v2:
     tags:
       - "{{ .Version }}"
       - "{{ if not .IsSnapshot }}latest{{ end }}"
+    # Dockerfile.server COPYs the entrypoint script, which is not a build
+    # artifact. dockers_v2 only stages binaries + the Dockerfile in the build
+    # context, so list it here; goreleaser recreates the path so the
+    # `COPY docker/stackit-server-entrypoint.sh` in the Dockerfile resolves.
+    extra_files:
+      - docker/stackit-server-entrypoint.sh
     platforms:
       - linux/amd64
       - linux/arm64

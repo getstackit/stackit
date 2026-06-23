@@ -1,0 +1,61 @@
+# Slim GoReleaser config used ONLY by the Docker (main) workflow to build and
+# push stackit-server snapshot images on pushes to main.
+#
+# The full release config (.goreleaser.yml) builds the CLI + server for every
+# OS/arch, UPX-compresses the CLI binaries (compress: best, ~5min on its own),
+# and produces archives/brews — none of which the container needs. The image
+# only consumes the linux/amd64 + linux/arm64 server binary, so this config
+# strips everything else: no CLI build, no UPX, no non-Linux targets, no
+# archives/brews. That removes the bulk of the workflow's runtime.
+#
+# Keep the `before` hooks, the server `build`, and the `dockers_v2` stanza in
+# sync with .goreleaser.yml.
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - pnpm install --frozen-lockfile
+    - pnpm --filter @stackit/web build
+    - ./scripts/sync-web-static.sh
+
+builds:
+  - id: server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    main: ./apps/server
+    binary: stackit-server
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+dockers_v2:
+  - id: server
+    ids: [server]
+    dockerfile: Dockerfile.server
+    images:
+      - ghcr.io/getstackit/stackit-server
+    tags:
+      - "{{ .Version }}"
+    # See .goreleaser.yml: stage the entrypoint script into the build context
+    # so the Dockerfile's `COPY docker/stackit-server-entrypoint.sh` resolves.
+    extra_files:
+      - docker/stackit-server-entrypoint.sh
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.source": "https://github.com/getstackit/stackit"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.revision": "{{.Commit}}"
+      "org.opencontainers.image.created": "{{.Date}}"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"

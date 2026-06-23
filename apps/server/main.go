@@ -45,7 +45,7 @@ func main() {
 }
 
 // setupLogging configures the default slog logger. Production deploys
-// (PORT or STACKIT_PUBLIC set) emit JSON with a level field so log
+// (STACKIT_ENV=production) emit JSON with a level field so log
 // aggregators tag entries correctly; local runs use the text handler
 // for readability. Output goes to stdout so platforms like Railway
 // don't classify everything as error (which is what happens when the
@@ -66,7 +66,7 @@ func setupLogging(jsonOutput bool) {
 func run() error {
 	var (
 		port          = flag.Int("port", 8080, "Port to listen on")
-		bind          = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1; switches to 0.0.0.0 when $PORT or $STACKIT_PUBLIC is set.")
+		bind          = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1 (loopback); STACKIT_ENV=production binds 0.0.0.0.")
 		cwd           = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -database-url is set)")
 		databaseURL   = flag.String("database-url", os.Getenv("STACKIT_DATABASE_URL"), "PostgreSQL connection string. When set, repos are served from the DB instead of the -cwd single-repo shortcut.")
 		reposRoot     = flag.String("repos-root", os.Getenv("STACKIT_REPOS_ROOT"), "Base directory under which per-repo checkouts live (<reposRoot>/<owner>/<name>) for DB-sourced repos.")
@@ -75,19 +75,21 @@ func run() error {
 		apiPrefix     = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
 		enableLegacy  = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
 		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
-		authDisabled  = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
+		authDisabled  = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused when the server binds a non-loopback interface (e.g. STACKIT_ENV=production) unless -read-only is set.")
 		readOnly      = flag.Bool("read-only", envBool("STACKIT_READ_ONLY"), "Serve in read-only mode: the submit endpoint is disabled so the repo can be exposed publicly without write access. Also set via STACKIT_READ_ONLY.")
 		syncInterval  = flag.Duration("sync-interval", envDuration("STACKIT_SYNC_INTERVAL"), "How often to mirror-fetch managed repos from their remotes so served state stays current. 0 disables the loop. Also set via STACKIT_SYNC_INTERVAL (e.g. 60s).")
 	)
 	flag.Parse()
 
-	publicMode := os.Getenv("PORT") != "" || os.Getenv("STACKIT_PUBLIC") != ""
-	setupLogging(publicMode)
+	env, err := resolveEnv(os.Getenv("STACKIT_ENV"))
+	if err != nil {
+		return err
+	}
+	prod := env.isProduction()
+	setupLogging(prod)
 
-	slog.Info("stackit-server starting", "version", version, "commit", commit, "built", date)
+	slog.Info("stackit-server starting", "version", version, "commit", commit, "built", date, "env", env.String())
 
-	// Honor $PORT when -port wasn't passed explicitly. PaaS hosts (Railway,
-	// Fly, Heroku) inject the port this way.
 	portExplicit := false
 	bindExplicit := false
 	cwdExplicit := false
@@ -101,10 +103,18 @@ func run() error {
 			cwdExplicit = true
 		}
 	})
-	if err := resolvePort(port, portExplicit, os.Getenv("PORT")); err != nil {
+	// $PORT is the PaaS convention (Railway, Fly, Heroku inject it); honored
+	// only in production so a stray $PORT from a dev shell can't move the local
+	// listener. resolveBind likewise binds loopback locally, 0.0.0.0 in prod.
+	if err := resolvePort(port, portExplicit, prod, os.Getenv("PORT")); err != nil {
 		return err
 	}
-	resolveBind(bind, bindExplicit, publicMode)
+	resolveBind(bind, bindExplicit, prod)
+
+	// The auth requirement keys off actual exposure (a non-loopback bind),
+	// not the env name: binding off-host without auth or read-only is refused
+	// no matter how we got there (prod default, explicit -bind, etc.).
+	exposed := !isLoopbackBind(*bind)
 
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -174,7 +184,12 @@ func run() error {
 		}
 	}
 
-	authBuild, err := buildAuthConfig(*authDisabled, publicMode)
+	authBuild, err := buildAuthConfig(authBuildParams{
+		disabled: *authDisabled,
+		exposed:  exposed,
+		readOnly: *readOnly,
+		prod:     prod,
+	})
 	if err != nil {
 		return err
 	}

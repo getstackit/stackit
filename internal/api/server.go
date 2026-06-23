@@ -24,8 +24,8 @@ const apiPathPrefix = "/api"
 // ServerConfig holds configuration for the API server.
 type ServerConfig struct {
 	// BindAddr is the host/IP to listen on. Empty means "all interfaces".
-	// apps/server picks a safe default (127.0.0.1) and switches to the
-	// public-facing form when PORT or STACKIT_PUBLIC is set.
+	// apps/server picks a safe default (127.0.0.1) and binds 0.0.0.0 when
+	// STACKIT_ENV=production.
 	BindAddr    string
 	Port        int
 	CORSOrigins []string
@@ -58,8 +58,8 @@ type ServerConfig struct {
 	// needed to gate /api/* routes behind GitHub login. When nil the server
 	// runs without authentication; that mode is only safe on a private
 	// network (localhost dev, tunneled access). apps/server refuses to
-	// start unauthenticated when STACKIT_PUBLIC or $PORT are set unless
-	// -auth-disabled is passed explicitly.
+	// start unauthenticated when it binds a non-loopback interface unless
+	// -read-only is set.
 	Auth *AuthConfig
 
 	// RepoStore is the persistence backend for repo configuration. It is set

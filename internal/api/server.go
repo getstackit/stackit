@@ -81,8 +81,16 @@ type ServerConfig struct {
 
 	// SyncInterval, when > 0, enables the background sync loop: every interval
 	// each managed repo is mirror-fetched from its remote so the served state
-	// stays current without a local actor. Zero disables it.
+	// stays current without a local actor. Zero disables it. Even with the loop
+	// off, the syncer still backs on-demand refreshes (webhook receiver).
 	SyncInterval time.Duration
+
+	// GitHubWebhookSecret is the shared secret GitHub signs webhook deliveries
+	// with. When set, POST /api/v1/webhooks/github accepts verified push events
+	// and refreshes the matching managed repo immediately (the interval loop
+	// stays as a backstop). Empty disables the endpoint (it 404s), which is the
+	// correct posture for local/dev servers GitHub can't reach.
+	GitHubWebhookSecret string
 }
 
 // AuthConfig is the runtime auth setup. SessionStore must outlive the
@@ -105,11 +113,28 @@ type Server struct {
 	config     ServerConfig
 	httpServer *http.Server
 	syncCancel context.CancelFunc
+
+	// syncer is the shared per-repo mirror-fetch+refresh engine. Both the
+	// interval loop (when enabled) and the webhook receiver drive it, so it is
+	// built once here regardless of whether the loop runs.
+	syncer *reposync.Syncer
 }
 
 // NewServer creates a new API server backed by the given registry.
 func NewServer(cfg ServerConfig) *Server {
-	return &Server{config: cfg}
+	s := &Server{config: cfg}
+
+	// Guard against the typed-nil interface trap: assigning a nil
+	// *AppTokenProvider to the interface yields a non-nil interface wrapping a
+	// nil pointer. Only set provider when a concrete one exists; otherwise the
+	// syncer fetches unauthenticated (public repos only).
+	var provider reposync.TokenProvider
+	if cfg.RepoSyncTokens != nil {
+		provider = cfg.RepoSyncTokens
+	}
+	s.syncer = reposync.New(cfg.Registry, provider, cfg.SyncInterval)
+
+	return s
 }
 
 // Start begins serving HTTP requests. It blocks until the server is stopped.
@@ -145,17 +170,13 @@ func (s *Server) startSyncLoop() {
 	if s.config.SyncInterval <= 0 {
 		return
 	}
-	var provider reposync.TokenProvider
-	if s.config.RepoSyncTokens != nil {
-		provider = s.config.RepoSyncTokens
-	} else {
+	if s.config.RepoSyncTokens == nil {
 		slog.Warn("repo sync: no GitHub App configured; only public repos will refresh")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.syncCancel = cancel
-	syncer := reposync.New(s.config.Registry, provider, s.config.SyncInterval)
-	go syncer.Run(ctx)
+	go s.syncer.Run(ctx)
 	slog.Info("repo sync loop enabled", "interval", s.config.SyncInterval.String())
 }
 
@@ -276,20 +297,25 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	// read API is unaffected.
 	sessionGated = auth.RequireCSRFHeader(sessionGated)
 
-	// /config advertises server capabilities and must be reachable without a
-	// session so the client can learn whether a login is required before
-	// attempting one. It bypasses the session gate but still gets the outer
-	// middleware (and rate limiting below).
+	// Public, unauthenticated API routes that bypass the session/CSRF gate but
+	// still get the outer middleware and rate limiting below:
+	//   - /config advertises capabilities so the client can learn whether a
+	//     login is required before attempting one.
+	//   - /webhooks/github receives GitHub push deliveries (authenticated by
+	//     HMAC signature, not a session) and refreshes the matching managed
+	//     repo. It self-disables (404) when no webhook secret is configured.
+	webhookHandler := handlers.NewWebhookHandler(s.config.GitHubWebhookSecret, s.syncer)
 	publicAPIMux := http.NewServeMux()
 	for _, prefix := range prefixes {
 		publicAPIMux.Handle("GET "+prefix+"/config", configHandler)
+		publicAPIMux.Handle("POST "+prefix+"/webhooks/github", webhookHandler)
 	}
 
-	// Combined API dispatch: public capability routes bypass the session
-	// gate; everything else is session-gated. Rate limiting wraps both so the
-	// public endpoint is protected from floods too.
+	// Combined API dispatch: public routes bypass the session gate; everything
+	// else is session-gated. Rate limiting wraps both so the public endpoints
+	// are protected from floods too.
 	var protectedAPI http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isConfigPath(r.URL.Path, prefixes) {
+		if isPublicAPIPath(r.URL.Path, prefixes) {
 			publicAPIMux.ServeHTTP(w, r)
 			return
 		}
@@ -415,11 +441,14 @@ func isAPIPath(path string, prefixes []string) bool {
 	return false
 }
 
-// isConfigPath reports whether path is the unauthenticated capabilities
-// endpoint for any configured prefix (e.g. /api/v1/config or /api/config).
-func isConfigPath(path string, prefixes []string) bool {
+// isPublicAPIPath reports whether path is one of the unauthenticated API
+// endpoints that bypass the session/CSRF gate (but stay rate-limited): the
+// capabilities endpoint (/config) and the GitHub webhook receiver
+// (/webhooks/github), for any configured prefix.
+func isPublicAPIPath(path string, prefixes []string) bool {
 	for _, prefix := range prefixes {
-		if path == prefix+"/config" {
+		switch path {
+		case prefix + "/config", prefix + "/webhooks/github":
 			return true
 		}
 	}

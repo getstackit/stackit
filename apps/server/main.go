@@ -227,18 +227,19 @@ func run() error {
 	}
 
 	server := api.NewServer(api.ServerConfig{
-		BindAddr:       *bind,
-		Port:           *port,
-		CORSOrigins:    parseCSV(*corsOrigins),
-		APIPrefixes:    prefixes,
-		StaticFS:       staticFS,
-		Registry:       reg,
-		Auth:           authCfg,
-		ReadOnly:       *readOnly,
-		RepoStore:      repoStore,
-		ReposRoot:      absReposRoot,
-		RepoSyncTokens: appProvider,
-		SyncInterval:   *syncInterval,
+		BindAddr:            *bind,
+		Port:                *port,
+		CORSOrigins:         parseCSV(*corsOrigins),
+		APIPrefixes:         prefixes,
+		StaticFS:            staticFS,
+		Registry:            reg,
+		Auth:                authCfg,
+		ReadOnly:            *readOnly,
+		RepoStore:           repoStore,
+		ReposRoot:           absReposRoot,
+		RepoSyncTokens:      appProvider,
+		SyncInterval:        *syncInterval,
+		GitHubWebhookSecret: strings.TrimSpace(os.Getenv("STACKIT_GITHUB_WEBHOOK_SECRET")),
 	})
 
 	errCh := make(chan error, 1)

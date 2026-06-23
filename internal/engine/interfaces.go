@@ -13,6 +13,10 @@ type StackNavigator interface {
 	AllBranches() Branches
 	BranchNames() *BranchSet
 	CurrentBranch() *Branch
+	// CurrentBranchName returns the current branch name, or "" when HEAD is not
+	// on a branch (e.g. a detached-HEAD server mirror). Nil-safe alternative to
+	// CurrentBranch().GetName().
+	CurrentBranchName() string
 	Trunk() Branch
 	GetBranch(branchName string) Branch
 	Graph(strategy SortStrategy) *StackGraph

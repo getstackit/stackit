@@ -16,7 +16,7 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 	resp := BranchResponse{
 		Name:         branch.GetName(),
 		Depth:        node.Depth,
-		IsCurrent:    branch.GetName() == eng.CurrentBranch().GetName(),
+		IsCurrent:    branch.GetName() == eng.CurrentBranchName(),
 		NeedsRestack: branch.NeedsRestack(),
 		IsLocked:     branch.IsLocked(),
 		IsFrozen:     branch.IsFrozen(),
@@ -85,7 +85,7 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 
 // MapStackSummary creates a StackSummary from stack discovery info.
 func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, owner string) StackSummary {
-	currentBranch := eng.CurrentBranch().GetName()
+	currentBranch := eng.CurrentBranchName()
 	isCurrent := slices.Contains(allBranches, currentBranch)
 
 	// Detect worktree anchor and filter it from display branches

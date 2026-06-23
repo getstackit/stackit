@@ -53,3 +53,29 @@ func TestBuildRepoOmitsCurrentUserWhenPublic(t *testing.T) {
 		require.Equal(t, "widgets", repo.Repo)
 	})
 }
+
+// TestBuildSurvivesDetachedHEAD reproduces the server-mirror crash: managed
+// repo checkouts run with a detached HEAD, so engine.CurrentBranch() is nil.
+// The whole /view assembly path (Build -> MapStackDetail -> MapStackSummary)
+// must read the current branch nil-safely rather than dereference it.
+func TestBuildSurvivesDetachedHEAD(t *testing.T) {
+	t.Parallel()
+
+	// A linear stack so the mapper actually runs MapStackSummary per stack —
+	// without one, the loop is empty and the panic site is never reached.
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithLinearStack3()
+
+	head, err := s.Scene.Repo.GetRevision("HEAD")
+	require.NoError(t, err)
+	require.NoError(t, s.Scene.Repo.CheckoutDetached(head))
+	require.Nil(t, s.Engine.CurrentBranch(), "scenario must be in detached HEAD")
+
+	// gh is nil: the anonymous public read path with no GitHub calls, mirroring
+	// the request that panicked.
+	a := NewViewAssembler(s.Engine, nil, "origin", VisibilityPublic)
+	view, err := a.Build(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, view.Repo.CurrentBranch, "detached HEAD has no current branch")
+	require.NotEmpty(t, view.Stacks, "the stack should still be mapped while detached")
+}

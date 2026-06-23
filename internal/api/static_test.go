@@ -85,6 +85,29 @@ func TestStaticHandler(t *testing.T) {
 		}
 	})
 
+	// Branch names routinely contain dots (v1.2.0, 2026.01, fix.bug). Their URLs
+	// must serve the SPA shell on a cold load, not 404 as if the trailing ".0"
+	// were a missing asset — that would break deep links to dotted branches,
+	// which is the whole point of the path-URL scheme.
+	t.Run("falls back to index for dotted branch routes", func(t *testing.T) {
+		for _, p := range []string{
+			"/octo/widget/tree/release/v1.2.0",
+			"/octo/widget/tree/2026.01",
+			"/octo/widget/stack/fix.bug",
+		} {
+			req := httptest.NewRequest(http.MethodGet, p, nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("%s: want 200, got %d", p, rr.Code)
+			}
+			if !strings.Contains(rr.Body.String(), "index") {
+				t.Fatalf("%s: unexpected body: %q", p, rr.Body.String())
+			}
+		}
+	})
+
 	t.Run("nil fs serves fallback placeholder", func(t *testing.T) {
 		var nilFS fs.FS
 		handler := newStaticHandler(nilFS)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent } from "react";
-import type { FeedEvent } from "@/lib/api";
+import type { FeedEvent, RepoRef } from "@/lib/api";
 
 // Empty default = same-origin requests. See api.ts for rationale.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -14,7 +14,7 @@ type SSECallback = () => void;
  * Optionally calls onEvent for server-sourced feed events.
  */
 export function useSSE(
-  repoId: string,
+  ref: RepoRef,
   onUpdate: SSECallback,
   onEvent?: (event: FeedEvent) => void
 ) {
@@ -23,8 +23,9 @@ export function useSSE(
     onEvent?.(event);
   });
 
+  const { owner, repo } = ref;
   useEffect(() => {
-    const url = `${API_BASE}/api/v1/repos/${encodeURIComponent(repoId)}/events`;
+    const url = `${API_BASE}/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/events`;
     const eventSource = new EventSource(url);
 
     eventSource.addEventListener("stacks_updated", () => {
@@ -61,5 +62,5 @@ export function useSSE(
     return () => {
       eventSource.close();
     };
-  }, [repoId]);
+  }, [owner, repo]);
 }

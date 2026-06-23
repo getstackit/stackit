@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ConfigProvider } from "@/components/providers/config-provider";
 import { RepoProvider } from "@/components/providers/repo-provider";
 import { RepoPicker } from "@/components/repo-picker/repo-picker";
 import { RepoView } from "@/components/repo-picker/repo-view";
 import { ReadOnlyBanner } from "@/components/read-only-banner";
+import { parseRepoPath } from "@/lib/repo-route";
 import type { ConfigResponse } from "@/lib/api";
 
 // The server's /api/v1/config endpoint is authoritative for read-only and
@@ -23,22 +23,21 @@ const CONFIG_FALLBACK: ConfigResponse = {
   authRequired: !AUTH_DISABLED,
 };
 
-// Single root page driving both the unscoped picker and the per-repo view.
+// Client shell driving both the unscoped picker and the per-repo view.
 //
-// The Next.js build is `output: 'export'`, so only the root URL is emitted.
-// We scope to a repo via the `?repo=<id>` query string rather than a path
-// segment — that way the same static index.html handles every repo in both
-// `next dev` and the embedded production server, with no per-repo route to
-// pre-generate.
+// The Next.js build is `output: 'export'`, so only index.html is emitted; the
+// optional catch-all route ([[...slug]]) lets that one shell handle every path.
+// We scope to a repo via the path — GitHub-style `/{owner}/{repo}/...` — parsed
+// here from usePathname, with the Go server's SPA fallback serving the same
+// shell for deep links on refresh (see internal/api/static.go).
 function Home() {
-  const params = useSearchParams();
-  const repoId = params.get("repo") ?? "";
+  const { owner, repo } = parseRepoPath(usePathname());
 
   return (
     <>
       <ReadOnlyBanner />
-      {repoId ? (
-        <RepoProvider repoId={repoId}>
+      {owner && repo ? (
+        <RepoProvider owner={owner} repo={repo}>
           <RepoView />
         </RepoProvider>
       ) : (
@@ -48,14 +47,12 @@ function Home() {
   );
 }
 
-export default function Page() {
+export function AppShell() {
   return (
-    <Suspense fallback={null}>
-      <ConfigProvider fallback={CONFIG_FALLBACK}>
-        <AuthProvider>
-          <Home />
-        </AuthProvider>
-      </ConfigProvider>
-    </Suspense>
+    <ConfigProvider fallback={CONFIG_FALLBACK}>
+      <AuthProvider>
+        <Home />
+      </AuthProvider>
+    </ConfigProvider>
   );
 }

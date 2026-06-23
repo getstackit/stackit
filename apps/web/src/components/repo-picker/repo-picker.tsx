@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fetchRepos, type RepoSummary } from "@/lib/api";
+import { buildRepoPath } from "@/lib/repo-route";
 import { AddRepository } from "./add-repository";
 
 export function RepoPicker() {
@@ -17,8 +18,12 @@ export function RepoPicker() {
   const [repos, setRepos] = useState<RepoSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const openRepo = (id: string) =>
-    router.push(`/?repo=${encodeURIComponent(id)}`);
+  // Repos are addressed by their GitHub coordinates. A repo with no remote has
+  // none and can't be opened in the path-based UI.
+  const openRepo = (repo: RepoSummary) => {
+    if (!repo.owner || !repo.repo) return;
+    router.push(buildRepoPath(repo.owner, repo.repo, null));
+  };
 
   useEffect(() => {
     let active = true;
@@ -65,7 +70,7 @@ export function RepoPicker() {
             Add a GitHub repository to get started.
           </p>
         </header>
-        <AddRepository onAdded={(repo) => openRepo(repo.id)} />
+        <AddRepository onAdded={(repo) => openRepo(repo)} />
       </div>
     );
   }
@@ -86,7 +91,7 @@ export function RepoPicker() {
             <button
               type="button"
               data-testid={`repo-card-${repo.id}`}
-              onClick={() => openRepo(repo.id)}
+              onClick={() => openRepo(repo)}
               className="block w-full text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
             >
               <Card>
@@ -112,7 +117,7 @@ export function RepoPicker() {
         ))}
       </ul>
 
-      <AddRepository onAdded={(repo) => openRepo(repo.id)} />
+      <AddRepository onAdded={(repo) => openRepo(repo)} />
     </div>
   );
 }

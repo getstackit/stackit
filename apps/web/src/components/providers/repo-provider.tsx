@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useCallback,
   useRef,
@@ -11,6 +12,7 @@ import {
 } from "react";
 import {
   fetchView,
+  type RepoRef,
   type RepoResponse,
   type StackDetail,
   type TrunkCommitResponse,
@@ -23,7 +25,7 @@ import { diffViews } from "@/lib/diff-views";
 const MAX_EVENTS = 100;
 
 interface RepoState {
-  repoId: string;
+  repoRef: RepoRef;
   repo: RepoResponse | null;
   stackDetails: StackDetail[];
   recentlyMerged: TrunkCommitResponse[];
@@ -43,7 +45,17 @@ export function useRepo() {
   return ctx;
 }
 
-export function RepoProvider({ repoId, children }: { repoId: string; children: ReactNode }) {
+export function RepoProvider({
+  owner,
+  repo: repoName,
+  children,
+}: {
+  owner: string;
+  repo: string;
+  children: ReactNode;
+}) {
+  // Stable ref so the load/SSE effects don't re-run on every render.
+  const repoRef = useMemo<RepoRef>(() => ({ owner, repo: repoName }), [owner, repoName]);
   const [repo, setRepo] = useState<RepoResponse | null>(null);
   const [stackDetails, setStackDetails] = useState<StackDetail[]>([]);
   const [recentlyMerged, setRecentlyMerged] = useState<TrunkCommitResponse[]>([]);
@@ -69,7 +81,7 @@ export function RepoProvider({ repoId, children }: { repoId: string; children: R
 
   const loadData = useCallback(async () => {
     try {
-      const view = await fetchView(repoId);
+      const view = await fetchView(repoRef);
       setRepo(view.repo);
 
       // Diff against previous view to detect changes
@@ -88,7 +100,7 @@ export function RepoProvider({ repoId, children }: { repoId: string; children: R
     } finally {
       setLoading(false);
     }
-  }, [addEvents, repoId]);
+  }, [addEvents, repoRef]);
 
   // Initial load
   useEffect(() => {
@@ -100,12 +112,12 @@ export function RepoProvider({ repoId, children }: { repoId: string; children: R
   }, [loadData]);
 
   // SSE updates trigger refresh; server events get added directly
-  useSSE(repoId, loadData, addEvent);
+  useSSE(repoRef, loadData, addEvent);
 
   return (
     <RepoContext.Provider
       value={{
-        repoId,
+        repoRef,
         repo,
         stackDetails,
         recentlyMerged,

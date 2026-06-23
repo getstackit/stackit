@@ -2,40 +2,45 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { BranchResponse, StackDetail } from "@/lib/api";
+import {
+  buildRepoPath,
+  parseRepoPath,
+  type Selection,
+} from "@/lib/repo-route";
 
-export type Selection =
-  | { type: "branch"; name: string }
-  | { type: "stack"; rootBranch: string };
+export type { Selection };
 
 function readInitialSelection(): Selection | null {
   if (typeof window === "undefined") return null;
-  const params = new URLSearchParams(window.location.search);
-  const branch = params.get("branch");
-  if (branch) return { type: "branch", name: branch };
-  const stack = params.get("stack");
-  if (stack) return { type: "stack", rootBranch: stack };
-  return null;
+  return parseRepoPath(window.location.pathname).selection;
 }
 
-function updateUrl(params: Record<string, string | null>) {
-  const url = new URL(window.location.href);
-  for (const [key, value] of Object.entries(params)) {
-    if (value === null) {
-      url.searchParams.delete(key);
-    } else {
-      url.searchParams.set(key, value);
-    }
-  }
-  window.history.replaceState({}, "", url.toString());
+// navigate rewrites the path for the current repo to reflect selection,
+// without adding a history entry (matching the previous query-param behavior).
+// The owner/repo are read back from the current path so the hook needs no repo
+// props.
+function navigate(selection: Selection | null) {
+  const { owner, repo } = parseRepoPath(window.location.pathname);
+  if (!owner || !repo) return;
+  window.history.replaceState({}, "", buildRepoPath(owner, repo, selection));
 }
 
 export function useUrlSelection(stackDetails: StackDetail[]) {
   const [selection, setSelection] = useState<Selection | null>(readInitialSelection);
 
   const selectedBranch = useMemo(() => {
-    if (!selection || selection.type !== "branch") return null;
+    if (!selection) return null;
+    // A "pull" selection is a deep link by PR number; resolve it to the branch
+    // carrying that PR once the data has loaded.
+    const match =
+      selection.type === "branch"
+        ? (b: BranchResponse) => b.name === selection.name
+        : selection.type === "pull"
+          ? (b: BranchResponse) => b.pr?.number === selection.number
+          : null;
+    if (!match) return null;
     for (const stack of stackDetails) {
-      const found = stack.branches.find((b) => b.name === selection.name);
+      const found = stack.branches.find(match);
       if (found) return found;
     }
     return null;
@@ -56,18 +61,14 @@ export function useUrlSelection(stackDetails: StackDetail[]) {
   }, [selectedBranch, stackDetails]);
 
   const handleSelectBranch = useCallback((branch: BranchResponse | null) => {
-    if (branch) {
-      setSelection({ type: "branch", name: branch.name });
-      updateUrl({ branch: branch.name, stack: null });
-    } else {
-      setSelection(null);
-      updateUrl({ branch: null, stack: null });
-    }
+    const next: Selection | null = branch ? { type: "branch", name: branch.name } : null;
+    setSelection(next);
+    navigate(next);
   }, []);
 
   const handleClearSelection = useCallback(() => {
     setSelection(null);
-    updateUrl({ branch: null, stack: null });
+    navigate(null);
   }, []);
 
   const handleSelectStack = useCallback((stack: StackDetail) => {
@@ -75,13 +76,7 @@ export function useUrlSelection(stackDetails: StackDetail[]) {
       const deselecting = prev?.type === "stack" && prev.rootBranch === stack.rootBranch;
       const next = deselecting ? null : { type: "stack" as const, rootBranch: stack.rootBranch };
 
-      queueMicrotask(() => {
-        if (next) {
-          updateUrl({ branch: null, stack: stack.rootBranch });
-        } else {
-          updateUrl({ branch: null, stack: null });
-        }
-      });
+      queueMicrotask(() => navigate(next));
 
       return next;
     });

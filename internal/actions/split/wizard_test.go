@@ -5,6 +5,7 @@ import (
 )
 
 func TestBuildTypeChoices(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name               string
 		hasMultipleCommits bool
@@ -27,6 +28,7 @@ func TestBuildTypeChoices(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			choices := buildTypeChoices(tt.hasMultipleCommits)
 
 			// Check total count
@@ -63,6 +65,7 @@ func TestBuildTypeChoices(t *testing.T) {
 }
 
 func TestDirection(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		direction Direction
 		wantStr   string
@@ -74,6 +77,7 @@ func TestDirection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.direction), func(t *testing.T) {
+			t.Parallel()
 			if got := tt.direction.String(); got != tt.wantStr {
 				t.Errorf("Direction.String() = %q, want %q", got, tt.wantStr)
 			}

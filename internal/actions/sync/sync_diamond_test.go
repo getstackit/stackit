@@ -34,6 +34,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "dummy")
 
 	t.Run("sync preserves local parent and pushes to GitHub when GitHub has stale base", func(t *testing.T) {
+		t.Parallel()
 		// Setup scenario with diamond structure
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
@@ -151,6 +152,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 	})
 
 	t.Run("sync after modify preserves correct parents", func(t *testing.T) {
+		t.Parallel()
 		// This test simulates the full user scenario:
 		// 1. Create diamond
 		// 2. Submit
@@ -265,6 +267,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 	})
 
 	t.Run("sync pushes local parent to GitHub when GitHub base differs", func(t *testing.T) {
+		t.Parallel()
 		// This test verifies that local parent is authoritative:
 		// - Local parent is branch-a
 		// - GitHub PR base is main (stale/different)

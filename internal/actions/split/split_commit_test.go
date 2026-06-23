@@ -9,12 +9,14 @@ import (
 const testCurrentBranch = "current-branch"
 
 func TestBuildSplitResult(t *testing.T) {
+	t.Parallel()
 	// This tests the result construction logic that was buggy.
 	// The engine expects:
 	// - branchPoints: sorted indices (0, 1, 2, ...) where each branch starts
 	// - branchNames: names in REVERSE order of branchPoints (oldest branch name first)
 
 	t.Run("single split produces correctly ordered result", func(t *testing.T) {
+		t.Parallel()
 		// Simulate splitting a branch with 2 commits:
 		// - commit 0 (newest): stays in current branch
 		// - commit 1 (older): goes to split-off branch
@@ -59,6 +61,7 @@ func TestBuildSplitResult(t *testing.T) {
 	})
 
 	t.Run("multiple splits produce correctly ordered result", func(t *testing.T) {
+		t.Parallel()
 		// Simulate splitting a branch with 3 commits:
 		// - commit 0 (newest): stays in current branch
 		// - commit 1: goes to split-branch-1 (created first, closer to split point)
@@ -100,6 +103,7 @@ func TestBuildSplitResult(t *testing.T) {
 	})
 
 	t.Run("regression: old buggy code produced unsorted branchPoints", func(t *testing.T) {
+		t.Parallel()
 		// This test documents the bug that was fixed.
 		// The old code produced branchPoints = [1, 0] instead of [0, 1]
 		// which caused the engine to create branches at wrong commits.

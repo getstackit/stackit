@@ -62,7 +62,8 @@ with every authenticated user.
 | `STACKIT_REPOS_ROOT` | Base directory under which per-repo checkouts live (`<root>/<owner>/<name>`). Required for DB-backed serving and onboarding. Equivalent to `-repos-root`. |
 | `STACKIT_GITHUB_APP_ID` | GitHub App ID; enables installation-token auth for onboarding clones and background syncs. See [GitHub App & background sync](#github-app--background-sync). |
 | `STACKIT_GITHUB_APP_PRIVATE_KEY` / `_FILE` | GitHub App private key (PEM contents, or a path in the `_FILE` variant). |
-| `STACKIT_SYNC_INTERVAL` | How often to mirror-fetch managed repos (e.g. `60s`); `0`/unset disables the sync loop. Equivalent to `-sync-interval`. |
+| `STACKIT_GITHUB_WEBHOOK_SECRET` | Shared secret GitHub signs webhook deliveries with. Set it to enable the [webhook receiver](#evented-refresh-webhooks) for immediate, push-driven refreshes; unset leaves the endpoint disabled (404). |
+| `STACKIT_SYNC_INTERVAL` | How often to mirror-fetch managed repos (e.g. `60s`); defaults to `5m`, `0` disables the sync loop. Equivalent to `-sync-interval`. See [GitHub App & background sync](#github-app--background-sync). |
 | `STACKIT_BASE_URL` | The canonical https:// URL the server is reachable at. Required when auth is enabled (used to build the OAuth callback URL). |
 | `STACKIT_GITHUB_CLIENT_ID` | GitHub OAuth App client ID. |
 | `STACKIT_GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret. |
@@ -78,7 +79,7 @@ The most useful flags:
 |------|---------|---------|
 | `-database-url` | _(empty)_ | PostgreSQL connection string. Enables DB-backed multi-repo serving and runtime [onboarding](#repository-onboarding). Also settable via `STACKIT_DATABASE_URL`. |
 | `-repos-root` | _(empty)_ | Base directory for per-repo checkouts (`<root>/<owner>/<name>`). Required with `-database-url` and for onboarding. Also settable via `STACKIT_REPOS_ROOT`. |
-| `-sync-interval` | `0` | How often to mirror-fetch managed repos so served state stays current; `0` disables. Also settable via `STACKIT_SYNC_INTERVAL`. See [GitHub App & background sync](#github-app--background-sync). |
+| `-sync-interval` | `5m` | How often to mirror-fetch managed repos so served state stays current; `0` disables. Also settable via `STACKIT_SYNC_INTERVAL`. See [GitHub App & background sync](#github-app--background-sync). |
 | `-cwd` | _(empty)_ | Single-repo shortcut: serve the repo discovered from this path as `default`. Ignored when `-database-url` is set. |
 | `-port` | `8080` | Listen port; overrides `$PORT`. |
 | `-bind` | `127.0.0.1` (or `0.0.0.0` when `STACKIT_ENV=production`) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server without setting `STACKIT_ENV=production`. Binding a non-loopback interface requires auth or `-read-only`. |
@@ -219,12 +220,29 @@ server-side), so the server can fetch with no user present.
 | `STACKIT_GITHUB_APP_PRIVATE_KEY` | The App private key, PEM contents. |
 | `STACKIT_GITHUB_APP_PRIVATE_KEY_FILE` | Path to the PEM file, used when `_PRIVATE_KEY` is empty. |
 
+### How a refresh happens
+
+Whatever the trigger, a refresh is the same unit of work: rebuild the repo's
+engine from its current git refs and broadcast an SSE `refresh` so connected
+clients refetch. Three things trigger it:
+
+1. **The interval loop** — a periodic mirror-fetch of every managed checkout
+   (below). The reliable backstop.
+2. **Webhooks** — an immediate, push-driven refresh of a single repo
+   ([below](#evented-refresh-webhooks)). The low-latency path.
+3. **Manual sync** — `POST /api/v1/repos/{repoID}/sync`, an on-demand refresh
+   (below). The fallback for local servers and for forcing a pull.
+
+The interval loop is the floor: webhooks and manual sync make refreshes faster
+or on-demand, but the loop guarantees the server converges even if a delivery is
+missed.
+
 ### The sync loop
 
-Set **`-sync-interval`** (or `STACKIT_SYNC_INTERVAL`, e.g. `60s`; `0` disables)
-to keep served repos current. On each tick the server mirror-fetches every
-managed checkout — force-updating local branch heads and stackit metadata from
-the remote and pruning deleted refs — then rebuilds and pushes a refresh to
+Set **`-sync-interval`** (or `STACKIT_SYNC_INTERVAL`, e.g. `60s`); it defaults to
+`5m` and `0` disables it. On each tick the server mirror-fetches every managed
+checkout — force-updating local branch heads and stackit metadata from the
+remote and pruning deleted refs — then rebuilds and pushes a refresh to
 connected clients. Newly onboarded repos join the loop automatically.
 
 - Only **managed** checkouts (DB-backed / onboarded under the repos root) are
@@ -232,8 +250,55 @@ connected clients. Newly onboarded repos join the loop automatically.
   alone.
 - Private repos need the GitHub App (above) for the fetch. Without an App the
   loop still runs but refreshes **public repos only**.
-- A recommended interval is `60s` or higher; very short intervals hammer the
-  remote and add little.
+- The default `5m` is a backstop. Pair it with webhooks for fresher state rather
+  than dropping the interval to a few seconds — short intervals hammer the
+  remote and add little once webhooks are in play.
+
+### Evented refresh (webhooks)
+
+Webhooks make a managed repo refresh **immediately** when someone pushes,
+instead of waiting for the next tick. Set **`STACKIT_GITHUB_WEBHOOK_SECRET`** and
+point a GitHub webhook at the server:
+
+1. In the GitHub App (or the repo/org), add a webhook:
+   - **Payload URL**: `https://<your-host>/api/v1/webhooks/github`
+   - **Content type**: `application/json`
+   - **Secret**: the same value as `STACKIT_GITHUB_WEBHOOK_SECRET`
+   - **Events**: subscribe to **Pushes** only.
+2. Deliveries are authenticated solely by their `X-Hub-Signature-256` HMAC. The
+   endpoint **fails closed**: with no secret set it returns `404`, so it is never
+   an open refresh trigger. It is unaffected by read-only mode (a refresh is a
+   read-side operation).
+3. On a verified push the server resolves the repo, mirror-fetches it, and
+   refreshes — acking GitHub immediately and doing the fetch in the background.
+   A burst of pushes for one repo coalesces into a single fetch.
+
+> **Keep the interval loop on as a backstop.** Webhook delivery isn't
+> guaranteed (the server may be down when GitHub delivers, and GitHub gives up
+> after retries). Crucially, GitHub sends a push event only for `refs/heads/*`
+> and `refs/tags/*` — **not** for stackit's `refs/stackit/metadata/*` refs. A
+> normal branch push fires a webhook and the mirror-fetch picks up metadata in
+> the same pass, but a metadata-only change (e.g. from `describe`) is invisible
+> to webhooks and is caught only by the interval loop. So run **both**: webhooks
+> for latency, the loop for correctness.
+
+### Manual sync
+
+`POST /api/v1/repos/{repoID}/sync` forces a refresh of one repo on demand. It is
+session-gated like submit (and refused in read-only mode), so it is never an
+anonymous trigger. For a managed mirror it mirror-fetches then rebuilds; for a
+local `-cwd` working repo it only re-reads on-disk refs (it never mirror-fetches
+a working tree, which would detach its HEAD).
+
+### Running locally
+
+Webhooks are a server-mode feature — GitHub can't reach a `localhost` server, so
+there's nothing to configure locally, and the endpoint stays disabled. A local
+server pointed at a `-cwd` working repo stays current a different way: a
+filesystem watcher on the repo's `.git` refs already refreshes on every local
+action (commit, branch switch, `git fetch`, `stackit sync`). To pull and reflect
+remote changes on demand, run `stackit sync` (or `git fetch`) in the repo — the
+watcher fires — or call the manual-sync endpoint above.
 
 > Note: GitHub App token minting is exercised by the `ghinstallation` library;
 > stackit's tests cover the surrounding logic with fakes. Verify end-to-end

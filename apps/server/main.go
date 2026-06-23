@@ -77,7 +77,7 @@ func run() error {
 		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
 		authDisabled  = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused when the server binds a non-loopback interface (e.g. STACKIT_ENV=production) unless -read-only is set.")
 		readOnly      = flag.Bool("read-only", envBool("STACKIT_READ_ONLY"), "Serve in read-only mode: the submit endpoint is disabled so the repo can be exposed publicly without write access. Also set via STACKIT_READ_ONLY.")
-		syncInterval  = flag.Duration("sync-interval", envDuration("STACKIT_SYNC_INTERVAL"), "How often to mirror-fetch managed repos from their remotes so served state stays current. 0 disables the loop. Also set via STACKIT_SYNC_INTERVAL (e.g. 60s).")
+		syncInterval  = flag.Duration("sync-interval", envSyncInterval(), "How often to mirror-fetch managed repos from their remotes so served state stays current. Defaults to 5m (the webhook backstop); 0 disables the loop. Also set via STACKIT_SYNC_INTERVAL (e.g. 60s).")
 	)
 	flag.Parse()
 
@@ -293,12 +293,26 @@ func envBool(name string) bool {
 	return err == nil && v
 }
 
-// envDuration parses the named environment variable as a Go duration (e.g.
-// "60s"). Unset or unparseable values yield 0, which disables the sync loop.
-func envDuration(name string) time.Duration {
-	d, err := time.ParseDuration(strings.TrimSpace(os.Getenv(name)))
+// defaultSyncInterval is the background mirror-fetch cadence used when
+// STACKIT_SYNC_INTERVAL is unset. It exists so the webhook backstop is present
+// out of the box: even if a delivery is missed (or a push only touched stackit
+// metadata refs, which GitHub sends no push event for), the loop catches up
+// within this window. Operators tune it down for fresher state or set 0 to
+// disable polling and rely solely on webhooks.
+const defaultSyncInterval = 5 * time.Minute
+
+// envSyncInterval resolves the sync-loop interval default: the value of
+// STACKIT_SYNC_INTERVAL when set ("0" explicitly disables the loop), otherwise
+// defaultSyncInterval. An unparseable value falls back to the default rather
+// than silently disabling the loop.
+func envSyncInterval() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("STACKIT_SYNC_INTERVAL"))
+	if raw == "" {
+		return defaultSyncInterval
+	}
+	d, err := time.ParseDuration(raw)
 	if err != nil {
-		return 0
+		return defaultSyncInterval
 	}
 	return d
 }

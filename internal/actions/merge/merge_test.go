@@ -253,9 +253,10 @@ func (h *mockHandler) Complete(_ *merge.Result) {
 
 func TestExecute_AlwaysCallsComplete(t *testing.T) {
 	t.Parallel()
-	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	t.Run("calls Complete on success", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		handler := &mockHandler{}
 		err := merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
 			Plan:    &merge.Plan{Steps: []merge.PlanStep{}},
@@ -266,6 +267,8 @@ func TestExecute_AlwaysCallsComplete(t *testing.T) {
 	})
 
 	t.Run("calls Complete on failure", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		handler := &mockHandler{}
 		err := merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
 			Plan: &merge.Plan{Steps: []merge.PlanStep{

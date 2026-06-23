@@ -30,8 +30,7 @@ const (
 //  6. Old behavior: SyncParentsFromGitHubBase trusted GitHub and reparented branch-c to main
 //  7. New behavior: PushParentsToGitHub pushes local parent to GitHub (local is authoritative)
 func TestSyncDiamondStackParentPreservation(t *testing.T) {
-	// Set dummy GITHUB_TOKEN to avoid calling 'gh auth token' and triggering credentials prompts
-	t.Setenv("GITHUB_TOKEN", "dummy")
+	t.Parallel()
 
 	t.Run("sync preserves local parent and pushes to GitHub when GitHub has stale base", func(t *testing.T) {
 		t.Parallel()

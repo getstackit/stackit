@@ -5,13 +5,14 @@
 # every git op — distroless has no git binary.
 FROM alpine:3.20
 
-RUN apk add --no-cache git ca-certificates tzdata \
+RUN apk add --no-cache git ca-certificates tzdata su-exec \
  && addgroup -S -g 10001 stackit \
  && adduser -S -D -H -u 10001 -G stackit stackit
 
 ARG TARGETPLATFORM
 COPY --chown=stackit:stackit $TARGETPLATFORM/stackit-server /usr/local/bin/stackit-server
+COPY docker/stackit-server-entrypoint.sh /usr/local/bin/stackit-server-entrypoint
+RUN chmod 0755 /usr/local/bin/stackit-server-entrypoint
 
-USER stackit:stackit
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/stackit-server"]
+ENTRYPOINT ["/usr/local/bin/stackit-server-entrypoint"]

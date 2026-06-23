@@ -10,9 +10,9 @@ import (
 )
 
 const insertRepo = `-- name: InsertRepo :one
-INSERT INTO repos (id, display_name, owner, name, path, remote)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, display_name, owner, name, path, remote, created_at, updated_at
+INSERT INTO repos (id, display_name, owner, name, path, remote, added_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, display_name, owner, name, path, remote, created_at, updated_at, added_by
 `
 
 type InsertRepoParams struct {
@@ -22,6 +22,7 @@ type InsertRepoParams struct {
 	Name        string
 	Path        string
 	Remote      string
+	AddedBy     string
 }
 
 func (q *Queries) InsertRepo(ctx context.Context, arg InsertRepoParams) (Repo, error) {
@@ -32,6 +33,7 @@ func (q *Queries) InsertRepo(ctx context.Context, arg InsertRepoParams) (Repo, e
 		arg.Name,
 		arg.Path,
 		arg.Remote,
+		arg.AddedBy,
 	)
 	var i Repo
 	err := row.Scan(
@@ -43,6 +45,7 @@ func (q *Queries) InsertRepo(ctx context.Context, arg InsertRepoParams) (Repo, e
 		&i.Remote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AddedBy,
 	)
 	return i, err
 }

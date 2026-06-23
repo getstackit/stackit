@@ -38,7 +38,7 @@ var validationCases = []validationCase{
 	},
 	{
 		name:   "BranchDiffHandler branch query",
-		build:  func(reg *registry.Registry) http.Handler { return NewBranchDiffHandler(reg) },
+		build:  func(reg *registry.Registry) http.Handler { return NewBranchDiffHandler(reg, 0) },
 		method: http.MethodGet,
 		url:    "/api/v1/branch-diff?branch=x",
 		setRequest: func(req *http.Request, branch string) {

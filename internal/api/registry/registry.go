@@ -36,8 +36,21 @@ type EntryConfig struct {
 	DisplayName string
 	RepoRoot    string
 	Remote      string
-	Engine      engine.Engine
-	GitHub      github.Client
+	// AddedBy is the GitHub login of the user who onboarded this repo, or
+	// empty for operator-seeded repos. Handlers use it to scope per-user
+	// visibility so a user only sees repos they added.
+	AddedBy string
+	// Managed marks a server-owned mirror checkout (DB-backed / onboarded under
+	// the repos root) that the sync loop may mirror-fetch. The -cwd dev repo is
+	// the operator's own working tree and is left unmanaged.
+	Managed bool
+	// Owner and Name are the GitHub coordinates, set for managed repos. The
+	// sync loop uses them to resolve a GitHub App installation token for the
+	// fetch.
+	Owner  string
+	Name   string
+	Engine engine.Engine
+	GitHub github.Client
 }
 
 // RepoEntry is the per-repository state required to serve API requests for
@@ -49,11 +62,29 @@ type RepoEntry struct {
 	DisplayName string
 	RepoRoot    string
 	Remote      string
-	Engine      engine.Engine
-	GitHub      github.Client
+	// AddedBy is the GitHub login of the user who onboarded this repo, or
+	// empty for operator-seeded repos visible to everyone.
+	AddedBy string
+	// Managed marks a server-owned mirror checkout the sync loop may
+	// mirror-fetch (see EntryConfig.Managed).
+	Managed bool
+	// Owner and Name are the GitHub coordinates, set for managed repos; the
+	// sync loop resolves an installation token from them.
+	Owner  string
+	Name   string
+	Engine engine.Engine
+	GitHub github.Client
 
 	Broadcaster *Broadcaster
 	Watcher     *watcher.RefWatcher
+
+	// refresh state: trunkName is captured at construction; lastCurrentBranch
+	// tracks the served HEAD across refreshes to detect branch switches.
+	// refreshMu serializes refresh() so the ref watcher and the sync loop
+	// can't rebuild the engine concurrently.
+	refreshMu         sync.Mutex
+	trunkName         string
+	lastCurrentBranch string
 
 	closers []func() error
 }
@@ -67,6 +98,10 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 		DisplayName: cfg.DisplayName,
 		RepoRoot:    cfg.RepoRoot,
 		Remote:      cfg.Remote,
+		AddedBy:     cfg.AddedBy,
+		Managed:     cfg.Managed,
+		Owner:       cfg.Owner,
+		Name:        cfg.Name,
 		Engine:      cfg.Engine,
 		GitHub:      cfg.GitHub,
 		Broadcaster: NewBroadcaster(),
@@ -74,7 +109,11 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 	entry.AddCloser(func() error { entry.Broadcaster.Close(); return nil })
 
 	if cfg.RepoRoot != "" && cfg.Engine != nil {
-		entry.Watcher = watcher.NewRefWatcher(cfg.RepoRoot, watcherDebounce, makeWatcherCallback(entry))
+		entry.trunkName = cfg.Engine.Trunk().GetName()
+		if cb := cfg.Engine.CurrentBranch(); cb != nil {
+			entry.lastCurrentBranch = cb.GetName()
+		}
+		entry.Watcher = watcher.NewRefWatcher(cfg.RepoRoot, watcherDebounce, entry.Refresh)
 		watcherDone := make(chan error, 1)
 		go func() {
 			watcherDone <- entry.Watcher.Start()
@@ -112,38 +151,37 @@ func (e *RepoEntry) close() error {
 	return errors.Join(errs...)
 }
 
-// makeWatcherCallback returns the function the ref watcher invokes when
-// the repo's refs change. It rebuilds the engine, detects branch switches,
-// and re-broadcasts both "branch_switched" and "refresh" so connected SSE
-// clients refetch.
-func makeWatcherCallback(entry *RepoEntry) func() {
-	trunkName := entry.Engine.Trunk().GetName()
-	var lastCurrentBranch string
-	if cb := entry.Engine.CurrentBranch(); cb != nil {
-		lastCurrentBranch = cb.GetName()
+// Refresh rebuilds the engine from current refs and broadcasts a "refresh"
+// event (plus "branch_switched" when the served HEAD changed) so connected SSE
+// clients refetch. It is the shared post-change path invoked by both the ref
+// watcher (local changes) and the sync loop (remote changes); refreshMu
+// serializes the two so the engine isn't rebuilt concurrently.
+func (e *RepoEntry) Refresh() {
+	if e.Engine == nil {
+		return
+	}
+	e.refreshMu.Lock()
+	defer e.refreshMu.Unlock()
+
+	if err := e.Engine.Rebuild(e.trunkName); err != nil {
+		slog.Error("engine rebuild failed", "repo", e.ID, "error", err)
+		return
 	}
 
-	return func() {
-		if err := entry.Engine.Rebuild(trunkName); err != nil {
-			slog.Error("engine rebuild failed", "repo", entry.ID, "error", err)
-			return
+	if cb := e.Engine.CurrentBranch(); cb != nil {
+		newBranch := cb.GetName()
+		if e.lastCurrentBranch != "" && newBranch != e.lastCurrentBranch {
+			data, _ := json.Marshal(map[string]string{
+				"from":      e.lastCurrentBranch,
+				"to":        newBranch,
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+			e.Broadcaster.Broadcast("branch_switched", string(data))
 		}
-
-		if cb := entry.Engine.CurrentBranch(); cb != nil {
-			newBranch := cb.GetName()
-			if lastCurrentBranch != "" && newBranch != lastCurrentBranch {
-				data, _ := json.Marshal(map[string]string{
-					"from":      lastCurrentBranch,
-					"to":        newBranch,
-					"timestamp": time.Now().Format(time.RFC3339),
-				})
-				entry.Broadcaster.Broadcast("branch_switched", string(data))
-			}
-			lastCurrentBranch = newBranch
-		}
-
-		entry.Broadcaster.Broadcast("refresh", "{}")
+		e.lastCurrentBranch = newBranch
 	}
+
+	e.Broadcaster.Broadcast("refresh", "{}")
 }
 
 // Registry is a goroutine-safe collection of RepoEntries keyed by ID.

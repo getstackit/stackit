@@ -136,6 +136,16 @@ export interface ViewResponse {
   recentlyMerged?: TrunkCommitResponse[];
 }
 
+// --- Server Capabilities ---
+
+// ConfigResponse mirrors httpcontract.ConfigResponse. It advertises server
+// capabilities so the UI can adapt at runtime instead of relying on
+// build-time flags.
+export interface ConfigResponse {
+  readOnly: boolean;
+  authRequired: boolean;
+}
+
 // --- Auth Types ---
 
 export interface MeResponse {
@@ -173,6 +183,12 @@ export function fetchMe(): Promise<MeResponse> {
   return fetchAPI<MeResponse>("/auth/me");
 }
 
+// fetchConfig reads server capabilities. It is served unauthenticated, so
+// the client can call it before deciding whether to attempt a login.
+export function fetchConfig(): Promise<ConfigResponse> {
+  return fetchAPI<ConfigResponse>("/api/v1/config");
+}
+
 export function authLoginURL(returnTo?: string): string {
   const path = "/auth/login";
   if (!returnTo) {
@@ -198,6 +214,34 @@ function repoPath(repoId: string, suffix: string): string {
 
 export function fetchRepos(): Promise<ReposListResponse> {
   return fetchAPI<ReposListResponse>("/api/v1/repos");
+}
+
+// onboardRepo asks the server to clone a GitHub repo and start serving it,
+// returning the newly served repo's summary. The caller's session must be able
+// to access owner/name; the server verifies that and 404s otherwise.
+export async function onboardRepo(owner: string, name: string): Promise<RepoSummary> {
+  const res = await fetch(`${API_BASE}/api/v1/repos`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      [CSRF_HEADER]: CSRF_HEADER_VALUE,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ owner, name }),
+  });
+  if (res.status === 401) {
+    throw new UnauthorizedError();
+  }
+  if (!res.ok) {
+    // The server returns {"error": "..."} for handled failures; surface it.
+    const detail = await res.json().catch(() => null);
+    const message =
+      detail && typeof detail.error === "string"
+        ? detail.error
+        : `API error: ${res.status} ${res.statusText}`;
+    throw new Error(message);
+  }
+  return res.json();
 }
 
 export function fetchView(repoId: string): Promise<ViewResponse> {

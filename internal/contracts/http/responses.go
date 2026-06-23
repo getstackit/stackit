@@ -5,6 +5,20 @@
 // to evolve independently.
 package httpcontract
 
+// ConfigResponse advertises server capabilities so the web client can adapt
+// at runtime instead of relying on build-time flags. It is served
+// unauthenticated so the client can learn whether a login is required
+// before attempting one.
+type ConfigResponse struct {
+	// ReadOnly is true when the server refuses writes (the submit endpoint
+	// is disabled). The client hides write affordances.
+	ReadOnly bool `json:"readOnly"`
+	// AuthRequired is true when reads require a session. It is false on a
+	// public read-only server and when auth is disabled, so the client knows
+	// not to send the user through a login flow.
+	AuthRequired bool `json:"authRequired"`
+}
+
 // RepoSummary is one entry in ReposListResponse — the metadata clients
 // need to render a repo picker without hitting per-repo endpoints.
 type RepoSummary struct {
@@ -17,6 +31,16 @@ type RepoSummary struct {
 // ReposListResponse is the response shape for GET /api/v1/repos.
 type ReposListResponse struct {
 	Repos []RepoSummary `json:"repos"`
+}
+
+// OnboardRepoRequest is the body for POST /api/v1/repos — a request to clone a
+// GitHub repository and start serving it. Provide either Owner+Name or URL;
+// URL is a convenience that is parsed into owner/name. On success the server
+// responds 201 with a RepoSummary for the newly served repo.
+type OnboardRepoRequest struct {
+	Owner string `json:"owner,omitempty"`
+	Name  string `json:"name,omitempty"`
+	URL   string `json:"url,omitempty"`
 }
 
 // ViewResponse is the combined response for the frontend view.

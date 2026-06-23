@@ -41,7 +41,7 @@ func TestEventsHandlerReturnsWhenBroadcasterCloses(t *testing.T) {
 		ID:          "default",
 		Broadcaster: broadcaster,
 	}))
-	handler := NewEventsHandler(reg)
+	handler := NewEventsHandler(reg, SSELimits{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/repos/default/events", nil)
 	req.SetPathValue("repoID", "default")
@@ -68,6 +68,51 @@ func TestEventsHandlerReturnsWhenBroadcasterCloses(t *testing.T) {
 	}
 }
 
+func TestEventsHandlerRejectsBeyondPerIPCap(t *testing.T) {
+	t.Parallel()
+
+	reg := registry.New()
+	broadcaster := registry.NewBroadcaster()
+	require.NoError(t, reg.Add(&registry.RepoEntry{
+		ID:          "default",
+		Broadcaster: broadcaster,
+	}))
+	handler := NewEventsHandler(reg, SSELimits{MaxPerIP: 1})
+
+	// First connection holds the only per-IP slot. Run it in the background;
+	// it blocks streaming until the broadcaster closes.
+	firstReq := httptest.NewRequest(http.MethodGet, "/api/v1/repos/default/events", nil)
+	firstReq.SetPathValue("repoID", "default")
+	first := newSignalingResponseWriter()
+	done := make(chan struct{})
+	go func() {
+		handler.ServeHTTP(first, firstReq)
+		close(done)
+	}()
+
+	select {
+	case <-first.wrote:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first SSE connection to establish")
+	}
+
+	// Second connection from the same IP exceeds the cap and is rejected
+	// without blocking.
+	secondReq := httptest.NewRequest(http.MethodGet, "/api/v1/repos/default/events", nil)
+	secondReq.SetPathValue("repoID", "default")
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, secondReq)
+	require.Equal(t, http.StatusTooManyRequests, second.Code)
+
+	// Releasing the first slot (broadcaster shutdown) lets the goroutine exit.
+	broadcaster.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first connection did not exit after broadcaster shutdown")
+	}
+}
+
 func TestEventsHandlerReturns404ForUnknownRepo(t *testing.T) {
 	t.Parallel()
 
@@ -76,7 +121,7 @@ func TestEventsHandlerReturns404ForUnknownRepo(t *testing.T) {
 		ID:          "default",
 		Broadcaster: registry.NewBroadcaster(),
 	}))
-	handler := NewEventsHandler(reg)
+	handler := NewEventsHandler(reg, SSELimits{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/repos/missing/events", nil)
 	req.SetPathValue("repoID", "missing")

@@ -72,7 +72,7 @@ func TestRequireCSRFHeader_BlocksMutatingMethodsWithoutHeader(t *testing.T) {
 	}))
 
 	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
-		req := httptest.NewRequest(m, "/api/v1/repos/default/stacks/main/submit", nil)
+		req := httptest.NewRequest(m, "/api/v1/repos/acme/demo/stacks/main/submit", nil)
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
 		require.Equalf(t, http.StatusForbidden, rr.Code, "method %s without header should be 403", m)
@@ -89,7 +89,7 @@ func TestRequireCSRFHeader_AllowsMutatingMethodsWithHeader(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos/default/stacks/main/submit", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos/acme/demo/stacks/main/submit", nil)
 	req.Header.Set(CSRFHeader, "1")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)

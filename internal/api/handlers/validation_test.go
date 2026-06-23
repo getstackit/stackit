@@ -31,27 +31,25 @@ var validationCases = []validationCase{
 		name:   "BranchesHandler getBranch path value",
 		build:  func(reg *registry.Registry) http.Handler { return NewBranchesHandler(reg) },
 		method: http.MethodGet,
-		url:    "/api/v1/branches/x",
+		url:    "/api/v1/repos/acme/demo/branches/x",
 		setRequest: func(req *http.Request, branch string) {
 			req.SetPathValue("name", branch)
 		},
 	},
 	{
-		name:   "BranchDiffHandler branch query",
+		name:   "BranchDiffHandler branch path value",
 		build:  func(reg *registry.Registry) http.Handler { return NewBranchDiffHandler(reg, 0) },
 		method: http.MethodGet,
-		url:    "/api/v1/branch-diff?branch=x",
+		url:    "/api/v1/repos/acme/demo/branch-diff/x",
 		setRequest: func(req *http.Request, branch string) {
-			q := req.URL.Query()
-			q.Set("branch", branch)
-			req.URL.RawQuery = q.Encode()
+			req.SetPathValue("name", branch)
 		},
 	},
 	{
 		name:   "SubmitHandler rootBranch path value",
 		build:  func(reg *registry.Registry) http.Handler { return NewSubmitHandler(reg) },
 		method: http.MethodPost,
-		url:    "/api/v1/stacks/x/submit",
+		url:    "/api/v1/repos/acme/demo/stacks/x/submit",
 		setRequest: func(req *http.Request, branch string) {
 			req.SetPathValue("rootBranch", branch)
 		},
@@ -83,9 +81,9 @@ func TestHandlers_RejectMalformedBranchNames(t *testing.T) {
 				t.Parallel()
 
 				reg := registry.New()
-				require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default"}))
+				require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default", Owner: testOwner, Name: testRepo}))
 
-				req := httptest.NewRequest(vc.method, vc.url, nil)
+				req := withRepo(httptest.NewRequest(vc.method, vc.url, nil))
 				vc.setRequest(req, bad.input)
 
 				rr := httptest.NewRecorder()

@@ -8,11 +8,6 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-// defaultRepoID is the ID assigned to the single bootstrap repo when the
-// server is started with `-cwd` (single-repo legacy shortcut). It's also
-// substituted on the unscoped legacy routes that don't carry {repoID}.
-const defaultRepoID = "default"
-
 // Visibility controls whether a handler may expose operator- or
 // viewer-identifying fields in its response. A public (read-only) server
 // must not leak who is running it, so identity fields like currentUser are
@@ -30,18 +25,13 @@ const (
 	VisibilityPublic
 )
 
-// resolveRepo looks up the repo entry for the {repoID} path value on r.
-// If the path value is empty (legacy/unscoped route or direct test call)
-// it falls back to defaultRepoID. Returns false and writes a 404 when the
-// repoID does not exist in the registry or is not visible to the requesting
-// user. A repo invisible to the caller 404s (not 403) so its existence is not
-// disclosed.
+// resolveRepo looks up the repo entry for the {owner}/{repo} path values on r,
+// matched case-insensitively against the registry's GitHub coordinates. Returns
+// false and writes a 404 when no such repo exists or it is not visible to the
+// requesting user. A repo invisible to the caller 404s (not 403) so its
+// existence is not disclosed.
 func resolveRepo(reg *registry.Registry, w http.ResponseWriter, r *http.Request) (*registry.RepoEntry, bool) {
-	id := r.PathValue("repoID")
-	if id == "" {
-		id = defaultRepoID
-	}
-	entry, ok := reg.Get(id)
+	entry, ok := reg.GetByOwnerRepo(r.PathValue("owner"), r.PathValue("repo"))
 	if !ok || !visibleTo(entry, requestUser(r)) {
 		http.NotFound(w, r)
 		return nil, false

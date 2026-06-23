@@ -230,7 +230,7 @@ clients refetch. Three things trigger it:
    (below). The reliable backstop.
 2. **Webhooks** — an immediate, push-driven refresh of a single repo
    ([below](#evented-refresh-webhooks)). The low-latency path.
-3. **Manual sync** — `POST /api/v1/repos/{repoID}/sync`, an on-demand refresh
+3. **Manual sync** — `POST /api/v1/repos/{owner}/{repo}/sync`, an on-demand refresh
    (below). The fallback for local servers and for forcing a pull.
 
 The interval loop is the floor: webhooks and manual sync make refreshes faster
@@ -284,7 +284,7 @@ point a GitHub webhook at the server:
 
 ### Manual sync
 
-`POST /api/v1/repos/{repoID}/sync` forces a refresh of one repo on demand. It is
+`POST /api/v1/repos/{owner}/{repo}/sync` forces a refresh of one repo on demand. It is
 session-gated like submit (and refused in read-only mode), so it is never an
 anonymous trigger. For a managed mirror it mirror-fetches then rebuilds; for a
 local `-cwd` working repo it only re-reads on-disk refs (it never mirror-fetches

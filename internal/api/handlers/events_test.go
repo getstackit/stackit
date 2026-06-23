@@ -39,12 +39,13 @@ func TestEventsHandlerReturnsWhenBroadcasterCloses(t *testing.T) {
 	broadcaster := registry.NewBroadcaster()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "default",
+		Owner:       "acme",
+		Name:        "demo",
 		Broadcaster: broadcaster,
 	}))
 	handler := NewEventsHandler(reg, SSELimits{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/repos/default/events", nil)
-	req.SetPathValue("repoID", "default")
+	req := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/events", nil))
 	recorder := newSignalingResponseWriter()
 
 	done := make(chan struct{})
@@ -75,14 +76,15 @@ func TestEventsHandlerRejectsBeyondPerIPCap(t *testing.T) {
 	broadcaster := registry.NewBroadcaster()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "default",
+		Owner:       "acme",
+		Name:        "demo",
 		Broadcaster: broadcaster,
 	}))
 	handler := NewEventsHandler(reg, SSELimits{MaxPerIP: 1})
 
 	// First connection holds the only per-IP slot. Run it in the background;
 	// it blocks streaming until the broadcaster closes.
-	firstReq := httptest.NewRequest(http.MethodGet, "/api/v1/repos/default/events", nil)
-	firstReq.SetPathValue("repoID", "default")
+	firstReq := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/events", nil))
 	first := newSignalingResponseWriter()
 	done := make(chan struct{})
 	go func() {
@@ -98,8 +100,7 @@ func TestEventsHandlerRejectsBeyondPerIPCap(t *testing.T) {
 
 	// Second connection from the same IP exceeds the cap and is rejected
 	// without blocking.
-	secondReq := httptest.NewRequest(http.MethodGet, "/api/v1/repos/default/events", nil)
-	secondReq.SetPathValue("repoID", "default")
+	secondReq := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/events", nil))
 	second := httptest.NewRecorder()
 	handler.ServeHTTP(second, secondReq)
 	require.Equal(t, http.StatusTooManyRequests, second.Code)
@@ -119,12 +120,13 @@ func TestEventsHandlerReturns404ForUnknownRepo(t *testing.T) {
 	reg := registry.New()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "default",
+		Owner:       "acme",
+		Name:        "demo",
 		Broadcaster: registry.NewBroadcaster(),
 	}))
 	handler := NewEventsHandler(reg, SSELimits{})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/repos/missing/events", nil)
-	req.SetPathValue("repoID", "missing")
+	req := withRepoCoords(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/missing/events", nil), "acme", "missing")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 

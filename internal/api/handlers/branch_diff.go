@@ -46,9 +46,9 @@ func (h *BranchDiffHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	branchName := r.URL.Query().Get("branch")
+	branchName := r.PathValue("name")
 	if branchName == "" {
-		http.Error(w, "missing branch query parameter", http.StatusBadRequest)
+		http.Error(w, "missing branch", http.StatusBadRequest)
 		return
 	}
 	if !validateBranchName(w, branchName) {

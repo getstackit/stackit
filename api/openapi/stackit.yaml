@@ -6,124 +6,6 @@ info:
 servers:
   - url: /
 paths:
-  /api/v1/view:
-    get:
-      summary: Combined view payload for the dashboard.
-      operationId: getView
-      responses:
-        "200":
-          description: Current repository and stack state.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ViewResponse"
-  /api/v1/repo:
-    get:
-      summary: Repository metadata.
-      operationId: getRepo
-      responses:
-        "200":
-          description: Repository details.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RepoResponse"
-  /api/v1/stacks:
-    get:
-      summary: List discovered stacks.
-      operationId: listStacks
-      responses:
-        "200":
-          description: Stack list.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/StackSummary"
-  /api/v1/stacks/{rootBranch}:
-    get:
-      summary: Get detailed stack by root branch.
-      operationId: getStack
-      parameters:
-        - in: path
-          name: rootBranch
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Stack details.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StackDetail"
-        "404":
-          description: Stack not found.
-  /api/v1/branches:
-    get:
-      summary: List tracked branches.
-      operationId: listBranches
-      responses:
-        "200":
-          description: Branch list.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/BranchResponse"
-  /api/v1/branches/{branchName}:
-    get:
-      summary: Get one tracked branch.
-      operationId: getBranch
-      parameters:
-        - in: path
-          name: branchName
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Branch details.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BranchResponse"
-        "404":
-          description: Branch not found.
-  /api/v1/branch-diff:
-    get:
-      summary: Get raw patch diff for a tracked branch.
-      operationId: getBranchDiff
-      parameters:
-        - in: query
-          name: branch
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Branch diff details.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BranchDiffResponse"
-        "400":
-          description: Missing branch query parameter.
-        "404":
-          description: Branch not found.
-  /api/v1/events:
-    get:
-      summary: Server-sent event stream for repository refresh events.
-      operationId: streamEvents
-      responses:
-        "200":
-          description: text/event-stream payload.
-          content:
-            text/event-stream:
-              schema:
-                type: string
   /api/v1/repos:
     get:
       summary: List repositories the server is serving (filtered to the caller).
@@ -168,7 +50,248 @@ paths:
           description: Repository already onboarded.
         "503":
           description: Onboarding not available (no auth, database, or repos root).
+  /api/v1/repos/{owner}/{repo}/view:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    get:
+      summary: Combined view payload for the dashboard.
+      operationId: getView
+      responses:
+        "200":
+          description: Current repository and stack state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewResponse"
+        "404":
+          description: Repository not found or not visible to the caller.
+  /api/v1/repos/{owner}/{repo}/repo:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    get:
+      summary: Repository metadata.
+      operationId: getRepo
+      responses:
+        "200":
+          description: Repository details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoResponse"
+        "404":
+          description: Repository not found or not visible to the caller.
+  /api/v1/repos/{owner}/{repo}/stacks:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    get:
+      summary: List discovered stacks.
+      operationId: listStacks
+      responses:
+        "200":
+          description: Stack list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StackSummary"
+  /api/v1/repos/{owner}/{repo}/stacks/{rootBranch}:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    get:
+      summary: Get detailed stack by root branch.
+      operationId: getStack
+      parameters:
+        - in: path
+          name: rootBranch
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stack details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StackDetail"
+        "404":
+          description: Stack not found.
+  /api/v1/repos/{owner}/{repo}/stacks/{rootBranch}/submit:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    post:
+      summary: Submit a stack as stacked pull requests.
+      operationId: submitStack
+      parameters:
+        - in: path
+          name: rootBranch
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Submit result.
+        "404":
+          description: Stack not found.
+        "405":
+          description: Server is read-only.
+  /api/v1/repos/{owner}/{repo}/sync:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    post:
+      summary: Force an immediate refresh of one repository.
+      operationId: syncRepo
+      responses:
+        "204":
+          description: Refresh completed.
+        "404":
+          description: Repository not found or not visible to the caller.
+        "405":
+          description: Server is read-only.
+        "502":
+          description: Mirror fetch failed.
+  /api/v1/repos/{owner}/{repo}/branches:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    get:
+      summary: List tracked branches.
+      operationId: listBranches
+      responses:
+        "200":
+          description: Branch list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BranchResponse"
+  /api/v1/repos/{owner}/{repo}/branches/{branchName}:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    get:
+      summary: Get one tracked branch.
+      operationId: getBranch
+      parameters:
+        - in: path
+          name: branchName
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Branch details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchResponse"
+        "404":
+          description: Branch not found.
+  /api/v1/repos/{owner}/{repo}/branch-diff/{branchName}:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    get:
+      summary: Get raw patch diff for a tracked branch.
+      operationId: getBranchDiff
+      parameters:
+        - in: path
+          name: branchName
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Branch diff details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchDiffResponse"
+        "400":
+          description: Missing branch.
+        "404":
+          description: Branch not found.
+  /api/v1/repos/{owner}/{repo}/events:
+    parameters:
+      - $ref: "#/components/parameters/Owner"
+      - $ref: "#/components/parameters/Repo"
+    get:
+      summary: Server-sent event stream for repository refresh events.
+      operationId: streamEvents
+      responses:
+        "200":
+          description: text/event-stream payload.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /api/v1/webhooks/github:
+    post:
+      summary: Receive a GitHub webhook delivery and trigger a repo refresh.
+      description: >-
+        Authenticated solely by the X-Hub-Signature-256 HMAC over the raw body;
+        it carries no session or CSRF token. Fails closed: when no webhook secret
+        is configured the endpoint returns 404. A verified push is acked
+        immediately and the matching managed repo is mirror-fetched off the
+        request path (a burst for one repo coalesces into a single fetch). It is
+        unaffected by read-only mode, since a refresh is a read-side operation.
+      operationId: receiveGitHubWebhook
+      parameters:
+        - in: header
+          name: X-Hub-Signature-256
+          required: true
+          description: HMAC-SHA256 of the raw request body, keyed by the webhook secret.
+          schema:
+            type: string
+        - in: header
+          name: X-GitHub-Event
+          required: true
+          description: GitHub event name; only "push" triggers a refresh and "ping" is acked.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The GitHub webhook event payload (e.g. a push event).
+      responses:
+        "202":
+          description: Push accepted; a refresh is scheduled for the matching managed repo.
+        "204":
+          description: >-
+            Verified but no action taken — a ping, a non-push event, or a push
+            that did not resolve to a managed repo.
+        "400":
+          description: Could not read the request body.
+        "401":
+          description: Missing or invalid signature.
+        "404":
+          description: Webhook receiver is disabled (no secret configured).
 components:
+  parameters:
+    Owner:
+      in: path
+      name: owner
+      required: true
+      description: GitHub repository owner (login), matched case-insensitively.
+      schema:
+        type: string
+    Repo:
+      in: path
+      name: repo
+      required: true
+      description: GitHub repository name, matched case-insensitively.
+      schema:
+        type: string
   schemas:
     ViewResponse:
       type: object
@@ -372,6 +495,10 @@ components:
       required: [id, displayName, trunk]
       properties:
         id:
+          type: string
+        owner:
+          type: string
+        repo:
           type: string
         displayName:
           type: string

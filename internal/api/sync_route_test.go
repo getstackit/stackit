@@ -13,7 +13,7 @@ import (
 // syncRouteRequest builds a POST to the manual-sync route with the CSRF header
 // set so it clears RequireCSRFHeader and reaches the routed handler.
 func syncRouteRequest() *http.Request {
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos/default/sync", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos/acme/demo/sync", nil)
 	req.Header.Set(auth.CSRFHeader, "1")
 	return req
 }

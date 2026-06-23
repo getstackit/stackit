@@ -96,7 +96,7 @@ func TestReposListFiltersByUser(t *testing.T) {
 func TestResolveRepoVisibility(t *testing.T) {
 	t.Parallel()
 	reg := registry.New()
-	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "alice-repo", AddedBy: "alice"}))
+	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "alice-repo", AddedBy: "alice", Owner: "alice", Name: "repo"}))
 
 	// A tiny handler that 200s when resolveRepo succeeds.
 	probe := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -105,16 +105,12 @@ func TestResolveRepoVisibility(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	withRepoID := func(req *http.Request, id string) *http.Request {
-		req.SetPathValue("repoID", id)
-		return req
-	}
 
 	t.Run("owner resolves", func(t *testing.T) {
 		t.Parallel()
 		gated, base := sessionFor(t, "alice", probe)
 		rec := httptest.NewRecorder()
-		gated.ServeHTTP(rec, withRepoID(base, "alice-repo"))
+		gated.ServeHTTP(rec, withRepoCoords(base, "alice", "repo"))
 		require.Equal(t, http.StatusOK, rec.Code)
 	})
 
@@ -122,14 +118,14 @@ func TestResolveRepoVisibility(t *testing.T) {
 		t.Parallel()
 		gated, base := sessionFor(t, "bob", probe)
 		rec := httptest.NewRecorder()
-		gated.ServeHTTP(rec, withRepoID(base, "alice-repo"))
+		gated.ServeHTTP(rec, withRepoCoords(base, "alice", "repo"))
 		require.Equal(t, http.StatusNotFound, rec.Code)
 	})
 
 	t.Run("anonymous gets 404", func(t *testing.T) {
 		t.Parallel()
 		rec := httptest.NewRecorder()
-		probe.ServeHTTP(rec, withRepoID(httptest.NewRequest(http.MethodGet, "/api/v1/repos/alice-repo/view", nil), "alice-repo"))
+		probe.ServeHTTP(rec, withRepoCoords(httptest.NewRequest(http.MethodGet, "/api/v1/repos/alice/repo/view", nil), "alice", "repo"))
 		require.Equal(t, http.StatusNotFound, rec.Code)
 	})
 }

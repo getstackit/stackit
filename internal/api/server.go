@@ -266,33 +266,22 @@ func (s *Server) buildHandler() (http.Handler, error) {
 		apiMux.Handle("GET "+prefix+"/repos", reposListHandler)
 		apiMux.Handle("POST "+prefix+"/repos", onboardHandler)
 
-		// New multi-repo routes. {repoID} resolves through the registry;
-		// unknown IDs return 404 from inside the handler.
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/view", viewHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/repo", repoHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/stacks", stacksHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/stacks/{name...}", stacksHandler)
-		apiMux.Handle("POST "+prefix+"/repos/{repoID}/stacks/{rootBranch}/submit", submitHandler)
-		apiMux.Handle("POST "+prefix+"/repos/{repoID}/sync", syncHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branches", branchesHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branches/{name...}", branchesHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branch-diff", branchDiffHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/events", eventsHandler)
-
-		// Legacy unscoped routes. With no {repoID} path value, handlers
-		// fall back to "default" (see defaultRepoID in handlers/common.go).
-		// These keep the existing web client working while the multi-repo
-		// migration is in progress and are removed once the frontend uses
-		// the /repos/{repoID}/ shape.
-		apiMux.Handle("GET "+prefix+"/view", viewHandler)
-		apiMux.Handle("GET "+prefix+"/repo", repoHandler)
-		apiMux.Handle("GET "+prefix+"/stacks", stacksHandler)
-		apiMux.Handle("GET "+prefix+"/stacks/{name...}", stacksHandler)
-		apiMux.Handle("POST "+prefix+"/stacks/{rootBranch}/submit", submitHandler)
-		apiMux.Handle("GET "+prefix+"/branches", branchesHandler)
-		apiMux.Handle("GET "+prefix+"/branches/{name...}", branchesHandler)
-		apiMux.Handle("GET "+prefix+"/branch-diff", branchDiffHandler)
-		apiMux.Handle("GET "+prefix+"/events", eventsHandler)
+		// GitHub-style per-repo routes. {owner}/{repo} resolves through the
+		// registry's owner/repo index (case-insensitive); unknown coordinates
+		// return 404 from inside the handler. Branch and stack names occupy a
+		// trailing {name...} wildcard so they can contain slashes; that forces
+		// branch-diff to be its own resource (the wildcard must be last, so
+		// .../branches/{name}/diff is not expressible).
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/view", viewHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/repo", repoHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/stacks", stacksHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/stacks/{name...}", stacksHandler)
+		apiMux.Handle("POST "+prefix+"/repos/{owner}/{repo}/stacks/{rootBranch}/submit", submitHandler)
+		apiMux.Handle("POST "+prefix+"/repos/{owner}/{repo}/sync", syncHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/branches", branchesHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/branches/{name...}", branchesHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/branch-diff/{name...}", branchDiffHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/events", eventsHandler)
 	}
 
 	// Apply session enforcement to /api/* only. /auth/* and static assets

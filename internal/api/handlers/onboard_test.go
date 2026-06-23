@@ -131,6 +131,27 @@ func TestOnboardHandlerDuplicate(t *testing.T) {
 	require.Equal(t, http.StatusConflict, rec.Code)
 }
 
+func TestOnboardHandlerDuplicateDifferentCasing(t *testing.T) {
+	t.Parallel()
+	reg := registry.New()
+	t.Cleanup(func() { _ = reg.Close() })
+	// An existing repo, indexed by its case-folded owner/repo key.
+	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "octo-widget", Owner: "octo", Name: "widget", AddedBy: "alice"}))
+	cipher := onboardCipher(t)
+
+	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir(), fakeTokenProvider{token: "inst-token"})
+	h.checkAccess = func(_ context.Context, _, _, _ string) (*github.RepoAccess, error) {
+		t.Fatal("onboard should 409 on the owner/repo collision before checking access or cloning")
+		return nil, nil
+	}
+
+	// Different casing derives a different repo ID, so the ID check passes and
+	// only the owner/repo index catches the collision. Without that guard this
+	// would clone and persist a row, then 500 at reg.Add with an orphaned row.
+	rec := doOnboard(t, h, cipher, `{"owner":"Octo","name":"Widget"}`)
+	require.Equal(t, http.StatusConflict, rec.Code)
+}
+
 func TestOnboardHandlerInvalidCoords(t *testing.T) {
 	t.Parallel()
 	reg := registry.New()

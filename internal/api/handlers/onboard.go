@@ -129,7 +129,17 @@ func (h *OnboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := repoID(owner, name)
+	// Guard both identities the registry indexes: the derived ID and the
+	// case-folded owner/repo key. repoID does not lowercase, so "Octo/Widget"
+	// and "octo/widget" yield distinct IDs but the same owner/repo key. Checking
+	// only the ID would let the second casing pass here, clone, persist a row,
+	// then fail at reg.Add with a 500 and an orphaned DB row. Catch the
+	// owner/repo collision up front so it's a clean 409 before any clone or write.
 	if _, exists := h.reg.Get(id); exists {
+		writeJSONError(w, http.StatusConflict, "repository already onboarded")
+		return
+	}
+	if _, exists := h.reg.GetByOwnerRepo(owner, name); exists {
 		writeJSONError(w, http.StatusConflict, "repository already onboarded")
 		return
 	}
@@ -229,7 +239,7 @@ func (h *OnboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summary := httpcontract.RepoSummary{ID: entry.ID, DisplayName: entry.DisplayName}
+	summary := httpcontract.RepoSummary{ID: entry.ID, Owner: entry.Owner, Repo: entry.Name, DisplayName: entry.DisplayName}
 	if entry.Engine != nil {
 		summary.Trunk = entry.Engine.Trunk().GetName()
 		if cur := entry.Engine.CurrentBranch(); cur != nil {

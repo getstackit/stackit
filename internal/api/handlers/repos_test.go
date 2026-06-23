@@ -21,11 +21,15 @@ func TestReposListHandler_ListsRegisteredRepos(t *testing.T) {
 	reg := registry.New()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "alpha",
+		Owner:       "acme",
+		Name:        "alpha",
 		DisplayName: "Alpha",
 		Engine:      s.Engine,
 	}))
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "beta",
+		Owner:       "acme",
+		Name:        "beta",
 		DisplayName: "Beta",
 		Engine:      s.Engine,
 	}))
@@ -42,6 +46,8 @@ func TestReposListHandler_ListsRegisteredRepos(t *testing.T) {
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
 	require.Len(t, resp.Repos, 2)
 	require.Equal(t, "alpha", resp.Repos[0].ID)
+	require.Equal(t, "acme", resp.Repos[0].Owner)
+	require.Equal(t, "alpha", resp.Repos[0].Repo)
 	require.Equal(t, "Alpha", resp.Repos[0].DisplayName)
 	require.Equal(t, "main", resp.Repos[0].Trunk)
 	require.Equal(t, "beta", resp.Repos[1].ID)

@@ -30,6 +30,13 @@ const watcherDebounce = 200 * time.Millisecond
 // without escaping, keeping the routing surface simple.
 var idPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+// ownerRepoKey is the lookup key for the owner/repo secondary index. GitHub
+// treats owner/repo case-insensitively, so we lowercase to match a request's
+// path segments regardless of how they were typed.
+func ownerRepoKey(owner, name string) string {
+	return strings.ToLower(owner + "/" + name)
+}
+
 // EntryConfig is the input to NewEntry. It captures the per-repo state the
 // constructor needs to wire up the broadcaster + watcher.
 type EntryConfig struct {
@@ -185,19 +192,30 @@ func (e *RepoEntry) Refresh() {
 	e.Broadcaster.Broadcast("refresh", "{}")
 }
 
-// Registry is a goroutine-safe collection of RepoEntries keyed by ID.
+// Registry is a goroutine-safe collection of RepoEntries keyed by ID, with a
+// secondary index keyed by owner/repo so handlers can resolve the GitHub-style
+// /repos/{owner}/{repo} routes.
 type Registry struct {
 	mu      sync.RWMutex
 	entries map[string]*RepoEntry
+	// byOwnerRepo maps a lowercased "owner/name" to the same entries. Only
+	// entries with both an owner and a name are indexed; a repo with no GitHub
+	// remote (empty coordinates) is reachable by ID but not by owner/repo.
+	byOwnerRepo map[string]*RepoEntry
 }
 
 // New returns an empty registry.
 func New() *Registry {
-	return &Registry{entries: make(map[string]*RepoEntry)}
+	return &Registry{
+		entries:     make(map[string]*RepoEntry),
+		byOwnerRepo: make(map[string]*RepoEntry),
+	}
 }
 
 // Add inserts an entry. The entry's ID must be non-empty, match the allowed
-// pattern, and be unique within the registry.
+// pattern, and be unique within the registry. When the entry carries GitHub
+// coordinates (Owner and Name), they must also be unique so the owner/repo
+// index stays unambiguous.
 func (r *Registry) Add(e *RepoEntry) error {
 	if e == nil {
 		return errors.New("registry: nil entry")
@@ -213,7 +231,17 @@ func (r *Registry) Add(e *RepoEntry) error {
 	if _, exists := r.entries[e.ID]; exists {
 		return fmt.Errorf("registry: duplicate repo ID %q", e.ID)
 	}
+	var key string
+	if e.Owner != "" && e.Name != "" {
+		key = ownerRepoKey(e.Owner, e.Name)
+		if _, exists := r.byOwnerRepo[key]; exists {
+			return fmt.Errorf("registry: duplicate repo %s/%s", e.Owner, e.Name)
+		}
+	}
 	r.entries[e.ID] = e
+	if key != "" {
+		r.byOwnerRepo[key] = e
+	}
 	return nil
 }
 
@@ -223,6 +251,18 @@ func (r *Registry) Get(id string) (*RepoEntry, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	e, ok := r.entries[id]
+	return e, ok
+}
+
+// GetByOwnerRepo returns the entry for owner/repo, matched case-insensitively.
+// The bool is false when no such entry exists or the coordinates are empty.
+func (r *Registry) GetByOwnerRepo(owner, repo string) (*RepoEntry, bool) {
+	if owner == "" || repo == "" {
+		return nil, false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	e, ok := r.byOwnerRepo[ownerRepoKey(owner, repo)]
 	return e, ok
 }
 
@@ -277,5 +317,6 @@ func (r *Registry) Close() error {
 		}
 	}
 	r.entries = nil
+	r.byOwnerRepo = nil
 	return errors.Join(errs...)
 }

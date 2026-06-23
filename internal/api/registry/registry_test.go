@@ -58,6 +58,50 @@ func TestRegistry_AddRejectsDuplicateID(t *testing.T) {
 	require.Contains(t, err.Error(), "duplicate repo ID")
 }
 
+func TestRegistry_AddRejectsDuplicateOwnerRepo(t *testing.T) {
+	t.Parallel()
+	r := New()
+	require.NoError(t, r.Add(&RepoEntry{ID: "a", Owner: "octo", Name: "widget"}))
+	// Same coordinates, different ID, different casing — still a collision.
+	err := r.Add(&RepoEntry{ID: "b", Owner: "Octo", Name: "Widget"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate repo")
+}
+
+func TestRegistry_GetByOwnerRepo(t *testing.T) {
+	t.Parallel()
+	r := New()
+	require.NoError(t, r.Add(&RepoEntry{ID: "managed", Owner: "Octo", Name: "Widget"}))
+	require.NoError(t, r.Add(&RepoEntry{ID: "no-remote"})) // empty coordinates: ID-only
+
+	t.Run("matches owner/repo case-insensitively", func(t *testing.T) {
+		t.Parallel()
+		e, ok := r.GetByOwnerRepo("octo", "widget")
+		require.True(t, ok)
+		require.Equal(t, "managed", e.ID)
+	})
+
+	t.Run("returns false when no repo matches", func(t *testing.T) {
+		t.Parallel()
+		_, ok := r.GetByOwnerRepo("octo", "missing")
+		require.False(t, ok)
+	})
+
+	t.Run("returns false for empty coordinates", func(t *testing.T) {
+		t.Parallel()
+		_, ok := r.GetByOwnerRepo("", "")
+		require.False(t, ok)
+	})
+
+	t.Run("entry without coordinates is not indexed by owner/repo", func(t *testing.T) {
+		t.Parallel()
+		_, byID := r.Get("no-remote")
+		require.True(t, byID, "should still be reachable by ID")
+		_, byOwnerRepo := r.GetByOwnerRepo("", "")
+		require.False(t, byOwnerRepo)
+	})
+}
+
 func TestRegistry_GetMissing(t *testing.T) {
 	t.Parallel()
 	r := New()

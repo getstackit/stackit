@@ -251,6 +251,16 @@ func (s *Server) buildHandler() (http.Handler, error) {
 		onboardHandler = readOnlyWriteHandler()
 	}
 
+	// Manual sync forces a refresh of one repo on demand. It is privileged (it
+	// drives a git fetch on a managed mirror), so it is session-gated like
+	// submit and refused on a public read-only server — the webhook and interval
+	// loop keep public servers fresh without an anonymous trigger. On a local
+	// auth-disabled server it stays reachable as the on-demand pull.
+	var syncHandler http.Handler = handlers.NewSyncHandler(reg, s.syncer)
+	if s.config.ReadOnly {
+		syncHandler = readOnlyWriteHandler()
+	}
+
 	for _, prefix := range prefixes {
 		// Unscoped index of available repos.
 		apiMux.Handle("GET "+prefix+"/repos", reposListHandler)
@@ -263,6 +273,7 @@ func (s *Server) buildHandler() (http.Handler, error) {
 		apiMux.Handle("GET "+prefix+"/repos/{repoID}/stacks", stacksHandler)
 		apiMux.Handle("GET "+prefix+"/repos/{repoID}/stacks/{name...}", stacksHandler)
 		apiMux.Handle("POST "+prefix+"/repos/{repoID}/stacks/{rootBranch}/submit", submitHandler)
+		apiMux.Handle("POST "+prefix+"/repos/{repoID}/sync", syncHandler)
 		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branches", branchesHandler)
 		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branches/{name...}", branchesHandler)
 		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branch-diff", branchDiffHandler)

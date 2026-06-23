@@ -25,6 +25,11 @@ type agentSkillFormat string
 const (
 	agentSkillFormatClaude agentSkillFormat = "claude"
 	agentSkillFormatCodex  agentSkillFormat = "codex"
+
+	// skillManifestFile is the filename of the skill manifest in each skill directory.
+	skillManifestFile = "SKILL.md"
+	// stackCreateSkillFile is the filename for the stack-create command skill.
+	stackCreateSkillFile = "stack-create.md"
 )
 
 type agentInstallTarget struct {
@@ -42,9 +47,9 @@ type existingSkillInstallation struct {
 }
 
 var (
-	skillRootFiles = []string{"SKILL.md", "reference.md"}
+	skillRootFiles = []string{skillManifestFile, "reference.md"}
 
-	codexSkillRootFiles = []string{"SKILL.md"}
+	codexSkillRootFiles = []string{skillManifestFile}
 
 	skillCommandFiles = []string{"navigation.md", "branch.md", "stack.md", "recovery.md"}
 
@@ -57,7 +62,7 @@ var (
 	codexReferenceFiles = []string{"workflows.md", "commit-style.md", "stack-plan-recovery.md"}
 
 	commandTemplateFiles = []string{
-		"stack-absorb.md", "stack-create.md", "stack-describe.md", "stack-extract.md",
+		"stack-absorb.md", stackCreateSkillFile, "stack-describe.md", "stack-extract.md",
 		"stack-fix.md", "stack-fold.md", "stack-modify.md", "stack-plan.md", "stack-resolve.md",
 		"stack-restack.md", "stack-review.md", "stack-split.md", "stack-status.md",
 		"stack-submit.md", "stack-sync.md", "stack-tidy.md", "stack-verify.md",
@@ -218,7 +223,7 @@ func installCommandSkills(baseDir, skillsBaseDir string, files []string, render 
 		if err := os.MkdirAll(destDir, 0750); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", destDir, err)
 		}
-		if err := os.WriteFile(filepath.Join(destDir, "SKILL.md"), content, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(destDir, skillManifestFile), content, 0600); err != nil {
 			return fmt.Errorf("failed to write SKILL.md for %s: %w", skillName, err)
 		}
 		if format == agentSkillFormatCodex {
@@ -423,7 +428,7 @@ func installedFilePaths(baseDir string, target agentInstallTarget) []string {
 	for _, filename := range commandTemplateFiles {
 		skillName := strings.TrimSuffix(filename, ".md")
 		skillDir := filepath.Join(baseDir, target.skillsBaseDir, skillName)
-		paths = append(paths, filepath.Join(skillDir, "SKILL.md"))
+		paths = append(paths, filepath.Join(skillDir, skillManifestFile))
 		if target.format == agentSkillFormatCodex {
 			paths = append(paths, filepath.Join(skillDir, "agents", "openai.yaml"))
 		}
@@ -606,12 +611,12 @@ func installedSkillManifestPathsForFormat(baseDir string, format agentSkillForma
 	switch format {
 	case agentSkillFormatCodex:
 		return []string{
-			filepath.Join(baseDir, ".codex", "skills", "stackit", "SKILL.md"),
+			filepath.Join(baseDir, ".codex", "skills", "stackit", skillManifestFile),
 			filepath.Join(baseDir, ".codex", "skills", "stackit", "skill.md"), // legacy path compatibility
 		}
 	default:
 		return []string{
-			filepath.Join(baseDir, ".claude", "skills", "stackit", "SKILL.md"),
+			filepath.Join(baseDir, ".claude", "skills", "stackit", skillManifestFile),
 			filepath.Join(baseDir, ".claude", "skills", "stackit", "skill.md"), // legacy path compatibility
 		}
 	}

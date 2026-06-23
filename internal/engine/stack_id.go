@@ -9,6 +9,9 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 )
 
+// stackFallbackName is the fallback ID used when a branch name produces only special characters.
+const stackFallbackName = "stack"
+
 // timeNow is a variable for time.Now to allow mocking in tests.
 // Used by stack-ID generation, stack metadata creation, and worktree registration.
 var timeNow = time.Now
@@ -117,7 +120,7 @@ func sanitizeBranchNameForStackID(branchName string) string {
 
 	// Fallback for empty result (branch name was all special chars)
 	if result == "" {
-		result = "stack"
+		result = stackFallbackName
 	}
 
 	return result

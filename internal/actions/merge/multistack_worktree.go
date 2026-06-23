@@ -88,7 +88,7 @@ func (w *MultiStackWorktreeExecutor) ExecuteInWorktree(ctx context.Context, stac
 			}
 			result.ConflictStacks = append(result.ConflictStacks, MultiStackExcluded{
 				Stack:  stack,
-				Reason: "conflict",
+				Reason: excludeReasonConflict,
 			})
 		} else {
 			w.output.Debug("Stack %s merged successfully", stack.RootBranch)

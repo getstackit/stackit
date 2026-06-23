@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	gogithub "github.com/google/go-github/v67/github"
+	gogithub "github.com/google/go-github/v73/github"
 	"github.com/stretchr/testify/require"
 
 	githubpkg "github.com/getstackit/stackit/internal/github"

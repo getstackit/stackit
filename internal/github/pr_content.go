@@ -22,8 +22,8 @@ func BatchGetPRContentGraphQL(ctx context.Context, runner GitCommandRunner, owne
 
 	query := buildPRContentQuery(unique)
 	variables := map[string]any{
-		"owner": owner,
-		"repo":  repo,
+		graphqlVarOwner: owner,
+		graphqlVarRepo:  repo,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)

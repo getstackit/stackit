@@ -35,17 +35,17 @@ type Section struct {
 // Sections defines the ordering and titles for config sections.
 // This is the single source of truth for section organization.
 var Sections = []Section{
-	{Name: "trunk", Title: "", DocsTitle: "Trunk branches"},
-	{Name: "branch", Title: "Branch naming pattern", DocsTitle: "Branch naming"},
-	{Name: "submit", Title: "PR submission settings", DocsTitle: "PR submission"},
-	{Name: "merge", Title: "Merge method: squash, merge, rebase", DocsTitle: "Merge settings"},
-	{Name: "ci", Title: "CI validation", DocsTitle: "CI validation"},
-	{Name: "undo", Title: "Undo history", DocsTitle: "Other settings"},
-	{Name: "worktree", Title: "Worktree settings", DocsTitle: "Worktree settings"},
-	{Name: "split", Title: "Split command", DocsTitle: "Split command"},
-	{Name: "concurrency", Title: "Concurrency", DocsTitle: ""}, // grouped with "Other settings"
-	{Name: "navigation", Title: "PR navigation display", DocsTitle: "PR navigation"},
-	{Name: "hooks", Title: "Post-worktree-create hooks (require approval on first run)", DocsTitle: ""},
+	{Name: SectionTrunk, Title: "", DocsTitle: "Trunk branches"},
+	{Name: SectionBranch, Title: "Branch naming pattern", DocsTitle: "Branch naming"},
+	{Name: SectionSubmit, Title: "PR submission settings", DocsTitle: "PR submission"},
+	{Name: SectionMerge, Title: "Merge method: squash, merge, rebase", DocsTitle: "Merge settings"},
+	{Name: SectionCI, Title: "CI validation", DocsTitle: "CI validation"},
+	{Name: SectionUndo, Title: "Undo history", DocsTitle: "Other settings"},
+	{Name: SectionWorktree, Title: "Worktree settings", DocsTitle: "Worktree settings"},
+	{Name: SectionSplit, Title: "Split command", DocsTitle: "Split command"},
+	{Name: SectionConcurrency, Title: "Concurrency", DocsTitle: ""}, // grouped with "Other settings"
+	{Name: SectionNavigation, Title: "PR navigation display", DocsTitle: "PR navigation"},
+	{Name: SectionHooks, Title: "Post-worktree-create hooks (require approval on first run)", DocsTitle: ""},
 }
 
 // Options is the registry of all configuration options.
@@ -53,183 +53,183 @@ var Sections = []Section{
 var Options = []Option{
 	// Trunk section
 	{
-		YAMLPath:    "trunk",
+		YAMLPath:    YAMLPathTrunk,
 		GitKey:      KeyTrunk,
 		Description: "Primary trunk branch",
 		Default:     DefaultTrunk,
-		Section:     "trunk",
+		Section:     SectionTrunk,
 	},
 	{
-		YAMLPath:    "trunks",
+		YAMLPath:    YAMLPathTrunks,
 		GitKey:      KeyTrunks,
 		Description: "Additional trunk branches (e.g., release branches)",
 		IsArray:     true,
 		Example:     "develop, release",
-		Section:     "trunk",
+		Section:     SectionTrunk,
 	},
 
 	// Branch section
 	{
-		YAMLPath:    "branch.pattern",
+		YAMLPath:    YAMLPathBranchPattern,
 		GitKey:      KeyBranchPattern,
 		Description: "Branch naming pattern",
 		Comment:     "Placeholders: {username}, {date}, {message}, {scope}",
 		Example:     "{username}/{date}/{message}",
-		Section:     "branch",
+		Section:     SectionBranch,
 	},
 
 	// Submit section
 	{
-		YAMLPath:    "submit.footer",
+		YAMLPath:    YAMLPathSubmitFooter,
 		GitKey:      KeySubmitFooter,
 		Description: "Include navigation footer",
 		Default:     DefaultSubmitFooter,
-		Section:     "submit",
+		Section:     SectionSubmit,
 	},
 	{
-		YAMLPath:    "submit.draft",
+		YAMLPath:    YAMLPathSubmitDraft,
 		GitKey:      KeySubmitDraft,
 		Description: "Create as draft",
 		Default:     DefaultSubmitDraft,
-		Section:     "submit",
+		Section:     SectionSubmit,
 	},
 	{
-		YAMLPath:    "submit.web",
+		YAMLPath:    YAMLPathSubmitWeb,
 		GitKey:      KeySubmitWeb,
 		Description: "Open in browser: always, created, never",
 		Default:     DefaultSubmitWeb,
 		ValidValues: ValidSubmitWeb,
-		Section:     "submit",
+		Section:     SectionSubmit,
 	},
 	{
-		YAMLPath:    "submit.labels",
+		YAMLPath:    YAMLPathSubmitLabels,
 		GitKey:      KeySubmitLabels,
 		Description: "Default labels",
 		IsArray:     true,
-		Section:     "submit",
+		Section:     SectionSubmit,
 	},
 	{
-		YAMLPath:    "submit.reviewers",
+		YAMLPath:    YAMLPathSubmitReviewers,
 		GitKey:      KeySubmitReviewers,
 		Description: "Default reviewers",
 		IsArray:     true,
-		Section:     "submit",
+		Section:     SectionSubmit,
 	},
 	{
-		YAMLPath:    "submit.assignees",
+		YAMLPath:    YAMLPathSubmitAssignees,
 		GitKey:      KeySubmitAssignees,
 		Description: "Default assignees",
 		IsArray:     true,
-		Section:     "submit",
+		Section:     SectionSubmit,
 	},
 
 	// Merge section
 	{
-		YAMLPath:    "merge.method",
+		YAMLPath:    YAMLPathMergeMethod,
 		GitKey:      KeyMergeMethod,
 		Description: "Merge method: squash, merge, rebase",
 		ValidValues: ValidMergeMethods,
-		Example:     "squash",
-		Section:     "merge",
+		Example:     MergeMethodSquash,
+		Section:     SectionMerge,
 	},
 
 	// CI section
 	{
-		YAMLPath:    "ci.command",
+		YAMLPath:    YAMLPathCICommand,
 		GitKey:      KeyCICommand,
 		Description: "Command to run",
-		Example:     "make test",
-		Section:     "ci",
+		Example:     ciCommandExample,
+		Section:     SectionCI,
 	},
 	{
-		YAMLPath:    "ci.timeout",
+		YAMLPath:    YAMLPathCITimeout,
 		GitKey:      KeyCITimeout,
 		Description: "Timeout in seconds",
 		Default:     DefaultCITimeout,
-		Section:     "ci",
+		Section:     SectionCI,
 	},
 
 	// Undo section
 	{
-		YAMLPath:    "undo.depth",
+		YAMLPath:    YAMLPathUndoDepth,
 		GitKey:      KeyUndoDepth,
 		Description: "Max snapshots",
 		Default:     DefaultUndoDepth,
-		Section:     "undo",
+		Section:     SectionUndo,
 	},
 	{
-		YAMLPath:    "undo.enabled",
+		YAMLPath:    YAMLPathUndoEnabled,
 		GitKey:      KeyUndoEnabled,
 		Description: "Take snapshots before mutations (set false to skip undo overhead)",
 		Default:     DefaultUndoEnabled,
-		Section:     "undo",
+		Section:     SectionUndo,
 	},
 
 	// Worktree section
 	{
-		YAMLPath:    "worktree.basePath",
+		YAMLPath:    YAMLPathWorktreeBasePath,
 		GitKey:      KeyWorktreeBasePath,
 		Description: "Base directory (empty = auto)",
 		Example:     "",
-		Section:     "worktree",
+		Section:     SectionWorktree,
 	},
 	{
-		YAMLPath:    "worktree.autoClean",
+		YAMLPath:    YAMLPathWorktreeAutoClean,
 		GitKey:      KeyWorktreeAutoClean,
 		Description: "Clean during sync",
 		Default:     DefaultWorktreeAutoClean,
-		Section:     "worktree",
+		Section:     SectionWorktree,
 	},
 
 	// Split section
 	{
-		YAMLPath:    "split.hunkSelector",
+		YAMLPath:    YAMLPathSplitHunkSelector,
 		GitKey:      KeySplitHunkSelector,
 		Description: "tui or git",
 		Default:     DefaultSplitHunkSelector,
 		ValidValues: ValidHunkSelectors,
-		Section:     "split",
+		Section:     SectionSplit,
 	},
 
 	// Concurrency (top-level)
 	{
-		YAMLPath:    "maxConcurrency",
+		YAMLPath:    YAMLPathMaxConcurrency,
 		GitKey:      KeyMaxConcurrency,
 		Description: "0 = auto-detect",
 		Default:     DefaultMaxConcurrency,
-		Section:     "concurrency",
+		Section:     SectionConcurrency,
 	},
 
 	// Navigation section
 	{
-		YAMLPath:    "navigation.when",
+		YAMLPath:    YAMLPathNavigationWhen,
 		GitKey:      KeyNavigationWhen,
 		Description: "always, never, multiple",
 		Default:     DefaultNavigationWhen,
 		ValidValues: ValidNavigationWhen,
-		Section:     "navigation",
+		Section:     SectionNavigation,
 	},
 	{
-		YAMLPath:    "navigation.location",
+		YAMLPath:    YAMLPathNavigationLocation,
 		GitKey:      KeyNavigationLocation,
 		Description: "body, comment, none",
 		Default:     DefaultNavigationLocation,
 		ValidValues: ValidNavigationLocation,
-		Section:     "navigation",
+		Section:     SectionNavigation,
 	},
 	{
-		YAMLPath:    "navigation.marker",
+		YAMLPath:    YAMLPathNavigationMarker,
 		GitKey:      KeyNavigationMarker,
 		Description: "Current branch marker",
 		Default:     DefaultNavigationMarker,
-		Section:     "navigation",
+		Section:     SectionNavigation,
 	},
 	{
-		YAMLPath:    "navigation.showMerged",
+		YAMLPath:    YAMLPathNavigationShowMerged,
 		GitKey:      KeyNavigationShowMerged,
 		Description: "Show merged history",
 		Default:     DefaultNavigationShowMerged,
-		Section:     "navigation",
+		Section:     SectionNavigation,
 	},
 
 	// Hooks section (special - not directly settable via config set)
@@ -237,12 +237,12 @@ var Options = []Option{
 	// while GitKey is for personal approval tracking (which hooks user has approved).
 	// This is intentional: teams define hooks in .stackit.yaml, users approve them locally.
 	{
-		YAMLPath:    "hooks.post-worktree-create",
+		YAMLPath:    YAMLPathHooksPostWorktree,
 		GitKey:      KeyApprovedHooks,
 		Description: "Commands to run after creating a worktree",
 		IsArray:     true,
 		Example:     "npm install, mise install",
-		Section:     "hooks",
+		Section:     SectionHooks,
 	},
 }
 

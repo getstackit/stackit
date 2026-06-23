@@ -12,6 +12,12 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
+// checkStatusCompleted is the status value for completed check runs in demo mode.
+const (
+	checkStatusCompleted   = "COMPLETED"
+	checkConclusionSuccess = "SUCCESS"
+)
+
 // prCounter is used to generate unique PR numbers
 var prCounter int32 = 100
 
@@ -146,9 +152,9 @@ func (c *GitHubClient) getPRChecksStatus(_ context.Context, _ string) *github.Ch
 		Pending:        false,
 		ReviewDecision: "APPROVED",
 		Checks: []github.CheckDetail{
-			{Name: "Build", Status: "COMPLETED", Conclusion: "SUCCESS"},
-			{Name: "Test", Status: "COMPLETED", Conclusion: "SUCCESS"},
-			{Name: "Lint", Status: "COMPLETED", Conclusion: "SUCCESS"},
+			{Name: "Build", Status: checkStatusCompleted, Conclusion: checkConclusionSuccess},
+			{Name: "Test", Status: checkStatusCompleted, Conclusion: checkConclusionSuccess},
+			{Name: "Lint", Status: checkStatusCompleted, Conclusion: checkConclusionSuccess},
 		},
 	}
 }

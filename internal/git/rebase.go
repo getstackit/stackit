@@ -61,7 +61,7 @@ func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream s
 }
 
 func (r *runner) rebaseContinueOnce(ctx context.Context) error {
-	_, err := r.RunGitCommandWithEnv(ctx, []string{"GIT_EDITOR=true"}, "rebase", "--continue")
+	_, err := r.RunGitCommandWithEnv(ctx, []string{gitEditorTrue}, "rebase", "--continue")
 	return err
 }
 
@@ -96,11 +96,11 @@ func AutoContinueRerereRebase(ctx context.Context, r Runner, originalErr error) 
 			return outcome, unmergedFiles, nil
 		}
 
-		if _, err := r.RunGitCommandWithEnv(ctx, []string{"GIT_EDITOR=true"}, "rebase", "--continue"); err != nil {
+		if _, err := r.RunGitCommandWithEnv(ctx, []string{gitEditorTrue}, "rebase", "--continue"); err != nil {
 			if isRebaseContinueStagedChangesError(err) && r.IsRebaseInProgress(ctx) {
 				unmergedFiles, filesErr := r.GetUnmergedFiles(ctx)
 				if filesErr == nil && len(unmergedFiles) == 0 {
-					if _, commitErr := r.RunGitCommandWithEnv(ctx, []string{"GIT_EDITOR=true"}, "commit"); commitErr != nil {
+					if _, commitErr := r.RunGitCommandWithEnv(ctx, []string{gitEditorTrue}, "commit"); commitErr != nil {
 						return outcome, nil, fmt.Errorf("commit after rerere replay failed: %w", commitErr)
 					}
 					outcome.RerereResolvedCount++

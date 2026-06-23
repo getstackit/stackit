@@ -25,7 +25,7 @@ func NewPrecommitCmd() *cobra.Command {
 
 func newPrecommitInstallCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:          "install",
+		Use:          cmdInstall,
 		Short:        "Install the pre-commit hook into the current repository",
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,

@@ -71,7 +71,7 @@ func (r *runner) changedFilesBetween(ctx context.Context, base, head string) ([]
 		return []string{}, nil
 	}
 
-	out, err := r.RunGitCommandRawWithContext(ctx, "diff", "--name-only", "-z", base, head)
+	out, err := r.RunGitCommandRawWithContext(ctx, gitCmdDiff, "--name-only", "-z", base, head)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff %s..%s: %w", base, head, err)
 	}
@@ -81,7 +81,7 @@ func (r *runner) changedFilesBetween(ctx context.Context, base, head string) ([]
 }
 
 func (r *runner) ShowDiff(ctx context.Context, left, right string, stat bool) (string, error) {
-	args := []string{"-c", "color.ui=always", "--no-pager", "diff", "--no-ext-diff"}
+	args := []string{"-c", "color.ui=always", "--no-pager", gitCmdDiff, "--no-ext-diff"}
 	if stat {
 		args = append(args, "--stat")
 	}
@@ -111,7 +111,7 @@ func (r *runner) ShowCommits(ctx context.Context, base, head string, patch, stat
 }
 
 func (r *runner) GetStagedDiff(ctx context.Context, files ...string) (string, error) {
-	args := []string{"diff", "--cached"}
+	args := []string{gitCmdDiff, "--cached"}
 	if len(files) > 0 {
 		args = append(args, "--")
 		args = append(args, files...)
@@ -120,7 +120,7 @@ func (r *runner) GetStagedDiff(ctx context.Context, files ...string) (string, er
 }
 
 func (r *runner) GetUnstagedDiff(ctx context.Context, files ...string) (string, error) {
-	args := []string{"diff"}
+	args := []string{gitCmdDiff}
 	if len(files) > 0 {
 		args = append(args, "--")
 		args = append(args, files...)
@@ -131,7 +131,7 @@ func (r *runner) GetUnstagedDiff(ctx context.Context, files ...string) (string, 
 // GetDiffBetween returns the raw diff between two refs.
 // Unlike ShowDiff, this returns uncolored output suitable for parsing.
 func (r *runner) GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error) {
-	args := []string{"diff", base, head}
+	args := []string{gitCmdDiff, base, head}
 	if len(files) > 0 {
 		args = append(args, "--")
 		args = append(args, files...)

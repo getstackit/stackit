@@ -273,7 +273,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 // It returns "{originalName}_split", or "{originalName}_split_N" if that's already taken.
 func generateDefaultBranchName(originalName string, existingNames []string) string {
 	// First try the simple suffix
-	candidate := originalName + "_split"
+	candidate := originalName + splitSuffix
 	if !slices.Contains(existingNames, candidate) {
 		return candidate
 	}

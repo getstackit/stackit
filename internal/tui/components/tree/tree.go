@@ -33,6 +33,11 @@ const (
 
 	// RestackSuggestedLabel marks branches where restacking may reduce review churn.
 	RestackSuggestedLabel = "(restack suggested)"
+
+	// ReviewStatusApproved is the review status string for approved PRs.
+	ReviewStatusApproved = "Approved"
+	// ReviewStatusChangesRequested is the review status string for PRs with requested changes.
+	ReviewStatusChangesRequested = "Changes Requested"
 )
 
 // MergedParentDisplay represents a historical merged parent for display purposes
@@ -1147,7 +1152,7 @@ func (r *StackTreeRenderer) formatSummaryLine(annotation BranchAnnotation, isTru
 
 	// Review status icon
 	switch annotation.ReviewStatus {
-	case "Approved":
+	case ReviewStatusApproved:
 		prParts = append(prParts, style.IconReviewApproved())
 	case "Changes Requested":
 		prParts = append(prParts, style.IconReviewChangesRequested())

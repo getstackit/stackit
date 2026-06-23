@@ -26,7 +26,7 @@ type PushSpec struct {
 }
 
 func (r *runner) PushBranch(ctx context.Context, branchName, remote string, opts PushOptions) error {
-	args := []string{"push", "-u", remote}
+	args := []string{gitCmdPush, "-u", remote}
 
 	switch {
 	case opts.Force:
@@ -70,7 +70,7 @@ func (r *runner) PushBranches(ctx context.Context, remote string, specs []PushSp
 		return results
 	}
 
-	args := []string{"push", "--porcelain", "-u", remote}
+	args := []string{gitCmdPush, "--porcelain", "-u", remote}
 	if opts.Force {
 		args = append(args, "--force")
 	} else {

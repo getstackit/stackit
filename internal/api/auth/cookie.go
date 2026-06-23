@@ -12,6 +12,10 @@ const (
 	sessionCookieName = "stackit_session"
 	stateCookieName   = "stackit_oauth_state"
 	returnCookieName  = "stackit_return"
+
+	// authPathPrefix is the Path attribute for auth-specific cookies.
+	// Scoping to /auth/ means auth cookies are not sent with API or static requests.
+	authPathPrefix = "/auth/"
 )
 
 // CookieOptions controls the attributes the auth package puts on cookies.
@@ -59,7 +63,7 @@ func (o CookieOptions) setState(w http.ResponseWriter, state string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    state,
-		Path:     "/auth/",
+		Path:     authPathPrefix,
 		MaxAge:   600,
 		HttpOnly: true,
 		Secure:   o.Secure,
@@ -71,7 +75,7 @@ func (o CookieOptions) clearState(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    "",
-		Path:     "/auth/",
+		Path:     authPathPrefix,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   o.Secure,
@@ -83,7 +87,7 @@ func (o CookieOptions) setReturn(w http.ResponseWriter, target string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     returnCookieName,
 		Value:    target,
-		Path:     "/auth/",
+		Path:     authPathPrefix,
 		MaxAge:   600,
 		HttpOnly: true,
 		Secure:   o.Secure,
@@ -95,7 +99,7 @@ func (o CookieOptions) clearReturn(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     returnCookieName,
 		Value:    "",
-		Path:     "/auth/",
+		Path:     authPathPrefix,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   o.Secure,

@@ -47,6 +47,13 @@ func NewCommandError(command string, args []string, stdout, stderr string, err e
 	}
 }
 
+// Git command name constants used across multiple files in the git package.
+const (
+	gitCmdPush    = "push"
+	gitCmdDiff    = "diff"
+	gitEditorTrue = "GIT_EDITOR=true"
+)
+
 // IsBranchNotFoundError returns true if the error indicates that a branch was not found
 func IsBranchNotFoundError(err error) bool {
 	if err == nil {

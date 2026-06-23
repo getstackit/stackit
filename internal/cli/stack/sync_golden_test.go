@@ -361,12 +361,8 @@ func TestSyncGolden(t *testing.T) {
 
 // --- small test helpers ---
 
-// answerYes/answerNo back yesNo; declared as constants so the transcript's
-// "yes"/"no" literals don't trip goconst's package-wide duplicate-string check.
-const (
-	answerYes = "yes"
-	answerNo  = "no"
-)
+// answerNo is used to represent a "no" answer in test transcripts.
+const answerNo = "no"
 
 func intPtr(i int) *int { return &i }
 

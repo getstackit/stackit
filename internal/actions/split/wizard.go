@@ -194,7 +194,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		}
 		if patternErr != nil || err != nil {
 			// Fallback to simpler default if pattern fails
-			defaultBranchName = currentBranch.GetName() + "_split"
+			defaultBranchName = currentBranch.GetName() + splitSuffix
 		}
 
 		// Prompt for branch name

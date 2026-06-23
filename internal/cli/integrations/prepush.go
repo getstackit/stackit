@@ -25,7 +25,7 @@ func NewPrepushCmd() *cobra.Command {
 
 func newPrepushInstallCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:          "install",
+		Use:          cmdInstall,
 		Short:        "Install the pre-push hook into the current repository",
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,

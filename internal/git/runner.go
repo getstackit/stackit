@@ -826,7 +826,7 @@ func (r *runner) GetReflog(ctx context.Context, count int, format string) (strin
 }
 
 func (r *runner) GetDiffNumstat(base, head string) (string, error) {
-	return r.runGitCommandInternal("diff", "--numstat", base, head)
+	return r.runGitCommandInternal(gitCmdDiff, "--numstat", base, head)
 }
 
 func (r *runner) GetCommitLog(sha, format string) (string, error) {
@@ -1110,7 +1110,7 @@ func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) erro
 		return nil
 	}
 	ctx = ctxOrBackground(ctx)
-	args := append([]string{"push", "origin"}, refspecs...)
+	args := append([]string{gitCmdPush, "origin"}, refspecs...)
 	if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
 		return fmt.Errorf("git push failed: %w", err)
 	}
@@ -1126,7 +1126,7 @@ func (r *runner) GetParentCommitSHA(commitSHA string) (string, error) {
 }
 
 func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool, error) {
-	commitDiff, err := r.runGitCommandInternal("diff", parentSHA, commitSHA)
+	commitDiff, err := r.runGitCommandInternal(gitCmdDiff, parentSHA, commitSHA)
 	if err != nil {
 		return false, fmt.Errorf("failed to get commit diff: %w", err)
 	}

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v73/github"
 	"golang.org/x/oauth2"
 )
 
@@ -198,7 +198,7 @@ func GetPullRequestByBranch(ctx context.Context, client *github.Client, owner, r
 	// List PRs for this branch
 	prs, _, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
 		Head:  fmt.Sprintf("%s:%s", owner, branchName),
-		State: "all",
+		State: prStateAll,
 		ListOptions: github.ListOptions{
 			PerPage: 1,
 		},
@@ -436,8 +436,8 @@ func EnableAutoMerge(ctx context.Context, runner GitCommandRunner, prNodeID stri
 	}
 
 	variables := map[string]any{
-		"pullRequestId": prNodeID,
-		"mergeMethod":   graphqlMethod,
+		graphqlVarPullRequestID: prNodeID,
+		"mergeMethod":           graphqlMethod,
 	}
 	if opts.CommitBody != "" {
 		variables["commitBody"] = opts.CommitBody
@@ -475,7 +475,7 @@ func DisableAutoMerge(ctx context.Context, runner GitCommandRunner, prNodeID str
 	}`
 
 	variables := map[string]any{
-		"pullRequestId": prNodeID,
+		graphqlVarPullRequestID: prNodeID,
 	}
 
 	_, err := executeGraphQLQuery(ctx, runner, mutation, variables)
@@ -503,7 +503,7 @@ func GetAutoMergeStatus(ctx context.Context, runner GitCommandRunner, prNodeID s
 	}`
 
 	variables := map[string]any{
-		"nodeId": prNodeID,
+		graphqlVarNodeID: prNodeID,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
@@ -550,6 +550,24 @@ const (
 	PRStateClosed = "CLOSED"
 )
 
+// GraphQL variable name constants shared across GitHub API calls.
+const (
+	graphqlVarOwner         = "owner"
+	graphqlVarRepo          = "repo"
+	graphqlVarPullRequestID = "pullRequestId"
+	graphqlVarNodeID        = "nodeId"
+)
+
+// PR list state constant for fetching PRs regardless of their open/closed status.
+const prStateAll = "all"
+
+// PR merge state text constants as returned by GitHub's mergeStateStatus field.
+const (
+	prMergeStateClean   = "CLEAN"
+	prMergeStateDirty   = "DIRTY"
+	prMergeStateUnknown = "UNKNOWN"
+)
+
 // mergeableMergeable is the GraphQL `mergeable` field value indicating a PR can
 // be merged without conflicts. The field's possible values are MERGEABLE,
 // CONFLICTING, and UNKNOWN.
@@ -573,11 +591,11 @@ func isMergeStateStatusUnsupported(err error) bool {
 func mergeableToMergeStateText(mergeable string) string {
 	switch mergeable {
 	case mergeableMergeable:
-		return "CLEAN"
+		return prMergeStateClean
 	case "CONFLICTING":
-		return "DIRTY"
+		return prMergeStateDirty
 	default:
-		return "UNKNOWN"
+		return prMergeStateUnknown
 	}
 }
 
@@ -594,7 +612,7 @@ func GetPRMergeableState(ctx context.Context, runner GitCommandRunner, prNodeID 
 	}`
 
 	variables := map[string]any{
-		"nodeId": prNodeID,
+		graphqlVarNodeID: prNodeID,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
@@ -639,7 +657,7 @@ func getPRMergeableStateBasic(ctx context.Context, runner GitCommandRunner, prNo
 	}`
 
 	variables := map[string]any{
-		"nodeId": prNodeID,
+		graphqlVarNodeID: prNodeID,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
@@ -848,9 +866,9 @@ func WaitForMergeable(ctx context.Context, runner GitCommandRunner, prNodeID str
 		}
 
 		switch state.MergeStateText {
-		case "CLEAN", "HAS_HOOKS":
+		case prMergeStateClean, "HAS_HOOKS":
 			return state, nil
-		case "DIRTY":
+		case prMergeStateDirty:
 			return state, fmt.Errorf("PR has merge conflicts (DIRTY). Please resolve conflicts and try again")
 		}
 
@@ -889,7 +907,7 @@ func updatePRDraftStatus(ctx context.Context, runner GitCommandRunner, pullReque
 	}
 
 	variables := map[string]any{
-		"pullRequestId": pullRequestID,
+		graphqlVarPullRequestID: pullRequestID,
 	}
 
 	_, err := executeGraphQLQuery(ctx, runner, mutation, variables)

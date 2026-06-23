@@ -16,10 +16,10 @@ func GenerateConfigTemplate() string {
 func GenerateYAMLExample() string {
 	// Overrides for example values that differ from defaults
 	overrides := map[string]string{
-		"trunks":           "develop, staging",
+		SectionTrunks:      "develop, staging",
 		"submit.labels":    "needs-review",
 		"submit.reviewers": "teammate1",
-		"ci.command":       "make test",
+		"ci.command":       ciCommandExample,
 	}
 	return generateYAML(false, overrides)
 }

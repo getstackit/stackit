@@ -1,5 +1,11 @@
 package merge
 
+// Exclusion reason constants for MultiStackExcluded
+const (
+	excludeReasonConflict  = "conflict"
+	excludeReasonCIFailure = "ci_failure"
+)
+
 // MultiStackInfo represents a stack that can be merged in multi-stack mode
 type MultiStackInfo struct {
 	RootBranch  string   // Stack root branch name (direct child of trunk)
@@ -20,7 +26,7 @@ type MultiStackResult struct {
 // MultiStackExcluded represents a stack that was not included in the merge
 type MultiStackExcluded struct {
 	Stack  MultiStackInfo
-	Reason string // "conflict" | "ci_failure"
+	Reason string // excludeReasonConflict | excludeReasonCIFailure
 }
 
 // MultiStackOptions contains options specific to multi-stack merge

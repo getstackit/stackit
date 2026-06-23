@@ -8,7 +8,7 @@ import (
 // docSectionMapping maps section names to their documentation groupings.
 // Some sections are grouped together in docs (e.g., "undo" and "concurrency" -> "Other settings").
 var docSectionMapping = map[string]string{
-	"concurrency": "undo", // Group with "Other settings"
+	SectionConcurrency: SectionUndo, // Group with "Other settings"
 }
 
 // GenerateConfigDocs generates markdown documentation for all configuration options.
@@ -45,7 +45,7 @@ func GenerateConfigDocs() string {
 
 		for _, opt := range opts {
 			// Skip hooks since they're documented separately
-			if opt.Section == "hooks" {
+			if opt.Section == SectionHooks {
 				continue
 			}
 			writeOptionDocs(&sb, &opt)

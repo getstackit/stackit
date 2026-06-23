@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v73/github"
 	"github.com/stretchr/testify/require"
 )
 

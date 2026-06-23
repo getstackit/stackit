@@ -113,7 +113,7 @@ func FindLargestWorkingSet(
 				allMerged = false
 				failed = append(failed, MultiStackExcluded{
 					Stack:  stack,
-					Reason: "conflict",
+					Reason: excludeReasonConflict,
 				})
 				break
 			}
@@ -132,7 +132,7 @@ func FindLargestWorkingSet(
 			// This stack breaks CI
 			failed = append(failed, MultiStackExcluded{
 				Stack:  stack,
-				Reason: "ci_failure",
+				Reason: excludeReasonCIFailure,
 			})
 			validator.output.Warn("  - %s fails CI", stack.RootBranch)
 		}

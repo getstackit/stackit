@@ -58,7 +58,7 @@ func (h *InteractiveUntrackHandler) PromptConfirmUntrackDescendants(branchName s
 	message := fmt.Sprintf("Branch %s has %d tracked descendants. Untrack all of them?",
 		style.ColorBranchName(branchName, false), descendantCount)
 	options := []tui.SelectOption{
-		{Label: "Yes", Value: "yes"},
+		{Label: "Yes", Value: answerYes},
 		{Label: "No", Value: "no"},
 	}
 
@@ -67,5 +67,5 @@ func (h *InteractiveUntrackHandler) PromptConfirmUntrackDescendants(branchName s
 		return false, err
 	}
 
-	return selected == "yes", nil
+	return selected == answerYes, nil
 }

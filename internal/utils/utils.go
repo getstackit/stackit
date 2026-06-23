@@ -16,6 +16,15 @@ const (
 	// MaxBranchNameByteLength is the maximum length for a branch name
 	// Git refs have a max length of 256 bytes, minus 22 for "refs/stackit/metadata/"
 	MaxBranchNameByteLength = 234
+
+	// branchNameErrTrailingDotOrSlash is the error reason for branch names ending in . or /
+	branchNameErrTrailingDotOrSlash = "cannot end with a dot or slash"
+
+	// termTypeDumb is the TERM value for dumb terminals that don't support control codes.
+	termTypeDumb = "dumb"
+
+	// envFalse is the canonical false string for boolean environment variables.
+	envFalse = "false"
 )
 
 var (
@@ -84,7 +93,7 @@ func ValidateBranchName(name string) error {
 
 	// Check for trailing dot or slash
 	if strings.HasSuffix(name, ".") || strings.HasSuffix(name, "/") {
-		return &BranchNameError{Name: name, Reason: "cannot end with a dot or slash"}
+		return &BranchNameError{Name: name, Reason: branchNameErrTrailingDotOrSlash}
 	}
 
 	// Check for leading slash
@@ -253,7 +262,7 @@ func TerminalDetected() bool {
 // --no-interactive on every command.
 func NonInteractiveEnv() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("STACKIT_NO_INTERACTIVE"))) {
-	case "", "0", "false", "no":
+	case "", "0", envFalse, "no":
 		return false
 	default:
 		return true
@@ -262,7 +271,7 @@ func NonInteractiveEnv() bool {
 
 func supportsTerminalControl() bool {
 	term := strings.ToLower(os.Getenv("TERM"))
-	if term == "" || term == "dumb" || strings.HasPrefix(term, "dumb-") {
+	if term == "" || term == termTypeDumb || strings.HasPrefix(term, termTypeDumb+"-") {
 		return false
 	}
 	return true

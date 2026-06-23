@@ -65,10 +65,19 @@ linters:
   exclusions:
     presets: []
     rules:
+      # Auth cookies set Secure from CookieOptions (true behind HTTPS / public
+      # mode, false for local-dev HTTP), so gosec's G124 fires on the literal.
+      # G124 isn't in golangci-lint's config-schema enum for gosec.excludes
+      # (config verify rejects it), so scope the exclusion here by path instead.
+      - path: internal/api/auth/cookie\.go
+        text: 'G124'
+        linters:
+          - gosec
       - path: _test\.go
         linters:
           - gosec
           - errcheck
+          - goconst
       - path: _test\.go
         linters:
           - lll
@@ -82,6 +91,15 @@ linters:
       - path: internal/(app|config|engine)/
         linters:
           - forbidigo
+      # TUI storyboard files contain fixture data with repeated string literals
+      # that don't benefit from extraction into constants.
+      - path: internal/tui/.*stories\.go
+        linters:
+          - goconst
+      # Benchmark mock data file with many repeated fixture strings.
+      - path: internal/tui/components/tree/tree_mock\.go
+        linters:
+          - goconst
 
 issues:
   max-issues-per-linter: 0

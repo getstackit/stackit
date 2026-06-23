@@ -97,18 +97,18 @@ func (h HooksConfig) For(phase string) []string {
 
 // knownTopLevelKeys contains all valid top-level keys in .stackit.yaml
 var knownTopLevelKeys = map[string]bool{
-	"trunk":          true,
-	"trunks":         true,
-	"branch":         true,
-	"submit":         true,
-	"merge":          true,
-	"ci":             true,
-	"undo":           true,
-	"worktree":       true,
-	"split":          true,
-	"hooks":          true,
-	"maxConcurrency": true,
-	"navigation":     true,
+	SectionTrunk:      true,
+	SectionTrunks:     true,
+	SectionBranch:     true,
+	SectionSubmit:     true,
+	SectionMerge:      true,
+	SectionCI:         true,
+	SectionUndo:       true,
+	SectionWorktree:   true,
+	SectionSplit:      true,
+	SectionHooks:      true,
+	"maxConcurrency":  true,
+	SectionNavigation: true,
 }
 
 // LoadProjectConfig reads the project configuration from .stackit.yaml in the repo root.

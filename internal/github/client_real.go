@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v73/github"
 )
 
 // StackitGitHubClient implements Client using the real GitHub API
@@ -67,7 +67,7 @@ func (c *StackitGitHubClient) UpdatePullRequest(ctx context.Context, owner, repo
 func (c *StackitGitHubClient) GetPullRequestByBranch(ctx context.Context, owner, repo, branchName string) (*PullRequestInfo, error) {
 	prs, _, err := c.client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
 		Head:  fmt.Sprintf("%s:%s", owner, branchName),
-		State: "all",
+		State: prStateAll,
 		ListOptions: github.ListOptions{
 			PerPage: 1,
 		},

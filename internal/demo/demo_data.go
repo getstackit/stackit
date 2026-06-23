@@ -4,6 +4,15 @@ package demo
 
 import "github.com/getstackit/stackit/internal/engine"
 
+// Demo data constants for branch names and statuses used in fixture data.
+const (
+	demoTrunkBranch   = "main"
+	demoAuthBase      = "feature/auth-base"
+	demoScopeAuth     = "AUTH"
+	demoPRStateOpen   = "OPEN"
+	demoChecksPassing = "PASSING"
+)
+
 // Branch represents a simulated branch with PR info
 type Branch struct {
 	Name     string
@@ -34,81 +43,81 @@ type Branch struct {
 
 var demoBranches = []Branch{
 	{
-		Name:     "feature/auth-base",
-		Parent:   "main",
+		Name:     demoAuthBase,
+		Parent:   demoTrunkBranch,
 		SHA:      "sha-auth-base",
 		PRNumber: 101,
-		PRState:  "OPEN",
+		PRState:  demoPRStateOpen,
 		PRTitle:  "Add authentication base module",
 		IsDraft:  false,
-		Checks:   "PASSING",
+		Checks:   demoChecksPassing,
 		Commits:  3,
 		Added:    150,
 		Deleted:  10,
-		Scope:    "AUTH",
+		Scope:    demoScopeAuth,
 	},
 	{
 		Name:     "feature/auth-validation",
-		Parent:   "feature/auth-base",
+		Parent:   demoAuthBase,
 		SHA:      "sha-auth-validation",
 		PRNumber: 102,
-		PRState:  "OPEN",
+		PRState:  demoPRStateOpen,
 		PRTitle:  "Add input validation for auth",
 		IsDraft:  false,
-		Checks:   "PASSING",
+		Checks:   demoChecksPassing,
 		Commits:  2,
 		Added:    50,
 		Deleted:  5,
-		Scope:    "AUTH",
+		Scope:    demoScopeAuth,
 	},
 	{
 		Name:     "feature/auth-login",
 		Parent:   "feature/auth-validation",
 		SHA:      "sha-auth-login",
 		PRNumber: 103,
-		PRState:  "OPEN",
+		PRState:  demoPRStateOpen,
 		PRTitle:  "Implement login flow",
 		IsDraft:  false,
-		Checks:   "PASSING",
+		Checks:   demoChecksPassing,
 		Commits:  5,
 		Added:    200,
 		Deleted:  20,
-		Scope:    "AUTH",
+		Scope:    demoScopeAuth,
 	},
 	{
 		Name:     "feature/auth-oauth",
-		Parent:   "feature/auth-base",
+		Parent:   demoAuthBase,
 		SHA:      "sha-auth-oauth",
 		PRNumber: 105,
 		PRState:  "MERGED",
 		PRTitle:  "Add OAuth support",
 		IsDraft:  false,
-		Checks:   "PASSING",
+		Checks:   demoChecksPassing,
 		Commits:  1,
 		Added:    30,
 		Deleted:  2,
-		Scope:    "AUTH",
+		Scope:    demoScopeAuth,
 	},
 	{
 		Name:     "feature/auth-oauth-google",
 		Parent:   "feature/auth-oauth",
 		SHA:      "sha-auth-oauth-google",
 		PRNumber: 106,
-		PRState:  "OPEN",
+		PRState:  demoPRStateOpen,
 		PRTitle:  "Add Google OAuth provider",
 		IsDraft:  true,
 		Checks:   "PENDING",
 		Commits:  2,
 		Added:    80,
 		Deleted:  5,
-		Scope:    "AUTH",
+		Scope:    demoScopeAuth,
 	},
 	{
 		Name:     "feature/api-refactor",
-		Parent:   "main",
+		Parent:   demoTrunkBranch,
 		SHA:      "sha-api-refactor",
 		PRNumber: 107,
-		PRState:  "OPEN",
+		PRState:  demoPRStateOpen,
 		PRTitle:  "Refactor API layer",
 		IsDraft:  false,
 		Checks:   "FAILING",
@@ -135,7 +144,7 @@ var demoBranches = []Branch{
 
 // Current branch is a leaf node (no children) to avoid warnings
 var demoCurrentBranch = "feature/auth-login"
-var demoTrunk = "main"
+var demoTrunk = demoTrunkBranch
 
 // GetDemoBranches returns the demo branch data
 func GetDemoBranches() []Branch {

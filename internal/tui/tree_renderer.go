@@ -313,9 +313,9 @@ func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, stat engine.Br
 
 			switch status.ReviewDecision {
 			case "APPROVED":
-				ann.ReviewStatus = "Approved"
+				ann.ReviewStatus = tree.ReviewStatusApproved
 			case "CHANGES_REQUESTED":
-				ann.ReviewStatus = "Changes Requested"
+				ann.ReviewStatus = tree.ReviewStatusChangesRequested
 			case "REVIEW_REQUIRED":
 				ann.ReviewStatus = "Awaiting Review"
 			}

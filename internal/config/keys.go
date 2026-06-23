@@ -58,6 +58,37 @@ const (
 	KeySubmitAssignees = "stackit.submit.assignees"
 )
 
+// YAML path constants for configuration options.
+// These are the paths used in .stackit.yaml files.
+const (
+	YAMLPathTrunk                = "trunk"
+	YAMLPathTrunks               = "trunks"
+	YAMLPathBranchPattern        = "branch.pattern"
+	YAMLPathSubmitFooter         = "submit.footer"
+	YAMLPathSubmitDraft          = "submit.draft"
+	YAMLPathSubmitWeb            = "submit.web"
+	YAMLPathSubmitLabels         = "submit.labels"
+	YAMLPathSubmitReviewers      = "submit.reviewers"
+	YAMLPathSubmitAssignees      = "submit.assignees"
+	YAMLPathMergeMethod          = "merge.method"
+	YAMLPathCICommand            = "ci.command"
+	YAMLPathCITimeout            = "ci.timeout"
+	YAMLPathUndoDepth            = "undo.depth"
+	YAMLPathUndoEnabled          = "undo.enabled"
+	YAMLPathWorktreeBasePath     = "worktree.basePath"
+	YAMLPathWorktreeAutoClean    = "worktree.autoClean"
+	YAMLPathSplitHunkSelector    = "split.hunkSelector"
+	YAMLPathMaxConcurrency       = "maxConcurrency"
+	YAMLPathNavigationWhen       = "navigation.when"
+	YAMLPathNavigationLocation   = "navigation.location"
+	YAMLPathNavigationMarker     = "navigation.marker"
+	YAMLPathNavigationShowMerged = "navigation.showMerged"
+	YAMLPathHooksPostWorktree    = "hooks.post-worktree-create"
+)
+
+// ciCommandExample is the example CI command used in templates and documentation.
+const ciCommandExample = "make test"
+
 // Default values for configuration.
 const (
 	// DefaultTrunk is the default trunk branch name.
@@ -90,14 +121,45 @@ const (
 	DefaultSubmitWeb = "never"
 )
 
+// Config section name constants. These identify configuration sections used in
+// the metadata registry, YAML validation, and documentation generation.
+const (
+	SectionTrunk       = "trunk"
+	SectionTrunks      = "trunks" // array variant of trunk for YAML and validation
+	SectionBranch      = "branch"
+	SectionSubmit      = "submit"
+	SectionMerge       = "merge"
+	SectionCI          = "ci"
+	SectionUndo        = "undo"
+	SectionWorktree    = "worktree"
+	SectionSplit       = "split"
+	SectionConcurrency = "concurrency"
+	SectionNavigation  = "navigation"
+	SectionHooks       = "hooks"
+)
+
+// Navigation when constants (valid values for KeyNavigationWhen).
+const (
+	NavigationWhenAlways   = "always"
+	NavigationWhenNever    = "never"
+	NavigationWhenMultiple = "multiple"
+)
+
+// Merge method string constants.
+const (
+	MergeMethodSquash = "squash"
+	MergeMethodMerge  = "merge"
+	MergeMethodRebase = "rebase"
+)
+
 // ValidMergeMethods contains the allowed merge method values.
-var ValidMergeMethods = []string{"squash", "merge", "rebase"}
+var ValidMergeMethods = []string{MergeMethodSquash, MergeMethodMerge, MergeMethodRebase}
 
 // ValidHunkSelectors contains the allowed hunk selector values.
 var ValidHunkSelectors = []string{"tui", "git"}
 
 // ValidNavigationWhen contains the allowed navigation when values.
-var ValidNavigationWhen = []string{"always", "never", "multiple"}
+var ValidNavigationWhen = []string{NavigationWhenAlways, NavigationWhenNever, NavigationWhenMultiple}
 
 // Navigation location constants.
 const (

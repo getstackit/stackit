@@ -107,7 +107,14 @@ All fetch functions live in `src/lib/api.ts`:
 | `fetchStacks()` | GET | `/api/stacks` | All stack summaries |
 | `fetchStack(root)` | GET | `/api/stacks/{root}` | Single stack detail |
 | `fetchBranch(name)` | GET | `/api/branches/{name}` | Single branch detail |
+| `fetchRepos()` | GET | `/api/v1/repos` | Repos the caller may see (picker) |
+| `onboardRepo(owner, name)` | POST | `/api/v1/repos` | Clone & serve a GitHub repo |
 | `submitStack(root)` | POST | `/api/submit/{root}` | Trigger stack submission |
+
+The repo picker (`src/components/repo-picker/`) renders an `AddRepository`
+form that calls `onboardRepo`; on success it navigates to the new repo. The
+form self-hides on a read-only server (`useConfig().readOnly`) since writes are
+refused there. See [Repository onboarding](./deploy.md#repository-onboarding).
 
 The API base URL is configured via `NEXT_PUBLIC_API_URL`. Default is empty
 (same-origin) so the embedded production build, served by the Go binary,

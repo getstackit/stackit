@@ -13,16 +13,18 @@ import (
 
 // ViewAssembler builds the combined /view payload.
 type ViewAssembler struct {
-	eng    engine.BranchReader
-	gh     github.Client
-	remote string
+	eng        engine.BranchReader
+	gh         github.Client
+	remote     string
+	visibility Visibility
 }
 
-func NewViewAssembler(eng engine.BranchReader, gh github.Client, remote string) *ViewAssembler {
+func NewViewAssembler(eng engine.BranchReader, gh github.Client, remote string, visibility Visibility) *ViewAssembler {
 	return &ViewAssembler{
-		eng:    eng,
-		gh:     gh,
-		remote: remote,
+		eng:        eng,
+		gh:         gh,
+		remote:     remote,
+		visibility: visibility,
 	}
 }
 
@@ -50,7 +52,13 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 	var currentUser string
 	if a.gh != nil {
 		owner, repo = a.gh.GetOwnerRepo()
-		currentUser, _ = a.gh.GetCurrentUser(ctx)
+		// currentUser identifies the operator (it comes from the server's
+		// GitHub token). On a public read-only server we must not leak that,
+		// and we must not spend the operator's GitHub rate limit on
+		// anonymous reads — so the lookup is skipped entirely.
+		if a.visibility == VisibilityPrivate {
+			currentUser, _ = a.gh.GetCurrentUser(ctx)
+		}
 	}
 
 	return httpcontract.RepoResponse{

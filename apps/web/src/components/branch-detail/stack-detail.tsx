@@ -11,6 +11,7 @@ import {
 } from "@/components/status/status-badge";
 import { StackDescription, StackColumn } from "@/components/swimlane/stack-column";
 import { useRepo } from "@/components/providers/repo-provider";
+import { useConfig } from "@/components/providers/config-provider";
 import { cn } from "@/lib/utils";
 import { stackStatusInfo } from "@/lib/status-config";
 import { computeStackStats } from "@/lib/stats";
@@ -30,6 +31,7 @@ export function StackDetailPanel({
   const issues = collectIssues(stack.branches);
   const stats = computeStackStats(stack.branches);
   const { refresh, repoId } = useRepo();
+  const { readOnly } = useConfig();
 
   const allHavePRs = stack.branches.every((b) => b.pr != null);
 
@@ -133,8 +135,9 @@ export function StackDetailPanel({
 
           <Separator />
 
-          {/* Submit button — hidden when all branches already have PRs */}
-          {!allHavePRs && (
+          {/* Submit button — hidden when all branches already have PRs, and
+              on a read-only server where writes are disabled. */}
+          {!readOnly && !allHavePRs && (
             <button
               onClick={handleSubmit}
               disabled={submitting || stack.status === "blocked"}

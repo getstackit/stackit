@@ -8,6 +8,7 @@ import {
   type MeResponse,
   UnauthorizedError,
 } from "@/lib/api";
+import { useConfig } from "@/components/providers/config-provider";
 
 interface AuthContextValue {
   // user is null while loading; remains null after a 401 (the provider will
@@ -31,10 +32,6 @@ export function useAuth() {
 
 interface AuthProviderProps {
   children: React.ReactNode;
-  // disable lets us short-circuit the auth check in dev / local-mode
-  // deployments where the server doesn't run /auth/*. The provider then
-  // pretends the user is signed in with a placeholder identity.
-  disable?: boolean;
 }
 
 const PLACEHOLDER_LOCAL_USER: MeResponse = { login: "local", id: 0 };
@@ -44,7 +41,16 @@ const PLACEHOLDER_LOCAL_USER: MeResponse = { login: "local", id: 0 };
 // on success it renders children with the user identity exposed via
 // context. Network failures other than 401 render a small error message
 // so the app doesn't silently hang on a broken backend.
-export function AuthProvider({ children, disable }: AuthProviderProps) {
+//
+// When the server reports that auth isn't required (a public read-only
+// server, or auth-disabled), the /auth/me check is skipped and a
+// placeholder identity is used — the same behavior the old build-time
+// NEXT_PUBLIC_STACKIT_AUTH_DISABLED flag produced, now driven by runtime
+// config so one build serves both private and public deployments.
+export function AuthProvider({ children }: AuthProviderProps) {
+  const { authRequired } = useConfig();
+  const disable = !authRequired;
+
   const [user, setUser] = useState<MeResponse | null>(() =>
     disable ? PLACEHOLDER_LOCAL_USER : null
   );

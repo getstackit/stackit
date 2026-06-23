@@ -26,8 +26,11 @@ type Repo struct {
 	Name        string
 	Path        string
 	Remote      string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// AddedBy is the GitHub login of the user who onboarded the repo at
+	// runtime, or empty for operator-seeded repos (shared with everyone).
+	AddedBy   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func repoFromRow(r reposdb.Repo) Repo {
@@ -38,6 +41,7 @@ func repoFromRow(r reposdb.Repo) Repo {
 		Name:        r.Name,
 		Path:        r.Path,
 		Remote:      r.Remote,
+		AddedBy:     r.AddedBy,
 		CreatedAt:   r.CreatedAt,
 		UpdatedAt:   r.UpdatedAt,
 	}
@@ -79,6 +83,7 @@ func (s *Store) AddRepo(ctx context.Context, r Repo) (Repo, error) {
 		Name:        r.Name,
 		Path:        r.Path,
 		Remote:      r.Remote,
+		AddedBy:     r.AddedBy,
 	})
 	if err != nil {
 		return Repo{}, fmt.Errorf("add repo %q: %w", r.ID, err)

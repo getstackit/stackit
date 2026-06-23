@@ -45,9 +45,11 @@ The container reads its repo list from a JSON file. Mount a volume at `/data`
 | `displayName` | no | Human label shown in the web UI; defaults to `id` |
 | `remote` | no | Git remote name; defaults to `origin` |
 
-You are responsible for cloning the repos into the mounted volume and
-running `stackit init` inside each one before starting the container.
-(Clone-from-URL + auto-init are Phase 4.)
+For DB-backed deployments (`-database-url`), repos can instead be added at
+runtime by logged-in users — the server clones and initializes them for you.
+See [Repository onboarding](#repository-onboarding). You can still pre-seed
+repos by inserting rows directly; a row with an empty `added_by` is shared
+with every authenticated user.
 
 ### Environment
 
@@ -55,6 +57,12 @@ running `stackit init` inside each one before starting the container.
 |-----|---------|
 | `PORT` | Listen port. Honored when `-port` isn't passed explicitly — needed for Railway, Fly, Heroku. Defaults to `8080`. Setting this also implicitly switches the server into "public mode" (binds `0.0.0.0`, requires auth env). |
 | `STACKIT_PUBLIC` | Explicit version of the same signal. Set when you mean to expose the server publicly without `$PORT` (e.g. behind a tunnel). |
+| `STACKIT_READ_ONLY` | Set to `1`/`true` to serve in read-only mode: the submit endpoint is disabled and reads are served anonymously, so a configured repo can be exposed to the public without write access. See [Read-only public mode](#read-only-public-mode). Equivalent to `-read-only`. |
+| `STACKIT_DATABASE_URL` | PostgreSQL connection string. When set, repos are served from the DB (and runtime [onboarding](#repository-onboarding) can persist new ones) instead of the `-cwd` single-repo shortcut. Equivalent to `-database-url`. |
+| `STACKIT_REPOS_ROOT` | Base directory under which per-repo checkouts live (`<root>/<owner>/<name>`). Required for DB-backed serving and onboarding. Equivalent to `-repos-root`. |
+| `STACKIT_GITHUB_APP_ID` | GitHub App ID; enables installation-token auth for onboarding clones and background syncs. See [GitHub App & background sync](#github-app--background-sync). |
+| `STACKIT_GITHUB_APP_PRIVATE_KEY` / `_FILE` | GitHub App private key (PEM contents, or a path in the `_FILE` variant). |
+| `STACKIT_SYNC_INTERVAL` | How often to mirror-fetch managed repos (e.g. `60s`); `0`/unset disables the sync loop. Equivalent to `-sync-interval`. |
 | `STACKIT_BASE_URL` | The canonical https:// URL the server is reachable at. Required when auth is enabled (used to build the OAuth callback URL). |
 | `STACKIT_GITHUB_CLIENT_ID` | GitHub OAuth App client ID. |
 | `STACKIT_GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret. |
@@ -68,11 +76,15 @@ The most useful flags:
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `-repos-config` | _(empty)_ | Path to the JSON repos file. Required for multi-repo mode. |
+| `-database-url` | _(empty)_ | PostgreSQL connection string. Enables DB-backed multi-repo serving and runtime [onboarding](#repository-onboarding). Also settable via `STACKIT_DATABASE_URL`. |
+| `-repos-root` | _(empty)_ | Base directory for per-repo checkouts (`<root>/<owner>/<name>`). Required with `-database-url` and for onboarding. Also settable via `STACKIT_REPOS_ROOT`. |
+| `-sync-interval` | `0` | How often to mirror-fetch managed repos so served state stays current; `0` disables. Also settable via `STACKIT_SYNC_INTERVAL`. See [GitHub App & background sync](#github-app--background-sync). |
+| `-cwd` | _(empty)_ | Single-repo shortcut: serve the repo discovered from this path as `default`. Ignored when `-database-url` is set. |
 | `-port` | `8080` | Listen port; overrides `$PORT`. |
 | `-bind` | `127.0.0.1` (or `0.0.0.0` if `$PORT`/`$STACKIT_PUBLIC` are set) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server on a host where the heuristics don't fire. |
 | `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. Loopback origins are **not** allowed implicitly — list each origin you want to accept. |
 | `-auth-disabled` | `false` | Skip the GitHub OAuth gate. **Refused** when `$PORT` or `$STACKIT_PUBLIC` is set. Use only for local dev or when fronted by platform auth (Tailscale, Cloudflare Access). |
+| `-read-only` | `false` | Serve in read-only mode: disable the submit endpoint and serve reads anonymously. Safe to expose publicly. See [Read-only public mode](#read-only-public-mode). Also settable via `STACKIT_READ_ONLY`. |
 
 Run `stackit-server -h` inside the container for the full list.
 
@@ -93,6 +105,140 @@ Run `stackit-server -h` inside the container for the full list.
    ```
 5. Boot the server. The startup log prints `auth: GitHub OAuth gate enabled` when configured correctly.
 
+## Read-only public mode
+
+Read-only mode turns the configured repos into a publicly viewable
+dashboard with no write access. Enable it with `-read-only` (or
+`STACKIT_READ_ONLY=1`).
+
+In this mode:
+
+- **The submit endpoint is removed.** `POST .../submit` — the server's only
+  mutating route — is replaced with a handler that refuses with `405`. No
+  code path can push branches or touch GitHub, regardless of who calls it or
+  whether auth is configured. This is the key difference from
+  `-auth-disabled`, which opens reads to everyone *and* leaves the write
+  endpoint reachable.
+- **Reads are anonymous.** The session gate is skipped, so anyone can load
+  the stacks, branches, commits, diffs, and PR/CI status. The web app
+  detects this via `/api/v1/config` and hides the submit button and the
+  login prompt, showing a read-only banner instead.
+- **The operator identity is withheld.** `currentUser` is omitted and the
+  per-request GitHub "who am I" lookup is skipped, so anonymous visitors
+  can't learn who runs the server and can't spend the operator's GitHub
+  rate limit.
+
+### What is exposed
+
+Everything needed to render the dashboard: branch structure, commit
+SHAs/messages/authors (git author *name* only, no email), diff patches, and
+PR/CI status. For a public repo this is the same information already visible
+on GitHub. **Do not point read-only mode at a private repo you don't intend
+to make public** — the diff and branch data will be served to anyone who can
+reach the port.
+
+Not exposed: filesystem paths, GitHub tokens, session data, local config
+values, or author emails.
+
+### Still required for a public deployment
+
+- **TLS termination** in front (the server speaks plain HTTP).
+- The abuse bounds below stay on in read-only mode — keep them.
+
+### Abuse bounds (on by default)
+
+A public endpoint needs limits even when it only serves reads:
+
+- **Per-IP rate limiting** on the API (token bucket; `429` with
+  `Retry-After` when exceeded). Honors `X-Forwarded-For` from a trusted
+  proxy.
+- **Concurrent SSE caps** (global + per-IP) on `/events`, with a bounded
+  connection lifetime and a keepalive so dead clients are reclaimed.
+- **Branch-diff throttle** bounding concurrent `git` subprocesses; excess
+  requests queue rather than fan out.
+
+The defaults are generous enough for normal use. A deployment fronted by a
+CDN/proxy should ensure `X-Forwarded-For` is set so the per-IP limits key on
+the real client rather than collapsing every visitor onto the proxy IP.
+
+## Repository onboarding
+
+On a DB-backed server, logged-in users can add their own repos through the web
+app (the "Add a repository" form on the picker) or `POST /api/v1/repos`. The
+server:
+
+1. Verifies the **requesting user's** GitHub token can access the repo — not
+   the server's token — so a user can only add repos they can already see. A
+   repo they can't see returns `404` (indistinguishable from "not found", by
+   design).
+2. Clones it to `<repos-root>/<owner>/<name>` using a **GitHub App installation
+   token** (not the user's session token), so the same durable credential
+   serves the background sync loop later. The App must be installed on the
+   owner; if it isn't, onboarding returns `400` asking the user to install it.
+3. Initializes stackit on the fresh checkout (trunk = the GitHub default
+   branch) and starts serving it.
+4. Records the repo against the user's login, so **each user sees only the
+   repos they added**. A repo with an empty `added_by` (operator-seeded) is
+   shared with everyone.
+
+### Requirements
+
+Onboarding is refused (`503`) unless all of these hold; it is also disabled
+(`405`) in read-only mode, since it is a write:
+
+- **Auth is configured** (GitHub OAuth) — the flow acts as the requesting user.
+- **A GitHub App is configured** (see below) — clones and syncs use its
+  installation tokens.
+- **`-database-url`** is set — the new repo is persisted so it survives a
+  restart.
+- **`-repos-root`** is set — somewhere to put the checkout.
+
+### Limitation: trusted users
+
+The model assumes everyone who can sign in is trusted; the repo ID is
+`<owner>-<name>` globally, so two users adding the same repo collide (`409`).
+
+## GitHub App & background sync
+
+Onboarding clones and the background sync loop authenticate with a **GitHub
+App**, whose installation access tokens are durable (minted and refreshed
+server-side), so the server can fetch with no user present.
+
+### Setting up the App
+
+1. Register a GitHub App (Settings → Developer settings → GitHub Apps).
+   Permissions: **Contents: Read-only** and **Metadata: Read-only**. Generate a
+   private key.
+2. Install the App on the orgs/accounts whose repos you'll serve. Users can
+   only onboard repos under an owner where the App is installed.
+3. Configure the server:
+
+| Var | Purpose |
+|-----|---------|
+| `STACKIT_GITHUB_APP_ID` | The numeric App ID. Setting it enables the provider. Equivalent to nothing on the CLI — App config is env-only. |
+| `STACKIT_GITHUB_APP_PRIVATE_KEY` | The App private key, PEM contents. |
+| `STACKIT_GITHUB_APP_PRIVATE_KEY_FILE` | Path to the PEM file, used when `_PRIVATE_KEY` is empty. |
+
+### The sync loop
+
+Set **`-sync-interval`** (or `STACKIT_SYNC_INTERVAL`, e.g. `60s`; `0` disables)
+to keep served repos current. On each tick the server mirror-fetches every
+managed checkout — force-updating local branch heads and stackit metadata from
+the remote and pruning deleted refs — then rebuilds and pushes a refresh to
+connected clients. Newly onboarded repos join the loop automatically.
+
+- Only **managed** checkouts (DB-backed / onboarded under the repos root) are
+  fetched. A `-cwd` dev repo is the operator's own working tree and is left
+  alone.
+- Private repos need the GitHub App (above) for the fetch. Without an App the
+  loop still runs but refreshes **public repos only**.
+- A recommended interval is `60s` or higher; very short intervals hammer the
+  remote and add little.
+
+> Note: GitHub App token minting is exercised by the `ghinstallation` library;
+> stackit's tests cover the surrounding logic with fakes. Verify end-to-end
+> against a real App before relying on it in production.
+
 ## Security posture
 
 The container is safe to run on a public hostname **only** behind:
@@ -101,11 +247,15 @@ The container is safe to run on a public hostname **only** behind:
    proxy in front (Railway, Fly, Cloudflare, Caddy, nginx) must terminate
    HTTPS. The `Strict-Transport-Security` header the server emits assumes
    this.
-2. **An authentication gateway** until in-process auth lands. Use Tailscale,
-   Cloudflare Access, an oauth2-proxy sidecar, or similar. Without one,
-   any caller can read every repo's branches/diffs and trigger
+2. **An access control** for write-capable deployments. Either the built-in
+   GitHub OAuth gate (`STACKIT_GITHUB_*` + an allowlist) or an external
+   gateway (Tailscale, Cloudflare Access, an oauth2-proxy sidecar). Without
+   one, any caller can trigger
    `POST /api/v1/repos/{id}/stacks/{branch}/submit`, which pushes branches
-   and creates PRs using the container's GitHub credentials.
+   and creates PRs using the container's GitHub credentials. To expose a
+   repo publicly *without* this risk, run in
+   [read-only mode](#read-only-public-mode), which removes the write
+   endpoint entirely.
 
 Built-in security controls (the server hardening pass that lands with
 this doc revision and follow-on PRs):
@@ -123,6 +273,12 @@ this doc revision and follow-on PRs):
   `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `HSTS` with a
   two-year max-age, and a CSP locked to `'self'` for scripts/connects.
 - CORS allowlist is exact-match; no implicit loopback bypass.
+- Per-IP request rate limiting (token bucket), concurrent-SSE caps
+  (global + per-IP) with bounded lifetime, and a branch-diff concurrency
+  throttle — abuse bounds for a public deployment, on by default.
+- Read-only mode (`-read-only`) removes the write endpoint and serves reads
+  anonymously while withholding the operator identity — see
+  [Read-only public mode](#read-only-public-mode).
 - Branch names supplied via path/query are validated against the same
   rules `stackit` enforces locally before reaching git.
 - GitHub OAuth gate via `STACKIT_GITHUB_*` + an allowlist. Every

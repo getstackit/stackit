@@ -32,6 +32,15 @@ type repoConfig struct {
 	Path string
 
 	Remote string
+
+	// AddedBy is the GitHub login of the user who onboarded this repo, or
+	// empty for operator-seeded rows. Carried through to the registry entry so
+	// the server can scope per-user visibility.
+	AddedBy string
+
+	// Managed marks a server-owned mirror checkout the sync loop may
+	// mirror-fetch. True for DB-backed repos; false for the -cwd dev repo.
+	Managed bool
 }
 
 // repoIDPattern restricts repo IDs to characters that survive in URL paths

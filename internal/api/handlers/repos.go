@@ -26,9 +26,13 @@ func (h *ReposListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := requestUser(r)
 	entries := h.reg.List()
 	summaries := make([]httpcontract.RepoSummary, 0, len(entries))
 	for _, entry := range entries {
+		if !visibleTo(entry, user) {
+			continue
+		}
 		summary := httpcontract.RepoSummary{
 			ID:          entry.ID,
 			DisplayName: entry.DisplayName,

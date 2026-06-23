@@ -11,14 +11,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/getstackit/stackit/internal/api"
+	"github.com/getstackit/stackit/internal/api/provision"
 	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/api/store"
-	"github.com/getstackit/stackit/internal/app"
 )
 
 // all: is required because Next static exports use underscore-prefixed paths like _next/.
@@ -74,6 +76,8 @@ func run() error {
 		enableLegacy  = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
 		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
 		authDisabled  = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused in public mode ($PORT or $STACKIT_PUBLIC).")
+		readOnly      = flag.Bool("read-only", envBool("STACKIT_READ_ONLY"), "Serve in read-only mode: the submit endpoint is disabled so the repo can be exposed publicly without write access. Also set via STACKIT_READ_ONLY.")
+		syncInterval  = flag.Duration("sync-interval", envDuration("STACKIT_SYNC_INTERVAL"), "How often to mirror-fetch managed repos from their remotes so served state stays current. 0 disables the loop. Also set via STACKIT_SYNC_INTERVAL (e.g. 60s).")
 	)
 	flag.Parse()
 
@@ -119,12 +123,16 @@ func run() error {
 		}
 	}()
 
+	// repoStore is non-nil only in DB-backed mode; it is handed to the server
+	// so runtime onboarding can persist newly added repos.
+	var repoStore *store.Store
 	switch {
 	case *databaseURL != "":
 		st, err := store.Open(context.Background(), *databaseURL)
 		if err != nil {
 			return err
 		}
+		repoStore = st
 		defer func() {
 			if closeErr := st.Close(); closeErr != nil {
 				slog.Error("repo store close failed", "error", closeErr)
@@ -183,14 +191,39 @@ func run() error {
 		slog.Warn("auth: DISABLED (no STACKIT_GITHUB_* env or -auth-disabled set). Do not expose this port publicly.")
 	}
 
+	// GitHub App provider authenticates onboarding clones and background syncs.
+	// Nil when no App is configured.
+	appProvider, err := buildAppProvider()
+	if err != nil {
+		return err
+	}
+	if appProvider != nil {
+		slog.Info("github app: installation-token provider enabled")
+	}
+
+	// Resolve the repos root to an absolute path so onboarded checkouts land
+	// in the same place boot-loaded repos resolve to (loadReposFromDB also
+	// makes it absolute), keeping persisted repos host-portable.
+	absReposRoot := *reposRoot
+	if absReposRoot != "" {
+		if abs, absErr := filepath.Abs(absReposRoot); absErr == nil {
+			absReposRoot = abs
+		}
+	}
+
 	server := api.NewServer(api.ServerConfig{
-		BindAddr:    *bind,
-		Port:        *port,
-		CORSOrigins: parseCSV(*corsOrigins),
-		APIPrefixes: prefixes,
-		StaticFS:    staticFS,
-		Registry:    reg,
-		Auth:        authCfg,
+		BindAddr:       *bind,
+		Port:           *port,
+		CORSOrigins:    parseCSV(*corsOrigins),
+		APIPrefixes:    prefixes,
+		StaticFS:       staticFS,
+		Registry:       reg,
+		Auth:           authCfg,
+		ReadOnly:       *readOnly,
+		RepoStore:      repoStore,
+		ReposRoot:      absReposRoot,
+		RepoSyncTokens: appProvider,
+		SyncInterval:   *syncInterval,
 	})
 
 	errCh := make(chan error, 1)
@@ -215,37 +248,43 @@ func run() error {
 	}
 }
 
-// addRegistryEntry resolves rc into an engine via app.GetContext and adds
-// the resulting RepoEntry to reg, registering a logger-close callback so
-// reg.Close releases the file handle on shutdown.
+// addRegistryEntry resolves rc into a RepoEntry via provision.BuildEntry and
+// adds it to reg. The build path is shared with runtime onboarding so startup
+// and "add a repo" can't drift.
 func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
-	opts := app.GetDefaultGlobalOptions()
-	opts.Cwd = rc.Path
-	opts.Interactive = false
-
-	runtimeCtx, err := app.GetContext(context.Background(), opts)
+	entry, err := provision.BuildEntry(context.Background(), provision.EntryParams{
+		ID:          rc.ID,
+		DisplayName: rc.DisplayName,
+		Path:        rc.Path,
+		Remote:      rc.Remote,
+		AddedBy:     rc.AddedBy,
+		Managed:     rc.Managed,
+		Owner:       rc.Owner,
+		Name:        rc.Name,
+	})
 	if err != nil {
 		return err
 	}
-
-	gh := runtimeCtx.GitHub()
-	if gh == nil && runtimeCtx.GitHubError() != nil {
-		slog.Warn("GitHub client unavailable", "repo", rc.ID, "error", runtimeCtx.GitHubError())
-	}
-
-	entry := registry.NewEntry(registry.EntryConfig{
-		ID:          rc.ID,
-		DisplayName: rc.DisplayName,
-		RepoRoot:    runtimeCtx.RepoRoot,
-		Remote:      rc.Remote,
-		Engine:      runtimeCtx.Engine,
-		GitHub:      gh,
-	})
-	if runtimeCtx.Logger != nil {
-		entry.AddCloser(runtimeCtx.Logger.Close)
-	}
-
 	return reg.Add(entry)
+}
+
+// envBool reports whether the named environment variable is set to a truthy
+// value (1, t, true, etc. per strconv.ParseBool). Unset or unparseable
+// values are false, so STACKIT_READ_ONLY=0 disables the mode rather than
+// tripping it the way a bare presence check would.
+func envBool(name string) bool {
+	v, err := strconv.ParseBool(os.Getenv(name))
+	return err == nil && v
+}
+
+// envDuration parses the named environment variable as a Go duration (e.g.
+// "60s"). Unset or unparseable values yield 0, which disables the sync loop.
+func envDuration(name string) time.Duration {
+	d, err := time.ParseDuration(strings.TrimSpace(os.Getenv(name)))
+	if err != nil {
+		return 0
+	}
+	return d
 }
 
 func parseCSV(raw string) []string {

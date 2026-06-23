@@ -84,7 +84,7 @@ func buildAuthConfig(authDisabled, publicMode bool) (*authBuildResult, error) {
 	}
 
 	return &authBuildResult{
-		cfg:   &api.AuthConfig{Handler: handler, SessionStore: store},
+		cfg:   &api.AuthConfig{Handler: handler, SessionStore: store, Cipher: cipher},
 		store: store,
 	}, nil
 }

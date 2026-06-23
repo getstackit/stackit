@@ -12,13 +12,23 @@ import (
 // Each connection is scoped to one repo: subscribers to /repos/A/events
 // only see events broadcast on repo A.
 type EventsHandler struct {
-	reg *registry.Registry
+	reg         *registry.Registry
+	limiter     *sseLimiter
+	maxLifetime time.Duration
 }
 
 // NewEventsHandler creates a handler that resolves the per-request repo
-// from the registry and streams from that repo's broadcaster.
-func NewEventsHandler(reg *registry.Registry) *EventsHandler {
-	return &EventsHandler{reg: reg}
+// from the registry and streams from that repo's broadcaster. limits bound
+// concurrent connections so an unauthenticated public deployment can't be
+// exhausted by clients opening unbounded streams; zero fields take the
+// package defaults.
+func NewEventsHandler(reg *registry.Registry, limits SSELimits) *EventsHandler {
+	limits = limits.withDefaults()
+	return &EventsHandler{
+		reg:         reg,
+		limiter:     newSSELimiter(limits.MaxGlobal, limits.MaxPerIP),
+		maxLifetime: limits.MaxLifetime,
+	}
 }
 
 // ServeHTTP handles the SSE connection for one repo.
@@ -50,6 +60,15 @@ func (h *EventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reserve a connection slot before streaming. A public server must cap
+	// concurrent streams or anyone can exhaust it by opening connections.
+	ip := ClientIP(r)
+	if !h.limiter.acquire(ip) {
+		http.Error(w, "too many connections", http.StatusTooManyRequests)
+		return
+	}
+	defer h.limiter.release(ip)
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -67,12 +86,29 @@ func (h *EventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
+	// Bound how long a single connection can hold its slot. EventSource
+	// reconnects on its own, so this is transparent to clients.
+	lifetime := time.NewTimer(h.maxLifetime)
+	defer lifetime.Stop()
+
+	// Periodic keepalive: keeps proxies from idling the stream out and makes
+	// a dead client fail the write below, releasing its slot promptly.
+	heartbeat := time.NewTicker(sseHeartbeatInterval)
+	defer heartbeat.Stop()
+
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case <-entry.Broadcaster.Done():
 			return
+		case <-lifetime.C:
+			return
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
 		case msg, ok := <-ch:
 			if !ok {
 				return

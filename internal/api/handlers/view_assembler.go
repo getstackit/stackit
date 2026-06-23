@@ -65,7 +65,7 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 		Owner:         owner,
 		Repo:          repo,
 		Trunk:         a.eng.Trunk().GetName(),
-		CurrentBranch: a.eng.CurrentBranch().GetName(),
+		CurrentBranch: a.eng.CurrentBranchName(),
 		Remote:        a.remote,
 		CurrentUser:   currentUser,
 	}

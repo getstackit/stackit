@@ -64,6 +64,16 @@ func (e *engineImpl) CurrentBranch() *Branch {
 	return &branch
 }
 
+// CurrentBranchName returns the current branch name, or "" when HEAD is not on
+// a branch (e.g. a detached-HEAD server mirror). Use this for nil-safe reads
+// where a missing current branch should be absent rather than an error.
+func (e *engineImpl) CurrentBranchName() string {
+	if cb := e.CurrentBranch(); cb != nil {
+		return cb.GetName()
+	}
+	return ""
+}
+
 // ValidateOnBranch ensures the user is on a branch
 func (e *engineImpl) ValidateOnBranch() (string, error) {
 	currentBranch := e.CurrentBranch()

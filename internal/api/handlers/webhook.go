@@ -1,11 +1,8 @@
 package handlers
 
 import (
-	"context"
 	"io"
-	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/getstackit/stackit/internal/api/githubwebhook"
 )
@@ -15,15 +12,12 @@ import (
 // request from forcing an unbounded read before the signature is even checked.
 const maxWebhookBody = 1 << 20 // 1 MiB
 
-// webhookSyncTimeout bounds the background fetch+refresh kicked off by a
-// delivery, so a stuck remote can't leak goroutines.
-const webhookSyncTimeout = 2 * time.Minute
-
-// RepoSyncer mirror-fetches and refreshes a single managed repo by its GitHub
-// coordinates. The concrete implementation is *reposync.Syncer; the handler
-// takes the narrow interface so handlers stays decoupled from reposync.
-type RepoSyncer interface {
-	SyncRepo(ctx context.Context, owner, name string) error
+// RepoSyncTrigger requests an asynchronous, coalesced sync of a managed repo by
+// its GitHub coordinates. The concrete implementation is *reposync.Coalescer;
+// the handler takes the narrow interface so handlers stays decoupled from
+// reposync, and so the receiver never blocks on a fetch.
+type RepoSyncTrigger interface {
+	Trigger(owner, name string)
 }
 
 // WebhookHandler receives GitHub webhook deliveries at
@@ -36,21 +30,21 @@ type RepoSyncer interface {
 // authenticated solely by the HMAC signature, so it must fail closed when no
 // secret is configured — otherwise it would be an open refresh trigger.
 type WebhookHandler struct {
-	secret string
-	syncer RepoSyncer
+	secret  string
+	trigger RepoSyncTrigger
 }
 
-// NewWebhookHandler wires a webhook receiver. An empty secret or nil syncer
+// NewWebhookHandler wires a webhook receiver. An empty secret or nil trigger
 // leaves the endpoint disabled (it 404s), so it is safe to mount
 // unconditionally and gate purely on configuration.
-func NewWebhookHandler(secret string, syncer RepoSyncer) *WebhookHandler {
-	return &WebhookHandler{secret: secret, syncer: syncer}
+func NewWebhookHandler(secret string, trigger RepoSyncTrigger) *WebhookHandler {
+	return &WebhookHandler{secret: secret, trigger: trigger}
 }
 
 func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Disabled when unconfigured: 404 so the endpoint is indistinguishable from
 	// a server that never had it, rather than advertising a misconfigured hook.
-	if h.secret == "" || h.syncer == nil {
+	if h.secret == "" || h.trigger == nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -88,16 +82,9 @@ func (h *WebhookHandler) handlePush(w http.ResponseWriter, body []byte) {
 		return
 	}
 
-	// A mirror-fetch is slow and GitHub expects a prompt response, so ack
-	// immediately and run the sync in the background, detached from the request.
-	// The inbound rate limiter bounds how often this fans out; a follow-up adds
-	// per-repo coalescing so a burst of pushes collapses to one fetch.
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), webhookSyncTimeout)
-		defer cancel()
-		if err := h.syncer.SyncRepo(ctx, owner, name); err != nil {
-			slog.Warn("webhook: sync failed", "owner", owner, "name", name, "error", err)
-		}
-	}()
+	// A mirror-fetch is slow and GitHub expects a prompt response, so hand off
+	// to the coalescer (which runs and de-dups the fetch off the request path)
+	// and ack immediately.
+	h.trigger.Trigger(owner, name)
 	w.WriteHeader(http.StatusAccepted)
 }

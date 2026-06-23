@@ -118,6 +118,10 @@ type Server struct {
 	// interval loop (when enabled) and the webhook receiver drive it, so it is
 	// built once here regardless of whether the loop runs.
 	syncer *reposync.Syncer
+
+	// coalescer fronts the syncer for event-driven refreshes (the webhook
+	// receiver), collapsing a burst of pushes for one repo into a single fetch.
+	coalescer *reposync.Coalescer
 }
 
 // NewServer creates a new API server backed by the given registry.
@@ -133,6 +137,7 @@ func NewServer(cfg ServerConfig) *Server {
 		provider = cfg.RepoSyncTokens
 	}
 	s.syncer = reposync.New(cfg.Registry, provider, cfg.SyncInterval)
+	s.coalescer = reposync.NewCoalescer(s.syncer.SyncRepo, 0)
 
 	return s
 }
@@ -304,7 +309,7 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	//   - /webhooks/github receives GitHub push deliveries (authenticated by
 	//     HMAC signature, not a session) and refreshes the matching managed
 	//     repo. It self-disables (404) when no webhook secret is configured.
-	webhookHandler := handlers.NewWebhookHandler(s.config.GitHubWebhookSecret, s.syncer)
+	webhookHandler := handlers.NewWebhookHandler(s.config.GitHubWebhookSecret, s.coalescer)
 	publicAPIMux := http.NewServeMux()
 	for _, prefix := range prefixes {
 		publicAPIMux.Handle("GET "+prefix+"/config", configHandler)

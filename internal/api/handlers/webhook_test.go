@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,6 +16,8 @@ import (
 	"github.com/getstackit/stackit/internal/api/githubwebhook"
 )
 
+// fakeSyncer records Trigger calls and signals each one on done, so a test can
+// wait for the (otherwise fire-and-forget) hand-off.
 type fakeSyncer struct {
 	mu    sync.Mutex
 	calls []string
@@ -27,7 +28,7 @@ func newFakeSyncer() *fakeSyncer {
 	return &fakeSyncer{done: make(chan struct{}, 1)}
 }
 
-func (f *fakeSyncer) SyncRepo(_ context.Context, owner, name string) error {
+func (f *fakeSyncer) Trigger(owner, name string) {
 	f.mu.Lock()
 	f.calls = append(f.calls, owner+"/"+name)
 	f.mu.Unlock()
@@ -35,7 +36,6 @@ func (f *fakeSyncer) SyncRepo(_ context.Context, owner, name string) error {
 	case f.done <- struct{}{}:
 	default:
 	}
-	return nil
 }
 
 func (f *fakeSyncer) called() []string {
@@ -98,11 +98,11 @@ func TestWebhookHandler_PushTriggersSync(t *testing.T) {
 	h.ServeHTTP(rr, webhookRequest("push", pushBody()))
 	require.Equal(t, http.StatusAccepted, rr.Code)
 
-	// The sync runs in a background goroutine; wait for it to land.
+	// Wait for the trigger hand-off (the real coalescer runs the fetch async).
 	select {
 	case <-sy.done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("SyncRepo was not called for a verified push")
+		t.Fatal("Trigger was not called for a verified push")
 	}
 	require.Equal(t, []string{"octo/widget"}, sy.called())
 }

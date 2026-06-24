@@ -29,6 +29,7 @@ func setupBehindBranch(t *testing.T, s *scenario.Scenario, branch string) string
 // behind their remote are all fast-forwarded by syncStackBranches using a single
 // batched fetch (the per-branch fetch N+1 was removed).
 func TestSyncStackBranchesBatchFastForward(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewRemoteScenario(t)
 
 	// Linear stack: main -> a -> b -> c, each tracked.
@@ -64,6 +65,7 @@ func TestSyncStackBranchesBatchFastForward(t *testing.T) {
 // from its remote (both sides have unique commits) is left untouched: it fails
 // the Behind() gate, so it is neither fast-forwarded nor reported as a conflict.
 func TestSyncStackBranchesSkipsDiverged(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewRemoteScenario(t)
 
 	s.CreateBranch("d").CommitChange("d-1", "d one").TrackBranch("d", "main")
@@ -97,6 +99,7 @@ func TestSyncStackBranchesSkipsDiverged(t *testing.T) {
 // pipeline fast-forwards behind branches end-to-end. Uses independent branches
 // off main so no restack is triggered, isolating the branch-sync behavior.
 func TestSyncActionFastForwardsBehindBranches(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewRemoteScenario(t)
 
 	want := map[string]string{}

@@ -12,7 +12,9 @@ import (
 )
 
 func TestAction(t *testing.T) {
+	t.Parallel()
 	t.Run("fails when not on a branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Detach HEAD
@@ -33,6 +35,7 @@ func TestAction(t *testing.T) {
 	})
 
 	t.Run("fails when on trunk", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Make sure we're on main
@@ -51,6 +54,7 @@ func TestAction(t *testing.T) {
 	})
 
 	t.Run("fails when branch is not tracked", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			CreateBranch("untracked")
 
@@ -67,6 +71,7 @@ func TestAction(t *testing.T) {
 	})
 
 	t.Run("returns early when no PRs to merge", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -89,6 +94,7 @@ func TestAction(t *testing.T) {
 	})
 
 	t.Run("dry run mode reports PRs without merging", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -120,6 +126,7 @@ func TestAction(t *testing.T) {
 	})
 
 	t.Run("preserves stack structure when merging bottom PR", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch-a": "main",
@@ -245,9 +252,11 @@ func (h *mockHandler) Complete(_ *merge.Result) {
 }
 
 func TestExecute_AlwaysCallsComplete(t *testing.T) {
-	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	t.Parallel()
 
 	t.Run("calls Complete on success", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		handler := &mockHandler{}
 		err := merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
 			Plan:    &merge.Plan{Steps: []merge.PlanStep{}},
@@ -258,6 +267,8 @@ func TestExecute_AlwaysCallsComplete(t *testing.T) {
 	})
 
 	t.Run("calls Complete on failure", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		handler := &mockHandler{}
 		err := merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
 			Plan: &merge.Plan{Steps: []merge.PlanStep{

@@ -30,10 +30,10 @@ const (
 //  6. Old behavior: SyncParentsFromGitHubBase trusted GitHub and reparented branch-c to main
 //  7. New behavior: PushParentsToGitHub pushes local parent to GitHub (local is authoritative)
 func TestSyncDiamondStackParentPreservation(t *testing.T) {
-	// Set dummy GITHUB_TOKEN to avoid calling 'gh auth token' and triggering credentials prompts
-	t.Setenv("GITHUB_TOKEN", "dummy")
+	t.Parallel()
 
 	t.Run("sync preserves local parent and pushes to GitHub when GitHub has stale base", func(t *testing.T) {
+		t.Parallel()
 		// Setup scenario with diamond structure
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
@@ -151,6 +151,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 	})
 
 	t.Run("sync after modify preserves correct parents", func(t *testing.T) {
+		t.Parallel()
 		// This test simulates the full user scenario:
 		// 1. Create diamond
 		// 2. Submit
@@ -265,6 +266,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 	})
 
 	t.Run("sync pushes local parent to GitHub when GitHub base differs", func(t *testing.T) {
+		t.Parallel()
 		// This test verifies that local parent is authoritative:
 		// - Local parent is branch-a
 		// - GitHub PR base is main (stale/different)

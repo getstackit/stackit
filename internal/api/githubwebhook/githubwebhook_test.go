@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -87,6 +88,15 @@ func TestParsePush(t *testing.T) {
 			name:   "invalid json",
 			body:   `not json`,
 			wantOK: false,
+		},
+		{
+			// application/x-www-form-urlencoded delivery: GitHub wraps the JSON
+			// in a url-encoded "payload" field. Must parse the same as raw JSON.
+			name:      "form-urlencoded payload",
+			body:      "payload=" + url.QueryEscape(`{"repository":{"name":"widget","full_name":"octo/widget","owner":{"login":"octo"}}}`),
+			wantOwner: "octo",
+			wantName:  "widget",
+			wantOK:    true,
 		},
 	}
 	for _, tt := range tests {

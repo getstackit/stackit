@@ -15,6 +15,9 @@ import {
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+// Repos are addressed by GitHub coordinates; one ref reused across cases.
+const REF = { owner: "acme", repo: "web" } as const;
+
 beforeEach(() => {
   mockFetch.mockReset();
 });
@@ -94,52 +97,52 @@ describe("onboardRepo", () => {
 });
 
 describe("fetchView", () => {
-  it("scopes to repoId", async () => {
+  it("scopes to owner/repo", async () => {
     const data = { repo: {}, stacks: [] };
     mockOk(data);
 
-    const result = await fetchView("stackit");
+    const result = await fetchView(REF);
     expect(result).toEqual(data);
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/stackit/view",
+      "/api/v1/repos/acme/web/view",
       { credentials: "include" }
     );
   });
 });
 
 describe("fetchRepo", () => {
-  it("scopes to repoId", async () => {
+  it("scopes to owner/repo", async () => {
     const data = { owner: "test", repo: "repo", trunk: "main", currentBranch: "main", remote: "origin" };
     mockOk(data);
 
-    const result = await fetchRepo("stackit");
+    const result = await fetchRepo(REF);
     expect(result).toEqual(data);
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/stackit/repo",
+      "/api/v1/repos/acme/web/repo",
       { credentials: "include" }
     );
   });
 });
 
 describe("fetchStacks", () => {
-  it("scopes to repoId", async () => {
+  it("scopes to owner/repo", async () => {
     mockOk([]);
-    const result = await fetchStacks("stackit");
+    const result = await fetchStacks(REF);
     expect(result).toEqual([]);
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/stackit/stacks",
+      "/api/v1/repos/acme/web/stacks",
       { credentials: "include" }
     );
   });
 });
 
 describe("fetchStack", () => {
-  it("encodes both repoId and branch name in URL", async () => {
+  it("encodes the branch name in URL", async () => {
     mockOk({ rootBranch: "feat/foo", branches: [] });
 
-    await fetchStack("stackit", "feat/foo");
+    await fetchStack(REF, "feat/foo");
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/stackit/stacks/feat%2Ffoo",
+      "/api/v1/repos/acme/web/stacks/feat%2Ffoo",
       { credentials: "include" }
     );
   });
@@ -149,21 +152,21 @@ describe("fetchBranch", () => {
   it("encodes branch name in URL", async () => {
     mockOk({ name: "feat/bar" });
 
-    await fetchBranch("stackit", "feat/bar");
+    await fetchBranch(REF, "feat/bar");
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/stackit/branches/feat%2Fbar",
+      "/api/v1/repos/acme/web/branches/feat%2Fbar",
       { credentials: "include" }
     );
   });
 });
 
 describe("fetchBranchDiff", () => {
-  it("sends encoded branch name in query string", async () => {
+  it("sends the encoded branch name as a path segment", async () => {
     mockOk({ branch: "feat/bar", baseRevision: "abc", headRevision: "def", patch: "" });
 
-    await fetchBranchDiff("stackit", "feat/bar");
+    await fetchBranchDiff(REF, "feat/bar");
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/stackit/branch-diff?branch=feat%2Fbar",
+      "/api/v1/repos/acme/web/branch-diff/feat%2Fbar",
       { credentials: "include" }
     );
   });
@@ -186,12 +189,12 @@ describe("error handling", () => {
   it("throws on non-ok response", async () => {
     mockError(404, "Not Found");
 
-    await expect(fetchRepo("stackit")).rejects.toThrow("API error: 404 Not Found");
+    await expect(fetchRepo(REF)).rejects.toThrow("API error: 404 Not Found");
   });
 
   it("throws on 500 response", async () => {
     mockError(500, "Internal Server Error");
 
-    await expect(fetchView("stackit")).rejects.toThrow("API error: 500 Internal Server Error");
+    await expect(fetchView(REF)).rejects.toThrow("API error: 500 Internal Server Error");
   });
 });

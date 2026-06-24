@@ -55,14 +55,15 @@ with every authenticated user.
 
 | Var | Purpose |
 |-----|---------|
-| `PORT` | Listen port. Honored when `-port` isn't passed explicitly — needed for Railway, Fly, Heroku. Defaults to `8080`. Setting this also implicitly switches the server into "public mode" (binds `0.0.0.0`, requires auth env). |
-| `STACKIT_PUBLIC` | Explicit version of the same signal. Set when you mean to expose the server publicly without `$PORT` (e.g. behind a tunnel). |
+| `STACKIT_ENV` | Deployment posture: `local` (default) or `production`. `production` binds `0.0.0.0`, emits JSON logs, forces `Secure` cookies, honors `$PORT`, and requires auth (or `-read-only`). `local` binds loopback (`127.0.0.1`) with auth optional. Set it to `production` on every hosted deploy. |
+| `PORT` | Listen port for **production** deploys. Honored when `-port` isn't passed and `STACKIT_ENV=production` — PaaS hosts (Railway, Fly, Heroku) inject it. Ignored in `local` so a stray `$PORT` from a dev shell can't move the listener. Defaults to `8080`. |
 | `STACKIT_READ_ONLY` | Set to `1`/`true` to serve in read-only mode: the submit endpoint is disabled and reads are served anonymously, so a configured repo can be exposed to the public without write access. See [Read-only public mode](#read-only-public-mode). Equivalent to `-read-only`. |
 | `STACKIT_DATABASE_URL` | PostgreSQL connection string. When set, repos are served from the DB (and runtime [onboarding](#repository-onboarding) can persist new ones) instead of the `-cwd` single-repo shortcut. Equivalent to `-database-url`. |
 | `STACKIT_REPOS_ROOT` | Base directory under which per-repo checkouts live (`<root>/<owner>/<name>`). Required for DB-backed serving and onboarding. Equivalent to `-repos-root`. |
 | `STACKIT_GITHUB_APP_ID` | GitHub App ID; enables installation-token auth for onboarding clones and background syncs. See [GitHub App & background sync](#github-app--background-sync). |
 | `STACKIT_GITHUB_APP_PRIVATE_KEY` / `_FILE` | GitHub App private key (PEM contents, or a path in the `_FILE` variant). |
-| `STACKIT_SYNC_INTERVAL` | How often to mirror-fetch managed repos (e.g. `60s`); `0`/unset disables the sync loop. Equivalent to `-sync-interval`. |
+| `STACKIT_GITHUB_WEBHOOK_SECRET` | Shared secret GitHub signs webhook deliveries with. Set it to enable the [webhook receiver](#evented-refresh-webhooks) for immediate, push-driven refreshes; unset leaves the endpoint disabled (404). |
+| `STACKIT_SYNC_INTERVAL` | How often to mirror-fetch managed repos (e.g. `60s`); defaults to `5m`, `0` disables the sync loop. Equivalent to `-sync-interval`. See [GitHub App & background sync](#github-app--background-sync). |
 | `STACKIT_BASE_URL` | The canonical https:// URL the server is reachable at. Required when auth is enabled (used to build the OAuth callback URL). |
 | `STACKIT_GITHUB_CLIENT_ID` | GitHub OAuth App client ID. |
 | `STACKIT_GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret. |
@@ -78,12 +79,12 @@ The most useful flags:
 |------|---------|---------|
 | `-database-url` | _(empty)_ | PostgreSQL connection string. Enables DB-backed multi-repo serving and runtime [onboarding](#repository-onboarding). Also settable via `STACKIT_DATABASE_URL`. |
 | `-repos-root` | _(empty)_ | Base directory for per-repo checkouts (`<root>/<owner>/<name>`). Required with `-database-url` and for onboarding. Also settable via `STACKIT_REPOS_ROOT`. |
-| `-sync-interval` | `0` | How often to mirror-fetch managed repos so served state stays current; `0` disables. Also settable via `STACKIT_SYNC_INTERVAL`. See [GitHub App & background sync](#github-app--background-sync). |
+| `-sync-interval` | `5m` | How often to mirror-fetch managed repos so served state stays current; `0` disables. Also settable via `STACKIT_SYNC_INTERVAL`. See [GitHub App & background sync](#github-app--background-sync). |
 | `-cwd` | _(empty)_ | Single-repo shortcut: serve the repo discovered from this path as `default`. Ignored when `-database-url` is set. |
 | `-port` | `8080` | Listen port; overrides `$PORT`. |
-| `-bind` | `127.0.0.1` (or `0.0.0.0` if `$PORT`/`$STACKIT_PUBLIC` are set) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server on a host where the heuristics don't fire. |
+| `-bind` | `127.0.0.1` (or `0.0.0.0` when `STACKIT_ENV=production`) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server without setting `STACKIT_ENV=production`. Binding a non-loopback interface requires auth or `-read-only`. |
 | `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. Loopback origins are **not** allowed implicitly — list each origin you want to accept. |
-| `-auth-disabled` | `false` | Skip the GitHub OAuth gate. **Refused** when `$PORT` or `$STACKIT_PUBLIC` is set. Use only for local dev or when fronted by platform auth (Tailscale, Cloudflare Access). |
+| `-auth-disabled` | `false` | Skip the GitHub OAuth gate. **Refused** when the server binds a non-loopback interface (e.g. `STACKIT_ENV=production`) unless `-read-only` is set. Use only for local dev or when fronted by platform auth (Tailscale, Cloudflare Access). |
 | `-read-only` | `false` | Serve in read-only mode: disable the submit endpoint and serve reads anonymously. Safe to expose publicly. See [Read-only public mode](#read-only-public-mode). Also settable via `STACKIT_READ_ONLY`. |
 
 Run `stackit-server -h` inside the container for the full list.
@@ -219,12 +220,29 @@ server-side), so the server can fetch with no user present.
 | `STACKIT_GITHUB_APP_PRIVATE_KEY` | The App private key, PEM contents. |
 | `STACKIT_GITHUB_APP_PRIVATE_KEY_FILE` | Path to the PEM file, used when `_PRIVATE_KEY` is empty. |
 
+### How a refresh happens
+
+Whatever the trigger, a refresh is the same unit of work: rebuild the repo's
+engine from its current git refs and broadcast an SSE `refresh` so connected
+clients refetch. Three things trigger it:
+
+1. **The interval loop** — a periodic mirror-fetch of every managed checkout
+   (below). The reliable backstop.
+2. **Webhooks** — an immediate, push-driven refresh of a single repo
+   ([below](#evented-refresh-webhooks)). The low-latency path.
+3. **Manual sync** — `POST /api/v1/repos/{owner}/{repo}/sync`, an on-demand refresh
+   (below). The fallback for local servers and for forcing a pull.
+
+The interval loop is the floor: webhooks and manual sync make refreshes faster
+or on-demand, but the loop guarantees the server converges even if a delivery is
+missed.
+
 ### The sync loop
 
-Set **`-sync-interval`** (or `STACKIT_SYNC_INTERVAL`, e.g. `60s`; `0` disables)
-to keep served repos current. On each tick the server mirror-fetches every
-managed checkout — force-updating local branch heads and stackit metadata from
-the remote and pruning deleted refs — then rebuilds and pushes a refresh to
+Set **`-sync-interval`** (or `STACKIT_SYNC_INTERVAL`, e.g. `60s`); it defaults to
+`5m` and `0` disables it. On each tick the server mirror-fetches every managed
+checkout — force-updating local branch heads and stackit metadata from the
+remote and pruning deleted refs — then rebuilds and pushes a refresh to
 connected clients. Newly onboarded repos join the loop automatically.
 
 - Only **managed** checkouts (DB-backed / onboarded under the repos root) are
@@ -232,8 +250,55 @@ connected clients. Newly onboarded repos join the loop automatically.
   alone.
 - Private repos need the GitHub App (above) for the fetch. Without an App the
   loop still runs but refreshes **public repos only**.
-- A recommended interval is `60s` or higher; very short intervals hammer the
-  remote and add little.
+- The default `5m` is a backstop. Pair it with webhooks for fresher state rather
+  than dropping the interval to a few seconds — short intervals hammer the
+  remote and add little once webhooks are in play.
+
+### Evented refresh (webhooks)
+
+Webhooks make a managed repo refresh **immediately** when someone pushes,
+instead of waiting for the next tick. Set **`STACKIT_GITHUB_WEBHOOK_SECRET`** and
+point a GitHub webhook at the server:
+
+1. In the GitHub App (or the repo/org), add a webhook:
+   - **Payload URL**: `https://<your-host>/api/v1/webhooks/github`
+   - **Content type**: `application/json`
+   - **Secret**: the same value as `STACKIT_GITHUB_WEBHOOK_SECRET`
+   - **Events**: subscribe to **Pushes** only.
+2. Deliveries are authenticated solely by their `X-Hub-Signature-256` HMAC. The
+   endpoint **fails closed**: with no secret set it returns `404`, so it is never
+   an open refresh trigger. It is unaffected by read-only mode (a refresh is a
+   read-side operation).
+3. On a verified push the server resolves the repo, mirror-fetches it, and
+   refreshes — acking GitHub immediately and doing the fetch in the background.
+   A burst of pushes for one repo coalesces into a single fetch.
+
+> **Keep the interval loop on as a backstop.** Webhook delivery isn't
+> guaranteed (the server may be down when GitHub delivers, and GitHub gives up
+> after retries). Crucially, GitHub sends a push event only for `refs/heads/*`
+> and `refs/tags/*` — **not** for stackit's `refs/stackit/metadata/*` refs. A
+> normal branch push fires a webhook and the mirror-fetch picks up metadata in
+> the same pass, but a metadata-only change (e.g. from `describe`) is invisible
+> to webhooks and is caught only by the interval loop. So run **both**: webhooks
+> for latency, the loop for correctness.
+
+### Manual sync
+
+`POST /api/v1/repos/{owner}/{repo}/sync` forces a refresh of one repo on demand. It is
+session-gated like submit (and refused in read-only mode), so it is never an
+anonymous trigger. For a managed mirror it mirror-fetches then rebuilds; for a
+local `-cwd` working repo it only re-reads on-disk refs (it never mirror-fetches
+a working tree, which would detach its HEAD).
+
+### Running locally
+
+Webhooks are a server-mode feature — GitHub can't reach a `localhost` server, so
+there's nothing to configure locally, and the endpoint stays disabled. A local
+server pointed at a `-cwd` working repo stays current a different way: a
+filesystem watcher on the repo's `.git` refs already refreshes on every local
+action (commit, branch switch, `git fetch`, `stackit sync`). To pull and reflect
+remote changes on demand, run `stackit sync` (or `git fetch`) in the repo — the
+watcher fires — or call the manual-sync endpoint above.
 
 > Note: GitHub App token minting is exercised by the `ghinstallation` library;
 > stackit's tests cover the surrounding logic with fakes. Verify end-to-end
@@ -262,8 +327,10 @@ this doc revision and follow-on PRs):
 
 - Process runs as the unprivileged `stackit` user (uid 10001) inside the
   container — neither user nor group is `root`.
-- Default bind is `127.0.0.1`; the `$PORT`/`$STACKIT_PUBLIC` heuristic
-  flips to `0.0.0.0` so PaaS routers can reach the port.
+- Default bind is `127.0.0.1`; `STACKIT_ENV=production` flips to
+  `0.0.0.0` so PaaS routers can reach the port. Binding any non-loopback
+  interface requires auth or `-read-only` — the server refuses to start
+  otherwise.
 - Request body capped at 1 MiB; `MaxHeaderBytes` at 1 MiB; `WriteTimeout`
   30 s, `IdleTimeout` 120 s, `ReadHeaderTimeout` 10 s.
 - Panic recovery middleware: a panicking handler returns 500 but cannot
@@ -343,7 +410,12 @@ cat > data/repos.json <<'EOF'
 { "repos": [ { "id": "stackit", "path": "/data/repos/stackit" } ] }
 EOF
 
+# STACKIT_ENV=production binds 0.0.0.0 so the -p mapping can reach the
+# server inside the container; STACKIT_READ_ONLY=1 exposes it without
+# needing OAuth set up (a non-loopback bind requires auth or read-only).
 docker run --rm -p 8080:8080 \
+  -e STACKIT_ENV=production \
+  -e STACKIT_READ_ONLY=1 \
   -v "$(pwd)/data:/data" \
   ghcr.io/getstackit/stackit-server:latest \
   -repos-config /data/repos.json
@@ -358,8 +430,11 @@ open http://localhost:8080
 1. **Service** — deploy from image `ghcr.io/getstackit/stackit-server:main`
    (or pin to `:latest` / `:vX.Y.Z`).
 2. **Volume** — mount at `/data`. Use at least a few GB; clones land here.
-3. **Variables** — Railway injects `PORT` automatically; no other vars are
-   required for the Phase 1 container.
+3. **Variables** — set `STACKIT_ENV=production` (binds `0.0.0.0` so Railway's
+   router can reach the port, and enforces auth). Railway injects `PORT`
+   automatically. Add the auth vars (`STACKIT_GITHUB_*`, `STACKIT_SESSION_KEY`,
+   an allowlist) for a write-capable deploy, or set `STACKIT_READ_ONLY=1` to
+   expose it read-only without auth.
 4. **Start command** — leave blank to use the image's `ENTRYPOINT`, then set
    the **Command** (Railway's arg override) to:
    ```

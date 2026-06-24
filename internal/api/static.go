@@ -23,6 +23,21 @@ var fallbackIndexHTML = []byte(`<!doctype html>
 </html>
 `)
 
+// assetExts are the file extensions of real static build output (Next's hashed
+// JS/CSS/media under _next/, plus root icons and manifests). A request whose
+// path ends in one of these but isn't on disk is a stale or missing asset and
+// must 404 — serving index.html for a <script>/<link>/<img> surfaces as a
+// confusing "unexpected token '<'" (or a silently broken asset) in the browser.
+// Any other dotted path is a client route (e.g. a branch named "v1.2.0") and
+// falls through to the SPA shell.
+var assetExts = map[string]bool{
+	".js": true, ".mjs": true, ".css": true, ".map": true, ".json": true,
+	".ico": true, ".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
+	".svg": true, ".webp": true, ".avif": true, ".woff": true, ".woff2": true,
+	".ttf": true, ".otf": true, ".eot": true, ".txt": true, ".xml": true,
+	".wasm": true, ".webmanifest": true,
+}
+
 func newStaticHandler(staticFS fs.FS) http.Handler {
 	indexHTML := fallbackIndexHTML
 	var fileServer http.Handler
@@ -55,9 +70,12 @@ func newStaticHandler(staticFS fs.FS) http.Handler {
 			}
 		}
 
-		// Return 404 for unknown files with extensions, but fallback to SPA index
-		// for extension-less client routes (e.g. /stacks/main).
-		if path.Ext(cleanPath) != "" {
+		// Not on disk: a missing static asset 404s, but every other unknown path
+		// is a client-side route and gets the SPA shell. We key this on a known
+		// set of asset extensions rather than "has any extension", because branch
+		// routes carry dots too — /{owner}/{repo}/tree/release/v1.2.0 ends in
+		// ".0", which must not be mistaken for a file and 404'd (see assetExts).
+		if assetExts[strings.ToLower(path.Ext(cleanPath))] {
 			http.NotFound(w, r)
 			return
 		}

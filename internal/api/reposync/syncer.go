@@ -6,6 +6,8 @@ package reposync
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -13,6 +15,11 @@ import (
 	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/utils"
 )
+
+// ErrRepoNotManaged is returned by SyncRepo when no managed registry entry
+// matches the requested owner/name — e.g. a webhook arrives for a repo that
+// was never onboarded, or for the unmanaged -cwd dev repo.
+var ErrRepoNotManaged = errors.New("reposync: repo not managed")
 
 // defaultWorkers bounds concurrent fetches per pass. Fetches are network-bound,
 // so a small pool is gentle on the remote and the file-descriptor table.
@@ -82,23 +89,38 @@ func (s *Syncer) syncOnce(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		s.syncEntry(ctx, e)
+		if err := s.syncEntry(ctx, e); err != nil {
+			slog.Warn("sync: entry failed", "repo", e.ID, "error", err)
+		}
 	})
 }
 
-func (s *Syncer) syncEntry(ctx context.Context, e *registry.RepoEntry) {
+// SyncRepo mirror-fetches and refreshes the single managed entry matching
+// owner/name. It is the per-repo unit of work shared by the interval loop and
+// the webhook receiver: the loop calls syncEntry directly over the entries it
+// already holds, while the webhook path arrives with only GitHub coordinates
+// and resolves the entry here. Returns ErrRepoNotManaged when no managed repo
+// matches, so a webhook for an un-onboarded repo is a clean no-op.
+func (s *Syncer) SyncRepo(ctx context.Context, owner, name string) error {
+	e, ok := s.reg.FindManaged(owner, name)
+	if !ok {
+		return fmt.Errorf("%w: %s/%s", ErrRepoNotManaged, owner, name)
+	}
+	return s.syncEntry(ctx, e)
+}
+
+func (s *Syncer) syncEntry(ctx context.Context, e *registry.RepoEntry) error {
 	token := ""
 	if s.provider != nil {
 		t, err := s.provider.InstallationToken(ctx, e.Owner, e.Name)
 		if err != nil {
-			slog.Warn("sync: installation token unavailable; skipping", "repo", e.ID, "error", err)
-			return
+			return fmt.Errorf("installation token: %w", err)
 		}
 		token = t
 	}
 	if err := s.fetch(ctx, e.RepoRoot, e.Remote, token); err != nil {
-		slog.Warn("sync: fetch failed", "repo", e.ID, "error", err)
-		return
+		return fmt.Errorf("fetch: %w", err)
 	}
 	s.refresh(e)
+	return nil
 }

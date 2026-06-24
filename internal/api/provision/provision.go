@@ -54,6 +54,21 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 		slog.Warn("GitHub client unavailable", "repo", p.ID, "error", runtimeCtx.GitHubError())
 	}
 
+	// Onboarding passes explicit coordinates; the single-repo startup path does
+	// not. Derive owner/name from the GitHub remote so every repo with a remote
+	// is reachable by its GitHub-style /repos/{owner}/{repo} route, not just
+	// onboarded ones.
+	owner, name := p.Owner, p.Name
+	if (owner == "" || name == "") && gh != nil {
+		remoteOwner, remoteName := gh.GetOwnerRepo()
+		if owner == "" {
+			owner = remoteOwner
+		}
+		if name == "" {
+			name = remoteName
+		}
+	}
+
 	entry := registry.NewEntry(registry.EntryConfig{
 		ID:          p.ID,
 		DisplayName: p.DisplayName,
@@ -61,8 +76,8 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 		Remote:      p.Remote,
 		AddedBy:     p.AddedBy,
 		Managed:     p.Managed,
-		Owner:       p.Owner,
-		Name:        p.Name,
+		Owner:       owner,
+		Name:        name,
 		Engine:      runtimeCtx.Engine,
 		GitHub:      gh,
 	})

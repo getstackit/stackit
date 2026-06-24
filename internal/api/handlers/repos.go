@@ -35,6 +35,8 @@ func (h *ReposListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		summary := httpcontract.RepoSummary{
 			ID:          entry.ID,
+			Owner:       entry.Owner,
+			Repo:        entry.Name,
 			DisplayName: entry.DisplayName,
 		}
 		if entry.Engine != nil {

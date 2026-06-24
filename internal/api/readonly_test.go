@@ -66,7 +66,7 @@ func newTestAuthConfig(t *testing.T) *AuthConfig {
 // submitRequest builds a POST to the submit route with the CSRF header set,
 // so it clears RequireCSRFHeader and reaches the routed handler.
 func submitRequest() *http.Request {
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos/default/stacks/main/submit", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/repos/acme/demo/stacks/main/submit", nil)
 	req.Header.Set(auth.CSRFHeader, "1")
 	return req
 }

@@ -20,9 +20,13 @@ type ConfigResponse struct {
 }
 
 // RepoSummary is one entry in ReposListResponse — the metadata clients
-// need to render a repo picker without hitting per-repo endpoints.
+// need to render a repo picker without hitting per-repo endpoints. Owner and
+// Repo are the GitHub coordinates the client uses to build /{owner}/{repo}
+// routes; they are omitted for a repo with no GitHub remote.
 type RepoSummary struct {
 	ID            string `json:"id"`
+	Owner         string `json:"owner,omitempty"`
+	Repo          string `json:"repo,omitempty"`
 	DisplayName   string `json:"displayName"`
 	Trunk         string `json:"trunk"`
 	CurrentBranch string `json:"currentBranch,omitempty"`

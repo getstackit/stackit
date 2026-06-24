@@ -13,39 +13,59 @@ func TestResolvePort(t *testing.T) {
 		name           string
 		start          int
 		portExplicit   bool
+		prod           bool
 		env            string
 		wantPort       int
 		wantErrContain string
 	}{
 		{
-			name:     "no env keeps default",
+			name:     "prod no env keeps default",
 			start:    8080,
+			prod:     true,
 			env:      "",
 			wantPort: 8080,
 		},
 		{
-			name:     "env populates default",
+			name:     "prod env populates default",
 			start:    8080,
+			prod:     true,
 			env:      "3000",
 			wantPort: 3000,
 		},
 		{
 			name:     "explicit flag wins over env",
 			start:    9999,
+			prod:     true,
 			env:      "3000",
 			wantPort: 9999, portExplicit: true,
 		},
 		{
-			name:     "whitespace env is treated as unset",
+			name:     "prod whitespace env is treated as unset",
 			start:    8080,
+			prod:     true,
 			env:      "   ",
 			wantPort: 8080,
 		},
 		{
-			name:           "invalid env returns error",
+			name:           "prod invalid env returns error",
 			start:          8080,
+			prod:           true,
 			env:            "not-a-number",
 			wantErrContain: "invalid PORT env",
+		},
+		{
+			name:     "local ignores env",
+			start:    8080,
+			prod:     false,
+			env:      "3000",
+			wantPort: 8080,
+		},
+		{
+			name:     "local ignores invalid env without error",
+			start:    8080,
+			prod:     false,
+			env:      "not-a-number",
+			wantPort: 8080,
 		},
 	}
 
@@ -53,7 +73,7 @@ func TestResolvePort(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			port := tt.start
-			err := resolvePort(&port, tt.portExplicit, tt.env)
+			err := resolvePort(&port, tt.portExplicit, tt.prod, tt.env)
 			if tt.wantErrContain != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.wantErrContain)

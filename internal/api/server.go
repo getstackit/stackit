@@ -24,8 +24,8 @@ const apiPathPrefix = "/api"
 // ServerConfig holds configuration for the API server.
 type ServerConfig struct {
 	// BindAddr is the host/IP to listen on. Empty means "all interfaces".
-	// apps/server picks a safe default (127.0.0.1) and switches to the
-	// public-facing form when PORT or STACKIT_PUBLIC is set.
+	// apps/server picks a safe default (127.0.0.1) and binds 0.0.0.0 when
+	// STACKIT_ENV=production.
 	BindAddr    string
 	Port        int
 	CORSOrigins []string
@@ -58,8 +58,8 @@ type ServerConfig struct {
 	// needed to gate /api/* routes behind GitHub login. When nil the server
 	// runs without authentication; that mode is only safe on a private
 	// network (localhost dev, tunneled access). apps/server refuses to
-	// start unauthenticated when STACKIT_PUBLIC or $PORT are set unless
-	// -auth-disabled is passed explicitly.
+	// start unauthenticated when it binds a non-loopback interface unless
+	// -read-only is set.
 	Auth *AuthConfig
 
 	// RepoStore is the persistence backend for repo configuration. It is set
@@ -81,8 +81,16 @@ type ServerConfig struct {
 
 	// SyncInterval, when > 0, enables the background sync loop: every interval
 	// each managed repo is mirror-fetched from its remote so the served state
-	// stays current without a local actor. Zero disables it.
+	// stays current without a local actor. Zero disables it. Even with the loop
+	// off, the syncer still backs on-demand refreshes (webhook receiver).
 	SyncInterval time.Duration
+
+	// GitHubWebhookSecret is the shared secret GitHub signs webhook deliveries
+	// with. When set, POST /api/v1/webhooks/github accepts verified push events
+	// and refreshes the matching managed repo immediately (the interval loop
+	// stays as a backstop). Empty disables the endpoint (it 404s), which is the
+	// correct posture for local/dev servers GitHub can't reach.
+	GitHubWebhookSecret string
 }
 
 // AuthConfig is the runtime auth setup. SessionStore must outlive the
@@ -105,11 +113,33 @@ type Server struct {
 	config     ServerConfig
 	httpServer *http.Server
 	syncCancel context.CancelFunc
+
+	// syncer is the shared per-repo mirror-fetch+refresh engine. Both the
+	// interval loop (when enabled) and the webhook receiver drive it, so it is
+	// built once here regardless of whether the loop runs.
+	syncer *reposync.Syncer
+
+	// coalescer fronts the syncer for event-driven refreshes (the webhook
+	// receiver), collapsing a burst of pushes for one repo into a single fetch.
+	coalescer *reposync.Coalescer
 }
 
 // NewServer creates a new API server backed by the given registry.
 func NewServer(cfg ServerConfig) *Server {
-	return &Server{config: cfg}
+	s := &Server{config: cfg}
+
+	// Guard against the typed-nil interface trap: assigning a nil
+	// *AppTokenProvider to the interface yields a non-nil interface wrapping a
+	// nil pointer. Only set provider when a concrete one exists; otherwise the
+	// syncer fetches unauthenticated (public repos only).
+	var provider reposync.TokenProvider
+	if cfg.RepoSyncTokens != nil {
+		provider = cfg.RepoSyncTokens
+	}
+	s.syncer = reposync.New(cfg.Registry, provider, cfg.SyncInterval)
+	s.coalescer = reposync.NewCoalescer(s.syncer.SyncRepo, 0)
+
+	return s
 }
 
 // Start begins serving HTTP requests. It blocks until the server is stopped.
@@ -145,17 +175,13 @@ func (s *Server) startSyncLoop() {
 	if s.config.SyncInterval <= 0 {
 		return
 	}
-	var provider reposync.TokenProvider
-	if s.config.RepoSyncTokens != nil {
-		provider = s.config.RepoSyncTokens
-	} else {
+	if s.config.RepoSyncTokens == nil {
 		slog.Warn("repo sync: no GitHub App configured; only public repos will refresh")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.syncCancel = cancel
-	syncer := reposync.New(s.config.Registry, provider, s.config.SyncInterval)
-	go syncer.Run(ctx)
+	go s.syncer.Run(ctx)
 	slog.Info("repo sync loop enabled", "interval", s.config.SyncInterval.String())
 }
 
@@ -225,37 +251,37 @@ func (s *Server) buildHandler() (http.Handler, error) {
 		onboardHandler = readOnlyWriteHandler()
 	}
 
+	// Manual sync forces a refresh of one repo on demand. It is privileged (it
+	// drives a git fetch on a managed mirror), so it is session-gated like
+	// submit and refused on a public read-only server — the webhook and interval
+	// loop keep public servers fresh without an anonymous trigger. On a local
+	// auth-disabled server it stays reachable as the on-demand pull.
+	var syncHandler http.Handler = handlers.NewSyncHandler(reg, s.syncer)
+	if s.config.ReadOnly {
+		syncHandler = readOnlyWriteHandler()
+	}
+
 	for _, prefix := range prefixes {
 		// Unscoped index of available repos.
 		apiMux.Handle("GET "+prefix+"/repos", reposListHandler)
 		apiMux.Handle("POST "+prefix+"/repos", onboardHandler)
 
-		// New multi-repo routes. {repoID} resolves through the registry;
-		// unknown IDs return 404 from inside the handler.
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/view", viewHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/repo", repoHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/stacks", stacksHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/stacks/{name...}", stacksHandler)
-		apiMux.Handle("POST "+prefix+"/repos/{repoID}/stacks/{rootBranch}/submit", submitHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branches", branchesHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branches/{name...}", branchesHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/branch-diff", branchDiffHandler)
-		apiMux.Handle("GET "+prefix+"/repos/{repoID}/events", eventsHandler)
-
-		// Legacy unscoped routes. With no {repoID} path value, handlers
-		// fall back to "default" (see defaultRepoID in handlers/common.go).
-		// These keep the existing web client working while the multi-repo
-		// migration is in progress and are removed once the frontend uses
-		// the /repos/{repoID}/ shape.
-		apiMux.Handle("GET "+prefix+"/view", viewHandler)
-		apiMux.Handle("GET "+prefix+"/repo", repoHandler)
-		apiMux.Handle("GET "+prefix+"/stacks", stacksHandler)
-		apiMux.Handle("GET "+prefix+"/stacks/{name...}", stacksHandler)
-		apiMux.Handle("POST "+prefix+"/stacks/{rootBranch}/submit", submitHandler)
-		apiMux.Handle("GET "+prefix+"/branches", branchesHandler)
-		apiMux.Handle("GET "+prefix+"/branches/{name...}", branchesHandler)
-		apiMux.Handle("GET "+prefix+"/branch-diff", branchDiffHandler)
-		apiMux.Handle("GET "+prefix+"/events", eventsHandler)
+		// GitHub-style per-repo routes. {owner}/{repo} resolves through the
+		// registry's owner/repo index (case-insensitive); unknown coordinates
+		// return 404 from inside the handler. Branch and stack names occupy a
+		// trailing {name...} wildcard so they can contain slashes; that forces
+		// branch-diff to be its own resource (the wildcard must be last, so
+		// .../branches/{name}/diff is not expressible).
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/view", viewHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/repo", repoHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/stacks", stacksHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/stacks/{name...}", stacksHandler)
+		apiMux.Handle("POST "+prefix+"/repos/{owner}/{repo}/stacks/{rootBranch}/submit", submitHandler)
+		apiMux.Handle("POST "+prefix+"/repos/{owner}/{repo}/sync", syncHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/branches", branchesHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/branches/{name...}", branchesHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/branch-diff/{name...}", branchDiffHandler)
+		apiMux.Handle("GET "+prefix+"/repos/{owner}/{repo}/events", eventsHandler)
 	}
 
 	// Apply session enforcement to /api/* only. /auth/* and static assets
@@ -276,20 +302,25 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	// read API is unaffected.
 	sessionGated = auth.RequireCSRFHeader(sessionGated)
 
-	// /config advertises server capabilities and must be reachable without a
-	// session so the client can learn whether a login is required before
-	// attempting one. It bypasses the session gate but still gets the outer
-	// middleware (and rate limiting below).
+	// Public, unauthenticated API routes that bypass the session/CSRF gate but
+	// still get the outer middleware and rate limiting below:
+	//   - /config advertises capabilities so the client can learn whether a
+	//     login is required before attempting one.
+	//   - /webhooks/github receives GitHub push deliveries (authenticated by
+	//     HMAC signature, not a session) and refreshes the matching managed
+	//     repo. It self-disables (404) when no webhook secret is configured.
+	webhookHandler := handlers.NewWebhookHandler(s.config.GitHubWebhookSecret, s.coalescer)
 	publicAPIMux := http.NewServeMux()
 	for _, prefix := range prefixes {
 		publicAPIMux.Handle("GET "+prefix+"/config", configHandler)
+		publicAPIMux.Handle("POST "+prefix+"/webhooks/github", webhookHandler)
 	}
 
-	// Combined API dispatch: public capability routes bypass the session
-	// gate; everything else is session-gated. Rate limiting wraps both so the
-	// public endpoint is protected from floods too.
+	// Combined API dispatch: public routes bypass the session gate; everything
+	// else is session-gated. Rate limiting wraps both so the public endpoints
+	// are protected from floods too.
 	var protectedAPI http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isConfigPath(r.URL.Path, prefixes) {
+		if isPublicAPIPath(r.URL.Path, prefixes) {
 			publicAPIMux.ServeHTTP(w, r)
 			return
 		}
@@ -415,11 +446,14 @@ func isAPIPath(path string, prefixes []string) bool {
 	return false
 }
 
-// isConfigPath reports whether path is the unauthenticated capabilities
-// endpoint for any configured prefix (e.g. /api/v1/config or /api/config).
-func isConfigPath(path string, prefixes []string) bool {
+// isPublicAPIPath reports whether path is one of the unauthenticated API
+// endpoints that bypass the session/CSRF gate (but stay rate-limited): the
+// capabilities endpoint (/config) and the GitHub webhook receiver
+// (/webhooks/github), for any configured prefix.
+func isPublicAPIPath(path string, prefixes []string) bool {
 	for _, prefix := range prefixes {
-		if path == prefix+"/config" {
+		switch path {
+		case prefix + "/config", prefix + "/webhooks/github":
 			return true
 		}
 	}

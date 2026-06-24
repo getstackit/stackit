@@ -64,6 +64,7 @@ with every authenticated user.
 | `STACKIT_GITHUB_APP_PRIVATE_KEY` / `_FILE` | GitHub App private key (PEM contents, or a path in the `_FILE` variant). |
 | `STACKIT_GITHUB_WEBHOOK_SECRET` | Shared secret GitHub signs webhook deliveries with. Set it to enable the [webhook receiver](#evented-refresh-webhooks) for immediate, push-driven refreshes; unset leaves the endpoint disabled (404). |
 | `STACKIT_SYNC_INTERVAL` | How often to mirror-fetch managed repos (e.g. `60s`); defaults to `5m`, `0` disables the sync loop. Equivalent to `-sync-interval`. See [GitHub App & background sync](#github-app--background-sync). |
+| `STACKIT_WEBHOOK_DEBOUNCE` | Quiet window a repo's webhook pushes wait out before a fetch, so a stack submit's burst of branch pushes collapses into one refresh (e.g. `5s`); defaults to `2s`, `0` dispatches immediately. Equivalent to `-webhook-debounce`. |
 | `STACKIT_BASE_URL` | The canonical https:// URL the server is reachable at. Required when auth is enabled (used to build the OAuth callback URL). |
 | `STACKIT_GITHUB_CLIENT_ID` | GitHub OAuth App client ID. |
 | `STACKIT_GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret. |
@@ -80,6 +81,7 @@ The most useful flags:
 | `-database-url` | _(empty)_ | PostgreSQL connection string. Enables DB-backed multi-repo serving and runtime [onboarding](#repository-onboarding). Also settable via `STACKIT_DATABASE_URL`. |
 | `-repos-root` | _(empty)_ | Base directory for per-repo checkouts (`<root>/<owner>/<name>`). Required with `-database-url` and for onboarding. Also settable via `STACKIT_REPOS_ROOT`. |
 | `-sync-interval` | `5m` | How often to mirror-fetch managed repos so served state stays current; `0` disables. Also settable via `STACKIT_SYNC_INTERVAL`. See [GitHub App & background sync](#github-app--background-sync). |
+| `-webhook-debounce` | `2s` | Quiet window a repo's webhook pushes wait out before a fetch, collapsing a stack submit's burst into one refresh; `0` dispatches immediately. Also settable via `STACKIT_WEBHOOK_DEBOUNCE`. |
 | `-cwd` | _(empty)_ | Single-repo shortcut: serve the repo discovered from this path as `default`. Ignored when `-database-url` is set. |
 | `-port` | `8080` | Listen port; overrides `$PORT`. |
 | `-bind` | `127.0.0.1` (or `0.0.0.0` when `STACKIT_ENV=production`) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server without setting `STACKIT_ENV=production`. Binding a non-loopback interface requires auth or `-read-only`. |
@@ -271,7 +273,10 @@ point a GitHub webhook at the server:
    read-side operation).
 3. On a verified push the server resolves the repo, mirror-fetches it, and
    refreshes — acking GitHub immediately and doing the fetch in the background.
-   A burst of pushes for one repo coalesces into a single fetch.
+   Pushes for one repo are **debounced** (`-webhook-debounce`, default `2s`) and
+   coalesced, so a stack submit's burst of branch pushes settles into a single
+   fetch rather than one per branch. The receiver accepts both webhook content
+   types (`application/json` and `application/x-www-form-urlencoded`).
 
 **Verifying a delivery in the logs.** A push you can trace end to end produces:
 

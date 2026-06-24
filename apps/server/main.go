@@ -65,19 +65,20 @@ func setupLogging(jsonOutput bool) {
 
 func run() error {
 	var (
-		port          = flag.Int("port", 8080, "Port to listen on")
-		bind          = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1 (loopback); STACKIT_ENV=production binds 0.0.0.0.")
-		cwd           = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -database-url is set)")
-		databaseURL   = flag.String("database-url", os.Getenv("STACKIT_DATABASE_URL"), "PostgreSQL connection string. When set, repos are served from the DB instead of the -cwd single-repo shortcut.")
-		reposRoot     = flag.String("repos-root", os.Getenv("STACKIT_REPOS_ROOT"), "Base directory under which per-repo checkouts live (<reposRoot>/<owner>/<name>) for DB-sourced repos.")
-		remote        = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
-		corsOrigins   = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
-		apiPrefix     = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
-		enableLegacy  = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
-		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
-		authDisabled  = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused when the server binds a non-loopback interface (e.g. STACKIT_ENV=production) unless -read-only is set.")
-		readOnly      = flag.Bool("read-only", envBool("STACKIT_READ_ONLY"), "Serve in read-only mode: the submit endpoint is disabled so the repo can be exposed publicly without write access. Also set via STACKIT_READ_ONLY.")
-		syncInterval  = flag.Duration("sync-interval", envSyncInterval(), "How often to mirror-fetch managed repos from their remotes so served state stays current. Defaults to 5m (the webhook backstop); 0 disables the loop. Also set via STACKIT_SYNC_INTERVAL (e.g. 60s).")
+		port            = flag.Int("port", 8080, "Port to listen on")
+		bind            = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1 (loopback); STACKIT_ENV=production binds 0.0.0.0.")
+		cwd             = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -database-url is set)")
+		databaseURL     = flag.String("database-url", os.Getenv("STACKIT_DATABASE_URL"), "PostgreSQL connection string. When set, repos are served from the DB instead of the -cwd single-repo shortcut.")
+		reposRoot       = flag.String("repos-root", os.Getenv("STACKIT_REPOS_ROOT"), "Base directory under which per-repo checkouts live (<reposRoot>/<owner>/<name>) for DB-sourced repos.")
+		remote          = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
+		corsOrigins     = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
+		apiPrefix       = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
+		enableLegacy    = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
+		shutdownGrace   = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
+		authDisabled    = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused when the server binds a non-loopback interface (e.g. STACKIT_ENV=production) unless -read-only is set.")
+		readOnly        = flag.Bool("read-only", envBool("STACKIT_READ_ONLY"), "Serve in read-only mode: the submit endpoint is disabled so the repo can be exposed publicly without write access. Also set via STACKIT_READ_ONLY.")
+		syncInterval    = flag.Duration("sync-interval", envSyncInterval(), "How often to mirror-fetch managed repos from their remotes so served state stays current. Defaults to 5m (the webhook backstop); 0 disables the loop. Also set via STACKIT_SYNC_INTERVAL (e.g. 60s).")
+		webhookDebounce = flag.Duration("webhook-debounce", envWebhookDebounce(), "Quiet window a repo's webhook pushes wait out before a fetch, so a stack submit's burst of pushes collapses into one refresh. Defaults to 2s; 0 dispatches immediately. Also set via STACKIT_WEBHOOK_DEBOUNCE (e.g. 5s).")
 	)
 	flag.Parse()
 
@@ -239,6 +240,7 @@ func run() error {
 		ReposRoot:           absReposRoot,
 		RepoSyncTokens:      appProvider,
 		SyncInterval:        *syncInterval,
+		WebhookDebounce:     *webhookDebounce,
 		GitHubWebhookSecret: strings.TrimSpace(os.Getenv("STACKIT_GITHUB_WEBHOOK_SECRET")),
 	})
 
@@ -313,6 +315,26 @@ func envSyncInterval() time.Duration {
 	d, err := time.ParseDuration(raw)
 	if err != nil {
 		return defaultSyncInterval
+	}
+	return d
+}
+
+// defaultWebhookDebounce is the quiet window webhook-triggered fetches wait out
+// when STACKIT_WEBHOOK_DEBOUNCE is unset, collapsing a stack submit's burst of
+// pushes into a single refresh.
+const defaultWebhookDebounce = 2 * time.Second
+
+// envWebhookDebounce resolves the webhook-debounce default: STACKIT_WEBHOOK_DEBOUNCE
+// when set ("0" dispatches immediately), otherwise defaultWebhookDebounce. An
+// unparseable value falls back to the default.
+func envWebhookDebounce() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("STACKIT_WEBHOOK_DEBOUNCE"))
+	if raw == "" {
+		return defaultWebhookDebounce
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return defaultWebhookDebounce
 	}
 	return d
 }

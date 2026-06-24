@@ -74,7 +74,7 @@ export function RepoView() {
               <OwnerSwimlane
                 label="You"
                 stacks={yourStacks}
-                selectedBranch={selection?.type === "branch" ? selection.name : null}
+                selectedBranch={selectedBranch?.name ?? null}
                 selectedStack={selection?.type === "stack" ? selection.rootBranch : null}
                 onSelectBranch={handleSelectBranch}
                 onSelectStack={handleSelectStack}
@@ -89,7 +89,7 @@ export function RepoView() {
                 label={`@${owner}`}
                 lastActive={getLastActiveDate(stacks)}
                 stacks={stacks}
-                selectedBranch={selection?.type === "branch" ? selection.name : null}
+                selectedBranch={selectedBranch?.name ?? null}
                 selectedStack={selection?.type === "stack" ? selection.rootBranch : null}
                 onSelectBranch={handleSelectBranch}
                 onSelectStack={handleSelectStack}

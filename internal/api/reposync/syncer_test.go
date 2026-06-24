@@ -95,6 +95,54 @@ func TestSyncEntryNilProviderUsesEmptyToken(t *testing.T) {
 	require.Equal(t, "", gotToken, "no provider means an unauthenticated (public) fetch")
 }
 
+func TestSyncRepoFetchesMatchingManagedEntry(t *testing.T) {
+	t.Parallel()
+	reg := registry.New()
+	require.NoError(t, reg.Add(managedEntry("m", "Octo", "Widget", "/r/m")))
+
+	var gotToken string
+	refreshed := false
+	s := New(reg, fakeProvider{token: "inst-token"}, time.Minute)
+	s.fetch = func(_ context.Context, _, _, token string) error { gotToken = token; return nil }
+	s.refresh = func(*registry.RepoEntry) { refreshed = true }
+
+	// Casing differs from the entry to prove the lookup is case-insensitive,
+	// matching how a webhook payload may present the coordinates.
+	require.NoError(t, s.SyncRepo(context.Background(), "octo", "widget"))
+	require.Equal(t, "inst-token", gotToken)
+	require.True(t, refreshed)
+}
+
+func TestSyncRepoUnknownRepoReturnsErrNotManaged(t *testing.T) {
+	t.Parallel()
+	reg := registry.New()
+	require.NoError(t, reg.Add(managedEntry("m", "o", "n", "/r")))
+
+	fetchCalled := false
+	s := New(reg, fakeProvider{token: "t"}, time.Minute)
+	s.fetch = func(context.Context, string, string, string) error { fetchCalled = true; return nil }
+	s.refresh = func(*registry.RepoEntry) {}
+
+	err := s.SyncRepo(context.Background(), "other", "repo")
+	require.ErrorIs(t, err, ErrRepoNotManaged)
+	require.False(t, fetchCalled, "an un-onboarded repo must not trigger a fetch")
+}
+
+func TestSyncRepoPropagatesFetchError(t *testing.T) {
+	t.Parallel()
+	reg := registry.New()
+	require.NoError(t, reg.Add(managedEntry("m", "o", "n", "/r")))
+
+	refreshed := false
+	s := New(reg, fakeProvider{token: "t"}, time.Minute)
+	s.fetch = func(context.Context, string, string, string) error { return errors.New("boom") }
+	s.refresh = func(*registry.RepoEntry) { refreshed = true }
+
+	err := s.SyncRepo(context.Background(), "o", "n")
+	require.Error(t, err)
+	require.False(t, refreshed, "a failed fetch must not refresh stale state")
+}
+
 func TestRunStopsOnContextCancel(t *testing.T) {
 	t.Parallel()
 	s := New(registry.New(), nil, time.Hour)

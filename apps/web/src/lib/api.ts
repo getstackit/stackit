@@ -25,9 +25,18 @@ export interface RepoResponse {
 
 export interface RepoSummary {
   id: string;
+  owner?: string;
+  repo?: string;
   displayName: string;
   trunk: string;
   currentBranch?: string;
+}
+
+// RepoRef identifies a repo by its GitHub coordinates — the shape every
+// per-repo endpoint is keyed by (/api/v1/repos/{owner}/{repo}/...).
+export interface RepoRef {
+  owner: string;
+  repo: string;
 }
 
 export interface ReposListResponse {
@@ -208,8 +217,8 @@ export async function logout(): Promise<void> {
   }
 }
 
-function repoPath(repoId: string, suffix: string): string {
-  return `/api/v1/repos/${encodeURIComponent(repoId)}/${suffix}`;
+function repoPath(ref: RepoRef, suffix: string): string {
+  return `/api/v1/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/${suffix}`;
 }
 
 export function fetchRepos(): Promise<ReposListResponse> {
@@ -244,34 +253,32 @@ export async function onboardRepo(owner: string, name: string): Promise<RepoSumm
   return res.json();
 }
 
-export function fetchView(repoId: string): Promise<ViewResponse> {
-  return fetchAPI<ViewResponse>(repoPath(repoId, "view"));
+export function fetchView(ref: RepoRef): Promise<ViewResponse> {
+  return fetchAPI<ViewResponse>(repoPath(ref, "view"));
 }
 
-export function fetchRepo(repoId: string): Promise<RepoResponse> {
-  return fetchAPI<RepoResponse>(repoPath(repoId, "repo"));
+export function fetchRepo(ref: RepoRef): Promise<RepoResponse> {
+  return fetchAPI<RepoResponse>(repoPath(ref, "repo"));
 }
 
-export function fetchStacks(repoId: string): Promise<StackSummary[]> {
-  return fetchAPI<StackSummary[]>(repoPath(repoId, "stacks"));
+export function fetchStacks(ref: RepoRef): Promise<StackSummary[]> {
+  return fetchAPI<StackSummary[]>(repoPath(ref, "stacks"));
 }
 
-export function fetchStack(repoId: string, rootBranch: string): Promise<StackDetail> {
-  return fetchAPI<StackDetail>(repoPath(repoId, `stacks/${encodeURIComponent(rootBranch)}`));
+export function fetchStack(ref: RepoRef, rootBranch: string): Promise<StackDetail> {
+  return fetchAPI<StackDetail>(repoPath(ref, `stacks/${encodeURIComponent(rootBranch)}`));
 }
 
-export function fetchBranches(repoId: string): Promise<BranchResponse[]> {
-  return fetchAPI<BranchResponse[]>(repoPath(repoId, "branches"));
+export function fetchBranches(ref: RepoRef): Promise<BranchResponse[]> {
+  return fetchAPI<BranchResponse[]>(repoPath(ref, "branches"));
 }
 
-export function fetchBranch(repoId: string, name: string): Promise<BranchResponse> {
-  return fetchAPI<BranchResponse>(repoPath(repoId, `branches/${encodeURIComponent(name)}`));
+export function fetchBranch(ref: RepoRef, name: string): Promise<BranchResponse> {
+  return fetchAPI<BranchResponse>(repoPath(ref, `branches/${encodeURIComponent(name)}`));
 }
 
-export function fetchBranchDiff(repoId: string, name: string): Promise<BranchDiffResponse> {
-  return fetchAPI<BranchDiffResponse>(
-    repoPath(repoId, `branch-diff?branch=${encodeURIComponent(name)}`)
-  );
+export function fetchBranchDiff(ref: RepoRef, name: string): Promise<BranchDiffResponse> {
+  return fetchAPI<BranchDiffResponse>(repoPath(ref, `branch-diff/${encodeURIComponent(name)}`));
 }
 
 // --- Event Feed Types ---
@@ -312,9 +319,9 @@ export interface SubmitResponse {
 
 // --- Mutation Functions ---
 
-export async function submitStack(repoId: string, rootBranch: string): Promise<SubmitResponse> {
+export async function submitStack(ref: RepoRef, rootBranch: string): Promise<SubmitResponse> {
   const res = await fetch(
-    `${API_BASE}${repoPath(repoId, `stacks/${encodeURIComponent(rootBranch)}/submit`)}`,
+    `${API_BASE}${repoPath(ref, `stacks/${encodeURIComponent(rootBranch)}/submit`)}`,
     {
       method: "POST",
       credentials: "include",

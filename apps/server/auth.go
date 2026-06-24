@@ -16,14 +16,29 @@ type authBuildResult struct {
 	store auth.Store // exposed separately so main can close it on shutdown
 }
 
+// authBuildParams describes the runtime posture buildAuthConfig needs. The
+// auth requirement keys off exposure (a non-loopback bind), not the env name:
+// a server reachable off-host must be authenticated or read-only, however it
+// got that way.
+type authBuildParams struct {
+	disabled bool // -auth-disabled was passed
+	exposed  bool // resolved bind is non-loopback (reachable off-host)
+	readOnly bool // read-only posture: writes impossible, reads anonymous
+	prod     bool // production env: force Secure cookies (behind TLS)
+}
+
 // buildAuthConfig wires up the OAuth handler, session store, and allowlist
-// from environment variables. Returns (nil, nil, nil) when auth is
-// explicitly disabled; an error when required env is missing in public
-// mode.
-func buildAuthConfig(authDisabled, publicMode bool) (*authBuildResult, error) {
-	if authDisabled {
-		if publicMode {
-			return nil, errors.New("-auth-disabled is not allowed when $PORT or $STACKIT_PUBLIC are set; remove the flag or unset the env vars")
+// from environment variables. Returns (nil, nil) when auth is off (explicitly
+// disabled, or unconfigured on a non-exposed/read-only server); an error when
+// an exposed, writable server would be left unauthenticated.
+func buildAuthConfig(p authBuildParams) (*authBuildResult, error) {
+	// An exposed, writable server must be authenticated. Read-only removes the
+	// write route by construction, so anonymous reads are safe there.
+	mustAuth := p.exposed && !p.readOnly
+
+	if p.disabled {
+		if mustAuth {
+			return nil, errors.New("-auth-disabled is not allowed when the server is reachable off-host (non-loopback bind): it would expose an unauthenticated, writable server. Pass -read-only, bind loopback (STACKIT_ENV=local), or configure GitHub OAuth")
 		}
 		return nil, nil
 	}
@@ -33,13 +48,12 @@ func buildAuthConfig(authDisabled, publicMode bool) (*authBuildResult, error) {
 	baseURL := strings.TrimSpace(os.Getenv("STACKIT_BASE_URL"))
 	sessionKey := strings.TrimSpace(os.Getenv("STACKIT_SESSION_KEY"))
 
-	// Outside public mode, missing OAuth config is "off by default" —
-	// users running a local dev binary shouldn't have to set env vars to
-	// boot. They can pass -auth-disabled explicitly to make the intent
-	// clear, or just leave the OAuth env unset.
+	// When the server isn't exposed (local loopback) or is read-only, missing
+	// OAuth config is "off by default" — a local dev binary shouldn't need env
+	// vars to boot, and a read-only server serves reads anonymously anyway.
 	if clientID == "" && clientSecret == "" && baseURL == "" && sessionKey == "" {
-		if publicMode {
-			return nil, errors.New("public mode requires STACKIT_GITHUB_CLIENT_ID, STACKIT_GITHUB_CLIENT_SECRET, STACKIT_BASE_URL, STACKIT_SESSION_KEY (and STACKIT_ALLOWED_GH_USERS or STACKIT_ALLOWED_GH_ORG); pass -auth-disabled if you really mean to run open")
+		if mustAuth {
+			return nil, errors.New("the server is reachable off-host (non-loopback bind) but auth is not configured: set STACKIT_GITHUB_CLIENT_ID, STACKIT_GITHUB_CLIENT_SECRET, STACKIT_BASE_URL, STACKIT_SESSION_KEY (and STACKIT_ALLOWED_GH_USERS or STACKIT_ALLOWED_GH_ORG), or pass -read-only to serve anonymously")
 		}
 		return nil, nil
 	}
@@ -76,7 +90,7 @@ func buildAuthConfig(authDisabled, publicMode bool) (*authBuildResult, error) {
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		BaseURL:      baseURL,
-		Cookies:      auth.CookieOptions{Secure: publicMode || strings.HasPrefix(baseURL, "https://")},
+		Cookies:      auth.CookieOptions{Secure: p.prod || strings.HasPrefix(baseURL, "https://")},
 	}, store, allow, cipher)
 	if err != nil {
 		_ = store.Close()

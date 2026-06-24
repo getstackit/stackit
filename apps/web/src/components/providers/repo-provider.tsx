@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useCallback,
   useRef,
@@ -11,6 +12,7 @@ import {
 } from "react";
 import {
   fetchView,
+  type RepoRef,
   type RepoResponse,
   type StackDetail,
   type TrunkCommitResponse,
@@ -23,7 +25,7 @@ import { diffViews } from "@/lib/diff-views";
 const MAX_EVENTS = 100;
 
 interface RepoState {
-  repoId: string;
+  repoRef: RepoRef;
   repo: RepoResponse | null;
   stackDetails: StackDetail[];
   recentlyMerged: TrunkCommitResponse[];
@@ -43,7 +45,17 @@ export function useRepo() {
   return ctx;
 }
 
-export function RepoProvider({ repoId, children }: { repoId: string; children: ReactNode }) {
+export function RepoProvider({
+  owner,
+  repo: repoName,
+  children,
+}: {
+  owner: string;
+  repo: string;
+  children: ReactNode;
+}) {
+  // Stable ref so the load/SSE effects don't re-run on every render.
+  const repoRef = useMemo<RepoRef>(() => ({ owner, repo: repoName }), [owner, repoName]);
   const [repo, setRepo] = useState<RepoResponse | null>(null);
   const [stackDetails, setStackDetails] = useState<StackDetail[]>([]);
   const [recentlyMerged, setRecentlyMerged] = useState<TrunkCommitResponse[]>([]);
@@ -69,115 +81,17 @@ export function RepoProvider({ repoId, children }: { repoId: string; children: R
 
   const loadData = useCallback(async () => {
     try {
-      const view = await fetchView(repoId);
+      const view = await fetchView(repoRef);
       setRepo(view.repo);
-
-      // TODO: Remove sample stacks — for UI development only
-      const sampleStacks: StackDetail[] = [
-        {
-          rootBranch: "sample/auth-refactor",
-          title: "Refactor auth middleware",
-          status: "shippable",
-          branchCount: 2,
-          prCount: 2,
-          isCurrent: false,
-          owner: "teammate-alice",
-          branches: [
-            {
-              name: "sample/auth-refactor",
-              depth: 0,
-              isCurrent: false,
-              needsRestack: false,
-              isLocked: false,
-              isFrozen: false,
-              revision: "abc1234",
-              commitDate: new Date().toISOString(),
-              commitAuthor: "teammate-alice",
-              commitCount: 3,
-              linesAdded: 120,
-              linesDeleted: 45,
-              pr: {
-                number: 101,
-                title: "Refactor auth middleware",
-                state: "OPEN",
-                url: "#",
-                isDraft: false,
-                base: "main",
-              },
-            },
-            {
-              name: "sample/auth-tests",
-              parent: "sample/auth-refactor",
-              depth: 1,
-              isCurrent: false,
-              needsRestack: false,
-              isLocked: false,
-              isFrozen: false,
-              revision: "def5678",
-              commitDate: new Date().toISOString(),
-              commitAuthor: "teammate-alice",
-              commitCount: 1,
-              linesAdded: 80,
-              linesDeleted: 0,
-              pr: {
-                number: 102,
-                title: "Add auth middleware tests",
-                state: "OPEN",
-                url: "#",
-                isDraft: false,
-                base: "sample/auth-refactor",
-              },
-            },
-          ],
-        },
-        {
-          rootBranch: "sample/fix-pagination",
-          title: "Fix pagination off-by-one",
-          status: "pending",
-          branchCount: 1,
-          prCount: 1,
-          isCurrent: false,
-          owner: "teammate-bob",
-          branches: [
-            {
-              name: "sample/fix-pagination",
-              depth: 0,
-              isCurrent: false,
-              needsRestack: true,
-              isLocked: false,
-              isFrozen: false,
-              revision: "fed9876",
-              commitDate: new Date().toISOString(),
-              commitAuthor: "teammate-bob",
-              commitCount: 1,
-              linesAdded: 5,
-              linesDeleted: 3,
-              pr: {
-                number: 200,
-                title: "Fix pagination off-by-one",
-                state: "OPEN",
-                url: "#",
-                isDraft: true,
-                base: "main",
-              },
-            },
-          ],
-        },
-      ];
-
-      const augmentedView: ViewResponse = {
-        repo: view.repo,
-        stacks: [...view.stacks, ...sampleStacks],
-      };
 
       // Diff against previous view to detect changes
       if (prevViewRef.current) {
-        const detected = diffViews(prevViewRef.current, augmentedView);
+        const detected = diffViews(prevViewRef.current, view);
         addEvents(detected);
       }
-      prevViewRef.current = augmentedView;
+      prevViewRef.current = view;
 
-      setStackDetails(augmentedView.stacks);
+      setStackDetails(view.stacks);
       setRecentlyMerged(view.recentlyMerged ?? []);
       setError(null);
       setLastUpdated(new Date());
@@ -186,7 +100,7 @@ export function RepoProvider({ repoId, children }: { repoId: string; children: R
     } finally {
       setLoading(false);
     }
-  }, [addEvents, repoId]);
+  }, [addEvents, repoRef]);
 
   // Initial load
   useEffect(() => {
@@ -198,12 +112,12 @@ export function RepoProvider({ repoId, children }: { repoId: string; children: R
   }, [loadData]);
 
   // SSE updates trigger refresh; server events get added directly
-  useSSE(repoId, loadData, addEvent);
+  useSSE(repoRef, loadData, addEvent);
 
   return (
     <RepoContext.Provider
       value={{
-        repoId,
+        repoRef,
         repo,
         stackDetails,
         recentlyMerged,

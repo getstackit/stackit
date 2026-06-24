@@ -7,10 +7,16 @@ import (
 )
 
 // resolvePort applies a $PORT fallback when -port wasn't passed explicitly.
-// flagPort is the destination flag pointer. When portExplicit is true the
-// env value is ignored (the operator wins). An empty env is a no-op.
-func resolvePort(flagPort *int, portExplicit bool, env string) error {
+// flagPort is the destination flag pointer. When portExplicit is true the env
+// value is ignored (the operator wins). $PORT is the PaaS convention, so it is
+// honored only in production (prod); locally it is ignored, so a stray $PORT
+// exported by a dev shell (cmux, Heroku toolbelt, ...) can't move the listener.
+// An empty env is a no-op.
+func resolvePort(flagPort *int, portExplicit, prod bool, env string) error {
 	if portExplicit {
+		return nil
+	}
+	if !prod {
 		return nil
 	}
 	env = strings.TrimSpace(env)

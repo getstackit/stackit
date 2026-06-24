@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,13 @@ const watcherDebounce = 200 * time.Millisecond
 // idPattern restricts repo IDs to characters that survive in URL paths
 // without escaping, keeping the routing surface simple.
 var idPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// ownerRepoKey is the lookup key for the owner/repo secondary index. GitHub
+// treats owner/repo case-insensitively, so we lowercase to match a request's
+// path segments regardless of how they were typed.
+func ownerRepoKey(owner, name string) string {
+	return strings.ToLower(owner + "/" + name)
+}
 
 // EntryConfig is the input to NewEntry. It captures the per-repo state the
 // constructor needs to wire up the broadcaster + watcher.
@@ -184,19 +192,30 @@ func (e *RepoEntry) Refresh() {
 	e.Broadcaster.Broadcast("refresh", "{}")
 }
 
-// Registry is a goroutine-safe collection of RepoEntries keyed by ID.
+// Registry is a goroutine-safe collection of RepoEntries keyed by ID, with a
+// secondary index keyed by owner/repo so handlers can resolve the GitHub-style
+// /repos/{owner}/{repo} routes.
 type Registry struct {
 	mu      sync.RWMutex
 	entries map[string]*RepoEntry
+	// byOwnerRepo maps a lowercased "owner/name" to the same entries. Only
+	// entries with both an owner and a name are indexed; a repo with no GitHub
+	// remote (empty coordinates) is reachable by ID but not by owner/repo.
+	byOwnerRepo map[string]*RepoEntry
 }
 
 // New returns an empty registry.
 func New() *Registry {
-	return &Registry{entries: make(map[string]*RepoEntry)}
+	return &Registry{
+		entries:     make(map[string]*RepoEntry),
+		byOwnerRepo: make(map[string]*RepoEntry),
+	}
 }
 
 // Add inserts an entry. The entry's ID must be non-empty, match the allowed
-// pattern, and be unique within the registry.
+// pattern, and be unique within the registry. When the entry carries GitHub
+// coordinates (Owner and Name), they must also be unique so the owner/repo
+// index stays unambiguous.
 func (r *Registry) Add(e *RepoEntry) error {
 	if e == nil {
 		return errors.New("registry: nil entry")
@@ -212,7 +231,17 @@ func (r *Registry) Add(e *RepoEntry) error {
 	if _, exists := r.entries[e.ID]; exists {
 		return fmt.Errorf("registry: duplicate repo ID %q", e.ID)
 	}
+	var key string
+	if e.Owner != "" && e.Name != "" {
+		key = ownerRepoKey(e.Owner, e.Name)
+		if _, exists := r.byOwnerRepo[key]; exists {
+			return fmt.Errorf("registry: duplicate repo %s/%s", e.Owner, e.Name)
+		}
+	}
 	r.entries[e.ID] = e
+	if key != "" {
+		r.byOwnerRepo[key] = e
+	}
 	return nil
 }
 
@@ -223,6 +252,37 @@ func (r *Registry) Get(id string) (*RepoEntry, bool) {
 	defer r.mu.RUnlock()
 	e, ok := r.entries[id]
 	return e, ok
+}
+
+// GetByOwnerRepo returns the entry for owner/repo, matched case-insensitively.
+// The bool is false when no such entry exists or the coordinates are empty.
+func (r *Registry) GetByOwnerRepo(owner, repo string) (*RepoEntry, bool) {
+	if owner == "" || repo == "" {
+		return nil, false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	e, ok := r.byOwnerRepo[ownerRepoKey(owner, repo)]
+	return e, ok
+}
+
+// FindManaged returns the managed entry whose GitHub owner/name match the
+// arguments case-insensitively, or false when none does. The interval sync
+// loop and the webhook receiver use it to map a remote-change signal (a push
+// for owner/name) onto the local checkout to refresh.
+//
+// Only managed mirrors are considered: the unmanaged -cwd working repo must
+// never be selected here, because the sync path mirror-fetches into a detached
+// HEAD and would corrupt a real working tree (see safety-invariants.md).
+func (r *Registry) FindManaged(owner, name string) (*RepoEntry, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, e := range r.entries {
+		if e.Managed && strings.EqualFold(e.Owner, owner) && strings.EqualFold(e.Name, name) {
+			return e, true
+		}
+	}
+	return nil, false
 }
 
 // List returns every entry sorted by ID so callers (and tests) get a stable
@@ -257,5 +317,6 @@ func (r *Registry) Close() error {
 		}
 	}
 	r.entries = nil
+	r.byOwnerRepo = nil
 	return errors.Join(errs...)
 }

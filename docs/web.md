@@ -30,9 +30,10 @@ apps/web/
 ├── src/
 │   ├── app/                    Pages and layouts
 │   │   ├── layout.tsx          Root layout (providers, fonts, metadata)
-│   │   ├── page.tsx            Main dashboard page
+│   │   ├── [[...slug]]/page.tsx Optional catch-all → renders AppShell (SPA)
 │   │   └── globals.css         Global styles, CSS variables, animations
 │   ├── components/
+│   │   ├── app-shell.tsx       Path → picker vs per-repo view dispatcher
 │   │   ├── providers/
 │   │   │   ├── repo-provider.tsx   Main data context (repo, stacks, events)
 │   │   │   └── theme-provider.tsx  Light/dark/system theme context
@@ -51,6 +52,7 @@ apps/web/
 │   │   └── use-previous.ts     Track previous state value
 │   ├── lib/
 │   │   ├── api.ts              API client, fetch functions, type definitions
+│   │   ├── repo-route.ts       Parse/build GitHub-style /{owner}/{repo}/... URLs
 │   │   ├── use-sse.ts          SSE hook for real-time updates
 │   │   ├── diff-views.ts       View snapshot diffing for event detection
 │   │   ├── utils.ts            cn() helper for class merging
@@ -69,7 +71,7 @@ apps/web/
 ```
 layout.tsx
 └── ThemeProvider → RepoProvider → TooltipProvider
-    └── page.tsx
+    └── [[...slug]]/page.tsx → AppShell
         ├── Header (repo info, refresh, theme toggle)
         ├── LeftPanel (scrollable)
         │   ├── OwnerSwimlane ("You")
@@ -87,9 +89,9 @@ layout.tsx
 
 ## Data Flow
 
-1. **RepoProvider** calls `fetchView()` on mount → GET `/api/view`
+1. **RepoProvider** calls `fetchView(repoRef)` on mount → GET `/api/v1/repos/{owner}/{repo}/view`
 2. Response contains: repo metadata, all stack details, recently merged commits
-3. **SSE hook** (`useSSE`) connects to `/api/events` for real-time updates
+3. **SSE hook** (`useSSE`) connects to `/api/v1/repos/{owner}/{repo}/events` for real-time updates
 4. On SSE event (`stacks_updated`, `branch_changed`, `refresh`, `branch_switched`), RepoProvider refetches
 5. **View diffing** (`diff-views.ts`) compares old and new snapshots to generate `FeedEvent` objects
 6. Events are displayed in the **EventFeed** component (capped at 100 events)
@@ -98,23 +100,28 @@ layout.tsx
 
 ### Client
 
-All fetch functions live in `src/lib/api.ts`:
+All fetch functions live in `src/lib/api.ts`. Per-repo endpoints are keyed by
+GitHub coordinates: the functions take a `RepoRef` (`{ owner, repo }`) and build
+`/api/v1/repos/{owner}/{repo}/...` URLs via the `repoPath` helper. `RepoProvider`
+holds a memoized `repoRef` and exposes it through `useRepo()`.
 
 | Function | Method | Endpoint | Purpose |
 |----------|--------|----------|---------|
-| `fetchView()` | GET | `/api/view` | Combined dashboard payload |
-| `fetchRepo()` | GET | `/api/repo` | Repository metadata |
-| `fetchStacks()` | GET | `/api/stacks` | All stack summaries |
-| `fetchStack(root)` | GET | `/api/stacks/{root}` | Single stack detail |
-| `fetchBranch(name)` | GET | `/api/branches/{name}` | Single branch detail |
 | `fetchRepos()` | GET | `/api/v1/repos` | Repos the caller may see (picker) |
 | `onboardRepo(owner, name)` | POST | `/api/v1/repos` | Clone & serve a GitHub repo |
-| `submitStack(root)` | POST | `/api/submit/{root}` | Trigger stack submission |
+| `fetchView(ref)` | GET | `/api/v1/repos/{owner}/{repo}/view` | Combined dashboard payload |
+| `fetchRepo(ref)` | GET | `/api/v1/repos/{owner}/{repo}/repo` | Repository metadata |
+| `fetchStacks(ref)` | GET | `/api/v1/repos/{owner}/{repo}/stacks` | All stack summaries |
+| `fetchStack(ref, root)` | GET | `/api/v1/repos/{owner}/{repo}/stacks/{root}` | Single stack detail |
+| `fetchBranch(ref, name)` | GET | `/api/v1/repos/{owner}/{repo}/branches/{name}` | Single branch detail |
+| `fetchBranchDiff(ref, name)` | GET | `/api/v1/repos/{owner}/{repo}/branch-diff/{name}` | Raw branch patch |
+| `submitStack(ref, root)` | POST | `/api/v1/repos/{owner}/{repo}/stacks/{root}/submit` | Trigger stack submission |
 
 The repo picker (`src/components/repo-picker/`) renders an `AddRepository`
-form that calls `onboardRepo`; on success it navigates to the new repo. The
-form self-hides on a read-only server (`useConfig().readOnly`) since writes are
-refused there. See [Repository onboarding](./deploy.md#repository-onboarding).
+form that calls `onboardRepo`; on success it navigates to the new repo's
+`/{owner}/{repo}` path. The form self-hides on a read-only server
+(`useConfig().readOnly`) since writes are refused there. See
+[Repository onboarding](./deploy.md#repository-onboarding).
 
 The API base URL is configured via `NEXT_PUBLIC_API_URL`. Default is empty
 (same-origin) so the embedded production build, served by the Go binary,
@@ -128,7 +135,8 @@ API response types in the frontend (`src/lib/api.ts`) mirror Go structs in `inte
 
 ### SSE Events
 
-The SSE hook in `src/lib/use-sse.ts` subscribes to `/api/events`:
+The SSE hook in `src/lib/use-sse.ts` takes a `RepoRef` and subscribes to
+`/api/v1/repos/{owner}/{repo}/events`:
 
 | Event Type | Trigger |
 |------------|---------|
@@ -243,10 +251,35 @@ src/components/status/__tests__/status-badge.test.tsx
 2. For component styles: use Tailwind utility classes
 3. For new animations: add `@keyframes` in `globals.css`, use via Tailwind `animate-*` class
 
-### Add a New Page
+### Routing (single SPA shell)
 
-Next.js App Router: create `src/app/<route>/page.tsx`. The static export will generate `<route>/index.html`.
+The app is a single client-rendered shell, not per-route pages. `output: "export"`
+emits one `index.html` from an optional catch-all route, `src/app/[[...slug]]/page.tsx`
+(a server component that exports `generateStaticParams` returning `[{ slug: [] }]`
+and renders `<AppShell>`). `AppShell` (`src/components/app-shell.tsx`) reads
+`usePathname()` and dispatches: an empty path shows the repo picker; `/{owner}/{repo}`
+mounts `RepoProvider` + `RepoView`. Deep links work on hard refresh because the Go
+server serves the same `index.html` for extension-less paths (SPA fallback in
+`internal/api/static.go`).
+
+To add a genuinely separate page you would add another route folder, but prefer
+extending the path scheme parsed in `src/lib/repo-route.ts`.
 
 ### Branch Selection & URL State
 
-Selection state is tracked via URL params (`?branch=name` or `?stack=rootBranch`). Update selection by changing URL params (client-side).
+URLs mirror GitHub and are the source of selection state:
+
+| Path | View |
+|------|------|
+| `/{owner}/{repo}` | Repo home, no selection |
+| `/{owner}/{repo}/tree/{branch}` | A branch (branch may contain slashes) |
+| `/{owner}/{repo}/stack/{rootBranch}` | A whole stack |
+| `/{owner}/{repo}/pull/{number}` | A PR, resolved client-side to its branch |
+
+`src/lib/repo-route.ts` is the single place that parses and builds these paths
+(`parseRepoPath` / `buildRepoPath`), encoding branch/stack names per-segment so
+slashes stay as separators. `useUrlSelection` (`src/hooks/use-url-selection.ts`)
+reads the initial selection from the path and updates it with
+`history.replaceState` (no history entry per in-repo selection, matching the
+prior behavior). A `pull` selection has no branch until the view loads; the hook
+resolves it to the branch carrying that PR number.

@@ -11,16 +11,26 @@ import (
 func TestBuildAuthConfig_DisabledLocalOK(t *testing.T) {
 	t.Parallel()
 
-	r, err := buildAuthConfig(true, false)
+	r, err := buildAuthConfig(authBuildParams{disabled: true})
 	require.NoError(t, err)
 	require.Nil(t, r)
 }
 
-func TestBuildAuthConfig_DisabledInPublicModeRefused(t *testing.T) {
+func TestBuildAuthConfig_DisabledExposedRefused(t *testing.T) {
 	t.Parallel()
 
-	_, err := buildAuthConfig(true, true)
+	_, err := buildAuthConfig(authBuildParams{disabled: true, exposed: true})
 	require.Error(t, err)
+}
+
+func TestBuildAuthConfig_DisabledExposedReadOnlyOK(t *testing.T) {
+	t.Parallel()
+
+	// Read-only removes the write route, so disabling auth on an exposed
+	// read-only server is safe — reads are anonymous by design.
+	r, err := buildAuthConfig(authBuildParams{disabled: true, exposed: true, readOnly: true})
+	require.NoError(t, err)
+	require.Nil(t, r)
 }
 
 func TestBuildAuthConfig_NoEnvLocalFallsThroughToUnauthed(t *testing.T) {
@@ -34,12 +44,12 @@ func TestBuildAuthConfig_NoEnvLocalFallsThroughToUnauthed(t *testing.T) {
 		"STACKIT_ALLOWED_GH_ORG":       "",
 	})
 
-	r, err := buildAuthConfig(false, false)
+	r, err := buildAuthConfig(authBuildParams{})
 	require.NoError(t, err)
-	require.Nil(t, r, "no env + local mode = no auth, no error")
+	require.Nil(t, r, "no env + not exposed = no auth, no error")
 }
 
-func TestBuildAuthConfig_NoEnvInPublicModeRefused(t *testing.T) {
+func TestBuildAuthConfig_NoEnvExposedRefused(t *testing.T) {
 	// t.Setenv is incompatible with t.Parallel; these tests share process env.
 	withEnv(t, map[string]string{
 		"STACKIT_GITHUB_CLIENT_ID":     "",
@@ -50,8 +60,25 @@ func TestBuildAuthConfig_NoEnvInPublicModeRefused(t *testing.T) {
 		"STACKIT_ALLOWED_GH_ORG":       "",
 	})
 
-	_, err := buildAuthConfig(false, true)
+	_, err := buildAuthConfig(authBuildParams{exposed: true})
 	require.Error(t, err)
+}
+
+func TestBuildAuthConfig_NoEnvExposedReadOnlyOK(t *testing.T) {
+	// t.Setenv is incompatible with t.Parallel; these tests share process env.
+	withEnv(t, map[string]string{
+		"STACKIT_GITHUB_CLIENT_ID":     "",
+		"STACKIT_GITHUB_CLIENT_SECRET": "",
+		"STACKIT_BASE_URL":             "",
+		"STACKIT_SESSION_KEY":          "",
+		"STACKIT_ALLOWED_GH_USERS":     "",
+		"STACKIT_ALLOWED_GH_ORG":       "",
+	})
+
+	// An exposed read-only server boots anonymously with no OAuth env.
+	r, err := buildAuthConfig(authBuildParams{exposed: true, readOnly: true})
+	require.NoError(t, err)
+	require.Nil(t, r)
 }
 
 func TestBuildAuthConfig_PartialEnvErrors(t *testing.T) {
@@ -64,7 +91,7 @@ func TestBuildAuthConfig_PartialEnvErrors(t *testing.T) {
 		"STACKIT_ALLOWED_GH_USERS":     "jonnii",
 	})
 
-	_, err := buildAuthConfig(false, false)
+	_, err := buildAuthConfig(authBuildParams{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "STACKIT_GITHUB_CLIENT_SECRET")
 }
@@ -79,7 +106,7 @@ func TestBuildAuthConfig_HappyPath(t *testing.T) {
 		"STACKIT_ALLOWED_GH_USERS":     "jonnii",
 	})
 
-	r, err := buildAuthConfig(false, false)
+	r, err := buildAuthConfig(authBuildParams{})
 	require.NoError(t, err)
 	require.NotNil(t, r)
 	require.NotNil(t, r.cfg.Handler)
@@ -98,7 +125,7 @@ func TestBuildAuthConfig_EmptyAllowlistErrors(t *testing.T) {
 		"STACKIT_ALLOWED_GH_ORG":       "",
 	})
 
-	_, err := buildAuthConfig(false, false)
+	_, err := buildAuthConfig(authBuildParams{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "allowlist")
 }

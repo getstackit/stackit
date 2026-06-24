@@ -24,7 +24,7 @@ func TestBranchesHandler_AllowsBranchNamedDiff(t *testing.T) {
 	reg := singleEntryRegistry(t, s)
 	handler := NewBranchesHandler(reg)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/branches/diff", nil)
+	req := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/branches/diff", nil))
 	req.SetPathValue("name", "diff")
 	rr := httptest.NewRecorder()
 
@@ -44,7 +44,7 @@ func TestBranchesHandler_AllowsBranchEndingInDiffSuffix(t *testing.T) {
 	reg := singleEntryRegistry(t, s)
 	handler := NewBranchesHandler(reg)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/branches/"+url.PathEscape(branchName), nil)
+	req := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/branches/"+url.PathEscape(branchName), nil))
 	req.SetPathValue("name", branchName)
 	rr := httptest.NewRecorder()
 
@@ -64,7 +64,8 @@ func TestBranchDiffHandler_ReturnsDiff(t *testing.T) {
 	reg := singleEntryRegistry(t, s)
 	handler := NewBranchDiffHandler(reg, 0)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff?branch="+url.QueryEscape(branchName), nil)
+	req := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/branch-diff/"+url.PathEscape(branchName), nil))
+	req.SetPathValue("name", branchName)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -95,7 +96,8 @@ func TestBranchDiffHandler_ThrottleGateRespectsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff?branch="+url.QueryEscape(branchName), nil).WithContext(ctx)
+	req := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/branch-diff/"+url.PathEscape(branchName), nil).WithContext(ctx))
+	req.SetPathValue("name", branchName)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -104,20 +106,22 @@ func TestBranchDiffHandler_ThrottleGateRespectsContext(t *testing.T) {
 	require.Empty(t, rr.Body.String(), "no diff should be computed when throttled and the client is gone")
 }
 
-func TestBranchDiffHandler_RequiresBranchQuery(t *testing.T) {
+func TestBranchDiffHandler_RequiresBranch(t *testing.T) {
 	t.Parallel()
 
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	reg := singleEntryRegistry(t, s)
 	handler := NewBranchDiffHandler(reg, 0)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff", nil)
+	// No {name} path value: the resource resolves to the repo but carries no
+	// branch, so the handler rejects it before touching git.
+	req := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/branch-diff/", nil))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
 	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "missing branch query parameter")
+	require.Contains(t, rr.Body.String(), "missing branch")
 }
 
 func TestBranchDiffHandler_RejectsUntrackedBranch(t *testing.T) {
@@ -127,7 +131,8 @@ func TestBranchDiffHandler_RejectsUntrackedBranch(t *testing.T) {
 	reg := singleEntryRegistry(t, s)
 	handler := NewBranchDiffHandler(reg, 0)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/branch-diff?branch=main", nil)
+	req := withRepo(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/demo/branch-diff/main", nil))
+	req.SetPathValue("name", "main")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -136,15 +141,14 @@ func TestBranchDiffHandler_RejectsUntrackedBranch(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "branch not found or not tracked")
 }
 
-func TestResolveRepo_Returns404ForUnknownID(t *testing.T) {
+func TestResolveRepo_Returns404ForUnknownRepo(t *testing.T) {
 	t.Parallel()
 
 	reg := registry.New()
-	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default"}))
+	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default", Owner: "acme", Name: "demo"}))
 	handler := NewBranchesHandler(reg)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/repos/missing/branches", nil)
-	req.SetPathValue("repoID", "missing")
+	req := withRepoCoords(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/missing/branches", nil), "acme", "missing")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -167,15 +171,38 @@ func setupTrackedBranchScenario(t *testing.T, branchName string) *scenario.Scena
 	return s
 }
 
-// singleEntryRegistry builds a registry with one entry id="default" pointing
-// at the scenario's engine. Mirrors the bootstrap behavior of the single-repo
-// `-cwd` shortcut and lets tests skip path-value setup for repoID.
+// testOwner and testRepo are the GitHub coordinates singleEntryRegistry
+// registers its entry under. Direct handler calls (no router) resolve to it
+// once withRepo sets the matching owner/repo path values resolveRepo reads.
+const (
+	testOwner = "acme"
+	testRepo  = "demo"
+)
+
+// singleEntryRegistry builds a registry with one entry pointing at the
+// scenario's engine, indexed by testOwner/testRepo. Mirrors the bootstrap
+// behavior of the single-repo `-cwd` shortcut.
 func singleEntryRegistry(t *testing.T, s *scenario.Scenario) *registry.Registry {
 	t.Helper()
 	reg := registry.New()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:     "default",
+		Owner:  testOwner,
+		Name:   testRepo,
 		Engine: s.Engine,
 	}))
 	return reg
+}
+
+// withRepoCoords sets the owner/repo path values resolveRepo reads, standing in
+// for the router's {owner}/{repo} match in a direct handler call.
+func withRepoCoords(req *http.Request, owner, repo string) *http.Request {
+	req.SetPathValue("owner", owner)
+	req.SetPathValue("repo", repo)
+	return req
+}
+
+// withRepo sets the path values for the singleEntryRegistry entry.
+func withRepo(req *http.Request) *http.Request {
+	return withRepoCoords(req, testOwner, testRepo)
 }

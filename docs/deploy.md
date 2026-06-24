@@ -273,6 +273,21 @@ point a GitHub webhook at the server:
    refreshes — acking GitHub immediately and doing the fetch in the background.
    A burst of pushes for one repo coalesces into a single fetch.
 
+**Verifying a delivery in the logs.** A push you can trace end to end produces:
+
+```
+webhook: push accepted, triggering sync   repo=getstackit/stackit delivery=<uuid>
+sync: refreshed repo                       repo=getstackit-stackit owner=getstackit name=stackit
+```
+
+The `delivery` matches the UUID in the webhook's **Recent Deliveries** on GitHub.
+Other outcomes: `webhook: ping acknowledged` (the test delivery GitHub sends on
+save); `sync: ignoring push for repo not managed here` (an App webhook delivers
+pushes for *every* installed repo — ones this server doesn't serve are a no-op,
+not an error); and `sync: coalesced sync failed` (a real fetch/token failure).
+The same `sync: refreshed repo` line is emitted by the interval loop and manual
+sync, so it's the single signal that a repo's served state advanced.
+
 > **Keep the interval loop on as a backstop.** Webhook delivery isn't
 > guaranteed (the server may be down when GitHub delivers, and GitHub gives up
 > after retries). Crucially, GitHub sends a push event only for `refs/heads/*`

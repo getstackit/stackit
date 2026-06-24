@@ -18,6 +18,11 @@ const SignatureHeader = "X-Hub-Signature-256"
 // EventHeader names the webhook event type (e.g. "push", "ping").
 const EventHeader = "X-GitHub-Event"
 
+// DeliveryHeader carries GitHub's per-delivery UUID. Logging it lets an
+// operator correlate a server-side log line with the matching entry in the
+// webhook's "Recent Deliveries" list on GitHub.
+const DeliveryHeader = "X-GitHub-Delivery"
+
 const signaturePrefix = "sha256="
 
 // Verify reports whether sigHeader is a valid HMAC-SHA256 signature of body

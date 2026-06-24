@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/getstackit/stackit/internal/api/githubwebhook"
@@ -60,31 +61,40 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch r.Header.Get(githubwebhook.EventHeader) {
+	// Delivery ID correlates this log trail with GitHub's "Recent Deliveries".
+	delivery := r.Header.Get(githubwebhook.DeliveryHeader)
+
+	switch event := r.Header.Get(githubwebhook.EventHeader); event {
 	case "push":
-		h.handlePush(w, body)
+		h.handlePush(w, body, delivery)
 	case "ping":
 		// GitHub sends ping once when the hook is created; acknowledge it.
+		slog.Info("webhook: ping acknowledged", "delivery", delivery) //nolint:gosec // values emitted as structured slog fields
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		// Event types we don't act on (the App should only subscribe to push,
 		// but be tolerant). Acknowledge so GitHub doesn't retry.
+		slog.Debug("webhook: ignoring event", "event", event, "delivery", delivery) //nolint:gosec // values emitted as structured slog fields
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-func (h *WebhookHandler) handlePush(w http.ResponseWriter, body []byte) {
+func (h *WebhookHandler) handlePush(w http.ResponseWriter, body []byte, delivery string) {
 	owner, name, ok := githubwebhook.ParsePush(body)
 	if !ok {
 		// Verified but not a recognizable push payload: acknowledge so GitHub
 		// doesn't retry a delivery we can't act on.
+		slog.Warn("webhook: push had no repository in payload, ignoring", "delivery", delivery) //nolint:gosec // values emitted as structured slog fields
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	// A mirror-fetch is slow and GitHub expects a prompt response, so hand off
 	// to the coalescer (which runs and de-dups the fetch off the request path)
-	// and ack immediately.
+	// and ack immediately. The sync outcome is logged downstream (reposync):
+	// "sync: refreshed repo" on success, or a warning if the fetch fails / the
+	// repo isn't managed here.
+	slog.Info("webhook: push accepted, triggering sync", "repo", owner+"/"+name, "delivery", delivery) //nolint:gosec // values emitted as structured slog fields
 	h.trigger.Trigger(owner, name)
 	w.WriteHeader(http.StatusAccepted)
 }

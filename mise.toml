@@ -36,7 +36,7 @@ pnpm = "10.32.1"
 # Pinned (not "latest") so local matches CI exactly — a drift here means lint
 # passes locally but fails in CI (or vice versa). Keep in sync with the
 # golangci-lint-action version in .github/workflows/{test,release}.yml.
-golangci-lint = "2.12.2"
+golangci-lint = "2.11.3"
 
 # Development tools
 "aqua:watchexec/watchexec" = "latest"   # File watcher for dev auto-reload

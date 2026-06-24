@@ -2,6 +2,7 @@ package reposync
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -75,7 +76,15 @@ func (c *Coalescer) drain(key, owner, name string) {
 		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 		err := c.sync(ctx, owner, name)
 		cancel()
-		if err != nil {
+		switch {
+		case err == nil:
+			// Success is logged at the sync chokepoint (reposync syncEntry).
+		case errors.Is(err, ErrRepoNotManaged):
+			// Expected, not a failure: the GitHub App webhook delivers a push
+			// for every repo the App is installed on, so we routinely see
+			// pushes for repos this server doesn't serve. Note it and move on.
+			slog.Info("sync: ignoring push for repo not managed here", "repo", key)
+		default:
 			slog.Warn("sync: coalesced sync failed", "repo", key, "error", err)
 		}
 

@@ -12,45 +12,66 @@ import (
 // pin a goroutine indefinitely.
 const defaultSyncTimeout = 2 * time.Minute
 
+// defaultDebounce is the quiet window a repo's triggers wait out before syncing.
+// Submitting a stack pushes its branches in quick succession, each firing a
+// webhook; debouncing collapses that sequence into a single fetch once the
+// pushes settle, instead of one fetch per branch.
+const defaultDebounce = 2 * time.Second
+
 // SyncFunc mirror-fetches and refreshes one repo by its GitHub coordinates.
 // (*Syncer).SyncRepo satisfies it.
 type SyncFunc func(ctx context.Context, owner, name string) error
 
-// Coalescer collapses repeated sync triggers for the same repo. At most one
-// sync runs per repo at a time; triggers that arrive while one is in flight set
-// a single pending flag, so a burst of pushes for a repo yields one extra sync
-// afterward rather than a fetch per delivery. This bounds live goroutines to the
+// Coalescer debounces and collapses repeated sync triggers for the same repo.
+// A trigger (re)arms a per-repo timer; the sync runs only after the timer's
+// quiet window elapses with no newer trigger, so a burst of pushes — e.g. a
+// whole stack submit — yields a single fetch once they settle. At most one sync
+// runs per repo at a time; a trigger that lands while one is in flight sets a
+// pending flag for exactly one follow-up. This bounds live goroutines to the
 // number of distinct repos seeing traffic and keeps git subprocesses in check —
 // the webhook receiver can hand off every delivery without fanning out.
 type Coalescer struct {
-	sync    SyncFunc
-	timeout time.Duration
+	sync     SyncFunc
+	timeout  time.Duration
+	debounce time.Duration
 
 	mu    sync.Mutex
 	state map[string]*repoSync
 }
 
-// repoSync tracks the in-flight/pending status for one repo key.
+// repoSync tracks the debounce timer and in-flight/pending status for one repo
+// key. gen disambiguates a just-fired timer from a fresher one re-armed by a
+// trigger that raced it, so at most one run() proceeds per key.
 type repoSync struct {
 	running bool
 	pending bool
+	gen     uint64
+	timer   *time.Timer
 }
 
-// NewCoalescer wraps sync. A non-positive timeout uses defaultSyncTimeout.
-func NewCoalescer(sync SyncFunc, timeout time.Duration) *Coalescer {
+// NewCoalescer wraps sync. A non-positive timeout uses defaultSyncTimeout; a
+// negative debounce uses defaultDebounce, while a zero debounce dispatches
+// immediately (no quiet window).
+func NewCoalescer(sync SyncFunc, timeout, debounce time.Duration) *Coalescer {
 	if timeout <= 0 {
 		timeout = defaultSyncTimeout
 	}
-	return &Coalescer{sync: sync, timeout: timeout, state: make(map[string]*repoSync)}
+	if debounce < 0 {
+		debounce = defaultDebounce
+	}
+	return &Coalescer{sync: sync, timeout: timeout, debounce: debounce, state: make(map[string]*repoSync)}
 }
 
 // Trigger requests a sync for owner/name and returns immediately. It is safe for
-// concurrent use; repeated calls while a sync for the repo is in flight coalesce
-// into a single follow-up run.
+// concurrent use. The sync is debounced: a burst of triggers keeps bumping the
+// timer out and collapses into one run once the quiet window elapses; triggers
+// that land while a sync is already running coalesce into a single follow-up.
 func (c *Coalescer) Trigger(owner, name string) {
 	key := owner + "/" + name
 
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	st := c.state[key]
 	if st == nil {
 		st = &repoSync{}
@@ -61,17 +82,35 @@ func (c *Coalescer) Trigger(owner, name string) {
 		// hasn't been synced yet. Any number of triggers in this window collapse
 		// to one follow-up.
 		st.pending = true
+		return
+	}
+
+	// (Re)arm the debounce timer. Bumping gen and stopping any prior timer means
+	// a timer that already fired (its run() not yet past the lock) sees a stale
+	// gen and bows out, so only the latest timer's run() proceeds.
+	st.gen++
+	gen := st.gen
+	if st.timer != nil {
+		st.timer.Stop()
+	}
+	st.timer = time.AfterFunc(c.debounce, func() { c.run(key, owner, name, gen) })
+}
+
+// run executes syncs for key until no trigger arrived during the last run. It
+// is the debounce timer's callback; gen guards against a superseded timer.
+func (c *Coalescer) run(key, owner, name string, gen uint64) {
+	c.mu.Lock()
+	st := c.state[key]
+	if st == nil || st.gen != gen || st.running {
+		// A newer trigger re-armed the timer (and will fire its own run), or a
+		// run is already active for this key. This fire is stale; drop it.
 		c.mu.Unlock()
 		return
 	}
 	st.running = true
+	st.timer = nil
 	c.mu.Unlock()
 
-	go c.drain(key, owner, name)
-}
-
-// drain runs syncs for key until no trigger arrived during the last run.
-func (c *Coalescer) drain(key, owner, name string) {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 		err := c.sync(ctx, owner, name)

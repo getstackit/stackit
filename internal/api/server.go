@@ -91,6 +91,12 @@ type ServerConfig struct {
 	// stays as a backstop). Empty disables the endpoint (it 404s), which is the
 	// correct posture for local/dev servers GitHub can't reach.
 	GitHubWebhookSecret string
+
+	// WebhookDebounce is the quiet window a repo's webhook triggers wait out
+	// before a fetch runs, so a stack submit's burst of pushes collapses into a
+	// single refresh. Negative uses the package default; zero dispatches
+	// immediately.
+	WebhookDebounce time.Duration
 }
 
 // AuthConfig is the runtime auth setup. SessionStore must outlive the
@@ -137,7 +143,7 @@ func NewServer(cfg ServerConfig) *Server {
 		provider = cfg.RepoSyncTokens
 	}
 	s.syncer = reposync.New(cfg.Registry, provider, cfg.SyncInterval)
-	s.coalescer = reposync.NewCoalescer(s.syncer.SyncRepo, 0)
+	s.coalescer = reposync.NewCoalescer(s.syncer.SyncRepo, 0, cfg.WebhookDebounce)
 
 	return s
 }

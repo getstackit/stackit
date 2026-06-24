@@ -122,5 +122,9 @@ func (s *Syncer) syncEntry(ctx context.Context, e *registry.RepoEntry) error {
 		return fmt.Errorf("fetch: %w", err)
 	}
 	s.refresh(e)
+	// The single success line for every sync path — interval loop, manual sync,
+	// and webhook-triggered. For a webhook push it follows the handler's
+	// "webhook: push accepted" line, completing the receive→refresh trace.
+	slog.Info("sync: refreshed repo", "repo", e.ID, "owner", e.Owner, "name", e.Name)
 	return nil
 }

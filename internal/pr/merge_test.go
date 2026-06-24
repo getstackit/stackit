@@ -33,6 +33,8 @@ func TestFormatMergeTitleWithDescription(t *testing.T) {
 }
 
 func TestFormatMergeTitle(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		scopes     []string
@@ -91,6 +93,7 @@ func TestFormatMergeTitle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := FormatMergeTitle(tt.scopes, tt.totalCount)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -98,7 +101,10 @@ func TestFormatMergeTitle(t *testing.T) {
 }
 
 func TestFormatMergeBody(t *testing.T) {
+	t.Parallel()
+
 	t.Run("single branch with PR", func(t *testing.T) {
+		t.Parallel()
 		result := FormatMergeBody(MergeBodyParams{
 			Branches: []MergeBranch{
 				{Name: "feature-a", PRNumber: 123, PRTitle: "Add feature A"},
@@ -124,6 +130,7 @@ Stackit-PRs: 123
 	})
 
 	t.Run("multiple branches with PRs", func(t *testing.T) {
+		t.Parallel()
 		result := FormatMergeBody(MergeBodyParams{
 			Branches: []MergeBranch{
 				{Name: "feature-a", PRNumber: 1, PRTitle: "Add feature A"},
@@ -152,6 +159,7 @@ Stackit-PRs: 1,2
 	})
 
 	t.Run("branch without PR", func(t *testing.T) {
+		t.Parallel()
 		result := FormatMergeBody(MergeBodyParams{
 			Branches: []MergeBranch{
 				{Name: "feature-a", PRNumber: 0, PRTitle: ""},
@@ -176,6 +184,7 @@ Stackit-Stack-Size: 1
 	})
 
 	t.Run("with excluded branches", func(t *testing.T) {
+		t.Parallel()
 		result := FormatMergeBody(MergeBodyParams{
 			Branches: []MergeBranch{
 				{Name: "feature-a", PRNumber: 1, PRTitle: "Add feature A"},
@@ -210,6 +219,7 @@ Stackit-PRs: 1
 	})
 
 	t.Run("no stack tree", func(t *testing.T) {
+		t.Parallel()
 		result := FormatMergeBody(MergeBodyParams{
 			Branches: []MergeBranch{
 				{Name: "feature-a", PRNumber: 1, PRTitle: "Add feature A"},
@@ -227,6 +237,7 @@ Stackit-PRs: 1
 	})
 
 	t.Run("with stack description", func(t *testing.T) {
+		t.Parallel()
 		result := FormatMergeBody(MergeBodyParams{
 			Branches: []MergeBranch{
 				{Name: "feature-a", PRNumber: 1, PRTitle: "Add feature A"},
@@ -262,6 +273,7 @@ Stackit-Scope: PROJ-123
 	})
 
 	t.Run("with stack description title only", func(t *testing.T) {
+		t.Parallel()
 		result := FormatMergeBody(MergeBodyParams{
 			Branches: []MergeBranch{
 				{Name: "feature-a", PRNumber: 1, PRTitle: "Add feature A"},
@@ -294,6 +306,7 @@ Stackit-Scope: PROJ-456
 	})
 
 	t.Run("with empty stack description", func(t *testing.T) {
+		t.Parallel()
 		result := FormatMergeBody(MergeBodyParams{
 			Branches: []MergeBranch{
 				{Name: "feature-a", PRNumber: 1, PRTitle: "Add feature A"},
@@ -322,7 +335,10 @@ Stackit-PRs: 1
 }
 
 func TestFormatStackTree(t *testing.T) {
+	t.Parallel()
+
 	t.Run("single branch", func(t *testing.T) {
+		t.Parallel()
 		result := FormatStackTree(StackTreeParams{
 			TrunkName: "main",
 			Branches: []StackTreeBranch{
@@ -337,6 +353,7 @@ func TestFormatStackTree(t *testing.T) {
 	})
 
 	t.Run("nested branches", func(t *testing.T) {
+		t.Parallel()
 		result := FormatStackTree(StackTreeParams{
 			TrunkName: "main",
 			Branches: []StackTreeBranch{
@@ -355,6 +372,7 @@ func TestFormatStackTree(t *testing.T) {
 	})
 
 	t.Run("branch without PR", func(t *testing.T) {
+		t.Parallel()
 		result := FormatStackTree(StackTreeParams{
 			TrunkName: "main",
 			Branches: []StackTreeBranch{

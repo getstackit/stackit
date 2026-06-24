@@ -117,49 +117,27 @@ type AnalysisResult struct {
 	IncompleteCount int     // Number of incomplete stacks
 }
 
-// GetShippable returns only the stacks that are ready to ship.
-func (r *AnalysisResult) GetShippable() []Stack {
+func (r *AnalysisResult) filterByStatus(status Status) []Stack {
 	var result []Stack
 	for _, s := range r.Stacks {
-		if s.IsShippable() {
+		if s.Status == status {
 			result = append(result, s)
 		}
 	}
 	return result
 }
+
+// GetShippable returns only the stacks that are ready to ship.
+func (r *AnalysisResult) GetShippable() []Stack { return r.filterByStatus(StatusShippable) }
 
 // GetPending returns only the stacks that are pending.
-func (r *AnalysisResult) GetPending() []Stack {
-	var result []Stack
-	for _, s := range r.Stacks {
-		if s.IsPending() {
-			result = append(result, s)
-		}
-	}
-	return result
-}
+func (r *AnalysisResult) GetPending() []Stack { return r.filterByStatus(StatusPending) }
 
 // GetBlocked returns only the stacks that are blocked.
-func (r *AnalysisResult) GetBlocked() []Stack {
-	var result []Stack
-	for _, s := range r.Stacks {
-		if s.IsBlocked() {
-			result = append(result, s)
-		}
-	}
-	return result
-}
+func (r *AnalysisResult) GetBlocked() []Stack { return r.filterByStatus(StatusBlocked) }
 
 // GetIncomplete returns only the stacks that are incomplete.
-func (r *AnalysisResult) GetIncomplete() []Stack {
-	var result []Stack
-	for _, s := range r.Stacks {
-		if s.IsIncomplete() {
-			result = append(result, s)
-		}
-	}
-	return result
-}
+func (r *AnalysisResult) GetIncomplete() []Stack { return r.filterByStatus(StatusIncomplete) }
 
 // HasShippable returns true if there are any shippable stacks.
 func (r *AnalysisResult) HasShippable() bool {

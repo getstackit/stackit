@@ -5,10 +5,12 @@
 package githubwebhook
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/url"
 	"strings"
 )
 
@@ -67,7 +69,7 @@ type pushPayload struct {
 // recognizable push payload, so the caller can ignore it without erroring.
 func ParsePush(body []byte) (owner, name string, ok bool) {
 	var p pushPayload
-	if err := json.Unmarshal(body, &p); err != nil {
+	if err := json.Unmarshal(normalizePushBody(body), &p); err != nil {
 		return "", "", false
 	}
 
@@ -92,4 +94,29 @@ func ParsePush(body []byte) (owner, name string, ok bool) {
 		return "", "", false
 	}
 	return owner, name, true
+}
+
+// normalizePushBody returns the JSON document from a webhook body, tolerating
+// both content types a GitHub webhook can be configured to send:
+//
+//   - application/json — the body already is the JSON document.
+//   - application/x-www-form-urlencoded — GitHub sends "payload=<url-encoded
+//     JSON>" instead, and a receiver that only json.Unmarshal's the raw body
+//     silently fails to find the repository (the cause of "push had no
+//     repository in payload").
+//
+// The HMAC signature is computed over the raw delivered bytes either way, so
+// Verify is unaffected; only the bytes we hand to the JSON parser need
+// unwrapping. Detection is by the "payload=" prefix — a JSON body always starts
+// with "{", so the two never collide.
+func normalizePushBody(body []byte) []byte {
+	const formPrefix = "payload="
+	if !bytes.HasPrefix(body, []byte(formPrefix)) {
+		return body
+	}
+	decoded, err := url.QueryUnescape(string(body[len(formPrefix):]))
+	if err != nil {
+		return body
+	}
+	return []byte(decoded)
 }

@@ -7,6 +7,8 @@ import (
 )
 
 func TestBuildEditorCommand(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		editor  string
@@ -48,6 +50,7 @@ func TestBuildEditorCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			cmd, err := BuildEditorCommand(tt.editor, tt.file)
 			if tt.wantErr != "" {
 				require.Error(t, err)

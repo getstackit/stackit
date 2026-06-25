@@ -254,4 +254,33 @@ func TestNavigationCommands(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, output, "already")
 	})
+
+	// Regression test for #1299: when a branch falls behind after trunk
+	// advances, checkout must suggest a command that actually exists. The
+	// old strings ("stackit upstack restack" / "stackit stack restack") were
+	// not real subcommands.
+	t.Run("restack suggestion references real commands when branch falls behind", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+
+		// Create stack: main -> a -> b
+		s.RunCli("create", "a", "-m", "a").
+			RunCli("create", "b", "-m", "b")
+
+		// Advance trunk so the stack falls behind main.
+		s.Checkout("main").CommitChange("main-update", "advance trunk")
+
+		// Checking out a (now behind its parent) suggests restacking upstack.
+		output, err := s.RunCliAndGetOutput("checkout", "a")
+		require.NoError(t, err)
+		require.Contains(t, output, "stackit restack --upstack")
+		require.NotContains(t, output, "stackit upstack restack")
+
+		// Checking out b (ancestor a is behind) suggests restacking the stack.
+		output, err = s.RunCliAndGetOutput("checkout", "b")
+		require.NoError(t, err)
+		require.Contains(t, output, "The downstack branch")
+		require.Contains(t, output, "stackit restack")
+		require.NotContains(t, output, "stackit stack restack")
+	})
 }

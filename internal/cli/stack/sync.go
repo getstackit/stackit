@@ -58,7 +58,7 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 				// or pushed to GitHub. This is the whole contract of --dry-run.
 				if dryRun {
 					remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-					plan := computeSyncDryRun(ctx, remoteCtx, opts)
+					plan := computeSyncDryRun(remoteCtx, ctx.Engine, opts)
 					cancelRemote()
 					if jsonOutput {
 						return renderSyncDryRunJSON(ctx.Output, plan.toResult())
@@ -144,14 +144,16 @@ func (p dryRunPlan) toResult() sync.DryRunResult {
 // reads PR/deletion state, but performs no fetch-and-merge, deletion, restack,
 // or GitHub write. It intentionally reimplements a slice of sync.Action's
 // planning rather than running the action with a special handler, because a
-// dry-run is a query, not a simulation of the full interactive process.
-func computeSyncDryRun(ctx *app.Context, gctx context.Context, opts sync.Options) dryRunPlan {
-	eng := ctx.Engine
+// dry-run is a query, not a simulation of the full interactive process. It takes
+// the bounded context and engine directly (not the full app context) so every
+// remote-status/deletion read shares one deadline and the unbounded command
+// context is not reachable here by mistake.
+func computeSyncDryRun(ctx context.Context, eng engine.Engine, opts sync.Options) dryRunPlan {
 	plan := dryRunPlan{restacked: opts.Restack}
 
 	// Check if trunk needs to be pulled from remote
 	trunk := eng.Trunk()
-	remoteStatus := eng.ReadBranchRemoteStatuses(gctx, engine.BranchesOf(trunk)).ForBranch(trunk)
+	remoteStatus := eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(trunk)).ForBranch(trunk)
 	if remoteStatus.Behind() {
 		plan.pullBranch = trunk.GetName()
 		plan.pullRev = shortSHA(remoteStatus.RemoteSha)
@@ -193,7 +195,7 @@ func computeSyncDryRun(ctx *app.Context, gctx context.Context, opts sync.Options
 
 	// Batch-check deletion status for all candidates
 	if len(candidateNames) > 0 {
-		statuses, err := eng.GetDeletionStatuses(ctx.Context, candidateNames)
+		statuses, err := eng.GetDeletionStatuses(ctx, candidateNames)
 		if err == nil {
 			for _, name := range candidateNames {
 				if status, ok := statuses[name]; ok && status.SafeToDelete {
@@ -207,7 +209,7 @@ func computeSyncDryRun(ctx *app.Context, gctx context.Context, opts sync.Options
 	managedWorktrees, err := eng.ListManagedWorktrees()
 	if err == nil {
 		for _, wt := range managedWorktrees {
-			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
+			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx, wt.Path); hasChanges {
 				plan.skipped = append(plan.skipped, wt.AnchorBranch)
 			}
 		}

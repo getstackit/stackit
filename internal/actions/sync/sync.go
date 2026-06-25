@@ -145,7 +145,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	g.Go(func() error {
 		ctx.Logger.Info("goroutine github started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		var err error
-		githubSyncResult, err = syncGitHubPRInfo(ctx, remoteCtx)
+		githubSyncResult, err = syncGitHubPRInfo(remoteCtx, ctx)
 		githubErr = err
 		return nil
 	})

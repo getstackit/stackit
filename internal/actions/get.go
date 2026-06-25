@@ -10,6 +10,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/utils"
 )
@@ -183,7 +184,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		branchesToSync, usedMetadata = crawlAncestorsViaMetadata(eng, targetBranch, branchesToSync, parentMap, branchPRInfo)
 	}
 	if !usedMetadata {
-		branchesToSync = crawlAncestorsViaGitHub(ctx, remoteCtx, targetBranch, branchesToSync, parentMap, branchPRInfo)
+		branchesToSync = crawlAncestorsViaGitHub(remoteCtx, ctx.GitHub(), eng, targetBranch, branchesToSync, parentMap, branchPRInfo)
 	}
 
 	// If target branch exists locally, identify local descendants
@@ -480,16 +481,17 @@ func crawlAncestorsViaMetadata(eng engine.Engine, targetBranch string, branchesT
 // information. It prepends discovered ancestors to branchesToSync (trunk-first) and
 // records each branch's parent in parentMap and PR number in branchPRInfo. It is a
 // no-op when no GitHub client is configured. The (possibly grown) branchesToSync slice
-// is returned because ancestors are prepended.
-func crawlAncestorsViaGitHub(ctx *app.Context, gctx context.Context, targetBranch string, branchesToSync []string, parentMap map[string]string, branchPRInfo map[string]*int) []string {
-	if ctx.GitHub() == nil {
+// is returned because ancestors are prepended. The context bounds the GitHub reads; it
+// takes the narrow github.Client/engine.Engine it needs rather than the full app
+// context, so the unbounded command context is not reachable here by mistake.
+func crawlAncestorsViaGitHub(ctx context.Context, gh github.Client, eng engine.Engine, targetBranch string, branchesToSync []string, parentMap map[string]string, branchPRInfo map[string]*int) []string {
+	if gh == nil {
 		return branchesToSync
 	}
-	eng := ctx.Engine
-	owner, repo := ctx.GitHub().GetOwnerRepo()
+	owner, repo := gh.GetOwnerRepo()
 	current := targetBranch
 	for {
-		pr, err := ctx.GitHub().GetPullRequestByBranch(gctx, owner, repo, current)
+		pr, err := gh.GetPullRequestByBranch(ctx, owner, repo, current)
 		if err != nil || pr == nil {
 			break
 		}

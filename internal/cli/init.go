@@ -96,7 +96,7 @@ func (h *cliInitHandler) OnSuccess(trunkName string, wasInitialized bool, isRese
 		splog.Info("Pro-tip: enhance your workflow with integrations:")
 		splog.Info("  - GitHub:     %s", style.ColorGreen("stackit github install"))
 		splog.Info("  - Pre-commit: %s", style.ColorGreen("stackit precommit install"))
-		splog.Info("  - Agents:     %s", style.ColorGreen("stackit agents install"))
+		splog.Info("  - Agents:     %s", style.ColorGreen("stackit agent install"))
 	}
 }
 

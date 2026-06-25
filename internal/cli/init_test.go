@@ -46,7 +46,7 @@ Run 'stackit config' to change these settings.
 Pro-tip: enhance your workflow with integrations:
   - GitHub:     stackit github install
   - Pre-commit: stackit precommit install
-  - Agents:     stackit agents install
+  - Agents:     stackit agent install
 `)
 
 		require.Equal(t, expected, normalized, "output format should match expected structure")
@@ -126,7 +126,7 @@ Run 'stackit config' to change these settings.
 Pro-tip: enhance your workflow with integrations:
   - GitHub:     stackit github install
   - Pre-commit: stackit precommit install
-  - Agents:     stackit agents install
+  - Agents:     stackit agent install
 `)
 
 		require.Equal(t, expected, normalized, "output format should match expected structure")

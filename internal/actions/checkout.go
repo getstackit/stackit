@@ -170,7 +170,7 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 		parent := branch.GetParentOrTrunk()
 		ctx.Output.Info("This branch has fallen behind %s - you may want to %s.",
 			output.Branch(parent, false),
-			output.Cyan("stackit upstack restack"))
+			output.Cyan("stackit restack --upstack"))
 		return
 	}
 
@@ -181,7 +181,7 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 			ctx.Output.Info("The downstack branch %s has fallen behind %s - you may want to %s.",
 				output.Branch(ancestor.GetName(), false),
 				output.Branch(parent, false),
-				output.Cyan("stackit stack restack"))
+				output.Cyan("stackit restack"))
 			return
 		}
 	}

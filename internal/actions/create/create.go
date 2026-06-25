@@ -217,6 +217,14 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		h.OnStep(StepTracking, handler.StatusCompleted, "Branch tracked")
 	}
 
+	// Opportunistically configure the metadata fetch refspec so a plain
+	// `git fetch` keeps pulling branch metadata. Local, idempotent, and a no-op
+	// when no remote is configured — closes the gap left by removing the implicit
+	// bootstrap from engine construction (issue #1330).
+	if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
+		out.Debug("Failed to configure metadata refspec: %v", err)
+	}
+
 	ctx.Logger.Info("branch created name=%v parent=%v hasCommit=%v", branchName, currentBranch, hasStaged)
 
 	// Create worktree if requested

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -518,8 +519,22 @@ func (e *engineImpl) FetchRemoteMetadata(ctx context.Context) error {
 	return e.FetchRemote(ctx, RemoteFetchRequest{IncludeMetadata: true})
 }
 
-// ConfigureRemoteMetadataSync adds the metadata refspec to the configured
-// remote so subsequent git fetches pick up metadata changes automatically.
+// ConfigureRemoteMetadataSync adds the metadata refspec to the resolved remote
+// so subsequent git fetches pick up metadata changes automatically. It is a
+// no-op when that remote has no URL (e.g. a remote-less repo), so such a repo is
+// never polluted with a dangling fetch refspec. The remote is resolved via
+// GetRemote (the current branch's tracking remote, falling back to origin), so
+// this works for non-origin remotes too.
 func (e *engineImpl) ConfigureRemoteMetadataSync(_ context.Context) error {
+	// `git config --get remote.<name>.url` exits non-zero when the remote does
+	// not exist; that absence is precisely the "no remote to configure" signal,
+	// so we treat the error as a no-op rather than a failure.
+	url, err := e.git.GetConfig(fmt.Sprintf("remote.%s.url", e.GetRemote()))
+	if err != nil {
+		return nil //nolint:nilerr // missing remote.<name>.url means there is no remote to sync
+	}
+	if strings.TrimSpace(url) == "" {
+		return nil
+	}
 	return e.git.EnsureMetadataRefspecConfigured()
 }

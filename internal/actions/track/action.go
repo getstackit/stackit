@@ -24,6 +24,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	eng := ctx.Engine
 	branchName := opts.BranchName
 
+	// Opportunistically configure the metadata fetch refspec so a plain
+	// `git fetch` keeps pulling branch metadata. Local, idempotent, and a no-op
+	// when no remote is configured — closes the gap left by removing the implicit
+	// bootstrap from engine construction (issue #1330).
+	if err := eng.ConfigureRemoteMetadataSync(ctx.Context); err != nil {
+		ctx.Output.Debug("Failed to configure metadata refspec: %v", err)
+	}
+
 	// Handle --parent flag (single branch tracking)
 	if opts.Parent != "" {
 		parent := opts.Parent

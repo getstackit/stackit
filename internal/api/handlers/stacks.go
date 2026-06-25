@@ -85,6 +85,6 @@ func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, entry *
 		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), found.AllBranches)
 	}
 
-	detail := httpcontract.MapStackDetail(entry.Engine, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap)
+	detail := httpcontract.MapStackDetail(r.Context(), entry.Engine, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap)
 	writeJSON(w, detail)
 }

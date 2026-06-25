@@ -73,7 +73,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		if checksMap != nil {
 			checks = checksMap[branch.GetName()]
 		}
-		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks))
+		responses = append(responses, httpcontract.MapBranch(r.Context(), entry.Engine, branch, node, checks))
 	}
 
 	writeJSON(w, responses)
@@ -101,6 +101,6 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entr
 		}
 	}
 
-	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks)
+	resp := httpcontract.MapBranch(r.Context(), entry.Engine, branch, node, checks)
 	writeJSON(w, resp)
 }

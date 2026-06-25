@@ -56,7 +56,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	require.True(t, gotPrInfo.IsLocked(), "Locked status should be persisted in PR info")
 
 	// 5. Check submission status - should NOT need update if nothing changed
-	statuses, err := eng.BatchGetPRSubmissionStatus(engine.BranchesOf(branch))
+	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), engine.BranchesOf(branch))
 	require.NoError(t, err)
 	status := statuses[branch.GetName()]
 	if status.NeedsUpdate {

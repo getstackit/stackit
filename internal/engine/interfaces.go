@@ -63,15 +63,16 @@ type BranchStatus interface {
 	GetBranchType(branch Branch) git.BranchType
 	GetPrInfo(branch Branch) (*PrInfo, error)
 	// BatchGetPRSubmissionStatus returns submission status for many branches,
-	// reading remote status once for the whole set instead of per branch.
-	BatchGetPRSubmissionStatus(branches Branches) (map[string]PRSubmissionStatus, error)
+	// reading remote status once for the whole set instead of per branch. The
+	// context bounds the remote read (a `git ls-remote`); pass a deadline-bearing
+	// context so a stalled remote can't outlive the caller's intent.
+	BatchGetPRSubmissionStatus(ctx context.Context, branches Branches) (map[string]PRSubmissionStatus, error)
 	// BatchGetPRSubmissionStatusWithRemote is BatchGetPRSubmissionStatus with a
 	// caller-supplied remote-status snapshot, so the remote read can be shared.
 	BatchGetPRSubmissionStatusWithRemote(branches Branches, remoteStatuses BranchRemoteStatuses) (map[string]PRSubmissionStatus, error)
 	FindMostRecentTrackedAncestors(ctx context.Context, branchName string) ([]string, error)
 	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)
-	GetBranchRemoteDifference(branchName string) (string, error)
 	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
 }

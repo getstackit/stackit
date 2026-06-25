@@ -61,7 +61,7 @@ func TestBatchGetPRSubmissionStatusReadsRemoteOnceForUpdates(t *testing.T) {
 
 	// Measure only the batched call, isolating it from any setup reads.
 	counting.fetchRemoteShas.Store(0)
-	statuses, err := eng.BatchGetPRSubmissionStatus(branches)
+	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), branches)
 	require.NoError(t, err)
 	require.Len(t, statuses, 3)
 
@@ -145,7 +145,7 @@ func TestBatchGetPRSubmissionStatusSkipsRemoteForCreates(t *testing.T) {
 	branches := engine.BranchesOf(eng.GetBranch("P"), eng.GetBranch("C1"), eng.GetBranch("C2"))
 
 	counting.fetchRemoteShas.Store(0)
-	statuses, err := eng.BatchGetPRSubmissionStatus(branches)
+	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), branches)
 	require.NoError(t, err)
 	require.Len(t, statuses, 3)
 

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -24,9 +25,8 @@ type GitHubSyncResult struct {
 
 // syncGitHubPRInfo fetches PR info from GitHub (network operation only)
 // This is designed to run in parallel with other network operations
-func syncGitHubPRInfo(ctx *app.Context) (*GitHubSyncResult, error) {
+func syncGitHubPRInfo(ctx *app.Context, gctx context.Context) (*GitHubSyncResult, error) {
 	nav := ctx.Navigator()
-	gctx := ctx.Context
 
 	setupStart := time.Now()
 	allBranches := nav.AllBranches()

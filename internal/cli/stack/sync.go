@@ -2,6 +2,7 @@
 package stack
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -56,7 +57,9 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 				// sync.Action, so nothing is fast-forwarded, deleted, restacked,
 				// or pushed to GitHub. This is the whole contract of --dry-run.
 				if dryRun {
-					plan := computeSyncDryRun(ctx, opts)
+					remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+					plan := computeSyncDryRun(ctx, remoteCtx, opts)
+					cancelRemote()
 					if jsonOutput {
 						return renderSyncDryRunJSON(ctx.Output, plan.toResult())
 					}
@@ -142,13 +145,13 @@ func (p dryRunPlan) toResult() sync.DryRunResult {
 // or GitHub write. It intentionally reimplements a slice of sync.Action's
 // planning rather than running the action with a special handler, because a
 // dry-run is a query, not a simulation of the full interactive process.
-func computeSyncDryRun(ctx *app.Context, opts sync.Options) dryRunPlan {
+func computeSyncDryRun(ctx *app.Context, gctx context.Context, opts sync.Options) dryRunPlan {
 	eng := ctx.Engine
 	plan := dryRunPlan{restacked: opts.Restack}
 
 	// Check if trunk needs to be pulled from remote
 	trunk := eng.Trunk()
-	remoteStatus := eng.ReadBranchRemoteStatuses(ctx.Context, engine.BranchesOf(trunk)).ForBranch(trunk)
+	remoteStatus := eng.ReadBranchRemoteStatuses(gctx, engine.BranchesOf(trunk)).ForBranch(trunk)
 	if remoteStatus.Behind() {
 		plan.pullBranch = trunk.GetName()
 		plan.pullRev = shortSHA(remoteStatus.RemoteSha)

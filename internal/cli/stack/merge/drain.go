@@ -218,7 +218,9 @@ func runMergeDrain(ctx *app.Context, opts mergeDrainOptions) error {
 
 		// Get the PR's NodeID for merge operations
 		owner, repo := ctx.GitHub().GetOwnerRepo()
-		prInfo, err := ctx.GitHub().GetPullRequest(ctx.Context, owner, repo, bottomPR.PRNumber)
+		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, owner, repo, bottomPR.PRNumber)
+		cancelRemote()
 		if err != nil {
 			return fmt.Errorf("failed to get PR #%d info: %w", bottomPR.PRNumber, err)
 		}

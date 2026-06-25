@@ -119,8 +119,8 @@ type WorktreeEngineOptions struct {
 }
 
 // NewEngineForWorktree creates an engine for a worktree session using a snapshot
-// from the parent engine. This skips rebuildInternal and maybeAutoFetchRemoteMetadata
-// since worktrees share .git with the parent and the metadata is identical.
+// from the parent engine. This skips rebuildInternal since worktrees share .git
+// with the parent and the metadata is identical.
 func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 	g := git.NewRunnerWithPath(opts.WorktreePath, nil)
 
@@ -221,10 +221,6 @@ func NewEngine(opts Options) (Engine, error) {
 			return nil, fmt.Errorf("failed to rebuild engine: %w", err)
 		}
 	}
-
-	// Auto-fetch remote metadata on first use (fresh clone scenario)
-	// Skip if refspec is already configured to avoid unnecessary work
-	e.maybeAutoFetchRemoteMetadata()
 
 	return e, nil
 }
@@ -328,40 +324,6 @@ func (e *engineImpl) ensureLocalLoaded() {
 
 		e.localLoaded.Store(true)
 	})
-}
-
-// maybeAutoFetchRemoteMetadata fetches remote metadata if this appears to be a fresh clone
-func (e *engineImpl) maybeAutoFetchRemoteMetadata() {
-	// Fast path: Check if refspec is already configured (most common case)
-	// This avoids expensive git config reads and network fetches for normal operations
-	remote := e.GetRemote()
-	refspecs, err := e.git.GetConfigAll(fmt.Sprintf("remote.%s.fetch", remote))
-	if err == nil {
-		metadataRefspec := "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*"
-		if slices.Contains(refspecs, metadataRefspec) {
-			// Already configured, nothing to do - this is the fast path
-			// Skip loading remote metadata cache here - it's not needed for most commands
-			// and will be loaded lazily when actually needed (e.g., during sync operations)
-			return
-		}
-	}
-
-	// Not configured yet - this might be a fresh clone
-	// Try to fetch metadata refs (this is a network operation, so it's slow)
-	// Only do this if refspec isn't configured to avoid slowing down every command
-	if err := e.FetchRemote(context.Background(), RemoteFetchRequest{
-		Remote:          remote,
-		IncludeMetadata: true,
-	}); err != nil {
-		// No remote metadata available, or error fetching - that's okay
-		return
-	}
-
-	// Configure refspec for future fetches
-	_ = e.git.EnsureMetadataRefspecConfigured()
-
-	// Load remote metadata cache (only if we just fetched)
-	_ = e.LoadRemoteMetadataCache()
 }
 
 // Reset clears all branch metadata and rebuilds with new trunk

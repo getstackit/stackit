@@ -19,8 +19,10 @@ func syncRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) error 
 	out := ctx.Output
 
 	// Fetch remote metadata refs
+	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	defer cancelRemote()
 	fetchStart := time.Now()
-	if err := eng.FetchRemoteMetadata(ctx.Context); err != nil {
+	if err := eng.FetchRemoteMetadata(remoteCtx); err != nil {
 		// Non-fatal: remote may not have metadata yet
 		out.Debug("No remote metadata to fetch: %v", err)
 	}

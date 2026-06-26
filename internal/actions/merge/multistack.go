@@ -237,7 +237,9 @@ func validateBranchesMatchRemote(ctx context.Context, eng engine.Engine, stacks 
 			branchBuilder.Add(eng.GetBranch(branchName))
 		}
 	}
-	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx, branchBuilder.Build())
+	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
+	defer cancelRemote()
+	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, branchBuilder.Build())
 
 	for _, stack := range stacks {
 		for _, branchName := range stack.AllBranches {

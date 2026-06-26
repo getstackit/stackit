@@ -31,6 +31,15 @@ type DebugLogger interface {
 // DefaultCommandTimeout is the default timeout for git commands
 const DefaultCommandTimeout = 5 * time.Minute
 
+// CommandWaitDelay bounds how long we wait for a killed git/gh subprocess to
+// release its stdio pipes before force-closing them. Without it, a `git fetch`
+// can spawn an `ssh` grandchild that inherits the captured stdout/stderr pipe;
+// when the context deadline kills git, ssh keeps the pipe open and cmd.Run()
+// blocks indefinitely — the command times out but never returns, which is the
+// hang-until-reboot behind issue #1330. Setting WaitDelay makes Go force-close
+// the pipes shortly after the kill so Run() always returns.
+const CommandWaitDelay = 10 * time.Second
+
 // ErrStaleRemoteInfo indicates that a push failed because the remote has changed
 var ErrStaleRemoteInfo = errors.New("stale info")
 
@@ -159,6 +168,7 @@ func (r *runner) runGitInternal(ctx context.Context, input string, env []string,
 	r.debugLog("git %s", strings.Join(args, " "))
 
 	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.WaitDelay = CommandWaitDelay
 	if root := r.getRepoRoot(); root != "" {
 		cmd.Dir = root
 	}
@@ -207,6 +217,7 @@ func (r *runner) runGitStreaming(ctx context.Context, args ...string) (string, e
 	r.debugLog("git %s (streaming)", strings.Join(args, " "))
 
 	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.WaitDelay = CommandWaitDelay
 	if root := r.getRepoRoot(); root != "" {
 		cmd.Dir = root
 	}
@@ -245,6 +256,7 @@ func (r *runner) RunGHCommandWithContext(ctx context.Context, args ...string) (s
 	r.debugLog("gh %s", strings.Join(args, " "))
 
 	cmd := exec.CommandContext(ctx, "gh", args...)
+	cmd.WaitDelay = CommandWaitDelay
 	// Use repoRoot for gh commands to ensure they are scoped to the correct repo
 	if root := r.getRepoRoot(); root != "" {
 		cmd.Dir = root

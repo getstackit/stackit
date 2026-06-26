@@ -195,8 +195,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var remoteStatusCh chan engine.BranchRemoteStatuses
 	if !opts.DryRun {
 		remoteStatusCh = make(chan engine.BranchRemoteStatuses, 1)
+		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 		go func() {
-			remoteStatusCh <- eng.ReadBranchRemoteStatuses(ctx.Context, branchObjs)
+			defer cancelRemote()
+			remoteStatusCh <- eng.ReadBranchRemoteStatuses(remoteCtx, branchObjs)
 		}()
 	}
 

@@ -25,9 +25,10 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 	if repoOwner != "" && repoName != "" {
 		// Collect updates from the callback (which may be called concurrently in the
 		// REST fallback) then write all PR info in one atomic batch.
+		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 		var mu sync.Mutex
 		updates := make(map[string]*engine.PrInfo)
-		if err := github.SyncPrInfo(ctx.Context, ctx.Git(), branches, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+		if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branches, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 			branch := nav.GetBranch(name)
 
 			lockReason := engine.LockReasonNone
@@ -50,6 +51,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 			// Non-fatal, continue
 			ctx.Output.Debug("Failed to sync PR info: %v", err)
 		}
+		cancelRemote()
 		if err := pr.BatchUpsertPrInfo(ctx.Context, updates); err != nil {
 			ctx.Output.Debug("Failed to update PR info: %v", err)
 		}
@@ -101,7 +103,9 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 				seen[parentName] = true
 				parentBranches = parentBranches.Append(eng.GetBranch(parentName))
 			}
-			remoteStatuses = eng.ReadBranchRemoteStatuses(ctx.Context, parentBranches)
+			remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+			remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, parentBranches)
+			cancelRemote()
 			remoteRead = true
 		}
 		return remoteStatuses

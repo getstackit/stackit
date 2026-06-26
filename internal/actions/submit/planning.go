@@ -33,7 +33,9 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		err      error
 	)
 	if remoteStatuses == nil {
-		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(branches)
+		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		defer cancelRemote()
+		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(remoteCtx, branches)
 	} else {
 		statuses, err = ctx.Engine.BatchGetPRSubmissionStatusWithRemote(branches, remoteStatuses)
 	}

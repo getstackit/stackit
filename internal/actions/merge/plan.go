@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -275,10 +276,13 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	// We don't strictly need allRevisions here yet, but it's good for cache
 	_, _ = eng.GetRevisions(involvedBranches)
 
+	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
+	defer cancelRemote()
+
 	// Fetch CI statuses in batch if possible
 	var allCheckStatuses map[string]*github.CheckStatus
 	if githubClient != nil {
-		allCheckStatuses, _ = githubClient.BatchGetPRChecksStatus(ctx, allBranches)
+		allCheckStatuses, _ = githubClient.BatchGetPRChecksStatus(remoteCtx, allBranches)
 	}
 
 	statusBranchBuilder := engine.NewBranchesBuilder(len(allBranches) + 1)
@@ -287,7 +291,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	}
 	statusBranchBuilder.Add(eng.Trunk())
 	statusBranches := statusBranchBuilder.Build()
-	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx, statusBranches)
+	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, statusBranches)
 
 	// 5. For each branch: fetch PR info, check status, CI checks in parallel
 	branchesToMerge := make([]BranchMergeInfo, len(allBranches))

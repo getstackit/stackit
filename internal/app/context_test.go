@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -55,6 +56,33 @@ func TestGitHubLazyErrorIsSharedAcrossContextCopies(t *testing.T) {
 	require.Nil(t, ctxCopy.GitHub())
 	require.ErrorIs(t, ctxCopy.GitHubError(), expectedErr)
 	require.Equal(t, 1, initCalls)
+}
+
+func TestRemoteOperationContextAddsDefaultDeadline(t *testing.T) {
+	t.Parallel()
+
+	ctx := &Context{Context: context.Background()}
+	remoteCtx, cancel := ctx.RemoteOperationContext()
+	defer cancel()
+
+	deadline, ok := remoteCtx.Deadline()
+	require.True(t, ok)
+	require.WithinDuration(t, time.Now().Add(DefaultRemoteOperationTimeout), deadline, time.Second)
+}
+
+func TestRemoteOperationContextPreservesExistingDeadline(t *testing.T) {
+	t.Parallel()
+
+	parentDeadline := time.Now().Add(30 * time.Second)
+	parent, parentCancel := context.WithDeadline(context.Background(), parentDeadline)
+	defer parentCancel()
+
+	remoteCtx, cancel := WithRemoteOperationTimeout(parent)
+	defer cancel()
+
+	deadline, ok := remoteCtx.Deadline()
+	require.True(t, ok)
+	require.Equal(t, parentDeadline, deadline)
 }
 
 type fakeGitHubClient struct{}

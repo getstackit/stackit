@@ -27,7 +27,9 @@ func getMergeMethodWithPause(ctx *app.Context, githubClient github.Client, handl
 
 // calculateBaselineEstimate tries to find a branch with successful CI and use its timing as a baseline
 func calculateBaselineEstimate(ctx context.Context, plan *Plan, client github.Client, splog output.Output) time.Duration {
-	statuses, err := client.BatchGetPRChecksStatus(ctx, plan.BranchNames())
+	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
+	defer cancelRemote()
+	statuses, err := client.BatchGetPRChecksStatus(remoteCtx, plan.BranchNames())
 	if err != nil {
 		return 0
 	}

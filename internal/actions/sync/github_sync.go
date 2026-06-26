@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -23,16 +24,17 @@ type GitHubSyncResult struct {
 }
 
 // syncGitHubPRInfo fetches PR info from GitHub (network operation only)
-// This is designed to run in parallel with other network operations
-func syncGitHubPRInfo(ctx *app.Context) (*GitHubSyncResult, error) {
+// This is designed to run in parallel with other network operations. The bounded
+// remoteCtx governs every network call; the app context only supplies the
+// navigator, logger, and git runner.
+func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncResult, error) {
 	nav := ctx.Navigator()
-	gctx := ctx.Context
 
 	setupStart := time.Now()
 	allBranches := nav.AllBranches()
 	branchNames := allBranches.Names()
 
-	repoOwner, repoName, err := nav.GetRepoInfo(gctx)
+	repoOwner, repoName, err := nav.GetRepoInfo(remoteCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
 	}
@@ -51,7 +53,7 @@ func syncGitHubPRInfo(ctx *app.Context) (*GitHubSyncResult, error) {
 
 	// Sync PR info from GitHub (this is already parallelized internally)
 	syncPrStart := time.Now()
-	if err := github.SyncPrInfo(gctx, ctx.Git(), branchNames, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branchNames, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 		result.mu.Lock()
 		result.PRInfos[name] = prInfo
 		result.mu.Unlock()

@@ -144,6 +144,7 @@ type RemoteFetchRequest struct {
 // RemoteFetcher provides batched remote fetch operations.
 type RemoteFetcher interface {
 	FetchRemote(ctx context.Context, req RemoteFetchRequest) error
+	EnsureRemoteMetadata(ctx context.Context) error
 }
 
 // ApplySplitOptions contains options for applying a split

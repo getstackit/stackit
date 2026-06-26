@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -10,6 +11,30 @@ import (
 // (refs/stackit/metadata/* and refs/stackit/stacks/*) and is the single point
 // where adapter code should reach to push, fetch, or test remote support — no
 // adapter should be calling git.Runner directly for these.
+
+// EnsureRemoteMetadata fetches the latest branch metadata refs, configures the
+// fetch refspec for future git fetches, and loads the fetched refs into the
+// engine cache. Callers must pass a context with a deadline because this may
+// perform network I/O.
+func (e *engineImpl) EnsureRemoteMetadata(ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("ensure remote metadata requires a context with a deadline")
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		return fmt.Errorf("ensure remote metadata requires a context with a deadline")
+	}
+
+	if err := e.FetchRemote(ctx, RemoteFetchRequest{IncludeMetadata: true}); err != nil {
+		return err
+	}
+	if err := e.ConfigureRemoteMetadataSync(ctx); err != nil {
+		return err
+	}
+	if err := e.LoadRemoteMetadataCache(); err != nil {
+		return err
+	}
+	return nil
+}
 
 // TestRemoteMetadataCompatibility probes the configured remote to verify that
 // it accepts the metadata-ref namespace. Returns nil on success.

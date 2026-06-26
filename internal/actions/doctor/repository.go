@@ -58,5 +58,9 @@ func checkRepository(ctx *app.Context, handler Handler, warnings int, errors int
 		handler.OnCheck("initialized", CheckPassed, "stackit is initialized")
 	}
 
+	// Local, read-only scan for stale git lock files (a hung operation can leave
+	// one behind and block every later git command — see issue #1330).
+	warnings = checkGitLocks(ctx.RepoRoot, handler, warnings)
+
 	return warnings, errors
 }

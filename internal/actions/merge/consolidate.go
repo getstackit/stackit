@@ -310,7 +310,11 @@ func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(_ context.Context,
 
 	prUpdates := make(map[string]*engine.PrInfo, len(branchesToLock))
 	for _, b := range branchesToLock {
-		prInfo, _ := b.GetPrInfo()
+		prInfo, err := b.GetPrInfo()
+		if err != nil {
+			splog.Debug("Failed to read PR info for %s: %v", b.GetName(), err)
+			continue
+		}
 		if prInfo != nil {
 			prUpdates[b.GetName()] = prInfo.WithMergeBranch(consolidationBranch)
 		}

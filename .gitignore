@@ -30,6 +30,8 @@ bin/
 stackit
 st
 stackit-web
+/server
+/stackit-server
 
 .gocache/
 st-tui

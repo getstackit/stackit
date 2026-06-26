@@ -92,6 +92,16 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		}
 	}
 
+	// If this branch has already landed, do not rebase it during restack. This
+	// covers merged PR metadata for all GitHub methods, plus Git-detected merge,
+	// rebase, and multi-commit squash histories on trunk before sync refreshes
+	// PR metadata.
+	if e.branchChangesLanded(ctx, branchName, parentName) {
+		item.Skip = true
+		item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
+		return item, true
+	}
+
 	if branch.IsFrozen() {
 		parentRev, err := e.GetBranch(parentName).GetRevision()
 		if err != nil {

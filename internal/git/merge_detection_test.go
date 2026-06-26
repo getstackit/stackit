@@ -2,6 +2,7 @@ package git_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,7 +24,7 @@ func TestIsMerged(t *testing.T) {
 		require.NoError(t, err)
 
 		// Initialize git repo
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Branch is not merged
 		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
@@ -47,9 +48,64 @@ func TestIsMerged(t *testing.T) {
 		require.NoError(t, err)
 
 		// Initialize git repo
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Branch should be merged
+		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
+		require.NoError(t, err)
+		require.True(t, merged)
+	})
+
+	t.Run("returns true for rebase-merged branch", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+
+		err := scene.Repo.CreateAndCheckoutBranch("branch1")
+		require.NoError(t, err)
+		err = scene.Repo.CreateChangeAndCommit("branch1 change 1", "b1")
+		require.NoError(t, err)
+		err = scene.Repo.CreateChangeAndCommit("branch1 change 2", "b2")
+		require.NoError(t, err)
+
+		commitsOutput, err := scene.Repo.RunGitCommandAndGetOutput("rev-list", "--reverse", "main..branch1")
+		require.NoError(t, err)
+		commits := strings.Fields(commitsOutput)
+		require.Len(t, commits, 2)
+
+		err = scene.Repo.CheckoutBranch("main")
+		require.NoError(t, err)
+		err = scene.Repo.CreateChangeAndCommit("unrelated trunk change", "trunk")
+		require.NoError(t, err)
+		for _, commit := range commits {
+			err = scene.Repo.RunGitCommand("cherry-pick", commit)
+			require.NoError(t, err)
+		}
+
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
+		require.NoError(t, err)
+		require.True(t, merged)
+	})
+
+	t.Run("returns true for multi-commit squash after unrelated trunk change", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+
+		err := scene.Repo.CreateAndCheckoutBranch("branch1")
+		require.NoError(t, err)
+		err = scene.Repo.CreateChangeAndCommit("v1", "feature")
+		require.NoError(t, err)
+		err = scene.Repo.CreateChangeAndCommit("v1\nv2", "feature")
+		require.NoError(t, err)
+
+		err = scene.Repo.CheckoutBranch("main")
+		require.NoError(t, err)
+		err = scene.Repo.CreateChangeAndCommit("unrelated trunk change", "trunk")
+		require.NoError(t, err)
+		err = scene.Repo.RunGitCommand("merge", "--squash", "branch1")
+		require.NoError(t, err)
+		err = scene.Repo.RunGitCommand("commit", "-m", "squash branch1")
+		require.NoError(t, err)
+
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
 		require.NoError(t, err)
 		require.True(t, merged)

@@ -87,10 +87,29 @@ func (e *engineImpl) prStateIsMerged(branchName string) bool {
 	return err == nil && prInfo != nil && prInfo.State() == prStateMerged
 }
 
+// branchChangesLanded reports whether branchName's changes have landed into
+// target. PR metadata is authoritative across GitHub's merge, squash, and
+// rebase merge methods. The Git fallback is limited to trunk: for non-trunk
+// parents, patch-equivalence can also mean a local stack operation made a child
+// empty, not that a GitHub PR landed.
+func (e *engineImpl) branchChangesLanded(ctx context.Context, branchName, target string) bool {
+	if branchName == e.trunk {
+		return false
+	}
+	if e.prStateIsMerged(branchName) {
+		return true
+	}
+	if target == "" || target != e.trunk {
+		return false
+	}
+	merged, err := e.git.IsMerged(ctx, branchName, target)
+	return err == nil && merged
+}
+
 // shouldReparentBranch checks if a parent branch should be reparented
 // Returns true if the parent branch:
 // - No longer exists locally
-// - Has been merged into trunk
+// - Has been merged into its own parent
 // - Has a "MERGED" PR state in metadata
 func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName string, metaMap map[string]*git.Meta) bool {
 	// Check if parent is trunk (no need to reparent)
@@ -110,9 +129,14 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 		return true
 	}
 
-	// Check if parent has been merged into trunk
-	merged, err := e.git.IsMerged(ctx, parentBranchName, e.trunk)
-	if err == nil && merged {
+	// Check if parent has landed. Git-only detection is safe for trunk; stacked
+	// PR bases rely on merged PR metadata so local fold/squash operations do
+	// not get mistaken for GitHub merges.
+	mergeTarget := e.trunk
+	if state := e.readState(parentBranchName); state != nil && state.Parent != "" {
+		mergeTarget = state.Parent
+	}
+	if e.branchChangesLanded(ctx, parentBranchName, mergeTarget) {
 		return true
 	}
 

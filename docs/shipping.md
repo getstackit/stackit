@@ -31,6 +31,33 @@ stackit merge ship         # Consolidate stack into single atomic PR (waits by d
 
 Shipping stacked changes is fundamentally different from shipping linear PRs. Stackit provides multiple merge strategies optimized for different scenarios, plus advanced multi-stack consolidation for high-velocity teams.
 
+## GitHub Merge Methods
+
+GitHub supports three PR merge methods through the merge button. Stackit must
+support all three because repositories can choose any combination of them, and a
+stack may be merged by a teammate or automation outside of Stackit.
+
+| Method | What GitHub writes to the base branch | Original PR commits reachable from base? | Detection implications |
+|--------|----------------------------------------|------------------------------------------|------------------------|
+| Merge commit | A merge commit whose parents include the old base and the PR head | Yes | Ancestry checks work: the PR branch tip is reachable from base. |
+| Squash merge | One new commit containing the PR's combined final diff | No | Ancestry fails. Multi-commit PRs may also fail per-commit patch matching because one combined commit replaced many commits. |
+| Rebase merge | New commits replaying the PR commits onto the current base | No | Ancestry fails because SHAs are rewritten. Per-commit patch matching usually works, but conflict resolution or rewritten patches can change the result. |
+
+For stacked changes, these differences affect sync, restack, cleanup, and stack
+navigation:
+
+- A branch can be merged even when its tip is not an ancestor of trunk.
+- A merged parent must be skipped when restacking descendants, or the parent's
+  already-landed commits can be replayed into children.
+- A merged sibling must never be treated as a new base for an unrelated branch.
+- PR state and landed-commit metadata are safety signals, not just display
+  fields.
+
+The configured merge method (`stackit.merge.method`, or `--method` on merge
+commands) controls how Stackit asks GitHub to merge PRs. It does not limit what
+sync/restack must understand: those commands must recognize all three methods
+when reading repository history and PR state.
+
 ## Merge Status View
 
 Use `stackit merge status` to see an overview of your mergeable work:

@@ -122,9 +122,92 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 	lines := strings.SplitSeq(strings.TrimSpace(cherryOutput), "\n")
 	for line := range lines {
 		if line != "" && line[0] != '-' {
-			return false, nil
+			// cherry reports unmerged commits; but squash merges combine all branch
+			// commits into one new commit, so no individual branch commit has to
+			// match. Fall back to aggregate patch-id comparison for the whole branch
+			// diff against commits added to the target since the branch diverged.
+			return r.isSquashMerged(ctx, branchRev, mergeBase, target)
 		}
 	}
 
 	return true, nil
+}
+
+// isSquashMerged detects whether branchName was squash-merged into target by
+// comparing the aggregate branch diff's patch-id against commits reachable from
+// target but not from mergeBase (i.e. commits added since the branch diverged).
+// A squash merge creates a single commit whose diff matches the branch's
+// combined diff even when unrelated target commits mean the full tree differs.
+//
+// Failure modes are biased toward the safe direction:
+//
+//   - False negative: if the target rewrote the same files between mergeBase and
+//     the squash, or the squash landed further back than the scanned window, the
+//     patch-ids differ and this returns false. Callers then rebase the branch and
+//     surface any conflict in a throwaway validation worktree — no data loss.
+//   - False positive: a match means some target commit has a byte-identical
+//     combined diff (after --stable normalization), which means the branch's
+//     changes already landed. Treating it as merged is correct in that case; an
+//     accidental collision of unrelated changes is not realistic for patch-ids.
+//
+// The scan is bounded to keep long-lived trunks cheap; exceeding it only costs a
+// false negative, never a wrong "merged".
+func (r *runner) isSquashMerged(ctx context.Context, branchRev, mergeBase, target string) (bool, error) {
+	branchPatchID, err := r.diffPatchID(ctx, mergeBase, branchRev)
+	if err != nil {
+		return false, nil //nolint:nilerr
+	}
+	if branchPatchID == "" {
+		return false, nil
+	}
+
+	// Enumerate commits on target since the merge-base (up to 200
+	// commits to bound the scan on long-lived trunks).
+	logOutput, err := r.RunGitCommandWithContext(ctx, "log", "--format=%H", "-200", mergeBase+".."+target)
+	if err != nil {
+		return false, nil //nolint:nilerr
+	}
+
+	for commitSHA := range strings.SplitSeq(strings.TrimSpace(logOutput), "\n") {
+		commitSHA = strings.TrimSpace(commitSHA)
+		if commitSHA == "" {
+			continue
+		}
+		commitPatchID, patchErr := r.commitPatchID(ctx, commitSHA)
+		if patchErr != nil {
+			continue
+		}
+		if commitPatchID == branchPatchID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *runner) diffPatchID(ctx context.Context, base, head string) (string, error) {
+	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "diff", "--no-ext-diff", "--full-index", base, head)
+	if err != nil {
+		return "", err
+	}
+	return r.patchID(ctx, diffOutput)
+}
+
+func (r *runner) commitPatchID(ctx context.Context, commitSHA string) (string, error) {
+	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "show", "--format=", "--no-ext-diff", "--full-index", commitSHA)
+	if err != nil {
+		return "", err
+	}
+	return r.patchID(ctx, diffOutput)
+}
+
+func (r *runner) patchID(ctx context.Context, diffOutput string) (string, error) {
+	if strings.TrimSpace(diffOutput) == "" {
+		return "", nil
+	}
+	output, err := r.runGitInternal(ctx, diffOutput, nil, true, "patch-id", "--stable")
+	if err != nil {
+		return "", err
+	}
+	patchID, _, _ := strings.Cut(strings.TrimSpace(output), " ")
+	return patchID, nil
 }

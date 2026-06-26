@@ -38,8 +38,12 @@ func checkEnvironment(runner git.Runner, handler Handler, warnings int, errors i
 		}
 	}
 
-	// Check GitHub authentication
-	token, err := getGitHubToken(runner)
+	// Check GitHub authentication. Bound both the token probe and the
+	// connectivity check with one short deadline so an unreachable remote is
+	// reported quickly rather than hanging this diagnostic.
+	ghCtx, cancel := context.WithTimeout(context.Background(), remoteCheckTimeout)
+	defer cancel()
+	token, err := getGitHubToken(ghCtx, runner)
 	if err != nil {
 		warnings++
 		handler.OnCheck("github_auth", CheckWarning, "GitHub authentication not configured")
@@ -49,7 +53,6 @@ func checkEnvironment(runner git.Runner, handler Handler, warnings int, errors i
 			handler.OnCheck("github_auth", CheckWarning, "GitHub token is empty")
 		} else {
 			// Try to create a GitHub client to verify connectivity
-			ghCtx := context.Background()
 			client, err := github.NewGitHubClient(ghCtx, runner)
 			if err != nil {
 				warnings++

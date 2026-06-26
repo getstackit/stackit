@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -43,6 +44,53 @@ func newEngineWithMode(t *testing.T, repoRoot string, mode engine.LoadMode) engi
 	})
 	require.NoError(t, err)
 	return eng
+}
+
+func TestNewEngineDoesNotFetchRemoteMetadata(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewRemoteScenario(t)
+
+	s.CreateBranch("feature").Commit("feature")
+	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+	require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature"))
+	require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "refs/stackit/metadata/feature"))
+	require.NoError(t, s.Scene.Repo.RunGitCommand("update-ref", "-d", "refs/stackit/remote-metadata/feature"))
+
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot: s.Scene.Dir,
+		Trunk:    "main",
+		LoadMode: engine.LoadModeShared,
+	})
+	require.NoError(t, err)
+
+	const metadataRefspec = "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*"
+	refspecs, err := eng.Git().GetConfigAll("remote.origin.fetch")
+	require.NoError(t, err)
+	require.NotContains(t, refspecs, metadataRefspec)
+
+	_, err = s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", "refs/stackit/remote-metadata/feature")
+	require.Error(t, err, "engine construction must not fetch remote metadata")
+
+	deadlineCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, eng.EnsureRemoteMetadata(deadlineCtx))
+
+	refspecs, err = eng.Git().GetConfigAll("remote.origin.fetch")
+	require.NoError(t, err)
+	require.Contains(t, refspecs, metadataRefspec)
+
+	remoteMetadataSHA, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", "refs/stackit/remote-metadata/feature")
+	require.NoError(t, err)
+	require.NotEmpty(t, remoteMetadataSHA)
+	require.True(t, eng.GetRemoteMetadataCache().Has("feature"))
+}
+
+func TestEnsureRemoteMetadataRequiresDeadline(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewRemoteScenario(t)
+
+	eng := newEngineWithMode(t, s.Scene.Dir, engine.LoadModeShared)
+	require.ErrorContains(t, eng.EnsureRemoteMetadata(context.Background()), "requires a context with a deadline")
 }
 
 // TestLoadMode_FullParity asserts that under LoadModeFull every accessor

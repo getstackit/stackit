@@ -27,7 +27,9 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, remoteSta
 	// ls-remote overlaps the trunk fetch and GitHub call. Fall back to computing
 	// them here when the caller didn't supply them.
 	if remoteStatuses == nil {
-		remoteStatuses = eng.ReadBranchRemoteStatuses(gctx, allBranches)
+		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, allBranches)
+		cancelRemote()
 	}
 
 	syncStart := time.Now()
@@ -97,8 +99,10 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, remoteSta
 	// Fetch every behind branch in a single git fetch, replacing the previous
 	// N per-branch fetches (one network round trip instead of N).
 	behindNames := behind.Names()
+	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	defer cancelRemote()
 	fetchStart := time.Now()
-	fetchErr := eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+	fetchErr := eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
 		Remote:   remote,
 		Branches: behindNames,
 	})
@@ -109,7 +113,8 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, remoteSta
 	// succeeded, UpdateBranchFromRemote does the local-only update (no network).
 	// If the batch fetch failed, fall back to the per-branch PullBranch, which
 	// re-fetches individually — preserving sync's warn-and-continue behavior
-	// rather than failing the whole sync.
+	// rather than failing the whole sync. Both paths run under the bounded
+	// remoteCtx so a single deadline governs the whole pass.
 	for _, branch := range behind {
 		// Check for context cancellation
 		if err := gctx.Err(); err != nil {
@@ -122,9 +127,9 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, remoteSta
 		var result engine.PullResult
 		var err error
 		if fetchErr != nil {
-			result, err = eng.PullBranch(gctx, remote, branchName)
+			result, err = eng.PullBranch(remoteCtx, remote, branchName)
 		} else {
-			result, err = eng.UpdateBranchFromRemote(gctx, remote, branchName)
+			result, err = eng.UpdateBranchFromRemote(remoteCtx, remote, branchName)
 		}
 		ctx.Logger.Info("update branch from remote completed branch=%v durationMs=%v", branchName, time.Since(pullStart).Milliseconds())
 

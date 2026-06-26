@@ -156,7 +156,7 @@ func mergePrInfoIntoMeta(meta *git.Meta, prInfo *PrInfo) *git.Meta {
 // BatchGetPRSubmissionStatus returns the submission status for every branch,
 // reading remote status once for the whole set instead of once per branch (a
 // full `git ls-remote` each time). Results are keyed by branch name.
-func (e *engineImpl) BatchGetPRSubmissionStatus(branches Branches) (map[string]PRSubmissionStatus, error) {
+func (e *engineImpl) BatchGetPRSubmissionStatus(ctx context.Context, branches Branches) (map[string]PRSubmissionStatus, error) {
 	// Only branches with an existing PR consult remote status; creates return
 	// early without it. Read the remote a single time, and only if at least one
 	// branch needs it, so an all-creates stack stays fully offline here.
@@ -164,7 +164,7 @@ func (e *engineImpl) BatchGetPRSubmissionStatus(branches Branches) (map[string]P
 	for _, branch := range branches {
 		prInfo, err := e.GetPrInfo(branch)
 		if err == nil && prInfo != nil && prInfo.Number() != nil {
-			remoteStatuses = e.ReadBranchRemoteStatuses(context.Background(), branches)
+			remoteStatuses = e.ReadBranchRemoteStatuses(ctx, branches)
 			break
 		}
 	}

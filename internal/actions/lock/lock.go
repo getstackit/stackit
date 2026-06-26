@@ -41,7 +41,9 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 
 	// Check for unpushed commits
 	unpushedBranches := []string{}
-	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx.Context, branches)
+	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, branches)
+	cancelRemote()
 	for _, b := range branches.WithoutTrunk() {
 		status := remoteStatuses[b.GetName()]
 		if !status.Matches() {

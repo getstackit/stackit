@@ -68,7 +68,10 @@ func StackInfoAction(ctx *app.Context, opts StackInfoOptions) error {
 	commits := eng.BatchCommits(stackBranches, engine.CommitFormatReadable)
 	diffs := eng.BatchDiffStats(stackBranches)
 	fileCounts := eng.BatchChangedFileCounts(ctx.Context, stackBranches)
-	prStatuses, _ := eng.BatchGetPRSubmissionStatus(stackBranches)
+
+	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	defer cancelRemote()
+	prStatuses, _ := eng.BatchGetPRSubmissionStatus(remoteCtx, stackBranches)
 
 	for _, branch := range stackBranches {
 		if branch.IsTrunk() {

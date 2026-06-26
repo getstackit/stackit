@@ -216,7 +216,9 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 	deleteStatuses := make(map[string]engine.DeletionStatus) // name -> status
 	utilityBranches := make(map[string]bool)                 // branches that are utility type
 	var skippedInWorktree []string
-	remoteStatuses := eng.ReadBranchRemoteStatuses(c, allTrackedBranches.WithoutTrunk())
+	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, allTrackedBranches.WithoutTrunk())
+	cancelRemote()
 
 	for _, name := range candidateNames {
 		status := statuses[name]

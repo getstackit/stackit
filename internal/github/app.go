@@ -5,10 +5,28 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/google/go-github/v73/github"
 )
+
+// appHTTPTimeout is the client-level ceiling for GitHub App HTTP calls
+// (installation discovery and JWT token minting). Callers pass a context
+// deadline, but http.DefaultTransport sets no timeout of its own, so a stalled
+// socket reached with a context.Background() that slips through could hang
+// indefinitely. This is the belt-and-suspenders bound.
+const appHTTPTimeout = 30 * time.Second
+
+// appHTTPTransport clones http.DefaultTransport and adds a response-header
+// timeout so a remote that accepts the connection but never replies cannot
+// wedge a request. DefaultTransport is shared process-wide and must not be
+// mutated in place, hence the clone.
+func appHTTPTransport() *http.Transport {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.ResponseHeaderTimeout = appHTTPTimeout
+	return tr
+}
 
 // AppTokenProvider mints GitHub App installation access tokens for repositories.
 // Installation tokens are durable — the underlying transport refreshes them
@@ -29,13 +47,13 @@ type AppTokenProvider struct {
 // NewAppTokenProvider builds a provider from a GitHub App ID and its
 // PEM-encoded private key (PKCS#1 or PKCS#8).
 func NewAppTokenProvider(appID int64, privateKeyPEM []byte) (*AppTokenProvider, error) {
-	apps, err := ghinstallation.NewAppsTransport(http.DefaultTransport, appID, privateKeyPEM)
+	apps, err := ghinstallation.NewAppsTransport(appHTTPTransport(), appID, privateKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("github app transport: %w", err)
 	}
 	return &AppTokenProvider{
 		apps:           apps,
-		resolveClient:  github.NewClient(&http.Client{Transport: apps}),
+		resolveClient:  github.NewClient(&http.Client{Transport: apps, Timeout: appHTTPTimeout}),
 		installByOwner: make(map[string]int64),
 		transports:     make(map[int64]*ghinstallation.Transport),
 	}, nil

@@ -105,17 +105,20 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// until later), so reading it once here is safe.
 	branchesForStatus := ctx.Navigator().AllBranches()
 
+	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+	defer cancelRemote()
+
 	parallelStart := time.Now()
 	ctx.Logger.Info("starting parallel phase")
 
-	g, _ := errgroup.WithContext(gctx)
+	g, _ := errgroup.WithContext(remoteCtx)
 
 	// Goroutine 1: Fetch trunk as a required operation, then refresh Stackit
 	// metadata refs on a best-effort basis.
 	g.Go(func() error {
 		ctx.Logger.Info("goroutine remote fetch started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		fetchStart := time.Now()
-		trunkFetchErr = eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+		trunkFetchErr = eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
 			Remote:   eng.GetRemote(),
 			Branches: []string{eng.Trunk().GetName()},
 		})
@@ -126,7 +129,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 
 		metadataFetchStart := time.Now()
-		metadataFetchErr = eng.FetchRemote(gctx, engine.RemoteFetchRequest{
+		metadataFetchErr = eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
 			Remote:               eng.GetRemote(),
 			IncludeMetadata:      true,
 			IncludeStackMetadata: true,
@@ -142,7 +145,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	g.Go(func() error {
 		ctx.Logger.Info("goroutine github started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		var err error
-		githubSyncResult, err = syncGitHubPRInfo(ctx)
+		githubSyncResult, err = syncGitHubPRInfo(remoteCtx, ctx)
 		githubErr = err
 		return nil
 	})
@@ -153,7 +156,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	g.Go(func() error {
 		ctx.Logger.Info("goroutine remote statuses started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		statusStart := time.Now()
-		remoteStatuses = eng.ReadBranchRemoteStatuses(gctx, branchesForStatus)
+		remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, branchesForStatus)
 		ctx.Logger.Info("prefetch remote branch statuses completed durationMs=%v branchCount=%v", time.Since(statusStart).Milliseconds(), len(remoteStatuses))
 		return nil
 	})

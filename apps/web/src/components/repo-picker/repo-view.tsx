@@ -168,9 +168,13 @@ export function RepoView() {
       <BackgroundMesh />
       <Header repo={repo ?? null} lastUpdated={lastUpdated ?? null} refresh={refresh} />
 
-      {/* Main content: stacks area + detail panel */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Main content: stacks area + detail panel.
+          Stacks vertically on mobile (detail panel below) and sits side-by-side
+          on desktop. Without the column fallback the fixed-width detail panel
+          (shrink-0) squeezes the flex-1 stacks area to ~0 on narrow viewports,
+          so no data renders. */}
+      <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
+        <div className="flex flex-1 flex-col overflow-hidden min-h-0 min-w-0">
           {branchOverlayMode && selectedBranch && selectedBranchStack ? (
             <>
               <div className="min-h-0 flex-1 overflow-hidden border-b">
@@ -190,10 +194,11 @@ export function RepoView() {
           )}
         </div>
 
-        {/* Right: detail + event feed panel (always visible) */}
-        <div className="flex shrink-0">
-          <Separator orientation="vertical" />
-          <div className="w-[480px] shrink-0 flex flex-col overflow-hidden">
+        {/* Detail + event feed panel (always visible): below the stacks on
+            mobile (bounded height), beside them on desktop (fixed width). */}
+        <div className="flex shrink-0 flex-col border-t md:flex-row md:border-t-0">
+          <Separator orientation="vertical" className="hidden md:block" />
+          <div className="flex h-[45vh] w-full shrink-0 flex-col overflow-hidden md:h-auto md:w-[480px]">
             {branchOverlayMode && selectedBranchStack ? (
               <div className="flex-1 overflow-auto p-4">
                 <StackDetailPanel

@@ -71,6 +71,17 @@ func buildAuthConfig(p authBuildParams) (*authBuildResult, error) {
 		return nil, errors.New("STACKIT_SESSION_KEY is required when configuring auth (generate with: openssl rand -base64 32)")
 	}
 
+	// An exposed server issues the session cookie over the network. If its
+	// public base URL is plaintext http://, that bearer cookie travels in the
+	// clear: it can't be marked Secure (a Secure cookie is never sent back over
+	// http, which would silently break login), so it is capturable and
+	// replayable on the network path. Fail closed rather than ship that posture.
+	// Behind a TLS-terminating proxy the base URL is the public https:// URL, so
+	// this check passes and the internal http hop is fine.
+	if p.exposed && !strings.HasPrefix(baseURL, "https://") {
+		return nil, errors.New("the server is reachable off-host (non-loopback bind) but STACKIT_BASE_URL is not https://: the session cookie would be sent over plaintext and could be captured and replayed. Use an https:// base URL (terminate TLS at a proxy if needed), or bind loopback (STACKIT_ENV=local)")
+	}
+
 	cipher, err := auth.NewCipher(sessionKey)
 	if err != nil {
 		return nil, fmt.Errorf("STACKIT_SESSION_KEY: %w", err)
@@ -90,7 +101,10 @@ func buildAuthConfig(p authBuildParams) (*authBuildResult, error) {
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		BaseURL:      baseURL,
-		Cookies:      auth.CookieOptions{Secure: p.prod || strings.HasPrefix(baseURL, "https://")},
+		// Secure tracks actual exposure, not just the env name: any off-host
+		// (exposed) deployment serves the cookie over TLS — guaranteed by the
+		// https:// base-URL check above — so it must be marked Secure.
+		Cookies: auth.CookieOptions{Secure: p.prod || p.exposed || strings.HasPrefix(baseURL, "https://")},
 	}, store, allow, cipher)
 	if err != nil {
 		_ = store.Close()

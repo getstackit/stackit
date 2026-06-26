@@ -114,6 +114,59 @@ func TestBuildAuthConfig_HappyPath(t *testing.T) {
 	require.NoError(t, r.store.Close())
 }
 
+func TestBuildAuthConfig_ExposedHTTPBaseURLRefused(t *testing.T) {
+	// t.Setenv is incompatible with t.Parallel; these tests share process env.
+	withEnv(t, map[string]string{
+		"STACKIT_GITHUB_CLIENT_ID":     "id",
+		"STACKIT_GITHUB_CLIENT_SECRET": "secret",
+		"STACKIT_BASE_URL":             "http://10.0.0.5:8080",
+		"STACKIT_SESSION_KEY":          mustKey(t),
+		"STACKIT_ALLOWED_GH_USERS":     "jonnii",
+	})
+
+	// Exposed (off-host bind) + plaintext base URL would ship a non-Secure
+	// session cookie over the network. Fail closed.
+	_, err := buildAuthConfig(authBuildParams{exposed: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "https")
+}
+
+func TestBuildAuthConfig_ExposedHTTPSBaseURLOK(t *testing.T) {
+	// t.Setenv is incompatible with t.Parallel; these tests share process env.
+	withEnv(t, map[string]string{
+		"STACKIT_GITHUB_CLIENT_ID":     "id",
+		"STACKIT_GITHUB_CLIENT_SECRET": "secret",
+		"STACKIT_BASE_URL":             "https://example.com",
+		"STACKIT_SESSION_KEY":          mustKey(t),
+		"STACKIT_ALLOWED_GH_USERS":     "jonnii",
+	})
+
+	// Exposed over https:// (e.g. behind a TLS-terminating proxy) is the
+	// supported posture: boots with Secure cookies.
+	r, err := buildAuthConfig(authBuildParams{exposed: true})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.NoError(t, r.store.Close())
+}
+
+func TestBuildAuthConfig_LocalHTTPBaseURLOK(t *testing.T) {
+	// t.Setenv is incompatible with t.Parallel; these tests share process env.
+	withEnv(t, map[string]string{
+		"STACKIT_GITHUB_CLIENT_ID":     "id",
+		"STACKIT_GITHUB_CLIENT_SECRET": "secret",
+		"STACKIT_BASE_URL":             "http://localhost:8080",
+		"STACKIT_SESSION_KEY":          mustKey(t),
+		"STACKIT_ALLOWED_GH_USERS":     "jonnii",
+	})
+
+	// Not exposed (loopback) + http:// is fine for local dev — the cookie never
+	// leaves the host.
+	r, err := buildAuthConfig(authBuildParams{})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	require.NoError(t, r.store.Close())
+}
+
 func TestBuildAuthConfig_EmptyAllowlistErrors(t *testing.T) {
 	// t.Setenv is incompatible with t.Parallel; these tests share process env.
 	withEnv(t, map[string]string{

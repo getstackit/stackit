@@ -36,7 +36,7 @@ func (a *ViewAssembler) Build(ctx context.Context) (httpcontract.ViewResponse, e
 
 	graph := a.eng.Graph(engine.SortStrategySmart)
 	checksMap := a.fetchChecks(ctx, stacks)
-	details := a.mapStackDetails(graph, stacks, checksMap)
+	details := a.mapStackDetails(ctx, graph, stacks, checksMap)
 
 	recentlyMerged := a.fetchRecentlyMerged(ctx)
 
@@ -89,13 +89,14 @@ func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks []merge.MultiSta
 }
 
 func (a *ViewAssembler) mapStackDetails(
+	ctx context.Context,
 	graph *engine.StackGraph,
 	stacks []merge.MultiStackInfo,
 	checksMap map[string]*github.CheckStatus,
 ) []httpcontract.StackDetail {
 	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {
-		detail := httpcontract.MapStackDetail(a.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap)
+		detail := httpcontract.MapStackDetail(ctx, a.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap)
 		details = append(details, detail)
 	}
 	return details

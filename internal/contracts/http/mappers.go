@@ -12,7 +12,7 @@ import (
 )
 
 // MapBranch converts an engine Branch and its StackNode into an API BranchResponse.
-func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus) BranchResponse {
+func MapBranch(ctx context.Context, eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus) BranchResponse {
 	resp := BranchResponse{
 		Name:         branch.GetName(),
 		Depth:        node.Depth,
@@ -72,7 +72,7 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 	}
 
 	// Map remote status
-	remoteStatus := eng.ReadBranchRemoteStatuses(context.Background(), engine.BranchesOf(branch)).ForBranch(branch)
+	remoteStatus := eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(branch)).ForBranch(branch)
 	resp.RemoteStatus = &RemoteStatus{
 		Ahead:         remoteStatus.Ahead(),
 		Behind:        remoteStatus.Behind(),
@@ -130,7 +130,7 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 }
 
 // MapStackDetail creates a full StackDetail with all branch info.
-func MapStackDetail(eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap map[string]*github.CheckStatus) StackDetail {
+func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap map[string]*github.CheckStatus) StackDetail {
 	// Derive owner from root branch's PR author
 	var owner string
 	if checksMap != nil {
@@ -158,7 +158,7 @@ func MapStackDetail(eng engine.BranchReader, graph *engine.StackGraph, rootBranc
 		if checksMap != nil {
 			checks = checksMap[name]
 		}
-		br := MapBranch(eng, node.Branch, node, checks)
+		br := MapBranch(ctx, eng, node.Branch, node, checks)
 		if isAnchor {
 			// Anchor's direct children become display roots
 			if br.Parent == anchorName {

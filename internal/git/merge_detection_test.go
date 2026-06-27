@@ -86,7 +86,11 @@ func TestIsMerged(t *testing.T) {
 		require.True(t, merged)
 	})
 
-	t.Run("returns true for multi-commit squash after unrelated trunk change", func(t *testing.T) {
+	// A multi-commit squash matches no individual branch commit, so the cheap
+	// per-commit IsMerged cannot see it — only the aggregate-patch-id
+	// IsSquashMerged can. This split keeps the expensive scan off the hot
+	// IsMerged path.
+	t.Run("multi-commit squash: IsMerged false, IsSquashMerged true", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")
@@ -106,8 +110,13 @@ func TestIsMerged(t *testing.T) {
 		require.NoError(t, err)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+
 		merged, err := runner.IsMerged(context.Background(), "branch1", "main")
 		require.NoError(t, err)
-		require.True(t, merged)
+		require.False(t, merged, "cheap IsMerged must not detect a multi-commit squash")
+
+		squashMerged, err := runner.IsSquashMerged(context.Background(), "branch1", "main")
+		require.NoError(t, err)
+		require.True(t, squashMerged, "IsSquashMerged must detect the aggregate squash")
 	})
 }

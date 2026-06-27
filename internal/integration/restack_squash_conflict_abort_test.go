@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // revParse returns the resolved SHA of a ref in the test repo.
@@ -14,6 +16,22 @@ func (s *TestShell) revParse(ref string) string {
 	s.t.Helper()
 	s.Git("rev-parse " + ref)
 	return strings.TrimSpace(s.Output())
+}
+
+// recordPR stamps a PR number and state onto a branch's metadata. The squash
+// scan is gated behind a recorded PR number, so detection tests must give the
+// merged branch a PR to mirror real GitHub usage (a squash-merged branch always
+// had a PR).
+func (s *TestShell) recordPR(branch string, prNumber int, state, base string) {
+	s.t.Helper()
+	runner := git.NewRunnerWithPath(s.Dir(), nil)
+	meta, err := runner.ReadMetadata(branch)
+	require.NoError(s.t, err)
+	num := prNumber
+	st := state
+	b := base
+	meta = meta.WithPrInfo(&git.PrInfoPersistence{Number: &num, State: &st, Base: &b})
+	require.NoError(s.t, runner.WriteMetadata(branch, meta))
 }
 
 // fileContent reads a working-tree file from the test repo.
@@ -28,9 +46,10 @@ func (s *TestShell) fileContent(name string) string {
 // from issue #1345.
 //
 // Setup: main -> parent (multi-commit) -> child. The parent is squash-merged onto
-// main WITHOUT any recorded PR state, so detection must come from aggregate
-// patch-id, not metadata. A later trunk edit touches the same line the child
-// touches, so when the child reparents onto trunk its own commit CONFLICTS.
+// main with a stale (OPEN) PR state, so detection must come from aggregate
+// patch-id, not recorded MERGED metadata. A later trunk edit touches the same
+// line the child touches, so when the child reparents onto trunk its own commit
+// CONFLICTS.
 //
 // The invariant: after the conflict is aborted, the child must be restored to its
 // original commit — its work intact, never reset to the squash-merged parent's
@@ -57,12 +76,14 @@ func TestSquashMergedParentConflictAbortPreservesChild(t *testing.T) {
 	childOrig := sh.revParse("child")
 
 	// GitHub squash-merges parent: one combined commit lands on main carrying the
-	// parent's aggregate diff. No PR state is recorded (no SimulateBranchMerged).
+	// parent's aggregate diff. The PR state stays stale (OPEN), so detection must
+	// fall through to the patch-id scan, which is gated behind a recorded PR number.
 	sh.Checkout("main")
 	parentStaleTip := sh.revParse("parent")
 	sh.WriteFile("shared.txt", "base\np2\n").
 		WriteFile("notes.txt", "parent note\n").
 		Git("commit -m 'squash-merge parent (#1)'")
+	sh.recordPR("parent", 1, "OPEN", "main")
 
 	// A later trunk commit edits the same shared line the child rewrote, so the
 	// child's replay onto trunk is guaranteed to conflict.
@@ -105,9 +126,9 @@ func TestSquashMergedParentConflictAbortPreservesChild(t *testing.T) {
 // TestRestackWritesReflogMessageOnReparent locks in the second half of the fix:
 // branch ref moves during restack must be annotated in the reflog. Issue #1345
 // noted that blank "(no message)" reflog entries made the incident impossible to
-// trace. Here a squash-merged parent (no PR state) causes the child to reparent
-// cleanly onto trunk; the resulting ref move must carry a "stackit: restack"
-// message instead of an empty one.
+// trace. Here a squash-merged parent (stale PR state) causes the child to
+// reparent cleanly onto trunk; the resulting ref move must carry a
+// "stackit: restack" message instead of an empty one.
 func TestRestackWritesReflogMessageOnReparent(t *testing.T) {
 	t.Parallel()
 	sh := NewTestShellInProcess(t)
@@ -123,11 +144,14 @@ func TestRestackWritesReflogMessageOnReparent(t *testing.T) {
 		Run("create child -m 'child commit'").
 		OnBranch("child")
 
-	// Squash-merge parent onto main with no recorded PR state.
+	// Squash-merge parent onto main. The PR state is still stale (OPEN), so
+	// detection falls through to the aggregate patch-id scan, which is gated
+	// behind a recorded PR number.
 	sh.Checkout("main")
 	sh.WriteFile("shared.txt", "base\np2\n").
 		WriteFile("notes.txt", "parent note\n").
 		Git("commit -m 'squash-merge parent (#1)'")
+	sh.recordPR("parent", 1, "OPEN", "main")
 
 	sh.Checkout("child").
 		Run("restack --upstack")

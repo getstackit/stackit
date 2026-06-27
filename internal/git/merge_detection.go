@@ -85,40 +85,31 @@ func (r *runner) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 	return strings.Split(strings.TrimSpace(output), "\n"), nil
 }
 
-type mergeEvidence string
-
-const (
-	mergeEvidenceNone        mergeEvidence = "none"
-	mergeEvidenceAncestor    mergeEvidence = "ancestor"
-	mergeEvidenceCherry      mergeEvidence = "cherry"
-	mergeEvidencePatchID     mergeEvidence = "patch_id"
-	mergeEvidenceAggregateID mergeEvidence = "aggregate_patch_id"
-)
-
+// IsMerged reports whether branchName's commits have landed in target using
+// cheap Git history checks only: ancestry, and per-commit patch matching via
+// `git cherry` (which covers plain merge commits and rebase merges, since both
+// preserve each commit's patch-id). It deliberately does NOT detect squash
+// merges — those collapse N commits into one new commit that matches no
+// individual branch commit, and proving equivalence needs an aggregate patch-id
+// scan over the target's recent history. That scan is too expensive to run on
+// every IsMerged call (this is invoked in loops over every tracked branch), so
+// callers that have a reason to suspect a squash merge opt into IsSquashMerged.
 func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool, error) {
-	merged, _, err := r.detectMerge(ctx, branchName, target)
-	if err != nil {
-		return false, err
-	}
-	return merged, nil
-}
-
-func (r *runner) detectMerge(ctx context.Context, branchName, target string) (bool, mergeEvidence, error) {
 	// Get merge base
 	mergeBase, err := r.GetMergeBase(ctx, branchName, target)
 	if err != nil {
-		return false, mergeEvidenceNone, fmt.Errorf("failed to get merge base: %w", err)
+		return false, fmt.Errorf("failed to get merge base: %w", err)
 	}
 
 	// Get branch revision
 	branchRev, err := r.GetRevision(branchName)
 	if err != nil {
-		return false, mergeEvidenceNone, fmt.Errorf("failed to get branch revision: %w", err)
+		return false, fmt.Errorf("failed to get branch revision: %w", err)
 	}
 
 	// If merge base equals branch revision, branch is already merged
 	if mergeBase == branchRev {
-		return true, mergeEvidenceAncestor, nil
+		return true, nil
 	}
 
 	// Use git cherry to check if all commits are in trunk
@@ -128,43 +119,42 @@ func (r *runner) detectMerge(ctx context.Context, branchName, target string) (bo
 	if err != nil {
 		// If cherry fails, fall back to simpler check
 		// Check if branch tip is reachable from trunk
-		merged, ancestorErr := r.IsAncestor(ctx, branchRev, target)
-		if ancestorErr != nil {
-			return false, mergeEvidenceNone, ancestorErr
-		}
-		evidence := mergeEvidenceNone
-		if merged {
-			evidence = mergeEvidenceAncestor
-		}
-		return merged, evidence, nil
+		return r.IsAncestor(ctx, branchRev, target)
 	}
 
 	// If cherry output is empty or all lines start with '-', branch is merged
 	if cherryOutput == "" {
-		return true, mergeEvidenceCherry, nil
+		return true, nil
 	}
 
 	// Check if all commits are marked as merged (lines starting with '-')
 	lines := strings.SplitSeq(strings.TrimSpace(cherryOutput), "\n")
 	for line := range lines {
 		if line != "" && line[0] != '-' {
-			// cherry reports unmerged commits; but squash merges combine all branch
-			// commits into one new commit, so no individual branch commit has to
-			// match. Fall back to aggregate patch-id comparison for the whole branch
-			// diff against commits added to the target since the branch diverged.
-			merged, err := r.isSquashMerged(ctx, branchRev, mergeBase, target)
-			if err != nil {
-				return false, mergeEvidenceNone, err
-			}
-			evidence := mergeEvidenceNone
-			if merged {
-				evidence = mergeEvidenceAggregateID
-			}
-			return merged, evidence, nil
+			return false, nil
 		}
 	}
 
-	return true, mergeEvidencePatchID, nil
+	return true, nil
+}
+
+// IsSquashMerged reports whether branchName was squash-merged into target by
+// comparing the branch's aggregate diff patch-id against commits added to
+// target since the branch diverged. Unlike IsMerged it does not short-circuit
+// on ancestry or per-commit matches, so callers use it as a fallback once
+// IsMerged returns false. It is comparatively expensive (a bounded log plus a
+// patch-id per scanned target commit), so gate it behind a signal that the
+// branch may genuinely have merged — e.g. a recorded PR number.
+func (r *runner) IsSquashMerged(ctx context.Context, branchName, target string) (bool, error) {
+	mergeBase, err := r.GetMergeBase(ctx, branchName, target)
+	if err != nil {
+		return false, fmt.Errorf("failed to get merge base: %w", err)
+	}
+	branchRev, err := r.GetRevision(branchName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get branch revision: %w", err)
+	}
+	return r.isSquashMerged(ctx, branchRev, mergeBase, target)
 }
 
 // isSquashMerged detects whether branchName was squash-merged into target by

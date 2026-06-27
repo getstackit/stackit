@@ -393,6 +393,10 @@ func (d *demoGitRunner) IsMerged(_ context.Context, _, _ string) (bool, error) {
 	return false, nil
 }
 
+func (d *demoGitRunner) IsSquashMerged(_ context.Context, _, _ string) (bool, error) {
+	return false, nil
+}
+
 func (d *demoGitRunner) GetMergedBranches(_ context.Context, _ string) (map[string]bool, error) {
 	return make(map[string]bool), nil
 }

@@ -95,6 +95,19 @@ func metaHasSubmittedPR(meta *git.Meta) bool {
 	return prMeta != nil && prMeta.Number != nil && *prMeta.Number != 0
 }
 
+// branchHasSubmittedPR reports whether a branch has a recorded PR number,
+// resolving metadata from the engine cache/disk. Used to gate the expensive
+// squash-merge scan: a branch that was never submitted cannot have been merged
+// on GitHub.
+func (e *engineImpl) branchHasSubmittedPR(branchName string) bool {
+	prInfo, err := e.GetPrInfo(e.GetBranch(branchName))
+	if err != nil || prInfo == nil {
+		return false
+	}
+	num := prInfo.Number()
+	return num != nil && *num != 0
+}
+
 type landedCheckMode int
 
 const (
@@ -124,7 +137,20 @@ func (e *engineImpl) branchLanded(ctx context.Context, branchName, target string
 	if target == "" || target != e.trunk {
 		return false
 	}
-	merged, err := e.git.IsMerged(ctx, branchName, target)
+	// IsMerged covers ancestry and per-commit (rebase) merges cheaply.
+	if merged, err := e.git.IsMerged(ctx, branchName, target); err == nil && merged {
+		return true
+	}
+	// Squash merges that haven't been reflected in PR state yet need the
+	// aggregate patch-id scan, which is expensive — gate it behind a recorded PR
+	// number so it stays off the hot path for actively-developed branches that
+	// have no PR. IsMerged is called in loops over every tracked branch, so the
+	// scan must not run there; only the explicit "did this branch land" checks
+	// (restack/reparent) opt into it.
+	if !e.branchHasSubmittedPR(branchName) {
+		return false
+	}
+	merged, err := e.git.IsSquashMerged(ctx, branchName, target)
 	return err == nil && merged
 }
 

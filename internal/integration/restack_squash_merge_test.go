@@ -124,12 +124,13 @@ func TestRestackAfterMultiCommitSquashParentDeleted(t *testing.T) {
 	requireCleanWorkingTree(t, sh)
 }
 
-// TestRestackDetectsSquashMergeWithoutPRState covers running `stackit restack`
-// when the parent was squash-merged but no PR state has been recorded (e.g.
-// the branch was merged directly without a PR, or st sync has not run yet).
-// Aggregate patch-id comparison in IsMerged must detect the squash and cause
-// the child to reparent to trunk without replaying the parent's commits.
-func TestRestackDetectsSquashMergeWithoutPRState(t *testing.T) {
+// TestRestackDetectsSquashMergeWithStalePRState covers running `stackit restack`
+// when the parent was squash-merged on GitHub but its local PR state has not yet
+// synced to MERGED (e.g. the merge happened out of band, or a prior sync ran
+// offline). The aggregate patch-id squash scan must detect the merge — gated on
+// the parent's recorded PR number — and cause the child to reparent to trunk
+// without replaying the parent's commits.
+func TestRestackDetectsSquashMergeWithStalePRState(t *testing.T) {
 	t.Parallel()
 	sh := scenario.NewRemoteScenario(t)
 	disableCommitSigning(t, sh)
@@ -143,17 +144,20 @@ func TestRestackDetectsSquashMergeWithoutPRState(t *testing.T) {
 		CommitChange("file-c", "c").
 		TrackBranch("child", "parent")
 
-	// Squash-merge parent onto main WITHOUT recording PR state.
-	// This simulates a branch merged via the GitHub UI before st sync has
-	// had a chance to mark the PR as MERGED in local metadata.
+	// Squash-merge parent onto main. The PR number is recorded but its state is
+	// stale (still OPEN) — simulating a GitHub UI squash-merge before st sync
+	// marked the PR MERGED. The recorded PR number is what gates the otherwise
+	// expensive squash patch-id scan.
 	mainName := sh.Engine.Trunk().GetName()
 	sh.Checkout("main")
 	sh.CommitChange("file-main", "unrelated")
 	sh.CommitChange("file-p", "v1\nv2")
 
-	// Intentionally skip markPrMerged — IsMerged must detect the squash from
-	// Git history. The unrelated trunk commit means a whole-tree comparison
-	// would not match the parent tip.
+	// Stale PR state (OPEN, not MERGED) forces detection through the aggregate
+	// patch-id scan rather than PR metadata. The unrelated trunk commit means a
+	// whole-tree comparison would not match the parent tip.
+	markPrWithState(t, sh, "parent", 42, "OPEN", mainName)
+
 	sh.Checkout("child")
 	plan, err := actions.PlanRestack(sh.Context, actions.RestackOptions{
 		BranchName: "child",
@@ -164,7 +168,7 @@ func TestRestackDetectsSquashMergeWithoutPRState(t *testing.T) {
 
 	sh.Rebuild()
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName(),
-		"child should reparent to main when IsMerged detects squash via aggregate patch-id")
+		"child should reparent to main when the squash scan detects the parent merged")
 
 	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("child"))
 	require.NoError(t, err)

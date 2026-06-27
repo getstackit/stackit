@@ -85,22 +85,40 @@ func (r *runner) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 	return strings.Split(strings.TrimSpace(output), "\n"), nil
 }
 
+type mergeEvidence string
+
+const (
+	mergeEvidenceNone        mergeEvidence = "none"
+	mergeEvidenceAncestor    mergeEvidence = "ancestor"
+	mergeEvidenceCherry      mergeEvidence = "cherry"
+	mergeEvidencePatchID     mergeEvidence = "patch_id"
+	mergeEvidenceAggregateID mergeEvidence = "aggregate_patch_id"
+)
+
 func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool, error) {
+	merged, _, err := r.detectMerge(ctx, branchName, target)
+	if err != nil {
+		return false, err
+	}
+	return merged, nil
+}
+
+func (r *runner) detectMerge(ctx context.Context, branchName, target string) (bool, mergeEvidence, error) {
 	// Get merge base
 	mergeBase, err := r.GetMergeBase(ctx, branchName, target)
 	if err != nil {
-		return false, fmt.Errorf("failed to get merge base: %w", err)
+		return false, mergeEvidenceNone, fmt.Errorf("failed to get merge base: %w", err)
 	}
 
 	// Get branch revision
 	branchRev, err := r.GetRevision(branchName)
 	if err != nil {
-		return false, fmt.Errorf("failed to get branch revision: %w", err)
+		return false, mergeEvidenceNone, fmt.Errorf("failed to get branch revision: %w", err)
 	}
 
 	// If merge base equals branch revision, branch is already merged
 	if mergeBase == branchRev {
-		return true, nil
+		return true, mergeEvidenceAncestor, nil
 	}
 
 	// Use git cherry to check if all commits are in trunk
@@ -110,12 +128,20 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 	if err != nil {
 		// If cherry fails, fall back to simpler check
 		// Check if branch tip is reachable from trunk
-		return r.IsAncestor(ctx, branchRev, target)
+		merged, ancestorErr := r.IsAncestor(ctx, branchRev, target)
+		if ancestorErr != nil {
+			return false, mergeEvidenceNone, ancestorErr
+		}
+		evidence := mergeEvidenceNone
+		if merged {
+			evidence = mergeEvidenceAncestor
+		}
+		return merged, evidence, nil
 	}
 
 	// If cherry output is empty or all lines start with '-', branch is merged
 	if cherryOutput == "" {
-		return true, nil
+		return true, mergeEvidenceCherry, nil
 	}
 
 	// Check if all commits are marked as merged (lines starting with '-')
@@ -126,11 +152,19 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 			// commits into one new commit, so no individual branch commit has to
 			// match. Fall back to aggregate patch-id comparison for the whole branch
 			// diff against commits added to the target since the branch diverged.
-			return r.isSquashMerged(ctx, branchRev, mergeBase, target)
+			merged, err := r.isSquashMerged(ctx, branchRev, mergeBase, target)
+			if err != nil {
+				return false, mergeEvidenceNone, err
+			}
+			evidence := mergeEvidenceNone
+			if merged {
+				evidence = mergeEvidenceAggregateID
+			}
+			return merged, evidence, nil
 		}
 	}
 
-	return true, nil
+	return true, mergeEvidencePatchID, nil
 }
 
 // isSquashMerged detects whether branchName was squash-merged into target by

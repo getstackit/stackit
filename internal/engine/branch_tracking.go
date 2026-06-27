@@ -178,7 +178,7 @@ func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch 
 				// multi-commit squash merge, and errors when the old parent
 				// ref is already deleted — clobbering the divergence point
 				// would make the next restack replay the merged commits.
-				if e.prStateIsMerged(oldParent) {
+				if e.branchLanded(ctx, oldParent, parentBranchName, landedMetadataOnly) {
 					shouldUpdateRevision = false
 				} else if merged, _ := e.git.IsMerged(ctx, oldParent, parentBranchName); merged {
 					shouldUpdateRevision = false

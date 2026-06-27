@@ -483,14 +483,12 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	// with how rule 5 gates its tree comparison behind PR metadata). IsMerged
 	// targets trunk specifically, so a branch squash-merged into a still-open
 	// parent is not treated as deletable.
-	if meta != nil {
-		if prMeta := meta.GetPrInfo(); prMeta != nil && prMeta.Number != nil && *prMeta.Number != 0 {
-			if merged, err := e.git.IsMerged(ctx, branchName, trunkName); err == nil && merged {
-				return DeletionStatus{
-					SafeToDelete: true,
-					Reason:       fmt.Sprintf("merged into %s", trunkName),
-					Kind:         DeletionReasonMergedIntoTrunk,
-				}
+	if metaHasSubmittedPR(meta) {
+		if merged, err := e.git.IsMerged(ctx, branchName, trunkName); err == nil && merged {
+			return DeletionStatus{
+				SafeToDelete: true,
+				Reason:       fmt.Sprintf("merged into %s", trunkName),
+				Kind:         DeletionReasonMergedIntoTrunk,
 			}
 		}
 	}
@@ -504,8 +502,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	if meta == nil {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
 	}
-	prInfoMeta := meta.GetPrInfo()
-	if prInfoMeta == nil || prInfoMeta.Number == nil || *prInfoMeta.Number == 0 {
+	if !metaHasSubmittedPR(meta) {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
 	}
 

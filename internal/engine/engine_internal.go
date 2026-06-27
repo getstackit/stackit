@@ -87,17 +87,39 @@ func (e *engineImpl) prStateIsMerged(branchName string) bool {
 	return err == nil && prInfo != nil && prInfo.State() == prStateMerged
 }
 
-// branchChangesLanded reports whether branchName's changes have landed into
-// target. PR metadata is authoritative across GitHub's merge, squash, and
-// rebase merge methods. The Git fallback is limited to trunk: for non-trunk
+func metaHasSubmittedPR(meta *git.Meta) bool {
+	if meta == nil {
+		return false
+	}
+	prMeta := meta.GetPrInfo()
+	return prMeta != nil && prMeta.Number != nil && *prMeta.Number != 0
+}
+
+type landedCheckMode int
+
+const (
+	// landedMetadataOnly trusts recorded PR state but does not infer anything
+	// from Git history.
+	landedMetadataOnly landedCheckMode = iota
+	// landedMetadataOrTrunkGit trusts recorded PR state, and also allows Git
+	// merge detection when the target is trunk.
+	landedMetadataOrTrunkGit
+)
+
+// branchLanded reports whether branchName's changes have landed into target.
+// PR metadata is authoritative across GitHub's merge, squash, and rebase merge
+// methods. Git fallback is intentionally limited to trunk: for non-trunk
 // parents, patch-equivalence can also mean a local stack operation made a child
 // empty, not that a GitHub PR landed.
-func (e *engineImpl) branchChangesLanded(ctx context.Context, branchName, target string) bool {
+func (e *engineImpl) branchLanded(ctx context.Context, branchName, target string, mode landedCheckMode) bool {
 	if branchName == e.trunk {
 		return false
 	}
 	if e.prStateIsMerged(branchName) {
 		return true
+	}
+	if mode != landedMetadataOrTrunkGit {
+		return false
 	}
 	if target == "" || target != e.trunk {
 		return false
@@ -136,7 +158,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 	if state := e.readState(parentBranchName); state != nil && state.Parent != "" {
 		mergeTarget = state.Parent
 	}
-	if e.branchChangesLanded(ctx, parentBranchName, mergeTarget) {
+	if e.branchLanded(ctx, parentBranchName, mergeTarget, landedMetadataOrTrunkGit) {
 		return true
 	}
 

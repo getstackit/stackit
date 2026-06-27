@@ -313,6 +313,21 @@ t.Run("test1", func(t *testing.T) { ... })
 t.Run("squash", func(t *testing.T) { ... })
 ```
 
+## GitHub Merge Method Coverage
+
+When testing sync, restack, branch cleanup, merged-branch detection, or merge
+orchestration, cover the GitHub merge method that matters for the behavior:
+
+| Method | Test shape |
+|--------|------------|
+| Merge commit | PR branch tip is reachable from trunk; ancestry-based detection should work. |
+| Squash merge | PR changes land as one combined commit; original PR commits are not ancestors of trunk. Include a multi-commit PR when testing patch/diff equivalence. |
+| Rebase merge | PR commits are replayed onto trunk with new SHAs; original PR commits are not ancestors of trunk. |
+
+Do not rely on a single-commit squash test to prove squash support: `git cherry`
+can already patch-match that case. Multi-commit squash tests are the important
+safety coverage for replay/reparenting bugs.
+
 ## Debugging Failing Tests
 
 Set `DEBUG=1` to preserve test directories:

@@ -9,6 +9,8 @@ const testNewFileName = "newfile.go"
 const testDeletedFileName = "deleted.go"
 
 func TestCanSplitHunk(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		content  string
@@ -88,6 +90,7 @@ func TestCanSplitHunk(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			hunk := Hunk{
 				File:    "test.go",
 				Content: tt.content,
@@ -101,6 +104,8 @@ func TestCanSplitHunk(t *testing.T) {
 }
 
 func TestSplitHunk(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name            string
 		content         string
@@ -152,6 +157,7 @@ func TestSplitHunk(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			hunk := Hunk{
 				File:     "test.go",
 				OldStart: 1,
@@ -173,6 +179,8 @@ func TestSplitHunk(t *testing.T) {
 }
 
 func TestCountHunkLines(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name            string
 		content         string
@@ -223,6 +231,7 @@ func TestCountHunkLines(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			hunk := Hunk{Content: tt.content}
 			added, removed := CountHunkLines(hunk)
 			if added != tt.expectedAdded {
@@ -236,6 +245,8 @@ func TestCountHunkLines(t *testing.T) {
 }
 
 func TestGetHunkPreview(t *testing.T) {
+	t.Parallel()
+
 	content := `@@ -1,6 +1,7 @@ func example()
  line1
 +added
@@ -271,6 +282,8 @@ func TestGetHunkPreview(t *testing.T) {
 }
 
 func TestGetHunkHeader(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		content  string
@@ -295,6 +308,7 @@ func TestGetHunkHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			hunk := Hunk{
 				Content:  tt.content,
 				OldStart: 0,
@@ -311,6 +325,8 @@ func TestGetHunkHeader(t *testing.T) {
 }
 
 func TestBuildPatchFromHunks(t *testing.T) {
+	t.Parallel()
+
 	hunks := []Hunk{
 		{
 			File:      "file1.go",
@@ -363,6 +379,8 @@ func TestBuildPatchFromHunks(t *testing.T) {
 }
 
 func TestParseDiffOutput(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		diff          string
@@ -469,6 +487,7 @@ diff --git a/code.go b/code.go
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			hunks, err := ParseDiffOutput(tt.diff)
 			if err != nil {
 				t.Fatalf("ParseDiffOutput() error = %v", err)
@@ -484,6 +503,8 @@ diff --git a/code.go b/code.go
 }
 
 func TestBuildPatchFromHunks_Binary(t *testing.T) {
+	t.Parallel()
+
 	// Test that binary files produce correct patch format
 	hunks := []Hunk{
 		{
@@ -515,6 +536,8 @@ func TestBuildPatchFromHunks_Binary(t *testing.T) {
 }
 
 func TestBuildPatchFromHunks_MixedBinaryAndText(t *testing.T) {
+	t.Parallel()
+
 	hunks := []Hunk{
 		{
 			File:      "image.png",
@@ -547,6 +570,8 @@ func TestBuildPatchFromHunks_MixedBinaryAndText(t *testing.T) {
 }
 
 func TestSplitHunk_TrailingEmptyLines(t *testing.T) {
+	t.Parallel()
+
 	// Test that hunks with trailing empty lines are handled correctly
 	content := `@@ -1,5 +1,5 @@ func example()
 -removed
@@ -573,6 +598,8 @@ func TestSplitHunk_TrailingEmptyLines(t *testing.T) {
 }
 
 func TestCanSplitHunk_NoNewlineAtEnd(t *testing.T) {
+	t.Parallel()
+
 	// Test hunk that ends with "\ No newline at end of file"
 	content := `@@ -1,3 +1,3 @@ func example()
 -old

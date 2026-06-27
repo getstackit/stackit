@@ -74,6 +74,9 @@ type BranchStatus interface {
 	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)
 	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
+	// TrunkRemoteState reports how the local trunk relates to its
+	// remote-tracking branch using only local refs (no network).
+	TrunkRemoteState(ctx context.Context) TrunkRemoteState
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
 }
 

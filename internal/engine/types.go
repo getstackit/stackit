@@ -227,6 +227,26 @@ func (s BranchRemoteStatus) MissingRemote() bool {
 	return s.RemoteSha == ""
 }
 
+// TrunkRemoteState describes how the local trunk relates to its remote-tracking
+// branch (e.g. origin/main) using only already-fetched local refs — never the
+// network. It is safe on the restack path and offline.
+type TrunkRemoteState struct {
+	// HasRemoteRef is false when no remote-tracking trunk ref exists locally: a
+	// local-only repo, a never-fetched remote, or a fresh clone without
+	// origin/<trunk>. Callers treat this as "unknown — do not guard".
+	HasRemoteRef bool
+	// AheadOrDiverged is true when the local trunk has commits that are not
+	// present on the remote-tracking trunk (local trunk is NOT an ancestor of
+	// origin/<trunk>). Equal or behind is false.
+	AheadOrDiverged bool
+	// LocalSha is the local trunk tip; RemoteSha is the remote-tracking tip.
+	LocalSha  string
+	RemoteSha string
+	// RemoteRef is the remote-tracking ref name, e.g. "origin/main", for
+	// user-facing messages.
+	RemoteRef string
+}
+
 // BranchRemoteStatuses maps branch names to their remote sync status.
 type BranchRemoteStatuses map[string]BranchRemoteStatus
 

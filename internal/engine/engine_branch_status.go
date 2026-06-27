@@ -293,6 +293,47 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	return results
 }
 
+// TrunkRemoteState reports how the local trunk relates to its remote-tracking
+// branch using only local refs (a rev-parse of refs/remotes/<remote>/<trunk>
+// plus an ancestry check). It never lists or fetches from the remote, so it is
+// cheap enough for the restack path and works offline.
+//
+// When no remote-tracking trunk ref exists locally (local-only repo, never
+// fetched, fresh clone) it returns HasRemoteRef=false and AheadOrDiverged=false
+// so callers leave such repos unguarded.
+func (e *engineImpl) TrunkRemoteState(ctx context.Context) TrunkRemoteState {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	e.mu.RLock()
+	trunk := e.trunk
+	e.mu.RUnlock()
+
+	remote := e.git.GetRemote()
+	state := TrunkRemoteState{RemoteRef: remote + "/" + trunk}
+
+	remoteSha, err := e.git.GetRemoteSha(remote, trunk)
+	if err != nil || remoteSha == "" {
+		return state
+	}
+	state.HasRemoteRef = true
+	state.RemoteSha = remoteSha
+
+	localSha, err := e.git.GetRevision(trunk)
+	if err != nil || localSha == "" {
+		return state
+	}
+	state.LocalSha = localSha
+
+	// Local trunk is "ahead or diverged" when it is NOT an ancestor of the
+	// remote-tracking trunk. Equal (a commit is its own ancestor) and behind
+	// both report ancestor=true, so neither trips the guard.
+	if isAncestor, err := e.git.IsAncestor(ctx, localSha, remoteSha); err == nil && !isAncestor {
+		state.AheadOrDiverged = true
+	}
+	return state
+}
+
 // GetMergedBranches returns a map of branches merged into the target branch
 func (e *engineImpl) GetMergedBranches(ctx context.Context, target string) (map[string]bool, error) {
 	return e.git.GetMergedBranches(ctx, target)

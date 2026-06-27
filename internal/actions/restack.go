@@ -100,6 +100,9 @@ func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := guardUnpushedTrunk(ctx, eng, rawGroups); err != nil {
+		return nil, err
+	}
 	plan := &RestackPlan{opts: opts}
 	for _, g := range rawGroups {
 		sorted := eng.SortBranchesTopologically(g.branches)
@@ -380,6 +383,39 @@ func restackGroupsParallel(
 	}
 
 	return collector.restacked, collector.skipped, collector.conflicts, collector.joinedError()
+}
+
+// guardUnpushedTrunk refuses to restack when the local trunk has commits that
+// are not on its remote-tracking branch (origin/<trunk>). Restacking rebases
+// trunk-anchored branches onto the LOCAL trunk tip, so un-pushed/divergent
+// trunk commits would be baked into the stack — work that only exists locally
+// and may never land as-is. Reconciling trunk with the remote first (sync, or a
+// push) keeps restack building only on commits that exist on origin/<trunk>.
+//
+// It is a no-op when there is no work to do, and for repos with no
+// remote-tracking trunk ref (local-only, never fetched, fresh clone), which the
+// engine reports via HasRemoteRef=false.
+func guardUnpushedTrunk(ctx *app.Context, eng engine.BranchReader, groups []restackBranchGroup) error {
+	hasBranches := false
+	for _, g := range groups {
+		if len(g.branches) > 0 {
+			hasBranches = true
+			break
+		}
+	}
+	if !hasBranches {
+		return nil
+	}
+
+	state := eng.TrunkRemoteState(ctx.Context)
+	if !state.AheadOrDiverged {
+		return nil
+	}
+	return fmt.Errorf(
+		"local trunk %q has commits that are not on %q; restack would build the stack on those un-pushed commits.\n"+
+			"Reconcile trunk with the remote first (run `stackit sync`, or push trunk) so restack only builds on %s",
+		eng.Trunk().GetName(), state.RemoteRef, state.RemoteRef,
+	)
 }
 
 type restackBranchGroup struct {

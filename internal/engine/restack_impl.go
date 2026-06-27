@@ -107,7 +107,7 @@ func (e *engineImpl) restackBranch(
 				{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: remoteSha, OldSHA: localSha},
 				{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 			}
-			if err := e.git.UpdateRefsBatch(ctx, updates); err != nil {
+			if err := e.git.UpdateRefsBatchWithLog(ctx, updates, "stackit: restack (frozen)"); err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for frozen branch %s: %w", branchName, err)
 			}
 
@@ -179,7 +179,7 @@ func (e *engineImpl) restackBranch(
 			{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: trunkRev, OldSHA: anchorRev},
 			{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 		}
-		if err := e.git.UpdateRefsBatch(ctx, updates); err != nil {
+		if err := e.git.UpdateRefsBatchWithLog(ctx, updates, "stackit: restack (anchor)"); err != nil {
 			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for anchor %s: %w", branchName, err)
 		}
 

@@ -750,6 +750,33 @@ func TestAbsorbConflictHandling(t *testing.T) {
 		require.True(t, IsAbsorbInProgress(s.Context))
 	})
 
+	t.Run("IsAbsorbInProgress returns false during a rebase even when detached", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		s.CreateBranch("test-branch")
+		s.TrackBranch("test-branch", "main")
+
+		testFile := filepath.Join(s.Scene.Dir, "test.go")
+		err := os.WriteFile(testFile, []byte("package main\n\nfunc test() {}\n"), 0600)
+		require.NoError(t, err)
+		s.RunGit("add", "test.go")
+		s.RunGit("commit", "-m", "add test.go")
+
+		// Reproduce the restack conflict workflow's state: HEAD detached AND a
+		// rebase in progress. EnterConflictWorkflow detaches on purpose, which
+		// leaves a "checkout: moving from" reflog entry. That alone used to make
+		// IsAbsorbInProgress report a phantom absorb, routing `stackit abort` to
+		// the absorb cleanup path instead of the standard rebase abort.
+		s.RunGit("checkout", "--detach", "HEAD")
+		rebaseMergeDir := filepath.Join(s.Scene.Dir, ".git", "rebase-merge")
+		require.NoError(t, os.MkdirAll(rebaseMergeDir, 0750))
+
+		// A rebase in progress means this is a restack/sync conflict, not an
+		// absorb — the standard abort owns it.
+		require.False(t, IsAbsorbInProgress(s.Context))
+	})
+
 	t.Run("ShowConflict displays staged changes info", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)

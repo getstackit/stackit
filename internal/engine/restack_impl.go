@@ -61,6 +61,10 @@ func (e *engineImpl) restackBranch(
 		return RestackBranchResult{Result: RestackUnneeded, LockReason: lockReason}, nil
 	}
 
+	if e.branchLanded(ctx, branchName, parent) {
+		return RestackBranchResult{Result: RestackUnneeded}, nil
+	}
+
 	if e.IsFrozen(branch) {
 		// For frozen branches, we update via hard reset to remote instead of rebase
 		remoteSha, err := e.git.GetRemoteRevision(branchName)

@@ -1065,6 +1065,13 @@ func (t *tracingRunner) ListRefs(prefix string) (map[string]string, error) {
 	return result, err
 }
 
+func (t *tracingRunner) RefDecorations() (map[string][]RefDecoration, error) {
+	start := time.Now()
+	result, err := t.inner.RefDecorations()
+	t.trace("RefDecorations", time.Since(start), err == nil, err)
+	return result, err
+}
+
 // ObjectOperations methods
 
 func (t *tracingRunner) CreateBlob(content string) (string, error) {

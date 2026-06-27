@@ -23,6 +23,9 @@ type StackNavigator interface {
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	SortBranchesTopologically(branches Branches) Branches
 	FindBranchesForCommits(commitSHAs []string) map[string]string
+	// RefDecorations returns local branch and tag refs grouped by the commit SHA
+	// they point at (annotated tags dereferenced), for git-log-style annotations.
+	RefDecorations() (map[string][]git.RefDecoration, error)
 	// GetAllBranchNames returns the names of all local branches, including ones
 	// not tracked by stackit. Used by diagnostics that must see untracked or
 	// orphaned branches.

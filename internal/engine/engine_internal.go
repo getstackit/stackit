@@ -87,6 +87,14 @@ func (e *engineImpl) prStateIsMerged(branchName string) bool {
 	return err == nil && prInfo != nil && prInfo.State() == prStateMerged
 }
 
+func metaHasSubmittedPR(meta *git.Meta) bool {
+	if meta == nil {
+		return false
+	}
+	prMeta := meta.GetPrInfo()
+	return prMeta != nil && prMeta.Number != nil && *prMeta.Number != 0
+}
+
 // branchLanded reports whether branchName's changes have landed into target.
 // PR metadata is authoritative across GitHub's merge, squash, and rebase merge
 // methods. Git fallback is intentionally limited to trunk: for non-trunk

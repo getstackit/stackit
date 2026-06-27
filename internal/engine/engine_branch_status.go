@@ -461,8 +461,30 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 		}
 	}
 
-	// 4. Check if merged into trunk
+	// 4. Check if merged into trunk (ancestry-based; covers merge commits)
 	if mergedBranches != nil && mergedBranches[branchName] {
+		return DeletionStatus{
+			SafeToDelete: true,
+			Reason:       fmt.Sprintf("merged into %s", trunkName),
+			Kind:         DeletionReasonMergedIntoTrunk,
+		}
+	}
+
+	// 4b. Squash and rebase merges don't appear in the ancestry-based
+	// mergedBranches set, and GitHub may have merged the PR before its local
+	// state synced to MERGED (so rule 3 didn't fire either). For branches that
+	// carry a recorded PR number, fall back to the same landed-branch detection
+	// restack uses (cheap cherry plus the gated squash patch-id scan), so cleanup
+	// keeps pace with squash-aware reparenting instead of leaving the merged
+	// branch behind.
+	//
+	// Gated on a recorded PR number for two reasons: it never auto-deletes an
+	// unsubmitted local branch whose diff happens to match trunk, and it keeps
+	// the expensive patch-id scan off the common no-PR path (consistent with how
+	// rule 5 gates its tree comparison behind PR metadata). branchLanded targets
+	// trunk specifically, so a branch squash-merged into a still-open parent is
+	// not treated as deletable.
+	if metaHasSubmittedPR(meta) && e.branchLanded(ctx, branchName, trunkName) {
 		return DeletionStatus{
 			SafeToDelete: true,
 			Reason:       fmt.Sprintf("merged into %s", trunkName),
@@ -479,8 +501,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	if meta == nil {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
 	}
-	prInfoMeta := meta.GetPrInfo()
-	if prInfoMeta == nil || prInfoMeta.Number == nil || *prInfoMeta.Number == 0 {
+	if !metaHasSubmittedPR(meta) {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
 	}
 

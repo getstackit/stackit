@@ -2,6 +2,64 @@
 
 Critical guarantees that all operations must maintain. These are non-negotiable.
 
+## GitHub Merge Methods Are First-Class
+
+**Stackit must correctly handle PRs merged through all GitHub UI merge methods:
+merge commit, squash merge, and rebase merge.**
+
+This applies to: sync, restack, branch cleanup, merged-branch detection, stack
+navigation, merge orchestration, and any operation that decides whether branch
+changes have landed on trunk or another parent branch.
+
+### Why This Matters
+
+GitHub's three merge methods produce different Git histories for the same PR:
+
+| Method | What lands on the base branch | Is the PR branch tip reachable from base? | Can ancestry prove it merged? |
+|--------|-------------------------------|-------------------------------------------|-------------------------------|
+| Merge commit | A merge commit whose parents include the base and PR head | Yes | Yes |
+| Squash merge | One new commit containing the combined PR diff | No | No |
+| Rebase merge | New commits replaying the PR commits onto base | No | No |
+
+For merge commits, `git merge-base --is-ancestor <branch> <base>` and
+`git branch --merged <base>` are meaningful. For squash and rebase merges they
+are not: the PR's original commits are not ancestors of the base branch even
+though the PR landed.
+
+Squash merges are especially risky for stacked changes because a multi-commit
+PR lands as one combined commit. Per-commit patch matching (`git cherry`) can
+fail even when the branch's final diff is present on trunk. Rebase merges keep
+one commit per PR commit but rewrite SHAs, so ancestry still fails.
+
+### Required Behavior
+
+Code must not define "merged" using a single Git predicate. A merged PR can be
+proven by a combination of signals, including:
+
+- PR metadata that records the PR state as merged
+- The GitHub-reported landed commit being reachable from the target branch
+- Ancestry when the PR used a merge commit
+- Patch/range equivalence when the PR used rebase merge
+- Aggregate diff equivalence or recorded landed metadata when the PR used
+  squash merge
+
+When sync or restack sees a merged parent, it must reparent descendants past the
+landed branch without replaying that parent's commits. When it sees a merged
+sibling, it must never move an unrelated branch ref to the sibling's stale
+pre-merge tip.
+
+### Implementation Rules
+
+- Do not assume `IsAncestor(branch, trunk)` means "not merged" when it returns
+  false.
+- Do not assume `git branch --merged` covers squash or rebase merges.
+- Do not assume `git cherry` covers multi-commit squash merges.
+- Do not delete or reparent branch metadata based solely on SHA equality.
+- Preserve or fetch enough PR information to distinguish "closed unmerged" from
+  "merged by any GitHub method".
+- Any change to sync, restack, cleanup, or merge detection must consider all
+  three GitHub merge methods explicitly.
+
 ## No Detached HEAD State
 
 **Operations must NEVER leave the user in a detached HEAD state when cancelled or on failure.**

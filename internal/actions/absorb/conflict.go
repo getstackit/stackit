@@ -11,9 +11,23 @@ import (
 
 // IsAbsorbInProgress checks if there's a failed absorb operation that needs cleanup.
 // This is detected by checking for:
-// 1. Detached HEAD state, OR
-// 2. Presence of absorb stash marker
+// 1. Presence of absorb stash marker, OR
+// 2. Detached HEAD state with no rebase/merge in progress
 func IsAbsorbInProgress(ctx *app.Context) bool {
+	// A rebase or merge in progress is owned by the standard conflict-workflow
+	// abort (restack/sync/merge). EnterConflictWorkflow deliberately detaches
+	// HEAD before the conflict rebase — which writes a "checkout: moving from"
+	// reflog entry — and persists continuation + snapshot state for the standard
+	// abort to roll back. Absorb's own failure mode is a cherry-pick conflict,
+	// which never leaves a rebase-merge/rebase-apply directory. So an in-progress
+	// rebase/merge means this is NOT an absorb to clean up. Without this guard the
+	// conflict workflow's detach is misread as a mid-absorb failure, routing
+	// `stackit abort` to absorb cleanup — which never runs `git rebase --abort`
+	// and leaves the repo stuck mid-rebase with stale continuation state.
+	if ctx.Engine.IsRebaseInProgress(ctx.Context) || ctx.Engine.IsMergeInProgress(ctx.Context) {
+		return false
+	}
+
 	// Check for absorb stash marker
 	stashList, _ := ctx.Engine.StashList(ctx.Context)
 	if strings.Contains(stashList, absorbStashMarker) {

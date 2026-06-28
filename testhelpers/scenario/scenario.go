@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 
@@ -36,6 +37,9 @@ const flagNoInteractive = "--no-interactive"
 
 // branchParent is the default parent branch name used in diamond stack fixtures.
 const branchParent = "parent"
+
+// defaultTrunk is the trunk branch name used by the test scenarios.
+const defaultTrunk = "main"
 
 // SetGlobalInProcessRunner sets the global in-process runner in a thread-safe way.
 func SetGlobalInProcessRunner(runner InProcessRunner) {
@@ -97,7 +101,7 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 	cfg, _ := config.LoadConfig(scene.Dir)
 	trunk := cfg.Trunk()
 	if trunk == "" {
-		trunk = "main"
+		trunk = defaultTrunk
 	}
 	maxUndoDepth := cfg.UndoStackDepth()
 	if maxUndoDepth <= 0 {
@@ -221,6 +225,28 @@ func (s *Scenario) CommitChange(name, message string) *Scenario {
 	return s
 }
 
+// SyncRemoteTrunkToLocal advances the local remote-tracking ref
+// (refs/remotes/origin/<trunk>) to the current local trunk tip. It models a
+// `git fetch` after the trunk's new commits have already landed on the remote —
+// the "synced trunk" state — without running a full push/fetch round-trip.
+//
+// Use it after advancing local trunk (e.g. simulating a merge by committing on
+// main) so the restack trunk guard sees origin/<trunk> == local trunk. Without
+// it, local trunk looks ahead of the remote, which is the distinct "un-pushed
+// local commits" state the guard is meant to reject.
+func (s *Scenario) SyncRemoteTrunkToLocal() *Scenario {
+	s.T.Helper()
+	trunk := defaultTrunk
+	if s.Engine != nil {
+		trunk = s.Engine.Trunk().GetName()
+	}
+	sha, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", trunk)
+	require.NoError(s.T, err)
+	err = s.Scene.Repo.RunGitCommand("update-ref", "refs/remotes/origin/"+trunk, strings.TrimSpace(sha))
+	require.NoError(s.T, err)
+	return s
+}
+
 // TrackBranch tracks a branch with a parent in the engine.
 func (s *Scenario) TrackBranch(branch, parent string) *Scenario {
 	s.T.Helper()
@@ -236,7 +262,7 @@ func (s *Scenario) WithStack(structure map[string]string) *Scenario {
 	s.T.Helper()
 
 	// Ensure we have an initial commit on main if it's the root
-	if s.Engine.Trunk().GetName() == "main" {
+	if s.Engine.Trunk().GetName() == defaultTrunk {
 		messages, _ := s.Scene.Repo.ListCurrentBranchCommitMessages()
 		if len(messages) == 0 {
 			s.WithInitialCommit()

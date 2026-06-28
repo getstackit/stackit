@@ -217,6 +217,24 @@ PR information persisted in branch metadata.
 | `lockReason` | `*LockReason` | Lock status parsed from PR footer |
 | `mergeBranch` | `*string` | Merge branch name for consolidated PRs |
 
+### Merge Method Compatibility
+
+PR metadata is part of Stackit's safety model. A PR state of `"MERGED"` means
+the branch's changes landed, but it does not imply the branch tip is reachable
+from trunk:
+
+- GitHub merge commits preserve ancestry, so the PR branch tip is reachable from
+  the base branch.
+- GitHub squash merges create one new commit for the combined PR diff; the
+  original PR commits are not reachable from the base branch.
+- GitHub rebase merges replay commits with new SHAs; the original PR commits are
+  not reachable from the base branch.
+
+Code that consumes `prInfo.state`, updates merged metadata, cleans branches, or
+restacks descendants must treat all three GitHub merge methods as valid. Do not
+use ancestry alone to decide whether a PR's changes landed, and do not treat a
+non-ancestor branch tip as proof that a merged PR still needs to be replayed.
+
 ### MergedParent
 
 **Source**: `internal/git/metadata.go:76-80`

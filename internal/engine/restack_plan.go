@@ -62,17 +62,6 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		return item, true
 	}
 
-	// A branch whose PR was already merged is awaiting sync cleanup. Rebasing
-	// it onto trunk would replay commits the merge already applied — for a
-	// multi-commit squash merge that conflicts on every commit, since no
-	// individual commit patch-matches the squashed result. Skip it;
-	// descendants still reparent past it via shouldReparentBranch.
-	if prInfo, err := e.GetPrInfo(branch); err == nil && prInfo != nil && prInfo.State() == prStateMerged {
-		item.Skip = true
-		item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
-		return item, true
-	}
-
 	parent := branch.GetParent()
 	parentName := e.trunk
 	e.mu.RLock()
@@ -90,6 +79,16 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 				parentName = e.trunk
 			}
 		}
+	}
+
+	// If this branch has already landed, do not rebase it during restack. This
+	// covers merged PR metadata for all GitHub methods, plus Git-detected merge,
+	// rebase, and multi-commit squash histories on trunk even when the merged
+	// branch has no stackit PR metadata.
+	if e.branchLanded(ctx, branchName, parentName) {
+		item.Skip = true
+		item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
+		return item, true
 	}
 
 	if branch.IsFrozen() {

@@ -293,6 +293,47 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	return results
 }
 
+// TrunkRemoteState reports how the local trunk relates to its remote-tracking
+// branch using only local refs (a rev-parse of refs/remotes/<remote>/<trunk>
+// plus an ancestry check). It never lists or fetches from the remote, so it is
+// cheap enough for the restack path and works offline.
+//
+// When no remote-tracking trunk ref exists locally (local-only repo, never
+// fetched, fresh clone) it returns HasRemoteRef=false and AheadOrDiverged=false
+// so callers leave such repos unguarded.
+func (e *engineImpl) TrunkRemoteState(ctx context.Context) TrunkRemoteState {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	e.mu.RLock()
+	trunk := e.trunk
+	e.mu.RUnlock()
+
+	remote := e.git.GetRemote()
+	state := TrunkRemoteState{RemoteRef: remote + "/" + trunk}
+
+	remoteSha, err := e.git.GetRemoteSha(remote, trunk)
+	if err != nil || remoteSha == "" {
+		return state
+	}
+	state.HasRemoteRef = true
+	state.RemoteSha = remoteSha
+
+	localSha, err := e.git.GetRevision(trunk)
+	if err != nil || localSha == "" {
+		return state
+	}
+	state.LocalSha = localSha
+
+	// Local trunk is "ahead or diverged" when it is NOT an ancestor of the
+	// remote-tracking trunk. Equal (a commit is its own ancestor) and behind
+	// both report ancestor=true, so neither trips the guard.
+	if isAncestor, err := e.git.IsAncestor(ctx, localSha, remoteSha); err == nil && !isAncestor {
+		state.AheadOrDiverged = true
+	}
+	return state
+}
+
 // GetMergedBranches returns a map of branches merged into the target branch
 func (e *engineImpl) GetMergedBranches(ctx context.Context, target string) (map[string]bool, error) {
 	return e.git.GetMergedBranches(ctx, target)
@@ -461,8 +502,30 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 		}
 	}
 
-	// 4. Check if merged into trunk
+	// 4. Check if merged into trunk (ancestry-based; covers merge commits)
 	if mergedBranches != nil && mergedBranches[branchName] {
+		return DeletionStatus{
+			SafeToDelete: true,
+			Reason:       fmt.Sprintf("merged into %s", trunkName),
+			Kind:         DeletionReasonMergedIntoTrunk,
+		}
+	}
+
+	// 4b. Squash and rebase merges don't appear in the ancestry-based
+	// mergedBranches set, and GitHub may have merged the PR before its local
+	// state synced to MERGED (so rule 3 didn't fire either). For branches that
+	// carry a recorded PR number, fall back to the same landed-branch detection
+	// restack uses (cheap cherry plus the gated squash patch-id scan), so cleanup
+	// keeps pace with squash-aware reparenting instead of leaving the merged
+	// branch behind.
+	//
+	// Gated on a recorded PR number for two reasons: it never auto-deletes an
+	// unsubmitted local branch whose diff happens to match trunk, and it keeps
+	// the expensive patch-id scan off the common no-PR path (consistent with how
+	// rule 5 gates its tree comparison behind PR metadata). branchLanded targets
+	// trunk specifically, so a branch squash-merged into a still-open parent is
+	// not treated as deletable.
+	if metaHasSubmittedPR(meta) && e.branchLanded(ctx, branchName, trunkName) {
 		return DeletionStatus{
 			SafeToDelete: true,
 			Reason:       fmt.Sprintf("merged into %s", trunkName),
@@ -479,8 +542,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	if meta == nil {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
 	}
-	prInfoMeta := meta.GetPrInfo()
-	if prInfoMeta == nil || prInfoMeta.Number == nil || *prInfoMeta.Number == 0 {
+	if !metaHasSubmittedPR(meta) {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
 	}
 

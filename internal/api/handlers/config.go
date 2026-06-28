@@ -13,11 +13,12 @@ import (
 type ConfigHandler struct {
 	readOnly     bool
 	authRequired bool
+	singleRepo   bool
 }
 
 // NewConfigHandler creates a handler that reports the given capabilities.
-func NewConfigHandler(readOnly, authRequired bool) *ConfigHandler {
-	return &ConfigHandler{readOnly: readOnly, authRequired: authRequired}
+func NewConfigHandler(readOnly, authRequired, singleRepo bool) *ConfigHandler {
+	return &ConfigHandler{readOnly: readOnly, authRequired: authRequired, singleRepo: singleRepo}
 }
 
 // ServeHTTP returns the capability payload.
@@ -29,5 +30,6 @@ func (h *ConfigHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, httpcontract.ConfigResponse{
 		ReadOnly:     h.readOnly,
 		AuthRequired: h.authRequired,
+		SingleRepo:   h.singleRepo,
 	})
 }

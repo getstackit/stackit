@@ -65,17 +65,21 @@ func setupLogging(jsonOutput bool) {
 
 func run() error {
 	var (
-		port            = flag.Int("port", 8080, "Port to listen on")
-		bind            = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1 (loopback); STACKIT_ENV=production binds 0.0.0.0.")
-		cwd             = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -database-url is set)")
-		databaseURL     = flag.String("database-url", os.Getenv("STACKIT_DATABASE_URL"), "PostgreSQL connection string. When set, repos are served from the DB instead of the -cwd single-repo shortcut.")
-		reposRoot       = flag.String("repos-root", os.Getenv("STACKIT_REPOS_ROOT"), "Base directory under which per-repo checkouts live (<reposRoot>/<owner>/<name>) for DB-sourced repos.")
-		remote          = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
-		corsOrigins     = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
-		apiPrefix       = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
-		enableLegacy    = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
-		shutdownGrace   = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
+		port          = flag.Int("port", 8080, "Port to listen on")
+		bind          = flag.String("bind", "", "Interface to bind on. Defaults to 127.0.0.1 (loopback); STACKIT_ENV=production binds 0.0.0.0.")
+		cwd           = flag.String("cwd", "", "Working directory for repository detection (single-repo shortcut; ignored when -database-url is set)")
+		databaseURL   = flag.String("database-url", os.Getenv("STACKIT_DATABASE_URL"), "PostgreSQL connection string. When set, repos are served from the DB instead of the -cwd single-repo shortcut.")
+		reposRoot     = flag.String("repos-root", os.Getenv("STACKIT_REPOS_ROOT"), "Base directory under which per-repo checkouts live (<reposRoot>/<owner>/<name>) for DB-sourced repos.")
+		remote        = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
+		corsOrigins   = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
+		apiPrefix     = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
+		enableLegacy  = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
+		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
+		// Intentionally flag-only (no STACKIT_* env binding): disabling the auth
+		// gate must be a deliberate, visible act on the command line, not
+		// something a stray env var in a shell or deploy config can switch on.
 		authDisabled    = flag.Bool("auth-disabled", false, "Disable GitHub OAuth gate. Refused when the server binds a non-loopback interface (e.g. STACKIT_ENV=production) unless -read-only is set.")
+		authForce       = flag.Bool("auth", envBool("STACKIT_AUTH"), "Force-enable the GitHub OAuth gate on a loopback bind to test the login flow locally (loopback binds are anonymous by default even when STACKIT_GITHUB_* is set). Ignored when the bind is exposed (auth is already required there). Also set via STACKIT_AUTH.")
 		readOnly        = flag.Bool("read-only", envBool("STACKIT_READ_ONLY"), "Serve in read-only mode: the submit endpoint is disabled so the repo can be exposed publicly without write access. Also set via STACKIT_READ_ONLY.")
 		syncInterval    = flag.Duration("sync-interval", envSyncInterval(), "How often to mirror-fetch managed repos from their remotes so served state stays current. Defaults to 5m (the webhook backstop); 0 disables the loop. Also set via STACKIT_SYNC_INTERVAL (e.g. 60s).")
 		webhookDebounce = flag.Duration("webhook-debounce", envWebhookDebounce(), "Quiet window a repo's webhook pushes wait out before a fetch, so a stack submit's burst of pushes collapses into one refresh. Defaults to 2s; 0 dispatches immediately. Also set via STACKIT_WEBHOOK_DEBOUNCE (e.g. 5s).")
@@ -186,10 +190,11 @@ func run() error {
 	}
 
 	authBuild, err := buildAuthConfig(authBuildParams{
-		disabled: *authDisabled,
-		exposed:  exposed,
-		readOnly: *readOnly,
-		prod:     prod,
+		disabled:  *authDisabled,
+		forceAuth: *authForce,
+		exposed:   exposed,
+		readOnly:  *readOnly,
+		prod:      prod,
 	})
 	if err != nil {
 		return err
@@ -204,7 +209,7 @@ func run() error {
 		}()
 		slog.Info("auth: GitHub OAuth gate enabled")
 	} else {
-		slog.Warn("auth: DISABLED (no STACKIT_GITHUB_* env or -auth-disabled set). Do not expose this port publicly.")
+		slog.Warn("auth: DISABLED — anonymous access. Expected on a loopback bind; pass -auth (STACKIT_AUTH) to test the OAuth login flow locally. Never expose this port publicly.")
 	}
 
 	// GitHub App provider authenticates onboarding clones and background syncs.
@@ -228,9 +233,17 @@ func run() error {
 	}
 
 	server := api.NewServer(api.ServerConfig{
-		BindAddr:            *bind,
-		Port:                *port,
-		CORSOrigins:         parseCSV(*corsOrigins),
+		BindAddr:    *bind,
+		Port:        *port,
+		CORSOrigins: parseCSV(*corsOrigins),
+		// On a loopback bind, accept any loopback browser origin so a local dev
+		// web server on an environment-assigned port (e.g. cmux-set $PORT) isn't
+		// blocked by CORS. Never enabled when exposed.
+		AllowLoopbackOrigins: !exposed,
+		// Single-repo mode: anything but DB-backed multi-tenant serves one repo
+		// discovered from -cwd, so the web client opens it directly instead of
+		// showing the (hosted-only) repo picker.
+		SingleRepo:          *databaseURL == "",
 		APIPrefixes:         prefixes,
 		StaticFS:            staticFS,
 		Registry:            reg,

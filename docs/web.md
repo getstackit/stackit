@@ -123,6 +123,12 @@ form that calls `onboardRepo`; on success it navigates to the new repo's
 (`useConfig().readOnly`) since writes are refused there. See
 [Repository onboarding](./deploy.md#repository-onboarding).
 
+In single-repo mode (`useConfig().singleRepo`, set by a server with no
+`STACKIT_DATABASE_URL`), the picker is skipped entirely: `RepoPicker`
+`router.replace`s straight to the sole repo once it loads, so Back doesn't
+bounce through it. It falls back to the normal render if that repo has no
+GitHub coordinates (no remote) and so can't be addressed in the path UI.
+
 The API base URL is configured via `NEXT_PUBLIC_API_URL`. Default is empty
 (same-origin) so the embedded production build, served by the Go binary,
 hits whatever host the page came from. Set it explicitly when running
@@ -179,8 +185,13 @@ Components generated with `shadcn` CLI using New York style. Config in `componen
 ### Running Locally
 
 ```bash
-# Both server + web (recommended)
+# Both server + web (recommended) — local single-repo mode: serves the
+# current git repo and the UI opens it directly (no picker).
 mise run dev
+
+# Both server + web in DB-backed multi-tenant mode (the hosted model;
+# shows the repo picker). Run `mise run db:up` first.
+mise run dev:hosted
 
 # Web only (needs API running separately)
 mise run web:dev
@@ -188,6 +199,11 @@ mise run web:dev
 # Server only
 go run ./apps/server --port 8080
 ```
+
+`dev` and `dev:hosted` share `Procfile.dev`; they differ only in whether
+`STACKIT_DATABASE_URL` is set (the `dev` task clears it). When the server
+reports `singleRepo` via `/api/v1/config`, the web client skips the picker
+and navigates straight to the sole repo.
 
 The web dev server runs at `http://localhost:3000` and proxies API requests to `http://localhost:8080`.
 

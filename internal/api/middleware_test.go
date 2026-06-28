@@ -27,7 +27,7 @@ func TestStatusWriterImplementsFlusherWhenWrappedWriterDoes(t *testing.T) {
 func TestCORSMiddlewareAllowsConfiguredOrigin(t *testing.T) {
 	t.Parallel()
 
-	handler := corsMiddleware([]string{"http://example.com"}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := corsMiddleware([]string{"http://example.com"}, false, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -47,12 +47,11 @@ func TestCORSMiddlewareAllowsConfiguredOrigin(t *testing.T) {
 func TestCORSMiddlewareRejectsLoopbackOriginByDefault(t *testing.T) {
 	t.Parallel()
 
-	// Previously the middleware allowed any loopback origin automatically.
-	// On a public deploy that opens an attack surface for anything else
-	// running on the host, so the rule was removed; localhost must be in
-	// -cors to be accepted.
+	// With allowLoopback off (the exposed-server posture), loopback origins are
+	// not auto-allowed: localhost must be in -cors to be accepted, so the server
+	// is safe on a host shared with untrusted processes.
 	for _, origin := range []string{"http://localhost:5100", "http://127.0.0.1:3000", "http://[::1]:5173"} {
-		handler := corsMiddleware(nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handler := corsMiddleware(nil, false, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 
@@ -66,10 +65,49 @@ func TestCORSMiddlewareRejectsLoopbackOriginByDefault(t *testing.T) {
 	}
 }
 
+func TestCORSMiddlewareAllowsLoopbackOriginWhenEnabled(t *testing.T) {
+	t.Parallel()
+
+	// On a loopback bind (local dev), any loopback origin is accepted on its
+	// environment-assigned port without an explicit allowlist entry.
+	for _, origin := range []string{"http://localhost:5100", "http://127.0.0.1:3000", "http://[::1]:5173"} {
+		handler := corsMiddleware(nil, true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/view", nil)
+		req.Header.Set("Origin", origin)
+
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		require.Equalf(t, origin, rr.Header().Get("Access-Control-Allow-Origin"), "loopback origin %q should be allowed", origin)
+		require.Equal(t, "true", rr.Header().Get("Access-Control-Allow-Credentials"))
+	}
+}
+
+func TestCORSMiddlewareRejectsNonLoopbackOriginEvenWhenLoopbackEnabled(t *testing.T) {
+	t.Parallel()
+
+	// allowLoopback widens only to loopback hosts; a non-local origin is still
+	// rejected unless explicitly in -cors.
+	handler := corsMiddleware(nil, true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/view", nil)
+	req.Header.Set("Origin", "http://evil.example.com")
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	require.Empty(t, rr.Header().Get("Access-Control-Allow-Origin"))
+}
+
 func TestCORSMiddlewareRejectsUnconfiguredNonLocalOrigin(t *testing.T) {
 	t.Parallel()
 
-	handler := corsMiddleware(nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := corsMiddleware(nil, false, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

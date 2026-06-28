@@ -13,7 +13,19 @@ import { fetchRepos, type RepoSummary } from "@/lib/api";
 import { buildRepoPath } from "@/lib/repo-route";
 import { AddRepository } from "./add-repository";
 
-export function RepoPicker() {
+interface RepoPickerProps {
+  // autoOpenSingle navigates straight to the sole repo (single-repo / local
+  // mode) instead of rendering the picker — choosing a repo is only meaningful
+  // in the hosted, multi-repo model.
+  autoOpenSingle?: boolean;
+}
+
+// openableRepo reports whether a repo can be addressed in the path-based UI —
+// it needs GitHub coordinates, which a repo with no remote lacks.
+const openableRepo = (repo: RepoSummary): repo is RepoSummary & { owner: string; repo: string } =>
+  Boolean(repo.owner && repo.repo);
+
+export function RepoPicker({ autoOpenSingle = false }: RepoPickerProps) {
   const router = useRouter();
   const [repos, setRepos] = useState<RepoSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +33,7 @@ export function RepoPicker() {
   // Repos are addressed by their GitHub coordinates. A repo with no remote has
   // none and can't be opened in the path-based UI.
   const openRepo = (repo: RepoSummary) => {
-    if (!repo.owner || !repo.repo) return;
+    if (!openableRepo(repo)) return;
     router.push(buildRepoPath(repo.owner, repo.repo, null));
   };
 
@@ -40,6 +52,25 @@ export function RepoPicker() {
       active = false;
     };
   }, []);
+
+  // In single-repo mode, redirect straight to the one repo once it loads.
+  // router.replace (not push) keeps the picker out of history so Back doesn't
+  // bounce here. Falls through to the normal render when the repo can't be
+  // addressed (no remote) so the user still sees a useful state.
+  const soleRepo = autoOpenSingle && repos?.length === 1 ? repos[0] : null;
+  useEffect(() => {
+    if (soleRepo && openableRepo(soleRepo)) {
+      router.replace(buildRepoPath(soleRepo.owner, soleRepo.repo, null));
+    }
+  }, [soleRepo, router]);
+
+  if (soleRepo && openableRepo(soleRepo)) {
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
+        Opening {soleRepo.displayName || soleRepo.id}…
+      </div>
+    );
+  }
 
   if (error) {
     return (

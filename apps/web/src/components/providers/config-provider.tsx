@@ -6,6 +6,7 @@ import { fetchConfig, type ConfigResponse } from "@/lib/api";
 const ConfigContext = createContext<ConfigResponse>({
   readOnly: false,
   authRequired: true,
+  singleRepo: false,
 });
 
 export function useConfig() {

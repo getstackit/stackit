@@ -19,17 +19,19 @@ type authBuildResult struct {
 // authBuildParams describes the runtime posture buildAuthConfig needs. The
 // auth requirement keys off exposure (a non-loopback bind), not the env name:
 // a server reachable off-host must be authenticated or read-only, however it
-// got that way.
+// got that way. On a loopback bind auth is off by default — a local run should
+// "just work" without a login — so forceAuth opts back in for testing OAuth.
 type authBuildParams struct {
-	disabled bool // -auth-disabled was passed
-	exposed  bool // resolved bind is non-loopback (reachable off-host)
-	readOnly bool // read-only posture: writes impossible, reads anonymous
-	prod     bool // production env: force Secure cookies (behind TLS)
+	disabled  bool // -auth-disabled was passed
+	forceAuth bool // -auth was passed: opt into the OAuth gate on a loopback bind
+	exposed   bool // resolved bind is non-loopback (reachable off-host)
+	readOnly  bool // read-only posture: writes impossible, reads anonymous
+	prod      bool // production env: force Secure cookies (behind TLS)
 }
 
 // buildAuthConfig wires up the OAuth handler, session store, and allowlist
 // from environment variables. Returns (nil, nil) when auth is off (explicitly
-// disabled, or unconfigured on a non-exposed/read-only server); an error when
+// disabled, or on a loopback bind that didn't opt in via -auth); an error when
 // an exposed, writable server would be left unauthenticated.
 func buildAuthConfig(p authBuildParams) (*authBuildResult, error) {
 	// An exposed, writable server must be authenticated. Read-only removes the
@@ -37,9 +39,21 @@ func buildAuthConfig(p authBuildParams) (*authBuildResult, error) {
 	mustAuth := p.exposed && !p.readOnly
 
 	if p.disabled {
+		if p.forceAuth {
+			return nil, errors.New("-auth and -auth-disabled are mutually exclusive")
+		}
 		if mustAuth {
 			return nil, errors.New("-auth-disabled is not allowed when the server is reachable off-host (non-loopback bind): it would expose an unauthenticated, writable server. Pass -read-only, bind loopback (STACKIT_ENV=local), or configure GitHub OAuth")
 		}
+		return nil, nil
+	}
+
+	// On a loopback bind (not exposed, not read-only-mandated) auth is off by
+	// default even when GitHub creds are present in the environment: a local
+	// run should "just work" without sending the operator through an OAuth
+	// login. Opt in with -auth (STACKIT_AUTH) to exercise the login flow
+	// locally. An exposed server still falls through to the required-auth path.
+	if !mustAuth && !p.forceAuth {
 		return nil, nil
 	}
 
@@ -48,14 +62,14 @@ func buildAuthConfig(p authBuildParams) (*authBuildResult, error) {
 	baseURL := strings.TrimSpace(os.Getenv("STACKIT_BASE_URL"))
 	sessionKey := strings.TrimSpace(os.Getenv("STACKIT_SESSION_KEY"))
 
-	// When the server isn't exposed (local loopback) or is read-only, missing
-	// OAuth config is "off by default" — a local dev binary shouldn't need env
-	// vars to boot, and a read-only server serves reads anonymously anyway.
+	// Auth is now required (exposed+writable) or explicitly requested (-auth).
+	// Wholly unconfigured OAuth is an error in both cases — the message differs
+	// so the operator knows which lever they tripped.
 	if clientID == "" && clientSecret == "" && baseURL == "" && sessionKey == "" {
-		if mustAuth {
-			return nil, errors.New("the server is reachable off-host (non-loopback bind) but auth is not configured: set STACKIT_GITHUB_CLIENT_ID, STACKIT_GITHUB_CLIENT_SECRET, STACKIT_BASE_URL, STACKIT_SESSION_KEY (and STACKIT_ALLOWED_GH_USERS or STACKIT_ALLOWED_GH_ORG), or pass -read-only to serve anonymously")
+		if p.forceAuth {
+			return nil, errors.New("-auth was set but GitHub OAuth is not configured: set STACKIT_GITHUB_CLIENT_ID, STACKIT_GITHUB_CLIENT_SECRET, STACKIT_BASE_URL, STACKIT_SESSION_KEY (and STACKIT_ALLOWED_GH_USERS or STACKIT_ALLOWED_GH_ORG)")
 		}
-		return nil, nil
+		return nil, errors.New("the server is reachable off-host (non-loopback bind) but auth is not configured: set STACKIT_GITHUB_CLIENT_ID, STACKIT_GITHUB_CLIENT_SECRET, STACKIT_BASE_URL, STACKIT_SESSION_KEY (and STACKIT_ALLOWED_GH_USERS or STACKIT_ALLOWED_GH_ORG), or pass -read-only to serve anonymously")
 	}
 
 	if clientID == "" {

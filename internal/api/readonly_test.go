@@ -186,4 +186,22 @@ func TestConfigEndpointAuthDisabled(t *testing.T) {
 	cfg := fetchConfig(t, newTestHandler(t, false))
 	require.False(t, cfg.ReadOnly)
 	require.False(t, cfg.AuthRequired)
+	require.False(t, cfg.SingleRepo, "multi-tenant by default")
+}
+
+func TestConfigEndpointSingleRepo(t *testing.T) {
+	t.Parallel()
+
+	// Single-repo (local) mode is advertised so the web client opens the sole
+	// repo directly instead of showing the hosted-only picker.
+	srv := NewServer(ServerConfig{
+		APIPrefixes: []string{"/api/v1"},
+		Registry:    registry.New(),
+		SingleRepo:  true,
+	})
+	handler, err := srv.buildHandler()
+	require.NoError(t, err)
+
+	cfg := fetchConfig(t, handler)
+	require.True(t, cfg.SingleRepo)
 }

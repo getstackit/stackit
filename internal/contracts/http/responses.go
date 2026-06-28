@@ -17,6 +17,11 @@ type ConfigResponse struct {
 	// public read-only server and when auth is disabled, so the client knows
 	// not to send the user through a login flow.
 	AuthRequired bool `json:"authRequired"`
+	// SingleRepo is true when the server runs in single-repo mode (the local
+	// `-cwd`/discovery shortcut, not the DB-backed multi-tenant model). The
+	// client skips the repo picker and opens the sole repo directly — picking
+	// a repo is only meaningful in the hosted, multi-repo model.
+	SingleRepo bool `json:"singleRepo"`
 }
 
 // RepoSummary is one entry in ReposListResponse — the metadata clients

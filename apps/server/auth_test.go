@@ -91,7 +91,9 @@ func TestBuildAuthConfig_PartialEnvErrors(t *testing.T) {
 		"STACKIT_ALLOWED_GH_USERS":     "jonnii",
 	})
 
-	_, err := buildAuthConfig(authBuildParams{})
+	// forceAuth so the loopback default-off path doesn't short-circuit before
+	// the per-field validation we want to exercise.
+	_, err := buildAuthConfig(authBuildParams{forceAuth: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "STACKIT_GITHUB_CLIENT_SECRET")
 }
@@ -106,12 +108,57 @@ func TestBuildAuthConfig_HappyPath(t *testing.T) {
 		"STACKIT_ALLOWED_GH_USERS":     "jonnii",
 	})
 
-	r, err := buildAuthConfig(authBuildParams{})
+	// forceAuth: a loopback bind is anonymous by default even with full creds.
+	r, err := buildAuthConfig(authBuildParams{forceAuth: true})
 	require.NoError(t, err)
 	require.NotNil(t, r)
 	require.NotNil(t, r.cfg.Handler)
 	require.NotNil(t, r.cfg.SessionStore)
 	require.NoError(t, r.store.Close())
+}
+
+func TestBuildAuthConfig_LocalCredsPresentDefaultsOff(t *testing.T) {
+	// t.Setenv is incompatible with t.Parallel; these tests share process env.
+	withEnv(t, map[string]string{
+		"STACKIT_GITHUB_CLIENT_ID":     "id",
+		"STACKIT_GITHUB_CLIENT_SECRET": "secret",
+		"STACKIT_BASE_URL":             "http://localhost:8080",
+		"STACKIT_SESSION_KEY":          mustKey(t),
+		"STACKIT_ALLOWED_GH_USERS":     "jonnii",
+	})
+
+	// The local-experience guarantee: a loopback bind with full GitHub creds in
+	// the environment still boots anonymously, so `stackit-server` in a repo
+	// "just works" without an OAuth login.
+	r, err := buildAuthConfig(authBuildParams{})
+	require.NoError(t, err)
+	require.Nil(t, r, "loopback bind defaults to anonymous even with creds present")
+}
+
+func TestBuildAuthConfig_ForceAuthNoCredsErrors(t *testing.T) {
+	// t.Setenv is incompatible with t.Parallel; these tests share process env.
+	withEnv(t, map[string]string{
+		"STACKIT_GITHUB_CLIENT_ID":     "",
+		"STACKIT_GITHUB_CLIENT_SECRET": "",
+		"STACKIT_BASE_URL":             "",
+		"STACKIT_SESSION_KEY":          "",
+		"STACKIT_ALLOWED_GH_USERS":     "",
+		"STACKIT_ALLOWED_GH_ORG":       "",
+	})
+
+	// -auth on a loopback bind with no OAuth config is a usage error: the
+	// operator asked for the login flow but gave nothing to authenticate with.
+	_, err := buildAuthConfig(authBuildParams{forceAuth: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "-auth")
+}
+
+func TestBuildAuthConfig_DisabledAndForceConflict(t *testing.T) {
+	t.Parallel()
+
+	_, err := buildAuthConfig(authBuildParams{disabled: true, forceAuth: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "mutually exclusive")
 }
 
 func TestBuildAuthConfig_ExposedHTTPBaseURLRefused(t *testing.T) {
@@ -160,8 +207,8 @@ func TestBuildAuthConfig_LocalHTTPBaseURLOK(t *testing.T) {
 	})
 
 	// Not exposed (loopback) + http:// is fine for local dev — the cookie never
-	// leaves the host.
-	r, err := buildAuthConfig(authBuildParams{})
+	// leaves the host. forceAuth because a loopback bind is otherwise anonymous.
+	r, err := buildAuthConfig(authBuildParams{forceAuth: true})
 	require.NoError(t, err)
 	require.NotNil(t, r)
 	require.NoError(t, r.store.Close())
@@ -178,7 +225,9 @@ func TestBuildAuthConfig_EmptyAllowlistErrors(t *testing.T) {
 		"STACKIT_ALLOWED_GH_ORG":       "",
 	})
 
-	_, err := buildAuthConfig(authBuildParams{})
+	// forceAuth so the empty-allowlist validation runs (loopback is otherwise
+	// anonymous and would short-circuit before the allowlist is built).
+	_, err := buildAuthConfig(authBuildParams{forceAuth: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "allowlist")
 }

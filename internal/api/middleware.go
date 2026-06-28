@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -117,11 +119,14 @@ func maxBodyMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// corsMiddleware adds CORS headers for the given allowed origins. Origins
-// must be configured explicitly via -cors; there is no implicit loopback
-// allowance, so the server is safe to run on a host shared with untrusted
-// processes.
-func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
+// corsMiddleware adds CORS headers for the given allowed origins. Origins are
+// configured explicitly via -cors. When allowLoopback is set (only on a
+// loopback bind, never when the server is exposed), any loopback origin
+// (localhost / 127.0.0.1 / [::1] on any port, http or https) is also accepted —
+// local dev web servers get an environment-assigned port, so a fixed allowlist
+// can't keep up. An exposed server keeps the strict explicit allowlist, so it
+// stays safe on a host shared with untrusted processes.
+func corsMiddleware(allowedOrigins []string, allowLoopback bool, next http.Handler) http.Handler {
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		originSet[strings.TrimRight(o, "/")] = struct{}{}
@@ -129,7 +134,11 @@ func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := strings.TrimRight(r.Header.Get("Origin"), "/")
-		if _, ok := originSet[origin]; ok {
+		_, allowed := originSet[origin]
+		if !allowed && allowLoopback && isLoopbackOrigin(origin) {
+			allowed = true
+		}
+		if allowed {
 			h := w.Header()
 			h.Set("Access-Control-Allow-Origin", origin)
 			h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -146,6 +155,29 @@ func corsMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isLoopbackOrigin reports whether origin is an http(s) URL whose host is a
+// loopback address (localhost, 127.0.0.0/8, or ::1), on any port. Used to
+// accept the environment-assigned port of a local dev web server without an
+// explicit allowlist entry. Only consulted on a loopback bind.
+func isLoopbackOrigin(origin string) bool {
+	if origin == "" {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // loggingMiddleware logs each request with method, path, status, duration,

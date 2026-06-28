@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -1153,6 +1154,95 @@ func TestReadBranchRemoteStatuses(t *testing.T) {
 		main := s.Engine.GetBranch("main")
 		status := s.Engine.ReadBranchRemoteStatuses(context.Background(), engine.BranchesOf(main)).ForBranch(main)
 		require.False(t, status.Matches(), "main should not match empty remote")
+	})
+}
+
+func TestTrunkRemoteState(t *testing.T) {
+	t.Parallel()
+
+	// setRemoteTrunk points refs/remotes/origin/main at the given ref (resolved to
+	// a SHA), simulating a fetched remote-tracking trunk without any network.
+	setRemoteTrunk := func(t *testing.T, s *scenario.Scenario, ref string) {
+		t.Helper()
+		sha, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", ref)
+		require.NoError(t, err)
+		require.NoError(t, s.Scene.Repo.RunGitCommand("update-ref", "refs/remotes/origin/main", strings.TrimSpace(sha)))
+	}
+
+	t.Run("no remote-tracking ref is not guarded", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		state := s.Engine.TrunkRemoteState(context.Background())
+		require.False(t, state.HasRemoteRef, "with no origin/main the guard must stay inert")
+		require.False(t, state.AheadOrDiverged)
+	})
+
+	t.Run("trunk equal to remote is not ahead", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		setRemoteTrunk(t, s, "main")
+
+		state := s.Engine.TrunkRemoteState(context.Background())
+		require.True(t, state.HasRemoteRef)
+		require.False(t, state.AheadOrDiverged, "synced trunk must not be flagged")
+		require.Equal(t, state.LocalSha, state.RemoteSha)
+		require.Equal(t, "origin/main", state.RemoteRef)
+	})
+
+	t.Run("trunk ahead of remote is flagged", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		setRemoteTrunk(t, s, "main")
+
+		// Local main advances past the recorded remote tip (un-pushed commit).
+		s.Commit("un-pushed trunk commit")
+
+		state := s.Engine.TrunkRemoteState(context.Background())
+		require.True(t, state.HasRemoteRef)
+		require.True(t, state.AheadOrDiverged, "local trunk ahead of origin/main must be flagged")
+		require.NotEqual(t, state.LocalSha, state.RemoteSha)
+	})
+
+	t.Run("trunk behind remote is not flagged", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		// Build a descendant commit and point origin/main at it, leaving local main
+		// strictly behind (still an ancestor of the remote).
+		require.NoError(t, s.Scene.Repo.RunGitCommand("branch", "remote-ahead", "main"))
+		require.NoError(t, s.Scene.Repo.CheckoutBranch("remote-ahead"))
+		s.Commit("landed on origin")
+		setRemoteTrunk(t, s, "remote-ahead")
+		require.NoError(t, s.Scene.Repo.CheckoutBranch("main"))
+
+		state := s.Engine.TrunkRemoteState(context.Background())
+		require.True(t, state.HasRemoteRef)
+		require.False(t, state.AheadOrDiverged, "trunk behind origin/main builds only on remote commits")
+	})
+
+	t.Run("trunk diverged from remote is flagged", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		// Common ancestor = current main tip.
+		base, err := s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", "main")
+		require.NoError(t, err)
+		base = strings.TrimSpace(base)
+
+		// Remote-only commit on top of the common ancestor.
+		require.NoError(t, s.Scene.Repo.RunGitCommand("branch", "remote-work", base))
+		require.NoError(t, s.Scene.Repo.CheckoutBranch("remote-work"))
+		s.Commit("landed on origin only")
+		setRemoteTrunk(t, s, "remote-work")
+		require.NoError(t, s.Scene.Repo.CheckoutBranch("main"))
+
+		// Local main gets its own divergent commit on the same ancestor.
+		s.Commit("local divergent commit")
+
+		state := s.Engine.TrunkRemoteState(context.Background())
+		require.True(t, state.HasRemoteRef)
+		require.True(t, state.AheadOrDiverged, "diverged trunk must be flagged like the ahead case")
 	})
 }
 

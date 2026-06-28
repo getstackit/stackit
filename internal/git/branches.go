@@ -137,7 +137,7 @@ func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision strin
 		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)
 	}
 	refName := fmt.Sprintf("refs/heads/%s", branchName)
-	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", refName, sha); err != nil {
+	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", "-m", "stackit: update branch ref", refName, sha); err != nil {
 		return fmt.Errorf("failed to update branch ref: %w", err)
 	}
 	return nil

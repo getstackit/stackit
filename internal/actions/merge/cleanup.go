@@ -90,13 +90,21 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 	affectedBranches := make([]string, 0, len(branchNames))
 
 	// Fetch every PR's state and body in one GraphQL query instead of a REST
-	// GetPullRequest per branch.
+	// GetPullRequest per branch. Collect branch+prInfo pairs so we don't
+	// call GetPrInfo() twice per branch.
+	type branchWithPR struct {
+		branch engine.Branch
+		prInfo *engine.PrInfo
+	}
+	branchPRs := make([]branchWithPR, 0, len(branchNames))
 	prNumbers := make([]int, 0, len(branchNames))
 	for _, branchName := range branchNames {
-		prInfo, err := c.engine.GetBranch(branchName).GetPrInfo()
+		branch := c.engine.GetBranch(branchName)
+		prInfo, err := branch.GetPrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil {
 			continue
 		}
+		branchPRs = append(branchPRs, branchWithPR{branch: branch, prInfo: prInfo})
 		prNumbers = append(prNumbers, *prInfo.Number())
 	}
 	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.Git(), repoOwner, repoName, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
@@ -105,19 +113,15 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		prDetails = map[int]github.PRStateBody{}
 	}
 
-	for _, branchName := range branchNames {
-		branch := c.engine.GetBranch(branchName)
-		prInfo, err := branch.GetPrInfo()
-		if err != nil || prInfo == nil || prInfo.Number() == nil {
-			continue
-		}
-
+	for _, bpr := range branchPRs {
+		branch := bpr.branch
+		prInfo := bpr.prInfo
 		prNumber := *prInfo.Number()
 
 		// Get current PR state/body from the batched fetch
 		existingPR, ok := prDetails[prNumber]
 		if !ok {
-			out.Debug("Failed to get PR #%d for %s", prNumber, branchName)
+			out.Debug("Failed to get PR #%d for %s", prNumber, branch.GetName())
 			continue
 		}
 
@@ -149,10 +153,10 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 
 		// Upsert PR info to keep metadata in sync
 		if err := c.engine.UpsertPrInfo(ctx, branch, prInfo); err != nil {
-			out.Debug("Failed to upsert PR info for %s: %v", branchName, err)
+			out.Debug("Failed to upsert PR info for %s: %v", branch.GetName(), err)
 		}
 
-		affectedBranches = append(affectedBranches, branchName)
+		affectedBranches = append(affectedBranches, branch.GetName())
 	}
 
 	// Sync metadata to remote

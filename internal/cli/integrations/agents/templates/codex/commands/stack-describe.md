@@ -8,12 +8,37 @@ Generate or refresh stack and PR descriptions from the current branch history.
 
 ## Workflow
 
-1. Inspect:
+1. Build context cheapest-first. Work down this ladder and **stop as soon as you
+   can write an accurate description** — most stacks never need past the first rung.
+   **Never run a full `git diff` of the stack;** it burns enormous context for
+   little signal over the cheaper sources below.
 
-   ```bash
-   stackit tree --no-interactive
-   git log --oneline --decorate -20
-   ```
+   1. **Commit subjects — cheapest.** Usually all you need:
+
+      ```bash
+      stackit tree --no-interactive
+      git log --oneline --decorate -20
+      ```
+
+   2. **PR descriptions — cheap, high-signal.** When subjects are thin and a
+      branch has a PR, read the existing PR body (a human/agent already
+      summarized intent) and synthesize from it rather than from code:
+
+      ```bash
+      gh pr view <pr_number> --json title,body -q '.title, .body'
+      ```
+
+   3. **Changed file names — cheap, names only.** To see which subsystems a
+      branch touches without reading contents:
+
+      ```bash
+      git diff --name-only <parent>..<branch>
+      ```
+
+   If after all of this the intent is still unclear on a large stack and your
+   harness supports delegating to a sub-agent, have the sub-agent read the diff
+   and return a 2–3 sentence summary so the diff stays out of your main context.
+   Otherwise describe from the signals above — do not read the full diff yourself.
 
 2. Generate a title and description from the history:
    - **Title** — max 72 chars, imperative mood, summarizes the whole stack.

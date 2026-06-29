@@ -48,9 +48,18 @@ NewAbsorbCmd → common.Run                            (same bootstrap as co)
 
 ## Proposed wins (ranked)
 
-### 1. Same worktree-validation fix benefits the post-absorb restack *(shared with modify.md #1)*
+### 1. Worktree reuse for the overlapping-file post-absorb restack *(shared with modify.md #1)*
 
-`RestackBranches` here goes through the same `ValidateRebases` worktree-per-spec path. Trivially-safe rebases (very common after absorb — most hunks land in a single ancestor and don't change descendant-touched files) could skip validation entirely.
+> **Status:** Partly addressed for free. `RestackBranches` here goes through the
+> same `ValidateRebases` path, which now has a shipped conflict-free fast path:
+> rebases whose files are disjoint from the parent's changes skip the worktree
+> entirely (single- *and* multi-commit). After absorb most hunks land in a single
+> ancestor and don't touch descendant files, so this common case already takes the
+> no-worktree path automatically.
+
+Remaining: branches whose files **overlap** the absorbed change still create a
+validation worktree each. The shared worktree-reuse-per-depth-level idea
+(`modify.md` #1) is what's left to amortize those.
 
 ### 2. Drop the redundant pre-staging `HasStagedChanges` call *(small, low risk)*
 

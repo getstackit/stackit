@@ -97,18 +97,6 @@ Remaining redundant probes:
 
 ---
 
-### 6. Conflict-impossible validation: avoid per-spec worktrees when safe
-
-> **Status:** Partially done — the core mechanism shipped. `validateSingleSpec` calls `tryConflictFreeReplay` (`internal/engine/rebase_validator.go:355`, def `:419`): it compares the changed-file sets (`rebaseFileOverlap`) and, when disjoint, builds the rebased SHA via `merge-tree --write-tree` + `commit-tree` with **no worktree**.
-
-**Files:** `internal/engine/rebase_validator.go`
-
-**Remaining:** the fast path bails when `len(commits) != 1`, so multi-commit branches still fall back to the worktree-per-spec path. Extend `tryConflictFreeReplay` to replay multiple commits (sequential `merge-tree`/`commit-tree`, or a single range replay) while keeping the disjoint-file-set guard.
-
-**Affects:** modify.md #1, restack.md #1, absorb.md #1.
-
----
-
 ### 7. Reuse a single worktree per depth level for validation
 
 When #6's fast path can't apply (genuinely overlapping changes, multi-commit), validation still creates one worktree per spec (`rebase_validator.go:367`). It could amortize worktree creation across siblings at the same depth: one worktree per concurrency lane, reset between specs via `git rebase --abort` + `git reset --hard`. Note the tradeoff with the existing per-spec parallelism.
@@ -169,6 +157,7 @@ These wins have fully landed. Numbering is preserved so per-command page referen
 
 - **#10 — Gate `IsInManagedWorktree` to commands that need it.** `SkipManagedWorktreeCheck` exists, is applied to read-only commands via `ApplyReadOnlyCurrentBranch`, and call sites are minimal (`common.go` + tests). Keep applying it to new read-only commands.
 - **#11 — Stop calling `ReloadRepository` after every commit.** go-git was removed entirely. There is no repo handle to close and no worktree re-scan; the expensive reopen this targeted no longer exists. The global revision cache it relied on is also gone (and a global revision cache is now an explicit anti-pattern — see `.claude/rules/code-style.md`).
+- **#6 — Conflict-impossible validation fast path.** `validateSingleSpec` calls `tryConflictFreeReplay` (`internal/engine/rebase_validator.go`): when the branch's changed files are disjoint from the parent's, it replays the branch onto the new base via `merge-tree --write-tree` + `commit-tree` with **no worktree**. Now covers **multi-commit branches** too — each commit is replayed oldest-first via `replayCommitConflictFree`, chained onto the previous result, preserving per-commit author identity and message. The remaining worktree-amortization idea lives on as #7.
 
 ---
 
@@ -176,11 +165,11 @@ These wins have fully landed. Numbering is preserved so per-command page referen
 
 For maximum impact per engineering hour:
 
-1. **#6 multi-commit fast path** — the single-commit conflict-free replay already ships; extending it to multi-commit branches is the biggest remaining win for `modify`/`restack`/`absorb`.
-2. **#1 remaining load-mode adoption** — pure call-site changes (`children`, `down`, `up`, `top`, `bottom`) on top of finished engine infrastructure.
-3. **#2 batch stack-wide status checks** — removes the per-parent `git rev-parse` walks in `submit` and `info`.
-4. **#8 `RebuildBranches`** — scopes the remaining full rebuilds in `absorb`/`untrack`.
-5. **#3 on-demand diff batching** — `info --diff`/`--patch` and `absorb`'s commit scan.
+1. **#1 remaining load-mode adoption** — pure call-site changes (`down`, `bottom`) on top of finished engine infrastructure.
+2. **#2 batch stack-wide status checks** — removes the per-parent `git rev-parse` walks in `submit` and `info`.
+3. **#8 `RebuildBranches`** — scopes the remaining full rebuilds in `absorb`/`untrack`.
+4. **#3 on-demand diff batching** — `info --diff`/`--patch` and `absorb`'s commit scan.
+5. **#7 per-level worktree reuse** — amortizes the worktree cost that remains for genuinely overlapping multi-branch validation (the disjoint-file fast path #6 already eliminated the common case).
 6. **#9 combine txs** for `create` and `describe`; **#4 no-op snapshot skip**; **#5 / #12** hygiene.
 
 ## Order-of-magnitude estimates
@@ -189,7 +178,6 @@ Back-of-envelope guesses to size effort vs reward, not measured. Completed items
 
 | Win | Affected commands | Typical saving per affected run |
 |---|---|---|
-| #6 multi-commit fast path | modify, restack, absorb | N x ~300ms worktree creation (multi-commit branches) |
 | #1 remaining load-mode adoption | read-only/common commands | remaining bootstrap cost (50-500ms depending on branch count) |
 | #2 batch status checks | submit, info | N x `git rev-parse` per stack walk |
 | #3 on-demand diff batching | info, absorb | N x ~5ms `git` processes |

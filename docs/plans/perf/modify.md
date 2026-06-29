@@ -41,31 +41,33 @@ NewModifyCmd.RunE → common.Run                       (same bootstrap as co)
 
 1. **`git worktree add` per spec** inside `ValidateRebases`, **only when the fast
    path misses**. `validateSingleSpec` now tries `tryConflictFreeReplay` first
-   (see "Already shipped" below): for a single-commit descendant whose files are
-   disjoint from the parent's new changes, no worktree is created at all. The
-   worktree cost only applies to multi-commit descendants or overlapping file
-   sets. When it does apply, branches at the same depth are parallelized but each
+   (see "Already shipped" below): for any descendant (single- or multi-commit)
+   whose files are disjoint from the parent's new changes, no worktree is created
+   at all. The worktree cost only applies to descendants with **overlapping file
+   sets**. When it does apply, branches at the same depth are parallelized but each
    still gets its own worktree.
 2. **User pre-commit hook** during the `git commit --amend`. Outside stackit's control but it runs every modify.
 3. **`PlanRestack`** — several git ops per descendant, run sequentially. For a
-   deep stack, this is meaningful. See win #5.
+   deep stack, this is meaningful. See win #2.
 4. **Bootstrap (`rebuildInternal`)** — fixed cost; see `co.md`.
 
 `HasStagedChanges` is now a cheap `git diff --cached --quiet` index probe, no
 longer a full working-tree walk, so it is no longer a notable cost.
 
 For a **leaf branch amend** (no children): the restack block is skipped entirely.
-For a **mid-stack amend** with multi-commit or overlapping descendants: the
-worktree-validate dance still dominates.
+For a **mid-stack amend** with overlapping descendants: the worktree-validate
+dance still dominates.
 
 ## Already shipped (do not re-plan)
 
-- **Conflict-free fast path** — `validateSingleSpec` calls `tryConflictFreeReplay`
-  (`internal/engine/rebase_validator.go:355,425`), which compares
-  `GetChangedFiles(old-parent..new-parent)` against
-  `GetChangedFiles(old-parent..branch)` and, when the file sets are disjoint for a
-  single-commit branch, computes the rebased tree via `merge-tree --write-tree` +
-  `commit-tree` with no worktree. This is the original win #1.
+- **Conflict-free fast path (single- and multi-commit)** — `validateSingleSpec`
+  calls `tryConflictFreeReplay` (`internal/engine/rebase_validator.go:355`), which
+  compares `GetChangedFiles(old-parent..new-parent)` against
+  `GetChangedFiles(old-parent..branch)` and, when the file sets are disjoint,
+  replays the branch onto the new base with no worktree. Multi-commit branches are
+  replayed commit-by-commit via `replayCommitConflictFree` (oldest first, chained
+  onto the previous rebased result), preserving each commit's author identity and
+  message. This was the original win #1.
 - **`HasStagedChanges` coalescing** — moot: `HasStagedChanges` is now
   `git diff --cached --quiet` (`internal/git/staging.go:55`), not a `Status()`
   tree walk. The expensive walk the old win targeted no longer exists.
@@ -81,23 +83,7 @@ worktree-validate dance still dominates.
 
 ## Proposed wins (ranked)
 
-### 1. Extend conflict-free replay to multi-commit branches *(medium impact, high risk)*
-
-> **Status:** Partially done. The single-commit conflict-free fast path is
-> shipped (`tryConflictFreeReplay`, `internal/engine/rebase_validator.go:425`).
-> It bails out for multi-commit branches (`len(commits) != 1` → falls back to the
-> worktree path).
-
-Remaining work: handle multi-commit descendants without a worktree. This requires
-iterating each commit's diff and confirming the *aggregate* branch file set is
-disjoint from the parent's new changes, then replaying commits onto the new
-parent via repeated `commit-tree` (or a single squashed `merge-tree` when commit
-identity can be preserved). Higher risk than the single-commit case because each
-intermediate commit's tree must be reconstructed in order; keep it strictly
-opt-in to the proven-disjoint case and fall back to the worktree path on any
-uncertainty.
-
-### 2. Reuse a single validation worktree per depth level *(medium impact, medium risk)*
+### 1. Reuse a single validation worktree per depth level *(medium impact, medium risk)*
 
 > **Status:** Not started. `validateSingleSpec`
 > (`internal/engine/rebase_validator.go:367`) still calls
@@ -112,10 +98,11 @@ concurrency) instead of O(slow-path specs).
 Risk: rerere state and partial-rebase state need careful reset between specs. The
 current per-spec isolation is the safe design — make this an opt-in path for the
 validated-good case. Note the impact is now smaller than originally estimated,
-since the fast path already eliminates worktrees for the common single-commit
-disjoint case.
+since the fast path already eliminates worktrees for any disjoint-file case
+(single- or multi-commit); only branches with files overlapping the parent's
+changes still reach this slow path.
 
-### 3. Reduce `PlanRestack`'s per-branch git ops *(small impact)*
+### 2. Reduce `PlanRestack`'s per-branch git ops *(small impact)*
 
 > **Status:** Not started. `PlanRestack` (`internal/engine/restack_plan.go:10`)
 > loops over branches sequentially; `planRestackBranch` does several git ops per
@@ -143,13 +130,15 @@ Cheapest first step is the batch reads; only add fan-out if profiling still show
 STACKIT_NO_LOGGING=1 hyperfine \
   'echo // noop >> file.go; stackit modify -a --no-edit'
 
-# Mid-stack (5 multi-commit descendants) — measures worktree validation cost
+# Mid-stack (5 descendants with OVERLAPPING files) — measures worktree validation cost
 STACKIT_NO_LOGGING=1 hyperfine \
   'echo // noop >> file.go; stackit modify -a --no-edit'
 ```
 
-Use multi-commit descendants for the mid-stack case so the conflict-free fast
-path does not absorb the cost being measured. Instrument: each
+Use descendants whose files **overlap** the parent's changes for the mid-stack
+case so the conflict-free fast path does not absorb the cost being measured
+(disjoint single- and multi-commit branches now both take the no-worktree path).
+Instrument: each
 `validateSingleSpec`, the worktree creation specifically, `ValidateRebases` total,
 `PlanRestack`, and `git commit`. The delta between leaf and mid-stack is
 essentially the worktree validation cost that survives the fast path.

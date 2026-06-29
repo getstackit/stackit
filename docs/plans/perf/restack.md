@@ -20,40 +20,22 @@ NewRestackCmd → common.Run                           (same bootstrap as co)
               restackBranchesWithPlan                internal/actions/common.go:114
                 ├─ validateBranchAncestry            cheap
                 ├─ Engine.ValidateRebases            ← per-spec worktrees, with a conflict-free
-                │                                       fast path (see win #1)
+                │                                       fast path for disjoint-file branches (shipped)
                 ├─ (apply or conflict workflow)
                 └─ engine state writes
 ```
 
 ## Where time goes
 
-1. **`Engine.ValidateRebases`** dominates — same per-spec worktree creation that hurts `modify` and `absorb`. A conflict-free fast path now skips the worktree for **single-commit** branches whose diff is disjoint from the parent's (`tryConflictFreeReplay`, `internal/engine/rebase_validator.go:355,419`). Multi-commit branches still pay a worktree each, so a "stack of 8 branches all touch the same file" still validates in dependency order with width-level parallelism.
+1. **`Engine.ValidateRebases`** dominates — same per-spec worktree creation that hurts `modify` and `absorb`. A conflict-free fast path now skips the worktree for **any** branch (single- or multi-commit) whose diff is disjoint from the parent's (`tryConflictFreeReplay`, `internal/engine/rebase_validator.go:355`). Only branches whose files overlap the parent's changes still pay a worktree each, so a "stack of 8 branches all touch the same file" still validates in dependency order with width-level parallelism.
 2. **`Engine.PlanRestack`** — ~3 git ops per branch, built once in the CLI and threaded through to the action via `enginePlan` (it is not rebuilt). Still O(branches) git ops once. Each lookup hits git directly (no revision cache — see the note under removed wins).
-3. **`TakeBestEffortSnapshot`** — already batches its revision reads via `BatchGetRevisions` (`internal/engine/undo.go:121`), so the cost is one `git rev-parse` plus metadata listing, not per-branch iteration. It is skipped entirely when `undo.enabled=false`. Remaining overhead: it still runs for a no-op restack (see win #2).
+3. **`TakeBestEffortSnapshot`** — already batches its revision reads via `BatchGetRevisions` (`internal/engine/undo.go:121`), so the cost is one `git rev-parse` plus metadata listing, not per-branch iteration. It is skipped entirely when `undo.enabled=false`. Remaining overhead: it still runs for a no-op restack (see win #1).
 4. **`--parallel` with worktrees** — `restackGroupsParallel` (`internal/actions/restack.go:310`) dispatches independent stack groups to separate worktrees, created on demand via a bounded `utils.RunWithWorkers` pool. Each worktree creation is hundreds of ms; for the multi-stack case this is a feature (parallelism beats serial worktree-creates), but each group still individually pays per-spec validation.
 5. **Bootstrap** — same fixed cost as `co.md`.
 
 ## Proposed wins (ranked)
 
-### 1. Extend the conflict-free fast path to multi-commit branches *(shared with modify.md #1)*
-
-> **Status:** Partially done. The single-commit case is implemented:
-> `validateSingleSpec` calls `tryConflictFreeReplay`
-> (`internal/engine/rebase_validator.go:355`), which compares the parent's and
-> branch's changed-file sets (`rebaseFileOverlap`) and, when disjoint, produces
-> the rebased SHA with `git merge-tree --write-tree` + `commit-tree` — no
-> worktree. This already collapses typical post-amend restacks (one commit per
-> branch, disjoint files) to a few `git diff --name-only` invocations.
-
-Remaining work: `tryConflictFreeReplay` bails out for any branch with more than
-one commit (`len(commits) != 1` → fall back to the worktree path). Multi-commit
-branches still create a validation worktree even when every commit's diff is
-disjoint from the parent's amend diff. Extend the safe-replay path to iterate
-each commit (cherry-pick-equivalent via repeated `merge-tree`/`commit-tree`)
-when the aggregate file sets are disjoint, so deep stacks of small multi-commit
-branches also skip worktrees.
-
-### 2. Skip the snapshot when `!plan.HasWork()` *(trivial)*
+### 1. Skip the snapshot when `!plan.HasWork()` *(trivial)*
 
 `TakeBestEffortSnapshot` runs unconditionally in `RestackAction`
 (`internal/actions/restack.go:153`), before the work is dispatched. The CLI
@@ -67,7 +49,7 @@ when about to mutate refs). The `undo.enabled=false` skip is already handled
 inside `TakeBestEffortSnapshot` (`internal/actions/common.go`), so this is the
 only remaining snapshot win.
 
-### 3. Reuse a validation worktree per depth level *(shared with modify.md #2)*
+### 2. Reuse a validation worktree per depth level *(shared with modify.md #1)*
 
 Within a level (sibling branches that fall through the fast path),
 `validateSingleSpec` creates a fresh worktree per spec
@@ -78,7 +60,7 @@ instead of one per fall-through spec. Note this trades some intra-level
 parallelism (siblings currently validate concurrently across worktrees) for
 fewer `git worktree add`/`remove` cycles, so measure before committing.
 
-### 4. `--all-stacks` parallel mode should reuse a worktree pool *(small impact, low risk)*
+### 3. `--all-stacks` parallel mode should reuse a worktree pool *(small impact, low risk)*
 
 `restackGroupsParallel` (`internal/actions/restack.go:310`) creates a worktree
 per group on demand inside `utils.RunWithWorkers` and tears it down with

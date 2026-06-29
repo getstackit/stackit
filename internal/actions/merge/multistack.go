@@ -286,15 +286,21 @@ func lockAndNotifyMultiStackPRs(ctx *app.Context, eng engine.Engine, includedSta
 	}
 
 	// Update PR info with consolidation branch
+	lockNames := make([]string, len(branchesToLock))
+	for i, b := range branchesToLock {
+		lockNames[i] = b.GetName()
+	}
+	allMeta, metaErrs := eng.BatchReadMetadataRaw(lockNames)
+
 	prUpdates := make(map[string]*engine.PrInfo, len(branchesToLock))
 	for _, b := range branchesToLock {
-		prInfo, err := b.GetPrInfo()
-		if err != nil {
-			out.Debug("Failed to read PR info for %s: %v", b.GetName(), err)
+		name := b.GetName()
+		if err, hasErr := metaErrs[name]; hasErr {
+			out.Debug("Failed to read PR info for %s: %v", name, err)
 			continue
 		}
-		if prInfo != nil {
-			prUpdates[b.GetName()] = prInfo.WithMergeBranch(consolidationBranch)
+		if prInfo := engine.NewPrInfoFromMeta(allMeta[name]); prInfo != nil {
+			prUpdates[name] = prInfo.WithMergeBranch(consolidationBranch)
 		}
 	}
 	if len(prUpdates) > 0 {

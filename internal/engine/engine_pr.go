@@ -20,8 +20,11 @@ func (e *engineImpl) GetPrInfo(branch Branch) (*PrInfo, error) {
 
 // NewPrInfoFromMeta creates a PrInfo from git.Meta
 func NewPrInfoFromMeta(meta *git.Meta) *PrInfo {
+	if meta == nil {
+		return nil
+	}
 	prInfo := meta.GetPrInfo()
-	if meta == nil || prInfo == nil {
+	if prInfo == nil {
 		return nil
 	}
 

@@ -117,6 +117,7 @@ type mergeExecuteEngine interface {
 	engine.SyncManager
 	engine.StackRewriter
 	engine.RemoteMetadataManager
+	BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error)
 	Git() git.Runner
 }
 

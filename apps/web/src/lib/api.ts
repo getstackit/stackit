@@ -153,6 +153,10 @@ export interface ViewResponse {
 export interface ConfigResponse {
   readOnly: boolean;
   authRequired: boolean;
+  // singleRepo is true in local single-repo mode: the client opens the sole
+  // repo directly instead of showing the (hosted-only) repo picker. Optional
+  // so an older server that omits it is treated as multi-tenant.
+  singleRepo?: boolean;
 }
 
 // --- Auth Types ---

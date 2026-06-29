@@ -55,8 +55,9 @@ with every authenticated user.
 
 | Var | Purpose |
 |-----|---------|
-| `STACKIT_ENV` | Deployment posture: `local` (default) or `production`. `production` binds `0.0.0.0`, emits JSON logs, forces `Secure` cookies, honors `$PORT`, and requires auth (or `-read-only`). `local` binds loopback (`127.0.0.1`) with auth optional. Set it to `production` on every hosted deploy. |
+| `STACKIT_ENV` | Deployment posture: `local` (default) or `production`. `production` binds `0.0.0.0`, emits JSON logs, forces `Secure` cookies, honors `$PORT`, and requires auth (or `-read-only`). `local` binds loopback (`127.0.0.1`) and serves anonymously — auth is off **even when the `STACKIT_GITHUB_*` creds are set**, so `mise run dev` "just works" without an OAuth login. Set `STACKIT_AUTH=1` to exercise the login flow locally. Set `STACKIT_ENV=production` on every hosted deploy. |
 | `PORT` | Listen port for **production** deploys. Honored when `-port` isn't passed and `STACKIT_ENV=production` — PaaS hosts (Railway, Fly, Heroku) inject it. Ignored in `local` so a stray `$PORT` from a dev shell can't move the listener. Defaults to `8080`. |
+| `STACKIT_AUTH` | Set to `1`/`true` to force-enable the GitHub OAuth gate on a loopback bind, so you can test the login flow locally (loopback binds are anonymous by default even when `STACKIT_GITHUB_*` is set). Ignored when the bind is exposed — auth is already required there. Requires the `STACKIT_GITHUB_*` values to be configured. Equivalent to `-auth`. |
 | `STACKIT_READ_ONLY` | Set to `1`/`true` to serve in read-only mode: the submit endpoint is disabled and reads are served anonymously, so a configured repo can be exposed to the public without write access. See [Read-only public mode](#read-only-public-mode). Equivalent to `-read-only`. |
 | `STACKIT_DATABASE_URL` | PostgreSQL connection string. When set, repos are served from the DB (and runtime [onboarding](#repository-onboarding) can persist new ones) instead of the `-cwd` single-repo shortcut. Equivalent to `-database-url`. |
 | `STACKIT_REPOS_ROOT` | Base directory under which per-repo checkouts live (`<root>/<owner>/<name>`). Required for DB-backed serving and onboarding. Equivalent to `-repos-root`. |
@@ -85,8 +86,9 @@ The most useful flags:
 | `-cwd` | _(empty)_ | Single-repo shortcut: serve the repo discovered from this path as `default`. Ignored when `-database-url` is set. |
 | `-port` | `8080` | Listen port; overrides `$PORT`. |
 | `-bind` | `127.0.0.1` (or `0.0.0.0` when `STACKIT_ENV=production`) | Interface to bind on. Pass `-bind 0.0.0.0` explicitly to expose the server without setting `STACKIT_ENV=production`. Binding a non-loopback interface requires auth or `-read-only`. |
-| `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. Loopback origins are **not** allowed implicitly — list each origin you want to accept. |
-| `-auth-disabled` | `false` | Skip the GitHub OAuth gate. **Refused** when the server binds a non-loopback interface (e.g. `STACKIT_ENV=production`) unless `-read-only` is set. Use only for local dev or when fronted by platform auth (Tailscale, Cloudflare Access). |
+| `-cors` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed CORS origins. On an **exposed** bind, loopback origins are **not** allowed implicitly — list each origin you want to accept. On a **loopback** bind, any loopback origin (`localhost`/`127.0.0.1`/`[::1]` on any port) is accepted automatically, since a local dev web server's port is environment-assigned. |
+| `-auth` | `false` | Force-enable the GitHub OAuth gate on a loopback bind to test the login flow locally. Ignored when the bind is exposed (auth is already required there). Mutually exclusive with `-auth-disabled`. Also settable via `STACKIT_AUTH`. |
+| `-auth-disabled` | `false` | Skip the GitHub OAuth gate. **Refused** when the server binds a non-loopback interface (e.g. `STACKIT_ENV=production`) unless `-read-only` is set. Flag-only by design (no env binding), so a stray env var can't disable auth. Use only for local dev or when fronted by platform auth (Tailscale, Cloudflare Access). |
 | `-read-only` | `false` | Serve in read-only mode: disable the submit endpoint and serve reads anonymously. Safe to expose publicly. See [Read-only public mode](#read-only-public-mode). Also settable via `STACKIT_READ_ONLY`. |
 
 Run `stackit-server -h` inside the container for the full list.
@@ -359,7 +361,9 @@ this doc revision and follow-on PRs):
 - Security headers on every response: `X-Content-Type-Options: nosniff`,
   `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `HSTS` with a
   two-year max-age, and a CSP locked to `'self'` for scripts/connects.
-- CORS allowlist is exact-match; no implicit loopback bypass.
+- CORS allowlist is exact-match on an exposed bind; no implicit loopback
+  bypass there. The automatic loopback-origin allowance is gated to loopback
+  binds only (local dev), so an exposed deploy is unaffected.
 - Per-IP request rate limiting (token bucket), concurrent-SSE caps
   (global + per-IP) with bounded lifetime, and a branch-diff concurrency
   throttle — abuse bounds for a public deployment, on by default.

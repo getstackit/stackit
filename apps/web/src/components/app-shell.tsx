@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { AuthProvider } from "@/components/providers/auth-provider";
-import { ConfigProvider } from "@/components/providers/config-provider";
+import { ConfigProvider, useConfig } from "@/components/providers/config-provider";
 import { RepoProvider } from "@/components/providers/repo-provider";
 import { RepoPicker } from "@/components/repo-picker/repo-picker";
 import { RepoView } from "@/components/repo-picker/repo-view";
@@ -21,6 +21,7 @@ const AUTH_DISABLED = process.env.NEXT_PUBLIC_STACKIT_AUTH_DISABLED === "1";
 const CONFIG_FALLBACK: ConfigResponse = {
   readOnly: false,
   authRequired: !AUTH_DISABLED,
+  singleRepo: false,
 };
 
 // Client shell driving both the unscoped picker and the per-repo view.
@@ -32,6 +33,7 @@ const CONFIG_FALLBACK: ConfigResponse = {
 // shell for deep links on refresh (see internal/api/static.go).
 function Home() {
   const { owner, repo } = parseRepoPath(usePathname());
+  const { singleRepo } = useConfig();
 
   return (
     <>
@@ -41,7 +43,7 @@ function Home() {
           <RepoView />
         </RepoProvider>
       ) : (
-        <RepoPicker />
+        <RepoPicker autoOpenSingle={singleRepo} />
       )}
     </>
   );

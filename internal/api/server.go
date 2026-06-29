@@ -29,6 +29,14 @@ type ServerConfig struct {
 	BindAddr    string
 	Port        int
 	CORSOrigins []string
+
+	// AllowLoopbackOrigins accepts any loopback browser origin (localhost /
+	// 127.0.0.1 / [::1] on any port) in addition to CORSOrigins. apps/server
+	// sets it only on a loopback bind so local dev web servers — whose port is
+	// environment-assigned — work without a fixed allowlist entry. An exposed
+	// server leaves it false and keeps the strict explicit allowlist.
+	AllowLoopbackOrigins bool
+
 	APIPrefixes []string
 	StaticFS    fs.FS
 	Registry    *registry.Registry
@@ -46,6 +54,11 @@ type ServerConfig struct {
 	// BranchDiffConcurrency caps how many branch-diff requests run their git
 	// subprocesses at once. Zero takes the handler default.
 	BranchDiffConcurrency int
+
+	// SingleRepo marks single-repo mode (the local -cwd/discovery shortcut, not
+	// the DB-backed multi-tenant model). It is surfaced via /api/v1/config so
+	// the web client skips the repo picker and opens the sole repo directly.
+	SingleRepo bool
 
 	// ReadOnly puts the server into a public read-only posture: the
 	// mutating submit route is replaced with a handler that refuses with
@@ -224,7 +237,7 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	// authRequired tells the client whether reads need a login. Read-only
 	// mode and auth-disabled both serve reads anonymously.
 	authRequired := s.config.Auth != nil && !s.config.ReadOnly
-	configHandler := handlers.NewConfigHandler(s.config.ReadOnly, authRequired)
+	configHandler := handlers.NewConfigHandler(s.config.ReadOnly, authRequired, s.config.SingleRepo)
 
 	// The submit route is the server's only mutating endpoint. In
 	// read-only mode it is replaced with a handler that refuses every
@@ -379,7 +392,7 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	// middleware that short-circuits).
 	handler := loggingMiddleware(root)
 	handler = maxBodyMiddleware(handler)
-	handler = corsMiddleware(s.config.CORSOrigins, handler)
+	handler = corsMiddleware(s.config.CORSOrigins, s.config.AllowLoopbackOrigins, handler)
 	handler = securityHeadersMiddleware(csp, handler)
 	handler = requestIDMiddleware(handler)
 	handler = recoverMiddleware(handler)

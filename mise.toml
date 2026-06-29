@@ -288,7 +288,14 @@ run = """
 """
 
 [tasks.dev]
-description = "Run server + web dev servers using overmind and Procfile.dev"
+description = "Run server + web dev servers (local single-repo mode: serves the current git repo, no picker)"
+# Clear STACKIT_DATABASE_URL (set in [env]) so the server takes the single-repo
+# cwd shortcut instead of the DB-backed multi-tenant path. Both dev tasks share
+# Procfile.dev; this inline clear is the only difference from dev:hosted.
+run = "STACKIT_DATABASE_URL= overmind start -f Procfile.dev"
+
+[tasks."dev:hosted"]
+description = "Run server + web dev servers in DB-backed multi-tenant mode (the hosted model; run db:up first)"
 run = "overmind start -f Procfile.dev"
 
 [tasks."dev:stop"]

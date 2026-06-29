@@ -291,38 +291,19 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []Trun
 
 	result := make([]TrunkCommitResponse, 0, len(collapsed))
 	for _, c := range collapsed {
-		message := c.Subject
-		// For stack-merge commits, use the consolidation PR's title from GitHub
-		// instead of the raw "Merge pull request #N from ..." subject
-		if c.StackSize > 0 && c.PRNumber != 0 && len(prTitles) > 0 {
-			if title, ok := prTitles[c.PRNumber]; ok {
-				message = title
-			}
-		}
-
+		// Message substitution and constituent-title selection are shared with
+		// the `stackit log` command via internal/git.
 		resp := TrunkCommitResponse{
-			SHA:        shortSHA(c.SHA),
-			Message:    message,
-			Author:     c.Author,
-			Date:       c.Date.Format(time.RFC3339),
-			PRNumber:   c.PRNumber,
-			Kind:       string(c.Kind),
-			StackSize:  c.StackSize,
-			StackPRs:   append([]int(nil), c.StackPRNumbers...),
-			StackScope: c.StackScope,
-		}
-
-		// Populate PR titles for stack-merge commits when available
-		if c.StackSize > 0 && len(prTitles) > 0 {
-			titles := make(map[int]string)
-			for _, pr := range c.StackPRNumbers {
-				if title, ok := prTitles[pr]; ok {
-					titles[pr] = title
-				}
-			}
-			if len(titles) > 0 {
-				resp.StackPRTitles = titles
-			}
+			SHA:           shortSHA(c.SHA),
+			Message:       git.CollapsedMessage(c, prTitles),
+			Author:        c.Author,
+			Date:          c.Date.Format(time.RFC3339),
+			PRNumber:      c.PRNumber,
+			Kind:          string(c.Kind),
+			StackSize:     c.StackSize,
+			StackPRs:      append([]int(nil), c.StackPRNumbers...),
+			StackScope:    c.StackScope,
+			StackPRTitles: git.ConstituentPRTitles(c, prTitles),
 		}
 
 		if resp.Kind == "" {

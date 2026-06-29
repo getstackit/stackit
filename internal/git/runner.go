@@ -699,6 +699,12 @@ func (r *runner) GetCommitRange(ctx context.Context, base, head, format string) 
 		return r.gitLogLines(ctx, rangeArg, "%h %s")
 	case "SUBJECT":
 		return r.gitLogLines(ctx, rangeArg, "%s")
+	case "SHA_SUBJECT":
+		// NUL-separated full SHA and subject on one record per commit. The line
+		// is never blank (%H is always present) so gitLogLines won't drop a
+		// commit with an empty subject, and the literal NUL survives the split
+		// on "\n". Callers split each entry on "\x00" to recover SHA + subject.
+		return r.gitLogLines(ctx, rangeArg, "%H%x00%s")
 	case "READABLE_WITH_DATE":
 		// Tab-separated: short SHA, RFC3339 UTC date, subject. Use Unix
 		// epoch from git and convert in Go to preserve the prior behavior of

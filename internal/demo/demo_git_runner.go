@@ -604,6 +604,10 @@ func (d *demoGitRunner) ListRefs(_ string) (map[string]string, error) {
 	return make(map[string]string), nil
 }
 
+func (d *demoGitRunner) RefDecorations() (map[string][]git.RefDecoration, error) {
+	return make(map[string][]git.RefDecoration), nil
+}
+
 func (d *demoGitRunner) ReadMetadata(_ string) (*git.Meta, error) {
 	return git.NewMeta(), nil
 }

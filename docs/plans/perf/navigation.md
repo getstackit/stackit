@@ -36,12 +36,12 @@ These commands are bundled because they share one performance story: once the en
 > - Lazy `LoadMode`s with on-demand promotion: `LoadModeBranchesOnly`, `LoadModeShared`, `LoadModeFull` (`internal/engine/engine.go:167-184`), promoted via `ensureSharedLoaded`/`ensureLocalLoaded` (`engine_impl.go:249`, `:310`).
 > - **Per-branch** lazy shared-metadata load: `ensureBranchSharedLoaded` (`engine_impl.go:271`), wired into the branch-status accessors used by parent/down/trunk (`engine_branch_status.go`, `engine_reader.go:101`).
 > - `parent` uses `common.RunReadOnlyCurrentBranch` (`parent.go:24`); default `trunk` applies `common.ApplyReadOnlyCurrentBranch` (`trunk.go:34`). Both resolve to `LoadModeBranchesOnly` + skip the managed-worktree check (`internal/cli/common/common.go:72-82`).
+> - **`down` and `bottom`** opt into `LoadModeBranchesOnly` when `--quiet` (`down.go`, `bottom.go`), mirroring the quiet exact-checkout path in `co`. They keep the managed-worktree check (checkout relies on it for worktree switching), so they set only `EngineLoadMode` — not `RunReadOnlyCurrentBranch`. `bottom`'s path no longer builds the full graph: `SwitchBranchAction` builds `Graph()` only for `DirectionTop` (`internal/actions/navigation/action.go`), since `DirectionBottom`'s `traverseDownward` walks the parent chain only.
 
-Remaining work — the graph-based commands still use the full `common.Run` path (`LoadModeFull`):
-- `children` (`children.go:25`), `up` (`up.go:40`), `top` (`top.go:27`), `bottom` (`bottom.go:25`) build the whole `Graph()` over `AllBranches()`, so they need shared metadata for the stack — but none of them read frozen / NeedsPRBodyUpdate / PR state, so they could drop to `LoadModeShared` and skip the `BatchReadLocalMetadata` pass.
-- `down` (`down.go:30`) only walks the parent chain via `GetParent()`, which already triggers per-branch promotion — it is the strongest candidate for `LoadModeBranchesOnly`.
+Why quiet-gated: in non-quiet mode `printBranchInfo` builds the full `Graph()` (`internal/actions/checkout.go:161`), which under `LoadModeBranchesOnly` would do N per-branch lazy reads instead of one batched `BatchReadMetadata` — i.e. *worse*. Quiet checkout skips `printBranchInfo`, so the lazy parent-chain walk is a clean win.
 
-Measure first: for these commands the win is skipping the local-metadata batch (and, for `down`, deferring shared reads to the visited branches), not the per-branch reads the infrastructure already provides.
+Remaining work — the graph-based commands still use the full `common.Run` path:
+- `children` (`children.go:25`), `up` (`up.go:40`), `top` (`top.go:27`) build the whole `Graph()` over `AllBranches()`, so they genuinely need shared metadata for every branch — but none of them read frozen / NeedsPRBodyUpdate / PR state, so they could drop to `LoadModeShared` and skip the `BatchReadLocalMetadata` pass. (They cannot use `LoadModeBranchesOnly` — enumerating children forces a full graph build, where the per-branch lazy path is slower than one batch read.)
 
 ### 2. `up --to` should DFS once, not K x N *(small impact, low risk)*
 

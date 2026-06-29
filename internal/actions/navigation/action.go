@@ -35,12 +35,15 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 	var targetBranch string
 	var err error
 
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
-
 	switch direction {
 	case DirectionBottom:
+		// Walks the parent chain only — no full graph needed, so the command can
+		// run under LoadModeBranchesOnly and lazily promote just the chain.
 		targetBranch = traverseDownward(currentBranch.GetName(), ctx)
 	case DirectionTop:
+		// Walking toward the tips needs child relationships, which requires the
+		// full stack graph.
+		graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
 		targetBranch, err = traverseUpward(currentBranch.GetName(), ctx, graph, handler)
 		if err != nil {
 			return actions.CheckoutResult{}, err

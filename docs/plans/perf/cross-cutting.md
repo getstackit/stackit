@@ -16,11 +16,11 @@ This document collects the wins that remain open across multiple per-command ana
 
 **Files:** command wrappers in `internal/cli` (the engine side is done)
 
-Default context creation uses `LoadModeShared`. Commands already opted into the lighter `LoadModeBranchesOnly` path via `common.ApplyReadOnlyCurrentBranch`: exact quiet `co`, `parent`, default `trunk`.
+Default context creation uses `LoadModeShared`. Commands already opted into the lighter `LoadModeBranchesOnly` path: exact quiet `co`, `parent`, default `trunk`, and (quiet) `down` / `bottom`. `down`/`bottom` keep the managed-worktree check (checkout relies on it) and gate on `--quiet` because non-quiet checkout's `printBranchInfo` builds the full graph anyway; `bottom`'s `SwitchBranchAction` no longer builds the graph for the downward direction.
 
 Remaining adoption:
 
-- `children`, `up`, `top`, `bottom` still use the full `common.Run` bootstrap; `down` only walks the parent chain and is the best remaining candidate for the lighter mode.
+- `children`, `up`, `top` enumerate children, which forces a full `Graph()` build over `AllBranches()` — they cannot use `LoadModeBranchesOnly` (the per-branch lazy path is slower than one batch there), but they read no local metadata so they could drop from the default to `LoadModeShared`'s already-batched shared read and skip the local-metadata pass.
 - `info` and stack-graph views need more than branch-list mode but rely on the per-branch promotion path rather than a full load — confirm they don't force `LoadModeFull`.
 - Non-quiet/fuzzy `co` still pays broader bootstrap because it needs graph/worktree/checkout context.
 
@@ -165,7 +165,7 @@ These wins have fully landed. Numbering is preserved so per-command page referen
 
 For maximum impact per engineering hour:
 
-1. **#1 remaining load-mode adoption** — pure call-site changes (`down`, `bottom`) on top of finished engine infrastructure.
+1. **#1 remaining load-mode adoption** — `children`/`up`/`top` can drop from the default to `LoadModeShared` (skip the local-metadata batch); `down`/`bottom` already moved to `LoadModeBranchesOnly`.
 2. **#2 batch stack-wide status checks** — removes the per-parent `git rev-parse` walks in `submit` and `info`.
 3. **#8 `RebuildBranches`** — scopes the remaining full rebuilds in `absorb`/`untrack`.
 4. **#3 on-demand diff batching** — `info --diff`/`--patch` and `absorb`'s commit scan.

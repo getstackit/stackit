@@ -86,6 +86,29 @@ func TestNavigationCommands(t *testing.T) {
 		require.Equal(t, "main", strings.TrimSpace(output))
 	})
 
+	t.Run("quiet down and bottom navigate correctly under light load path", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+
+		// Create stack: main -> a -> b -> c
+		s.RunCli("create", "a", "-m", "a").
+			RunCli("create", "b", "-m", "b").
+			RunCli("create", "c", "-m", "c")
+
+		// Quiet down/bottom opt into LoadModeBranchesOnly; verify they still land
+		// on the correct branch (parent-chain traversal + checkout) end-to-end.
+		s.RunCli("down", "--quiet")
+		s.ExpectBranch("b")
+
+		s.RunCli("bottom", "--quiet")
+		s.ExpectBranch("a")
+
+		// Multi-step quiet down from the tip walks several parents at once.
+		s.Checkout("c").
+			RunCli("down", "2", "--quiet")
+		s.ExpectBranch("a")
+	})
+
 	t.Run("trunk and first branch navigation", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)

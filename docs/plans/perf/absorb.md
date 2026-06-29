@@ -23,8 +23,7 @@ NewAbsorbCmd → common.Run                            (same bootstrap as co)
        ├─ for each hunk:
        │     eng.FindTargetCommitForHunk             tries applying hunk to successive commits — most expensive part per-hunk
        │
-       ├─ for each target:
-       │     eng.FindBranchForCommit                 lookup
+       ├─ eng.FindBranchesForCommits(targets)        single batched scan (was per-hunk lookup)
        │
        ├─ if --dry-run: print + maybe JSON; return
        │
@@ -53,9 +52,14 @@ NewAbsorbCmd → common.Run                            (same bootstrap as co)
 
 `RestackBranches` here goes through the same `ValidateRebases` worktree-per-spec path. Trivially-safe rebases (very common after absorb — most hunks land in a single ancestor and don't change descendant-touched files) could skip validation entirely.
 
-### 2. Combine the two `HasStagedChanges` calls *(small, low risk)*
+### 2. Drop the redundant pre-staging `HasStagedChanges` call *(small, low risk)*
 
-`absorb.go:63` checks before staging, `:78` checks after. The first call is *only* used to decide whether to print "Nothing to absorb" — which the second call also catches. Drop the first one; the user-facing message arrives one staging op later but the behavior is the same.
+`absorb.go:63` checks before staging, `:78` checks after. The first call's
+*result is already discarded* (`_, err := eng.HasStagedChanges(...)`) — only its
+error is propagated; the "Nothing to absorb" decision is made entirely off the
+second call at `:78`. So the first `HasStagedChanges` is a pure `worktree.Status()`
+full-tree walk with no behavioral effect. Delete it outright. (Same underlying
+`worktree.Status()` cost as `create.md` #1.)
 
 ### 3. Scope `eng.Rebuild("")` to touched branches *(medium, medium risk)*
 
@@ -65,9 +69,10 @@ After absorb, only the modified branches and their descendants have changed. A `
 
 `absorb.go:121–130` calls `GetAllCommits(SHA)` per branch and then walks. One `git rev-list --boundary <trunk>..<current>` returns all SHAs in one process. The per-branch attribution can be done from the parent-revision metadata already in the cache.
 
-### 5. `FindBranchForCommit` could come from a commit→branch map built during the SHA walk *(trivial)*
-
-While iterating `downstackBranches` to collect SHAs, also populate `commitSHA → branchName`. Then `FindBranchForCommit` becomes a map lookup. Today it's a separate function call per target hunk.
+> Note: the separate target→branch attribution step (`FindBranchesForCommits`,
+> `engine_reader.go:201`) *also* calls `GetAllCommits` per branch. If win #4
+> builds a `commitSHA → branchName` map during the single rev-list walk, that
+> batched scan can be dropped too — folding former win #5 into this one.
 
 ## Validation
 

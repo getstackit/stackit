@@ -4,11 +4,10 @@ package github
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
-	"github.com/google/go-github/v73/github"
+	"github.com/google/go-github/v88/github"
 	"golang.org/x/oauth2"
 
 	"github.com/getstackit/stackit/internal/utils"
@@ -90,27 +89,21 @@ func createGitHubClient(ctx context.Context, hostname, token string) (*github.Cl
 		&oauth2.Token{AccessToken: token},
 	)
 	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
+
+	opts := []github.ClientOptionsFunc{github.WithHTTPClient(tc)}
 
 	// Configure for GitHub Enterprise if not github.com
 	if hostname != "github.com" {
-		// GitHub Enterprise API endpoints
-		// REST API: https://hostname/api/v3/
-		// Upload API: https://hostname/api/uploads/
-		baseURL, err := url.Parse(fmt.Sprintf("https://%s/api/v3/", hostname))
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse base URL for hostname %s: %w", hostname, err)
-		}
-		uploadURL, err := url.Parse(fmt.Sprintf("https://%s/api/uploads/", hostname))
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse upload URL for hostname %s: %w", hostname, err)
-		}
-
-		client.BaseURL = baseURL
-		client.UploadURL = uploadURL
+		opts = append(opts, github.WithEnterpriseURLs(
+			fmt.Sprintf("https://%s/api/v3/", hostname),
+			fmt.Sprintf("https://%s/api/uploads/", hostname),
+		))
 	}
-	// For github.com, the default URLs are already correct
 
+	client, err := github.NewClient(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create github client for %s: %w", hostname, err)
+	}
 	return client, nil
 }
 

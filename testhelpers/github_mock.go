@@ -6,12 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/google/go-github/v73/github"
+	"github.com/google/go-github/v88/github"
 )
 
 // MockGitHubServerConfig configures the behavior of a mock GitHub server
@@ -324,10 +323,11 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 // NewMockGitHubClient creates a GitHub client configured to use a mock server
 func NewMockGitHubClient(t *testing.T, config *MockGitHubServerConfig) (*github.Client, string, string) {
 	server := NewMockGitHubServer(t, config)
-	client := github.NewClient(nil)
-	baseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = baseURL
-	client.UploadURL = baseURL
+	baseURL := server.URL + "/"
+	client, err := github.NewClient(github.WithURLs(&baseURL, &baseURL))
+	if err != nil {
+		t.Fatalf("create mock github client: %v", err)
+	}
 
 	owner := config.Owner
 	repo := config.Repo

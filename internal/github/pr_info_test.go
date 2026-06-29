@@ -173,10 +173,8 @@ func TestGetGitHubClient(t *testing.T) {
 
 		// For github.com, BaseURL should be the default GitHub API URL
 		// The go-github library sets a default BaseURL even for github.com
-		require.NotNil(t, client.BaseURL)
-		require.Contains(t, client.BaseURL.String(), "api.github.com")
-		require.NotNil(t, client.UploadURL)
-		require.Contains(t, client.UploadURL.String(), "uploads.github.com")
+		require.Contains(t, client.BaseURL(), "api.github.com")
+		require.Contains(t, client.UploadURL(), "uploads.github.com")
 	})
 
 	t.Run("creates client for GitHub Enterprise", func(t *testing.T) {
@@ -205,12 +203,10 @@ func TestGetGitHubClient(t *testing.T) {
 		require.Equal(t, "repo", repo)
 
 		// For Enterprise, BaseURL and UploadURL should be set
-		require.NotNil(t, client.BaseURL)
-		require.Contains(t, client.BaseURL.String(), "github.company.com")
-		require.Contains(t, client.BaseURL.String(), "/api/v3/")
-		require.NotNil(t, client.UploadURL)
-		require.Contains(t, client.UploadURL.String(), "github.company.com")
-		require.Contains(t, client.UploadURL.String(), "/api/uploads/")
+		require.Contains(t, client.BaseURL(), "github.company.com")
+		require.Contains(t, client.BaseURL(), "/api/v3/")
+		require.Contains(t, client.UploadURL(), "github.company.com")
+		require.Contains(t, client.UploadURL(), "/api/uploads/")
 	})
 
 	t.Run("creates client for Enterprise GitHub with simple hostname", func(t *testing.T) {
@@ -239,12 +235,10 @@ func TestGetGitHubClient(t *testing.T) {
 		require.Equal(t, "repo", repo)
 
 		// For Enterprise, BaseURL and UploadURL should be set
-		require.NotNil(t, client.BaseURL)
-		require.Contains(t, client.BaseURL.String(), "my-internal-github")
-		require.Contains(t, client.BaseURL.String(), "/api/v3/")
-		require.NotNil(t, client.UploadURL)
-		require.Contains(t, client.UploadURL.String(), "my-internal-github")
-		require.Contains(t, client.UploadURL.String(), "/api/uploads/")
+		require.Contains(t, client.BaseURL(), "my-internal-github")
+		require.Contains(t, client.BaseURL(), "/api/v3/")
+		require.Contains(t, client.UploadURL(), "my-internal-github")
+		require.Contains(t, client.UploadURL(), "/api/uploads/")
 	})
 }
 

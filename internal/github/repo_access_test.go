@@ -4,10 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 
-	"github.com/google/go-github/v73/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,10 +14,12 @@ import (
 // hits the stub instead of api.github.com.
 func clientForStub(t *testing.T, srv *httptest.Server) *github.Client {
 	t.Helper()
-	base, err := url.Parse(srv.URL + "/")
+	baseURL := srv.URL + "/"
+	c, err := github.NewClient(
+		github.WithHTTPClient(srv.Client()),
+		github.WithURLs(&baseURL, &baseURL),
+	)
 	require.NoError(t, err)
-	c := github.NewClient(srv.Client())
-	c.BaseURL = base
 	return c
 }
 

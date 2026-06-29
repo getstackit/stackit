@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/google/go-github/v73/github"
+	"github.com/google/go-github/v88/github"
 
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/utils"

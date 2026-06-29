@@ -143,14 +143,22 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Build tree structure for display
 	branchObjs := make(engine.Branches, len(branches))
+	for i, branchName := range branches {
+		branchObjs[i] = nav.GetBranch(branchName)
+	}
+
+	// Resolve up-to-date status for every branch in one batched parent-revision
+	// read rather than a per-branch IsBranchUpToDate() (each of which shells a
+	// separate `git rev-parse` for the parent).
+	statuses := eng.ReadBranchStatuses(branchObjs)
+
 	fixedMap := make(map[string]bool)
 	scopeMap := make(map[string]string)
 	worktreeMap := make(map[string]string)
 
 	for i, branchName := range branches {
-		branch := nav.GetBranch(branchName)
-		branchObjs[i] = branch
-		fixedMap[branchName] = branch.IsBranchUpToDate()
+		branch := branchObjs[i]
+		fixedMap[branchName] = statuses.IsUpToDate(branch)
 		scopeMap[branchName] = branch.GetScope().String()
 
 		// Check if this branch belongs to a stack with a managed worktree.

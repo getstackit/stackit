@@ -28,23 +28,6 @@ Remaining adoption:
 
 ---
 
-### 2. Batch branch status reads at stack-iteration call sites
-
-> **Status:** Partially done. The batched reader `engine.ReadBranchStatuses` (`internal/engine/engine_branch_status.go:187`) exists and several actions use the `Batch*` readers. The remaining issue is specific call sites that still walk a stack calling per-branch up-to-date/restack checks.
-
-**Files:** call sites in `submit`, `info`
-
-Open call sites:
-
-- `submit` calls per-branch `branch.IsBranchUpToDate()` (`internal/cli/.../submit.go:153`, `submit_validation.go:121,127`), each hitting the uncached `IsUpToDate` with a fresh `git rev-parse` per parent.
-- `info`'s stack render loops `branch.NeedsRestack()` per branch (`internal/actions/stack_info.go:148-151`) → `IsUpToDate` → live parent SHA lookup, even though the heavy reads around it are already batched.
-
-**Proposal:** route these stack-wide status checks through `ReadBranchStatuses` (or a batched parent-revision helper) so the live per-parent SHA lookups happen once.
-
-**Affects:** info.md #1, submit.md #1.
-
----
-
 ### 3. Single batched git call for stats / diffs / revisions, never per branch
 
 > **Status:** Partially done. `tree` is fully on the batched path (`BatchDiffStats` / `BatchBranchStats` / `BatchCommits`, `internal/engine/branch_view.go`); `info` batches its stack stats too. Remaining N+1s are on the on-demand diff paths.
@@ -58,7 +41,7 @@ Remaining per-branch git invocations:
 
 **Proposal:** extend the batched stat/commit readers to these on-demand paths; the revision-keyed memoization already in `engine_branch_info.go` makes it safe.
 
-**Affects:** info.md #3, absorb.md #4.
+**Affects:** info.md #2, absorb.md #4.
 
 ---
 
@@ -157,6 +140,7 @@ These wins have fully landed. Numbering is preserved so per-command page referen
 
 - **#10 — Gate `IsInManagedWorktree` to commands that need it.** `SkipManagedWorktreeCheck` exists, is applied to read-only commands via `ApplyReadOnlyCurrentBranch`, and call sites are minimal (`common.go` + tests). Keep applying it to new read-only commands.
 - **#11 — Stop calling `ReloadRepository` after every commit.** go-git was removed entirely. There is no repo handle to close and no worktree re-scan; the expensive reopen this targeted no longer exists. The global revision cache it relied on is also gone (and a global revision cache is now an explicit anti-pattern — see `.claude/rules/code-style.md`).
+- **#2 — Batch branch status reads at stack-iteration call sites.** `submit` (`internal/actions/submit/submit.go`, `submit_validation.go`) and `info` (`internal/actions/stack_info.go`) now resolve up-to-date status for the whole branch set in one `eng.ReadBranchStatuses(...)` call (a single batched parent-revision read) instead of a per-branch `IsBranchUpToDate()` / `NeedsRestack()` that shelled a `git rev-parse` per parent.
 - **#6 — Conflict-impossible validation fast path.** `validateSingleSpec` calls `tryConflictFreeReplay` (`internal/engine/rebase_validator.go`): when the branch's changed files are disjoint from the parent's, it replays the branch onto the new base via `merge-tree --write-tree` + `commit-tree` with **no worktree**. Now covers **multi-commit branches** too — each commit is replayed oldest-first via `replayCommitConflictFree`, chained onto the previous result, preserving per-commit author identity and message. The remaining worktree-amortization idea lives on as #7.
 
 ---
@@ -165,12 +149,11 @@ These wins have fully landed. Numbering is preserved so per-command page referen
 
 For maximum impact per engineering hour:
 
-1. **#1 remaining load-mode adoption** — `children`/`up`/`top` can drop from the default to `LoadModeShared` (skip the local-metadata batch); `down`/`bottom` already moved to `LoadModeBranchesOnly`.
-2. **#2 batch stack-wide status checks** — removes the per-parent `git rev-parse` walks in `submit` and `info`.
-3. **#8 `RebuildBranches`** — scopes the remaining full rebuilds in `absorb`/`untrack`.
-4. **#3 on-demand diff batching** — `info --diff`/`--patch` and `absorb`'s commit scan.
-5. **#7 per-level worktree reuse** — amortizes the worktree cost that remains for genuinely overlapping multi-branch validation (the disjoint-file fast path #6 already eliminated the common case).
-6. **#9 combine txs** for `create` and `describe`; **#4 no-op snapshot skip**; **#5 / #12** hygiene.
+1. **#8 `RebuildBranches`** — scopes the remaining full rebuilds in `absorb`/`untrack`.
+2. **#3 on-demand diff batching** — `info --diff`/`--patch` and `absorb`'s commit scan.
+3. **#1 remaining load-mode adoption** — `children`/`up`/`top` can drop from the default to `LoadModeShared` (skip the local-metadata batch); `down`/`bottom` already moved to `LoadModeBranchesOnly`.
+4. **#7 per-level worktree reuse** — amortizes the worktree cost that remains for genuinely overlapping multi-branch validation (the disjoint-file fast path #6 already eliminated the common case).
+5. **#9 combine txs** for `create` and `describe`; **#4 no-op snapshot skip**; **#5 / #12** hygiene.
 
 ## Order-of-magnitude estimates
 
@@ -179,7 +162,6 @@ Back-of-envelope guesses to size effort vs reward, not measured. Completed items
 | Win | Affected commands | Typical saving per affected run |
 |---|---|---|
 | #1 remaining load-mode adoption | read-only/common commands | remaining bootstrap cost (50-500ms depending on branch count) |
-| #2 batch status checks | submit, info | N x `git rev-parse` per stack walk |
 | #3 on-demand diff batching | info, absorb | N x ~5ms `git` processes |
 | #8 RebuildBranches | absorb, untrack | full rebuild → scoped read |
 | #4 no-op snapshot skip | restack (no-work path) | 5-15ms |

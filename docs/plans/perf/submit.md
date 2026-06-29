@@ -8,7 +8,7 @@
 NewSubmitCmd → executeSubmit → submit.Action         internal/actions/submit/submit.go:77
   ├─ if untracked target: prompt + eng.TrackBranch
   ├─ getBranchesToSubmit                              graph walk over the stack (planning.go:165)
-  ├─ for each branch: branch.IsBranchUpToDate         N × uncached parent rev-parse (submit.go:153)
+  ├─ eng.ReadBranchStatuses(branchObjs)               one batched parent rev-parse for all branches (submit.go)
   ├─ tree.NewStackTree + normalizeDisplayTreeParents  in-memory (builds its own parentMap, no eng.Graph)
   ├─ handler.OnEvent(StackDisplayEvent)               render
   │
@@ -31,8 +31,10 @@ NewSubmitCmd → executeSubmit → submit.Action         internal/actions/submit
 > Note: the branch push is already a single batched `git push` (`pushSubmittedBranches`,
 > submit.go:448), and remote SHAs come from `eng.ReadBranchRemoteStatuses` (the old
 > `PopulateRemoteShas` is gone). The footer pass already fetches all PR content in one
-> GraphQL query before fanning out. Several originally-planned wins have landed; the
-> remaining ones are below.
+> GraphQL query before fanning out. The per-branch up-to-date checks now go through one
+> batched `eng.ReadBranchStatuses` (both the display `fixedMap` and `validateBaseRevisions`),
+> replacing the old N × uncached `git rev-parse`. Several originally-planned wins have
+> landed; the remaining ones are below.
 
 ## Where time goes
 
@@ -50,22 +52,7 @@ For a **--restack submit**:
 
 ## Proposed wins (ranked)
 
-### 1. Batch per-branch `IsBranchUpToDate` checks *(shared with cross-cutting.md #2)*
-
-> **Status:** Not started. The batched engine reader `ReadBranchStatuses`
-> (`internal/engine/engine_branch_status.go:187`) already exists, but submit does
-> not route through it.
-
-`branch.IsBranchUpToDate()` → `engineImpl.IsUpToDate` (engine_branch_status.go:157) runs an
-**uncached** `git rev-parse` on the parent for every call. Submit calls it per branch in two
-places:
-- `submit.go:153` — building `fixedMap` for the display tree.
-- `submit_validation.go:121` and `:127` — inside `validateBaseRevisions`.
-
-Route both through `ReadBranchStatuses` (one `BatchGetRevisions` for all parents) so the
-planning path does one grouped read instead of N individual `rev-parse` invocations.
-
-### 2. Cache PR check/info reads across commands (shared with tree.md #4)
+### 1. Cache PR check/info reads across commands (shared with tree.md #4)
 
 > **Status:** Not started. The per-branch PR-info read this win originally
 > targeted is already batched: `ValidateBranchesToSubmit` syncs all PRs in one
@@ -78,15 +65,15 @@ recently, a short TTL cache (~30s) on `BatchGetPRChecksStatus` and the PR-info s
 a following `submit` skip the redundant GraphQL round trip. This is the cross-cutting cache
 shared with tree.md #4; submit is one consumer.
 
-### 3. Pre-build worktrees for parallel update path *(low impact today, useful for `--restack` path; shared with restack.md #4)*
+### 2. Pre-build worktrees for parallel update path *(low impact today, useful for `--restack` path; shared with restack.md #3)*
 
 > **Status:** Not started.
 
 When `--restack` is on, the inner `RestackBranches` builds worktrees per spec. If submit ran
 restack frequently (or for `--all-stacks`), a reusable worktree pool would help. Same shape as
-`restack.md` #4 — track the work there; submit benefits for free.
+`restack.md` #3 — track the work there; submit benefits for free.
 
-### 4. Combine the `SubmitFooter` update with the PR create/update call *(medium impact, low risk)*
+### 3. Combine the `SubmitFooter` update with the PR create/update call *(medium impact, low risk)*
 
 > **Status:** Partially done. The footer pass already fetches every PR's current
 > content in **one** GraphQL query up front (`actions.FetchPRContentForBranches`,
@@ -100,7 +87,7 @@ the body/title sent by `createPullRequestQuiet`/`updatePullRequestQuiet` so the 
 the same call. Saves the entire second-pass round trip when `--submit-footer` is on (the
 default for many users).
 
-### 5. Push metadata refs in the same `git push` as branch refs *(medium impact, medium risk)*
+### 4. Push metadata refs in the same `git push` as branch refs *(medium impact, medium risk)*
 
 > **Status:** Not started.
 
@@ -111,7 +98,7 @@ pushed all branch refs. The pattern is "1 batched branch push + 1 metadata push"
 fail-as-a-group; today's behavior tolerates a metadata-only push failure ("Run 'st sync' and
 try submitting again"). Keep the fallback.
 
-### 6. Sequential create path could parallelize after the first PR *(small impact, medium risk)*
+### 5. Sequential create path could parallelize after the first PR *(small impact, medium risk)*
 
 > **Status:** Not started.
 

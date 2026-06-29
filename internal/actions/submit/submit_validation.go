@@ -111,6 +111,15 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 		return remoteStatuses
 	}
 
+	// Resolve up-to-date status for every branch in one batched parent-revision
+	// read instead of a per-branch IsBranchUpToDate() inside the loop (each of
+	// which would shell a separate `git rev-parse` for the parent).
+	branchObjs := make(engine.Branches, 0, len(branches))
+	for _, branchName := range branches {
+		branchObjs = append(branchObjs, eng.GetBranch(branchName))
+	}
+	statuses := eng.ReadBranchStatuses(branchObjs)
+
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)
 		parentBranchName := resolveSubmitParentName(nav, branch)
@@ -118,13 +127,13 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 		parentBranch := eng.GetBranch(parentBranchName)
 		switch {
 		case parentBranch.IsTrunk():
-			if !branch.IsBranchUpToDate() {
+			if !statuses.IsUpToDate(branch) {
 				ctx.Output.Info("Note that %s has fallen behind trunk. You may encounter conflicts if you attempt to merge it.",
 					output.Branch(branchName, false))
 			}
 		case validatedBranches[parentBranchName]:
 			// Parent is in the submission list
-			if !branch.IsBranchUpToDate() {
+			if !statuses.IsUpToDate(branch) {
 				return fmt.Errorf("you are trying to submit at least one branch that has not been restacked on its parent. To resolve this, check out %s and run 'stackit restack'",
 					output.Branch(branchName, false))
 			}

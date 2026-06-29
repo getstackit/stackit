@@ -7,6 +7,8 @@
 package stacklog
 
 import (
+	"strings"
+
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -20,12 +22,6 @@ type Source interface {
 	BatchCommits(branches engine.Branches, format engine.CommitFormat) map[string][]string
 	RefDecorations() (map[string][]git.RefDecoration, error)
 	GetRevisionForName(branchName string) (string, error)
-}
-
-// Decoration is a local branch or tag pointing at a commit.
-type Decoration struct {
-	Name  string
-	IsTag bool
 }
 
 // Commit is one commit on a stack branch, identified by its full SHA so the
@@ -47,8 +43,8 @@ type Branch struct {
 //
 // Branches are ordered top-down: the branch you're standing on first, its
 // trunk-most ancestor last; trunk itself is excluded (it's the boundary). When
-// HEAD is on trunk or detached, OnTrunk is true and Branches is empty, so
-// callers render trunk history alone.
+// HEAD is on trunk or detached, Branches is empty, so callers render trunk
+// history alone.
 //
 // Decorations is keyed by full commit SHA and covers every local branch head and
 // tag, so the renderer can annotate both the stack band and the trunk band from
@@ -57,15 +53,14 @@ type Result struct {
 	Branches    []Branch
 	TrunkName   string
 	TrunkTipSHA string // full SHA of the trunk tip, for the boundary marker
-	OnTrunk     bool
-	Decorations map[string][]Decoration
+	Decorations map[string][]git.RefDecoration
 }
 
 // Gather collects the current stack's ancestor-path commits plus the decoration
 // map and trunk-tip marker. It never walks above HEAD (children are out of
 // scope) and excludes trunk from the band.
 func Gather(src Source) (Result, error) {
-	decorations, err := decorationMap(src)
+	decorations, err := src.RefDecorations()
 	if err != nil {
 		return Result{}, err
 	}
@@ -84,21 +79,20 @@ func Gather(src Source) (Result, error) {
 
 	current := src.CurrentBranch()
 	if current == nil || current.IsTrunk() {
-		res.OnTrunk = true
 		return res, nil
 	}
 
 	// Downstack returns the ancestor path trunk-ward→current (trunk excluded).
 	// Reverse it so the branch we're standing on renders at the top.
-	chain := src.Graph(engine.SortStrategyAlphabetical).Downstack(*current, true)
-	branches := reversed(chain)
+	branches := src.Graph(engine.SortStrategyAlphabetical).Downstack(*current, true).Reverse()
 	if len(branches) == 0 {
 		// Current branch is untracked / not in the graph: no stack band to show.
 		return res, nil
 	}
 
-	shaByBranch := src.BatchCommits(branches, engine.CommitFormatSHA)
-	subjectByBranch := src.BatchCommits(branches, engine.CommitFormatSubject)
+	// One combined walk per branch yields both SHA and subject on each record,
+	// so the two never desync (an empty subject can't shift the pairing).
+	commitsByBranch := src.BatchCommits(branches, engine.CommitFormatSHASubject)
 
 	currentName := current.GetName()
 	for _, b := range branches {
@@ -106,47 +100,20 @@ func Gather(src Source) (Result, error) {
 		res.Branches = append(res.Branches, Branch{
 			Name:      name,
 			IsCurrent: name == currentName,
-			Commits:   zipCommits(shaByBranch[name], subjectByBranch[name]),
+			Commits:   parseCommits(commitsByBranch[name]),
 		})
 	}
 	return res, nil
 }
 
-// decorationMap reads ref decorations and converts them to the action type.
-func decorationMap(src Source) (map[string][]Decoration, error) {
-	raw, err := src.RefDecorations()
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string][]Decoration, len(raw))
-	for sha, refs := range raw {
-		converted := make([]Decoration, len(refs))
-		for i, r := range refs {
-			converted[i] = Decoration{Name: r.Name, IsTag: r.IsTag}
-		}
-		out[sha] = converted
-	}
-	return out, nil
-}
-
-// zipCommits pairs full SHAs with subjects. Both lists come from walking the
-// same branch range in the same (newest-first) order, so they align by index;
-// any length mismatch is defensive and simply truncates to the shorter list.
-func zipCommits(shas, subjects []string) []Commit {
-	n := min(len(shas), len(subjects))
-	commits := make([]Commit, n)
-	for i := range n {
-		commits[i] = Commit{SHA: shas[i], Subject: subjects[i]}
+// parseCommits splits each CommitFormatSHASubject record ("<full-sha>\x00<subject>")
+// into a Commit. A record with a trailing empty subject still yields a Commit with
+// an empty Subject (it is not dropped).
+func parseCommits(records []string) []Commit {
+	commits := make([]Commit, 0, len(records))
+	for _, rec := range records {
+		sha, subject, _ := strings.Cut(rec, "\x00")
+		commits = append(commits, Commit{SHA: sha, Subject: subject})
 	}
 	return commits
-}
-
-// reversed returns the branches in reverse order, so a trunk-ward→current chain
-// becomes current→trunk-ward (top-down for display).
-func reversed(branches engine.Branches) engine.Branches {
-	out := make([]engine.Branch, len(branches))
-	for i, b := range branches {
-		out[len(branches)-1-i] = b
-	}
-	return engine.NewBranches(out)
 }

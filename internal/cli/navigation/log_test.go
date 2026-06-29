@@ -10,6 +10,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/stacklog"
 	"github.com/getstackit/stackit/internal/actions/trunklog"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 func TestBuildLogRequest(t *testing.T) {
@@ -99,7 +100,7 @@ func TestRenderDefaultViewStackBandDividerAndDecorations(t *testing.T) {
 				Commits: []stacklog.Commit{{SHA: "e4f5a6b000000000", Subject: "feat: add base types"}},
 			},
 		},
-		Decorations: map[string][]stacklog.Decoration{
+		Decorations: map[string][]git.RefDecoration{
 			// Branch head on the current tip plus a tag — the head is suppressed
 			// (shown as the header), the tag is surfaced.
 			"a1b2c3d000000000": {{Name: "auth-api"}, {Name: "v2.0.0", IsTag: true}},
@@ -129,7 +130,6 @@ func TestRenderDefaultViewOnTrunkIsTrunkOnly(t *testing.T) {
 	stack := stacklog.Result{
 		TrunkName:   "main",
 		TrunkTipSHA: "9f81673000000000",
-		OnTrunk:     true,
 	}
 	trunk := trunklog.Result{Commits: []trunklog.Commit{
 		{SHA: "9f81673000000000", Message: "feat: latest"},
@@ -143,6 +143,19 @@ func TestRenderDefaultViewOnTrunkIsTrunkOnly(t *testing.T) {
 		"──────── main 9f81673 ────────",
 		"9f81673  feat: latest",
 	}, "\n"), plain)
+}
+
+func TestStackBandCommitCount(t *testing.T) {
+	t.Parallel()
+
+	stack := stacklog.Result{
+		Branches: []stacklog.Branch{
+			{Name: "a", Commits: []stacklog.Commit{{SHA: "1"}, {SHA: "2"}}},
+			{Name: "b", Commits: []stacklog.Commit{{SHA: "3"}}},
+		},
+	}
+	require.Equal(t, 3, stackBandCommitCount(stack))
+	require.Equal(t, 0, stackBandCommitCount(stacklog.Result{}))
 }
 
 func TestLogPagerViewUsesAltScreen(t *testing.T) {

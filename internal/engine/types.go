@@ -54,6 +54,11 @@ const (
 	CommitFormatMessage CommitFormat = "MESSAGE" // Full commit message
 	// CommitFormatSubject is the first line of the commit message
 	CommitFormatSubject CommitFormat = "SUBJECT" // First line of commit message
+	// CommitFormatSHASubject pairs the full SHA and subject on one NUL-separated
+	// record per commit ("<full-sha>\x00<subject>"), so callers get both from a
+	// single walk without index-aligning two separate lists. The subject may be
+	// empty; the record is never blank because the SHA is always present.
+	CommitFormatSHASubject CommitFormat = "SHA_SUBJECT"
 )
 
 // Scope represents a branch scope that can be empty, a regular scope, or an inheritance breaker

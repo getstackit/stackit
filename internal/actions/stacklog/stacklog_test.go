@@ -26,7 +26,7 @@ func TestGather_AncestorPathTopDown(t *testing.T) {
 	res, err := stacklog.Gather(s.Engine)
 	require.NoError(t, err)
 
-	require.False(t, res.OnTrunk)
+	require.NotEmpty(t, res.Branches)
 	require.Equal(t, "main", res.TrunkName)
 	require.NotEmpty(t, res.TrunkTipSHA)
 
@@ -65,7 +65,6 @@ func TestGather_OnTrunkHasNoStackBand(t *testing.T) {
 	res, err := stacklog.Gather(s.Engine)
 	require.NoError(t, err)
 
-	require.True(t, res.OnTrunk)
 	require.Empty(t, res.Branches)
 	require.Equal(t, "main", res.TrunkName)
 }

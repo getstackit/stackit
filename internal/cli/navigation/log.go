@@ -14,6 +14,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/trunklog"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -70,18 +71,22 @@ field changes as breaking.`,
 				// current stack from HEAD down, a trunk boundary, then trunk
 				// history. A range/--since stays a plain changelog.
 				var content string
+				commitCount := len(res.Commits)
 				if req.From == "" {
 					stack, err := stacklog.Gather(ctx.Engine)
 					if err != nil {
 						return err
 					}
 					content = renderDefaultView(stack, res)
+					// The rendered default view includes the stack-band commits
+					// above the divider, so count them too — not just trunk.
+					commitCount += stackBandCommitCount(stack)
 				} else {
 					content = renderLog(res, nil, "", "")
 				}
 
 				if ctx.Interactive {
-					return displayLogPager(content, len(res.Commits))
+					return displayLogPager(content, commitCount)
 				}
 				displayLog(ctx.Output, content)
 				return nil
@@ -153,6 +158,16 @@ func renderDefaultView(stack stacklog.Result, trunk trunklog.Result) string {
 	return strings.Join(sections, "\n")
 }
 
+// stackBandCommitCount totals the commits across every branch in the stack band,
+// so the pager header reflects the stack commits rendered above the divider.
+func stackBandCommitCount(stack stacklog.Result) int {
+	total := 0
+	for _, br := range stack.Branches {
+		total += len(br.Commits)
+	}
+	return total
+}
+
 // renderStackBand renders the current stack's commits grouped by branch, newest
 // branch (HEAD) first. Each branch is a header followed by its commits; the HEAD
 // commit is marked distinctly. Returns "" when there is no stack band (on trunk).
@@ -207,7 +222,7 @@ func renderTrunkDivider(stack stacklog.Result) string {
 // When decos is non-nil each commit is annotated with the branches and tags
 // pointing at it (excluding excludeBranch and the divider's tip SHA, which are
 // already shown elsewhere).
-func renderLog(res trunklog.Result, decos map[string][]stacklog.Decoration, excludeBranch, skipSHA string) string {
+func renderLog(res trunklog.Result, decos map[string][]git.RefDecoration, excludeBranch, skipSHA string) string {
 	if len(res.Commits) == 0 {
 		return ""
 	}
@@ -260,7 +275,7 @@ func renderLog(res trunklog.Result, decos map[string][]stacklog.Decoration, excl
 // formatDecorations renders git-log-style "(tag: v1.0, feature)" annotations.
 // The branch named excludeBranch is omitted (it's already shown as a header or
 // divider label); tags are always shown. Returns "" when nothing remains.
-func formatDecorations(decos []stacklog.Decoration, excludeBranch string) string {
+func formatDecorations(decos []git.RefDecoration, excludeBranch string) string {
 	if len(decos) == 0 {
 		return ""
 	}

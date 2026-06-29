@@ -92,7 +92,7 @@ func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.Rece
 	if titles == nil {
 		return nil
 	}
-	prNumbers := collectStackPRNumbers(commits)
+	prNumbers := git.PRTitleNumbers(commits)
 	if len(prNumbers) == 0 {
 		return nil
 	}
@@ -107,64 +107,21 @@ func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.Rece
 	return resolved
 }
 
-// collectStackPRNumbers gathers the unique PR numbers referenced by the commits:
-// each commit's own PR plus the constituent PRs of stack-merges.
-func collectStackPRNumbers(commits []git.RecentCommit) []int {
-	seen := make(map[int]struct{})
-	var nums []int
-	add := func(n int) {
-		if n == 0 {
-			return
-		}
-		if _, ok := seen[n]; ok {
-			return
-		}
-		seen[n] = struct{}{}
-		nums = append(nums, n)
-	}
-	for _, c := range commits {
-		add(c.PRNumber)
-		for _, pr := range c.StackPRNumbers {
-			add(pr)
-		}
-	}
-	return nums
-}
-
 // toCommit maps a git.RecentCommit to the action Commit, substituting the
 // consolidation PR's title for the raw merge subject and attaching constituent
-// PR titles when available.
+// PR titles when available. The message/title enrichment is shared with the HTTP
+// mapper via the git helpers.
 func toCommit(c git.RecentCommit, prTitles map[int]string) Commit {
-	message := c.Subject
-	if c.StackSize > 0 && c.PRNumber != 0 && len(prTitles) > 0 {
-		if title, ok := prTitles[c.PRNumber]; ok {
-			message = title
-		}
+	return Commit{
+		SHA:           c.SHA,
+		Message:       git.CollapsedMessage(c, prTitles),
+		Author:        c.Author,
+		Date:          c.Date,
+		Kind:          c.Kind,
+		PRNumber:      c.PRNumber,
+		StackSize:     c.StackSize,
+		StackPRs:      append([]int(nil), c.StackPRNumbers...),
+		StackScope:    c.StackScope,
+		StackPRTitles: git.ConstituentPRTitles(c, prTitles),
 	}
-
-	out := Commit{
-		SHA:        c.SHA,
-		Message:    message,
-		Author:     c.Author,
-		Date:       c.Date,
-		Kind:       c.Kind,
-		PRNumber:   c.PRNumber,
-		StackSize:  c.StackSize,
-		StackPRs:   append([]int(nil), c.StackPRNumbers...),
-		StackScope: c.StackScope,
-	}
-
-	if c.StackSize > 0 && len(prTitles) > 0 {
-		stackTitles := make(map[int]string)
-		for _, pr := range c.StackPRNumbers {
-			if title, ok := prTitles[pr]; ok {
-				stackTitles[pr] = title
-			}
-		}
-		if len(stackTitles) > 0 {
-			out.StackPRTitles = stackTitles
-		}
-	}
-
-	return out
 }

@@ -229,6 +229,9 @@ type RefOperations interface {
 	VerifyRef(ctx context.Context, refName string) error
 	DeleteRef(ctx context.Context, name string) error
 	ListRefs(prefix string) (map[string]string, error)
+	// RefDecorations returns local branch and tag refs grouped by the commit SHA
+	// they point at, dereferencing annotated tags to the wrapped commit.
+	RefDecorations() (map[string][]RefDecoration, error)
 }
 
 // ObjectOperations provides low-level Git object operations.

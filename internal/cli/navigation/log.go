@@ -10,9 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/getstackit/stackit/internal/actions/stacklog"
 	"github.com/getstackit/stackit/internal/actions/trunklog"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -26,16 +28,19 @@ func NewLogCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "log [<from>..<to>]",
-		Short: "Show trunk commit history with stacks collapsed",
-		Long: `Show the trunk commit history, collapsing each consolidated stack-merge into a
-single entry that lists its constituent PRs (mirrors the web app's Recently
-Merged view).
+		Short: "Show your current stack and recent trunk history",
+		Long: `Show a stack-aware commit history.
 
-With no arguments it shows the most recent trunk commits. Pass a revision range
-to produce a changelog between two refs.
+With no arguments it shows the commits in your current stack from where you are
+(the branch you're on and its ancestors, grouped by branch with branch and tag
+decorations), a clear trunk boundary, then the recent trunk history below it with
+consolidated stack-merges collapsed into a single entry (mirrors the web app's
+Recently Merged view). On trunk it shows trunk history alone.
+
+Pass a revision range to produce a plain changelog between two refs instead.
 
 Examples:
-  stackit log                      # recent trunk history (stacks collapsed)
+  stackit log                      # current stack + recent trunk history
   stackit log v1.4.0..main         # changelog between two refs
   stackit log --since v1.4.0       # everything since v1.4.0 up to the trunk tip
   stackit log --json v1.4.0..main  # machine-readable (used by release tooling)
@@ -61,10 +66,29 @@ field changes as breaking.`,
 				if jsonOut {
 					return printLogJSON(ctx.Output, res)
 				}
-				if ctx.Interactive {
-					return displayLogPager(res)
+
+				// The default (no-range) view is stack-aware: it shows the
+				// current stack from HEAD down, a trunk boundary, then trunk
+				// history. A range/--since stays a plain changelog.
+				var content string
+				commitCount := len(res.Commits)
+				if req.From == "" {
+					stack, err := stacklog.Gather(ctx.Engine)
+					if err != nil {
+						return err
+					}
+					content = renderDefaultView(stack, res)
+					// The rendered default view includes the stack-band commits
+					// above the divider, so count them too — not just trunk.
+					commitCount += stackBandCommitCount(stack)
+				} else {
+					content = renderLog(res, nil, "", "")
 				}
-				displayLog(ctx.Output, res)
+
+				if ctx.Interactive {
+					return displayLogPager(content, commitCount)
+				}
+				displayLog(ctx.Output, content)
 				return nil
 			})
 		},
@@ -101,20 +125,104 @@ func buildLogRequest(args []string, since string, count int) (trunklog.Request, 
 	}
 }
 
-// displayLog renders the gathered trunk history as a terminal list, mirroring the
-// web "Recently Merged" panel: one line per collapsed commit, with stack-merges
-// expanding into their constituent PRs.
-func displayLog(out output.Output, res trunklog.Result) {
-	rendered := renderLog(res)
-	if rendered == "" {
+// displayLog prints already-rendered log content, falling back to a placeholder
+// when there is nothing to show.
+func displayLog(out output.Output, content string) {
+	if content == "" {
 		out.Println(output.Dim("No commits."))
 		return
 	}
-	out.Print(rendered)
+	out.Print(content)
 	out.Newline()
 }
 
-func renderLog(res trunklog.Result) string {
+// stackCommitSymbol marks the HEAD commit; otherSymbol marks every other commit
+// in the current stack band.
+const (
+	stackHeadSymbol  = "◉"
+	stackOtherSymbol = "◯"
+)
+
+// renderDefaultView composes the stack-aware default view: the current stack
+// from HEAD down (when not on trunk), a trunk boundary line, and the decorated
+// trunk history below it.
+func renderDefaultView(stack stacklog.Result, trunk trunklog.Result) string {
+	var sections []string
+	if band := renderStackBand(stack); band != "" {
+		sections = append(sections, band)
+	}
+	sections = append(sections, renderTrunkDivider(stack))
+	if body := renderLog(trunk, stack.Decorations, stack.TrunkName, stack.TrunkTipSHA); body != "" {
+		sections = append(sections, body)
+	}
+	return strings.Join(sections, "\n")
+}
+
+// stackBandCommitCount totals the commits across every branch in the stack band,
+// so the pager header reflects the stack commits rendered above the divider.
+func stackBandCommitCount(stack stacklog.Result) int {
+	total := 0
+	for _, br := range stack.Branches {
+		total += len(br.Commits)
+	}
+	return total
+}
+
+// renderStackBand renders the current stack's commits grouped by branch, newest
+// branch (HEAD) first. Each branch is a header followed by its commits; the HEAD
+// commit is marked distinctly. Returns "" when there is no stack band (on trunk).
+func renderStackBand(stack stacklog.Result) string {
+	if len(stack.Branches) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for bi, br := range stack.Branches {
+		if bi > 0 {
+			b.WriteString("\n")
+		}
+		if br.IsCurrent {
+			b.WriteString(output.Green(br.Name))
+		} else {
+			b.WriteString(output.Cyan(br.Name))
+		}
+		for ci, c := range br.Commits {
+			symbol := output.Dim(stackOtherSymbol)
+			if br.IsCurrent && ci == 0 {
+				symbol = output.Green(stackHeadSymbol)
+			}
+			b.WriteString("\n  ")
+			b.WriteString(symbol)
+			b.WriteString(" ")
+			b.WriteString(output.Yellow(shortSHA(c.SHA)))
+			b.WriteString("  ")
+			b.WriteString(c.Subject)
+			// The branch's own head ref is the header above; omit it here, but
+			// still surface tags and any other branch pointing at this commit.
+			if deco := formatDecorations(stack.Decorations[c.SHA], br.Name); deco != "" {
+				b.WriteString(" ")
+				b.WriteString(deco)
+			}
+		}
+	}
+	return b.String()
+}
+
+// renderTrunkDivider draws the boundary between the stack and trunk history,
+// labeled with the trunk name, its short tip SHA, and any tags on the tip.
+func renderTrunkDivider(stack stacklog.Result) string {
+	label := output.Cyan(stack.TrunkName) + " " + output.Yellow(shortSHA(stack.TrunkTipSHA))
+	if deco := formatDecorations(stack.Decorations[stack.TrunkTipSHA], stack.TrunkName); deco != "" {
+		label += " " + deco
+	}
+	return output.Dim("──────── ") + label + output.Dim(" ────────")
+}
+
+// renderLog renders trunk history, mirroring the web "Recently Merged" panel:
+// one line per collapsed commit, stack-merges expanding into constituent PRs.
+// When decos is non-nil each commit is annotated with the branches and tags
+// pointing at it (excluding excludeBranch and the divider's tip SHA, which are
+// already shown elsewhere).
+func renderLog(res trunklog.Result, decos map[string][]git.RefDecoration, excludeBranch, skipSHA string) string {
 	if len(res.Commits) == 0 {
 		return ""
 	}
@@ -152,17 +260,47 @@ func renderLog(res trunklog.Result) string {
 			b.WriteString(" ")
 			b.WriteString(output.Cyan(fmt.Sprintf("(#%d)", c.PRNumber)))
 		}
+
+		if c.SHA != skipSHA {
+			if deco := formatDecorations(decos[c.SHA], excludeBranch); deco != "" {
+				b.WriteString(" ")
+				b.WriteString(deco)
+			}
+		}
 	}
 
 	return b.String()
 }
 
-func displayLogPager(res trunklog.Result) error {
-	content := renderLog(res)
+// formatDecorations renders git-log-style "(tag: v1.0, feature)" annotations.
+// The branch named excludeBranch is omitted (it's already shown as a header or
+// divider label); tags are always shown. Returns "" when nothing remains.
+func formatDecorations(decos []git.RefDecoration, excludeBranch string) string {
+	if len(decos) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(decos))
+	for _, d := range decos {
+		switch {
+		case d.IsTag:
+			parts = append(parts, output.Yellow("tag: "+d.Name))
+		case d.Name == excludeBranch:
+			continue
+		default:
+			parts = append(parts, output.Cyan(d.Name))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return output.Dim("(") + strings.Join(parts, output.Dim(", ")) + output.Dim(")")
+}
+
+func displayLogPager(content string, commitCount int) error {
 	if content == "" {
 		content = output.Dim("No commits.")
 	}
-	model := newLogPagerModel(content, len(res.Commits))
+	model := newLogPagerModel(content, commitCount)
 	_, err := tea.NewProgram(model, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout)).Run()
 	return err
 }

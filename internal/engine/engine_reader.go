@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // AllBranches returns all branches.
@@ -232,6 +233,13 @@ func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) map[string]stri
 	}
 
 	return result
+}
+
+// RefDecorations returns local branch and tag refs grouped by the commit SHA
+// they point at, for git-log-style annotations. Annotated tags are dereferenced
+// to the commit they wrap. Thin passthrough to the git layer.
+func (e *engineImpl) RefDecorations() (map[string][]git.RefDecoration, error) {
+	return e.git.RefDecorations()
 }
 
 // SortBranchesTopologically sorts branches so parents come before children.

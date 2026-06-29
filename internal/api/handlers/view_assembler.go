@@ -119,26 +119,8 @@ func (a *ViewAssembler) fetchPRTitles(ctx context.Context, commits []git.RecentC
 		return nil
 	}
 
-	seen := make(map[int]struct{})
-	var prNumbers []int
-	for _, c := range commits {
-		if c.StackSize == 0 {
-			continue
-		}
-		// Include the consolidation PR itself so we can use its title as the display message
-		if c.PRNumber != 0 {
-			if _, ok := seen[c.PRNumber]; !ok {
-				seen[c.PRNumber] = struct{}{}
-				prNumbers = append(prNumbers, c.PRNumber)
-			}
-		}
-		for _, pr := range c.StackPRNumbers {
-			if _, ok := seen[pr]; !ok {
-				seen[pr] = struct{}{}
-				prNumbers = append(prNumbers, pr)
-			}
-		}
-	}
+	// PR-number collection is shared with the `stackit log` command via internal/git.
+	prNumbers := git.PRTitleNumbers(commits)
 	if len(prNumbers) == 0 {
 		return nil
 	}

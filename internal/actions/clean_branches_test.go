@@ -265,6 +265,32 @@ func TestCleanBranches(t *testing.T) {
 		require.Equal(t, "branch1", parent.GetName(), "planning should not mutate branch metadata")
 	})
 
+	t.Run("uses supplied remote statuses for unpushed detection", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+			})
+
+		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
+		err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), prInfo)
+		require.NoError(t, err)
+
+		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{
+			Force: true,
+			RemoteStatuses: engine.BranchRemoteStatuses{
+				"branch1": {
+					LocalSha:       "local",
+					RemoteSha:      "remote",
+					CommonAncestor: "remote",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Contains(t, plan.BranchesToDelete, "branch1")
+		require.True(t, plan.UnpushedBranches["branch1"], "branch1 should use the supplied ahead status")
+	})
+
 	t.Run("does not mark branch without unpushed changes as unpushed", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).

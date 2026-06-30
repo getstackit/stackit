@@ -19,6 +19,7 @@ type CleanBranchesOptions struct {
 	Force             bool
 	InManagedWorktree bool   // True if running from a stackit-managed worktree
 	CurrentBranch     string // Name of the current branch (used to skip deletion in worktree)
+	RemoteStatuses    engine.BranchRemoteStatuses
 }
 
 // CleanBranchesResult contains the result of cleaning branches
@@ -222,9 +223,18 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 	deleteStatuses := make(map[string]engine.DeletionStatus) // name -> status
 	utilityBranches := make(map[string]bool)                 // branches that are utility type
 	var skippedInWorktree []string
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, allTrackedBranches.WithoutTrunk())
-	cancelRemote()
+	remoteStatuses := opts.RemoteStatuses
+	if remoteStatuses == nil {
+		branchesNeedingRemoteStatus := engine.NewBranchesBuilder(len(candidateNames))
+		for _, name := range candidateNames {
+			if statuses[name].SafeToDelete {
+				branchesNeedingRemoteStatus.Add(eng.GetBranch(name))
+			}
+		}
+		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
+		remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, branchesNeedingRemoteStatus.Build())
+		cancelRemote()
+	}
 
 	for _, name := range candidateNames {
 		status := statuses[name]

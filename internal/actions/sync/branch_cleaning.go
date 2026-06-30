@@ -9,11 +9,12 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 // cleanBranches handles cleaning merged/closed branches
-func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool, handler Handler, summary *Summary) (*actions.CleanBranchesResult, error) {
+func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) (*actions.CleanBranchesResult, error) {
 	// Only emit phase start if we have branches that might need cleaning
 	allBranches := ctx.Engine.AllBranches()
 	hasBranchesToCheck := false
@@ -41,6 +42,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool
 		Force:             opts.Force,
 		InManagedWorktree: ctx.InManagedWorktree,
 		CurrentBranch:     currentBranchName,
+		RemoteStatuses:    remoteStatuses,
 	})
 	if err != nil {
 		return nil, err

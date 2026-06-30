@@ -2,7 +2,9 @@ package git_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -119,4 +121,73 @@ func TestIsMerged(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, squashMerged, "IsSquashMerged must detect the aggregate squash")
 	})
+}
+
+type captureGitLogger struct {
+	mu    sync.Mutex
+	debug []string
+}
+
+func (l *captureGitLogger) Debug(msg string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.debug = append(l.debug, fmt.Sprintf(msg, args...))
+}
+
+func (l *captureGitLogger) Info(string, ...any) {}
+
+func (l *captureGitLogger) countDebugContaining(needle string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	count := 0
+	for _, line := range l.debug {
+		if strings.Contains(line, needle) {
+			count++
+		}
+	}
+	return count
+}
+
+func TestIsSquashMergedCachesTargetCommitPatchIDs(t *testing.T) {
+	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+
+	err := scene.Repo.CreateAndCheckoutBranch("branch1")
+	require.NoError(t, err)
+	err = scene.Repo.CreateChangeAndCommit("branch1 change", "branch1")
+	require.NoError(t, err)
+
+	err = scene.Repo.CheckoutBranch("main")
+	require.NoError(t, err)
+	err = scene.Repo.CreateAndCheckoutBranch("branch2")
+	require.NoError(t, err)
+	err = scene.Repo.CreateChangeAndCommit("branch2 change", "branch2")
+	require.NoError(t, err)
+
+	err = scene.Repo.CheckoutBranch("main")
+	require.NoError(t, err)
+	for _, name := range []string{"target1", "target2", "target3"} {
+		err = scene.Repo.CreateChangeAndCommit(name+" change", name)
+		require.NoError(t, err)
+	}
+
+	targetCommitsOutput, err := scene.Repo.RunGitCommandAndGetOutput("rev-list", "--reverse", "branch1..main")
+	require.NoError(t, err)
+	targetCommits := strings.Fields(targetCommitsOutput)
+	require.Len(t, targetCommits, 3)
+
+	logger := &captureGitLogger{}
+	runner := git.NewRunnerWithPath(scene.Repo.Dir, logger)
+
+	merged, err := runner.IsSquashMerged(context.Background(), "branch1", "main")
+	require.NoError(t, err)
+	require.False(t, merged)
+
+	merged, err = runner.IsSquashMerged(context.Background(), "branch2", "main")
+	require.NoError(t, err)
+	require.False(t, merged)
+
+	for _, commit := range targetCommits {
+		require.Equal(t, 1, logger.countDebugContaining("git show --format= --no-ext-diff --full-index "+commit))
+	}
 }

@@ -94,7 +94,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	var trunkSummary Summary
 	var githubSyncResult *GitHubSyncResult
-	var metadataFetchErr error
 	var trunkFetchErr error
 	var trunkErr error
 	var githubErr error
@@ -113,30 +112,20 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	g, _ := errgroup.WithContext(remoteCtx)
 
-	// Goroutine 1: Fetch trunk as a required operation, then refresh Stackit
-	// metadata refs on a best-effort basis.
+	// Goroutine 1: Fetch trunk and Stackit metadata refs in one round trip.
 	g.Go(func() error {
 		ctx.Logger.Info("goroutine remote fetch started delayMs=%v", time.Since(parallelStart).Milliseconds())
 		fetchStart := time.Now()
 		trunkFetchErr = eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
-			Remote:   eng.GetRemote(),
-			Branches: []string{eng.Trunk().GetName()},
-		})
-		ctx.Logger.Info("fetch trunk completed durationMs=%v", time.Since(fetchStart).Milliseconds())
-		if trunkFetchErr != nil {
-			ctx.Logger.Debug("fetch trunk failed error=%v", trunkFetchErr)
-			return trunkFetchErr
-		}
-
-		metadataFetchStart := time.Now()
-		metadataFetchErr = eng.FetchRemote(remoteCtx, engine.RemoteFetchRequest{
 			Remote:               eng.GetRemote(),
+			Branches:             []string{eng.Trunk().GetName()},
 			IncludeMetadata:      true,
 			IncludeStackMetadata: true,
 		})
-		ctx.Logger.Info("fetch metadata refs completed durationMs=%v", time.Since(metadataFetchStart).Milliseconds())
-		if metadataFetchErr != nil {
-			ctx.Logger.Debug("fetch metadata refs failed (non-fatal) error=%v", metadataFetchErr)
+		ctx.Logger.Info("fetch trunk and metadata completed durationMs=%v", time.Since(fetchStart).Milliseconds())
+		if trunkFetchErr != nil {
+			ctx.Logger.Debug("fetch trunk and metadata failed error=%v", trunkFetchErr)
+			return trunkFetchErr
 		}
 		return nil
 	})
@@ -200,9 +189,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	branchesToRestack := []string{}
 
 	// Process remote metadata (sequential - depends on fetch)
-	if metadataFetchErr != nil {
-		out.Debug("No remote metadata to fetch: %v", metadataFetchErr)
-	}
 	if err := processRemoteMetadata(ctx, &opts, handler); err != nil {
 		return err
 	}

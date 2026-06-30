@@ -241,6 +241,30 @@ func TestCleanBranches(t *testing.T) {
 		require.True(t, plan.UnpushedBranches["branch1"], "branch1 should be marked as having unpushed changes")
 	})
 
+	t.Run("planning does not reparent surviving children", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+				"branch2": "branch1",
+			})
+
+		prInfo := testhelpers.NewTestPrInfoMerged(1, "main")
+		err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), prInfo)
+		require.NoError(t, err)
+
+		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{
+			Force: true,
+		})
+		require.NoError(t, err)
+		require.Contains(t, plan.BranchesToDelete, "branch1")
+		require.Contains(t, plan.BranchesWithNewParents, "branch2")
+
+		parent := s.Engine.GetBranch("branch2").GetParent()
+		require.NotNil(t, parent)
+		require.Equal(t, "branch1", parent.GetName(), "planning should not mutate branch metadata")
+	})
+
 	t.Run("does not mark branch without unpushed changes as unpushed", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).

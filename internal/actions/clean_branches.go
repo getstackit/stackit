@@ -45,7 +45,9 @@ type BranchDeletionPlan struct {
 	// (local branch is ahead of or diverged from remote)
 	UnpushedBranches map[string]bool
 	// internal plan for execution
-	plan *deletionPlan
+	plan           *deletionPlan
+	reparentMoves  []plannedReparentMove
+	deleteStatuses map[string]engine.DeletionStatus
 }
 
 // branchDeletionInfo stores information about a branch marked for deletion
@@ -58,6 +60,12 @@ type branchDeletionInfo struct {
 // deletionPlan manages the state of branches being deleted
 type deletionPlan struct {
 	branches map[string]*branchDeletionInfo
+}
+
+type plannedReparentMove struct {
+	branchName         string
+	newParentName      string
+	preserveDivergence bool
 }
 
 func newDeletionPlan() *deletionPlan {
@@ -92,34 +100,12 @@ func (p *deletionPlan) removeBlocker(branchName, blockerName string) {
 // 3. Reparent branches that are NOT being deleted but whose parents ARE.
 // 4. Execute the deletions in batches (greedy iterative approach).
 func CleanBranches(ctx *app.Context, opts CleanBranchesOptions) (*CleanBranchesResult, error) {
-	// Phase 1: Identify candidates for deletion
-	deleteStatuses, skippedInWorktree, _, err := identifyBranchesToDelete(ctx, opts)
+	plan, err := PlanBranchDeletions(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	// Phase 2: Build deletion plan
-	plan, branchesWithNewParents, err := buildDeletionPlanAndReparent(ctx, deleteStatuses)
-	if err != nil {
-		return nil, err
-	}
-
-	// Capture planned deletions before executeDeletions removes them from plan.branches
-	deletedBranches := make(map[string]string)
-	for name, info := range plan.branches {
-		deletedBranches[name] = info.reason
-	}
-
-	// Phase 3: Execute deletions
-	if err := executeDeletions(ctx, plan); err != nil {
-		return nil, err
-	}
-
-	return &CleanBranchesResult{
-		DeletedBranches:        deletedBranches,
-		BranchesWithNewParents: branchesWithNewParents,
-		SkippedInWorktree:      skippedInWorktree,
-	}, nil
+	return ExecuteBranchDeletions(ctx, plan, nil)
 }
 
 // PlanBranchDeletions identifies branches that should be deleted and builds a deletion plan.
@@ -132,10 +118,7 @@ func PlanBranchDeletions(ctx *app.Context, opts CleanBranchesOptions) (*BranchDe
 	}
 
 	// Phase 2: Build deletion plan
-	plan, branchesWithNewParents, err := buildDeletionPlanAndReparent(ctx, deleteStatuses)
-	if err != nil {
-		return nil, err
-	}
+	plan, branchesWithNewParents, reparentMoves := buildDeletionPlan(ctx, deleteStatuses)
 
 	// Build the public plan
 	branchesToDelete := make(map[string]string)
@@ -156,6 +139,8 @@ func PlanBranchDeletions(ctx *app.Context, opts CleanBranchesOptions) (*BranchDe
 		UtilityBranches:        utilityBranches,
 		UnpushedBranches:       unpushedBranches,
 		plan:                   plan,
+		reparentMoves:          reparentMoves,
+		deleteStatuses:         deleteStatuses,
 	}, nil
 }
 
@@ -163,29 +148,50 @@ func PlanBranchDeletions(ctx *app.Context, opts CleanBranchesOptions) (*BranchDe
 // The branchesToDelete parameter allows filtering which branches from the plan to actually delete.
 // If nil, all planned branches are deleted.
 func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPlan, branchesToDelete map[string]bool) (*CleanBranchesResult, error) {
+	plan := plannedDeletion.plan
+	branchesWithNewParents := plannedDeletion.BranchesWithNewParents
+	reparentMoves := plannedDeletion.reparentMoves
+
 	// If branchesToDelete filter is provided, remove branches not in the filter
 	if branchesToDelete != nil {
+		filteredStatuses := make(map[string]engine.DeletionStatus)
 		for name := range plannedDeletion.plan.branches {
 			if !branchesToDelete[name] {
-				delete(plannedDeletion.plan.branches, name)
+				continue
 			}
+			status := plannedDeletion.deleteStatuses[name]
+			if !status.SafeToDelete {
+				info := plannedDeletion.plan.branches[name]
+				status = engine.DeletionStatus{
+					SafeToDelete: true,
+					Reason:       info.reason,
+					Kind:         info.reasonKind,
+				}
+			}
+			filteredStatuses[name] = status
 		}
+
+		plan, branchesWithNewParents, reparentMoves = buildDeletionPlan(ctx, filteredStatuses)
 	}
 
 	// Capture planned deletions before executeDeletions removes them from plan.branches
 	deletedBranches := make(map[string]string)
-	for name, info := range plannedDeletion.plan.branches {
+	for name, info := range plan.branches {
 		deletedBranches[name] = info.reason
 	}
 
+	if err := applyReparentMoves(ctx, reparentMoves); err != nil {
+		return nil, err
+	}
+
 	// Execute deletions
-	if err := executeDeletions(ctx, plannedDeletion.plan); err != nil {
+	if err := executeDeletions(ctx, plan); err != nil {
 		return nil, err
 	}
 
 	return &CleanBranchesResult{
 		DeletedBranches:        deletedBranches,
-		BranchesWithNewParents: plannedDeletion.BranchesWithNewParents,
+		BranchesWithNewParents: branchesWithNewParents,
 		SkippedInWorktree:      plannedDeletion.SkippedInWorktree,
 	}, nil
 }
@@ -257,14 +263,15 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 	return deleteStatuses, skippedInWorktree, utilityBranches, nil
 }
 
-// buildDeletionPlanAndReparent constructs the deletion hierarchy and updates parents of surviving branches.
-func buildDeletionPlanAndReparent(ctx *app.Context, deleteStatuses map[string]engine.DeletionStatus) (*deletionPlan, []string, error) {
+// buildDeletionPlan constructs the deletion hierarchy and records parent updates
+// for surviving branches. It does not mutate branch metadata.
+func buildDeletionPlan(ctx *app.Context, deleteStatuses map[string]engine.DeletionStatus) (*deletionPlan, []string, []plannedReparentMove) {
 	eng := ctx.Engine
 	out := ctx.Output
-	c := ctx.Context
 
 	plan := newDeletionPlan()
 	branchesWithNewParents := []string{}
+	reparentMoves := []plannedReparentMove{}
 	visited := make(map[string]bool)
 
 	// Build StackGraph for efficient traversals
@@ -314,12 +321,10 @@ func buildDeletionPlanAndReparent(ctx *app.Context, deleteStatuses map[string]en
 			out.Debug("Marked %s for deletion. Reason: %s. Blockers: %v", branchName, status.Reason, blockers)
 		} else {
 			// Branch is NOT being deleted. Check if it needs a new parent.
-			newParentName, err := reparentBranchIfNecessary(c, branch, plan, eng, out)
-			if err != nil {
-				return nil, nil, err
-			}
-			if newParentName != "" {
+			move := planReparentIfNecessary(branch, plan, eng, out)
+			if move != nil {
 				branchesWithNewParents = append(branchesWithNewParents, branchName)
+				reparentMoves = append(reparentMoves, *move)
 			}
 		}
 	}
@@ -334,7 +339,7 @@ func buildDeletionPlanAndReparent(ctx *app.Context, deleteStatuses map[string]en
 		}
 	}
 
-	return plan, branchesWithNewParents, nil
+	return plan, branchesWithNewParents, reparentMoves
 }
 
 // executeDeletions greedily deletes unblocked branches from the plan.
@@ -537,9 +542,9 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 	return queue
 }
 
-// reparentBranchIfNecessary updates a branch's parent if its current parent is being deleted.
-// Returns the name of the new parent if changed, or empty string if not changed.
-func reparentBranchIfNecessary(ctx context.Context, branch engine.Branch, plan *deletionPlan, eng engine.Engine, out output.Output) (string, error) {
+// planReparentIfNecessary records a parent update if the branch's current parent
+// is being deleted. It returns nil when no parent change is needed.
+func planReparentIfNecessary(branch engine.Branch, plan *deletionPlan, eng engine.Engine, out output.Output) *plannedReparentMove {
 	branchName := branch.GetName()
 	parentName := getParentName(branch)
 
@@ -549,19 +554,18 @@ func reparentBranchIfNecessary(ctx context.Context, branch engine.Branch, plan *
 	// If parent changed, update it
 	if newParentName != parentName {
 		reparentOpts := buildReparentOptions(plan, parentName)
-		if err := applyReparent(ctx, eng, branch, newParentName, reparentOpts); err != nil {
-			return "", fmt.Errorf("failed to set parent for %s: %w", branchName, err)
-		}
-		out.Info("Set parent of %s to %s.",
-			output.Branch(branchName, false),
-			output.Branch(newParentName, false))
+		out.Debug("Planned parent update for %s from %s to %s.", branchName, parentName, newParentName)
 
 		// Remove this branch as a blocker for its old parent in the plan
 		plan.removeBlocker(parentName, branchName)
-		return newParentName, nil
+		return &plannedReparentMove{
+			branchName:         branchName,
+			newParentName:      newParentName,
+			preserveDivergence: reparentOpts.preserveDivergence,
+		}
 	}
 
-	return "", nil
+	return nil
 }
 
 type reparentOptions struct {
@@ -597,6 +601,26 @@ func applyReparent(ctx context.Context, eng engine.Engine, branch engine.Branch,
 		return eng.ReparentBranch(ctx, branch, newParent)
 	}
 	return eng.SetParent(ctx, branch, newParent, engine.DivergenceRecompute)
+}
+
+func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove) error {
+	if len(moves) == 0 {
+		return nil
+	}
+
+	eng := ctx.Engine
+	for _, move := range moves {
+		branch := eng.GetBranch(move.branchName)
+		if err := applyReparent(ctx.Context, eng, branch, move.newParentName, reparentOptions{
+			preserveDivergence: move.preserveDivergence,
+		}); err != nil {
+			return fmt.Errorf("failed to set parent for %s: %w", move.branchName, err)
+		}
+		ctx.Output.Info("Set parent of %s to %s.",
+			output.Branch(move.branchName, false),
+			output.Branch(move.newParentName, false))
+	}
+	return nil
 }
 
 // removeWorktreeIfCheckedOut removes the worktree if the branch is checked out in one.

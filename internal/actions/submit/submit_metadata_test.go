@@ -16,7 +16,9 @@ const (
 )
 
 func TestPreparePRMetadata_DraftStatus(t *testing.T) {
+	t.Parallel()
 	t.Run("new PR with --draft flag creates as draft", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
 
@@ -31,6 +33,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 	})
 
 	t.Run("new PR with --publish flag creates as non-draft", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
 
@@ -45,6 +48,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 	})
 
 	t.Run("new PR defaults to published (not draft)", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
 
@@ -59,6 +63,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 	})
 
 	t.Run("existing PR preserves draft status", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
 
@@ -93,6 +98,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 	})
 
 	t.Run("--draft flag overrides existing PR draft status", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
 
@@ -115,6 +121,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 	})
 
 	t.Run("--publish flag overrides existing PR draft status", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
 
@@ -225,7 +232,9 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 }
 
 func TestPreparePRMetadata_NoEdit(t *testing.T) {
+	t.Parallel()
 	t.Run("no-edit skips title and body editing", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
 
@@ -250,7 +259,9 @@ func TestPreparePRMetadata_NoEdit(t *testing.T) {
 }
 
 func TestGetPRBody_MultipleCommits(t *testing.T) {
+	t.Parallel()
 	t.Run("returns a bulleted list of subjects for multiple commits", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := "feature"
 

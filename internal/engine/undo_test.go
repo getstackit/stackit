@@ -23,7 +23,9 @@ func snapshotOpts(command string, args ...string) engine.SnapshotOptions {
 }
 
 func TestTakeSnapshot(t *testing.T) {
+	t.Parallel()
 	t.Run("creates snapshot with branch and metadata SHAs", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Create a stack: main -> feature
@@ -60,6 +62,7 @@ func TestTakeSnapshot(t *testing.T) {
 	})
 
 	t.Run("creates undo directory if it doesn't exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -73,6 +76,7 @@ func TestTakeSnapshot(t *testing.T) {
 	})
 
 	t.Run("captures current branch correctly", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -91,7 +95,9 @@ func TestTakeSnapshot(t *testing.T) {
 }
 
 func TestGetSnapshots(t *testing.T) {
+	t.Parallel()
 	t.Run("returns empty list when no snapshots exist", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -101,6 +107,7 @@ func TestGetSnapshots(t *testing.T) {
 	})
 
 	t.Run("returns snapshots sorted by time newest first", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -135,6 +142,7 @@ func TestGetSnapshots(t *testing.T) {
 	})
 
 	t.Run("includes display names with SHA and local timestamp", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -151,7 +159,9 @@ func TestGetSnapshots(t *testing.T) {
 }
 
 func TestLoadSnapshot(t *testing.T) {
+	t.Parallel()
 	t.Run("loads valid snapshot", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -174,6 +184,7 @@ func TestLoadSnapshot(t *testing.T) {
 	})
 
 	t.Run("returns error for non-existent snapshot", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -184,7 +195,9 @@ func TestLoadSnapshot(t *testing.T) {
 }
 
 func TestRestoreSnapshot(t *testing.T) {
+	t.Parallel()
 	t.Run("restores branch heads to snapshot state", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -233,6 +246,7 @@ func TestRestoreSnapshot(t *testing.T) {
 	})
 
 	t.Run("deletes branches created after snapshot", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -274,6 +288,7 @@ func TestRestoreSnapshot(t *testing.T) {
 	})
 
 	t.Run("restores metadata refs", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -308,6 +323,7 @@ func TestRestoreSnapshot(t *testing.T) {
 	})
 
 	t.Run("restores HEAD to original branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -338,6 +354,7 @@ func TestRestoreSnapshot(t *testing.T) {
 	})
 
 	t.Run("handles deleted branches gracefully", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -370,6 +387,7 @@ func TestRestoreSnapshot(t *testing.T) {
 	})
 
 	t.Run("switches to trunk if snapshot branch was deleted", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -410,7 +428,9 @@ func TestRestoreSnapshot(t *testing.T) {
 }
 
 func TestEnforceMaxStackDepth(t *testing.T) {
+	t.Parallel()
 	t.Run("deletes oldest snapshots when exceeding max depth", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
@@ -432,7 +452,9 @@ func TestEnforceMaxStackDepth(t *testing.T) {
 }
 
 func TestSnapshotFileFormat(t *testing.T) {
+	t.Parallel()
 	t.Run("snapshot files are valid JSON", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").

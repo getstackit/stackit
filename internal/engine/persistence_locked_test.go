@@ -12,6 +12,7 @@ import (
 )
 
 func TestPrInfoLockedPersistence(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit().
 		CreateBranch("feature").

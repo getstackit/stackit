@@ -9,6 +9,8 @@ import (
 )
 
 func TestGenerateDefaultBranchName(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		originalName  string
@@ -55,6 +57,7 @@ func TestGenerateDefaultBranchName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := generateDefaultBranchName(tt.originalName, tt.existingNames)
 			if got != tt.want {
 				t.Errorf("generateDefaultBranchName(%q, %v) = %q, want %q",

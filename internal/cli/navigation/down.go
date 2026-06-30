@@ -6,6 +6,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
@@ -27,7 +28,18 @@ as an argument to move multiple levels at once.`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.Run(cmd, func(ctx *app.Context) error {
+			// down only walks the parent chain and checks out an exact branch. In
+			// quiet mode no branch info is printed (which would build the full stack
+			// graph), so the lighter branches-only load with lazy per-branch promotion
+			// is sufficient — mirroring the quiet exact-checkout path in `co`. The
+			// managed-worktree check is intentionally preserved (checkout relies on it
+			// for worktree switching).
+			opts := common.GetGlobalOptions(cmd)
+			if opts.Quiet {
+				loadMode := engine.LoadModeBranchesOnly
+				opts.EngineLoadMode = &loadMode
+			}
+			return common.RunWithOptions(cmd, opts, func(ctx *app.Context) error {
 				parsedSteps, err := parsePositiveSteps(args, steps)
 				if err != nil {
 					return err

@@ -34,9 +34,10 @@ Per-command analysis of where `stackit` spends time, with proposed wins. All cla
 
 See [cross-cutting.md → Recommended attack order](cross-cutting.md#recommended-attack-order). TL;DR:
 
-1. Expand lightweight load modes
-2. Conflict-impossible validation for restack
-3. Preload stack stats for `tree`
-4. `RebuildBranches([]string)` for `untrack` + `absorb` cleanup
-5. Snapshot batching / undo opt-out
-6. Coalesce remaining staging `worktree.Status()` calls
+1. `RebuildBranches([]string)` for `absorb` + `untrack` cleanup
+2. On-demand diff batching for `info --diff`/`--patch` and `absorb`
+3. Drop `children`/`up`/`top` from the default load to `LoadModeShared`
+4. Per-level worktree reuse for overlapping-file validation
+5. Combine metadata transactions for `create` + `describe`; remaining hygiene
+
+Several originally-planned wins have since landed — see [cross-cutting.md → Completed](cross-cutting.md#completed-since-last-revision) (multi-commit conflict-free validation, batched stack-wide status checks in `submit`/`info`, quiet `down`/`bottom` branches-only load, go-git removal / `ReloadRepository`, snapshot batching + `undo.enabled` opt-out, `IsInManagedWorktree` gating, `scope`/`untrack` batching).

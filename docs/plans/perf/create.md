@@ -6,19 +6,23 @@
 
 ```
 NewCreateCmd.RunE → common.Run                       (same bootstrap as co)
-  └─ create.Action                                   internal/actions/create/create.go:38
+  └─ create.Action                                   internal/actions/create/create.go:42
        ├─ validation.MustBeOnBranch
-       ├─ actions.TakeBestEffortSnapshot
+       │     └─ eng.ValidateOnBranch → eng.CurrentBranch()  ← shells `git symbolic-ref` (NOT cached)
+       ├─ eng.CurrentBranch().GetName()              ← shells GetCurrentBranch again (create.go:56)
+       ├─ actions.TakeBestEffortSnapshot             internal/actions/common.go:45
+       │     │   (no-op when config undo.enabled=false)
        │     └─ engine.TakeSnapshot                  internal/engine/undo.go:108
-       │           ├─ for each branch: branch.GetRevision()        N revision lookups (not preloaded)
-       │           ├─ git.ListMetadata                              one go-git ref iter
-       │           ├─ json.MarshalIndent + os.WriteFile             snapshot file
-       │           └─ enforceMaxStackDepth                          os.ReadDir + sort + maybe os.Remove
+       │           ├─ git.BatchGetRevisions(branches)        one rev-parse for all branches
+       │           ├─ git.ListMetadata                       one go-git ref iter
+       │           ├─ json.MarshalIndent + os.WriteFile      snapshot file
+       │           └─ enforceMaxStackDepth                   os.ReadDir + sort + maybe os.Remove
        │
-       ├─ eng.HasStagedChanges                       internal/git/staging.go:102
-       │     └─ worktree.Status()                    ← O(working tree)
+       ├─ eng.HasStagedChanges                       internal/git/staging.go:55 (`git diff --cached --quiet`)
        ├─ if interactive + no staged:
-       │     eng.HasUnstagedChanges                  → another worktree.Status()
+       │     eng.HasUnstagedChanges                  internal/git/staging.go:62 (`git diff --quiet`)
+       ├─ if non-interactive + no staged guard:
+       │     eng.HasUnstagedChanges + eng.HasUntrackedFiles  two more git subprocesses
        │
        ├─ stage (optional, only if --all/--update/--patch):
        │     git.StageChanges                        forks `git add ...`
@@ -30,19 +34,17 @@ NewCreateCmd.RunE → common.Run                       (same bootstrap as co)
        │
        ├─ eng.AllBranches() + slices.ContainsFunc    O(N) duplicate check, cached
        │
-       ├─ eng.CreateAndCheckoutBranch                internal/engine/engine_writer.go:296
-       │     └─ git.runner.CreateAndCheckoutBranch   internal/git/branches.go:91
-       │           └─ native `git checkout -b <branch>`
+       ├─ eng.CreateAndCheckoutBranch                internal/engine/branch_mutations.go:365
+       │     ├─ git.runner.CreateAndCheckoutBranch   internal/git/branches.go:45 (native `git checkout -b`)
+       │     └─ addKnownBranchLocked                 pushes new branch into e.state.branches
        │
-       ├─ if staged: eng.Commit                      internal/engine/engine_writer.go:709
-       │     └─ git.runner.Commit                    internal/git/commit.go:68
-       │           ├─ shells `git commit -m ...`     ← user hooks dominate
-       │           ├─ revisionCache.InvalidateAll
-       │           └─ ReloadRepository               ← closes + reopens go-git repo
+       ├─ if staged: eng.Commit                      internal/engine/commit_ops.go:10
+       │     └─ git.runner.CommitWithOptions         internal/git/commit.go:20
+       │           └─ shells `git commit ...`        ← user hooks dominate (no go-git reload anymore)
        │
-       ├─ eng.TrackBranch                            internal/engine/engine_writer.go:91
-       │     ├─ git.GetCurrentBranch                 cheap (HEAD)
-       │     ├─ optional GetAllBranchNames           usually a no-op (already cached)
+       ├─ eng.TrackBranch                            internal/engine/branch_tracking.go:12
+       │     ├─ git.GetCurrentBranch                 cheap (HEAD), but redundant re-shell
+       │     ├─ GetAllBranchNames re-fetch           gated; no longer fires (branch already cached)
        │     └─ SetParent → metadata transaction     1 ref write
        │
        ├─ if --scope: eng.SetScope                   another metadata transaction
@@ -51,46 +53,41 @@ NewCreateCmd.RunE → common.Run                       (same bootstrap as co)
 
 ## Where time goes (largest → smallest, typical interactive create)
 
-1. **`git commit` subprocess + user hooks** — the user's pre-commit hook usually dominates wall time when present. Stackit can't change that, but it can avoid duplicate work around it (see #4).
-2. **`ReloadRepository`** (`internal/git/runner.go:480`) after every commit. Closes the go-git `*Repository`, invalidates the entire revision cache, and re-opens. Re-opens of large repos cost real I/O; throwing away `revisionCache.AllBranchRevisions` is wasteful since only the freshly committed branch's SHA changed.
-3. **`worktree.Status()` × 1–2** — `HasStagedChanges` calls it once, and `HasUnstagedChanges` calls it again in the interactive prompt path. Checkout no longer adds an extra go-git status walk. Each remaining status check is a full working-tree walk; on a big repo this is the dominant non-hook cost.
-4. **`TakeSnapshot`** (`internal/engine/undo.go:108`). Iterates `e.state.branches` and calls `branch.GetRevision()` per branch, hitting `r.revisionCache` one entry at a time. Also calls `git.ListMetadata` (separate ref iter) and an `os.ReadDir` for stack-depth enforcement. On a 50-branch repo this is ~50 cached lookups + 1 metadata scan + snapshot write — usually 5–15ms but it runs on every mutation.
+1. **`git commit` subprocess + user hooks** — the user's pre-commit hook usually dominates wall time when present. Stackit can't change that. (`ReloadRepository` after commit is gone — `Commit` now just shells `git commit` with no go-git reload or cache invalidation, see `internal/git/commit.go`.)
+2. **`git diff` staging probes × 1–3** — `HasStagedChanges` runs `git diff --cached --quiet`; the interactive prompt adds `HasUnstagedChanges`; the non-interactive empty-tree guard adds `HasUnstagedChanges` + `HasUntrackedFiles`. These are cheap native git subprocesses (not full go-git working-tree walks), but they are separate processes that could be collapsed into one `git status --porcelain`.
+3. **`GetCurrentBranch` shelled 2–3×** — `validation.MustBeOnBranch` → `CurrentBranch()` re-shells, `create.go:56` re-shells, and `TrackBranch` re-shells again. `CurrentBranch()` does not consult any cache; it always shells `git symbolic-ref`.
+4. **`TakeSnapshot`** (`internal/engine/undo.go:108`). Now batches revisions in one `BatchGetRevisions` call and is skipped entirely when `undo.enabled=false`. Remaining per-call cost: `git.ListMetadata` (ref iter), the JSON write, and `enforceMaxStackDepth`'s `os.ReadDir + sort` on every mutation.
 5. **Bootstrap (`rebuildInternal`)** — same fixed cost as `co.md` describes.
-6. **`TrackBranch` re-fetches `GetCurrentBranch`** inside its critical section (`internal/engine/engine_writer.go:102`) even though we just created the branch. Small but pointless.
+6. **`SetScope` does its own metadata transaction** instead of bundling with the parent-set in `TrackBranch`. Two ref writes where one would do.
 7. **`getCommitMessageForBranch`** when no `-m` is provided opens an editor or reads from stdin — user-blocking, not stackit's fault.
-8. **`SetScope` does its own metadata transaction** instead of bundling with the parent-set in `TrackBranch`. Two ref writes where one would do.
 
 ## Proposed wins (ranked)
 
-### 1. Coalesce staging `worktree.Status()` calls *(medium impact, low risk)*
+### 1. Coalesce staging probes into one `git status` *(low impact, low risk)*
 
-`HasStagedChanges` and `HasUnstagedChanges` both walk the working tree. Add a single `RepoStatus` (`{HasStaged, HasUnstaged, HasUntracked}`) call early in `create.Action`, cache it on the engine for the duration of the request, and reuse it for prompts/validation. Same fix benefits `modify`, `absorb`, and `submit`.
+> **Status:** Premise corrected. The probes are **not** go-git `worktree.Status()` walks — `HasStagedChanges` / `HasUnstagedChanges` run `git diff --cached --quiet` / `git diff --quiet` (`internal/git/staging.go:55,62`) and `HasUntrackedFiles` runs `git ls-files`. So the original "full working-tree walk" cost is overstated; this is now a smaller, optional win.
 
-### 2. Snapshot should use batched revisions and skip on opt-out *(medium impact, low risk)*
+The non-interactive guard (`internal/actions/create/create.go:125–137`) can fire three separate git subprocesses (`HasStagedChanges`, then `HasUnstagedChanges` + `HasUntrackedFiles`). Add a single `RepoStatus` (`{HasStaged, HasUnstaged, HasUntracked}`) call backed by one `git status --porcelain`, cache it on the engine for the request, and reuse it for staging decisions and the guard. Same fix benefits `modify`, `absorb`, and `submit`.
 
-`TakeSnapshot` should call `BatchGetRevisions` (or use the revision cache after `LoadAllBranchRevisions`) instead of iterating per-branch. Also: snapshots are only consumed by `undo`. For users that never undo, the work and disk write are pure overhead. Add a config flag (`undo.enabled=false`) and short-circuit `TakeBestEffortSnapshot` when it's off.
+### 2. Lazy `enforceMaxStackDepth` *(small, low risk)*
 
-Also: `enforceMaxStackDepth` does `os.ReadDir + sort + os.Remove`. Cheap individually, but on every mutating command it adds up. Lazy enforcement (only when the directory size exceeds N × max-depth) is fine.
+> **Status:** Partially done. Batched revisions are implemented — `TakeSnapshot` already calls `e.git.BatchGetRevisions(e.state.branches)` (`internal/engine/undo.go:121`). The opt-out is implemented — `TakeBestEffortSnapshot` short-circuits when `undo.enabled=false` (`internal/actions/common.go:45–48`, config key `stackit.undo.enabled` in `internal/config/keys.go:18`). Only the lazy-enforcement item below remains.
 
-### 3. Drop or scope `ReloadRepository` after commit *(medium impact, medium risk)*
+`enforceMaxStackDepth` (`internal/engine/undo.go:172`) does `os.ReadDir + sort + os.Remove` on every snapshot. Cheap individually but it runs on every mutating command. Enforce lazily (only when the directory entry count exceeds N × max-depth) so the common case skips the directory scan and sort.
 
-`ReloadRepository` throws away the entire go-git in-memory state to pick up a single new commit. Two cheaper options:
-- Just invalidate the affected branch in `revisionCache` (`revisionCache.Invalidate(branchName)`) and let go-git re-read its packed refs lazily.
-- Re-open only the refs subsystem, not the whole repo.
+### 3. Bundle parent-set + scope into one metadata transaction *(small, low risk)*
 
-Risk: go-git caches loose-object packs; if we don't reload we may miss the new commit object on subsequent lookups. Easiest first step is `revisionCache.Invalidate(branchName)` plus a targeted ref refresh.
+`TrackBranch` opens a transaction to write the parent ref (`SetParent`, `internal/engine/branch_tracking.go:66`). `create.Action` then calls `SetScope` (`internal/actions/create/create.go:264`), which opens another (`internal/engine/branch_tracking.go:371`). They could be one: add a `TrackWithScope` / `SetParentAndScope` helper that writes both in a single transaction. (Note: `SetScopeAndMarkForUpdate` at `branch_tracking.go:401` already shows the pattern for bundling two writes, but it does not cover the parent-set.) Saves one ref write + one git ref update on every `create --scope`.
 
-### 4. Bundle parent-set + scope into one metadata transaction *(small, low risk)*
+### 4. Use a cached current branch instead of re-shelling *(trivial)*
 
-`TrackBranch` opens a transaction to write the parent ref. `SetScope` opens another. They could be one: extend `SetParent` to accept an optional scope, or expose a `TrackWithScope` helper that does both atomically. Saves one ref write + one git ref update.
+`CurrentBranch()` (`internal/engine/engine_reader.go:48`) always shells `git symbolic-ref` and ignores `e.currentBranch` except to overwrite it. In a single `create` it is invoked at least three times: `validation.MustBeOnBranch` → `ValidateOnBranch`, then `create.go:56`, then again inside `TrackBranch` (`branch_tracking.go:23`). Bootstrap already knows the current branch; provide a cached read (e.g. `CurrentBranchName()` backed by `e.currentBranch`, refreshed only on mutation) and have the validator and `create.Action` consult it. The fix is more involved than "call `CurrentBranch()`" because that method itself re-shells.
 
-### 5. Skip `TrackBranch`'s "validate branches exist" re-fetch *(trivial)*
+## Already implemented (removed from the plan)
 
-`internal/engine/engine_writer.go:107–139` re-runs `GetAllBranchNames` if the just-created branch isn't in the cached list. After `CreateAndCheckoutBranch`, that cache is stale — but we know the answer (we just created it). Have `CreateAndCheckoutBranch` push the branch into `e.state.branches` (it already does, `engine_writer.go:307`), and have `TrackBranch` trust the cache.
-
-### 6. Defer `validation.MustBeOnBranch` `GetCurrentBranch` to use cached value *(trivial)*
-
-Bootstrap already populated `e.currentBranch`. The validator should consult `eng.CurrentBranch()` (cached) rather than re-shelling.
+- **`ReloadRepository` after commit** — removed. `Commit` (`internal/engine/commit_ops.go:10` → `internal/git/commit.go:20`) shells `git commit` with no go-git repo reload or revision-cache invalidation. The go-git `*Repository` / `revisionCache` machinery this win targeted no longer exists.
+- **Snapshot batched revisions + opt-out** — see win #2 status note.
+- **Skip `TrackBranch`'s "validate branches exist" re-fetch** — done. `CreateAndCheckoutBranch` pushes the new branch into `e.state.branches` via `addKnownBranchLocked` (`internal/engine/branch_mutations.go:375`), so the `GetAllBranchNames` re-fetch in `TrackBranch` (`branch_tracking.go:28–42`) no longer fires for the create path.
 
 ## Validation
 
@@ -99,4 +96,4 @@ STACKIT_NO_LOGGING=1 hyperfine --warmup 1 \
   'cd /tmp/scratch && git add . && stackit create -m "perf: noop"'
 ```
 
-Run with a no-op pre-commit hook (or `--no-verify` if that flag is available) to isolate the stackit overhead from user hook cost. Instrument: each remaining `worktree.Status()` call, `TakeSnapshot`, `ReloadRepository`, and `git commit`.
+Run with a no-op pre-commit hook (or `--no-verify` if that flag is available) to isolate the stackit overhead from user hook cost. Instrument: the `git diff`/`git status` staging probes, `GetCurrentBranch` shells, `TakeSnapshot`, and `git commit`.

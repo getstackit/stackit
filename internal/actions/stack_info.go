@@ -145,9 +145,13 @@ func StackInfoAction(ctx *app.Context, opts StackInfoOptions) error {
 		trunkName := eng.Trunk().GetName()
 		stackTree := tree.NewStackTree(stackBranches, currentBranch.GetName(), trunkName)
 		stackTree.FixedMap = make(map[string]bool)
+		// Resolve restack status for the whole stack in one batched parent-revision
+		// read instead of a per-branch NeedsRestack() (each of which would shell a
+		// separate `git rev-parse` for the parent).
+		statuses := eng.ReadBranchStatuses(stackBranches)
 		for _, branch := range stackBranches {
 			// IsFixed means it does NOT need restack
-			stackTree.FixedMap[branch.GetName()] = !branch.NeedsRestack()
+			stackTree.FixedMap[branch.GetName()] = statuses.IsUpToDate(branch)
 		}
 		stackTree.FixedMap[trunkName] = true
 

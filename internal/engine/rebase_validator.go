@@ -417,26 +417,34 @@ func (e *engineImpl) validateSingleSpec(
 }
 
 // tryConflictFreeReplay tries to produce the rebased SHA without a worktree for
-// single-commit branches where the parent's new changes and the branch's changes
-// touch completely disjoint file sets (a content conflict is therefore impossible).
+// branches where the parent's new changes and the branch's changes touch
+// completely disjoint file sets (a content conflict is therefore impossible).
 //
-// Returns (newSHA, true) on success; returns ("", false) to signal the caller to
-// fall back to the full worktree path.
+// Multi-commit branches are supported only when the commit range is linear: each
+// commit is replayed individually, oldest first, chained onto the previous
+// rebased result so per-commit author identity and messages are preserved. The
+// branch-level disjoint-file check is a sufficient conflict guarantee for every
+// commit, because each commit's changes are a subset of the branch's overall
+// changes — none of which touch a file the parent changed.
+//
+// Returns (newSHA, true) on success, where newSHA is the rebased branch tip;
+// returns ("", false) to signal the caller to fall back to the full worktree path.
 func (e *engineImpl) tryConflictFreeReplay(
 	ctx context.Context,
 	spec RebaseSpec,
 	resolvedParent string,
 ) (string, bool) {
-	// Only handle single-commit branches — multi-commit replay requires iterating
-	// each commit individually and is deferred to the worktree path.
 	commits, err := e.git.GetCommitRangeSHAs(ctx, spec.OldUpstream, spec.Branch)
-	if err != nil || len(commits) != 1 {
+	if err != nil || len(commits) == 0 {
+		return "", false
+	}
+	if !e.commitRangeIsLinear(commits, spec.OldUpstream) {
 		return "", false
 	}
 
 	// Get the files changed by the parent's new commits (what we're rebasing onto).
 	parentFiles, err := e.git.GetChangedFiles(ctx, spec.OldUpstream, resolvedParent)
-	if err != nil || len(parentFiles) == 0 {
+	if err != nil {
 		return "", false
 	}
 
@@ -451,12 +459,68 @@ func (e *engineImpl) tryConflictFreeReplay(
 		return "", false
 	}
 
-	// File sets are disjoint — compute the rebased tree via merge-tree.
+	// File sets are disjoint — replay each commit onto the new base. commits is
+	// newest-first, so iterate in reverse (oldest first). The oldest commit's
+	// original parent is OldUpstream; every later commit's original parent is the
+	// commit immediately before it. Each replayed commit becomes the new base for
+	// the next, so author identity and message are preserved per commit.
+	newBase := resolvedParent
+	for i := len(commits) - 1; i >= 0; i-- {
+		mergeBase := spec.OldUpstream
+		if i+1 < len(commits) {
+			mergeBase = commits[i+1]
+		}
+		newSHA, ok := e.replayCommitConflictFree(ctx, commits[i], mergeBase, newBase)
+		if !ok {
+			return "", false
+		}
+		newBase = newSHA
+	}
+	return newBase, true
+}
+
+// commitRangeIsLinear reports whether commits (newest-first) form a simple
+// single-parent chain rooted at oldUpstream. The replay fast path relies on that
+// shape to preserve git rebase semantics; merge commits and side-branch commits
+// must fall back to the real worktree rebase.
+func (e *engineImpl) commitRangeIsLinear(commits []string, oldUpstream string) bool {
+	for i := len(commits) - 1; i >= 0; i-- {
+		parentRaw, err := e.git.GetCommitLog(commits[i], "%P")
+		if err != nil {
+			return false
+		}
+		parents := strings.Fields(parentRaw)
+		if len(parents) != 1 {
+			return false
+		}
+
+		expectedParent := oldUpstream
+		if i+1 < len(commits) {
+			expectedParent = commits[i+1]
+		}
+		if parents[0] != expectedParent {
+			return false
+		}
+	}
+	return true
+}
+
+// replayCommitConflictFree replays a single commit onto newBase without a
+// worktree, given the commit's original parent (the 3-way merge base). The caller
+// must have established that the branch's changes are disjoint from the new base's
+// changes, so the merge is guaranteed conflict-free.
+//
+// Returns (newSHA, true) on success; returns ("", false) to signal fallback.
+func (e *engineImpl) replayCommitConflictFree(
+	ctx context.Context,
+	commitSHA, mergeBase, newBase string,
+) (string, bool) {
+	// Compute the rebased tree via merge-tree.
 	// git merge-tree --write-tree --merge-base <base> <ours> <theirs>
-	// OURS  = resolvedParent (the new base we're rebasing onto)
-	// THEIRS = spec.Branch  (carries our changes on top of OldUpstream)
+	// OURS  = newBase  (the rebased parent so far)
+	// THEIRS = commitSHA (this commit's snapshot on top of its original parent)
 	treeSHARaw, err := e.git.RunGitCommandWithContext(ctx,
-		"merge-tree", "--write-tree", "--merge-base", spec.OldUpstream, resolvedParent, spec.Branch)
+		"merge-tree", "--write-tree", "--merge-base", mergeBase, newBase, commitSHA)
 	if err != nil {
 		return "", false
 	}
@@ -468,7 +532,6 @@ func (e *engineImpl) tryConflictFreeReplay(
 	}
 
 	// Preserve the original commit's author identity and message.
-	commitSHA := commits[0] // single commit, newest-first list
 	authorName, err := e.git.GetCommitLog(commitSHA, "%an")
 	if err != nil {
 		return "", false
@@ -493,7 +556,7 @@ func (e *engineImpl) tryConflictFreeReplay(
 	}
 
 	newSHARaw, err := e.git.RunGitCommandWithEnv(ctx, env,
-		"commit-tree", treeSHA, "-p", resolvedParent, "-m", strings.TrimSpace(msg))
+		"commit-tree", treeSHA, "-p", newBase, "-m", strings.TrimSpace(msg))
 	if err != nil {
 		return "", false
 	}

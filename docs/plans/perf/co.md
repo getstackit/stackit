@@ -7,9 +7,9 @@
 ```
 NewCheckoutCmd.RunE
   ├─ if --quiet and exact branch/trunk:
-  │    opts.EngineLoadMode = LoadModeBranchesOnly
+  │    globalOpts.EngineLoadMode = &LoadModeBranchesOnly
   │
-  └─ common.Run                              internal/cli/common/common.go
+  └─ common.RunWithOptions                   internal/cli/common/common.go
        ├─ app.GetContextWithWriter
        │    ├─ git.NewRunner / DiscoverRepoRoot
        │    ├─ config.LoadConfig
@@ -17,10 +17,11 @@ NewCheckoutCmd.RunE
        │    └─ engine.NewEngine
        │         ├─ LoadModeBranchesOnly: GetAllBranchNames only
        │         └─ default LoadModeShared: shared metadata, local metadata lazy
-       └─ Engine.IsInManagedWorktree() unless skipped by command options
+       └─ Engine.IsInManagedWorktree() unless SkipManagedWorktreeCheck
   └─ common.Checkout → actions.CheckoutAction
        ├─ resolveBranchName
-       │    └─ eng.AllBranches() (already cached, cheap)
+       │    ├─ eng.BranchNames().Contains(input)  (O(1) exact match, returns early)
+       │    └─ eng.AllBranches() only for scope/fuzzy fallback
        ├─ getWorktreeSwitchInfo
        │    ├─ Engine.GetStackRootForBranch
        │    └─ Engine.GetWorktreeForStack
@@ -42,6 +43,16 @@ NewCheckoutCmd.RunE
 
 ### 1. Expand lightweight bootstrap beyond exact quiet checkout *(high impact, medium risk)*
 
+> **Status:** Partially done. The opt-in and the per-branch promotion mechanism
+> both exist. `NewCheckoutCmd.RunE` opts exact quiet `co <branch>` and
+> `co --trunk --quiet` into `LoadModeBranchesOnly`
+> (`internal/cli/navigation/checkout.go:37`). Lazy single-branch promotion is
+> already implemented via `ensureBranchSharedLoaded`
+> (`internal/engine/engine_impl.go:271`), which loads one branch's shared
+> metadata without triggering the full `ensureSharedLoaded` batch — accessors
+> like `GetParent` and `ReadBranchStatuses` already call it. The remaining work
+> is to extend the CLI opt-in beyond the quiet path.
+
 Exact quiet `co <branch>` and `co --trunk --quiet` already opt into `LoadModeBranchesOnly`. The remaining common cases are:
 
 - exact non-quiet checkout, where branch info needs a small ancestor slice rather than full repo metadata;
@@ -54,13 +65,18 @@ Use branch-list mode first, then promote only the chosen branch's stack/worktree
 
 `printBranchInfo` is informational. It is already behind `--quiet` and uses batched status reads; add a config option to disable it by default for users who prioritize checkout latency over guidance.
 
-### 3. Skip double `AllBranches` traversal *(trivial)*
+### 3. Keep auditing managed-worktree checks *(small impact, command-specific)*
 
-`resolveBranchName` builds a name slice and scans it linearly. With an exact name in hand, do one map lookup via `Engine.GetBranch` first and return immediately. Only fall back to the slice scan for fuzzy/scope matching.
+> **Status:** Partially done. The `SkipManagedWorktreeCheck` opt-out already exists
+> (`app.GlobalOptions.SkipManagedWorktreeCheck`, honored in
+> `RunWithOptions` at `internal/cli/common/common.go:47`, and set by
+> `ApplyReadOnlyCurrentBranch` / `RunReadOnlyCurrentBranch`). Checkout itself
+> still needs `IsInManagedWorktree` (`internal/engine/engine_worktree.go:315`).
 
-### 4. Keep auditing managed-worktree checks *(small impact, command-specific)*
-
-Checkout itself needs `IsInManagedWorktree`. The remaining win is not in `co`, but in commands that reuse checkout helpers or command wrappers without needing worktree switching.
+Remaining work is an audit, not a change in `co`: find commands that reuse
+checkout helpers or command wrappers but never switch worktrees, and route them
+through `RunReadOnlyCurrentBranch` (or set `SkipManagedWorktreeCheck`) so they
+skip the managed-worktree probe.
 
 ## How to validate
 

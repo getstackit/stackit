@@ -444,7 +444,7 @@ func (e *engineImpl) tryConflictFreeReplay(
 
 	// Get the files changed by the parent's new commits (what we're rebasing onto).
 	parentFiles, err := e.git.GetChangedFiles(ctx, spec.OldUpstream, resolvedParent)
-	if err != nil || len(parentFiles) == 0 {
+	if err != nil {
 		return "", false
 	}
 

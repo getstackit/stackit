@@ -122,6 +122,34 @@ func TestTryConflictFreeReplaySingleCommitUsesMergeTreeWithExplicitMergeBase(t *
 	}, fakeGit.commitTreeCalls[1])
 }
 
+func TestTryConflictFreeReplayUsesFastPathWhenParentChangedNoFiles(t *testing.T) {
+	// Parent advanced without touching any files (same tree as old-base). An empty
+	// parent file set cannot overlap branch changes, so the fast path should still
+	// replay instead of falling back to a worktree dry-run.
+	fakeGit := &fastPathGit{
+		t:       t,
+		commits: []string{"feature-commit"},
+		parents: map[string]string{
+			"feature-commit": "old-base",
+		},
+		changedFiles: map[string][]string{
+			"new-parent": {},
+			"feature":    {"feature.txt"},
+		},
+	}
+	eng := &engineImpl{git: fakeGit}
+
+	newSHA, ok := eng.tryConflictFreeReplay(context.Background(), RebaseSpec{
+		Branch:      "feature",
+		NewParent:   "new-parent",
+		OldUpstream: "old-base",
+	}, "new-parent")
+
+	require.True(t, ok)
+	require.Equal(t, "new-sha-1", newSHA)
+	require.Len(t, fakeGit.mergeTreeCalls, 1)
+}
+
 func TestTryConflictFreeReplayMultiCommitChainsEachCommit(t *testing.T) {
 	// Branch has three commits (newest-first): c3 -> c2 -> c1 -> old-base.
 	fakeGit := &fastPathGit{

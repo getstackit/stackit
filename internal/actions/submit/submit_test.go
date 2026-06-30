@@ -536,6 +536,7 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 }
 
 func TestSubmitPreservesLockStatus(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"feature": "main",
@@ -577,6 +578,7 @@ func TestSubmitPreservesLockStatus(t *testing.T) {
 }
 
 func TestSubmitDryRunWithWorktreeAnchorParent(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"wt-anchor": "main",
@@ -598,6 +600,7 @@ func TestSubmitDryRunWithWorktreeAnchorParent(t *testing.T) {
 }
 
 func TestSubmitDisplayTreeSkipsWorktreeAnchorParent(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"wt-anchor": "main",

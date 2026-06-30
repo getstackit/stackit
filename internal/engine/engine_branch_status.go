@@ -430,6 +430,22 @@ func (e *engineImpl) GetDeletionStatuses(ctx context.Context, branchNames []stri
 		return results, nil
 	}
 
+	inputs, err := e.loadDeletionStatusInputs(ctx, branchNames)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.evaluateDeletionStatuses(ctx, branchNames, inputs), nil
+}
+
+type deletionStatusInputs struct {
+	trunkName      string
+	metadataMap    map[string]*git.Meta
+	revisions      map[string]string
+	mergedBranches map[string]bool
+}
+
+func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames []string) (*deletionStatusInputs, error) {
 	trunkName := e.Trunk().GetName()
 
 	// Collect all refs we need revisions for (branches + their parents)
@@ -452,14 +468,25 @@ func (e *engineImpl) GetDeletionStatuses(ctx context.Context, branchNames []stri
 		return nil, fmt.Errorf("failed to check merged branches: %w", err)
 	}
 
+	return &deletionStatusInputs{
+		trunkName:      trunkName,
+		metadataMap:    metadataMap,
+		revisions:      revisions,
+		mergedBranches: mergedBranches,
+	}, nil
+}
+
+func (e *engineImpl) evaluateDeletionStatuses(ctx context.Context, branchNames []string, inputs *deletionStatusInputs) map[string]DeletionStatus {
+	results := make(map[string]DeletionStatus, len(branchNames))
+
 	// Evaluate each branch
 	for _, name := range branchNames {
 		branch := e.GetBranch(name)
-		meta := metadataMap[name]
-		results[name] = e.evaluateDeletionStatus(ctx, name, branch, meta, revisions, mergedBranches, trunkName)
+		meta := inputs.metadataMap[name]
+		results[name] = e.evaluateDeletionStatus(ctx, name, branch, meta, inputs.revisions, inputs.mergedBranches, inputs.trunkName)
 	}
 
-	return results, nil
+	return results
 }
 
 // evaluateDeletionStatus applies the canonical deletion policy for a single branch.

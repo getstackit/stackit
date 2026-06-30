@@ -199,7 +199,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Phase 3: Clean branches (delete merged/closed)
-	cleanResult, err := cleanBranches(ctx, &opts, dirtyAnchors, handler, summary)
+	cleanResult, err := cleanBranches(ctx, &opts, dirtyAnchors, remoteStatuses, handler, summary)
 	if err != nil {
 		return fmt.Errorf("failed to clean branches: %w", err)
 	}

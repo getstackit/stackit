@@ -32,6 +32,7 @@ func TestCleanBranchesNonInteractiveRespectsDirtyStackFilter(t *testing.T) {
 		s.Context,
 		&Options{Force: true},
 		map[string]bool{"branch1": true},
+		nil,
 		&NullHandler{},
 		&Summary{},
 	)
@@ -89,6 +90,7 @@ func TestCleanBranchesInteractiveDoesNotAutoDeleteUnpushedUtilityBranch(t *testi
 	result, err := cleanBranches(
 		s.Context,
 		&Options{Force: true},
+		nil,
 		nil,
 		handler,
 		&Summary{},

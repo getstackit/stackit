@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v73/github"
+	"github.com/google/go-github/v88/github"
 )
 
 // StackitGitHubClient implements Client using the real GitHub API

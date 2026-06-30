@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/google/go-github/v73/github"
+	"github.com/google/go-github/v88/github"
 )
 
 // appHTTPTimeout is the client-level ceiling for GitHub App HTTP calls
@@ -51,9 +51,13 @@ func NewAppTokenProvider(appID int64, privateKeyPEM []byte) (*AppTokenProvider, 
 	if err != nil {
 		return nil, fmt.Errorf("github app transport: %w", err)
 	}
+	resolveClient, err := github.NewClient(github.WithHTTPClient(&http.Client{Transport: apps, Timeout: appHTTPTimeout}))
+	if err != nil {
+		return nil, fmt.Errorf("github app client: %w", err)
+	}
 	return &AppTokenProvider{
 		apps:           apps,
-		resolveClient:  github.NewClient(&http.Client{Transport: apps, Timeout: appHTTPTimeout}),
+		resolveClient:  resolveClient,
 		installByOwner: make(map[string]int64),
 		transports:     make(map[int64]*ghinstallation.Transport),
 	}, nil
@@ -83,7 +87,7 @@ func (p *AppTokenProvider) transportFor(ctx context.Context, owner, name string)
 		// One network round-trip per owner, then cached. Held under the lock so
 		// concurrent first-time resolutions for the same owner don't duplicate
 		// the call; token minting (below) happens outside the lock.
-		inst, _, err := p.resolveClient.Apps.FindRepositoryInstallation(ctx, owner, name)
+		inst, _, err := p.resolveClient.Apps.GetRepositoryInstallation(ctx, owner, name)
 		if err != nil {
 			return nil, fmt.Errorf("find app installation for %s/%s: %w", owner, name, err)
 		}

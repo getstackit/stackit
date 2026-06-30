@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/google/go-github/v73/github"
+	"github.com/google/go-github/v88/github"
 )
 
 // ErrRepoAccessDenied is returned by CheckRepoAccess when the authenticated
@@ -59,7 +59,7 @@ func repoAccessFromClient(ctx context.Context, client *github.Client, owner, nam
 		Private:       repo.GetPrivate(),
 	}
 	if perms := repo.GetPermissions(); perms != nil {
-		access.CanPush = perms["push"]
+		access.CanPush = perms.GetPush()
 	}
 	return access, nil
 }

@@ -13,7 +13,9 @@ import (
 )
 
 func TestExecuteInWorktree(t *testing.T) {
+	t.Parallel()
 	t.Run("successfully merges in worktree", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch-a": "main",
@@ -83,6 +85,7 @@ func TestExecuteInWorktree(t *testing.T) {
 	})
 
 	t.Run("deletes branch that is checked out in a separate worktree", func(t *testing.T) {
+		t.Parallel()
 		// This test verifies that when a branch is checked out in a worktree,
 		// the merge execution properly removes the worktree before deleting the branch.
 		// Previously, the deletion would fail silently because git refuses to delete

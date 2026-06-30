@@ -14,7 +14,9 @@ import (
 )
 
 func TestCreateMergePlan(t *testing.T) {
+	t.Parallel()
 	t.Run("creates plan for bottom-up strategy", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -49,6 +51,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 
 	t.Run("validates draft PRs", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -75,6 +78,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 
 	t.Run("allows draft PRs with force", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -101,6 +105,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 
 	t.Run("identifies upstack branches for restacking in branching stack", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"P":   "main",
@@ -150,6 +155,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 
 	t.Run("creates plan for scope-based merge", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"feature-a": "main",
@@ -205,6 +211,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 
 	t.Run("scope-based merge excludes branches without matching scope", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"scoped-a":   "main",
@@ -251,6 +258,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 
 	t.Run("scope-based merge fails when no branches found with scope", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch-a": "main",
@@ -273,6 +281,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 
 	t.Run("scope-based merge handles scope inheritance", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"parent":     "main",
@@ -318,6 +327,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 
 	t.Run("creates plan for consolidate strategy", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",

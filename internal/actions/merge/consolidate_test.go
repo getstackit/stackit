@@ -13,7 +13,9 @@ import (
 )
 
 func TestConsolidateMergeExecutor(t *testing.T) {
+	t.Parallel()
 	t.Run("pre-validation fails for out-of-sync branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -50,6 +52,7 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 	})
 
 	t.Run("creates consolidation branch correctly", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -88,6 +91,7 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 	})
 
 	t.Run("builds correct consolidation PR body", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -119,6 +123,7 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 	})
 
 	t.Run("handles stack scope correctly", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"batch/feature-a": "main",
@@ -159,6 +164,7 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 	})
 
 	t.Run("handles empty consolidation correctly", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// Single branch on main
@@ -178,7 +184,9 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 }
 
 func TestConsolidationStepExecution(t *testing.T) {
+	t.Parallel()
 	t.Run("executes consolidation step", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -212,7 +220,9 @@ func TestConsolidationStepExecution(t *testing.T) {
 }
 
 func TestConsolidationErrorHandling(t *testing.T) {
+	t.Parallel()
 	t.Run("handles closed PR gracefully", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -243,6 +253,7 @@ func TestConsolidationErrorHandling(t *testing.T) {
 	})
 
 	t.Run("handles draft PR with force flag", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"branch1": "main",
@@ -281,6 +292,7 @@ func TestConsolidationErrorHandling(t *testing.T) {
 	})
 
 	t.Run("execute with Wait: false skips waiting", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t).
 			WithStack(map[string]string{
 				"branch1": "main",

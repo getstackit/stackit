@@ -11,52 +11,60 @@ newDescribeCmd → common.Run → describe.Action          internal/actions/desc
   │
   ├─ --show: branches-only bootstrap, print + return  (no network)
   ├─ --clear:
-  │    ├─ eng.ClearStackDescription                   metadata transaction
+  │    ├─ eng.ClearStackDescription                   metadata write (stack-meta ref)
   │    └─ markStackAndPushMetadata                    see below
-  ├─ -m / -d:
+  ├─ -m / -d / stdin:
   │    └─ applyStackDescription
-  │         ├─ eng.SetStackDescription                metadata transaction
+  │         ├─ eng.SetStackDescription                metadata write (stack-meta ref)
   │         └─ markStackAndPushMetadata
   └─ interactive:
-       ├─ eng.GetStackDescription                     cache read
+       ├─ eng.GetStackDescription                     cache read       describe.go:96
        ├─ tui.OpenEditor                              user-blocking
        └─ applyStackDescription
 
-markStackAndPushMetadata:
-  ├─ graph.CollectBranches(root)                      in-memory walk over stack
-  ├─ eng.BatchMarkNeedsPRBodyUpdate(branchNames)      ← writes ONE meta ref PER branch
-  └─ actions.PushMetadataOnly                         `git push refs/stackit/metadata/<root>`
+markStackAndPushMetadata:                             describe.go:135
+  ├─ eng.Graph + graph.CollectBranches(root).Names()  in-memory walk over stack
+  ├─ eng.MarkBranchesForPRBodyUpdate(branchNames)     batched: one blob-batch + one UpdateRefsBatch
+  └─ actions.PushMetadataOnly                          one `git push` of metadata refs
 ```
 
 ## Where time goes
 
 1. **`actions.PushMetadataOnly`** — one network round trip. Same cost story as `scope.md` #1.
-2. **`BatchMarkNeedsPRBodyUpdate(branchNames)`** — currently writes one ref per branch. Let me verify what "Batch" means here in practice.
+2. **`SetStackDescription` / `ClearStackDescription`** — one stack-meta ref write
+   (`WriteStackMeta` → `CreateBlob` + `UpdateRef`).
+3. **`MarkBranchesForPRBodyUpdate`** — already a single batched write across all
+   stack branches (blob-batch + atomic `UpdateRefsBatch`).
 
-Looking at `engine_writer.go:1062` (not pasted here), `BatchMarkNeedsPRBodyUpdate` should ideally write all the flags in a single `UpdateRefsBatch` call. The CLAUDE.md "Batch Operations" rule explicitly calls this out. If it does — good. If it just loops `MarkNeedsPRBodyUpdate` internally, that's an N+1.
-
-3. **`SetStackDescription` (or `ClearStackDescription`)** — one metadata transaction.
-4. **Bootstrap + open editor** — `--show` already uses branches-only mode and skips the managed-worktree check; mutating/editor paths still use the normal context.
-
-For a stack with 10 branches, the metadata phase writes 1 description + 10 mark-flags + 1 push. The push dominates by an order of magnitude.
+For a stack with 10 branches the metadata phase does: 1 stack-meta ref write +
+1 batched local-metadata write (covering all 10 branches) + 1 push. The push
+dominates by an order of magnitude.
 
 ## Wins (ranked)
 
-### 1. Ensure `BatchMarkNeedsPRBodyUpdate` is genuinely batched *(check first; high impact if it isn't)*
+### 1. Fold the stack-description write and the PR-update flag write into one ref batch *(shared with scope.md #1)*
 
-This is one of the "use batch APIs" examples from `.claude/rules/code-style.md`. Confirm via `internal/engine/engine_writer.go:1062` that the implementation uses `UpdateRefsBatch` or `withMetadataTx` over the whole branch set. If it's a loop, the cost on a 20-branch stack is 20 × ref writes + 20 × tx overhead = ~50–200ms wasted. (The fact that it's called `Batch...` suggests it is — verify before optimizing.)
+> **Status:** Not started. The premise in the original plan ("they touch
+> overlapping metadata, one tx over `{stackRoot, ...branches}`") was wrong and has
+> been corrected here.
 
-### 2. Combine `SetStackDescription` + `BatchMarkNeedsPRBodyUpdate` in one tx *(shared with scope.md #1)*
+The two writes target **different** refs and run as two separate, non-atomic
+phases today:
 
-The description write and the mark-for-PR-update write touch overlapping metadata. One transaction over `{stackRoot, ...branches}` is enough.
+- `SetStackDescription` writes the **stack-meta ref** keyed by stack ID
+  (`StackMetaRefName(stackID)`) via `WriteStackMeta` (`internal/engine/stack_id.go:39`,
+  `internal/git/stack_metadata.go:81`).
+- `MarkBranchesForPRBodyUpdate` writes the **per-branch local-metadata refs**
+  via `WriteLocalMetadataBlobsBatch` + `UpdateRefsBatch`
+  (`internal/engine/pr_flags.go:14`).
 
-### 3. Defer the metadata push for `--show` — already done *(trivial confirmation)*
-
-`--show` short-circuits before any writes/pushes. Good.
-
-### 4. Editor mode: don't re-fetch description after editor closes *(trivial)*
-
-`describe.go:96` reads `existingDesc` before opening the editor; `applyStackDescription` writes the new one. No redundant read on this path. Good.
+They can still be collapsed into a single atomic `UpdateRefsBatch`:
+`WriteStackMetaBlob` (`internal/git/stack_metadata.go:122`) already returns a blob
+SHA without touching a ref — exactly for transactional writes. Build one
+`[]git.RefUpdate` containing the stack-meta ref update plus every local-metadata
+ref update and commit them in one `UpdateRefsBatch` call. This removes one git
+process (the standalone `WriteStackMeta` `UpdateRef`) and makes the
+description-set + mark-for-update atomic. The push afterward is unchanged.
 
 ## Validation
 
@@ -66,4 +74,7 @@ STACKIT_NO_LOGGING=1 hyperfine \
   'stackit describe -m "Test"'
 ```
 
-The delta isolates the metadata write + push from the bootstrap baseline. Instrument: each metadata transaction, `PushMetadataRefs`, and confirm `BatchMarkNeedsPRBodyUpdate` is a single ref-write batch (it should be — confirm via `git update-ref --stdin` or equivalent).
+The delta isolates the metadata write + push from the bootstrap baseline.
+Instrument each ref write and `PushMetadataForBranches`; after win #1 the
+description-set path should show a single combined `UpdateRefsBatch` rather than a
+`WriteStackMeta` `UpdateRef` followed by a separate batch.

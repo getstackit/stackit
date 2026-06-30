@@ -144,6 +144,107 @@ func TestValidateRebases(t *testing.T) {
 		require.NotEmpty(t, result.NewSHAs["branch3"])
 	})
 
+	t.Run("validates multi-commit branch with disjoint files via fast path", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		// branch1 forks from main's current tip and gets THREE commits, each
+		// touching a distinct file. Capture the fork point as the old upstream.
+		branch1OldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		require.NoError(t, err)
+
+		s.CreateBranch("branch1").
+			CommitChange("a", "commit a").
+			CommitChange("b", "commit b").
+			CommitChange("c", "commit c").
+			TrackBranch("branch1", "main")
+
+		// main advances by touching a file disjoint from everything branch1 touches,
+		// so the conflict-free fast path replays each branch commit without a worktree.
+		s.Checkout("main").
+			CommitChange("parent", "parent change").
+			Checkout("branch1")
+
+		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		require.NoError(t, err)
+
+		specs := []engine.RebaseSpec{
+			{
+				Branch:      "branch1",
+				NewParent:   mainRev,
+				OldUpstream: branch1OldBase,
+			},
+		}
+
+		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		require.NoError(t, err)
+		require.True(t, result.Success)
+		newTip := result.NewSHAs["branch1"]
+		require.NotEmpty(t, newTip)
+
+		// The rebased tip must sit directly on the advanced main and carry exactly
+		// the branch's three original commits.
+		replayed, err := s.Engine.Git().GetCommitRangeSHAs(context.Background(), mainRev, newTip)
+		require.NoError(t, err)
+		require.Len(t, replayed, 3, "all three branch commits should be replayed onto new main")
+
+		// Per-commit messages are preserved in order. replayed is newest-first, so
+		// replayed[0] is "commit c" and replayed[2] is "commit a".
+		msgC, err := s.Engine.Git().GetCommitLog(replayed[0], "%s")
+		require.NoError(t, err)
+		require.Equal(t, "commit c", msgC)
+		msgA, err := s.Engine.Git().GetCommitLog(replayed[2], "%s")
+		require.NoError(t, err)
+		require.Equal(t, "commit a", msgA)
+
+		// The rebased tip's tree contains both the parent's change and all three
+		// branch changes (4 distinct files relative to the fork point).
+		filesFromBase, err := s.Engine.Git().GetChangedFiles(context.Background(), branch1OldBase, newTip)
+		require.NoError(t, err)
+		require.Len(t, filesFromBase, 4)
+	})
+
+	t.Run("matches git rebase semantics for branch range containing merge commit", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		require.NoError(t, err)
+
+		s.CreateBranch("feature").
+			CommitChange("feature.txt", "feature change").
+			TrackBranch("feature", "main")
+
+		s.Checkout("main").
+			CreateBranch("side").
+			CommitChange("side.txt", "side change")
+
+		s.Checkout("feature").
+			RunGit("merge", "--no-ff", "side", "-m", "merge side")
+
+		s.Checkout("main").
+			CommitChange("parent.txt", "parent change").
+			Checkout("feature")
+
+		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		require.NoError(t, err)
+
+		result, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{{
+			Branch:      "feature",
+			NewParent:   mainRev,
+			OldUpstream: oldBase,
+		}})
+		require.NoError(t, err)
+		require.True(t, result.Success)
+		newTip := result.NewSHAs["feature"]
+		require.NotEmpty(t, newTip)
+
+		replayedSubjects, err := s.Engine.Git().GetCommitRange(context.Background(), mainRev, newTip, "SUBJECT")
+		require.NoError(t, err)
+		require.ElementsMatch(t, []string{"feature change", "side change"}, replayedSubjects)
+		require.NotContains(t, replayedSubjects, "merge side")
+	})
+
 	t.Run("stops at first conflict in chain", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)

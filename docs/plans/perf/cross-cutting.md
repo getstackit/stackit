@@ -4,117 +4,85 @@ This document collects the wins that remain open across multiple per-command ana
 
 **How to read this:** the items are ordered by **how many of the analyzed commands benefit**, not by per-command magnitude. The "Affects" column lists which command pages discuss the same fix.
 
+**Status legend:** items that have fully landed since this plan was written are listed under [Completed](#completed-since-last-revision) at the bottom rather than deleted outright, so their numbering doesn't shift the references in the per-command pages.
+
 ---
 
 ## Tier 1: Touch one place, many commands get faster
 
-### 1. Expand lightweight engine load modes to the remaining safe commands
+### 1. Expand lightweight engine load modes to the remaining read-only commands
 
-> **Status:** Partially done. Three load modes exist (`LoadModeFull`, `LoadModeShared`, `LoadModeBranchesOnly`). Quiet/exact checkout and several read-only views already opt into `LoadModeBranchesOnly`. Remaining open: `children`, `info`, fuzzy `co`, `up`/`down`/`top`/`bottom`/`main` still use broader bootstrap.
+> **Status:** Partially done. The infrastructure is complete — three load modes (`LoadModeFull`, `LoadModeShared`, `LoadModeBranchesOnly`) plus **per-branch lazy promotion** (`ensureBranchSharedLoaded`, `internal/engine/engine_impl.go:271`, wired into `GetParent` and the branch-status readers). What remains is purely per-command *adoption*, not new plumbing.
 
-**Files:** `internal/app/context.go`, `internal/engine/engine_impl.go`, command wrappers in `internal/cli`
+**Files:** command wrappers in `internal/cli` (the engine side is done)
 
-`engine.LoadModeShared` and `engine.LoadModeBranchesOnly` already exist. Default context creation uses `LoadModeShared`, and exact quiet checkout plus several read-only views now opt into `LoadModeBranchesOnly`.
+Default context creation uses `LoadModeShared`. Commands already opted into the lighter `LoadModeBranchesOnly` path: exact quiet `co`, `parent`, default `trunk`, and (quiet) `down` / `bottom`. `down`/`bottom` keep the managed-worktree check (checkout relies on it) and gate on `--quiet` because non-quiet checkout's `printBranchInfo` builds the full graph anyway; `bottom`'s `SwitchBranchAction` no longer builds the graph for the downward direction.
 
-The remaining win is broader adoption and a true lazy-by-branch path:
+Remaining adoption:
 
-- `children`, `info`, and stack graph views still need more metadata than branch-list mode but often not the full repo.
-- Non-quiet/fuzzy `co`, `up`, `down`, `top`, `bottom`, and `main` still pay broader bootstrap because they need graph/worktree/checkout context.
-- `track --parent` only needs the parent + child branch.
+- `children`, `up`, `top` enumerate children, which forces a full `Graph()` build over `AllBranches()` — they cannot use `LoadModeBranchesOnly` (the per-branch lazy path is slower than one batch there), but they read no local metadata so they could drop from the default to `LoadModeShared`'s already-batched shared read and skip the local-metadata pass.
+- `info` and stack-graph views need more than branch-list mode but rely on the per-branch promotion path rather than a full load — confirm they don't force `LoadModeFull`.
+- Non-quiet/fuzzy `co` still pays broader bootstrap because it needs graph/worktree/checkout context.
 
-**Proposal:** keep `LoadModeBranchesOnly` for exact branch-list cases, and add/expand lazy metadata loading for graph commands that only need the current stack. Metadata should be promoted per branch or per stack root on first access instead of forcing every repo branch into memory at startup.
-
-**Affects:** co.md, navigation.md, info.md, scope.md, describe.md.
-
----
-
-### 2. Batch branch status reads at stack-iteration call sites
-
-**Files:** `internal/engine/engine_branch_status.go`, call sites in `submit`, `info`, and stack renderers
-
-`ReadBranchStatuses` exists and `checkout` branch info uses it. The remaining issue is call sites that iterate a stack and call `IsBranchUpToDate`/revision lookups branch-by-branch.
-
-**Proposal:** route stack-wide status checks through `ReadBranchStatuses` or a similar batched parent-revision helper. The engine already keeps metadata in memory after bootstrap; the expensive part to avoid is repeated live parent SHA lookups while walking a stack.
-
-**Affects:** info.md #1, submit.md #1, any stack-wide status renderer.
+**Affects:** co.md, navigation.md, info.md.
 
 ---
 
 ### 3. Single batched git call for stats / diffs / revisions, never per branch
 
-**Files:** `internal/engine/engine_branch_info.go`, `internal/git/commit_info.go`
+> **Status:** Partially done. `tree` is fully on the batched path (`BatchDiffStats` / `BatchBranchStats` / `BatchCommits`, `internal/engine/branch_view.go`); `info` batches its stack stats too. Remaining N+1s are on the on-demand diff paths.
 
-Per-branch git invocations are the most pervasive N+1 pattern in the codebase. `tree` and `submit` already batch several revision/stat reads. The same pattern needs to extend to:
+**Files:** `internal/engine/engine_branch_info.go`, `internal/actions/absorb.go`, `internal/actions/info.go`
 
-- **diff stats**: keep branch-tree views on one batched stat path.
-- **commit counts/ranges**: normal/full `tree` no longer loads commit messages, but still needs counts per branch.
-- **diff content** for `info --diff` / `info --patch`: only on demand, but should be cached once computed.
+Remaining per-branch git invocations:
 
-**Proposal:** keep expanding `eng.BatchBranchStats(branches)`/future preload helpers so tree calls it once and `info`, `submit`, etc., consult the same cache when set.
+- **`info --diff` / `info --patch`**: `GetAllCommits` + `GetParentCommitSHA` per render (`info.go:190-193`, `:226-229`); compute once and reuse.
+- **`absorb`**: per-branch `GetAllCommits` loop (`absorb.go:121-130`), plus the batched-scan path also calls `GetAllCommits` per branch — fold both into a single `git rev-list`.
 
-**Affects:** tree.md #1, info.md #3, absorb.md #4, modify.md #6.
+**Proposal:** extend the batched stat/commit readers to these on-demand paths; the revision-keyed memoization already in `engine_branch_info.go` makes it safe.
+
+**Affects:** info.md #2, absorb.md #4.
 
 ---
 
-### 4. Snapshot taking should batch revisions and be opt-out
+### 4. Snapshot taking: skip when there's no work
 
-> **Status:** Partially done. `BatchGetRevisions` is now used in `TakeSnapshot` (`undo.go`), eliminating the per-branch revision loop. The `undo.enabled` opt-out config flag is not yet implemented.
+> **Status:** Mostly done. `TakeSnapshot` uses `BatchGetRevisions` (`internal/engine/undo.go:121`) — no per-branch revision loop. The `undo.enabled` opt-out is implemented: config key `stackit.undo.enabled` (`internal/config/keys.go:18`), honored by `TakeBestEffortSnapshot` (`internal/actions/common.go`), which no-ops when disabled.
 
-**Files:** `internal/engine/undo.go`
+**Files:** `internal/actions/common.go`, `internal/actions/restack.go`, `internal/engine/undo.go`
 
-Every mutating command (`create`, `modify`, `absorb`, `restack`) calls `TakeBestEffortSnapshot`, which iterates `state.branches` and calls `branch.GetRevision()` per branch. Two issues:
+Remaining:
 
-- Per-branch loop instead of `BatchGetRevisions` (already exists).
-- The snapshot is only ever read by `stackit undo`; for users who never undo, it is pure overhead.
+- **Skip the snapshot on no-op operations.** `RestackAction` (`internal/actions/restack.go:153`) takes a snapshot before discovering there's no work to do; gate it on `plan.HasWork()`. The same "snapshot only just before a real mutation" principle applies to other actions that frequently short-circuit.
+- **Lazy `enforceMaxStackDepth`** (`undo.go:172`) still does an `os.ReadDir` + sort on every snapshot.
 
-**Proposal:**
-
-- Use `BatchGetRevisions` or read from `revisionCache` after `LoadAllBranchRevisions`.
-- Add `undo.enabled` config flag (default `true`); when `false`, `TakeBestEffortSnapshot` is a no-op.
-- Move snapshot capture to just before mutation, not at the start of an action. Many actions short-circuit without ever needing a snapshot.
-
-**Affects:** create.md #2, restack.md #5 + #6, absorb.md.
+**Affects:** restack.md, create.md.
 
 ---
 
 ## Tier 2: Reusable plumbing for expensive operations
 
-### 5. Coalesce `worktree.Status()` across the action's request
+### 5. Coalesce staging status probes within an action
 
-**Files:** `internal/git/staging.go`, all reused by multiple actions
+> **Status:** Premise obsolete. go-git has been removed; the staging helpers no longer do a full working-tree walk. `HasStagedChanges` / `HasUnstagedChanges` now shell `git diff --cached --quiet` / `git diff --quiet` (`internal/git/staging.go:55,62`). This is a much smaller win than originally described — coalescing redundant subprocesses, not eliminating tree walks.
 
-Checkout no longer calls go-git's `worktree.Status()`, but staging helpers still can run the same full working-tree walk multiple times in one action. `create` can call `HasStagedChanges` and then `HasUnstagedChanges`; `absorb` calls `HasStagedChanges` before and after staging; `modify` checks staged changes after optional staging.
+**Files:** `internal/git/staging.go` and callers
 
-**Proposal:** an action-scoped `RepoStatus` value (`{HasStaged, HasUnstaged, HasUntracked, modified files}`) computed once per request and cached on `app.Context`. Pass it through to staging/validation helpers where needed.
+Remaining redundant probes:
 
-**Affects:** create.md #1, modify.md #3, absorb.md #2.
+- `create`'s non-interactive guard can fire up to three separate status subprocesses (`create.go:125-137`).
+- `absorb` calls `HasStagedChanges` twice and now *discards* the first result entirely (`absorb.go:63`, `:78`) — that first call can simply be deleted.
+- `modify`'s angle is **closed** — its `HasStagedChanges` is just a `git diff --cached --quiet`, no tree walk.
 
----
+**Proposal:** an action-scoped `RepoStatus` value (one `git status --porcelain`) computed once per request where multiple probes remain.
 
-### 6. Conflict-impossible validation: avoid per-spec worktrees when safe
-
-**Files:** `internal/engine/rebase_validator.go`
-
-The single biggest cost on `modify` (mid-stack), `restack`, and `--restack`-mode `submit` is creating a worktree per descendant spec to dry-run the rebase.
-
-**Proposal:** add a safe fast path before scheduling worktree validation. The validator currently produces the rewritten SHAs that later apply steps consume, so this is not just "skip validation"; the fast path must either directly compute/apply the safe replay result or share a cheap replay path that produces equivalent output.
-
-A first classifier can compare:
-
-- `git diff --name-only <old-parent>..<new-parent>` (the change being rebased onto)
-- `git diff --name-only <old-parent>..<branch>` (the change being rebased)
-
-If the file sets are disjoint, no content conflict is possible and the direct replay path can avoid the temporary worktree.
-
-**Affects:** modify.md #1, restack.md #1, absorb.md #1, submit.md #3 indirectly.
+**Affects:** create.md #1, absorb.md #2.
 
 ---
 
 ### 7. Reuse a single worktree per depth level for validation
 
-**Files:** `internal/engine/rebase_validator.go`
-
-If #6 is not enough because the stack genuinely has overlapping changes, validation could still amortize worktree creation across siblings at the same depth: one worktree per concurrency lane, reset between specs via `git rebase --abort` + `git reset --hard`.
+When #6's fast path can't apply (genuinely overlapping changes, multi-commit), validation still creates one worktree per spec (`rebase_validator.go:367`). It could amortize worktree creation across siblings at the same depth: one worktree per concurrency lane, reset between specs via `git rebase --abort` + `git reset --hard`. Note the tradeoff with the existing per-spec parallelism.
 
 **Affects:** modify.md #2, restack.md #3, absorb.md #1.
 
@@ -122,61 +90,58 @@ If #6 is not enough because the stack genuinely has overlapping changes, validat
 
 ### 8. Scoped engine rebuild: `RebuildBranches([]string)`
 
-**Files:** `internal/engine/engine_internal.go`, `internal/engine/engine_writer.go`
+> **Status:** Open (method does not exist), but the motivating N+1 is already fixed. `untrack` no longer rebuilds per branch — `UntrackBranches` (`internal/engine/branch_tracking.go:82-98`) does a single `DeleteRefsBatch` + one `rebuild()`.
 
-`engine.rebuild()` re-reads metadata for every branch in the repo even when only a handful changed. The worst offender is `UntrackBranch`, which calls `rebuild()` per branch in the loop.
+**Files:** `internal/engine/engine_internal.go`
 
-**Proposal:** a `RebuildBranches([]string)` engine method that re-reads only the listed branches' metadata + revisions, then merges into `state.branchState`. Use from `untrack` (batched), `absorb` post-apply, `modify` post-commit, etc.
+`engine.rebuild()` still re-reads metadata for every branch in the repo even when only a handful changed. A `RebuildBranches([]string)` method would re-read only the listed branches' metadata + revisions and merge into `state.branchState`.
 
-**Affects:** absorb.md #3, track-untrack.md #1 + #2.
+Remaining beneficiaries (each still does a full rebuild):
+
+- `untrack`'s single post-batch rebuild (`internal/actions/untrack/action.go`).
+- `absorb` post-apply (`absorb.go:297` calls `Rebuild("")`).
+
+**Affects:** absorb.md #3, track-untrack.md #2.
 
 ---
 
 ### 9. Combine commit + metadata writes into single transactions
 
-**Files:** `internal/engine/transaction.go`, callers in `engine_writer.go`
+> **Status:** Partially done. `scope` is complete — `SetScopeAndMarkForUpdate` (`internal/engine/branch_tracking.go:401`) writes the scope ref and the PR-update flag in one transaction.
 
-Commands that mutate both the parent ref and an adjacent metadata field (scope, lock, PR-update flag, description) issue two separate transactions today. Each transaction is a ref-update round trip. Combining them is straightforward via `withMetadataTx` once the engine exposes the right helpers.
+**Files:** `internal/engine/transaction.go`, `internal/engine/branch_tracking.go`, `internal/git/stack_metadata.go`
 
-**Affects:** create.md #4, scope.md #1, describe.md #2.
+Remaining commands that issue two separate ref-update round trips:
+
+- **`create`**: `TrackBranch`→`SetParent` and `SetScope` are separate transactions; no `SetParentAndScope` helper exists.
+- **`describe`**: `SetStackDescription` (stack-meta ref) and `MarkBranchesForPRBodyUpdate` (per-branch local-meta refs) are separate write phases. `WriteStackMetaBlob` (`internal/git/stack_metadata.go:122`) already returns a blob SHA without a ref write, so both can fold into one `UpdateRefsBatch`.
+
+**Affects:** create.md #4, describe.md #1.
 
 ---
 
 ## Tier 3: Smaller universal hygiene
 
-### 10. Continue gating `IsInManagedWorktree` to commands that need it
-
-> **Status:** Done. Call sites are minimal — only `common.go` + tests. `SkipManagedWorktreeCheck` is applied to read-only commands. Continue applying to any new commands added.
-
-**File:** `internal/cli/common/common.go`
-
-`SkipManagedWorktreeCheck` exists and several read-only commands use it. Continue moving commands that do not branch on managed-worktree state onto this option.
-
-**Affects:** co.md and navigation.md indirectly.
-
----
-
-### 11. Stop calling `ReloadRepository` after every commit
-
-> **Status:** Done. go-git has been completely removed from the codebase. `ReloadRepository()` is now a two-line function that calls `revisionCache.InvalidateAll()` — no repo handle close, no worktree re-scan. The expensive go-git worktree reopen described below no longer exists. The remaining micro-optimisation (invalidating only the affected branch's cache entry rather than all entries) is low priority.
-
-**File:** `internal/git/commit.go`
-
-~~Closes the entire go-git repo handle to pick up one new commit. Cheaper: invalidate just the affected branch in `revisionCache` and let go-git re-read the new packed ref lazily.~~
-
-**Affects:** create.md #3, modify.md #4, absorb.md post-apply, anywhere a commit is created.
-
----
-
 ### 12. Replace per-call `config.LoadConfig` with `ctx.Config`
 
-> **Status:** Partially done. `trunk.go` and `hookmiddleware.go` have been updated. Other callers in `internal/cli/` remain.
+> **Status:** Partially done. `trunk.go`'s `findTrunkForBranch` now reads `ctx.Config.AllTrunks()`; `hookmiddleware.go` updated.
 
 **Files:** `internal/cli/navigation/trunk.go`, others
 
-Bootstrap already loads config into `ctx.Config`. Several commands re-load it. Trivial to fix; affects perf only marginally but is a clean-up alongside the bigger items.
+Remaining: `handleAddTrunk` (`trunk.go:75`) still calls `config.LoadConfig` because it needs a writable `*GitConfig` (`ctx.Config` is the read-only `Configurer` interface, which lacks `AddTrunk`/`Save`). This is not a trivial swap and may not be worth it. Audit `internal/cli` for any remaining read-only `config.LoadConfig` callers that can use `ctx.Config` directly.
 
-**Affects:** navigation.md #4.
+**Affects:** navigation.md.
+
+---
+
+## Completed since last revision
+
+These wins have fully landed. Numbering is preserved so per-command page references stay valid.
+
+- **#10 — Gate `IsInManagedWorktree` to commands that need it.** `SkipManagedWorktreeCheck` exists, is applied to read-only commands via `ApplyReadOnlyCurrentBranch`, and call sites are minimal (`common.go` + tests). Keep applying it to new read-only commands.
+- **#11 — Stop calling `ReloadRepository` after every commit.** go-git was removed entirely. There is no repo handle to close and no worktree re-scan; the expensive reopen this targeted no longer exists. The global revision cache it relied on is also gone (and a global revision cache is now an explicit anti-pattern — see `.claude/rules/code-style.md`).
+- **#2 — Batch branch status reads at stack-iteration call sites.** `submit` (`internal/actions/submit/submit.go`, `submit_validation.go`) and `info` (`internal/actions/stack_info.go`) now resolve up-to-date status for the whole branch set in one `eng.ReadBranchStatuses(...)` call (a single batched parent-revision read) instead of a per-branch `IsBranchUpToDate()` / `NeedsRestack()` that shelled a `git rev-parse` per parent.
+- **#6 — Conflict-impossible validation fast path.** `validateSingleSpec` calls `tryConflictFreeReplay` (`internal/engine/rebase_validator.go`): when the branch's changed files are disjoint from the parent's, it replays the branch onto the new base via `merge-tree --write-tree` + `commit-tree` with **no worktree**. Now covers **multi-commit branches** too — each commit is replayed oldest-first via `replayCommitConflictFree`, chained onto the previous result, preserving per-commit author identity and message. The remaining worktree-amortization idea lives on as #7.
 
 ---
 
@@ -184,31 +149,26 @@ Bootstrap already loads config into `ctx.Config`. Several commands re-load it. T
 
 For maximum impact per engineering hour:
 
-1. **#1 (expand lightweight load modes)** — biggest perceived speedup on read-only/common commands.
-2. **#6 (safe validation fast path)** — biggest single win for `modify`, the second most-run hot-path mutating command.
-3. **#3 (preload stack stats)** — keeps `tree` on an O(1) batched stats path instead of per-branch git processes.
-4. **#8 (`RebuildBranches`)** — fixes the `untrack` N+1 and improves `absorb` / `modify` cleanup.
-5. **#4 (snapshot batching / opt-out)** — small but hits every mutating command.
-6. **#5 (coalesce status checks)** — removes duplicate working-tree scans that still remain outside checkout.
-7. The remaining items are mostly hygiene that compound once the above are in.
+1. **#8 `RebuildBranches`** — scopes the remaining full rebuilds in `absorb`/`untrack`.
+2. **#3 on-demand diff batching** — `info --diff`/`--patch` and `absorb`'s commit scan.
+3. **#1 remaining load-mode adoption** — `children`/`up`/`top` can drop from the default to `LoadModeShared` (skip the local-metadata batch); `down`/`bottom` already moved to `LoadModeBranchesOnly`.
+4. **#7 per-level worktree reuse** — amortizes the worktree cost that remains for genuinely overlapping multi-branch validation (the disjoint-file fast path #6 already eliminated the common case).
+5. **#9 combine txs** for `create` and `describe`; **#4 no-op snapshot skip**; **#5 / #12** hygiene.
 
 ## Order-of-magnitude estimates
 
-These are back-of-envelope guesses to size effort vs reward, not measured:
+Back-of-envelope guesses to size effort vs reward, not measured. Completed items omitted.
 
 | Win | Affected commands | Typical saving per affected run |
 |---|---|---|
-| #1 expand load modes | read-only/common commands | remaining bootstrap cost (50-500ms depending on branch count) |
-| #6 safe validation fast path | modify, restack, absorb | N x ~300ms worktree creation |
-| #3 preload stack stats | tree, info | N x ~5ms `git diff --numstat` processes |
-| #8 RebuildBranches | untrack, absorb, modify, sync | K x full rebuild on multi-branch operations |
-| #4 snapshot batching | every mutating command | 5-15ms |
-| #5 coalesce Status | create, modify, absorb | duplicate Status walks |
-| #9 combine txs | create, scope, describe | 1 ref write per command |
-| #11 scoped reload | create, modify, absorb | 1 go-git reopen |
+| #1 remaining load-mode adoption | read-only/common commands | remaining bootstrap cost (50-500ms depending on branch count) |
+| #3 on-demand diff batching | info, absorb | N x ~5ms `git` processes |
+| #8 RebuildBranches | absorb, untrack | full rebuild → scoped read |
+| #4 no-op snapshot skip | restack (no-work path) | 5-15ms |
+| #9 combine txs | create, describe | 1 ref write per command |
 
 ## What not to touch
 
 - **`git commit` itself and pre-commit hooks.** The user owns hook cost.
-- **GitHub API latency.** Batching is already in place; further wins are caching with TTL (`tree.md`, `submit.md`) which is bounded by correctness.
-- **go-git's internals.** Checkout is already a native-Git exception because the go-git checkout/status path was materially slower on large working trees. Keep the broader default as go-git where it is correct and fast enough; do not rewrite go-git internals.
+- **GitHub API latency.** Batching is already in place; further wins are caching with TTL (`tree.md`, `submit.md`) which is bounded by correctness — and, for the CLI's per-process model, would have to be on-disk to persist across invocations.
+- **A global/ambient revision cache or `PreloadBranchData`-style warm-up.** Deliberately removed; reintroducing it is an anti-pattern (`.claude/rules/code-style.md`). Batch readers return values you pass around instead.

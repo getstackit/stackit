@@ -420,6 +420,11 @@ type runner struct {
 	// Thread-safe: sync.Map handles concurrent reads from worker pools.
 	metadataCache metadataCache
 
+	// commitPatchIDCache memoizes stable patch IDs for immutable commits. Squash
+	// merge detection scans the same trunk commits for many branches during
+	// cleanup, and each miss otherwise spawns `git show` plus `git patch-id`.
+	commitPatchIDCache sync.Map // map[string]string
+
 	// objects is a persistent git cat-file --batch process for zero-spawn object reads.
 	// Started lazily on first use; lives for the lifetime of the runner.
 	objects *objectReader

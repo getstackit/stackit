@@ -217,11 +217,20 @@ func (r *runner) diffPatchID(ctx context.Context, base, head string) (string, er
 }
 
 func (r *runner) commitPatchID(ctx context.Context, commitSHA string) (string, error) {
+	if cached, ok := r.commitPatchIDCache.Load(commitSHA); ok {
+		return cached.(string), nil
+	}
+
 	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "show", "--format=", "--no-ext-diff", "--full-index", commitSHA)
 	if err != nil {
 		return "", err
 	}
-	return r.patchID(ctx, diffOutput)
+	patchID, err := r.patchID(ctx, diffOutput)
+	if err != nil {
+		return "", err
+	}
+	r.commitPatchIDCache.Store(commitSHA, patchID)
+	return patchID, nil
 }
 
 func (r *runner) patchID(ctx context.Context, diffOutput string) (string, error) {

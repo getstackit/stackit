@@ -14,6 +14,7 @@ import (
 )
 
 func TestMultiStackWorktreeExecutor_ConflictingStackResetsState(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// stack1 modifies test.txt to "stack1"
@@ -51,6 +52,7 @@ func TestMultiStackWorktreeExecutor_ConflictingStackResetsState(t *testing.T) {
 }
 
 func TestMultiStackWorktreeExecutor_PullsTrunkBeforeMerge(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewRemoteScenario(t)
 
 	remotePath, err := s.Scene.Repo.RunGitCommandAndGetOutput("remote", "get-url", "origin")
@@ -83,6 +85,7 @@ func TestMultiStackWorktreeExecutor_PullsTrunkBeforeMerge(t *testing.T) {
 }
 
 func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Create a stack with 3 branches: branch1 -> branch2 -> branch3
@@ -161,6 +164,7 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 }
 
 func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Create stack1 with 2 branches modifying different files

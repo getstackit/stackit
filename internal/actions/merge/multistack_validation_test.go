@@ -11,7 +11,9 @@ import (
 )
 
 func TestValidateBranchesMatchRemote(t *testing.T) {
+	t.Parallel()
 	t.Run("passes when all branches match remote", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		// Create a branch and push it
@@ -31,6 +33,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 	})
 
 	t.Run("fails when branch differs from remote", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		// Create a branch and push it
@@ -57,6 +60,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 	})
 
 	t.Run("fails with multiple mismatched branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		// Create first branch and push
@@ -92,6 +96,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 	})
 
 	t.Run("passes with multiple stacks all matching remote", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		// Create stack1
@@ -120,6 +125,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 	})
 
 	t.Run("fails when one stack has mismatched branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		// Create stack1 - will match remote
@@ -153,6 +159,7 @@ func TestValidateBranchesMatchRemote(t *testing.T) {
 	})
 
 	t.Run("handles branch not on remote gracefully", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
 		// Create a branch but don't push it

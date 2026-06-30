@@ -14,7 +14,9 @@ import (
 )
 
 func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
+	t.Parallel()
 	t.Run("single_branch_no_pr", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a": "main",
@@ -30,6 +32,7 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 	})
 
 	t.Run("multiple_branches_with_prs", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a":   "main",
@@ -48,6 +51,7 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 	})
 
 	t.Run("branches_with_scope", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a": "main",
@@ -65,7 +69,9 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 }
 
 func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *testing.T) {
+	t.Parallel()
 	t.Run("with_stack_description_uses_title", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a": "main",
@@ -88,6 +94,7 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 	})
 
 	t.Run("with_stack_description_title_only", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a":   "main",
@@ -110,6 +117,7 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 	})
 
 	t.Run("no_description_fallback", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a": "main",
@@ -130,7 +138,9 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 }
 
 func TestPRContentGenerator_GenerateMultiStackPR(t *testing.T) {
+	t.Parallel()
 	t.Run("single_stack", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a": "main",
@@ -147,6 +157,7 @@ func TestPRContentGenerator_GenerateMultiStackPR(t *testing.T) {
 	})
 
 	t.Run("with_excluded_stacks", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a": "main",
@@ -164,6 +175,7 @@ func TestPRContentGenerator_GenerateMultiStackPR(t *testing.T) {
 	})
 
 	t.Run("mixed_scopes_omits_scope_trailer", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithStack(map[string]string{
 			"feature-a": "main",

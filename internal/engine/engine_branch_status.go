@@ -443,6 +443,7 @@ type deletionStatusInputs struct {
 	metadataMap    map[string]*git.Meta
 	revisions      map[string]string
 	mergedBranches map[string]bool
+	squashCache    *git.SquashMergeCache
 }
 
 func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames []string) (*deletionStatusInputs, error) {
@@ -473,6 +474,7 @@ func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames [
 		metadataMap:    metadataMap,
 		revisions:      revisions,
 		mergedBranches: mergedBranches,
+		squashCache:    git.NewSquashMergeCache(),
 	}, nil
 }
 
@@ -483,7 +485,7 @@ func (e *engineImpl) evaluateDeletionStatuses(ctx context.Context, branchNames [
 	for _, name := range branchNames {
 		branch := e.GetBranch(name)
 		meta := inputs.metadataMap[name]
-		results[name] = e.evaluateDeletionStatus(ctx, name, branch, meta, inputs.revisions, inputs.mergedBranches, inputs.trunkName)
+		results[name] = e.evaluateDeletionStatus(ctx, name, branch, meta, inputs.revisions, inputs.mergedBranches, inputs.trunkName, inputs.squashCache)
 	}
 
 	return results
@@ -496,7 +498,7 @@ func (e *engineImpl) evaluateDeletionStatuses(ctx context.Context, branchNames [
 //  3. PR state CLOSED/MERGED → deletable
 //  4. Merged into trunk → deletable
 //  5. Empty with PR → deletable
-func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName string, branch Branch, meta *git.Meta, revisions map[string]string, mergedBranches map[string]bool, trunkName string) DeletionStatus {
+func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName string, branch Branch, meta *git.Meta, revisions map[string]string, mergedBranches map[string]bool, trunkName string, squashCache *git.SquashMergeCache) DeletionStatus {
 	// 1. Never delete trunk
 	if e.IsTrunk(branch) {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
@@ -552,7 +554,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	// rule 5 gates its tree comparison behind PR metadata). branchLanded targets
 	// trunk specifically, so a branch squash-merged into a still-open parent is
 	// not treated as deletable.
-	if metaHasSubmittedPR(meta) && e.branchLanded(ctx, branchName, trunkName) {
+	if metaHasSubmittedPR(meta) && e.branchLanded(ctx, branchName, trunkName, squashCache) {
 		return DeletionStatus{
 			SafeToDelete: true,
 			Reason:       fmt.Sprintf("merged into %s", trunkName),

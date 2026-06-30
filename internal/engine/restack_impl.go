@@ -26,6 +26,7 @@ func (e *engineImpl) restackBranch(
 	revMap map[string]string,
 	worktrees git.WorktreeList,
 	metaRefSHAs map[string]string,
+	squashCache *git.SquashMergeCache,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
@@ -61,7 +62,7 @@ func (e *engineImpl) restackBranch(
 		return RestackBranchResult{Result: RestackUnneeded, LockReason: lockReason}, nil
 	}
 
-	if e.branchLanded(ctx, branchName, parent) {
+	if e.branchLanded(ctx, branchName, parent, squashCache) {
 		return RestackBranchResult{Result: RestackUnneeded}, nil
 	}
 
@@ -217,7 +218,7 @@ func (e *engineImpl) restackBranch(
 
 	// Check if parent needs reparenting (merged, deleted, or has MERGED PR state)
 	e.mu.RLock()
-	needsReparent := e.shouldReparentBranch(ctx, parent, metaMap)
+	needsReparent := e.shouldReparentBranch(ctx, parent, metaMap, squashCache)
 	e.mu.RUnlock()
 
 	if needsReparent {
@@ -225,7 +226,7 @@ func (e *engineImpl) restackBranch(
 
 		// Find nearest valid ancestor
 		e.mu.RLock()
-		newParent := e.findNearestValidAncestor(ctx, branchName, metaMap)
+		newParent := e.findNearestValidAncestor(ctx, branchName, metaMap, squashCache)
 		e.mu.RUnlock()
 
 		// Reparent to the nearest valid ancestor. DivergenceRecompute is

@@ -494,9 +494,9 @@ func (t *tracingRunner) IsMerged(ctx context.Context, branchName, target string)
 	return result, err
 }
 
-func (t *tracingRunner) IsSquashMerged(ctx context.Context, branchName, target string) (bool, error) {
+func (t *tracingRunner) IsSquashMerged(ctx context.Context, branchName, target string, cache *SquashMergeCache) (bool, error) {
 	start := time.Now()
-	result, err := t.inner.IsSquashMerged(ctx, branchName, target)
+	result, err := t.inner.IsSquashMerged(ctx, branchName, target, cache)
 	t.trace("IsSquashMerged", time.Since(start), err == nil, err, slog.String("branch", branchName), slog.String("target", target))
 	return result, err
 }

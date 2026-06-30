@@ -393,7 +393,7 @@ func (d *demoGitRunner) IsMerged(_ context.Context, _, _ string) (bool, error) {
 	return false, nil
 }
 
-func (d *demoGitRunner) IsSquashMerged(_ context.Context, _, _ string) (bool, error) {
+func (d *demoGitRunner) IsSquashMerged(_ context.Context, _, _ string, _ *git.SquashMergeCache) (bool, error) {
 	return false, nil
 }
 

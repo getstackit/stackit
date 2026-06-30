@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 func (r *runner) Merge(ctx context.Context, branchName string, opts MergeOptions) error {
@@ -138,6 +139,19 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 	return true, nil
 }
 
+// SquashMergeCache memoizes immutable commit patch IDs for one higher-level
+// operation. Create one at the operation boundary and pass it through repeated
+// IsSquashMerged calls that scan the same target history.
+type SquashMergeCache struct {
+	commitPatchIDs sync.Map // map[string]string
+}
+
+// NewSquashMergeCache creates an operation-scoped cache for repeated
+// IsSquashMerged checks against overlapping target history.
+func NewSquashMergeCache() *SquashMergeCache {
+	return &SquashMergeCache{}
+}
+
 // IsSquashMerged reports whether branchName was squash-merged into target by
 // comparing the branch's aggregate diff patch-id against commits added to
 // target since the branch diverged. Unlike IsMerged it does not short-circuit
@@ -145,7 +159,7 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 // IsMerged returns false. It is comparatively expensive (a bounded log plus a
 // patch-id per scanned target commit), so keep it out of broad IsMerged loops
 // and call it only from explicit landing decisions.
-func (r *runner) IsSquashMerged(ctx context.Context, branchName, target string) (bool, error) {
+func (r *runner) IsSquashMerged(ctx context.Context, branchName, target string, cache *SquashMergeCache) (bool, error) {
 	mergeBase, err := r.GetMergeBase(ctx, branchName, target)
 	if err != nil {
 		return false, fmt.Errorf("failed to get merge base: %w", err)
@@ -154,7 +168,7 @@ func (r *runner) IsSquashMerged(ctx context.Context, branchName, target string) 
 	if err != nil {
 		return false, fmt.Errorf("failed to get branch revision: %w", err)
 	}
-	return r.isSquashMerged(ctx, branchRev, mergeBase, target)
+	return r.isSquashMerged(ctx, branchRev, mergeBase, target, cache)
 }
 
 // isSquashMerged detects whether branchName was squash-merged into target by
@@ -176,7 +190,7 @@ func (r *runner) IsSquashMerged(ctx context.Context, branchName, target string) 
 //
 // The scan is bounded to keep long-lived trunks cheap; exceeding it only costs a
 // false negative, never a wrong "merged".
-func (r *runner) isSquashMerged(ctx context.Context, branchRev, mergeBase, target string) (bool, error) {
+func (r *runner) isSquashMerged(ctx context.Context, branchRev, mergeBase, target string, cache *SquashMergeCache) (bool, error) {
 	branchPatchID, err := r.diffPatchID(ctx, mergeBase, branchRev)
 	if err != nil {
 		return false, nil //nolint:nilerr
@@ -197,7 +211,7 @@ func (r *runner) isSquashMerged(ctx context.Context, branchRev, mergeBase, targe
 		if commitSHA == "" {
 			continue
 		}
-		commitPatchID, patchErr := r.commitPatchID(ctx, commitSHA)
+		commitPatchID, patchErr := r.commitPatchID(ctx, commitSHA, cache)
 		if patchErr != nil {
 			continue
 		}
@@ -216,12 +230,21 @@ func (r *runner) diffPatchID(ctx context.Context, base, head string) (string, er
 	return r.patchID(ctx, diffOutput)
 }
 
-func (r *runner) commitPatchID(ctx context.Context, commitSHA string) (string, error) {
+func (r *runner) commitPatchID(ctx context.Context, commitSHA string, cache *SquashMergeCache) (string, error) {
+	if cached, ok := cache.commitPatchIDs.Load(commitSHA); ok {
+		return cached.(string), nil
+	}
+
 	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "show", "--format=", "--no-ext-diff", "--full-index", commitSHA)
 	if err != nil {
 		return "", err
 	}
-	return r.patchID(ctx, diffOutput)
+	patchID, err := r.patchID(ctx, diffOutput)
+	if err != nil {
+		return "", err
+	}
+	cache.commitPatchIDs.Store(commitSHA, patchID)
+	return patchID, nil
 }
 
 func (r *runner) patchID(ctx context.Context, diffOutput string) (string, error) {

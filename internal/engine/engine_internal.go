@@ -106,7 +106,7 @@ func metaHasSubmittedPR(meta *git.Meta) bool {
 // a child stacked on that local branch still needs to reparent past it without
 // replaying the collaborator's commits. Callers that delete branches must add
 // their own metadata/confirmation gate before using this predicate.
-func (e *engineImpl) branchLanded(ctx context.Context, branchName, target string) bool {
+func (e *engineImpl) branchLanded(ctx context.Context, branchName, target string, squashCache *git.SquashMergeCache) bool {
 	if branchName == e.trunk {
 		return false
 	}
@@ -123,7 +123,7 @@ func (e *engineImpl) branchLanded(ctx context.Context, branchName, target string
 	// Squash merges need the aggregate patch-id scan, which is expensive and
 	// intentionally stays out of the hot IsMerged primitive. Only explicit
 	// "did this branch land into trunk" checks opt into it.
-	merged, err := e.git.IsSquashMerged(ctx, branchName, target)
+	merged, err := e.git.IsSquashMerged(ctx, branchName, target, squashCache)
 	return err == nil && merged
 }
 
@@ -132,7 +132,7 @@ func (e *engineImpl) branchLanded(ctx context.Context, branchName, target string
 // - No longer exists locally
 // - Has been merged into its own parent
 // - Has a "MERGED" PR state in metadata
-func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName string, metaMap map[string]*git.Meta) bool {
+func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName string, metaMap map[string]*git.Meta, squashCache *git.SquashMergeCache) bool {
 	// Check if parent is trunk (no need to reparent)
 	if parentBranchName == e.trunk {
 		return false
@@ -157,7 +157,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 	if state := e.readState(parentBranchName); state != nil && state.Parent != "" {
 		mergeTarget = state.Parent
 	}
-	if e.branchLanded(ctx, parentBranchName, mergeTarget) {
+	if e.branchLanded(ctx, parentBranchName, mergeTarget, squashCache) {
 		return true
 	}
 
@@ -179,7 +179,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 
 // findNearestValidAncestor finds the nearest ancestor that hasn't been merged/deleted
 // Returns trunk if all ancestors have been merged
-func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName string, metaMap map[string]*git.Meta) string {
+func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName string, metaMap map[string]*git.Meta, squashCache *git.SquashMergeCache) string {
 	// Get the starting parent from branchState
 	state := e.readState(branchName)
 	if state == nil {
@@ -188,7 +188,7 @@ func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName st
 	current := state.Parent
 
 	for current != "" && current != e.trunk {
-		if !e.shouldReparentBranch(ctx, current, metaMap) {
+		if !e.shouldReparentBranch(ctx, current, metaMap, squashCache) {
 			return current
 		}
 		// Move to the next parent

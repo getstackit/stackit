@@ -146,6 +146,7 @@ func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch 
 func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch Branch, parentBranch Branch) error {
 	branchName := branch.GetName()
 	parentBranchName := parentBranch.GetName()
+	squashCache := git.NewSquashMergeCache()
 
 	return e.WithRetry(ctx, func() error {
 		// Get new parent revision (may run multiple times on retry)
@@ -180,8 +181,8 @@ func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch 
 				// revision is still enough to compare its aggregate patch against
 				// trunk.
 				oldParentRev := *meta.GetParentBranchRevision()
-				if e.branchLanded(ctx, oldParent, parentBranchName) ||
-					e.branchLanded(ctx, oldParentRev, parentBranchName) {
+				if e.branchLanded(ctx, oldParent, parentBranchName, squashCache) ||
+					e.branchLanded(ctx, oldParentRev, parentBranchName, squashCache) {
 					shouldUpdateRevision = false
 				} else if merged, _ := e.git.IsMerged(ctx, oldParent, parentBranchName); merged {
 					shouldUpdateRevision = false

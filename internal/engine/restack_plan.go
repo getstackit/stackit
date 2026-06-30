@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // PlanRestack builds the rebase specs and branch decisions for a restack.
@@ -15,9 +17,10 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 		PlannedResults: make(map[string]RestackBranchResult),
 		Items:          make(map[string]RestackPlanItem),
 	}
+	squashCache := git.NewSquashMergeCache()
 
 	for _, branch := range branches {
-		item, ok := e.planRestackBranch(ctx, branch, plan.BranchMap)
+		item, ok := e.planRestackBranch(ctx, branch, plan.BranchMap, squashCache)
 		if !ok {
 			continue
 		}
@@ -48,7 +51,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 	return plan, nil
 }
 
-func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches map[string]bool) (RestackPlanItem, bool) {
+func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches map[string]bool, squashCache *git.SquashMergeCache) (RestackPlanItem, bool) {
 	branchName := branch.GetName()
 	item := RestackPlanItem{Branch: branchName, Action: RestackPlanApplyValidated}
 
@@ -85,7 +88,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	// covers merged PR metadata for all GitHub methods, plus Git-detected merge,
 	// rebase, and multi-commit squash histories on trunk even when the merged
 	// branch has no stackit PR metadata.
-	if e.branchLanded(ctx, branchName, parentName) {
+	if e.branchLanded(ctx, branchName, parentName, squashCache) {
 		item.Skip = true
 		item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
 		return item, true
@@ -140,11 +143,11 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 
 	e.mu.RLock()
-	needsReparent := state != nil && e.shouldReparentBranch(ctx, state.Parent, nil)
+	needsReparent := state != nil && e.shouldReparentBranch(ctx, state.Parent, nil, squashCache)
 	if needsReparent {
 		item.Reparented = true
 		item.OldParent = state.Parent
-		parentName = e.findNearestValidAncestor(ctx, branchName, nil)
+		parentName = e.findNearestValidAncestor(ctx, branchName, nil, squashCache)
 	}
 	e.mu.RUnlock()
 	item.NewParent = parentName

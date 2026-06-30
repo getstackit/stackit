@@ -117,7 +117,7 @@ func TestIsMerged(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, merged, "cheap IsMerged must not detect a multi-commit squash")
 
-		squashMerged, err := runner.IsSquashMerged(context.Background(), "branch1", "main")
+		squashMerged, err := runner.IsSquashMerged(context.Background(), "branch1", "main", git.NewSquashMergeCache())
 		require.NoError(t, err)
 		require.True(t, squashMerged, "IsSquashMerged must detect the aggregate squash")
 	})
@@ -179,11 +179,12 @@ func TestIsSquashMergedCachesTargetCommitPatchIDs(t *testing.T) {
 	logger := &captureGitLogger{}
 	runner := git.NewRunnerWithPath(scene.Repo.Dir, logger)
 
-	merged, err := runner.IsSquashMerged(context.Background(), "branch1", "main")
+	cache := git.NewSquashMergeCache()
+	merged, err := runner.IsSquashMerged(context.Background(), "branch1", "main", cache)
 	require.NoError(t, err)
 	require.False(t, merged)
 
-	merged, err = runner.IsSquashMerged(context.Background(), "branch2", "main")
+	merged, err = runner.IsSquashMerged(context.Background(), "branch2", "main", cache)
 	require.NoError(t, err)
 	require.False(t, merged)
 

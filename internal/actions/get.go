@@ -77,7 +77,9 @@ type GetHandler interface {
 }
 
 // GetNullHandler is a no-op handler for testing or when output is not needed
-type GetNullHandler struct{}
+type GetNullHandler struct {
+	handlers.NullRestackHandler
+}
 
 // Start implements GetHandler.
 func (h *GetNullHandler) Start(_ string, _ *int) {}
@@ -87,16 +89,6 @@ func (h *GetNullHandler) EmitEvent(_ GetEvent) {}
 
 // Complete implements GetHandler.
 func (h *GetNullHandler) Complete(_ GetSummary) {}
-
-// OnRestackStart implements RestackHandler.
-func (h *GetNullHandler) OnRestackStart(_ int) {}
-
-// OnRestackBranch implements RestackHandler.
-func (h *GetNullHandler) OnRestackBranch(_ string, _ handlers.RestackResult, _ string, _ *int, _ engine.LockReason, _ bool, _ bool, _ string, _ bool, _, _ string, _ int) {
-}
-
-// OnRestackComplete implements RestackHandler.
-func (h *GetNullHandler) OnRestackComplete(_, _ int, _ []string) {}
 
 // GetOptions contains options for the get command
 type GetOptions struct {

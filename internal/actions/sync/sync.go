@@ -433,9 +433,11 @@ type Handler interface {
 
 // NullHandler is a no-op handler for testing or when output is not needed
 // NullHandler is a no-op handler for when nil is passed.
-// It embeds handler.NullBase for Cleanup() and IsInteractive().
+// It embeds handler.NullBase for Cleanup() and IsInteractive(), and
+// handlers.NullRestackHandler for the restack-specific no-op methods.
 type NullHandler struct {
 	handler.NullBase
+	handlers.NullRestackHandler
 }
 
 // Start implements Handler.
@@ -446,16 +448,6 @@ func (h *NullHandler) EmitEvent(Event) {}
 
 // Complete implements Handler.
 func (h *NullHandler) Complete(Summary) {}
-
-// OnRestackStart implements RestackHandler.
-func (h *NullHandler) OnRestackStart(int) {}
-
-// OnRestackBranch implements RestackHandler.
-func (h *NullHandler) OnRestackBranch(string, RestackResult, string, *int, engine.LockReason, bool, bool, string, bool, string, string, int) {
-}
-
-// OnRestackComplete implements RestackHandler.
-func (h *NullHandler) OnRestackComplete(int, int, []string) {}
 
 // PromptMetadataConflict implements Handler. Returns false (keep local) in non-interactive mode.
 func (h *NullHandler) PromptMetadataConflict(_ *engine.MetadataDiff) (bool, error) {

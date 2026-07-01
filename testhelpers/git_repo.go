@@ -303,6 +303,13 @@ func (r *GitRepo) CreateAndCheckoutBranch(name string) error {
 	return r.runGitCommand("checkout", "-b", name)
 }
 
+// CreateAndCheckoutBranchFrom creates and checks out a new branch from an
+// explicit start point in a single git invocation, avoiding a separate
+// checkout of the start point first.
+func (r *GitRepo) CreateAndCheckoutBranchFrom(name, startPoint string) error {
+	return r.runGitCommand("checkout", "-b", name, startPoint)
+}
+
 // CheckoutBranch checks out a branch.
 func (r *GitRepo) CheckoutBranch(name string) error {
 	return r.runGitCommand("checkout", name)

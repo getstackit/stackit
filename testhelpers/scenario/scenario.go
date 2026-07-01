@@ -199,6 +199,15 @@ func (s *Scenario) CreateBranchQuiet(name string) *Scenario {
 	return s
 }
 
+// CreateBranchFromQuiet creates and checks out a new branch from an explicit
+// start point without rebuilding the engine, in a single git invocation.
+func (s *Scenario) CreateBranchFromQuiet(name, startPoint string) *Scenario {
+	s.T.Helper()
+	err := s.Scene.Repo.CreateAndCheckoutBranchFrom(name, startPoint)
+	require.NoError(s.T, err)
+	return s
+}
+
 // Rebuild refreshes the engine's internal state from the Git repository.
 func (s *Scenario) Rebuild() *Scenario {
 	s.T.Helper()
@@ -282,9 +291,9 @@ func (s *Scenario) WithStack(structure map[string]string) *Scenario {
 				continue
 			}
 			if created[parent] {
-				// Create branch without rebuilding engine
-				s.CheckoutQuiet(parent)
-				s.CreateBranchQuiet(branch)
+				// Create branch from its parent in a single git invocation
+				// (avoids a separate checkout of the parent first).
+				s.CreateBranchFromQuiet(branch, parent)
 
 				err := s.Scene.Repo.CreateChangeAndCommit("change on "+branch, branch)
 				require.NoError(s.T, err)

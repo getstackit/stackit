@@ -458,8 +458,8 @@ func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string,
 	// Since these are topologically ordered, each parent will be rebased before its children
 	sortedDescendants := eng.SortBranchesTopologically(descendants)
 
-	// Prefetch every descendant's parent revision in one batch instead of a
-	// git rev-parse per descendant.
+	// Prefetch every descendant's parent revision and divergence point in one
+	// batch instead of a git rev-parse and metadata read per descendant.
 	parentNames := make([]string, 0, len(sortedDescendants))
 	for _, d := range sortedDescendants {
 		if parent := d.GetParent(); parent != nil {
@@ -467,6 +467,7 @@ func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string,
 		}
 	}
 	parentRevs, _ := eng.GetRevisions(parentNames)
+	divergencePoints := eng.BatchDivergencePoints(sortedDescendants)
 
 	for _, d := range sortedDescendants {
 		if d.GetName() == source {
@@ -482,9 +483,8 @@ func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string,
 		}
 
 		// Get the old upstream (divergence point)
-		dOldUpstream, divErr := eng.GetDivergencePoint(d.GetName())
-		if divErr != nil {
-			out.Debug("Failed to get divergence point for %s: %v", d.GetName(), divErr)
+		dOldUpstream := divergencePoints[d.GetName()]
+		if dOldUpstream == "" {
 			dOldUpstream = parentRev // Fallback
 		}
 

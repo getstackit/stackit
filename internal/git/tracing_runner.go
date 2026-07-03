@@ -557,6 +557,13 @@ func (t *tracingRunner) GetUnstagedDiff(ctx context.Context, files ...string) (s
 	return result, err
 }
 
+func (t *tracingRunner) GetUnstagedDiffBinary(ctx context.Context, files ...string) (string, error) {
+	start := time.Now()
+	result, err := t.inner.GetUnstagedDiffBinary(ctx, files...)
+	t.trace("GetUnstagedDiffBinary", time.Since(start), err == nil, err)
+	return result, err
+}
+
 func (t *tracingRunner) GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error) {
 	start := time.Now()
 	result, err := t.inner.GetDiffBetween(ctx, base, head, files...)
@@ -803,10 +810,24 @@ func (t *tracingRunner) StashPushStaged(ctx context.Context, message string) (st
 	return result, err
 }
 
+func (t *tracingRunner) StashDrop(ctx context.Context, ref string) error {
+	start := time.Now()
+	err := t.inner.StashDrop(ctx, ref)
+	t.trace("StashDrop", time.Since(start), err == nil, err)
+	return err
+}
+
 func (t *tracingRunner) StashPop(ctx context.Context) error {
 	start := time.Now()
 	err := t.inner.StashPop(ctx)
 	t.trace("StashPop", time.Since(start), err == nil, err)
+	return err
+}
+
+func (t *tracingRunner) StashPopRef(ctx context.Context, ref string) error {
+	start := time.Now()
+	err := t.inner.StashPopRef(ctx, ref)
+	t.trace("StashPopRef", time.Since(start), err == nil, err)
 	return err
 }
 
@@ -869,6 +890,13 @@ func (t *tracingRunner) ApplyPatch(ctx context.Context, patchFile string, threeW
 	start := time.Now()
 	err := t.inner.ApplyPatch(ctx, patchFile, threeWay)
 	t.trace("ApplyPatch", time.Since(start), err == nil, err)
+	return err
+}
+
+func (t *tracingRunner) ApplyPatchToWorktree(ctx context.Context, patch string) error {
+	start := time.Now()
+	err := t.inner.ApplyPatchToWorktree(ctx, patch)
+	t.trace("ApplyPatchToWorktree", time.Since(start), err == nil, err)
 	return err
 }
 

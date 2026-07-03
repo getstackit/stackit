@@ -41,6 +41,7 @@ func AbsorbChain(ctx context.Context, eng GitOperationEngine, operation string) 
 	return Chain{
 		MustBeOnBranch(eng),
 		CurrentBranchMustNotBeTrunk(eng, operation),
+		CurrentBranchMustBeTracked(eng),
 		CurrentBranchMustBeModifiable(eng),
 		MustNotHaveRebaseInProgress(ctx, eng),
 	}

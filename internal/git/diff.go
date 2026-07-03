@@ -128,6 +128,22 @@ func (r *runner) GetUnstagedDiff(ctx context.Context, files ...string) (string, 
 	return r.RunGitCommandRawWithContext(ctx, args...)
 }
 
+// GetUnstagedDiffBinary returns the unstaged (index->worktree) diff with full
+// binary content (`git diff --binary`). Plain `git diff` emits only a
+// "Binary files ... differ" placeholder for binary files, which `git apply`
+// refuses ("cannot apply binary patch ... without full index line"). The
+// `--binary` form embeds a `GIT binary patch` that round-trips through
+// `git apply`, so callers that reapply the captured diff to the working tree
+// (e.g. absorb's stash fallback) must use this instead of GetUnstagedDiff.
+func (r *runner) GetUnstagedDiffBinary(ctx context.Context, files ...string) (string, error) {
+	args := []string{gitCmdDiff, "--binary"}
+	if len(files) > 0 {
+		args = append(args, "--")
+		args = append(args, files...)
+	}
+	return r.RunGitCommandRawWithContext(ctx, args...)
+}
+
 // GetDiffBetween returns the raw diff between two refs.
 // Unlike ShowDiff, this returns uncolored output suitable for parsing.
 func (r *runner) GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error) {

@@ -139,6 +139,10 @@ type WorkingTree interface {
 	// Prefer this over calling Has* individually when multiple flags are needed.
 	GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
+	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary
+	// content (`git diff --binary`) so the result can be reapplied with
+	// `git apply`.
+	GetUnstagedDiffBinary(ctx context.Context, files ...string) (string, error)
 	GetUntrackedFileHunks(ctx context.Context) ([]git.Hunk, error)
 	GetPendingChanges(ctx context.Context) ([]PendingChange, error)
 	GetCommitTemplate(ctx context.Context) (string, error)
@@ -259,10 +263,15 @@ type CommitOperations interface {
 	StageAll(ctx context.Context) error
 	StagePatch(ctx context.Context) error
 	StageHunks(ctx context.Context, hunks []git.Hunk) error
+	// ApplyPatchToWorktree applies a patch to the working tree only (not the
+	// index). It applies atomically or fails without writing conflict markers.
+	ApplyPatchToWorktree(ctx context.Context, patch string) error
 	StageChanges(ctx context.Context, opts git.StagingOptions) error
 	StashPush(ctx context.Context, message string) (string, error)
 	StashPushStaged(ctx context.Context, message string) (string, error)
+	StashDrop(ctx context.Context, ref string) error
 	StashPop(ctx context.Context) error
+	StashPopRef(ctx context.Context, ref string) error
 }
 
 // WorktreeOperations handles worktree management

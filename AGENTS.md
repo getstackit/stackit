@@ -105,6 +105,7 @@ api/openapi/       API contract source of truth
 
 ## Documentation
 
+- `docs/absorb.md` - Absorb command: target selection, stash/restore safety model, restack modes
 - `docs/config.md` - Configuration system, keys, layered config
 - `docs/hooks.md` - Lifecycle hook configuration, env vars, approval flow, recipes
 - `docs/multiplayer.md` - Collaboration: detecting landed work from non-stackit teammates, the un-pushed trunk guard, reparent invariants

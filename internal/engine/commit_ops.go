@@ -35,6 +35,11 @@ func (e *engineImpl) StageHunks(ctx context.Context, hunks []git.Hunk) error {
 	return e.git.StageHunks(ctx, hunks)
 }
 
+// ApplyPatchToWorktree applies a patch to the working tree only (not the index).
+func (e *engineImpl) ApplyPatchToWorktree(ctx context.Context, patch string) error {
+	return e.git.ApplyPatchToWorktree(ctx, patch)
+}
+
 // StageChanges stages changes according to the given staging options.
 func (e *engineImpl) StageChanges(ctx context.Context, opts git.StagingOptions) error {
 	return e.git.StageChanges(ctx, opts)
@@ -50,7 +55,17 @@ func (e *engineImpl) StashPushStaged(ctx context.Context, message string) (strin
 	return e.git.StashPushStaged(ctx, message)
 }
 
+// StashDrop drops a stash entry by ref.
+func (e *engineImpl) StashDrop(ctx context.Context, ref string) error {
+	return e.git.StashDrop(ctx, ref)
+}
+
 // StashPop pops the most recent stash
 func (e *engineImpl) StashPop(ctx context.Context) error {
 	return e.git.StashPop(ctx)
+}
+
+// StashPopRef pops a specific stash entry by ref.
+func (e *engineImpl) StashPopRef(ctx context.Context, ref string) error {
+	return e.git.StashPopRef(ctx, ref)
 }

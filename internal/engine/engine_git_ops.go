@@ -57,6 +57,12 @@ func (e *engineImpl) GetUnstagedDiff(ctx context.Context, files ...string) (stri
 	return e.git.GetUnstagedDiff(ctx, files...)
 }
 
+// GetUnstagedDiffBinary returns the unstaged diff with full binary content
+// (`git diff --binary`), suitable for reapplying via `git apply`.
+func (e *engineImpl) GetUnstagedDiffBinary(ctx context.Context, files ...string) (string, error) {
+	return e.git.GetUnstagedDiffBinary(ctx, files...)
+}
+
 // HasStagedChanges checks if there are staged changes in the repository
 func (e *engineImpl) HasStagedChanges(ctx context.Context) (bool, error) {
 	return e.git.HasStagedChanges(ctx)

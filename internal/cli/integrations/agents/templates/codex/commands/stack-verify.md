@@ -8,13 +8,15 @@ Run verification across stack branches.
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Inspect:
 
    ```bash
-   stackit state --json
+   stackit state --json | jq '{current_branch,trunk,working_tree,operation}'
    ```
 
-2. Determine check command from user input, project docs, or common files. Prefer `mise run check` when available.
+2. Determine the lightest check command from user input, project docs, or common files. Prefer targeted commands over full-suite checks.
 
 3. Run across the current stack with structured output, stopping at the first
    failing depth:
@@ -25,5 +27,8 @@ Run verification across stack branches.
 
    For current branch and descendants only, swap `--stack` for `--upstack`.
 
-4. Parse `results[]` for the first entry with a non-zero `exit_code` — report that
-   failing branch and its output. If all pass, report that clearly.
+   If sandbox metadata shows `.git` is read-only, run `stackit foreach` with escalation on the first attempt because it may switch branches.
+
+4. Parse `results[]` for the first entry with a non-zero `exit_code`. Report the
+   failing branch, repro command, and actionable failure block; do not paste
+   passing branch output. If all pass, report that clearly.

@@ -8,12 +8,13 @@ Squash branches whose history is dominated by fixup, WIP, or noise commits, leav
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Inspect:
 
    ```bash
    git status --short
-   stackit tree --no-interactive
-   stackit info --stack --json --no-interactive
+   stackit state --json | jq '{current_branch,trunk,working_tree,operation,branches:[.stack.branches[] | {name,parent,is_current,is_trunk,needs_restack,is_locked,is_frozen,children:(.children // [])}]}'
    ```
 
 2. If there are uncommitted changes, stop and ask whether to commit, stash, or abort.
@@ -38,7 +39,9 @@ Squash branches whose history is dominated by fixup, WIP, or noise commits, leav
    | 0 meaningful, all noise | squash, keep oldest message |
    | 2+ meaningful commits | leave for manual review |
 
-6. Show the user the full plan: per branch, the commits with classification, the proposed action, and the message that will land.
+6. Show the user a compact plan: branch, proposed action, kept message, and count
+   of noise commits. Expand commit lists only when asking about a branch that
+   needs manual review.
 
 7. Wait for explicit user approval before any squash. If the user asks to review one branch at a time, confirm each before squashing.
 
@@ -52,13 +55,17 @@ Squash branches whose history is dominated by fixup, WIP, or noise commits, leav
    When a meaningful message should replace the existing one:
 
    ```bash
-   printf '%s\n' "<meaningful message>" | stackit squash -F - --no-interactive
+   mkdir -p tmp
+   printf '%s\n' "<meaningful message>" > tmp/stackit-message.txt
+   stackit squash -F tmp/stackit-message.txt --no-interactive
    ```
+
+   If sandbox metadata shows `.git` is read-only, run `stackit checkout` and `stackit squash` with escalation on the first attempt.
 
 9. Verify:
 
    ```bash
-   stackit tree --no-interactive
+   stackit state --json | jq '.current_branch as $c | .stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen,pr}'
    ```
 
 ## Do Not

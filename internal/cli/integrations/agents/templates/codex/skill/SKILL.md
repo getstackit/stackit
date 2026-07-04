@@ -11,8 +11,32 @@ Stackit manages stacked Git branches: small dependent PRs instead of one large r
 
 - Pass `--no-interactive` on Stackit commands (or set `STACKIT_NO_INTERACTIVE=1` once in the environment instead of repeating the flag — interactive features also auto-disable when there's no TTY). Add `--force` for absorb and `--yes` for undo. Bare `stackit merge` (no flags) opens a TTY wizard; non-interactively, `stackit merge --yes` merges the next (bottom) ready PR, or `stackit merge ship --yes` consolidates the whole stack into one PR.
 - Stage changes before `stackit create`.
-- Pipe commit messages via `-F -`: `printf '%s\n' "feat: x" | stackit create -F - --no-interactive`.
-- After any mutation, run `stackit tree --no-interactive` and report the resulting stack.
+- Put generated messages in `tmp/stackit-message.txt` and pass `-F tmp/stackit-message.txt`. Do not pipe into mutating Stackit commands in Codex: pipes create a separate shell command segment, so approval can attach to `printf` instead of `stackit`.
+- When sandbox metadata shows `.git` is read-only, run mutating Stackit commands with escalation on the first attempt. Do not intentionally try once un-escalated just to discover the expected ref/lock failure.
+- Prefer compact JSON views when `jq` is available. If `jq` is unavailable, use `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+- After any mutation, verify with the compact current-branch view below and report only the branch, parent, children/restack flags, and next step.
+
+## Compact Reads
+
+Use these views instead of dumping full stack JSON when `jq` is available:
+
+```bash
+stackit state --json | jq '{current_branch,trunk,working_tree,operation}'
+```
+
+```bash
+stackit state --json | jq '.current_branch as $c | .stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen,pr}'
+```
+
+For stack-wide health, keep each branch small:
+
+```bash
+stackit state --json | jq '{current_branch,trunk,working_tree,operation,branches:[.stack.branches[] | {name,parent,is_current,is_trunk,needs_restack,is_locked,is_frozen,pr:(.pr // null),children:(.children // [])}]}'
+```
+
+On command failure, report the failing command, the actionable failure block, and any log path. Do not paste passing package lists or full successful command output.
+
+For validation, choose the lightest command that covers the change. Agent template edits use `mise run test:pkg ./internal/cli/integrations`; full `mise run check` is for broad cross-package changes.
 
 ## Asking Policy
 
@@ -27,13 +51,12 @@ If there is no work to act on, say so and stop.
 Run once at the start of a Stackit-related session:
 
 ```bash
-stackit state --json
+stackit state --json | jq '{current_branch,trunk,working_tree,operation}'
 ```
 
-This single call returns the current branch, working-tree state, any in-progress
-operation, and the full `stack` (PR/CI status + per-branch needs_restack/locked/
-frozen/scope). Surface failing CI, branches ready to merge, and branches needing
-restack when relevant.
+This returns the current branch, working-tree state, and any in-progress
+operation. Read the compact stack-wide health view only when branch relationships
+or PR/CI state matter.
 
 ## Skill Selection
 

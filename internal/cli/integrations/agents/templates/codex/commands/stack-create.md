@@ -1,5 +1,5 @@
 ---
-description: Use when the user wants to create a new Stackit stacked branch from current working tree changes. Trigger phrases include "stack these changes", "create a stacked change", "make a stackit branch", "commit this with stackit", and "turn this into a stacked PR". Stages changes and runs `stackit create -F -`.
+description: Use when the user wants to create a new Stackit stacked branch from current working tree changes. Trigger phrases include "stack these changes", "create a stacked change", "make a stackit branch", "commit this with stackit", and "turn this into a stacked PR". Stages changes and runs `stackit create`.
 ---
 
 # Stack Create
@@ -7,6 +7,8 @@ description: Use when the user wants to create a new Stackit stacked branch from
 Create one new stacked branch from the current working tree.
 
 ## Workflow
+
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
 
 Use a staged preflight. Do not eagerly gather every git view up front.
 
@@ -48,26 +50,28 @@ Use a staged preflight. Do not eagerly gather every git view up front.
 
 6. If the user did not provide a branch name, preserve the repo's configured `branch.pattern` by omitting the branch-name argument. Only pass an explicit branch name when the user asked for one.
 
-7. Create the branch:
+7. Write the message to a stable repo-local file, then create the branch:
 
    ```bash
-   printf '%s\n' "<commit message>" | stackit create -F - --no-interactive
+   mkdir -p tmp
+   printf '%s\n' "<commit message>" > tmp/stackit-message.txt
+   stackit create -F tmp/stackit-message.txt --no-interactive
    ```
 
    With an explicit branch name:
 
    ```bash
-   printf '%s\n' "<commit message>" | stackit create -F - <branch-name> --no-interactive
+   stackit create -F tmp/stackit-message.txt <branch-name> --no-interactive
    ```
 
    If config requires a scope, add `--scope <value>`.
 
-8. If creation fails because Git cannot write under `.git/refs/heads` or create a `.lock` file, retry the exact same command with the required permission or escalation. Do not change the branch name just to work around that failure.
+8. If sandbox metadata shows `.git` is read-only, run the `stackit create` command with escalation on the first attempt. If creation still fails because Git cannot write under `.git/refs/heads` or create a `.lock` file, retry the exact same command with the required permission or escalation. Do not change the branch name just to work around that failure.
 
 9. Verify after mutation, not before:
 
    ```bash
-   stackit tree --no-interactive
+   stackit state --json | jq '.current_branch as $c | .stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen,pr}'
    ```
 
 10. Report:
@@ -84,5 +88,6 @@ Use a staged preflight. Do not eagerly gather every git view up front.
 - Use `git commit` to create the branch.
 - Use `git checkout -b`.
 - Chain staging and creation in one shell command.
+- Pipe messages into `stackit create`; use `tmp/stackit-message.txt` with `-F` so approval rules match `stackit create`.
 - Run `git status`, multiple `git diff` variants, `git log`, and `stackit tree` all up front when one or two targeted checks would do.
 - Introduce a fallback branch name after a permission failure. Preserve the pattern-driven command and retry it with approval instead.

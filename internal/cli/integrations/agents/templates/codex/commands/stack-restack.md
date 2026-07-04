@@ -8,10 +8,12 @@ Rebase stack branches according to Stackit metadata.
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Inspect:
 
    ```bash
-   stackit state --json
+   stackit state --json | jq '{current_branch,trunk,working_tree,operation}'
    ```
 
 2. Precondition: if the state JSON's `working_tree.clean` is false (uncommitted
@@ -25,6 +27,8 @@ Rebase stack branches according to Stackit metadata.
    - Several independent roots: `stackit restack --stacks <root-a>,<root-b> --continue-on-conflict --no-interactive`
    - Every independent stack (only if requested): `stackit restack --all-stacks --continue-on-conflict --no-interactive`
 
+   If sandbox metadata shows `.git` is read-only, run `stackit restack` with escalation on the first attempt.
+
 4. If conflicts occur: resolve the files, stage them, then run
    `stackit continue --no-interactive` to finish (or invoke `stack-resolve`). Do
    not use raw `git rebase`. If `--continue-on-conflict` reports skipped branches,
@@ -32,5 +36,6 @@ Rebase stack branches according to Stackit metadata.
    `stackit restack --branch <conflicted-branch> --upstack --no-interactive`, then
    resolve and `stackit continue`.
 
-5. Verify with `stackit tree --no-interactive`. When done, report the result and
-   suggest `stackit submit` to update PRs, then stop.
+5. Verify with the compact current-branch view. Use `stackit tree --no-interactive`
+   only if ancestry is still unclear. When done, report the result and suggest
+   `stackit submit` to update PRs, then stop.

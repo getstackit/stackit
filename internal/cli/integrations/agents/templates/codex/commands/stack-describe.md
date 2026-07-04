@@ -8,6 +8,8 @@ Generate or refresh stack and PR descriptions from the current branch history.
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Build context cheapest-first. Work down this ladder and **stop as soon as you
    can write an accurate description** — most stacks never need past the first rung.
    **Never run a full `git diff` of the stack;** it burns enormous context for
@@ -16,7 +18,7 @@ Generate or refresh stack and PR descriptions from the current branch history.
    1. **Commit subjects — cheapest.** Usually all you need:
 
       ```bash
-      stackit tree --no-interactive
+      stackit state --json | jq -r '.stack.branches[] | select(.is_trunk|not) | [.name,(.parent // ""),(.pr.title // "")] | @tsv'
       git log --oneline --decorate -20
       ```
 
@@ -45,19 +47,17 @@ Generate or refresh stack and PR descriptions from the current branch history.
    - **Description** — markdown body with a summary paragraph, bullet points of
      key changes (grouped by branch/concern), and a concrete test plan.
 
-3. Set the description with explicit flags (a bare non-interactive `describe`
-   with no input now errors with "nothing to set" — it does not write anything):
+3. Set the description from a file in editor format (first line title, blank
+   line, then body). A bare non-interactive `describe` with no input now errors
+   with "nothing to set" — it does not write anything:
 
    ```bash
-   stackit describe -m "<title>" -d "<description>" --no-interactive
+   mkdir -p tmp
+   printf '%s\n\n%s\n' "<title>" "<description>" > tmp/stackit-description.txt
+   stackit describe -F tmp/stackit-description.txt --no-interactive
    ```
 
-   `-d` requires `-m`, and the body supports multiline text. Alternatively pipe
-   the whole thing in editor format (first line title, blank line, then body):
-
-   ```bash
-   printf '<title>\n\n<description>' | stackit describe -F - --no-interactive
-   ```
+   If sandbox metadata shows `.git` is read-only, run `stackit describe` with escalation on the first attempt.
 
 4. Confirm what was set and report it:
 
@@ -66,3 +66,4 @@ Generate or refresh stack and PR descriptions from the current branch history.
    ```
 
 Descriptions should include a concrete summary and test plan. Do not use placeholders.
+Report only the title and a short summary of the body that was set.

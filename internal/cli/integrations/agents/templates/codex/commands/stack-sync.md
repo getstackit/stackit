@@ -8,10 +8,12 @@ Sync with trunk and clean up branches that have landed.
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Inspect:
 
    ```bash
-   stackit state --json
+   stackit state --json | jq '{current_branch,trunk,working_tree,operation}'
    ```
 
 2. If there are uncommitted changes, stop and ask the user to commit (via
@@ -34,6 +36,8 @@ Sync with trunk and clean up branches that have landed.
    stackit sync --no-restack --no-interactive
    ```
 
+   If sandbox metadata shows `.git` is read-only, run `stackit sync` with escalation on the first attempt.
+
 6. Recompute the restack scope (cleanup/reparenting may have changed roots):
 
    ```bash
@@ -48,5 +52,5 @@ Sync with trunk and clean up branches that have landed.
 7. Verify:
 
    ```bash
-   stackit tree --no-interactive
+   stackit state --json | jq '{current_branch,trunk,working_tree,operation,branches:[.stack.branches[] | {name,parent,is_current,is_trunk,needs_restack,is_locked,is_frozen,pr:(.pr // null),children:(.children // [])}]}'
    ```

@@ -8,10 +8,12 @@ Resolve an in-progress Stackit conflict and continue the operation.
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Inspect:
 
    ```bash
-   stackit state --json
+   stackit state --json | jq '{current_branch,trunk,working_tree,operation}'
    ```
 
    `operation.conflicted_files` lists the unmerged paths; `operation.kind` and
@@ -31,8 +33,10 @@ Resolve an in-progress Stackit conflict and continue the operation.
    stackit continue --no-interactive
    ```
 
+   If sandbox metadata shows `.git` is read-only, run `stackit continue` with escalation on the first attempt.
+
 5. If another conflict appears, repeat.
 
-6. Verify with `stackit tree --no-interactive` and the relevant check command.
+6. Verify with the compact current-branch view and the relevant check command.
 
 Use `stackit abort --no-interactive` only if the user asks to abort.

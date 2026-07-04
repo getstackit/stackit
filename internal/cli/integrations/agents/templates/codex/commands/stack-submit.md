@@ -8,10 +8,12 @@ Submit branches as PRs or update existing PRs. This touches remotes, so confirm 
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Inspect:
 
    ```bash
-   stackit state --json
+   stackit state --json | jq '{current_branch,trunk,working_tree,operation}'
    ```
 
 2. If there are uncommitted changes, warn and stop unless the user asked to submit anyway.
@@ -28,6 +30,8 @@ Submit branches as PRs or update existing PRs. This touches remotes, so confirm 
    ```bash
    stackit submit --no-interactive
    ```
+
+   After the user has approved this remote-affecting action, run `stackit submit` with escalation on the first attempt when network or `.git` access is sandboxed.
 
    Entire stack:
 

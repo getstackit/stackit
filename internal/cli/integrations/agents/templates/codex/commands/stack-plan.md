@@ -8,16 +8,19 @@ Split uncommitted working-tree changes into multiple stacked branches. Primary o
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Gather changes:
 
    ```bash
    git status --short
-   git diff --cached
-   git diff
+   git diff --cached --name-status
+   git diff --name-status
    git ls-files --others --exclude-standard
    ```
 
-   Read untracked files before planning. If there are no changes, stop.
+   Read untracked files before planning. Inspect full diffs only for files whose
+   path/status is not enough to plan the stack. If there are no changes, stop.
 
 2. Propose a plan before executing. Group by concern, dependency order, and architecture. Keep tests with implementation. File-level granularity is the default; ask the user to split manually with `git add -p` when one file contains unrelated work for multiple branches.
 
@@ -28,7 +31,9 @@ Split uncommitted working-tree changes into multiple stacked branches. Primary o
    git ls-remote --heads origin <name>
    ```
 
-4. Detect check command: prefer `mise run check`, then `make test`, then `npm test`. Ask if none is discoverable.
+4. Detect the lightest check command that covers the planned changes. Prefer
+   targeted `mise run test:pkg ...` or package-specific checks over full-suite
+   commands. Ask if none is discoverable.
 
 5. Pre-validate the combined changes:
 
@@ -44,17 +49,21 @@ Split uncommitted working-tree changes into multiple stacked branches. Primary o
    BACKUP="stack-plan-backup-$(date +%s)"
    git checkout -b "$BACKUP"
    git add -A
-   printf 'stack-plan: backup of all changes' | git commit -F -
+   git commit -m "stack-plan: backup of all changes"
    BACKUP_SHA=$(git rev-parse HEAD)
    git checkout "$ORIGINAL"
    ```
 
+   If sandbox metadata shows `.git` is read-only, run `git checkout -b`, `git commit`, and later mutating `stackit` commands with escalation on the first attempt.
+
 7. For each planned branch:
 
    ```bash
+   mkdir -p tmp
+   printf '%s\n' "<message>" > tmp/stackit-message.txt
    git checkout "$BACKUP_SHA" -- <files-for-this-branch>
    git diff --cached --stat            # MUST be non-empty before creating
-   printf '%s\n' "<message>" | stackit create -F - <name> --no-interactive
+   stackit create -F tmp/stackit-message.txt <name> --no-interactive
    git log -1 --stat                   # verify the new branch actually committed the files
    <check-command>
    ```
@@ -77,7 +86,7 @@ Split uncommitted working-tree changes into multiple stacked branches. Primary o
 
      ```bash
      git branch -D "$BACKUP"
-     stackit tree --no-interactive
+     stackit state --json | jq '.current_branch as $c | .stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen,pr}'
      ```
 
    - **Failure:** any create produced an empty branch, any check failed, or any

@@ -6,21 +6,23 @@ These notes support the narrow Codex skills. Prefer the narrow skill body when i
 
 ```bash
 git add -A
-printf '%s\n' "feat: add auth middleware" | stackit create -F - --no-interactive
-stackit tree --no-interactive
+mkdir -p tmp
+printf '%s\n' "feat: add auth middleware" > tmp/stackit-message.txt
+stackit create -F tmp/stackit-message.txt --no-interactive
+stackit state --json | jq '.current_branch as $c | .stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen,pr}'
 ```
 
 With an explicit branch name:
 
 ```bash
-printf '%s\n' "feat: add auth middleware" | stackit create -F - my-branch --no-interactive
+stackit create -F tmp/stackit-message.txt my-branch --no-interactive
 ```
 
 If branch config requires a scope, retry with `--scope <value>`.
 
 ## Add Work To An Existing Branch
 
-- Follow-up commit: `git add -A` then `printf '%s\n' "<message>" | git commit -F -`
+- Follow-up commit: `git add -A` then `git commit -m "<message>"`
 - Amend latest commit: `stackit modify --no-interactive`
 - Distribute fixes through the stack: `stackit absorb --force --no-interactive`
 
@@ -29,7 +31,7 @@ Use another stacked branch when the work is a separate reviewable unit.
 ## Submit PRs
 
 ```bash
-stackit tree --no-interactive
+stackit state --json | jq '.current_branch as $c | .stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen,pr}'
 stackit submit --no-interactive
 stackit submit --stack --no-interactive
 stackit submit --draft --no-interactive

@@ -8,10 +8,12 @@ Fold a branch into its parent when it is too small to review separately.
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Inspect:
 
    ```bash
-   stackit state --json
+   stackit state --json | jq '.current_branch as $c | {current_branch:$c, branch:(.stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen})}'
    ```
 
 2. Check preconditions before folding (folding rewrites stack structure):
@@ -35,6 +37,8 @@ Fold a branch into its parent when it is too small to review separately.
    stackit fold --no-interactive
    ```
 
+   If sandbox metadata shows `.git` is read-only, run `stackit fold` with escalation on the first attempt.
+
 6. `stackit fold` automatically restacks descendants — only restack manually if it
    reports remaining work:
 
@@ -42,4 +46,4 @@ Fold a branch into its parent when it is too small to review separately.
    stackit restack --branch <parent-branch> --upstack --no-interactive
    ```
 
-7. Verify with `stackit tree --no-interactive`.
+7. Verify with the compact current-branch view. Use `stackit tree --no-interactive` only if ancestry is unclear.

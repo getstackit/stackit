@@ -8,10 +8,12 @@ Diagnose stack problems and apply the smallest safe repair.
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Inspect:
 
    ```bash
-   stackit state --json
+   stackit state --json | jq '{current_branch,trunk,working_tree,operation,branches:[.stack.branches[] | {name,parent,is_current,is_trunk,needs_restack,is_locked,is_frozen,children:(.children // [])}]}'
    stackit doctor --no-interactive
    ```
 
@@ -27,12 +29,14 @@ Diagnose stack problems and apply the smallest safe repair.
    stackit restack --all-stacks --continue-on-conflict --no-interactive               # all stacks
    ```
 
+   If sandbox metadata shows `.git` is read-only, run mutating Stackit repair commands with escalation on the first attempt.
+
 4. If the last Stackit operation clearly caused the problem and rollback is safest, ask before:
 
    ```bash
    stackit undo --no-interactive --yes
    ```
 
-5. Verify with `stackit tree --no-interactive` and the lightest relevant build/test command.
+5. Verify with the compact stack-wide health view and the lightest relevant build/test command.
 
 Do not delete branches or undo work without explicit user approval.

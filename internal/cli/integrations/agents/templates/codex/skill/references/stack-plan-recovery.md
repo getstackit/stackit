@@ -25,18 +25,20 @@ branches are gone, checking after each:
 
 ```bash
 stackit undo --no-interactive --yes
-stackit tree --no-interactive
+stackit state --json | jq '.current_branch as $c | .stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen,pr}'
 ```
 
 ## Continue From The Last Successful Branch
 
 ```bash
-stackit tree --no-interactive
+stackit state --json | jq '{current_branch,trunk,working_tree,operation,branches:[.stack.branches[] | {name,parent,is_current,is_trunk,needs_restack,is_locked,is_frozen,children:(.children // [])}]}'
 git checkout stack-plan-backup-<timestamp>
 git diff <last-created-branch>..stack-plan-backup-<timestamp> --stat
 git checkout <last-created-branch>
 git checkout stack-plan-backup-<timestamp> -- <files-for-next-branch>
-printf '%s\n' "<commit message>" | stackit create -F - <next-branch> --no-interactive
+mkdir -p tmp
+printf '%s\n' "<commit message>" > tmp/stackit-message.txt
+stackit create -F tmp/stackit-message.txt <next-branch> --no-interactive
 ```
 
 ## Clean Up

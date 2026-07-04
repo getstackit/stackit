@@ -16,10 +16,13 @@ Add login endpoint and token validation middleware.
 
 If the project does not document a format, write a clear subject line, a blank line, then a short explanation of why the change exists.
 
-Pipe messages through stdin:
+For Stackit mutations, write generated messages to a file and pass `-F` so the
+mutating shell command starts with `stackit`:
 
 ```bash
-printf '%s\n' "feat: add x" | stackit create -F - --no-interactive
+mkdir -p tmp
+printf '%s\n' "feat: add x" > tmp/stackit-message.txt
+stackit create -F tmp/stackit-message.txt --no-interactive
 ```
 
 ## PR Descriptions

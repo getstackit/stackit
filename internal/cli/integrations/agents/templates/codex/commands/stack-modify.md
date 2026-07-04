@@ -8,6 +8,8 @@ Amend the current stacked branch or add a follow-up commit to it.
 
 ## Workflow
 
+When a `jq` snippet is shown, use it only if `jq` is available. If not, run `stackit state --no-interactive` and summarize only relevant lines; use raw `stackit state --json` only as a last resort and do not paste the full JSON.
+
 1. Check for changes first:
 
    ```bash
@@ -29,23 +31,27 @@ Amend the current stacked branch or add a follow-up commit to it.
    stackit modify --no-interactive --no-edit
    ```
 
-   If the commit's intent changed and the message should be regenerated, pipe it
-   via stdin (keeps permission rules stable across messages):
+   If the commit's intent changed and the message should be regenerated, write
+   the message to a file and pass it with `-F`:
 
    ```bash
-   printf '%s\n' "<message>" | stackit modify --no-interactive -F -
+   mkdir -p tmp
+   printf '%s\n' "<message>" > tmp/stackit-message.txt
+   stackit modify --no-interactive -F tmp/stackit-message.txt
    ```
 
    If the user asked for a *new* commit on this branch rather than an amend:
 
    ```bash
-   printf '%s\n' "<message>" | stackit modify --no-interactive -c -F -
+   stackit modify --no-interactive -c -F tmp/stackit-message.txt
    ```
 
-4. Verify (run `stackit tree` only after the mutation):
+   If sandbox metadata shows `.git` is read-only, run `stackit modify` with escalation on the first attempt.
+
+4. Verify with the compact current-branch view:
 
    ```bash
-   stackit tree --no-interactive
+   stackit state --json | jq '.current_branch as $c | .stack.branches[] | select(.name == $c) | {name,parent,children,needs_restack,is_locked,is_frozen,pr}'
    ```
 
 `stackit modify` automatically restacks descendant branches — do not run a manual

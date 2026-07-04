@@ -81,14 +81,25 @@ type WorktreeMeta struct {
 	MainRepoDir  string    `json:"mainRepoDir"`    // Path to main repo (for detection)
 }
 
-func (r *runner) AddWorktree(ctx context.Context, path string, branch string, detach bool) error {
+// WorktreeDetachMode controls whether a new worktree checks out its branch
+// normally or at a detached HEAD (`git worktree add --detach`).
+type WorktreeDetachMode int
+
+const (
+	// WorktreeAttached checks out the branch normally (HEAD attached to it).
+	WorktreeAttached WorktreeDetachMode = iota
+	// WorktreeDetached adds the worktree at a detached HEAD.
+	WorktreeDetached
+)
+
+func (r *runner) AddWorktree(ctx context.Context, path string, branch string, detach WorktreeDetachMode) error {
 	return r.AddWorktreeWithOptions(ctx, path, branch, detach, false)
 }
 
 // AddWorktreeWithOptions adds a worktree with additional options
-func (r *runner) AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach bool, noCheckout bool) error {
+func (r *runner) AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach WorktreeDetachMode, noCheckout bool) error {
 	args := []string{"worktree", "add"}
-	if detach {
+	if detach == WorktreeDetached {
 		args = append(args, "--detach")
 	}
 	if noCheckout {

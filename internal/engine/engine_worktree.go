@@ -33,7 +33,7 @@ const (
 )
 
 // AddWorktree adds a new worktree
-func (e *engineImpl) AddWorktree(ctx context.Context, path string, branch string, detach bool) error {
+func (e *engineImpl) AddWorktree(ctx context.Context, path string, branch string, detach git.WorktreeDetachMode) error {
 	return e.git.AddWorktree(ctx, path, branch, detach)
 }
 
@@ -122,7 +122,7 @@ func (e *engineImpl) CreateTemporaryWorktreeWithOptions(ctx context.Context, bra
 	// 3. Only the brief `git worktree` commands are serialized
 	e.worktreeMu.Lock()
 	e.maybePruneTempWorktreesLocked(ctx, prune)
-	err = e.addWorktreeWithRetryLocked(ctx, worktreePath, branch, true, checkout == WorktreeCheckoutShallow)
+	err = e.addWorktreeWithRetryLocked(ctx, worktreePath, branch, git.WorktreeDetached, checkout == WorktreeCheckoutShallow)
 	e.worktreeMu.Unlock()
 
 	if err != nil {
@@ -164,7 +164,7 @@ func (e *engineImpl) maybePruneTempWorktreesLocked(ctx context.Context, prune Wo
 
 // addWorktreeWithRetryLocked attempts to add a worktree, pruning and retrying once on failure.
 // Caller must hold worktreeMu.
-func (e *engineImpl) addWorktreeWithRetryLocked(ctx context.Context, path string, branch string, detach bool, noCheckout bool) error {
+func (e *engineImpl) addWorktreeWithRetryLocked(ctx context.Context, path string, branch string, detach git.WorktreeDetachMode, noCheckout bool) error {
 	if err := e.git.AddWorktreeWithOptions(ctx, path, branch, detach, noCheckout); err == nil {
 		return nil
 	}

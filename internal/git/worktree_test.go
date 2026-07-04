@@ -30,7 +30,7 @@ func TestWorktree(t *testing.T) {
 		worktreePath = filepath.Join(worktreePath, "worktree")
 
 		// Add worktree
-		err = runner.AddWorktree(context.Background(), worktreePath, "test-branch", false)
+		err = runner.AddWorktree(context.Background(), worktreePath, "test-branch", git.WorktreeAttached)
 		require.NoError(t, err)
 
 		// Verify worktree exists
@@ -62,7 +62,7 @@ func TestWorktree(t *testing.T) {
 		worktreePath := filepath.Join(tmpDir, "worktree-detached")
 
 		// Add detached worktree
-		err := runner.AddWorktree(context.Background(), worktreePath, "", true)
+		err := runner.AddWorktree(context.Background(), worktreePath, "", git.WorktreeDetached)
 		require.NoError(t, err)
 
 		// Verify worktree exists

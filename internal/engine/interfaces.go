@@ -276,7 +276,7 @@ type CommitOperations interface {
 
 // WorktreeOperations handles worktree management
 type WorktreeOperations interface {
-	AddWorktree(ctx context.Context, path string, branch string, detach bool) error
+	AddWorktree(ctx context.Context, path string, branch string, detach git.WorktreeDetachMode) error
 	RemoveWorktree(ctx context.Context, path string) error
 	ForceRemoveWorktree(ctx context.Context, path string) error
 	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)

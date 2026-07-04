@@ -909,12 +909,12 @@ func (t *tracingRunner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string)
 
 // WorktreeOperations methods
 
-func (t *tracingRunner) AddWorktree(ctx context.Context, path string, branch string, detach bool) error {
+func (t *tracingRunner) AddWorktree(ctx context.Context, path string, branch string, detach WorktreeDetachMode) error {
 	// Don't trace - delegates to AddWorktreeWithOptions which is traced
 	return t.inner.AddWorktree(ctx, path, branch, detach)
 }
 
-func (t *tracingRunner) AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach bool, noCheckout bool) error {
+func (t *tracingRunner) AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach WorktreeDetachMode, noCheckout bool) error {
 	start := time.Now()
 	err := t.inner.AddWorktreeWithOptions(ctx, path, branch, detach, noCheckout)
 	t.trace("AddWorktreeWithOptions", time.Since(start), err == nil, err, slog.String("branch", branch))

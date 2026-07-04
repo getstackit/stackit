@@ -469,11 +469,11 @@ func (d *demoGitRunner) GetCommitTemplate(_ context.Context) (string, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) AddWorktree(_ context.Context, _, _ string, _ bool) error {
+func (d *demoGitRunner) AddWorktree(_ context.Context, _, _ string, _ git.WorktreeDetachMode) error {
 	return nil
 }
 
-func (d *demoGitRunner) AddWorktreeWithOptions(_ context.Context, _, _ string, _, _ bool) error {
+func (d *demoGitRunner) AddWorktreeWithOptions(_ context.Context, _, _ string, _ git.WorktreeDetachMode, _ bool) error {
 	return nil
 }
 

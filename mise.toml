@@ -1,5 +1,6 @@
 [settings]
 experimental = true
+quiet = true
 
 [env]
 STACKIT_NO_LOGGING = "1"                                    # Used for tests
@@ -13,6 +14,8 @@ STACKIT_NO_LOGGING = "1"                                    # Used for tests
 # (CI does this with a service container in .github/workflows/test.yml).
 STACKIT_DATABASE_URL = "postgres://stackit:stackit@localhost:5432/stackit?sslmode=disable"
 GOBIN = "{{ config_root }}/bin"
+GOCACHE = "{{ config_root }}/.gocache"
+GOLANGCI_LINT_CACHE = "{{ config_root }}/.golangci-cache"
 PROJECT_ROOT = "{{ config_root }}"
 _.path = ["{{ config_root }}/bin", "{{ env.HOME }}/go/bin"]
 # Local secrets / OAuth config for `mise run dev`. .env is gitignored; see
@@ -97,8 +100,16 @@ run = """
 description = "Format code"
 run = "goimports -w ."
 
+[tasks."fmt:check"]
+description = "Check Go formatting without modifying files"
+run = "scripts/check-quiet.sh fmt"
+
 [tasks.lint]
-description = "Run linter"
+description = "Run linter with compact, actionable output"
+run = "scripts/check-quiet.sh lint"
+
+[tasks."lint:verbose"]
+description = "Run linter with full output"
 run = "golangci-lint run --allow-parallel-runners"
 
 [tasks."lint:fix"]
@@ -106,18 +117,12 @@ description = "Run linter and fix issues"
 run = "golangci-lint run --allow-parallel-runners --fix"
 
 [tasks.test]
-description = "Run all tests (with caching for faster repeated runs)"
-run = """
-  PACKAGES=$(bash scripts/go-test-packages.sh all)
-  gotestsum --format pkgname-and-test-fails -- $PACKAGES
-"""
+description = "Run all tests with compact, actionable output"
+run = "scripts/check-quiet.sh test all"
 
 [tasks."test:fresh"]
-description = "Run all tests without caching"
-run = """
-  PACKAGES=$(bash scripts/go-test-packages.sh all)
-  gotestsum --format pkgname-and-test-fails -- $PACKAGES -count=1
-"""
+description = "Run all tests without caching with compact, actionable output"
+run = "scripts/check-quiet.sh test:fresh"
 
 [tasks."test:verbose"]
 description = "Run tests with verbose output"
@@ -135,11 +140,8 @@ run = """
 """
 
 [tasks."test:race"]
-description = "Run tests with race detection"
-run = """
-  PACKAGES=$(bash scripts/go-test-packages.sh all)
-  gotestsum --format pkgname-and-test-fails -- -race $PACKAGES
-"""
+description = "Run tests with race detection and compact, actionable output"
+run = "scripts/check-quiet.sh test:race"
 
 [tasks."test:pkg"]
 description = "Run tests for a specific package"
@@ -149,32 +151,20 @@ arg "package" help="Package to test (e.g. ./testhelpers)"
 run = "gotestsum --format standard-verbose -- {{arg(name='package')}}"
 
 [tasks."test:unit"]
-description = "Run low-IO Go unit tests only"
-run = """
-  PACKAGES=$(bash scripts/go-test-packages.sh unit)
-  gotestsum --format pkgname-and-test-fails -- $PACKAGES
-"""
+description = "Run low-IO Go unit tests only with compact, actionable output"
+run = "scripts/check-quiet.sh test unit"
 
 [tasks."test:fast"]
-description = "Run fast Go tests without git-scenario or integration packages"
-run = """
-  PACKAGES=$(bash scripts/go-test-packages.sh fast)
-  gotestsum --format pkgname-and-test-fails -- $PACKAGES
-"""
+description = "Run fast Go tests without git-scenario or integration packages with compact, actionable output"
+run = "scripts/check-quiet.sh test fast"
 
 [tasks."test:git"]
-description = "Run git-backed scenario tests outside the integration tree"
-run = """
-  PACKAGES=$(bash scripts/go-test-packages.sh git)
-  gotestsum --format pkgname-and-test-fails -- $PACKAGES
-"""
+description = "Run git-backed scenario tests outside the integration tree with compact, actionable output"
+run = "scripts/check-quiet.sh test git"
 
 [tasks."test:integration"]
-description = "Run integration tests only"
-run = """
-  PACKAGES=$(bash scripts/go-test-packages.sh integration)
-  gotestsum --format pkgname-and-test-fails -- $PACKAGES
-"""
+description = "Run integration tests only with compact, actionable output"
+run = "scripts/check-quiet.sh test integration"
 
 [tasks.clean]
 description = "Clean built binaries, shims, and test artifacts"
@@ -187,12 +177,20 @@ run = """
 """
 
 [tasks.check]
-description = "Run all checks (Go format, lint, all Go tests + web tests, typecheck, build)"
-depends = ["fmt", "lint", "test", "check:web"]
+description = "Run all checks with compact, actionable output"
+run = "scripts/check-quiet.sh all"
+
+[tasks."check:verbose"]
+description = "Run all checks with full output"
+depends = ["fmt:check", "lint:verbose", "test:verbose", "check:web:verbose"]
 
 [tasks."check:go"]
-description = "Run all Go checks (format, lint, all Go tests)"
-depends = ["fmt", "lint", "test"]
+description = "Run all Go checks with compact, actionable output"
+run = "scripts/check-quiet.sh go"
+
+[tasks."check:go:verbose"]
+description = "Run all Go checks with full output"
+depends = ["fmt:check", "lint:verbose", "test:verbose"]
 
 [tasks."web:install"]
 description = "Install frontend workspace dependencies"
@@ -344,6 +342,10 @@ run = """
 
 [tasks."web:build"]
 description = "Build the web app"
+run = "scripts/check-quiet.sh web:build"
+
+[tasks."web:build:verbose"]
+description = "Build the web app with full output"
 run = "pnpm --filter @stackit/web build"
 
 [tasks."web:sync-static"]
@@ -352,11 +354,19 @@ depends = ["web:build"]
 run = "./scripts/sync-web-static.sh"
 
 [tasks."web:test"]
-description = "Run frontend tests"
+description = "Run frontend tests with compact, actionable output"
+run = "scripts/check-quiet.sh web:test"
+
+[tasks."web:test:verbose"]
+description = "Run frontend tests with full output"
 run = "pnpm --filter @stackit/web test"
 
 [tasks."check:web"]
-description = "Run frontend tests, type checks, and build"
+description = "Run frontend tests, type checks, and build with compact, actionable output"
+run = "scripts/check-quiet.sh web:check"
+
+[tasks."check:web:verbose"]
+description = "Run frontend tests, type checks, and build with full output"
 run = """
   pnpm --filter @stackit/web test
   pnpm --filter @stackit/web typecheck

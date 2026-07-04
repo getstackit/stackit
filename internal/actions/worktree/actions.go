@@ -82,7 +82,7 @@ func restoreWorktreePath(ctx *app.Context, snapshot *worktreeSnapshot) error {
 	if snapshot.CheckoutBranch == "" {
 		return nil
 	}
-	return ctx.Engine.AddWorktree(ctx.Context, snapshot.Info.Path, snapshot.CheckoutBranch, false)
+	return ctx.Engine.AddWorktree(ctx.Context, snapshot.Info.Path, snapshot.CheckoutBranch, git.WorktreeAttached)
 }
 
 func restoreAnchorBranch(ctx *app.Context, snapshot *worktreeSnapshot) error {
@@ -457,7 +457,7 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 		return nil, fmt.Errorf("worktree path %s already exists; remove it first or choose a different name", worktreePath)
 	}
 
-	if err := eng.AddWorktree(ctx.Context, worktreePath, checkoutBranch, false); err != nil {
+	if err := eng.AddWorktree(ctx.Context, worktreePath, checkoutBranch, git.WorktreeAttached); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("failed to create worktree: %w", err)
 	}

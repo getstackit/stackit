@@ -201,8 +201,8 @@ type PatchOperations interface {
 
 // WorktreeOperations handles worktree management.
 type WorktreeOperations interface {
-	AddWorktree(ctx context.Context, path string, branch string, detach bool) error
-	AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach bool, noCheckout bool) error
+	AddWorktree(ctx context.Context, path string, branch string, detach WorktreeDetachMode) error
+	AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach WorktreeDetachMode, noCheckout bool) error
 	RemoveWorktree(ctx context.Context, path string) error
 	ForceRemoveWorktree(ctx context.Context, path string) error
 	ListWorktrees(ctx context.Context) (WorktreeList, error)

@@ -257,6 +257,49 @@ func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
 	require.NoError(t, err, "runner should still resolve old commits")
 }
 
+func TestPullBranch_FetchFailurePropagatesError(t *testing.T) {
+	// Regression: if the fetch fails (e.g. remote unreachable), PullBranch must
+	// return the error instead of silently falling through to compare local HEAD
+	// against a stale remote-tracking ref, which could wrongly report
+	// PullUnneeded even though the remote was never actually checked.
+
+	// 1. Setup a "remote" repository and clone it locally.
+	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
+	require.NoError(t, err)
+	err = remoteScene.Repo.PushBranch("upstream", "main")
+	require.NoError(t, err)
+
+	localDir, err := os.MkdirTemp("", "stackit-test-local-*")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(localDir) })
+
+	cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	runner := git.NewRunnerWithPath(localDir, nil)
+	err = runner.InitDefaultRepo()
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	trackedBefore, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/main")
+	require.NoError(t, err)
+
+	// 2. Break the remote so the fetch fails.
+	require.NoError(t, os.RemoveAll(remotePath))
+
+	// 3. PullBranch must surface the fetch error rather than reporting success.
+	result, err := runner.PullBranch(ctx, "origin", "main")
+	require.Error(t, err, "PullBranch should surface a fetch failure instead of swallowing it")
+	require.Equal(t, git.PullConflict, result)
+
+	// 4. The stale remote-tracking ref must be untouched by the failed fetch.
+	trackedAfter, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/main")
+	require.NoError(t, err)
+	require.Equal(t, trackedBefore, trackedAfter)
+}
+
 func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 	// This test reproduces a critical bug where pulling trunk in a worktree
 	// corrupts the main workspace's index/working tree.

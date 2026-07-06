@@ -142,10 +142,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		branchObjects = branchObjects.Append(eng.GetBranch(name))
 	}
 	sortedForValidation := eng.SortBranchesTopologically(branchObjects)
-	sortedNames := sortedForValidation.Names()
 
 	// Build rebase specs for all branches in topological order
-	allRebaseSpecs := buildRebaseSpecsForAll(eng, plan, sortedNames)
+	allRebaseSpecs := buildRebaseSpecsForAll(eng, plan, sortedForValidation)
 
 	// Report progress for validation
 	handler.OnValidationProgress(0, len(allRebaseSpecs), "validating...")
@@ -308,16 +307,29 @@ func collectAllBranchesToRestack(eng engine.Engine, graph *engine.StackGraph, mo
 
 // buildRebaseSpecsForAll builds rebase specs for all branches that will be affected,
 // accounting for cascading parent changes when ancestors are moved.
-func buildRebaseSpecsForAll(eng engine.Engine, plan *flattenPlan, branchNames []string) []engine.RebaseSpec {
+func buildRebaseSpecsForAll(eng engine.Engine, plan *flattenPlan, branches engine.Branches) []engine.RebaseSpec {
 	// Build a map of existing rebase specs from the plan
 	existingSpecs := make(map[string]engine.RebaseSpec)
 	for _, spec := range plan.RebaseSpecs {
 		existingSpecs[spec.Branch] = spec
 	}
 
-	specs := make([]engine.RebaseSpec, 0, len(branchNames))
+	// Resolve divergence points and parent revisions for every branch up front
+	// in batched reads, instead of one git process pair per branch below.
+	divergence := eng.BatchDivergencePoints(branches)
+	parentNames := make([]string, 0, len(branches))
+	for _, b := range branches {
+		if parent := b.GetParent(); parent != nil {
+			parentNames = append(parentNames, parent.GetName())
+		}
+	}
+	parentRevisions, _ := eng.GetRevisions(parentNames)
 
-	for _, branchName := range branchNames {
+	specs := make([]engine.RebaseSpec, 0, len(branches))
+
+	for _, branch := range branches {
+		branchName := branch.GetName()
+
 		// If we already have a spec from the plan, use it
 		if spec, ok := existingSpecs[branchName]; ok {
 			specs = append(specs, spec)
@@ -325,22 +337,21 @@ func buildRebaseSpecsForAll(eng engine.Engine, plan *flattenPlan, branchNames []
 		}
 
 		// This is a descendant branch - build its spec based on its parent's new position
-		branch := eng.GetBranch(branchName)
 		parent := branch.GetParent()
 		if parent == nil {
 			continue
 		}
 
 		// Get the old upstream (divergence point)
-		oldUpstream, err := eng.GetDivergencePoint(branchName)
-		if err != nil {
+		oldUpstream, ok := divergence[branchName]
+		if !ok {
 			continue
 		}
 
 		// The new parent revision is the tip of the parent branch
 		// (which will be its rebased position after the flatten)
-		newParentRev, err := parent.GetRevision()
-		if err != nil {
+		newParentRev, ok := parentRevisions[parent.GetName()]
+		if !ok || newParentRev == "" {
 			continue
 		}
 

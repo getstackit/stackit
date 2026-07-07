@@ -750,7 +750,7 @@ func PromptBranchCheckout(branches []engine.Branch, eng engine.BranchReader) (st
 	stats := eng.BatchBranchStats(engine.Branches(branches))
 	annotations := make(map[string]tree.BranchAnnotation)
 	for _, branch := range branches {
-		annotations[branch.GetName()] = GetBranchAnnotation(eng, branch, stats[branch.GetName()], AnnotationOptions{})
+		annotations[branch.GetName()] = GetBranchAnnotation(eng, branch, stats[branch.GetName()], AnnotationOptions{SkipCommitMessages: true})
 	}
 	renderer.SetAnnotations(annotations)
 

@@ -85,6 +85,21 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.Equal(t, newRemoteSha, localSha, "Local branch should match remote after pull")
 }
 
+func TestPullBranch_FetchFailureReturnsError(t *testing.T) {
+	// Regression: a failed fetch (e.g. network/auth error) must surface as an
+	// error instead of silently falling through to UpdateBranchFromRemote,
+	// which only reads the (now stale) remote-tracking ref and can report
+	// PullUnneeded even though the branch was never actually synced.
+	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+	err := runner.InitDefaultRepo()
+	require.NoError(t, err)
+
+	result, err := runner.PullBranch(context.Background(), "nonexistent-remote", "main")
+	require.Error(t, err)
+	require.Equal(t, git.PullConflict, result)
+}
+
 func TestBranchFetchRefspec_ForcesUpdate(t *testing.T) {
 	// The refspec must carry a leading '+' so that force-pushed (non-fast-forward)
 	// remote branches still update the remote-tracking ref. A missing '+' is the

@@ -521,7 +521,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 	branch := nav.GetBranch(submissionInfo.BranchName)
 	// Use bodyToCreate (the body that was actually sent) instead of submissionInfo.Metadata.Body
 	// This ensures local state matches what's on GitHub
-	_ = pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
+	if err := pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
 		&prNumber,
 		submissionInfo.Metadata.Title,
 		bodyToCreate,
@@ -529,7 +529,9 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 		submissionInfo.Base,
 		prURL,
 		submissionInfo.Metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason()).WithBaseSHA(submissionInfo.BaseSHA))
+	).WithLockReason(branch.GetLockReason()).WithBaseSHA(submissionInfo.BaseSHA)); err != nil {
+		ctx.Output.Debug("Failed to store local PR info for %s: %v", submissionInfo.BranchName, err)
+	}
 
 	return prURL, nil
 }
@@ -660,7 +662,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		}
 	}
 
-	_ = pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
+	if err := pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
 		submissionInfo.PRNumber,
 		submissionInfo.Metadata.Title,
 		submissionInfo.Metadata.Body,
@@ -668,7 +670,9 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		baseToStore,
 		prURL,
 		submissionInfo.Metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason()).WithBaseSHA(baseSHAToStore))
+	).WithLockReason(branch.GetLockReason()).WithBaseSHA(baseSHAToStore)); err != nil {
+		ctx.Output.Debug("Failed to store local PR info for %s: %v", submissionInfo.BranchName, err)
+	}
 
 	return prURL, nil
 }

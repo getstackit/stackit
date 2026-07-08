@@ -31,7 +31,9 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 	// Fetch with explicit refspec to update the remote-tracking branch.
 	// This ensures refs/remotes/<remote>/<branch> is actually updated.
 	refspec := BranchFetchRefspec(remote, branchName)
-	_ = r.fetchRemoteRefSpecs(ctx, remote, []string{refspec})
+	if err := r.fetchRemoteRefSpecs(ctx, remote, []string{refspec}); err != nil {
+		return PullConflict, fmt.Errorf("failed to fetch %s from %s: %w", branchName, remote, err)
+	}
 
 	return r.UpdateBranchFromRemote(ctx, remote, branchName)
 }

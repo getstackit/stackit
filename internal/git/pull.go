@@ -28,6 +28,14 @@ func BranchFetchRefspec(remote, branch string) string {
 }
 
 func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (PullResult, error) {
+	// Worktree sessions and similar ephemeral setups intentionally have no
+	// remote configured; UpdateBranchFromRemote already tolerates that via
+	// GetRemoteSha's error handling. Skip the fetch attempt entirely in that
+	// case rather than surfacing "remote not configured" as a pull failure.
+	if !r.remoteConfigured(ctx, remote) {
+		return r.UpdateBranchFromRemote(ctx, remote, branchName)
+	}
+
 	// Fetch with explicit refspec to update the remote-tracking branch.
 	// This ensures refs/remotes/<remote>/<branch> is actually updated.
 	refspec := BranchFetchRefspec(remote, branchName)

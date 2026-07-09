@@ -85,6 +85,39 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.Equal(t, newRemoteSha, localSha, "Local branch should match remote after pull")
 }
 
+func TestPullBranch_FetchFailureReturnsError(t *testing.T) {
+	// Regression: a failed fetch against a remote that IS configured (e.g. a
+	// network/auth error, or here an unreachable URL) must surface as an
+	// error instead of silently falling through to UpdateBranchFromRemote,
+	// which only reads the (now stale) remote-tracking ref and can report
+	// PullUnneeded even though the branch was never actually synced.
+	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+	err := runner.InitDefaultRepo()
+	require.NoError(t, err)
+
+	err = scene.Repo.RunGitCommand("remote", "add", "origin", "https://127.0.0.1:1/nonexistent/repo.git")
+	require.NoError(t, err)
+
+	result, err := runner.PullBranch(context.Background(), "origin", "main")
+	require.Error(t, err)
+	require.Equal(t, git.PullConflict, result)
+}
+
+func TestPullBranch_NoRemoteConfiguredReturnsUnneeded(t *testing.T) {
+	// Ephemeral setups (e.g. worktree sessions created without a remote)
+	// must NOT have "no remote configured" treated as a pull failure -
+	// UpdateBranchFromRemote already tolerates this via GetRemoteSha.
+	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+	err := runner.InitDefaultRepo()
+	require.NoError(t, err)
+
+	result, err := runner.PullBranch(context.Background(), "nonexistent-remote", "main")
+	require.NoError(t, err)
+	require.Equal(t, git.PullUnneeded, result)
+}
+
 func TestBranchFetchRefspec_ForcesUpdate(t *testing.T) {
 	// The refspec must carry a leading '+' so that force-pushed (non-fast-forward)
 	// remote branches still update the remote-tracking ref. A missing '+' is the

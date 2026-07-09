@@ -39,6 +39,15 @@ func (r *runner) getRemote() string {
 	return DefaultRemote
 }
 
+// remoteConfigured reports whether remote has a URL configured. A remote
+// name with no URL (e.g. an ephemeral worktree session created without one)
+// makes `git fetch <remote>` fail with "does not appear to be a git
+// repository" rather than a genuine network/auth error.
+func (r *runner) remoteConfigured(ctx context.Context, remote string) bool {
+	_, err := r.RunGitCommandWithContext(ctx, "remote", "get-url", remote)
+	return err == nil
+}
+
 // fetchRemoteShas lists the branch refs on a remote without modifying any
 // local refs. `git ls-remote --heads` returns only refs/heads/*.
 func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {

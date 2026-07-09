@@ -133,10 +133,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Children: rebase onto grandparent (source's old parent)
+	childDivergencePoints := eng.BatchDivergencePoints(children)
 	for _, child := range children {
 		// Get the old upstream (divergence point)
-		childOldUpstream, divErr := eng.GetDivergencePoint(child.GetName())
-		if divErr != nil {
+		childOldUpstream, ok := childDivergencePoints[child.GetName()]
+		if !ok || childOldUpstream == "" {
 			// Fallback to source revision if unavailable
 			childOldUpstream = sourceRev
 		}

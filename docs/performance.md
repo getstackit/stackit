@@ -41,14 +41,14 @@ run in parallel rather than blocking the fetch.
 
 ## Diagnosing a slow command
 
-stackit traces every git operation with a microsecond duration. Enable debug-level logging
+stackit traces every git/gh subprocess with a microsecond duration. Enable debug-level logging
 to a file, run the slow command, then read the trace:
 
 ```bash
 STACKIT_LOG_LEVEL=debug STACKIT_LOG_FILE=/tmp/st-trace.log stackit get <branch>
 ```
 
-Each git operation is logged as an `[st-trace]` line with `op=` (operation) and `dur_us=`
+Each subprocess is logged as an `[st-trace]` line with `op=` (for example, `git.fetch`) and `dur_us=`
 (microseconds). To see which operation dominates:
 
 ```bash
@@ -67,7 +67,7 @@ print(f"git ops: {len(rows)}, summed git time: {sum(d for d,_ in rows)/1e6:.2f}s
 
 Interpreting the result:
 
-- **`FetchRefSpecs` dominates** → the cost is the `git fetch` / SSH handshake. Enable SSH
+- **`git.fetch` dominates** → the cost is the `git fetch` / SSH handshake. Enable SSH
   connection reuse (above).
 - **A large gap between the summed git time and the wall-clock time** → the remaining time
   is GitHub API latency or shell `precmd` hooks (e.g. `mise`, `direnv`) firing around the

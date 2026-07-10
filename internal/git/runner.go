@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +29,10 @@ type DebugLogger interface {
 	Info(msg string, args ...any)
 }
 
+type traceLogger interface {
+	Trace(op string, durationMicros int64, success bool, err error, attrs ...slog.Attr)
+}
+
 // DefaultCommandTimeout is the default timeout for git commands
 const DefaultCommandTimeout = 5 * time.Minute
 
@@ -42,6 +47,20 @@ const CommandWaitDelay = 10 * time.Second
 
 // ErrStaleRemoteInfo indicates that a push failed because the remote has changed
 var ErrStaleRemoteInfo = errors.New("stale info")
+
+func traceOp(base string, args []string) string {
+	if len(args) == 0 {
+		return base
+	}
+	return base + "." + args[0]
+}
+
+func traceCmd(base string, args []string) string {
+	if len(args) == 0 {
+		return base
+	}
+	return base + " " + strings.Join(args, " ")
+}
 
 func (r *runner) UpdateRefWithLog(ctx context.Context, refName, sha, message string) error {
 	_, err := r.RunGitCommandWithContext(ctx, "update-ref", "-m", message, refName, sha)
@@ -155,6 +174,10 @@ func (r *runner) RunGitCommandRawWithContext(ctx context.Context, args ...string
 }
 
 func (r *runner) runGitInternal(ctx context.Context, input string, env []string, trim bool, args ...string) (string, error) {
+	start := time.Now()
+	op := traceOp("git", args)
+	cmdAttr := slog.String("cmd", traceCmd("git", args))
+
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -190,13 +213,16 @@ func (r *runner) runGitInternal(ctx context.Context, input string, env []string,
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", NewCommandError("git", args, stdout.String(), stderr.String(), err)
+		cmdErr := NewCommandError("git", args, stdout.String(), stderr.String(), err)
+		r.traceLog(op, time.Since(start), false, cmdErr, cmdAttr)
+		return "", cmdErr
 	}
 
 	result := stdout.String()
 	if trim {
 		result = strings.TrimSpace(result)
 	}
+	r.traceLog(op, time.Since(start), true, nil, cmdAttr)
 	return result, nil
 }
 
@@ -204,6 +230,10 @@ func (r *runner) runGitInternal(ctx context.Context, input string, env []string,
 // while also capturing it for error handling. This is useful for commands like commit
 // where hook output should be visible to the user.
 func (r *runner) runGitStreaming(ctx context.Context, args ...string) (string, error) {
+	start := time.Now()
+	op := traceOp("git", args)
+	cmdAttr := slog.String("cmd", traceCmd("git", args))
+
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -235,13 +265,20 @@ func (r *runner) runGitStreaming(ctx context.Context, args ...string) (string, e
 	}
 
 	if err := cmd.Run(); err != nil {
-		return "", NewCommandError("git", args, stdoutBuf.String(), stderrBuf.String(), err)
+		cmdErr := NewCommandError("git", args, stdoutBuf.String(), stderrBuf.String(), err)
+		r.traceLog(op, time.Since(start), false, cmdErr, cmdAttr)
+		return "", cmdErr
 	}
 
+	r.traceLog(op, time.Since(start), true, nil, cmdAttr)
 	return strings.TrimSpace(stdoutBuf.String()), nil
 }
 
 func (r *runner) RunGHCommandWithContext(ctx context.Context, args ...string) (string, error) {
+	start := time.Now()
+	op := traceOp("gh", args)
+	cmdAttr := slog.String("cmd", traceCmd("gh", args))
+
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -277,10 +314,15 @@ func (r *runner) RunGHCommandWithContext(ctx context.Context, args ...string) (s
 	err := cmd.Run()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", NewCommandError("gh", args, stdout.String(), stderr.String(), ctx.Err())
+			cmdErr := NewCommandError("gh", args, stdout.String(), stderr.String(), ctx.Err())
+			r.traceLog(op, time.Since(start), false, cmdErr, cmdAttr)
+			return "", cmdErr
 		}
-		return "", NewCommandError("gh", args, stdout.String(), stderr.String(), err)
+		cmdErr := NewCommandError("gh", args, stdout.String(), stderr.String(), err)
+		r.traceLog(op, time.Since(start), false, cmdErr, cmdAttr)
+		return "", cmdErr
 	}
+	r.traceLog(op, time.Since(start), true, nil, cmdAttr)
 	return strings.TrimSpace(stdout.String()), nil
 }
 
@@ -288,6 +330,10 @@ func (r *runner) RunGitCommandInteractive(args ...string) error {
 	if !utils.IsInteractive() {
 		return fmt.Errorf("interactive git command '%v' not allowed in non-interactive mode", args)
 	}
+
+	start := time.Now()
+	op := traceOp("git", args)
+	cmdAttr := slog.String("cmd", traceCmd("git", args))
 
 	r.debugLog("git %s (interactive)", strings.Join(args, " "))
 
@@ -299,7 +345,9 @@ func (r *runner) RunGitCommandInteractive(args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	err := cmd.Run()
+	r.traceLog(op, time.Since(start), err == nil, err, cmdAttr)
+	return err
 }
 
 // StagingOptions defines which changes to stage
@@ -450,6 +498,15 @@ func (r *runner) debugLog(format string, args ...any) {
 	r.loggerMu.RUnlock()
 	if logger != nil {
 		logger.Debug(format, args...)
+	}
+}
+
+func (r *runner) traceLog(op string, duration time.Duration, success bool, err error, attrs ...slog.Attr) {
+	r.loggerMu.RLock()
+	logger := r.logger
+	r.loggerMu.RUnlock()
+	if tracer, ok := logger.(traceLogger); ok {
+		tracer.Trace(op, duration.Microseconds(), success, err, attrs...)
 	}
 }
 

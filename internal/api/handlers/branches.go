@@ -63,8 +63,12 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), names)
 	}
 
-	// One remote listing for all branches instead of one per branch.
-	remoteStatuses := entry.Engine.ReadBranchRemoteStatuses(r.Context(), engine.BranchesOf(branches...))
+	// One remote listing, one stats pass, and one commits pass for all
+	// branches instead of one of each per branch.
+	branchSet := engine.BranchesOf(branches...)
+	remoteStatuses := entry.Engine.ReadBranchRemoteStatuses(r.Context(), branchSet)
+	stats := entry.Engine.BatchBranchStats(branchSet)
+	commitsByBranch := entry.Engine.BatchCommits(branchSet, engine.CommitFormatReadableWithDate)
 
 	responses := make([]httpcontract.BranchResponse, 0, len(branches))
 	for _, branch := range branches {
@@ -76,7 +80,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		if checksMap != nil {
 			checks = checksMap[branch.GetName()]
 		}
-		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatuses.ForBranch(branch)))
+		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatuses.ForBranch(branch), stats[branch.GetName()], commitsByBranch[branch.GetName()]))
 	}
 
 	writeJSON(w, responses)
@@ -104,7 +108,10 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entr
 		}
 	}
 
-	remoteStatus := entry.Engine.ReadBranchRemoteStatuses(r.Context(), engine.BranchesOf(branch)).ForBranch(branch)
-	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatus)
+	branchSet := engine.BranchesOf(branch)
+	remoteStatus := entry.Engine.ReadBranchRemoteStatuses(r.Context(), branchSet).ForBranch(branch)
+	stat := entry.Engine.BatchBranchStats(branchSet)[branchName]
+	commits := entry.Engine.BatchCommits(branchSet, engine.CommitFormatReadableWithDate)[branchName]
+	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatus, stat, commits)
 	writeJSON(w, resp)
 }

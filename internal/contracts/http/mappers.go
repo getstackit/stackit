@@ -12,10 +12,11 @@ import (
 )
 
 // MapBranch converts an engine Branch and its StackNode into an API BranchResponse.
-// remoteStatus should come from a single ReadBranchRemoteStatuses call covering
-// all branches being mapped in the current request, not a per-branch call, since
-// each ReadBranchRemoteStatuses call lists the remote's refs.
-func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus, remoteStatus engine.BranchRemoteStatus) BranchResponse {
+// remoteStatus, stat, and commits should each come from a single batch call
+// covering all branches being mapped in the current request
+// (ReadBranchRemoteStatuses, BatchBranchStats, BatchCommits), not per-branch
+// calls — per-branch reads spawn a git process per field per branch.
+func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus, remoteStatus engine.BranchRemoteStatus, stat engine.BranchStat, commits []string) BranchResponse {
 	resp := BranchResponse{
 		Name:         branch.GetName(),
 		Depth:        node.Depth,
@@ -38,9 +39,10 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 		resp.Scope = scope.String()
 	}
 
-	if rev, err := branch.GetRevision(); err == nil {
-		resp.Revision = shortSHA(rev)
-	}
+	resp.Revision = stat.ShortSHA
+	resp.CommitCount = stat.CommitCount
+	resp.LinesAdded = stat.LinesAdded
+	resp.LinesDeleted = stat.LinesDeleted
 
 	if date, err := branch.GetCommitDate(); err == nil {
 		resp.CommitDate = date.Format(time.RFC3339)
@@ -50,17 +52,8 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 		resp.CommitAuthor = author
 	}
 
-	if count, err := branch.GetCommitCount(); err == nil {
-		resp.CommitCount = count
-	}
-
-	if added, deleted, err := branch.GetDiffStats(); err == nil {
-		resp.LinesAdded = added
-		resp.LinesDeleted = deleted
-	}
-
 	// Map commits
-	if commits, err := eng.GetAllCommits(branch, engine.CommitFormatReadableWithDate); err == nil {
+	if len(commits) > 0 {
 		resp.Commits = mapCommitsWithDate(commits)
 	}
 
@@ -161,8 +154,11 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 		stackBranches = append(stackBranches, node.Branch)
 	}
 
-	// One remote listing for the whole stack instead of one per branch.
+	// One remote listing, one stats pass, and one commits pass for the whole
+	// stack instead of one of each per branch.
 	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx, stackBranches)
+	stats := eng.BatchBranchStats(stackBranches)
+	commitsByBranch := eng.BatchCommits(stackBranches, engine.CommitFormatReadableWithDate)
 
 	branches := make([]BranchResponse, 0, len(nodes))
 	for _, node := range nodes {
@@ -171,7 +167,7 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 		if checksMap != nil {
 			checks = checksMap[name]
 		}
-		br := MapBranch(eng, node.Branch, node, checks, remoteStatuses.ForBranch(node.Branch))
+		br := MapBranch(eng, node.Branch, node, checks, remoteStatuses.ForBranch(node.Branch), stats[name], commitsByBranch[name])
 		if isAnchor {
 			// Anchor's direct children become display roots
 			if br.Parent == anchorName {

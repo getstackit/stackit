@@ -114,6 +114,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)
 	needsRebuild := false
+	squashCache := git.NewSquashMergeCache()
 
 	for i, branch := range branches {
 		branchName := branch.GetName()
@@ -122,7 +123,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 		if validation != nil {
 			result, err = e.restackBranchWithValidatedRebase(ctx, branch, validation, plan, allMeta, allRevisions, worktrees, metaRefSHAs)
 		} else {
-			result, err = e.restackBranch(ctx, branch, allMeta, allRevisions, worktrees, metaRefSHAs)
+			result, err = e.restackBranch(ctx, branch, allMeta, allRevisions, worktrees, metaRefSHAs, squashCache)
 		}
 		results[branchName] = result
 

@@ -96,7 +96,7 @@ type DiffOperations interface {
 	GetMergeBaseByRef(ctx context.Context, ref1, ref2 string) (string, error)
 	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
 	IsMerged(ctx context.Context, branchName, target string) (bool, error)
-	IsSquashMerged(ctx context.Context, branchName, target string) (bool, error)
+	IsSquashMerged(ctx context.Context, branchName, target string, cache *SquashMergeCache) (bool, error)
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
 	IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error)
 	GetChangedFiles(ctx context.Context, base, head string) ([]string, error)

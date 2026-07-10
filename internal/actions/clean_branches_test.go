@@ -8,9 +8,32 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+type countingDeletionEngine struct {
+	engine.Engine
+	listWorktreesCalls        int
+	deleteBranchesCalls       int
+	deleteRemoteMetadataCalls int
+}
+
+func (e *countingDeletionEngine) ListWorktrees(ctx context.Context) (git.WorktreeList, error) {
+	e.listWorktreesCalls++
+	return e.Engine.ListWorktrees(ctx)
+}
+
+func (e *countingDeletionEngine) DeleteBranches(ctx context.Context, branches engine.Branches) ([]string, error) {
+	e.deleteBranchesCalls++
+	return e.Engine.DeleteBranches(ctx, branches)
+}
+
+func (e *countingDeletionEngine) DeleteRemoteMetadataForBranches(ctx context.Context, branchNames []string) error {
+	e.deleteRemoteMetadataCalls++
+	return e.Engine.DeleteRemoteMetadataForBranches(ctx, branchNames)
+}
 
 func TestCleanBranches(t *testing.T) {
 	t.Parallel()
@@ -99,6 +122,8 @@ func TestCleanBranches(t *testing.T) {
 			WithStack(map[string]string{
 				"branch1": "main",
 			})
+		countingEngine := &countingDeletionEngine{Engine: s.Engine}
+		s.Context.Engine = countingEngine
 
 		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: false,
@@ -108,6 +133,9 @@ func TestCleanBranches(t *testing.T) {
 		// Branch should still exist
 		require.True(t, s.Engine.GetBranch("branch1").IsTracked())
 		require.Empty(t, result.BranchesWithNewParents)
+		require.Zero(t, countingEngine.listWorktreesCalls)
+		require.Zero(t, countingEngine.deleteBranchesCalls)
+		require.Zero(t, countingEngine.deleteRemoteMetadataCalls)
 	})
 
 	t.Run("deletes locked branch when merged", func(t *testing.T) {
@@ -202,6 +230,34 @@ func TestCleanBranches(t *testing.T) {
 		// branch2 should be deleted even though we didn't "visit" it via a deleted branch1
 		require.False(t, s.Engine.GetBranch("branch2").IsTracked())
 		require.True(t, s.Engine.GetBranch("branch1").IsTracked())
+	})
+
+	t.Run("deletes a fully merged stack in one cleanup pass", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+				"branch2": "branch1",
+				"branch3": "branch2",
+			})
+
+		for number, name := range []string{"branch1", "branch2", "branch3"} {
+			err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name), testhelpers.NewTestPrInfoMerged(number+1, "main"))
+			require.NoError(t, err)
+		}
+		countingEngine := &countingDeletionEngine{Engine: s.Engine}
+		s.Context.Engine = countingEngine
+
+		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{Force: true})
+		require.NoError(t, err)
+		require.Len(t, result.DeletedBranches, 3)
+		require.Equal(t, 1, countingEngine.listWorktreesCalls)
+		require.Equal(t, 1, countingEngine.deleteBranchesCalls)
+		require.Equal(t, 1, countingEngine.deleteRemoteMetadataCalls)
+		for _, name := range []string{"branch1", "branch2", "branch3"} {
+			require.Contains(t, result.DeletedBranches, name)
+			require.False(t, s.Engine.GetBranch(name).IsTracked())
+		}
 	})
 
 	t.Run("marks branch with unpushed changes when merged", func(t *testing.T) {

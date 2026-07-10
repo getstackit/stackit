@@ -5,7 +5,6 @@ import { motion } from "motion/react";
 import type { StackDetail as StackDetailType, BranchResponse, SubmitResponse } from "@/lib/api";
 import { submitStack } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
   DiffStats,
 } from "@/components/status/status-badge";
@@ -93,7 +92,7 @@ export function StackDetailPanel({
           {/* Issues */}
           {issues.length > 0 && (
             <>
-              <Separator />
+              <hr className="border-border" />
               <div className="space-y-1.5">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Issues
@@ -114,7 +113,7 @@ export function StackDetailPanel({
             </>
           )}
 
-          <Separator />
+          <hr className="border-border" />
 
           {/* All branches (leaf → root) */}
           <div className="space-y-1.5">
@@ -133,7 +132,7 @@ export function StackDetailPanel({
             />
           </div>
 
-          <Separator />
+          <hr className="border-border" />
 
           {/* Submit button — hidden when all branches already have PRs, and
               on a read-only server where writes are disabled. */}

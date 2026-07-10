@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFormatAndParseStackTrailers(t *testing.T) {
+func TestStackMetadataTrailersRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -60,8 +60,8 @@ func TestFormatAndParseStackTrailers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			formatted := FormatStackTrailers(tt.stackSize, tt.prNumbers, tt.scope)
-			info := ParseStackTrailers(formatted)
+			formatted := NewStackMetadata(tt.stackSize, tt.prNumbers, tt.scope).ToTrailers()
+			info := ParseStackMetadataTrailers(formatted)
 
 			require.NotNil(t, info)
 			require.Equal(t, tt.wantSize, info.StackSize)
@@ -71,14 +71,14 @@ func TestFormatAndParseStackTrailers(t *testing.T) {
 	}
 }
 
-func TestParseStackTrailers_noTrailers(t *testing.T) {
+func TestParseStackMetadataTrailers_noTrailers(t *testing.T) {
 	t.Parallel()
 
-	info := ParseStackTrailers("Just a regular commit message\n\nWith some body text.")
+	info := ParseStackMetadataTrailers("Just a regular commit message\n\nWith some body text.")
 	require.Nil(t, info)
 }
 
-func TestParseStackTrailers_embeddedInCommitBody(t *testing.T) {
+func TestParseStackMetadataTrailers_embeddedInCommitBody(t *testing.T) {
 	t.Parallel()
 
 	body := `Consolidate stack [PROJ-123]: feat-a, feat-b, feat-c
@@ -92,17 +92,17 @@ Stackit-Stack-Size: 3
 Stackit-PRs: 45,46,47
 Stackit-Scope: PROJ-123`
 
-	info := ParseStackTrailers(body)
+	info := ParseStackMetadataTrailers(body)
 	require.NotNil(t, info)
 	require.Equal(t, 3, info.StackSize)
 	require.Equal(t, []int{45, 46, 47}, info.PRNumbers)
 	require.Equal(t, "PROJ-123", info.Scope)
 }
 
-func TestFormatStackTrailers_format(t *testing.T) {
+func TestStackMetadataToTrailers_format(t *testing.T) {
 	t.Parallel()
 
-	result := FormatStackTrailers(3, []int{1, 2, 3}, "SCOPE")
+	result := NewStackMetadata(3, []int{1, 2, 3}, "SCOPE").ToTrailers()
 	require.Contains(t, result, "Stackit-Stack-Size: 3")
 	require.Contains(t, result, "Stackit-PRs: 1,2,3")
 	require.Contains(t, result, "Stackit-Scope: SCOPE")

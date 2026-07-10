@@ -19,17 +19,17 @@ func TestNormalizeAPIPrefixes(t *testing.T) {
 		{
 			name:     "default",
 			input:    nil,
-			expected: []string{"/api/v1", "/api"},
+			expected: []string{"/api/v1"},
 		},
 		{
 			name:     "trim and dedupe",
-			input:    []string{" api/v1 ", "/api/v1/", "/api"},
-			expected: []string{"/api/v1", "/api"},
+			input:    []string{" api/v1 ", "/api/v1/"},
+			expected: []string{"/api/v1"},
 		},
 		{
 			name:     "empty values fallback to default",
 			input:    []string{"", "  "},
-			expected: []string{"/api/v1", "/api"},
+			expected: []string{"/api/v1"},
 		},
 	}
 
@@ -49,17 +49,17 @@ func TestNormalizeAPIPrefixes(t *testing.T) {
 }
 
 func TestIsAPIPath(t *testing.T) {
-	prefixes := []string{"/api/v1", "/api"}
+	prefixes := []string{"/api/v1"}
 
 	tests := []struct {
 		path string
 		want bool
 	}{
-		{path: "/api", want: true},
-		{path: "/api/stacks", want: true},
+		{path: "/api", want: false},
+		{path: "/api/stacks", want: false},
 		{path: "/api/v1", want: true},
 		{path: "/api/v1/view", want: true},
-		{path: "/api/v12/view", want: true},
+		{path: "/api/v12/view", want: false},
 		{path: "/dashboard", want: false},
 	}
 

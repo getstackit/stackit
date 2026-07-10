@@ -20,15 +20,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gertd/go-pluralize"
-
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
-
-var pluralizeClient = pluralize.NewClient()
 
 // FormatRerereResolved renders the standard message describing how many
 // rebase conflicts git rerere auto-resolved during an operation.
@@ -538,11 +534,14 @@ func PluralSuffix(word string, plural bool) string {
 	if !plural {
 		return ""
 	}
-	pluralized := pluralizeClient.Plural(word)
-	if len(pluralized) > len(word) {
-		return pluralized[len(word):]
+	switch word {
+	case "branch":
+		return "es"
+	case "PR":
+		return "s"
+	default:
+		return "s"
 	}
-	return "s" // fallback
 }
 
 // Pluralize returns the plural form of word if count != 1, otherwise returns the singular form
@@ -550,7 +549,7 @@ func Pluralize(word string, count int) string {
 	if count == 1 {
 		return word
 	}
-	return pluralizeClient.Plural(word)
+	return word + PluralSuffix(word, true)
 }
 
 // PluralIt returns "them" if plural is true, otherwise "it"

@@ -18,7 +18,6 @@ import {
   X,
 } from "lucide-react";
 import { useRepo } from "@/components/providers/repo-provider";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import type { EventKind } from "@/lib/api";
 import { formatTimeAgo } from "@/lib/time";
 
@@ -128,7 +127,7 @@ export function EventFeed() {
 
       {/* Event list */}
       {!collapsed && (
-        <ScrollArea className="max-h-[300px]">
+        <div className="max-h-[300px] overflow-auto">
           {events.length === 0 ? (
             <p className="text-xs text-muted-foreground/60 py-4 text-center">
               No recent activity
@@ -171,7 +170,7 @@ export function EventFeed() {
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
       )}
     </div>
   );

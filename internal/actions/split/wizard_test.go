@@ -2,6 +2,8 @@ package split
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBuildTypeChoices(t *testing.T) {
@@ -53,13 +55,9 @@ func TestBuildTypeChoices(t *testing.T) {
 					availableCount, tt.wantAvailableCount)
 			}
 
-			if commitChoice == nil {
-				t.Fatal("buildTypeChoices() missing commit choice")
-			}
-			if commitChoice.Available != tt.wantCommitAvail {
-				t.Errorf("buildTypeChoices() commit.Available = %v, want %v",
-					commitChoice.Available, tt.wantCommitAvail)
-			}
+			require.NotNil(t, commitChoice, "buildTypeChoices() missing commit choice")
+			require.Equal(t, tt.wantCommitAvail, commitChoice.Available,
+				"buildTypeChoices() commit.Available")
 		})
 	}
 }

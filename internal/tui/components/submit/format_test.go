@@ -3,9 +3,11 @@ package submit
 import (
 	"errors"
 	"regexp"
+	"strings"
 	"testing"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,6 +157,23 @@ func TestModelCompletionSummaryIncludesFailuresAndWarnings(t *testing.T) {
 	require.Contains(t, summary, "#935 add-feature")
 	require.Contains(t, summary, "✗ fix-bug — failed to push branch: remote rejected")
 	require.Contains(t, summary, "⚠️  add-feature: failed to add labels")
+}
+
+func TestFormatCompactRowTruncatesLongErrors(t *testing.T) {
+	t.Parallel()
+
+	long := "failed to push branch: " + strings.Repeat("x", 100) + "\nhint: check your remote\nhint: and your credentials"
+	row := ansi.Strip(FormatCompactRow(Item{
+		BranchName: "jonnii/20260511011552/fix-bug",
+		Action:     ActionUpdate,
+		Status:     StatusError,
+		Error:      errors.New(long),
+	}, 80, "", DefaultStyles()))
+
+	require.NotContains(t, row, "\n", "row must stay on one line")
+	require.NotContains(t, row, "hint:")
+	require.Contains(t, row, "...")
+	require.LessOrEqual(t, lipgloss.Width(row), 80+maxErrorDetailWidth, "detail must be capped")
 }
 
 func TestFormatFailureSummaryWithoutErrorDetail(t *testing.T) {

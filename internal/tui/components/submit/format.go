@@ -137,11 +137,7 @@ func rowParts(item Item, spinnerView string, styles Styles) (string, string) {
 		}
 		return styles.DoneStyle.Render("✓"), styles.DoneStyle.Render(detail)
 	case StatusError:
-		detail := "failed"
-		if item.Error != nil {
-			detail = item.Error.Error()
-		}
-		return styles.ErrorStyle.Render("✗"), styles.ErrorStyle.Render(detail)
+		return styles.ErrorStyle.Render("✗"), styles.ErrorStyle.Render(compactErrorText(item.Error))
 	case StatusPending, "":
 		if item.IsSkipped {
 			reason := item.SkipReason
@@ -158,6 +154,28 @@ func rowParts(item Item, spinnerView string, styles Styles) (string, string) {
 	default:
 		return styles.DimStyle.Render("○"), styles.DimStyle.Render(item.Status)
 	}
+}
+
+// maxErrorDetailWidth caps the error text shown in a progress row so a long
+// git/gh message cannot shred the column layout mid-TUI.
+const maxErrorDetailWidth = 60
+
+// compactErrorText flattens an error to its trimmed first line, truncated to
+// fit a progress row. The full text still persists via FormatFailureSummary
+// when the TUI exits, so nothing is lost.
+func compactErrorText(err error) string {
+	if err == nil {
+		return "failed"
+	}
+	detail := err.Error()
+	if i := strings.IndexByte(detail, '\n'); i >= 0 {
+		detail = detail[:i]
+	}
+	detail = strings.TrimSpace(detail)
+	if detail == "" {
+		return "failed"
+	}
+	return TruncateMiddle(detail, maxErrorDetailWidth)
 }
 
 func actionLabel(action string) string {

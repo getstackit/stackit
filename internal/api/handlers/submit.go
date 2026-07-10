@@ -109,7 +109,7 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			branches = append(branches, br)
 		case submit.CompletionEvent:
-			success = e.Success
+			success = e.Success()
 			completionMsg = e.Message
 		}
 	}

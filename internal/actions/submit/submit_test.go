@@ -625,9 +625,16 @@ func TestSubmitDisplayTreeSkipsWorktreeAnchorParent(t *testing.T) {
 	stack := handler.stackEvent.Stack
 	require.Equal(t, []string{"feature"}, stack.Branches, "worktree anchors are not submittable")
 	require.Equal(t, "main", stack.ParentMap["feature"], "display parent should skip worktree anchor")
-	require.Equal(t, []string{"feature"}, stack.ChildrenMap["main"], "feature should appear as trunk child in display tree")
-	require.Empty(t, stack.ChildrenMap["wt-anchor"], "worktree anchor should not appear in display tree relationships")
+	childrenMap := make(map[string][]string)
+	for _, branchName := range stack.Branches {
+		parentName := stack.ParentMap[branchName]
+		if parentName != "" {
+			childrenMap[parentName] = append(childrenMap[parentName], branchName)
+		}
+	}
+	require.Equal(t, []string{"feature"}, childrenMap["main"], "feature should appear as trunk child in display tree")
+	require.Empty(t, childrenMap["wt-anchor"], "worktree anchor should not appear in display tree relationships")
 
-	_, hasAnchorFixedState := handler.stackEvent.FixedMap["wt-anchor"]
+	_, hasAnchorFixedState := stack.FixedMap["wt-anchor"]
 	require.False(t, hasAnchorFixedState, "fixed map should not include non-submittable worktree anchors")
 }

@@ -1,8 +1,6 @@
 package submit
 
-import (
-	"github.com/getstackit/stackit/internal/tui/components/tree"
-)
+import "time"
 
 // Event represents a feedback event from the submit action.
 // Implementations should use type switches to handle specific event types.
@@ -10,13 +8,23 @@ type Event interface {
 	submitEvent() // marker method for type safety
 }
 
+// StackSnapshot contains the branch relationships and metadata needed to render
+// the stack being submitted. This is action-layer data; adapters decide how to
+// visualize it.
+type StackSnapshot struct {
+	Branches      []string          // branches in the stack, in order
+	CurrentBranch string            // currently checked out branch
+	TrunkBranch   string            // trunk/main branch name
+	ParentMap     map[string]string // branch -> parent
+	FixedMap      map[string]bool   // branch -> is fixed (doesn't need restack)
+	ScopeMap      map[string]string // branch -> scope
+	WorktreeMap   map[string]string // branch -> worktree path (for stack roots with managed worktrees)
+}
+
 // StackDisplayEvent indicates the initial stack visualization phase.
 // Handlers can use this to display the branches that will be processed.
 type StackDisplayEvent struct {
-	Stack       *tree.StackTree   // tree structure for rendering the stack
-	FixedMap    map[string]bool   // branch -> is fixed (doesn't need restack)
-	ScopeMap    map[string]string // branch -> scope
-	WorktreeMap map[string]string // branch -> worktree path (only for stack roots with managed worktrees)
+	Stack StackSnapshot
 }
 
 func (StackDisplayEvent) submitEvent() {}
@@ -38,17 +46,37 @@ func (PreparingEvent) submitEvent() {}
 type BranchPlanEvent struct {
 	BranchName string
 	Action     string // "create" or "update"
+	PRNumber   *int   // existing PR number for updates, nil for creates
 	IsCurrent  bool
+	Empty      bool // branch has no commits relative to its parent
 	Skipped    bool
 	SkipReason string
 }
 
 func (BranchPlanEvent) submitEvent() {}
 
+// PlanningCompleteEvent indicates that all BranchPlanEvents have been emitted.
+// Handlers that buffer plan rows can render the complete plan before any
+// confirmation prompt or submission starts.
+type PlanningCompleteEvent struct{}
+
+func (PlanningCompleteEvent) submitEvent() {}
+
+// BranchWarningEvent surfaces a non-fatal warning raised while submitting a
+// branch (e.g. labels or reviewers could not be applied). Warnings must flow
+// through the handler rather than direct console output: the interactive
+// runner quiets the console while the TUI is active, so direct writes during
+// the submission phase are silently dropped.
+type BranchWarningEvent struct {
+	BranchName string
+	Warning    string
+}
+
+func (BranchWarningEvent) submitEvent() {}
+
 // SubmissionStartEvent indicates the submission phase is beginning.
 type SubmissionStartEvent struct {
-	Branches     []BranchInfo
-	IsSequential bool // Sequential submission mode (all creates) for PR ordering
+	Branches []BranchInfo
 }
 
 func (SubmissionStartEvent) submitEvent() {}
@@ -63,10 +91,31 @@ type BranchProgressEvent struct {
 
 func (BranchProgressEvent) submitEvent() {}
 
+// CompletionOutcome classifies how a submit run ended, so handlers can decide
+// presentation without string-matching messages.
+type CompletionOutcome string
+
+// CompletionOutcome values.
+const (
+	OutcomeComplete        CompletionOutcome = "complete"          // branches were submitted
+	OutcomeUpToDate        CompletionOutcome = "up-to-date"        // nothing needed submitting
+	OutcomeDryRun          CompletionOutcome = "dry-run"           // plan reported, nothing submitted
+	OutcomeCanceled        CompletionOutcome = "canceled"          // user declined a confirmation
+	OutcomeNothingToSubmit CompletionOutcome = "nothing-to-submit" // no branches in scope / untracked
+	OutcomeOnTrunk         CompletionOutcome = "on-trunk"          // checked out on trunk; nothing to submit from here
+	OutcomeFailed          CompletionOutcome = "failed"            // at least one branch failed
+)
+
 // CompletionEvent indicates the action has finished.
 type CompletionEvent struct {
-	Success bool
-	Message string // "All PRs up to date", "Dry run complete", etc.
+	Outcome  CompletionOutcome
+	Message  string        // human-readable detail, e.g. "All PRs up to date"
+	Duration time.Duration // elapsed run time; set when branches were submitted
+}
+
+// Success reports whether the run ended without failure or cancellation.
+func (e CompletionEvent) Success() bool {
+	return e.Outcome != OutcomeFailed && e.Outcome != OutcomeCanceled
 }
 
 func (CompletionEvent) submitEvent() {}

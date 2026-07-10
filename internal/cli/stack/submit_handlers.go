@@ -387,6 +387,11 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				detail = ref + " " + actionDone
 			}
 			h.Output.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), detail)
+			// A newly created PR is the one the user needs to open; updated
+			// PRs rarely need their URL re-pasted.
+			if item.action == "create" && item.url != "" {
+				h.Output.Info("     %s", item.url)
+			}
 
 		case submit.StatusError:
 			if h.plan.solo {
@@ -430,13 +435,14 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 	}
 }
 
-// completionSummary renders the post-submit PR list, leaning on the solo
-// formatting when only one branch was submitted.
+// completionSummary renders the post-submit result for a solo submit (ref +
+// URL together). A stack submit already streamed one line per branch — with
+// URLs on creates — so repeating them as a block would double the list.
 func (h *SimpleSubmitHandler) completionSummary() string {
 	if h.plan.solo {
 		return submitComponent.FormatSoloSummary(h.submitItems())
 	}
-	return submitComponent.FormatURLSummary(h.submitItems())
+	return ""
 }
 
 // printOnTrunkGuidance explains that submit does nothing from trunk and points

@@ -228,52 +228,49 @@ func prNumberFromURL(raw string) (int, bool) {
 	return n, err == nil
 }
 
-// FormatURLSummary renders clickable PR URLs after submit completes.
-func FormatURLSummary(items []Item) string {
-	rows := make([]string, 0, len(items))
-	for _, item := range items {
-		if item.URL == "" {
-			continue
-		}
-		ref := PRRef(item)
-		if ref == "" {
-			ref = "-"
-		}
-		name := DisplayBranchName(item.BranchName)
-		rows = append(rows, fmt.Sprintf("%s %s\n     %s", ref, name, item.URL))
-	}
-	if len(rows) == 0 {
-		return ""
-	}
-	return "Pull requests\n\n" + strings.Join(rows, "\n")
-}
-
 // hyperlink wraps text in an OSC 8 terminal hyperlink escape sequence.
 // Terminals without OSC 8 support ignore the sequence and show the plain text.
 func hyperlink(url, text string) string {
 	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
 }
 
-// FormatLinkedURLSummary renders the post-submit PR list with clickable labels
-// and visible URLs. Keeping the URL visible matters for copy/paste, logs, and
-// terminals that do not expose OSC 8 links clearly.
-func FormatLinkedURLSummary(items []Item) string {
+// FormatFinalList renders the persisted post-submit result: one row per
+// branch with its final status, the row hyperlinked to its PR. Raw URL lines
+// print only for newly created PRs — those are the ones the user needs to
+// open; updated PRs rarely need their URL re-pasted.
+func FormatFinalList(items []Item) string {
 	rows := make([]string, 0, len(items))
 	for _, item := range items {
-		if item.URL == "" {
-			continue
-		}
-		ref := PRRef(item)
-		if ref == "" {
-			ref = "-"
-		}
 		name := DisplayBranchName(item.BranchName)
-		rows = append(rows, fmt.Sprintf("%s\n     %s", hyperlink(item.URL, fmt.Sprintf("%s %s", ref, name)), item.URL))
+		switch item.Status {
+		case StatusError:
+			detail := "failed"
+			if item.Error != nil {
+				detail = item.Error.Error()
+			}
+			rows = append(rows, fmt.Sprintf("✗ %s — %s", name, detail))
+
+		case StatusDone:
+			detail := pastTense(item.Action)
+			if ref := PRRef(item); ref != "" {
+				detail = ref + " " + detail
+			}
+			row := fmt.Sprintf("✓ %s %s", name, detail)
+			if item.URL != "" {
+				row = hyperlink(item.URL, row)
+			}
+			if item.Action == ActionCreate && item.URL != "" {
+				row += "\n     " + item.URL
+			}
+			rows = append(rows, row)
+
+		default:
+			// Not a terminal state: nothing was submitted for this branch, so
+			// there is no result to persist. An all-pending list stays empty,
+			// which lets completionSummary fall back to the plan view.
+		}
 	}
-	if len(rows) == 0 {
-		return ""
-	}
-	return "Pull requests\n\n" + strings.Join(rows, "\n")
+	return strings.Join(rows, "\n")
 }
 
 // FormatSoloSummary renders the post-submit result for a single-branch submit:

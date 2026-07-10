@@ -94,40 +94,38 @@ func TestModelSoloDropsHeaderAndName(t *testing.T) {
 	require.Contains(t, summary, "https://github.com/getstackit/stackit/pull/1270")
 }
 
-func TestFormatURLSummaryRendersClickableRows(t *testing.T) {
+func TestFormatFinalList(t *testing.T) {
 	t.Parallel()
 
-	summary := FormatURLSummary([]Item{
+	summary := FormatFinalList([]Item{
 		{
 			BranchName: "jonnii/20260511011552/guard-runner.repoRoot-reads-with-repoMu-to-fix",
 			Action:     ActionUpdate,
 			Status:     StatusDone,
 			URL:        "https://github.com/getstackit/stackit/pull/934",
 		},
-	})
-
-	require.Equal(t, `Pull requests
-
-#934 guard-runner.repoRoot-reads-with-repoMu-to-fix
-     https://github.com/getstackit/stackit/pull/934`, summary)
-}
-
-func TestFormatLinkedURLSummaryEmitsHyperlinks(t *testing.T) {
-	t.Parallel()
-
-	summary := FormatLinkedURLSummary([]Item{
 		{
 			BranchName: "jonnii/20260511011552/add-feature",
 			Action:     ActionCreate,
 			Status:     StatusDone,
 			URL:        "https://github.com/getstackit/stackit/pull/935",
 		},
+		{
+			BranchName: "jonnii/20260511011552/fix-bug",
+			Action:     ActionUpdate,
+			Status:     StatusError,
+			Error:      errors.New("remote rejected"),
+		},
 	})
 
-	require.Equal(t, "Pull requests\n\n"+
-		"\x1b]8;;https://github.com/getstackit/stackit/pull/935\x1b\\#935 add-feature\x1b]8;;\x1b\\\n"+
-		"     https://github.com/getstackit/stackit/pull/935",
+	require.Equal(t,
+		"\x1b]8;;https://github.com/getstackit/stackit/pull/934\x1b\\✓ guard-runner.repoRoot-reads-with-repoMu-to-fix #934 updated\x1b]8;;\x1b\\\n"+
+			// Only the newly created PR prints its raw URL.
+			"\x1b]8;;https://github.com/getstackit/stackit/pull/935\x1b\\✓ add-feature #935 created\x1b]8;;\x1b\\\n"+
+			"     https://github.com/getstackit/stackit/pull/935\n"+
+			"✗ fix-bug — remote rejected",
 		summary)
+	require.NotContains(t, summary, "Pull requests")
 }
 
 func TestModelCompletionSummaryIncludesFailuresAndWarnings(t *testing.T) {
@@ -154,8 +152,7 @@ func TestModelCompletionSummaryIncludesFailuresAndWarnings(t *testing.T) {
 	m = updated.(*Model)
 
 	summary := m.completionSummary()
-	require.Contains(t, summary, "Pull requests")
-	require.Contains(t, summary, "#935 add-feature")
+	require.Contains(t, summary, "✓ add-feature #935 created")
 	require.Contains(t, summary, "✗ fix-bug — failed to push branch: remote rejected")
 	require.Contains(t, summary, "⚠️  add-feature: failed to add labels")
 }
@@ -262,8 +259,8 @@ func TestModelCompletionSummaryPrefersSubmissionResults(t *testing.T) {
 	}})
 
 	summary := m.completionSummary()
-	require.Contains(t, summary, "Pull requests")
-	require.Contains(t, summary, "https://github.com/getstackit/stackit/pull/934")
+	require.Contains(t, summary, "✓ feature-1 #934 updated")
+	require.NotContains(t, summary, "Submitting")
 }
 
 func stripANSIEscape(s string) string {

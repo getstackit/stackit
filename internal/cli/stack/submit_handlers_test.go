@@ -13,33 +13,41 @@ import (
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
 )
 
-func TestSimpleSubmitHandlerPrintsFinalURLSummary(t *testing.T) {
+func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
 	handler := NewSimpleSubmitHandler(out)
-	branch := "jonnii/20260511011552/guard-runner.repoRoot-reads-with-repoMu-to-fix"
+	updated := "jonnii/20260511011552/guard-runner.repoRoot-reads-with-repoMu-to-fix"
+	created := "jonnii/20260511011552/add-feature"
 
 	handler.OnEvent(submitAction.SubmissionStartEvent{
-		Branches: []submitAction.BranchInfo{{
-			Name:   branch,
-			Action: "update",
-		}},
+		Branches: []submitAction.BranchInfo{
+			{Name: updated, Action: "update"},
+			{Name: created, Action: "create"},
+		},
 	})
 	handler.OnEvent(submitAction.BranchProgressEvent{
-		BranchName: branch,
+		BranchName: updated,
 		Status:     submitAction.StatusDone,
 		URL:        "https://github.com/getstackit/stackit/pull/934",
+	})
+	handler.OnEvent(submitAction.BranchProgressEvent{
+		BranchName: created,
+		Status:     submitAction.StatusDone,
+		URL:        "https://github.com/getstackit/stackit/pull/935",
 	})
 	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Message: "Submit complete"})
 
 	got := out.String()
-	require.Contains(t, got, "Submitting 1 branch")
+	require.Contains(t, got, "Submitting 2 branches")
 	require.Contains(t, got, "✓ guard-runner.repoRoot-reads-with-repoMu-to-fix #934 updated")
-	require.Contains(t, got, "Pull requests")
-	require.Contains(t, got, "#934 guard-runner.repoRoot-reads-with-repoMu-to-fix")
-	require.Contains(t, got, "     https://github.com/getstackit/stackit/pull/934")
-	require.NotContains(t, got, "updated → https://github.com/getstackit/stackit/pull/934")
+	require.Contains(t, got, "✓ add-feature #935 created")
+	// Only the newly created PR prints its raw URL; no trailing summary block
+	// repeats the list.
+	require.Contains(t, got, "     https://github.com/getstackit/stackit/pull/935")
+	require.NotContains(t, got, "https://github.com/getstackit/stackit/pull/934")
+	require.NotContains(t, got, "Pull requests")
 }
 
 func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
@@ -52,7 +60,7 @@ func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
 	handler.OnEvent(submitAction.SubmissionStartEvent{
 		Branches: []submitAction.BranchInfo{{
 			Name:   branch,
-			Action: "update",
+			Action: "create",
 		}},
 	})
 	handler.OnEvent(submitAction.BranchProgressEvent{
@@ -71,7 +79,7 @@ func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
 	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Message: "Submit complete"})
 
 	got := out.String()
-	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/934")
+	require.Equal(t, 1, strings.Count(got, "https://github.com/getstackit/stackit/pull/934"))
 	require.NotContains(t, got, "syncing")
 	require.Equal(t, 1, strings.Count(got, "✓ guard-runner"), "footer sync must not re-report a finished branch")
 }

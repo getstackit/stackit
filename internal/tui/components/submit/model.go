@@ -163,22 +163,23 @@ func (m *Model) content() string {
 }
 
 // completionSummary is the output persisted to the terminal when the TUI
-// exits. After a submission it lists PR URLs and failures; when nothing was
-// submitted (dry run, all up to date) it falls back to the final plan view,
-// which would otherwise be erased with the progress display. Warnings are
-// appended in either case so they survive the screen clear.
+// exits. After a submission it lists every branch's final result (including
+// failures); when nothing was submitted (dry run, all up to date) it falls
+// back to the final plan view, which would otherwise be erased with the
+// progress display. Warnings are appended in either case so they survive the
+// screen clear.
 func (m *Model) completionSummary() string {
 	var summary string
 	if m.Solo {
 		summary = FormatSoloSummary(m.Items)
-	} else {
-		summary = FormatLinkedURLSummary(m.Items)
-	}
-	if failures := FormatFailureSummary(m.Items); failures != "" {
-		if summary != "" {
-			summary += "\n\n"
+		if failures := FormatFailureSummary(m.Items); failures != "" {
+			if summary != "" {
+				summary += "\n\n"
+			}
+			summary += failures
 		}
-		summary += failures
+	} else {
+		summary = FormatFinalList(m.Items)
 	}
 	if summary == "" {
 		return m.content()

@@ -161,20 +161,25 @@ func rowParts(item Item, spinnerView string, styles Styles) (string, string) {
 // git/gh message cannot shred the column layout mid-TUI.
 const maxErrorDetailWidth = 60
 
+// errorText is err's message, or a generic label when there is none.
+func errorText(err error) string {
+	if err == nil {
+		return "failed"
+	}
+	return err.Error()
+}
+
 // compactErrorText flattens an error to its trimmed first line, truncated to
 // fit a progress row. The full text still persists via FormatFailureSummary
 // when the TUI exits, so nothing is lost.
 func compactErrorText(err error) string {
-	if err == nil {
-		return "failed"
-	}
-	detail := err.Error()
+	detail := errorText(err)
 	if i := strings.IndexByte(detail, '\n'); i >= 0 {
 		detail = detail[:i]
 	}
 	detail = strings.TrimSpace(detail)
 	if detail == "" {
-		return "failed"
+		detail = errorText(nil)
 	}
 	return TruncateMiddle(detail, maxErrorDetailWidth)
 }
@@ -244,11 +249,7 @@ func FormatFinalList(items []Item) string {
 		name := DisplayBranchName(item.BranchName)
 		switch item.Status {
 		case StatusError:
-			detail := "failed"
-			if item.Error != nil {
-				detail = item.Error.Error()
-			}
-			rows = append(rows, fmt.Sprintf("✗ %s — %s", name, detail))
+			rows = append(rows, fmt.Sprintf("✗ %s — %s", name, errorText(item.Error)))
 
 		case StatusDone:
 			detail := pastTense(item.Action)
@@ -347,11 +348,7 @@ func FormatFailureSummary(items []Item) string {
 		if item.Status != StatusError {
 			continue
 		}
-		detail := "failed"
-		if item.Error != nil {
-			detail = item.Error.Error()
-		}
-		rows = append(rows, fmt.Sprintf("✗ %s — %s", DisplayBranchName(item.BranchName), detail))
+		rows = append(rows, fmt.Sprintf("✗ %s — %s", DisplayBranchName(item.BranchName), errorText(item.Error)))
 	}
 	if len(rows) == 0 {
 		return ""

@@ -2,6 +2,9 @@
 package stack
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
@@ -41,6 +44,7 @@ type submitFlags struct {
 	cli                  bool
 	noLabels             bool
 	noAssignees          bool
+	jsonOutput           bool
 }
 
 func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
@@ -72,6 +76,7 @@ func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
 	cmd.Flags().BoolVar(&f.cli, "cli", false, "Edit PR metadata via the CLI instead of on web.")
 	cmd.Flags().BoolVar(&f.noLabels, "no-labels", false, "Don't apply default labels from config.")
 	cmd.Flags().BoolVar(&f.noAssignees, "no-assignees", false, "Don't apply default assignees from config.")
+	cmd.Flags().BoolVar(&f.jsonOutput, "json", false, "Output the plan and per-branch results as JSON.")
 }
 
 func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
@@ -130,6 +135,21 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			ConfigLabels:    configLabels,
 			ConfigReviewers: cfg.SubmitReviewers(),
 			ConfigAssignees: configAssignees,
+		}
+
+		if f.jsonOutput {
+			cmd.SilenceErrors = true
+			jsonHandler := submit.NewJSONHandler()
+			err := submit.Action(ctx, opts, jsonHandler)
+			if err != nil {
+				jsonHandler.SetError(err)
+			}
+			data, marshalErr := json.MarshalIndent(jsonHandler.Result, "", "  ")
+			if marshalErr != nil {
+				return fmt.Errorf("failed to marshal JSON: %w", marshalErr)
+			}
+			ctx.Output.Info("%s", string(data))
+			return err
 		}
 
 		// Action is the single source of truth for what to submit. The runner

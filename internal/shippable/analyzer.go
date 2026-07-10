@@ -117,6 +117,22 @@ func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo,
 		}
 	}
 
+	// Only branches with updateable PRs need remote status. Missing and draft
+	// PRs return before the not-pushed check, so keep incomplete stacks offline.
+	remoteStatusBranches := make(engine.Branches, 0, len(stack.AllBranches))
+	for _, branchName := range stack.AllBranches {
+		branch := a.eng.GetBranch(branchName)
+		prInfo, err := branch.GetPrInfo()
+		if err == nil && prInfo != nil && prInfo.Number() != nil && !prInfo.IsDraft() {
+			remoteStatusBranches = append(remoteStatusBranches, branch)
+		}
+	}
+	remoteStatuses := &branchRemoteStatusProvider{
+		ctx:      ctx,
+		eng:      a.eng,
+		branches: remoteStatusBranches,
+	}
+
 	// Check each branch in the stack
 	for _, branchName := range stack.AllBranches {
 		// Extract author from first branch with PR status
@@ -126,7 +142,7 @@ func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo,
 			}
 		}
 
-		blocking := a.analyzeBranch(ctx, branchName, statusMap)
+		blocking := a.analyzeBranch(branchName, statusMap, remoteStatuses)
 		if blocking != nil {
 			result.BlockingPRs = append(result.BlockingPRs, *blocking)
 
@@ -153,7 +169,9 @@ func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo,
 }
 
 // analyzeBranch analyzes a single branch and returns blocking info if any.
-func (a *Analyzer) analyzeBranch(ctx context.Context, branchName string, statusMap map[string]*github.CheckStatus) *BlockingPR {
+// remoteStatuses lazily reads remote status once for branches that can reach
+// the not-pushed check.
+func (a *Analyzer) analyzeBranch(branchName string, statusMap map[string]*github.CheckStatus, remoteStatuses *branchRemoteStatusProvider) *BlockingPR {
 	// Get PR info from engine metadata
 	branch := a.eng.GetBranch(branchName)
 	prInfo, err := branch.GetPrInfo()
@@ -181,7 +199,7 @@ func (a *Analyzer) analyzeBranch(ctx context.Context, branchName string, statusM
 	// Check if local branch matches remote
 	// This is critical for shipping: if local differs from remote, the octopus merge
 	// will use local SHAs but PRs track remote SHAs, so GitHub won't auto-close them
-	if !a.eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(branch)).ForBranch(branch).Matches() {
+	if !remoteStatuses.ForBranch(branch).Matches() {
 		return &BlockingPR{
 			Branch:   branchName,
 			PRNumber: prNumber,
@@ -237,6 +255,29 @@ func (a *Analyzer) analyzeBranch(ctx context.Context, branchName string, statusM
 
 	// No blocking issues found
 	return nil
+}
+
+type branchRemoteStatusProvider struct {
+	ctx      context.Context
+	eng      engine.BranchReader
+	branches engine.Branches
+
+	loaded   bool
+	statuses engine.BranchRemoteStatuses
+}
+
+func (p *branchRemoteStatusProvider) ForBranch(branch engine.Branch) engine.BranchRemoteStatus {
+	if p == nil {
+		return engine.BranchRemoteStatus{}
+	}
+	if !p.loaded {
+		p.statuses = engine.BranchRemoteStatuses{}
+		if len(p.branches) > 0 {
+			p.statuses = p.eng.ReadBranchRemoteStatuses(p.ctx, p.branches)
+		}
+		p.loaded = true
+	}
+	return p.statuses.ForBranch(branch)
 }
 
 // determineStatus determines the overall Status based on analysis results.

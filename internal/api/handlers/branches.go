@@ -63,6 +63,9 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), names)
 	}
 
+	// One remote listing for all branches instead of one per branch.
+	remoteStatuses := entry.Engine.ReadBranchRemoteStatuses(r.Context(), engine.BranchesOf(branches...))
+
 	responses := make([]httpcontract.BranchResponse, 0, len(branches))
 	for _, branch := range branches {
 		node := graph.GetNode(branch.GetName())
@@ -73,7 +76,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		if checksMap != nil {
 			checks = checksMap[branch.GetName()]
 		}
-		responses = append(responses, httpcontract.MapBranch(r.Context(), entry.Engine, branch, node, checks))
+		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatuses.ForBranch(branch)))
 	}
 
 	writeJSON(w, responses)
@@ -101,6 +104,7 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entr
 		}
 	}
 
-	resp := httpcontract.MapBranch(r.Context(), entry.Engine, branch, node, checks)
+	remoteStatus := entry.Engine.ReadBranchRemoteStatuses(r.Context(), engine.BranchesOf(branch)).ForBranch(branch)
+	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatus)
 	writeJSON(w, resp)
 }

@@ -12,7 +12,10 @@ import (
 )
 
 // MapBranch converts an engine Branch and its StackNode into an API BranchResponse.
-func MapBranch(ctx context.Context, eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus) BranchResponse {
+// remoteStatus should come from a single ReadBranchRemoteStatuses call covering
+// all branches being mapped in the current request, not a per-branch call, since
+// each ReadBranchRemoteStatuses call lists the remote's refs.
+func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus, remoteStatus engine.BranchRemoteStatus) BranchResponse {
 	resp := BranchResponse{
 		Name:         branch.GetName(),
 		Depth:        node.Depth,
@@ -72,7 +75,6 @@ func MapBranch(ctx context.Context, eng engine.BranchReader, branch engine.Branc
 	}
 
 	// Map remote status
-	remoteStatus := eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(branch)).ForBranch(branch)
 	resp.RemoteStatus = &RemoteStatus{
 		Ahead:         remoteStatus.Ahead(),
 		Behind:        remoteStatus.Behind(),
@@ -145,7 +147,8 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 	isAnchor := summary.HasWorktree
 	anchorName := rootBranch
 
-	branches := make([]BranchResponse, 0, len(allBranches))
+	nodes := make([]*engine.StackNode, 0, len(allBranches))
+	stackBranches := make(engine.Branches, 0, len(allBranches))
 	for _, name := range allBranches {
 		if isAnchor && name == anchorName {
 			continue
@@ -154,11 +157,21 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 		if node == nil {
 			continue
 		}
+		nodes = append(nodes, node)
+		stackBranches = append(stackBranches, node.Branch)
+	}
+
+	// One remote listing for the whole stack instead of one per branch.
+	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx, stackBranches)
+
+	branches := make([]BranchResponse, 0, len(nodes))
+	for _, node := range nodes {
+		name := node.Branch.GetName()
 		var checks *github.CheckStatus
 		if checksMap != nil {
 			checks = checksMap[name]
 		}
-		br := MapBranch(ctx, eng, node.Branch, node, checks)
+		br := MapBranch(eng, node.Branch, node, checks, remoteStatuses.ForBranch(node.Branch))
 		if isAnchor {
 			// Anchor's direct children become display roots
 			if br.Parent == anchorName {

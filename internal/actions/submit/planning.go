@@ -11,8 +11,9 @@ import (
 // prepareBranchesForSubmit prepares submission info for each branch, emitting
 // events via handler. When remoteStatuses is provided, planning reuses that
 // snapshot; otherwise it asks the engine for lazily batched status so create-only
-// dry runs do not read remote state.
-func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, remoteStatuses engine.BranchRemoteStatuses, handler Handler) ([]Info, error) {
+// dry runs do not read remote state. empty flags branches with no commits so
+// plan output can surface them.
+func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts Options, currentBranch string, remoteStatuses engine.BranchRemoteStatuses, empty map[string]bool, handler Handler) ([]Info, error) {
 	submissionInfos := make([]Info, 0, len(branches))
 	nav := ctx.Navigator()
 
@@ -67,7 +68,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 				Action:     action,
 				IsCurrent:  isCurrent,
 				Skipped:    true,
-				SkipReason: "skipped, no existing PR",
+				SkipReason: "no existing PR",
 			})
 			continue
 		}
@@ -90,6 +91,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 				handler.OnEvent(BranchPlanEvent{
 					BranchName: branchName,
 					Action:     action,
+					PRNumber:   prNumber,
 					IsCurrent:  isCurrent,
 					Skipped:    true,
 					SkipReason: status.Reason,
@@ -142,7 +144,9 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		handler.OnEvent(BranchPlanEvent{
 			BranchName: branchName,
 			Action:     action,
+			PRNumber:   prNumber,
 			IsCurrent:  isCurrent,
+			Empty:      empty[branchName],
 			Skipped:    false,
 		})
 
@@ -159,6 +163,33 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	}
 
 	return submissionInfos, nil
+}
+
+// confirmPrompt describes what --confirm is about to do in concrete terms.
+func confirmPrompt(infos []Info) string {
+	creates, updates := 0, 0
+	for _, info := range infos {
+		if info.Action == actionCreate {
+			creates++
+		} else {
+			updates++
+		}
+	}
+	switch {
+	case creates > 0 && updates > 0:
+		return fmt.Sprintf("Create %d and update %d PRs?", creates, updates)
+	case creates > 0:
+		return fmt.Sprintf("Create %d %s?", creates, pluralPR(creates))
+	default:
+		return fmt.Sprintf("Update %d %s?", updates, pluralPR(updates))
+	}
+}
+
+func pluralPR(count int) string {
+	if count == 1 {
+		return "PR"
+	}
+	return "PRs"
 }
 
 // getBranchesToSubmit returns the list of branches to submit based on options

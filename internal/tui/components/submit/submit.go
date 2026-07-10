@@ -26,7 +26,6 @@ type Styles struct {
 	DoneStyle    lipgloss.Style
 	ErrorStyle   lipgloss.Style
 	BranchStyle  lipgloss.Style
-	URLStyle     lipgloss.Style
 	DimStyle     lipgloss.Style
 }
 
@@ -40,7 +39,6 @@ func DefaultStyles() Styles {
 		DoneStyle:    statusStyles.Done,
 		ErrorStyle:   statusStyles.Error,
 		BranchStyle:  commonStyles.Branch.Bold(true),
-		URLStyle:     commonStyles.URL,
 		DimStyle:     commonStyles.Subtle,
 	}
 }
@@ -60,4 +58,6 @@ const (
 	SkipReasonNoChanges = "no changes"
 	// ActionUpdate indicates the branch will update an existing PR
 	ActionUpdate = "update"
+	// ActionCreate indicates the branch will create a new PR
+	ActionCreate = "create"
 )

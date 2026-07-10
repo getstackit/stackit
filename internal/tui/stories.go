@@ -373,46 +373,23 @@ func registerTreeStories() {
 	})
 }
 
+// newSimulationSubmitModel builds the submit model as it looks when the TUI
+// starts: the submission set is known and every branch is pending.
+func newSimulationSubmitModel() *submit.Model {
+	return submit.NewModel([]submit.Item{
+		{BranchName: "feature-2", Action: submit.ActionUpdate, Status: submit.StatusPending},
+		{BranchName: "feature-3", Action: submit.ActionCreate, Status: submit.StatusPending},
+	})
+}
+
 func registerSubmitStories() {
-	mockData := &tree.MockTreeData{
-		CurrentVal: "feature-3",
-		TrunkVal:   "main",
-		ChildrenMap: map[string][]string{
-			"main":      {"feature-1"},
-			"feature-1": {"feature-2"},
-			"feature-2": {"feature-3"},
-			"feature-3": {},
-		},
-		ParentsMap: map[string]string{
-			"feature-1": "main",
-			"feature-2": "feature-1",
-			"feature-3": "feature-2",
-		},
-		FixedMap: map[string]bool{
-			"main":      true,
-			"feature-1": true,
-			"feature-2": true,
-			"feature-3": true,
-		},
-	}
-
-	createRenderer := func() *tree.StackTreeRenderer {
-		return tree.NewRenderer(mockData)
-	}
-
 	RegisterStory(Story{
 		Name:        "Full Submission",
 		Category:    "Submit",
 		Description: "A simulated full submission process with state transitions",
 		CreateModel: func() tea.Model {
-			m := submit.NewModel(nil)
-			m.Renderer = createRenderer()
-			m.Renderer.SetAnnotation("feature-1", tree.BranchAnnotation{Scope: "CORE", ExplicitScope: "CORE"})
-			m.Renderer.SetAnnotation("feature-2", tree.BranchAnnotation{Scope: "API", ExplicitScope: "API"})
-			m.Renderer.SetAnnotation("feature-3", tree.BranchAnnotation{Scope: "UI", ExplicitScope: "UI"})
-			m.RootBranch = mockData.TrunkVal
 			return &submitSimulationModel{
-				submitModel: m,
+				submitModel: newSimulationSubmitModel(),
 				startTime:   time.Now(),
 			}
 		},
@@ -428,13 +405,6 @@ func registerSubmitStories() {
 				{BranchName: "feature-2", Action: "update", Status: submit.StatusError, Error: fmt.Errorf("failed to push branch: remote rejected")},
 				{BranchName: "feature-3", Action: "create", Status: submit.StatusPending},
 			})
-			m.Renderer = createRenderer()
-			m.Renderer.SetAnnotation("feature-1", tree.BranchAnnotation{Scope: "CORE", ExplicitScope: "CORE"})
-			m.Renderer.SetAnnotation("feature-2", tree.BranchAnnotation{Scope: "API", ExplicitScope: "API"})
-			m.Renderer.SetAnnotation("feature-3", tree.BranchAnnotation{Scope: "UI", ExplicitScope: "UI"})
-			m.RootBranch = mockData.TrunkVal
-			m.GlobalMessage = "Submitting 3 branches..."
-			m.Done = true
 			return m
 		},
 	})
@@ -471,27 +441,7 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if int(msg) == -1 {
 			// Reset simulation
 			m.step = 0
-			m.submitModel = submit.NewModel(nil)
-			m.submitModel.Renderer = tree.NewRenderer(&tree.StackTree{
-				Branches:       []string{"main", "feature-1", "feature-2", "feature-3"},
-				CurrentBranchV: "feature-3",
-				TrunkBranch:    "main",
-				ChildrenMap: map[string][]string{
-					"main":      {"feature-1"},
-					"feature-1": {"feature-2"},
-					"feature-2": {"feature-3"},
-					"feature-3": {},
-				},
-				ParentMap: map[string]string{
-					"feature-1": "main",
-					"feature-2": "feature-1",
-					"feature-3": "feature-2",
-				},
-			})
-			m.submitModel.Renderer.SetAnnotation("feature-1", tree.BranchAnnotation{Scope: "CORE", ExplicitScope: "CORE"})
-			m.submitModel.Renderer.SetAnnotation("feature-2", tree.BranchAnnotation{Scope: "API", ExplicitScope: "API"})
-			m.submitModel.Renderer.SetAnnotation("feature-3", tree.BranchAnnotation{Scope: "UI", ExplicitScope: "UI"})
-			m.submitModel.RootBranch = "main"
+			m.submitModel = newSimulationSubmitModel()
 			return m, m.nextTick()
 		}
 
@@ -500,27 +450,18 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch m.step {
 		case 1:
-			_, c := m.submitModel.Update(submit.GlobalMessageMsg("Preparing branches..."))
-			cmds = append(cmds, c, m.nextTick())
-		case 2:
-			m.submitModel.Update(submit.PlanUpdateMsg{BranchName: "feature-1", Action: "update", Skip: true, SkipReason: "already up to date"})
-			m.submitModel.Update(submit.PlanUpdateMsg{BranchName: "feature-2", Action: "update"})
-			_, c := m.submitModel.Update(submit.PlanUpdateMsg{BranchName: "feature-3", Action: "create"})
-			cmds = append(cmds, c, m.nextTick())
-		case 3:
-			m.submitModel.Update(submit.GlobalMessageMsg("Submitting..."))
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-2", Status: submit.StatusSubmitting})
 			cmds = append(cmds, c, m.nextTick())
-		case 4:
+		case 2:
 			m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-2", Status: submit.StatusDone, URL: "https://github.com/owner/repo/pull/102"})
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-3", Status: submit.StatusSubmitting})
 			cmds = append(cmds, c, m.nextTick())
-		case 5:
+		case 3:
 			_, c := m.submitModel.Update(submit.ProgressUpdateMsg{BranchName: "feature-3", Status: submit.StatusDone, URL: "https://github.com/owner/repo/pull/103"})
 			cmds = append(cmds, c, m.nextTick())
-			m.submitModel.Update(submit.GlobalMessageMsg("✓ All branches submitted"))
-			// We don't send ProgressCompleteMsg because it would trigger tea.Quit
-			m.submitModel.Done = true
+			// The final state stays visible until the reset tick.
+			// We don't send ProgressCompleteMsg because it would trigger tea.Quit,
+			// and we don't set Done because the view blanks once Done is set.
 			cmds = append(cmds, tea.Tick(3*time.Second, func(_ time.Time) tea.Msg {
 				return simulationTickMsg(-1) // Signal reset
 			}))
@@ -542,6 +483,6 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *submitSimulationModel) View() tea.View {
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
 	return tea.NewView(fmt.Sprint(m.submitModel.View().Content) + "\n" +
-		helpStyle.Render(fmt.Sprintf("Simulation step: %d/6", m.step)) + "\n" +
+		helpStyle.Render(fmt.Sprintf("Simulation step: %d/3", m.step)) + "\n" +
 		helpStyle.Render("q: back"))
 }

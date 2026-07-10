@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -75,6 +75,7 @@ type Info struct {
 
 // Action performs the submit operation with an event handler for progress feedback.
 func Action(ctx *app.Context, opts Options, handler Handler) error {
+	start := time.Now()
 	// Validate flags
 	if opts.Draft && opts.Publish {
 		return fmt.Errorf("can't use both --publish and --draft flags in one command")
@@ -98,7 +99,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			// Non-interactive: inform and exit gracefully
 			ctx.Output.Info("Branch %s is not tracked by stackit.", branchName)
 			ctx.Output.Tip("Run 'stackit track' to track this branch, then try again.")
-			handler.OnEvent(CompletionEvent{Success: true, Message: "Branch not tracked"})
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeNothingToSubmit, Message: "Branch not tracked"})
 			return nil
 		}
 
@@ -111,7 +112,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 		if !shouldTrack {
 			ctx.Output.Info("Skipping. Use 'stackit track --parent <branch>' for a different parent.")
-			handler.OnEvent(CompletionEvent{Success: true, Message: "Tracking declined"})
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeNothingToSubmit, Message: "Tracking declined"})
 			return nil
 		}
 
@@ -128,7 +129,21 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return err
 	}
 	if len(branches) == 0 {
-		handler.OnEvent(CompletionEvent{Success: true, Message: "No branches to submit"})
+		// Standing on trunk is the most common reason there is nothing in scope:
+		// submit defaults to downstack, and downstack from trunk is just trunk
+		// (filtered out above). Surface a distinct outcome so the adapter can
+		// point the user at creating or checking out a branch rather than
+		// printing a bare "nothing to submit".
+		if opts.Branch == "" {
+			if cb := nav.CurrentBranch(); cb != nil && cb.IsTrunk() {
+				handler.OnEvent(CompletionEvent{
+					Outcome: OutcomeOnTrunk,
+					Message: fmt.Sprintf("You're on %s — nothing to submit from here.", cb.GetName()),
+				})
+				return nil
+			}
+		}
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeNothingToSubmit, Message: "No branches to submit"})
 		return nil
 	}
 
@@ -170,15 +185,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	stackTree := tree.NewStackTree(branchObjs, currentBranchName, nav.Trunk().GetName())
-	normalizeDisplayTreeParents(nav, stackTree)
+	stackSnapshot := buildStackSnapshot(nav, branchObjs, currentBranchName, nav.Trunk().GetName(), fixedMap, scopeMap, worktreeMap)
 
 	// Display the stack
 	handler.OnEvent(StackDisplayEvent{
-		Stack:       stackTree,
-		FixedMap:    fixedMap,
-		ScopeMap:    scopeMap,
-		WorktreeMap: worktreeMap,
+		Stack: stackSnapshot,
 	})
 
 	// Restack if requested
@@ -219,31 +230,59 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		remoteStatuses = <-remoteStatusCh
 	}
 
+	// Branches with no commits still submit (an empty PR can be a placeholder),
+	// but the plan flags them and interactive runs confirm first.
+	emptyMap := eng.BatchIsBranchEmpty(branches)
+
 	// Prepare branches for submit (show planning phase with current indicator)
-	submissionInfos, err := prepareBranchesForSubmit(ctx, branchObjs, opts, currentBranchName, remoteStatuses, handler)
+	submissionInfos, err := prepareBranchesForSubmit(ctx, branchObjs, opts, currentBranchName, remoteStatuses, emptyMap, handler)
 	if err != nil {
 		return fmt.Errorf("failed to prepare branches: %w", err)
 	}
+	handler.OnEvent(PlanningCompleteEvent{})
 
 	// Check if we should abort
 	if opts.DryRun {
-		handler.OnEvent(CompletionEvent{Success: true, Message: "Dry run complete"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeDryRun, Message: "Dry run complete"})
 		return nil
 	}
 
 	if len(submissionInfos) == 0 {
-		handler.OnEvent(CompletionEvent{Success: true, Message: "All PRs up to date"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeUpToDate, Message: "All PRs up to date"})
 		return nil
 	}
 
-	// Handle interactive confirmation
-	if opts.Confirm {
-		confirmed, err := handler.Confirm("Proceed with submit?", true)
+	// Confirm empty branches interactively. --confirm already prompts below
+	// with the full plan visible, so don't ask twice.
+	emptyCount := 0
+	for _, info := range submissionInfos {
+		if emptyMap[info.BranchName] {
+			emptyCount++
+		}
+	}
+	if emptyCount > 0 && handler.IsInteractive() && !opts.Confirm {
+		message := fmt.Sprintf("%d branches have no commits — submit anyway?", emptyCount)
+		if emptyCount == 1 {
+			message = "1 branch has no commits — submit anyway?"
+		}
+		confirmed, err := handler.Confirm(message, true)
 		if err != nil {
 			return fmt.Errorf("confirmation canceled: %w", err)
 		}
 		if !confirmed {
-			handler.OnEvent(CompletionEvent{Success: false, Message: "Submit canceled"})
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeCanceled, Message: "Submit canceled"})
+			return nil
+		}
+	}
+
+	// Handle interactive confirmation
+	if opts.Confirm {
+		confirmed, err := handler.Confirm(confirmPrompt(submissionInfos), true)
+		if err != nil {
+			return fmt.Errorf("confirmation canceled: %w", err)
+		}
+		if !confirmed {
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeCanceled, Message: "Submit canceled"})
 			return nil
 		}
 	}
@@ -264,7 +303,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Start submission phase with a worker pool to avoid spawning too many goroutines
-	handler.OnEvent(SubmissionStartEvent{Branches: branchInfos, IsSequential: allCreates})
+	handler.OnEvent(SubmissionStartEvent{Branches: branchInfos})
 
 	githubClient, err := getGitHubClient(ctx)
 	if err != nil {
@@ -312,7 +351,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	if submitErr != nil {
-		handler.OnEvent(CompletionEvent{Success: false, Message: "Submit failed"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
 		return submitErr
 	}
 
@@ -336,33 +375,44 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Push metadata refs for successfully submitted branches
 	if err := pushMetadataRefs(ctx, branchObjs); err != nil {
-		handler.OnEvent(CompletionEvent{Success: false, Message: "Submit failed"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
 		return fmt.Errorf("failed to push metadata to remote: %w. Your PRs were created/updated successfully, but metadata sync failed. Run 'st sync' and try submitting again", err)
 	}
 
 	ctx.Logger.Info("submit completed branchCount=%v", len(branches))
 
-	handler.OnEvent(CompletionEvent{Success: true, Message: "Submit complete"})
+	handler.OnEvent(CompletionEvent{Outcome: OutcomeComplete, Message: "Submit complete", Duration: time.Since(start)})
 	return nil
 }
 
-// normalizeDisplayTreeParents rewrites stack display parent links to skip
-// worktree anchors so submit tree rendering matches log rendering behavior.
-func normalizeDisplayTreeParents(nav engine.StackNavigator, stackTree *tree.StackTree) {
-	if stackTree == nil {
-		return
+// buildStackSnapshot captures the stack relationships and metadata that submit
+// adapters need for rendering.
+func buildStackSnapshot(
+	nav engine.StackNavigator,
+	branches []engine.Branch,
+	currentBranchName string,
+	trunkBranchName string,
+	fixedMap map[string]bool,
+	scopeMap map[string]string,
+	worktreeMap map[string]string,
+) StackSnapshot {
+	parentMap := make(map[string]string, len(branches))
+	branchNames := make([]string, len(branches))
+	for i, branch := range branches {
+		branchName := branch.GetName()
+		branchNames[i] = branchName
+		parentMap[branchName] = resolveSubmitParentName(nav, branch)
 	}
 
-	childrenMap := make(map[string][]string, len(stackTree.Branches))
-	for _, branchName := range stackTree.Branches {
-		branch := nav.GetBranch(branchName)
-		parentName := resolveSubmitParentName(nav, branch)
-		stackTree.ParentMap[branchName] = parentName
-		if parentName != "" {
-			childrenMap[parentName] = append(childrenMap[parentName], branchName)
-		}
+	return StackSnapshot{
+		Branches:      branchNames,
+		CurrentBranch: currentBranchName,
+		TrunkBranch:   trunkBranchName,
+		ParentMap:     parentMap,
+		FixedMap:      fixedMap,
+		ScopeMap:      scopeMap,
+		WorktreeMap:   worktreeMap,
 	}
-	stackTree.ChildrenMap = childrenMap
 }
 
 // submitBranch creates or updates the PR for a single branch. The branch has
@@ -389,9 +439,9 @@ func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, re
 	var prURL string
 	var err error
 	if info.Action == actionCreate {
-		prURL, err = createPullRequestQuiet(ctx, info, repoOwner, repoName)
+		prURL, err = createPullRequestQuiet(ctx, info, repoOwner, repoName, handler)
 	} else {
-		prURL, err = updatePullRequestQuiet(ctx, info, opts, repoOwner, repoName)
+		prURL, err = updatePullRequestQuiet(ctx, info, opts, repoOwner, repoName, handler)
 	}
 
 	if err != nil {
@@ -481,7 +531,7 @@ func pushSubmittedBranches(ctx *app.Context, opts Options, infos []Info, remote 
 }
 
 // createPullRequestQuiet creates a new pull request without logging
-func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, repoName string) (string, error) {
+func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, repoName string, handler Handler) (string, error) {
 	pr := ctx.PR()
 	nav := ctx.Navigator()
 
@@ -510,9 +560,9 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 		return "", fmt.Errorf("failed to create PR for %s: %w", submissionInfo.BranchName, err)
 	}
 
-	// Log any warnings from PR creation (e.g., failed to add labels/assignees)
+	// Surface any warnings from PR creation (e.g., failed to add labels/assignees)
 	for _, warning := range prResult.Warnings {
-		ctx.Output.Warn("%s: %s", submissionInfo.BranchName, warning)
+		handler.OnEvent(BranchWarningEvent{BranchName: submissionInfo.BranchName, Warning: warning})
 	}
 
 	// Update PR info
@@ -537,7 +587,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 }
 
 // updatePullRequestQuiet updates an existing pull request without logging
-func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options, repoOwner, repoName string) (string, error) {
+func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options, repoOwner, repoName string, handler Handler) (string, error) {
 	pr := ctx.PR()
 	nav := ctx.Navigator()
 
@@ -636,9 +686,9 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		return "", fmt.Errorf("failed to update PR for %s: %w", submissionInfo.BranchName, err)
 	}
 
-	// Log any warnings from PR update (e.g., failed to add labels/assignees)
+	// Surface any warnings from PR update (e.g., failed to add labels/assignees)
 	for _, warning := range updateWarnings {
-		ctx.Output.Warn("%s: %s", submissionInfo.BranchName, warning)
+		handler.OnEvent(BranchWarningEvent{BranchName: submissionInfo.BranchName, Warning: warning})
 	}
 
 	// If the base.sha refresh was needed but failed, keep the previously stored BaseSHA

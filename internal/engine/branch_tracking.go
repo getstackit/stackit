@@ -306,13 +306,17 @@ func (e *engineImpl) ReparentBranches(ctx context.Context, branchNames []string,
 // Automatically propagates each new parent's stack ID when a move crosses a
 // stack boundary.
 func (e *engineImpl) ReparentBranchesToParents(ctx context.Context, moves []BranchParentMove) error {
-	divPoints := make(map[string]string, len(moves))
+	branches := make(Branches, len(moves))
+	for i, m := range moves {
+		branches[i] = e.GetBranch(m.Branch)
+	}
+	divPoints := e.BatchDivergencePoints(branches)
 	for _, m := range moves {
-		div, err := e.GetDivergencePoint(m.Branch)
-		if err != nil {
-			return fmt.Errorf("failed to determine divergence point for %s: %w", m.Branch, err)
+		// The batch reader returns "" where the individual lookup would error;
+		// reparenting must not proceed with an unknown divergence point.
+		if divPoints[m.Branch] == "" {
+			return fmt.Errorf("failed to determine divergence point for %s", m.Branch)
 		}
-		divPoints[m.Branch] = div
 	}
 
 	for _, m := range moves {

@@ -19,8 +19,13 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 	}
 	squashCache := git.NewSquashMergeCache()
 
+	// Resolve metadata and revisions for the branches, their tracked ancestors,
+	// and trunk in two batched reads instead of per-branch git calls. Planning
+	// is read-only, so the snapshot stays valid for the whole loop.
+	metaMap, revMap := e.collectRestackData(branches.Names())
+
 	for _, branch := range branches {
-		item, ok := e.planRestackBranch(ctx, branch, plan.BranchMap, squashCache)
+		item, ok := e.planRestackBranch(ctx, branch, plan.BranchMap, squashCache, metaMap, revMap)
 		if !ok {
 			continue
 		}
@@ -35,7 +40,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 			if parentItem, ok := plan.Items[item.NewParent]; ok && parentItem.Action == RestackPlanApplyAnchor && parentItem.TargetRev != "" {
 				specNewParent = parentItem.TargetRev
 			} else if e.IsWorktreeAnchor(e.GetBranch(item.NewParent)) && item.ParentRev != "" {
-				if parentRev, err := e.GetBranch(item.NewParent).GetRevision(); err == nil && parentRev != item.ParentRev {
+				if parentRev, ok := e.planRev(revMap, item.NewParent); ok && parentRev != item.ParentRev {
 					specNewParent = item.ParentRev
 				}
 			}
@@ -51,7 +56,10 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 	return plan, nil
 }
 
-func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches map[string]bool, squashCache *git.SquashMergeCache) (RestackPlanItem, bool) {
+// planRestackBranch builds the plan item for one branch. metaMap and revMap
+// are batch-resolved snapshots from collectRestackData; lookups fall back to
+// individual reads on a miss so the maps are an optimization, not a contract.
+func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches map[string]bool, squashCache *git.SquashMergeCache, metaMap map[string]*git.Meta, revMap map[string]string) (RestackPlanItem, bool) {
 	branchName := branch.GetName()
 	item := RestackPlanItem{Branch: branchName, Action: RestackPlanApplyValidated}
 
@@ -75,7 +83,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 	if parent != nil {
 		parentName = parent.GetName()
-		if _, err := e.GetBranch(parentName).GetRevision(); err != nil {
+		if _, ok := e.planRev(revMap, parentName); !ok {
 			if ancestors, ancestorErr := e.FindMostRecentTrackedAncestors(ctx, branchName); ancestorErr == nil && len(ancestors) > 0 {
 				parentName = ancestors[0]
 			} else {
@@ -95,8 +103,8 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 
 	if branch.IsFrozen() {
-		parentRev, err := e.GetBranch(parentName).GetRevision()
-		if err != nil {
+		parentRev, ok := e.planRev(revMap, parentName)
+		if !ok {
 			return item, false
 		}
 		remoteSha, err := e.git.GetRemoteRevision(branchName)
@@ -105,8 +113,8 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 			item.SkipResult = RestackBranchResult{Result: RestackUnneeded, Frozen: true}
 			return item, true
 		}
-		localSha, err := branch.GetRevision()
-		if err != nil {
+		localSha, ok := e.planRev(revMap, branchName)
+		if !ok {
 			return item, false
 		}
 		if localSha == remoteSha {
@@ -122,12 +130,12 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 
 	if branch.IsWorktreeAnchor() {
-		trunkRev, err := e.Trunk().GetRevision()
-		if err != nil {
+		trunkRev, ok := e.planRev(revMap, e.trunk)
+		if !ok {
 			return item, false
 		}
-		anchorRev, err := branch.GetRevision()
-		if err != nil {
+		anchorRev, ok := e.planRev(revMap, branchName)
+		if !ok {
 			return item, false
 		}
 		if anchorRev == trunkRev {
@@ -152,9 +160,13 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	e.mu.RUnlock()
 	item.NewParent = parentName
 
-	meta, err := e.git.ReadMetadata(branchName)
-	if err != nil {
-		return item, false
+	meta := metaMap[branchName]
+	if meta == nil {
+		var err error
+		meta, err = e.git.ReadMetadata(branchName)
+		if err != nil {
+			return item, false
+		}
 	}
 
 	oldParentRev := ""
@@ -183,13 +195,13 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 	item.OldUpstream = oldParentRev
 
-	parentRev, err := e.GetBranch(parentName).GetRevision()
-	if err != nil {
+	parentRev, ok := e.planRev(revMap, parentName)
+	if !ok {
 		return item, false
 	}
 	if e.IsWorktreeAnchor(e.GetBranch(parentName)) {
-		trunkRev, err := e.Trunk().GetRevision()
-		if err != nil {
+		trunkRev, ok := e.planRev(revMap, e.trunk)
+		if !ok {
 			return item, false
 		}
 		if parentRev != trunkRev {
@@ -207,4 +219,18 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 
 	return item, true
+}
+
+// planRev returns a branch's revision from the batch-resolved snapshot,
+// falling back to an individual read on a miss. ok is false when the revision
+// cannot be resolved at all (e.g. the branch was deleted).
+func (e *engineImpl) planRev(revMap map[string]string, name string) (string, bool) {
+	if rev, ok := revMap[name]; ok {
+		return rev, true
+	}
+	rev, err := e.GetBranch(name).GetRevision()
+	if err != nil {
+		return "", false
+	}
+	return rev, true
 }

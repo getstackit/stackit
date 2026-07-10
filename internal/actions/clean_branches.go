@@ -352,143 +352,119 @@ func buildDeletionPlan(ctx *app.Context, deleteStatuses map[string]engine.Deleti
 	return plan, branchesWithNewParents, reparentMoves
 }
 
-// executeDeletions greedily deletes unblocked branches from the plan.
+// executeDeletions removes worktrees and then deletes every branch that can be
+// safely removed from the plan in one engine batch. The planning pass has
+// already reparented surviving children, so branches from different
+// topological layers can share a single ref update and engine rebuild.
 func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
+	if len(plan.branches) == 0 {
+		return nil
+	}
+
 	eng := ctx.Engine
 	out := ctx.Output
 	c := ctx.Context
 
-	// Push every successfully-deleted branch's remote metadata ref in a single
-	// `git push --delete` after the loop. The deletion loop runs one batch per
-	// topological layer; without this, a 3-deep chain would issue 3 separate
-	// network roundtrips even though one would do. Deferred so previously-
-	// completed batches still push if a later batch fails.
-	var deletedBranchNames []string
-	defer func() {
-		if len(deletedBranchNames) == 0 {
-			return
+	// Snapshot the worktree list once for the whole cleanup. Deleting a
+	// worktree cannot make another branch appear in a worktree, so this list is
+	// sufficient for every branch selected below.
+	listStart := time.Now()
+	worktrees, err := eng.ListWorktrees(c)
+	ctx.Logger.Info("list worktrees for cleanup completed durationMs=%d worktreeCount=%d",
+		time.Since(listStart).Milliseconds(), len(worktrees))
+	if err != nil {
+		out.Debug("Failed to list worktrees for branch cleanup: %v", err)
+		worktrees = git.WorktreeList{}
+	}
+
+	selectionStart := time.Now()
+	worktreesRemoved := 0
+	worktreesFailed := 0
+	branchNames := selectBranchesForDeletion(plan, func(name string) bool {
+		removed, removeErr := removeWorktreeIfCheckedOut(c, name, worktrees, eng, out)
+		if removeErr != nil {
+			out.Warn("Could not remove worktree for branch %s: %v", name, removeErr)
+			worktreesFailed++
+			return false
 		}
-		pushStart := time.Now()
-		err := eng.DeleteRemoteMetadataForBranches(c, deletedBranchNames)
-		ctx.Logger.Info("delete remote metadata refs completed durationMs=%d branchCount=%d ok=%v",
-			time.Since(pushStart).Milliseconds(), len(deletedBranchNames), err == nil)
-		if err != nil {
-			out.Debug("Failed to batch delete remote metadata: %v", err)
+		if removed != "" {
+			worktreesRemoved++
 		}
-	}()
+		return true
+	}, func(name string) string {
+		return getParentName(eng.GetBranch(name))
+	})
+	ctx.Logger.Info("select branches for cleanup completed durationMs=%d branchCount=%d worktreesRemoved=%d worktreesFailed=%d",
+		time.Since(selectionStart).Milliseconds(), len(branchNames), worktreesRemoved, worktreesFailed)
 
-	batchIdx := 0
-	previousCount := len(plan.branches)
-	for {
-		var batchNames []string
-		for name, info := range plan.branches {
-			if len(info.blockers) == 0 {
-				batchNames = append(batchNames, name)
-			}
-		}
+	if len(branchNames) == 0 {
+		return nil
+	}
 
-		if len(batchNames) == 0 {
-			break
-		}
+	branches := engine.NewBranchesBuilder(len(branchNames))
+	for _, name := range branchNames {
+		branches.Add(eng.GetBranch(name))
+	}
 
-		// Sort for deterministic deletion order (helps with debugging and reproducibility)
-		sort.Strings(batchNames)
-		batchIdx++
+	engineStart := time.Now()
+	_, engineErr := eng.DeleteBranches(c, branches.Build())
+	ctx.Logger.Info("engine delete branches completed durationMs=%d branchCount=%d ok=%v",
+		time.Since(engineStart).Milliseconds(), len(branchNames), engineErr == nil)
+	if engineErr != nil {
+		return fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(branchNames, ", "), engineErr)
+	}
 
-		// Snapshot the worktree list once for this batch instead of
-		// re-running `git worktree list --porcelain` per branch.
-		listStart := time.Now()
-		worktrees, err := eng.ListWorktrees(c)
-		ctx.Logger.Info("list worktrees for cleanup batch completed durationMs=%d batch=%d worktreeCount=%d",
-			time.Since(listStart).Milliseconds(), batchIdx, len(worktrees))
-		if err != nil {
-			out.Debug("Failed to list worktrees for branch cleanup: %v", err)
-			worktrees = git.WorktreeList{}
-		}
+	pushStart := time.Now()
+	err = eng.DeleteRemoteMetadataForBranches(c, branchNames)
+	ctx.Logger.Info("delete remote metadata refs completed durationMs=%d branchCount=%d ok=%v",
+		time.Since(pushStart).Milliseconds(), len(branchNames), err == nil)
+	if err != nil {
+		out.Debug("Failed to batch delete remote metadata: %v", err)
+	}
 
-		// Remove any worktrees that have these branches checked out
-		removeStart := time.Now()
-		var failedWorktreeRemovals []string
-		worktreesRemoved := 0
-		for _, name := range batchNames {
-			removed, err := removeWorktreeIfCheckedOut(c, name, worktrees, eng, out)
-			if err != nil {
-				out.Warn("Could not remove worktree for branch %s: %v", name, err)
-				failedWorktreeRemovals = append(failedWorktreeRemovals, name)
-				continue
-			}
-			if removed != "" {
-				worktreesRemoved++
-			}
-		}
-		ctx.Logger.Info("remove worktrees for cleanup batch completed durationMs=%d batch=%d branchCount=%d worktreesRemoved=%d worktreesFailed=%d",
-			time.Since(removeStart).Milliseconds(), batchIdx, len(batchNames), worktreesRemoved, len(failedWorktreeRemovals))
-
-		// Filter out branches where worktree removal failed
-		if len(failedWorktreeRemovals) > 0 {
-			failedSet := make(map[string]bool)
-			for _, name := range failedWorktreeRemovals {
-				failedSet[name] = true
-				// Remove from plan so we don't try again
-				delete(plan.branches, name)
-			}
-
-			filteredNames := make([]string, 0, len(batchNames))
-			for _, name := range batchNames {
-				if !failedSet[name] {
-					filteredNames = append(filteredNames, name)
-				}
-			}
-			batchNames = filteredNames
-		}
-
-		if len(batchNames) == 0 {
-			break // All branches in this batch failed worktree removal
-		}
-
-		// Prepare engine branches and track parents
-		branches := engine.NewBranchesBuilder(len(batchNames))
-		parents := make(map[string]string)
-		for _, name := range batchNames {
-			branch := eng.GetBranch(name)
-			branches.Add(branch)
-			parents[name] = getParentName(branch)
-		}
-
-		// Batch delete from engine
-		engineStart := time.Now()
-		_, engineErr := eng.DeleteBranches(c, branches.Build())
-		ctx.Logger.Info("engine delete branches batch completed durationMs=%d batch=%d branchCount=%d ok=%v",
-			time.Since(engineStart).Milliseconds(), batchIdx, len(batchNames), engineErr == nil)
-		if engineErr != nil {
-			return fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(batchNames, ", "), engineErr)
-		}
-
-		// Defer the remote metadata push to one combined call after the loop.
-		deletedBranchNames = append(deletedBranchNames, batchNames...)
-
-		// Cleanup plan and update parent blockers
-		for _, name := range batchNames {
-			out.Info("Deleted branch %s", output.Branch(name, false))
-			delete(plan.branches, name)
-
-			parentName := parents[name]
-			plan.removeBlocker(parentName, name)
-		}
-
-		// Safety check: ensure we're making progress to prevent infinite loops
-		currentCount := len(plan.branches)
-		if currentCount >= previousCount && currentCount > 0 {
-			remaining := make([]string, 0, currentCount)
-			for name := range plan.branches {
-				remaining = append(remaining, name)
-			}
-			return fmt.Errorf("no progress made in deletion, %d branches remaining: %s", currentCount, strings.Join(remaining, ", "))
-		}
-		previousCount = currentCount
+	for _, name := range branchNames {
+		out.Info("Deleted branch %s", output.Branch(name, false))
 	}
 
 	return nil
+}
+
+// selectBranchesForDeletion resolves the deletion plan without mutating Git.
+// A branch rejected by canDelete is removed from the plan but remains a blocker
+// for its parent, preventing an unsafe ancestor deletion. Selected branches are
+// returned in children-before-parent order for DeleteBranches.
+func selectBranchesForDeletion(plan *deletionPlan, canDelete func(string) bool, parentName func(string) string) []string {
+	var selected []string
+	for {
+		var candidates []string
+		for name, info := range plan.branches {
+			if len(info.blockers) == 0 {
+				candidates = append(candidates, name)
+			}
+		}
+		if len(candidates) == 0 {
+			return selected
+		}
+		sort.Strings(candidates)
+
+		selectedInLayer := make([]string, 0, len(candidates))
+		for _, name := range candidates {
+			if canDelete(name) {
+				selectedInLayer = append(selectedInLayer, name)
+				continue
+			}
+			delete(plan.branches, name)
+		}
+		if len(selectedInLayer) == 0 {
+			return selected
+		}
+
+		for _, name := range selectedInLayer {
+			delete(plan.branches, name)
+			plan.removeBlocker(parentName(name), name)
+		}
+		selected = append(selected, selectedInLayer...)
+	}
 }
 
 // getParentName returns the name of the parent branch or trunk if no parent exists

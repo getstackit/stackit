@@ -106,9 +106,38 @@ func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
 	require.Contains(t, got, "Will submit (1)")
 	require.Contains(t, got, "● current-branch [CORE] → create")
 	require.Contains(t, got, "No changes (1)")
-	require.NotContains(t, got, "skipped-branch")
+	// Small skip groups list their names even when there is active work.
+	require.Contains(t, got, "skipped-branch")
 	require.NotContains(t, got, "skipped-branch — no changes")
 	require.Equal(t, 1, strings.Count(got, "current-branch"), "stack and plan must print as one merged list")
+}
+
+func TestPlanPrinterCollapsesLargeSkipGroups(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+
+	branches := []string{"active-one", "skip-a", "skip-b", "skip-c", "skip-d"}
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:    branches,
+		TrunkBranch: "main",
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{BranchName: "active-one", Action: "create"})
+	for _, name := range branches[1:] {
+		handler.OnEvent(submitAction.BranchPlanEvent{
+			BranchName: name,
+			Skipped:    true,
+			SkipReason: "no changes",
+		})
+	}
+	handler.OnEvent(submitAction.PlanningCompleteEvent{})
+
+	got := ansi.Strip(out.String())
+	require.Contains(t, got, "No changes (4)")
+	// Groups above the naming threshold collapse to a bare count.
+	require.NotContains(t, got, "skip-a")
+	require.NotContains(t, got, "skip-d")
 }
 
 func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {

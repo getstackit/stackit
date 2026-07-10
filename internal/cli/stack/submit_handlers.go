@@ -30,6 +30,10 @@ func NewSubmitUI(out output.Output, logger output.Logger) (*tui.Runner, submit.H
 	return nil, NewSimpleSubmitHandler(out)
 }
 
+// maxNamedSkipGroup is the largest skipped-branch group that still lists its
+// branch names when there is active work; bigger groups show only the count.
+const maxNamedSkipGroup = 3
+
 // planPrinter prints the stack and per-branch plan as a single merged list,
 // shared by both submit handlers. It adapts its framing to the shape of the
 // work: a lone branch off trunk reads as a single PR, while a real stack keeps
@@ -112,7 +116,9 @@ func (p *planPrinter) Flush() {
 	}
 	for _, group := range skipped {
 		p.out.Info("%s", sectionHeader(skipGroupTitle(group.reason), len(group.events), true))
-		if len(active) > 0 {
+		// Small groups list their names so "why didn't my branch go out?" is
+		// answerable at a glance; only large groups collapse to a bare count.
+		if len(active) > 0 && len(group.events) > maxNamedSkipGroup {
 			continue
 		}
 		for _, ev := range group.events {

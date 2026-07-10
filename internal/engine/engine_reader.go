@@ -139,16 +139,10 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 
 	trunk := e.trunk
 
-	// Map of commit SHA to slice of tracked branch names
-	trackedBranchTips := make(map[string][]string)
-
-	// Add trunk tip
-	trunkRev, err := e.git.GetRevision(trunk)
-	if err == nil {
-		trackedBranchTips[trunkRev] = append(trackedBranchTips[trunkRev], trunk)
-	}
-
-	// Get all tracked branches and their tips
+	// Collect trunk plus every tracked candidate (skipping the branch itself
+	// and branches already merged into trunk) so their revisions can be
+	// resolved in a single batched git call instead of one per branch.
+	candidates := []string{trunk}
 	for _, candidate := range e.state.branches {
 		// Skip the branch itself and trunk (already handled)
 		if candidate == branchName || candidate == trunk {
@@ -165,13 +159,19 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 			continue
 		}
 
-		// Get candidate revision
-		candidateRev, err := e.git.GetRevision(candidate)
-		if err != nil {
+		candidates = append(candidates, candidate)
+	}
+
+	revisions, _ := e.git.BatchGetRevisions(candidates)
+
+	// Map of commit SHA to slice of tracked branch names
+	trackedBranchTips := make(map[string][]string)
+	for _, candidate := range candidates {
+		rev, ok := revisions[candidate]
+		if !ok {
 			continue
 		}
-
-		trackedBranchTips[candidateRev] = append(trackedBranchTips[candidateRev], candidate)
+		trackedBranchTips[rev] = append(trackedBranchTips[rev], candidate)
 	}
 
 	// Get history of the branch we're tracking

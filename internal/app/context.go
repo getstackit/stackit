@@ -388,8 +388,8 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 		}
 	}
 
-	// Create git runner with logger for command logging, wrapped with tracing
-	gitRunner := git.NewTracingRunner(git.NewRunnerWithPath(repoRoot, logger), logger)
+	// Create git runner with logger for command logging and tracing.
+	gitRunner := git.NewRunnerWithPath(repoRoot, logger)
 
 	loadMode := engine.LoadModeShared
 	if opts.EngineLoadMode != nil {

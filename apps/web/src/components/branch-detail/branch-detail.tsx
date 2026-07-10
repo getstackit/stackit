@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import type { BranchResponse } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipTrigger,
@@ -113,7 +112,7 @@ export function BranchDetail({ branch, onNavigateToBranch }: BranchDetailProps) 
         {/* Warnings */}
         <Warnings branch={branch} />
 
-        <Separator />
+        <hr className="border-border" />
 
         {/* Commits */}
         <CommitList commits={branch.commits} />

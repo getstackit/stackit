@@ -10,7 +10,6 @@ import { StackDetailPanel } from "@/components/branch-detail/stack-detail";
 import { DetailEmptyState } from "@/components/branch-detail/detail-empty-state";
 import { EventFeed } from "@/components/layout/event-feed";
 import { Header } from "@/components/layout/header";
-import { Separator } from "@/components/ui/separator";
 import { RecentlyMerged } from "@/components/recently-merged/recently-merged";
 import { BackgroundMesh } from "@/components/ui/background-mesh";
 import { SkeletonSwimlane } from "@/components/ui/skeleton-shimmer";
@@ -197,7 +196,7 @@ export function RepoView() {
         {/* Detail + event feed panel (always visible): below the stacks on
             mobile (bounded height), beside them on desktop (fixed width). */}
         <div className="flex shrink-0 flex-col border-t md:flex-row md:border-t-0">
-          <Separator orientation="vertical" className="hidden md:block" />
+          <div aria-hidden className="hidden w-px shrink-0 bg-border md:block" />
           <div className="flex h-[45vh] w-full shrink-0 flex-col overflow-hidden md:h-auto md:w-[480px]">
             {branchOverlayMode && selectedBranchStack ? (
               <div className="flex-1 overflow-auto p-4">
@@ -230,7 +229,7 @@ export function RepoView() {
             )}
             {!branchOverlayMode && (
               <>
-                <Separator />
+                <hr className="border-border" />
                 <div className="p-3 overflow-auto">
                   <EventFeed />
                 </div>

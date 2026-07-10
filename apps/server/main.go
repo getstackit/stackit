@@ -73,7 +73,6 @@ func run() error {
 		remote        = flag.String("remote", "origin", "Default git remote name for the single-repo -cwd shortcut")
 		corsOrigins   = flag.String("cors", "http://localhost:3000,http://localhost:5173", "Comma-separated allowed CORS origins")
 		apiPrefix     = flag.String("api-prefix", "/api/v1", "Canonical API prefix")
-		enableLegacy  = flag.Bool("legacy-api-prefix", true, "Also expose legacy /api endpoints")
 		shutdownGrace = flag.Duration("shutdown-timeout", 10*time.Second, "Graceful shutdown timeout")
 		// Intentionally flag-only (no STACKIT_* env binding): disabling the auth
 		// gate must be a deliberate, visible act on the command line, not
@@ -124,11 +123,6 @@ func run() error {
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		return err
-	}
-
-	prefixes := []string{*apiPrefix}
-	if *enableLegacy && *apiPrefix != "/api" {
-		prefixes = append(prefixes, "/api")
 	}
 
 	reg := registry.New()
@@ -244,7 +238,7 @@ func run() error {
 		// discovered from -cwd, so the web client opens it directly instead of
 		// showing the (hosted-only) repo picker.
 		SingleRepo:          *databaseURL == "",
-		APIPrefixes:         prefixes,
+		APIPrefixes:         []string{*apiPrefix},
 		StaticFS:            staticFS,
 		Registry:            reg,
 		Auth:                authCfg,

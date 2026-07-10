@@ -21,9 +21,6 @@ type StackMetadata struct {
 	Scope     string
 }
 
-// StackTrailerInfo is an alias kept for backwards compatibility.
-type StackTrailerInfo = StackMetadata
-
 // NewStackMetadata constructs stack metadata from explicit fields.
 func NewStackMetadata(stackSize int, prNumbers []int, scope string) StackMetadata {
 	return StackMetadata{
@@ -68,11 +65,6 @@ func (m StackMetadata) ToTrailers() string {
 	return b.String()
 }
 
-// FormatStackTrailers is a compatibility wrapper around StackMetadata.ToTrailers.
-func FormatStackTrailers(stackSize int, prNumbers []int, scope string) string {
-	return NewStackMetadata(stackSize, prNumbers, scope).ToTrailers()
-}
-
 // ParseStackMetadataTrailers extracts stack trailer values from a commit message body.
 // Returns nil if no stack trailers are found.
 func ParseStackMetadataTrailers(body string) *StackMetadata {
@@ -106,11 +98,6 @@ func ParseStackMetadataTrailers(body string) *StackMetadata {
 		return nil
 	}
 	return info
-}
-
-// ParseStackTrailers is a compatibility wrapper around ParseStackMetadataTrailers.
-func ParseStackTrailers(body string) *StackTrailerInfo {
-	return ParseStackMetadataTrailers(body)
 }
 
 // parseTrailer checks if a line matches "Key: value" and returns the value.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
@@ -74,6 +75,7 @@ type Info struct {
 
 // Action performs the submit operation with an event handler for progress feedback.
 func Action(ctx *app.Context, opts Options, handler Handler) error {
+	start := time.Now()
 	// Validate flags
 	if opts.Draft && opts.Publish {
 		return fmt.Errorf("can't use both --publish and --draft flags in one command")
@@ -379,7 +381,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	ctx.Logger.Info("submit completed branchCount=%v", len(branches))
 
-	handler.OnEvent(CompletionEvent{Outcome: OutcomeComplete, Message: "Submit complete"})
+	handler.OnEvent(CompletionEvent{Outcome: OutcomeComplete, Message: "Submit complete", Duration: time.Since(start)})
 	return nil
 }
 

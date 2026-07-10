@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -174,6 +175,26 @@ func TestFormatCompactRowTruncatesLongErrors(t *testing.T) {
 	require.NotContains(t, row, "hint:")
 	require.Contains(t, row, "...")
 	require.LessOrEqual(t, lipgloss.Width(row), 80+maxErrorDetailWidth, "detail must be capped")
+}
+
+func TestFormatClosingSummary(t *testing.T) {
+	t.Parallel()
+
+	items := []Item{
+		{BranchName: "a", Action: ActionCreate, Status: StatusDone},
+		{BranchName: "b", Action: ActionUpdate, Status: StatusDone},
+		{BranchName: "c", Action: ActionUpdate, Status: StatusDone},
+		{BranchName: "d", Action: ActionUpdate, Status: StatusError, Error: errors.New("boom")},
+	}
+
+	require.Equal(t,
+		"✗ 1 created, 2 updated, 1 failed, 4 unchanged (6.2s)",
+		FormatClosingSummary(items, 4, 6200*time.Millisecond))
+	require.Equal(t,
+		"✓ 1 created (1m23s)",
+		FormatClosingSummary(items[:1], 0, 83*time.Second))
+	require.Equal(t, "✓ 1 created", FormatClosingSummary(items[:1], 0, 0))
+	require.Empty(t, FormatClosingSummary(nil, 0, time.Second))
 }
 
 func TestFormatFailureSummaryWithoutErrorDetail(t *testing.T) {

@@ -1,5 +1,7 @@
 package submit
 
+import "time"
+
 // Event represents a feedback event from the submit action.
 // Implementations should use type switches to handle specific event types.
 type Event interface {
@@ -106,8 +108,9 @@ const (
 
 // CompletionEvent indicates the action has finished.
 type CompletionEvent struct {
-	Outcome CompletionOutcome
-	Message string // human-readable detail, e.g. "All PRs up to date"
+	Outcome  CompletionOutcome
+	Message  string        // human-readable detail, e.g. "All PRs up to date"
+	Duration time.Duration // elapsed run time; set when branches were submitted
 }
 
 // Success reports whether the run ended without failure or cancellation.

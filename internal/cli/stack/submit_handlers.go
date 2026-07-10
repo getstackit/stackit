@@ -202,6 +202,17 @@ func (p *planPrinter) pad(name string, dim bool, current bool) string {
 	return style.ColorBranchNameBold(padded, current)
 }
 
+// skippedCount is the number of plan rows that were skipped.
+func (p *planPrinter) skippedCount() int {
+	n := 0
+	for _, ev := range p.events {
+		if ev.Skipped {
+			n++
+		}
+	}
+	return n
+}
+
 type skippedPlanGroup struct {
 	reason string
 	events []submit.BranchPlanEvent
@@ -396,6 +407,14 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				h.Output.Newline()
 				h.Output.Info("%s", summary)
 			}
+			// The solo summary already names the single result; a count line
+			// would just restate it.
+			if !h.plan.solo {
+				if closing := submitComponent.FormatClosingSummary(h.submitItems(), h.plan.skippedCount(), ev.Duration); closing != "" {
+					h.Output.Newline()
+					h.Output.Info("%s", closing)
+				}
+			}
 		case submit.OutcomeOnTrunk:
 			printOnTrunkGuidance(h.Output, ev.Message)
 		case submit.OutcomeFailed:
@@ -569,7 +588,10 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			}
 			return
 		}
-		h.runner.Send(submitComponent.ProgressCompleteMsg{})
+		h.runner.Send(submitComponent.ProgressCompleteMsg{
+			Skipped: h.plan.skippedCount(),
+			Elapsed: ev.Duration,
+		})
 		h.runner.Wait()
 	}
 }

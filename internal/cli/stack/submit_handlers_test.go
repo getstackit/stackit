@@ -3,6 +3,7 @@ package stack
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
@@ -72,7 +73,7 @@ func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
 	got := out.String()
 	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/934")
 	require.NotContains(t, got, "syncing")
-	require.Equal(t, 1, strings.Count(got, "✓"), "footer sync must not re-report a finished branch")
+	require.Equal(t, 1, strings.Count(got, "✓ guard-runner"), "footer sync must not re-report a finished branch")
 }
 
 func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
@@ -110,6 +111,31 @@ func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
 	require.Contains(t, got, "skipped-branch")
 	require.NotContains(t, got, "skipped-branch — no changes")
 	require.Equal(t, 1, strings.Count(got, "current-branch"), "stack and plan must print as one merged list")
+}
+
+func TestSimpleSubmitHandlerPrintsClosingSummary(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out)
+
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:    []string{"create-me", "update-me", "skip-me"},
+		TrunkBranch: "main",
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{BranchName: "create-me", Action: "create"})
+	handler.OnEvent(submitAction.BranchPlanEvent{BranchName: "update-me", Action: "update"})
+	handler.OnEvent(submitAction.BranchPlanEvent{BranchName: "skip-me", Skipped: true, SkipReason: "no changes"})
+	handler.OnEvent(submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+		{Name: "create-me", Action: "create"},
+		{Name: "update-me", Action: "update"},
+	}})
+	handler.OnEvent(submitAction.BranchProgressEvent{BranchName: "create-me", Status: submitAction.StatusDone, URL: "https://github.com/x/y/pull/1"})
+	handler.OnEvent(submitAction.BranchProgressEvent{BranchName: "update-me", Status: submitAction.StatusDone, URL: "https://github.com/x/y/pull/2"})
+	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Duration: 6200 * time.Millisecond})
+
+	got := ansi.Strip(out.String())
+	require.Contains(t, got, "✓ 1 created, 1 updated, 1 unchanged (6.2s)")
 }
 
 func TestPlanPrinterCollapsesLargeSkipGroups(t *testing.T) {

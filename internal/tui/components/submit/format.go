@@ -6,6 +6,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"charm.land/lipgloss/v2"
@@ -287,6 +288,57 @@ func FormatSoloSummary(items []Item) string {
 		return "  " + label + "\n  " + item.URL
 	}
 	return ""
+}
+
+// FormatClosingSummary renders the one-line run summary: counts by outcome
+// plus elapsed time, e.g. "✓ 1 created, 2 updated, 4 unchanged (6.2s)".
+func FormatClosingSummary(items []Item, skipped int, elapsed time.Duration) string {
+	var created, updated, failed int
+	for _, item := range items {
+		switch {
+		case item.Status == StatusError:
+			failed++
+		case item.Status == StatusDone && item.Action == ActionCreate:
+			created++
+		case item.Status == StatusDone && item.Action == ActionUpdate:
+			updated++
+		}
+	}
+
+	parts := make([]string, 0, 4)
+	if created > 0 {
+		parts = append(parts, fmt.Sprintf("%d created", created))
+	}
+	if updated > 0 {
+		parts = append(parts, fmt.Sprintf("%d updated", updated))
+	}
+	if failed > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed", failed))
+	}
+	if skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d unchanged", skipped))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+
+	icon := "✓"
+	if failed > 0 {
+		icon = "✗"
+	}
+	line := icon + " " + strings.Join(parts, ", ")
+	if elapsed > 0 {
+		line += " (" + formatElapsed(elapsed) + ")"
+	}
+	return line
+}
+
+// formatElapsed renders a duration compactly: "6.2s" under a minute, "1m23s" above.
+func formatElapsed(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	return d.Round(time.Second).String()
 }
 
 // FormatFailureSummary renders failed branches with their errors. The progress

@@ -4,6 +4,7 @@ package submit
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
@@ -37,8 +38,11 @@ type WarningMsg struct {
 	Warning    string
 }
 
-// ProgressCompleteMsg is sent when all submissions are finished
-type ProgressCompleteMsg struct{}
+// ProgressCompleteMsg is sent when all submissions are finished.
+type ProgressCompleteMsg struct {
+	Skipped int           // branches skipped in the plan, shown as "unchanged"
+	Elapsed time.Duration // total run time; zero when unknown
+}
 
 // NewModel creates a new submit model
 func NewModel(items []Item) *Model {
@@ -98,6 +102,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ProgressCompleteMsg:
 		m.Done = true
 		summary := m.completionSummary()
+		// The solo summary already names the single result; a count line would
+		// just restate it.
+		if !m.Solo && summary != "" {
+			if closing := FormatClosingSummary(m.Items, msg.Skipped, msg.Elapsed); closing != "" {
+				summary += "\n\n" + closing
+			}
+		}
 		if summary != "" {
 			return m, tea.Sequence(
 				tea.Printf("\n%s", summary),

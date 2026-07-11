@@ -59,7 +59,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 // planRestackBranch builds the plan item for one branch. metaMap and revMap
 // are batch-resolved snapshots from collectRestackData; lookups fall back to
 // individual reads on a miss so the maps are an optimization, not a contract.
-func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches map[string]bool, squashCache *git.SquashMergeCache, metaMap map[string]*git.Meta, revMap map[string]string) (RestackPlanItem, bool) {
+func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches map[string]bool, squashCache *git.SquashMergeCache, metaMap MetaMap, revMap RevisionMap) (RestackPlanItem, bool) {
 	branchName := branch.GetName()
 	item := RestackPlanItem{Branch: branchName, Action: RestackPlanApplyValidated}
 
@@ -224,7 +224,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 // planRev returns a branch's revision from the batch-resolved snapshot,
 // falling back to an individual read on a miss. ok is false when the revision
 // cannot be resolved at all (e.g. the branch was deleted).
-func (e *engineImpl) planRev(revMap map[string]string, name string) (string, bool) {
+func (e *engineImpl) planRev(revMap RevisionMap, name string) (string, bool) {
 	if rev, ok := revMap[name]; ok {
 		return rev, true
 	}

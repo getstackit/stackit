@@ -22,6 +22,21 @@ const (
 // LockReason is re-exported from git package
 type LockReason = git.LockReason
 
+// MetaMap is branch name -> metadata, as returned by the batch metadata readers.
+type MetaMap map[string]*git.Meta
+
+// Get returns the metadata for a branch, or nil if the map is nil or the
+// branch has no entry.
+func (m MetaMap) Get(branchName string) *git.Meta {
+	if m == nil {
+		return nil
+	}
+	return m[branchName]
+}
+
+// RevisionMap is branch name -> commit SHA, as returned by the batch revision readers.
+type RevisionMap map[string]string
+
 const (
 	// LockReasonNone indicates the branch is not locked
 	LockReasonNone LockReason = git.LockReasonNone

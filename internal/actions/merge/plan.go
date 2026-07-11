@@ -328,8 +328,8 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 				state = checkStatus.State
 			}
 		}
-		if state != "OPEN" {
-			if state == "MERGED" {
+		if state != git.PRStateOpen {
+			if state == git.PRStateMerged {
 				splog.Debug("Skipping %s: PR #%d is already merged", name, *prInfo.Number())
 				branchValid[idx] = true // Not an error, just skip
 				return

@@ -2,6 +2,8 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -544,12 +546,6 @@ func GetAutoMergeStatus(ctx context.Context, runner GitCommandRunner, prNodeID s
 	return status, nil
 }
 
-// PR state constants as returned by GitHub's GraphQL API.
-const (
-	PRStateMerged = "MERGED"
-	PRStateClosed = "CLOSED"
-)
-
 // GraphQL variable name constants shared across GitHub API calls.
 const (
 	graphqlVarOwner         = "owner"
@@ -577,7 +573,7 @@ const mergeableMergeable = "MERGEABLE"
 type PRMergeableState struct {
 	Mergeable      bool   // True if PR can be merged without conflicts
 	MergeStateText string // mergeStateStatus value: CLEAN, DIRTY, BLOCKED, UNKNOWN, etc.
-	State          string // OPEN, CLOSED, MERGED
+	State          git.PRState
 }
 
 // isMergeStateStatusUnsupported returns true when the error indicates the mergeStateStatus
@@ -626,9 +622,9 @@ func GetPRMergeableState(ctx context.Context, runner GitCommandRunner, prNodeID 
 	var response struct {
 		Data struct {
 			Node struct {
-				Mergeable        string `json:"mergeable"`
-				MergeStateStatus string `json:"mergeStateStatus"`
-				State            string `json:"state"`
+				Mergeable        string      `json:"mergeable"`
+				MergeStateStatus string      `json:"mergeStateStatus"`
+				State            git.PRState `json:"state"`
 			} `json:"node"`
 		} `json:"data"`
 	}
@@ -668,8 +664,8 @@ func getPRMergeableStateBasic(ctx context.Context, runner GitCommandRunner, prNo
 	var response struct {
 		Data struct {
 			Node struct {
-				Mergeable string `json:"mergeable"`
-				State     string `json:"state"`
+				Mergeable string      `json:"mergeable"`
+				State     git.PRState `json:"state"`
 			} `json:"node"`
 		} `json:"data"`
 	}
@@ -728,10 +724,10 @@ func BatchGetPRMergeableStates(ctx context.Context, runner GitCommandRunner, prN
 	// Parse response - the data object has dynamic keys (pr0, pr1, etc.)
 	var response struct {
 		Data map[string]struct {
-			ID               string `json:"id"`
-			Mergeable        string `json:"mergeable"`
-			MergeStateStatus string `json:"mergeStateStatus"`
-			State            string `json:"state"`
+			ID               string      `json:"id"`
+			Mergeable        string      `json:"mergeable"`
+			MergeStateStatus string      `json:"mergeStateStatus"`
+			State            git.PRState `json:"state"`
 		} `json:"data"`
 	}
 
@@ -767,9 +763,9 @@ func batchGetPRMergeableStatesBasic(ctx context.Context, runner GitCommandRunner
 
 	var response struct {
 		Data map[string]struct {
-			ID        string `json:"id"`
-			Mergeable string `json:"mergeable"`
-			State     string `json:"state"`
+			ID        string      `json:"id"`
+			Mergeable string      `json:"mergeable"`
+			State     git.PRState `json:"state"`
 		} `json:"data"`
 	}
 
@@ -809,11 +805,11 @@ func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID strin
 			return fmt.Errorf("failed to check PR state: %w", err)
 		}
 
-		if state.State == PRStateMerged {
+		if state.State == git.PRStateMerged {
 			return nil
 		}
 
-		if state.State == PRStateClosed {
+		if state.State == git.PRStateClosed {
 			return fmt.Errorf("PR was closed without merging")
 		}
 
@@ -822,7 +818,7 @@ func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID strin
 		if err == nil && !autoMerge.Enabled {
 			// Re-check PR state to avoid race condition where PR merged between checks
 			freshState, freshErr := GetPRMergeableState(ctx, runner, prNodeID)
-			if freshErr == nil && freshState.State == PRStateMerged {
+			if freshErr == nil && freshState.State == git.PRStateMerged {
 				return nil // PR merged successfully
 			}
 
@@ -859,9 +855,9 @@ func WaitForMergeable(ctx context.Context, runner GitCommandRunner, prNodeID str
 		}
 
 		switch state.State {
-		case PRStateMerged:
+		case git.PRStateMerged:
 			return state, fmt.Errorf("PR was merged while waiting: %w", ErrPRAlreadyMerged)
-		case PRStateClosed:
+		case git.PRStateClosed:
 			return state, fmt.Errorf("PR was closed without merging")
 		}
 

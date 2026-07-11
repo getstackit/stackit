@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/getstackit/stackit/internal/git"
 )
 
 var update = flag.Bool("update", false, "update golden files")
@@ -219,7 +221,7 @@ func buildGoldenTests() []goldenTest {
 			name: "merged_pr",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: new(123), PRState: PRStateMerged},
+				"feature-1": {PRNumber: new(123), PRState: git.PRStateMerged},
 			},
 			opts: RenderOptions{Mode: RenderModeFull},
 		},
@@ -227,7 +229,7 @@ func buildGoldenTests() []goldenTest {
 			name: "closed_pr",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: new(123), PRState: PRStateClosed},
+				"feature-1": {PRNumber: new(123), PRState: git.PRStateClosed},
 			},
 			opts: RenderOptions{Mode: RenderModeFull},
 		},

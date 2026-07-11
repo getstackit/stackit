@@ -1,13 +1,15 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 )
 
 // PRStateBody holds the subset of pull-request fields needed to append a
 // consolidation footer and decide whether a PR still needs closing.
 type PRStateBody struct {
-	State string
+	State git.PRState
 	Body  string
 }
 
@@ -45,7 +47,7 @@ func parsePRStateBodyResponse(body []byte, prNumbers []int) (map[int]PRStateBody
 	return parsePRNumberQueryResponse(body, prNumbers, func(prData map[string]any) (PRStateBody, bool) {
 		var entry PRStateBody
 		if state, ok := prData["state"].(string); ok {
-			entry.State = state
+			entry.State = git.PRState(state)
 		}
 		if prBody, ok := prData["body"].(string); ok {
 			entry.Body = prBody

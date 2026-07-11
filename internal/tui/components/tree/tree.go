@@ -8,6 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
@@ -16,11 +17,6 @@ const (
 	CurrentBranchSymbol = "◉"
 	// BranchSymbol is the symbol used for regular branches in tree views
 	BranchSymbol = "◯"
-
-	// PRStateMerged indicates the PR has been merged
-	PRStateMerged = "MERGED"
-	// PRStateClosed indicates the PR has been closed
-	PRStateClosed = "CLOSED"
 
 	// CheckStatusNone indicates no CI status
 	CheckStatusNone = "NONE"
@@ -44,7 +40,7 @@ const (
 type MergedParentDisplay struct {
 	BranchName string
 	PRNumber   *int
-	PRState    string // "MERGED", "CLOSED"
+	PRState    git.PRState
 }
 
 // BranchAnnotation holds per-branch display metadata
@@ -64,7 +60,7 @@ type BranchAnnotation struct {
 	CommitCount  int
 	LinesAdded   int
 	LinesDeleted int
-	PRState      string // "OPEN", "MERGED", "CLOSED"
+	PRState      git.PRState
 
 	// WorktreePath is set if this branch is the stack root of a managed worktree
 	WorktreePath string
@@ -847,8 +843,8 @@ func (r *StackTreeRenderer) getBranchingLine(numChildren int, indentLevel int, p
 	// They should use the current branch's scope color.
 	annotation := r.Annotations[branchName]
 	scope := annotation.Scope
-	isMerged := annotation.PRState == PRStateMerged
-	isClosed := annotation.PRState == PRStateClosed
+	isMerged := annotation.PRState == git.PRStateMerged
+	isClosed := annotation.PRState == git.PRStateClosed
 	isDim := isMerged || isClosed
 
 	var styleObj lipgloss.Style
@@ -884,8 +880,8 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 	isSelected := args.branchName == args.selectedBranch
 	annotation := r.Annotations[args.branchName]
 	isTrunk := r.isTrunk(args.branchName)
-	isMerged := annotation.PRState == PRStateMerged
-	isClosed := annotation.PRState == PRStateClosed
+	isMerged := annotation.PRState == git.PRStateMerged
+	isClosed := annotation.PRState == git.PRStateClosed
 	isDim := isMerged || isClosed
 
 	// Check if branch matches search (if search is active)
@@ -1230,9 +1226,9 @@ func (r *StackTreeRenderer) formatMergedParentLine(
 		text = fmt.Sprintf("previously based on %s", prNum)
 
 		switch merged.PRState {
-		case PRStateMerged:
+		case git.PRStateMerged:
 			text += " " + style.ColorDim("(merged)")
-		case PRStateClosed:
+		case git.PRStateClosed:
 			text += " " + style.ColorDim("(closed)")
 		}
 	} else {
@@ -1355,9 +1351,9 @@ func (r *StackTreeRenderer) FormatAnnotationColored(annotation BranchAnnotation)
 	}
 
 	switch annotation.PRState {
-	case PRStateMerged:
+	case git.PRStateMerged:
 		parts = append(parts, style.ColorDim("(Merged)"))
-	case PRStateClosed:
+	case git.PRStateClosed:
 		parts = append(parts, style.ColorDim("(Closed)"))
 	}
 

@@ -21,15 +21,11 @@ const (
 	DefaultMergePollInterval = 10 * time.Second
 )
 
-// PR state and merge strategy string constants shared across merge subcommands.
+// Merge-state and merge strategy string constants shared across merge subcommands.
 const (
-	prStateOpen     = "OPEN"
-	prStateMerged   = "MERGED"
-	prStateClean    = "CLEAN"
-	prStateHasHooks = "HAS_HOOKS"
+	mergeStateClean    = "CLEAN"
+	mergeStateHasHooks = "HAS_HOOKS"
 
-	mergeStrategySquash   = "squash"
-	mergeStrategyMerge    = "merge"
 	mergeStrategyShip     = "ship"
 	mergeStrategyBottomUp = "bottom-up"
 	mergeStrategyDone     = "done"
@@ -108,11 +104,11 @@ func doOrchestrateMerge(ctx context.Context, out output.Output, runner git.Runne
 	if err != nil {
 		return 0, fmt.Errorf("failed to check PR mergeable state: %w", err)
 	}
-	if mergeableState.State == prStateMerged {
+	if mergeableState.State == git.PRStateMerged {
 		out.Success("PR #%d is already merged", opts.prNumber)
 		return OutcomeMerged, nil
 	}
-	if mergeableState.State != prStateOpen {
+	if mergeableState.State != git.PRStateOpen {
 		return 0, fmt.Errorf("PR #%d is %s (not open)", opts.prNumber, mergeableState.State)
 	}
 	if !mergeableState.Mergeable {
@@ -196,7 +192,7 @@ func handleAutoMergeError(ctx context.Context, out output.Output, runner git.Run
 // isReadyToMerge returns true if the PR's mergeStateStatus indicates it can be merged immediately.
 func isReadyToMerge(mergeStateText string) bool {
 	switch mergeStateText {
-	case prStateClean, prStateHasHooks:
+	case mergeStateClean, mergeStateHasHooks:
 		return true
 	default:
 		return false

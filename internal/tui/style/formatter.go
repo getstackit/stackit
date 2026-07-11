@@ -1,6 +1,8 @@
 package style
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"fmt"
 	"image/color"
 	"strings"
@@ -227,15 +229,15 @@ func IconLocked() string {
 }
 
 // ColorPRNumberByState colors PR number based on state
-func ColorPRNumberByState(prNumber int, state string, isDraft bool) string {
+func ColorPRNumberByState(prNumber int, state git.PRState, isDraft bool) string {
 	prefix := fmt.Sprintf("#%d", prNumber)
 	if isDraft {
 		return ColorDim(prefix)
 	}
 	switch state {
-	case "MERGED":
+	case git.PRStateMerged:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Render(prefix) // purple
-	case "CLOSED":
+	case git.PRStateClosed:
 		return ColorDim(prefix)
 	default:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Render(prefix) // cyan

@@ -1,6 +1,8 @@
 package merge
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 	"fmt"
 
@@ -22,7 +24,7 @@ func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExec
 		if prInfo == nil || prInfo.Number() == nil {
 			return fmt.Errorf("PR not found for branch %s", step.BranchName)
 		}
-		if prInfo.State() != prStateOpen {
+		if prInfo.State() != git.PRStateOpen {
 			return fmt.Errorf("PR #%d for branch %s is %s (not open)", *prInfo.Number(), step.BranchName, prInfo.State())
 		}
 		// Optionally check CI checks haven't changed to failing or pending
@@ -73,7 +75,7 @@ func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExec
 		if prInfo == nil || prInfo.Number() == nil {
 			return fmt.Errorf("PR not found for branch %s", step.BranchName)
 		}
-		if prInfo.State() != prStateOpen {
+		if prInfo.State() != git.PRStateOpen {
 			return fmt.Errorf("PR #%d for branch %s is %s (not open)", *prInfo.Number(), step.BranchName, prInfo.State())
 		}
 	}

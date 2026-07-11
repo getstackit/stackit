@@ -174,7 +174,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.OnStep(StepValidating, basehandler.StatusCompleted, "Validation passed")
 
 	// Start the operation
-	handler.Start(source, oldParentName, onto)
+	handler.Start(basehandler.Reparent{Branch: source, OldParent: oldParentName, NewParent: onto})
 
 	// Step 1: Reparent children to grandparent
 	var reparentedChildren []string
@@ -188,7 +188,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			return fmt.Errorf("failed to reparent children to %s: %w", grandparentBranch.GetName(), err)
 		}
 		for _, child := range children {
-			handler.OnChildReparented(child.GetName(), source, grandparentBranch.GetName())
+			handler.OnChildReparented(basehandler.Reparent{Branch: child.GetName(), OldParent: source, NewParent: grandparentBranch.GetName()})
 			reparentedChildren = append(reparentedChildren, child.GetName())
 			out.Info("Reparented %s from %s to %s.",
 				output.Branch(child.GetName(), false),

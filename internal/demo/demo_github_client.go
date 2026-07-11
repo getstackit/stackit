@@ -14,8 +14,8 @@ import (
 
 // checkStatusCompleted is the status value for completed check runs in demo mode.
 const (
-	checkStatusCompleted   = "COMPLETED"
-	checkConclusionSuccess = "SUCCESS"
+	checkStatusCompleted   = github.CheckRunStatusCompleted
+	checkConclusionSuccess = github.CheckConclusionSuccess
 )
 
 // prCounter is used to generate unique PR numbers

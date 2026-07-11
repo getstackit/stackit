@@ -13,13 +13,6 @@ const (
 	StepRestacking Step = "restacking"
 )
 
-// PlannedMove represents a single branch move in the flatten plan
-type PlannedMove struct {
-	Branch    string // Branch being moved
-	OldParent string // Current parent branch
-	NewParent string // Target parent branch (closer to trunk)
-}
-
 // ExcludedBranch represents a branch that was kept in place due to code dependencies
 type ExcludedBranch struct {
 	Branch string // Branch name
@@ -28,9 +21,9 @@ type ExcludedBranch struct {
 
 // Preview contains information about the planned flatten for confirmation
 type Preview struct {
-	Moves            []PlannedMove    // Branches that will be moved
-	UnchangedCount   int              // Number of branches that won't change
-	ExcludedBranches []ExcludedBranch // Branches kept in place due to dependencies
+	Moves            []basehandler.Reparent // Branches that will be moved
+	UnchangedCount   int                    // Number of branches that won't change
+	ExcludedBranches []ExcludedBranch       // Branches kept in place due to dependencies
 }
 
 // Result contains the result of the flatten action
@@ -51,7 +44,7 @@ type Handler interface {
 	OnValidationProgress(current, total int, branchName string)
 
 	// OnBranchMoved is called when a branch is moved to a new parent
-	OnBranchMoved(branch, oldParent, newParent string)
+	OnBranchMoved(move basehandler.Reparent)
 
 	// Complete is called when flatten finishes
 	Complete(result Result)
@@ -83,7 +76,7 @@ func (h *NullHandler) Start(int) {}
 func (h *NullHandler) OnValidationProgress(int, int, string) {}
 
 // OnBranchMoved implements Handler.
-func (h *NullHandler) OnBranchMoved(string, string, string) {}
+func (h *NullHandler) OnBranchMoved(basehandler.Reparent) {}
 
 // Complete implements Handler.
 func (h *NullHandler) Complete(Result) {}

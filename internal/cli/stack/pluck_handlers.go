@@ -36,12 +36,12 @@ func NewSimplePluckHandler(out output.Output) *SimplePluckHandler {
 }
 
 // Start is called at the beginning of pluck
-func (h *SimplePluckHandler) Start(sourceBranch, oldParent, newParent string) {
+func (h *SimplePluckHandler) Start(move handler.Reparent) {
 	h.Lock()
 	defer h.Unlock()
-	h.sourceBranch = sourceBranch
-	h.oldParent = oldParent
-	h.newParent = newParent
+	h.sourceBranch = move.Branch
+	h.oldParent = move.OldParent
+	h.newParent = move.NewParent
 }
 
 // OnStep is called for each step in the pluck process
@@ -50,7 +50,7 @@ func (h *SimplePluckHandler) OnStep(_ pluck.Step, _ handler.StepStatus, _ string
 }
 
 // OnChildReparented is called when a child is reparented
-func (h *SimplePluckHandler) OnChildReparented(_, _, _ string) {
+func (h *SimplePluckHandler) OnChildReparented(handler.Reparent) {
 	// Output is handled by the action
 }
 

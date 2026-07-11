@@ -321,13 +321,9 @@ func unlockDrainBranches(ctx *app.Context, branches []mergeAction.BranchMergeInf
 
 func resolveMergeMethod(ctx *app.Context, methodFlag string) (github.MergeMethod, error) {
 	if methodFlag != "" {
-		switch methodFlag {
-		case mergeStrategySquash:
-			return github.MergeMethodSquash, nil
-		case mergeStrategyMerge:
-			return github.MergeMethodMerge, nil
-		case "rebase":
-			return github.MergeMethodRebase, nil
+		switch method := github.MergeMethod(methodFlag); method {
+		case github.MergeMethodSquash, github.MergeMethodMerge, github.MergeMethodRebase:
+			return method, nil
 		default:
 			return "", fmt.Errorf("invalid merge method: %s (must be squash, merge, or rebase)", methodFlag)
 		}

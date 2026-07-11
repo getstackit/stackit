@@ -1,6 +1,8 @@
 package merge
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 	"fmt"
 
@@ -126,7 +128,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		}
 
 		// Skip if already closed/merged (e.g., by merge commit strategy)
-		if existingPR.State != "OPEN" {
+		if existingPR.State != git.PRStateOpen {
 			out.Debug("PR #%d is already %s, skipping", prNumber, existingPR.State)
 			result.SkippedPRs = append(result.SkippedPRs, prNumber)
 			continue

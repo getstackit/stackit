@@ -1,6 +1,8 @@
 package submit
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -54,7 +56,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 
 		// If PR is closed or merged, treat as a new PR creation
 		// This allows recovery when a PR was closed (e.g., due to deleted base branch)
-		if prInfo != nil && (prInfo.State() == "CLOSED" || prInfo.State() == "MERGED") {
+		if prInfo != nil && (prInfo.State() == git.PRStateClosed || prInfo.State() == git.PRStateMerged) {
 			action = actionCreate
 			prNumber = nil
 		}

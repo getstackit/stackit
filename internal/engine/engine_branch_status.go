@@ -440,8 +440,8 @@ func (e *engineImpl) GetDeletionStatuses(ctx context.Context, branchNames []stri
 
 type deletionStatusInputs struct {
 	trunkName      string
-	metadataMap    map[string]*git.Meta
-	revisions      map[string]string
+	metadataMap    MetaMap
+	revisions      RevisionMap
 	mergedBranches map[string]bool
 	squashCache    *git.SquashMergeCache
 }
@@ -498,7 +498,7 @@ func (e *engineImpl) evaluateDeletionStatuses(ctx context.Context, branchNames [
 //  3. PR state CLOSED/MERGED → deletable
 //  4. Merged into trunk → deletable
 //  5. Empty with PR → deletable
-func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName string, branch Branch, meta *git.Meta, revisions map[string]string, mergedBranches map[string]bool, trunkName string, squashCache *git.SquashMergeCache) DeletionStatus {
+func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName string, branch Branch, meta *git.Meta, revisions RevisionMap, mergedBranches map[string]bool, trunkName string, squashCache *git.SquashMergeCache) DeletionStatus {
 	// 1. Never delete trunk
 	if e.IsTrunk(branch) {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
@@ -513,11 +513,10 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	if meta != nil {
 		prInfo := NewPrInfoFromMeta(meta)
 		if prInfo != nil {
-			const prStateClosed = "CLOSED"
-			if prInfo.State() == prStateClosed {
+			if prInfo.State() == git.PRStateClosed {
 				return DeletionStatus{SafeToDelete: true, Reason: "closed on GitHub", Kind: DeletionReasonClosedPR}
 			}
-			if prInfo.State() == prStateMerged {
+			if prInfo.State() == git.PRStateMerged {
 				base := prInfo.Base()
 				if base == "" {
 					base = trunkName

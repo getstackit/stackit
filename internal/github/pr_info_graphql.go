@@ -1,6 +1,8 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -133,7 +135,7 @@ func pullRequestInfoFromGraphQLNode(node map[string]any) *PullRequestInfo {
 		info.Body = v
 	}
 	if v, ok := node["state"].(string); ok {
-		info.State = strings.ToUpper(v)
+		info.State = git.PRState(strings.ToUpper(v))
 	}
 	if v, ok := node["url"].(string); ok {
 		info.HTMLURL = v

@@ -14,10 +14,6 @@ import (
 	"github.com/getstackit/stackit/internal/tui"
 )
 
-const (
-	prStateOpen = "OPEN"
-)
-
 // GetMergeMethod returns the merge method to use for PR merges.
 // If not configured, it prompts the user to select one and saves it to config.
 func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeMethod, error) {
@@ -117,7 +113,7 @@ type mergeExecuteEngine interface {
 	engine.SyncManager
 	engine.StackRewriter
 	engine.RemoteMetadataManager
-	BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error)
+	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
 	Git() git.Runner
 }
 

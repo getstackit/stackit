@@ -1,6 +1,10 @@
 package engine
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/getstackit/stackit/internal/git"
+)
 
 // PrInfo represents PR information for a branch
 // PrInfo is immutable - use With* methods to create modified copies
@@ -9,7 +13,7 @@ type PrInfo struct {
 	title       string
 	body        string
 	isDraft     bool
-	state       string     // MERGED, CLOSED, OPEN
+	state       git.PRState
 	base        string     // Base branch name
 	baseSHA     string     // Tip SHA of base branch at last submit (used to detect stale base.sha on GitHub)
 	url         string     // PR URL
@@ -18,7 +22,7 @@ type PrInfo struct {
 }
 
 // NewPrInfo creates a new PrInfo instance
-func NewPrInfo(number *int, title, body, state, base, url string, isDraft bool) *PrInfo {
+func NewPrInfo(number *int, title, body string, state git.PRState, base, url string, isDraft bool) *PrInfo {
 	return &PrInfo{
 		number:  number,
 		title:   title,
@@ -51,7 +55,7 @@ func (p *PrInfo) IsDraft() bool {
 }
 
 // State returns the PR state (MERGED, CLOSED, OPEN)
-func (p *PrInfo) State() string {
+func (p *PrInfo) State() git.PRState {
 	return p.state
 }
 
@@ -90,15 +94,15 @@ func (p *PrInfo) MergeBranch() string {
 // MarshalJSON implements json.Marshaler for PrInfo
 func (p *PrInfo) MarshalJSON() ([]byte, error) {
 	type Alias struct {
-		Number      *int   `json:"number,omitempty"`
-		Base        string `json:"base,omitempty"`
-		URL         string `json:"url,omitempty"`
-		Title       string `json:"title,omitempty"`
-		Body        string `json:"body,omitempty"`
-		State       string `json:"state,omitempty"`
-		IsDraft     bool   `json:"is_draft"`
-		LockReason  string `json:"lock_reason,omitempty"`
-		MergeBranch string `json:"merge_branch,omitempty"`
+		Number      *int        `json:"number,omitempty"`
+		Base        string      `json:"base,omitempty"`
+		URL         string      `json:"url,omitempty"`
+		Title       string      `json:"title,omitempty"`
+		Body        string      `json:"body,omitempty"`
+		State       git.PRState `json:"state,omitempty"`
+		IsDraft     bool        `json:"is_draft"`
+		LockReason  string      `json:"lock_reason,omitempty"`
+		MergeBranch string      `json:"merge_branch,omitempty"`
 	}
 	return json.Marshal(&Alias{
 		Number:      p.number,
@@ -195,7 +199,7 @@ func (p *PrInfo) WithIsDraft(isDraft bool) *PrInfo {
 }
 
 // WithState returns a new PrInfo with the state field updated
-func (p *PrInfo) WithState(state string) *PrInfo {
+func (p *PrInfo) WithState(state git.PRState) *PrInfo {
 	return &PrInfo{
 		number:      p.number,
 		title:       p.title,

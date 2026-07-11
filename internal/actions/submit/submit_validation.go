@@ -2,6 +2,8 @@
 package submit
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"fmt"
 	"sync"
 
@@ -155,7 +157,7 @@ func validateNoMergedOrClosedBranches(branches []string, eng engine.BranchStatus
 		if err != nil {
 			continue
 		}
-		if prInfo != nil && (prInfo.State() == "MERGED" || prInfo.State() == "CLOSED") {
+		if prInfo != nil && (prInfo.State() == git.PRStateMerged || prInfo.State() == git.PRStateClosed) {
 			mergedOrClosedBranches = append(mergedOrClosedBranches, branchName)
 		}
 	}

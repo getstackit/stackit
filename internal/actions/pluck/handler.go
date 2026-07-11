@@ -34,13 +34,13 @@ type Preview struct {
 // Handler receives events from pluck action
 type Handler interface {
 	// Start is called at the beginning of pluck
-	Start(sourceBranch, oldParent, newParent string)
+	Start(move basehandler.Reparent)
 
 	// OnStep is called for each step in the pluck process
 	OnStep(step Step, status basehandler.StepStatus, message string)
 
 	// OnChildReparented is called when a child is reparented to the grandparent
-	OnChildReparented(child, oldParent, newParent string)
+	OnChildReparented(move basehandler.Reparent)
 
 	// Complete is called when pluck finishes
 	Complete(result Result)
@@ -66,10 +66,10 @@ type NullHandler struct {
 }
 
 // Start implements Handler.
-func (h *NullHandler) Start(string, string, string) {}
+func (h *NullHandler) Start(basehandler.Reparent) {}
 
 // OnChildReparented implements Handler.
-func (h *NullHandler) OnChildReparented(string, string, string) {}
+func (h *NullHandler) OnChildReparented(basehandler.Reparent) {}
 
 // Complete implements Handler.
 func (h *NullHandler) Complete(Result) {}

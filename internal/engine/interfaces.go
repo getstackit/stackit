@@ -94,7 +94,7 @@ type BranchInfo interface {
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetRevisionForName(branchName string) (string, error)
-	GetRevisions(branchNames []string) (map[string]string, []error)
+	GetRevisions(branchNames []string) (RevisionMap, []error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
 	GetTrunkCommitsInRange(from, to string) ([]git.RecentCommit, error)
@@ -348,7 +348,7 @@ type MetadataInspector interface {
 	ReadMetadataRaw(branchName string) (*git.Meta, error)
 	// BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 	// returning per-branch errors so callers can detect corrupted refs.
-	BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error)
+	BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error)
 	// DeleteMetadataRef deletes a single branch's metadata ref directly, without
 	// the transactional rebuild performed by DeleteMetadata. Intended for
 	// pruning orphaned refs whose branches no longer exist.

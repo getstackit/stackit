@@ -2,6 +2,8 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 	"strings"
 	"time"
@@ -23,7 +25,7 @@ type PullRequestInfo struct {
 	HTMLURL string
 	Title   string
 	Body    string
-	State   string
+	State   git.PRState
 	Draft   bool
 	Base    string
 	Head    string
@@ -32,11 +34,33 @@ type PullRequestInfo struct {
 	Warnings []string
 }
 
+// CheckRunStatus is a GitHub check-run status.
+type CheckRunStatus string
+
+const (
+	CheckRunStatusQueued     CheckRunStatus = "QUEUED"
+	CheckRunStatusInProgress CheckRunStatus = "IN_PROGRESS"
+	CheckRunStatusCompleted  CheckRunStatus = "COMPLETED"
+)
+
+// CheckConclusion is a GitHub check-run conclusion.
+type CheckConclusion string
+
+const (
+	CheckConclusionSuccess        CheckConclusion = "SUCCESS"
+	CheckConclusionFailure        CheckConclusion = "FAILURE"
+	CheckConclusionNeutral        CheckConclusion = "NEUTRAL"
+	CheckConclusionSkipped        CheckConclusion = "SKIPPED"
+	CheckConclusionCanceled       CheckConclusion = "CANCELED"
+	CheckConclusionTimedOut       CheckConclusion = "TIMED_OUT"
+	CheckConclusionActionRequired CheckConclusion = "ACTION_REQUIRED"
+)
+
 // CheckDetail represents the status of an individual CI check
 type CheckDetail struct {
 	Name       string
-	Status     string // QUEUED, IN_PROGRESS, COMPLETED
-	Conclusion string // SUCCESS, FAILURE, NEUTRAL, etc.
+	Status     CheckRunStatus
+	Conclusion CheckConclusion
 	StartedAt  time.Time
 	FinishedAt time.Time
 }
@@ -46,9 +70,9 @@ type CheckStatus struct {
 	Passing        bool
 	Pending        bool
 	Checks         []CheckDetail
-	ReviewDecision string // "APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED", ""
-	Author         string // GitHub username of PR author
-	State          string // "OPEN", "CLOSED", "MERGED", or "" if unknown
+	ReviewDecision ReviewDecision // empty if none
+	Author         string         // GitHub username of PR author
+	State          git.PRState    // empty if unknown
 }
 
 // MergeMethod represents a GitHub PR merge method
@@ -159,14 +183,14 @@ func ToPullRequestInfo(pr *github.PullRequest) *PullRequestInfo {
 		info.Body = *pr.Body
 	}
 	if pr.State != nil {
-		info.State = strings.ToUpper(*pr.State)
+		info.State = git.PRState(strings.ToUpper(*pr.State))
 	}
 	// The REST API reports merged PRs as state "closed" with a separate merged
 	// indicator; normalize to MERGED so this path matches the GraphQL
 	// PullRequestState enum. List responses omit the `merged` boolean and only
 	// populate `merged_at`, so check both.
 	if pr.GetMerged() || pr.MergedAt != nil {
-		info.State = PRStateMerged
+		info.State = git.PRStateMerged
 	}
 	if pr.Draft != nil {
 		info.Draft = *pr.Draft

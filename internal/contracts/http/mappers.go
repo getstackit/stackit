@@ -188,7 +188,7 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 func mapPR(prInfo *engine.PrInfo) *PRResponse {
 	pr := &PRResponse{
 		Title:   prInfo.Title(),
-		State:   prInfo.State(),
+		State:   string(prInfo.State()),
 		URL:     prInfo.URL(),
 		IsDraft: prInfo.IsDraft(),
 		Base:    prInfo.Base(),
@@ -201,7 +201,7 @@ func mapPR(prInfo *engine.PrInfo) *PRResponse {
 
 func mapCI(checks *github.CheckStatus) *CIResponse {
 	ci := &CIResponse{
-		ReviewDecision: checks.ReviewDecision,
+		ReviewDecision: string(checks.ReviewDecision),
 	}
 
 	switch {
@@ -219,8 +219,8 @@ func mapCI(checks *github.CheckStatus) *CIResponse {
 	for i, check := range checks.Checks {
 		ci.Checks[i] = CheckDetailResponse{
 			Name:       check.Name,
-			Status:     check.Status,
-			Conclusion: check.Conclusion,
+			Status:     string(check.Status),
+			Conclusion: string(check.Conclusion),
 		}
 	}
 

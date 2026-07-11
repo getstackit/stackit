@@ -40,12 +40,12 @@ func NewSimpleMoveHandler(out output.Output) *SimpleMoveHandler {
 }
 
 // Start is called at the beginning of move
-func (h *SimpleMoveHandler) Start(sourceBranch, oldParent, newParent string) {
+func (h *SimpleMoveHandler) Start(move handler.Reparent) {
 	h.Lock()
 	defer h.Unlock()
-	h.sourceBranch = sourceBranch
-	h.oldParent = oldParent
-	h.newParent = newParent
+	h.sourceBranch = move.Branch
+	h.oldParent = move.OldParent
+	h.newParent = move.NewParent
 }
 
 // OnStep is called for each step in the move process

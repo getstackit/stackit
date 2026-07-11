@@ -505,7 +505,7 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 			kind := engine.DeletionReasonGhost
 			reason := "branch no longer exists locally"
 			if meta, err := eng.ReadMetadataRaw(ghostName); err == nil && meta != nil {
-				if pr := meta.GetPrInfo(); pr != nil && pr.State != nil && *pr.State == "MERGED" {
+				if pr := meta.GetPrInfo(); pr != nil && pr.State != nil && *pr.State == git.PRStateMerged {
 					kind = engine.DeletionReasonMergedPR
 					reason = "branch deleted locally; PR was merged"
 				}

@@ -83,7 +83,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	plan.source = source
 	plan.sourceBranch = sourceBranch
 
-	h.Start(plan.source, plan.oldParentName, plan.onto)
+	h.Start(handler.Reparent{Branch: plan.source, OldParent: plan.oldParentName, NewParent: plan.onto})
 
 	if err := eng.ReparentBranch(gctx, plan.sourceBranch, plan.ontoBranch); err != nil {
 		return fmt.Errorf("failed to set parent: %w", err)

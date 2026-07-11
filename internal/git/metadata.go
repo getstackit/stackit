@@ -74,11 +74,21 @@ func (sd *StackDescription) IsEmpty() bool {
 	return sd == nil || (sd.Title == "" && sd.Description == "")
 }
 
+// PRState is a GitHub pull-request state as reported by the API
+// (GraphQL uppercase form). Empty means unknown.
+type PRState string
+
+const (
+	PRStateOpen   PRState = "OPEN"
+	PRStateMerged PRState = "MERGED"
+	PRStateClosed PRState = "CLOSED"
+)
+
 // MergedParent represents a historical parent that was merged or deleted
 type MergedParent struct {
-	BranchName string  `json:"branchName"`
-	PRNumber   *int    `json:"prNumber,omitempty"`
-	PRState    *string `json:"prState,omitempty"` // "MERGED", "CLOSED"
+	BranchName string   `json:"branchName"`
+	PRNumber   *int     `json:"prNumber,omitempty"`
+	PRState    *PRState `json:"prState,omitempty"` // MERGED or CLOSED
 }
 
 // LocalMeta represents branch metadata that is strictly local and never pushed
@@ -103,7 +113,7 @@ type PrInfoPersistence struct {
 	URL         *string     `json:"url,omitempty"`
 	Title       *string     `json:"title,omitempty"`
 	Body        *string     `json:"body,omitempty"`
-	State       *string     `json:"state,omitempty"`
+	State       *PRState    `json:"state,omitempty"`
 	IsDraft     *bool       `json:"isDraft,omitempty"`
 	LockReason  *LockReason `json:"lockReason,omitempty"`
 	MergeBranch *string     `json:"mergeBranch,omitempty"`

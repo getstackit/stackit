@@ -232,7 +232,7 @@ func getStringValue(prInfo *engine.PrInfo, field string) string {
 	case "Base":
 		return prInfo.Base()
 	case "State":
-		return prInfo.State()
+		return string(prInfo.State())
 	default:
 		return ""
 	}

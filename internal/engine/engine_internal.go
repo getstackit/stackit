@@ -41,7 +41,7 @@ func (e *engineImpl) rebuildInternal(refreshCurrentBranch bool) error {
 // ensureSharedLoaded / ensureLocalLoaded calls become no-ops via the atomic
 // fast path. We can't run sharedLoadOnce/localLoadOnce here (they'd block
 // future loads even on Reset), so we set the atomic flags directly.
-func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMeta map[string]*git.Meta, allLocalMeta map[string]*git.LocalMeta) {
+func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMeta MetaMap, allLocalMeta map[string]*git.LocalMeta) {
 	e.state.rebuildFromMetadata(e.trunk, branches, allMeta, allLocalMeta)
 	if currentBranch != "" {
 		e.currentBranch = currentBranch
@@ -76,15 +76,12 @@ func (e *engineImpl) rebuild() error {
 	return nil
 }
 
-// prStateMerged is the GitHub PR state recorded in metadata once a PR merges.
-const prStateMerged = "MERGED"
-
 // prStateIsMerged reports whether a branch's PR was recorded as merged in
 // metadata. Works even when the branch ref itself no longer exists, since
 // PR info lives on the metadata ref.
 func (e *engineImpl) prStateIsMerged(branchName string) bool {
 	prInfo, err := e.GetPrInfo(e.GetBranch(branchName))
-	return err == nil && prInfo != nil && prInfo.State() == prStateMerged
+	return err == nil && prInfo != nil && prInfo.State() == git.PRStateMerged
 }
 
 func metaHasSubmittedPR(meta *git.Meta) bool {
@@ -132,7 +129,7 @@ func (e *engineImpl) branchLanded(ctx context.Context, branchName, target string
 // - No longer exists locally
 // - Has been merged into its own parent
 // - Has a "MERGED" PR state in metadata
-func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName string, metaMap map[string]*git.Meta, squashCache *git.SquashMergeCache) bool {
+func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName string, metaMap MetaMap, squashCache *git.SquashMergeCache) bool {
 	// Check if parent is trunk (no need to reparent)
 	if parentBranchName == e.trunk {
 		return false
@@ -165,7 +162,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 	if metaMap != nil {
 		if meta, ok := metaMap[parentBranchName]; ok && meta != nil {
 			prInfo := meta.GetPrInfo()
-			if prInfo != nil && prInfo.State != nil && *prInfo.State == prStateMerged {
+			if prInfo != nil && prInfo.State != nil && *prInfo.State == git.PRStateMerged {
 				return true
 			}
 			// If metadata exists but state isn't MERGED, we don't need to check further
@@ -179,7 +176,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 
 // findNearestValidAncestor finds the nearest ancestor that hasn't been merged/deleted
 // Returns trunk if all ancestors have been merged
-func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName string, metaMap map[string]*git.Meta, squashCache *git.SquashMergeCache) string {
+func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName string, metaMap MetaMap, squashCache *git.SquashMergeCache) string {
 	// Get the starting parent from branchState
 	state := e.readState(branchName)
 	if state == nil {
@@ -207,7 +204,7 @@ func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName st
 func (e *engineImpl) appendMergedDownstack(
 	branchName string,
 	oldParent string,
-	metaMap map[string]*git.Meta,
+	metaMap MetaMap,
 ) error {
 	// Always read fresh metadata from disk for the branch being modified.
 	// This is critical because SetParent has just written the new parent,
@@ -232,7 +229,7 @@ func (e *engineImpl) appendMergedDownstack(
 	return nil
 }
 
-func (e *engineImpl) withMergedDownstack(meta *git.Meta, oldParent string, metaMap map[string]*git.Meta) *git.Meta {
+func (e *engineImpl) withMergedDownstack(meta *git.Meta, oldParent string, metaMap MetaMap) *git.Meta {
 	if meta == nil || oldParent == "" {
 		return meta
 	}
@@ -272,11 +269,9 @@ func (e *engineImpl) withMergedDownstack(meta *git.Meta, oldParent string, metaM
 }
 
 // getMetaFromMapOrDisk retrieves metadata from the cache map or from disk if not found.
-func (e *engineImpl) getMetaFromMapOrDisk(branchName string, metaMap map[string]*git.Meta) *git.Meta {
-	if metaMap != nil {
-		if meta, ok := metaMap[branchName]; ok {
-			return meta
-		}
+func (e *engineImpl) getMetaFromMapOrDisk(branchName string, metaMap MetaMap) *git.Meta {
+	if meta := metaMap.Get(branchName); meta != nil {
+		return meta
 	}
 	meta, err := e.readMetadata(branchName)
 	if err != nil {
@@ -286,7 +281,7 @@ func (e *engineImpl) getMetaFromMapOrDisk(branchName string, metaMap map[string]
 }
 
 // Helper functions
-func getStringValue(s *string) string {
+func getStringValue[T ~string](s *T) T {
 	if s == nil {
 		return ""
 	}
@@ -300,7 +295,7 @@ func getBoolValue(b *bool) bool {
 	return *b
 }
 
-func stringPtr(s string) *string {
+func stringPtr[T ~string](s T) *T {
 	if s == "" {
 		return nil
 	}

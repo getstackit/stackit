@@ -16,7 +16,7 @@ import (
 // markPrWithState records a PR number and an explicit (possibly stale) state on
 // a branch's metadata, without asserting the PR has merged. Used to simulate a
 // branch whose PR was merged on GitHub before its local state synced to MERGED.
-func markPrWithState(t *testing.T, sh *scenario.Scenario, branch string, prNumber int, state, base string) {
+func markPrWithState(t *testing.T, sh *scenario.Scenario, branch string, prNumber int, state git.PRState, base string) {
 	t.Helper()
 	meta, err := sh.Engine.Git().ReadMetadata(branch)
 	require.NoError(t, err)

@@ -1,6 +1,8 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -57,13 +59,13 @@ func TestParsePRInfoByBranchResponse(t *testing.T) {
 	require.Equal(t, 42, feature.Number)
 	require.Equal(t, "feat: auth", feature.Title)
 	require.Equal(t, "do auth", feature.Body)
-	require.Equal(t, "OPEN", feature.State)
+	require.Equal(t, git.PRStateOpen, feature.State)
 	require.Equal(t, "https://gh/pr/42", feature.HTMLURL)
 	require.True(t, feature.Draft)
 	require.Equal(t, "main", feature.Base)
 	require.Equal(t, "feature", feature.Head)
 
-	require.Equal(t, "MERGED", infos["child"].State)
+	require.Equal(t, git.PRStateMerged, infos["child"].State)
 }
 
 func TestParsePRInfoByBranchResponse_NullRefAndNoPR(t *testing.T) {

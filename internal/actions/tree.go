@@ -11,6 +11,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
@@ -66,15 +67,25 @@ type TreeBranchInfo struct {
 	Children     []string    `json:"children,omitempty"`
 }
 
+// ReviewStatus is the PR review state reported in tree JSON output.
+type ReviewStatus string
+
+// Review status values for TreePRInfo.
+const (
+	ReviewApproved         ReviewStatus = "approved"
+	ReviewChangesRequested ReviewStatus = "changes_requested"
+	ReviewRequired         ReviewStatus = "review_required"
+)
+
 // TreePRInfo represents PR information in JSON output
 type TreePRInfo struct {
-	Number       int    `json:"number"`
-	URL          string `json:"url,omitempty"`
-	Title        string `json:"title,omitempty"`
-	State        string `json:"state"`
-	IsDraft      bool   `json:"is_draft,omitempty"`
-	ReviewStatus string `json:"review_status,omitempty"`
-	CIStatus     string `json:"ci_status,omitempty"`
+	Number       int          `json:"number"`
+	URL          string       `json:"url,omitempty"`
+	Title        string       `json:"title,omitempty"`
+	State        git.PRState  `json:"state"`
+	IsDraft      bool         `json:"is_draft,omitempty"`
+	ReviewStatus ReviewStatus `json:"review_status,omitempty"`
+	CIStatus     string       `json:"ci_status,omitempty"`
 }
 
 // TreeSummary represents summary statistics in JSON output
@@ -423,11 +434,11 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 							// Review status
 							switch status.ReviewDecision {
 							case github.ReviewDecisionApproved:
-								info.PR.ReviewStatus = "approved"
+								info.PR.ReviewStatus = ReviewApproved
 							case github.ReviewDecisionChangesRequested:
-								info.PR.ReviewStatus = "changes_requested"
+								info.PR.ReviewStatus = ReviewChangesRequested
 							case github.ReviewDecisionReviewRequired:
-								info.PR.ReviewStatus = "review_required"
+								info.PR.ReviewStatus = ReviewRequired
 							}
 						}
 					}
@@ -446,9 +457,9 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 		// Update summary (exclude trunk)
 		if !info.IsTrunk {
 			result.Summary.TotalBranches++
-			if info.PR != nil && info.PR.ReviewStatus == "approved" {
+			if info.PR != nil && info.PR.ReviewStatus == ReviewApproved {
 				result.Summary.ApprovedCount++
-			} else if info.PR != nil && info.PR.ReviewStatus == "review_required" {
+			} else if info.PR != nil && info.PR.ReviewStatus == ReviewRequired {
 				result.Summary.InReviewCount++
 			}
 		}

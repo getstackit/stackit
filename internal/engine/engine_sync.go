@@ -45,7 +45,7 @@ func (e *engineImpl) RestackBranchesWithValidatedPlan(ctx context.Context, branc
 // and trunk itself — in two batched reads instead of per-branch git calls.
 // Consumers treat the maps as a point-in-time snapshot and fall back to
 // individual reads on a miss.
-func (e *engineImpl) collectRestackData(branchNames []string) (map[string]*git.Meta, map[string]string) {
+func (e *engineImpl) collectRestackData(branchNames []string) (MetaMap, RevisionMap) {
 	// Identify all potential parents and ancestors to fetch their metadata and revisions too
 	e.mu.RLock()
 	allInvolvedBranches := make(map[string]bool)
@@ -115,6 +115,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
+	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs}
 
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)
@@ -126,9 +127,9 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 		var result RestackBranchResult
 		var err error
 		if validation != nil {
-			result, err = e.restackBranchWithValidatedRebase(ctx, branch, validation, plan, allMeta, allRevisions, worktrees, metaRefSHAs)
+			result, err = e.restackBranchWithValidatedRebase(ctx, branch, validation, plan, snap)
 		} else {
-			result, err = e.restackBranch(ctx, branch, allMeta, allRevisions, worktrees, metaRefSHAs, squashCache)
+			result, err = e.restackBranch(ctx, branch, snap, squashCache)
 		}
 		results[branchName] = result
 
@@ -143,10 +144,10 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			// GetRevision subprocess. For RestackUnneeded we leave the map alone
 			// because the branch's SHA didn't change and allRevisions already
 			// holds the pre-restack value from BatchGetRevisions.
-			if allRevisions == nil {
-				allRevisions = make(map[string]string)
+			if snap.revs == nil {
+				snap.revs = make(RevisionMap)
 			}
-			allRevisions[branchName] = result.NewRev
+			snap.revs[branchName] = result.NewRev
 		}
 
 		if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -32,11 +33,11 @@ type SingleBranchInfo struct {
 
 // SingleBranchPRInfo represents PR information for JSON output
 type SingleBranchPRInfo struct {
-	Number  int    `json:"number"`
-	Title   string `json:"title"`
-	State   string `json:"state"`
-	IsDraft bool   `json:"is_draft"`
-	URL     string `json:"url"`
+	Number  int         `json:"number"`
+	Title   string      `json:"title"`
+	State   git.PRState `json:"state"`
+	IsDraft bool        `json:"is_draft"`
+	URL     string      `json:"url"`
 }
 
 // SingleBranchStats represents diff statistics for a branch
@@ -239,11 +240,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	}
 
 	// Apply dimming for merged/closed PRs
-	const (
-		prStateMerged = "MERGED"
-		prStateClosed = "CLOSED"
-	)
-	if prInfo != nil && (prInfo.State() == prStateMerged || prInfo.State() == prStateClosed) {
+	if prInfo != nil && (prInfo.State() == git.PRStateMerged || prInfo.State() == git.PRStateClosed) {
 		for i := range outputLines {
 			outputLines[i] = output.Dim(outputLines[i])
 		}
@@ -262,20 +259,15 @@ func getPRTitleLine(prInfo *engine.PrInfo) string {
 
 	state := prInfo.State()
 
-	const (
-		prStateMerged = "MERGED"
-		prStateClosed = "CLOSED"
-	)
-
 	prNumber := output.PRNumber(*prInfo.Number())
 
 	switch state {
-	case prStateMerged:
+	case git.PRStateMerged:
 		return fmt.Sprintf("%s (Merged) %s", prNumber, prInfo.Title())
-	case prStateClosed:
+	case git.PRStateClosed:
 		return fmt.Sprintf("%s (Abandoned) %s", prNumber, output.Dim(prInfo.Title()))
 	default:
-		prState := output.PRState(state, prInfo.IsDraft())
+		prState := output.PRState(string(state), prInfo.IsDraft())
 		return fmt.Sprintf("%s %s %s", prNumber, prState, prInfo.Title())
 	}
 }

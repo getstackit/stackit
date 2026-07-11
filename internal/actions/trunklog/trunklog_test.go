@@ -26,9 +26,9 @@ func (f *fakeSource) GetRecentTrunkCommits(count int) ([]git.RecentCommit, error
 	return f.recent, f.err
 }
 
-func (f *fakeSource) GetTrunkCommitsInRange(from, to string) ([]git.RecentCommit, error) {
+func (f *fakeSource) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error) {
 	f.calledRange = true
-	f.gotFrom, f.gotTo = from, to
+	f.gotFrom, f.gotTo = rr.Base, rr.Head
 	return f.ranged, f.err
 }
 

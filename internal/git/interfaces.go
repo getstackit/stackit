@@ -80,7 +80,7 @@ type CommitReader interface {
 	GetCommitDate(branchName string) (time.Time, error)
 	GetCommitAuthor(branchName string) (string, error)
 	GetCommitRange(ctx context.Context, base, head, format string) ([]string, error)
-	GetCommitRangeSHAs(ctx context.Context, base, head string) ([]string, error)
+	GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error)
 	GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetCommitLog(sha, format string) (string, error)
@@ -99,10 +99,10 @@ type DiffOperations interface {
 	IsSquashMerged(ctx context.Context, branchName, target string, cache *SquashMergeCache) (bool, error)
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
 	IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error)
-	GetChangedFiles(ctx context.Context, base, head string) ([]string, error)
+	GetChangedFiles(ctx context.Context, rr RevRange) ([]string, error)
 	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
-	ShowCommits(ctx context.Context, base, head string, patch, stat bool) (string, error)
-	GetDiffNumstat(base, head string) (string, error)
+	ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error)
+	GetDiffNumstat(rr RevRange) (string, error)
 	GetStagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary
@@ -111,7 +111,7 @@ type DiffOperations interface {
 	GetUnstagedDiffBinary(ctx context.Context, files ...string) (string, error)
 	// GetDiffBetween returns the raw diff between two refs, without color codes.
 	// This is suitable for parsing into hunks.
-	GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error)
+	GetDiffBetween(ctx context.Context, rr RevRange, files ...string) (string, error)
 }
 
 // StagingOperations handles staging area operations.

@@ -7,6 +7,20 @@ import (
 	"strings"
 )
 
+// RevRange is a base..head revision range. Functions that walk or diff a
+// range take it instead of two adjacent strings so the direction is explicit
+// at every call site — transposed base/head reads wrong instead of silently
+// reversing the diff.
+type RevRange struct {
+	Base string
+	Head string
+}
+
+// String returns the git "base..head" range notation.
+func (r RevRange) String() string {
+	return r.Base + ".." + r.Head
+}
+
 func (r *runner) IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error) {
 	branchRev, err := r.GetRevision(branchName)
 	if err != nil {
@@ -43,15 +57,16 @@ func (r *runner) resolveTreeSHA(ctx context.Context, ref string) (string, error)
 	return strings.TrimSpace(out), nil
 }
 
-func (r *runner) GetChangedFiles(ctx context.Context, base, head string) ([]string, error) {
-	files, err := r.changedFilesBetween(ctx, base, head)
+func (r *runner) GetChangedFiles(ctx context.Context, rr RevRange) ([]string, error) {
+	files, err := r.changedFilesBetween(ctx, rr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get changed files: %w", err)
 	}
 	return files, nil
 }
 
-func (r *runner) changedFilesBetween(ctx context.Context, base, head string) ([]string, error) {
+func (r *runner) changedFilesBetween(ctx context.Context, rr RevRange) ([]string, error) {
+	base, head := rr.Base, rr.Head
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -89,7 +104,8 @@ func (r *runner) ShowDiff(ctx context.Context, left, right string, stat bool) (s
 	return r.RunGitCommandWithContext(ctx, args...)
 }
 
-func (r *runner) ShowCommits(ctx context.Context, base, head string, patch, stat bool) (string, error) {
+func (r *runner) ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error) {
+	base, head := rr.Base, rr.Head
 	args := []string{"-c", "color.ui=always", "--no-pager", "log"}
 	switch {
 	case patch && stat:
@@ -146,7 +162,8 @@ func (r *runner) GetUnstagedDiffBinary(ctx context.Context, files ...string) (st
 
 // GetDiffBetween returns the raw diff between two refs.
 // Unlike ShowDiff, this returns uncolored output suitable for parsing.
-func (r *runner) GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error) {
+func (r *runner) GetDiffBetween(ctx context.Context, rr RevRange, files ...string) (string, error) {
+	base, head := rr.Base, rr.Head
 	args := []string{gitCmdDiff, base, head}
 	if len(files) > 0 {
 		args = append(args, "--")

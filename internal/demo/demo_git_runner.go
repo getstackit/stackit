@@ -317,7 +317,7 @@ func (d *demoGitRunner) GetReflog(_ context.Context, _ int, _ string) (string, e
 	return "", nil
 }
 
-func (d *demoGitRunner) GetCommitRangeSHAs(_ context.Context, _, _ string) ([]string, error) {
+func (d *demoGitRunner) GetCommitRangeSHAs(_ context.Context, _ git.RevRange) ([]string, error) {
 	return []string{"sha1", "sha2"}, nil
 }
 
@@ -413,7 +413,7 @@ func (d *demoGitRunner) IsDiffEmpty(_ context.Context, _, _ string) (bool, error
 	return false, nil
 }
 
-func (d *demoGitRunner) GetChangedFiles(_ context.Context, _, _ string) ([]string, error) {
+func (d *demoGitRunner) GetChangedFiles(_ context.Context, _ git.RevRange) ([]string, error) {
 	return []string{}, nil
 }
 
@@ -421,7 +421,7 @@ func (d *demoGitRunner) ShowDiff(_ context.Context, _, _ string, _ bool) (string
 	return "diff", nil
 }
 
-func (d *demoGitRunner) ShowCommits(_ context.Context, _, _ string, _, _ bool) (string, error) {
+func (d *demoGitRunner) ShowCommits(_ context.Context, _ git.RevRange, _, _ bool) (string, error) {
 	return "commits", nil
 }
 
@@ -441,11 +441,11 @@ func (d *demoGitRunner) GetUnstagedDiffBinary(_ context.Context, _ ...string) (s
 	return "", nil
 }
 
-func (d *demoGitRunner) GetDiffBetween(_ context.Context, _, _ string, _ ...string) (string, error) {
+func (d *demoGitRunner) GetDiffBetween(_ context.Context, _ git.RevRange, _ ...string) (string, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) GetDiffNumstat(_, _ string) (string, error) {
+func (d *demoGitRunner) GetDiffNumstat(_ git.RevRange) (string, error) {
 	return "1\t1\ttest.txt", nil
 }
 

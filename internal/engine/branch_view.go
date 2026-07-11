@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -94,7 +95,7 @@ func (e *engineImpl) BatchDiffStats(branches Branches) map[string]DiffStat {
 		if e.IsTrunk(b) {
 			return DiffStat{}
 		}
-		added, deleted, _ := e.diffStatsBetween(statBase(parentRev, storedBase), head)
+		added, deleted, _ := e.diffStatsBetween(git.RevRange{Base: statBase(parentRev, storedBase), Head: head})
 		return DiffStat{Added: added, Deleted: deleted}
 	})
 }
@@ -109,7 +110,7 @@ func (e *engineImpl) BatchCommits(branches Branches, format CommitFormat) map[st
 		if e.IsTrunk(b) {
 			return nil
 		}
-		commits, _ := e.commitsBetween(statBase(parentRev, storedBase), head, format)
+		commits, _ := e.commitsBetween(git.RevRange{Base: statBase(parentRev, storedBase), Head: head}, format)
 		return commits
 	})
 }
@@ -128,7 +129,7 @@ func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branch
 		if base == "" || head == "" {
 			return 0
 		}
-		files, err := e.GetChangedFiles(ctx, base, head)
+		files, err := e.GetChangedFiles(ctx, git.RevRange{Base: base, Head: head})
 		if err != nil {
 			return 0
 		}
@@ -150,10 +151,10 @@ func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
 			return st
 		}
 		base := statBase(parentRev, storedBase)
-		if c, err := e.commitCountBetween(base, head); err == nil {
+		if c, err := e.commitCountBetween(git.RevRange{Base: base, Head: head}); err == nil {
 			st.CommitCount = c
 		}
-		if a, d, err := e.diffStatsBetween(base, head); err == nil {
+		if a, d, err := e.diffStatsBetween(git.RevRange{Base: base, Head: head}); err == nil {
 			st.LinesAdded = a
 			st.LinesDeleted = d
 		}

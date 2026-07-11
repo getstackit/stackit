@@ -196,7 +196,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		}
 		branchRevision, err := branch.GetRevision()
 		if err == nil {
-			commitsOutput, err := eng.ShowCommits(ctx.Context, baseRevision, branchRevision, true, opts.Stat)
+			commitsOutput, err := eng.ShowCommits(ctx.Context, git.RevRange{Base: baseRevision, Head: branchRevision}, true, opts.Stat)
 			if err == nil && commitsOutput != "" {
 				outputLines = append(outputLines, commitsOutput)
 			}
@@ -347,7 +347,7 @@ func outputBranchInfoJSON(ctx *app.Context, branch engine.Branch) error {
 		if err == nil && base != "" {
 			branchRev, err := branch.GetRevision()
 			if err == nil {
-				files, err := eng.GetChangedFiles(ctx.Context, base, branchRev)
+				files, err := eng.GetChangedFiles(ctx.Context, git.RevRange{Base: base, Head: branchRev})
 				if err == nil {
 					info.DiffStats.FilesChanged = len(files)
 				}

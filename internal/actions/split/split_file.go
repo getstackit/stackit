@@ -113,7 +113,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Get the diff between parent and branchToSplit (raw output for parsing)
-	diffOutput, err := eng.GetDiffBetween(ctx, parentBranchName, branchToSplit.GetName())
+	diffOutput, err := eng.GetDiffBetween(ctx, git.RevRange{Base: parentBranchName, Head: branchToSplit.GetName()})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff: %w", err)
 	}
@@ -636,7 +636,7 @@ func promptForFiles(ctx context.Context, branchToSplit engine.Branch, eng splitB
 	}
 
 	// Get list of changed files
-	changedFiles, err := eng.GetChangedFiles(ctx, mergeBase, branchToSplit.GetName())
+	changedFiles, err := eng.GetChangedFiles(ctx, git.RevRange{Base: mergeBase, Head: branchToSplit.GetName()})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get changed files: %w", err)
 	}

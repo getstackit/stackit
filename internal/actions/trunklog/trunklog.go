@@ -15,7 +15,7 @@ import (
 // CommitSource is the narrow engine dependency this action needs.
 type CommitSource interface {
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
-	GetTrunkCommitsInRange(from, to string) ([]git.RecentCommit, error)
+	GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error)
 }
 
 // TitleResolver resolves PR titles from the forge. It is nil-safe: pass a nil
@@ -63,7 +63,7 @@ func Gather(ctx context.Context, src CommitSource, titles TitleResolver, req Req
 		err error
 	)
 	if req.From != "" {
-		raw, err = src.GetTrunkCommitsInRange(req.From, req.To)
+		raw, err = src.GetTrunkCommitsInRange(git.RevRange{Base: req.From, Head: req.To})
 	} else {
 		raw, err = src.GetRecentTrunkCommits(req.Count)
 	}

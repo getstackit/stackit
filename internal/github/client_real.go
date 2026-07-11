@@ -122,7 +122,7 @@ func (c *StackitGitHubClient) GetPRChecksStatus(ctx context.Context, branchName 
 }
 
 // BatchGetPRChecksStatus returns the check status for multiple branches
-func (c *StackitGitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (map[string]*CheckStatus, error) {
+func (c *StackitGitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (ChecksByBranch, error) {
 	// Use GraphQL for efficiency and rate limit safety
 	return BatchGetPRChecksStatusGraphQL(ctx, c.runner, c.owner, c.repo, branchNames)
 }

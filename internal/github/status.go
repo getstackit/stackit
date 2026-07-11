@@ -39,6 +39,16 @@ const (
 // graphQLAliasRegex matches characters not valid in GraphQL alias identifiers
 var graphQLAliasRegex = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
+// ChecksByBranch maps branch names to their PR check status. Branches without
+// a PR (or whose status could not be fetched) are absent.
+type ChecksByBranch map[string]*CheckStatus
+
+// Get returns the check status for a branch, or nil if unknown.
+// Safe to call on a nil map.
+func (c ChecksByBranch) Get(branch string) *CheckStatus {
+	return c[branch]
+}
+
 // IsApproved returns true if the review decision indicates approval
 func (s *CheckStatus) IsApproved() bool {
 	return s.ReviewDecision == ReviewDecisionApproved
@@ -61,9 +71,9 @@ func (s *CheckStatus) IsReady() bool {
 
 // BatchGetPRChecksStatusGraphQL returns the check status for multiple branches using a single GraphQL query.
 // This function fetches both CI check status and PR review decisions in a single request for efficiency.
-func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, branchNames []string) (map[string]*CheckStatus, error) {
+func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, branchNames []string) (ChecksByBranch, error) {
 	if len(branchNames) == 0 {
-		return make(map[string]*CheckStatus), nil
+		return make(ChecksByBranch), nil
 	}
 
 	// Sanitize branch names for GraphQL aliases
@@ -148,7 +158,7 @@ func buildPRStatusQuery(aliasMap map[string]string) string {
 }
 
 // parsePRStatusResponse parses the GraphQL response for PR status queries
-func parsePRStatusResponse(body []byte, aliasToBranch map[string]string) (map[string]*CheckStatus, error) {
+func parsePRStatusResponse(body []byte, aliasToBranch map[string]string) (ChecksByBranch, error) {
 	var graphqlResponse struct {
 		Data map[string]any `json:"data"`
 	}
@@ -161,7 +171,7 @@ func parsePRStatusResponse(body []byte, aliasToBranch map[string]string) (map[st
 		return nil, fmt.Errorf("invalid GraphQL response format: missing repository")
 	}
 
-	results := make(map[string]*CheckStatus)
+	results := make(ChecksByBranch)
 	for alias, data := range repository {
 		if data == nil {
 			continue

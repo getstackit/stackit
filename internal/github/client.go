@@ -125,7 +125,7 @@ type Client interface {
 	GetPRChecksStatus(ctx context.Context, branchName string) (*CheckStatus, error)
 
 	// BatchGetPRChecksStatus returns the check status for multiple branches
-	BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (map[string]*CheckStatus, error)
+	BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (ChecksByBranch, error)
 
 	// BatchGetPRTitles returns titles for multiple PRs by number
 	BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error)

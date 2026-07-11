@@ -169,8 +169,8 @@ func (c *GitHubClient) GetPRChecksStatus(ctx context.Context, branchName string)
 }
 
 // BatchGetPRChecksStatus returns simulated check status for multiple branches
-func (c *GitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (map[string]*github.CheckStatus, error) {
-	results := make(map[string]*github.CheckStatus)
+func (c *GitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (github.ChecksByBranch, error) {
+	results := make(github.ChecksByBranch)
 	var mu sync.Mutex
 
 	utils.RunWithWorkers(branchNames, github.MaxGitHubConcurrency, func(name string) {

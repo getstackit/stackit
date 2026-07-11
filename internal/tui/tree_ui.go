@@ -267,7 +267,7 @@ func (m *TreeModel) enrichData() tea.Cmd {
 
 		// Channels for parallel results (buffered so goroutines don't block)
 		type ciResult struct {
-			statuses map[string]*github.CheckStatus
+			statuses github.ChecksByBranch
 			err      error
 		}
 		ciChan := make(chan ciResult, 1)

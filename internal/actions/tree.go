@@ -154,7 +154,7 @@ func TreeAction(ctx *app.Context, opts TreeOptions) error {
 	annotations := make(map[string]tree.BranchAnnotation, len(visibleBranches))
 
 	// Prefetch CI status in batch if in FULL style
-	var ciStatuses map[string]*github.CheckStatus
+	var ciStatuses github.ChecksByBranch
 	if opts.Style == TreeStyleFull && ctx.GitHub() != nil {
 		branchNames := visibleBranches.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 		if len(branchNames) > 0 {
@@ -335,7 +335,7 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 
 	// Prefetch CI status for JSON output (always fetched to provide complete data)
 	ghClient := ctx.GitHub()
-	var ciStatuses map[string]*github.CheckStatus
+	var ciStatuses github.ChecksByBranch
 	if ghClient != nil {
 		branchNames := branchesToInclude.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 		if len(branchNames) > 0 {
@@ -422,26 +422,24 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 					}
 
 					// CI status
-					if ciStatuses != nil {
-						if status, ok := ciStatuses[branchName]; ok && status != nil {
-							switch {
-							case status.Pending:
-								info.PR.CIStatus = "pending"
-							case status.Passing:
-								info.PR.CIStatus = "passing"
-							default:
-								info.PR.CIStatus = "failing"
-							}
+					if status := ciStatuses.Get(branchName); status != nil {
+						switch {
+						case status.Pending:
+							info.PR.CIStatus = "pending"
+						case status.Passing:
+							info.PR.CIStatus = "passing"
+						default:
+							info.PR.CIStatus = "failing"
+						}
 
-							// Review status
-							switch status.ReviewDecision {
-							case github.ReviewDecisionApproved:
-								info.PR.ReviewStatus = ReviewApproved
-							case github.ReviewDecisionChangesRequested:
-								info.PR.ReviewStatus = ReviewChangesRequested
-							case github.ReviewDecisionReviewRequired:
-								info.PR.ReviewStatus = ReviewRequired
-							}
+						// Review status
+						switch status.ReviewDecision {
+						case github.ReviewDecisionApproved:
+							info.PR.ReviewStatus = ReviewApproved
+						case github.ReviewDecisionChangesRequested:
+							info.PR.ReviewStatus = ReviewChangesRequested
+						case github.ReviewDecisionReviewRequired:
+							info.PR.ReviewStatus = ReviewRequired
 						}
 					}
 				}

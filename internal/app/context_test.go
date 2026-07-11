@@ -115,7 +115,7 @@ func (f *fakeGitHubClient) GetPRChecksStatus(_ context.Context, _ string) (*gith
 	return nil, nil
 }
 
-func (f *fakeGitHubClient) BatchGetPRChecksStatus(_ context.Context, _ []string) (map[string]*github.CheckStatus, error) {
+func (f *fakeGitHubClient) BatchGetPRChecksStatus(_ context.Context, _ []string) (github.ChecksByBranch, error) {
 	return nil, nil
 }
 

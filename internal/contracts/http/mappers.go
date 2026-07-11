@@ -125,7 +125,7 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 }
 
 // MapStackDetail creates a full StackDetail with all branch info.
-func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap map[string]*github.CheckStatus) StackDetail {
+func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap github.ChecksByBranch) StackDetail {
 	// Derive owner from root branch's PR author
 	var owner string
 	if checksMap != nil {
@@ -163,10 +163,7 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 	branches := make([]BranchResponse, 0, len(nodes))
 	for _, node := range nodes {
 		name := node.Branch.GetName()
-		var checks *github.CheckStatus
-		if checksMap != nil {
-			checks = checksMap[name]
-		}
+		checks := checksMap.Get(name)
 		br := MapBranch(eng, node.Branch, node, checks, remoteStatuses.ForBranch(node.Branch), stats[name], commitsByBranch[name])
 		if isAnchor {
 			// Anchor's direct children become display roots

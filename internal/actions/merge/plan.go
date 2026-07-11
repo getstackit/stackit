@@ -280,7 +280,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	defer cancelRemote()
 
 	// Fetch CI statuses in batch if possible
-	var allCheckStatuses map[string]*github.CheckStatus
+	var allCheckStatuses github.ChecksByBranch
 	if githubClient != nil {
 		allCheckStatuses, _ = githubClient.BatchGetPRChecksStatus(remoteCtx, allBranches)
 	}
@@ -362,23 +362,21 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 		// Get CI check status from batch-loaded results
 		checksStatus := ChecksNone
-		if allCheckStatuses != nil {
-			if status, ok := allCheckStatuses[name]; ok && status != nil {
-				switch {
-				case status.Pending:
-					checksStatus = ChecksPending
-				case !status.Passing:
-					checksStatus = ChecksFailing
-					if !opts.Force {
-						branchValid[idx] = false
-						branchErrors[idx] = fmt.Sprintf("Branch %s PR #%d has failing CI checks", name, *prInfo.Number())
-					}
-				default:
-					if len(status.Checks) > 0 {
-						checksStatus = ChecksPassing
-					}
-					// else: no checks configured, keep ChecksNone
+		if status := allCheckStatuses.Get(name); status != nil {
+			switch {
+			case status.Pending:
+				checksStatus = ChecksPending
+			case !status.Passing:
+				checksStatus = ChecksFailing
+				if !opts.Force {
+					branchValid[idx] = false
+					branchErrors[idx] = fmt.Sprintf("Branch %s PR #%d has failing CI checks", name, *prInfo.Number())
 				}
+			default:
+				if len(status.Checks) > 0 {
+					checksStatus = ChecksPassing
+				}
+				// else: no checks configured, keep ChecksNone
 			}
 		}
 

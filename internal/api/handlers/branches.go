@@ -54,7 +54,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		}
 	}
 
-	var checksMap map[string]*github.CheckStatus
+	var checksMap github.ChecksByBranch
 	if entry.GitHub != nil {
 		names := make([]string, len(branches))
 		for i, b := range branches {
@@ -76,10 +76,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		if node == nil {
 			continue
 		}
-		var checks *github.CheckStatus
-		if checksMap != nil {
-			checks = checksMap[branch.GetName()]
-		}
+		checks := checksMap.Get(branch.GetName())
 		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatuses.ForBranch(branch), stats[branch.GetName()], commitsByBranch[branch.GetName()]))
 	}
 
@@ -103,9 +100,7 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entr
 	var checks *github.CheckStatus
 	if entry.GitHub != nil {
 		checksMap, _ := entry.GitHub.BatchGetPRChecksStatus(r.Context(), []string{branchName})
-		if checksMap != nil {
-			checks = checksMap[branchName]
-		}
+		checks = checksMap.Get(branchName)
 	}
 
 	branchSet := engine.BranchesOf(branch)

@@ -71,7 +71,7 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 	}
 }
 
-func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks []merge.MultiStackInfo) map[string]*github.CheckStatus {
+func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks []merge.MultiStackInfo) github.ChecksByBranch {
 	if a.gh == nil {
 		return nil
 	}
@@ -92,7 +92,7 @@ func (a *ViewAssembler) mapStackDetails(
 	ctx context.Context,
 	graph *engine.StackGraph,
 	stacks []merge.MultiStackInfo,
-	checksMap map[string]*github.CheckStatus,
+	checksMap github.ChecksByBranch,
 ) []httpcontract.StackDetail {
 	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {

@@ -209,7 +209,7 @@ func findWorktreeByNameOrBranch(ctx *app.Context, nameOrBranch string) (*engine.
 		}
 	}
 
-	return nil, fmt.Errorf("no worktree found for %s", output.Branch(nameOrBranch, false))
+	return nil, fmt.Errorf("no worktree found for %s", output.BranchName(nameOrBranch))
 }
 
 func getWorktreeEntry(ctx *app.Context, nameOrBranch string) (*Entry, error) {
@@ -218,7 +218,7 @@ func getWorktreeEntry(ctx *app.Context, nameOrBranch string) (*Entry, error) {
 		return nil, err
 	}
 	if len(result.Worktrees) == 0 {
-		return nil, fmt.Errorf("no worktree found for %s", output.Branch(nameOrBranch, false))
+		return nil, fmt.Errorf("no worktree found for %s", output.BranchName(nameOrBranch))
 	}
 	entry := result.Worktrees[0]
 	return &entry, nil

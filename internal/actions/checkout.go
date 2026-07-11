@@ -80,7 +80,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 			if currentBranch != nil {
 				currentBranchName = currentBranch.GetName()
 			}
-			out.Info("No branch selected; staying on %s.", output.Branch(currentBranchName, true))
+			out.Info("No branch selected; staying on %s.", output.CurrentBranch(currentBranchName))
 			return CheckoutResult{}, nil
 		}
 	}
@@ -88,7 +88,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 	currentBranch := eng.CurrentBranch()
 	if currentBranch != nil && branchName == currentBranch.GetName() {
 		if !ctx.Quiet {
-			out.Info("Already on %s.", output.Branch(branchName, true))
+			out.Info("Already on %s.", output.CurrentBranch(branchName))
 		}
 		return CheckoutResult{}, nil
 	}
@@ -131,7 +131,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 	}
 	ctx.Logger.Info("branch changed from=%v to=%v", previousBranch, branchName)
 
-	out.Info("Checked out %s.", output.Branch(branchName, false))
+	out.Info("Checked out %s.", output.BranchName(branchName))
 
 	// Skip branch info in quiet mode for faster checkout
 	if !ctx.Quiet {
@@ -169,7 +169,7 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 	if !statuses.IsUpToDate(branch) {
 		parent := branch.GetParentOrTrunk()
 		ctx.Output.Info("This branch has fallen behind %s - you may want to %s.",
-			output.Branch(parent, false),
+			output.BranchName(parent),
 			output.Cyan("stackit restack --upstack"))
 		return
 	}
@@ -179,8 +179,8 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 		if !statuses.IsUpToDate(ancestor) {
 			parent := ancestor.GetParentOrTrunk()
 			ctx.Output.Info("The downstack branch %s has fallen behind %s - you may want to %s.",
-				output.Branch(ancestor.GetName(), false),
-				output.Branch(parent, false),
+				output.BranchName(ancestor.GetName()),
+				output.BranchName(parent),
 				output.Cyan("stackit restack"))
 			return
 		}
@@ -217,7 +217,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 
 		if switchTarget != "" {
 			if targetStack != "" {
-				ctx.Output.Info("Switching to worktree for stack %s.", output.Branch(targetStack, false))
+				ctx.Output.Info("Switching to worktree for stack %s.", output.BranchName(targetStack))
 			} else {
 				ctx.Output.Info("Switching to main repository.")
 			}
@@ -239,12 +239,12 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 
 	if _, err := os.Stat(targetWorktree.Path); os.IsNotExist(err) {
 		ctx.Output.Warn("Worktree for stack %s is registered but path does not exist: %s",
-			output.Branch(targetStackRoot, false), targetWorktree.Path)
+			output.BranchName(targetStackRoot), targetWorktree.Path)
 		ctx.Output.Tip("stackit worktree remove %s", targetStackRoot)
 		return "", nil, nil
 	}
 
-	ctx.Output.Info("Switching to worktree for stack %s.", output.Branch(targetStackRoot, false))
+	ctx.Output.Info("Switching to worktree for stack %s.", output.BranchName(targetStackRoot))
 	fallbackTips := []string{
 		fmt.Sprintf("cd %s && stackit co %s", targetWorktree.Path, branchName),
 		"For automatic worktree switching, enable shell integration: eval \"$(stackit shell zsh)\"",
@@ -280,7 +280,7 @@ func resolveBranchName(eng engine.Engine, out output.Output, input string) (stri
 	names := branchNames.Names()
 	matches := fuzzy.Find(input, names)
 	if len(matches) == 1 {
-		out.Info("Fuzzy matched to %s.", output.Branch(matches[0].Str, false))
+		out.Info("Fuzzy matched to %s.", output.BranchName(matches[0].Str))
 		return matches[0].Str, nil
 	} else if len(matches) > 1 {
 		// Multiple matches - return error with suggestions

@@ -650,17 +650,17 @@ func promptForFiles(ctx context.Context, branchToSplit engine.Branch, eng splitB
 	}
 
 	// Show instructions based on mode
-	splog.Info("Splitting %s by file.", output.Branch(branchToSplit.GetName(), true))
+	splog.Info("Splitting %s by file.", output.CurrentBranch(branchToSplit.GetName()))
 	switch {
 	case asSibling:
 		splog.Info("Select the files to extract to a new sibling branch.")
 		splog.Info("The original branch will remain unchanged.")
 	case direction == DirectionAbove:
 		splog.Info("Select the files to extract to a new child branch.")
-		splog.Info("The remaining files will stay on %s.", output.Branch(branchToSplit.GetName(), true))
+		splog.Info("The remaining files will stay on %s.", output.CurrentBranch(branchToSplit.GetName()))
 	default:
 		splog.Info("Select the files to extract to a new parent branch.")
-		splog.Info("The remaining files will stay on %s.", output.Branch(branchToSplit.GetName(), true))
+		splog.Info("The remaining files will stay on %s.", output.CurrentBranch(branchToSplit.GetName()))
 	}
 	splog.Info("")
 

@@ -423,7 +423,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 	}
 
 	for _, name := range branchNames {
-		out.Info("Deleted branch %s", output.Branch(name, false))
+		out.Info("Deleted branch %s", output.BranchName(name))
 	}
 
 	return nil
@@ -603,8 +603,8 @@ func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove) error {
 			return fmt.Errorf("failed to set parent for %s: %w", move.branchName, err)
 		}
 		ctx.Output.Info("Set parent of %s to %s.",
-			output.Branch(move.branchName, false),
-			output.Branch(move.newParentName, false))
+			output.BranchName(move.branchName),
+			output.BranchName(move.newParentName))
 	}
 	return nil
 }

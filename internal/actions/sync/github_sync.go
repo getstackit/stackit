@@ -231,9 +231,9 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		}
 
 		out.Info("Updated PR base for %s: %s → %s",
-			output.Branch(u.branchName, false),
+			output.BranchName(u.branchName),
 			output.Dim(u.oldBase),
-			output.Branch(u.localParentName, false))
+			output.BranchName(u.localParentName))
 
 		mu.Lock()
 		updated = append(updated, u.branchName)

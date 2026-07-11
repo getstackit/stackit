@@ -228,9 +228,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	for _, move := range filteredPlan.Moves {
 		handler.OnBranchMoved(move)
 		out.Info("  %s: %s -> %s",
-			output.Branch(move.Branch, false),
+			output.BranchName(move.Branch),
 			output.Dim(move.OldParent),
-			output.Branch(move.NewParent, false))
+			output.BranchName(move.NewParent))
 	}
 
 	handler.OnStep(StepFlattening, basehandler.StatusCompleted, "Parent pointers updated")

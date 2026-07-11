@@ -380,8 +380,8 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 		isCurrent := branchName == currentBranchName
 		ctx.Output.Info("Reparented %s from %s to %s (parent was merged/deleted).",
 			output.Branch(branchName, isCurrent),
-			output.Branch(result.OldParent, false),
-			output.Branch(result.NewParent, false))
+			output.BranchName(result.OldParent),
+			output.BranchName(result.NewParent))
 	}
 
 	switch result.Result {
@@ -390,7 +390,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 		isCurrent := branchName == currentBranchName
 		ctx.Output.Info("Restacked %s on %s.",
 			output.Branch(branchName, isCurrent),
-			output.Branch(parentName, false))
+			output.BranchName(parentName))
 		if result.RerereResolvedCount > 0 {
 			printRerereResolved(ctx, result.RerereResolvedCount)
 		}
@@ -407,7 +407,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 				ctx.Output.Info("%s frozen", output.Branch(branchName, branchName == currentBranchName))
 			}
 		case branch.IsTrunk():
-			ctx.Output.Info("%s up to date", output.Branch(branchName, false))
+			ctx.Output.Info("%s up to date", output.BranchName(branchName))
 		default:
 			isCurrent := branchName == currentBranchName
 			ctx.Output.Info("%s up to date", output.Branch(branchName, isCurrent))

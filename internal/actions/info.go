@@ -165,7 +165,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	parentBranch := branch.GetParent()
 	if parentBranch != nil {
 		outputLines = append(outputLines, "")
-		outputLines = append(outputLines, fmt.Sprintf("%s: %s", output.Cyan("Parent"), output.BranchWithTrunk(parentBranch.GetName(), false, parentBranch.IsTrunk())))
+		outputLines = append(outputLines, fmt.Sprintf("%s: %s", output.Cyan("Parent"), output.BranchNameWithTrunk(parentBranch.GetName(), parentBranch.IsTrunk())))
 	}
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
@@ -173,7 +173,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	if len(children) > 0 {
 		outputLines = append(outputLines, fmt.Sprintf("%s:", output.Cyan("Children")))
 		for _, child := range children {
-			outputLines = append(outputLines, fmt.Sprintf("▸ %s", output.BranchWithTrunk(child.GetName(), false, child.IsTrunk())))
+			outputLines = append(outputLines, fmt.Sprintf("▸ %s", output.BranchNameWithTrunk(child.GetName(), child.IsTrunk())))
 		}
 	}
 

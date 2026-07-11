@@ -126,19 +126,19 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 		case parentBranch.IsTrunk():
 			if !statuses.IsUpToDate(branch) {
 				ctx.Output.Warn("%s is behind trunk and may conflict on merge — run 'stackit sync' and 'stackit restack' to update it.",
-					output.Branch(branchName, false))
+					output.BranchName(branchName))
 			}
 		case validatedBranches[parentBranchName]:
 			// Parent is in the submission list
 			if !statuses.IsUpToDate(branch) {
 				return fmt.Errorf("you are trying to submit at least one branch that has not been restacked on its parent. To resolve this, check out %s and run 'stackit restack'",
-					output.Branch(branchName, false))
+					output.BranchName(branchName))
 			}
 		default:
 			// Parent is not in submission list
 			if !parentRemoteStatuses().ForBranch(parentBranch).Matches() {
 				return fmt.Errorf("you are trying to submit at least one branch whose base does not match its parent remotely, without including its parent. You may want to use 'stackit submit --stack' to ensure that the ancestors of %s are included in your submission",
-					output.Branch(branchName, false))
+					output.BranchName(branchName))
 			}
 		}
 

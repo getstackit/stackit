@@ -61,12 +61,12 @@ func PopAction(ctx *app.Context, _ PopOptions) error {
 	hasStaged, err := eng.HasStagedChanges(ctx.Context)
 	if err == nil && hasStaged {
 		out.Info("Popped branch %s. Changes are now staged on %s.",
-			output.Branch(currentBranch, false),
-			output.Branch(parentName, false))
+			output.BranchName(currentBranch),
+			output.BranchName(parentName))
 	} else {
 		out.Info("Popped branch %s. Switched to %s.",
-			output.Branch(currentBranch, false),
-			output.Branch(parentName, false))
+			output.BranchName(currentBranch),
+			output.BranchName(parentName))
 	}
 
 	return nil

@@ -120,13 +120,13 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 		return err
 	}
 	if entry.NeedsRepair && (entry.RegistrationState != RegistrationStateInvalid || entry.Exists) {
-		return fmt.Errorf("managed worktree %s cannot be removed because %s; %s", output.Branch(entry.displayName(), false), output.Dim(entry.StatusMessage), repairHint(entry))
+		return fmt.Errorf("managed worktree %s cannot be removed because %s; %s", output.BranchName(entry.displayName()), output.Dim(entry.StatusMessage), repairHint(entry))
 	}
 	if entry.IsCurrent {
 		return fmt.Errorf("cannot remove the current worktree; cd to the main repo first")
 	}
 	if len(entry.RootBranches) > 0 {
-		return fmt.Errorf("worktree %s has %d branch(es); use 'stackit worktree detach %s' to remove the worktree while keeping branches", output.Branch(entry.displayName(), false), entry.StackSize, entry.displayName())
+		return fmt.Errorf("worktree %s has %d branch(es); use 'stackit worktree detach %s' to remove the worktree while keeping branches", output.BranchName(entry.displayName()), entry.StackSize, entry.displayName())
 	}
 	if entry.Exists && entry.IsDirty && !opts.Force {
 		return fmt.Errorf("worktree has uncommitted changes; use --force to discard them")
@@ -187,7 +187,7 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 		out.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
 	}
 
-	out.Success("Removed worktree for stack %s", output.Branch(snapshot.Info.AnchorBranch, false))
+	out.Success("Removed worktree for stack %s", output.BranchName(snapshot.Info.AnchorBranch))
 	return nil
 }
 
@@ -307,8 +307,8 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*CreateResult, error) {
 		return nil, err
 	}
 
-	out.Success("Created worktree %s", output.Branch(opts.Name, false))
-	out.Info("  Anchor branch: %s", output.Branch(created.AnchorBranch, false))
+	out.Success("Created worktree %s", output.BranchName(opts.Name))
+	out.Info("  Anchor branch: %s", output.BranchName(created.AnchorBranch))
 	out.Info("  Path: %s", output.Dim(created.Path))
 	if opts.Scope != "" {
 		out.Info("  Scope: %s", output.Dim(opts.Scope))
@@ -666,15 +666,15 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*AttachResult, error) {
 	if !branch.IsTracked() {
 		// Check if the branch exists at all
 		if _, err := eng.GetRevision(branch); err != nil {
-			return nil, fmt.Errorf("branch %s does not exist", output.Branch(opts.Branch, false))
+			return nil, fmt.Errorf("branch %s does not exist", output.BranchName(opts.Branch))
 		}
-		return nil, fmt.Errorf("branch %s is not tracked by stackit", output.Branch(opts.Branch, false))
+		return nil, fmt.Errorf("branch %s is not tracked by stackit", output.BranchName(opts.Branch))
 	}
 
 	// Find the stack root
 	stackRootName := eng.GetStackRootForBranch(branch)
 	if stackRootName == "" {
-		return nil, fmt.Errorf("branch %s is not part of a stack (its parent must be trunk)", output.Branch(opts.Branch, false))
+		return nil, fmt.Errorf("branch %s is not part of a stack (its parent must be trunk)", output.BranchName(opts.Branch))
 	}
 	stackRoot := eng.GetBranch(stackRootName)
 	originalParent := eng.Trunk().GetName()
@@ -684,7 +684,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*AttachResult, error) {
 
 	// Validate: stack root is not already a worktree anchor
 	if eng.IsWorktreeAnchor(stackRoot) {
-		return nil, fmt.Errorf("branch %s is already a worktree anchor", output.Branch(stackRootName, false))
+		return nil, fmt.Errorf("branch %s is already a worktree anchor", output.BranchName(stackRootName))
 	}
 
 	// Validate: stack root doesn't already have a worktree
@@ -753,9 +753,9 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*AttachResult, error) {
 		return nil, err
 	}
 
-	out.Success("Attached stack %s to worktree", output.Branch(stackRootName, false))
-	out.Info("  Name: %s", output.Branch(name, false))
-	out.Info("  Anchor branch: %s", output.Branch(created.AnchorBranch, false))
+	out.Success("Attached stack %s to worktree", output.BranchName(stackRootName))
+	out.Info("  Name: %s", output.BranchName(name))
+	out.Info("  Anchor branch: %s", output.BranchName(created.AnchorBranch))
 	out.Info("  Path: %s", output.Dim(created.Path))
 	out.Newline()
 
@@ -786,7 +786,7 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 		return err
 	}
 	if entry.NeedsRepair {
-		return fmt.Errorf("managed worktree %s cannot be detached because %s; %s", output.Branch(entry.displayName(), false), output.Dim(entry.StatusMessage), repairHint(entry))
+		return fmt.Errorf("managed worktree %s cannot be detached because %s; %s", output.BranchName(entry.displayName()), output.Dim(entry.StatusMessage), repairHint(entry))
 	}
 
 	// Check if we're currently in this worktree
@@ -874,7 +874,7 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 	}
 	unregistered = true
 
-	out.Success("Detached worktree %s", output.Branch(snapshot.Info.Name, false))
+	out.Success("Detached worktree %s", output.BranchName(snapshot.Info.Name))
 	return nil
 }
 func removeWorktreePath(ctx *app.Context, path string, force bool) error {

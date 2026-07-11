@@ -50,7 +50,7 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 		return fmt.Errorf("failed to squash branch: %w", err)
 	}
 
-	out.Info("Squashed commits in %s.", output.Branch(currentBranch.GetName(), true))
+	out.Info("Squashed commits in %s.", output.CurrentBranch(currentBranch.GetName()))
 	ctx.Logger.Info("squash completed branch=%v", currentBranch.GetName())
 
 	// Get upstack branches (recursive children only, excluding current branch)

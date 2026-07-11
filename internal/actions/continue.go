@@ -95,7 +95,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		return fmt.Errorf("failed to checkout branch %s: %w", result.BranchName, err)
 	}
 
-	out.Info("Resolved rebase conflict for %s.", output.Branch(result.BranchName, true))
+	out.Info("Resolved rebase conflict for %s.", output.CurrentBranch(result.BranchName))
 	if result.RerereResolvedCount > 0 {
 		printRerereResolved(ctx, result.RerereResolvedCount)
 	}

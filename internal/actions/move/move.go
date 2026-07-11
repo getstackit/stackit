@@ -293,7 +293,7 @@ func maybeRename(ctx *app.Context, h Handler, opts Options, plan *movePlan) (boo
 				out.Info("Warning: failed to rename branch: %v", err)
 			} else {
 				h.OnRename(source, newName)
-				out.Info("Renamed branch %s to %s.", output.Branch(source, false), output.Branch(newName, true))
+				out.Info("Renamed branch %s to %s.", output.BranchName(source), output.CurrentBranch(newName))
 				source = newName
 				sourceBranch = eng.GetBranch(source)
 				return true, source, sourceBranch
@@ -311,9 +311,9 @@ func restackAndMark(ctx *app.Context, plan *movePlan, sourceBranch engine.Branch
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 
 	out.Info("Moved %s from %s to %s.",
-		output.Branch(plan.source, true),
-		output.Branch(plan.oldParentName, false),
-		output.Branch(plan.onto, false))
+		output.CurrentBranch(plan.source),
+		output.BranchName(plan.oldParentName),
+		output.BranchName(plan.onto))
 
 	branchesToRestack := graph.Range(sourceBranch, engine.StackRange{
 		RecursiveChildren: true,
@@ -369,9 +369,9 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	out.Info("Dry-run: showing what would happen without making changes\n")
 
 	// Print move summary
-	out.Info("Move: %s", output.Branch(source, true))
-	out.Info("  From: %s", output.Branch(oldParentName, false))
-	out.Info("  To:   %s", output.Branch(onto, false))
+	out.Info("Move: %s", output.CurrentBranch(source))
+	out.Info("  From: %s", output.BranchName(oldParentName))
+	out.Info("  To:   %s", output.BranchName(onto))
 
 	// Print commits that would be moved
 	if len(commits) > 0 {
@@ -387,7 +387,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	if len(descNames) > 0 {
 		out.Info("\nDescendant branches to restack (%d):", len(descNames))
 		for _, name := range descNames {
-			out.Info("  • %s", output.Branch(name, false))
+			out.Info("  • %s", output.BranchName(name))
 		}
 	}
 
@@ -401,7 +401,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 
 	if !validation.Success {
 		out.Info("Validation: %s", output.Red("conflicts detected"))
-		out.Info("  Branch: %s", output.Branch(validation.FailedBranch, false))
+		out.Info("  Branch: %s", output.BranchName(validation.FailedBranch))
 		out.Info("  Error: %s", validation.ErrorMessage)
 		if len(validation.ConflictingFiles) > 0 {
 			out.Info("  Conflicting files:")

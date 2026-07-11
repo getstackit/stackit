@@ -32,7 +32,7 @@ func (e *engineImpl) writeLocalMetadata(branch string, meta *git.LocalMeta) erro
 }
 
 // batchReadLocalMetadata loads local metadata for many branches in one call.
-func (e *engineImpl) batchReadLocalMetadata(branches []string) map[string]*git.LocalMeta {
+func (e *engineImpl) batchReadLocalMetadata(branches []string) git.LocalMetaMap {
 	return e.git.BatchReadLocalMetadata(branches)
 }
 

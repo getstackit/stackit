@@ -662,8 +662,8 @@ func (d *demoGitRunner) BatchReadMetadata(_ []string) (map[string]*git.Meta, map
 	return make(map[string]*git.Meta), make(map[string]error)
 }
 
-func (d *demoGitRunner) BatchReadLocalMetadata(_ []string) map[string]*git.LocalMeta {
-	return make(map[string]*git.LocalMeta)
+func (d *demoGitRunner) BatchReadLocalMetadata(_ []string) git.LocalMetaMap {
+	return make(git.LocalMetaMap)
 }
 
 func (d *demoGitRunner) GetParentCommitSHA(_ string) (string, error) {

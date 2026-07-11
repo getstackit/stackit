@@ -134,7 +134,7 @@ func (s *stateCore) rebuildFromMetadata(
 	trunk string,
 	branches []string,
 	allMeta map[string]*git.Meta,
-	allLocalMeta map[string]*git.LocalMeta,
+	allLocalMeta git.LocalMetaMap,
 ) {
 	s.applySharedMetadata(trunk, branches, allMeta)
 	s.applyLocalMetadata(allLocalMeta)
@@ -198,7 +198,7 @@ func (s *stateCore) applySharedMetadata(
 // flag is preserved for untracked branches.
 //
 // Callers must hold the engine write lock.
-func (s *stateCore) applyLocalMetadata(allLocalMeta map[string]*git.LocalMeta) {
+func (s *stateCore) applyLocalMetadata(allLocalMeta git.LocalMetaMap) {
 	for name, meta := range allLocalMeta {
 		if meta.Frozen {
 			state := s.branchState.GetOrCreate(name)

@@ -266,7 +266,7 @@ type MetadataOperations interface {
 	RenameMetadata(oldName, newName string) error
 	ListMetadata() (map[string]string, error)
 	ReadLocalMetadata(branchName string) (*LocalMeta, error)
-	BatchReadLocalMetadata(branchNames []string) map[string]*LocalMeta
+	BatchReadLocalMetadata(branchNames []string) LocalMetaMap
 	WriteLocalMetadata(branchName string, meta *LocalMeta) error
 
 	// Transaction support methods. The batch forms marshal each entry and

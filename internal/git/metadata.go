@@ -98,6 +98,16 @@ type LocalMeta struct {
 	NavigationCommentID *int64 `json:"navigationCommentId,omitempty"`
 }
 
+// LocalMetaMap is branch name -> local metadata, as returned by the batch
+// local-metadata readers.
+type LocalMetaMap map[string]*LocalMeta
+
+// Get returns the local metadata for a branch, or nil if absent.
+// Safe to call on a nil map.
+func (m LocalMetaMap) Get(branchName string) *LocalMeta {
+	return m[branchName]
+}
+
 // ModifiedBy represents information about who last modified the metadata
 type ModifiedBy struct {
 	GitName        string  `json:"gitName"`
@@ -197,8 +207,8 @@ func (r *runner) BatchReadMetadata(branchNames []string) (map[string]*Meta, map[
 // BatchReadLocalMetadata reads local metadata for multiple branches in parallel.
 // Returns a map of successfully read metadata. Failures are silently ignored since
 // local metadata is not critical and missing metadata is expected for new branches.
-func (r *runner) BatchReadLocalMetadata(branchNames []string) map[string]*LocalMeta {
-	results := make(map[string]*LocalMeta, len(branchNames))
+func (r *runner) BatchReadLocalMetadata(branchNames []string) LocalMetaMap {
+	results := make(LocalMetaMap, len(branchNames))
 
 	if len(branchNames) == 0 {
 		return results

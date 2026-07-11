@@ -41,7 +41,7 @@ func (e *engineImpl) rebuildInternal(refreshCurrentBranch bool) error {
 // ensureSharedLoaded / ensureLocalLoaded calls become no-ops via the atomic
 // fast path. We can't run sharedLoadOnce/localLoadOnce here (they'd block
 // future loads even on Reset), so we set the atomic flags directly.
-func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMeta MetaMap, allLocalMeta map[string]*git.LocalMeta) {
+func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMeta MetaMap, allLocalMeta git.LocalMetaMap) {
 	e.state.rebuildFromMetadata(e.trunk, branches, allMeta, allLocalMeta)
 	if currentBranch != "" {
 		e.currentBranch = currentBranch

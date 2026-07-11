@@ -40,25 +40,12 @@ func (e *engineImpl) RestackBranchesWithValidatedPlan(ctx context.Context, branc
 	return e.restackBranches(ctx, branches, validation, plan, progress)
 }
 
-func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
-	// Save current branch to restore after restacking
-	originalBranch := e.CurrentBranch()
-	var originalRev string
-	if originalBranch == nil {
-		originalRev, _ = e.git.GetCurrentRevision(ctx)
-	}
-
-	defer func() {
-		if originalBranch != nil {
-			_ = e.CheckoutBranch(ctx, *originalBranch)
-		} else if originalRev != "" {
-			_ = e.git.CheckoutDetached(ctx, originalRev)
-		}
-	}()
-
-	// 1. Collect all the data required for the restack (in bulk)
-	branchNames := branches.Names()
-
+// collectRestackData resolves the metadata and revisions restack planning and
+// application need — the given branches, every tracked ancestor up to trunk,
+// and trunk itself — in two batched reads instead of per-branch git calls.
+// Consumers treat the maps as a point-in-time snapshot and fall back to
+// individual reads on a miss.
+func (e *engineImpl) collectRestackData(branchNames []string) (map[string]*git.Meta, map[string]string) {
 	// Identify all potential parents and ancestors to fetch their metadata and revisions too
 	e.mu.RLock()
 	allInvolvedBranches := make(map[string]bool)
@@ -83,11 +70,29 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	involvedBranchNames = append(involvedBranchNames, e.trunk)
 	e.mu.RUnlock()
 
-	// Fetch ALL metadata in parallel
-	allMeta, _ := e.batchReadMetadata(involvedBranchNames)
+	metaMap, _ := e.batchReadMetadata(involvedBranchNames)
+	revMap, _ := e.git.BatchGetRevisions(involvedBranchNames)
+	return metaMap, revMap
+}
 
-	// Fetch ALL revisions in parallel
-	allRevisions, _ := e.git.BatchGetRevisions(involvedBranchNames)
+func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
+	// Save current branch to restore after restacking
+	originalBranch := e.CurrentBranch()
+	var originalRev string
+	if originalBranch == nil {
+		originalRev, _ = e.git.GetCurrentRevision(ctx)
+	}
+
+	defer func() {
+		if originalBranch != nil {
+			_ = e.CheckoutBranch(ctx, *originalBranch)
+		} else if originalRev != "" {
+			_ = e.git.CheckoutDetached(ctx, originalRev)
+		}
+	}()
+
+	// 1. Collect all the data required for the restack (in bulk)
+	allMeta, allRevisions := e.collectRestackData(branches.Names())
 
 	// Snapshot the worktree list once. Restacking N branches used to call
 	// `git worktree list` N times for the "reset other worktree's working dir"

@@ -847,12 +847,13 @@ func splitNulTerminated(s string) []string {
 	return result
 }
 
-func (r *runner) GetCommitRangeSHAs(ctx context.Context, base, head string) ([]string, error) {
+func (r *runner) GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error) {
+	base, head := rr.Base, rr.Head
 	return r.GetCommitRange(ctx, base, head, "SHA")
 }
 
 func (r *runner) GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error) {
-	return r.GetCommitRangeSHAs(ctx, "", branchName)
+	return r.GetCommitRangeSHAs(ctx, RevRange{Head: branchName})
 }
 
 func (r *runner) GetCommitSHA(branchName string, offset int) (string, error) {
@@ -900,7 +901,8 @@ func (r *runner) GetReflog(ctx context.Context, count int, format string) (strin
 	return r.RunGitCommandWithContext(ctx, args...)
 }
 
-func (r *runner) GetDiffNumstat(base, head string) (string, error) {
+func (r *runner) GetDiffNumstat(rr RevRange) (string, error) {
+	base, head := rr.Base, rr.Head
 	return r.runGitCommandInternal(gitCmdDiff, "--numstat", base, head)
 }
 
@@ -1233,7 +1235,7 @@ func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool,
 			continue
 		}
 
-		if hunkOverlaps(hunk, commitHunk) {
+		if hunk.Overlaps(commitHunk) {
 			return false, nil
 		}
 	}

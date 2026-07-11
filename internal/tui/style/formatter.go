@@ -1,6 +1,8 @@
 package style
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"fmt"
 	"image/color"
 	"strings"
@@ -69,13 +71,26 @@ func FormatShortLine(line string, circleIndex, arrowIndex int, isCurrent bool, o
 	return coloredBefore.String() + arrowChar + coloredAfter
 }
 
-// ColorBranchName colors a branch name based on whether it's current
-func ColorBranchName(branchName string, isCurrent bool) string {
-	name := branchName
+// ColorBranchName colors a branch name that is not the current branch.
+func ColorBranchName(branchName string) string {
+	return BranchStyle(false, false, false).Render(branchName)
+}
+
+// ColorCurrentBranch colors the checked-out branch and appends its
+// " (current)" marker.
+func ColorCurrentBranch(branchName string) string {
+	return BranchStyle(true, false, false).Render(branchName + " (current)")
+}
+
+// ColorBranchNameIf renders the current-branch style (with the " (current)"
+// marker) when isCurrent, and the plain style otherwise. For call sites where
+// currency is only known at runtime; prefer ColorBranchName/ColorCurrentBranch
+// when it is fixed.
+func ColorBranchNameIf(branchName string, isCurrent bool) string {
 	if isCurrent {
-		name += " (current)"
+		return ColorCurrentBranch(branchName)
 	}
-	return BranchStyle(isCurrent, false, false).Render(name)
+	return ColorBranchName(branchName)
 }
 
 // ColorBranchNameWithTrunk colors a branch name based on whether it's current and trunk status
@@ -85,16 +100,6 @@ func ColorBranchNameWithTrunk(branchName string, isCurrent bool, isTrunk bool) s
 		name += " (current)"
 	}
 	return BranchStyle(isCurrent, isTrunk, false).Render(name)
-}
-
-// ColorBranchNameBold colors a branch name with bold if current (green)
-func ColorBranchNameBold(branchName string, isCurrent bool) string {
-	return BranchStyle(isCurrent, false, false).Render(branchName)
-}
-
-// ColorBranchNameBoldWithTrunk colors a branch name with bold if current and trunk status
-func ColorBranchNameBoldWithTrunk(branchName string, isCurrent bool, isTrunk bool) string {
-	return BranchStyle(isCurrent, isTrunk, false).Render(branchName)
 }
 
 // BranchStyle returns the unified style for a branch name
@@ -145,27 +150,6 @@ func ColorPRNumber(prNumber int) string {
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("3")).
 		Render(fmt.Sprintf("PR #%d", prNumber))
-}
-
-// ColorPRState colors PR state text based on state and draft status
-func ColorPRState(state string, isDraft bool) string {
-	if isDraft {
-		return ColorDim("(Draft)")
-	}
-
-	switch state {
-	case "APPROVED":
-		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("2")).
-			Render("(Approved)")
-	case "CHANGES_REQUESTED":
-		return ColorMagenta("(Changes Requested)")
-	case "REVIEW_REQUIRED":
-		return ColorYellow("(Review Required)")
-	default:
-		// No review decision means review isn't required
-		return ""
-	}
 }
 
 // GetScopeColor returns a deterministic color for a scope string
@@ -227,15 +211,15 @@ func IconLocked() string {
 }
 
 // ColorPRNumberByState colors PR number based on state
-func ColorPRNumberByState(prNumber int, state string, isDraft bool) string {
+func ColorPRNumberByState(prNumber int, state git.PRState, isDraft bool) string {
 	prefix := fmt.Sprintf("#%d", prNumber)
 	if isDraft {
 		return ColorDim(prefix)
 	}
 	switch state {
-	case "MERGED":
+	case git.PRStateMerged:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Render(prefix) // purple
-	case "CLOSED":
+	case git.PRStateClosed:
 		return ColorDim(prefix)
 	default:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Render(prefix) // cyan

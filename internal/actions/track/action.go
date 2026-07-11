@@ -75,7 +75,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", output.Branch(branchName, false), output.Branch(parent, false))
+		ctx.Output.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parent))
 		return nil
 	}
 
@@ -94,7 +94,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", output.Branch(branchName, false), output.Branch(parentBranch, false))
+		ctx.Output.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parentBranch))
 		return nil
 	}
 
@@ -114,7 +114,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 	// Check if branch is already tracked
 	branch := eng.GetBranch(branchName)
 	if branch.IsTracked() {
-		ctx.Output.Info("%s is already tracked.", output.Branch(branchName, false))
+		ctx.Output.Info("%s is already tracked.", output.BranchName(branchName))
 		// Still ask if user wants to track descendants
 	} else {
 		// Try auto-detection (single unambiguous non-trunk tracked ancestor)
@@ -126,7 +126,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 			// Skip worktree anchors for auto-detection
 			if !candidateBranch.IsWorktreeAnchor() {
 				parentBranch = candidate
-				ctx.Output.Info("Auto-detected parent %s for %s.", output.Branch(parentBranch, false), output.Branch(branchName, false))
+				ctx.Output.Info("Auto-detected parent %s for %s.", output.BranchName(parentBranch), output.BranchName(branchName))
 			}
 		}
 
@@ -160,7 +160,7 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 			return fmt.Errorf("failed to track branch: %w", err)
 		}
 
-		ctx.Output.Info("Tracked %s with parent %s.", output.Branch(branchName, false), output.Branch(parentBranch, false))
+		ctx.Output.Info("Tracked %s with parent %s.", output.BranchName(branchName), output.BranchName(parentBranch))
 	}
 
 	// Find untracked children and ask to track them

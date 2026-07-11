@@ -157,7 +157,7 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 		prInfo, _ := branchObj.GetPrInfo()
 		if prInfo != nil {
 			if prInfo.MergeBranch() != "" {
-				if prInfo.State() == "MERGED" {
+				if prInfo.State() == git.PRStateMerged {
 					content.WriteString("> 💡 **Notice**: This PR was merged via a merge branch.\n\n")
 				} else {
 					mergeBranch := prInfo.MergeBranch()

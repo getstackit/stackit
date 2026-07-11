@@ -1479,7 +1479,7 @@ func TestSetParentScenarios(t *testing.T) {
 		meta, err := s.Engine.Git().ReadMetadata("branch1")
 		require.NoError(t, err)
 		prNumber := 1
-		state := prStateMerged
+		state := git.PRStateMerged
 		base := "main"
 		meta = meta.WithPrInfo(&git.PrInfoPersistence{Number: &prNumber, State: &state, Base: &base})
 		require.NoError(t, s.Engine.Git().WriteMetadata("branch1", meta))

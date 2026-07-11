@@ -8,6 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
@@ -134,7 +135,7 @@ func (p *planPrinter) printActiveLine(ev submit.BranchPlanEvent) {
 	}
 	name := p.pad(p.decoratedName(ev.BranchName), false, ev.IsCurrent)
 
-	action := ev.Action
+	action := string(ev.Action)
 	if ev.PRNumber != nil {
 		action = fmt.Sprintf("%s %s", action, style.ColorYellow(fmt.Sprintf("#%d", *ev.PRNumber)))
 	}
@@ -161,17 +162,17 @@ func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
 
 	if ev.Skipped {
 		p.out.Info("%s → %s %s",
-			style.ColorBranchNameBold(name, ev.IsCurrent),
+			style.BranchStyle(ev.IsCurrent, false, false).Render(name),
 			style.ColorBranchNameWithTrunk(base, false, base == p.trunk),
 			style.ColorDim("— "+ev.SkipReason))
 		return
 	}
 
-	action := ev.Action
+	action := string(ev.Action)
 	if ev.PRNumber != nil {
 		action = fmt.Sprintf("%s %s", action, style.ColorYellow(fmt.Sprintf("#%d", *ev.PRNumber)))
 	}
-	line := fmt.Sprintf("%s → %s  %s", style.ColorBranchNameBold(name, ev.IsCurrent), style.ColorBranchNameWithTrunk(base, false, base == p.trunk), colorAction(ev.Action, action))
+	line := fmt.Sprintf("%s → %s  %s", style.BranchStyle(ev.IsCurrent, false, false).Render(name), style.ColorBranchNameWithTrunk(base, false, base == p.trunk), colorAction(ev.Action, action))
 	if ev.Empty {
 		line += " " + style.ColorDim("(empty)")
 	}
@@ -199,7 +200,7 @@ func (p *planPrinter) pad(name string, dim bool, current bool) string {
 	if dim {
 		return style.ColorDim(padded)
 	}
-	return style.ColorBranchNameBold(padded, current)
+	return style.BranchStyle(current, false, false).Render(padded)
 }
 
 // skippedCount is the number of plan rows that were skipped.
@@ -263,11 +264,11 @@ func skipGroupTitle(reason string) string {
 	}
 }
 
-func colorAction(action, text string) string {
+func colorAction(action engine.SubmitAction, text string) string {
 	switch action {
-	case "create":
+	case engine.SubmitActionCreate:
 		return style.ColorGreen(text)
-	case "update":
+	case engine.SubmitActionUpdate:
 		return style.ColorCyan(text)
 	default:
 		return style.ColorDim(text)
@@ -284,10 +285,10 @@ type SimpleSubmitHandler struct {
 
 type branchItem struct {
 	name         string
-	action       string
+	action       engine.SubmitAction
 	prNumber     *int
 	url          string
-	status       string
+	status       submitComponent.Status
 	err          error
 	reportedDone bool
 }
@@ -334,7 +335,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				name:     branch.Name,
 				action:   branch.Action,
 				prNumber: branch.PRNumber,
-				status:   string(submit.StatusPending),
+				status:   submitComponent.StatusPending,
 			}
 			h.order = append(h.order, branch.Name)
 		}
@@ -350,7 +351,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		if item == nil {
 			return
 		}
-		item.status = string(ev.Status)
+		item.status = submitComponent.Status(ev.Status)
 		if ev.URL != "" {
 			item.url = ev.URL
 		}
@@ -379,7 +380,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				return
 			}
 			actionDone := "created"
-			if item.action == "update" {
+			if item.action == engine.SubmitActionUpdate {
 				actionDone = "updated"
 			}
 			detail := actionDone
@@ -389,7 +390,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			h.Output.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), detail)
 			// A newly created PR is the one the user needs to open; updated
 			// PRs rarely need their URL re-pasted.
-			if item.action == "create" && item.url != "" {
+			if item.action == engine.SubmitActionCreate && item.url != "" {
 				h.Output.Info("     %s", item.url)
 			}
 
@@ -563,7 +564,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 
 		h.runner.Send(submitComponent.ProgressUpdateMsg{
 			BranchName: ev.BranchName,
-			Status:     string(ev.Status),
+			Status:     submitComponent.Status(ev.Status),
 			URL:        ev.URL,
 			Err:        ev.Error,
 		})

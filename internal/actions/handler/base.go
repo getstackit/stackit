@@ -40,6 +40,13 @@ type Base interface {
 	IsInteractive() bool
 }
 
+// Reparent describes a branch moving from one parent to another.
+type Reparent struct {
+	Branch    string
+	OldParent string
+	NewParent string
+}
+
 // NullBase provides no-op implementations of the Base interface.
 // Embed this in handler structs to inherit default implementations.
 //

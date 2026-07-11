@@ -2,6 +2,8 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 	"strings"
 	"time"
@@ -23,7 +25,7 @@ type PullRequestInfo struct {
 	HTMLURL string
 	Title   string
 	Body    string
-	State   string
+	State   git.PRState
 	Draft   bool
 	Base    string
 	Head    string
@@ -32,11 +34,33 @@ type PullRequestInfo struct {
 	Warnings []string
 }
 
+// CheckRunStatus is a GitHub check-run status.
+type CheckRunStatus string
+
+const (
+	CheckRunStatusQueued     CheckRunStatus = "QUEUED"
+	CheckRunStatusInProgress CheckRunStatus = "IN_PROGRESS"
+	CheckRunStatusCompleted  CheckRunStatus = "COMPLETED"
+)
+
+// CheckConclusion is a GitHub check-run conclusion.
+type CheckConclusion string
+
+const (
+	CheckConclusionSuccess        CheckConclusion = "SUCCESS"
+	CheckConclusionFailure        CheckConclusion = "FAILURE"
+	CheckConclusionNeutral        CheckConclusion = "NEUTRAL"
+	CheckConclusionSkipped        CheckConclusion = "SKIPPED"
+	CheckConclusionCanceled       CheckConclusion = "CANCELED"
+	CheckConclusionTimedOut       CheckConclusion = "TIMED_OUT"
+	CheckConclusionActionRequired CheckConclusion = "ACTION_REQUIRED"
+)
+
 // CheckDetail represents the status of an individual CI check
 type CheckDetail struct {
 	Name       string
-	Status     string // QUEUED, IN_PROGRESS, COMPLETED
-	Conclusion string // SUCCESS, FAILURE, NEUTRAL, etc.
+	Status     CheckRunStatus
+	Conclusion CheckConclusion
 	StartedAt  time.Time
 	FinishedAt time.Time
 }
@@ -46,9 +70,9 @@ type CheckStatus struct {
 	Passing        bool
 	Pending        bool
 	Checks         []CheckDetail
-	ReviewDecision string // "APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED", ""
-	Author         string // GitHub username of PR author
-	State          string // "OPEN", "CLOSED", "MERGED", or "" if unknown
+	ReviewDecision ReviewDecision // empty if none
+	Author         string         // GitHub username of PR author
+	State          git.PRState    // empty if unknown
 }
 
 // MergeMethod represents a GitHub PR merge method
@@ -63,6 +87,14 @@ const (
 	MergeMethodRebase MergeMethod = "rebase"
 )
 
+// ValidMergeMethods lists every accepted merge method value.
+var ValidMergeMethods = []MergeMethod{MergeMethodSquash, MergeMethodMerge, MergeMethodRebase}
+
+// Valid reports whether m is one of the accepted merge methods.
+func (m MergeMethod) Valid() bool {
+	return m == MergeMethodSquash || m == MergeMethodMerge || m == MergeMethodRebase
+}
+
 // MergeMethodSettings contains the allowed merge methods for a repository
 type MergeMethodSettings struct {
 	AllowMergeCommit bool
@@ -76,20 +108,31 @@ type MergePROptions struct {
 	CommitBody string // Optional commit body for merge/squash commit message.
 }
 
+// Repo identifies a GitHub repository by owner and name.
+type Repo struct {
+	Owner string
+	Name  string
+}
+
+// String returns the "owner/name" form.
+func (r Repo) String() string {
+	return r.Owner + "/" + r.Name
+}
+
 // Client is an interface for GitHub API interactions
 type Client interface {
 	// CreatePullRequest creates a new pull request
-	CreatePullRequest(ctx context.Context, owner, repo string, opts CreatePROptions) (*PullRequestInfo, error)
+	CreatePullRequest(ctx context.Context, opts CreatePROptions) (*PullRequestInfo, error)
 
 	// UpdatePullRequest updates an existing pull request
 	// Returns warnings (non-fatal issues like failed label/assignee additions) and error
-	UpdatePullRequest(ctx context.Context, owner, repo string, prNumber int, opts UpdatePROptions) (warnings []string, err error)
+	UpdatePullRequest(ctx context.Context, prNumber int, opts UpdatePROptions) (warnings []string, err error)
 
 	// GetPullRequestByBranch gets a pull request for a branch
-	GetPullRequestByBranch(ctx context.Context, owner, repo, branchName string) (*PullRequestInfo, error)
+	GetPullRequestByBranch(ctx context.Context, branchName string) (*PullRequestInfo, error)
 
 	// GetPullRequest gets a pull request by number
-	GetPullRequest(ctx context.Context, owner, repo string, prNumber int) (*PullRequestInfo, error)
+	GetPullRequest(ctx context.Context, prNumber int) (*PullRequestInfo, error)
 
 	// MergePullRequest merges a pull request using the specified merge method
 	MergePullRequest(ctx context.Context, branchName string, opts MergePROptions) error
@@ -101,29 +144,29 @@ type Client interface {
 	GetPRChecksStatus(ctx context.Context, branchName string) (*CheckStatus, error)
 
 	// BatchGetPRChecksStatus returns the check status for multiple branches
-	BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (map[string]*CheckStatus, error)
+	BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (ChecksByBranch, error)
 
 	// BatchGetPRTitles returns titles for multiple PRs by number
-	BatchGetPRTitles(ctx context.Context, owner, repo string, prNumbers []int) (map[int]string, error)
+	BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error)
 
-	// GetOwnerRepo returns the repository owner and name
-	GetOwnerRepo() (owner, repo string)
+	// Repo returns the repository the client is bound to
+	Repo() Repo
 
 	// ClosePullRequest closes a pull request
-	ClosePullRequest(ctx context.Context, owner, repo string, prNumber int) error
+	ClosePullRequest(ctx context.Context, prNumber int) error
 
 	// Comment methods for navigation location support
 	// CreatePRComment creates a new comment on a pull request
-	CreatePRComment(ctx context.Context, owner, repo string, prNumber int, body string) (int64, error)
+	CreatePRComment(ctx context.Context, prNumber int, body string) (int64, error)
 
 	// UpdatePRComment updates an existing pull request comment
-	UpdatePRComment(ctx context.Context, owner, repo string, commentID int64, body string) error
+	UpdatePRComment(ctx context.Context, commentID int64, body string) error
 
 	// DeletePRComment deletes a pull request comment
-	DeletePRComment(ctx context.Context, owner, repo string, commentID int64) error
+	DeletePRComment(ctx context.Context, commentID int64) error
 
 	// ListPRComments lists all comments on a pull request
-	ListPRComments(ctx context.Context, owner, repo string, prNumber int) ([]PRComment, error)
+	ListPRComments(ctx context.Context, prNumber int) ([]PRComment, error)
 
 	// GetCurrentUser returns the authenticated GitHub username
 	GetCurrentUser(ctx context.Context) (string, error)
@@ -159,14 +202,14 @@ func ToPullRequestInfo(pr *github.PullRequest) *PullRequestInfo {
 		info.Body = *pr.Body
 	}
 	if pr.State != nil {
-		info.State = strings.ToUpper(*pr.State)
+		info.State = git.PRState(strings.ToUpper(*pr.State))
 	}
 	// The REST API reports merged PRs as state "closed" with a separate merged
 	// indicator; normalize to MERGED so this path matches the GraphQL
 	// PullRequestState enum. List responses omit the `merged` boolean and only
 	// populate `merged_at`, so check both.
 	if pr.GetMerged() || pr.MergedAt != nil {
-		info.State = PRStateMerged
+		info.State = git.PRStateMerged
 	}
 	if pr.Draft != nil {
 		info.Draft = *pr.Draft

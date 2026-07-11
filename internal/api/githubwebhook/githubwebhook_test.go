@@ -102,11 +102,11 @@ func TestParsePush(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			owner, name, ok := ParsePush([]byte(tt.body))
+			repo, ok := ParsePush([]byte(tt.body))
 			require.Equal(t, tt.wantOK, ok)
 			if tt.wantOK {
-				require.Equal(t, tt.wantOwner, owner)
-				require.Equal(t, tt.wantName, name)
+				require.Equal(t, tt.wantOwner, repo.Owner)
+				require.Equal(t, tt.wantName, repo.Name)
 			}
 		})
 	}

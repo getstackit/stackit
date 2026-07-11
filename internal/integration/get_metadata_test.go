@@ -23,9 +23,9 @@ type countingGitHubClient struct {
 	prByBranch atomic.Int64
 }
 
-func (c *countingGitHubClient) GetPullRequestByBranch(ctx context.Context, owner, repo, branch string) (*githubpkg.PullRequestInfo, error) {
+func (c *countingGitHubClient) GetPullRequestByBranch(ctx context.Context, branch string) (*githubpkg.PullRequestInfo, error) {
 	c.prByBranch.Add(1)
-	return c.Client.GetPullRequestByBranch(ctx, owner, repo, branch)
+	return c.Client.GetPullRequestByBranch(ctx, branch)
 }
 
 // recordingGetHandler captures the PR number surfaced for each branch. EmitEvent is

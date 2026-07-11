@@ -54,7 +54,7 @@ as an argument to move multiple levels at once.`,
 
 				// Check if on trunk
 				if currentBranch.IsTrunk() {
-					ctx.Output.Info("Already at trunk (%s).", style.ColorBranchName(currentBranch.GetName(), true))
+					ctx.Output.Info("Already at trunk (%s).", style.ColorCurrentBranch(currentBranch.GetName()))
 					return nil
 				}
 
@@ -69,11 +69,11 @@ as an argument to move multiple levels at once.`,
 					if parent == nil {
 						// No parent found - branch is untracked or we've gone past trunk
 						if i == 0 {
-							ctx.Output.Info("%s has no parent (untracked branch).", style.ColorBranchName(currentBranch.GetName(), true))
+							ctx.Output.Info("%s has no parent (untracked branch).", style.ColorCurrentBranch(currentBranch.GetName()))
 							return nil
 						}
 						// We moved some steps but can't go further
-						ctx.Output.Info("Stopped at %s (no further parent after %d step(s)).", style.ColorBranchName(targetBranch.GetName(), false), i)
+						ctx.Output.Info("Stopped at %s (no further parent after %d step(s)).", style.ColorBranchName(targetBranch.GetName()), i)
 						break
 					}
 					ctx.Output.Info("⮑  %s", parent.GetName())

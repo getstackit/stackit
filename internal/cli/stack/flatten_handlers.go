@@ -55,7 +55,7 @@ func (h *SimpleFlattenHandler) OnValidationProgress(_, _ int, _ string) {
 }
 
 // OnBranchMoved is called when a branch is moved to a new parent
-func (h *SimpleFlattenHandler) OnBranchMoved(_, _, _ string) {
+func (h *SimpleFlattenHandler) OnBranchMoved(handler.Reparent) {
 	// Moves are reported by the action itself
 }
 

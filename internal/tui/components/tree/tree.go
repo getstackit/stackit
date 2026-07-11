@@ -8,6 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
@@ -17,19 +18,14 @@ const (
 	// BranchSymbol is the symbol used for regular branches in tree views
 	BranchSymbol = "◯"
 
-	// PRStateMerged indicates the PR has been merged
-	PRStateMerged = "MERGED"
-	// PRStateClosed indicates the PR has been closed
-	PRStateClosed = "CLOSED"
-
 	// CheckStatusNone indicates no CI status
-	CheckStatusNone = "NONE"
+	CheckStatusNone CheckStatus = "NONE"
 	// CheckStatusPassing indicates CI is passing
-	CheckStatusPassing = "PASSING"
+	CheckStatusPassing CheckStatus = "PASSING"
 	// CheckStatusFailing indicates CI is failing
-	CheckStatusFailing = "FAILING"
+	CheckStatusFailing CheckStatus = "FAILING"
 	// CheckStatusPending indicates CI is pending
-	CheckStatusPending = "PENDING"
+	CheckStatusPending CheckStatus = "PENDING"
 
 	// RestackSuggestedLabel marks branches where restacking may reduce review churn.
 	RestackSuggestedLabel = "(restack suggested)"
@@ -40,18 +36,21 @@ const (
 	ReviewStatusChangesRequested = "Changes Requested"
 )
 
+// CheckStatus is the aggregate CI state shown for a branch in tree views.
+type CheckStatus string
+
 // MergedParentDisplay represents a historical merged parent for display purposes
 type MergedParentDisplay struct {
 	BranchName string
 	PRNumber   *int
-	PRState    string // "MERGED", "CLOSED"
+	PRState    git.PRState
 }
 
 // BranchAnnotation holds per-branch display metadata
 type BranchAnnotation struct {
 	PRNumber      *int
 	PRAction      string // "create", "update", "skip", ""
-	CheckStatus   string // PASSING, FAILING, PENDING, NONE, ""
+	CheckStatus   CheckStatus
 	ReviewStatus  string // "Approved", "In Review", "Changes Requested", "Commented", ""
 	IsDraft       bool
 	IsLocked      bool
@@ -64,7 +63,7 @@ type BranchAnnotation struct {
 	CommitCount  int
 	LinesAdded   int
 	LinesDeleted int
-	PRState      string // "OPEN", "MERGED", "CLOSED"
+	PRState      git.PRState
 
 	// WorktreePath is set if this branch is the stack root of a managed worktree
 	WorktreePath string
@@ -847,8 +846,8 @@ func (r *StackTreeRenderer) getBranchingLine(numChildren int, indentLevel int, p
 	// They should use the current branch's scope color.
 	annotation := r.Annotations[branchName]
 	scope := annotation.Scope
-	isMerged := annotation.PRState == PRStateMerged
-	isClosed := annotation.PRState == PRStateClosed
+	isMerged := annotation.PRState == git.PRStateMerged
+	isClosed := annotation.PRState == git.PRStateClosed
 	isDim := isMerged || isClosed
 
 	var styleObj lipgloss.Style
@@ -884,8 +883,8 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 	isSelected := args.branchName == args.selectedBranch
 	annotation := r.Annotations[args.branchName]
 	isTrunk := r.isTrunk(args.branchName)
-	isMerged := annotation.PRState == PRStateMerged
-	isClosed := annotation.PRState == PRStateClosed
+	isMerged := annotation.PRState == git.PRStateMerged
+	isClosed := annotation.PRState == git.PRStateClosed
 	isDim := isMerged || isClosed
 
 	// Check if branch matches search (if search is active)
@@ -1002,7 +1001,7 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 
 	// LINE 1: Symbol + Branch Name (bold if current) + SHA + Scope + Actionable Warnings
 	branchName := args.branchName
-	coloredBranchName := style.ColorBranchNameBoldWithTrunk(branchName, isCurrent, isTrunk)
+	coloredBranchName := style.BranchStyle(isCurrent, isTrunk, false).Render(branchName)
 
 	switch {
 	case isSelected && !isNonSelectable:
@@ -1230,9 +1229,9 @@ func (r *StackTreeRenderer) formatMergedParentLine(
 		text = fmt.Sprintf("previously based on %s", prNum)
 
 		switch merged.PRState {
-		case PRStateMerged:
+		case git.PRStateMerged:
 			text += " " + style.ColorDim("(merged)")
-		case PRStateClosed:
+		case git.PRStateClosed:
 			text += " " + style.ColorDim("(closed)")
 		}
 	} else {
@@ -1355,9 +1354,9 @@ func (r *StackTreeRenderer) FormatAnnotationColored(annotation BranchAnnotation)
 	}
 
 	switch annotation.PRState {
-	case PRStateMerged:
+	case git.PRStateMerged:
 		parts = append(parts, style.ColorDim("(Merged)"))
-	case PRStateClosed:
+	case git.PRStateClosed:
 		parts = append(parts, style.ColorDim("(Closed)"))
 	}
 
@@ -1372,7 +1371,7 @@ func (r *StackTreeRenderer) FormatAnnotationColored(annotation BranchAnnotation)
 	return " " + strings.Join(parts, " ")
 }
 
-func (r *StackTreeRenderer) checksIcon(status string) string {
+func (r *StackTreeRenderer) checksIcon(status CheckStatus) string {
 	switch status {
 	case CheckStatusPassing:
 		return "✓"

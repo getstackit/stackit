@@ -152,6 +152,6 @@ func TestBatchGetPRSubmissionStatusSkipsRemoteForCreates(t *testing.T) {
 	require.Equal(t, int64(0), counting.fetchRemoteShas.Load(),
 		"an all-creates stack needs no remote read for submission status")
 	for name, st := range statuses {
-		require.Equal(t, "create", st.Action, "branch %s should be a create", name)
+		require.Equal(t, engine.SubmitActionCreate, st.Action, "branch %s should be a create", name)
 	}
 }

@@ -16,12 +16,6 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-// PR submission action constants
-const (
-	actionCreate = "create"
-	actionUpdate = "update"
-)
-
 // Options contains options for the submit command
 type Options struct {
 	Branch               string
@@ -68,7 +62,7 @@ type Info struct {
 	Base       string
 	HeadSHA    string
 	BaseSHA    string
-	Action     string // "create" or "update"
+	Action     engine.SubmitAction
 	PRNumber   *int
 	Metadata   *PRMetadata
 }
@@ -297,7 +291,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			Action:   info.Action,
 			PRNumber: info.PRNumber,
 		}
-		if info.Action != actionCreate {
+		if info.Action != engine.SubmitActionCreate {
 			allCreates = false
 		}
 	}
@@ -305,12 +299,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Start submission phase with a worker pool to avoid spawning too many goroutines
 	handler.OnEvent(SubmissionStartEvent{Branches: branchInfos})
 
-	githubClient, err := getGitHubClient(ctx)
-	if err != nil {
+	if _, err := getGitHubClient(ctx); err != nil {
 		return err
 	}
-	repoOwner, repoName := githubClient.GetOwnerRepo()
-
 	remote := nav.GetRemote()
 
 	// Push every branch that needs it in a single git invocation instead of one
@@ -328,7 +319,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if allCreates {
 			// Sequential submission for new stacks - ensures sequential PR numbers
 			for _, info := range submissionInfos {
-				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, pushResults); err != nil {
+				if err := submitBranch(ctx, info, opts, handler, pushResults); err != nil {
 					errMu.Lock()
 					if submitErr == nil {
 						submitErr = err
@@ -339,7 +330,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		} else {
 			// Parallel submission for updates (faster when PRs already exist)
 			utils.Run(submissionInfos, func(info Info) {
-				if err := submitBranch(ctx, info, opts, handler, repoOwner, repoName, pushResults); err != nil {
+				if err := submitBranch(ctx, info, opts, handler, pushResults); err != nil {
 					errMu.Lock()
 					if submitErr == nil {
 						submitErr = err
@@ -359,13 +350,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// content in one GraphQL query up front (instead of a GET per branch), then
 	// apply each footer/title update in parallel.
 	if opts.SubmitFooter {
-		prContent := actions.FetchPRContentForBranches(ctx, branches, repoOwner, repoName)
+		prContent := actions.FetchPRContentForBranches(ctx, branches)
 		utils.Run(branches, func(name string) {
 			handler.OnEvent(BranchProgressEvent{
 				BranchName: name,
 				Status:     StatusSyncing,
 			})
-			actions.UpdateBranchPRMetadataWithContent(ctx, name, repoOwner, repoName, prContent)
+			actions.UpdateBranchPRMetadataWithContent(ctx, name, prContent)
 			handler.OnEvent(BranchProgressEvent{
 				BranchName: name,
 				Status:     StatusDone,
@@ -418,7 +409,7 @@ func buildStackSnapshot(
 // submitBranch creates or updates the PR for a single branch. The branch has
 // already been pushed as part of the batched push in Action; pushResults carries
 // that branch's push outcome.
-func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, repoOwner, repoName string, pushResults map[string]error) error {
+func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, pushResults map[string]error) error {
 	handler.OnEvent(BranchProgressEvent{
 		BranchName: info.BranchName,
 		Status:     StatusSubmitting,
@@ -438,10 +429,10 @@ func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, re
 
 	var prURL string
 	var err error
-	if info.Action == actionCreate {
-		prURL, err = createPullRequestQuiet(ctx, info, repoOwner, repoName, handler)
+	if info.Action == engine.SubmitActionCreate {
+		prURL, err = createPullRequestQuiet(ctx, info, handler)
 	} else {
-		prURL, err = updatePullRequestQuiet(ctx, info, opts, repoOwner, repoName, handler)
+		prURL, err = updatePullRequestQuiet(ctx, info, opts, handler)
 	}
 
 	if err != nil {
@@ -471,7 +462,7 @@ func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, re
 			case "always":
 				shouldOpenBrowser = true
 			case "created":
-				shouldOpenBrowser = info.Action == actionCreate
+				shouldOpenBrowser = info.Action == engine.SubmitActionCreate
 			}
 		}
 	}
@@ -531,7 +522,7 @@ func pushSubmittedBranches(ctx *app.Context, opts Options, infos []Info, remote 
 }
 
 // createPullRequestQuiet creates a new pull request without logging
-func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, repoName string, handler Handler) (string, error) {
+func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, handler Handler) (string, error) {
 	pr := ctx.PR()
 	nav := ctx.Navigator()
 
@@ -555,7 +546,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 		Labels:        submissionInfo.Metadata.Labels,
 		Assignees:     submissionInfo.Metadata.Assignees,
 	}
-	prResult, err := ctx.GitHub().CreatePullRequest(ctx.Context, repoOwner, repoName, createOpts)
+	prResult, err := ctx.GitHub().CreatePullRequest(ctx.Context, createOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to create PR for %s: %w", submissionInfo.BranchName, err)
 	}
@@ -575,7 +566,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 		&prNumber,
 		submissionInfo.Metadata.Title,
 		bodyToCreate,
-		"OPEN",
+		git.PRStateOpen,
 		submissionInfo.Base,
 		prURL,
 		submissionInfo.Metadata.IsDraft,
@@ -587,7 +578,7 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, repoOwner, re
 }
 
 // updatePullRequestQuiet updates an existing pull request without logging
-func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options, repoOwner, repoName string, handler Handler) (string, error) {
+func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options, handler Handler) (string, error) {
 	pr := ctx.PR()
 	nav := ctx.Navigator()
 
@@ -663,7 +654,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 	if baseSHAStale {
 		trunkName := ctx.Engine.Trunk().GetName()
 		trunkOpts := github.UpdatePROptions{Base: &trunkName}
-		if _, err := ctx.GitHub().UpdatePullRequest(ctx.Context, repoOwner, repoName, *submissionInfo.PRNumber, trunkOpts); err != nil {
+		if _, err := ctx.GitHub().UpdatePullRequest(ctx.Context, *submissionInfo.PRNumber, trunkOpts); err != nil {
 			ctx.Output.Debug("Failed to refresh stale base.sha for %s: %v", submissionInfo.BranchName, err)
 		} else {
 			// The main update below will set it back to the actual parent, causing GitHub
@@ -673,13 +664,13 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		}
 	}
 
-	updateWarnings, err := ctx.GitHub().UpdatePullRequest(ctx.Context, repoOwner, repoName, *submissionInfo.PRNumber, updateOpts)
+	updateWarnings, err := ctx.GitHub().UpdatePullRequest(ctx.Context, *submissionInfo.PRNumber, updateOpts)
 	if err != nil {
 		if retargetedToTrunk {
 			// The PR is currently targeting trunk from the base.sha refresh above; restore
 			// the real parent so a failed update doesn't strand it showing the full stack diff.
 			rollbackOpts := github.UpdatePROptions{Base: &submissionInfo.Base}
-			if _, rollbackErr := ctx.GitHub().UpdatePullRequest(ctx.Context, repoOwner, repoName, *submissionInfo.PRNumber, rollbackOpts); rollbackErr != nil {
+			if _, rollbackErr := ctx.GitHub().UpdatePullRequest(ctx.Context, *submissionInfo.PRNumber, rollbackOpts); rollbackErr != nil {
 				ctx.Output.Debug("Failed to restore PR base for %s after update error: %v", submissionInfo.BranchName, rollbackErr)
 			}
 		}
@@ -706,7 +697,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		prURL = prInfo.URL()
 	} else {
 		// Get from GitHub
-		prResult, err := ctx.GitHub().GetPullRequestByBranch(ctx.Context, repoOwner, repoName, submissionInfo.BranchName)
+		prResult, err := ctx.GitHub().GetPullRequestByBranch(ctx.Context, submissionInfo.BranchName)
 		if err == nil && prResult != nil {
 			prURL = prResult.HTMLURL
 		}
@@ -716,7 +707,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		submissionInfo.PRNumber,
 		submissionInfo.Metadata.Title,
 		submissionInfo.Metadata.Body,
-		"OPEN",
+		git.PRStateOpen,
 		baseToStore,
 		prURL,
 		submissionInfo.Metadata.IsDraft,

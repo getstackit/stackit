@@ -2,14 +2,17 @@
 // without requiring a real git repository.
 package demo
 
-import "github.com/getstackit/stackit/internal/engine"
+import (
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+)
 
 // Demo data constants for branch names and statuses used in fixture data.
 const (
 	demoTrunkBranch   = "main"
 	demoAuthBase      = "feature/auth-base"
 	demoScopeAuth     = "AUTH"
-	demoPRStateOpen   = "OPEN"
+	demoPRStateOpen   = git.PRStateOpen
 	demoChecksPassing = "PASSING"
 )
 
@@ -19,7 +22,7 @@ type Branch struct {
 	Parent   string
 	SHA      string
 	PRNumber int
-	PRState  string // OPEN, MERGED, CLOSED
+	PRState  git.PRState
 	PRTitle  string
 	IsDraft  bool
 	Checks   string // PASSING, FAILING, PENDING, NONE
@@ -89,7 +92,7 @@ var demoBranches = []Branch{
 		Parent:   demoAuthBase,
 		SHA:      "sha-auth-oauth",
 		PRNumber: 105,
-		PRState:  "MERGED",
+		PRState:  git.PRStateMerged,
 		PRTitle:  "Add OAuth support",
 		IsDraft:  false,
 		Checks:   demoChecksPassing,
@@ -131,7 +134,7 @@ var demoBranches = []Branch{
 		Parent:   "feature/api-refactor",
 		SHA:      "sha-api-v2",
 		PRNumber: 108,
-		PRState:  "CLOSED",
+		PRState:  git.PRStateClosed,
 		PRTitle:  "Implement API v2 endpoints",
 		IsDraft:  false,
 		Checks:   "NONE",

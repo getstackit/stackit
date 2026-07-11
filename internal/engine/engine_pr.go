@@ -209,7 +209,7 @@ func (e *engineImpl) prSubmissionStatus(branch Branch, remoteStatus BranchRemote
 
 	if prInfo == nil || prInfo.Number() == nil {
 		return PRSubmissionStatus{
-			Action:      "create",
+			Action:      SubmitActionCreate,
 			NeedsUpdate: true,
 			PRInfo:      prInfo,
 		}, nil
@@ -257,7 +257,7 @@ func (e *engineImpl) prSubmissionStatus(branch Branch, remoteStatus BranchRemote
 	}
 
 	return PRSubmissionStatus{
-		Action:      "update",
+		Action:      SubmitActionUpdate,
 		NeedsUpdate: needsUpdate,
 		Reason:      reason,
 		PRNumber:    prInfo.Number(),

@@ -1,5 +1,7 @@
 package config
 
+import "github.com/getstackit/stackit/internal/github"
+
 // Configurer is the interface for stackit configuration.
 // The git-based GitConfig implements this interface.
 type Configurer interface {
@@ -27,7 +29,7 @@ type Configurer interface {
 	WorktreeAutoClean() bool
 
 	// Merge settings
-	MergeMethod() string
+	MergeMethod() github.MergeMethod
 
 	// CI settings
 	CICommand() string

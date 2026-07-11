@@ -51,7 +51,8 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 	owner, repo := "", ""
 	var currentUser string
 	if a.gh != nil {
-		owner, repo = a.gh.GetOwnerRepo()
+		ghRepo := a.gh.Repo()
+		owner, repo = ghRepo.Owner, ghRepo.Name
 		// currentUser identifies the operator (it comes from the server's
 		// GitHub token). On a public read-only server we must not leak that,
 		// and we must not spend the operator's GitHub rate limit on
@@ -71,7 +72,7 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 	}
 }
 
-func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks []merge.MultiStackInfo) map[string]*github.CheckStatus {
+func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks []merge.MultiStackInfo) github.ChecksByBranch {
 	if a.gh == nil {
 		return nil
 	}
@@ -92,7 +93,7 @@ func (a *ViewAssembler) mapStackDetails(
 	ctx context.Context,
 	graph *engine.StackGraph,
 	stacks []merge.MultiStackInfo,
-	checksMap map[string]*github.CheckStatus,
+	checksMap github.ChecksByBranch,
 ) []httpcontract.StackDetail {
 	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {
@@ -120,13 +121,12 @@ func (a *ViewAssembler) fetchPRTitles(ctx context.Context, commits []git.RecentC
 	}
 
 	// PR-number collection is shared with the `stackit log` command via internal/git.
-	prNumbers := git.PRTitleNumbers(commits)
+	prNumbers := git.RecentCommits(commits).PRTitleNumbers()
 	if len(prNumbers) == 0 {
 		return nil
 	}
 
-	owner, repo := a.gh.GetOwnerRepo()
-	titles, err := a.gh.BatchGetPRTitles(ctx, owner, repo, prNumbers)
+	titles, err := a.gh.BatchGetPRTitles(ctx, prNumbers)
 	if err != nil {
 		return nil
 	}

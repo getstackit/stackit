@@ -10,6 +10,8 @@ import (
 	"unicode"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 const defaultSubmitWidth = 80
@@ -153,7 +155,7 @@ func rowParts(item Item, spinnerView string, styles Styles) (string, string) {
 		}
 		return styles.DimStyle.Render("○"), styles.DimStyle.Render(detail)
 	default:
-		return styles.DimStyle.Render("○"), styles.DimStyle.Render(item.Status)
+		return styles.DimStyle.Render("○"), styles.DimStyle.Render(string(item.Status))
 	}
 }
 
@@ -184,18 +186,18 @@ func compactErrorText(err error) string {
 	return TruncateMiddle(detail, maxErrorDetailWidth)
 }
 
-func actionLabel(action string) string {
+func actionLabel(action engine.SubmitAction) string {
 	switch action {
 	case ActionCreate:
 		return "create"
 	case ActionUpdate:
 		return "update"
 	default:
-		return action
+		return string(action)
 	}
 }
 
-func pastTense(action string) string {
+func pastTense(action engine.SubmitAction) string {
 	switch action {
 	case ActionCreate:
 		return "created"

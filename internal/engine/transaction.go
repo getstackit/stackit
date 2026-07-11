@@ -45,7 +45,7 @@ type MetadataTx struct {
 
 	// Staged changes
 	metaUpdates  map[string]*git.Meta
-	localUpdates map[string]*git.LocalMeta
+	localUpdates git.LocalMetaMap
 
 	// Staged deletions
 	metaDeletes      map[string]bool
@@ -67,7 +67,7 @@ func (e *engineImpl) BeginTx(message string) *MetadataTx {
 	return &MetadataTx{
 		eng:               e,
 		metaUpdates:       make(map[string]*git.Meta),
-		localUpdates:      make(map[string]*git.LocalMeta),
+		localUpdates:      make(git.LocalMetaMap),
 		metaDeletes:       make(map[string]bool),
 		localMetaDeletes:  make(map[string]bool),
 		originalMeta:      make(map[string]string),

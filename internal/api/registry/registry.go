@@ -30,11 +30,22 @@ const watcherDebounce = 200 * time.Millisecond
 // without escaping, keeping the routing surface simple.
 var idPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
-// ownerRepoKey is the lookup key for the owner/repo secondary index. GitHub
-// treats owner/repo case-insensitively, so we lowercase to match a request's
-// path segments regardless of how they were typed.
-func ownerRepoKey(owner, name string) string {
-	return strings.ToLower(owner + "/" + name)
+// RepoRef identifies a GitHub repository by its owner/name coordinates.
+type RepoRef struct {
+	Owner string
+	Name  string
+}
+
+// Key returns the canonical lookup key for the repo. GitHub treats owner/repo
+// case-insensitively, so we lowercase to match regardless of how the
+// coordinates were typed.
+func (r RepoRef) Key() string {
+	return strings.ToLower(r.Owner + "/" + r.Name)
+}
+
+// String returns the "owner/name" form for logs and errors.
+func (r RepoRef) String() string {
+	return r.Owner + "/" + r.Name
 }
 
 // EntryConfig is the input to NewEntry. It captures the per-repo state the
@@ -52,11 +63,10 @@ type EntryConfig struct {
 	// the repos root) that the sync loop may mirror-fetch. The -cwd dev repo is
 	// the operator's own working tree and is left unmanaged.
 	Managed bool
-	// Owner and Name are the GitHub coordinates, set for managed repos. The
+	// RepoRef carries the GitHub coordinates, set for managed repos. The
 	// sync loop uses them to resolve a GitHub App installation token for the
 	// fetch.
-	Owner  string
-	Name   string
+	RepoRef
 	Engine engine.Engine
 	GitHub github.Client
 }
@@ -76,10 +86,9 @@ type RepoEntry struct {
 	// Managed marks a server-owned mirror checkout the sync loop may
 	// mirror-fetch (see EntryConfig.Managed).
 	Managed bool
-	// Owner and Name are the GitHub coordinates, set for managed repos; the
+	// RepoRef carries the GitHub coordinates, set for managed repos; the
 	// sync loop resolves an installation token from them.
-	Owner  string
-	Name   string
+	RepoRef
 	Engine engine.Engine
 	GitHub github.Client
 
@@ -108,8 +117,7 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 		Remote:      cfg.Remote,
 		AddedBy:     cfg.AddedBy,
 		Managed:     cfg.Managed,
-		Owner:       cfg.Owner,
-		Name:        cfg.Name,
+		RepoRef:     cfg.RepoRef,
 		Engine:      cfg.Engine,
 		GitHub:      cfg.GitHub,
 		Broadcaster: NewBroadcaster(),
@@ -233,9 +241,9 @@ func (r *Registry) Add(e *RepoEntry) error {
 	}
 	var key string
 	if e.Owner != "" && e.Name != "" {
-		key = ownerRepoKey(e.Owner, e.Name)
+		key = e.Key()
 		if _, exists := r.byOwnerRepo[key]; exists {
-			return fmt.Errorf("registry: duplicate repo %s/%s", e.Owner, e.Name)
+			return fmt.Errorf("registry: duplicate repo %s", e.RepoRef)
 		}
 	}
 	r.entries[e.ID] = e
@@ -262,23 +270,24 @@ func (r *Registry) GetByOwnerRepo(owner, repo string) (*RepoEntry, bool) {
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	e, ok := r.byOwnerRepo[ownerRepoKey(owner, repo)]
+	e, ok := r.byOwnerRepo[RepoRef{Owner: owner, Name: repo}.Key()]
 	return e, ok
 }
 
-// FindManaged returns the managed entry whose GitHub owner/name match the
-// arguments case-insensitively, or false when none does. The interval sync
-// loop and the webhook receiver use it to map a remote-change signal (a push
-// for owner/name) onto the local checkout to refresh.
+// FindManaged returns the managed entry whose GitHub coordinates match repo
+// case-insensitively, or false when none does. The interval sync loop and the
+// webhook receiver use it to map a remote-change signal (a push for
+// owner/name) onto the local checkout to refresh.
 //
 // Only managed mirrors are considered: the unmanaged -cwd working repo must
 // never be selected here, because the sync path mirror-fetches into a detached
 // HEAD and would corrupt a real working tree (see safety-invariants.md).
-func (r *Registry) FindManaged(owner, name string) (*RepoEntry, bool) {
+func (r *Registry) FindManaged(repo RepoRef) (*RepoEntry, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	key := repo.Key()
 	for _, e := range r.entries {
-		if e.Managed && strings.EqualFold(e.Owner, owner) && strings.EqualFold(e.Name, name) {
+		if e.Managed && e.Key() == key {
 			return e, true
 		}
 	}

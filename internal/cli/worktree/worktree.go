@@ -263,7 +263,7 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 	if name == "" {
 		name = wt.AnchorBranch
 	}
-	coloredName := style.ColorBranchName(name, isCurrent)
+	coloredName := style.ColorBranchNameIf(name, isCurrent)
 
 	// Stack size
 	stackInfo := style.ColorDim("empty")
@@ -385,14 +385,14 @@ Worktrees with uncommitted changes are skipped.`,
 
 				for _, name := range result.Pruned {
 					if dryRun {
-						ctx.Output.Println(fmt.Sprintf("  %s", style.ColorBranchName(name, false)))
+						ctx.Output.Println(fmt.Sprintf("  %s", style.ColorBranchName(name)))
 					} else {
-						ctx.Output.Success("Pruned %s", style.ColorBranchName(name, false))
+						ctx.Output.Success("Pruned %s", style.ColorBranchName(name))
 					}
 				}
 
 				for _, entry := range result.Skipped {
-					ctx.Output.Info("Skipped %s: %s", style.ColorBranchName(entry.Name, false), style.ColorDim(entry.Reason))
+					ctx.Output.Info("Skipped %s: %s", style.ColorBranchName(entry.Name), style.ColorDim(entry.Reason))
 				}
 
 				return nil
@@ -564,10 +564,10 @@ worktree anchors. Stale registrations with missing directories are removed.`,
 				}
 
 				for _, repaired := range result.Repaired {
-					ctx.Output.Success("%s: %s", style.ColorBranchName(repaired.Name, false), repaired.Action)
+					ctx.Output.Success("%s: %s", style.ColorBranchName(repaired.Name), repaired.Action)
 				}
 				for _, skipped := range result.Skipped {
-					ctx.Output.Info("Skipped %s: %s", style.ColorBranchName(skipped.Name, false), style.ColorDim(skipped.Reason))
+					ctx.Output.Info("Skipped %s: %s", style.ColorBranchName(skipped.Name), style.ColorDim(skipped.Reason))
 				}
 				if len(result.Repaired) == 0 && len(result.Skipped) == 0 {
 					ctx.Output.Info("No managed worktrees needed repair.")

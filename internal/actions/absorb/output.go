@@ -53,7 +53,7 @@ func printAbsorbPreview(
 			branchName = unknown
 		}
 
-		splog.Info("  %s  %s", shortSHA(commitSHA), output.Branch(branchName, false))
+		splog.Info("  %s  %s", shortSHA(commitSHA), output.BranchName(branchName))
 		if subject := commitSubject(eng, branchName, commitSHA); subject != "" {
 			splog.Info("    %s", subject)
 		}

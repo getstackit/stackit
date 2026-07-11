@@ -7,9 +7,25 @@ import "github.com/getstackit/stackit/internal/tui/style"
 // without importing internal/tui. They delegate to internal/tui/style, which
 // remains the single source of the actual lipgloss rendering.
 
+// BranchName renders a non-current branch name, colored.
+func BranchName(name string) string {
+	return style.ColorBranchName(name)
+}
+
+// CurrentBranch renders the current branch name with a "(current)" marker.
+func CurrentBranch(name string) string {
+	return style.ColorCurrentBranch(name)
+}
+
 // Branch renders a branch name, colored, with a "(current)" marker when isCurrent.
+// Prefer BranchName/CurrentBranch when the condition is known at the call site.
 func Branch(name string, isCurrent bool) string {
-	return style.ColorBranchName(name, isCurrent)
+	return style.ColorBranchNameIf(name, isCurrent)
+}
+
+// BranchNameWithTrunk renders a non-current branch name, with trunk in a distinct color.
+func BranchNameWithTrunk(name string, isTrunk bool) string {
+	return style.ColorBranchNameWithTrunk(name, false, isTrunk)
 }
 
 // BranchWithTrunk is like Branch but renders the trunk branch in a distinct color.
@@ -43,9 +59,6 @@ func NeedsRestack(text string) string { return style.ColorNeedsRestack(text) }
 
 // PRNumber renders a pull-request number.
 func PRNumber(prNumber int) string { return style.ColorPRNumber(prNumber) }
-
-// PRState renders a pull-request state label.
-func PRState(state string, isDraft bool) string { return style.ColorPRState(state, isDraft) }
 
 // RenderMarkdown renders markdown content for the terminal.
 func RenderMarkdown(content string) string { return style.RenderMarkdown(content) }

@@ -14,10 +14,6 @@ import (
 	"github.com/getstackit/stackit/internal/tui"
 )
 
-const (
-	prStateOpen = "OPEN"
-)
-
 // GetMergeMethod returns the merge method to use for PR merges.
 // If not configured, it prompts the user to select one and saves it to config.
 func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeMethod, error) {
@@ -29,7 +25,7 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 
 	// Check if already configured
 	if method := cfg.MergeMethod(); method != "" {
-		return github.MergeMethod(method), nil
+		return method, nil
 	}
 
 	// Query allowed methods from GitHub
@@ -65,7 +61,7 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 
 	// If only one option, use it automatically
 	if len(options) == 1 {
-		method := options[0].Value
+		method := github.MergeMethod(options[0].Value)
 		if err := cfg.SetMergeMethod(method); err != nil {
 			return "", fmt.Errorf("failed to save merge method: %w", err)
 		}
@@ -73,13 +69,13 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 			return "", fmt.Errorf("failed to save config: %w", err)
 		}
 		ctx.Output.Info("Using merge method: %s (only option available)", method)
-		return github.MergeMethod(method), nil
+		return method, nil
 	}
 
 	// Check if interactive mode is available
 	if err := tui.CheckInteractiveAllowed(); err != nil {
 		// Non-interactive mode: use the first allowed option
-		method := options[0].Value
+		method := github.MergeMethod(options[0].Value)
 		if err := cfg.SetMergeMethod(method); err != nil {
 			return "", fmt.Errorf("failed to save merge method: %w", err)
 		}
@@ -87,7 +83,7 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 			return "", fmt.Errorf("failed to save config: %w", err)
 		}
 		ctx.Output.Info("Using merge method: %s (auto-selected in non-interactive mode)", method)
-		return github.MergeMethod(method), nil
+		return method, nil
 	}
 
 	// Prompt user to select
@@ -98,15 +94,16 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 	}
 
 	// Save to config
-	if err := cfg.SetMergeMethod(selected); err != nil {
+	method := github.MergeMethod(selected)
+	if err := cfg.SetMergeMethod(method); err != nil {
 		return "", fmt.Errorf("failed to save merge method: %w", err)
 	}
 	if err := cfg.Save(); err != nil {
 		return "", fmt.Errorf("failed to save config: %w", err)
 	}
 
-	ctx.Output.Info("Saved merge.method = %s to config", selected)
-	return github.MergeMethod(selected), nil
+	ctx.Output.Info("Saved merge.method = %s to config", method)
+	return method, nil
 }
 
 // mergeExecuteEngine is a minimal interface needed for executing a merge plan
@@ -117,7 +114,7 @@ type mergeExecuteEngine interface {
 	engine.SyncManager
 	engine.StackRewriter
 	engine.RemoteMetadataManager
-	BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error)
+	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
 	Git() git.Runner
 }
 

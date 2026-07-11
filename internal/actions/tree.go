@@ -11,6 +11,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
@@ -19,15 +20,17 @@ import (
 )
 
 // TreeStyle defines the output style for the tree command
+type TreeStyle string
+
 const (
-	TreeStyleNormal = "NORMAL"
-	TreeStyleFull   = "FULL"
-	TreeStyleShort  = "SHORT"
+	TreeStyleNormal TreeStyle = "NORMAL"
+	TreeStyleFull   TreeStyle = "FULL"
+	TreeStyleShort  TreeStyle = "SHORT"
 )
 
 // TreeOptions contains options for the tree command
 type TreeOptions struct {
-	Style         string // TreeStyleNormal, TreeStyleFull, or TreeStyleShort
+	Style         TreeStyle
 	Steps         *int
 	BranchName    string
 	ShowUntracked bool
@@ -66,15 +69,25 @@ type TreeBranchInfo struct {
 	Children     []string    `json:"children,omitempty"`
 }
 
+// ReviewStatus is the PR review state reported in tree JSON output.
+type ReviewStatus string
+
+// Review status values for TreePRInfo.
+const (
+	ReviewApproved         ReviewStatus = "approved"
+	ReviewChangesRequested ReviewStatus = "changes_requested"
+	ReviewRequired         ReviewStatus = "review_required"
+)
+
 // TreePRInfo represents PR information in JSON output
 type TreePRInfo struct {
-	Number       int    `json:"number"`
-	URL          string `json:"url,omitempty"`
-	Title        string `json:"title,omitempty"`
-	State        string `json:"state"`
-	IsDraft      bool   `json:"is_draft,omitempty"`
-	ReviewStatus string `json:"review_status,omitempty"`
-	CIStatus     string `json:"ci_status,omitempty"`
+	Number       int          `json:"number"`
+	URL          string       `json:"url,omitempty"`
+	Title        string       `json:"title,omitempty"`
+	State        git.PRState  `json:"state"`
+	IsDraft      bool         `json:"is_draft,omitempty"`
+	ReviewStatus ReviewStatus `json:"review_status,omitempty"`
+	CIStatus     string       `json:"ci_status,omitempty"`
 }
 
 // TreeSummary represents summary statistics in JSON output
@@ -95,7 +108,7 @@ func TreeAction(ctx *app.Context, opts TreeOptions) error {
 	if opts.Interactive || (utils.IsInteractive() && opts.Steps == nil) {
 		// Run interactive TUI
 		m := tui.NewTreeModel(ctx.Context, ctx.Engine, ctx.GitHub(), tui.TreeOptions{
-			Style:         opts.Style,
+			Style:         string(opts.Style),
 			ShowUntracked: opts.ShowUntracked,
 			Logger:        ctx.Logger,
 		})
@@ -141,7 +154,7 @@ func TreeAction(ctx *app.Context, opts TreeOptions) error {
 	annotations := make(map[string]tree.BranchAnnotation, len(visibleBranches))
 
 	// Prefetch CI status in batch if in FULL style
-	var ciStatuses map[string]*github.CheckStatus
+	var ciStatuses github.ChecksByBranch
 	if opts.Style == TreeStyleFull && ctx.GitHub() != nil {
 		branchNames := visibleBranches.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 		if len(branchNames) > 0 {
@@ -322,7 +335,7 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 
 	// Prefetch CI status for JSON output (always fetched to provide complete data)
 	ghClient := ctx.GitHub()
-	var ciStatuses map[string]*github.CheckStatus
+	var ciStatuses github.ChecksByBranch
 	if ghClient != nil {
 		branchNames := branchesToInclude.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
 		if len(branchNames) > 0 {
@@ -409,26 +422,24 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 					}
 
 					// CI status
-					if ciStatuses != nil {
-						if status, ok := ciStatuses[branchName]; ok && status != nil {
-							switch {
-							case status.Pending:
-								info.PR.CIStatus = "pending"
-							case status.Passing:
-								info.PR.CIStatus = "passing"
-							default:
-								info.PR.CIStatus = "failing"
-							}
+					if status := ciStatuses.Get(branchName); status != nil {
+						switch {
+						case status.Pending:
+							info.PR.CIStatus = "pending"
+						case status.Passing:
+							info.PR.CIStatus = "passing"
+						default:
+							info.PR.CIStatus = "failing"
+						}
 
-							// Review status
-							switch status.ReviewDecision {
-							case github.ReviewDecisionApproved:
-								info.PR.ReviewStatus = "approved"
-							case github.ReviewDecisionChangesRequested:
-								info.PR.ReviewStatus = "changes_requested"
-							case github.ReviewDecisionReviewRequired:
-								info.PR.ReviewStatus = "review_required"
-							}
+						// Review status
+						switch status.ReviewDecision {
+						case github.ReviewDecisionApproved:
+							info.PR.ReviewStatus = ReviewApproved
+						case github.ReviewDecisionChangesRequested:
+							info.PR.ReviewStatus = ReviewChangesRequested
+						case github.ReviewDecisionReviewRequired:
+							info.PR.ReviewStatus = ReviewRequired
 						}
 					}
 				}
@@ -446,9 +457,9 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 		// Update summary (exclude trunk)
 		if !info.IsTrunk {
 			result.Summary.TotalBranches++
-			if info.PR != nil && info.PR.ReviewStatus == "approved" {
+			if info.PR != nil && info.PR.ReviewStatus == ReviewApproved {
 				result.Summary.ApprovedCount++
-			} else if info.PR != nil && info.PR.ReviewStatus == "review_required" {
+			} else if info.PR != nil && info.PR.ReviewStatus == ReviewRequired {
 				result.Summary.InReviewCount++
 			}
 		}

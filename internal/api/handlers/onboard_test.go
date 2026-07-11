@@ -136,7 +136,7 @@ func TestOnboardHandlerDuplicateDifferentCasing(t *testing.T) {
 	reg := registry.New()
 	t.Cleanup(func() { _ = reg.Close() })
 	// An existing repo, indexed by its case-folded owner/repo key.
-	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "octo-widget", Owner: "octo", Name: "widget", AddedBy: "alice"}))
+	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "octo-widget", RepoRef: registry.RepoRef{Owner: "octo", Name: "widget"}, AddedBy: "alice"}))
 	cipher := onboardCipher(t)
 
 	h := NewOnboardHandler(reg, &fakeRepoStore{}, cipher, t.TempDir(), fakeTokenProvider{token: "inst-token"})

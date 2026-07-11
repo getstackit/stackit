@@ -1,6 +1,8 @@
 package github_test
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"testing"
 	"time"
 
@@ -18,7 +20,7 @@ func TestToPullRequestInfoState(t *testing.T) {
 	tests := []struct {
 		name     string
 		pr       *gogithub.PullRequest
-		expected string
+		expected git.PRState
 	}{
 		{
 			name:     "open PR",

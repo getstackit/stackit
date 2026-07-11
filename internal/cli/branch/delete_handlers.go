@@ -48,12 +48,12 @@ func (h *SimpleDeleteHandler) OnBranch(name string, status delete.Status, _ *int
 	switch status {
 	case delete.StatusDeleted:
 		h.deleted++
-		h.Output.Info("Deleted branch %s", style.ColorBranchName(name, false))
+		h.Output.Info("Deleted branch %s", style.ColorBranchName(name))
 	case delete.StatusSkipped:
 		h.skipped++
-		h.Output.Info("Skipped branch %s", style.ColorBranchName(name, false))
+		h.Output.Info("Skipped branch %s", style.ColorBranchName(name))
 	case delete.StatusRestacked:
-		h.Output.Info("Restacked branch %s", style.ColorBranchName(name, false))
+		h.Output.Info("Restacked branch %s", style.ColorBranchName(name))
 	}
 }
 

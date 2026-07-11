@@ -67,11 +67,6 @@ func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, i
 		return nil, err
 	}
 
-	owner, repo := p.ctx.GitHub().GetOwnerRepo()
-	if owner == "" || repo == "" {
-		return nil, fmt.Errorf("could not determine repository owner/name")
-	}
-
 	content := p.prGenerator.GenerateMultiStackPR(included, excluded)
 
 	opts := github.CreatePROptions{
@@ -82,7 +77,7 @@ func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, i
 		Draft: false,
 	}
 
-	pr, err := p.ctx.GitHub().CreatePullRequest(ctx, owner, repo, opts)
+	pr, err := p.ctx.GitHub().CreatePullRequest(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PR: %w", err)
 	}
@@ -145,15 +140,8 @@ func (p *MultiStackPRCreator) resolveMergeMethod() (github.MergeMethod, error) {
 		return "", fmt.Errorf("failed to load config: %w", err)
 	}
 
-	mergeMethod := github.MergeMethodSquash // default
-	if method := cfg.MergeMethod(); method != "" {
-		switch method {
-		case "merge":
-			mergeMethod = github.MergeMethodMerge
-		case "rebase":
-			mergeMethod = github.MergeMethodRebase
-		}
+	if method := cfg.MergeMethod(); method.Valid() {
+		return method, nil
 	}
-
-	return mergeMethod, nil
+	return github.MergeMethodSquash, nil // default
 }

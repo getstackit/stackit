@@ -8,6 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -32,11 +33,11 @@ type SingleBranchInfo struct {
 
 // SingleBranchPRInfo represents PR information for JSON output
 type SingleBranchPRInfo struct {
-	Number  int    `json:"number"`
-	Title   string `json:"title"`
-	State   string `json:"state"`
-	IsDraft bool   `json:"is_draft"`
-	URL     string `json:"url"`
+	Number  int         `json:"number"`
+	Title   string      `json:"title"`
+	State   git.PRState `json:"state"`
+	IsDraft bool        `json:"is_draft"`
+	URL     string      `json:"url"`
 }
 
 // SingleBranchStats represents diff statistics for a branch
@@ -164,7 +165,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	parentBranch := branch.GetParent()
 	if parentBranch != nil {
 		outputLines = append(outputLines, "")
-		outputLines = append(outputLines, fmt.Sprintf("%s: %s", output.Cyan("Parent"), output.BranchWithTrunk(parentBranch.GetName(), false, parentBranch.IsTrunk())))
+		outputLines = append(outputLines, fmt.Sprintf("%s: %s", output.Cyan("Parent"), output.BranchNameWithTrunk(parentBranch.GetName(), parentBranch.IsTrunk())))
 	}
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
@@ -172,7 +173,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	if len(children) > 0 {
 		outputLines = append(outputLines, fmt.Sprintf("%s:", output.Cyan("Children")))
 		for _, child := range children {
-			outputLines = append(outputLines, fmt.Sprintf("▸ %s", output.BranchWithTrunk(child.GetName(), false, child.IsTrunk())))
+			outputLines = append(outputLines, fmt.Sprintf("▸ %s", output.BranchNameWithTrunk(child.GetName(), child.IsTrunk())))
 		}
 	}
 
@@ -195,7 +196,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		}
 		branchRevision, err := branch.GetRevision()
 		if err == nil {
-			commitsOutput, err := eng.ShowCommits(ctx.Context, baseRevision, branchRevision, true, opts.Stat)
+			commitsOutput, err := eng.ShowCommits(ctx.Context, git.RevRange{Base: baseRevision, Head: branchRevision}, true, opts.Stat)
 			if err == nil && commitsOutput != "" {
 				outputLines = append(outputLines, commitsOutput)
 			}
@@ -239,11 +240,7 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 	}
 
 	// Apply dimming for merged/closed PRs
-	const (
-		prStateMerged = "MERGED"
-		prStateClosed = "CLOSED"
-	)
-	if prInfo != nil && (prInfo.State() == prStateMerged || prInfo.State() == prStateClosed) {
+	if prInfo != nil && (prInfo.State() == git.PRStateMerged || prInfo.State() == git.PRStateClosed) {
 		for i := range outputLines {
 			outputLines[i] = output.Dim(outputLines[i])
 		}
@@ -262,20 +259,18 @@ func getPRTitleLine(prInfo *engine.PrInfo) string {
 
 	state := prInfo.State()
 
-	const (
-		prStateMerged = "MERGED"
-		prStateClosed = "CLOSED"
-	)
-
 	prNumber := output.PRNumber(*prInfo.Number())
 
 	switch state {
-	case prStateMerged:
+	case git.PRStateMerged:
 		return fmt.Sprintf("%s (Merged) %s", prNumber, prInfo.Title())
-	case prStateClosed:
+	case git.PRStateClosed:
 		return fmt.Sprintf("%s (Abandoned) %s", prNumber, output.Dim(prInfo.Title()))
 	default:
-		prState := output.PRState(state, prInfo.IsDraft())
+		prState := ""
+		if prInfo.IsDraft() {
+			prState = output.Dim("(Draft)")
+		}
 		return fmt.Sprintf("%s %s %s", prNumber, prState, prInfo.Title())
 	}
 }
@@ -352,7 +347,7 @@ func outputBranchInfoJSON(ctx *app.Context, branch engine.Branch) error {
 		if err == nil && base != "" {
 			branchRev, err := branch.GetRevision()
 			if err == nil {
-				files, err := eng.GetChangedFiles(ctx.Context, base, branchRev)
+				files, err := eng.GetChangedFiles(ctx.Context, git.RevRange{Base: base, Head: branchRev})
 				if err == nil {
 					info.DiffStats.FilesChanged = len(files)
 				}

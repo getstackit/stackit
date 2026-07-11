@@ -1,6 +1,8 @@
 package merge
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 	"fmt"
 
@@ -22,7 +24,7 @@ func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExec
 		if prInfo == nil || prInfo.Number() == nil {
 			return fmt.Errorf("PR not found for branch %s", step.BranchName)
 		}
-		if prInfo.State() != prStateOpen {
+		if prInfo.State() != git.PRStateOpen {
 			return fmt.Errorf("PR #%d for branch %s is %s (not open)", *prInfo.Number(), step.BranchName, prInfo.State())
 		}
 		// Optionally check CI checks haven't changed to failing or pending
@@ -73,7 +75,7 @@ func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExec
 		if prInfo == nil || prInfo.Number() == nil {
 			return fmt.Errorf("PR not found for branch %s", step.BranchName)
 		}
-		if prInfo.State() != prStateOpen {
+		if prInfo.State() != git.PRStateOpen {
 			return fmt.Errorf("PR #%d for branch %s is %s (not open)", *prInfo.Number(), step.BranchName, prInfo.State())
 		}
 	}
@@ -158,10 +160,8 @@ func updatePRBaseBranchFromContext(ctx context.Context, githubClient github.Clie
 		return nil
 	}
 
-	owner, repo := githubClient.GetOwnerRepo()
-
 	// Get PR for this branch
-	pr, err := githubClient.GetPullRequestByBranch(ctx, owner, repo, branchName)
+	pr, err := githubClient.GetPullRequestByBranch(ctx, branchName)
 	if err != nil || pr == nil {
 		// PR not found or error - non-fatal
 		return nil //nolint:nilerr
@@ -172,7 +172,7 @@ func updatePRBaseBranchFromContext(ctx context.Context, githubClient github.Clie
 		Base: &newBase,
 	}
 
-	if _, err := githubClient.UpdatePullRequest(ctx, owner, repo, pr.Number, updateOpts); err != nil {
+	if _, err := githubClient.UpdatePullRequest(ctx, pr.Number, updateOpts); err != nil {
 		return fmt.Errorf("failed to update PR base: %w", err)
 	}
 

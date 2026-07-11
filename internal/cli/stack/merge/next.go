@@ -144,9 +144,8 @@ func runMergeNext(ctx *app.Context, opts mergeNextOptions, postMergeHandler Post
 	}
 
 	// Get the PR's NodeID for merge operations
-	owner, repo := ctx.GitHub().GetOwnerRepo()
 	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, owner, repo, bottomPR.PRNumber)
+	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, bottomPR.PRNumber)
 	cancelRemote()
 	if err != nil {
 		return fmt.Errorf("failed to get PR info: %w", err)

@@ -12,7 +12,7 @@ import (
 // restackBranches handles restacking branches after sync operations.
 // When restackScope is non-nil, only those branches are restacked (skipping current-branch expansion).
 // When expandScope is true, expands to the full current stack (used when --restack is explicitly passed).
-func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope []string, expandScope bool, dirtyAnchors map[string]bool, handler Handler, summary *Summary) error {
+func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope []string, expandScope bool, dirtyAnchors dirtyAnchorSet, handler Handler, summary *Summary) error {
 	nav := ctx.Navigator()
 
 	if restackScope != nil {
@@ -53,7 +53,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	seen := make(map[string]bool)
 	uniqueBranches := engine.NewBranchesBuilder(len(branchesToRestack))
 	for _, branchName := range branchesToRestack {
-		if !seen[branchName] && !isInDirtyStack(ctx, branchName, dirtyAnchors) {
+		if !seen[branchName] && !dirtyAnchors.includes(ctx, branchName) {
 			seen[branchName] = true
 			branch := nav.GetBranch(branchName)
 			// Only include branches that exist, are tracked, and are not trunks

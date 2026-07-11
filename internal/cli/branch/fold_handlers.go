@@ -52,6 +52,6 @@ func (h *SimpleFoldHandler) Complete(result fold.Result) {
 	defer h.Unlock()
 
 	h.Output.Info("Folded %s into %s",
-		style.ColorBranchName(result.FoldedBranch, false),
-		style.ColorBranchName(result.IntoBranch, true))
+		style.ColorBranchName(result.FoldedBranch),
+		style.ColorCurrentBranch(result.IntoBranch))
 }

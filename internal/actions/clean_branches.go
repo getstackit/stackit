@@ -423,7 +423,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 	}
 
 	for _, name := range branchNames {
-		out.Info("Deleted branch %s", output.Branch(name, false))
+		out.Info("Deleted branch %s", output.BranchName(name))
 	}
 
 	return nil
@@ -505,7 +505,7 @@ func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStat
 			kind := engine.DeletionReasonGhost
 			reason := "branch no longer exists locally"
 			if meta, err := eng.ReadMetadataRaw(ghostName); err == nil && meta != nil {
-				if pr := meta.GetPrInfo(); pr != nil && pr.State != nil && *pr.State == "MERGED" {
+				if pr := meta.GetPrInfo(); pr != nil && pr.State != nil && *pr.State == git.PRStateMerged {
 					kind = engine.DeletionReasonMergedPR
 					reason = "branch deleted locally; PR was merged"
 				}
@@ -603,8 +603,8 @@ func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove) error {
 			return fmt.Errorf("failed to set parent for %s: %w", move.branchName, err)
 		}
 		ctx.Output.Info("Set parent of %s to %s.",
-			output.Branch(move.branchName, false),
-			output.Branch(move.newParentName, false))
+			output.BranchName(move.branchName),
+			output.BranchName(move.newParentName))
 	}
 	return nil
 }

@@ -74,11 +74,21 @@ func (sd *StackDescription) IsEmpty() bool {
 	return sd == nil || (sd.Title == "" && sd.Description == "")
 }
 
+// PRState is a GitHub pull-request state as reported by the API
+// (GraphQL uppercase form). Empty means unknown.
+type PRState string
+
+const (
+	PRStateOpen   PRState = "OPEN"
+	PRStateMerged PRState = "MERGED"
+	PRStateClosed PRState = "CLOSED"
+)
+
 // MergedParent represents a historical parent that was merged or deleted
 type MergedParent struct {
-	BranchName string  `json:"branchName"`
-	PRNumber   *int    `json:"prNumber,omitempty"`
-	PRState    *string `json:"prState,omitempty"` // "MERGED", "CLOSED"
+	BranchName string   `json:"branchName"`
+	PRNumber   *int     `json:"prNumber,omitempty"`
+	PRState    *PRState `json:"prState,omitempty"` // MERGED or CLOSED
 }
 
 // LocalMeta represents branch metadata that is strictly local and never pushed
@@ -86,6 +96,16 @@ type LocalMeta struct {
 	Frozen              bool   `json:"frozen,omitempty"`
 	NeedsPRBodyUpdate   bool   `json:"needsPRBodyUpdate,omitempty"`
 	NavigationCommentID *int64 `json:"navigationCommentId,omitempty"`
+}
+
+// LocalMetaMap is branch name -> local metadata, as returned by the batch
+// local-metadata readers.
+type LocalMetaMap map[string]*LocalMeta
+
+// Get returns the local metadata for a branch, or nil if absent.
+// Safe to call on a nil map.
+func (m LocalMetaMap) Get(branchName string) *LocalMeta {
+	return m[branchName]
 }
 
 // ModifiedBy represents information about who last modified the metadata
@@ -103,7 +123,7 @@ type PrInfoPersistence struct {
 	URL         *string     `json:"url,omitempty"`
 	Title       *string     `json:"title,omitempty"`
 	Body        *string     `json:"body,omitempty"`
-	State       *string     `json:"state,omitempty"`
+	State       *PRState    `json:"state,omitempty"`
 	IsDraft     *bool       `json:"isDraft,omitempty"`
 	LockReason  *LockReason `json:"lockReason,omitempty"`
 	MergeBranch *string     `json:"mergeBranch,omitempty"`
@@ -187,8 +207,8 @@ func (r *runner) BatchReadMetadata(branchNames []string) (map[string]*Meta, map[
 // BatchReadLocalMetadata reads local metadata for multiple branches in parallel.
 // Returns a map of successfully read metadata. Failures are silently ignored since
 // local metadata is not critical and missing metadata is expected for new branches.
-func (r *runner) BatchReadLocalMetadata(branchNames []string) map[string]*LocalMeta {
-	results := make(map[string]*LocalMeta, len(branchNames))
+func (r *runner) BatchReadLocalMetadata(branchNames []string) LocalMetaMap {
+	results := make(LocalMetaMap, len(branchNames))
 
 	if len(branchNames) == 0 {
 		return results

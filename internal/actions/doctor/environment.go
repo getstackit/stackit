@@ -58,9 +58,9 @@ func checkEnvironment(runner git.Runner, handler Handler, warnings int, errors i
 				warnings++
 				handler.OnCheck("github_auth", CheckWarning, fmt.Sprintf("GitHub authentication failed: %v", err))
 			} else {
-				owner, repo := client.GetOwnerRepo()
-				if owner != "" && repo != "" {
-					handler.OnCheck("github_auth", CheckPassed, fmt.Sprintf("GitHub authentication successful (%s/%s)", owner, repo))
+				repo := client.Repo()
+				if repo.Owner != "" && repo.Name != "" {
+					handler.OnCheck("github_auth", CheckPassed, fmt.Sprintf("GitHub authentication successful (%s)", repo))
 				} else {
 					handler.OnCheck("github_auth", CheckPassed, "GitHub authentication successful")
 				}

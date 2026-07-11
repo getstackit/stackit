@@ -11,7 +11,7 @@ import (
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-const prStateMerged = "MERGED"
+const prStateMerged = git.PRStateMerged
 
 func TestSync(t *testing.T) {
 	t.Parallel()
@@ -120,7 +120,7 @@ func TestSync(t *testing.T) {
 		meta, err := eng.Git().ReadMetadata(mergeBranch)
 		require.NoError(t, err)
 		prNum := 100
-		state := "CLOSED"
+		state := git.PRStateClosed
 		base := mainBranchName
 		meta = meta.WithPrInfo(&git.PrInfoPersistence{
 			Number: &prNum,
@@ -172,7 +172,7 @@ func TestSync(t *testing.T) {
 		// b: OPEN pointing to main
 		metaB, _ := eng.Git().ReadMetadata("b")
 		prNumB := 2
-		stateB := "OPEN"
+		stateB := git.PRStateOpen
 		baseB := mainBranchName
 		metaB = metaB.WithPrInfo(&git.PrInfoPersistence{
 			Number: &prNumB,
@@ -215,7 +215,7 @@ func TestSyncDraftPRs(t *testing.T) {
 	require.NoError(t, err)
 
 	prNum := 1
-	state := "OPEN"
+	state := git.PRStateOpen
 	base := mainBranchName
 	isDraft := true
 	meta = meta.WithPrInfo(&git.PrInfoPersistence{
@@ -271,7 +271,7 @@ func TestSyncCleanupDiamond(t *testing.T) {
 	// Mark 'b' as merged
 	metaB, _ := eng.Git().ReadMetadata("b")
 	prNumB := 2
-	stateB := "MERGED"
+	stateB := git.PRStateMerged
 	baseB := mainBranchName
 	metaB = metaB.WithPrInfo(&git.PrInfoPersistence{
 		Number: &prNumB,

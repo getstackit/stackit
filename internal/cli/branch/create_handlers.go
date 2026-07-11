@@ -68,8 +68,8 @@ func (h *SimpleCreateHandler) Complete(result create.Result) {
 	defer h.Unlock()
 
 	h.Output.Info("Created branch %s on %s",
-		style.ColorBranchName(result.BranchName, true),
-		style.ColorBranchName(result.ParentBranch, false))
+		style.ColorCurrentBranch(result.BranchName),
+		style.ColorBranchName(result.ParentBranch))
 }
 
 // PromptStageChanges returns false for simple handler (non-interactive)

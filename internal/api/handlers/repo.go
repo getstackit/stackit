@@ -33,7 +33,8 @@ func (h *RepoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	owner, repo := "", ""
 	if entry.GitHub != nil {
-		owner, repo = entry.GitHub.GetOwnerRepo()
+		ghRepo := entry.GitHub.Repo()
+		owner, repo = ghRepo.Owner, ghRepo.Name
 	}
 
 	resp := httpcontract.RepoResponse{

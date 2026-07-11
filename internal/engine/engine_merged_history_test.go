@@ -70,7 +70,7 @@ func TestRestackBranch_CapturesMergedHistory(t *testing.T) {
 		// Simulate branch1 being merged (mark it in metadata)
 		meta, err := s.Engine.Git().ReadMetadata("branch1")
 		require.NoError(t, err)
-		mergedState := prStateMerged
+		mergedState := git.PRStateMerged
 		metaPrInfo := meta.GetPrInfo()
 		metaPrInfo.State = &mergedState
 		meta = meta.WithPrInfo(metaPrInfo)
@@ -93,7 +93,7 @@ func TestRestackBranch_CapturesMergedHistory(t *testing.T) {
 		require.NotNil(t, mergedHistory[0].PRNumber)
 		require.Equal(t, 99, *mergedHistory[0].PRNumber)
 		require.NotNil(t, mergedHistory[0].PRState)
-		require.Equal(t, "MERGED", *mergedHistory[0].PRState)
+		require.Equal(t, git.PRStateMerged, *mergedHistory[0].PRState)
 	})
 }
 
@@ -110,7 +110,7 @@ func TestRestackBranch_InheritsMergedHistory(t *testing.T) {
 
 		// First: merge branch1 and reparent branch2 to main
 		meta1, _ := s.Engine.Git().ReadMetadata("branch1")
-		mergedState := prStateMerged
+		mergedState := git.PRStateMerged
 		meta1 = meta1.WithPrInfo(&git.PrInfoPersistence{State: &mergedState})
 		_ = s.Engine.Git().WriteMetadata("branch1", meta1)
 
@@ -162,7 +162,7 @@ func TestRestackBranch_LimitsHistoryGrowth(t *testing.T) {
 		}
 		s = s.WithStack(parentMap)
 
-		mergedState := prStateMerged
+		mergedState := git.PRStateMerged
 
 		// Merge each branch one by one, causing reparenting up the chain
 		for i := range 6 {
@@ -240,7 +240,7 @@ func TestRestackBranch_PreventsDuplicateHistory(t *testing.T) {
 
 		// Mark branch1 as merged
 		meta1, _ := s.Engine.Git().ReadMetadata("branch1")
-		mergedState := prStateMerged
+		mergedState := git.PRStateMerged
 		meta1 = meta1.WithPrInfo(&git.PrInfoPersistence{State: &mergedState})
 		_ = s.Engine.Git().WriteMetadata("branch1", meta1)
 

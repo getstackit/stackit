@@ -1,6 +1,8 @@
 package merge
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 	"fmt"
 
@@ -81,8 +83,8 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		return result
 	}
 
-	repoOwner, repoName := githubClient.GetOwnerRepo()
-	if repoOwner == "" || repoName == "" {
+	repo := githubClient.Repo()
+	if repo.Owner == "" || repo.Name == "" {
 		out.Debug("Could not get repo owner/name for PR cleanup")
 		return result
 	}
@@ -107,7 +109,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		branchPRs = append(branchPRs, branchWithPR{branch: branch, prInfo: prInfo})
 		prNumbers = append(prNumbers, *prInfo.Number())
 	}
-	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.Git(), repoOwner, repoName, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.Git(), repo, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 	if err != nil {
 		out.Debug("Failed to batch fetch PR details: %v", err)
 		prDetails = map[int]github.PRStateBody{}
@@ -126,7 +128,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		}
 
 		// Skip if already closed/merged (e.g., by merge commit strategy)
-		if existingPR.State != "OPEN" {
+		if existingPR.State != git.PRStateOpen {
 			out.Debug("PR #%d is already %s, skipping", prNumber, existingPR.State)
 			result.SkippedPRs = append(result.SkippedPRs, prNumber)
 			continue
@@ -137,14 +139,14 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		newBody := existingPR.Body + footer
 		updateOpts := github.UpdatePROptions{Body: &newBody}
 
-		if _, err := githubClient.UpdatePullRequest(ctx, repoOwner, repoName, prNumber, updateOpts); err != nil {
+		if _, err := githubClient.UpdatePullRequest(ctx, prNumber, updateOpts); err != nil {
 			out.Debug("Failed to update PR #%d body: %v", prNumber, err)
 		} else {
 			out.Debug("Updated PR #%d with consolidation footer", prNumber)
 		}
 
 		// Close the PR (handles squash/rebase merge strategies where GitHub doesn't auto-close)
-		if err := githubClient.ClosePullRequest(ctx, repoOwner, repoName, prNumber); err != nil {
+		if err := githubClient.ClosePullRequest(ctx, prNumber); err != nil {
 			out.Debug("Failed to close PR #%d: %v", prNumber, err)
 			result.FailedPRs = append(result.FailedPRs, prNumber)
 		} else {

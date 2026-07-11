@@ -184,7 +184,7 @@ func TestValidateRebases(t *testing.T) {
 
 		// The rebased tip must sit directly on the advanced main and carry exactly
 		// the branch's three original commits.
-		replayed, err := s.Engine.Git().GetCommitRangeSHAs(context.Background(), mainRev, newTip)
+		replayed, err := s.Engine.Git().GetCommitRangeSHAs(context.Background(), git.RevRange{Base: mainRev, Head: newTip})
 		require.NoError(t, err)
 		require.Len(t, replayed, 3, "all three branch commits should be replayed onto new main")
 
@@ -199,7 +199,7 @@ func TestValidateRebases(t *testing.T) {
 
 		// The rebased tip's tree contains both the parent's change and all three
 		// branch changes (4 distinct files relative to the fork point).
-		filesFromBase, err := s.Engine.Git().GetChangedFiles(context.Background(), branch1OldBase, newTip)
+		filesFromBase, err := s.Engine.Git().GetChangedFiles(context.Background(), git.RevRange{Base: branch1OldBase, Head: newTip})
 		require.NoError(t, err)
 		require.Len(t, filesFromBase, 4)
 	})

@@ -63,7 +63,7 @@ func (v *LocalCIValidator) Validate(ctx context.Context, workdir string) error {
 
 // LocalCISearchResult contains the result of binary search for working stacks
 type LocalCISearchResult struct {
-	WorkingStacks []MultiStackInfo     // Stacks that pass CI together
+	WorkingStacks MultiStacks          // Stacks that pass CI together
 	FailedStacks  []MultiStackExcluded // Stacks that failed CI
 }
 

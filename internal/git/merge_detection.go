@@ -191,7 +191,7 @@ func (r *runner) IsSquashMerged(ctx context.Context, branchName, target string, 
 // The scan is bounded to keep long-lived trunks cheap; exceeding it only costs a
 // false negative, never a wrong "merged".
 func (r *runner) isSquashMerged(ctx context.Context, branchRev, mergeBase, target string, cache *SquashMergeCache) (bool, error) {
-	branchPatchID, err := r.diffPatchID(ctx, mergeBase, branchRev)
+	branchPatchID, err := r.diffPatchID(ctx, RevRange{Base: mergeBase, Head: branchRev})
 	if err != nil {
 		return false, nil //nolint:nilerr
 	}
@@ -222,7 +222,8 @@ func (r *runner) isSquashMerged(ctx context.Context, branchRev, mergeBase, targe
 	return false, nil
 }
 
-func (r *runner) diffPatchID(ctx context.Context, base, head string) (string, error) {
+func (r *runner) diffPatchID(ctx context.Context, rr RevRange) (string, error) {
+	base, head := rr.Base, rr.Head
 	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "diff", "--no-ext-diff", "--full-index", base, head)
 	if err != nil {
 		return "", err

@@ -277,7 +277,7 @@ func addWorktreeInfo(eng engine.Engine, branch engine.Branch, ann *tree.BranchAn
 // This allows CI statuses and worktree info to be computed once and shared
 // across all branches, avoiding redundant lookups.
 type AnnotationEnrichment struct {
-	CIStatuses          map[string]*github.CheckStatus
+	CIStatuses          github.ChecksByBranch
 	EmptyWorktrees      map[string]*engine.WorktreeInfo
 	WorktreeByStackRoot map[string]*engine.WorktreeInfo
 }
@@ -302,8 +302,8 @@ func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, stat engine.Br
 	}
 
 	// Apply CI status and review status
-	if !branch.IsTrunk() && enrichment.CIStatuses != nil {
-		if status := enrichment.CIStatuses[branch.GetName()]; status != nil {
+	if !branch.IsTrunk() {
+		if status := enrichment.CIStatuses.Get(branch.GetName()); status != nil {
 			ann.CheckStatus = tree.CheckStatusPassing
 			if status.Pending {
 				ann.CheckStatus = tree.CheckStatusPending
@@ -312,11 +312,11 @@ func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, stat engine.Br
 			}
 
 			switch status.ReviewDecision {
-			case "APPROVED":
+			case github.ReviewDecisionApproved:
 				ann.ReviewStatus = tree.ReviewStatusApproved
-			case "CHANGES_REQUESTED":
+			case github.ReviewDecisionChangesRequested:
 				ann.ReviewStatus = tree.ReviewStatusChangesRequested
-			case "REVIEW_REQUIRED":
+			case github.ReviewDecisionReviewRequired:
 				ann.ReviewStatus = "Awaiting Review"
 			}
 		}

@@ -2,6 +2,8 @@
 package submit
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"fmt"
 	"sync"
 
@@ -28,7 +30,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 		var mu sync.Mutex
 		updates := make(map[string]*engine.PrInfo)
-		if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branches, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+		if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branches, github.Repo{Owner: repoOwner, Name: repoName}, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 			branch := nav.GetBranch(name)
 
 			lockReason := engine.LockReasonNone
@@ -124,19 +126,19 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 		case parentBranch.IsTrunk():
 			if !statuses.IsUpToDate(branch) {
 				ctx.Output.Warn("%s is behind trunk and may conflict on merge — run 'stackit sync' and 'stackit restack' to update it.",
-					output.Branch(branchName, false))
+					output.BranchName(branchName))
 			}
 		case validatedBranches[parentBranchName]:
 			// Parent is in the submission list
 			if !statuses.IsUpToDate(branch) {
 				return fmt.Errorf("you are trying to submit at least one branch that has not been restacked on its parent. To resolve this, check out %s and run 'stackit restack'",
-					output.Branch(branchName, false))
+					output.BranchName(branchName))
 			}
 		default:
 			// Parent is not in submission list
 			if !parentRemoteStatuses().ForBranch(parentBranch).Matches() {
 				return fmt.Errorf("you are trying to submit at least one branch whose base does not match its parent remotely, without including its parent. You may want to use 'stackit submit --stack' to ensure that the ancestors of %s are included in your submission",
-					output.Branch(branchName, false))
+					output.BranchName(branchName))
 			}
 		}
 
@@ -155,7 +157,7 @@ func validateNoMergedOrClosedBranches(branches []string, eng engine.BranchStatus
 		if err != nil {
 			continue
 		}
-		if prInfo != nil && (prInfo.State() == "MERGED" || prInfo.State() == "CLOSED") {
+		if prInfo != nil && (prInfo.State() == git.PRStateMerged || prInfo.State() == git.PRStateClosed) {
 			mergedOrClosedBranches = append(mergedOrClosedBranches, branchName)
 		}
 	}

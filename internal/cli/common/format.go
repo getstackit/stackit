@@ -51,11 +51,11 @@ func FormatBranchSummary(out output.Output, results []BranchResult) (success, fa
 		switch result.Status {
 		case StatusDone:
 			success++
-			out.Info("  ✓ %s", style.ColorBranchName(result.BranchName, result.IsCurrent))
+			out.Info("  ✓ %s", style.ColorBranchNameIf(result.BranchName, result.IsCurrent))
 			printIndentedOutput(result.Output, out.Info)
 		case StatusError:
 			fail++
-			out.Error("  ✗ %s", style.ColorBranchName(result.BranchName, result.IsCurrent))
+			out.Error("  ✗ %s", style.ColorBranchNameIf(result.BranchName, result.IsCurrent))
 			if result.Error != nil {
 				out.Error("    Error: %v", result.Error)
 			}

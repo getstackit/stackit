@@ -33,17 +33,17 @@ type fastPathGit struct {
 	commitTreeN int
 }
 
-func (g *fastPathGit) GetCommitRangeSHAs(_ context.Context, base, head string) ([]string, error) {
-	require.Equal(g.t, "old-base", base)
-	require.Equal(g.t, "feature", head)
+func (g *fastPathGit) GetCommitRangeSHAs(_ context.Context, rr git.RevRange) ([]string, error) {
+	require.Equal(g.t, "old-base", rr.Base)
+	require.Equal(g.t, "feature", rr.Head)
 	return g.commits, nil
 }
 
-func (g *fastPathGit) GetChangedFiles(_ context.Context, base, head string) ([]string, error) {
-	require.Equal(g.t, "old-base", base)
-	files, ok := g.changedFiles[head]
+func (g *fastPathGit) GetChangedFiles(_ context.Context, rr git.RevRange) ([]string, error) {
+	require.Equal(g.t, "old-base", rr.Base)
+	files, ok := g.changedFiles[rr.Head]
 	if !ok {
-		g.t.Fatalf("unexpected changed-files head: %s", head)
+		g.t.Fatalf("unexpected changed-files head: %s", rr.Head)
 	}
 	return files, nil
 }

@@ -13,7 +13,7 @@ func TestCheckStatus_IsApproved(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		reviewDecision string
+		reviewDecision github.ReviewDecision
 		want           bool
 	}{
 		{"approved", github.ReviewDecisionApproved, true},
@@ -80,7 +80,7 @@ func TestCheckStatus_IsReady(t *testing.T) {
 		name           string
 		passing        bool
 		pending        bool
-		reviewDecision string
+		reviewDecision github.ReviewDecision
 		want           bool
 	}{
 		{"fully ready", true, false, github.ReviewDecisionApproved, true},
@@ -108,7 +108,7 @@ func TestReviewDecisionConstants(t *testing.T) {
 	t.Parallel()
 
 	// Verify constants match GitHub's actual values
-	assert.Equal(t, "APPROVED", github.ReviewDecisionApproved)
-	assert.Equal(t, "CHANGES_REQUESTED", github.ReviewDecisionChangesRequested)
-	assert.Equal(t, "REVIEW_REQUIRED", github.ReviewDecisionReviewRequired)
+	assert.Equal(t, github.ReviewDecision("APPROVED"), github.ReviewDecisionApproved)
+	assert.Equal(t, github.ReviewDecision("CHANGES_REQUESTED"), github.ReviewDecisionChangesRequested)
+	assert.Equal(t, github.ReviewDecision("REVIEW_REQUIRED"), github.ReviewDecisionReviewRequired)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	configtui "github.com/getstackit/stackit/internal/tui/config"
@@ -333,7 +334,7 @@ func newConfigSetCmd() *cobra.Command {
 				}
 				splog.Info("Cleared all personal default assignees")
 			case keyMergeMethod:
-				if err := cfg.SetMergeMethod(value); err != nil {
+				if err := cfg.SetMergeMethod(github.MergeMethod(value)); err != nil {
 					return fmt.Errorf("failed to set %s: %w", keyMergeMethod, err)
 				}
 				splog.Info("Set %s to: %s", keyMergeMethod, value)
@@ -910,7 +911,7 @@ func showConfigWithSources(repoRoot string, w io.Writer) error {
 	formatLine("submit.assignees", assigneesValue, assigneesSource)
 
 	// merge.method
-	mergeMethod := cfg.MergeMethod()
+	mergeMethod := string(cfg.MergeMethod())
 	if mergeMethod == "" {
 		mergeMethod = valueNotSet
 	}

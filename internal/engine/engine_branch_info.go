@@ -33,7 +33,7 @@ func (e *engineImpl) GetRevisionForName(branchName string) (string, error) {
 }
 
 // GetRevisions returns the SHAs for multiple branches.
-func (e *engineImpl) GetRevisions(branchNames []string) (map[string]string, []error) {
+func (e *engineImpl) GetRevisions(branchNames []string) (RevisionMap, []error) {
 	return e.git.BatchGetRevisions(branchNames)
 }
 
@@ -53,13 +53,14 @@ func (e *engineImpl) GetCommitCount(branch Branch) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return e.commitCountBetween(base, branchRev)
+	return e.commitCountBetween(git.RevRange{Base: base, Head: branchRev})
 }
 
 // commitCountBetween returns the commit count in (base, head], using the
 // (base, head)-keyed cache. It takes pre-resolved revisions so batched callers
 // need not re-resolve a branch's head.
-func (e *engineImpl) commitCountBetween(base, head string) (int, error) {
+func (e *engineImpl) commitCountBetween(rr git.RevRange) (int, error) {
+	base, head := rr.Base, rr.Head
 	if head == base {
 		return 0, nil
 	}
@@ -85,13 +86,14 @@ func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	return e.diffStatsBetween(base, branchRev)
+	return e.diffStatsBetween(git.RevRange{Base: base, Head: branchRev})
 }
 
 // diffStatsBetween returns the additions/deletions between two revisions, using
 // the (base, head)-keyed cache. It takes pre-resolved revisions so batched
 // callers (the Batch* readers) need not re-resolve a branch's head.
-func (e *engineImpl) diffStatsBetween(base, head string) (int, int, error) {
+func (e *engineImpl) diffStatsBetween(rr git.RevRange) (int, int, error) {
+	base, head := rr.Base, rr.Head
 	if head == base {
 		return 0, 0, nil
 	}
@@ -102,7 +104,7 @@ func (e *engineImpl) diffStatsBetween(base, head string) (int, int, error) {
 		return stats[0], stats[1], nil
 	}
 
-	output, err := e.git.GetDiffNumstat(base, head)
+	output, err := e.git.GetDiffNumstat(rr)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -167,11 +169,11 @@ func (e *engineImpl) GetRecentTrunkCommits(count int) ([]git.RecentCommit, error
 // GetTrunkCommitsInRange returns the commits in the revision range from..to with
 // stack trailer metadata. An empty `to` defaults to the trunk branch tip. Use it
 // to build a changelog over a tag range (e.g. from "v1.4.0" to trunk).
-func (e *engineImpl) GetTrunkCommitsInRange(from, to string) ([]git.RecentCommit, error) {
-	if to == "" {
-		to = e.trunk
+func (e *engineImpl) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error) {
+	if rr.Head == "" {
+		rr.Head = e.trunk
 	}
-	return e.git.GetRecentCommitsInRange(context.Background(), from+".."+to)
+	return e.git.GetRecentCommitsInRange(context.Background(), rr.String())
 }
 
 // GetAllCommits returns commits for a branch in various formats
@@ -216,12 +218,12 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 		}
 	}
 
-	return e.commitsBetween(baseRevision, branchRevision, format)
+	return e.commitsBetween(git.RevRange{Base: baseRevision, Head: branchRevision}, format)
 }
 
 // commitsBetween returns the formatted commits in (base, head]. It handles
 // formatting in-process via go-git, avoiding per-commit git process spawns, and
 // takes pre-resolved revisions so batched callers need not re-resolve the head.
-func (e *engineImpl) commitsBetween(base, head string, format CommitFormat) ([]string, error) {
-	return e.git.GetCommitRange(context.Background(), base, head, string(format))
+func (e *engineImpl) commitsBetween(rr git.RevRange, format CommitFormat) ([]string, error) {
+	return e.git.GetCommitRange(context.Background(), rr.Base, rr.Head, string(format))
 }

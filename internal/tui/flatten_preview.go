@@ -75,7 +75,7 @@ func RenderFlattenPreview(preview FlattenPreviewData) string {
 			for _, move := range moves {
 				truncatedBranch := truncateBranchName(move.Branch, maxBranchLen)
 				fmt.Fprintf(&sb, "      %s\n",
-					style.ColorBranchName(truncatedBranch, false))
+					style.ColorBranchName(truncatedBranch))
 			}
 			sb.WriteString("\n")
 		}
@@ -100,7 +100,7 @@ func RenderFlattenPreview(preview FlattenPreviewData) string {
 		for _, excluded := range preview.ExcludedBranches {
 			fmt.Fprintf(&sb, "  %s %s %s\n",
 				style.ColorDim("·"),
-				style.ColorBranchName(excluded.Branch, false),
+				style.ColorBranchName(excluded.Branch),
 				style.ColorDim("("+excluded.Reason+")"))
 		}
 		sb.WriteString("\n")

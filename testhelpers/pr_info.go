@@ -2,6 +2,7 @@ package testhelpers
 
 import (
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // NewTestPrInfo creates a PrInfo for testing with common defaults
@@ -19,7 +20,7 @@ func NewTestPrInfo(number int) *engine.PrInfo {
 }
 
 // NewTestPrInfoWithState creates a PrInfo with a specific state
-func NewTestPrInfoWithState(number int, state string) *engine.PrInfo {
+func NewTestPrInfoWithState(number int, state git.PRState) *engine.PrInfo {
 	return engine.NewPrInfo(
 		&number,
 		"",
@@ -84,7 +85,7 @@ func NewTestPrInfoWithTitle(number int, title string) *engine.PrInfo {
 }
 
 // NewTestPrInfoFull creates a PrInfo with all fields specified
-func NewTestPrInfoFull(number int, title, body, state, base, url string, isDraft bool) *engine.PrInfo {
+func NewTestPrInfoFull(number int, title, body string, state git.PRState, base, url string, isDraft bool) *engine.PrInfo {
 	return engine.NewPrInfo(
 		&number,
 		title,

@@ -9,17 +9,17 @@ import (
 )
 
 // UpdateStackPRMetadata updates PR titles and body footers for a list of branches
-func UpdateStackPRMetadata(ctx *app.Context, branches []string, repoOwner, repoName string) {
+func UpdateStackPRMetadata(ctx *app.Context, branches []string) {
 	if len(branches) == 0 {
 		return
 	}
 
 	// Fetch every PR's current title/body in one GraphQL query instead of one
 	// GetPullRequest per branch, then update each in parallel.
-	current := FetchPRContentForBranches(ctx, branches, repoOwner, repoName)
+	current := FetchPRContentForBranches(ctx, branches)
 
 	utils.Run(branches, func(name string) {
-		UpdateBranchPRMetadataWithContent(ctx, name, repoOwner, repoName, current)
+		UpdateBranchPRMetadataWithContent(ctx, name, current)
 	})
 }
 
@@ -27,7 +27,7 @@ func UpdateStackPRMetadata(ctx *app.Context, branches []string, repoOwner, repoN
 // the given branches in a single GraphQL query, keyed by PR number. Branches
 // without a known PR number are skipped. On failure it returns an empty map; the
 // per-branch update then falls back to a direct GetPullRequest.
-func FetchPRContentForBranches(ctx *app.Context, branches []string, repoOwner, repoName string) map[int]github.PRContent {
+func FetchPRContentForBranches(ctx *app.Context, branches []string) map[int]github.PRContent {
 	prNumbers := make([]int, 0, len(branches))
 	for _, name := range branches {
 		prInfo, err := ctx.Engine.GetBranch(name).GetPrInfo()
@@ -40,7 +40,7 @@ func FetchPRContentForBranches(ctx *app.Context, branches []string, repoOwner, r
 		return map[int]github.PRContent{}
 	}
 
-	content, err := github.BatchGetPRContentGraphQL(ctx.Context, ctx.Git(), repoOwner, repoName, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	content, err := github.BatchGetPRContentGraphQL(ctx.Context, ctx.Git(), ctx.GitHub().Repo(), prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 	if err != nil {
 		ctx.Output.Debug("Failed to batch-fetch PR content: %v", err)
 		return map[int]github.PRContent{}
@@ -49,16 +49,16 @@ func FetchPRContentForBranches(ctx *app.Context, branches []string, repoOwner, r
 }
 
 // UpdateBranchPRMetadata updates PR title and body footer for a single branch.
-func UpdateBranchPRMetadata(ctx *app.Context, name string, repoOwner, repoName string) {
-	current := FetchPRContentForBranches(ctx, []string{name}, repoOwner, repoName)
-	UpdateBranchPRMetadataWithContent(ctx, name, repoOwner, repoName, current)
+func UpdateBranchPRMetadata(ctx *app.Context, name string) {
+	current := FetchPRContentForBranches(ctx, []string{name})
+	UpdateBranchPRMetadataWithContent(ctx, name, current)
 }
 
 // UpdateBranchPRMetadataWithContent updates PR title and body footer for a single
 // branch, using PR content pre-fetched in bulk by FetchPRContentForBranches. If
 // the branch's PR is not present in current (a batch miss or fetch failure), it
 // falls back to a direct GetPullRequest so the freshness guarantee is preserved.
-func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, repoOwner, repoName string, current map[int]github.PRContent) {
+func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current map[int]github.PRContent) {
 	branch := ctx.Engine.GetBranch(name)
 	prInfo, err := branch.GetPrInfo()
 	if err != nil || prInfo == nil || prInfo.Number() == nil {
@@ -71,7 +71,7 @@ func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, repoOwner,
 	// Use the bulk-fetched current state, falling back to a single GET on a miss.
 	content, ok := current[prNumber]
 	if !ok {
-		latestPR, err := ctx.GitHub().GetPullRequest(ctx.Context, repoOwner, repoName, prNumber)
+		latestPR, err := ctx.GitHub().GetPullRequest(ctx.Context, prNumber)
 		if err != nil {
 			ctx.Output.Debug("Failed to fetch PR #%d for %s: %v", prNumber, name, err)
 			return
@@ -130,7 +130,7 @@ func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, repoOwner,
 		}
 
 		ctx.Output.Debug("Updating PR #%d for %s: titleChanged=%v, bodyChanged=%v", prNumber, name, updatedTitle != currentTitle, shouldUpdateBody)
-		warnings, err := ctx.GitHub().UpdatePullRequest(ctx.Context, repoOwner, repoName, prNumber, updateOpts)
+		warnings, err := ctx.GitHub().UpdatePullRequest(ctx.Context, prNumber, updateOpts)
 		if err != nil {
 			ctx.Output.Debug("Failed to update PR #%d for %s: %v", prNumber, name, err)
 			return
@@ -156,23 +156,23 @@ func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, repoOwner,
 		// Delete navigation comment only if we have a cached ID (indicates we previously used comment mode)
 		// This avoids unnecessary API calls when the user has always used body/none mode
 		if commentID, _ := ctx.Engine.GetNavigationCommentID(branch); commentID != 0 {
-			deleteNavigationComment(ctx, name, prNumber, repoOwner, repoName)
+			deleteNavigationComment(ctx, name, prNumber)
 		}
 	case config.NavigationLocationComment:
 		// Create/update navigation comment
-		updateNavigationComment(ctx, name, prNumber, repoOwner, repoName, navOpts)
+		updateNavigationComment(ctx, name, prNumber, navOpts)
 	}
 }
 
 // deleteNavigationComment removes any existing navigation comment from a PR.
 // Uses cached comment ID when available to avoid API search.
-func deleteNavigationComment(ctx *app.Context, branchName string, prNumber int, repoOwner, repoName string) {
+func deleteNavigationComment(ctx *app.Context, branchName string, prNumber int) {
 	branch := ctx.Engine.GetBranch(branchName)
 
 	// Try cached comment ID first
 	commentID, err := ctx.Engine.GetNavigationCommentID(branch)
 	if err == nil && commentID != 0 {
-		if err := ctx.GitHub().DeletePRComment(ctx.Context, repoOwner, repoName, commentID); err == nil {
+		if err := ctx.GitHub().DeletePRComment(ctx.Context, commentID); err == nil {
 			if err := ctx.Engine.ClearNavigationCommentID(branch); err != nil {
 				ctx.Output.Debug("Failed to clear navigation comment ID cache for %s: %v", branchName, err)
 			}
@@ -186,7 +186,7 @@ func deleteNavigationComment(ctx *app.Context, branchName string, prNumber int, 
 	}
 
 	// Fall back to search for existing comment
-	comments, err := ctx.GitHub().ListPRComments(ctx.Context, repoOwner, repoName, prNumber)
+	comments, err := ctx.GitHub().ListPRComments(ctx.Context, prNumber)
 	if err != nil {
 		ctx.Output.Debug("Failed to list comments on PR #%d: %v", prNumber, err)
 		return
@@ -194,7 +194,7 @@ func deleteNavigationComment(ctx *app.Context, branchName string, prNumber int, 
 
 	for _, c := range comments {
 		if pr.IsStackitComment(c.Body) {
-			if err := ctx.GitHub().DeletePRComment(ctx.Context, repoOwner, repoName, c.ID); err == nil {
+			if err := ctx.GitHub().DeletePRComment(ctx.Context, c.ID); err == nil {
 				ctx.Output.Debug("Deleted navigation comment %d on PR #%d", c.ID, prNumber)
 			}
 			break
@@ -205,13 +205,13 @@ func deleteNavigationComment(ctx *app.Context, branchName string, prNumber int, 
 // updateNavigationComment manages the navigation comment on a PR.
 // Creates, updates, or deletes the comment as needed based on navigation options.
 // Uses cached comment ID when available to avoid API search.
-func updateNavigationComment(ctx *app.Context, branchName string, prNumber int, repoOwner, repoName string, navOpts pr.NavigationOptions) {
+func updateNavigationComment(ctx *app.Context, branchName string, prNumber int, navOpts pr.NavigationOptions) {
 	commentBody := pr.CreateNavigationComment(branchName, ctx.Engine, navOpts)
 	branch := ctx.Engine.GetBranch(branchName)
 
 	// If navigation should be hidden, delete existing comment
 	if commentBody == "" {
-		deleteNavigationComment(ctx, branchName, prNumber, repoOwner, repoName)
+		deleteNavigationComment(ctx, branchName, prNumber)
 		return
 	}
 
@@ -219,7 +219,7 @@ func updateNavigationComment(ctx *app.Context, branchName string, prNumber int, 
 	commentID, _ := ctx.Engine.GetNavigationCommentID(branch)
 	if commentID != 0 {
 		// Try to update existing comment
-		if err := ctx.GitHub().UpdatePRComment(ctx.Context, repoOwner, repoName, commentID, commentBody); err == nil {
+		if err := ctx.GitHub().UpdatePRComment(ctx.Context, commentID, commentBody); err == nil {
 			ctx.Output.Debug("Updated navigation comment %d on PR #%d", commentID, prNumber)
 			return
 		}
@@ -230,7 +230,7 @@ func updateNavigationComment(ctx *app.Context, branchName string, prNumber int, 
 	}
 
 	// Search for existing comment (cache miss or stale)
-	comments, err := ctx.GitHub().ListPRComments(ctx.Context, repoOwner, repoName, prNumber)
+	comments, err := ctx.GitHub().ListPRComments(ctx.Context, prNumber)
 	if err != nil {
 		ctx.Output.Debug("Failed to list comments on PR #%d: %v", prNumber, err)
 		return
@@ -239,7 +239,7 @@ func updateNavigationComment(ctx *app.Context, branchName string, prNumber int, 
 	for _, c := range comments {
 		if pr.IsStackitComment(c.Body) {
 			// Found existing - update it and cache ID
-			if err := ctx.GitHub().UpdatePRComment(ctx.Context, repoOwner, repoName, c.ID, commentBody); err == nil {
+			if err := ctx.GitHub().UpdatePRComment(ctx.Context, c.ID, commentBody); err == nil {
 				if err := ctx.Engine.SetNavigationCommentID(branch, c.ID); err != nil {
 					ctx.Output.Debug("Failed to cache navigation comment ID for %s: %v", branchName, err)
 				}
@@ -250,7 +250,7 @@ func updateNavigationComment(ctx *app.Context, branchName string, prNumber int, 
 	}
 
 	// No existing comment - create new one and cache ID
-	newID, err := ctx.GitHub().CreatePRComment(ctx.Context, repoOwner, repoName, prNumber, commentBody)
+	newID, err := ctx.GitHub().CreatePRComment(ctx.Context, prNumber, commentBody)
 	if err == nil {
 		if err := ctx.Engine.SetNavigationCommentID(branch, newID); err != nil {
 			ctx.Output.Debug("Failed to cache navigation comment ID for %s: %v", branchName, err)
@@ -288,9 +288,9 @@ func PushMetadataAndSyncPRs(ctx *app.Context, branchNames []string) error {
 
 	// If GitHub client is available, update PRs to trigger CI checks (and update footers/titles)
 	if ctx.GitHub() != nil {
-		owner, repo := ctx.GitHub().GetOwnerRepo()
-		if owner != "" && repo != "" {
-			UpdateStackPRMetadata(ctx, branchNames, owner, repo)
+		repo := ctx.GitHub().Repo()
+		if repo.Owner != "" && repo.Name != "" {
+			UpdateStackPRMetadata(ctx, branchNames)
 		}
 	}
 

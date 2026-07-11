@@ -23,8 +23,8 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 	out := ctx.Output
 
 	out.Info("%s", output.Yellow("Dry Run: Folding plan"))
-	out.Info("  Fold branch: %s", output.Branch(current.GetName(), true))
-	out.Info("  Into parent: %s", output.Branch(parent.GetName(), false))
+	out.Info("  Fold branch: %s", output.CurrentBranch(current.GetName()))
+	out.Info("  Into parent: %s", output.BranchName(parent.GetName()))
 	out.Newline()
 
 	// Show combined commit messages

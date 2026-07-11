@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/getstackit/stackit/internal/api/registry"
 )
 
 // defaultSyncTimeout bounds a single coalesced sync so a stuck remote can't
@@ -20,7 +22,7 @@ const defaultDebounce = 2 * time.Second
 
 // SyncFunc mirror-fetches and refreshes one repo by its GitHub coordinates.
 // (*Syncer).SyncRepo satisfies it.
-type SyncFunc func(ctx context.Context, owner, name string) error
+type SyncFunc func(ctx context.Context, repo registry.RepoRef) error
 
 // Coalescer debounces and collapses repeated sync triggers for the same repo.
 // A trigger (re)arms a per-repo timer; the sync runs only after the timer's
@@ -62,12 +64,12 @@ func NewCoalescer(sync SyncFunc, timeout, debounce time.Duration) *Coalescer {
 	return &Coalescer{sync: sync, timeout: timeout, debounce: debounce, state: make(map[string]*repoSync)}
 }
 
-// Trigger requests a sync for owner/name and returns immediately. It is safe for
+// Trigger requests a sync for repo and returns immediately. It is safe for
 // concurrent use. The sync is debounced: a burst of triggers keeps bumping the
 // timer out and collapses into one run once the quiet window elapses; triggers
 // that land while a sync is already running coalesce into a single follow-up.
-func (c *Coalescer) Trigger(owner, name string) {
-	key := owner + "/" + name
+func (c *Coalescer) Trigger(repo registry.RepoRef) {
+	key := repo.Key()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -93,12 +95,12 @@ func (c *Coalescer) Trigger(owner, name string) {
 	if st.timer != nil {
 		st.timer.Stop()
 	}
-	st.timer = time.AfterFunc(c.debounce, func() { c.run(key, owner, name, gen) })
+	st.timer = time.AfterFunc(c.debounce, func() { c.run(key, repo, gen) })
 }
 
 // run executes syncs for key until no trigger arrived during the last run. It
 // is the debounce timer's callback; gen guards against a superseded timer.
-func (c *Coalescer) run(key, owner, name string, gen uint64) {
+func (c *Coalescer) run(key string, repo registry.RepoRef, gen uint64) {
 	c.mu.Lock()
 	st := c.state[key]
 	if st == nil || st.gen != gen || st.running {
@@ -113,7 +115,7 @@ func (c *Coalescer) run(key, owner, name string, gen uint64) {
 
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
-		err := c.sync(ctx, owner, name)
+		err := c.sync(ctx, repo)
 		cancel()
 		switch {
 		case err == nil:

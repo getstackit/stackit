@@ -15,15 +15,14 @@ import (
 // CommitSource is the narrow engine dependency this action needs.
 type CommitSource interface {
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
-	GetTrunkCommitsInRange(from, to string) ([]git.RecentCommit, error)
+	GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error)
 }
 
 // TitleResolver resolves PR titles from the forge. It is nil-safe: pass a nil
 // resolver when no GitHub client is available (offline) and PR titles are simply
 // omitted rather than treated as an error.
 type TitleResolver interface {
-	GetOwnerRepo() (owner, repo string)
-	BatchGetPRTitles(ctx context.Context, owner, repo string, prNumbers []int) (map[int]string, error)
+	BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error)
 }
 
 // Request selects which trunk commits to gather.
@@ -64,7 +63,7 @@ func Gather(ctx context.Context, src CommitSource, titles TitleResolver, req Req
 		err error
 	)
 	if req.From != "" {
-		raw, err = src.GetTrunkCommitsInRange(req.From, req.To)
+		raw, err = src.GetTrunkCommitsInRange(git.RevRange{Base: req.From, Head: req.To})
 	} else {
 		raw, err = src.GetRecentTrunkCommits(req.Count)
 	}
@@ -72,7 +71,7 @@ func Gather(ctx context.Context, src CommitSource, titles TitleResolver, req Req
 		return Result{}, err
 	}
 
-	collapsed := git.CollapseStackMerges(raw)
+	collapsed := git.RecentCommits(raw).Collapse()
 	prTitles := resolveTitles(ctx, titles, collapsed)
 
 	result := Result{
@@ -92,15 +91,11 @@ func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.Rece
 	if titles == nil {
 		return nil
 	}
-	prNumbers := git.PRTitleNumbers(commits)
+	prNumbers := git.RecentCommits(commits).PRTitleNumbers()
 	if len(prNumbers) == 0 {
 		return nil
 	}
-	owner, repo := titles.GetOwnerRepo()
-	if owner == "" || repo == "" {
-		return nil
-	}
-	resolved, err := titles.BatchGetPRTitles(ctx, owner, repo, prNumbers)
+	resolved, err := titles.BatchGetPRTitles(ctx, prNumbers)
 	if err != nil {
 		return nil
 	}
@@ -114,7 +109,7 @@ func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.Rece
 func toCommit(c git.RecentCommit, prTitles map[int]string) Commit {
 	return Commit{
 		SHA:           c.SHA,
-		Message:       git.CollapsedMessage(c, prTitles),
+		Message:       c.DisplayMessage(prTitles),
 		Author:        c.Author,
 		Date:          c.Date,
 		Kind:          c.Kind,
@@ -122,6 +117,6 @@ func toCommit(c git.RecentCommit, prTitles map[int]string) Commit {
 		StackSize:     c.StackSize,
 		StackPRs:      append([]int(nil), c.StackPRNumbers...),
 		StackScope:    c.StackScope,
-		StackPRTitles: git.ConstituentPRTitles(c, prTitles),
+		StackPRTitles: c.ConstituentPRTitles(prTitles),
 	}
 }

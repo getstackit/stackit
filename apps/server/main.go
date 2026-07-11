@@ -284,8 +284,7 @@ func addRegistryEntry(reg *registry.Registry, rc repoConfig) error {
 		Remote:      rc.Remote,
 		AddedBy:     rc.AddedBy,
 		Managed:     rc.Managed,
-		Owner:       rc.Owner,
-		Name:        rc.Name,
+		RepoRef:     registry.RepoRef{Owner: rc.Owner, Name: rc.Name},
 	})
 	if err != nil {
 		return err

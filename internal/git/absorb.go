@@ -12,22 +12,22 @@ type HunkTarget struct {
 	CommitIndex int // Index in the commit list (0 = newest)
 }
 
-// hunkOverlaps checks if two hunks have overlapping line ranges.
+// Overlaps reports whether two hunks have overlapping line ranges.
 // It includes a safety margin to account for git context lines.
-func hunkOverlaps(h1, h2 Hunk) bool {
-	if h1.File != h2.File {
+func (h Hunk) Overlaps(other Hunk) bool {
+	if h.File != other.File {
 		return false
 	}
 
 	// Add safety margin of 3 lines (typical git context) to avoid conflicts
 	margin := 3
 
-	h1Start := h1.OldStart - margin
-	h1End := h1.OldStart + h1.OldCount + margin
-	h2Start := h2.NewStart
-	h2End := h2.NewStart + h2.NewCount
+	hStart := h.OldStart - margin
+	hEnd := h.OldStart + h.OldCount + margin
+	otherStart := other.NewStart
+	otherEnd := other.NewStart + other.NewCount
 
-	overlap := h1Start <= h2End && h2Start <= h1End
+	overlap := hStart <= otherEnd && otherStart <= hEnd
 	return overlap
 }
 

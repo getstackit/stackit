@@ -1,6 +1,10 @@
 package submit
 
-import "time"
+import (
+	"time"
+
+	"github.com/getstackit/stackit/internal/engine"
+)
 
 // Event represents a feedback event from the submit action.
 // Implementations should use type switches to handle specific event types.
@@ -45,8 +49,8 @@ func (PreparingEvent) submitEvent() {}
 // BranchPlanEvent indicates what will happen to each branch.
 type BranchPlanEvent struct {
 	BranchName string
-	Action     string // "create" or "update"
-	PRNumber   *int   // existing PR number for updates, nil for creates
+	Action     engine.SubmitAction
+	PRNumber   *int // existing PR number for updates, nil for creates
 	IsCurrent  bool
 	Empty      bool // branch has no commits relative to its parent
 	Skipped    bool
@@ -136,6 +140,6 @@ const (
 // BranchInfo contains information about a branch for submission tracking.
 type BranchInfo struct {
 	Name     string
-	Action   string // "create" or "update"
+	Action   engine.SubmitAction
 	PRNumber *int
 }

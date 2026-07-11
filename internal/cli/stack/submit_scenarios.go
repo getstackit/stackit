@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"errors"
 	"time"
 
 	submitAction "github.com/getstackit/stackit/internal/actions/submit"
@@ -96,6 +97,178 @@ var SubmitScenarios = []SubmitScenario{
 			submitAction.BranchProgressEvent{BranchName: "add-submit-TUI-lab-scenarios", Status: submitAction.StatusSubmitting},
 			submitAction.BranchProgressEvent{BranchName: "add-submit-TUI-lab-scenarios", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/1417"},
 			submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Duration: 5500 * time.Millisecond},
+		},
+	},
+	{
+		Name:        "ss-create-stack",
+		Description: "A three-PR stack where every branch is created in sequence.",
+		Events: []submitAction.Event{
+			submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+				Branches:      []string{"feat/api", "feat/web", "feat/cli"},
+				CurrentBranch: "feat/cli",
+				TrunkBranch:   "main",
+				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api", "feat/cli": "feat/web"},
+				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true, "feat/cli": true},
+			}},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionCreate},
+			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate},
+			submitAction.BranchPlanEvent{BranchName: "feat/cli", Action: engine.SubmitActionCreate, IsCurrent: true},
+			submitAction.PlanningCompleteEvent{},
+			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+				{Name: "feat/api", Action: engine.SubmitActionCreate},
+				{Name: "feat/web", Action: engine.SubmitActionCreate},
+				{Name: "feat/cli", Action: engine.SubmitActionCreate},
+			}},
+			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusSubmitting},
+			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/1420"},
+			submitAction.BranchProgressEvent{BranchName: "feat/web", Status: submitAction.StatusSubmitting},
+			submitAction.BranchProgressEvent{BranchName: "feat/web", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/1421"},
+			submitAction.BranchProgressEvent{BranchName: "feat/cli", Status: submitAction.StatusSubmitting},
+			submitAction.BranchProgressEvent{BranchName: "feat/cli", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/1422"},
+			submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Duration: 3 * time.Second},
+		},
+	},
+	{
+		Name:        "ss-mixed",
+		Description: "An existing PR update and a new current-branch PR in one stack.",
+		Events: []submitAction.Event{
+			submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+				Branches:      []string{"feat/api", "feat/web"},
+				CurrentBranch: "feat/web",
+				TrunkBranch:   "main",
+				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
+				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
+			}},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
+			submitAction.PlanningCompleteEvent{},
+			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)},
+				{Name: "feat/web", Action: engine.SubmitActionCreate},
+			}},
+			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusSubmitting},
+			submitAction.BranchProgressEvent{BranchName: "feat/web", Status: submitAction.StatusSubmitting},
+			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/50"},
+			submitAction.BranchProgressEvent{BranchName: "feat/web", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/51"},
+			submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Duration: 2 * time.Second},
+		},
+	},
+	{
+		Name:        "ss-current",
+		Description: "A full stack where every PR is already current and no TUI starts.",
+		Events: []submitAction.Event{
+			submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+				Branches:      []string{"feat/api", "feat/web"},
+				CurrentBranch: "feat/web",
+				TrunkBranch:   "main",
+				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
+				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
+			}},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Skipped: true, SkipReason: "no changes"},
+			submitAction.BranchPlanEvent{BranchName: "feat/web", IsCurrent: true, Skipped: true, SkipReason: "no changes"},
+			submitAction.PlanningCompleteEvent{},
+			submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "All PRs up to date"},
+		},
+	},
+	{
+		Name:        "ss-update-only",
+		Description: "Update an existing PR while a new branch is skipped by --update-only.",
+		Events: []submitAction.Event{
+			submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+				Branches:      []string{"feat/api", "feat/web"},
+				CurrentBranch: "feat/web",
+				TrunkBranch:   "main",
+				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
+				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
+			}},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true, Skipped: true, SkipReason: "no existing PR"},
+			submitAction.PlanningCompleteEvent{},
+			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)}}},
+			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusSubmitting},
+			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/50"},
+			submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Duration: time.Second},
+		},
+	},
+	{
+		Name:        "ss-empty-canceled",
+		Description: "An empty current branch is shown in the plan, then submission is canceled.",
+		Events: []submitAction.Event{
+			submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+				Branches:      []string{"feat/placeholder"},
+				CurrentBranch: "feat/placeholder",
+				TrunkBranch:   "main",
+				ParentMap:     map[string]string{"feat/placeholder": "main"},
+				FixedMap:      map[string]bool{"feat/placeholder": true},
+			}},
+			submitAction.BranchPlanEvent{BranchName: "feat/placeholder", Action: engine.SubmitActionCreate, IsCurrent: true, Empty: true},
+			submitAction.PlanningCompleteEvent{},
+			submitAction.CompletionEvent{Outcome: submitAction.OutcomeCanceled, Message: "Submit canceled"},
+		},
+	},
+	{
+		Name:        "ss-restack",
+		Description: "A full-stack submit that performs its optional restack before planning.",
+		Events: []submitAction.Event{
+			submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+				Branches:      []string{"feat/api", "feat/web"},
+				CurrentBranch: "feat/web",
+				TrunkBranch:   "main",
+				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
+				FixedMap:      map[string]bool{"feat/api": false, "feat/web": false},
+			}},
+			submitAction.RestackEvent{Started: true},
+			submitAction.RestackEvent{Completed: true},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
+			submitAction.PlanningCompleteEvent{},
+			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)},
+				{Name: "feat/web", Action: engine.SubmitActionCreate},
+			}},
+			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/50"},
+			submitAction.BranchProgressEvent{BranchName: "feat/web", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/51"},
+			submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Duration: 4 * time.Second},
+		},
+	},
+	{
+		Name:        "ss-dry-run",
+		Description: "A full-stack plan that exits before starting the submit TUI.",
+		Events: []submitAction.Event{
+			submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+				Branches:      []string{"feat/api", "feat/web"},
+				CurrentBranch: "feat/web",
+				TrunkBranch:   "main",
+				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
+				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
+			}},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
+			submitAction.PlanningCompleteEvent{},
+			submitAction.CompletionEvent{Outcome: submitAction.OutcomeDryRun, Message: "Dry run complete"},
+		},
+	},
+	{
+		Name:        "ss-failure",
+		Description: "One branch completes and a second branch fails during submission.",
+		Events: []submitAction.Event{
+			submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+				Branches:      []string{"feat/api", "feat/web"},
+				CurrentBranch: "feat/web",
+				TrunkBranch:   "main",
+				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
+				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
+			}},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
+			submitAction.PlanningCompleteEvent{},
+			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: intPointer(50)},
+				{Name: "feat/web", Action: engine.SubmitActionCreate},
+			}},
+			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/50"},
+			submitAction.BranchProgressEvent{BranchName: "feat/web", Status: submitAction.StatusError, Error: errors.New("force-with-lease rejected the remote branch")},
+			submitAction.CompletionEvent{Outcome: submitAction.OutcomeFailed, Message: "Submit failed"},
 		},
 	},
 }

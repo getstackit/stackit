@@ -11,7 +11,7 @@ import (
 
 // MultiStackWorktreeResult contains the result of merging stacks in a worktree
 type MultiStackWorktreeResult struct {
-	MergedStacks   []MultiStackInfo     // Stacks that were successfully merged
+	MergedStacks   MultiStacks          // Stacks that were successfully merged
 	ConflictStacks []MultiStackExcluded // Stacks that conflicted
 	WorktreePath   string               // Path to the worktree
 	WorktreeEngine engine.Engine        // Engine for the worktree
@@ -49,7 +49,7 @@ func (w *MultiStackWorktreeExecutor) ExecuteInWorktree(ctx context.Context, stac
 	}
 
 	result := &MultiStackWorktreeResult{
-		MergedStacks:   make([]MultiStackInfo, 0),
+		MergedStacks:   make(MultiStacks, 0),
 		ConflictStacks: make([]MultiStackExcluded, 0),
 		WorktreePath:   session.Path,
 		WorktreeEngine: session.Engine,

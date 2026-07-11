@@ -242,7 +242,7 @@ func (c *ConsolidateMergeExecutor) createConsolidationPR(ctx context.Context, br
 
 // waitForConsolidationMerge waits for CI to pass and auto-merges the consolidation PR
 func (c *ConsolidateMergeExecutor) waitForConsolidationMerge(ctx context.Context, branchName string, pr *github.PullRequestInfo) error {
-	expectChecks := AnyPRHasChecks(c.plan.BranchesToMerge)
+	expectChecks := c.plan.BranchesToMerge.AnyHasChecks()
 
 	// Get merge method: use override if provided, otherwise detect/prompt
 	mergeMethod, err := c.resolveMergeMethod()

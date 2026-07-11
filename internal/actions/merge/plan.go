@@ -80,6 +80,9 @@ type BranchMergeInfo struct {
 	MatchesRemote bool
 }
 
+// MergeBranches is an ordered collection of branches to merge.
+type MergeBranches []BranchMergeInfo
+
 // PlanStep represents a single step in the merge plan
 type PlanStep struct {
 	StepType     StepType
@@ -95,8 +98,8 @@ func (b BranchMergeInfo) HasChecks() bool {
 	return b.ChecksStatus != ChecksNone
 }
 
-// AnyPRHasChecks returns true if any of the given branches have CI checks configured
-func AnyPRHasChecks(branches []BranchMergeInfo) bool {
+// AnyHasChecks returns true if any branch has CI checks configured.
+func (branches MergeBranches) AnyHasChecks() bool {
 	for _, b := range branches {
 		if b.HasChecks() {
 			return true
@@ -104,6 +107,29 @@ func AnyPRHasChecks(branches []BranchMergeInfo) bool {
 	}
 	return false
 }
+
+// Names returns the branch names in merge order.
+func (branches MergeBranches) Names() []string {
+	names := make([]string, len(branches))
+	for i, branch := range branches {
+		names[i] = branch.BranchName
+	}
+	return names
+}
+
+// AllAreLeaves reports whether every branch is a leaf in graph.
+func (branches MergeBranches) AllAreLeaves(graph *engine.StackGraph) bool {
+	for _, branchInfo := range branches {
+		node := graph.GetNode(branchInfo.BranchName)
+		if node == nil || !graph.IsLeaf(node.Branch) {
+			return false
+		}
+	}
+	return true
+}
+
+// AnyPRHasChecks is retained for callers that have not migrated to MergeBranches.AnyHasChecks.
+func AnyPRHasChecks(branches []BranchMergeInfo) bool { return MergeBranches(branches).AnyHasChecks() }
 
 // BranchNames returns the names of all branches to be merged, in order.
 func (p *Plan) BranchNames() []string {
@@ -118,11 +144,11 @@ func (p *Plan) BranchNames() []string {
 type Plan struct {
 	Strategy        Strategy
 	CurrentBranch   string
-	BranchesToMerge []BranchMergeInfo // Branches that will be merged (bottom to top)
-	UpstackBranches []string          // Branches above current that will be restacked
-	Steps           []PlanStep        // Ordered steps to execute
-	Warnings        []string          // Non-blocking warnings
-	Infos           []string          // Informational messages
+	BranchesToMerge MergeBranches // Branches that will be merged (bottom to top)
+	UpstackBranches []string      // Branches above current that will be restacked
+	Steps           []PlanStep    // Ordered steps to execute
+	Warnings        []string      // Non-blocking warnings
+	Infos           []string      // Informational messages
 	CreatedAt       time.Time
 }
 
@@ -146,7 +172,7 @@ type CreatePlanOptions struct {
 // CollectedBranches holds the intermediate result of branch collection.
 // This allows the wizard to collect branches once, then build plans with different strategies.
 type CollectedBranches struct {
-	BranchesToMerge []BranchMergeInfo
+	BranchesToMerge MergeBranches
 	UpstackBranches []string
 	CurrentBranch   string
 	Validation      *PlanValidation
@@ -294,7 +320,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	remoteStatuses := eng.ReadBranchRemoteStatuses(remoteCtx, statusBranches)
 
 	// 5. For each branch: fetch PR info, check status, CI checks in parallel
-	branchesToMerge := make([]BranchMergeInfo, len(allBranches))
+	branchesToMerge := make(MergeBranches, len(allBranches))
 	branchErrors := make([]string, len(allBranches))
 	branchWarnings := make([][]string, len(allBranches))
 	branchValid := make([]bool, len(allBranches))
@@ -391,7 +417,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	})
 
 	// Collect results and filter skipped branches
-	finalBranchesToMerge := []BranchMergeInfo{}
+	finalBranchesToMerge := MergeBranches{}
 	validation := &PlanValidation{
 		Valid:    true,
 		Errors:   []string{},
@@ -730,7 +756,7 @@ func IsSingleBranchLeafMerge(plan *Plan, graph *engine.StackGraph) bool {
 	if len(plan.UpstackBranches) > 0 {
 		return false
 	}
-	return AllBranchesAreLeaves(graph, plan.BranchesToMerge)
+	return plan.BranchesToMerge.AllAreLeaves(graph)
 }
 
 // AllBranchesAreLeaves checks if all branches in the plan have no children in the stack graph.
@@ -744,17 +770,7 @@ func IsSingleBranchLeafMerge(plan *Plan, graph *engine.StackGraph) bool {
 // the function to return false. This is a fail-safe behavior - if we can't verify a
 // branch's structure, we don't allow individual merging.
 func AllBranchesAreLeaves(graph *engine.StackGraph, branches []BranchMergeInfo) bool {
-	for _, branchInfo := range branches {
-		node := graph.GetNode(branchInfo.BranchName)
-		if node == nil {
-			// Branch not in graph - fail-safe: treat as non-leaf
-			return false
-		}
-		if !graph.IsLeaf(node.Branch) {
-			return false
-		}
-	}
-	return true
+	return MergeBranches(branches).AllAreLeaves(graph)
 }
 
 // IndividualMergeStatus contains the result of checking if individual merge is possible
@@ -776,7 +792,7 @@ func CanMergeIndividually(ctx context.Context, gitRunner git.Runner, githubClien
 	}
 
 	// Check 1: All branches must be leaves
-	if !AllBranchesAreLeaves(graph, branches) {
+	if !MergeBranches(branches).AllAreLeaves(graph) {
 		status.BlockingReason = "some branches have children"
 		return status, nil
 	}

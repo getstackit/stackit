@@ -83,8 +83,8 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		return result
 	}
 
-	repoOwner, repoName := githubClient.GetOwnerRepo()
-	if repoOwner == "" || repoName == "" {
+	repo := githubClient.Repo()
+	if repo.Owner == "" || repo.Name == "" {
 		out.Debug("Could not get repo owner/name for PR cleanup")
 		return result
 	}
@@ -109,7 +109,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		branchPRs = append(branchPRs, branchWithPR{branch: branch, prInfo: prInfo})
 		prNumbers = append(prNumbers, *prInfo.Number())
 	}
-	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.Git(), repoOwner, repoName, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.Git(), repo, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 	if err != nil {
 		out.Debug("Failed to batch fetch PR details: %v", err)
 		prDetails = map[int]github.PRStateBody{}

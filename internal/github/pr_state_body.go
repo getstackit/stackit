@@ -16,7 +16,7 @@ type PRStateBody struct {
 // BatchGetPRStateBodyGraphQL fetches the state and body for multiple PR numbers
 // in a single GraphQL query, replacing one REST GetPullRequest call per number.
 // Numbers with no matching PR are absent from the returned map.
-func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, prNumbers []int) (map[int]PRStateBody, error) {
+func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, prNumbers []int) (map[int]PRStateBody, error) {
 	if len(prNumbers) == 0 {
 		return make(map[int]PRStateBody), nil
 	}
@@ -25,8 +25,8 @@ func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, ow
 
 	query := buildPRStateBodyQuery(unique)
 	variables := map[string]any{
-		graphqlVarOwner: owner,
-		graphqlVarRepo:  repo,
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)

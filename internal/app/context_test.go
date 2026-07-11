@@ -123,8 +123,8 @@ func (f *fakeGitHubClient) BatchGetPRTitles(_ context.Context, _ []int) (map[int
 	return nil, nil
 }
 
-func (f *fakeGitHubClient) GetOwnerRepo() (string, string) {
-	return "", ""
+func (f *fakeGitHubClient) Repo() github.Repo {
+	return github.Repo{}
 }
 
 func (f *fakeGitHubClient) ClosePullRequest(_ context.Context, _ int) error {

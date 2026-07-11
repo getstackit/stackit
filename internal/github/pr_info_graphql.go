@@ -13,7 +13,7 @@ import (
 // (as head ref) with each branch in a single GraphQL query, replacing one REST
 // list call per branch. Branches with no associated PR are absent from the
 // returned map.
-func batchGetPRInfoByBranchGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, branchNames []string) (map[string]*PullRequestInfo, error) {
+func batchGetPRInfoByBranchGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, branchNames []string) (map[string]*PullRequestInfo, error) {
 	results := make(map[string]*PullRequestInfo, len(branchNames))
 	if len(branchNames) == 0 {
 		return results, nil
@@ -30,7 +30,7 @@ func batchGetPRInfoByBranchGraphQL(ctx context.Context, runner GitCommandRunner,
 		unique = append(unique, n)
 	}
 
-	query, variables := buildPRInfoByBranchQuery(owner, repo, unique)
+	query, variables := buildPRInfoByBranchQuery(repo, unique)
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func batchGetPRInfoByBranchGraphQL(ctx context.Context, runner GitCommandRunner,
 // buildPRInfoByBranchQuery builds a GraphQL query that resolves each branch's
 // head PR under a b<index> alias. Branch names are passed as variables so names
 // containing slashes or other characters need no escaping.
-func buildPRInfoByBranchQuery(owner, repo string, branches []string) (string, map[string]any) {
+func buildPRInfoByBranchQuery(repo Repo, branches []string) (string, map[string]any) {
 	var b strings.Builder
 	b.WriteString("query($owner: String!, $repo: String!")
 	for i := range branches {
@@ -60,8 +60,8 @@ func buildPRInfoByBranchQuery(owner, repo string, branches []string) (string, ma
 	b.WriteString("}\n")
 
 	variables := map[string]any{
-		graphqlVarOwner: owner,
-		graphqlVarRepo:  repo,
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
 	}
 	for i, name := range branches {
 		variables[fmt.Sprintf("b%d", i)] = "refs/heads/" + name

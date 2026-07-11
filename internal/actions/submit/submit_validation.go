@@ -30,7 +30,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) error {
 		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 		var mu sync.Mutex
 		updates := make(map[string]*engine.PrInfo)
-		if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branches, repoOwner, repoName, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+		if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branches, github.Repo{Owner: repoOwner, Name: repoName}, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 			branch := nav.GetBranch(name)
 
 			lockReason := engine.LockReasonNone

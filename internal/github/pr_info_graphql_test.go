@@ -11,7 +11,7 @@ import (
 func TestBuildPRInfoByBranchQuery(t *testing.T) {
 	t.Parallel()
 
-	query, variables := buildPRInfoByBranchQuery("octo", "repo", []string{"feature", "jonnii/long/branch-name"})
+	query, variables := buildPRInfoByBranchQuery(Repo{Owner: "octo", Name: "repo"}, []string{"feature", "jonnii/long/branch-name"})
 
 	require.Contains(t, query, "repository(owner: $owner, name: $repo)")
 	require.Contains(t, query, "b0: ref(qualifiedName: $b0)")

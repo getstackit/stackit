@@ -40,8 +40,7 @@ func FetchPRContentForBranches(ctx *app.Context, branches []string) map[int]gith
 		return map[int]github.PRContent{}
 	}
 
-	repoOwner, repoName := ctx.GitHub().GetOwnerRepo()
-	content, err := github.BatchGetPRContentGraphQL(ctx.Context, ctx.Git(), repoOwner, repoName, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	content, err := github.BatchGetPRContentGraphQL(ctx.Context, ctx.Git(), ctx.GitHub().Repo(), prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 	if err != nil {
 		ctx.Output.Debug("Failed to batch-fetch PR content: %v", err)
 		return map[int]github.PRContent{}
@@ -289,8 +288,8 @@ func PushMetadataAndSyncPRs(ctx *app.Context, branchNames []string) error {
 
 	// If GitHub client is available, update PRs to trigger CI checks (and update footers/titles)
 	if ctx.GitHub() != nil {
-		owner, repo := ctx.GitHub().GetOwnerRepo()
-		if owner != "" && repo != "" {
+		repo := ctx.GitHub().Repo()
+		if repo.Owner != "" && repo.Name != "" {
 			UpdateStackPRMetadata(ctx, branchNames)
 		}
 	}

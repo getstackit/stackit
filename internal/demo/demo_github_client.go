@@ -45,9 +45,9 @@ func NewDemoGitHubClient() *GitHubClient {
 	}
 }
 
-// GetOwnerRepo returns the repository owner and name
-func (c *GitHubClient) GetOwnerRepo() (string, string) {
-	return c.owner, c.repo
+// Repo returns the repository the client is bound to
+func (c *GitHubClient) Repo() github.Repo {
+	return github.Repo{Owner: c.owner, Name: c.repo}
 }
 
 // CreatePullRequest creates a simulated pull request

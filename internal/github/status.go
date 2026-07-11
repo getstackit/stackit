@@ -71,7 +71,7 @@ func (s *CheckStatus) IsReady() bool {
 
 // BatchGetPRChecksStatusGraphQL returns the check status for multiple branches using a single GraphQL query.
 // This function fetches both CI check status and PR review decisions in a single request for efficiency.
-func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, branchNames []string) (ChecksByBranch, error) {
+func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, branchNames []string) (ChecksByBranch, error) {
 	if len(branchNames) == 0 {
 		return make(ChecksByBranch), nil
 	}
@@ -99,8 +99,8 @@ func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner,
 	query := buildPRStatusQuery(aliasMap)
 
 	variables := map[string]any{
-		graphqlVarOwner: owner,
-		graphqlVarRepo:  repo,
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)

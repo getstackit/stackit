@@ -51,7 +51,8 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 	owner, repo := "", ""
 	var currentUser string
 	if a.gh != nil {
-		owner, repo = a.gh.GetOwnerRepo()
+		ghRepo := a.gh.Repo()
+		owner, repo = ghRepo.Owner, ghRepo.Name
 		// currentUser identifies the operator (it comes from the server's
 		// GitHub token). On a public read-only server we must not leak that,
 		// and we must not spend the operator's GitHub rate limit on

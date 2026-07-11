@@ -15,7 +15,7 @@ import (
 
 // SyncPrInfo syncs PR information for branches from GitHub. It fetches every
 // branch's PR in a single GraphQL query rather than one REST call per branch.
-func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []string, repoOwner, repoName string, onUpdate func(string, *PullRequestInfo)) error {
+func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []string, repo Repo, onUpdate func(string, *PullRequestInfo)) error {
 	if len(branchNames) == 0 {
 		return nil
 	}
@@ -32,12 +32,11 @@ func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 	if err != nil {
 		return nil //nolint:nilerr // Skip if can't determine repo
 	}
-	if repoOwner == "" || repoName == "" {
-		repoOwner = repoInfo.Owner
-		repoName = repoInfo.Repo
+	if repo.Owner == "" || repo.Name == "" {
+		repo = Repo{Owner: repoInfo.Owner, Name: repoInfo.Repo}
 	}
 
-	infos, err := batchGetPRInfoByBranchGraphQL(ctx, runner, repoOwner, repoName, branchNames)
+	infos, err := batchGetPRInfoByBranchGraphQL(ctx, runner, repo, branchNames)
 	if err == nil {
 		for name, info := range infos {
 			if info != nil && onUpdate != nil {
@@ -53,7 +52,7 @@ func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 	}
 
 	utils.Run(branchNames, func(name string) {
-		pr, err := getPRInfoForBranch(ctx, client, repoOwner, repoName, name)
+		pr, err := getPRInfoForBranch(ctx, client, repo, name)
 		if err != nil || pr == nil || onUpdate == nil {
 			return
 		}
@@ -65,9 +64,9 @@ func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 
 // getPRInfoForBranch gets PR info for a branch using the REST API. This is the
 // compatibility fallback when the batched GraphQL sync fails.
-func getPRInfoForBranch(ctx context.Context, client *github.Client, owner, repo, branchName string) (*github.PullRequest, error) {
-	prs, _, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
-		Head:  fmt.Sprintf("%s:%s", owner, branchName),
+func getPRInfoForBranch(ctx context.Context, client *github.Client, repo Repo, branchName string) (*github.PullRequest, error) {
+	prs, _, err := client.PullRequests.List(ctx, repo.Owner, repo.Name, &github.PullRequestListOptions{
+		Head:  fmt.Sprintf("%s:%s", repo.Owner, branchName),
 		State: prStateAll,
 		ListOptions: github.ListOptions{
 			PerPage: 1,

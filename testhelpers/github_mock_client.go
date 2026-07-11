@@ -30,9 +30,9 @@ func NewMockGitHubClientInterface(client *github.Client, owner, repo string, con
 	}
 }
 
-// GetOwnerRepo returns the repository owner and name
-func (c *MockGitHubClient) GetOwnerRepo() (string, string) {
-	return c.owner, c.repo
+// Repo returns the repository the client is bound to
+func (c *MockGitHubClient) Repo() githubpkg.Repo {
+	return githubpkg.Repo{Owner: c.owner, Name: c.repo}
 }
 
 // CreatePullRequest creates a new pull request

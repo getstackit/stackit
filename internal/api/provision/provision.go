@@ -59,7 +59,8 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 	// onboarded ones.
 	repo := p.RepoRef
 	if (repo.Owner == "" || repo.Name == "") && gh != nil {
-		remoteOwner, remoteName := gh.GetOwnerRepo()
+		remote := gh.Repo()
+		remoteOwner, remoteName := remote.Owner, remote.Name
 		if repo.Owner == "" {
 			repo.Owner = remoteOwner
 		}

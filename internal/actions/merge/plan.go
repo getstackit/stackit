@@ -783,12 +783,11 @@ func CanMergeIndividually(ctx context.Context, gitRunner git.Runner, githubClien
 
 	// Check 2: All PRs must have MERGEABLE state
 	// Resolve all PR node IDs in a single GraphQL query instead of one REST call per PR.
-	owner, repo := githubClient.GetOwnerRepo()
 	prNumbers := make([]int, 0, len(branches))
 	for _, branchInfo := range branches {
 		prNumbers = append(prNumbers, branchInfo.PRNumber)
 	}
-	nodeIDByNumber, err := github.BatchGetPRNodeIDsGraphQL(ctx, gitRunner, owner, repo, prNumbers)
+	nodeIDByNumber, err := github.BatchGetPRNodeIDsGraphQL(ctx, gitRunner, githubClient.Repo(), prNumbers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to batch get PR node IDs: %w", err)
 	}

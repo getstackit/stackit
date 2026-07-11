@@ -108,6 +108,17 @@ type MergePROptions struct {
 	CommitBody string // Optional commit body for merge/squash commit message.
 }
 
+// Repo identifies a GitHub repository by owner and name.
+type Repo struct {
+	Owner string
+	Name  string
+}
+
+// String returns the "owner/name" form.
+func (r Repo) String() string {
+	return r.Owner + "/" + r.Name
+}
+
 // Client is an interface for GitHub API interactions
 type Client interface {
 	// CreatePullRequest creates a new pull request
@@ -138,8 +149,8 @@ type Client interface {
 	// BatchGetPRTitles returns titles for multiple PRs by number
 	BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error)
 
-	// GetOwnerRepo returns the repository owner and name
-	GetOwnerRepo() (owner, repo string)
+	// Repo returns the repository the client is bound to
+	Repo() Repo
 
 	// ClosePullRequest closes a pull request
 	ClosePullRequest(ctx context.Context, prNumber int) error

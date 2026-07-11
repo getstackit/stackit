@@ -383,7 +383,7 @@ func (r *runner) ListMetadata() (map[string]string, error) {
 // WriteMetadataBlobsBatch marshals each Meta to JSON and writes all the blobs
 // in one `git hash-object` invocation via CreateBlobsBatch. Returns SHAs in
 // input order. Does NOT update any refs — callers (transaction commit,
-// BatchMarkNeedsPRBodyUpdate) pair the SHAs with ref updates afterwards.
+// MarkBranchesForPRBodyUpdate) pair the SHAs with ref updates afterwards.
 func (r *runner) WriteMetadataBlobsBatch(ctx context.Context, metas []*Meta) ([]string, error) {
 	if len(metas) == 0 {
 		return nil, nil

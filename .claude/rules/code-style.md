@@ -37,7 +37,7 @@ const (
 
 | Instead of | Use |
 |------------|-----|
-| `MarkNeedsPRBodyUpdate` in a loop | `BatchMarkNeedsPRBodyUpdate(branchNames)` |
+| per-branch PR-body-update marking in a loop | `MarkBranchesForPRBodyUpdate(ctx, branchNames)` |
 | `ReadLocalMetadata` in a loop | `BatchReadLocalMetadata(branchNames)` |
 | `UpdateRef` in a loop | `UpdateRefsBatch(ctx, updates)` |
 | `DeleteRef` in a loop | `DeleteRefsBatch(ctx, refNames)` |
@@ -51,12 +51,13 @@ const (
 
 ```go
 // BAD - N git processes for N branches
-for _, name := range branchNames {
-    _ = eng.MarkNeedsPRBodyUpdate(name)
+for _, branch := range branches {
+    div, _ := eng.GetDivergencePoint(branch.GetName())
+    divPoints[branch.GetName()] = div
 }
 
-// GOOD - parallel reads + single atomic ref update
-_ = eng.BatchMarkNeedsPRBodyUpdate(branchNames)
+// GOOD - one batched, cache-backed pass
+divPoints := eng.BatchDivergencePoints(branches)
 ```
 
 When adding new operations that touch multiple branches or refs, prefer designing batch APIs from the start. Use `UpdateRefsBatch` for atomic multi-ref writes and `BatchReadLocalMetadata` / `BatchReadMetadata` for parallel reads.

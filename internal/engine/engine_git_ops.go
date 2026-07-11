@@ -137,12 +137,12 @@ func (e *engineImpl) GetMergeBase(ctx context.Context, rev1, rev2 string) (strin
 
 // IsDiffEmpty checks if the diff between base and head is empty
 func (e *engineImpl) IsDiffEmpty(ctx context.Context, base, head string) (bool, error) {
-	return e.git.IsDiffEmpty(ctx, base, head)
+	return e.git.IsDiffEmpty(ctx, head, base)
 }
 
 // GetChangedFiles returns the list of files changed between base and head
-func (e *engineImpl) GetChangedFiles(ctx context.Context, base, head string) ([]string, error) {
-	return e.git.GetChangedFiles(ctx, base, head)
+func (e *engineImpl) GetChangedFiles(ctx context.Context, rr git.RevRange) ([]string, error) {
+	return e.git.GetChangedFiles(ctx, rr)
 }
 
 // ListWorktrees returns every working tree registered with the repo.
@@ -192,13 +192,13 @@ func (e *engineImpl) ShowDiff(ctx context.Context, left, right string, stat bool
 
 // GetDiffBetween returns the raw diff between two refs, suitable for parsing.
 // Unlike ShowDiff, this returns uncolored output.
-func (e *engineImpl) GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error) {
-	return e.git.GetDiffBetween(ctx, base, head, files...)
+func (e *engineImpl) GetDiffBetween(ctx context.Context, rr git.RevRange, files ...string) (string, error) {
+	return e.git.GetDiffBetween(ctx, rr, files...)
 }
 
 // ShowCommits returns commit log with optional patches/stat
-func (e *engineImpl) ShowCommits(ctx context.Context, base, head string, patch, stat bool) (string, error) {
-	return e.git.ShowCommits(ctx, base, head, patch, stat)
+func (e *engineImpl) ShowCommits(ctx context.Context, rr git.RevRange, patch, stat bool) (string, error) {
+	return e.git.ShowCommits(ctx, rr, patch, stat)
 }
 
 // GetCommitTemplate returns the commit template
@@ -291,7 +291,7 @@ func (e *engineImpl) ReadMetadataRaw(branchName string) (*git.Meta, error) {
 
 // BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 // returning per-branch errors so callers can detect corrupted refs.
-func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error) {
+func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error) {
 	return e.git.BatchReadMetadata(branchNames)
 }
 

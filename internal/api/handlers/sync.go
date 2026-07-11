@@ -13,7 +13,7 @@ import (
 // The manual-sync handler uses the synchronous form (not the coalescer) so it
 // can report success or failure back to the caller.
 type ManagedSyncer interface {
-	SyncRepo(ctx context.Context, owner, name string) error
+	SyncRepo(ctx context.Context, repo registry.RepoRef) error
 }
 
 // SyncHandler serves POST /api/v1/repos/{repoID}/sync: force an immediate
@@ -51,7 +51,7 @@ func (h *SyncHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if entry.Managed {
-		if err := h.syncer.SyncRepo(r.Context(), entry.Owner, entry.Name); err != nil {
+		if err := h.syncer.SyncRepo(r.Context(), entry.RepoRef); err != nil {
 			slog.Warn("manual sync failed", "repo", entry.ID, "error", err)
 			http.Error(w, "sync failed", http.StatusBadGateway)
 			return

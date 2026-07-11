@@ -19,8 +19,8 @@ type WizardOptions struct {
 	Direction Direction
 	// BranchName is a pre-selected branch name (empty = prompt or auto-generate)
 	BranchName string
-	// HunkSelector specifies which hunk selection method to use ("tui" or "git")
-	HunkSelector string
+	// HunkSelector specifies which hunk selection method to use
+	HunkSelector HunkSelector
 }
 
 // RunWizard executes the interactive split wizard.
@@ -147,7 +147,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	switch style {
 	case StyleHunk:
 		hunkOpts := hunkOptions{
-			useGitAddP: opts.HunkSelector == "git",
+			useGitAddP: opts.HunkSelector == HunkSelectorGit,
 		}
 		return splitByHunkWithHandler(ctx, *currentBranch, eng, out, handler, direction, hunkOpts)
 

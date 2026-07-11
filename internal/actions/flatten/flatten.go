@@ -226,11 +226,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("failed to update flattened parent relationships: %w", err)
 	}
 	for _, move := range filteredPlan.Moves {
-		handler.OnBranchMoved(move.Branch, move.OldParent, move.NewParent)
+		handler.OnBranchMoved(move)
 		out.Info("  %s: %s -> %s",
-			output.Branch(move.Branch, false),
+			output.BranchName(move.Branch),
 			output.Dim(move.OldParent),
-			output.Branch(move.NewParent, false))
+			output.BranchName(move.NewParent))
 	}
 
 	handler.OnStep(StepFlattening, basehandler.StatusCompleted, "Parent pointers updated")
@@ -281,7 +281,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 // collectAllBranchesToRestack collects all branches that will be affected by the moves,
 // including the moved branches and all their descendants.
-func collectAllBranchesToRestack(eng engine.Engine, graph *engine.StackGraph, moves []PlannedMove) []string {
+func collectAllBranchesToRestack(eng engine.Engine, graph *engine.StackGraph, moves []basehandler.Reparent) []string {
 	seen := make(map[string]bool)
 	var result []string
 
@@ -399,7 +399,7 @@ func filterPlanExcludingConflicts(plan *flattenPlan, conflicts map[string]string
 
 	// Build filtered plan
 	filtered := &flattenPlan{
-		Moves:          make([]PlannedMove, 0),
+		Moves:          make([]basehandler.Reparent, 0),
 		RebaseSpecs:    make([]engine.RebaseSpec, 0),
 		UnchangedCount: plan.UnchangedCount,
 	}
@@ -432,9 +432,9 @@ func filterPlanExcludingConflicts(plan *flattenPlan, conflicts map[string]string
 
 // flattenPlan contains the calculated flatten operations
 type flattenPlan struct {
-	Moves          []PlannedMove       // Branches that will be moved
-	UnchangedCount int                 // Number of branches that won't change
-	RebaseSpecs    []engine.RebaseSpec // Specs for validating all moves
+	Moves          []basehandler.Reparent // Branches that will be moved
+	UnchangedCount int                    // Number of branches that won't change
+	RebaseSpecs    []engine.RebaseSpec    // Specs for validating all moves
 }
 
 // AnalysisProgressFunc is called to report progress during flatten plan analysis.
@@ -445,7 +445,7 @@ type AnalysisProgressFunc func(current, total int, branchName string)
 // onto trunk or any intermediate branch that's closer to trunk.
 func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branches, trunk engine.Branch, onProgress AnalysisProgressFunc) (*flattenPlan, error) {
 	plan := &flattenPlan{
-		Moves:       make([]PlannedMove, 0),
+		Moves:       make([]basehandler.Reparent, 0),
 		RebaseSpecs: make([]engine.RebaseSpec, 0),
 	}
 
@@ -491,7 +491,7 @@ func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branc
 
 		// If we found a better parent, add to the plan
 		if newParent != "" && newParent != origParentName {
-			plan.Moves = append(plan.Moves, PlannedMove{
+			plan.Moves = append(plan.Moves, basehandler.Reparent{
 				Branch:    bName,
 				OldParent: origParentName,
 				NewParent: newParent,

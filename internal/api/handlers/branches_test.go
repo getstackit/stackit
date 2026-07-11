@@ -145,7 +145,7 @@ func TestResolveRepo_Returns404ForUnknownRepo(t *testing.T) {
 	t.Parallel()
 
 	reg := registry.New()
-	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default", Owner: "acme", Name: "demo"}))
+	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default", RepoRef: registry.RepoRef{Owner: "acme", Name: "demo"}}))
 	handler := NewBranchesHandler(reg)
 
 	req := withRepoCoords(httptest.NewRequest(http.MethodGet, "/api/v1/repos/acme/missing/branches", nil), "acme", "missing")
@@ -186,10 +186,9 @@ func singleEntryRegistry(t *testing.T, s *scenario.Scenario) *registry.Registry 
 	t.Helper()
 	reg := registry.New()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
-		ID:     "default",
-		Owner:  testOwner,
-		Name:   testRepo,
-		Engine: s.Engine,
+		ID:      "default",
+		RepoRef: registry.RepoRef{Owner: testOwner, Name: testRepo},
+		Engine:  s.Engine,
 	}))
 	return reg
 }

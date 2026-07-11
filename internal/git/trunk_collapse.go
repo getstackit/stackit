@@ -1,6 +1,6 @@
 package git
 
-// CollapseStackMerges returns the input commits with constituent-PR commits
+// Collapse returns the commits with constituent-PR commits
 // dropped when their PR number is already represented by a stack-merge
 // consolidation commit in the same slice. Input order is preserved.
 //
@@ -9,7 +9,7 @@ package git
 // Presentation shaping (terminal vs JSX) stays with each caller; the PR-title
 // enrichment they both need lives in PRTitleNumbers / CollapsedMessage /
 // ConstituentPRTitles below.
-func CollapseStackMerges(commits []RecentCommit) []RecentCommit {
+func (commits RecentCommits) Collapse() RecentCommits {
 	// Collect all PR numbers covered by stack-merge consolidation commits.
 	coveredPRs := make(map[int]struct{})
 	for _, c := range commits {
@@ -20,7 +20,7 @@ func CollapseStackMerges(commits []RecentCommit) []RecentCommit {
 		}
 	}
 
-	result := make([]RecentCommit, 0, len(commits))
+	result := make(RecentCommits, 0, len(commits))
 	for _, c := range commits {
 		// Skip commits whose PR is already represented by a stack-merge.
 		if c.PRNumber != 0 && c.StackSize == 0 {
@@ -39,7 +39,7 @@ func CollapseStackMerges(commits []RecentCommit) []RecentCommit {
 // title is never displayed — so callers don't over-fetch. Order is first-seen
 // stable. Safe to call on either the raw or the collapsed slice: collapse only
 // drops covered regular commits, never stack-merges, so both yield the same set.
-func PRTitleNumbers(commits []RecentCommit) []int {
+func (commits RecentCommits) PRTitleNumbers() []int {
 	seen := make(map[int]struct{})
 	var nums []int
 	add := func(n int) {
@@ -64,11 +64,11 @@ func PRTitleNumbers(commits []RecentCommit) []int {
 	return nums
 }
 
-// CollapsedMessage returns the display message for a commit: a stack-merge uses
+// DisplayMessage returns the display message for a commit: a stack-merge uses
 // its consolidation PR's title when available, replacing the raw
 // "Merge pull request #N from ..." subject; everything else falls back to the
 // commit subject.
-func CollapsedMessage(c RecentCommit, prTitles map[int]string) string {
+func (c RecentCommit) DisplayMessage(prTitles map[int]string) string {
 	if c.StackSize > 0 && c.PRNumber != 0 && len(prTitles) > 0 {
 		if title, ok := prTitles[c.PRNumber]; ok {
 			return title
@@ -80,7 +80,7 @@ func CollapsedMessage(c RecentCommit, prTitles map[int]string) string {
 // ConstituentPRTitles returns the subset of prTitles keyed by a stack-merge's
 // constituent PR numbers, or nil when the commit is not a stack-merge or no
 // titles apply.
-func ConstituentPRTitles(c RecentCommit, prTitles map[int]string) map[int]string {
+func (c RecentCommit) ConstituentPRTitles(prTitles map[int]string) map[int]string {
 	if c.StackSize == 0 || len(prTitles) == 0 {
 		return nil
 	}
@@ -94,4 +94,22 @@ func ConstituentPRTitles(c RecentCommit, prTitles map[int]string) map[int]string
 		return nil
 	}
 	return titles
+}
+
+// CollapseStackMerges is retained for callers that have not migrated to RecentCommits.Collapse.
+func CollapseStackMerges(commits []RecentCommit) RecentCommits {
+	return RecentCommits(commits).Collapse()
+}
+
+// PRTitleNumbers is retained for callers that have not migrated to RecentCommits.PRTitleNumbers.
+func PRTitleNumbers(commits []RecentCommit) []int { return RecentCommits(commits).PRTitleNumbers() }
+
+// CollapsedMessage is retained for callers that have not migrated to RecentCommit.DisplayMessage.
+func CollapsedMessage(c RecentCommit, prTitles map[int]string) string {
+	return c.DisplayMessage(prTitles)
+}
+
+// ConstituentPRTitles is retained for callers that have not migrated to RecentCommit.ConstituentPRTitles.
+func ConstituentPRTitles(c RecentCommit, prTitles map[int]string) map[int]string {
+	return c.ConstituentPRTitles(prTitles)
 }

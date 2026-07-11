@@ -21,14 +21,14 @@ func (f fakeProvider) InstallationToken(_ context.Context, _, _ string) (string,
 }
 
 func managedEntry(id, owner, name, root string) *registry.RepoEntry {
-	return &registry.RepoEntry{ID: id, Managed: true, Owner: owner, Name: name, RepoRoot: root, Remote: "origin"}
+	return &registry.RepoEntry{ID: id, Managed: true, RepoRef: registry.RepoRef{Owner: owner, Name: name}, RepoRoot: root, Remote: "origin"}
 }
 
 func TestSyncOnceFetchesManagedOnly(t *testing.T) {
 	t.Parallel()
 	reg := registry.New()
 	require.NoError(t, reg.Add(managedEntry("managed", "octo", "widget", "/r/m")))
-	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "unmanaged", Owner: "octo", Name: "dev"}))
+	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "unmanaged", RepoRef: registry.RepoRef{Owner: "octo", Name: "dev"}}))
 
 	var mu sync.Mutex
 	fetched := map[string]string{}
@@ -108,7 +108,7 @@ func TestSyncRepoFetchesMatchingManagedEntry(t *testing.T) {
 
 	// Casing differs from the entry to prove the lookup is case-insensitive,
 	// matching how a webhook payload may present the coordinates.
-	require.NoError(t, s.SyncRepo(context.Background(), "octo", "widget"))
+	require.NoError(t, s.SyncRepo(context.Background(), registry.RepoRef{Owner: "octo", Name: "widget"}))
 	require.Equal(t, "inst-token", gotToken)
 	require.True(t, refreshed)
 }
@@ -123,7 +123,7 @@ func TestSyncRepoUnknownRepoReturnsErrNotManaged(t *testing.T) {
 	s.fetch = func(context.Context, string, string, string) error { fetchCalled = true; return nil }
 	s.refresh = func(*registry.RepoEntry) {}
 
-	err := s.SyncRepo(context.Background(), "other", "repo")
+	err := s.SyncRepo(context.Background(), registry.RepoRef{Owner: "other", Name: "repo"})
 	require.ErrorIs(t, err, ErrRepoNotManaged)
 	require.False(t, fetchCalled, "an un-onboarded repo must not trigger a fetch")
 }
@@ -138,7 +138,7 @@ func TestSyncRepoPropagatesFetchError(t *testing.T) {
 	s.fetch = func(context.Context, string, string, string) error { return errors.New("boom") }
 	s.refresh = func(*registry.RepoEntry) { refreshed = true }
 
-	err := s.SyncRepo(context.Background(), "o", "n")
+	err := s.SyncRepo(context.Background(), registry.RepoRef{Owner: "o", Name: "n"})
 	require.Error(t, err)
 	require.False(t, refreshed, "a failed fetch must not refresh stale state")
 }

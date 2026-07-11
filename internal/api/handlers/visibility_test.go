@@ -96,7 +96,7 @@ func TestReposListFiltersByUser(t *testing.T) {
 func TestResolveRepoVisibility(t *testing.T) {
 	t.Parallel()
 	reg := registry.New()
-	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "alice-repo", AddedBy: "alice", Owner: "alice", Name: "repo"}))
+	require.NoError(t, reg.Add(&registry.RepoEntry{ID: "alice-repo", AddedBy: "alice", RepoRef: registry.RepoRef{Owner: "alice", Name: "repo"}}))
 
 	// A tiny handler that 200s when resolveRepo succeeds.
 	probe := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

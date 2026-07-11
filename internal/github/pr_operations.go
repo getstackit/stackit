@@ -2,6 +2,8 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -55,11 +57,11 @@ type UpdatePROptions struct {
 // applyPRMetadata requests reviewers, adds labels, and adds assignees on an existing PR.
 // Failures are collected as warnings rather than hard errors, matching the non-fatal
 // contract used by both CreatePullRequest and UpdatePullRequest.
-func applyPRMetadata(ctx context.Context, client *github.Client, owner, repo string, prNumber int, reviewers, teamReviewers, labels, assignees []string) []string {
+func applyPRMetadata(ctx context.Context, client *github.Client, repo Repo, prNumber int, reviewers, teamReviewers, labels, assignees []string) []string {
 	var warnings []string
 
 	if len(reviewers) > 0 || len(teamReviewers) > 0 {
-		_, _, err := client.PullRequests.RequestReviewers(ctx, owner, repo, prNumber, github.ReviewersRequest{
+		_, _, err := client.PullRequests.RequestReviewers(ctx, repo.Owner, repo.Name, prNumber, github.ReviewersRequest{
 			Reviewers:     reviewers,
 			TeamReviewers: teamReviewers,
 		})
@@ -69,14 +71,14 @@ func applyPRMetadata(ctx context.Context, client *github.Client, owner, repo str
 	}
 
 	if len(labels) > 0 {
-		_, _, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, prNumber, labels)
+		_, _, err := client.Issues.AddLabelsToIssue(ctx, repo.Owner, repo.Name, prNumber, labels)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("failed to add labels: %v", err))
 		}
 	}
 
 	if len(assignees) > 0 {
-		_, _, err := client.Issues.AddAssignees(ctx, owner, repo, prNumber, assignees)
+		_, _, err := client.Issues.AddAssignees(ctx, repo.Owner, repo.Name, prNumber, assignees)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("failed to add assignees: %v", err))
 		}
@@ -88,7 +90,7 @@ func applyPRMetadata(ctx context.Context, client *github.Client, owner, repo str
 // CreatePullRequest creates a new pull request.
 // Returns warnings (non-fatal issues like failed label/assignee additions) and error,
 // matching the same contract as UpdatePullRequest.
-func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo string, opts CreatePROptions) ([]string, *github.PullRequest, error) {
+func CreatePullRequest(ctx context.Context, client *github.Client, repo Repo, opts CreatePROptions) ([]string, *github.PullRequest, error) {
 	pr := &github.NewPullRequest{
 		Title: new(opts.Title),
 		Head:  new(opts.Head),
@@ -100,24 +102,24 @@ func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo s
 		pr.Body = new(opts.Body)
 	}
 
-	createdPR, _, err := client.PullRequests.Create(ctx, owner, repo, pr)
+	createdPR, _, err := client.PullRequests.Create(ctx, repo.Owner, repo.Name, pr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create pull request: %w", err)
 	}
 
-	warnings := applyPRMetadata(ctx, client, owner, repo, *createdPR.Number, opts.Reviewers, opts.TeamReviewers, opts.Labels, opts.Assignees)
+	warnings := applyPRMetadata(ctx, client, repo, *createdPR.Number, opts.Reviewers, opts.TeamReviewers, opts.Labels, opts.Assignees)
 	return warnings, createdPR, nil
 }
 
 // UpdatePullRequest updates an existing pull request
 // Returns warnings (non-fatal issues like failed label/assignee additions) and error
-func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCommandRunner, owner, repo string, prNumber int, opts UpdatePROptions) ([]string, error) {
+func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCommandRunner, repo Repo, prNumber int, opts UpdatePROptions) ([]string, error) {
 	// Handle draft status changes separately using GraphQL API, as the REST API
 	// doesn't support updating draft status. We need to use GraphQL mutation
 	// markPullRequestReadyForReview or convertPullRequestToDraft.
 	if opts.Draft != nil {
 		// Get current PR to check if draft status actually needs to change
-		pr, _, err := client.PullRequests.Get(ctx, owner, repo, prNumber)
+		pr, _, err := client.PullRequests.Get(ctx, repo.Owner, repo.Name, prNumber)
 		if err == nil && pr.Draft != nil {
 			currentDraft := *pr.Draft
 			desiredDraft := *opts.Draft
@@ -152,18 +154,18 @@ func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCom
 	}
 	// Note: We don't set update.Draft here because the REST API doesn't support it
 
-	_, _, err := client.PullRequests.Edit(ctx, owner, repo, prNumber, update)
+	_, _, err := client.PullRequests.Edit(ctx, repo.Owner, repo.Name, prNumber, update)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to update pull request: %w", err)
 	}
 
-	warnings := applyPRMetadata(ctx, client, owner, repo, prNumber, opts.Reviewers, opts.TeamReviewers, opts.Labels, opts.Assignees)
+	warnings := applyPRMetadata(ctx, client, repo, prNumber, opts.Reviewers, opts.TeamReviewers, opts.Labels, opts.Assignees)
 
 	// Rerequest review if specified
 	if opts.RerequestReview {
 		// Get current reviewers first
-		pr, _, err := client.PullRequests.Get(ctx, owner, repo, prNumber)
+		pr, _, err := client.PullRequests.Get(ctx, repo.Owner, repo.Name, prNumber)
 		if err == nil && pr.RequestedReviewers != nil {
 			var reviewers []string
 			var teamReviewers []string
@@ -175,11 +177,11 @@ func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCom
 			}
 			if len(reviewers) > 0 || len(teamReviewers) > 0 {
 				// Remove and re-add reviewers
-				_, _ = client.PullRequests.RemoveReviewers(ctx, owner, repo, prNumber, github.ReviewersRequest{
+				_, _ = client.PullRequests.RemoveReviewers(ctx, repo.Owner, repo.Name, prNumber, github.ReviewersRequest{
 					Reviewers:     reviewers,
 					TeamReviewers: teamReviewers,
 				})
-				_, _, _ = client.PullRequests.RequestReviewers(ctx, owner, repo, prNumber, github.ReviewersRequest{
+				_, _, _ = client.PullRequests.RequestReviewers(ctx, repo.Owner, repo.Name, prNumber, github.ReviewersRequest{
 					Reviewers:     reviewers,
 					TeamReviewers: teamReviewers,
 				})
@@ -194,10 +196,10 @@ func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCom
 }
 
 // GetPullRequestByBranch gets a pull request for a branch
-func GetPullRequestByBranch(ctx context.Context, client *github.Client, owner, repo, branchName string) (*github.PullRequest, error) {
+func GetPullRequestByBranch(ctx context.Context, client *github.Client, repo Repo, branchName string) (*github.PullRequest, error) {
 	// List PRs for this branch
-	prs, _, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
-		Head:  fmt.Sprintf("%s:%s", owner, branchName),
+	prs, _, err := client.PullRequests.List(ctx, repo.Owner, repo.Name, &github.PullRequestListOptions{
+		Head:  fmt.Sprintf("%s:%s", repo.Owner, branchName),
 		State: prStateAll,
 		ListOptions: github.ListOptions{
 			PerPage: 1,
@@ -267,9 +269,9 @@ func ParseReviewers(reviewersStr string) ([]string, []string) {
 // MergePullRequest merges a pull request using the GitHub API.
 // If opts.CommitBody is set, it is used as an additional commit message body
 // for merge/squash strategies.
-func MergePullRequest(ctx context.Context, client *github.Client, owner, repo, branchName string, opts MergePROptions) error {
+func MergePullRequest(ctx context.Context, client *github.Client, repo Repo, branchName string, opts MergePROptions) error {
 	// First, get the PR for this branch
-	pr, err := GetPullRequestByBranch(ctx, client, owner, repo, branchName)
+	pr, err := GetPullRequestByBranch(ctx, client, repo, branchName)
 	if err != nil {
 		return fmt.Errorf("failed to get PR for branch %s: %w", branchName, err)
 	}
@@ -281,7 +283,7 @@ func MergePullRequest(ctx context.Context, client *github.Client, owner, repo, b
 	mergeRequest := &github.PullRequestOptions{
 		MergeMethod: string(opts.Method),
 	}
-	_, _, err = client.PullRequests.Merge(ctx, owner, repo, *pr.Number, opts.CommitBody, mergeRequest)
+	_, _, err = client.PullRequests.Merge(ctx, repo.Owner, repo.Name, *pr.Number, opts.CommitBody, mergeRequest)
 	if err != nil {
 		return fmt.Errorf("failed to merge PR #%d for branch %s using %s: %w", *pr.Number, branchName, opts.Method, err)
 	}
@@ -544,12 +546,6 @@ func GetAutoMergeStatus(ctx context.Context, runner GitCommandRunner, prNodeID s
 	return status, nil
 }
 
-// PR state constants as returned by GitHub's GraphQL API.
-const (
-	PRStateMerged = "MERGED"
-	PRStateClosed = "CLOSED"
-)
-
 // GraphQL variable name constants shared across GitHub API calls.
 const (
 	graphqlVarOwner         = "owner"
@@ -577,7 +573,7 @@ const mergeableMergeable = "MERGEABLE"
 type PRMergeableState struct {
 	Mergeable      bool   // True if PR can be merged without conflicts
 	MergeStateText string // mergeStateStatus value: CLEAN, DIRTY, BLOCKED, UNKNOWN, etc.
-	State          string // OPEN, CLOSED, MERGED
+	State          git.PRState
 }
 
 // isMergeStateStatusUnsupported returns true when the error indicates the mergeStateStatus
@@ -626,9 +622,9 @@ func GetPRMergeableState(ctx context.Context, runner GitCommandRunner, prNodeID 
 	var response struct {
 		Data struct {
 			Node struct {
-				Mergeable        string `json:"mergeable"`
-				MergeStateStatus string `json:"mergeStateStatus"`
-				State            string `json:"state"`
+				Mergeable        string      `json:"mergeable"`
+				MergeStateStatus string      `json:"mergeStateStatus"`
+				State            git.PRState `json:"state"`
 			} `json:"node"`
 		} `json:"data"`
 	}
@@ -668,8 +664,8 @@ func getPRMergeableStateBasic(ctx context.Context, runner GitCommandRunner, prNo
 	var response struct {
 		Data struct {
 			Node struct {
-				Mergeable string `json:"mergeable"`
-				State     string `json:"state"`
+				Mergeable string      `json:"mergeable"`
+				State     git.PRState `json:"state"`
 			} `json:"node"`
 		} `json:"data"`
 	}
@@ -728,10 +724,10 @@ func BatchGetPRMergeableStates(ctx context.Context, runner GitCommandRunner, prN
 	// Parse response - the data object has dynamic keys (pr0, pr1, etc.)
 	var response struct {
 		Data map[string]struct {
-			ID               string `json:"id"`
-			Mergeable        string `json:"mergeable"`
-			MergeStateStatus string `json:"mergeStateStatus"`
-			State            string `json:"state"`
+			ID               string      `json:"id"`
+			Mergeable        string      `json:"mergeable"`
+			MergeStateStatus string      `json:"mergeStateStatus"`
+			State            git.PRState `json:"state"`
 		} `json:"data"`
 	}
 
@@ -767,9 +763,9 @@ func batchGetPRMergeableStatesBasic(ctx context.Context, runner GitCommandRunner
 
 	var response struct {
 		Data map[string]struct {
-			ID        string `json:"id"`
-			Mergeable string `json:"mergeable"`
-			State     string `json:"state"`
+			ID        string      `json:"id"`
+			Mergeable string      `json:"mergeable"`
+			State     git.PRState `json:"state"`
 		} `json:"data"`
 	}
 
@@ -809,11 +805,11 @@ func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID strin
 			return fmt.Errorf("failed to check PR state: %w", err)
 		}
 
-		if state.State == PRStateMerged {
+		if state.State == git.PRStateMerged {
 			return nil
 		}
 
-		if state.State == PRStateClosed {
+		if state.State == git.PRStateClosed {
 			return fmt.Errorf("PR was closed without merging")
 		}
 
@@ -822,7 +818,7 @@ func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID strin
 		if err == nil && !autoMerge.Enabled {
 			// Re-check PR state to avoid race condition where PR merged between checks
 			freshState, freshErr := GetPRMergeableState(ctx, runner, prNodeID)
-			if freshErr == nil && freshState.State == PRStateMerged {
+			if freshErr == nil && freshState.State == git.PRStateMerged {
 				return nil // PR merged successfully
 			}
 
@@ -859,9 +855,9 @@ func WaitForMergeable(ctx context.Context, runner GitCommandRunner, prNodeID str
 		}
 
 		switch state.State {
-		case PRStateMerged:
+		case git.PRStateMerged:
 			return state, fmt.Errorf("PR was merged while waiting: %w", ErrPRAlreadyMerged)
-		case PRStateClosed:
+		case git.PRStateClosed:
 			return state, fmt.Errorf("PR was closed without merging")
 		}
 

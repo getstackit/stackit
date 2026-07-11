@@ -61,9 +61,9 @@ func TestRegistry_AddRejectsDuplicateID(t *testing.T) {
 func TestRegistry_AddRejectsDuplicateOwnerRepo(t *testing.T) {
 	t.Parallel()
 	r := New()
-	require.NoError(t, r.Add(&RepoEntry{ID: "a", Owner: "octo", Name: "widget"}))
+	require.NoError(t, r.Add(&RepoEntry{ID: "a", RepoRef: RepoRef{Owner: "octo", Name: "widget"}}))
 	// Same coordinates, different ID, different casing — still a collision.
-	err := r.Add(&RepoEntry{ID: "b", Owner: "Octo", Name: "Widget"})
+	err := r.Add(&RepoEntry{ID: "b", RepoRef: RepoRef{Owner: "Octo", Name: "Widget"}})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duplicate repo")
 }
@@ -71,7 +71,7 @@ func TestRegistry_AddRejectsDuplicateOwnerRepo(t *testing.T) {
 func TestRegistry_GetByOwnerRepo(t *testing.T) {
 	t.Parallel()
 	r := New()
-	require.NoError(t, r.Add(&RepoEntry{ID: "managed", Owner: "Octo", Name: "Widget"}))
+	require.NoError(t, r.Add(&RepoEntry{ID: "managed", RepoRef: RepoRef{Owner: "Octo", Name: "Widget"}}))
 	require.NoError(t, r.Add(&RepoEntry{ID: "no-remote"})) // empty coordinates: ID-only
 
 	t.Run("matches owner/repo case-insensitively", func(t *testing.T) {
@@ -126,25 +126,25 @@ func TestRegistry_ListReturnsSortedByID(t *testing.T) {
 func TestRegistry_FindManaged(t *testing.T) {
 	t.Parallel()
 	r := New()
-	require.NoError(t, r.Add(&RepoEntry{ID: "managed", Managed: true, Owner: "Octo", Name: "Widget"}))
-	require.NoError(t, r.Add(&RepoEntry{ID: "unmanaged", Owner: "octo", Name: "dev"}))
+	require.NoError(t, r.Add(&RepoEntry{ID: "managed", Managed: true, RepoRef: RepoRef{Owner: "Octo", Name: "Widget"}}))
+	require.NoError(t, r.Add(&RepoEntry{ID: "unmanaged", RepoRef: RepoRef{Owner: "octo", Name: "dev"}}))
 
 	t.Run("matches owner/name case-insensitively", func(t *testing.T) {
 		t.Parallel()
-		e, ok := r.FindManaged("octo", "widget")
+		e, ok := r.FindManaged(RepoRef{Owner: "octo", Name: "widget"})
 		require.True(t, ok)
 		require.Equal(t, "managed", e.ID)
 	})
 
 	t.Run("skips unmanaged entries", func(t *testing.T) {
 		t.Parallel()
-		_, ok := r.FindManaged("octo", "dev")
+		_, ok := r.FindManaged(RepoRef{Owner: "octo", Name: "dev"})
 		require.False(t, ok, "the unmanaged -cwd repo must never be selected for mirror-fetch")
 	})
 
 	t.Run("returns false when no repo matches", func(t *testing.T) {
 		t.Parallel()
-		_, ok := r.FindManaged("octo", "missing")
+		_, ok := r.FindManaged(RepoRef{Owner: "octo", Name: "missing"})
 		require.False(t, ok)
 	})
 }

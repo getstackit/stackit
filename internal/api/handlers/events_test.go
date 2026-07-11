@@ -39,8 +39,7 @@ func TestEventsHandlerReturnsWhenBroadcasterCloses(t *testing.T) {
 	broadcaster := registry.NewBroadcaster()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "default",
-		Owner:       "acme",
-		Name:        "demo",
+		RepoRef:     registry.RepoRef{Owner: "acme", Name: "demo"},
 		Broadcaster: broadcaster,
 	}))
 	handler := NewEventsHandler(reg, SSELimits{})
@@ -76,8 +75,7 @@ func TestEventsHandlerRejectsBeyondPerIPCap(t *testing.T) {
 	broadcaster := registry.NewBroadcaster()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "default",
-		Owner:       "acme",
-		Name:        "demo",
+		RepoRef:     registry.RepoRef{Owner: "acme", Name: "demo"},
 		Broadcaster: broadcaster,
 	}))
 	handler := NewEventsHandler(reg, SSELimits{MaxPerIP: 1})
@@ -120,8 +118,7 @@ func TestEventsHandlerReturns404ForUnknownRepo(t *testing.T) {
 	reg := registry.New()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "default",
-		Owner:       "acme",
-		Name:        "demo",
+		RepoRef:     registry.RepoRef{Owner: "acme", Name: "demo"},
 		Broadcaster: registry.NewBroadcaster(),
 	}))
 	handler := NewEventsHandler(reg, SSELimits{})

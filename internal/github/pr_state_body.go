@@ -1,20 +1,22 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 )
 
 // PRStateBody holds the subset of pull-request fields needed to append a
 // consolidation footer and decide whether a PR still needs closing.
 type PRStateBody struct {
-	State string
+	State git.PRState
 	Body  string
 }
 
 // BatchGetPRStateBodyGraphQL fetches the state and body for multiple PR numbers
 // in a single GraphQL query, replacing one REST GetPullRequest call per number.
 // Numbers with no matching PR are absent from the returned map.
-func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, prNumbers []int) (map[int]PRStateBody, error) {
+func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, prNumbers []int) (map[int]PRStateBody, error) {
 	if len(prNumbers) == 0 {
 		return make(map[int]PRStateBody), nil
 	}
@@ -23,8 +25,8 @@ func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, ow
 
 	query := buildPRStateBodyQuery(unique)
 	variables := map[string]any{
-		graphqlVarOwner: owner,
-		graphqlVarRepo:  repo,
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
@@ -45,7 +47,7 @@ func parsePRStateBodyResponse(body []byte, prNumbers []int) (map[int]PRStateBody
 	return parsePRNumberQueryResponse(body, prNumbers, func(prData map[string]any) (PRStateBody, bool) {
 		var entry PRStateBody
 		if state, ok := prData["state"].(string); ok {
-			entry.State = state
+			entry.State = git.PRState(state)
 		}
 		if prBody, ok := prData["body"].(string); ok {
 			entry.Body = prBody

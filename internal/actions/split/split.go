@@ -26,6 +26,16 @@ const (
 	StyleFile Style = "file"
 )
 
+// HunkSelector selects the hunk-picking UI for split.
+type HunkSelector string
+
+const (
+	// HunkSelectorTUI uses the built-in TUI hunk selector.
+	HunkSelectorTUI HunkSelector = "tui"
+	// HunkSelectorGit uses git add -p.
+	HunkSelectorGit HunkSelector = "git"
+)
+
 // Options contains options for the split command
 type Options struct {
 	Style         Style
@@ -47,9 +57,9 @@ type Options struct {
 	// UseWizard enables the new wizard-based interactive flow.
 	// When true, the wizard will guide through type/direction selection.
 	UseWizard bool
-	// HunkSelector specifies which hunk selection method to use ("tui" or "git").
-	// Only applies to StyleHunk. When "git", uses git add -p instead of the TUI selector.
-	HunkSelector string
+	// HunkSelector specifies which hunk selection method to use.
+	// Only applies to StyleHunk.
+	HunkSelector HunkSelector
 	// PatchFile specifies a patch file for non-interactive hunk selection.
 	// If set, hunks in the patch are staged directly without prompting.
 	// Use "-" to read from stdin.
@@ -177,7 +187,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Hunk options for the split
 		hunkOpts := hunkOptions{
-			useGitAddP: opts.HunkSelector == "git",
+			useGitAddP: opts.HunkSelector == HunkSelectorGit,
 			patchFile:  opts.PatchFile,
 			name:       opts.Name,
 			message:    opts.Message,

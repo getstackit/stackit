@@ -5,6 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/api/registry"
 	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // defaultBranchDiffConcurrency caps simultaneous diff computations. Each one
@@ -83,7 +84,7 @@ func (h *BranchDiffHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	patch, err := entry.Engine.GetDiffBetween(r.Context(), baseRevision, headRevision)
+	patch, err := entry.Engine.GetDiffBetween(r.Context(), git.RevRange{Base: baseRevision, Head: headRevision})
 	if err != nil {
 		http.Error(w, "failed to compute branch diff: "+err.Error(), http.StatusInternalServerError)
 		return

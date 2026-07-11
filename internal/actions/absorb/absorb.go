@@ -389,7 +389,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		for commitSHA := range branchHunks {
 			handler.OnApply(branch.GetName(), commitSHA[:8])
-			out.Info("Absorbed changes into commit %s in %s", commitSHA[:8], output.Branch(branch.GetName(), false))
+			out.Info("Absorbed changes into commit %s in %s", commitSHA[:8], output.BranchName(branch.GetName()))
 		}
 	}
 

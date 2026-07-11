@@ -21,7 +21,7 @@ type fakeGitHub struct {
 	currentUser string
 }
 
-func (f *fakeGitHub) GetOwnerRepo() (string, string) { return f.owner, f.repo }
+func (f *fakeGitHub) Repo() github.Repo { return github.Repo{Owner: f.owner, Name: f.repo} }
 
 func (f *fakeGitHub) GetCurrentUser(context.Context) (string, error) {
 	return f.currentUser, nil

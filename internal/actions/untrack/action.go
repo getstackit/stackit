@@ -60,7 +60,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	for _, name := range allNames {
-		ctx.Output.Info("Stopped tracking %s.", output.Branch(name, false))
+		ctx.Output.Info("Stopped tracking %s.", output.BranchName(name))
 	}
 
 	return nil

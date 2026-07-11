@@ -1,37 +1,25 @@
 package merge
 
 import (
-	"fmt"
-
 	"github.com/getstackit/stackit/internal/engine"
 )
 
-// FormatStackLabel creates a display label for a stack
-func FormatStackLabel(stack MultiStackInfo) string {
-	label := fmt.Sprintf("%s (%d branches", stack.RootBranch, len(stack.AllBranches))
-	if stack.PRCount > 0 {
-		label += fmt.Sprintf(", %d PRs", stack.PRCount)
-	}
-	if stack.Scope != "" {
-		label += fmt.Sprintf(", scope: %s", stack.Scope)
-	}
-	label += ")"
-	return label
-}
+// FormatStackLabel is retained for callers that have not migrated to MultiStackInfo.Label.
+func FormatStackLabel(stack MultiStackInfo) string { return stack.Label() }
 
 // DiscoverStacks returns all independent stacks rooted at trunk.
 // Each stack is represented by its root branch (direct child of trunk)
 // and includes all branches in the stack in topological order.
-func DiscoverStacks(eng engine.BranchReader) ([]MultiStackInfo, error) {
+func DiscoverStacks(eng engine.BranchReader) (MultiStacks, error) {
 	return DiscoverStacksWithSort(eng, engine.SortStrategyAlphabetical)
 }
 
 // DiscoverStacksWithSort is like DiscoverStacks but allows specifying the sort strategy.
 // Use SortStrategySmart to match the ordering of `stackit tree`.
-func DiscoverStacksWithSort(eng engine.BranchReader, strategy engine.SortStrategy) ([]MultiStackInfo, error) {
+func DiscoverStacksWithSort(eng engine.BranchReader, strategy engine.SortStrategy) (MultiStacks, error) {
 	independentStacks := engine.DiscoverIndependentStacksWithSort(eng, strategy)
 
-	stacks := make([]MultiStackInfo, 0, len(independentStacks))
+	stacks := make(MultiStacks, 0, len(independentStacks))
 	for _, independentStack := range independentStacks {
 		branches := engine.BranchesFromNames(eng, independentStack.Branches)
 
@@ -69,22 +57,5 @@ func countPRs(branches engine.Branches) int {
 // If selectedRoots is empty, returns all stacks.
 // The returned stacks maintain the order of selectedRoots (priority order).
 func FilterStacks(stacks []MultiStackInfo, selectedRoots []string) []MultiStackInfo {
-	if len(selectedRoots) == 0 {
-		return stacks
-	}
-
-	// Build a map for quick lookup
-	stackMap := make(map[string]MultiStackInfo)
-	for _, stack := range stacks {
-		stackMap[stack.RootBranch] = stack
-	}
-
-	// Return stacks in the order of selectedRoots (preserving priority)
-	var filtered []MultiStackInfo
-	for _, root := range selectedRoots {
-		if stack, ok := stackMap[root]; ok {
-			filtered = append(filtered, stack)
-		}
-	}
-	return filtered
+	return MultiStacks(stacks).FilterByRoots(selectedRoots)
 }

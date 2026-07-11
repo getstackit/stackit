@@ -13,7 +13,7 @@ type PRContent struct {
 // BatchGetPRContentGraphQL fetches the current title and body for multiple PR
 // numbers in a single GraphQL query, replacing one REST GetPullRequest call per
 // PR. PRs absent from the response (e.g. not found) are omitted from the map.
-func BatchGetPRContentGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, prNumbers []int) (map[int]PRContent, error) {
+func BatchGetPRContentGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, prNumbers []int) (map[int]PRContent, error) {
 	if len(prNumbers) == 0 {
 		return make(map[int]PRContent), nil
 	}
@@ -22,8 +22,8 @@ func BatchGetPRContentGraphQL(ctx context.Context, runner GitCommandRunner, owne
 
 	query := buildPRContentQuery(unique)
 	variables := map[string]any{
-		graphqlVarOwner: owner,
-		graphqlVarRepo:  repo,
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)

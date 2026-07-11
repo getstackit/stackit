@@ -14,18 +14,25 @@ const (
 	reflogRestackAnchor = "stackit: restack (anchor)"
 )
 
+// restackSnapshot bundles the branch-keyed state captured once per restack
+// pass so per-branch steps don't re-read metadata, revisions, worktrees, or
+// metadata-ref SHAs from git. It is mutated in place as branches are rebased
+// so later branches in the same pass observe the updated values.
+type restackSnapshot struct {
+	meta        MetaMap
+	revs        RevisionMap
+	worktrees   git.WorktreeList
+	metaRefSHAs map[string]string
+}
+
 // restackBranch rebases a branch onto its parent
 // If the parent has been merged/deleted, it will automatically reparent to the nearest valid ancestor.
-// worktrees and metaRefSHAs are snapshots taken by the caller — passing them
-// avoids spawning `git worktree list` and `git rev-parse <metadata ref>` per
-// branch.
+// snap is the point-in-time state captured by the caller — passing it avoids
+// spawning `git worktree list` and `git rev-parse <metadata ref>` per branch.
 func (e *engineImpl) restackBranch(
 	ctx context.Context,
 	branch Branch,
-	metaMap map[string]*git.Meta,
-	revMap map[string]string,
-	worktrees git.WorktreeList,
-	metaRefSHAs map[string]string,
+	snap *restackSnapshot,
 	squashCache *git.SquashMergeCache,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
@@ -90,7 +97,7 @@ func (e *engineImpl) restackBranch(
 			}
 
 			// Get current metadata SHA for optimistic locking
-			oldMetadataSHA := metaRefSHAs[branchName]
+			oldMetadataSHA := snap.metaRefSHAs[branchName]
 
 			// Prepare metadata update
 			meta, err := e.readMetadata(branchName)
@@ -129,7 +136,7 @@ func (e *engineImpl) restackBranch(
 				// This is best-effort: sync checks for uncommitted changes before proceeding,
 				// so failure here just means the worktree may be briefly out of sync with HEAD.
 				// The ResetWorktreeWorkingDir command itself is logged via debugLog.
-				if worktreePath := worktrees.PathForBranch(branchName); worktreePath != "" {
+				if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
 					_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 				}
 			}
@@ -164,7 +171,7 @@ func (e *engineImpl) restackBranch(
 		}
 
 		// Get current metadata SHA for optimistic locking
-		oldMetadataSHA := metaRefSHAs[branchName]
+		oldMetadataSHA := snap.metaRefSHAs[branchName]
 
 		// Prepare metadata update with new parent revision
 		meta, err := e.readMetadata(branchName)
@@ -200,7 +207,7 @@ func (e *engineImpl) restackBranch(
 			// If the branch is checked out in a different worktree, reset that worktree.
 			// This is best-effort: sync checks for uncommitted changes before proceeding,
 			// so failure here just means the worktree may be briefly out of sync with HEAD.
-			if worktreePath := worktrees.PathForBranch(branchName); worktreePath != "" {
+			if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
 				_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 			}
 		}
@@ -218,7 +225,7 @@ func (e *engineImpl) restackBranch(
 
 	// Check if parent needs reparenting (merged, deleted, or has MERGED PR state)
 	e.mu.RLock()
-	needsReparent := e.shouldReparentBranch(ctx, parent, metaMap, squashCache)
+	needsReparent := e.shouldReparentBranch(ctx, parent, snap.meta, squashCache)
 	e.mu.RUnlock()
 
 	if needsReparent {
@@ -226,7 +233,7 @@ func (e *engineImpl) restackBranch(
 
 		// Find nearest valid ancestor
 		e.mu.RLock()
-		newParent := e.findNearestValidAncestor(ctx, branchName, metaMap, squashCache)
+		newParent := e.findNearestValidAncestor(ctx, branchName, snap.meta, squashCache)
 		e.mu.RUnlock()
 
 		// Reparent to the nearest valid ancestor. DivergenceRecompute is
@@ -243,13 +250,13 @@ func (e *engineImpl) restackBranch(
 
 		// Capture the old parent in merged history (best-effort, don't fail on error).
 		// appendMergedDownstack reads fresh from disk and updates metaMap.
-		_ = e.appendMergedDownstack(branchName, oldParent, metaMap)
+		_ = e.appendMergedDownstack(branchName, oldParent, snap.meta)
 
 		// SetParent + appendMergedDownstack bumped the metadata ref. Refresh
 		// the cached SHA so the later optimistic-locking UpdateRefsBatch
 		// doesn't fail with "is at X but expected Y".
 		if sha, refErr := e.git.GetRef(git.MetadataRefPrefix + branchName); refErr == nil {
-			metaRefSHAs[branchName] = sha
+			snap.metaRefSHAs[branchName] = sha
 		}
 	}
 
@@ -257,8 +264,8 @@ func (e *engineImpl) restackBranch(
 	parentBranch := e.GetBranch(parent)
 	var parentRev string
 	var err error
-	if revMap != nil {
-		parentRev = revMap[parent]
+	if snap.revs != nil {
+		parentRev = snap.revs[parent]
 	}
 	if parentRev == "" {
 		parentRev, err = parentBranch.GetRevision()
@@ -268,10 +275,7 @@ func (e *engineImpl) restackBranch(
 	}
 
 	// Get metadata (read once to avoid duplicate disk I/O)
-	var meta *git.Meta
-	if metaMap != nil {
-		meta = metaMap[branchName]
-	}
+	meta := snap.meta.Get(branchName)
 	if meta == nil {
 		meta, err = e.readMetadata(branchName)
 		if err != nil {
@@ -352,7 +356,7 @@ func (e *engineImpl) restackBranch(
 
 	// Get current SHAs for optimistic locking
 	oldBranchSHA, _ := branch.GetRevision()
-	oldMetadataSHA := metaRefSHAs[branchName]
+	oldMetadataSHA := snap.metaRefSHAs[branchName]
 
 	// Prepare metadata update
 	meta, metaReadErr := e.readMetadata(branchName)
@@ -375,7 +379,7 @@ func (e *engineImpl) restackBranch(
 	// that appears as staged changes reverting the rebased commits.
 	// This is best-effort: sync checks for uncommitted changes before proceeding,
 	// so failure here just means the worktree may be briefly out of sync with HEAD.
-	if worktreePath := worktrees.PathForBranch(branchName); worktreePath != "" {
+	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
 		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 	}
 
@@ -407,9 +411,9 @@ func (e *engineImpl) restackBranch(
 
 	// Update the cached metadata if we're using a metaMap, so subsequent branches in the batch
 	// see the updated ParentBranchRevision.
-	if metaMap != nil {
+	if snap.meta != nil {
 		if updatedMeta, err := e.readMetadata(branchName); err == nil {
-			metaMap[branchName] = updatedMeta
+			snap.meta[branchName] = updatedMeta
 		}
 	}
 
@@ -429,10 +433,7 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 	branch Branch,
 	validation *RebaseValidation,
 	plan *RestackPlan,
-	metaMap map[string]*git.Meta,
-	revMap map[string]string,
-	worktrees git.WorktreeList,
-	metaRefSHAs map[string]string,
+	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
@@ -452,9 +453,9 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 
 	switch item.Action {
 	case RestackPlanApplyFrozen, RestackPlanApplyAnchor:
-		return e.applyPlannedRefUpdate(ctx, branch, item, metaMap, revMap, worktrees, metaRefSHAs)
+		return e.applyPlannedRefUpdate(ctx, branch, item, snap)
 	case RestackPlanApplyValidated:
-		return e.applyValidatedRestack(ctx, branch, validation, item, metaMap, revMap, worktrees, metaRefSHAs)
+		return e.applyValidatedRestack(ctx, branch, validation, item, snap)
 	default:
 		return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("unknown restack plan action for %s", branchName)
 	}
@@ -465,10 +466,7 @@ func (e *engineImpl) applyValidatedRestack(
 	branch Branch,
 	validation *RebaseValidation,
 	item RestackPlanItem,
-	metaMap map[string]*git.Meta,
-	revMap map[string]string,
-	worktrees git.WorktreeList,
-	metaRefSHAs map[string]string,
+	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
 	newRev := ""
@@ -483,8 +481,8 @@ func (e *engineImpl) applyValidatedRestack(
 	if validation != nil && validation.NewSHAs != nil {
 		parentRev = validation.NewSHAs[item.NewParent]
 	}
-	if parentRev == "" && revMap != nil {
-		parentRev = revMap[item.NewParent]
+	if parentRev == "" && snap.revs != nil {
+		parentRev = snap.revs[item.NewParent]
 	}
 	if parentRev == "" {
 		parentRev = item.ParentRev
@@ -497,7 +495,7 @@ func (e *engineImpl) applyValidatedRestack(
 		parentRev = rev
 	}
 
-	result, err := e.applyBranchAndMetadata(ctx, branch, item, newRev, parentRev, metaMap, revMap, worktrees, metaRefSHAs)
+	result, err := e.applyBranchAndMetadata(ctx, branch, item, newRev, parentRev, snap)
 	if err != nil {
 		return result, err
 	}
@@ -512,10 +510,7 @@ func (e *engineImpl) applyPlannedRefUpdate(
 	ctx context.Context,
 	branch Branch,
 	item RestackPlanItem,
-	metaMap map[string]*git.Meta,
-	revMap map[string]string,
-	worktrees git.WorktreeList,
-	metaRefSHAs map[string]string,
+	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
 	if item.TargetRev == "" {
 		return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("missing target revision for %s", item.Branch)
@@ -530,7 +525,7 @@ func (e *engineImpl) applyPlannedRefUpdate(
 		parentRev = rev
 	}
 
-	return e.applyBranchAndMetadata(ctx, branch, item, item.TargetRev, parentRev, metaMap, revMap, worktrees, metaRefSHAs)
+	return e.applyBranchAndMetadata(ctx, branch, item, item.TargetRev, parentRev, snap)
 }
 
 func (e *engineImpl) applyBranchAndMetadata(
@@ -539,16 +534,10 @@ func (e *engineImpl) applyBranchAndMetadata(
 	item RestackPlanItem,
 	newRev string,
 	parentRev string,
-	metaMap map[string]*git.Meta,
-	revMap map[string]string,
-	worktrees git.WorktreeList,
-	metaRefSHAs map[string]string,
+	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
-	meta := (*git.Meta)(nil)
-	if metaMap != nil {
-		meta = metaMap[branchName]
-	}
+	meta := snap.meta.Get(branchName)
 	if meta == nil {
 		var err error
 		meta, err = e.readMetadata(branchName)
@@ -558,12 +547,12 @@ func (e *engineImpl) applyBranchAndMetadata(
 	}
 
 	oldBranchSHA, _ := branch.GetRevision()
-	oldMetadataSHA := metaRefSHAs[branchName]
+	oldMetadataSHA := snap.metaRefSHAs[branchName]
 
 	updatedMeta := meta.WithParentBranchRevision(&parentRev)
 	if item.Reparented {
 		updatedMeta = updatedMeta.WithParentBranchName(&item.NewParent)
-		updatedMeta = e.withMergedDownstack(updatedMeta, item.OldParent, metaMap)
+		updatedMeta = e.withMergedDownstack(updatedMeta, item.OldParent, snap.meta)
 	}
 	metadataJSON, err := json.Marshal(updatedMeta)
 	if err != nil {
@@ -583,15 +572,15 @@ func (e *engineImpl) applyBranchAndMetadata(
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update refs atomically: %w", err)
 	}
 
-	if worktreePath := worktrees.PathForBranch(branchName); worktreePath != "" {
+	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
 		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 	}
 
-	if metaMap != nil {
-		metaMap[branchName] = updatedMeta
+	if snap.meta != nil {
+		snap.meta[branchName] = updatedMeta
 	}
-	if revMap != nil {
-		revMap[branchName] = newRev
+	if snap.revs != nil {
+		snap.revs[branchName] = newRev
 	}
 
 	return RestackBranchResult{

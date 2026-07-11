@@ -74,7 +74,7 @@ func (h *InteractiveLockHandler) PromptSubmitBeforeLock(_ []string) (bool, error
 func (h *InteractiveLockHandler) PromptUnlockDownstack(lockedBranchNames []string) (bool, error) {
 	var prompt string
 	if len(lockedBranchNames) == 1 {
-		prompt = fmt.Sprintf("Would you like to also unlock the downstack branch %s?", style.ColorBranchName(lockedBranchNames[0], false))
+		prompt = fmt.Sprintf("Would you like to also unlock the downstack branch %s?", style.ColorBranchName(lockedBranchNames[0]))
 	} else {
 		prompt = fmt.Sprintf("Would you like to also unlock %d downstack branches (%s)?", len(lockedBranchNames), strings.Join(lockedBranchNames, ", "))
 	}

@@ -93,7 +93,7 @@ func addTreeFlags(cmd *cobra.Command, f *treeFlags) {
 	cmd.Flags().BoolVar(&f.jsonOutput, "json", false, "Output in JSON format")
 }
 
-func executeTree(cmd *cobra.Command, f *treeFlags, style string) error {
+func executeTree(cmd *cobra.Command, f *treeFlags, style actions.TreeStyle) error {
 	return common.Run(cmd, func(ctx *app.Context) error {
 		eng := ctx.Engine
 

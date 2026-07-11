@@ -43,7 +43,7 @@ type Preview struct {
 // Handler receives events from move action
 type Handler interface {
 	// Start is called at the beginning of move
-	Start(sourceBranch, oldParent, newParent string)
+	Start(move handler.Reparent)
 
 	// OnStep is called for each step in the move process
 	OnStep(step Step, status handler.StepStatus, message string)
@@ -83,7 +83,7 @@ type NullHandler struct {
 }
 
 // Start implements Handler.
-func (h *NullHandler) Start(string, string, string) {}
+func (h *NullHandler) Start(handler.Reparent) {}
 
 // OnRename implements Handler.
 func (h *NullHandler) OnRename(string, string) {}

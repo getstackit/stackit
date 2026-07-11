@@ -67,9 +67,9 @@ func foldWithKeep(gctx context.Context, ctx *app.Context, currentBranch, parentB
 	}
 
 	splog.Info("Folded %s into %s (kept %s).",
-		output.Branch(parentBranch.GetName(), true),
-		output.Branch(currentBranch.GetName(), false),
-		output.Branch(currentBranch.GetName(), false))
+		output.CurrentBranch(parentBranch.GetName()),
+		output.BranchName(currentBranch.GetName()),
+		output.BranchName(currentBranch.GetName()))
 
 	// Rebuild graph with fresh engine state after deletion
 	graph = eng.Graph(engine.SortStrategyAlphabetical)

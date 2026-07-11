@@ -161,7 +161,7 @@ Examples:
 					Name:          name,
 					Message:       resolvedMessage,
 					UseWizard:     useWizard,
-					HunkSelector:  hunkSelector,
+					HunkSelector:  split.HunkSelector(hunkSelector),
 					PatchFile:     patchFile,
 					DryRun:        dryRun,
 				}, handler)

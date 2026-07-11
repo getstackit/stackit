@@ -5,7 +5,7 @@ import (
 )
 
 // BatchGetPRTitlesGraphQL fetches PR titles for multiple PR numbers using a single GraphQL query.
-func BatchGetPRTitlesGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, prNumbers []int) (map[int]string, error) {
+func BatchGetPRTitlesGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, prNumbers []int) (map[int]string, error) {
 	if len(prNumbers) == 0 {
 		return make(map[int]string), nil
 	}
@@ -14,8 +14,8 @@ func BatchGetPRTitlesGraphQL(ctx context.Context, runner GitCommandRunner, owner
 
 	query := buildPRTitlesQuery(unique)
 	variables := map[string]any{
-		graphqlVarOwner: owner,
-		graphqlVarRepo:  repo,
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)

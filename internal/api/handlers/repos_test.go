@@ -21,15 +21,13 @@ func TestReposListHandler_ListsRegisteredRepos(t *testing.T) {
 	reg := registry.New()
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "alpha",
-		Owner:       "acme",
-		Name:        "alpha",
+		RepoRef:     registry.RepoRef{Owner: "acme", Name: "alpha"},
 		DisplayName: "Alpha",
 		Engine:      s.Engine,
 	}))
 	require.NoError(t, reg.Add(&registry.RepoEntry{
 		ID:          "beta",
-		Owner:       "acme",
-		Name:        "beta",
+		RepoRef:     registry.RepoRef{Owner: "acme", Name: "beta"},
 		DisplayName: "Beta",
 		Engine:      s.Engine,
 	}))

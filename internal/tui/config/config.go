@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 )
@@ -132,8 +133,8 @@ func TUIAction(repoRoot string) error {
 				return err
 			}
 			currentMethod := cfg.MergeMethod()
-			if newValue != currentMethod {
-				if err := cfg.SetMergeMethod(newValue); err != nil {
+			if newMethod := github.MergeMethod(newValue); newMethod != currentMethod {
+				if err := cfg.SetMergeMethod(newMethod); err != nil {
 					out.Info("Failed to set merge.method: %v", err)
 					continue
 				}

@@ -87,19 +87,19 @@ func TestRemoteOperationContextPreservesExistingDeadline(t *testing.T) {
 
 type fakeGitHubClient struct{}
 
-func (f *fakeGitHubClient) CreatePullRequest(_ context.Context, _, _ string, _ github.CreatePROptions) (*github.PullRequestInfo, error) {
+func (f *fakeGitHubClient) CreatePullRequest(_ context.Context, _ github.CreatePROptions) (*github.PullRequestInfo, error) {
 	return nil, nil
 }
 
-func (f *fakeGitHubClient) UpdatePullRequest(_ context.Context, _, _ string, _ int, _ github.UpdatePROptions) ([]string, error) {
+func (f *fakeGitHubClient) UpdatePullRequest(_ context.Context, _ int, _ github.UpdatePROptions) ([]string, error) {
 	return nil, nil
 }
 
-func (f *fakeGitHubClient) GetPullRequestByBranch(_ context.Context, _, _, _ string) (*github.PullRequestInfo, error) {
+func (f *fakeGitHubClient) GetPullRequestByBranch(_ context.Context, _ string) (*github.PullRequestInfo, error) {
 	return nil, nil
 }
 
-func (f *fakeGitHubClient) GetPullRequest(_ context.Context, _, _ string, _ int) (*github.PullRequestInfo, error) {
+func (f *fakeGitHubClient) GetPullRequest(_ context.Context, _ int) (*github.PullRequestInfo, error) {
 	return nil, nil
 }
 
@@ -115,35 +115,35 @@ func (f *fakeGitHubClient) GetPRChecksStatus(_ context.Context, _ string) (*gith
 	return nil, nil
 }
 
-func (f *fakeGitHubClient) BatchGetPRChecksStatus(_ context.Context, _ []string) (map[string]*github.CheckStatus, error) {
+func (f *fakeGitHubClient) BatchGetPRChecksStatus(_ context.Context, _ []string) (github.ChecksByBranch, error) {
 	return nil, nil
 }
 
-func (f *fakeGitHubClient) BatchGetPRTitles(_ context.Context, _, _ string, _ []int) (map[int]string, error) {
+func (f *fakeGitHubClient) BatchGetPRTitles(_ context.Context, _ []int) (map[int]string, error) {
 	return nil, nil
 }
 
-func (f *fakeGitHubClient) GetOwnerRepo() (string, string) {
-	return "", ""
+func (f *fakeGitHubClient) Repo() github.Repo {
+	return github.Repo{}
 }
 
-func (f *fakeGitHubClient) ClosePullRequest(_ context.Context, _, _ string, _ int) error {
+func (f *fakeGitHubClient) ClosePullRequest(_ context.Context, _ int) error {
 	return nil
 }
 
-func (f *fakeGitHubClient) CreatePRComment(_ context.Context, _, _ string, _ int, _ string) (int64, error) {
+func (f *fakeGitHubClient) CreatePRComment(_ context.Context, _ int, _ string) (int64, error) {
 	return 0, nil
 }
 
-func (f *fakeGitHubClient) UpdatePRComment(_ context.Context, _, _ string, _ int64, _ string) error {
+func (f *fakeGitHubClient) UpdatePRComment(_ context.Context, _ int64, _ string) error {
 	return nil
 }
 
-func (f *fakeGitHubClient) DeletePRComment(_ context.Context, _, _ string, _ int64) error {
+func (f *fakeGitHubClient) DeletePRComment(_ context.Context, _ int64) error {
 	return nil
 }
 
-func (f *fakeGitHubClient) ListPRComments(_ context.Context, _, _ string, _ int) ([]github.PRComment, error) {
+func (f *fakeGitHubClient) ListPRComments(_ context.Context, _ int) ([]github.PRComment, error) {
 	return nil, nil
 }
 

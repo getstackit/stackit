@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/getstackit/stackit/internal/api/githubwebhook"
+	"github.com/getstackit/stackit/internal/api/registry"
 )
 
 // maxWebhookBody caps the request body the webhook receiver will read. GitHub
@@ -18,7 +19,7 @@ const maxWebhookBody = 1 << 20 // 1 MiB
 // the handler takes the narrow interface so handlers stays decoupled from
 // reposync, and so the receiver never blocks on a fetch.
 type RepoSyncTrigger interface {
-	Trigger(owner, name string)
+	Trigger(repo registry.RepoRef)
 }
 
 // WebhookHandler receives GitHub webhook deliveries at
@@ -80,7 +81,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandler) handlePush(w http.ResponseWriter, body []byte, delivery string) {
-	owner, name, ok := githubwebhook.ParsePush(body)
+	repo, ok := githubwebhook.ParsePush(body)
 	if !ok {
 		// Verified but not a recognizable push payload: acknowledge so GitHub
 		// doesn't retry a delivery we can't act on.
@@ -94,7 +95,7 @@ func (h *WebhookHandler) handlePush(w http.ResponseWriter, body []byte, delivery
 	// and ack immediately. The sync outcome is logged downstream (reposync):
 	// "sync: refreshed repo" on success, or a warning if the fetch fails / the
 	// repo isn't managed here.
-	slog.Info("webhook: push accepted, triggering sync", "repo", owner+"/"+name, "delivery", delivery) //nolint:gosec // values emitted as structured slog fields
-	h.trigger.Trigger(owner, name)
+	slog.Info("webhook: push accepted, triggering sync", "repo", repo.String(), "delivery", delivery) //nolint:gosec // values emitted as structured slog fields
+	h.trigger.Trigger(repo)
 	w.WriteHeader(http.StatusAccepted)
 }

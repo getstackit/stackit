@@ -134,7 +134,7 @@ func (g *PRContentGenerator) convertExcluded(excluded []MultiStackExcluded) []pr
 	for i, ex := range excluded {
 		result[i] = pr.ExcludedBranch{
 			Name:   ex.Stack.RootBranch,
-			Reason: ex.Reason,
+			Reason: string(ex.Reason),
 		}
 	}
 	return result

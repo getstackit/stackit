@@ -121,9 +121,9 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 
 	// Log success
 	if opts.CreateCommit {
-		out.Info("Created new commit in %s.", output.Branch(currentBranch, true))
+		out.Info("Created new commit in %s.", output.CurrentBranch(currentBranch))
 	} else {
-		out.Info("Amended commit in %s.", output.Branch(currentBranch, true))
+		out.Info("Amended commit in %s.", output.CurrentBranch(currentBranch))
 	}
 
 	// Restack upstack branches
@@ -158,8 +158,8 @@ func interactiveRebaseAction(ctx *app.Context, _ ModifyOptions) error {
 	}
 
 	out.Info("Starting interactive rebase for %s onto %s...",
-		output.Branch(currentBranch.GetName(), true),
-		output.Branch(parentName, false))
+		output.CurrentBranch(currentBranch.GetName()),
+		output.BranchName(parentName))
 
 	// Run interactive rebase
 	if err := eng.InteractiveRebase(gctx, parentName); err != nil {

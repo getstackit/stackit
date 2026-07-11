@@ -80,16 +80,13 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 
 	// If PR exists and local metadata is missing title or body, fetch from GitHub
 	if prInfo != nil && prInfo.Number() != nil && (metadata.Title == "" || metadata.Body == "") && ctx.GitHub() != nil {
-		repoOwner, repoName := ctx.GitHub().GetOwnerRepo()
-		if repoOwner != "" && repoName != "" {
-			currentPR, err := ctx.GitHub().GetPullRequest(ctx.Context, repoOwner, repoName, *prInfo.Number())
-			if err == nil && currentPR != nil {
-				if metadata.Title == "" {
-					metadata.Title = currentPR.Title
-				}
-				if metadata.Body == "" {
-					metadata.Body = currentPR.Body
-				}
+		currentPR, err := ctx.GitHub().GetPullRequest(ctx.Context, *prInfo.Number())
+		if err == nil && currentPR != nil {
+			if metadata.Title == "" {
+				metadata.Title = currentPR.Title
+			}
+			if metadata.Body == "" {
+				metadata.Body = currentPR.Body
 			}
 		}
 	}
@@ -232,7 +229,7 @@ func getStringValue(prInfo *engine.PrInfo, field string) string {
 	case "Base":
 		return prInfo.Base()
 	case "State":
-		return prInfo.State()
+		return string(prInfo.State())
 	default:
 		return ""
 	}

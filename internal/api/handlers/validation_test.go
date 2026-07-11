@@ -81,7 +81,7 @@ func TestHandlers_RejectMalformedBranchNames(t *testing.T) {
 				t.Parallel()
 
 				reg := registry.New()
-				require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default", Owner: testOwner, Name: testRepo}))
+				require.NoError(t, reg.Add(&registry.RepoEntry{ID: "default", RepoRef: registry.RepoRef{Owner: testOwner, Name: testRepo}}))
 
 				req := withRepo(httptest.NewRequest(vc.method, vc.url, nil))
 				vc.setRequest(req, bad.input)

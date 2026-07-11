@@ -131,7 +131,7 @@ func hookEnv(ctx *app.Context, cmd *cobra.Command, phaseKey string) []string {
 					env = append(env, fmt.Sprintf("STACKIT_PR_NUMBER=%d", *n))
 				}
 				if s := pr.State(); s != "" {
-					env = append(env, "STACKIT_PR_STATE="+s)
+					env = append(env, "STACKIT_PR_STATE="+string(s))
 				}
 				env = append(env, fmt.Sprintf("STACKIT_PR_DRAFT=%t", pr.IsDraft()))
 			}

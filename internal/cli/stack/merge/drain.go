@@ -217,9 +217,8 @@ func runMergeDrain(ctx *app.Context, opts mergeDrainOptions) error {
 		out.Info("Merging PR #%d (%s) [%d/%d]...", bottomPR.PRNumber, bottomPR.BranchName, merged+1, displayTotal)
 
 		// Get the PR's NodeID for merge operations
-		owner, repo := ctx.GitHub().GetOwnerRepo()
 		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-		prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, owner, repo, bottomPR.PRNumber)
+		prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, bottomPR.PRNumber)
 		cancelRemote()
 		if err != nil {
 			return fmt.Errorf("failed to get PR #%d info: %w", bottomPR.PRNumber, err)
@@ -321,13 +320,9 @@ func unlockDrainBranches(ctx *app.Context, branches []mergeAction.BranchMergeInf
 
 func resolveMergeMethod(ctx *app.Context, methodFlag string) (github.MergeMethod, error) {
 	if methodFlag != "" {
-		switch methodFlag {
-		case mergeStrategySquash:
-			return github.MergeMethodSquash, nil
-		case mergeStrategyMerge:
-			return github.MergeMethodMerge, nil
-		case "rebase":
-			return github.MergeMethodRebase, nil
+		switch method := github.MergeMethod(methodFlag); method {
+		case github.MergeMethodSquash, github.MergeMethodMerge, github.MergeMethodRebase:
+			return method, nil
 		default:
 			return "", fmt.Errorf("invalid merge method: %s (must be squash, merge, or rebase)", methodFlag)
 		}

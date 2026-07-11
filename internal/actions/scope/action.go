@@ -47,14 +47,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		switch {
 		case !explicitScope.IsEmpty():
 			if explicitScope.IsNone() {
-				out.Info("Branch %s has scope inheritance DISABLED (explicitly set to '%s').", output.Branch(currentBranch, false), explicitScope.String())
+				out.Info("Branch %s has scope inheritance DISABLED (explicitly set to '%s').", output.BranchName(currentBranch), explicitScope.String())
 			} else {
-				out.Info("Branch %s has explicit scope: %s", output.Branch(currentBranch, false), output.Dim(explicitScope.String()))
+				out.Info("Branch %s has explicit scope: %s", output.BranchName(currentBranch), output.Dim(explicitScope.String()))
 			}
 		case !resolvedScope.IsEmpty():
-			out.Info("Branch %s inherits scope: %s", output.Branch(currentBranch, false), output.Dim(resolvedScope.String()))
+			out.Info("Branch %s inherits scope: %s", output.BranchName(currentBranch), output.Dim(resolvedScope.String()))
 		default:
-			out.Info("Branch %s has no scope set.", output.Branch(currentBranch, false))
+			out.Info("Branch %s has no scope set.", output.BranchName(currentBranch))
 		}
 		return nil
 	}
@@ -67,7 +67,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if err := eng.SetScopeAndMarkForUpdate(ctx.Context, eng.GetBranch(currentBranch), engine.Empty()); err != nil {
 			return fmt.Errorf("failed to unset scope: %w", err)
 		}
-		out.Info("Unset explicit scope for branch %s. It will now inherit from its parent.", output.Branch(currentBranch, false))
+		out.Info("Unset explicit scope for branch %s. It will now inherit from its parent.", output.BranchName(currentBranch))
 		// PR body update flag already set atomically inside SetScopeAndMarkForUpdate.
 		if err := actions.PushMetadataOnly(ctx, eng, []string{currentBranch}); err != nil {
 			out.Debug("Failed to push metadata changes: %v", err)
@@ -94,9 +94,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	if newScope.IsNone() {
-		out.Info("Disabled scope for branch %s (breaks inheritance).", output.Branch(currentBranch, false))
+		out.Info("Disabled scope for branch %s (breaks inheritance).", output.BranchName(currentBranch))
 	} else {
-		out.Info("Set scope for branch %s to: %s", output.Branch(currentBranch, false), output.Dim(opts.Scope))
+		out.Info("Set scope for branch %s to: %s", output.BranchName(currentBranch), output.Dim(opts.Scope))
 
 		// Rename prompt - only if scope changed and branch name contains old scope
 		if oldScope.IsDefined() && !oldScope.Equal(newScope) && strings.Contains(currentBranch, oldScope.String()) {
@@ -106,7 +106,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				if err := eng.RenameBranch(ctx.Context, eng.GetBranch(currentBranch), eng.GetBranch(newName)); err != nil {
 					out.Info("Warning: failed to rename branch: %v", err)
 				} else {
-					out.Info("Renamed branch %s to %s.", output.Branch(currentBranch, false), output.Branch(newName, true))
+					out.Info("Renamed branch %s to %s.", output.BranchName(currentBranch), output.CurrentBranch(newName))
 				}
 			}
 		}

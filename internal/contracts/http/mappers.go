@@ -125,7 +125,7 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 }
 
 // MapStackDetail creates a full StackDetail with all branch info.
-func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap map[string]*github.CheckStatus) StackDetail {
+func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap github.ChecksByBranch) StackDetail {
 	// Derive owner from root branch's PR author
 	var owner string
 	if checksMap != nil {
@@ -163,10 +163,7 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 	branches := make([]BranchResponse, 0, len(nodes))
 	for _, node := range nodes {
 		name := node.Branch.GetName()
-		var checks *github.CheckStatus
-		if checksMap != nil {
-			checks = checksMap[name]
-		}
+		checks := checksMap.Get(name)
 		br := MapBranch(eng, node.Branch, node, checks, remoteStatuses.ForBranch(node.Branch), stats[name], commitsByBranch[name])
 		if isAnchor {
 			// Anchor's direct children become display roots
@@ -188,7 +185,7 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 func mapPR(prInfo *engine.PrInfo) *PRResponse {
 	pr := &PRResponse{
 		Title:   prInfo.Title(),
-		State:   prInfo.State(),
+		State:   string(prInfo.State()),
 		URL:     prInfo.URL(),
 		IsDraft: prInfo.IsDraft(),
 		Base:    prInfo.Base(),
@@ -201,7 +198,7 @@ func mapPR(prInfo *engine.PrInfo) *PRResponse {
 
 func mapCI(checks *github.CheckStatus) *CIResponse {
 	ci := &CIResponse{
-		ReviewDecision: checks.ReviewDecision,
+		ReviewDecision: string(checks.ReviewDecision),
 	}
 
 	switch {
@@ -219,8 +216,8 @@ func mapCI(checks *github.CheckStatus) *CIResponse {
 	for i, check := range checks.Checks {
 		ci.Checks[i] = CheckDetailResponse{
 			Name:       check.Name,
-			Status:     check.Status,
-			Conclusion: check.Conclusion,
+			Status:     string(check.Status),
+			Conclusion: string(check.Conclusion),
 		}
 	}
 
@@ -296,7 +293,7 @@ func computeStackStatus(graph *engine.StackGraph, branchNames []string) string {
 func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []TrunkCommitResponse {
 	// Drop constituent-PR commits already represented by a stack-merge. The
 	// collapse logic is shared with the `stackit log` command via internal/git.
-	collapsed := git.CollapseStackMerges(commits)
+	collapsed := git.RecentCommits(commits).Collapse()
 
 	result := make([]TrunkCommitResponse, 0, len(collapsed))
 	for _, c := range collapsed {
@@ -304,7 +301,7 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []Trun
 		// the `stackit log` command via internal/git.
 		resp := TrunkCommitResponse{
 			SHA:           shortSHA(c.SHA),
-			Message:       git.CollapsedMessage(c, prTitles),
+			Message:       c.DisplayMessage(prTitles),
 			Author:        c.Author,
 			Date:          c.Date.Format(time.RFC3339),
 			PRNumber:      c.PRNumber,
@@ -312,7 +309,7 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []Trun
 			StackSize:     c.StackSize,
 			StackPRs:      append([]int(nil), c.StackPRNumbers...),
 			StackScope:    c.StackScope,
-			StackPRTitles: git.ConstituentPRTitles(c, prTitles),
+			StackPRTitles: c.ConstituentPRTitles(prTitles),
 		}
 
 		if resp.Kind == "" {

@@ -27,12 +27,12 @@ func newCountingGitHubClient(client stackitgithub.Client) *countingGitHubClient 
 	}
 }
 
-func (c *countingGitHubClient) GetPullRequestByBranch(ctx context.Context, owner, repo, branchName string) (*stackitgithub.PullRequestInfo, error) {
+func (c *countingGitHubClient) GetPullRequestByBranch(ctx context.Context, branchName string) (*stackitgithub.PullRequestInfo, error) {
 	c.mu.Lock()
 	c.branchCalls[branchName]++
 	c.mu.Unlock()
 
-	return c.Client.GetPullRequestByBranch(ctx, owner, repo, branchName)
+	return c.Client.GetPullRequestByBranch(ctx, branchName)
 }
 
 func (c *countingGitHubClient) branchCallCount(branchName string) int {

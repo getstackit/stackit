@@ -1,5 +1,7 @@
 package config
 
+import "github.com/getstackit/stackit/internal/github"
+
 // Git config keys for stackit configuration.
 // All keys are prefixed with "stackit." to namespace them within git config.
 const (
@@ -145,15 +147,13 @@ const (
 	NavigationWhenMultiple = "multiple"
 )
 
-// Merge method string constants.
-const (
-	MergeMethodSquash = "squash"
-	MergeMethodMerge  = "merge"
-	MergeMethodRebase = "rebase"
-)
-
-// ValidMergeMethods contains the allowed merge method values.
-var ValidMergeMethods = []string{MergeMethodSquash, MergeMethodMerge, MergeMethodRebase}
+// ValidMergeMethods contains the allowed merge method values (the string
+// names of github.ValidMergeMethods, for config metadata and error messages).
+var ValidMergeMethods = []string{
+	string(github.MergeMethodSquash),
+	string(github.MergeMethodMerge),
+	string(github.MergeMethodRebase),
+}
 
 // ValidHunkSelectors contains the allowed hunk selector values.
 var ValidHunkSelectors = []string{"tui", "git"}

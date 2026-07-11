@@ -56,7 +56,7 @@ func (h *InteractiveUntrackHandler) IsInteractive() bool {
 // PromptConfirmUntrackDescendants prompts user to confirm untracking descendants
 func (h *InteractiveUntrackHandler) PromptConfirmUntrackDescendants(branchName string, descendantCount int) (bool, error) {
 	message := fmt.Sprintf("Branch %s has %d tracked descendants. Untrack all of them?",
-		style.ColorBranchName(branchName, false), descendantCount)
+		style.ColorBranchName(branchName), descendantCount)
 	options := []tui.SelectOption{
 		{Label: "Yes", Value: answerYes},
 		{Label: "No", Value: "no"},

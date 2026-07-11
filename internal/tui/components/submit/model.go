@@ -26,7 +26,7 @@ type Model struct {
 // ProgressUpdateMsg is sent to update the status of a specific branch submission
 type ProgressUpdateMsg struct {
 	BranchName string
-	Status     string
+	Status     Status
 	URL        string
 	Err        error
 }

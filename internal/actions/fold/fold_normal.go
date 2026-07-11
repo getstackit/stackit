@@ -42,8 +42,8 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 	}
 
 	splog.Info("Folded %s into %s.",
-		output.Branch(currentBranch.GetName(), true),
-		output.Branch(parentBranch.GetName(), false))
+		output.CurrentBranch(currentBranch.GetName()),
+		output.BranchName(parentBranch.GetName()))
 
 	// Restack all descendants of the parent
 	if len(descendants) > 0 {

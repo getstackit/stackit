@@ -1,6 +1,8 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"testing"
 	"time"
 
@@ -45,7 +47,7 @@ func TestParseCheckRollup_DeduplicatesByName(t *testing.T) {
 	assert.False(t, status.Pending)
 	assert.Len(t, status.Checks, 1, "should deduplicate to single check")
 	assert.Equal(t, "Test", status.Checks[0].Name)
-	assert.Equal(t, "SUCCESS", status.Checks[0].Conclusion)
+	assert.Equal(t, CheckConclusionSuccess, status.Checks[0].Conclusion)
 }
 
 func TestParseCheckRollup_KeepsLatestByFinishedAt(t *testing.T) {
@@ -82,7 +84,7 @@ func TestParseCheckRollup_KeepsLatestByFinishedAt(t *testing.T) {
 	require.NotNil(t, status)
 	assert.True(t, status.Passing, "should use the check that finished last")
 	require.Len(t, status.Checks, 1)
-	assert.Equal(t, "SUCCESS", status.Checks[0].Conclusion)
+	assert.Equal(t, CheckConclusionSuccess, status.Checks[0].Conclusion)
 	expectedTime, _ := time.Parse(time.RFC3339, "2024-01-01T10:30:00Z")
 	assert.Equal(t, expectedTime, status.Checks[0].FinishedAt)
 }
@@ -134,7 +136,7 @@ func TestParseBranchStatus_ExtractsPRState(t *testing.T) {
 	tests := []struct {
 		name          string
 		prState       string
-		expectedState string
+		expectedState git.PRState
 	}{
 		{"open PR", "OPEN", "OPEN"},
 		{"merged PR", "MERGED", "MERGED"},

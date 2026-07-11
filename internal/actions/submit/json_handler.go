@@ -60,7 +60,7 @@ func (h *JSONHandler) OnEvent(e Event) {
 	switch ev := e.(type) {
 	case BranchPlanEvent:
 		b := h.branch(ev.BranchName)
-		b.Action = ev.Action
+		b.Action = string(ev.Action)
 		b.PR = ev.PRNumber
 		if ev.Skipped {
 			b.Status = string(StatusSkipped)

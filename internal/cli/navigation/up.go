@@ -62,7 +62,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 							ctx.Output.Info("Already at the top of the stack.")
 							return nil
 						}
-						ctx.Output.Info("Stopped at %s (no further children after %d step(s)).", style.ColorBranchName(targetBranch, false), i)
+						ctx.Output.Info("Stopped at %s (no further children after %d step(s)).", style.ColorBranchName(targetBranch), i)
 						break
 					}
 
@@ -88,7 +88,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 								nextBranch = candidates[0]
 							case 0:
 								// --to is not a descendant of any child
-								ctx.Output.Warn("Branch %s is not a descendant of %s.", style.ColorBranchName(toBranch, false), style.ColorBranchName(targetBranch, false))
+								ctx.Output.Warn("Branch %s is not a descendant of %s.", style.ColorBranchName(toBranch), style.ColorBranchName(targetBranch))
 								fallthrough
 							default:
 								// Still ambiguous even with --to (shouldn't happen in a tree)

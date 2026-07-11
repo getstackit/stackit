@@ -93,12 +93,12 @@ func (h *SimpleGetHandler) Complete(summary actions.GetSummary) {
 	}
 
 	// Checkout message
-	h.Output.Info("Checked out %s", style.ColorBranchName(summary.TargetBranch, true))
+	h.Output.Info("Checked out %s", style.ColorCurrentBranch(summary.TargetBranch))
 
 	// Status messages
 	if summary.IsFrozen {
 		h.Output.Info("Branch %s was retrieved in 'frozen' mode (local-only), making it uneditable",
-			style.ColorBranchName(summary.TargetBranch, false))
+			style.ColorBranchName(summary.TargetBranch))
 		h.Output.Info("Use %s to make it editable", style.ColorCyan("st unfreeze"))
 	}
 }
@@ -134,10 +134,10 @@ func (h *SimpleGetHandler) printFetchEvent(event actions.GetEvent) {
 	if event.Type == actions.GetEventCompleted {
 		if event.NewRevision != "" {
 			h.Output.Info("  %s fast-forwarded to %s",
-				style.ColorBranchName(event.Branch, false),
+				style.ColorBranchName(event.Branch),
 				style.ColorDim(event.NewRevision))
 		} else {
-			h.Output.Info("  %s is up to date", style.ColorBranchName(event.Branch, false))
+			h.Output.Info("  %s is up to date", style.ColorBranchName(event.Branch))
 		}
 	}
 }
@@ -151,11 +151,11 @@ func (h *SimpleGetHandler) printSyncEvent(event actions.GetEvent) {
 
 	if event.IsNew {
 		h.Output.Info("  Synced %s%s from remote",
-			style.ColorBranchName(event.Branch, false),
+			style.ColorBranchName(event.Branch),
 			prInfo)
 	} else {
 		h.Output.Info("  Updated %s%s from remote",
-			style.ColorBranchName(event.Branch, false),
+			style.ColorBranchName(event.Branch),
 			prInfo)
 	}
 }
@@ -175,18 +175,18 @@ func (h *SimpleGetHandler) OnRestackBranch(branch string, result handlers.Restac
 
 	if reparented {
 		h.Output.Info("  Reparented %s from %s to %s",
-			style.ColorBranchName(branch, isCurrent),
-			style.ColorBranchName(oldParent, false),
-			style.ColorBranchName(newParent, false))
+			style.ColorBranchNameIf(branch, isCurrent),
+			style.ColorBranchName(oldParent),
+			style.ColorBranchName(newParent))
 	}
 
 	prInfo := common.FormatPRInfo(prNumber)
 
 	switch result {
 	case handlers.RestackDone:
-		msg := fmt.Sprintf("Restacked %s%s", style.ColorBranchName(branch, isCurrent), prInfo)
+		msg := fmt.Sprintf("Restacked %s%s", style.ColorBranchNameIf(branch, isCurrent), prInfo)
 		if parent != "" {
-			msg += fmt.Sprintf(" on %s", style.ColorBranchName(parent, false))
+			msg += fmt.Sprintf(" on %s", style.ColorBranchName(parent))
 		}
 		msg += fmt.Sprintf(" -> %s", style.ColorDim(newRev))
 		h.Output.Info("  %s", msg)
@@ -201,14 +201,14 @@ func (h *SimpleGetHandler) OnRestackBranch(branch string, result handlers.Restac
 			reason = common.ReasonFrozen
 		}
 
-		msg := fmt.Sprintf("%s%s %s", style.ColorBranchName(branch, isCurrent), prInfo, reason)
+		msg := fmt.Sprintf("%s%s %s", style.ColorBranchNameIf(branch, isCurrent), prInfo, reason)
 		if reason == common.ReasonNoRestackNeeded {
-			msg = fmt.Sprintf("%s%s up to date", style.ColorBranchName(branch, isCurrent), prInfo)
+			msg = fmt.Sprintf("%s%s up to date", style.ColorBranchNameIf(branch, isCurrent), prInfo)
 		}
 		h.Output.Info("  %s", msg)
 	case handlers.RestackConflict:
 		h.Output.Warn("  Skipped %s%s (conflict)",
-			style.ColorBranchName(branch, isCurrent),
+			style.ColorBranchNameIf(branch, isCurrent),
 			prInfo)
 	}
 }

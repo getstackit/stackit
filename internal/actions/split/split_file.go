@@ -113,7 +113,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Get the diff between parent and branchToSplit (raw output for parsing)
-	diffOutput, err := eng.GetDiffBetween(ctx, parentBranchName, branchToSplit.GetName())
+	diffOutput, err := eng.GetDiffBetween(ctx, git.RevRange{Base: parentBranchName, Head: branchToSplit.GetName()})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff: %w", err)
 	}
@@ -636,7 +636,7 @@ func promptForFiles(ctx context.Context, branchToSplit engine.Branch, eng splitB
 	}
 
 	// Get list of changed files
-	changedFiles, err := eng.GetChangedFiles(ctx, mergeBase, branchToSplit.GetName())
+	changedFiles, err := eng.GetChangedFiles(ctx, git.RevRange{Base: mergeBase, Head: branchToSplit.GetName()})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get changed files: %w", err)
 	}
@@ -650,17 +650,17 @@ func promptForFiles(ctx context.Context, branchToSplit engine.Branch, eng splitB
 	}
 
 	// Show instructions based on mode
-	splog.Info("Splitting %s by file.", output.Branch(branchToSplit.GetName(), true))
+	splog.Info("Splitting %s by file.", output.CurrentBranch(branchToSplit.GetName()))
 	switch {
 	case asSibling:
 		splog.Info("Select the files to extract to a new sibling branch.")
 		splog.Info("The original branch will remain unchanged.")
 	case direction == DirectionAbove:
 		splog.Info("Select the files to extract to a new child branch.")
-		splog.Info("The remaining files will stay on %s.", output.Branch(branchToSplit.GetName(), true))
+		splog.Info("The remaining files will stay on %s.", output.CurrentBranch(branchToSplit.GetName()))
 	default:
 		splog.Info("Select the files to extract to a new parent branch.")
-		splog.Info("The remaining files will stay on %s.", output.Branch(branchToSplit.GetName(), true))
+		splog.Info("The remaining files will stay on %s.", output.CurrentBranch(branchToSplit.GetName()))
 	}
 	splog.Info("")
 

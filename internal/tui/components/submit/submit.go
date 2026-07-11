@@ -4,20 +4,25 @@ package submit
 import (
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Item represents a branch being submitted
 type Item struct {
 	BranchName string
-	Action     string // "create" or "update"
+	Action     engine.SubmitAction
 	PRNumber   *int
-	Status     string // "pending", "submitting", "done", "error"
+	Status     Status
 	IsSkipped  bool
 	SkipReason string
 	URL        string
 	Error      error
 }
+
+// Status is the submission progress state of a branch. It mirrors the
+// actions-layer submit.BranchStatus values; adapters convert at the boundary.
+type Status string
 
 // Styles defines the visual styling for the submit component.
 // It uses the shared style definitions from internal/tui/style for consistency.
@@ -45,19 +50,19 @@ func DefaultStyles() Styles {
 
 const (
 	// StatusSubmitting indicates the branch is currently being submitted
-	StatusSubmitting = "submitting"
+	StatusSubmitting Status = "submitting"
 	// StatusSyncing indicates the branch metadata is being synced
-	StatusSyncing = "syncing"
+	StatusSyncing Status = "syncing"
 	// StatusDone indicates the branch submission was successful
-	StatusDone = "done"
+	StatusDone Status = "done"
 	// StatusError indicates the branch submission failed
-	StatusError = "error"
+	StatusError Status = "error"
 	// StatusPending indicates the branch is waiting to be submitted
-	StatusPending = "pending"
+	StatusPending Status = "pending"
 	// SkipReasonNoChanges indicates the branch was skipped because it has no changes
 	SkipReasonNoChanges = "no changes"
 	// ActionUpdate indicates the branch will update an existing PR
-	ActionUpdate = "update"
+	ActionUpdate = engine.SubmitActionUpdate
 	// ActionCreate indicates the branch will create a new PR
-	ActionCreate = "create"
+	ActionCreate = engine.SubmitActionCreate
 )

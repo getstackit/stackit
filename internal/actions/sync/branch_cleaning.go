@@ -14,7 +14,7 @@ import (
 )
 
 // cleanBranches handles cleaning merged/closed branches
-func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) (*actions.CleanBranchesResult, error) {
+func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) (*actions.CleanBranchesResult, error) {
 	// Only emit phase start if we have branches that might need cleaning
 	allBranches := ctx.Engine.AllBranches()
 	hasBranchesToCheck := false
@@ -50,7 +50,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool
 
 	// Filter out branches in dirty stacks - don't delete them while worktree has uncommitted changes
 	for name := range plan.BranchesToDelete {
-		if isInDirtyStack(ctx, name, dirtyAnchors) {
+		if dirtyAnchors.includes(ctx, name) {
 			delete(plan.BranchesToDelete, name)
 		}
 	}
@@ -93,7 +93,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool
 				// Utility branch with no unpushed local changes - auto-confirm without prompting.
 				branchesToDelete[name] = true
 				ctx.Output.Info("Auto-deleting utility branch %s (%s)",
-					output.Branch(name, false), reason)
+					output.BranchName(name), reason)
 			} else {
 				// Regular branch - add to prompt list
 				branchesToPrompt[name] = reason
@@ -145,13 +145,13 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors map[string]bool
 	// Warn about branches that couldn't be deleted from worktree
 	for _, name := range result.SkippedInWorktree {
 		ctx.Output.Warn("Cannot delete %s from worktree. Run sync from the main repository to clean up.",
-			output.Branch(name, true))
+			output.CurrentBranch(name))
 	}
 
 	// Warn about branches skipped due to unpushed changes
 	for _, name := range result.SkippedUnpushed {
 		ctx.Output.Warn("Skipped %s — has unpushed local changes. Push first or delete manually with 'git branch -D %s'.",
-			output.Branch(name, false), name)
+			output.BranchName(name), name)
 	}
 
 	return result, nil

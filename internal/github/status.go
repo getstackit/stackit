@@ -2,6 +2,8 @@
 package github
 
 import (
+	"github.com/getstackit/stackit/internal/git"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,18 +14,11 @@ import (
 
 // Status check constants
 const (
-	// GitHub check conclusion and status constants
-	checkConclusionFailure        = "FAILURE"
-	checkConclusionCanceled       = "CANCELED"
-	checkConclusionTimedOut       = "TIMED_OUT"
-	checkConclusionActionRequired = "ACTION_REQUIRED"
-	checkStateFailure             = "FAILURE"
-	checkStateError               = "ERROR"
-	checkStatePending             = "PENDING"
-	checkStatusInProgress         = "IN_PROGRESS"
-	checkStatusCompleted          = "COMPLETED"
-	checkConclusionSuccess        = "SUCCESS"
-	checkTypeCheckRun             = "CheckRun"
+	// Commit-status (StatusContext) states, distinct from check-run conclusions.
+	checkStateFailure = "FAILURE"
+	checkStateError   = "ERROR"
+	checkStatePending = "PENDING"
+	checkTypeCheckRun = "CheckRun"
 
 	// Stackit check names - these checks are excluded from CI status evaluation
 	// because they are part of stackit's own workflow and expected to fail
@@ -32,15 +27,27 @@ const (
 	stackitStackOrderCheckName = "Check Stack Order"
 )
 
-// Review decision constants
+// ReviewDecision is a GitHub PR review decision.
+type ReviewDecision string
+
 const (
-	ReviewDecisionApproved         = "APPROVED"
-	ReviewDecisionChangesRequested = "CHANGES_REQUESTED"
-	ReviewDecisionReviewRequired   = "REVIEW_REQUIRED"
+	ReviewDecisionApproved         ReviewDecision = "APPROVED"
+	ReviewDecisionChangesRequested ReviewDecision = "CHANGES_REQUESTED"
+	ReviewDecisionReviewRequired   ReviewDecision = "REVIEW_REQUIRED"
 )
 
 // graphQLAliasRegex matches characters not valid in GraphQL alias identifiers
 var graphQLAliasRegex = regexp.MustCompile(`[^a-zA-Z0-9]`)
+
+// ChecksByBranch maps branch names to their PR check status. Branches without
+// a PR (or whose status could not be fetched) are absent.
+type ChecksByBranch map[string]*CheckStatus
+
+// Get returns the check status for a branch, or nil if unknown.
+// Safe to call on a nil map.
+func (c ChecksByBranch) Get(branch string) *CheckStatus {
+	return c[branch]
+}
 
 // IsApproved returns true if the review decision indicates approval
 func (s *CheckStatus) IsApproved() bool {
@@ -64,9 +71,9 @@ func (s *CheckStatus) IsReady() bool {
 
 // BatchGetPRChecksStatusGraphQL returns the check status for multiple branches using a single GraphQL query.
 // This function fetches both CI check status and PR review decisions in a single request for efficiency.
-func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner, owner, repo string, branchNames []string) (map[string]*CheckStatus, error) {
+func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, branchNames []string) (ChecksByBranch, error) {
 	if len(branchNames) == 0 {
-		return make(map[string]*CheckStatus), nil
+		return make(ChecksByBranch), nil
 	}
 
 	// Sanitize branch names for GraphQL aliases
@@ -92,8 +99,8 @@ func BatchGetPRChecksStatusGraphQL(ctx context.Context, runner GitCommandRunner,
 	query := buildPRStatusQuery(aliasMap)
 
 	variables := map[string]any{
-		graphqlVarOwner: owner,
-		graphqlVarRepo:  repo,
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
 	}
 
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
@@ -151,7 +158,7 @@ func buildPRStatusQuery(aliasMap map[string]string) string {
 }
 
 // parsePRStatusResponse parses the GraphQL response for PR status queries
-func parsePRStatusResponse(body []byte, aliasToBranch map[string]string) (map[string]*CheckStatus, error) {
+func parsePRStatusResponse(body []byte, aliasToBranch map[string]string) (ChecksByBranch, error) {
 	var graphqlResponse struct {
 		Data map[string]any `json:"data"`
 	}
@@ -164,7 +171,7 @@ func parsePRStatusResponse(body []byte, aliasToBranch map[string]string) (map[st
 		return nil, fmt.Errorf("invalid GraphQL response format: missing repository")
 	}
 
-	results := make(map[string]*CheckStatus)
+	results := make(ChecksByBranch)
 	for alias, data := range repository {
 		if data == nil {
 			continue
@@ -201,9 +208,9 @@ func parseBranchStatus(data any) *CheckStatus {
 	}
 
 	// Extract PR state
-	var prState string
+	var prState git.PRState
 	if s, ok := prNode["state"].(string); ok {
-		prState = s
+		prState = git.PRState(s)
 	}
 
 	// Extract author
@@ -215,9 +222,9 @@ func parseBranchStatus(data any) *CheckStatus {
 	}
 
 	// Extract review decision
-	var reviewDecision string
+	var reviewDecision ReviewDecision
 	if rd, ok := prNode["reviewDecision"].(string); ok {
-		reviewDecision = rd
+		reviewDecision = ReviewDecision(rd)
 	}
 
 	// Navigate to commit's statusCheckRollup
@@ -252,7 +259,7 @@ func parseBranchStatus(data any) *CheckStatus {
 }
 
 // parseCheckRollup parses the statusCheckRollup data from the GraphQL response
-func parseCheckRollup(rollup map[string]any, reviewDecision, author string) *CheckStatus {
+func parseCheckRollup(rollup map[string]any, reviewDecision ReviewDecision, author string) *CheckStatus {
 	// First pass: collect all checks and deduplicate by name, keeping the most recent
 	checksByName := make(map[string]*CheckDetail)
 
@@ -291,10 +298,10 @@ func parseCheckRollup(rollup map[string]any, reviewDecision, author string) *Che
 	checks := make([]CheckDetail, 0, len(checksByName))
 
 	for _, detail := range checksByName {
-		if detail.Status == "QUEUED" || detail.Status == checkStatusInProgress {
+		if detail.Status == CheckRunStatusQueued || detail.Status == CheckRunStatusInProgress {
 			hasPending = true
 		}
-		if detail.Conclusion == checkConclusionFailure || detail.Conclusion == checkConclusionCanceled || detail.Conclusion == checkConclusionTimedOut || detail.Conclusion == checkConclusionActionRequired {
+		if detail.Conclusion == CheckConclusionFailure || detail.Conclusion == CheckConclusionCanceled || detail.Conclusion == CheckConclusionTimedOut || detail.Conclusion == CheckConclusionActionRequired {
 			hasFailing = true
 		}
 		checks = append(checks, *detail)
@@ -323,10 +330,10 @@ func parseCheckNode(n map[string]any) *CheckDetail {
 			detail.Name = name
 		}
 		if status, ok := n["status"].(string); ok {
-			detail.Status = strings.ToUpper(status)
+			detail.Status = CheckRunStatus(strings.ToUpper(status))
 		}
 		if conclusion, ok := n["conclusion"].(string); ok {
-			detail.Conclusion = strings.ToUpper(conclusion)
+			detail.Conclusion = CheckConclusion(strings.ToUpper(conclusion))
 		}
 		if startedAt, ok := n["startedAt"].(string); ok {
 			t, _ := time.Parse(time.RFC3339, startedAt)
@@ -340,16 +347,16 @@ func parseCheckNode(n map[string]any) *CheckDetail {
 		if context, ok := n["context"].(string); ok {
 			detail.Name = context
 		}
-		detail.Status = checkStatusCompleted
+		detail.Status = CheckRunStatusCompleted
 		if state, ok := n["state"].(string); ok {
 			state = strings.ToUpper(state)
 			switch state {
 			case checkStatePending:
-				detail.Status = checkStatusInProgress
+				detail.Status = CheckRunStatusInProgress
 			case checkStateFailure, checkStateError:
-				detail.Conclusion = checkConclusionFailure
-			case checkConclusionSuccess:
-				detail.Conclusion = checkConclusionSuccess
+				detail.Conclusion = CheckConclusionFailure
+			case string(CheckConclusionSuccess):
+				detail.Conclusion = CheckConclusionSuccess
 			}
 		}
 		if createdAt, ok := n["createdAt"].(string); ok {

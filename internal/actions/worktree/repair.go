@@ -30,7 +30,7 @@ func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
 		return nil, err
 	}
 	if opts.NameOrBranch != "" && len(listResult.Worktrees) == 0 {
-		return nil, fmt.Errorf("no worktree found for %s", output.Branch(opts.NameOrBranch, false))
+		return nil, fmt.Errorf("no worktree found for %s", output.BranchName(opts.NameOrBranch))
 	}
 
 	result := &RepairResult{
@@ -95,12 +95,12 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 		}
 
 		if entry.CurrentBranch == "" {
-			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because the worktree has no branch checked out", output.Branch(entry.displayName(), false))
+			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because the worktree has no branch checked out", output.BranchName(entry.displayName()))
 		}
 
 		currentBranch := ctx.Engine.GetBranch(entry.CurrentBranch)
 		if !currentBranch.IsTracked() {
-			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because %s is not tracked by stackit", output.Branch(entry.displayName(), false), output.Branch(entry.CurrentBranch, false))
+			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because %s is not tracked by stackit", output.BranchName(entry.displayName()), output.BranchName(entry.CurrentBranch))
 		}
 
 		stackRootName := ctx.Engine.GetStackRootForBranch(currentBranch)
@@ -109,7 +109,7 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 		}
 		stackRoot := ctx.Engine.GetBranch(stackRootName)
 		if !stackRoot.IsTracked() {
-			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because no tracked stack root could be determined", output.Branch(entry.displayName(), false))
+			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because no tracked stack root could be determined", output.BranchName(entry.displayName()))
 		}
 
 		if ctx.Engine.IsWorktreeAnchor(stackRoot) {
@@ -118,14 +118,14 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 				return RepairEntry{}, fmt.Errorf("failed to inspect anchor registration: %w", err)
 			}
 			if existing != nil && existing.Path != wtInfo.Path {
-				return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because anchor %s is already registered to %s", output.Branch(entry.displayName(), false), output.Branch(stackRootName, false), existing.Path)
+				return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because anchor %s is already registered to %s", output.BranchName(entry.displayName()), output.BranchName(stackRootName), existing.Path)
 			}
 			if err := ctx.Engine.RegisterWorktreeWithName(stackRootName, wtInfo.Path, wtInfo.Name); err != nil {
 				return RepairEntry{}, fmt.Errorf("failed to register worktree under anchor %s: %w", stackRootName, err)
 			}
 			if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
 				_ = ctx.Engine.UnregisterWorktree(ctx.Context, stackRootName)
-				return RepairEntry{}, fmt.Errorf("failed to remove stale registration %s: %w", output.Branch(wtInfo.AnchorBranch, false), err)
+				return RepairEntry{}, fmt.Errorf("failed to remove stale registration %s: %w", output.BranchName(wtInfo.AnchorBranch), err)
 			}
 			return RepairEntry{
 				Name:         entry.displayName(),
@@ -151,7 +151,7 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, rootBranchName string) (string, error) {
 	rootBranch := ctx.Engine.GetBranch(rootBranchName)
 	if !rootBranch.IsTracked() {
-		return "", fmt.Errorf("branch %s is not tracked by stackit", output.Branch(rootBranchName, false))
+		return "", fmt.Errorf("branch %s is not tracked by stackit", output.BranchName(rootBranchName))
 	}
 
 	originalParent := ctx.Engine.Trunk().GetName()
@@ -169,16 +169,16 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 		return "", err
 	}
 	if ctx.Engine.BranchNames().Contains(anchorBranchName) {
-		return "", fmt.Errorf("generated anchor branch %s already exists", output.Branch(anchorBranchName, false))
+		return "", fmt.Errorf("generated anchor branch %s already exists", output.BranchName(anchorBranchName))
 	}
 
 	parentBranch := ctx.Engine.GetBranch(originalParent)
 	parentSHA, err := parentBranch.GetRevision()
 	if err != nil {
-		return "", fmt.Errorf("failed to get parent revision for %s: %w", output.Branch(originalParent, false), err)
+		return "", fmt.Errorf("failed to get parent revision for %s: %w", output.BranchName(originalParent), err)
 	}
 	if err := ctx.Engine.CreateBranch(ctx.Context, anchorBranchName, parentSHA); err != nil {
-		return "", fmt.Errorf("failed to create anchor branch %s: %w", output.Branch(anchorBranchName, false), err)
+		return "", fmt.Errorf("failed to create anchor branch %s: %w", output.BranchName(anchorBranchName), err)
 	}
 
 	anchorBranch := ctx.Engine.GetBranch(anchorBranchName)
@@ -199,31 +199,31 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 
 	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, parentBranch, engine.DivergenceRecompute); err != nil {
 		cleanup()
-		return "", fmt.Errorf("failed to set parent on anchor branch %s: %w", output.Branch(anchorBranchName, false), err)
+		return "", fmt.Errorf("failed to set parent on anchor branch %s: %w", output.BranchName(anchorBranchName), err)
 	}
 	if err := ctx.Engine.SetBranchType(anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
 		cleanup()
-		return "", fmt.Errorf("failed to mark %s as a worktree anchor: %w", output.Branch(anchorBranchName, false), err)
+		return "", fmt.Errorf("failed to mark %s as a worktree anchor: %w", output.BranchName(anchorBranchName), err)
 	}
 	if scope != "" {
 		if err := ctx.Engine.SetScope(ctx.Context, anchorBranch, engine.NewScope(scope)); err != nil {
 			cleanup()
-			return "", fmt.Errorf("failed to set scope on anchor branch %s: %w", output.Branch(anchorBranchName, false), err)
+			return "", fmt.Errorf("failed to set scope on anchor branch %s: %w", output.BranchName(anchorBranchName), err)
 		}
 	}
 	if err := ctx.Engine.ReparentBranch(ctx.Context, ctx.Engine.GetBranch(rootBranchName), anchorBranch); err != nil {
 		cleanup()
-		return "", fmt.Errorf("failed to reparent %s under anchor %s: %w", output.Branch(rootBranchName, false), output.Branch(anchorBranchName, false), err)
+		return "", fmt.Errorf("failed to reparent %s under anchor %s: %w", output.BranchName(rootBranchName), output.BranchName(anchorBranchName), err)
 	}
 	rootReparented = true
 	if err := ctx.Engine.RegisterWorktreeWithName(anchorBranchName, wtInfo.Path, wtInfo.Name); err != nil {
 		cleanup()
-		return "", fmt.Errorf("failed to register worktree under anchor %s: %w", output.Branch(anchorBranchName, false), err)
+		return "", fmt.Errorf("failed to register worktree under anchor %s: %w", output.BranchName(anchorBranchName), err)
 	}
 	registered = true
 	if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
 		cleanup()
-		return "", fmt.Errorf("failed to remove legacy registration %s: %w", output.Branch(wtInfo.AnchorBranch, false), err)
+		return "", fmt.Errorf("failed to remove legacy registration %s: %w", output.BranchName(wtInfo.AnchorBranch), err)
 	}
 	return anchorBranchName, nil
 }

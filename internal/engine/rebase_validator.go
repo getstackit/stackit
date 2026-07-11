@@ -434,7 +434,7 @@ func (e *engineImpl) tryConflictFreeReplay(
 	spec RebaseSpec,
 	resolvedParent string,
 ) (string, bool) {
-	commits, err := e.git.GetCommitRangeSHAs(ctx, spec.OldUpstream, spec.Branch)
+	commits, err := e.git.GetCommitRangeSHAs(ctx, git.RevRange{Base: spec.OldUpstream, Head: spec.Branch})
 	if err != nil || len(commits) == 0 {
 		return "", false
 	}
@@ -443,13 +443,13 @@ func (e *engineImpl) tryConflictFreeReplay(
 	}
 
 	// Get the files changed by the parent's new commits (what we're rebasing onto).
-	parentFiles, err := e.git.GetChangedFiles(ctx, spec.OldUpstream, resolvedParent)
+	parentFiles, err := e.git.GetChangedFiles(ctx, git.RevRange{Base: spec.OldUpstream, Head: resolvedParent})
 	if err != nil {
 		return "", false
 	}
 
 	// Get the files changed by our branch.
-	branchFiles, err := e.git.GetChangedFiles(ctx, spec.OldUpstream, spec.Branch)
+	branchFiles, err := e.git.GetChangedFiles(ctx, git.RevRange{Base: spec.OldUpstream, Head: spec.Branch})
 	if err != nil {
 		return "", false
 	}

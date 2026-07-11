@@ -83,12 +83,7 @@ func newStyles() styles {
 	}
 }
 
-const (
-	dotSymbol        = "●"
-	statusCompleted  = "COMPLETED"
-	statusInProgress = "IN_PROGRESS"
-	statusQueued     = "QUEUED"
-)
+const dotSymbol = "●"
 
 // Message types for the merge component
 
@@ -509,20 +504,20 @@ func (m *Model) renderCheckIndicators(checks []github.CheckDetail) string {
 		var symbol string
 		var s lipgloss.Style
 		switch check.Status {
-		case statusCompleted:
+		case github.CheckRunStatusCompleted:
 			symbol = dotSymbol
 			switch check.Conclusion {
-			case "SUCCESS":
+			case github.CheckConclusionSuccess:
 				s = m.styles.doneStyle
-			case "NEUTRAL", "SKIPPED":
+			case github.CheckConclusionNeutral, github.CheckConclusionSkipped:
 				s = m.styles.dimStyle
 			default:
 				s = m.styles.errorStyle
 			}
-		case statusQueued:
+		case github.CheckRunStatusQueued:
 			symbol = "○"
 			s = m.styles.dimStyle
-		case statusInProgress:
+		case github.CheckRunStatusInProgress:
 			symbol = dotSymbol
 			s = m.styles.waitStyle
 		default:
@@ -567,11 +562,11 @@ func (m *Model) renderDetailedChecks(checks []github.CheckDetail) string {
 	b.WriteString("    └ ")
 	var activeChecks []string
 	for _, check := range checks {
-		if check.Status == statusInProgress || (check.Status == statusCompleted && check.Conclusion != "SUCCESS" && check.Conclusion != "NEUTRAL" && check.Conclusion != "SKIPPED") {
+		if check.Status == github.CheckRunStatusInProgress || (check.Status == github.CheckRunStatusCompleted && check.Conclusion != github.CheckConclusionSuccess && check.Conclusion != github.CheckConclusionNeutral && check.Conclusion != github.CheckConclusionSkipped) {
 			status := "running"
 			s := m.styles.waitStyle
-			if check.Status == statusCompleted {
-				status = strings.ToLower(check.Conclusion)
+			if check.Status == github.CheckRunStatusCompleted {
+				status = strings.ToLower(string(check.Conclusion))
 				s = m.styles.errorStyle
 			}
 			activeChecks = append(activeChecks, fmt.Sprintf("%s (%s)", check.Name, s.Render(status)))

@@ -41,15 +41,15 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 	}
 
 	// Batch fetch PR/CI status from GitHub
-	var statusMap map[string]*github.CheckStatus
+	var statusMap github.ChecksByBranch
 	if a.client != nil {
 		statusMap, err = a.client.BatchGetPRChecksStatus(ctx, allBranches)
 		if err != nil {
 			// Non-fatal: continue with analysis but without GitHub status
-			statusMap = make(map[string]*github.CheckStatus)
+			statusMap = make(github.ChecksByBranch)
 		}
 	} else {
-		statusMap = make(map[string]*github.CheckStatus)
+		statusMap = make(github.ChecksByBranch)
 	}
 
 	// Analyze each stack
@@ -81,16 +81,16 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 // This can be used when you already have a stack and status information.
 func (a *Analyzer) AnalyzeStack(ctx context.Context, stack merge.MultiStackInfo) (*Stack, error) {
 	// Fetch PR/CI status for this stack's branches
-	var statusMap map[string]*github.CheckStatus
+	var statusMap github.ChecksByBranch
 	var err error
 	if a.client != nil {
 		statusMap, err = a.client.BatchGetPRChecksStatus(ctx, stack.AllBranches)
 		if err != nil {
 			// Non-fatal: continue without GitHub status
-			statusMap = make(map[string]*github.CheckStatus)
+			statusMap = make(github.ChecksByBranch)
 		}
 	} else {
-		statusMap = make(map[string]*github.CheckStatus)
+		statusMap = make(github.ChecksByBranch)
 	}
 
 	analyzed := a.analyzeStack(ctx, stack, statusMap)
@@ -98,7 +98,7 @@ func (a *Analyzer) AnalyzeStack(ctx context.Context, stack merge.MultiStackInfo)
 }
 
 // analyzeStack performs the actual analysis of a single stack.
-func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo, statusMap map[string]*github.CheckStatus) Stack {
+func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo, statusMap github.ChecksByBranch) Stack {
 	result := Stack{
 		Stack:       stack,
 		ApprovalOK:  true,
@@ -137,7 +137,7 @@ func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo,
 	for _, branchName := range stack.AllBranches {
 		// Extract author from first branch with PR status
 		if result.Author == "" {
-			if status, ok := statusMap[branchName]; ok && status != nil && status.Author != "" {
+			if status := statusMap.Get(branchName); status != nil && status.Author != "" {
 				result.Author = status.Author
 			}
 		}
@@ -171,7 +171,7 @@ func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo,
 // analyzeBranch analyzes a single branch and returns blocking info if any.
 // remoteStatuses lazily reads remote status once for branches that can reach
 // the not-pushed check.
-func (a *Analyzer) analyzeBranch(branchName string, statusMap map[string]*github.CheckStatus, remoteStatuses *branchRemoteStatusProvider) *BlockingPR {
+func (a *Analyzer) analyzeBranch(branchName string, statusMap github.ChecksByBranch, remoteStatuses *branchRemoteStatusProvider) *BlockingPR {
 	// Get PR info from engine metadata
 	branch := a.eng.GetBranch(branchName)
 	prInfo, err := branch.GetPrInfo()
@@ -208,8 +208,8 @@ func (a *Analyzer) analyzeBranch(branchName string, statusMap map[string]*github
 	}
 
 	// Check GitHub status
-	status, hasStatus := statusMap[branchName]
-	if !hasStatus || status == nil {
+	status := statusMap.Get(branchName)
+	if status == nil {
 		// No status means we can't determine shippability from GitHub
 		// This could be because there's no open PR or the branch isn't tracked
 		return nil

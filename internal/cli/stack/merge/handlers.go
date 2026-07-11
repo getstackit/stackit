@@ -295,7 +295,7 @@ func (h *InteractiveMergeEventHandler) PromptStacks(availableStacks []mergeActio
 		// Add unselected stacks
 		for _, stack := range availableStacks {
 			if !selectedSet[stack.RootBranch] {
-				label := "  " + mergeAction.FormatStackLabel(stack)
+				label := "  " + stack.Label()
 				options = append(options, tui.SelectOption{Label: label, Value: stack.RootBranch})
 			}
 		}

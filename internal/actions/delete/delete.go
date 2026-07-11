@@ -133,7 +133,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	for _, name := range branchNames {
 		handler.OnBranch(name, StatusDeleted, nil)
-		out.Info("Deleted branch %s", output.Branch(name, false))
+		out.Info("Deleted branch %s", output.BranchName(name))
 	}
 
 	// Identify stack roots that were deleted (branches whose parent is trunk)
@@ -269,7 +269,7 @@ func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []stri
 			mainRepoDir = wt.MainRepoDir
 		}
 
-		ctx.Output.Info("Removing worktree for deleted stack %s", output.Branch(stackRoot, false))
+		ctx.Output.Info("Removing worktree for deleted stack %s", output.BranchName(stackRoot))
 
 		// Remove worktree directory if it exists
 		if _, statErr := os.Stat(wt.Path); statErr == nil {

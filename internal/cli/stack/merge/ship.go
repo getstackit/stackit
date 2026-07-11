@@ -34,7 +34,7 @@ func NewShipCmd(postMergeHandler PostMergeHandler) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     mergeStrategyShip,
-		Aliases: []string{mergeStrategySquash},
+		Aliases: []string{"squash"},
 		Short:   "Consolidate all stack branches into a single PR and merge atomically",
 		Long: `Consolidate all branches in the stack into a single PR for atomic merging.
 
@@ -389,9 +389,8 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 
 // getPRNodeID fetches the NodeID for a PR by number
 func getPRNodeID(ctx *app.Context, prNumber int) (string, error) {
-	owner, repo := ctx.GitHub().GetOwnerRepo()
 	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, owner, repo, prNumber)
+	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, prNumber)
 	cancelRemote()
 	if err != nil {
 		return "", err

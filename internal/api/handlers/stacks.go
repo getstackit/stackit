@@ -80,7 +80,7 @@ func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, entry *
 
 	graph := entry.Engine.Graph(engine.SortStrategySmart)
 
-	var checksMap map[string]*github.CheckStatus
+	var checksMap github.ChecksByBranch
 	if entry.GitHub != nil {
 		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), found.AllBranches)
 	}

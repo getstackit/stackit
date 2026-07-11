@@ -55,7 +55,7 @@ type BranchStatus interface {
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
 	// SHAs in one batched rev-parse instead of a diff per branch.
-	BatchIsBranchEmpty(branchNames []string) map[string]bool
+	BatchIsBranchEmpty(branchNames []string) BranchNameSet
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription
@@ -80,7 +80,7 @@ type BranchStatus interface {
 	// TrunkRemoteState reports how the local trunk relates to its
 	// remote-tracking branch using only local refs (no network).
 	TrunkRemoteState(ctx context.Context) TrunkRemoteState
-	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
+	GetMergedBranches(ctx context.Context, target string) (BranchNameSet, error)
 }
 
 // BranchInfo provides commit and diff metadata
@@ -94,10 +94,10 @@ type BranchInfo interface {
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetRevisionForName(branchName string) (string, error)
-	GetRevisions(branchNames []string) (map[string]string, []error)
+	GetRevisions(branchNames []string) (RevisionMap, []error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
-	GetTrunkCommitsInRange(from, to string) ([]git.RecentCommit, error)
+	GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
 	// GetDivergencePoint returns the divergence point of a branch from its parent.
 	// Returns the ParentBranchRevision from metadata if valid, otherwise the parent's current revision.
@@ -120,13 +120,13 @@ type BranchInfo interface {
 // GitDiffer handles diff and merge operations
 type GitDiffer interface {
 	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
-	GetChangedFiles(ctx context.Context, base, head string) ([]string, error)
+	GetChangedFiles(ctx context.Context, rr git.RevRange) ([]string, error)
 	IsDiffEmpty(ctx context.Context, base, head string) (bool, error)
 	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
-	ShowCommits(ctx context.Context, base, head string, patch, stat bool) (string, error)
+	ShowCommits(ctx context.Context, rr git.RevRange, patch, stat bool) (string, error)
 	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
 	// GetDiffBetween returns raw diff between two refs, suitable for parsing into hunks.
-	GetDiffBetween(ctx context.Context, base, head string, files ...string) (string, error)
+	GetDiffBetween(ctx context.Context, rr git.RevRange, files ...string) (string, error)
 }
 
 // WorkingTree handles worktree and staging area operations
@@ -348,7 +348,7 @@ type MetadataInspector interface {
 	ReadMetadataRaw(branchName string) (*git.Meta, error)
 	// BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 	// returning per-branch errors so callers can detect corrupted refs.
-	BatchReadMetadataRaw(branchNames []string) (map[string]*git.Meta, map[string]error)
+	BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error)
 	// DeleteMetadataRef deletes a single branch's metadata ref directly, without
 	// the transactional rebuild performed by DeleteMetadata. Intended for
 	// pruning orphaned refs whose branches no longer exist.

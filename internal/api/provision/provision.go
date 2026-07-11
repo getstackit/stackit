@@ -28,10 +28,9 @@ type EntryParams struct {
 	// Managed marks a server-owned mirror checkout the sync loop may
 	// mirror-fetch (see registry.EntryConfig.Managed).
 	Managed bool
-	// Owner and Name are the GitHub coordinates carried onto the entry so the
-	// sync loop can resolve an installation token.
-	Owner string
-	Name  string
+	// RepoRef carries the GitHub coordinates onto the entry so the sync loop
+	// can resolve an installation token.
+	registry.RepoRef
 }
 
 // BuildEntry resolves p into a runtime context via app.GetContext and returns a
@@ -58,14 +57,15 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 	// not. Derive owner/name from the GitHub remote so every repo with a remote
 	// is reachable by its GitHub-style /repos/{owner}/{repo} route, not just
 	// onboarded ones.
-	owner, name := p.Owner, p.Name
-	if (owner == "" || name == "") && gh != nil {
-		remoteOwner, remoteName := gh.GetOwnerRepo()
-		if owner == "" {
-			owner = remoteOwner
+	repo := p.RepoRef
+	if (repo.Owner == "" || repo.Name == "") && gh != nil {
+		remote := gh.Repo()
+		remoteOwner, remoteName := remote.Owner, remote.Name
+		if repo.Owner == "" {
+			repo.Owner = remoteOwner
 		}
-		if name == "" {
-			name = remoteName
+		if repo.Name == "" {
+			repo.Name = remoteName
 		}
 	}
 
@@ -76,8 +76,7 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 		Remote:      p.Remote,
 		AddedBy:     p.AddedBy,
 		Managed:     p.Managed,
-		Owner:       owner,
-		Name:        name,
+		RepoRef:     repo,
 		Engine:      runtimeCtx.Engine,
 		GitHub:      gh,
 	})

@@ -36,6 +36,7 @@ stackit-web
 .gocache/
 .golangci-cache/
 st-tui
+!apps/st-tui/
 
 tmp/
 node_modules/

@@ -144,7 +144,7 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 
 	// Handle modifications with existing git apply --cached
 	if len(modHunks) > 0 {
-		patch := BuildPatchFromHunks(modHunks)
+		patch := Hunks(modHunks).Patch()
 		if patch != "" {
 			// Apply the patch to the index using git apply --cached
 			// We use --3way to handle conflicts better
@@ -164,7 +164,7 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 						}
 						// Try to apply remaining modifications if any
 						if len(remainingHunks) > 0 {
-							remainingPatch := BuildPatchFromHunks(remainingHunks)
+							remainingPatch := Hunks(remainingHunks).Patch()
 							if remainingPatch != "" {
 								_, retryErr := r.runGitInternal(ctx, remainingPatch, nil, true, "apply", "--cached")
 								if retryErr != nil {
@@ -185,7 +185,7 @@ func (r *runner) StageHunks(ctx context.Context, hunks []Hunk) error {
 
 // stageNewFileHunk handles staging a single new file hunk by writing content to disk and staging it.
 func (r *runner) stageNewFileHunk(ctx context.Context, h Hunk) error {
-	content := extractContentFromHunk(h)
+	content := h.NewFileContent()
 	filePath := filepath.Join(r.getRepoRoot(), h.File)
 
 	// Create parent directories if they don't exist
@@ -270,10 +270,10 @@ func (r *runner) fileExistsInIndex(ctx context.Context, file string) (bool, erro
 	return false, fmt.Errorf("failed to read index for %s: %w", file, err)
 }
 
-// extractContentFromHunk extracts the file content from a new file hunk.
+// NewFileContent extracts the file content from a new file hunk.
 // It parses the unified diff format and returns only the added lines (without the + prefix).
 // Respects the "\ No newline at end of file" marker to preserve files without trailing newlines.
-func extractContentFromHunk(h Hunk) string {
+func (h Hunk) NewFileContent() string {
 	var lines []string
 	hasNoNewlineMarker := false
 	for line := range strings.SplitSeq(h.Content, "\n") {
@@ -298,6 +298,9 @@ func extractContentFromHunk(h Hunk) string {
 	}
 	return result
 }
+
+// extractContentFromHunk is retained for callers that have not migrated to Hunk.NewFileContent.
+func extractContentFromHunk(h Hunk) string { return h.NewFileContent() }
 
 // ApplyPatchToWorktree applies a patch to the working tree only (not the
 // index) by piping it to `git apply` via stdin. Unlike a stash pop, git apply

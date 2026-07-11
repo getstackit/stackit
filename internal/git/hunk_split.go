@@ -6,12 +6,12 @@ import (
 	"strings"
 )
 
-// CanSplitHunk returns true if the hunk has context lines between changes,
+// CanSplit returns true if the hunk has context lines between changes,
 // meaning it can be split into multiple smaller hunks.
 // A hunk is splittable only when there's at least one context line that separates
 // two distinct groups of changes (additions/deletions).
-func CanSplitHunk(hunk Hunk) bool {
-	lines := strings.Split(hunk.Content, "\n")
+func (h Hunk) CanSplit() bool {
+	lines := strings.Split(h.Content, "\n")
 
 	// Track state: we need to find the pattern:
 	// change(s) -> context(s) -> change(s)
@@ -48,14 +48,14 @@ func CanSplitHunk(hunk Hunk) bool {
 	return false
 }
 
-// SplitHunk divides a hunk at the first context line after changes.
+// Split divides a hunk at the first context line after changes.
 // Returns the split hunks or an error if the hunk cannot be split.
-func SplitHunk(hunk Hunk) ([]Hunk, error) {
-	if !CanSplitHunk(hunk) {
-		return []Hunk{hunk}, nil
+func (h Hunk) Split() (Hunks, error) {
+	if !h.CanSplit() {
+		return Hunks{h}, nil
 	}
 
-	lines := strings.Split(hunk.Content, "\n")
+	lines := strings.Split(h.Content, "\n")
 
 	// Parse original hunk header
 	hunkHeaderRegex := regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$`)
@@ -63,7 +63,7 @@ func SplitHunk(hunk Hunk) ([]Hunk, error) {
 	var headerLine string
 	var headerSuffix string
 	var contentLines []string
-	origOldStart, origNewStart := hunk.OldStart, hunk.NewStart
+	origOldStart, origNewStart := h.OldStart, h.NewStart
 
 	for i, line := range lines {
 		if strings.HasPrefix(line, "@@") {
@@ -78,13 +78,13 @@ func SplitHunk(hunk Hunk) ([]Hunk, error) {
 	}
 
 	if headerLine == "" {
-		return []Hunk{hunk}, nil
+		return Hunks{h}, nil
 	}
 
 	// Find the split point - first context line after changes that has more changes after it
 	splitIndex := findSplitPoint(contentLines)
 	if splitIndex < 0 {
-		return []Hunk{hunk}, nil
+		return Hunks{h}, nil
 	}
 
 	// Split the content
@@ -104,30 +104,30 @@ func SplitHunk(hunk Hunk) ([]Hunk, error) {
 	// Build first hunk
 	firstHeader := fmt.Sprintf("@@ -%d,%d +%d,%d @@%s", firstOldStart, firstOldCount, firstNewStart, firstNewCount, headerSuffix)
 	firstHunk := Hunk{
-		File:      hunk.File,
+		File:      h.File,
 		OldStart:  firstOldStart,
 		OldCount:  firstOldCount,
 		NewStart:  firstNewStart,
 		NewCount:  firstNewCount,
 		Content:   firstHeader + "\n" + strings.Join(firstContent, "\n"),
-		IndexLine: hunk.IndexLine,
+		IndexLine: h.IndexLine,
 	}
 
 	// Build second hunk
 	secondHeader := fmt.Sprintf("@@ -%d,%d +%d,%d @@", secondOldStart, secondOldCount, secondNewStart, secondNewCount)
 	secondHunk := Hunk{
-		File:      hunk.File,
+		File:      h.File,
 		OldStart:  secondOldStart,
 		OldCount:  secondOldCount,
 		NewStart:  secondNewStart,
 		NewCount:  secondNewCount,
 		Content:   secondHeader + "\n" + strings.Join(secondContent, "\n"),
-		IndexLine: hunk.IndexLine,
+		IndexLine: h.IndexLine,
 	}
 
 	// Recursively split if possible
-	moreHunks, _ := SplitHunk(secondHunk)
-	result := make([]Hunk, 0, 1+len(moreHunks))
+	moreHunks, _ := secondHunk.Split()
+	result := make(Hunks, 0, 1+len(moreHunks))
 	result = append(result, firstHunk)
 	result = append(result, moreHunks...)
 
@@ -191,10 +191,10 @@ func countLines(lines []string) (oldCount, newCount int) {
 	return oldCount, newCount
 }
 
-// GetHunkPreview returns a short preview of the hunk content.
+// Preview returns a short preview of the hunk content.
 // maxLines specifies the maximum number of content lines to show.
-func GetHunkPreview(hunk Hunk, maxLines int) (preview string, totalLines int, hasMore bool) {
-	lines := strings.Split(hunk.Content, "\n")
+func (h Hunk) Preview(maxLines int) (preview string, totalLines int, hasMore bool) {
+	lines := strings.Split(h.Content, "\n")
 	contentLines := make([]string, 0, len(lines))
 
 	for _, line := range lines {
@@ -217,14 +217,26 @@ func GetHunkPreview(hunk Hunk, maxLines int) (preview string, totalLines int, ha
 	return strings.Join(contentLines[:maxLines], "\n"), totalLines, true
 }
 
-// GetHunkHeader extracts just the @@ header line from the hunk
-func GetHunkHeader(hunk Hunk) string {
-	lines := strings.SplitSeq(hunk.Content, "\n")
+// Header extracts just the @@ header line from the hunk.
+func (h Hunk) Header() string {
+	lines := strings.SplitSeq(h.Content, "\n")
 	for line := range lines {
 		if strings.HasPrefix(line, "@@") {
 			return line
 		}
 	}
 	// Fallback: generate header from hunk metadata
-	return fmt.Sprintf("@@ -%d,%d +%d,%d @@", hunk.OldStart, hunk.OldCount, hunk.NewStart, hunk.NewCount)
+	return fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldCount, h.NewStart, h.NewCount)
 }
+
+// CanSplitHunk is retained for callers that have not migrated to Hunk.CanSplit.
+func CanSplitHunk(h Hunk) bool { return h.CanSplit() }
+
+// SplitHunk is retained for callers that have not migrated to Hunk.Split.
+func SplitHunk(h Hunk) (Hunks, error) { return h.Split() }
+
+// GetHunkPreview is retained for callers that have not migrated to Hunk.Preview.
+func GetHunkPreview(h Hunk, maxLines int) (string, int, bool) { return h.Preview(maxLines) }
+
+// GetHunkHeader is retained for callers that have not migrated to Hunk.Header.
+func GetHunkHeader(h Hunk) string { return h.Header() }

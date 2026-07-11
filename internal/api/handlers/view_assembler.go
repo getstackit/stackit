@@ -121,7 +121,7 @@ func (a *ViewAssembler) fetchPRTitles(ctx context.Context, commits []git.RecentC
 	}
 
 	// PR-number collection is shared with the `stackit log` command via internal/git.
-	prNumbers := git.PRTitleNumbers(commits)
+	prNumbers := git.RecentCommits(commits).PRTitleNumbers()
 	if len(prNumbers) == 0 {
 		return nil
 	}

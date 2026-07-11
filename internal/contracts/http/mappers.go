@@ -293,7 +293,7 @@ func computeStackStatus(graph *engine.StackGraph, branchNames []string) string {
 func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []TrunkCommitResponse {
 	// Drop constituent-PR commits already represented by a stack-merge. The
 	// collapse logic is shared with the `stackit log` command via internal/git.
-	collapsed := git.CollapseStackMerges(commits)
+	collapsed := git.RecentCommits(commits).Collapse()
 
 	result := make([]TrunkCommitResponse, 0, len(collapsed))
 	for _, c := range collapsed {
@@ -301,7 +301,7 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []Trun
 		// the `stackit log` command via internal/git.
 		resp := TrunkCommitResponse{
 			SHA:           shortSHA(c.SHA),
-			Message:       git.CollapsedMessage(c, prTitles),
+			Message:       c.DisplayMessage(prTitles),
 			Author:        c.Author,
 			Date:          c.Date.Format(time.RFC3339),
 			PRNumber:      c.PRNumber,
@@ -309,7 +309,7 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []Trun
 			StackSize:     c.StackSize,
 			StackPRs:      append([]int(nil), c.StackPRNumbers...),
 			StackScope:    c.StackScope,
-			StackPRTitles: git.ConstituentPRTitles(c, prTitles),
+			StackPRTitles: c.ConstituentPRTitles(prTitles),
 		}
 
 		if resp.Kind == "" {

@@ -145,7 +145,7 @@ func NewHunkSelectorModel(hunks []git.Hunk) *HunkSelectorModel {
 			Hunk:       h,
 			Selected:   false,
 			Expanded:   false,
-			Splittable: !h.Binary && git.CanSplitHunk(h),
+			Splittable: !h.Binary && h.CanSplit(),
 		}
 		if _, exists := fileMap[h.File]; !exists {
 			fileOrder = append(fileOrder, h.File)
@@ -319,7 +319,7 @@ func (m *HunkSelectorModel) renderHeader() string {
 	for _, item := range m.items {
 		if item.Selected {
 			selected++
-			added, removed := git.CountHunkLines(item.Hunk)
+			added, removed := item.Hunk.LineCounts()
 			totalAdded += added
 			totalRemoved += removed
 		}
@@ -393,8 +393,8 @@ func (m *HunkSelectorModel) updateViewportContent() {
 			}
 
 			// Hunk header line
-			header := git.GetHunkHeader(item.Hunk)
-			added, removed := git.CountHunkLines(item.Hunk)
+			header := item.Hunk.Header()
+			added, removed := item.Hunk.LineCounts()
 
 			headerText := fmt.Sprintf("%s +%d -%d", header, added, removed)
 			if item.Splittable {
@@ -409,10 +409,10 @@ func (m *HunkSelectorModel) updateViewportContent() {
 
 			// Show preview for current hunk or expanded hunks
 			if isCursor || item.Expanded {
-				preview, totalLines, hasMore := git.GetHunkPreview(item.Hunk, m.previewLines)
+				preview, totalLines, hasMore := item.Hunk.Preview(m.previewLines)
 				if item.Expanded {
 					// Show full content
-					preview, _, _ = git.GetHunkPreview(item.Hunk, totalLines)
+					preview, _, _ = item.Hunk.Preview(totalLines)
 				}
 
 				// Render diff lines with colors
@@ -476,7 +476,7 @@ func (m *HunkSelectorModel) ensureCursorVisible() {
 				if item.Hunk.Binary {
 					continue
 				}
-				_, totalLines, _ := git.GetHunkPreview(item.Hunk, m.previewLines)
+				_, totalLines, _ := item.Hunk.Preview(m.previewLines)
 				if item.Expanded {
 					linePos += totalLines
 				} else {
@@ -504,7 +504,7 @@ func (m *HunkSelectorModel) splitCurrentHunk() {
 		return
 	}
 
-	splitHunks, err := git.SplitHunk(item.Hunk)
+	splitHunks, err := item.Hunk.Split()
 	if err != nil || len(splitHunks) <= 1 {
 		return
 	}
@@ -518,7 +518,7 @@ func (m *HunkSelectorModel) splitCurrentHunk() {
 			Hunk:       h,
 			Selected:   item.Selected, // Preserve selection state
 			Expanded:   false,
-			Splittable: git.CanSplitHunk(h),
+			Splittable: h.CanSplit(),
 		})
 	}
 
@@ -604,7 +604,7 @@ func (m *HunkSelectorModel) SetHunks(hunks []git.Hunk) {
 			Hunk:       h,
 			Selected:   false,
 			Expanded:   false,
-			Splittable: !h.Binary && git.CanSplitHunk(h),
+			Splittable: !h.Binary && h.CanSplit(),
 		}
 		if _, exists := fileMap[h.File]; !exists {
 			fileOrder = append(fileOrder, h.File)

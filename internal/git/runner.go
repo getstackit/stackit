@@ -1235,7 +1235,7 @@ func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool,
 			continue
 		}
 
-		if hunkOverlaps(hunk, commitHunk) {
+		if hunk.Overlaps(commitHunk) {
 			return false, nil
 		}
 	}

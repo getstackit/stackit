@@ -39,6 +39,9 @@ type RecentCommit struct {
 	StackScope     string           // from Stackit-Scope trailer (empty if absent)
 }
 
+// RecentCommits is an ordered collection of commits returned from git log.
+type RecentCommits []RecentCommit
+
 // commit log field separator used inside a record (never appears in commit
 // metadata when escaped through git's pretty format).
 const commitFieldSep = "\x1f"

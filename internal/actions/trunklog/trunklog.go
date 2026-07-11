@@ -71,7 +71,7 @@ func Gather(ctx context.Context, src CommitSource, titles TitleResolver, req Req
 		return Result{}, err
 	}
 
-	collapsed := git.CollapseStackMerges(raw)
+	collapsed := git.RecentCommits(raw).Collapse()
 	prTitles := resolveTitles(ctx, titles, collapsed)
 
 	result := Result{
@@ -91,7 +91,7 @@ func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.Rece
 	if titles == nil {
 		return nil
 	}
-	prNumbers := git.PRTitleNumbers(commits)
+	prNumbers := git.RecentCommits(commits).PRTitleNumbers()
 	if len(prNumbers) == 0 {
 		return nil
 	}
@@ -109,7 +109,7 @@ func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.Rece
 func toCommit(c git.RecentCommit, prTitles map[int]string) Commit {
 	return Commit{
 		SHA:           c.SHA,
-		Message:       git.CollapsedMessage(c, prTitles),
+		Message:       c.DisplayMessage(prTitles),
 		Author:        c.Author,
 		Date:          c.Date,
 		Kind:          c.Kind,
@@ -117,6 +117,6 @@ func toCommit(c git.RecentCommit, prTitles map[int]string) Commit {
 		StackSize:     c.StackSize,
 		StackPRs:      append([]int(nil), c.StackPRNumbers...),
 		StackScope:    c.StackScope,
-		StackPRTitles: git.ConstituentPRTitles(c, prTitles),
+		StackPRTitles: c.ConstituentPRTitles(prTitles),
 	}
 }

@@ -22,13 +22,16 @@ type Hunk struct {
 	FileMode      string // File mode (e.g., "100644", "100755") for new/deleted files
 }
 
+// Hunks is an ordered collection of diff hunks.
+type Hunks []Hunk
+
 // ParseDiffOutput parses a diff output into structured hunks
-func ParseDiffOutput(diffOutput string) ([]Hunk, error) {
+func ParseDiffOutput(diffOutput string) (Hunks, error) {
 	if diffOutput == "" {
-		return []Hunk{}, nil
+		return Hunks{}, nil
 	}
 
-	var hunks []Hunk
+	var hunks Hunks
 	lines := strings.Split(diffOutput, "\n")
 
 	// Regex to match hunk headers: @@ -old_start,old_count +new_start,new_count @@
@@ -184,10 +187,10 @@ func parseInt(s string) int {
 	return result
 }
 
-// BuildPatchFromHunks constructs a unified diff patch from selected hunks.
+// Patch constructs a unified diff patch from the selected hunks.
 // The patch can be applied using git apply --cached to stage specific hunks.
 // Binary files are handled separately as they have a different diff format.
-func BuildPatchFromHunks(hunks []Hunk) string {
+func (hunks Hunks) Patch() string {
 	if len(hunks) == 0 {
 		return ""
 	}
@@ -320,8 +323,8 @@ func GenerateNewFileHunk(filePath string, content []byte) Hunk {
 }
 
 // CountHunkLines returns the number of added and removed lines in a hunk
-func CountHunkLines(hunk Hunk) (added, removed int) {
-	lines := strings.SplitSeq(hunk.Content, "\n")
+func (h Hunk) LineCounts() (added, removed int) {
+	lines := strings.SplitSeq(h.Content, "\n")
 	for line := range lines {
 		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
 			added++
@@ -331,3 +334,9 @@ func CountHunkLines(hunk Hunk) (added, removed int) {
 	}
 	return added, removed
 }
+
+// BuildPatchFromHunks is retained for callers that have not migrated to Hunks.Patch.
+func BuildPatchFromHunks(hunks []Hunk) string { return Hunks(hunks).Patch() }
+
+// CountHunkLines is retained for callers that have not migrated to Hunk.LineCounts.
+func CountHunkLines(h Hunk) (added, removed int) { return h.LineCounts() }

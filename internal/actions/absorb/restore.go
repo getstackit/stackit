@@ -170,7 +170,7 @@ func applyModHunksToWorktree(ctx context.Context, eng engine.Engine, out output.
 
 	ok := true
 	for _, file := range order {
-		patch := git.BuildPatchFromHunks(byFile[file])
+		patch := git.Hunks(byFile[file]).Patch()
 		if patch == "" {
 			continue
 		}

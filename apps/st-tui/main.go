@@ -21,32 +21,64 @@ func main() {
 	}
 
 	args := flags.Args()
-	if len(args) != 2 || args[0] != "sync" {
-		printUsage(os.Stderr)
-		os.Exit(2)
-	}
-
-	scenario, found := stack.LookupSyncScenario(args[1])
-	if !found {
-		_, _ = fmt.Fprintf(os.Stderr, "unknown sync scenario %q\n\n", args[1])
+	if len(args) != 2 {
 		printUsage(os.Stderr)
 		os.Exit(2)
 	}
 
 	out := output.NewDefaultOutput()
+	switch args[0] {
+	case "sync":
+		runSyncScenario(out, args[1], *delay)
+	case "submit":
+		runSubmitScenario(out, args[1], *delay)
+	default:
+		_, _ = fmt.Fprintf(os.Stderr, "unknown command %q\n\n", args[0])
+		printUsage(os.Stderr)
+		os.Exit(2)
+	}
+}
+
+func runSyncScenario(out output.Output, name string, delay time.Duration) {
+	scenario, found := stack.LookupSyncScenario(name)
+	if !found {
+		_, _ = fmt.Fprintf(os.Stderr, "unknown sync scenario %q\n\n", name)
+		printUsage(os.Stderr)
+		os.Exit(2)
+	}
 	runner, handler := stack.NewSyncUI(out, output.NewNullLogger())
 	if runner != nil {
 		defer runner.Cleanup()
 	}
-	scenario.Replay(handler, *delay)
+	scenario.Replay(handler, delay)
+}
+
+func runSubmitScenario(out output.Output, name string, delay time.Duration) {
+	scenario, found := stack.LookupSubmitScenario(name)
+	if !found {
+		_, _ = fmt.Fprintf(os.Stderr, "unknown submit scenario %q\n\n", name)
+		printUsage(os.Stderr)
+		os.Exit(2)
+	}
+	runner, handler := stack.NewSubmitUI(out, output.NewNullLogger())
+	if runner != nil {
+		defer runner.Cleanup()
+	}
+	scenario.Replay(handler, delay)
 }
 
 func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Usage: st-tui [--delay duration] sync <scenario>")
+	_, _ = fmt.Fprintln(w, "Usage: st-tui [--delay duration] <command> <scenario>")
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "Sync scenarios:")
 	for _, name := range stack.SyncScenarioNames() {
 		scenario, _ := stack.LookupSyncScenario(name)
+		_, _ = fmt.Fprintf(w, "  %-10s %s\n", name, scenario.Description)
+	}
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Submit scenarios:")
+	for _, name := range stack.SubmitScenarioNames() {
+		scenario, _ := stack.LookupSubmitScenario(name)
 		_, _ = fmt.Fprintf(w, "  %-10s %s\n", name, scenario.Description)
 	}
 	_, _ = fmt.Fprintln(w, "")

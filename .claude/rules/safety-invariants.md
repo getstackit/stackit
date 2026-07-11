@@ -176,7 +176,7 @@ branchNames := make([]string, len(branches))
 for i, b := range branches {
     branchNames[i] = b.GetName()
 }
-_ = eng.BatchMarkNeedsPRBodyUpdate(branchNames)
+_ = eng.MarkBranchesForPRBodyUpdate(ctx, branchNames)
 if err := pushMetadataOnly(ctx, eng, branchName); err != nil {
     out.Debug("Failed: %v", err)
 }

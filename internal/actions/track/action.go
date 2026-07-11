@@ -167,26 +167,25 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 	allBranches := eng.AllBranches()
 	untrackedChildren := []string{}
 
-	for _, candidateBranch := range allBranches {
-		candidate := candidateBranch.GetName()
-		if candidate == branchName {
-			continue
-		}
+	// branchRev is loop-invariant; a failed lookup just disables child detection.
+	branchRev, revErr := eng.GetRevision(eng.GetBranch(branchName))
+	if revErr == nil {
+		for _, candidateBranch := range allBranches {
+			candidate := candidateBranch.GetName()
+			if candidate == branchName {
+				continue
+			}
 
-		// Check if candidate is a child (has this branch as merge base)
-		mergeBase, err := eng.GetMergeBase(ctx.Context, candidate, branchName)
-		if err != nil {
-			continue
-		}
+			// Check if candidate is a child (has this branch as merge base)
+			mergeBase, err := eng.GetMergeBase(ctx.Context, candidate, branchName)
+			if err != nil {
+				continue
+			}
 
-		branchRev, err := eng.GetRevision(eng.GetBranch(branchName))
-		if err != nil {
-			continue
-		}
-
-		// If merge base is the branch we just tracked, candidate is a child
-		if mergeBase == branchRev && !candidateBranch.IsTracked() {
-			untrackedChildren = append(untrackedChildren, candidate)
+			// If merge base is the branch we just tracked, candidate is a child
+			if mergeBase == branchRev && !candidateBranch.IsTracked() {
+				untrackedChildren = append(untrackedChildren, candidate)
+			}
 		}
 	}
 

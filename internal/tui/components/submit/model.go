@@ -19,6 +19,7 @@ type Model struct {
 	Items          []Item
 	Warnings       []string      // formatted warning lines, rendered after the rows and persisted on exit
 	Solo           bool          // single-branch submit — drop the count header and per-row name
+	Verbose        bool          // retain the detailed final per-branch result list
 	spinner        spinner.Model // lowercase for custom style
 	Styles         Styles
 }
@@ -52,6 +53,7 @@ func NewModel(items []Item) *Model {
 
 	return &Model{
 		Items:   items,
+		Verbose: true,
 		spinner: s,
 		Styles:  DefaultStyles(),
 	}
@@ -102,9 +104,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ProgressCompleteMsg:
 		m.Done = true
 		summary := m.completionSummary()
+		if !m.Verbose {
+			summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
+			if failures := FormatFailureSummary(m.Items); failures != "" {
+				if summary != "" {
+					summary += "\n\n"
+				}
+				summary += failures
+			}
+		}
 		// The solo summary already names the single result; a count line would
 		// just restate it.
-		if !m.Solo && summary != "" {
+		if m.Verbose && !m.Solo && summary != "" {
 			if closing := FormatClosingSummary(m.Items, msg.Skipped, msg.Elapsed); closing != "" {
 				summary += "\n\n" + closing
 			}
@@ -170,7 +181,8 @@ func (m *Model) content() string {
 // screen clear.
 func (m *Model) completionSummary() string {
 	var summary string
-	if m.Solo {
+	switch {
+	case m.Verbose && m.Solo:
 		summary = FormatSoloSummary(m.Items)
 		if failures := FormatFailureSummary(m.Items); failures != "" {
 			if summary != "" {
@@ -178,8 +190,10 @@ func (m *Model) completionSummary() string {
 			}
 			summary += failures
 		}
-	} else {
+	case m.Verbose:
 		summary = FormatFinalList(m.Items)
+	default:
+		summary = FormatOutcomeSummary(m.Items, 0)
 	}
 	if summary == "" {
 		return m.content()
@@ -200,7 +214,10 @@ func (m *Model) header() string {
 	if count == 0 {
 		return ""
 	}
-	return fmt.Sprintf("Submitting %d %s", count, pluralBranch(count))
+	if m.Verbose {
+		return fmt.Sprintf("Submitting %d %s", count, pluralBranch(count))
+	}
+	return fmt.Sprintf("Submitting %d %s", count, pluralPR(count))
 }
 
 func pluralBranch(count int) string {

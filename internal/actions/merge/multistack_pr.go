@@ -140,15 +140,8 @@ func (p *MultiStackPRCreator) resolveMergeMethod() (github.MergeMethod, error) {
 		return "", fmt.Errorf("failed to load config: %w", err)
 	}
 
-	mergeMethod := github.MergeMethodSquash // default
-	if method := cfg.MergeMethod(); method != "" {
-		switch method {
-		case "merge":
-			mergeMethod = github.MergeMethodMerge
-		case "rebase":
-			mergeMethod = github.MergeMethodRebase
-		}
+	if method := cfg.MergeMethod(); method.Valid() {
+		return method, nil
 	}
-
-	return mergeMethod, nil
+	return github.MergeMethodSquash, nil // default
 }

@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // GitConfig provides typed access to stackit configuration stored in git config.
@@ -318,26 +319,26 @@ func (c *GitConfig) SetWorktreeAutoClean(enabled bool) error {
 
 // MergeMethod returns the configured merge method (empty if not set).
 // Priority: personal git config > team project config > empty (not set).
-func (c *GitConfig) MergeMethod() string {
+func (c *GitConfig) MergeMethod() github.MergeMethod {
 	// Check personal git config first
 	method, _ := c.store.Get(KeyMergeMethod)
 	if method != "" {
-		return method
+		return github.MergeMethod(method)
 	}
 	// Fall back to team project config
 	if c.project != nil && c.project.HasMergeMethod() {
-		return c.project.Merge.Method
+		return github.MergeMethod(c.project.Merge.Method)
 	}
 	// Return empty (not set)
 	return ""
 }
 
 // SetMergeMethod sets the merge method preference.
-func (c *GitConfig) SetMergeMethod(method string) error {
-	if !slices.Contains(ValidMergeMethods, method) {
+func (c *GitConfig) SetMergeMethod(method github.MergeMethod) error {
+	if !method.Valid() {
 		return fmt.Errorf("invalid merge method: %s (must be one of: %s)", method, strings.Join(ValidMergeMethods, ", "))
 	}
-	return c.store.Set(KeyMergeMethod, method)
+	return c.store.Set(KeyMergeMethod, string(method))
 }
 
 // CICommand returns the CI validation command.

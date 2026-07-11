@@ -1,5 +1,7 @@
 package config
 
+import "github.com/getstackit/stackit/internal/github"
+
 // Option describes a single configuration option for documentation and template generation.
 type Option struct {
 	// YAMLPath is the path in the YAML config file (e.g., "submit.footer")
@@ -129,7 +131,7 @@ var Options = []Option{
 		GitKey:      KeyMergeMethod,
 		Description: "Merge method: squash, merge, rebase",
 		ValidValues: ValidMergeMethods,
-		Example:     MergeMethodSquash,
+		Example:     string(github.MergeMethodSquash),
 		Section:     SectionMerge,
 	},
 

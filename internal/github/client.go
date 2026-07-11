@@ -87,6 +87,14 @@ const (
 	MergeMethodRebase MergeMethod = "rebase"
 )
 
+// ValidMergeMethods lists every accepted merge method value.
+var ValidMergeMethods = []MergeMethod{MergeMethodSquash, MergeMethodMerge, MergeMethodRebase}
+
+// Valid reports whether m is one of the accepted merge methods.
+func (m MergeMethod) Valid() bool {
+	return m == MergeMethodSquash || m == MergeMethodMerge || m == MergeMethodRebase
+}
+
 // MergeMethodSettings contains the allowed merge methods for a repository
 type MergeMethodSettings struct {
 	AllowMergeCommit bool

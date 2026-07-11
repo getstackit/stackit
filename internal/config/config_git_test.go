@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
 )
 
@@ -167,7 +168,7 @@ func TestGitConfigMergeMethod(t *testing.T) {
 		cfg, err := LoadGitConfig(scene.Dir)
 		require.NoError(t, err)
 
-		for _, method := range []string{"squash", "merge", "rebase"} {
+		for _, method := range github.ValidMergeMethods {
 			err = cfg.SetMergeMethod(method)
 			require.NoError(t, err)
 			require.Equal(t, method, cfg.MergeMethod())
@@ -409,7 +410,7 @@ func TestMigrationFromJSON(t *testing.T) {
 		require.Equal(t, "feature/{message}", cfg.BranchNamePattern())
 		require.False(t, cfg.SubmitFooter())
 		require.Equal(t, 15, cfg.UndoStackDepth())
-		require.Equal(t, "squash", cfg.MergeMethod())
+		require.Equal(t, github.MergeMethod("squash"), cfg.MergeMethod())
 		require.Equal(t, "npm test", cfg.CICommand())
 		require.Equal(t, 300, cfg.CITimeout())
 		require.Equal(t, "/tmp/worktrees", cfg.WorktreeBasePath())
@@ -896,14 +897,14 @@ trunks:
 		require.NoError(t, err)
 
 		// Should use project config value
-		require.Equal(t, "squash", cfg.MergeMethod())
+		require.Equal(t, github.MergeMethod("squash"), cfg.MergeMethod())
 
 		// Set personal override
 		err = cfg.SetMergeMethod("rebase")
 		require.NoError(t, err)
 
 		// Should now use personal config
-		require.Equal(t, "rebase", cfg.MergeMethod())
+		require.Equal(t, github.MergeMethod("rebase"), cfg.MergeMethod())
 	})
 
 	t.Run("CI command falls back to project config", func(t *testing.T) {
@@ -993,7 +994,7 @@ merge:
 		require.NoError(t, err)
 
 		require.Equal(t, "develop", cfg.Trunk())
-		require.Equal(t, "squash", cfg.MergeMethod())
+		require.Equal(t, github.MergeMethod("squash"), cfg.MergeMethod())
 	})
 
 	t.Run("deduplicates trunks from git and project config", func(t *testing.T) {

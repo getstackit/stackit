@@ -51,14 +51,14 @@ func (c *GitHubClient) GetOwnerRepo() (string, string) {
 }
 
 // CreatePullRequest creates a simulated pull request
-func (c *GitHubClient) CreatePullRequest(_ context.Context, owner, repo string, opts github.CreatePROptions) (*github.PullRequestInfo, error) {
+func (c *GitHubClient) CreatePullRequest(_ context.Context, opts github.CreatePROptions) (*github.PullRequestInfo, error) {
 	simulateDelay(delayMedium)
 
 	prNum := int(atomic.AddInt32(&prCounter, 1))
 	pr := &github.PullRequestInfo{
 		Number:  prNum,
 		NodeID:  fmt.Sprintf("PR_%d", prNum),
-		HTMLURL: fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNum),
+		HTMLURL: fmt.Sprintf("https://github.com/%s/%s/pull/%d", c.owner, c.repo, prNum),
 		Title:   opts.Title,
 		Body:    opts.Body,
 		State:   "open",
@@ -72,7 +72,7 @@ func (c *GitHubClient) CreatePullRequest(_ context.Context, owner, repo string, 
 }
 
 // UpdatePullRequest simulates updating a pull request
-func (c *GitHubClient) UpdatePullRequest(_ context.Context, _, _ string, prNumber int, opts github.UpdatePROptions) ([]string, error) {
+func (c *GitHubClient) UpdatePullRequest(_ context.Context, prNumber int, opts github.UpdatePROptions) ([]string, error) {
 	simulateDelay(delayShort)
 
 	// Find the PR by number
@@ -98,7 +98,7 @@ func (c *GitHubClient) UpdatePullRequest(_ context.Context, _, _ string, prNumbe
 }
 
 // GetPullRequestByBranch returns a simulated PR for a branch
-func (c *GitHubClient) GetPullRequestByBranch(_ context.Context, _, _, branchName string) (*github.PullRequestInfo, error) {
+func (c *GitHubClient) GetPullRequestByBranch(_ context.Context, branchName string) (*github.PullRequestInfo, error) {
 	simulateDelay(delayShort)
 
 	if pr, ok := c.prs[branchName]; ok {
@@ -108,7 +108,7 @@ func (c *GitHubClient) GetPullRequestByBranch(_ context.Context, _, _, branchNam
 }
 
 // GetPullRequest returns a simulated PR by number
-func (c *GitHubClient) GetPullRequest(_ context.Context, _, _ string, prNumber int) (*github.PullRequestInfo, error) {
+func (c *GitHubClient) GetPullRequest(_ context.Context, prNumber int) (*github.PullRequestInfo, error) {
 	simulateDelay(delayShort)
 
 	for _, pr := range c.prs {
@@ -150,7 +150,7 @@ func (c *GitHubClient) getPRChecksStatus(_ context.Context, _ string) *github.Ch
 	return &github.CheckStatus{
 		Passing:        true,
 		Pending:        false,
-		ReviewDecision: "APPROVED",
+		ReviewDecision: github.ReviewDecisionApproved,
 		Checks: []github.CheckDetail{
 			{Name: "Build", Status: checkStatusCompleted, Conclusion: checkConclusionSuccess},
 			{Name: "Test", Status: checkStatusCompleted, Conclusion: checkConclusionSuccess},
@@ -184,7 +184,7 @@ func (c *GitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNames [
 }
 
 // BatchGetPRTitles returns plausible fake titles for demo mode
-func (c *GitHubClient) BatchGetPRTitles(_ context.Context, _, _ string, prNumbers []int) (map[int]string, error) {
+func (c *GitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []int) (map[int]string, error) {
 	simulateDelay(delayShort)
 
 	titles := []string{
@@ -206,7 +206,7 @@ func (c *GitHubClient) BatchGetPRTitles(_ context.Context, _, _ string, prNumber
 }
 
 // ClosePullRequest simulates closing a pull request
-func (c *GitHubClient) ClosePullRequest(_ context.Context, _, _ string, prNumber int) error {
+func (c *GitHubClient) ClosePullRequest(_ context.Context, prNumber int) error {
 	simulateDelay(delayShort)
 
 	// Find the PR by number and close it
@@ -221,26 +221,26 @@ func (c *GitHubClient) ClosePullRequest(_ context.Context, _, _ string, prNumber
 }
 
 // CreatePRComment simulates creating a PR comment
-func (c *GitHubClient) CreatePRComment(_ context.Context, _, _ string, _ int, _ string) (int64, error) {
+func (c *GitHubClient) CreatePRComment(_ context.Context, _ int, _ string) (int64, error) {
 	simulateDelay(delayShort)
 	// In demo mode, return a simulated comment ID
 	return 12345, nil
 }
 
 // UpdatePRComment simulates updating a PR comment
-func (c *GitHubClient) UpdatePRComment(_ context.Context, _, _ string, _ int64, _ string) error {
+func (c *GitHubClient) UpdatePRComment(_ context.Context, _ int64, _ string) error {
 	simulateDelay(delayShort)
 	return nil
 }
 
 // DeletePRComment simulates deleting a PR comment
-func (c *GitHubClient) DeletePRComment(_ context.Context, _, _ string, _ int64) error {
+func (c *GitHubClient) DeletePRComment(_ context.Context, _ int64) error {
 	simulateDelay(delayShort)
 	return nil
 }
 
 // ListPRComments simulates listing PR comments
-func (c *GitHubClient) ListPRComments(_ context.Context, _, _ string, _ int) ([]github.PRComment, error) {
+func (c *GitHubClient) ListPRComments(_ context.Context, _ int) ([]github.PRComment, error) {
 	simulateDelay(delayShort)
 	// In demo mode, return empty list
 	return []github.PRComment{}, nil

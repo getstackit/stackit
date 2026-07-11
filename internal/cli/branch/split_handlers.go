@@ -64,7 +64,7 @@ func (h *SimpleSplitHandler) OnBranchCreated(branchName string) {
 	h.Lock()
 	defer h.Unlock()
 	h.newBranches = append(h.newBranches, branchName)
-	h.Output.Info("Created branch %s", style.ColorBranchName(branchName, false))
+	h.Output.Info("Created branch %s", style.ColorBranchName(branchName))
 }
 
 // Complete is called when split finishes
@@ -74,7 +74,7 @@ func (h *SimpleSplitHandler) Complete(result split.ActionResult) {
 
 	if len(result.NewBranches) > 0 {
 		h.Output.Info("Split %s into %d branches",
-			style.ColorBranchName(result.OriginalBranch, false),
+			style.ColorBranchName(result.OriginalBranch),
 			len(result.NewBranches))
 	}
 }

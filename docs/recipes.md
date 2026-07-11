@@ -14,6 +14,9 @@ Adding a method to the GitHub client interface requires updating 5 files:
 | 4 | `internal/demo/demo_github_client.go` | Implement on `GitHubClient` (fake data + `simulateDelay`) |
 | 5 | `internal/app/context_test.go` | Add stub to `fakeGitHubClient` |
 
+The client is bound to one repository at construction — methods must NOT take
+`owner, repo` parameters; implementations use the stored `c.owner, c.repo`.
+
 For GraphQL batch methods, follow the pattern in `status.go`:
 - Build query with aliases via `strings.Builder`
 - Execute via `executeGraphQLQuery()` (defined in `pr_operations.go`)

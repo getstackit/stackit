@@ -334,9 +334,10 @@ func (e *engineImpl) TrunkRemoteState(ctx context.Context) TrunkRemoteState {
 	return state
 }
 
-// GetMergedBranches returns a map of branches merged into the target branch
-func (e *engineImpl) GetMergedBranches(ctx context.Context, target string) (map[string]bool, error) {
-	return e.git.GetMergedBranches(ctx, target)
+// GetMergedBranches returns the set of branches merged into the target branch
+func (e *engineImpl) GetMergedBranches(ctx context.Context, target string) (BranchNameSet, error) {
+	merged, err := e.git.GetMergedBranches(ctx, target)
+	return BranchNameSet(merged), err
 }
 
 // IsMergedIntoTrunk checks if a branch is merged into trunk
@@ -373,8 +374,8 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 // are content-addressed, so equal SHA ⇔ no diff). All branch and parent tree
 // SHAs are resolved in a single batched rev-parse rather than a `git diff` per
 // branch. Branches whose trees cannot be resolved are omitted from the result.
-func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) map[string]bool {
-	result := make(map[string]bool, len(branchNames))
+func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
+	result := make(BranchNameSet, len(branchNames))
 	if len(branchNames) == 0 {
 		return result
 	}
@@ -442,7 +443,7 @@ type deletionStatusInputs struct {
 	trunkName      string
 	metadataMap    MetaMap
 	revisions      RevisionMap
-	mergedBranches map[string]bool
+	mergedBranches BranchNameSet
 	squashCache    *git.SquashMergeCache
 }
 
@@ -498,7 +499,7 @@ func (e *engineImpl) evaluateDeletionStatuses(ctx context.Context, branchNames [
 //  3. PR state CLOSED/MERGED → deletable
 //  4. Merged into trunk → deletable
 //  5. Empty with PR → deletable
-func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName string, branch Branch, meta *git.Meta, revisions RevisionMap, mergedBranches map[string]bool, trunkName string, squashCache *git.SquashMergeCache) DeletionStatus {
+func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName string, branch Branch, meta *git.Meta, revisions RevisionMap, mergedBranches BranchNameSet, trunkName string, squashCache *git.SquashMergeCache) DeletionStatus {
 	// 1. Never delete trunk
 	if e.IsTrunk(branch) {
 		return DeletionStatus{SafeToDelete: false, Reason: "", Kind: DeletionReasonNone}
@@ -531,7 +532,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	}
 
 	// 4. Check if merged into trunk (ancestry-based; covers merge commits)
-	if mergedBranches != nil && mergedBranches[branchName] {
+	if mergedBranches.Contains(branchName) {
 		return DeletionStatus{
 			SafeToDelete: true,
 			Reason:       fmt.Sprintf("merged into %s", trunkName),
@@ -580,13 +581,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 		parentName = parent.GetName()
 	}
 
-	parentRev := revisions[parentName]
-	if parentRev == "" {
-		if rev, revErr := e.git.GetRevision(parentName); revErr == nil {
-			parentRev = rev
-		}
-	}
-	if parentRev != "" {
+	if parentRev, ok := e.planRev(revisions, parentName); ok && parentRev != "" {
 		if empty, err := e.git.IsDiffEmpty(ctx, branchName, parentRev); err == nil && empty {
 			return DeletionStatus{SafeToDelete: true, Reason: "empty", Kind: DeletionReasonEmptyWithPR}
 		}

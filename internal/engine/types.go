@@ -37,6 +37,22 @@ func (m MetaMap) Get(branchName string) *git.Meta {
 // RevisionMap is branch name -> commit SHA, as returned by the batch revision readers.
 type RevisionMap map[string]string
 
+// Rev returns the revision for a branch and whether it was present. Safe to
+// call on a nil map.
+func (r RevisionMap) Rev(name string) (string, bool) {
+	rev, ok := r[name]
+	return rev, ok
+}
+
+// BranchNameSet is a set of branch names.
+type BranchNameSet map[string]bool
+
+// Contains reports whether the set includes the branch. Safe to call on a
+// nil set.
+func (s BranchNameSet) Contains(name string) bool {
+	return s[name]
+}
+
 const (
 	// LockReasonNone indicates the branch is not locked
 	LockReasonNone LockReason = git.LockReasonNone
@@ -375,8 +391,8 @@ type RestackPlanItem struct {
 // per-branch apply decisions for a restack operation.
 type RestackPlan struct {
 	Specs          []RebaseSpec
-	BranchMap      map[string]bool
-	ApplyMap       map[string]bool
+	BranchMap      BranchNameSet
+	ApplyMap       BranchNameSet
 	PlannedResults map[string]RestackBranchResult
 	Items          map[string]RestackPlanItem
 }
@@ -388,9 +404,18 @@ type ContinueRebaseResult struct {
 	RerereResolvedCount int    // Number of rebase continuations handled by git rerere
 }
 
+// SubmitAction says whether submitting a branch will create a new PR or
+// update the existing one.
+type SubmitAction string
+
+const (
+	SubmitActionCreate SubmitAction = "create"
+	SubmitActionUpdate SubmitAction = "update"
+)
+
 // PRSubmissionStatus represents the submission status of a branch
 type PRSubmissionStatus struct {
-	Action      string // "create", "update", or "skip"
+	Action      SubmitAction
 	NeedsUpdate bool   // True if the branch has changes or metadata needs update
 	Reason      string // Reason for the status
 	PRNumber    *int

@@ -20,15 +20,17 @@ import (
 )
 
 // TreeStyle defines the output style for the tree command
+type TreeStyle string
+
 const (
-	TreeStyleNormal = "NORMAL"
-	TreeStyleFull   = "FULL"
-	TreeStyleShort  = "SHORT"
+	TreeStyleNormal TreeStyle = "NORMAL"
+	TreeStyleFull   TreeStyle = "FULL"
+	TreeStyleShort  TreeStyle = "SHORT"
 )
 
 // TreeOptions contains options for the tree command
 type TreeOptions struct {
-	Style         string // TreeStyleNormal, TreeStyleFull, or TreeStyleShort
+	Style         TreeStyle
 	Steps         *int
 	BranchName    string
 	ShowUntracked bool
@@ -106,7 +108,7 @@ func TreeAction(ctx *app.Context, opts TreeOptions) error {
 	if opts.Interactive || (utils.IsInteractive() && opts.Steps == nil) {
 		// Run interactive TUI
 		m := tui.NewTreeModel(ctx.Context, ctx.Engine, ctx.GitHub(), tui.TreeOptions{
-			Style:         opts.Style,
+			Style:         string(opts.Style),
 			ShowUntracked: opts.ShowUntracked,
 			Logger:        ctx.Logger,
 		})

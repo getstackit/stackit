@@ -139,14 +139,14 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		newBody := existingPR.Body + footer
 		updateOpts := github.UpdatePROptions{Body: &newBody}
 
-		if _, err := githubClient.UpdatePullRequest(ctx, repoOwner, repoName, prNumber, updateOpts); err != nil {
+		if _, err := githubClient.UpdatePullRequest(ctx, prNumber, updateOpts); err != nil {
 			out.Debug("Failed to update PR #%d body: %v", prNumber, err)
 		} else {
 			out.Debug("Updated PR #%d with consolidation footer", prNumber)
 		}
 
 		// Close the PR (handles squash/rebase merge strategies where GitHub doesn't auto-close)
-		if err := githubClient.ClosePullRequest(ctx, repoOwner, repoName, prNumber); err != nil {
+		if err := githubClient.ClosePullRequest(ctx, prNumber); err != nil {
 			out.Debug("Failed to close PR #%d: %v", prNumber, err)
 			result.FailedPRs = append(result.FailedPRs, prNumber)
 		} else {

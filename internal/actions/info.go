@@ -267,7 +267,10 @@ func getPRTitleLine(prInfo *engine.PrInfo) string {
 	case git.PRStateClosed:
 		return fmt.Sprintf("%s (Abandoned) %s", prNumber, output.Dim(prInfo.Title()))
 	default:
-		prState := output.PRState(string(state), prInfo.IsDraft())
+		prState := ""
+		if prInfo.IsDraft() {
+			prState = output.Dim("(Draft)")
+		}
 		return fmt.Sprintf("%s %s %s", prNumber, prState, prInfo.Title())
 	}
 }

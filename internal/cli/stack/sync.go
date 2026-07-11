@@ -241,7 +241,7 @@ func renderSyncDryRunText(out output.Output, plan dryRunPlan) {
 	if plan.pullBranch != "" {
 		out.Newline()
 		out.Info("Would pull from remote:")
-		line := "  " + style.ColorBranchName(plan.pullBranch, false)
+		line := "  " + style.ColorBranchName(plan.pullBranch)
 		if plan.pullRev != "" {
 			line += " → " + style.ColorDim(plan.pullRev)
 		}
@@ -253,7 +253,7 @@ func renderSyncDryRunText(out output.Output, plan dryRunPlan) {
 		out.Newline()
 		out.Info("Would delete (merged or closed PRs):")
 		for _, c := range plan.clean {
-			line := "  " + style.ColorBranchName(c.branch, false)
+			line := "  " + style.ColorBranchName(c.branch)
 			if c.reason != "" {
 				line += " " + style.ColorDim("("+c.reason+")")
 			}
@@ -266,7 +266,7 @@ func renderSyncDryRunText(out output.Output, plan dryRunPlan) {
 		out.Newline()
 		out.Info("Would restack:")
 		for _, r := range plan.restack {
-			line := "  " + style.ColorBranchName(r.branch, false)
+			line := "  " + style.ColorBranchName(r.branch)
 			if r.parent != "" {
 				line += " " + style.ColorDim("on "+r.parent)
 			}
@@ -279,7 +279,7 @@ func renderSyncDryRunText(out output.Output, plan dryRunPlan) {
 		out.Newline()
 		out.Info("Skipped (worktree has uncommitted changes):")
 		for _, name := range plan.skipped {
-			out.Info("  %s", style.ColorBranchName(name, false))
+			out.Info("  %s", style.ColorBranchName(name))
 		}
 		printed = true
 	}

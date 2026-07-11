@@ -12,6 +12,8 @@ import (
 	"encoding/json"
 	"net/url"
 	"strings"
+
+	"github.com/getstackit/stackit/internal/api/registry"
 )
 
 // SignatureHeader is the request header GitHub signs each delivery with.
@@ -63,37 +65,37 @@ type pushPayload struct {
 	} `json:"repository"`
 }
 
-// ParsePush extracts the owner and repository name from a push event body. It
+// ParsePush extracts the repository coordinates from a push event body. It
 // prefers the explicit owner.login / repository.name fields and falls back to
 // splitting full_name ("owner/repo"). ok is false when the body isn't a
 // recognizable push payload, so the caller can ignore it without erroring.
-func ParsePush(body []byte) (owner, name string, ok bool) {
+func ParsePush(body []byte) (repo registry.RepoRef, ok bool) {
 	var p pushPayload
 	if err := json.Unmarshal(normalizePushBody(body), &p); err != nil {
-		return "", "", false
+		return registry.RepoRef{}, false
 	}
 
-	owner = p.Repository.Owner.Login
-	if owner == "" {
-		owner = p.Repository.Owner.Name
+	repo.Owner = p.Repository.Owner.Login
+	if repo.Owner == "" {
+		repo.Owner = p.Repository.Owner.Name
 	}
-	name = p.Repository.Name
+	repo.Name = p.Repository.Name
 
-	if (owner == "" || name == "") && p.Repository.FullName != "" {
+	if (repo.Owner == "" || repo.Name == "") && p.Repository.FullName != "" {
 		if o, n, found := strings.Cut(p.Repository.FullName, "/"); found {
-			if owner == "" {
-				owner = o
+			if repo.Owner == "" {
+				repo.Owner = o
 			}
-			if name == "" {
-				name = n
+			if repo.Name == "" {
+				repo.Name = n
 			}
 		}
 	}
 
-	if owner == "" || name == "" {
-		return "", "", false
+	if repo.Owner == "" || repo.Name == "" {
+		return registry.RepoRef{}, false
 	}
-	return owner, name, true
+	return repo, true
 }
 
 // normalizePushBody returns the JSON document from a webhook body, tolerating

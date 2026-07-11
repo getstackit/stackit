@@ -389,9 +389,8 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 
 // getPRNodeID fetches the NodeID for a PR by number
 func getPRNodeID(ctx *app.Context, prNumber int) (string, error) {
-	owner, repo := ctx.GitHub().GetOwnerRepo()
 	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, owner, repo, prNumber)
+	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, prNumber)
 	cancelRemote()
 	if err != nil {
 		return "", err

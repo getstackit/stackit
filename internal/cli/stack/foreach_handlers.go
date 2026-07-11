@@ -95,7 +95,7 @@ func (h *SimpleForeachHandler) OnEvent(e foreach.Event) {
 		switch ev.Status {
 		case foreach.StatusRunning:
 			// Sequential mode - show "Running on branch..."
-			h.Output.Info("\nRunning on branch %s...", style.ColorBranchName(ev.BranchName, isCurrent))
+			h.Output.Info("\nRunning on branch %s...", style.ColorBranchNameIf(ev.BranchName, isCurrent))
 
 		case foreach.StatusDone:
 			// In sequential mode, we've already printed "Running on branch..."
@@ -104,7 +104,7 @@ func (h *SimpleForeachHandler) OnEvent(e foreach.Event) {
 			if len(output) > 0 {
 				h.Output.Info("%s", strings.TrimSuffix(output, "\n"))
 			}
-			h.Output.Info("✓ Command succeeded on branch %s", style.ColorBranchName(ev.BranchName, isCurrent))
+			h.Output.Info("✓ Command succeeded on branch %s", style.ColorBranchNameIf(ev.BranchName, isCurrent))
 
 		case foreach.StatusError:
 			// In sequential mode, we've already printed "Running on branch..."
@@ -113,7 +113,7 @@ func (h *SimpleForeachHandler) OnEvent(e foreach.Event) {
 			if len(output) > 0 {
 				h.Output.Info("%s", strings.TrimSuffix(output, "\n"))
 			}
-			h.Output.Error("✗ Command failed on branch %s: %v", style.ColorBranchName(ev.BranchName, isCurrent), ev.Error)
+			h.Output.Error("✗ Command failed on branch %s: %v", style.ColorBranchNameIf(ev.BranchName, isCurrent), ev.Error)
 		}
 
 	case foreach.CompletionEvent:

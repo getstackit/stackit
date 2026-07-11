@@ -85,7 +85,7 @@ func handleAddTrunk(ctx *app.Context, trunkName string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	ctx.Output.Info("Added %s as a trunk branch.", style.ColorBranchName(trunkName, false))
+	ctx.Output.Info("Added %s as a trunk branch.", style.ColorBranchName(trunkName))
 	return nil
 }
 

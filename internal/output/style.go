@@ -9,7 +9,7 @@ import "github.com/getstackit/stackit/internal/tui/style"
 
 // Branch renders a branch name, colored, with a "(current)" marker when isCurrent.
 func Branch(name string, isCurrent bool) string {
-	return style.ColorBranchName(name, isCurrent)
+	return style.ColorBranchNameIf(name, isCurrent)
 }
 
 // BranchWithTrunk is like Branch but renders the trunk branch in a distinct color.
@@ -43,9 +43,6 @@ func NeedsRestack(text string) string { return style.ColorNeedsRestack(text) }
 
 // PRNumber renders a pull-request number.
 func PRNumber(prNumber int) string { return style.ColorPRNumber(prNumber) }
-
-// PRState renders a pull-request state label.
-func PRState(state string, isDraft bool) string { return style.ColorPRState(state, isDraft) }
 
 // RenderMarkdown renders markdown content for the terminal.
 func RenderMarkdown(content string) string { return style.RenderMarkdown(content) }

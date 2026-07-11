@@ -125,8 +125,7 @@ func (a *ViewAssembler) fetchPRTitles(ctx context.Context, commits []git.RecentC
 		return nil
 	}
 
-	owner, repo := a.gh.GetOwnerRepo()
-	titles, err := a.gh.BatchGetPRTitles(ctx, owner, repo, prNumbers)
+	titles, err := a.gh.BatchGetPRTitles(ctx, prNumbers)
 	if err != nil {
 		return nil
 	}

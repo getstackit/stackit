@@ -64,7 +64,7 @@ func (h *cliInitHandler) OnSuccess(trunkName string, wasInitialized bool, isRese
 	}
 	splog.Newline()
 
-	coloredTrunk := style.ColorBranchName(trunkName, false)
+	coloredTrunk := style.ColorBranchName(trunkName)
 	splog.Info("Trunk set to %s", coloredTrunk)
 
 	if isReset {

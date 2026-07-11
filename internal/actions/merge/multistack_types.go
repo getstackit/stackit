@@ -1,9 +1,11 @@
 package merge
 
-// Exclusion reason constants for MultiStackExcluded
+// ExcludeReason says why a stack was left out of a multi-stack merge.
+type ExcludeReason string
+
 const (
-	excludeReasonConflict  = "conflict"
-	excludeReasonCIFailure = "ci_failure"
+	excludeReasonConflict  ExcludeReason = "conflict"
+	excludeReasonCIFailure ExcludeReason = "ci_failure"
 )
 
 // MultiStackInfo represents a stack that can be merged in multi-stack mode
@@ -26,7 +28,7 @@ type MultiStackResult struct {
 // MultiStackExcluded represents a stack that was not included in the merge
 type MultiStackExcluded struct {
 	Stack  MultiStackInfo
-	Reason string // excludeReasonConflict | excludeReasonCIFailure
+	Reason ExcludeReason
 }
 
 // MultiStackOptions contains options specific to multi-stack merge

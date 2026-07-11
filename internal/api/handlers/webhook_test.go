@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/api/githubwebhook"
+	"github.com/getstackit/stackit/internal/api/registry"
 )
 
 // fakeSyncer records Trigger calls and signals each one on done, so a test can
@@ -28,9 +29,9 @@ func newFakeSyncer() *fakeSyncer {
 	return &fakeSyncer{done: make(chan struct{}, 1)}
 }
 
-func (f *fakeSyncer) Trigger(owner, name string) {
+func (f *fakeSyncer) Trigger(repo registry.RepoRef) {
 	f.mu.Lock()
-	f.calls = append(f.calls, owner+"/"+name)
+	f.calls = append(f.calls, repo.String())
 	f.mu.Unlock()
 	select {
 	case f.done <- struct{}{}:

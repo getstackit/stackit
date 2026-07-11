@@ -85,9 +85,9 @@ func (h *InteractivePluckHandler) IsInteractive() bool {
 func (h *InteractivePluckHandler) PromptConfirmPluck(preview pluck.Preview) (bool, error) {
 	h.Output.Newline()
 	h.Output.Info("Pluck Preview:")
-	h.Output.Info("  Branch: %s", style.ColorBranchName(preview.SourceBranch, true))
-	h.Output.Info("  From:   %s", style.ColorBranchName(preview.OldParent, false))
-	h.Output.Info("  To:     %s", style.ColorBranchName(preview.NewParent, false))
+	h.Output.Info("  Branch: %s", style.ColorCurrentBranch(preview.SourceBranch))
+	h.Output.Info("  From:   %s", style.ColorBranchName(preview.OldParent))
+	h.Output.Info("  To:     %s", style.ColorBranchName(preview.NewParent))
 
 	if len(preview.Commits) > 0 {
 		h.Output.Newline()
@@ -100,10 +100,10 @@ func (h *InteractivePluckHandler) PromptConfirmPluck(preview pluck.Preview) (boo
 	if len(preview.Children) > 0 {
 		h.Output.Newline()
 		h.Output.Info("Children to be reparented to %s (%d):",
-			style.ColorBranchName(preview.ChildNewParent, false),
+			style.ColorBranchName(preview.ChildNewParent),
 			len(preview.Children))
 		for _, child := range preview.Children {
-			h.Output.Info("  • %s", style.ColorBranchName(child, false))
+			h.Output.Info("  • %s", style.ColorBranchName(child))
 		}
 	}
 
@@ -112,14 +112,14 @@ func (h *InteractivePluckHandler) PromptConfirmPluck(preview pluck.Preview) (boo
 	if len(preview.Children) > 0 {
 		h.Output.Info("  1. Reparent %d children to %s",
 			len(preview.Children),
-			style.ColorBranchName(preview.ChildNewParent, false))
+			style.ColorBranchName(preview.ChildNewParent))
 		h.Output.Info("  2. Move %s to %s",
-			style.ColorBranchName(preview.SourceBranch, true),
-			style.ColorBranchName(preview.NewParent, false))
+			style.ColorCurrentBranch(preview.SourceBranch),
+			style.ColorBranchName(preview.NewParent))
 	} else {
 		h.Output.Info("  1. Move %s to %s",
-			style.ColorBranchName(preview.SourceBranch, true),
-			style.ColorBranchName(preview.NewParent, false))
+			style.ColorCurrentBranch(preview.SourceBranch),
+			style.ColorBranchName(preview.NewParent))
 	}
 	h.Output.Newline()
 

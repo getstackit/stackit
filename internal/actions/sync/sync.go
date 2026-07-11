@@ -62,13 +62,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Collect dirty worktree anchors (stacks to skip entirely)
 	// Rather than failing on dirty worktrees, we skip their entire stack to allow
 	// parallel work in other worktrees while preserving consistency.
-	var dirtyAnchors map[string]bool
+	var dirtyAnchors dirtyAnchorSet
 	managedWorktrees, err := eng.ListManagedWorktrees()
 	if err == nil {
 		for _, wt := range managedWorktrees {
 			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(gctx, wt.Path); hasChanges {
 				if dirtyAnchors == nil {
-					dirtyAnchors = make(map[string]bool)
+					dirtyAnchors = make(dirtyAnchorSet)
 				}
 				dirtyAnchors[wt.AnchorBranch] = true
 				out.Warn("Skipping stack rooted at %s (worktree has uncommitted changes)", wt.AnchorBranch)
@@ -228,7 +228,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Add branches with new parents to restack list (skip dirty stacks)
 	for _, branchName := range cleanResult.BranchesWithNewParents {
-		if isInDirtyStack(ctx, branchName, dirtyAnchors) {
+		if dirtyAnchors.includes(ctx, branchName) {
 			continue
 		}
 		branch := eng.GetBranch(branchName)
@@ -540,14 +540,18 @@ func pluralES(count int) string {
 	return "es"
 }
 
-// isInDirtyStack returns true if the branch belongs to a dirty worktree's stack.
+// dirtyAnchorSet is the set of stack-anchor branches whose worktrees have
+// uncommitted changes; sync skips every branch in those stacks.
+type dirtyAnchorSet map[string]bool
+
+// includes returns true if the branch belongs to a dirty worktree's stack.
 // A branch is in a dirty stack if its stack root (first ancestor whose parent is trunk)
 // matches the anchor branch of a dirty worktree.
-func isInDirtyStack(ctx *app.Context, branchName string, dirtyAnchors map[string]bool) bool {
-	if len(dirtyAnchors) == 0 {
+func (d dirtyAnchorSet) includes(ctx *app.Context, branchName string) bool {
+	if len(d) == 0 {
 		return false
 	}
 	branch := ctx.Engine.GetBranch(branchName)
 	stackRoot := ctx.Engine.GetStackRootForBranch(branch)
-	return dirtyAnchors[stackRoot]
+	return d[stackRoot]
 }

@@ -160,10 +160,8 @@ func updatePRBaseBranchFromContext(ctx context.Context, githubClient github.Clie
 		return nil
 	}
 
-	owner, repo := githubClient.GetOwnerRepo()
-
 	// Get PR for this branch
-	pr, err := githubClient.GetPullRequestByBranch(ctx, owner, repo, branchName)
+	pr, err := githubClient.GetPullRequestByBranch(ctx, branchName)
 	if err != nil || pr == nil {
 		// PR not found or error - non-fatal
 		return nil //nolint:nilerr
@@ -174,7 +172,7 @@ func updatePRBaseBranchFromContext(ctx context.Context, githubClient github.Clie
 		Base: &newBase,
 	}
 
-	if _, err := githubClient.UpdatePullRequest(ctx, owner, repo, pr.Number, updateOpts); err != nil {
+	if _, err := githubClient.UpdatePullRequest(ctx, pr.Number, updateOpts); err != nil {
 		return fmt.Errorf("failed to update PR base: %w", err)
 	}
 

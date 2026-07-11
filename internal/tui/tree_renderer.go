@@ -312,11 +312,11 @@ func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, stat engine.Br
 			}
 
 			switch status.ReviewDecision {
-			case "APPROVED":
+			case github.ReviewDecisionApproved:
 				ann.ReviewStatus = tree.ReviewStatusApproved
-			case "CHANGES_REQUESTED":
+			case github.ReviewDecisionChangesRequested:
 				ann.ReviewStatus = tree.ReviewStatusChangesRequested
-			case "REVIEW_REQUIRED":
+			case github.ReviewDecisionReviewRequired:
 				ann.ReviewStatus = "Awaiting Review"
 			}
 		}

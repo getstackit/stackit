@@ -4,13 +4,14 @@ package submit
 import (
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Item represents a branch being submitted
 type Item struct {
 	BranchName string
-	Action     string // "create" or "update"
+	Action     engine.SubmitAction
 	PRNumber   *int
 	Status     string // "pending", "submitting", "done", "error"
 	IsSkipped  bool
@@ -57,7 +58,7 @@ const (
 	// SkipReasonNoChanges indicates the branch was skipped because it has no changes
 	SkipReasonNoChanges = "no changes"
 	// ActionUpdate indicates the branch will update an existing PR
-	ActionUpdate = "update"
+	ActionUpdate = engine.SubmitActionUpdate
 	// ActionCreate indicates the branch will create a new PR
-	ActionCreate = "create"
+	ActionCreate = engine.SubmitActionCreate
 )

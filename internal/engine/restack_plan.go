@@ -12,8 +12,8 @@ import (
 func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*RestackPlan, error) {
 	plan := &RestackPlan{
 		Specs:          make([]RebaseSpec, 0, len(branches)),
-		BranchMap:      make(map[string]bool),
-		ApplyMap:       make(map[string]bool),
+		BranchMap:      make(BranchNameSet),
+		ApplyMap:       make(BranchNameSet),
 		PlannedResults: make(map[string]RestackBranchResult),
 		Items:          make(map[string]RestackPlanItem),
 	}
@@ -59,7 +59,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 // planRestackBranch builds the plan item for one branch. metaMap and revMap
 // are batch-resolved snapshots from collectRestackData; lookups fall back to
 // individual reads on a miss so the maps are an optimization, not a contract.
-func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches map[string]bool, squashCache *git.SquashMergeCache, metaMap MetaMap, revMap RevisionMap) (RestackPlanItem, bool) {
+func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches BranchNameSet, squashCache *git.SquashMergeCache, metaMap MetaMap, revMap RevisionMap) (RestackPlanItem, bool) {
 	branchName := branch.GetName()
 	item := RestackPlanItem{Branch: branchName, Action: RestackPlanApplyValidated}
 
@@ -210,7 +210,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 	item.ParentRev = parentRev
 
-	if parentRev == oldParentRev && !plannedBranches[parentName] && !item.Reparented {
+	if parentRev == oldParentRev && !plannedBranches.Contains(parentName) && !item.Reparented {
 		item.Skip = true
 		item.SkipResult = RestackBranchResult{
 			Result:            RestackUnneeded,
@@ -225,7 +225,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 // falling back to an individual read on a miss. ok is false when the revision
 // cannot be resolved at all (e.g. the branch was deleted).
 func (e *engineImpl) planRev(revMap RevisionMap, name string) (string, bool) {
-	if rev, ok := revMap[name]; ok {
+	if rev, ok := revMap.Rev(name); ok {
 		return rev, true
 	}
 	rev, err := e.GetBranch(name).GetRevision()

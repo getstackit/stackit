@@ -38,9 +38,7 @@ type fakeTitles struct {
 	err    error
 }
 
-func (f *fakeTitles) GetOwnerRepo() (string, string) { return "owner", "repo" }
-
-func (f *fakeTitles) BatchGetPRTitles(_ context.Context, _, _ string, prNumbers []int) (map[int]string, error) {
+func (f *fakeTitles) BatchGetPRTitles(_ context.Context, prNumbers []int) (map[int]string, error) {
 	f.gotPRs = prNumbers
 	return f.titles, f.err
 }

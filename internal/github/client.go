@@ -103,17 +103,17 @@ type MergePROptions struct {
 // Client is an interface for GitHub API interactions
 type Client interface {
 	// CreatePullRequest creates a new pull request
-	CreatePullRequest(ctx context.Context, owner, repo string, opts CreatePROptions) (*PullRequestInfo, error)
+	CreatePullRequest(ctx context.Context, opts CreatePROptions) (*PullRequestInfo, error)
 
 	// UpdatePullRequest updates an existing pull request
 	// Returns warnings (non-fatal issues like failed label/assignee additions) and error
-	UpdatePullRequest(ctx context.Context, owner, repo string, prNumber int, opts UpdatePROptions) (warnings []string, err error)
+	UpdatePullRequest(ctx context.Context, prNumber int, opts UpdatePROptions) (warnings []string, err error)
 
 	// GetPullRequestByBranch gets a pull request for a branch
-	GetPullRequestByBranch(ctx context.Context, owner, repo, branchName string) (*PullRequestInfo, error)
+	GetPullRequestByBranch(ctx context.Context, branchName string) (*PullRequestInfo, error)
 
 	// GetPullRequest gets a pull request by number
-	GetPullRequest(ctx context.Context, owner, repo string, prNumber int) (*PullRequestInfo, error)
+	GetPullRequest(ctx context.Context, prNumber int) (*PullRequestInfo, error)
 
 	// MergePullRequest merges a pull request using the specified merge method
 	MergePullRequest(ctx context.Context, branchName string, opts MergePROptions) error
@@ -128,26 +128,26 @@ type Client interface {
 	BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (map[string]*CheckStatus, error)
 
 	// BatchGetPRTitles returns titles for multiple PRs by number
-	BatchGetPRTitles(ctx context.Context, owner, repo string, prNumbers []int) (map[int]string, error)
+	BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error)
 
 	// GetOwnerRepo returns the repository owner and name
 	GetOwnerRepo() (owner, repo string)
 
 	// ClosePullRequest closes a pull request
-	ClosePullRequest(ctx context.Context, owner, repo string, prNumber int) error
+	ClosePullRequest(ctx context.Context, prNumber int) error
 
 	// Comment methods for navigation location support
 	// CreatePRComment creates a new comment on a pull request
-	CreatePRComment(ctx context.Context, owner, repo string, prNumber int, body string) (int64, error)
+	CreatePRComment(ctx context.Context, prNumber int, body string) (int64, error)
 
 	// UpdatePRComment updates an existing pull request comment
-	UpdatePRComment(ctx context.Context, owner, repo string, commentID int64, body string) error
+	UpdatePRComment(ctx context.Context, commentID int64, body string) error
 
 	// DeletePRComment deletes a pull request comment
-	DeletePRComment(ctx context.Context, owner, repo string, commentID int64) error
+	DeletePRComment(ctx context.Context, commentID int64) error
 
 	// ListPRComments lists all comments on a pull request
-	ListPRComments(ctx context.Context, owner, repo string, prNumber int) ([]PRComment, error)
+	ListPRComments(ctx context.Context, prNumber int) ([]PRComment, error)
 
 	// GetCurrentUser returns the authenticated GitHub username
 	GetCurrentUser(ctx context.Context) (string, error)

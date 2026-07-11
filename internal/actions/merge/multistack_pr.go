@@ -67,11 +67,6 @@ func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, i
 		return nil, err
 	}
 
-	owner, repo := p.ctx.GitHub().GetOwnerRepo()
-	if owner == "" || repo == "" {
-		return nil, fmt.Errorf("could not determine repository owner/name")
-	}
-
 	content := p.prGenerator.GenerateMultiStackPR(included, excluded)
 
 	opts := github.CreatePROptions{
@@ -82,7 +77,7 @@ func (p *MultiStackPRCreator) CreatePR(ctx context.Context, branchName string, i
 		Draft: false,
 	}
 
-	pr, err := p.ctx.GitHub().CreatePullRequest(ctx, owner, repo, opts)
+	pr, err := p.ctx.GitHub().CreatePullRequest(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PR: %w", err)
 	}

@@ -58,8 +58,8 @@ func (h *SimpleMoveHandler) OnRename(oldName, newName string) {
 	h.Lock()
 	defer h.Unlock()
 	h.Output.Info("Renamed branch %s to %s",
-		style.ColorBranchName(oldName, false),
-		style.ColorBranchName(newName, true))
+		style.ColorBranchName(oldName),
+		style.ColorCurrentBranch(newName))
 }
 
 // Complete is called when move finishes

@@ -101,10 +101,10 @@ func (s *Syncer) syncOnce(ctx context.Context) {
 // already holds, while the webhook path arrives with only GitHub coordinates
 // and resolves the entry here. Returns ErrRepoNotManaged when no managed repo
 // matches, so a webhook for an un-onboarded repo is a clean no-op.
-func (s *Syncer) SyncRepo(ctx context.Context, owner, name string) error {
-	e, ok := s.reg.FindManaged(owner, name)
+func (s *Syncer) SyncRepo(ctx context.Context, repo registry.RepoRef) error {
+	e, ok := s.reg.FindManaged(repo)
 	if !ok {
-		return fmt.Errorf("%w: %s/%s", ErrRepoNotManaged, owner, name)
+		return fmt.Errorf("%w: %s", ErrRepoNotManaged, repo)
 	}
 	return s.syncEntry(ctx, e)
 }

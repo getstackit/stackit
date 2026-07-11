@@ -69,7 +69,7 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 // This must run after syncGitHubPRInfo completes
 //
 //nolint:unparam // error return is for future error handling
-func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAnchors map[string]bool, handler Handler) error {
+func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAnchors dirtyAnchorSet, handler Handler) error {
 	eng := ctx.PR()
 	nav := ctx.Navigator()
 	out := ctx.Output
@@ -130,7 +130,7 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 					Message: fmt.Sprintf("Updating PR metadata for %s", branchName),
 				})
 			}
-			actions.UpdateStackPRMetadata(ctx, flaggedBranches, result.RepoOwner, result.RepoName)
+			actions.UpdateStackPRMetadata(ctx, flaggedBranches)
 			ctx.Logger.Info("update stack pr metadata completed durationMs=%d branchCount=%d",
 				time.Since(updateMetaStart).Milliseconds(), len(flaggedBranches))
 		}
@@ -159,7 +159,7 @@ type ParentsToGitHubResult struct {
 
 // PushParentsToGitHub pushes local parent relationships to GitHub PR bases.
 // Local metadata is authoritative - if local parent differs from GitHub PR base, update GitHub.
-func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchors map[string]bool) (*ParentsToGitHubResult, error) {
+func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchors dirtyAnchorSet) (*ParentsToGitHubResult, error) {
 	eng := ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
@@ -181,7 +181,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		}
 
 		// Skip branches in dirty stacks
-		if isInDirtyStack(ctx, branch.GetName(), dirtyAnchors) {
+		if dirtyAnchors.includes(ctx, branch.GetName()) {
 			continue
 		}
 
@@ -225,7 +225,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 			Base: &u.localParentName,
 		}
 
-		if _, err := githubClient.UpdatePullRequest(gctx, result.RepoOwner, result.RepoName, u.prNumber, updateOpts); err != nil {
+		if _, err := githubClient.UpdatePullRequest(gctx, u.prNumber, updateOpts); err != nil {
 			out.Debug("Failed to update PR base for %s: %v", u.branchName, err)
 			return
 		}

@@ -36,7 +36,7 @@ func (c *MockGitHubClient) GetOwnerRepo() (string, string) {
 }
 
 // CreatePullRequest creates a new pull request
-func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, owner, repo string, opts githubpkg.CreatePROptions) (*githubpkg.PullRequestInfo, error) {
+func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, opts githubpkg.CreatePROptions) (*githubpkg.PullRequestInfo, error) {
 	pr := &github.NewPullRequest{
 		Title: new(opts.Title),
 		Head:  new(opts.Head),
@@ -48,7 +48,7 @@ func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, owner, repo st
 		pr.Body = new(opts.Body)
 	}
 
-	createdPR, _, err := c.client.PullRequests.Create(ctx, owner, repo, pr)
+	createdPR, _, err := c.client.PullRequests.Create(ctx, c.owner, c.repo, pr)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, owner, repo st
 }
 
 // UpdatePullRequest updates an existing pull request
-func (c *MockGitHubClient) UpdatePullRequest(ctx context.Context, owner, repo string, prNumber int, opts githubpkg.UpdatePROptions) ([]string, error) {
+func (c *MockGitHubClient) UpdatePullRequest(ctx context.Context, prNumber int, opts githubpkg.UpdatePROptions) ([]string, error) {
 	update := &github.PullRequest{}
 
 	if opts.Title != nil {
@@ -72,14 +72,14 @@ func (c *MockGitHubClient) UpdatePullRequest(ctx context.Context, owner, repo st
 		}
 	}
 
-	_, _, err := c.client.PullRequests.Edit(ctx, owner, repo, prNumber, update)
+	_, _, err := c.client.PullRequests.Edit(ctx, c.owner, c.repo, prNumber, update)
 	return nil, err
 }
 
 // GetPullRequestByBranch gets a pull request for a branch
-func (c *MockGitHubClient) GetPullRequestByBranch(ctx context.Context, owner, repo, branchName string) (*githubpkg.PullRequestInfo, error) {
-	prs, _, err := c.client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
-		Head:  owner + ":" + branchName,
+func (c *MockGitHubClient) GetPullRequestByBranch(ctx context.Context, branchName string) (*githubpkg.PullRequestInfo, error) {
+	prs, _, err := c.client.PullRequests.List(ctx, c.owner, c.repo, &github.PullRequestListOptions{
+		Head:  c.owner + ":" + branchName,
 		State: "all",
 		ListOptions: github.ListOptions{
 			PerPage: 1,
@@ -97,8 +97,8 @@ func (c *MockGitHubClient) GetPullRequestByBranch(ctx context.Context, owner, re
 }
 
 // GetPullRequest gets a pull request by number
-func (c *MockGitHubClient) GetPullRequest(ctx context.Context, owner, repo string, prNumber int) (*githubpkg.PullRequestInfo, error) {
-	pr, _, err := c.client.PullRequests.Get(ctx, owner, repo, prNumber)
+func (c *MockGitHubClient) GetPullRequest(ctx context.Context, prNumber int) (*githubpkg.PullRequestInfo, error) {
+	pr, _, err := c.client.PullRequests.Get(ctx, c.owner, c.repo, prNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func (c *MockGitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNam
 }
 
 // BatchGetPRTitles returns synthetic titles for testing
-func (c *MockGitHubClient) BatchGetPRTitles(_ context.Context, _, _ string, prNumbers []int) (map[int]string, error) {
+func (c *MockGitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []int) (map[int]string, error) {
 	results := make(map[int]string, len(prNumbers))
 	for _, num := range prNumbers {
 		results[num] = fmt.Sprintf("PR #%d title", num)
@@ -168,15 +168,15 @@ func (c *MockGitHubClient) BatchGetPRTitles(_ context.Context, _, _ string, prNu
 }
 
 // ClosePullRequest closes a pull request
-func (c *MockGitHubClient) ClosePullRequest(ctx context.Context, owner, repo string, prNumber int) error {
+func (c *MockGitHubClient) ClosePullRequest(ctx context.Context, prNumber int) error {
 	state := "closed"
-	_, _, err := c.client.PullRequests.Edit(ctx, owner, repo, prNumber, &github.PullRequest{State: &state})
+	_, _, err := c.client.PullRequests.Edit(ctx, c.owner, c.repo, prNumber, &github.PullRequest{State: &state})
 	return err
 }
 
 // CreatePRComment creates a new comment on a pull request
-func (c *MockGitHubClient) CreatePRComment(ctx context.Context, owner, repo string, prNumber int, body string) (int64, error) {
-	comment, _, err := c.client.Issues.CreateComment(ctx, owner, repo, prNumber, &github.IssueComment{
+func (c *MockGitHubClient) CreatePRComment(ctx context.Context, prNumber int, body string) (int64, error) {
+	comment, _, err := c.client.Issues.CreateComment(ctx, c.owner, c.repo, prNumber, &github.IssueComment{
 		Body: new(body),
 	})
 	if err != nil {
@@ -186,22 +186,22 @@ func (c *MockGitHubClient) CreatePRComment(ctx context.Context, owner, repo stri
 }
 
 // UpdatePRComment updates an existing pull request comment
-func (c *MockGitHubClient) UpdatePRComment(ctx context.Context, owner, repo string, commentID int64, body string) error {
-	_, _, err := c.client.Issues.EditComment(ctx, owner, repo, commentID, &github.IssueComment{
+func (c *MockGitHubClient) UpdatePRComment(ctx context.Context, commentID int64, body string) error {
+	_, _, err := c.client.Issues.EditComment(ctx, c.owner, c.repo, commentID, &github.IssueComment{
 		Body: new(body),
 	})
 	return err
 }
 
 // DeletePRComment deletes a pull request comment
-func (c *MockGitHubClient) DeletePRComment(ctx context.Context, owner, repo string, commentID int64) error {
-	_, err := c.client.Issues.DeleteComment(ctx, owner, repo, commentID)
+func (c *MockGitHubClient) DeletePRComment(ctx context.Context, commentID int64) error {
+	_, err := c.client.Issues.DeleteComment(ctx, c.owner, c.repo, commentID)
 	return err
 }
 
 // ListPRComments lists all comments on a pull request
-func (c *MockGitHubClient) ListPRComments(ctx context.Context, owner, repo string, prNumber int) ([]githubpkg.PRComment, error) {
-	comments, _, err := c.client.Issues.ListComments(ctx, owner, repo, prNumber, &github.IssueListCommentsOptions{
+func (c *MockGitHubClient) ListPRComments(ctx context.Context, prNumber int) ([]githubpkg.PRComment, error) {
+	comments, _, err := c.client.Issues.ListComments(ctx, c.owner, c.repo, prNumber, &github.IssueListCommentsOptions{
 		ListOptions: github.ListOptions{
 			PerPage: 100,
 		},

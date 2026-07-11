@@ -12,7 +12,7 @@ import (
 // It skips branches that are trunk, locked, frozen, or in a dirty stack.
 // This allows the sync command to fast-forward branches when someone else pushes
 // commits to a stack branch from another machine.
-func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) error {
+func syncStackBranches(ctx *app.Context, dirtyAnchors dirtyAnchorSet, remoteStatuses engine.BranchRemoteStatuses, handler Handler, summary *Summary) error {
 	eng := ctx.Engine
 	nav := ctx.Navigator()
 	gctx := ctx.Context
@@ -73,7 +73,7 @@ func syncStackBranches(ctx *app.Context, dirtyAnchors map[string]bool, remoteSta
 		}
 
 		// Skip branches in dirty stacks
-		if isInDirtyStack(ctx, branchName, dirtyAnchors) {
+		if dirtyAnchors.includes(ctx, branchName) {
 			continue
 		}
 

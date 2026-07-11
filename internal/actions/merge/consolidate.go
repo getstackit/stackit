@@ -224,7 +224,6 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 func (c *ConsolidateMergeExecutor) createConsolidationPR(ctx context.Context, branchName string) (*github.PullRequestInfo, error) {
 	content := c.prGenerator.GenerateConsolidationPR(c.plan.BranchesToMerge)
 
-	owner, repo := c.getOwnerRepo()
 	opts := github.CreatePROptions{
 		Title: content.Title,
 		Body:  content.Body,
@@ -233,7 +232,7 @@ func (c *ConsolidateMergeExecutor) createConsolidationPR(ctx context.Context, br
 		Draft: false,
 	}
 
-	pr, err := c.ctx.GitHub().CreatePullRequest(ctx, owner, repo, opts)
+	pr, err := c.ctx.GitHub().CreatePullRequest(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PR: %w", err)
 	}
@@ -350,10 +349,6 @@ func (c *ConsolidateMergeExecutor) getStackScopeOrDefault() string {
 		}
 	}
 	return "stack"
-}
-
-func (c *ConsolidateMergeExecutor) getOwnerRepo() (owner, repo string) {
-	return c.ctx.GitHub().GetOwnerRepo()
 }
 
 // buildStackMetadata builds stack metadata for consolidation merge commits.

@@ -126,7 +126,7 @@ func (h *SimpleSyncHandler) IsInteractive() bool { return false }
 // PromptMetadataConflict implements Handler. Logs warning and returns false (keep local) in non-interactive mode.
 func (h *SimpleSyncHandler) PromptMetadataConflict(diff *engine.MetadataDiff) (bool, error) {
 	h.Output.Warn("Metadata conflict for %s (keeping local):",
-		style.ColorBranchName(diff.Branch, false))
+		style.ColorBranchName(diff.Branch))
 	for _, fd := range diff.Differences {
 		h.Output.Warn("  %s: %v (local) vs %v (remote)", fd.Field, fd.LocalValue, fd.RemoteValue)
 	}
@@ -137,7 +137,7 @@ func (h *SimpleSyncHandler) PromptMetadataConflict(diff *engine.MetadataDiff) (b
 // PromptOrphanedMetadata implements Handler. Logs warning and returns false (accept deletion) in non-interactive mode.
 func (h *SimpleSyncHandler) PromptOrphanedMetadata(info engine.OrphanedMetadataInfo) (bool, error) {
 	h.Output.Warn("Orphaned metadata for %s (accepting deletion):",
-		style.ColorBranchName(info.BranchName, false))
+		style.ColorBranchName(info.BranchName))
 	if info.LocalMeta != nil {
 		if info.LocalMeta.GetLockReason().IsLocked() {
 			h.Output.Warn("  lockReason: %s", info.LocalMeta.GetLockReason())
@@ -199,10 +199,10 @@ func (h *SimpleSyncHandler) printTrunkEvent(event syncAction.Event) {
 		if event.NewRevision != "" {
 			h.item(event.Phase, "  %s %s fast-forwarded to %s",
 				style.MarkSuccess(),
-				style.ColorBranchName(event.Branch, false),
+				style.ColorBranchName(event.Branch),
 				style.ColorDim(event.NewRevision))
 		} else {
-			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch, false))
+			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch))
 		}
 	}
 }
@@ -213,16 +213,16 @@ func (h *SimpleSyncHandler) printBranchSyncEvent(event syncAction.Event) {
 		if event.NewRevision != "" {
 			h.item(event.Phase, "  %s %s fast-forwarded to %s",
 				style.MarkSuccess(),
-				style.ColorBranchName(event.Branch, false),
+				style.ColorBranchName(event.Branch),
 				style.ColorDim(event.NewRevision))
 		} else {
-			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch, false))
+			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch))
 		}
 	case syncAction.EventSkipped:
 		if event.Conflict {
 			h.item(event.Phase, "  %s %s diverged from remote (skipping)",
 				style.MarkWarning(),
-				style.ColorBranchName(event.Branch, false))
+				style.ColorBranchName(event.Branch))
 		}
 	}
 }
@@ -231,7 +231,7 @@ func (h *SimpleSyncHandler) printGitHubEvent(event syncAction.Event) {
 	switch event.Type {
 	case syncAction.EventProgress:
 		if event.Branch != "" {
-			h.item(event.Phase, "  %s Updating PR for %s", style.MarkProgress(), style.ColorBranchName(event.Branch, false))
+			h.item(event.Phase, "  %s Updating PR for %s", style.MarkProgress(), style.ColorBranchName(event.Branch))
 		}
 	case syncAction.EventCompleted:
 		if event.Message != "" {
@@ -248,7 +248,7 @@ func (h *SimpleSyncHandler) printCleanEvent(event syncAction.Event) {
 		}
 		h.item(event.Phase, "  %s Deleted %s%s %s",
 			style.MarkSuccess(),
-			style.ColorBranchName(event.Branch, false),
+			style.ColorBranchName(event.Branch),
 			prInfo,
 			style.ColorDim(event.Message))
 	}
@@ -264,7 +264,7 @@ func (h *SimpleSyncHandler) printRestackEvent(event syncAction.Event) {
 		prInfo = fmt.Sprintf(" (PR #%d)", *event.PRNumber)
 	}
 
-	branchStr := style.ColorBranchName(event.Branch, event.IsCurrent)
+	branchStr := style.ColorBranchNameIf(event.Branch, event.IsCurrent)
 
 	switch event.Type {
 	case syncAction.EventCompleted:
@@ -272,7 +272,7 @@ func (h *SimpleSyncHandler) printRestackEvent(event syncAction.Event) {
 		case event.NewRevision != "":
 			msg := fmt.Sprintf("  %s Restacked %s%s", style.MarkSuccess(), branchStr, prInfo)
 			if event.Parent != "" {
-				msg += fmt.Sprintf(" on %s", style.ColorBranchName(event.Parent, false))
+				msg += fmt.Sprintf(" on %s", style.ColorBranchName(event.Parent))
 			}
 			msg += fmt.Sprintf(" → %s", style.ColorDim(event.NewRevision))
 			h.item(event.Phase, "%s", msg)
@@ -320,9 +320,9 @@ func (h *SimpleSyncHandler) OnRestackBranch(branch string, result syncAction.Res
 	// Log reparenting info if applicable
 	if reparented {
 		h.Output.Info("Reparented %s from %s to %s (parent was merged/deleted).",
-			style.ColorBranchName(branch, isCurrent),
-			style.ColorBranchName(oldParent, false),
-			style.ColorBranchName(newParent, false))
+			style.ColorBranchNameIf(branch, isCurrent),
+			style.ColorBranchName(oldParent),
+			style.ColorBranchName(newParent))
 	}
 
 	// Convert to Event and use existing printRestackEvent
@@ -510,7 +510,7 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			prInfo = fmt.Sprintf(" (PR #%d)", *event.PRNumber)
 		}
 
-		displayName := style.ColorBranchName(event.Branch, event.IsCurrent)
+		displayName := style.ColorBranchNameIf(event.Branch, event.IsCurrent)
 
 		switch event.Type {
 		case syncAction.EventCompleted:
@@ -629,7 +629,7 @@ func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncA
 		prInfo = fmt.Sprintf(" (PR #%d)", *prNumber)
 	}
 
-	displayName := style.ColorBranchName(branch, isCurrent)
+	displayName := style.ColorBranchNameIf(branch, isCurrent)
 
 	switch result {
 	case syncAction.RestackDone:
@@ -690,7 +690,7 @@ func (h *InteractiveSyncHandler) Resume() { h.runner.Resume() }
 // conflict to out. Shared by the interactive handler and the golden transcript
 // harness so both render identical text.
 func describeMetadataConflict(out output.Output, diff *engine.MetadataDiff) {
-	out.Info("\nMetadata differs for branch '%s':", style.ColorBranchName(diff.Branch, false))
+	out.Info("\nMetadata differs for branch '%s':", style.ColorBranchName(diff.Branch))
 	for _, fd := range diff.Differences {
 		out.Info("  %s: %v (local) → %v (remote)", fd.Field, fd.LocalValue, fd.RemoteValue)
 	}
@@ -718,7 +718,7 @@ func (h *InteractiveSyncHandler) PromptMetadataConflict(diff *engine.MetadataDif
 // harness so both render identical text.
 func describeOrphanedMetadata(out output.Output, info engine.OrphanedMetadataInfo) {
 	out.Info("\nRemote metadata for '%s' was deleted, but you have local changes:",
-		style.ColorBranchName(info.BranchName, false))
+		style.ColorBranchName(info.BranchName))
 	if info.LocalMeta != nil {
 		if info.LocalMeta.GetLockReason().IsLocked() {
 			out.Info("  lockReason: %s", info.LocalMeta.GetLockReason())
@@ -751,7 +751,7 @@ func describeRestackConflicts(out output.Output, conflictBranches []string) {
 	for _, name := range conflictBranches {
 		// Bullets are detail lines, not warnings — use Info so they don't each
 		// pick up a ⚠️ prefix.
-		out.Info("  • %s", style.ColorBranchName(name, false))
+		out.Info("  • %s", style.ColorBranchName(name))
 	}
 	out.Newline()
 	out.Info("Branches that could be restacked cleanly have been restacked.")
@@ -787,7 +787,7 @@ func buildDeletionOptions(branches map[string]string, unpushedBranches map[strin
 		if unpushedBranches[name] {
 			reason += " — has unpushed changes"
 		}
-		options[i] = fmt.Sprintf("%s (%s)", style.ColorBranchName(name, false), style.ColorDim(reason))
+		options[i] = fmt.Sprintf("%s (%s)", style.ColorBranchName(name), style.ColorDim(reason))
 		preSelected[i] = !unpushedBranches[name] // Don't pre-select branches with unpushed changes
 	}
 	return names, options, preSelected

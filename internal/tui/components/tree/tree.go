@@ -19,13 +19,13 @@ const (
 	BranchSymbol = "◯"
 
 	// CheckStatusNone indicates no CI status
-	CheckStatusNone = "NONE"
+	CheckStatusNone CheckStatus = "NONE"
 	// CheckStatusPassing indicates CI is passing
-	CheckStatusPassing = "PASSING"
+	CheckStatusPassing CheckStatus = "PASSING"
 	// CheckStatusFailing indicates CI is failing
-	CheckStatusFailing = "FAILING"
+	CheckStatusFailing CheckStatus = "FAILING"
 	// CheckStatusPending indicates CI is pending
-	CheckStatusPending = "PENDING"
+	CheckStatusPending CheckStatus = "PENDING"
 
 	// RestackSuggestedLabel marks branches where restacking may reduce review churn.
 	RestackSuggestedLabel = "(restack suggested)"
@@ -35,6 +35,9 @@ const (
 	// ReviewStatusChangesRequested is the review status string for PRs with requested changes.
 	ReviewStatusChangesRequested = "Changes Requested"
 )
+
+// CheckStatus is the aggregate CI state shown for a branch in tree views.
+type CheckStatus string
 
 // MergedParentDisplay represents a historical merged parent for display purposes
 type MergedParentDisplay struct {
@@ -47,7 +50,7 @@ type MergedParentDisplay struct {
 type BranchAnnotation struct {
 	PRNumber      *int
 	PRAction      string // "create", "update", "skip", ""
-	CheckStatus   string // PASSING, FAILING, PENDING, NONE, ""
+	CheckStatus   CheckStatus
 	ReviewStatus  string // "Approved", "In Review", "Changes Requested", "Commented", ""
 	IsDraft       bool
 	IsLocked      bool
@@ -998,7 +1001,7 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 
 	// LINE 1: Symbol + Branch Name (bold if current) + SHA + Scope + Actionable Warnings
 	branchName := args.branchName
-	coloredBranchName := style.ColorBranchNameBoldWithTrunk(branchName, isCurrent, isTrunk)
+	coloredBranchName := style.BranchStyle(isCurrent, isTrunk, false).Render(branchName)
 
 	switch {
 	case isSelected && !isNonSelectable:
@@ -1368,7 +1371,7 @@ func (r *StackTreeRenderer) FormatAnnotationColored(annotation BranchAnnotation)
 	return " " + strings.Join(parts, " ")
 }
 
-func (r *StackTreeRenderer) checksIcon(status string) string {
+func (r *StackTreeRenderer) checksIcon(status CheckStatus) string {
 	switch status {
 	case CheckStatusPassing:
 		return "✓"

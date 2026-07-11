@@ -125,8 +125,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			if _, err := ctx.RequireGitHub(); err != nil {
 				return fmt.Errorf("cannot resolve PR #%d: %w", prNum, err)
 			}
-			owner, repo := ctx.GitHub().GetOwnerRepo()
-			pr, err := ctx.GitHub().GetPullRequest(remoteCtx, owner, repo, prNum)
+			pr, err := ctx.GitHub().GetPullRequest(remoteCtx, prNum)
 			if err != nil {
 				return fmt.Errorf("failed to get PR #%d: %w", prNum, err)
 			}
@@ -236,7 +235,6 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 
 	// Fetch PR info for branches in parallel if possible
 	if ctx.GitHub() != nil {
-		owner, repo := ctx.GitHub().GetOwnerRepo()
 		trunkName := eng.Trunk().GetName()
 
 		// Filter out trunk before parallel fetch
@@ -252,7 +250,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 
 		var mu sync.Mutex
 		utils.Run(branchesToFetch, func(branchName string) {
-			if pr, err := ctx.GitHub().GetPullRequestByBranch(remoteCtx, owner, repo, branchName); err == nil && pr != nil {
+			if pr, err := ctx.GitHub().GetPullRequestByBranch(remoteCtx, branchName); err == nil && pr != nil {
 				prNum := pr.Number
 				mu.Lock()
 				branchPRInfo[branchName] = &prNum
@@ -480,10 +478,9 @@ func crawlAncestorsViaGitHub(ctx context.Context, gh github.Client, eng engine.E
 	if gh == nil {
 		return branchesToSync
 	}
-	owner, repo := gh.GetOwnerRepo()
 	current := targetBranch
 	for {
-		pr, err := gh.GetPullRequestByBranch(ctx, owner, repo, current)
+		pr, err := gh.GetPullRequestByBranch(ctx, current)
 		if err != nil || pr == nil {
 			break
 		}

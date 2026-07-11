@@ -21,7 +21,7 @@ type WorktreeCleanupResult struct {
 // registry is updated to point to the new stack root instead of deleting the worktree.
 // This function is best-effort and will not fail sync on errors.
 // Worktrees with dirty anchors (uncommitted changes) are skipped to preserve work in progress.
-func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors map[string]bool) *WorktreeCleanupResult {
+func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *WorktreeCleanupResult {
 	result := &WorktreeCleanupResult{
 		RemovedWorktrees: []string{},
 		Errors:           []string{},

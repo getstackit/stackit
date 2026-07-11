@@ -55,7 +55,7 @@ type BranchStatus interface {
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
 	// SHAs in one batched rev-parse instead of a diff per branch.
-	BatchIsBranchEmpty(branchNames []string) map[string]bool
+	BatchIsBranchEmpty(branchNames []string) BranchNameSet
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription
@@ -80,7 +80,7 @@ type BranchStatus interface {
 	// TrunkRemoteState reports how the local trunk relates to its
 	// remote-tracking branch using only local refs (no network).
 	TrunkRemoteState(ctx context.Context) TrunkRemoteState
-	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
+	GetMergedBranches(ctx context.Context, target string) (BranchNameSet, error)
 }
 
 // BranchInfo provides commit and diff metadata

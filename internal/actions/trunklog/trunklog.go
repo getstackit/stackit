@@ -22,8 +22,7 @@ type CommitSource interface {
 // resolver when no GitHub client is available (offline) and PR titles are simply
 // omitted rather than treated as an error.
 type TitleResolver interface {
-	GetOwnerRepo() (owner, repo string)
-	BatchGetPRTitles(ctx context.Context, owner, repo string, prNumbers []int) (map[int]string, error)
+	BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error)
 }
 
 // Request selects which trunk commits to gather.
@@ -96,11 +95,7 @@ func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.Rece
 	if len(prNumbers) == 0 {
 		return nil
 	}
-	owner, repo := titles.GetOwnerRepo()
-	if owner == "" || repo == "" {
-		return nil
-	}
-	resolved, err := titles.BatchGetPRTitles(ctx, owner, repo, prNumbers)
+	resolved, err := titles.BatchGetPRTitles(ctx, prNumbers)
 	if err != nil {
 		return nil
 	}

@@ -44,7 +44,7 @@ func RenderMovePreviewSimple(preview MovePreviewData) string {
 	// New position (highlighted)
 	sb.WriteString("New position:\n")
 	fmt.Fprintf(&sb, "  %s → %s %s\n",
-		style.ColorBranchName(preview.NewParent, false),
+		style.ColorBranchName(preview.NewParent),
 		style.ColorGreen(preview.SourceBranch),
 		style.ColorGreen("(moving to here)"))
 	sb.WriteString("\n")
@@ -62,7 +62,7 @@ func RenderMovePreviewSimple(preview MovePreviewData) string {
 	if len(preview.Descendants) > 0 {
 		fmt.Fprintf(&sb, "Branches to restack (%d):\n", len(preview.Descendants))
 		for _, desc := range preview.Descendants {
-			fmt.Fprintf(&sb, "  • %s\n", style.ColorBranchName(desc, false))
+			fmt.Fprintf(&sb, "  • %s\n", style.ColorBranchName(desc))
 		}
 		sb.WriteString("\n")
 	}
@@ -71,7 +71,7 @@ func RenderMovePreviewSimple(preview MovePreviewData) string {
 	sb.WriteString(style.ColorDim("─────────────────────────────────────") + "\n")
 	if preview.HasConflicts {
 		sb.WriteString(style.ColorRed("✗ ") + style.ColorRed("Conflicts detected") + "\n")
-		fmt.Fprintf(&sb, "  Branch: %s\n", style.ColorBranchName(preview.ConflictBranch, false))
+		fmt.Fprintf(&sb, "  Branch: %s\n", style.ColorBranchName(preview.ConflictBranch))
 		fmt.Fprintf(&sb, "  Error: %s\n", preview.ConflictError)
 	} else {
 		sb.WriteString(style.ColorGreen("✓ ") + style.ColorGreen("Move will complete without conflicts") + "\n")

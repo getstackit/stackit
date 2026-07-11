@@ -155,7 +155,7 @@ func rowParts(item Item, spinnerView string, styles Styles) (string, string) {
 		}
 		return styles.DimStyle.Render("○"), styles.DimStyle.Render(detail)
 	default:
-		return styles.DimStyle.Render("○"), styles.DimStyle.Render(item.Status)
+		return styles.DimStyle.Render("○"), styles.DimStyle.Render(string(item.Status))
 	}
 }
 

@@ -288,7 +288,7 @@ type branchItem struct {
 	action       engine.SubmitAction
 	prNumber     *int
 	url          string
-	status       string
+	status       submitComponent.Status
 	err          error
 	reportedDone bool
 }
@@ -335,7 +335,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				name:     branch.Name,
 				action:   branch.Action,
 				prNumber: branch.PRNumber,
-				status:   string(submit.StatusPending),
+				status:   submitComponent.StatusPending,
 			}
 			h.order = append(h.order, branch.Name)
 		}
@@ -351,7 +351,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		if item == nil {
 			return
 		}
-		item.status = string(ev.Status)
+		item.status = submitComponent.Status(ev.Status)
 		if ev.URL != "" {
 			item.url = ev.URL
 		}
@@ -380,7 +380,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				return
 			}
 			actionDone := "created"
-			if item.action == "update" {
+			if item.action == engine.SubmitActionUpdate {
 				actionDone = "updated"
 			}
 			detail := actionDone
@@ -390,7 +390,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			h.Output.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), detail)
 			// A newly created PR is the one the user needs to open; updated
 			// PRs rarely need their URL re-pasted.
-			if item.action == "create" && item.url != "" {
+			if item.action == engine.SubmitActionCreate && item.url != "" {
 				h.Output.Info("     %s", item.url)
 			}
 
@@ -564,7 +564,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 
 		h.runner.Send(submitComponent.ProgressUpdateMsg{
 			BranchName: ev.BranchName,
-			Status:     string(ev.Status),
+			Status:     submitComponent.Status(ev.Status),
 			URL:        ev.URL,
 			Err:        ev.Error,
 		})

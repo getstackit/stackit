@@ -492,6 +492,24 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 // Returns an error if any branch has invalid parent relationships.
 // Note: Missing parents are tolerated as buildRebaseSpecs will handle auto-reparenting.
 func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
+	// Resolve every branch and parent revision in one batched call instead of
+	// a git rev-parse per branch (and per parent).
+	names := make(map[string]struct{}, len(branches)*2)
+	for _, branch := range branches {
+		if branch.IsTrunk() {
+			continue
+		}
+		names[branch.GetName()] = struct{}{}
+		if parent := branch.GetParent(); parent != nil {
+			names[parent.GetName()] = struct{}{}
+		}
+	}
+	revNames := make([]string, 0, len(names))
+	for name := range names {
+		revNames = append(revNames, name)
+	}
+	revisions, _ := ctx.Engine.GetRevisions(revNames)
+
 	for _, branch := range branches {
 		branchName := branch.GetName()
 
@@ -501,9 +519,9 @@ func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 		}
 
 		// Verify branch itself exists
-		branchRev, err := branch.GetRevision()
-		if err != nil {
-			return fmt.Errorf("branch %s cannot be resolved: %w", branchName, err)
+		branchRev, ok := revisions.Rev(branchName)
+		if !ok {
+			return fmt.Errorf("branch %s cannot be resolved", branchName)
 		}
 
 		// If branch has a parent, validate it only if it exists
@@ -511,15 +529,15 @@ func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 		parent := branch.GetParent()
 		if parent != nil {
 			parentName := parent.GetName()
-			parentRev, err := parent.GetRevision()
-			if err != nil {
+			parentRev, ok := revisions.Rev(parentName)
+			if !ok {
 				// Parent doesn't exist - this is OK, auto-reparenting will handle it
 				ctx.Logger.Debug("parent branch missing, will auto-reparent branch=%v parent=%v", branchName, parentName)
 				continue
 			}
 
 			// Parent exists - verify they have a common ancestor
-			_, err = ctx.Engine.GetMergeBase(ctx.Context, parentRev, branchRev)
+			_, err := ctx.Engine.GetMergeBase(ctx.Context, parentRev, branchRev)
 			if err != nil {
 				return fmt.Errorf("branch %s and parent %s have no common ancestor: %w",
 					branchName, parentName, err)

@@ -754,6 +754,10 @@ func PromptBranchCheckout(branches []engine.Branch, eng engine.BranchReader) (st
 	}
 	renderer.SetAnnotations(annotations)
 
+	// Resolve restack status for all branches in one batched parent-revision
+	// read instead of a per-branch IsUpToDate() call in the loop below.
+	statuses := eng.ReadBranchStatuses(engine.Branches(branches))
+
 	// Build StackGraph for efficient traversals
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 
@@ -801,7 +805,7 @@ func PromptBranchCheckout(branches []engine.Branch, eng engine.BranchReader) (st
 		coloredBranchName += renderer.FormatAnnotationColored(annotation)
 
 		// Add restack indicator if needed
-		if !eng.IsUpToDate(branch) {
+		if !statuses.IsUpToDate(branch) {
 			coloredBranchName += " " + style.ColorNeedsRestack(tree.RestackSuggestedLabel)
 		}
 

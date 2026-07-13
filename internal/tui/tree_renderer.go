@@ -36,7 +36,7 @@ func NewStackTreeRendererWithOptions(eng engine.BranchReader, strategy engine.So
 // This decouples the tree renderer from the engine package.
 type graphData struct {
 	graph            *engine.StackGraph
-	eng              engine.BranchReader
+	statuses         engine.BranchStatuses
 	visibleAnchors   map[string]bool
 	flattenedChildOf map[string][]string
 }
@@ -114,11 +114,10 @@ func (d *graphData) IsTrunk(branchName string) bool {
 
 // IsFixed returns whether the branch is up-to-date with its parent.
 func (d *graphData) IsFixed(branchName string) bool {
-	node := d.graph.GetNode(branchName)
-	if node == nil {
+	if d.graph.GetNode(branchName) == nil {
 		return false
 	}
-	return d.eng.IsUpToDate(node.Branch)
+	return d.statuses.IsUpToDateByName(branchName)
 }
 
 func (d *graphData) isHiddenAnchor(branchName string) bool {
@@ -167,10 +166,15 @@ func newStackTreeRendererInternal(eng engine.BranchReader, strategy engine.SortS
 
 	graph := engine.BuildStackGraph(eng, strategy, branchFilter)
 
+	// Resolve restack status for every branch in one batched parent-revision
+	// read instead of a per-branch IsUpToDate() call during tree traversal
+	// (each of which would shell a separate `git rev-parse` for the parent).
+	statuses := eng.ReadBranchStatuses(eng.AllBranches())
+
 	// Use the Data interface instead of callback functions
 	data := &graphData{
 		graph:            graph,
-		eng:              eng,
+		statuses:         statuses,
 		visibleAnchors:   emptyWorktrees,
 		flattenedChildOf: make(map[string][]string),
 	}

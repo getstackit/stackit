@@ -163,6 +163,15 @@ func computeSyncDryRun(ctx context.Context, eng engine.Engine, opts sync.Options
 	allBranches := eng.AllBranches()
 	var candidateNames []string
 	restackRootSet := make(map[string]struct{})
+
+	// Resolve up-to-date status for every branch in one batched parent-revision
+	// read instead of a per-branch IsBranchUpToDate() inside the loop (each of
+	// which would shell a separate `git rev-parse` for the parent).
+	var statuses engine.BranchStatuses
+	if opts.Restack {
+		statuses = eng.ReadBranchStatuses(allBranches)
+	}
+
 	for _, branch := range allBranches {
 		if branch.IsTrunk() || !branch.IsTracked() {
 			continue
@@ -170,7 +179,7 @@ func computeSyncDryRun(ctx context.Context, eng engine.Engine, opts sync.Options
 		candidateNames = append(candidateNames, branch.GetName())
 
 		// Check restack status while iterating
-		if opts.Restack && !branch.IsBranchUpToDate() {
+		if opts.Restack && !statuses.IsUpToDate(branch) {
 			plan.restack = append(plan.restack, dryRunRestackItem{
 				branch: branch.GetName(),
 				parent: branch.GetParentOrTrunk(),

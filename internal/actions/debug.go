@@ -136,6 +136,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	branchNames := allBranches.Names()
 	allMeta, _ := eng.BatchReadMetadataRaw(branchNames)
 	revisions, _ := eng.GetRevisions(branchNames)
+	statuses := eng.ReadBranchStatuses(allBranches)
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 	branchInfos := make([]BranchInfo, 0, len(allBranches))
@@ -181,11 +182,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 			branchInfo.MetadataRefSHA = metadataSHA
 		}
 
-		if !branchInfo.IsTrunk {
-			branchInfo.IsFixed = branchObj.IsBranchUpToDate()
-		} else {
-			branchInfo.IsFixed = true
-		}
+		branchInfo.IsFixed = statuses.IsUpToDate(branch)
 
 		branchInfos = append(branchInfos, branchInfo)
 	}

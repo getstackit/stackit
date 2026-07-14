@@ -366,9 +366,12 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 	}
 	processableBranches := processable.Build()
 
-	// Resolve commit count and diff stats for all processable branches as one
-	// batched value, read in the loop below.
+	// Resolve commit count, diff stats, and up-to-date status for all
+	// processable branches as batched values, read in the loop below, instead
+	// of a per-branch IsBranchUpToDate() inside each worker (each of which
+	// would shell a separate `git rev-parse` for the parent).
 	stats := eng.BatchBranchStats(processableBranches)
+	statuses := eng.ReadBranchStatuses(processableBranches)
 
 	if len(processableBranches) > 0 {
 		utils.Run(processableBranches.All(), func(branch engine.Branch) {
@@ -380,7 +383,7 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 				IsTrunk:      branch.IsTrunk(),
 				IsLocked:     branch.IsLocked(),
 				IsFrozen:     branch.IsFrozen(),
-				NeedsRestack: !branch.IsBranchUpToDate() && !branch.IsTrunk(),
+				NeedsRestack: !statuses.IsUpToDate(branch) && !branch.IsTrunk(),
 			}
 
 			// Parent

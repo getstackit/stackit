@@ -57,6 +57,16 @@ func (r *objectReader) start() error {
 	return nil
 }
 
+// killLocked terminates the current process and releases its stdin pipe and
+// process resources so a restart doesn't leak the pipe's file descriptor or
+// leave a zombie process behind. Caller must hold r.mu.
+func (r *objectReader) killLocked() {
+	_ = r.stdin.Close()
+	_ = r.cmd.Process.Kill()
+	_ = r.cmd.Wait()
+	r.cmd = nil
+}
+
 // readResponse reads one response from stdout. Caller must hold r.mu.
 func (r *objectReader) readResponse(ref string) (string, bool, error) {
 	header, err := r.stdout.ReadString('\n')
@@ -99,8 +109,7 @@ func (r *objectReader) ReadObject(ref string) (string, bool, error) {
 	}
 	if _, err := fmt.Fprintf(r.stdin, "%s\n", ref); err != nil {
 		// Process died; restart and retry once
-		_ = r.cmd.Process.Kill()
-		r.cmd = nil
+		r.killLocked()
 		if startErr := r.start(); startErr != nil {
 			return "", false, startErr
 		}
@@ -128,8 +137,7 @@ func (r *objectReader) ReadObjectsBatch(refs []string) (map[string]string, error
 	for _, ref := range refs {
 		if _, err := fmt.Fprintf(r.stdin, "%s\n", ref); err != nil {
 			// Process died; clear it so the next call restarts, mirroring ReadObject.
-			_ = r.cmd.Process.Kill()
-			r.cmd = nil
+			r.killLocked()
 			return nil, fmt.Errorf("object reader write: %w", err)
 		}
 	}
@@ -138,8 +146,7 @@ func (r *objectReader) ReadObjectsBatch(refs []string) (map[string]string, error
 		content, found, err := r.readResponse(ref)
 		if err != nil {
 			// Stdout stream is broken; discard the process so the next call restarts.
-			_ = r.cmd.Process.Kill()
-			r.cmd = nil
+			r.killLocked()
 			return nil, err
 		}
 		if found {

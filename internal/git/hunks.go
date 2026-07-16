@@ -25,6 +25,10 @@ type Hunk struct {
 // Hunks is an ordered collection of diff hunks.
 type Hunks []Hunk
 
+// hunkHeaderRegex matches hunk headers: @@ -old_start,old_count +new_start,new_count @@
+// Example: @@ -10,5 +10,6 @@
+var hunkHeaderRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
+
 // ParseDiffOutput parses a diff output into structured hunks
 func ParseDiffOutput(diffOutput string) (Hunks, error) {
 	if diffOutput == "" {
@@ -33,10 +37,6 @@ func ParseDiffOutput(diffOutput string) (Hunks, error) {
 
 	var hunks Hunks
 	lines := strings.Split(diffOutput, "\n")
-
-	// Regex to match hunk headers: @@ -old_start,old_count +new_start,new_count @@
-	// Example: @@ -10,5 +10,6 @@
-	hunkHeaderRegex := regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
 	var currentHunk *Hunk
 	var currentFile string

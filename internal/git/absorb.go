@@ -1,7 +1,6 @@
 package git
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -39,8 +38,6 @@ func parseDiffHunks(diffOutput, targetFile string) []Hunk {
 
 	var hunks []Hunk
 	lines := strings.Split(diffOutput, "\n")
-
-	hunkHeaderRegex := regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
 	var currentHunk *Hunk
 	var currentFile string

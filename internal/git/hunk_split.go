@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+// hunkHeaderWithSuffixRegex matches hunk headers and captures any trailing
+// section-heading text after the closing "@@" (e.g. "@@ -1,2 +1,3 @@ func Foo()").
+var hunkHeaderWithSuffixRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$`)
+
 // CanSplit returns true if the hunk has context lines between changes,
 // meaning it can be split into multiple smaller hunks.
 // A hunk is splittable only when there's at least one context line that separates
@@ -57,9 +61,6 @@ func (h Hunk) Split() (Hunks, error) {
 
 	lines := strings.Split(h.Content, "\n")
 
-	// Parse original hunk header
-	hunkHeaderRegex := regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$`)
-
 	var headerLine string
 	var headerSuffix string
 	var contentLines []string
@@ -68,7 +69,7 @@ func (h Hunk) Split() (Hunks, error) {
 	for i, line := range lines {
 		if strings.HasPrefix(line, "@@") {
 			headerLine = line
-			match := hunkHeaderRegex.FindStringSubmatch(line)
+			match := hunkHeaderWithSuffixRegex.FindStringSubmatch(line)
 			if len(match) > 5 {
 				headerSuffix = match[5]
 			}

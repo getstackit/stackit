@@ -17,6 +17,27 @@ type BranchPattern string
 // DefaultBranchPattern is the default branch name pattern
 const DefaultBranchPattern BranchPattern = "{username}/{date}/{message}"
 
+var (
+	// placeholderRegex matches {placeholder} tokens in a branch pattern.
+	placeholderRegex = regexp.MustCompile(`\{[^}]+\}`)
+
+	// conventionalCommitPrefixRegex matches conventional commit prefixes like "feat:", "fix(scope):", etc.
+	// This is a duplicate of utils.conventionalCommitPrefixRegex to avoid import cycles.
+	conventionalCommitPrefixRegex = regexp.MustCompile(`^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?:\s*`)
+
+	// branchNameIgnoreRegex matches trailing slashes and dots that should be removed.
+	// This is a duplicate of utils.BranchNameIgnoreRegex to avoid import cycles.
+	branchNameIgnoreRegex = regexp.MustCompile(`[/.]*$`)
+
+	// branchNameReplaceRegex matches characters that are not valid in branch names.
+	// This is a duplicate of utils.BranchNameReplaceRegex to avoid import cycles.
+	branchNameReplaceRegex = regexp.MustCompile(`[^-_/.a-zA-Z0-9]+`)
+
+	// branchNameHyphenRegex matches consecutive hyphens for collapsing.
+	// This is a duplicate of utils.branchNameHyphenRegex to avoid import cycles.
+	branchNameHyphenRegex = regexp.MustCompile(`-+`)
+)
+
 // NewBranchPattern creates a new BranchPattern from a string
 // Returns an error if the pattern is invalid (doesn't contain {message})
 func NewBranchPattern(pattern string) (BranchPattern, error) {
@@ -100,7 +121,6 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 
 	// Scan pattern once to find which placeholders are present
 	// Use regex to find all {placeholder} patterns in one pass
-	placeholderRegex := regexp.MustCompile(`\{[^}]+\}`)
 	foundPlaceholders := make(map[string]bool)
 	for _, match := range placeholderRegex.FindAllString(pattern, -1) {
 		foundPlaceholders[match] = true
@@ -151,7 +171,7 @@ func (p BranchPattern) generateBranchNameFromMessage(message string) string {
 	subject := strings.TrimSpace(lines[0])
 
 	// Remove common prefixes like "feat:", "fix:", etc. if present (with optional scope)
-	subject = regexp.MustCompile(`^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?:\s*`).ReplaceAllString(subject, "")
+	subject = conventionalCommitPrefixRegex.ReplaceAllString(subject, "")
 
 	// Truncate to a reasonable length for branch names (before sanitization)
 	// Aim for ~50 characters to leave room for username/date prefixes
@@ -179,16 +199,13 @@ func (p BranchPattern) sanitizeBranchName(name string) string {
 	const maxBranchNameByteLength = 234
 
 	// Remove trailing slashes and dots
-	branchNameIgnoreRegex := regexp.MustCompile(`[/.]*$`)
 	name = branchNameIgnoreRegex.ReplaceAllString(name, "")
 
 	// Replace invalid characters with hyphens
-	branchNameReplaceRegex := regexp.MustCompile(`[^-_/.a-zA-Z0-9]+`)
 	name = branchNameReplaceRegex.ReplaceAllString(name, "-")
 
 	// Remove multiple consecutive hyphens
-	hyphenRegex := regexp.MustCompile(`-+`)
-	name = hyphenRegex.ReplaceAllString(name, "-")
+	name = branchNameHyphenRegex.ReplaceAllString(name, "-")
 
 	// Trim leading/trailing hyphens
 	name = strings.Trim(name, "-")

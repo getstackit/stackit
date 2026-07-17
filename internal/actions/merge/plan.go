@@ -296,11 +296,9 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		}
 	}
 
-	// 4. Batch fetch metadata and revisions for all involved branches
+	// 4. Batch fetch metadata for all involved branches
 	involvedBranches := append(append([]string{}, allBranches...), upstackBranches...)
 	allMeta, _ := eng.BatchReadMetadataRaw(involvedBranches)
-	// We don't strictly need allRevisions here yet, but it's good for cache
-	_, _ = eng.GetRevisions(involvedBranches)
 
 	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
 	defer cancelRemote()

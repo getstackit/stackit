@@ -170,7 +170,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	handler.OnRestackStart(branchCount)
 
 	var restacked, skipped int
-	var conflicts []string
+	var conflicts, blocked []string
 	prompter, promptForConflicts := conflictPrompter(handler, opts)
 
 	// Parallel mode: dispatch independent stack groups to separate worktrees.
@@ -178,9 +178,9 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	// so each worker computes its own plan inside its worktree.
 	if opts.Parallel && len(plan.groups) > 1 {
 		var err error
-		restacked, skipped, conflicts, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
-		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v", restacked, skipped, len(conflicts))
-		handler.OnRestackComplete(restacked, skipped, conflicts)
+		restacked, skipped, conflicts, blocked, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
+		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
+		handler.OnRestackComplete(restacked, skipped, conflicts, blocked)
 		if err != nil {
 			return fmt.Errorf("restack failed: %w", err)
 		}
@@ -197,7 +197,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		groupRoot := group.rootBranch
 		progress := func(p RestackProgress) {
 			p.StackRoot = groupRoot
-			handleRestackProgress(eng, handler, p, &restacked, &skipped, &conflicts)
+			handleRestackProgress(eng, handler, p, &restacked, &skipped, &conflicts, &blocked)
 		}
 
 		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode); err != nil {
@@ -205,7 +205,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		}
 	}
 
-	ctx.Logger.Info("restack completed restacked=%v skipped=%v conflicts=%v", restacked, skipped, len(conflicts))
+	ctx.Logger.Info("restack completed restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
 
 	if promptForConflicts && len(conflicts) > 0 {
 		resolve, err := prompter.PromptResolveConflicts(conflicts)
@@ -217,7 +217,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		}
 	}
 
-	handler.OnRestackComplete(restacked, skipped, conflicts)
+	handler.OnRestackComplete(restacked, skipped, conflicts, blocked)
 	return nil
 }
 
@@ -253,6 +253,7 @@ type parallelResultCollector struct {
 	restacked int
 	skipped   int
 	conflicts []string
+	blocked   []string
 	errs      []error
 }
 
@@ -260,7 +261,7 @@ type parallelResultCollector struct {
 func (c *parallelResultCollector) recordProgress(p RestackProgress) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	handleRestackProgress(c.eng, c.handler, p, &c.restacked, &c.skipped, &c.conflicts)
+	handleRestackProgress(c.eng, c.handler, p, &c.restacked, &c.skipped, &c.conflicts, &c.blocked)
 }
 
 // recordGroupFailure attributes every branch in a failed group to the handler
@@ -277,7 +278,7 @@ func (c *parallelResultCollector) recordGroupFailure(group restackPlannedGroup, 
 			Result:    engine.RestackConflict,
 			Conflict:  true,
 			StackRoot: group.rootBranch,
-		}, &c.restacked, &c.skipped, &c.conflicts)
+		}, &c.restacked, &c.skipped, &c.conflicts, &c.blocked)
 	}
 }
 
@@ -312,7 +313,7 @@ func restackGroupsParallel(
 	opts RestackOptions,
 	groups []restackPlannedGroup,
 	handler handlers.RestackHandler,
-) (restacked, skipped int, conflicts []string, err error) {
+) (restacked, skipped int, conflicts, blocked []string, err error) {
 	eng := ctx.Engine
 
 	numJobs := opts.Jobs
@@ -382,7 +383,7 @@ func restackGroupsParallel(
 		ctx.Logger.Warn("failed to rebuild engine after parallel restack: %v", err)
 	}
 
-	return collector.restacked, collector.skipped, collector.conflicts, collector.joinedError()
+	return collector.restacked, collector.skipped, collector.conflicts, collector.blocked, collector.joinedError()
 }
 
 // guardUnpushedTrunk refuses to restack when the local trunk has commits that
@@ -483,6 +484,7 @@ func handleRestackProgress(
 	restacked *int,
 	skipped *int,
 	conflicts *[]string,
+	blocked *[]string,
 ) {
 	res := handlers.RestackDone
 	switch p.Result {
@@ -495,6 +497,9 @@ func handleRestackProgress(
 		*skipped++
 		*conflicts = append(*conflicts, p.Branch)
 		res = handlers.RestackConflict
+	case engine.RestackBlocked:
+		*blocked = append(*blocked, p.Branch)
+		res = handlers.RestackBlocked
 	}
 
 	// Determine parent name for consistent output

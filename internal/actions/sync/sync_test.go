@@ -134,7 +134,7 @@ func TestSyncAction(t *testing.T) {
 			ExpectBranchFixed("GC2")
 	})
 
-	t.Run("partial success in branching restack (one child succeeds, one fails)", func(t *testing.T) {
+	t.Run("branching restack with a conflicted sibling holds back the whole stack", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewRemoteScenario(t)
 
@@ -178,9 +178,10 @@ func TestSyncAction(t *testing.T) {
 		// Should NOT error - conflicts are detected via validation and skipped
 		require.NoError(t, err)
 
-		// 0-Success should have been restacked successfully
-		s.ExpectBranchFixed("0-Success")
-		// 1-Failure should NOT be fixed (conflict detected via validation)
+		// The stack is applied atomically: 1-Failure's conflict holds back its
+		// clean sibling too, so the stack stays internally consistent and a
+		// later restack (after resolving) moves it as one unit.
+		s.ExpectBranchNotFixed("0-Success")
 		s.ExpectBranchNotFixed("1-Failure")
 	})
 

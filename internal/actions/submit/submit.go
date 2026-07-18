@@ -215,8 +215,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}()
 	}
 
-	if err := ValidateBranchesToSubmit(ctx, branches); err != nil {
+	submittable, err := ValidateBranchesToSubmit(ctx, branches)
+	if err != nil {
 		return fmt.Errorf("validation failed: %w", err)
+	}
+	if len(submittable) != len(branches) {
+		// Validation pruned unsubmittable subtrees (warned above); narrow the
+		// submission to the survivors.
+		branches = submittable
+		branchObjs = make(engine.Branches, len(branches))
+		for i, branchName := range branches {
+			branchObjs[i] = nav.GetBranch(branchName)
+		}
 	}
 
 	var remoteStatuses engine.BranchRemoteStatuses

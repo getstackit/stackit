@@ -329,6 +329,9 @@ const (
 	RestackUnneeded
 	// RestackConflict indicates a conflict occurred during restack
 	RestackConflict
+	// RestackBlocked indicates the branch was not restacked because another
+	// branch in its stack conflicted; it is untouched and needs a later pass
+	RestackBlocked
 )
 
 // RestackBranchResult represents the result of restacking a branch, including the rebased branch base

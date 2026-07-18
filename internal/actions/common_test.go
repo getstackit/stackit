@@ -182,13 +182,14 @@ func TestClassifyValidatedBranches(t *testing.T) {
 			NewSHAs: map[string]string{"a": "sha-a", "b": "sha-b"},
 		}
 
-		success, conflicts := classifyValidatedBranches(
+		success, conflicts, blocked := classifyValidatedBranches(
 			engine.BranchesOf(mkBranch("a"), mkBranch("b")),
 			plan,
 			validation,
 		)
 
 		require.Empty(t, conflicts)
+		require.Empty(t, blocked)
 		require.Len(t, success, 2)
 		require.Equal(t, "a", success[0].GetName())
 		require.Equal(t, "b", success[1].GetName())
@@ -205,43 +206,47 @@ func TestClassifyValidatedBranches(t *testing.T) {
 			NewSHAs: map[string]string{},
 		}
 
-		success, conflicts := classifyValidatedBranches(
+		success, conflicts, blocked := classifyValidatedBranches(
 			engine.BranchesOf(mkBranch("frozen"), mkBranch("anchor")),
 			plan,
 			validation,
 		)
 
 		require.Empty(t, conflicts)
+		require.Empty(t, blocked)
 		require.Len(t, success, 2)
 	})
 
 	// Regression: when sibling validations race in parallel and one fails,
-	// canceled siblings have no NewSHA. The previous position-based logic
-	// would put an alphabetically-earlier canceled sibling into success
+	// unattempted branches have no NewSHA. The previous position-based logic
+	// would put an alphabetically-earlier unattempted sibling into success
 	// (its position in specs was < the failed branch's position) and the
 	// engine then errored with "missing validated SHA for X". The fix
 	// classifies by capability: only branches with a confirmed NewSHA
-	// (or a no-validation action) are eligible.
-	t.Run("canceled sibling at same depth is dropped, not added to success", func(t *testing.T) {
+	// (or a no-validation action) are eligible; branches with neither a SHA
+	// nor a recorded failure are reported blocked, never silently dropped.
+	t.Run("unattempted branch is classified blocked, not added to success", func(t *testing.T) {
 		t.Parallel()
 		plan := mkPlan(map[string]engine.RestackPlanAction{
-			"alpha-canceled": engine.RestackPlanApplyValidated,
-			"beta-conflict":  engine.RestackPlanApplyValidated,
-			"gamma-ok":       engine.RestackPlanApplyValidated,
+			"alpha-blocked": engine.RestackPlanApplyValidated,
+			"beta-conflict": engine.RestackPlanApplyValidated,
+			"gamma-ok":      engine.RestackPlanApplyValidated,
 		})
 		validation := &engine.RebaseValidation{
 			Success:      false,
 			FailedBranch: "beta-conflict",
+			Failed:       []engine.FailedRebase{{Branch: "beta-conflict", ErrorType: engine.ValidationErrorConflict}},
 			NewSHAs:      map[string]string{"gamma-ok": "sha-gamma"},
 		}
 
-		success, conflicts := classifyValidatedBranches(
-			engine.BranchesOf(mkBranch("alpha-canceled"), mkBranch("beta-conflict"), mkBranch("gamma-ok")),
+		success, conflicts, blocked := classifyValidatedBranches(
+			engine.BranchesOf(mkBranch("alpha-blocked"), mkBranch("beta-conflict"), mkBranch("gamma-ok")),
 			plan,
 			validation,
 		)
 
 		require.Equal(t, []string{"beta-conflict"}, conflicts)
+		require.Equal(t, []string{"alpha-blocked"}, blocked)
 		require.Len(t, success, 1, "only gamma-ok (with confirmed NewSHA) should succeed")
 		require.Equal(t, "gamma-ok", success[0].GetName())
 	})
@@ -256,13 +261,14 @@ func TestClassifyValidatedBranches(t *testing.T) {
 			NewSHAs: map[string]string{"a": "sha-a"},
 		}
 
-		success, conflicts := classifyValidatedBranches(
+		success, conflicts, blocked := classifyValidatedBranches(
 			engine.BranchesOf(mkBranch("a"), mkBranch("not-in-plan")),
 			plan,
 			validation,
 		)
 
 		require.Empty(t, conflicts)
+		require.Empty(t, blocked)
 		require.Len(t, success, 1)
 		require.Equal(t, "a", success[0].GetName())
 	})

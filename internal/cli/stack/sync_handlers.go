@@ -344,20 +344,42 @@ func (h *SimpleSyncHandler) OnRestackBranch(branch string, result syncAction.Res
 	case syncAction.RestackConflict:
 		event.Type = syncAction.EventSkipped
 		event.Conflict = true
+	case syncAction.RestackBlocked:
+		event.Type = syncAction.EventSkipped
+		event.Message = reasonBlockedByConflict
 	}
 
 	h.printRestackEvent(event)
 }
 
 // OnRestackComplete implements RestackHandler for standalone restack operations
-func (h *SimpleSyncHandler) OnRestackComplete(restacked, skipped int, conflicts []string) {
+func (h *SimpleSyncHandler) OnRestackComplete(restacked, skipped int, conflicts, blocked []string) {
 	h.Output.Newline()
 
-	if restacked == 0 && skipped == 0 {
+	if restacked == 0 && skipped == 0 && len(blocked) == 0 {
 		h.Output.Info("✨ Everything is up to date!")
 		return
 	}
 
+	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked)); summary != "" {
+		h.Output.Info("✅ Summary: %s", summary)
+	}
+
+	for _, conflict := range conflicts {
+		h.Output.Info("  Run %s to resolve and continue",
+			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
+	}
+}
+
+// reasonBlockedByConflict annotates branches held back because another branch
+// in their stack conflicted. The stack is applied atomically, so these were
+// left untouched rather than restacked onto a moved parent.
+const reasonBlockedByConflict = "(blocked by conflict in stack)"
+
+// formatRestackSummaryLine renders the shared "restacked N, skipped M
+// (conflict), blocked K" summary used by both restack handlers. Returns ""
+// when there is nothing to summarize.
+func formatRestackSummaryLine(restacked, skipped, blocked int) string {
 	parts := []string{}
 	if restacked > 0 {
 		parts = append(parts, fmt.Sprintf("restacked %d", restacked))
@@ -365,15 +387,10 @@ func (h *SimpleSyncHandler) OnRestackComplete(restacked, skipped int, conflicts 
 	if skipped > 0 {
 		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", skipped))
 	}
-
-	if len(parts) > 0 {
-		h.Output.Info("✅ Summary: %s", strings.Join(parts, ", "))
+	if blocked > 0 {
+		parts = append(parts, fmt.Sprintf("blocked %d", blocked))
 	}
-
-	if len(conflicts) > 0 {
-		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", conflicts[0])))
-	}
+	return strings.Join(parts, ", ")
 }
 
 // InteractiveSyncHandler provides bubbletea TUI for TTY environments
@@ -656,17 +673,19 @@ func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncA
 		return fmt.Sprintf("%s%s %s", displayName, prInfo, reason), syncComponent.MarkDone
 	case syncAction.RestackConflict:
 		return fmt.Sprintf("Skipped %s%s (conflict)", displayName, prInfo), syncComponent.MarkWarn
+	case syncAction.RestackBlocked:
+		return fmt.Sprintf("Skipped %s%s %s", displayName, prInfo, reasonBlockedByConflict), syncComponent.MarkWarn
 	}
 	return "", syncComponent.MarkDone
 }
 
 // OnRestackComplete implements RestackHandler for standalone restack operations
-func (h *InteractiveSyncHandler) OnRestackComplete(restacked, skipped int, conflicts []string) {
+func (h *InteractiveSyncHandler) OnRestackComplete(restacked, skipped int, conflicts, blocked []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	// Build summary message
-	summaryMsg := h.formatRestackSummary(restacked, skipped, conflicts)
+	summaryMsg := h.formatRestackSummary(restacked, skipped, conflicts, blocked)
 
 	// Send complete message
 	h.runner.Send(syncComponent.CompleteMsg{Summary: summaryMsg})
@@ -826,26 +845,18 @@ func (h *InteractiveSyncHandler) PromptBranchDeletions(branches map[string]strin
 }
 
 // formatRestackSummary formats the restack summary
-func (h *InteractiveSyncHandler) formatRestackSummary(restacked, skipped int, conflicts []string) string {
-	if restacked == 0 && skipped == 0 {
+func (h *InteractiveSyncHandler) formatRestackSummary(restacked, skipped int, conflicts, blocked []string) string {
+	if restacked == 0 && skipped == 0 && len(blocked) == 0 {
 		return "✨ Everything is up to date!"
 	}
 
-	parts := []string{}
-	if restacked > 0 {
-		parts = append(parts, fmt.Sprintf("restacked %d", restacked))
-	}
-	if skipped > 0 {
-		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", skipped))
-	}
-
 	result := ""
-	if len(parts) > 0 {
-		result = "✅ Summary: " + strings.Join(parts, ", ")
+	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked)); summary != "" {
+		result = "✅ Summary: " + summary
 	}
 
-	if len(conflicts) > 0 {
-		result += fmt.Sprintf("\n   Run 'st restack %s' to resolve and continue", conflicts[0])
+	for _, conflict := range conflicts {
+		result += fmt.Sprintf("\n   Run 'st restack %s' to resolve and continue", conflict)
 	}
 
 	return result

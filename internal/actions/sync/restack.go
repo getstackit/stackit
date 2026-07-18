@@ -122,6 +122,19 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					IsCurrent:  p.IsCurrent,
 					Parent:     parentName,
 				})
+			case engine.RestackBlocked:
+				summary.BranchesBlocked++
+				handler.EmitEvent(Event{
+					Phase:      PhaseRestack,
+					Type:       EventSkipped,
+					Branch:     p.Branch,
+					PRNumber:   prNumber,
+					Message:    "(blocked by conflict in stack)",
+					LockReason: p.LockReason,
+					Frozen:     p.Frozen,
+					IsCurrent:  p.IsCurrent,
+					Parent:     parentName,
+				})
 			}
 		}, actions.ConflictModeContinue); err != nil {
 			return fmt.Errorf("failed to restack branches: %w", err)

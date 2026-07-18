@@ -357,7 +357,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 
 	// Restack if requested
 	var restacked, skipped int
-	var conflicts []string
+	var conflicts, blocked []string
 	if opts.Restack {
 		uniqueBranches := engine.NewBranchesBuilder(len(branchesToSync))
 		seen := make(map[string]bool)
@@ -404,13 +404,16 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 					skipped++
 					conflicts = append(conflicts, p.Branch)
 					handler.OnRestackBranch(p.Branch, handlers.RestackConflict, "", prNumber, p.LockReason, p.Frozen, p.IsCurrent, parentName, p.Reparented, p.OldParent, p.NewParent, p.RerereResolvedCount)
+				case engine.RestackBlocked:
+					blocked = append(blocked, p.Branch)
+					handler.OnRestackBranch(p.Branch, handlers.RestackBlocked, "", prNumber, p.LockReason, p.Frozen, p.IsCurrent, parentName, p.Reparented, p.OldParent, p.NewParent, p.RerereResolvedCount)
 				}
 			}, ConflictModeEnterWorkflow); err != nil {
-				handler.OnRestackComplete(restacked, skipped, conflicts)
+				handler.OnRestackComplete(restacked, skipped, conflicts, blocked)
 				return fmt.Errorf("restack failed: %w", err)
 			}
 
-			handler.OnRestackComplete(restacked, skipped, conflicts)
+			handler.OnRestackComplete(restacked, skipped, conflicts, blocked)
 		}
 	}
 

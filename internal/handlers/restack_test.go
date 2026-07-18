@@ -23,7 +23,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.OnRestackBranch("branch-a", RestackDone, "abc123", &prNum, engine.LockReasonNone, false, false, "main", false, "", "", 2)
 		handler.OnRestackBranch("branch-b", RestackDone, "def456", nil, engine.LockReasonNone, false, false, "branch-a", false, "", "", 0)
 
-		handler.OnRestackComplete(2, 0, nil)
+		handler.OnRestackComplete(2, 0, nil, nil)
 
 		require.Equal(t, RestackJSONStatusSuccess, handler.Result.Status)
 		require.Len(t, handler.Result.Restacked, 2)
@@ -46,7 +46,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.OnRestackBranch("branch-a", RestackUnneeded, "", nil, engine.LockReasonNone, false, false, "main", false, "", "", 0)
 		handler.OnRestackBranch("branch-b", RestackUnneeded, "", nil, engine.LockReasonNone, false, false, "branch-a", false, "", "", 0)
 
-		handler.OnRestackComplete(0, 2, nil)
+		handler.OnRestackComplete(0, 2, nil, nil)
 
 		require.Equal(t, RestackJSONStatusSuccess, handler.Result.Status)
 		require.Empty(t, handler.Result.Restacked)
@@ -65,7 +65,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.OnRestackBranch("branch-a", RestackDone, "abc123", nil, engine.LockReasonNone, false, false, "main", false, "", "", 0)
 		handler.OnRestackBranch("branch-b", RestackConflict, "", nil, engine.LockReasonNone, false, false, "branch-a", false, "", "", 0)
 
-		handler.OnRestackComplete(1, 0, []string{"branch-b"})
+		handler.OnRestackComplete(1, 0, []string{"branch-b"}, nil)
 
 		require.Equal(t, RestackJSONStatusConflict, handler.Result.Status)
 		require.Len(t, handler.Result.Restacked, 1)
@@ -94,7 +94,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler := NewJSONRestackHandler()
 		handler.OnRestackStart(1)
 		handler.OnRestackBranch("branch-a", RestackConflict, "", nil, engine.LockReasonNone, false, false, "main", false, "", "", 0)
-		handler.OnRestackComplete(0, 0, []string{"branch-a"})
+		handler.OnRestackComplete(0, 0, []string{"branch-a"}, nil)
 
 		handler.SetError(errors.New("restack stopped due to conflict on branch-a"))
 
@@ -118,7 +118,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.OnRestackBranch("beta", RestackConflict, "", nil, engine.LockReasonNone, false, false, "main", false, "", "", 0)
 		handler.SetLastBranchStackRoot("beta", "beta")
 
-		handler.OnRestackComplete(2, 0, []string{"beta"})
+		handler.OnRestackComplete(2, 0, []string{"beta"}, nil)
 
 		// Per-branch annotation
 		require.Equal(t, "alpha", handler.Result.Restacked[0].StackRoot)
@@ -134,7 +134,7 @@ func TestJSONRestackHandler(t *testing.T) {
 
 		handler := NewJSONRestackHandler()
 		handler.OnRestackStart(1)
-		handler.OnRestackComplete(0, 1, nil)
+		handler.OnRestackComplete(0, 1, nil, nil)
 
 		// Call SetError with nil
 		handler.SetError(nil)

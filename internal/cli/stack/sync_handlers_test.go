@@ -180,7 +180,7 @@ func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
-	handler.OnRestackComplete(5, 2, nil)
+	handler.OnRestackComplete(5, 2, nil, nil)
 
 	// Verify that OnRestackComplete sends a CompleteMsg
 	messages := mockRunner.Messages()

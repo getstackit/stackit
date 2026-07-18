@@ -18,6 +18,9 @@ const (
 	RestackUnneeded RestackResult = "unneeded"
 	// RestackConflict indicates the branch had a conflict
 	RestackConflict RestackResult = "conflict"
+	// RestackBlocked indicates the branch was left untouched because another
+	// branch in its stack conflicted
+	RestackBlocked RestackResult = "blocked"
 )
 
 // RestackHandler abstracts TTY vs non-TTY output for restack operations
@@ -29,8 +32,9 @@ type RestackHandler interface {
 	// OnRestackBranch is called for each branch during restack
 	OnRestackBranch(branch string, result RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, reparented bool, oldParent, newParent string, rerereResolvedCount int)
 
-	// OnRestackComplete is called when restack finishes
-	OnRestackComplete(restacked, skipped int, conflicts []string)
+	// OnRestackComplete is called when restack finishes. blocked lists
+	// branches left untouched because their stack contained a conflict.
+	OnRestackComplete(restacked, skipped int, conflicts, blocked []string)
 }
 
 // NullRestackHandler is a no-op handler for testing or when output is not needed
@@ -44,7 +48,7 @@ func (h *NullRestackHandler) OnRestackBranch(_ string, _ RestackResult, _ string
 }
 
 // OnRestackComplete implements RestackHandler.
-func (h *NullRestackHandler) OnRestackComplete(_, _ int, _ []string) {}
+func (h *NullRestackHandler) OnRestackComplete(_, _ int, _, _ []string) {}
 
 // RestackJSONStatus represents the aggregate outcome of a JSON restack operation.
 type RestackJSONStatus string
@@ -62,10 +66,12 @@ type RestackJSONResult struct {
 	Restacked     []RestackBranchInfo   `json:"restacked,omitempty"`
 	Skipped       []string              `json:"skipped,omitempty"`
 	Conflicts     []RestackConflictInfo `json:"conflicts,omitempty"`
+	Blocked       []string              `json:"blocked,omitempty"`     // Branches left untouched because their stack contained a conflict
 	StackRoots    []string              `json:"stack_roots,omitempty"` // Deduped independent stack roots that were processed
 	TotalCount    int                   `json:"total_count"`
 	RestackCount  int                   `json:"restack_count"`
 	ConflictCount int                   `json:"conflict_count"`
+	BlockedCount  int                   `json:"blocked_count,omitempty"`
 }
 
 // RestackBranchInfo represents info about a restacked branch
@@ -130,15 +136,18 @@ func (h *JSONRestackHandler) OnRestackBranch(branch string, result RestackResult
 			Branch: branch,
 			Parent: parent,
 		})
+	case RestackBlocked:
+		h.Result.Blocked = append(h.Result.Blocked, branch)
 	}
 }
 
 // OnRestackComplete implements RestackHandler.
-func (h *JSONRestackHandler) OnRestackComplete(restacked, _ int, _ []string) {
+func (h *JSONRestackHandler) OnRestackComplete(restacked, _ int, _, _ []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.Result.RestackCount = restacked
 	h.Result.ConflictCount = len(h.Result.Conflicts)
+	h.Result.BlockedCount = len(h.Result.Blocked)
 
 	if h.Result.ConflictCount > 0 {
 		h.Result.Status = RestackJSONStatusConflict

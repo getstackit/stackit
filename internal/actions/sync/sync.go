@@ -311,6 +311,7 @@ const (
 	RestackDone     = handlers.RestackDone
 	RestackUnneeded = handlers.RestackUnneeded
 	RestackConflict = handlers.RestackConflict
+	RestackBlocked  = handlers.RestackBlocked
 )
 
 // RestackResult is an alias for handlers.RestackResult
@@ -374,6 +375,7 @@ type Summary struct {
 	BranchesDeleted   int      // Number of branches deleted
 	BranchesSkipped   int      // Number of branches skipped (due to conflicts)
 	ConflictBranches  []string // Names of branches that conflicted
+	BranchesBlocked   int      // Number of branches left untouched because their stack conflicted
 	UpToDate          bool     // Everything was already current
 	WorktreesCleaned  int      // Number of orphaned worktrees cleaned up
 	SkippedStacks     []string // Stacks skipped due to dirty worktrees
@@ -382,8 +384,8 @@ type Summary struct {
 // HasChanges returns true if any operations were performed
 func (s *Summary) HasChanges() bool {
 	return s.TrunkUpdated || s.BranchesSynced > 0 || s.BranchesRestacked > 0 ||
-		s.BranchesDeleted > 0 || s.BranchesSkipped > 0 || s.WorktreesCleaned > 0 ||
-		len(s.SkippedStacks) > 0
+		s.BranchesDeleted > 0 || s.BranchesSkipped > 0 || s.BranchesBlocked > 0 ||
+		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0
 }
 
 // Handler abstracts TTY vs non-TTY output for sync operations
@@ -495,6 +497,9 @@ func FormatSummaryParts(summary Summary) []string {
 	}
 	if summary.BranchesSkipped > 0 {
 		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", summary.BranchesSkipped))
+	}
+	if summary.BranchesBlocked > 0 {
+		parts = append(parts, fmt.Sprintf("blocked %d", summary.BranchesBlocked))
 	}
 	if len(summary.SkippedStacks) > 0 {
 		parts = append(parts, fmt.Sprintf("skipped %d stack%s (dirty worktree)", len(summary.SkippedStacks), plural(len(summary.SkippedStacks))))

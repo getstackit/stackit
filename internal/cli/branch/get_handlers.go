@@ -210,15 +210,19 @@ func (h *SimpleGetHandler) OnRestackBranch(branch string, result handlers.Restac
 		h.Output.Warn("  Skipped %s%s (conflict)",
 			style.ColorBranchNameIf(branch, isCurrent),
 			prInfo)
+	case handlers.RestackBlocked:
+		h.Output.Warn("  Skipped %s%s (blocked by conflict in stack)",
+			style.ColorBranchNameIf(branch, isCurrent),
+			prInfo)
 	}
 }
 
 // OnRestackComplete implements RestackHandler for restack phase
-func (h *SimpleGetHandler) OnRestackComplete(restacked, skipped int, conflicts []string) {
+func (h *SimpleGetHandler) OnRestackComplete(restacked, skipped int, conflicts, blocked []string) {
 	h.Lock()
 	defer h.Unlock()
 
-	if restacked == 0 && skipped == 0 {
+	if restacked == 0 && skipped == 0 && len(blocked) == 0 {
 		return // No restack summary needed if nothing happened
 	}
 
@@ -229,13 +233,16 @@ func (h *SimpleGetHandler) OnRestackComplete(restacked, skipped int, conflicts [
 	if skipped > 0 {
 		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", skipped))
 	}
+	if len(blocked) > 0 {
+		parts = append(parts, fmt.Sprintf("blocked %d", len(blocked)))
+	}
 
 	if len(parts) > 0 {
 		h.Output.Info("  %s", strings.Join(parts, ", "))
 	}
 
-	if len(conflicts) > 0 {
+	for _, conflict := range conflicts {
 		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", conflicts[0])))
+			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
 	}
 }

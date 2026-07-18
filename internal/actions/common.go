@@ -58,7 +58,7 @@ type Restacker interface {
 // juggling a long positional parameter list.
 type RestackProgress struct {
 	Branch              string               // the branch being processed
-	Result              engine.RestackResult // Done, Unneeded, or Conflict
+	Result              engine.RestackResult // Done, Unneeded, Conflict, or Blocked
 	NewRev              string               // new revision if restacked (empty otherwise)
 	RerereResolvedCount int                  // number of rebase continuations handled by git rerere
 	Conflict            bool                 // true if this is a conflict
@@ -147,17 +147,31 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 
 	// Check if validation failed due to a system error (not a conflict)
 	if !validation.Success {
-		if validation.ErrorType == engine.ValidationErrorSystem {
-			return fmt.Errorf("validation failed for %s: %s", validation.FailedBranch, validation.ErrorMessage)
-		}
-		// Else: conflict - continue with conflict workflow
-		// Log conflicting files for debugging
-		if len(validation.ConflictingFiles) > 0 {
-			ctx.Logger.Debug("conflict detected during validation branch=%v files=%v", validation.FailedBranch, validation.ConflictingFiles)
+		for _, f := range validation.Failed {
+			if f.ErrorType == engine.ValidationErrorSystem {
+				return fmt.Errorf("validation failed for %s: %s", f.Branch, f.ErrorMessage)
+			}
+			// Else: conflict - continue with conflict workflow
+			// Log conflicting files for debugging
+			if len(f.ConflictingFiles) > 0 {
+				ctx.Logger.Debug("conflict detected during validation branch=%v files=%v", f.Branch, f.ConflictingFiles)
+			}
 		}
 	}
 
-	successBranches, conflictBranches := classifyValidatedBranches(branches, plan, validation)
+	successBranches, conflictBranches, blockedBranches := classifyValidatedBranches(branches, plan, validation)
+
+	// Non-interactive restacks apply stacks atomically: a conflict anywhere in
+	// an independent stack holds back the whole stack. Applying only part of a
+	// stack would move a parent without its children, turning a benign
+	// "behind trunk" state into "child not restacked on parent" — which
+	// downstream tooling (submit validation) treats as a hard error.
+	// The conflict workflow is exempt: it applies up to the conflict on
+	// purpose so the user resolves on top of the restacked parent, and
+	// 'stackit continue' finishes the rest of the stack.
+	if mode == ConflictModeContinue && len(conflictBranches) > 0 {
+		successBranches, blockedBranches = holdBackConflictedStacks(ctx.Engine, successBranches, conflictBranches, blockedBranches)
+	}
 
 	// For standalone mode, enter conflict workflow on first conflict
 	if mode == ConflictModeEnterWorkflow && len(conflictBranches) > 0 {
@@ -225,13 +239,9 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 	}
 	reportPlannedResults(ctx, branches, plannedResults, callback)
 
-	// Report conflicts via callback for sync mode
-	if mode == ConflictModeContinue && len(conflictBranches) > 0 {
-		currentBranch := ctx.Engine.CurrentBranch()
-		currentBranchName := ""
-		if currentBranch != nil {
-			currentBranchName = currentBranch.GetName()
-		}
+	// Report conflicts and blocked branches via callback for sync mode
+	if mode == ConflictModeContinue && (len(conflictBranches) > 0 || len(blockedBranches) > 0) {
+		currentBranchName := getCurrentBranchName(ctx.Engine)
 
 		for _, branchName := range conflictBranches {
 			if callback != nil {
@@ -243,25 +253,70 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 				})
 			}
 		}
+		for _, branchName := range blockedBranches {
+			if callback != nil {
+				callback(RestackProgress{
+					Branch:    branchName,
+					Result:    engine.RestackBlocked,
+					IsCurrent: branchName == currentBranchName,
+				})
+			}
+		}
 	}
 
 	return nil
 }
 
+// holdBackConflictedStacks enforces per-stack atomicity: any branch whose
+// independent stack (rooted at a child of trunk) contains a validation
+// conflict is moved from the apply set into the blocked set. Returns the
+// filtered apply set and the extended blocked list.
+func holdBackConflictedStacks(eng engine.BranchReader, success engine.Branches, conflicts, blocked []string) (engine.Branches, []string) {
+	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	trunk := eng.Trunk().GetName()
+	rootOf := func(name string) string {
+		cur := name
+		for {
+			node := graph.GetNode(cur)
+			if node == nil || node.Parent == "" || node.Parent == trunk {
+				return cur
+			}
+			cur = node.Parent
+		}
+	}
+
+	conflictedRoots := make(map[string]bool, len(conflicts))
+	for _, name := range conflicts {
+		conflictedRoots[rootOf(name)] = true
+	}
+
+	kept := engine.NewBranchesBuilder(len(success))
+	for _, branch := range success {
+		if conflictedRoots[rootOf(branch.GetName())] {
+			blocked = append(blocked, branch.GetName())
+			continue
+		}
+		kept.Add(branch)
+	}
+	return kept.Build(), blocked
+}
+
 // classifyValidatedBranches splits the planned branches into ones safe to
-// apply now and ones to surface as conflicts, using the validation result as
-// the source of truth instead of position-in-specs arithmetic. The earlier
-// position-based split was racy: when multiple sibling specs at the same
-// depth validate in parallel and one fails, validation.FailedBranch is
-// whichever failure arrives first on the results channel — non-deterministic.
-// Alphabetically-earlier canceled siblings would then satisfy `pos < failedPos`
-// and end up in successBranches without a matching entry in NewSHAs, and the
-// engine would error with "missing validated SHA for X". Here we apply a
-// branch only if its action proves it's safe: Frozen/Anchor branches don't
-// touch a rebase worktree at all, and Validated branches need a confirmed SHA.
-func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPlan, validation *engine.RebaseValidation) (success engine.Branches, conflicts []string) {
+// apply now, ones that conflicted, and ones blocked behind a conflict, using
+// the validation result as the source of truth instead of position-in-specs
+// arithmetic. A branch is applied only if its action proves it's safe:
+// Frozen/Anchor branches don't touch a rebase worktree at all, and Validated
+// branches need a confirmed SHA. Every planned branch lands in exactly one of
+// the three buckets so none silently disappears from reporting — a Validated
+// branch with no SHA that isn't in the failed set was skipped because an
+// ancestor failed, and is classified blocked.
+func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPlan, validation *engine.RebaseValidation) (success engine.Branches, conflicts, blocked []string) {
 	if plan == nil || validation == nil {
-		return nil, nil
+		return nil, nil, nil
+	}
+	failed := make(map[string]bool, len(validation.Failed))
+	for _, f := range validation.Failed {
+		failed[f.Branch] = true
 	}
 	builder := engine.NewBranchesBuilder(len(branches))
 	for _, branch := range branches {
@@ -278,17 +333,17 @@ func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPla
 		case engine.RestackPlanApplyFrozen, engine.RestackPlanApplyAnchor:
 			builder.Add(branch)
 		case engine.RestackPlanApplyValidated:
-			if _, hasSHA := validation.NewSHAs[branchName]; hasSHA {
+			switch {
+			case validation.NewSHAs[branchName] != "":
 				builder.Add(branch)
-			} else if branchName == validation.FailedBranch {
+			case failed[branchName]:
 				conflicts = append(conflicts, branchName)
+			default:
+				blocked = append(blocked, branchName)
 			}
-			// Otherwise the branch was canceled — a sibling at the same depth
-			// failed first, or validation never reached this depth. Leave it
-			// for the next restack pass.
 		}
 	}
-	return builder.Build(), conflicts
+	return builder.Build(), conflicts, blocked
 }
 
 func getCurrentBranchName(eng engine.BranchReader) string {

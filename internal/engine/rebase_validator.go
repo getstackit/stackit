@@ -46,13 +46,23 @@ type RebaseSpec struct {
 	OldUpstream string // Current base to replay commits from
 }
 
+// FailedRebase describes a single spec that failed validation.
+type FailedRebase struct {
+	Branch           string              // Branch whose rebase failed
+	ErrorType        ValidationErrorType // Conflict vs system error
+	ErrorMessage     string              // Error message describing the failure
+	ConflictingFiles []string            // Files that have conflicts (if ErrorType is ValidationErrorConflict)
+}
+
 // RebaseValidation is the result of dry-run validation
 type RebaseValidation struct {
 	Success          bool                // Whether all rebases would succeed
-	FailedBranch     string              // Which branch caused the conflict (if any)
+	FailedBranch     string              // First branch that failed (kept for single-chain callers; see Failed for all)
 	ErrorType        ValidationErrorType // Type of error (conflict vs system error)
 	ErrorMessage     string              // Error message describing the failure
 	ConflictingFiles []string            // Files that have conflicts (if ErrorType is ValidationErrorConflict)
+	Failed           []FailedRebase      // Every spec that failed validation, across all levels
+	Blocked          []string            // Specs never attempted because a tracked ancestor's spec failed
 	NewSHAs          map[string]string   // Branch -> resulting SHA after rebase (if successful)
 	RerereResolved   map[string]int      // Branch -> number of conflicts auto-resolved by rerere during validation
 }
@@ -64,8 +74,11 @@ type RebaseValidation struct {
 // IMPORTANT: This uses dry-run rebases that do NOT update branch refs, keeping
 // the main repository completely unmodified.
 //
-// Returns a RebaseValidation indicating success or the first failure encountered.
-// Worktrees are cleaned up automatically regardless of outcome.
+// Returns a RebaseValidation carrying every failure (Failed), the specs never
+// attempted because an ancestor failed (Blocked), and the new SHAs of every
+// spec that validated cleanly — a failure in one stack does not stop
+// validation of branches in unrelated stacks. Worktrees are cleaned up
+// automatically regardless of outcome.
 //
 // Uses parallel validation for improved performance on wide stacks. Branches at
 // the same depth are validated concurrently, providing 2-3x speedup for stacks
@@ -119,13 +132,10 @@ type validationLevel struct {
 
 // groupSpecsByDepth organizes specs into levels based on their dependency depth.
 // Specs at the same depth can be validated in parallel since they're independent.
-func (e *engineImpl) groupSpecsByDepth(specs []RebaseSpec) []validationLevel {
+func groupSpecsByDepth(graph *StackGraph, specs []RebaseSpec) []validationLevel {
 	if len(specs) == 0 {
 		return nil
 	}
-
-	// Build a graph to understand branch relationships
-	graph := e.Graph(SortStrategySmart)
 
 	// Group specs by their depth in the stack
 	specsByDepth := make(map[int][]RebaseSpec)
@@ -204,7 +214,8 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 	}
 
 	// Group specs by dependency depth
-	levels := e.groupSpecsByDepth(specs)
+	graph := e.Graph(SortStrategySmart)
+	levels := groupSpecsByDepth(graph, specs)
 
 	result := &RebaseValidation{
 		Success:        true,
@@ -219,27 +230,64 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 	// Maximum number of concurrent worktrees
 	maxConcurrency := e.getMaxConcurrency()
 
-	// Process each level sequentially (levels must wait for prior levels)
+	// Process each level sequentially (levels must wait for prior levels).
+	// A failure prunes only that branch's descendants: their specs are recorded
+	// as Blocked and skipped, while specs in unrelated stacks keep validating.
+	// This keeps one conflicted stack from silently canceling validation of
+	// every other stack's deeper branches.
+	failedOrBlocked := make(map[string]bool)
 	for _, level := range levels {
-		// Process this level and check for failures
-		failed := e.processValidationLevel(ctx, level, maxConcurrency, result, rebasedByName, rebasedBySHA)
-		if failed {
-			return result, nil
+		runnable := level.specs[:0:0]
+		for _, spec := range level.specs {
+			if specAncestorFailed(graph, spec.Branch, failedOrBlocked) {
+				failedOrBlocked[spec.Branch] = true
+				result.Blocked = append(result.Blocked, spec.Branch)
+				continue
+			}
+			runnable = append(runnable, spec)
+		}
+		if len(runnable) == 0 {
+			continue
+		}
+		failures := e.processValidationLevel(ctx, validationLevel{depth: level.depth, specs: runnable}, maxConcurrency, result, rebasedByName, rebasedBySHA)
+		for _, f := range failures {
+			failedOrBlocked[f.Branch] = true
 		}
 	}
 
 	return result, nil
 }
 
+// specAncestorFailed reports whether any tracked ancestor of branchName is in
+// the failed-or-blocked set. Levels are processed in ascending depth order, so
+// every ancestor's outcome is already decided when its descendants are checked.
+func specAncestorFailed(graph *StackGraph, branchName string, failedOrBlocked map[string]bool) bool {
+	node := graph.GetNode(branchName)
+	if node == nil {
+		return false
+	}
+	for parent := node.Parent; parent != ""; {
+		if failedOrBlocked[parent] {
+			return true
+		}
+		parentNode := graph.GetNode(parent)
+		if parentNode == nil {
+			return false
+		}
+		parent = parentNode.Parent
+	}
+	return false
+}
+
 // processValidationLevel processes all specs at a given depth level in parallel.
-// Returns true if any validation failed, false if all succeeded.
+// Returns every failed spec at this level (empty if all succeeded).
 //
 // Siblings at the same depth are independent: one failing does not invalidate
 // the others. We let every sibling run to completion so that a failed sibling
 // does not cancel an in-flight successful one — that race would silently drop
-// the survivor from NewSHAs and prevent it from being restacked. Deeper levels
-// are still skipped because the caller stops iterating after the first failed
-// level.
+// the survivor from NewSHAs and prevent it from being restacked. Every failure
+// is recorded (not just the first): the caller uses the full set to prune each
+// failed branch's descendants while other stacks keep validating.
 func (e *engineImpl) processValidationLevel(
 	ctx context.Context,
 	level validationLevel,
@@ -247,7 +295,7 @@ func (e *engineImpl) processValidationLevel(
 	result *RebaseValidation,
 	rebasedByName *sync.Map,
 	rebasedBySHA *sync.Map,
-) bool {
+) []FailedRebase {
 	// Within each level, validate specs in parallel
 	semaphore := make(chan struct{}, maxConcurrency)
 	results := make(chan validationResult, len(level.specs))
@@ -296,14 +344,16 @@ func (e *engineImpl) processValidationLevel(
 		close(results)
 	}()
 
-	// Collect every sibling's result. The first failure wins for reporting,
-	// but we keep accumulating successes so they don't get dropped.
-	var firstFailure *validationResult
+	// Collect every sibling's result, accumulating all failures and successes.
+	var failures []FailedRebase
 	for valResult := range results {
 		if !valResult.success {
-			if firstFailure == nil {
-				firstFailure = &valResult
-			}
+			failures = append(failures, FailedRebase{
+				Branch:           valResult.spec.Branch,
+				ErrorType:        valResult.errorType,
+				ErrorMessage:     valResult.errorMessage,
+				ConflictingFiles: valResult.conflictFiles,
+			})
 			continue
 		}
 
@@ -318,17 +368,21 @@ func (e *engineImpl) processValidationLevel(
 		}
 	}
 
-	// If there was a failure, populate result and return true to signal failure
-	if firstFailure != nil {
+	if len(failures) > 0 {
 		result.Success = false
-		result.FailedBranch = firstFailure.spec.Branch
-		result.ErrorMessage = firstFailure.errorMessage
-		result.ErrorType = firstFailure.errorType
-		result.ConflictingFiles = firstFailure.conflictFiles
-		return true
+		result.Failed = append(result.Failed, failures...)
+		// Keep the legacy first-failure fields for single-chain callers
+		// (move, pluck, flatten) that report exactly one conflict.
+		if result.FailedBranch == "" {
+			first := failures[0]
+			result.FailedBranch = first.Branch
+			result.ErrorMessage = first.ErrorMessage
+			result.ErrorType = first.ErrorType
+			result.ConflictingFiles = first.ConflictingFiles
+		}
 	}
 
-	return false
+	return failures
 }
 
 // validateSingleSpec validates a single rebase spec in isolation.

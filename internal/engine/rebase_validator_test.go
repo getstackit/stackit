@@ -1018,3 +1018,101 @@ func TestValidateRebasesParallel(t *testing.T) {
 		require.Contains(t, err.Error(), "duplicate branch")
 	})
 }
+
+func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
+	t.Parallel()
+
+	t.Run("conflict in one stack blocks only its descendants", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		// Shared file on main that stack A will conflict on.
+		s.Checkout("main").CommitChange("shared.txt", "original")
+		oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		require.NoError(t, err)
+
+		// Stack A: a1 (will conflict with main's coming change) -> a2.
+		s.CreateBranch("a1").
+			CommitChange("shared.txt", "a1 version").
+			TrackBranch("a1", "main")
+		a1Rev, err := s.Engine.GetRevision(s.Engine.GetBranch("a1"))
+		require.NoError(t, err)
+		s.CreateBranch("a2").
+			CommitChange("a2.txt", "a2 change").
+			TrackBranch("a2", "a1")
+
+		// Stack B: b1 -> b2, files disjoint from main's change (clean).
+		s.Checkout("main").
+			CreateBranch("b1").
+			CommitChange("b1.txt", "b1 change").
+			TrackBranch("b1", "main")
+		b1Rev, err := s.Engine.GetRevision(s.Engine.GetBranch("b1"))
+		require.NoError(t, err)
+		s.CreateBranch("b2").
+			CommitChange("b2.txt", "b2 change").
+			TrackBranch("b2", "b1")
+
+		// main advances with a conflicting version of stack A's file.
+		s.Checkout("main").CommitChange("shared.txt", "main conflicting version")
+		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		require.NoError(t, err)
+
+		specs := []engine.RebaseSpec{
+			{Branch: "a1", NewParent: mainRev, OldUpstream: oldBase},
+			{Branch: "a2", NewParent: "a1", OldUpstream: a1Rev},
+			{Branch: "b1", NewParent: mainRev, OldUpstream: oldBase},
+			{Branch: "b2", NewParent: "b1", OldUpstream: b1Rev},
+		}
+
+		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		require.NoError(t, err)
+		require.False(t, result.Success)
+
+		// a1's conflict is reported; a2 is blocked, never attempted.
+		require.Len(t, result.Failed, 1)
+		require.Equal(t, "a1", result.Failed[0].Branch)
+		require.Equal(t, engine.ValidationErrorConflict, result.Failed[0].ErrorType)
+		require.Equal(t, []string{"a2"}, result.Blocked)
+		require.NotContains(t, result.NewSHAs, "a1")
+		require.NotContains(t, result.NewSHAs, "a2")
+
+		// Stack B validates to completion despite stack A's conflict.
+		require.NotEmpty(t, result.NewSHAs["b1"])
+		require.NotEmpty(t, result.NewSHAs["b2"])
+	})
+
+	t.Run("collects every sibling conflict at a level", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		s.Checkout("main").CommitChange("shared.txt", "original")
+		oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		require.NoError(t, err)
+
+		s.CreateBranch("a1").
+			CommitChange("shared.txt", "a1 version").
+			TrackBranch("a1", "main")
+		s.Checkout("main").
+			CreateBranch("b1").
+			CommitChange("shared.txt", "b1 version").
+			TrackBranch("b1", "main")
+
+		s.Checkout("main").CommitChange("shared.txt", "main conflicting version")
+		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
+		require.NoError(t, err)
+
+		specs := []engine.RebaseSpec{
+			{Branch: "a1", NewParent: mainRev, OldUpstream: oldBase},
+			{Branch: "b1", NewParent: mainRev, OldUpstream: oldBase},
+		}
+
+		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		require.NoError(t, err)
+		require.False(t, result.Success)
+
+		failedBranches := []string{result.Failed[0].Branch, result.Failed[1].Branch}
+		require.ElementsMatch(t, []string{"a1", "b1"}, failedBranches)
+		require.Empty(t, result.Blocked)
+		require.NotEmpty(t, result.FailedBranch)
+	})
+}

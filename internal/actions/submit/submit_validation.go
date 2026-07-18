@@ -70,10 +70,8 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 		return nil, err
 	}
 
-	// Validate no merged/closed branches
-	if err := validateNoMergedOrClosedBranches(submittable, ctx.Status(), ctx); err != nil {
-		return nil, err
-	}
+	// Warn about merged/closed branches
+	warnMergedOrClosedBranches(submittable, ctx.Status(), ctx)
 
 	return submittable, nil
 }
@@ -176,8 +174,8 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 	return kept, nil
 }
 
-// validateNoMergedOrClosedBranches checks for merged/closed PRs and prompts user if found
-func validateNoMergedOrClosedBranches(branches []string, eng engine.BranchStatus, ctx *app.Context) error {
+// warnMergedOrClosedBranches checks for merged/closed PRs and warns about them
+func warnMergedOrClosedBranches(branches []string, eng engine.BranchStatus, ctx *app.Context) {
 	mergedOrClosedBranches := []string{}
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)
@@ -191,7 +189,7 @@ func validateNoMergedOrClosedBranches(branches []string, eng engine.BranchStatus
 	}
 
 	if len(mergedOrClosedBranches) == 0 {
-		return nil
+		return
 	}
 
 	hasMultiple := len(mergedOrClosedBranches) > 1
@@ -208,6 +206,4 @@ func validateNoMergedOrClosedBranches(branches []string, eng engine.BranchStatus
 	for _, branchName := range mergedOrClosedBranches {
 		ctx.Output.Debug("Branch %s already has a merged/closed PR", branchName)
 	}
-
-	return nil
 }

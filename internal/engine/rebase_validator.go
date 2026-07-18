@@ -230,6 +230,19 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 	// Maximum number of concurrent worktrees
 	maxConcurrency := e.getMaxConcurrency()
 
+	// Slow-path validations reuse worktrees from a shared pool instead of
+	// paying a full-checkout `git worktree add` + remove per spec. The pool is
+	// lazy: a validation run fully served by the conflict-free fast path
+	// creates no worktrees at all. Concurrent acquires are bounded by the
+	// per-level semaphore, so the pool never grows past maxConcurrency.
+	pool := &validationWorktreePool{
+		cleanups: map[string]func(){},
+		create: func() (string, func(), error) {
+			return e.CreateTemporaryWorktreeWithOptions(ctx, "HEAD", "stackit-validate-*", WorktreeCheckoutFull, WorktreePruneSkip)
+		},
+	}
+	defer pool.drain()
+
 	// Process each level sequentially (levels must wait for prior levels).
 	// A failure prunes only that branch's descendants: their specs are recorded
 	// as Blocked and skipped, while specs in unrelated stacks keep validating.
@@ -249,13 +262,83 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 		if len(runnable) == 0 {
 			continue
 		}
-		failures := e.processValidationLevel(ctx, validationLevel{depth: level.depth, specs: runnable}, maxConcurrency, result, rebasedByName, rebasedBySHA)
+		failures := e.processValidationLevel(ctx, validationLevel{depth: level.depth, specs: runnable}, maxConcurrency, pool, result, rebasedByName, rebasedBySHA)
 		for _, f := range failures {
 			failedOrBlocked[f.Branch] = true
 		}
 	}
 
 	return result, nil
+}
+
+// validationWorktreePool hands out reusable temporary worktrees for slow-path
+// rebase validation. Worktrees are created lazily on first acquire and kept
+// for reuse across specs and levels; drain removes everything at the end of
+// the validation run. Callers are bounded by the level semaphore, so at most
+// maxConcurrency worktrees ever exist.
+type validationWorktreePool struct {
+	mu       sync.Mutex
+	idle     []string
+	cleanups map[string]func()
+	create   func() (string, func(), error)
+}
+
+// acquire returns an idle worktree or creates a new one.
+func (p *validationWorktreePool) acquire() (string, error) {
+	p.mu.Lock()
+	if n := len(p.idle); n > 0 {
+		path := p.idle[n-1]
+		p.idle = p.idle[:n-1]
+		p.mu.Unlock()
+		return path, nil
+	}
+	p.mu.Unlock()
+
+	// Create outside the lock — `git worktree add` is the expensive part and
+	// concurrent acquires must not serialize on it.
+	path, cleanup, err := p.create()
+	if err != nil {
+		return "", err
+	}
+	p.mu.Lock()
+	p.cleanups[path] = cleanup
+	p.mu.Unlock()
+	return path, nil
+}
+
+// release returns a clean worktree to the pool for reuse. Only worktrees with
+// no rebase in progress may be released; callers abort first.
+func (p *validationWorktreePool) release(path string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.idle = append(p.idle, path)
+}
+
+// destroy removes a worktree whose state is no longer trustworthy (e.g. a
+// panic mid-rebase) instead of returning it to the pool.
+func (p *validationWorktreePool) destroy(path string) {
+	p.mu.Lock()
+	cleanup := p.cleanups[path]
+	delete(p.cleanups, path)
+	p.mu.Unlock()
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
+// drain removes every worktree the pool ever created.
+func (p *validationWorktreePool) drain() {
+	p.mu.Lock()
+	cleanups := make([]func(), 0, len(p.cleanups))
+	for _, cleanup := range p.cleanups {
+		cleanups = append(cleanups, cleanup)
+	}
+	p.cleanups = map[string]func(){}
+	p.idle = nil
+	p.mu.Unlock()
+	for _, cleanup := range cleanups {
+		cleanup()
+	}
 }
 
 // specAncestorFailed reports whether any tracked ancestor of branchName is in
@@ -292,6 +375,7 @@ func (e *engineImpl) processValidationLevel(
 	ctx context.Context,
 	level validationLevel,
 	maxConcurrency int,
+	pool *validationWorktreePool,
 	result *RebaseValidation,
 	rebasedByName *sync.Map,
 	rebasedBySHA *sync.Map,
@@ -334,7 +418,7 @@ func (e *engineImpl) processValidationLevel(
 			}
 
 			// Validate this single spec
-			valResult := e.validateSingleSpec(ctx, spec, rebasedByName, rebasedBySHA)
+			valResult := e.validateSingleSpec(ctx, spec, pool, rebasedByName, rebasedBySHA)
 			results <- valResult
 		}(spec)
 	}
@@ -389,6 +473,7 @@ func (e *engineImpl) processValidationLevel(
 func (e *engineImpl) validateSingleSpec(
 	ctx context.Context,
 	spec RebaseSpec,
+	pool *validationWorktreePool,
 	rebasedByName *sync.Map,
 	rebasedBySHA *sync.Map,
 ) validationResult {
@@ -416,9 +501,11 @@ func (e *engineImpl) validateSingleSpec(
 		}
 	}
 
-	// Slow path: dry-run the rebase inside a temporary worktree.
-	// Use WorktreePruneSkip since ValidateRebasesParallel already prunes once before parallel execution.
-	worktreePath, cleanup, err := e.CreateTemporaryWorktreeWithOptions(ctx, "HEAD", "stackit-validate-*", WorktreeCheckoutFull, WorktreePruneSkip)
+	// Slow path: dry-run the rebase inside a pooled temporary worktree.
+	// Acquire reuses a worktree from an earlier spec when one is idle; the
+	// rebase below checks out its own target commit, so no per-spec reset is
+	// needed between uses.
+	worktreePath, err := pool.acquire()
 	if err != nil {
 		return validationResult{
 			spec:         spec,
@@ -427,7 +514,18 @@ func (e *engineImpl) validateSingleSpec(
 			errorType:    ValidationErrorSystem,
 		}
 	}
-	defer cleanup()
+	// Reusable stays false only when we exit abnormally (a panic unwinding
+	// through this frame): the worktree may be mid-rebase, so it is removed
+	// rather than handed to the next spec. Both normal exits below abort any
+	// in-progress rebase first, leaving the worktree clean for reuse.
+	reusable := false
+	defer func() {
+		if reusable {
+			pool.release(worktreePath)
+		} else {
+			pool.destroy(worktreePath)
+		}
+	}()
 
 	wtGit := git.NewRunnerWithPath(worktreePath, nil)
 
@@ -452,6 +550,7 @@ func (e *engineImpl) validateSingleSpec(
 			_ = wtGit.RebaseAbort(ctx)
 		}
 
+		reusable = true
 		return validationResult{
 			spec:          spec,
 			success:       false,
@@ -461,6 +560,7 @@ func (e *engineImpl) validateSingleSpec(
 		}
 	}
 
+	reusable = true
 	return validationResult{
 		spec:           spec,
 		success:        true,

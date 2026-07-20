@@ -34,6 +34,7 @@ stackit-web
 /stackit-server
 
 .gocache/
+.golangci-cache/
 st-tui
 
 tmp/

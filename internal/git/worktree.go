@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -22,6 +23,15 @@ type Worktree struct {
 // invocation. Callers should pass it down per-batch instead of calling
 // ListWorktrees per branch — see PathForBranch for the common lookup.
 type WorktreeList []Worktree
+
+// IsMainWorktree reports whether worktreePath is the repo's main worktree
+// (repoRoot), resolving symlinks on both sides for comparison (e.g. /var vs
+// /private/var on macOS).
+func IsMainWorktree(worktreePath, repoRoot string) bool {
+	resolvedWorktree, _ := filepath.EvalSymlinks(worktreePath)
+	resolvedRoot, _ := filepath.EvalSymlinks(repoRoot)
+	return resolvedWorktree == resolvedRoot
+}
 
 // PathForBranch returns the worktree path where branchName is checked out,
 // or "" if no worktree currently has it.

@@ -3,7 +3,6 @@ package actions
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -624,11 +623,8 @@ func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktree
 		return "", nil // Branch not in any worktree
 	}
 
-	// Don't remove main worktree (resolve symlinks for comparison, e.g., /var vs /private/var on macOS)
-	repoRoot := eng.GetRepoRoot()
-	resolvedWorktree, _ := filepath.EvalSymlinks(worktreePath)
-	resolvedRoot, _ := filepath.EvalSymlinks(repoRoot)
-	if resolvedWorktree == resolvedRoot {
+	// Don't remove main worktree
+	if git.IsMainWorktree(worktreePath, eng.GetRepoRoot()) {
 		out.Debug("Branch %s is in main worktree, not removing", branchName)
 		return "", nil
 	}

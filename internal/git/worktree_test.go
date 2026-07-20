@@ -75,6 +75,41 @@ func TestWorktree(t *testing.T) {
 	})
 }
 
+func TestIsMainWorktree(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	root, err := filepath.EvalSymlinks(tmpDir)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		worktreePath string
+		repoRoot     string
+		expected     bool
+	}{
+		{
+			name:         "same path is main worktree",
+			worktreePath: root,
+			repoRoot:     root,
+			expected:     true,
+		},
+		{
+			name:         "different path is not main worktree",
+			worktreePath: filepath.Join(root, "linked"),
+			repoRoot:     root,
+			expected:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.expected, git.IsMainWorktree(tt.worktreePath, tt.repoRoot))
+		})
+	}
+}
+
 func TestWorktreeRegistry(t *testing.T) {
 	t.Run("write and read worktree metadata", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)

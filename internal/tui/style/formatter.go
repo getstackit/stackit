@@ -102,6 +102,13 @@ func ColorBranchNameWithTrunk(branchName string, isCurrent bool, isTrunk bool) s
 	return BranchStyle(isCurrent, isTrunk, false).Render(name)
 }
 
+// ColorBranchNamePlain colors a branch name by current/trunk status without
+// appending the " (current)" marker, for callers that already convey
+// currency another way (e.g. a leading cursor or row highlight).
+func ColorBranchNamePlain(branchName string, isCurrent, isTrunk bool) string {
+	return BranchStyle(isCurrent, isTrunk, false).Render(branchName)
+}
+
 // BranchStyle returns the unified style for a branch name
 func BranchStyle(isCurrent, isTrunk, isDim bool) lipgloss.Style {
 	if isDim {

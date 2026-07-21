@@ -113,7 +113,7 @@ func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, wa
 	}
 
 	// Check for empty branches (branches with no commits vs their parent)
-	emptyBranches := checkEmptyBranches(ctx, eng)
+	emptyBranches := checkEmptyBranches(eng)
 	if len(emptyBranches) > 0 {
 		warnings += len(emptyBranches)
 		branchList := strings.Join(emptyBranches, ", ")
@@ -126,23 +126,23 @@ func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, wa
 }
 
 // checkEmptyBranches finds branches that have no commits compared to their parent
-func checkEmptyBranches(ctx context.Context, eng engine.Engine) []string {
-	var emptyBranches []string
+func checkEmptyBranches(eng engine.Engine) []string {
 	trunk := eng.Trunk()
 	trunkName := trunk.GetName()
 
-	for _, branch := range eng.AllBranches() {
-		branchName := branch.GetName()
-		if branchName == trunkName {
-			continue
+	allBranches := eng.AllBranches()
+	branchNames := make([]string, 0, len(allBranches))
+	for _, branch := range allBranches {
+		if branch.GetName() != trunkName {
+			branchNames = append(branchNames, branch.GetName())
 		}
+	}
 
-		isEmpty, err := eng.IsBranchEmpty(ctx, branchName)
-		if err != nil {
-			// Skip branches we can't check
-			continue
-		}
-		if isEmpty {
+	emptyStatuses := eng.BatchIsBranchEmpty(branchNames)
+
+	var emptyBranches []string
+	for _, branchName := range branchNames {
+		if emptyStatuses[branchName] {
 			emptyBranches = append(emptyBranches, branchName)
 		}
 	}

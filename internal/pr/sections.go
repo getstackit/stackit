@@ -101,11 +101,6 @@ func ShouldShowNavigation(opts NavigationOptions, branch string, eng engine.Bran
 	}
 }
 
-// CreatePRBodyFooter creates a PR body footer with dependency tree using default options.
-func CreatePRBodyFooter(branch string, eng engine.BranchReader) string {
-	return CreatePRBodyFooterWithOptions(branch, eng, DefaultNavigationOptions())
-}
-
 // CreatePRBodyFooterWithOptions creates a PR body footer with dependency tree using custom options.
 // Returns empty string if neither navigation nor description should be shown.
 // The footer includes both the stack description and the navigation tree in a combined section.

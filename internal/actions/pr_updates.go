@@ -48,12 +48,6 @@ func FetchPRContentForBranches(ctx *app.Context, branches []string) map[int]gith
 	return content
 }
 
-// UpdateBranchPRMetadata updates PR title and body footer for a single branch.
-func UpdateBranchPRMetadata(ctx *app.Context, name string) {
-	current := FetchPRContentForBranches(ctx, []string{name})
-	UpdateBranchPRMetadataWithContent(ctx, name, current)
-}
-
 // UpdateBranchPRMetadataWithContent updates PR title and body footer for a single
 // branch, using PR content pre-fetched in bulk by FetchPRContentForBranches. If
 // the branch's PR is not present in current (a batch miss or fetch failure), it

@@ -128,9 +128,6 @@ func (branches MergeBranches) AllAreLeaves(graph *engine.StackGraph) bool {
 	return true
 }
 
-// AnyPRHasChecks is retained for callers that have not migrated to MergeBranches.AnyHasChecks.
-func AnyPRHasChecks(branches []BranchMergeInfo) bool { return MergeBranches(branches).AnyHasChecks() }
-
 // BranchNames returns the names of all branches to be merged, in order.
 func (p *Plan) BranchNames() []string {
 	names := make([]string, len(p.BranchesToMerge))

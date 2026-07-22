@@ -4,9 +4,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 )
 
-// FormatStackLabel is retained for callers that have not migrated to MultiStackInfo.Label.
-func FormatStackLabel(stack MultiStackInfo) string { return stack.Label() }
-
 // DiscoverStacks returns all independent stacks rooted at trunk.
 // Each stack is represented by its root branch (direct child of trunk)
 // and includes all branches in the stack in topological order.

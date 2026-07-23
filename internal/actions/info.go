@@ -332,12 +332,11 @@ func outputBranchInfoJSON(ctx *app.Context, branch engine.Branch) error {
 		info.CommitMessages = commits
 	}
 
-	// Diff stats
-	added, deleted, err := branch.GetDiffStats()
-	if err == nil {
-		info.DiffStats.Additions = added
-		info.DiffStats.Deletions = deleted
-	}
+	// Diff stats — resolved via the batched reader over a single-branch set,
+	// rather than a per-branch accessor.
+	diff := eng.BatchDiffStats(engine.BranchesOf(branch))[branchName]
+	info.DiffStats.Additions = diff.Added
+	info.DiffStats.Deletions = diff.Deleted
 
 	// Files changed — measured against the branch's divergence point, the same
 	// base GetDiffStats uses above, so the file count stays consistent with the

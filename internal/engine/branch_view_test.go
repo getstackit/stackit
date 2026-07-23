@@ -11,9 +11,9 @@ import (
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-// TestBatchBranchStats asserts the batched stats match the per-branch accessors
-// they replace, so annotation builders can read from the batch instead of
-// warming the engine-global caches.
+// TestBatchBranchStats asserts the batched stats match an independent raw-git
+// oracle (commit count and diff numstat against each branch's parent), so
+// annotation builders can rely on the batch reader as the single source.
 func TestBatchBranchStats(t *testing.T) {
 	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
@@ -36,11 +36,13 @@ func TestBatchBranchStats(t *testing.T) {
 			continue
 		}
 
-		wantCount, err := s.Engine.GetCommitCount(b)
+		parent := b.GetParent().GetName()
+
+		wantCount, err := s.Scene.Repo.GetCommitCount(parent, name)
 		require.NoError(t, err)
 		require.Equal(t, wantCount, stat.CommitCount, "CommitCount for %s", name)
 
-		wantAdded, wantDeleted, err := s.Engine.GetDiffStats(b)
+		wantAdded, wantDeleted, err := s.Scene.Repo.GetDiffStats(parent, name)
 		require.NoError(t, err)
 		require.Equal(t, wantAdded, stat.LinesAdded, "LinesAdded for %s", name)
 		require.Equal(t, wantDeleted, stat.LinesDeleted, "LinesDeleted for %s", name)
@@ -93,7 +95,7 @@ func TestPerConcernBatchReaders(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, wantDiv, divergence[name], "divergence for %s", name)
 
-		wantAdded, wantDeleted, err := s.Engine.GetDiffStats(b)
+		wantAdded, wantDeleted, err := s.Scene.Repo.GetDiffStats(b.GetParent().GetName(), name)
 		require.NoError(t, err)
 		require.Equal(t, engine.DiffStat{Added: wantAdded, Deleted: wantDeleted}, diffs[name], "diff for %s", name)
 
@@ -126,8 +128,9 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Without the fallback, GetAllCommits walks b's whole history to the repo
-	// root while GetCommitCount walks only parent..b, so the two disagree.
-	count, err := s.Engine.GetCommitCount(b)
+	// root while a parent..b walk covers only b's own commits, so the two
+	// disagree. The raw-git count against the parent tip is the oracle here.
+	count, err := s.Scene.Repo.GetCommitCount(b.GetParent().GetName(), "b")
 	require.NoError(t, err)
 	require.Equal(t, count, len(commits),
 		"commit messages and count must use the same base when no divergence is stored")

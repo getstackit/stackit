@@ -186,9 +186,7 @@ func TestDelete(t *testing.T) {
 		require.NotNil(t, parent)
 		require.Equal(t, "main", parent.GetName())
 
-		commitCount, err := s.Engine.GetCommitCount(s.Engine.GetBranch("branch2"))
-		require.NoError(t, err)
-		require.Equal(t, 1, commitCount)
+		require.Equal(t, 1, s.BranchCommitCount("branch2"))
 	})
 }
 

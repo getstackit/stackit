@@ -274,6 +274,24 @@ func (e *engineImpl) restackBranch(
 		}
 	}
 
+	// A worktree anchor is a hidden marker at trunk. When a branch parented
+	// under an anchor is restacked in isolation (e.g. EnterConflictWorkflow
+	// restacking just the conflict branch), the anchor ref can still lag trunk
+	// because it isn't part of this restack set. PlanRestack substitutes trunk
+	// for a stale anchor parent (see restack_plan.go); restackBranch must too.
+	// Without it, parentRev stays at the anchor's stale tip, the check below
+	// finds parentRev == oldParentRev and skips the rebase as "unneeded" — while
+	// validation (which used trunk) predicted a conflict. That mismatch trips
+	// EnterConflictWorkflow's "expected conflict but rebase completed
+	// successfully" assertion and leaves the branch un-restacked.
+	rebaseOnto := parent
+	if e.IsWorktreeAnchor(parentBranch) {
+		if trunkRev, trunkErr := e.Trunk().GetRevision(); trunkErr == nil && trunkRev != parentRev {
+			parentRev = trunkRev
+			rebaseOnto = trunkRev
+		}
+	}
+
 	// Get metadata (read once to avoid duplicate disk I/O)
 	meta := snap.meta.Get(branchName)
 	if meta == nil {
@@ -319,7 +337,7 @@ func (e *engineImpl) restackBranch(
 	}
 
 	// Perform rebase
-	gitResult, err := e.git.Rebase(ctx, branchName, parent, oldParentRev)
+	gitResult, err := e.git.Rebase(ctx, branchName, rebaseOnto, oldParentRev)
 	if err != nil {
 		return RestackBranchResult{
 			Result:              RestackConflict,

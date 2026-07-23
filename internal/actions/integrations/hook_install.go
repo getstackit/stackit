@@ -35,7 +35,7 @@ func installHook(repoRoot, hookName, marker, template, displayName string, out o
 		}
 		defer func() { _ = f.Close() }()
 
-		if _, err := f.WriteString(fmt.Sprintf("\n# Added by Stackit\n%s\n", marker)); err != nil {
+		if _, err := fmt.Fprintf(f, "\n# Added by Stackit\n%s\n", marker); err != nil {
 			return fmt.Errorf("failed to append to %s hook: %w", hookName, err)
 		}
 		out.Info(fmt.Sprintf("Appended Stackit verification to existing %s hook.", strings.ToLower(displayName)))

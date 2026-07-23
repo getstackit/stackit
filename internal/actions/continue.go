@@ -87,7 +87,9 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		if err := PrintConflictStatus(ctx, branchName); err != nil {
 			return fmt.Errorf("failed to print conflict status: %w", err)
 		}
-		return fmt.Errorf("rebase conflict is not yet resolved")
+		// PrintConflictStatus already told the user what to do; return the
+		// silenced conflict-workflow error so cobra doesn't reprint it.
+		return errors.NewConflictWorkflowError(branchName)
 	}
 
 	// Success - checkout the branch (rebase leaves us in detached HEAD)

@@ -302,10 +302,10 @@ func (h *SimpleSyncHandler) printSummary(summary syncAction.Summary) {
 		h.Output.Info("✅ Summary: %s", strings.Join(parts, ", "))
 	}
 
-	// Print actionable advice for conflicts
-	if len(summary.ConflictBranches) > 0 {
+	// Print actionable advice for every conflict, not just the first
+	for _, conflict := range summary.ConflictBranches {
 		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", summary.ConflictBranches[0])))
+			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
 	}
 }
 
@@ -581,17 +581,17 @@ func (h *InteractiveSyncHandler) formatSummary(summary syncAction.Summary) strin
 
 	parts := syncAction.FormatSummaryParts(summary)
 
-	result := ""
+	var lines []string
 	if len(parts) > 0 {
-		result = "✅ Summary: " + strings.Join(parts, ", ")
+		lines = append(lines, "✅ Summary: "+strings.Join(parts, ", "))
 	}
 
-	// Add actionable advice for conflicts
-	if len(summary.ConflictBranches) > 0 {
-		result += fmt.Sprintf("\n   Run 'st restack %s' to resolve and continue", summary.ConflictBranches[0])
+	// Add actionable advice for every conflict, not just the first
+	for _, conflict := range summary.ConflictBranches {
+		lines = append(lines, fmt.Sprintf("   Run 'st restack %s' to resolve and continue", conflict))
 	}
 
-	return result
+	return strings.Join(lines, "\n")
 }
 
 // OnRestackStart implements RestackHandler for standalone restack operations
@@ -764,16 +764,15 @@ func (h *InteractiveSyncHandler) PromptOrphanedMetadata(info engine.OrphanedMeta
 func describeRestackConflicts(out output.Output, conflictBranches []string) {
 	out.Newline()
 	// out.Warn already prefixes "⚠️ "; don't hardcode another one here.
-	out.Warn("Found conflicts in %d %s during restack:",
+	out.Warn("Found conflicts in %d %s during restack; branches without conflicts were restacked.",
 		len(conflictBranches),
 		map[bool]string{true: "branch", false: "branches"}[len(conflictBranches) == 1])
+	// Bullets are detail lines, not warnings — use Info so they don't each
+	// pick up a ⚠️ prefix.
+	out.Info("Resolve each with:")
 	for _, name := range conflictBranches {
-		// Bullets are detail lines, not warnings — use Info so they don't each
-		// pick up a ⚠️ prefix.
-		out.Info("  • %s", style.ColorBranchName(name))
+		out.Info("  • %s", style.ColorCyan("st restack "+name))
 	}
-	out.Newline()
-	out.Info("Branches that could be restacked cleanly have been restacked.")
 	out.Newline()
 }
 

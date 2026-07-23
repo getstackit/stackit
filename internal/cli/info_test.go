@@ -146,6 +146,24 @@ func TestInfoCommand(t *testing.T) {
 			"should contain patch output, got: %s", output)
 	})
 
+	t.Run("info with --json returns structured branch data", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
+
+		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
+			t.Fatal(err)
+		}
+		s.RunCli("create", "feature", "-m", "feature change")
+
+		output, err := s.RunCliAndGetOutput("info", "--json")
+
+		require.NoError(t, err, "info command failed: %s", output)
+		require.Contains(t, output, `"name": "feature"`)
+		require.Contains(t, output, `"is_current": true`)
+		require.Contains(t, output, `"commit_messages": [`)
+		require.Contains(t, output, `"diff_stats": {`)
+	})
+
 	t.Run("info with --stat flag shows diffstat", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
@@ -262,6 +280,28 @@ func TestInfoCommand(t *testing.T) {
 
 		require.Error(t, err, "info should fail when stackit not initialized")
 		require.Contains(t, output, "not initialized", "should mention not initialized")
+	})
+
+	t.Run("info with --stack shows tree with commit messages", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
+
+		if err := s.Scene.Repo.CreateChange("a change", "a", false); err != nil {
+			t.Fatal(err)
+		}
+		s.RunCli("create", "a", "-m", "a change")
+		if err := s.Scene.Repo.CreateChange("b change", "b", false); err != nil {
+			t.Fatal(err)
+		}
+		s.RunCli("create", "b", "-m", "b change")
+
+		output, err := s.RunCliAndGetOutput("info", "--stack")
+
+		require.NoError(t, err, "info command failed: %s", output)
+		require.Contains(t, output, "a", "tree should show branch a")
+		require.Contains(t, output, "b", "tree should show branch b")
+		require.Contains(t, output, "main", "tree should show trunk")
+		require.Contains(t, output, "a change", "tree should show commit messages")
 	})
 
 	t.Run("info with --stack --json shows JSON output", func(t *testing.T) {

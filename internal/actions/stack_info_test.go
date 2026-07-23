@@ -2,7 +2,6 @@ package actions
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,9 +11,9 @@ import (
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-func TestStackInfoAction(t *testing.T) {
+func TestQueryStackInfo(t *testing.T) {
 	t.Parallel()
-	t.Run("returns JSON info for the current stack", func(t *testing.T) {
+	t.Run("returns structured info for the current stack", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
@@ -28,25 +27,14 @@ func TestStackInfoAction(t *testing.T) {
 		s.Checkout("branch2")
 		s.Scene.Repo.CreateChangeAndCommit("c2", "f2.txt")
 
-		err := StackInfoAction(s.Context, StackInfoOptions{JSON: true})
-		output := s.Output.String()
-
+		result, err := QueryStackInfo(context.Background(), s.Engine)
 		require.NoError(t, err)
-		require.NotEmpty(t, output)
+		require.Len(t, result.Branches, 2)
 
-		var info StackInfoOutput
-		err = json.Unmarshal([]byte(output), &info)
-		require.NoError(t, err)
-
-		// Check branches
-		require.Len(t, info.Branches, 2)
-
-		// Map by name for easier checking
-		branchMap := make(map[string]StackBranchInfo)
-		for _, b := range info.Branches {
+		branchMap := make(map[string]StackInfoBranch)
+		for _, b := range result.Branches {
 			branchMap[b.Name] = b
 		}
-
 		require.Contains(t, branchMap, "branch1")
 		require.Contains(t, branchMap, "branch2")
 
@@ -59,37 +47,23 @@ func TestStackInfoAction(t *testing.T) {
 		require.Equal(t, "branch1", b2.Parent)
 		require.NotEmpty(t, b2.CommitMessages)
 		require.GreaterOrEqual(t, b2.DiffStats.FilesChanged, 1)
+
+		// Tree structure: Order holds the stacked (non-trunk) branches; trunk is
+		// referenced via Trunk/Parents and is always fixed.
+		require.Equal(t, []string{"branch1", "branch2"}, result.Order)
+		require.Equal(t, "main", result.Trunk)
+		require.Equal(t, "main", result.Parents["branch1"])
+		require.True(t, result.UpToDate["main"])
 	})
 
 	t.Run("fails when not on a branch", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		// Detach HEAD
 		s.RunGit("checkout", "--detach", "main")
 
-		err := StackInfoAction(s.Context, StackInfoOptions{JSON: true})
+		_, err := QueryStackInfo(context.Background(), s.Engine)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not on a branch")
-	})
-
-	t.Run("returns tree view with commit messages when JSON flag is false", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
-			WithStack(map[string]string{
-				"branch1": "main",
-			})
-		s.Checkout("branch1")
-
-		err := StackInfoAction(s.Context, StackInfoOptions{JSON: false})
-		output := s.Output.String()
-
-		require.NoError(t, err)
-		// Tree format includes branch name with symbol
-		require.Contains(t, output, "branch1")
-		// Tree format shows trunk at bottom
-		require.Contains(t, output, "main")
-		// Tree format shows commit messages
-		require.Contains(t, output, "change on branch1")
 	})
 
 	t.Run("includes lock and frozen state", func(t *testing.T) {
@@ -106,16 +80,10 @@ func TestStackInfoAction(t *testing.T) {
 		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch1), true)
 		require.NoError(t, err)
 
-		err = StackInfoAction(s.Context, StackInfoOptions{JSON: true})
-		output := s.Output.String()
-
+		result, err := QueryStackInfo(context.Background(), s.Engine)
 		require.NoError(t, err)
-
-		var info StackInfoOutput
-		err = json.Unmarshal([]byte(output), &info)
-		require.NoError(t, err)
-		require.Len(t, info.Branches, 1)
-		require.True(t, info.Branches[0].IsLocked)
-		require.True(t, info.Branches[0].IsFrozen)
+		require.Len(t, result.Branches, 1)
+		require.True(t, result.Branches[0].IsLocked)
+		require.True(t, result.Branches[0].IsFrozen)
 	})
 }

@@ -97,16 +97,6 @@ func (b Branch) GetRevision() (string, error) {
 	return b.reader.GetRevision(b)
 }
 
-// GetCommitCount returns the number of commits for this branch
-func (b Branch) GetCommitCount() (int, error) {
-	return b.reader.GetCommitCount(b)
-}
-
-// GetDiffStats returns the number of lines added and deleted for this branch
-func (b Branch) GetDiffStats() (added int, deleted int, err error) {
-	return b.reader.GetDiffStats(b)
-}
-
 // GetAllCommits returns commits for this branch in various formats
 func (b Branch) GetAllCommits(format CommitFormat) ([]string, error) {
 	return b.reader.GetAllCommits(b, format)

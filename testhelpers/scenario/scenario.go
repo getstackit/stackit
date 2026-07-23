@@ -329,6 +329,16 @@ func (s *Scenario) ExpectStackStructure(expected map[string]string) *Scenario {
 	return s
 }
 
+// BranchCommitCount returns the number of commits a branch carries relative to
+// its divergence base, resolved via the batched stats reader (BatchBranchStats).
+// It replaces the removed per-branch Engine.GetCommitCount accessor and uses the
+// same base resolution, so counts are unchanged.
+func (s *Scenario) BranchCommitCount(branch string) int {
+	s.T.Helper()
+	b := s.Engine.GetBranch(branch)
+	return s.Engine.BatchBranchStats(engine.BranchesOf(b))[branch].CommitCount
+}
+
 // ExpectBranchFixed asserts that a branch is considered "fixed" (no restack needed) by the engine.
 func (s *Scenario) ExpectBranchFixed(branch string) *Scenario {
 	s.T.Helper()

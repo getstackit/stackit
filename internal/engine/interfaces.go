@@ -88,8 +88,6 @@ type BranchInfo interface {
 	GetCommitDate(branch Branch) (time.Time, error)
 	GetCommitAuthor(branch Branch) (string, error)
 	GetRevision(branch Branch) (string, error)
-	GetCommitCount(branch Branch) (int, error)
-	GetDiffStats(branch Branch) (added int, deleted int, err error)
 	GetAllCommits(branch Branch, format CommitFormat) ([]string, error)
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)

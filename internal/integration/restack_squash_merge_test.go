@@ -70,9 +70,7 @@ func TestSquashMergeMultiCommitParent(t *testing.T) {
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName())
 
 	// Child must keep ONLY its own commit — parent's 3 commits must not replay.
-	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("child"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount, "child should not inherit parent's squashed commits")
+	require.Equal(t, 1, sh.BranchCommitCount("child"), "child should not inherit parent's squashed commits")
 
 	requireCleanWorkingTree(t, sh)
 }
@@ -120,9 +118,7 @@ func TestRestackAfterMultiCommitSquashParentDeleted(t *testing.T) {
 	sh.Rebuild()
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName())
 
-	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("child"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount, "child should not inherit parent's squashed commits")
+	require.Equal(t, 1, sh.BranchCommitCount("child"), "child should not inherit parent's squashed commits")
 
 	requireCleanWorkingTree(t, sh)
 }
@@ -173,9 +169,7 @@ func TestRestackDetectsSquashMergeWithStalePRState(t *testing.T) {
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName(),
 		"child should reparent to main when the squash scan detects the parent merged")
 
-	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("child"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount, "child should keep only its own commit")
+	require.Equal(t, 1, sh.BranchCommitCount("child"), "child should keep only its own commit")
 
 	requireCleanWorkingTree(t, sh)
 }
@@ -249,9 +243,7 @@ func TestSyncKeepsUnmergedBranchWithPRNumber(t *testing.T) {
 	require.Contains(t, branches, "feature",
 		"an unmerged branch must not be deleted just because it has a PR number")
 
-	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("feature"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount, "feature must keep its own unlanded commit")
+	require.Equal(t, 1, sh.BranchCommitCount("feature"), "feature must keep its own unlanded commit")
 
 	requireCleanWorkingTree(t, sh)
 }
@@ -309,9 +301,7 @@ func TestSquashMergedSiblingKeepsOwnCommit(t *testing.T) {
 		"sibling B must never be reset to A's stale pre-merge tip (issue #1345 data loss)")
 
 	// B keeps exactly its own commit on top of main.
-	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("branch-b"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount, "sibling B must keep only its own commit")
+	require.Equal(t, 1, sh.BranchCommitCount("branch-b"), "sibling B must keep only its own commit")
 
 	requireCleanWorkingTree(t, sh)
 }
@@ -357,9 +347,7 @@ func TestRestackAfterMultiCommitSquashWithoutSync(t *testing.T) {
 		"child should reparent to main past the merged parent")
 
 	// Child must keep ONLY its own commit — parent's 3 commits must not replay.
-	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("child"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount, "child should not inherit parent's squashed commits")
+	require.Equal(t, 1, sh.BranchCommitCount("child"), "child should not inherit parent's squashed commits")
 
 	requireCleanWorkingTree(t, sh)
 }

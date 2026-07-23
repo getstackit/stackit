@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -448,6 +449,27 @@ func (r *GitRepo) GetCommitCount(from, to string) (int, error) {
 		return 0, fmt.Errorf("failed to parse commit count: %w", err)
 	}
 	return count, nil
+}
+
+// GetDiffStats returns the total additions and deletions between two refs,
+// summed across all changed files (git diff --numstat from..to).
+func (r *GitRepo) GetDiffStats(from, to string) (added, deleted int, err error) {
+	output, err := r.runGitCommandAndGetOutput("diff", "--numstat", from+".."+to)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		// Binary files report "-" for numstat; treat as zero.
+		a, _ := strconv.Atoi(fields[0])
+		d, _ := strconv.Atoi(fields[1])
+		added += a
+		deleted += d
+	}
+	return added, deleted, nil
 }
 
 // GetBranchSHA returns the SHA of a branch.

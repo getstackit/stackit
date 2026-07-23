@@ -393,13 +393,8 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 
 	// Core regression assertions: B and C keep their own commit boundaries.
 	// If A commits were replayed into B/C, these counts would be inflated.
-	bCount, err := eng.GetCommitCount(eng.GetBranch("branch-b"))
-	require.NoError(t, err)
-	require.Equal(t, 1, bCount)
-
-	cCount, err := eng.GetCommitCount(eng.GetBranch("branch-c"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount)
+	require.Equal(t, 1, sh.BranchCommitCount("branch-b"))
+	require.Equal(t, 1, sh.BranchCommitCount("branch-c"))
 
 	sh.ExpectBranchFixed("branch-b").
 		ExpectBranchFixed("branch-c")
@@ -715,9 +710,7 @@ func TestSquashMergeMiddleOfStack(t *testing.T) {
 	require.Equal(t, "main", sh.Engine.GetBranch("branch-a").GetParent().GetName())
 
 	// C keeps its own commits — A's squash content shouldn't replay into C.
-	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("branch-c"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount)
+	require.Equal(t, 1, sh.BranchCommitCount("branch-c"))
 }
 
 // TestSquashMergeMultipleAdjacentMergedInOneSync covers when both A and B
@@ -759,9 +752,7 @@ func TestSquashMergeMultipleAdjacentMergedInOneSync(t *testing.T) {
 	require.Equal(t, mainName, sh.Engine.GetBranch("branch-c").GetParent().GetName())
 
 	// C should not have inherited A's or B's commits during restack.
-	cCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("branch-c"))
-	require.NoError(t, err)
-	require.Equal(t, 1, cCount)
+	require.Equal(t, 1, sh.BranchCommitCount("branch-c"))
 
 	requireCleanWorkingTree(t, sh)
 }
@@ -860,9 +851,7 @@ func TestSquashMergeSyncWhileOnChildOfMergedBranch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "branch-b", strings.TrimSpace(headRef))
 
-	bCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("branch-b"))
-	require.NoError(t, err)
-	require.Equal(t, 1, bCount, "B should keep its single commit after restack onto trunk")
+	require.Equal(t, 1, sh.BranchCommitCount("branch-b"), "B should keep its single commit after restack onto trunk")
 
 	requireCleanWorkingTree(t, sh)
 }
@@ -1066,9 +1055,7 @@ func TestMergeCommitNotSquash(t *testing.T) {
 	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName())
 
 	// B's commit boundary must be preserved — A's commits are already in trunk.
-	bCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("branch-b"))
-	require.NoError(t, err)
-	require.Equal(t, 1, bCount, "B should have its own commit only, not a duplicate of A's")
+	require.Equal(t, 1, sh.BranchCommitCount("branch-b"), "B should have its own commit only, not a duplicate of A's")
 
 	requireCleanWorkingTree(t, sh)
 }
@@ -1113,9 +1100,7 @@ func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 
 	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName())
 
-	bCount, err := sh.Engine.GetCommitCount(sh.Engine.GetBranch("branch-b"))
-	require.NoError(t, err)
-	require.Equal(t, 1, bCount)
+	require.Equal(t, 1, sh.BranchCommitCount("branch-b"))
 
 	requireCleanWorkingTree(t, sh)
 }

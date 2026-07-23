@@ -46,16 +46,6 @@ func (e *engineImpl) BatchDivergencePoints(branches Branches) map[string]string 
 	})
 }
 
-// GetCommitCount returns the number of commits for a branch.
-// Results are cached by (base, head) SHA pair.
-func (e *engineImpl) GetCommitCount(branch Branch) (int, error) {
-	base, branchRev, err := e.resolveBranchComparisonRevisions(branch.GetName())
-	if err != nil {
-		return 0, err
-	}
-	return e.commitCountBetween(git.RevRange{Base: base, Head: branchRev})
-}
-
 // commitCountBetween returns the commit count in (base, head], using the
 // (base, head)-keyed cache. It takes pre-resolved revisions so batched callers
 // need not re-resolve a branch's head.
@@ -77,16 +67,6 @@ func (e *engineImpl) commitCountBetween(rr git.RevRange) (int, error) {
 	count, _ := strconv.Atoi(strings.TrimSpace(out))
 	e.commitCountCache.Store(cacheKey, count)
 	return count, nil
-}
-
-// GetDiffStats returns diff stats for a branch.
-// Results are cached by (base, head) SHA pair.
-func (e *engineImpl) GetDiffStats(branch Branch) (int, int, error) {
-	base, branchRev, err := e.resolveBranchComparisonRevisions(branch.GetName())
-	if err != nil {
-		return 0, 0, err
-	}
-	return e.diffStatsBetween(git.RevRange{Base: base, Head: branchRev})
 }
 
 // diffStatsBetween returns the additions/deletions between two revisions, using
@@ -125,39 +105,6 @@ func (e *engineImpl) diffStatsBetween(rr git.RevRange) (int, int, error) {
 
 	e.diffStatsCache.Store(cacheKey, [2]int{added, deleted})
 	return added, deleted, nil
-}
-
-func (e *engineImpl) resolveBranchComparisonRevisions(branchName string) (base, branchRev string, err error) {
-	e.mu.RLock()
-	trunk := e.trunk
-	state := e.readState(branchName)
-	e.mu.RUnlock()
-
-	parent := trunk
-	if state != nil {
-		parent = state.Parent
-	}
-
-	// Get base revision (stored parent revision). An empty stored revision is
-	// treated as unset and falls back to the parent's current tip, matching
-	// statBase, which the batched diff-stat/commit-count readers use.
-	meta, err := e.readMetadata(branchName)
-	if rev := meta.GetParentBranchRevision(); err == nil && rev != nil && *rev != "" {
-		base = *rev
-	} else {
-		baseRev, err := e.git.GetRevision(parent)
-		if err != nil {
-			return "", "", err
-		}
-		base = baseRev
-	}
-
-	branchRev, err = e.git.GetRevision(branchName)
-	if err != nil {
-		return "", "", err
-	}
-
-	return base, branchRev, nil
 }
 
 // GetRecentTrunkCommits returns the most recent commits on the trunk branch,
@@ -204,7 +151,7 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 	// current tip when none is recorded. Falling back to the parent tip — not an
 	// empty base, which lists the branch's entire history back to the repo root —
 	// keeps the result to the branch's own commits and consistent with the base
-	// GetDiffStats / GetCommitCount use.
+	// the batched diff-stat / commit-count readers use (statBase).
 	var baseRevision string
 	if rev := meta.GetParentBranchRevision(); rev != nil && *rev != "" {
 		baseRevision = *rev

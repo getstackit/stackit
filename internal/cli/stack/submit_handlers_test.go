@@ -17,7 +17,7 @@ func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 	updated := "jonnii/20260511011552/guard-runner.repoRoot-reads-with-repoMu-to-fix"
 	created := "jonnii/20260511011552/add-feature"
 
@@ -54,7 +54,7 @@ func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 	branch := "jonnii/20260511011552/guard-runner.repoRoot-reads-with-repoMu-to-fix"
 
 	handler.OnEvent(submitAction.SubmissionStartEvent{
@@ -88,7 +88,7 @@ func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 	current := "jonnii/20260511011552/current-branch"
 	skipped := "jonnii/20260511011552/skipped-branch"
 
@@ -125,7 +125,7 @@ func TestSimpleSubmitHandlerPrintsClosingSummary(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
 		Branches:    []string{"create-me", "update-me", "skip-me"},
@@ -150,7 +150,7 @@ func TestPlanPrinterCollapsesLargeSkipGroups(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 
 	branches := []string{"active-one", "skip-a", "skip-b", "skip-c", "skip-d"}
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
@@ -180,7 +180,7 @@ func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {
 	out := output.NewTestOutput()
 	// A nil runner stands in for a TUI that was never started; every runner
 	// method is nil-safe. Plan output must not depend on the TUI running.
-	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out)
+	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitVerbose)
 	branch := "jonnii/20260511011552/up-to-date-branch"
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
@@ -209,7 +209,7 @@ func TestPlanPrinterShowsPRNumbersAndEmptyAnnotation(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 	prNumber := 1189
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
@@ -240,7 +240,7 @@ func TestSimpleSubmitHandlerSoloSubmitDropsStackFraming(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 	branch := "jonnii/20260511011552/tighten-submit-output"
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
@@ -277,7 +277,7 @@ func TestSimpleSubmitHandlerOnTrunkGuidance(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 
 	handler.OnEvent(submitAction.CompletionEvent{
 		Outcome: submitAction.OutcomeOnTrunk,
@@ -294,7 +294,7 @@ func TestSimpleSubmitHandlerPrintsBranchWarnings(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 
 	handler.OnEvent(submitAction.BranchWarningEvent{
 		BranchName: "jonnii/20260511011552/add-feature",
@@ -308,7 +308,7 @@ func TestSimpleSubmitHandlerStaysQuietOnFailureOutcome(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 
 	// The CLI prints the returned error; the handler must not double-report.
 	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeFailed, Message: "Submit failed"})
@@ -320,7 +320,7 @@ func TestSimpleSubmitHandlerPrintsOutcomeWhenNothingSubmitted(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewSimpleSubmitHandler(out)
+	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
 	branch := "jonnii/20260511011552/up-to-date-branch"
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{

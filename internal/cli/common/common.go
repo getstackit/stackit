@@ -60,6 +60,11 @@ func RunWithOptions(cmd *cobra.Command, opts app.GlobalOptions, fn func(ctx *app
 	// and failure both. Their errors are surfaced as warnings (non-blocking).
 	_ = RunCommandHooks(ctx, cmd, PhasePost)
 	if err != nil {
+		// The conflict workflow already printed full resolution instructions;
+		// silence cobra's "Error: ..." reprint but keep the non-zero exit.
+		if errors.Is(err, errors.ErrConflictWorkflow) {
+			cmd.SilenceErrors = true
+		}
 		return HandleCommandError(err)
 	}
 	return nil

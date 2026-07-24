@@ -352,7 +352,9 @@ func TestAbsorbComplex(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 
 		require.Error(t, err, "absorb should fail during restack. Output: %s", string(output))
-		require.Contains(t, string(output), "failed to restack", "should report restack failure")
+		// The conflict-workflow error is silenced (instructions are printed
+		// instead), so assert on the printed conflict status.
+		require.Contains(t, string(output), "Hit conflict restacking branchB", "should report restack conflict")
 
 		// In case of restack conflict, stackit stays in rebase mode (detached HEAD)
 		rebaseDir := scene.Dir + "/.git/rebase-merge"

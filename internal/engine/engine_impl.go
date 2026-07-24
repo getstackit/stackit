@@ -375,3 +375,58 @@ func (e *engineImpl) Rebuild(newTrunkName string) error {
 
 	return e.rebuild()
 }
+
+// RebuildBranches refreshes cached state for only the named branches, re-reading
+// their shared + local metadata and merging the result into the existing graph.
+// Unlike Rebuild it does not list every branch in the repo or re-read every
+// branch's metadata — use it after an operation that rewrote history or metadata
+// on a known set of branches (e.g. absorb) and left the rest of the graph alone.
+//
+// Because it merges rather than resets, it forces a full load first: a scoped
+// merge into a partially-loaded state would look complete while silently
+// omitting the untouched branches. It does not change the trunk, the branch
+// list, or the current branch — callers that add/remove branches or move HEAD
+// must use Rebuild. A named branch whose metadata no longer marks it tracked is
+// dropped from state, mirroring what a full rebuild would conclude.
+func (e *engineImpl) RebuildBranches(branchNames []string) error {
+	if len(branchNames) == 0 {
+		return nil
+	}
+
+	// The merge layers onto the complete graph, so both tiers must be loaded
+	// before we take the write lock (ensure* must not run under e.mu).
+	e.ensureSharedLoaded()
+	e.ensureLocalLoaded()
+
+	// Invalidate the metadata cache so the re-reads below observe writes made by
+	// the operation that just ran (e.g. absorb's raw cherry-pick/reset), not a
+	// stale pre-operation snapshot.
+	e.git.ClearMetadataCache()
+
+	allMeta, _ := e.batchReadMetadata(branchNames)
+	allLocalMeta := e.batchReadLocalMetadata(branchNames)
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	for _, name := range branchNames {
+		if name == e.trunk {
+			continue // Trunk is never tracked.
+		}
+
+		meta := allMeta[name]
+		if meta == nil || meta.GetParentBranchName() == nil || *meta.GetParentBranchName() == name {
+			// No parent metadata (untracked, deleted, or self-parenting) → drop,
+			// matching applySharedMetadata's skip-then-absent behavior.
+			e.state.removeBranch(name)
+			continue
+		}
+
+		e.state.updateBranchStateFromMeta(name, meta)
+		if lm := allLocalMeta[name]; lm != nil {
+			e.state.updateBranchStateFromLocalMeta(name, lm)
+		}
+	}
+
+	return nil
+}

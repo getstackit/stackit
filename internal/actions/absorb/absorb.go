@@ -361,6 +361,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Track the oldest modified branch to know where to start restacking from
 	var oldestModifiedBranch string
+	var modifiedBranches []string
 
 	// Get branches in topological order (bottom-up)
 	allBranches := eng.AllBranches()
@@ -375,6 +376,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if oldestModifiedBranch == "" {
 			oldestModifiedBranch = branch.GetName()
 		}
+		modifiedBranches = append(modifiedBranches, branch.GetName())
 
 		// Apply all hunks for this branch together
 		if err := eng.ApplyHunksToBranch(ctx.Context, branch, branchHunks); err != nil {
@@ -399,9 +401,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Absorb rewrites history via raw git operations (cherry-pick + reset on
 	// every modified branch), which engine doesn't observe through its own
-	// mutation paths. Rebuild reconciles cached ParentBranchRevision and
-	// branch tips with the post-rewrite state on disk.
-	if err := eng.Rebuild(""); err != nil {
+	// mutation paths. Refresh reconciles cached ParentBranchRevision and branch
+	// tips with the post-rewrite state on disk. Only the branches we applied
+	// hunks to changed, so a scoped rebuild suffices — it invalidates the
+	// metadata cache (so the follow-up restack reads fresh) without re-reading
+	// every branch in the repo.
+	if err := eng.RebuildBranches(modifiedBranches); err != nil {
 		return fmt.Errorf("failed to refresh engine after absorb: %w", err)
 	}
 

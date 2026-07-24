@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/output"
+)
+
+const (
+	prepushHookName    = "pre-push"
+	prepushMarker      = "stackit prepush verify"
+	prepushDisplayName = "Pre-push"
 )
 
 const prepushHookTemplate = `#!/bin/bash
@@ -20,55 +25,14 @@ stackit prepush verify
 
 // PrepushInstallAction installs the pre-push hook
 func PrepushInstallAction(ctx *app.Context) error {
-	return installPrepushHook(ctx.RepoRoot, ctx.Output)
+	return installHook(ctx.RepoRoot, prepushHookName, prepushMarker, prepushHookTemplate, prepushDisplayName, ctx.Output)
 }
 
 // PrepushInstallActionWithOutput installs the pre-push hook with a custom writer.
 // This is a convenience function for use during init where we don't have an app.Context.
 func PrepushInstallActionWithOutput(repoRoot string, writer io.Writer) error {
 	out := output.NewConsoleOutput(writer, false)
-	return installPrepushHook(repoRoot, out)
-}
-
-// installPrepushHook is the core implementation for installing the pre-push hook.
-func installPrepushHook(repoRoot string, out output.Output) error {
-	hooksDir := filepath.Join(repoRoot, ".git", "hooks")
-	hookPath := filepath.Join(hooksDir, "pre-push")
-
-	// Ensure hooks directory exists
-	if err := os.MkdirAll(hooksDir, 0750); err != nil {
-		return fmt.Errorf("failed to create hooks directory: %w", err)
-	}
-
-	// Check if hook already exists
-	if _, err := os.Stat(hookPath); err == nil {
-		content, err := os.ReadFile(hookPath)
-		if err == nil && strings.Contains(string(content), "stackit prepush verify") {
-			out.Info("Pre-push hook is already installed.")
-			return nil
-		}
-
-		// If it exists but doesn't have our command, append
-		f, err := os.OpenFile(hookPath, os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return fmt.Errorf("failed to open existing pre-push hook: %w", err)
-		}
-		defer func() { _ = f.Close() }()
-
-		if _, err := f.WriteString("\n# Added by Stackit\nstackit prepush verify\n"); err != nil {
-			return fmt.Errorf("failed to append to pre-push hook: %w", err)
-		}
-		out.Info("Appended Stackit verification to existing pre-push hook.")
-	} else {
-		// Create new hook
-		// #nosec G306 - Git hooks need to be executable
-		if err := os.WriteFile(hookPath, []byte(prepushHookTemplate), 0750); err != nil {
-			return fmt.Errorf("failed to write pre-push hook: %w", err)
-		}
-		out.Info("Installed Stackit pre-push hook.")
-	}
-
-	return nil
+	return installHook(repoRoot, prepushHookName, prepushMarker, prepushHookTemplate, prepushDisplayName, out)
 }
 
 // PrepushVerifyAction verifies that branches being pushed are not locked.
@@ -125,70 +89,5 @@ func PrepushVerifyFromReader(ctx *app.Context, reader io.Reader) error {
 
 // PrepushUninstallAction uninstalls the pre-push hook
 func PrepushUninstallAction(ctx *app.Context) error {
-	repoRoot := ctx.RepoRoot
-	hooksDir := filepath.Join(repoRoot, ".git", "hooks")
-	hookPath := filepath.Join(hooksDir, "pre-push")
-
-	// Check if hook exists
-	if _, err := os.Stat(hookPath); os.IsNotExist(err) {
-		ctx.Output.Info("Pre-push hook is not installed.")
-		return nil
-	}
-
-	content, err := os.ReadFile(hookPath)
-	if err != nil {
-		return fmt.Errorf("failed to read pre-push hook: %w", err)
-	}
-
-	lines := strings.Split(string(content), "\n")
-	newLines := make([]string, 0, len(lines))
-	removed := false
-
-	for i := range lines {
-		line := lines[i]
-		if strings.Contains(line, "stackit prepush verify") {
-			removed = true
-			// Check if previous line was our comment
-			if i > 0 && len(newLines) > 0 && (strings.Contains(lines[i-1], "Installed by Stackit") || strings.Contains(lines[i-1], "Added by Stackit")) {
-				newLines = newLines[:len(newLines)-1]
-			}
-			continue
-		}
-		newLines = append(newLines, line)
-	}
-
-	if !removed {
-		ctx.Output.Info("Stackit verification not found in pre-push hook.")
-		return nil
-	}
-
-	// Check if only shebang is left or if it's empty
-	isOnlyShebang := true
-	for _, line := range newLines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#!") {
-			continue
-		}
-		isOnlyShebang = false
-		break
-	}
-
-	if isOnlyShebang {
-		if err := os.Remove(hookPath); err != nil {
-			return fmt.Errorf("failed to remove pre-push hook: %w", err)
-		}
-		ctx.Output.Info("Removed Stackit pre-push hook.")
-	} else {
-		// Write back modified content
-		newContent := strings.Join(newLines, "\n")
-		// Clean up trailing/leading newlines that might have been left behind
-		newContent = strings.TrimSpace(newContent) + "\n"
-		// #nosec G306 - Git hooks need to be executable
-		if err := os.WriteFile(hookPath, []byte(newContent), 0750); err != nil {
-			return fmt.Errorf("failed to write pre-push hook: %w", err)
-		}
-		ctx.Output.Info("Removed Stackit verification from existing pre-push hook.")
-	}
-
-	return nil
+	return uninstallHook(ctx.Output, ctx.RepoRoot, prepushHookName, prepushMarker, prepushDisplayName)
 }

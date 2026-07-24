@@ -26,7 +26,7 @@ Stackit uses four ref namespaces:
 
 **Ref**: `refs/stackit/metadata/{branch-name}`
 
-**Source**: `internal/git/metadata.go:41-61`
+**Source**: `internal/git/metadata.go` (`Meta`)
 
 Branch metadata stores the relationship between branches and associated PR information.
 
@@ -87,7 +87,7 @@ Branch metadata stores the relationship between branches and associated PR infor
 
 **Ref**: `refs/stackit/local-metadata/{branch-name}`
 
-**Source**: `internal/git/metadata.go:82-87`
+**Source**: `internal/git/metadata.go` (`LocalMeta`)
 
 Local metadata is never pushed to remote. It stores per-machine state.
 
@@ -125,7 +125,7 @@ Local metadata is never pushed to remote. It stores per-machine state.
 
 **Ref**: `refs/stackit/stacks/{stack-id}`
 
-**Source**: `internal/git/stack_metadata.go:20-29`
+**Source**: `internal/git/stack_metadata.go` (`StackMeta`)
 
 Stack metadata stores information about an entire stack. It survives branch operations like merging the root branch, because it's stored separately from branch metadata.
 
@@ -181,7 +181,7 @@ The sanitized branch name:
 
 ### LockReason
 
-**Source**: `internal/git/metadata.go:13-23`
+**Source**: `internal/git/metadata.go` (`LockReason`)
 
 | Value | Description |
 |-------|-------------|
@@ -191,7 +191,7 @@ The sanitized branch name:
 
 ### BranchType
 
-**Source**: `internal/git/metadata.go:30-38`
+**Source**: `internal/git/metadata.go` (`BranchType`)
 
 | Value | Description |
 |-------|-------------|
@@ -201,7 +201,7 @@ The sanitized branch name:
 
 ### PrInfoPersistence
 
-**Source**: `internal/git/metadata.go:96-107`
+**Source**: `internal/git/metadata.go` (`PrInfoPersistence`)
 
 PR information persisted in branch metadata.
 
@@ -237,7 +237,7 @@ non-ancestor branch tip as proof that a merged PR still needs to be replayed.
 
 ### MergedParent
 
-**Source**: `internal/git/metadata.go:76-80`
+**Source**: `internal/git/metadata.go` (`MergedParent`)
 
 Records historical parent relationships when branches are reparented.
 
@@ -251,7 +251,7 @@ Limited to 5 entries (oldest entries dropped when limit exceeded).
 
 ### ModifiedBy
 
-**Source**: `internal/git/metadata.go:89-94`
+**Source**: `internal/git/metadata.go` (`ModifiedBy`)
 
 Tracks who last modified metadata.
 
@@ -265,7 +265,7 @@ Tracks who last modified metadata.
 
 ## Scope Inheritance
 
-**Source**: `internal/engine/types.go:57-155`
+**Source**: `internal/engine/types.go`
 
 Scopes are inherited from parent branches. When a branch doesn't have an explicit scope, Stackit walks up the parent chain until it finds one.
 

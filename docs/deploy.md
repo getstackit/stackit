@@ -1,14 +1,18 @@
 # Deploying stackit-server
 
-This guide covers running the hosted multi-repo `stackit-server` container.
-At the time of writing the container ships **Phase 1 + Phase 6** from
-[`docs/plans/server/README.md`](plans/server/README.md): multiple repos,
-served via a config file, with no authentication yet. OAuth, clone-from-URL,
-and per-user repo scoping arrive in later phases.
+This guide covers running the hosted `stackit-server` container. The server
+runs in one of two shapes:
 
-Treat the container as a single-tenant deployment behind your own
-authentication (a tunnel like Tailscale, an oauth2-proxy, etc.) until the
-auth phases land.
+- **Multi-tenant** (`-database-url` + `-repos-root`): logged-in users add their
+  own repos through the web app; the server clones them with a GitHub App
+  installation token and keeps them synced. Requires GitHub OAuth and a GitHub
+  App. See [Repository onboarding](#repository-onboarding).
+- **Single-repo** (`-cwd`): serve one already-checked-out repo, typically a
+  local dev server via `mise run dev`. No database.
+
+A write-capable deploy must sit behind an access control — the built-in GitHub
+OAuth gate or an external gateway. To expose a repo publicly without write
+access, run in [read-only mode](#read-only-public-mode).
 
 ## Image
 
@@ -26,30 +30,17 @@ All tags are multi-arch (`linux/amd64`, `linux/arm64`).
 
 ## Configuration
 
-The container reads its repo list from a JSON file. Mount a volume at `/data`
-(or anywhere) and point `-repos-config` at a file inside it.
+Where the server gets its repos depends on how you start it:
 
-```json
-{
-  "repos": [
-    { "id": "stackit",  "displayName": "Stackit",  "path": "/data/repos/stackit" },
-    { "id": "myapp",    "displayName": "My App",    "path": "/data/repos/myapp" }
-  ]
-}
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `id` | yes | URL-safe identifier (`[a-zA-Z0-9_-]+`) used in `/api/v1/repos/{id}/...` routes |
-| `path` | yes | Absolute path inside the container to a git working tree |
-| `displayName` | no | Human label shown in the web UI; defaults to `id` |
-| `remote` | no | Git remote name; defaults to `origin` |
-
-For DB-backed deployments (`-database-url`), repos can instead be added at
-runtime by logged-in users — the server clones and initializes them for you.
-See [Repository onboarding](#repository-onboarding). You can still pre-seed
-repos by inserting rows directly; a row with an empty `added_by` is shared
-with every authenticated user.
+- **`-database-url` (DB-backed, multi-repo).** Repos live in Postgres and are
+  added at runtime by logged-in users — the server clones and initializes them
+  for you into `-repos-root/<owner>/<name>`. See
+  [Repository onboarding](#repository-onboarding). You can pre-seed repos by
+  inserting rows directly; a row with an empty `added_by` is shared with every
+  authenticated user. Routes are keyed by `owner`/`repo`:
+  `/api/v1/repos/{owner}/{repo}/...`.
+- **`-cwd` (single-repo shortcut).** Serve the one repo discovered from that
+  path. Ignored when `-database-url` is set. Handy for a local dev server.
 
 ### Environment
 
@@ -338,7 +329,7 @@ The container is safe to run on a public hostname **only** behind:
    GitHub OAuth gate (`STACKIT_GITHUB_*` + an allowlist) or an external
    gateway (Tailscale, Cloudflare Access, an oauth2-proxy sidecar). Without
    one, any caller can trigger
-   `POST /api/v1/repos/{id}/stacks/{branch}/submit`, which pushes branches
+   `POST /api/v1/repos/{owner}/{repo}/stacks/{branch}/submit`, which pushes branches
    and creates PRs using the container's GitHub credentials. To expose a
    repo publicly *without* this risk, run in
    [read-only mode](#read-only-public-mode), which removes the write
@@ -391,7 +382,7 @@ can be ingested by any structured log pipeline.
 | `login` | `GET /auth/callback` after a successful exchange | `actor`, `user_id`, `target` (post-login URL), `request_id` |
 | `denied` | `GET /auth/callback` for non-allowlisted users | `actor`, `request_id` |
 | `logout` | `POST /auth/logout` | `actor`, `request_id` |
-| `submit` | `POST /api/v1/repos/{id}/stacks/{branch}/submit` | `actor`, `repo`, `branch`, `request_id` |
+| `submit` | `POST /api/v1/repos/{owner}/{repo}/stacks/{branch}/submit` | `actor`, `repo`, `branch`, `request_id` |
 
 Every request also carries a `X-Request-ID` response header with the
 same value used as `request_id` in the audit lines. Pass it through
@@ -418,21 +409,19 @@ and on bursts of `audit action=submit` from a single `actor`.
 curl https://stackit.example.com/api/v1/repos \
   -H "Cookie: stackit_session=$STACKIT_SESSION"
 
-curl -X POST https://stackit.example.com/api/v1/repos/default/stacks/main/submit \
+curl -X POST https://stackit.example.com/api/v1/repos/getstackit/stackit/stacks/main/submit \
   -H "Cookie: stackit_session=$STACKIT_SESSION" \
   -H "X-Stackit-CSRF: 1"
 ```
 
 ## Local smoke test
 
+The quickest end-to-end check serves a single pre-cloned repo via `-cwd`:
+
 ```bash
-# Clone something into ./data/repos/ first
-mkdir -p data/repos
-git clone https://github.com/getstackit/stackit data/repos/stackit
-(cd data/repos/stackit && stackit init)
-cat > data/repos.json <<'EOF'
-{ "repos": [ { "id": "stackit", "path": "/data/repos/stackit" } ] }
-EOF
+# Clone and initialize something to serve
+git clone https://github.com/getstackit/stackit data/stackit
+(cd data/stackit && stackit init)
 
 # STACKIT_ENV=production binds 0.0.0.0 so the -p mapping can reach the
 # server inside the container; STACKIT_READ_ONLY=1 exposes it without
@@ -442,32 +431,35 @@ docker run --rm -p 8080:8080 \
   -e STACKIT_READ_ONLY=1 \
   -v "$(pwd)/data:/data" \
   ghcr.io/getstackit/stackit-server:latest \
-  -repos-config /data/repos.json
+  -cwd /data/stackit
 
 # In another terminal:
 curl -s localhost:8080/api/v1/repos | jq
 open http://localhost:8080
 ```
 
+For the full multi-tenant flow, run with `-database-url` + `-repos-root` and add
+repos through the web app — see [Repository onboarding](#repository-onboarding).
+
 ## Railway
 
 1. **Service** — deploy from image `ghcr.io/getstackit/stackit-server:main`
    (or pin to `:latest` / `:vX.Y.Z`).
-2. **Volume** — mount at `/data`. Use at least a few GB; clones land here.
-3. **Variables** — set `STACKIT_ENV=production` (binds `0.0.0.0` so Railway's
+2. **Volume** — mount at `/data`. Use at least a few GB; clones land here. Set
+   `STACKIT_REPOS_ROOT=/data/repos`.
+3. **Postgres** — add a Railway Postgres plugin and point `STACKIT_DATABASE_URL`
+   at it (Railway exposes a connection string variable you can reference).
+4. **Variables** — set `STACKIT_ENV=production` (binds `0.0.0.0` so Railway's
    router can reach the port, and enforces auth). Railway injects `PORT`
    automatically. Add the auth vars (`STACKIT_GITHUB_*`, `STACKIT_SESSION_KEY`,
-   an allowlist) for a write-capable deploy, or set `STACKIT_READ_ONLY=1` to
-   expose it read-only without auth.
-4. **Start command** — leave blank to use the image's `ENTRYPOINT`, then set
-   the **Command** (Railway's arg override) to:
-   ```
-   -repos-config /data/repos.json
-   ```
-5. **Seed the volume** — clone repos into `/data/repos/<id>/`, run
-   `stackit init` in each, and create `/data/repos.json`. Do this once via
-   a one-shot Railway shell session, then redeploy. (A `repo init` API
-   endpoint replaces this manual step in Phase 4.)
+   `STACKIT_BASE_URL`, an allowlist) and the GitHub App vars
+   (`STACKIT_GITHUB_APP_ID`, `STACKIT_GITHUB_APP_PRIVATE_KEY`) so users can
+   onboard repos. To expose a single repo read-only instead, skip the database
+   and set `STACKIT_READ_ONLY=1` with a `-cwd` command.
+5. **Start command** — leave blank to use the image's `ENTRYPOINT`. The DB +
+   repos-root vars are enough; no command override is needed. (Users add repos
+   at runtime through the web app — see
+   [Repository onboarding](#repository-onboarding).)
 
 ## Pushing a snapshot without a release
 
@@ -492,16 +484,13 @@ the per-arch images and a manifest under `$TAG` (default `dev`). Skip the
   configured to redeploy whenever the GHCR tag is updated.
 - Use `:<short-sha>` to roll back to a known-good commit.
 
-## What's not in this container yet
+## Known limitations
 
-These all land in later phases:
-
-- **GitHub OAuth** (Phase 3) — every request currently hits the server with
-  no identity, and there is no per-user repo scoping.
-- **Clone-from-URL** (Phase 4) — repos must be pre-cloned into the mounted
-  volume.
-- **Persistent registry** (Phase 2) — runtime `POST /api/v1/repos` is not
-  available; edits to `repos.json` require a restart.
-
-See [`docs/plans/server/README.md`](plans/server/README.md) for the full
-phase plan.
+- **Trusted-user onboarding.** Repo IDs are `<owner>-<name>` globally, so two
+  users onboarding the same repo collide (`409`). The model assumes everyone who
+  can sign in is trusted. See
+  [Repository onboarding](#repository-onboarding).
+- **Metadata-only pushes aren't webhook-driven.** GitHub sends push events for
+  `refs/heads/*` and `refs/tags/*` only, so a metadata-only change (e.g. from
+  `describe`) is caught by the interval loop, not webhooks. Keep the sync loop
+  on. See [Evented refresh](#evented-refresh-webhooks).

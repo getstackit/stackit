@@ -63,7 +63,7 @@ Use these rules:
 | 1 | `internal/actions/<name>/` | Implement or extend the reusable operation |
 | 2 | `internal/cli/stack/<name>.go` | Cobra command definition (`Long` should include examples) |
 | 3 | `internal/cli/stack/<name>_handlers.go` or related adapter files | Add prompt/progress/output handling if needed |
-| 4 | `internal/cli/stack/root.go` | Register command in parent |
+| 4 | `internal/cli/root.go` | Register the command on `rootCmd` via `AddCommand` |
 | 5 | Tests in respective packages | Use action tests for orchestration and CLI tests for flags/output |
 
 CLI commands should:

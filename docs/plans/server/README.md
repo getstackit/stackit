@@ -1,5 +1,24 @@
 # Hosted multi-tenant stackit-server
 
+> **Status: historical.** This plan shipped (5 of 6 phases; the sixth, the
+> container, also shipped). The **built system diverged from this spec** — read
+> [`docs/deploy.md`](../../deploy.md) for how it actually works, not this file.
+> Key divergences: persistence is **Postgres** (`internal/api/store`), not the
+> planned SQLite-on-a-volume; there is **no `users` table** — identity lives in a
+> signed session cookie with the GitHub token encrypted inside it; routing is
+> keyed by **`{owner}/{repo}`**, not an opaque repo ID; onboarding clones with a
+> **GitHub App installation token**, not the user's token; and the background
+> **sync loop + webhook receiver** (which this plan listed as out of scope)
+> shipped too. Kept for design context.
+>
+> **Residual work not yet built** (real, tracked here until moved to issues):
+> - `DELETE /api/v1/repos/{owner}/{repo}` — runtime repo removal. The store query
+>   exists (`store/queries/delete_repo.sql`); no HTTP handler calls it.
+> - Persisted per-user model + token-at-rest — today operator-seeded repos
+>   (`added_by == ""`) are shared with every authenticated user; only build this
+>   if offline per-user GitHub actions are needed.
+> - Repo-level ACLs beyond the coarse `added_by` shared/owned split.
+
 Plan for turning the single-repo dev server into a hosted multi-user service
 deployable to Railway as a public container image
 (`ghcr.io/getstackit/stackit-server`).

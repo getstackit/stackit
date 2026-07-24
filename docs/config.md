@@ -54,7 +54,7 @@ git config --local --add stackit.trunks develop
 |-----|------|---------|-------------|
 | `stackit.trunk` | string | `main` | Primary trunk branch |
 | `stackit.trunks` | string[] | `[]` | Additional trunk branches |
-| `stackit.branch.pattern` | string | `{username}/{date}/{message}` | Branch naming template |
+| `stackit.branch.pattern` | string | `{username}/{date}/{message}` | Branch naming template (placeholders: `{username}`, `{date}`, `{message}`, `{scope}`) |
 | `stackit.submit.footer` | bool | `true` | Include PR footer in descriptions |
 | `stackit.submit.draft` | bool | `false` | Create PRs as drafts by default |
 | `stackit.submit.web` | string | `never` | When to open PRs in browser (always/created/never) |
@@ -70,6 +70,10 @@ git config --local --add stackit.trunks develop
 | `stackit.ci.timeout` | int | `600` | CI command timeout in seconds |
 | `stackit.split.hunkSelector` | string | `tui` | Hunk selector mode (tui/git) |
 | `stackit.maxConcurrency` | int | `0` | Max concurrent operations (0 = auto) |
+| `stackit.navigation.when` | string | `multiple` | When to show the PR navigation footer (always/never/multiple) |
+| `stackit.navigation.location` | string | `body` | Where to render navigation (body/comment/none) |
+| `stackit.navigation.marker` | string | `👈` | Marker for the current branch in the navigation footer |
+| `stackit.navigation.showMerged` | bool | `true` | Include merged branches in the navigation footer |
 | `stackit.hooks.approvedPostWorktreeCreate` | string[] | `[]` | Approved post-worktree hooks |
 
 ### Code Location
@@ -218,7 +222,7 @@ The table below shows all options available in `.stackit.yaml`. The "Team Fallba
 |--------|------|---------|-------------|---------------|
 | `trunk` | string | `main` | Primary trunk branch | Yes |
 | `trunks` | string[] | `[]` | Additional trunk branches (merged with git config) | Yes (additive) |
-| `branch.pattern` | string | `{username}/{date}/{message}` | Branch naming template | Yes |
+| `branch.pattern` | string | `{username}/{date}/{message}` | Branch naming template (placeholders: `{username}`, `{date}`, `{message}`, `{scope}`) | Yes |
 | `submit.footer` | bool | `true` | Include PR footer | Yes |
 | `submit.draft` | bool | `false` | Create PRs as drafts by default | Yes |
 | `submit.web` | string | `never` | Open PRs in browser (always/created/never) | Yes |
@@ -234,6 +238,10 @@ The table below shows all options available in `.stackit.yaml`. The "Team Fallba
 | `worktree.autoClean` | bool | `true` | Auto-remove clean, empty managed worktrees during sync | Yes |
 | `split.hunkSelector` | string | `tui` | Hunk selector mode (tui/git) | Yes |
 | `maxConcurrency` | int | `0` | Max concurrent operations (0 = auto) | Yes |
+| `navigation.when` | string | `multiple` | When to show the PR navigation footer (always/never/multiple) | Yes |
+| `navigation.location` | string | `body` | Where to render navigation (body/comment/none) | Yes |
+| `navigation.marker` | string | `👈` | Marker for the current branch in the navigation footer | Yes |
+| `navigation.showMerged` | bool | `true` | Include merged branches in the navigation footer | Yes |
 | `hooks.<phase>` | string[] | `[]` | Lifecycle hook commands per phase (e.g. `pre-modify`, `post-submit`, `post-worktree-create`); see `docs/hooks.md` | No (requires approval) |
 
 ### Layered Configuration Example
@@ -265,13 +273,18 @@ internal/config/
 
 ```go
 type ProjectConfig struct {
-    Trunk  string       `yaml:"trunk,omitempty"`
-    Trunks []string     `yaml:"trunks,omitempty"`
-    Branch BranchConfig `yaml:"branch,omitempty"`
-    Submit SubmitConfig `yaml:"submit,omitempty"`
-    Merge  MergeConfig  `yaml:"merge,omitempty"`
-    CI     CIConfig     `yaml:"ci,omitempty"`
-    Hooks  HooksConfig  `yaml:"hooks,omitempty"`
+    Trunk          string           `yaml:"trunk,omitempty"`
+    Trunks         []string         `yaml:"trunks,omitempty"`
+    Branch         BranchConfig     `yaml:"branch,omitempty"`
+    Submit         SubmitConfig     `yaml:"submit,omitempty"`
+    Merge          MergeConfig      `yaml:"merge,omitempty"`
+    CI             CIConfig         `yaml:"ci,omitempty"`
+    Undo           UndoConfig       `yaml:"undo,omitempty"`
+    Worktree       WorktreeConfig   `yaml:"worktree,omitempty"`
+    Split          SplitConfig      `yaml:"split,omitempty"`
+    Hooks          HooksConfig      `yaml:"hooks,omitempty"`
+    MaxConcurrency *int             `yaml:"maxConcurrency,omitempty"`
+    Navigation     NavigationConfig `yaml:"navigation,omitempty"`
 }
 
 // Load from repo root

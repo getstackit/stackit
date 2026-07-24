@@ -106,6 +106,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		summary := m.completionSummary()
 		if !m.Verbose {
 			summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
+			if urls := FormatCreatedURLs(m.Items); urls != "" {
+				if summary != "" {
+					summary += "\n"
+				}
+				summary += urls
+			}
 			if failures := FormatFailureSummary(m.Items); failures != "" {
 				if summary != "" {
 					summary += "\n\n"

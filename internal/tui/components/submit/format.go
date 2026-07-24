@@ -377,6 +377,24 @@ func FormatOutcomeSummary(items []Item, elapsed time.Duration) string {
 	return line
 }
 
+// FormatCreatedURLs lists the URLs of newly created PRs, one indented "#N  url"
+// line each. Updated PRs are omitted — they rarely need their URL re-pasted,
+// matching the per-branch and solo output. Returns "" when nothing was created.
+func FormatCreatedURLs(items []Item) string {
+	rows := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Status != StatusDone || item.Action != ActionCreate || item.URL == "" {
+			continue
+		}
+		if ref := PRRef(item); ref != "" {
+			rows = append(rows, fmt.Sprintf("  %s  %s", ref, item.URL))
+		} else {
+			rows = append(rows, "  "+item.URL)
+		}
+	}
+	return strings.Join(rows, "\n")
+}
+
 func pluralPR(count int) string {
 	if count == 1 {
 		return "PR"

@@ -464,6 +464,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				if summary := submitComponent.FormatOutcomeSummary(h.submitItems(), ev.Duration); summary != "" {
 					h.Output.Info("%s", summary)
 				}
+				if urls := submitComponent.FormatCreatedURLs(h.submitItems()); urls != "" {
+					h.Output.Info("%s", urls)
+				}
 				return
 			}
 			if summary := h.completionSummary(); summary != "" {

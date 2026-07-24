@@ -209,6 +209,20 @@ func TestFormatOutcomeSummary(t *testing.T) {
 	require.Empty(t, FormatOutcomeSummary(nil, time.Second))
 }
 
+func TestFormatCreatedURLs(t *testing.T) {
+	t.Parallel()
+
+	items := []Item{
+		{BranchName: "a", Action: ActionCreate, Status: StatusDone, URL: "https://github.com/o/r/pull/1"},
+		{BranchName: "b", Action: ActionUpdate, Status: StatusDone, URL: "https://github.com/o/r/pull/2"},
+		{BranchName: "c", Action: ActionCreate, Status: StatusError, URL: "https://github.com/o/r/pull/3"},
+	}
+
+	// Only the created, done PR is listed — not the updated or failed one.
+	require.Equal(t, "  #1  https://github.com/o/r/pull/1", FormatCreatedURLs(items))
+	require.Empty(t, FormatCreatedURLs(items[1:2]))
+}
+
 func TestFormatFailureSummaryWithoutErrorDetail(t *testing.T) {
 	t.Parallel()
 

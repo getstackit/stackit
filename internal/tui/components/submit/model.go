@@ -153,10 +153,6 @@ func (m *Model) content() string {
 	header := m.header()
 	if header != "" {
 		b.WriteString(header)
-		if !m.Verbose {
-			b.WriteString("  ")
-			b.WriteString(m.progress())
-		}
 		b.WriteString("\n\n")
 	}
 
@@ -181,31 +177,6 @@ func (m *Model) content() string {
 	}
 
 	return b.String()
-}
-
-// progress renders a compact, determinate progress indicator for the default
-// interactive submit view. Branch rows still identify the active operation;
-// this line answers the higher-level question of how much of the stack is
-// finished. Verbose mode intentionally keeps the existing audit-oriented
-// layout unchanged.
-func (m *Model) progress() string {
-	total := len(m.Items)
-	if total == 0 {
-		return ""
-	}
-
-	completed := 0
-	for _, item := range m.Items {
-		if item.Status == StatusDone || item.Status == StatusError {
-			completed++
-		}
-	}
-
-	const width = 10
-	filled := width * completed / total
-	bar := m.Styles.DoneStyle.Render(strings.Repeat("█", filled)) +
-		m.Styles.DimStyle.Render(strings.Repeat("░", width-filled))
-	return fmt.Sprintf("%s %d/%d complete", bar, completed, total)
 }
 
 // completionSummary is the output persisted to the terminal when the TUI

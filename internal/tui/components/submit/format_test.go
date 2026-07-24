@@ -292,23 +292,6 @@ func TestModelCompletionSummaryPrefersSubmissionResults(t *testing.T) {
 	require.NotContains(t, summary, "Submitting")
 }
 
-func TestModelCompactModeShowsDeterminateProgress(t *testing.T) {
-	t.Parallel()
-
-	m := NewModel([]Item{
-		{BranchName: "feature-1", Action: ActionUpdate, Status: StatusDone},
-		{BranchName: "feature-2", Action: ActionCreate, Status: StatusSubmitting},
-		{BranchName: "feature-3", Action: ActionCreate, Status: StatusPending},
-	})
-	m.Verbose = false
-
-	content := stripANSIEscape(m.content())
-	require.Contains(t, content, "Submitting 3 PRs")
-	require.Contains(t, content, "1/3 complete")
-	require.Contains(t, content, "███")
-	require.Contains(t, content, "░")
-}
-
 func stripANSIEscape(s string) string {
 	return ansiPattern.ReplaceAllString(s, "")
 }

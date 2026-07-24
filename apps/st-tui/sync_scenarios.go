@@ -6,6 +6,8 @@ import (
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 )
 
+func intPointer(n int) *int { return &n }
+
 // SyncScenario is a deterministic replay of the action events emitted by sync.
 // It drives the production Handler, not the Bubble Tea model directly, so its
 // terminal lifecycle and event formatting match the sync command.
@@ -53,6 +55,34 @@ var SyncScenarios = []SyncScenario{
 			BranchesSynced:    1,
 			BranchesDeleted:   1,
 			BranchesRestacked: 1,
+		},
+	},
+	{
+		Name:        "large-stack",
+		Description: "A multi-branch sync with merged cleanup and one restack conflict.",
+		TotalOps:    11,
+		Events: []syncAction.Event{
+			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted},
+			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted},
+			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main"},
+			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR info for 6 branches"},
+			{Phase: syncAction.PhaseClean, Type: syncAction.EventStarted},
+			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "stack-merge-stack-1784862381", Message: "merged into main"},
+			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "jonnii/20260724022739/make-restack-output-terse-and-outcome-focused", Message: "merged into main"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "info-query-cli-rendering", PRNumber: intPointer(936), Parent: "main", NewRevision: "9e49378"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260529015605/add-user-menu-to-header-and-extend-it-to-repo", PRNumber: intPointer(1070), Parent: "main", NewRevision: "15d7955"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", PRNumber: intPointer(1164), Parent: "main", NewRevision: "b0d42a4"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", PRNumber: intPointer(1242), Parent: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", NewRevision: "e1d9f30"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605033020/route-insert-s-child-select-prompt-through-the", PRNumber: intPointer(1241), Parent: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", NewRevision: "4cb45e0"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260219034124/prompt-notes-wt"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits", PRNumber: intPointer(754), Conflict: true},
+		},
+		Summary: syncAction.Summary{
+			BranchesDeleted:   2,
+			BranchesRestacked: 5,
+			BranchesSkipped:   1,
+			ConflictBranches:  []string{"jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits"},
 		},
 	},
 	{

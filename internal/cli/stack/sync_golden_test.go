@@ -232,7 +232,7 @@ func syncGoldenCases() []syncGoldenCase {
 					[]string{"feat-wip"},   // unpushed — not pre-selected
 					[]string{"feat-login"}, // user selects only the merged one
 				),
-				deleted("feat-login", intPtr(123), "merged"),
+				deleted("feat-login", new(123), "merged"),
 			},
 			summary: syncAction.Summary{TrunkUpdated: true, BranchesDeleted: 1},
 		},
@@ -242,8 +242,8 @@ func syncGoldenCases() []syncGoldenCase {
 				phaseStarted(syncAction.PhaseTrunk),
 				trunkFF("a1b2c3d"),
 				phaseStarted(syncAction.PhaseRestack),
-				restacked("feat-api", intPtr(201), "main", "b2c3d4e"),
-				restacked("feat-ui", intPtr(202), "feat-api", "c3d4e5f"),
+				restacked("feat-api", new(201), "main", "b2c3d4e"),
+				restacked("feat-ui", new(202), "feat-api", "c3d4e5f"),
 				restackUpToDate("feat-docs", nil),
 			},
 			summary: syncAction.Summary{TrunkUpdated: true, BranchesRestacked: 2},
@@ -252,8 +252,8 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "restack_conflict_declined",
 			steps: []step{
 				phaseStarted(syncAction.PhaseRestack),
-				restacked("feat-api", intPtr(201), "main", "b2c3d4e"),
-				restackConflict("feat-ui", intPtr(202)),
+				restacked("feat-api", new(201), "main", "b2c3d4e"),
+				restackConflict("feat-ui", new(202)),
 				promptResolveConflicts([]string{"feat-ui"}, false),
 			},
 			summary: syncAction.Summary{
@@ -318,10 +318,10 @@ func syncGoldenCases() []syncGoldenCase {
 					nil,
 					[]string{"feat-old"},
 				),
-				deleted("feat-old", intPtr(99), "merged"),
+				deleted("feat-old", new(99), "merged"),
 				phaseStarted(syncAction.PhaseRestack),
-				restacked("feat-ui", intPtr(202), "feat-api", "c3d4e5f"),
-				restackConflict("feat-report", intPtr(203)),
+				restacked("feat-ui", new(202), "feat-api", "c3d4e5f"),
+				restackConflict("feat-report", new(203)),
 				promptResolveConflicts([]string{"feat-report"}, false),
 			},
 			summary: syncAction.Summary{
@@ -363,8 +363,6 @@ func TestSyncGolden(t *testing.T) {
 
 // answerNo is used to represent a "no" answer in test transcripts.
 const answerNo = "no"
-
-func intPtr(i int) *int { return &i }
 
 func yesNo(b bool) string {
 	if b {

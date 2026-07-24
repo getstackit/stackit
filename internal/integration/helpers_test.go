@@ -666,7 +666,7 @@ func (s *TestShell) GetWorktreePath(nameOrAnchor string) string {
 	refsOutput, err := cmd.Output()
 	require.NoError(s.t, err, "failed to list worktree refs")
 
-	for _, refName := range strings.Fields(string(refsOutput)) {
+	for refName := range strings.FieldsSeq(string(refsOutput)) {
 		cmd = exec.Command("git", "show-ref", "-s", refName)
 		cmd.Dir = s.scene.Dir
 		shaOutput, err := cmd.Output()

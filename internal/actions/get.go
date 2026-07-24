@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"sync"
@@ -478,12 +479,8 @@ func (targets *syncTargets) crawlAncestorsViaMetadata(eng engine.Engine, targetB
 		current = *parent
 	}
 
-	for branch, parent := range discoveredParents {
-		targets.parentByBranch[branch] = parent
-	}
-	for branch, prNumber := range discoveredPRs {
-		targets.prByBranch[branch] = prNumber
-	}
+	maps.Copy(targets.parentByBranch, discoveredParents)
+	maps.Copy(targets.prByBranch, discoveredPRs)
 	targets.branches = discoveredBranches
 	return true
 }

@@ -1,5 +1,7 @@
 package engine
 
+import "maps"
+
 // Branches is an ordered set of branches.
 type Branches []Branch
 
@@ -194,9 +196,7 @@ type BranchStatuses struct {
 
 func newBranchStatuses(upToDate map[string]bool) BranchStatuses {
 	statuses := make(map[string]bool, len(upToDate))
-	for name, upToDate := range upToDate {
-		statuses[name] = upToDate
-	}
+	maps.Copy(statuses, upToDate)
 	return BranchStatuses{upToDate: statuses}
 }
 

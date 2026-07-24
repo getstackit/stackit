@@ -1160,9 +1160,9 @@ func mustExtractFrontmatter(t *testing.T, content string) (frontmatter, body str
 
 func extractRawFrontmatterValue(frontmatter, key string) (string, bool) {
 	prefix := key + ":"
-	for _, line := range strings.Split(frontmatter, "\n") {
-		if strings.HasPrefix(line, prefix) {
-			return strings.TrimSpace(strings.TrimPrefix(line, prefix)), true
+	for line := range strings.SplitSeq(frontmatter, "\n") {
+		if after, ok := strings.CutPrefix(line, prefix); ok {
+			return strings.TrimSpace(after), true
 		}
 	}
 	return "", false

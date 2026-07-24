@@ -313,8 +313,8 @@ func parseFrontmatter(content []byte, name string) (frontmatterLines []string, b
 		if trimmed == "" || strings.HasPrefix(trimmed, "name:") {
 			continue
 		}
-		if strings.HasPrefix(trimmed, "argument-hint:") {
-			argumentHint = strings.TrimSpace(strings.TrimPrefix(trimmed, "argument-hint:"))
+		if after, ok := strings.CutPrefix(trimmed, "argument-hint:"); ok {
+			argumentHint = strings.TrimSpace(after)
 			continue
 		}
 		rendered = append(rendered, line)
@@ -533,13 +533,13 @@ func splitFrontmatter(content []byte) (frontmatter, body []byte, found bool) {
 	}
 
 	rest := content[len(marker):]
-	idx := bytes.Index(rest, marker)
-	if idx < 0 {
+	before, after, ok := bytes.Cut(rest, marker)
+	if !ok {
 		return nil, nil, false
 	}
 
-	frontmatter = rest[:idx]
-	body = rest[idx+len(marker):]
+	frontmatter = before
+	body = after
 	return frontmatter, body, true
 }
 

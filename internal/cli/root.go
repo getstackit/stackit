@@ -131,7 +131,7 @@ Commit:  ` + commit + `
 	rootCmd.AddCommand(stack.NewSubmitCmd())
 	rootCmd.AddCommand(stack.NewSyncCmd())
 	rootCmd.AddCommand(navigation.NewTopCmd())
-	rootCmd.AddCommand(newUICmd(version, commit, date))
+	rootCmd.AddCommand(newUICmd())
 	rootCmd.AddCommand(newTrackCmd())
 	rootCmd.AddCommand(newUntrackCmd())
 	rootCmd.AddCommand(navigation.NewTrunkCmd())

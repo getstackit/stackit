@@ -9,7 +9,7 @@ import (
 )
 
 // newUICmd creates the ui command
-func newUICmd(_, _, _ string) *cobra.Command {
+func newUICmd() *cobra.Command {
 	var runLocalCI bool
 
 	cmd := &cobra.Command{

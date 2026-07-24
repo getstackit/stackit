@@ -44,9 +44,9 @@ var SyncScenarios = []SyncScenario{
 			{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted},
 			{Phase: syncAction.PhaseBranches, Type: syncAction.EventCompleted, Branch: "feat/api"},
 			{Phase: syncAction.PhaseClean, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "fix/merged", PRNumber: intPointer(39), Message: "after merge"},
+			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "fix/merged", PRNumber: new(39), Message: "after merge"},
 			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/web", PRNumber: intPointer(43), Parent: "feat/api", NewRevision: "d4e5f6a"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/web", PRNumber: new(43), Parent: "feat/api", NewRevision: "d4e5f6a"},
 		},
 		Summary: syncAction.Summary{
 			TrunkUpdated:      true,
@@ -66,7 +66,7 @@ var SyncScenarios = []SyncScenario{
 			{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted},
 			{Phase: syncAction.PhaseBranches, Type: syncAction.EventSkipped, Branch: "feat/api", Conflict: true},
 			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "feat/web", PRNumber: intPointer(43), Conflict: true},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "feat/web", PRNumber: new(43), Conflict: true},
 		},
 		Summary: syncAction.Summary{
 			BranchesSkipped:  2,
@@ -103,10 +103,6 @@ func SyncScenarioNames() []string {
 		names = append(names, scenario.Name)
 	}
 	return names
-}
-
-func intPointer(value int) *int {
-	return &value
 }
 
 func pause(delay time.Duration) {

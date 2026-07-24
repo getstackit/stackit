@@ -191,7 +191,7 @@ func BenchmarkStageAll(b *testing.B) {
 		b.StopTimer()
 		br := newBenchRepo(b, 5, 0)
 		path := filepath.Join(br.dir, "new.txt")
-		if err := os.WriteFile(path, []byte(fmt.Sprintf("iter-%d", iter)), 0o600); err != nil {
+		if err := os.WriteFile(path, fmt.Appendf(nil, "iter-%d", iter), 0o600); err != nil {
 			b.Fatalf("write: %v", err)
 		}
 		iter++

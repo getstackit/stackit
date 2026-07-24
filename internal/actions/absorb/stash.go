@@ -29,7 +29,7 @@ type stashEntry struct {
 
 func parseStashList(stashList string) []stashEntry {
 	entries := []stashEntry{}
-	for _, line := range strings.Split(stashList, "\n") {
+	for line := range strings.SplitSeq(stashList, "\n") {
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) < 2 {
 			continue

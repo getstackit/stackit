@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -150,7 +151,7 @@ func suggestionLiteral(n ast.Node) (string, bool) {
 func commandTokens(suggestion string) []string {
 	rest := strings.TrimPrefix(suggestion, "stackit ")
 	var tokens []string
-	for _, f := range strings.Fields(rest) {
+	for f := range strings.FieldsSeq(rest) {
 		if !commandTokenRe.MatchString(f) {
 			break
 		}
@@ -179,10 +180,8 @@ func findChild(cmd *cobra.Command, name string) *cobra.Command {
 		if c.Name() == name {
 			return c
 		}
-		for _, alias := range c.Aliases {
-			if alias == name {
-				return c
-			}
+		if slices.Contains(c.Aliases, name) {
+			return c
 		}
 	}
 	return nil

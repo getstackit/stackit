@@ -458,7 +458,7 @@ func (r *GitRepo) GetDiffStats(from, to string) (added, deleted int, err error) 
 	if err != nil {
 		return 0, 0, err
 	}
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue

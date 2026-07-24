@@ -54,9 +54,11 @@ func TestRestackWithStaleMetadataButMatchingParentRev(t *testing.T) {
 
 	// The bug manifests as "expected conflict on A but rebase completed successfully"
 	// which means the rebase was skipped entirely due to the early-exit check.
-	// The fix should make the rebase actually happen and hit a conflict.
+	// The fix should make the rebase actually happen and hit a conflict. The
+	// conflict-workflow error itself is no longer echoed by cobra (instructions
+	// are printed instead), so assert on the printed conflict status.
 	sh.OutputNotContains("rebase completed successfully").
-		OutputContains("restack stopped due to conflict")
+		OutputContains("Hit conflict restacking A")
 }
 
 // TestRestackWorktreeAnchoredBranchAgainstAdvancedTrunk reproduces the bug where

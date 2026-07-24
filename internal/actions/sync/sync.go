@@ -3,7 +3,6 @@ package sync
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -514,27 +513,6 @@ func plural(count int) string {
 		return ""
 	}
 	return "s"
-}
-
-// FormatSummaryString returns the full summary as a string
-func FormatSummaryString(summary Summary) string {
-	if summary.UpToDate {
-		return "Everything is up to date!"
-	}
-
-	parts := FormatSummaryParts(summary)
-	if len(parts) == 0 {
-		return ""
-	}
-
-	result := "Summary: " + strings.Join(parts, ", ")
-
-	// Add actionable advice for conflicts
-	if len(summary.ConflictBranches) > 0 {
-		result += fmt.Sprintf("\n   Run 'st restack %s' to resolve and continue", summary.ConflictBranches[0])
-	}
-
-	return result
 }
 
 // pluralES returns "es" if count != 1, otherwise empty string (for "branch" -> "branches")

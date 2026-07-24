@@ -15,20 +15,33 @@ import (
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
+// SubmitVerbosity selects how much per-branch detail the submit handlers emit.
+type SubmitVerbosity int
+
+const (
+	// SubmitCompact prints an outcome-focused summary (the default UX).
+	SubmitCompact SubmitVerbosity = iota
+	// SubmitVerbose retains the full branch-by-branch plan and result list.
+	SubmitVerbose
+)
+
+func (v SubmitVerbosity) verbose() bool { return v == SubmitVerbose }
+
 // NewSubmitUI creates a runner and handler pair for submit operations.
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
-func NewSubmitUI(out output.Output, logger output.Logger) (*tui.Runner, submit.Handler) {
+func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbosity) (*tui.Runner, submit.Handler) {
 	if tui.IsTTY() {
 		model := submitComponent.NewModel(nil)
+		model.Verbose = verbosity.verbose()
 		runner := tui.NewRunner(model, out, logger)
 		// Start lazily when the submission phase begins rather than here: the
 		// stack and plan print as plain lines, so a submit that turns out to
 		// have nothing to do never flashes the bubbletea startup/teardown
 		// sequence. See InteractiveSubmitHandler.OnEvent.
-		return runner, NewInteractiveSubmitHandler(runner, model, out)
+		return runner, NewInteractiveSubmitHandler(runner, model, out, verbosity)
 	}
-	return nil, NewSimpleSubmitHandler(out)
+	return nil, NewSimpleSubmitHandler(out, verbosity)
 }
 
 // maxNamedSkipGroup is the largest skipped-branch group that still lists its
@@ -41,6 +54,7 @@ const maxNamedSkipGroup = 3
 // the stack header and aligned columns.
 type planPrinter struct {
 	out       output.Output
+	verbose   bool
 	scopes    map[string]string
 	worktrees map[string]string
 	parents   map[string]string
@@ -96,6 +110,12 @@ func (p *planPrinter) Flush() {
 		return
 	}
 	p.printed = true
+	if !p.verbose {
+		if summary := p.compactSummary(); summary != "" {
+			p.out.Info("● %s", summary)
+		}
+		return
+	}
 
 	if p.solo {
 		p.printSoloLine(p.events[0])
@@ -126,6 +146,36 @@ func (p *planPrinter) Flush() {
 			p.printSkippedName(ev)
 		}
 	}
+}
+
+// compactSummary describes only the work that submit will perform. The
+// default submit output is an action summary, not a stack visualization; the
+// full branch-by-branch plan is available with --verbose.
+func (p *planPrinter) compactSummary() string {
+	var creates, updates int
+	for _, ev := range p.events {
+		if ev.Skipped {
+			continue
+		}
+		switch ev.Action {
+		case engine.SubmitActionCreate:
+			creates++
+		case engine.SubmitActionUpdate:
+			updates++
+		}
+	}
+
+	parts := make([]string, 0, 2)
+	if creates > 0 {
+		parts = append(parts, fmt.Sprintf("open %d %s", creates, pluralizePRs(creates)))
+	}
+	if updates > 0 {
+		parts = append(parts, fmt.Sprintf("update %d %s", updates, pluralizePRs(updates)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Will " + strings.Join(parts, " · ")
 }
 
 func (p *planPrinter) printActiveLine(ev submit.BranchPlanEvent) {
@@ -294,10 +344,10 @@ type branchItem struct {
 }
 
 // NewSimpleSubmitHandler creates a new simple submit handler
-func NewSimpleSubmitHandler(out output.Output) *SimpleSubmitHandler {
+func NewSimpleSubmitHandler(out output.Output, verbosity SubmitVerbosity) *SimpleSubmitHandler {
 	return &SimpleSubmitHandler{
 		BaseHandler: common.NewBaseHandler(out),
-		plan:        planPrinter{out: out},
+		plan:        planPrinter{out: out, verbose: verbosity.verbose()},
 		items:       make(map[string]*branchItem),
 	}
 }
@@ -339,11 +389,13 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			}
 			h.order = append(h.order, branch.Name)
 		}
-		h.Output.Newline()
-		// A solo branch was already named in the plan line; the count header
-		// would just restate it.
-		if !h.plan.solo {
-			h.Output.Info("Submitting %d %s", len(ev.Branches), pluralizeBranches(len(ev.Branches)))
+		if h.plan.verbose {
+			h.Output.Newline()
+			if !h.plan.solo {
+				h.Output.Info("Submitting %d %s", len(ev.Branches), pluralizeBranches(len(ev.Branches)))
+			}
+		} else {
+			h.Output.Info("Submitting %d %s...", len(ev.Branches), pluralizePRs(len(ev.Branches)))
 		}
 
 	case submit.BranchProgressEvent:
@@ -374,8 +426,13 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				return
 			}
 			item.reportedDone = true
-			// A solo branch reports its result in the completion summary
-			// (ref + URL together); a per-branch line here would duplicate it.
+			// Default output reports one final result rather than a noisy row per
+			// branch. Verbose mode retains the per-branch audit trail.
+			if !h.plan.verbose && !h.plan.solo {
+				return
+			}
+			// A solo branch reports its result in the completion summary (ref +
+			// URL together); a per-branch line here would duplicate it.
 			if h.plan.solo {
 				return
 			}
@@ -409,6 +466,15 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		h.plan.Flush()
 		switch ev.Outcome {
 		case submit.OutcomeComplete:
+			if !h.plan.verbose {
+				if summary := submitComponent.FormatOutcomeSummary(h.submitItems(), ev.Duration); summary != "" {
+					h.Output.Info("%s", summary)
+				}
+				if urls := submitComponent.FormatCreatedURLs(h.submitItems()); urls != "" {
+					h.Output.Info("%s", urls)
+				}
+				return
+			}
 			if summary := h.completionSummary(); summary != "" {
 				h.Output.Newline()
 				h.Output.Info("%s", summary)
@@ -429,7 +495,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		default:
 			// Dry run, all up to date, canceled, nothing to submit: print the
 			// outcome so the run doesn't end silently.
-			if ev.Message != "" {
+			if ev.Outcome == submit.OutcomeUpToDate && !h.plan.verbose {
+				h.Output.Info("✓ Nothing to submit")
+			} else if ev.Message != "" {
 				h.Output.Info("%s", ev.Message)
 			}
 		}
@@ -484,6 +552,13 @@ func (i *branchItem) toSubmitItem() submitComponent.Item {
 	}
 }
 
+func pluralizePRs(count int) string {
+	if count == 1 {
+		return "PR"
+	}
+	return "PRs"
+}
+
 func pluralizeBranches(count int) string {
 	if count == 1 {
 		return "branch"
@@ -507,8 +582,8 @@ type InteractiveSubmitHandler struct {
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
-func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output) *InteractiveSubmitHandler {
-	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out}}
+func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output, verbosity SubmitVerbosity) *InteractiveSubmitHandler {
+	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out, verbose: verbosity.verbose()}}
 }
 
 // OnEvent handles events from the submit action
@@ -549,9 +624,9 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			}
 		}
 		h.model.Items = items
-		// The plan already named a solo branch and printed its base, so the TUI
-		// drops the count header and the per-row branch name.
-		h.model.Solo = h.plan.solo
+		// Verbose mode retains the traditional solo plan line; default mode is
+		// self-contained and keeps the branch name in its progress row.
+		h.model.Solo = h.plan.verbose && h.plan.solo
 
 		// Start the TUI now that there's real submission work to animate.
 		// Idempotent, so later events that arrive after this are safe.
@@ -590,7 +665,9 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 				printOnTrunkGuidance(h.out, ev.Message)
 				return
 			}
-			if ev.Outcome != submit.OutcomeFailed && ev.Message != "" {
+			if ev.Outcome == submit.OutcomeUpToDate && !h.plan.verbose {
+				h.out.Info("✓ Nothing to submit")
+			} else if ev.Outcome != submit.OutcomeFailed && ev.Message != "" {
 				h.out.Info("%s", ev.Message)
 			}
 			return

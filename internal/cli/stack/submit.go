@@ -45,6 +45,7 @@ type submitFlags struct {
 	noLabels             bool
 	noAssignees          bool
 	jsonOutput           bool
+	verbose              bool
 }
 
 func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
@@ -77,6 +78,7 @@ func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
 	cmd.Flags().BoolVar(&f.noLabels, "no-labels", false, "Don't apply default labels from config.")
 	cmd.Flags().BoolVar(&f.noAssignees, "no-assignees", false, "Don't apply default assignees from config.")
 	cmd.Flags().BoolVar(&f.jsonOutput, "json", false, "Output the plan and per-branch results as JSON.")
+	cmd.Flags().BoolVar(&f.verbose, "verbose", false, "Show the full branch-by-branch submission plan and results.")
 }
 
 func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
@@ -155,7 +157,12 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		// Action is the single source of truth for what to submit. The runner
 		// starts lazily (when the submission phase begins), so calling Action
 		// unconditionally no longer flashes the TUI when there's nothing to do.
-		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger)
+		// A dry run's whole output IS the plan, so it always prints verbose.
+		verbosity := SubmitCompact
+		if f.verbose || f.dryRun {
+			verbosity = SubmitVerbose
+		}
+		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger, verbosity)
 		defer runner.Cleanup()
 		return submit.Action(ctx, opts, handler)
 	})

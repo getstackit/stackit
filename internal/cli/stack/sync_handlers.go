@@ -42,6 +42,11 @@ type SimpleSyncHandler struct {
 	totalOps  int
 	currentOp int
 	headers   *utils.LazyHeaders[syncAction.Phase]
+
+	// restack-only state: standalone restack suppresses already-current rows
+	// and reports them as a count in the summary instead.
+	restackUpToDate int
+	restackPrinted  bool
 }
 
 // NewSimpleSyncHandler creates a new SimpleSyncHandler
@@ -302,10 +307,10 @@ func (h *SimpleSyncHandler) printSummary(summary syncAction.Summary) {
 		h.Output.Info("✅ Summary: %s", strings.Join(parts, ", "))
 	}
 
-	// Print actionable advice for conflicts
-	if len(summary.ConflictBranches) > 0 {
+	// Print actionable advice for every conflict, not just the first
+	for _, conflict := range summary.ConflictBranches {
 		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", summary.ConflictBranches[0])))
+			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
 	}
 }
 
@@ -317,6 +322,14 @@ func (h *SimpleSyncHandler) OnRestackStart(_ int) {
 
 // OnRestackBranch implements RestackHandler for standalone restack operations
 func (h *SimpleSyncHandler) OnRestackBranch(branch string, result syncAction.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, reparented bool, oldParent, newParent string, rerereResolvedCount int) {
+	// Already-current branches are the expected default; suppress their rows
+	// and fold them into the summary count so only movement and problems print.
+	if isPlainUpToDate(result, lockReason, frozen, reparented) {
+		h.restackUpToDate++
+		return
+	}
+	h.restackPrinted = true
+
 	// Log reparenting info if applicable
 	if reparented {
 		h.Output.Info("Reparented %s from %s to %s (parent was merged/deleted).",
@@ -354,14 +367,18 @@ func (h *SimpleSyncHandler) OnRestackBranch(branch string, result syncAction.Res
 
 // OnRestackComplete implements RestackHandler for standalone restack operations
 func (h *SimpleSyncHandler) OnRestackComplete(restacked, skipped int, conflicts, blocked []string) {
-	h.Output.Newline()
+	// Only separate from prior rows when some actually printed; a pure no-op
+	// prints just the one-line summary with no leading blank.
+	if h.restackPrinted {
+		h.Output.Newline()
+	}
 
 	if restacked == 0 && skipped == 0 && len(blocked) == 0 {
 		h.Output.Info("✨ Everything is up to date!")
 		return
 	}
 
-	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked)); summary != "" {
+	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked), h.restackUpToDate); summary != "" {
 		h.Output.Info("✅ Summary: %s", summary)
 	}
 
@@ -377,9 +394,9 @@ func (h *SimpleSyncHandler) OnRestackComplete(restacked, skipped int, conflicts,
 const reasonBlockedByConflict = "(blocked by conflict in stack)"
 
 // formatRestackSummaryLine renders the shared "restacked N, skipped M
-// (conflict), blocked K" summary used by both restack handlers. Returns ""
-// when there is nothing to summarize.
-func formatRestackSummaryLine(restacked, skipped, blocked int) string {
+// (conflict), blocked K, P already current" summary used by both restack
+// handlers. Returns "" when there is nothing to summarize.
+func formatRestackSummaryLine(restacked, skipped, blocked, upToDate int) string {
 	parts := []string{}
 	if restacked > 0 {
 		parts = append(parts, fmt.Sprintf("restacked %d", restacked))
@@ -390,7 +407,18 @@ func formatRestackSummaryLine(restacked, skipped, blocked int) string {
 	if blocked > 0 {
 		parts = append(parts, fmt.Sprintf("blocked %d", blocked))
 	}
+	if upToDate > 0 {
+		parts = append(parts, fmt.Sprintf("%d already current", upToDate))
+	}
 	return strings.Join(parts, ", ")
+}
+
+// isPlainUpToDate reports whether a restack result is a no-op with nothing
+// worth showing — the branch was already current, not locked, frozen, or
+// reparented. Standalone restack suppresses these rows and folds them into the
+// summary count instead.
+func isPlainUpToDate(result syncAction.RestackResult, lockReason engine.LockReason, frozen, reparented bool) bool {
+	return result == syncAction.RestackUnneeded && !lockReason.IsLocked() && !frozen && !reparented
 }
 
 // InteractiveSyncHandler provides bubbletea TUI for TTY environments
@@ -403,6 +431,10 @@ type InteractiveSyncHandler struct {
 	totalOps     int
 	completedOps int
 	currentPhase syncAction.Phase
+
+	// restack-only: count of already-current branches whose rows were
+	// suppressed, reported as a summary count instead.
+	restackUpToDate int
 }
 
 // NewInteractiveSyncHandler creates a new InteractiveSyncHandler
@@ -581,17 +613,17 @@ func (h *InteractiveSyncHandler) formatSummary(summary syncAction.Summary) strin
 
 	parts := syncAction.FormatSummaryParts(summary)
 
-	result := ""
+	var lines []string
 	if len(parts) > 0 {
-		result = "✅ Summary: " + strings.Join(parts, ", ")
+		lines = append(lines, "✅ Summary: "+strings.Join(parts, ", "))
 	}
 
-	// Add actionable advice for conflicts
-	if len(summary.ConflictBranches) > 0 {
-		result += fmt.Sprintf("\n   Run 'st restack %s' to resolve and continue", summary.ConflictBranches[0])
+	// Add actionable advice for every conflict, not just the first
+	for _, conflict := range summary.ConflictBranches {
+		lines = append(lines, fmt.Sprintf("   Run 'st restack %s' to resolve and continue", conflict))
 	}
 
-	return result
+	return strings.Join(lines, "\n")
 }
 
 // OnRestackStart implements RestackHandler for standalone restack operations
@@ -614,6 +646,15 @@ func (h *InteractiveSyncHandler) OnRestackStart(branchCount int) {
 func (h *InteractiveSyncHandler) OnRestackBranch(branch string, result syncAction.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, reparented bool, oldParent, newParent string, rerereResolvedCount int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
+	// Already-current branches are the expected default; skip their rows but
+	// still advance the progress bar and count them for the summary.
+	if isPlainUpToDate(result, lockReason, frozen, reparented) {
+		h.restackUpToDate++
+		h.completedOps++
+		h.runner.Send(syncComponent.ProgressTickMsg{Completed: h.completedOps, Total: h.totalOps})
+		return
+	}
 
 	// Build detail message
 	detail, mark := h.formatRestackDetail(branch, result, newRev, prNumber, lockReason, frozen, isCurrent, parent, rerereResolvedCount)
@@ -764,16 +805,15 @@ func (h *InteractiveSyncHandler) PromptOrphanedMetadata(info engine.OrphanedMeta
 func describeRestackConflicts(out output.Output, conflictBranches []string) {
 	out.Newline()
 	// out.Warn already prefixes "⚠️ "; don't hardcode another one here.
-	out.Warn("Found conflicts in %d %s during restack:",
+	out.Warn("Found conflicts in %d %s during restack; branches without conflicts were restacked.",
 		len(conflictBranches),
 		map[bool]string{true: "branch", false: "branches"}[len(conflictBranches) == 1])
+	// Bullets are detail lines, not warnings — use Info so they don't each
+	// pick up a ⚠️ prefix.
+	out.Info("Resolve each with:")
 	for _, name := range conflictBranches {
-		// Bullets are detail lines, not warnings — use Info so they don't each
-		// pick up a ⚠️ prefix.
-		out.Info("  • %s", style.ColorBranchName(name))
+		out.Info("  • %s", style.ColorCyan("st restack "+name))
 	}
-	out.Newline()
-	out.Info("Branches that could be restacked cleanly have been restacked.")
 	out.Newline()
 }
 
@@ -851,7 +891,7 @@ func (h *InteractiveSyncHandler) formatRestackSummary(restacked, skipped int, co
 	}
 
 	result := ""
-	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked)); summary != "" {
+	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked), h.restackUpToDate); summary != "" {
 		result = "✅ Summary: " + summary
 	}
 

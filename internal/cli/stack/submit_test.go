@@ -33,8 +33,8 @@ func TestSubmitCommand(t *testing.T) {
 			return s.Repo.CheckoutBranch("branch-b")
 		})
 
-		// 1. Basic submit (downstack)
-		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
+		// 1. Basic submit (downstack). A dry run's whole output is the plan,
+		// so it always prints the detailed branch plan; --verbose is a no-op.
 		expected := testhelpers.NormalizeOutput(`
 Submit plan → main
 Will submit (2)
@@ -42,6 +42,10 @@ Will submit (2)
 ● branch-b → create (empty)
 Dry run complete
 `)
+		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
+		require.Equal(t, expected, testhelpers.NormalizeOutput(output))
+
+		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive", "--verbose")
 		require.Equal(t, expected, testhelpers.NormalizeOutput(output))
 
 		// 2. Submit --stack (full stack)
@@ -99,12 +103,7 @@ Dry run complete
 
 		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "ss", "--no-edit", "--no-interactive")
 		expected := testhelpers.NormalizeOutput(`
-Submit plan → main
-No changes (3)
-  branch-a
-● branch-b
-  branch-c
-All PRs up to date
+✓ Nothing to submit
 `)
 		require.Equal(t, expected, testhelpers.NormalizeOutput(output))
 	})

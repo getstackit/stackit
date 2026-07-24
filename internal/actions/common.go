@@ -23,6 +23,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -540,7 +541,7 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 		return fmt.Errorf("failed to print conflict status: %w", err)
 	}
 
-	return fmt.Errorf("restack stopped due to conflict on %s", firstConflict)
+	return errors.NewConflictWorkflowError(firstConflict)
 }
 
 // validateBranchAncestry performs pre-flight checks on branch ancestry relationships.

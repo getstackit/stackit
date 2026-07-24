@@ -333,6 +333,75 @@ func FormatClosingSummary(items []Item, skipped int, elapsed time.Duration) stri
 	return line
 }
 
+// FormatOutcomeSummary renders the compact completion message used by the
+// normal submit experience. It deliberately omits unchanged branches and the
+// per-branch audit trail; --verbose retains those details.
+func FormatOutcomeSummary(items []Item, elapsed time.Duration) string {
+	var created, updated, failed int
+	for _, item := range items {
+		switch {
+		case item.Status == StatusError:
+			failed++
+		case item.Status == StatusDone && item.Action == ActionCreate:
+			created++
+		case item.Status == StatusDone && item.Action == ActionUpdate:
+			updated++
+		}
+	}
+
+	parts := make([]string, 0, 3)
+	if created > 0 {
+		parts = append(parts, fmt.Sprintf("opened %d %s", created, pluralPR(created)))
+	}
+	if updated > 0 {
+		parts = append(parts, fmt.Sprintf("updated %d %s", updated, pluralPR(updated)))
+	}
+	if failed > 0 {
+		parts = append(parts, fmt.Sprintf("%d %s failed", failed, pluralPR(failed)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+
+	icon := "✓"
+	if failed > 0 {
+		icon = "✗"
+	}
+	line := icon + " " + strings.ToUpper(parts[0][:1]) + parts[0][1:]
+	if len(parts) > 1 {
+		line += " · " + strings.Join(parts[1:], " · ")
+	}
+	if elapsed > 0 {
+		line += " (" + formatElapsed(elapsed) + ")"
+	}
+	return line
+}
+
+// FormatCreatedURLs lists the URLs of newly created PRs, one indented "#N  url"
+// line each. Updated PRs are omitted — they rarely need their URL re-pasted,
+// matching the per-branch and solo output. Returns "" when nothing was created.
+func FormatCreatedURLs(items []Item) string {
+	rows := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Status != StatusDone || item.Action != ActionCreate || item.URL == "" {
+			continue
+		}
+		if ref := PRRef(item); ref != "" {
+			rows = append(rows, fmt.Sprintf("  %s  %s", ref, item.URL))
+		} else {
+			rows = append(rows, "  "+item.URL)
+		}
+	}
+	return strings.Join(rows, "\n")
+}
+
+func pluralPR(count int) string {
+	if count == 1 {
+		return "PR"
+	}
+	return "PRs"
+}
+
 // formatElapsed renders a duration compactly: "6.2s" under a minute, "1m23s" above.
 func formatElapsed(d time.Duration) string {
 	if d < time.Minute {

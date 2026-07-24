@@ -43,6 +43,11 @@ var (
 	// ErrCanceled indicates that an interactive operation was canceled by the user
 	ErrCanceled = errors.New("canceled")
 
+	// ErrConflictWorkflow indicates a command entered the conflict-resolution
+	// workflow. Resolution instructions have already been printed, so CLI
+	// adapters should exit non-zero without printing this error again.
+	ErrConflictWorkflow = errors.New("conflict workflow entered")
+
 	// ErrBack indicates that the user wants to go back to the previous step
 	ErrBack = errors.New("back")
 )
@@ -103,6 +108,28 @@ func NewBranchModificationError(branchName string, lockReason git.LockReason, fr
 		LockReason: lockReason,
 		IsFrozen:   frozen,
 	}
+}
+
+// ConflictWorkflowError reports that a restack stopped inside the conflict
+// workflow on a specific branch. The user-facing resolution instructions were
+// printed before this error was returned; it exists to carry the non-zero exit
+// code (and the message for JSON output) without a duplicate terminal print.
+type ConflictWorkflowError struct {
+	BranchName string
+}
+
+func (e *ConflictWorkflowError) Error() string {
+	return fmt.Sprintf("restack stopped due to conflict on %s", e.BranchName)
+}
+
+// Is returns true if the target error is ErrConflictWorkflow
+func (e *ConflictWorkflowError) Is(target error) bool {
+	return target == ErrConflictWorkflow
+}
+
+// NewConflictWorkflowError creates a new ConflictWorkflowError
+func NewConflictWorkflowError(branchName string) *ConflictWorkflowError {
+	return &ConflictWorkflowError{BranchName: branchName}
 }
 
 // RebaseConflictError represents an error when a rebase encounters a conflict

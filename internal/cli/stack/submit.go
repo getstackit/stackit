@@ -158,7 +158,11 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		// starts lazily (when the submission phase begins), so calling Action
 		// unconditionally no longer flashes the TUI when there's nothing to do.
 		// A dry run's whole output IS the plan, so it always prints verbose.
-		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger, f.verbose || f.dryRun)
+		verbosity := SubmitCompact
+		if f.verbose || f.dryRun {
+			verbosity = SubmitVerbose
+		}
+		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger, verbosity)
 		defer runner.Cleanup()
 		return submit.Action(ctx, opts, handler)
 	})

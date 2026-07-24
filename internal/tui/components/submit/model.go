@@ -103,8 +103,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ProgressCompleteMsg:
 		m.Done = true
-		summary := m.completionSummary()
-		if !m.Verbose {
+		var summary string
+		if m.Verbose {
+			summary = m.completionSummary()
+			// The solo summary already names the single result; a count line
+			// would just restate it.
+			if !m.Solo && summary != "" {
+				if closing := FormatClosingSummary(m.Items, msg.Skipped, msg.Elapsed); closing != "" {
+					summary += "\n\n" + closing
+				}
+			}
+		} else {
 			summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
 			if urls := FormatCreatedURLs(m.Items); urls != "" {
 				if summary != "" {
@@ -117,13 +126,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					summary += "\n\n"
 				}
 				summary += failures
-			}
-		}
-		// The solo summary already names the single result; a count line would
-		// just restate it.
-		if m.Verbose && !m.Solo && summary != "" {
-			if closing := FormatClosingSummary(m.Items, msg.Skipped, msg.Elapsed); closing != "" {
-				summary += "\n\n" + closing
 			}
 		}
 		if summary != "" {
@@ -179,16 +181,16 @@ func (m *Model) content() string {
 	return b.String()
 }
 
-// completionSummary is the output persisted to the terminal when the TUI
-// exits. After a submission it lists every branch's final result (including
-// failures); when nothing was submitted (dry run, all up to date) it falls
-// back to the final plan view, which would otherwise be erased with the
+// completionSummary is the verbose-mode output persisted to the terminal when
+// the TUI exits. After a submission it lists every branch's final result
+// (including failures); when nothing was submitted (dry run, all up to date) it
+// falls back to the final plan view, which would otherwise be erased with the
 // progress display. Warnings are appended in either case so they survive the
-// screen clear.
+// screen clear. Compact mode builds its own summary inline in the
+// ProgressCompleteMsg handler and does not call this.
 func (m *Model) completionSummary() string {
 	var summary string
-	switch {
-	case m.Verbose && m.Solo:
+	if m.Solo {
 		summary = FormatSoloSummary(m.Items)
 		if failures := FormatFailureSummary(m.Items); failures != "" {
 			if summary != "" {
@@ -196,10 +198,8 @@ func (m *Model) completionSummary() string {
 			}
 			summary += failures
 		}
-	case m.Verbose:
+	} else {
 		summary = FormatFinalList(m.Items)
-	default:
-		summary = FormatOutcomeSummary(m.Items, 0)
 	}
 	if summary == "" {
 		return m.content()

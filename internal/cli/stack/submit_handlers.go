@@ -15,21 +15,33 @@ import (
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
+// SubmitVerbosity selects how much per-branch detail the submit handlers emit.
+type SubmitVerbosity int
+
+const (
+	// SubmitCompact prints an outcome-focused summary (the default UX).
+	SubmitCompact SubmitVerbosity = iota
+	// SubmitVerbose retains the full branch-by-branch plan and result list.
+	SubmitVerbose
+)
+
+func (v SubmitVerbosity) verbose() bool { return v == SubmitVerbose }
+
 // NewSubmitUI creates a runner and handler pair for submit operations.
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
-func NewSubmitUI(out output.Output, logger output.Logger, verbose bool) (*tui.Runner, submit.Handler) {
+func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbosity) (*tui.Runner, submit.Handler) {
 	if tui.IsTTY() {
 		model := submitComponent.NewModel(nil)
-		model.Verbose = verbose
+		model.Verbose = verbosity.verbose()
 		runner := tui.NewRunner(model, out, logger)
 		// Start lazily when the submission phase begins rather than here: the
 		// stack and plan print as plain lines, so a submit that turns out to
 		// have nothing to do never flashes the bubbletea startup/teardown
 		// sequence. See InteractiveSubmitHandler.OnEvent.
-		return runner, NewInteractiveSubmitHandler(runner, model, out, verbose)
+		return runner, NewInteractiveSubmitHandler(runner, model, out, verbosity)
 	}
-	return nil, NewSimpleSubmitHandler(out, verbose)
+	return nil, NewSimpleSubmitHandler(out, verbosity)
 }
 
 // maxNamedSkipGroup is the largest skipped-branch group that still lists its
@@ -332,16 +344,10 @@ type branchItem struct {
 }
 
 // NewSimpleSubmitHandler creates a new simple submit handler
-func NewSimpleSubmitHandler(out output.Output, verbose ...bool) *SimpleSubmitHandler {
-	// Keep direct constructor callers (notably renderer tests and the TUI lab)
-	// detailed by default. The command always passes its explicit mode.
-	showVerbose := true
-	if len(verbose) > 0 {
-		showVerbose = verbose[0]
-	}
+func NewSimpleSubmitHandler(out output.Output, verbosity SubmitVerbosity) *SimpleSubmitHandler {
 	return &SimpleSubmitHandler{
 		BaseHandler: common.NewBaseHandler(out),
-		plan:        planPrinter{out: out, verbose: showVerbose},
+		plan:        planPrinter{out: out, verbose: verbosity.verbose()},
 		items:       make(map[string]*branchItem),
 	}
 }
@@ -576,12 +582,8 @@ type InteractiveSubmitHandler struct {
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
-func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output, verbose ...bool) *InteractiveSubmitHandler {
-	showVerbose := true
-	if len(verbose) > 0 {
-		showVerbose = verbose[0]
-	}
-	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out, verbose: showVerbose}}
+func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output, verbosity SubmitVerbosity) *InteractiveSubmitHandler {
+	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out, verbose: verbosity.verbose()}}
 }
 
 // OnEvent handles events from the submit action

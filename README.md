@@ -309,6 +309,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | `stackit github install` | Install GitHub Action CI checks for branch locking |
 | `stackit precommit install` | Install git pre-commit hook for branch state validation |
 | `stackit precommit uninstall` | Remove the git pre-commit hook |
+| `stackit prepush install` | Install git pre-push hook for branch state validation (also `uninstall`, `verify`) |
 
 ### Utilities & System
 | Command | Description |
@@ -318,6 +319,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | `stackit info` | Show detailed info about the current branch |
 | `stackit track` / `untrack` | Manually start/stop tracking a branch with stackit |
 | `stackit config` | Manage stackit configuration |
+| `stackit ui` | Open the shippable work dashboard in the local web UI |
 | `stackit debug` | Dump debugging information about recent commands and stack state |
 | `stackit continue` / `abort` | Continue or abort an interrupted operation (like a rebase) |
 

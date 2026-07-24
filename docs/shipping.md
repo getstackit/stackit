@@ -321,6 +321,7 @@ Launches an interactive merge wizard. Requires a TTY (use `merge next` or `merge
 | Flag | Description |
 |------|-------------|
 | `--dry-run` | Show merge plan without executing |
+| `--yes`, `-y` | Skip prompts and route to `merge next` non-interactively |
 | `--force` | Skip validation checks (draft PRs, failing CI) |
 | `--wait` | Wait for merge to complete (default: fire-and-forget) |
 | `--scope` | Pre-select scope to merge (skips scope prompt) |
@@ -366,7 +367,7 @@ Merge all PRs in the stack bottom-up, waiting for each to complete.
 
 ### `stackit merge ship`
 
-Consolidate stack(s) into a single PR.
+Consolidate stack(s) into a single PR. Alias: `stackit merge squash`.
 
 | Flag | Description |
 |------|-------------|
@@ -462,7 +463,8 @@ merge next (again)
 
 ```
 merge ship
-  → CreateMergePlan(StrategyShip)
+  → CollectMergeBranches()
+  → BuildMergePlan(StrategyShip)
   → Action()
     → Execute()
       → ConsolidateMergeExecutor.Execute()
@@ -479,7 +481,7 @@ merge ship
 merge ship --stacks a,b,c
   → DiscoverStacks()
   → ExecuteMultiStack()
-    → CreateWorktreeSession()
+    → NewMultiStackWorktreeExecutor(...).ExecuteInWorktree()
     → Test global merge feasibility
     → If fails: binary search for working subset
     → Run local CI (unless --skip-local-ci)

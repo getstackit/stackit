@@ -84,7 +84,7 @@ stackit submit             # Update PRs
 ```
 apps/
 ├── cli/        CLI entry point
-├── api/        HTTP API + embedded static web assets
+├── server/     HTTP API + embedded static web assets
 ├── st-tui/     TUI storyboard binary
 └── web/        Next.js frontend (see docs/web.md)
     ├── src/app/         Pages and layouts

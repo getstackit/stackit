@@ -53,14 +53,13 @@ of a commit" question. One `git rev-list --children <branchName>..HEAD` (or
 `git for-each-ref --contains <branchName-sha>`) gives all branches that contain
 the branch's tip in one process. N+1 → 1.
 
-#### 2. Hoist `GetRevision(branchName)` out of the candidate loop *(trivial)*
+#### 2. Hoist `GetRevision(branchName)` out of the candidate loop *(DONE)*
 
-`eng.GetRevision(eng.GetBranch(branchName))` is recomputed inside the loop
-(`action.go:182`) on every candidate even though `branchName` is invariant for
-the whole loop. `GetRevision` is **not** cached (it shells
-`git rev-parse` via `runner.getRevision` → `resolveRefSHA` each call —
-`internal/git/commit_info.go:56`), so this is N redundant rev-parse calls. Resolve
-it once before the loop.
+**Landed.** `branchRev` is now computed once before the candidate loop
+(`action.go`, "branchRev is loop-invariant"), instead of re-resolving
+`eng.GetRevision(eng.GetBranch(branchName))` on every candidate. `GetRevision`
+is still uncached (it shells `git rev-parse`), so hoisting removed N redundant
+rev-parse calls.
 
 > Note: win #1 subsumes this if implemented — the rev-list rewrite removes the
 > per-candidate merge-base/revision comparison entirely. Keep #2 only as the

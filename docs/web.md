@@ -34,27 +34,35 @@ apps/web/
 │   │   └── globals.css         Global styles, CSS variables, animations
 │   ├── components/
 │   │   ├── app-shell.tsx       Path → picker vs per-repo view dispatcher
+│   │   ├── read-only-banner.tsx Banner shown in read-only mode
 │   │   ├── providers/
-│   │   │   ├── repo-provider.tsx   Main data context (repo, stacks, events)
-│   │   │   └── theme-provider.tsx  Light/dark/system theme context
+│   │   │   ├── repo-provider.tsx    Main data context (repo, stacks, events)
+│   │   │   ├── config-provider.tsx  Server config (singleRepo, readOnly, auth)
+│   │   │   ├── auth-provider.tsx    Current user / login state
+│   │   │   └── theme-provider.tsx   Light/dark/system theme context
 │   │   ├── ui/                 Reusable UI primitives (shadcn)
 │   │   ├── status/             Status badge components
 │   │   ├── stack-tree/         SVG tree visualization
 │   │   ├── branch-detail/      Branch info panel components
-│   │   ├── stack-column.tsx    Vertical stack of branch cards
-│   │   ├── stack-list.tsx      Stack list container
-│   │   ├── owner-swimlane.tsx  Horizontal owner grouping
-│   │   ├── swimlane-label.tsx  Owner header with avatar
-│   │   ├── recently-merged.tsx Trunk commit history
-│   │   └── event-feed.tsx      Activity feed
+│   │   ├── swimlane/           Swimlane grouping: owner-swimlane, stack-column,
+│   │   │                       stack-list, branch-card, swimlane-label
+│   │   ├── recently-merged/    Trunk commit history (recently-merged + items)
+│   │   ├── repo-picker/        Repo picker + add-repository form + repo-view
+│   │   └── layout/             header.tsx, event-feed.tsx
 │   ├── hooks/
 │   │   ├── use-confetti.ts     Confetti animation on PR merge
-│   │   └── use-previous.ts     Track previous state value
+│   │   └── use-url-selection.ts Sync selection state with the URL
 │   ├── lib/
 │   │   ├── api.ts              API client, fetch functions, type definitions
 │   │   ├── repo-route.ts       Parse/build GitHub-style /{owner}/{repo}/... URLs
 │   │   ├── use-sse.ts          SSE hook for real-time updates
 │   │   ├── diff-views.ts       View snapshot diffing for event detection
+│   │   ├── swimlane-grouping.ts Group stacks into owner swimlanes
+│   │   ├── branch-utils.ts     Branch helpers
+│   │   ├── stats.ts            Stack/branch stat computation
+│   │   ├── status-config.ts    CI/PR status → label/color mapping
+│   │   ├── github.ts           GitHub URL/link helpers
+│   │   ├── file-icons.tsx      File-type icons for diffs
 │   │   ├── utils.ts            cn() helper for class merging
 │   │   └── time.ts             Time formatting utilities
 │   └── test/
@@ -70,8 +78,9 @@ apps/web/
 
 ```
 layout.tsx
-└── ThemeProvider → RepoProvider → TooltipProvider
+└── ThemeProvider → TooltipProvider
     └── [[...slug]]/page.tsx → AppShell
+        └── ConfigProvider → AuthProvider → RepoProvider (per-repo view)
         ├── Header (repo info, refresh, theme toggle)
         ├── LeftPanel (scrollable)
         │   ├── OwnerSwimlane ("You")
@@ -242,7 +251,8 @@ Tests use **Vitest** with **jsdom** environment and **Testing Library**. Test fi
 ```
 src/lib/__tests__/api.test.ts
 src/lib/__tests__/utils.test.ts
-src/hooks/__tests__/use-previous.test.ts
+src/components/providers/__tests__/config-provider.test.tsx
+src/components/swimlane/__tests__/stack-column.test.ts
 src/components/stack-tree/__tests__/tree-layout.test.ts
 src/components/status/__tests__/status-badge.test.tsx
 ```

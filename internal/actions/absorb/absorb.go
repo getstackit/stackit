@@ -67,12 +67,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Build a StackGraph for efficient traversals
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 
-	// Check if there are staged changes (before handling flags)
-	_, err := eng.HasStagedChanges(ctx.Context)
-	if err != nil {
-		return fmt.Errorf("failed to check staged changes: %w", err)
-	}
-
 	// Handle staging flags. Unlike create/modify, --all stages tracked changes
 	// only (git add -u): untracked files can never be absorbed. When combined
 	// with --patch, --all wins, matching the pre-existing precedence.

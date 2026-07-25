@@ -56,7 +56,7 @@ type BranchStatus interface {
 	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
 	// SHAs in one batched rev-parse instead of a diff per branch.
 	BatchIsBranchEmpty(branchNames []string) BranchNameSet
-	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
+	GetDeletionStatuses(ctx context.Context, branchNames []string) (DeletionStatuses, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription
 	IsLocked(branch Branch) bool

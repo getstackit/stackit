@@ -425,8 +425,8 @@ func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
 // GetDeletionStatuses checks deletion status for multiple branches in a single batch.
 // It batch-fetches metadata, revisions, and merged status, then evaluates the canonical
 // deletion policy for each branch.
-func (e *engineImpl) GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error) {
-	results := make(map[string]DeletionStatus, len(branchNames))
+func (e *engineImpl) GetDeletionStatuses(ctx context.Context, branchNames []string) (DeletionStatuses, error) {
+	results := make(DeletionStatuses, len(branchNames))
 	if len(branchNames) == 0 {
 		return results, nil
 	}
@@ -479,8 +479,8 @@ func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames [
 	}, nil
 }
 
-func (e *engineImpl) evaluateDeletionStatuses(ctx context.Context, branchNames []string, inputs *deletionStatusInputs) map[string]DeletionStatus {
-	results := make(map[string]DeletionStatus, len(branchNames))
+func (e *engineImpl) evaluateDeletionStatuses(ctx context.Context, branchNames []string, inputs *deletionStatusInputs) DeletionStatuses {
+	results := make(DeletionStatuses, len(branchNames))
 
 	// Evaluate each branch
 	for _, name := range branchNames {

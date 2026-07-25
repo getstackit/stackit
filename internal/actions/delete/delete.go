@@ -87,7 +87,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	// Confirm if not forced and not merged/closed
 	if !opts.Force {
 		for _, b := range toDelete {
-			status := statuses[b.GetName()]
+			status := statuses.For(b.GetName())
 			if !status.SafeToDelete {
 				// If handler is interactive, prompt for confirmation
 				if handler.IsInteractive() {
@@ -167,7 +167,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	return Result{MainRepoDirForSwitch: mainRepoDirForSwitch}, nil
 }
 
-func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engine.Branches, statuses map[string]engine.DeletionStatus) ([]string, error) {
+func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engine.Branches, statuses engine.DeletionStatuses) ([]string, error) {
 	eng := ctx.Engine
 	gctx := ctx.Context
 	out := ctx.Output
@@ -184,7 +184,7 @@ func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engin
 
 	for _, deleted := range toDelete {
 		deletedName := deleted.GetName()
-		status := statuses[deletedName]
+		status := statuses.For(deletedName)
 		if !shouldPreserveDivergenceOnDelete(status.Kind) {
 			continue
 		}

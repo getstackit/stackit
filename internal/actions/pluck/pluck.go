@@ -136,8 +136,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	childDivPoints := eng.BatchDivergencePoints(children)
 	for _, child := range children {
 		// Get the old upstream (divergence point)
-		childOldUpstream := childDivPoints[child.GetName()]
-		if childOldUpstream == "" {
+		childOldUpstream, ok := childDivPoints.Rev(child.GetName())
+		if !ok || childOldUpstream == "" {
 			// Fallback to source revision if unavailable
 			childOldUpstream = sourceRev
 		}

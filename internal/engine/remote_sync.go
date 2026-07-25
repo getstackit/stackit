@@ -258,8 +258,14 @@ func (e *engineImpl) ComputeMetadataDiff(branch string) (*MetadataDiff, error) {
 		return nil, err
 	}
 
+	return buildMetadataDiff(branch, local, remote), nil
+}
+
+// buildMetadataDiff compares already-loaded local and remote metadata for a
+// branch. Returns nil if there is no remote metadata to diff against.
+func buildMetadataDiff(branch string, local, remote *git.Meta) *MetadataDiff {
 	if remote == nil {
-		return nil, nil // No remote metadata, nothing to diff
+		return nil // No remote metadata, nothing to diff
 	}
 
 	diff := &MetadataDiff{
@@ -295,7 +301,7 @@ func (e *engineImpl) ComputeMetadataDiff(branch string) (*MetadataDiff, error) {
 	}
 
 	diff.HasConflict = len(diff.Differences) > 0
-	return diff, nil
+	return diff
 }
 
 // ComputeAllMetadataDiffs computes diffs for all branches in the remote cache that exist locally
@@ -308,19 +314,23 @@ func (e *engineImpl) ComputeAllMetadataDiffs() ([]*MetadataDiff, error) {
 	}
 
 	branches := make([]string, 0, len(e.remoteMetaCache))
-	for b := range e.remoteMetaCache {
+	remotes := make(map[string]*git.Meta, len(e.remoteMetaCache))
+	for b, remote := range e.remoteMetaCache {
 		if localBranches[b] {
 			branches = append(branches, b)
+			remotes[b] = remote
 		}
 	}
 	e.mu.RUnlock()
 
+	locals, metaErrs := e.batchReadMetadata(branches)
+
 	var diffs []*MetadataDiff
 	for _, branch := range branches {
-		diff, err := e.ComputeMetadataDiff(branch)
-		if err != nil {
+		if err := metaErrs[branch]; err != nil {
 			return nil, err
 		}
+		diff := buildMetadataDiff(branch, locals[branch], remotes[branch])
 		if diff != nil && diff.HasConflict {
 			diffs = append(diffs, diff)
 		}
@@ -425,11 +435,15 @@ func (e *engineImpl) FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)
 		localBranches[b] = true
 	}
 
+	branchNames := make([]string, 0, len(localRefs))
+	for refName := range localRefs {
+		branchNames = append(branchNames, refName[len("refs/stackit/metadata/"):])
+	}
+	metas, metaErrs := e.batchReadMetadata(branchNames)
+
 	orphaned := make([]OrphanedMetadataInfo, 0, len(localRefs))
 
-	for refName := range localRefs {
-		branchName := refName[len("refs/stackit/metadata/"):]
-
+	for _, branchName := range branchNames {
 		// Metadata is orphaned if the local branch is gone
 		existsLocally := localBranches[branchName]
 		_, hasRemote := e.remoteMetaCache[branchName]
@@ -441,8 +455,8 @@ func (e *engineImpl) FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)
 
 		// If it exists locally but has no remote metadata, it's not orphaned (it's a local-only branch)
 		// UNLESS it was previously synced (has LocalOnlyHash).
-		local, err := e.readMetadata(branchName)
-		if err != nil {
+		local := metas[branchName]
+		if metaErrs[branchName] != nil || local == nil {
 			continue
 		}
 

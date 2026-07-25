@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Header } from "@/components/layout/header";
 import { fetchRepos, type RepoSummary } from "@/lib/api";
 import { buildRepoPath } from "@/lib/repo-route";
 import { AddRepository } from "./add-repository";
@@ -72,9 +73,10 @@ export function RepoPicker({ autoOpenSingle = false }: RepoPickerProps) {
     );
   }
 
+  let body: ReactNode;
   if (error) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-2 text-sm">
+    body = (
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm">
         <p className="text-destructive">{error}</p>
         <p className="text-muted-foreground">
           Make sure stackit-server is running on{" "}
@@ -82,19 +84,15 @@ export function RepoPicker({ autoOpenSingle = false }: RepoPickerProps) {
         </p>
       </div>
     );
-  }
-
-  if (repos === null) {
-    return (
-      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
+  } else if (repos === null) {
+    body = (
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Loading repositories…
       </div>
     );
-  }
-
-  if (repos.length === 0) {
-    return (
-      <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-6 px-6 py-12">
+  } else if (repos.length === 0) {
+    body = (
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-12">
         <header className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold">No repositories configured</h1>
           <p className="text-sm text-muted-foreground">
@@ -104,51 +102,58 @@ export function RepoPicker({ autoOpenSingle = false }: RepoPickerProps) {
         <AddRepository onAdded={(repo) => openRepo(repo)} />
       </div>
     );
+  } else {
+    body = (
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-12">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold">Choose a repository</h1>
+          <p className="text-sm text-muted-foreground">
+            Stackit is serving {repos.length}{" "}
+            {repos.length === 1 ? "repository" : "repositories"}.
+          </p>
+        </header>
+
+        <ul className="flex flex-col gap-3" data-testid="repo-list">
+          {repos.map((repo) => (
+            <li key={repo.id}>
+              <button
+                type="button"
+                data-testid={`repo-card-${repo.id}`}
+                onClick={() => openRepo(repo)}
+                className="block w-full text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{repo.displayName || repo.id}</CardTitle>
+                    <CardDescription>
+                      <span className="font-mono">{repo.id}</span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex gap-4 text-xs text-muted-foreground">
+                    <span>
+                      trunk: <span className="font-mono">{repo.trunk}</span>
+                    </span>
+                    {repo.currentBranch && (
+                      <span>
+                        current: <span className="font-mono">{repo.currentBranch}</span>
+                      </span>
+                    )}
+                  </CardContent>
+                </Card>
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <AddRepository onAdded={(repo) => openRepo(repo)} />
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-12">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">Choose a repository</h1>
-        <p className="text-sm text-muted-foreground">
-          Stackit is serving {repos.length}{" "}
-          {repos.length === 1 ? "repository" : "repositories"}.
-        </p>
-      </header>
-
-      <ul className="flex flex-col gap-3" data-testid="repo-list">
-        {repos.map((repo) => (
-          <li key={repo.id}>
-            <button
-              type="button"
-              data-testid={`repo-card-${repo.id}`}
-              onClick={() => openRepo(repo)}
-              className="block w-full text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle>{repo.displayName || repo.id}</CardTitle>
-                  <CardDescription>
-                    <span className="font-mono">{repo.id}</span>
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex gap-4 text-xs text-muted-foreground">
-                  <span>
-                    trunk: <span className="font-mono">{repo.trunk}</span>
-                  </span>
-                  {repo.currentBranch && (
-                    <span>
-                      current: <span className="font-mono">{repo.currentBranch}</span>
-                    </span>
-                  )}
-                </CardContent>
-              </Card>
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      <AddRepository onAdded={(repo) => openRepo(repo)} />
+    <div className="flex min-h-screen flex-col">
+      <Header />
+      <main className="flex flex-1 flex-col overflow-y-auto">{body}</main>
     </div>
   );
 }

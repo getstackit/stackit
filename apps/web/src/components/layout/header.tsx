@@ -1,18 +1,26 @@
+import Link from "next/link";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { UserMenu } from "@/components/layout/user-menu";
 import { formatTimeAgo } from "@/lib/time";
 import type { RepoResponse } from "@/lib/api";
 
 interface HeaderProps {
-  repo: RepoResponse | null;
-  lastUpdated: Date | null;
-  refresh: () => void;
+  // All props are optional so the header can render on the repo picker page,
+  // which has no active repo and no refreshable view. The repo name, the
+  // "updated" timestamp, and the refresh button each appear only when their
+  // data is provided.
+  repo?: RepoResponse | null;
+  lastUpdated?: Date | null;
+  refresh?: () => void;
 }
 
 export function Header({ repo, lastUpdated, refresh }: HeaderProps) {
   return (
     <header className="relative flex items-center justify-between px-4 py-2 border-b shrink-0">
       <div className="flex items-center gap-3">
-        <span className="font-semibold text-sm">stackit</span>
+        <Link href="/" className="font-semibold text-sm hover:text-foreground/80 transition-colors">
+          stackit
+        </Link>
         {repo && (
           <span className="text-sm text-muted-foreground font-mono">
             {repo.owner}/{repo.repo}
@@ -26,13 +34,16 @@ export function Header({ repo, lastUpdated, refresh }: HeaderProps) {
           </span>
         )}
         <ThemeToggle />
-        <button
-          onClick={refresh}
-          className="text-xs text-muted-foreground hover:text-foreground"
-          title="Refresh"
-        >
-          &#x21BB;
-        </button>
+        {refresh && (
+          <button
+            onClick={refresh}
+            className="text-xs text-muted-foreground hover:text-foreground"
+            title="Refresh"
+          >
+            &#x21BB;
+          </button>
+        )}
+        <UserMenu />
       </div>
       {/* Animated gradient accent bar */}
       <div

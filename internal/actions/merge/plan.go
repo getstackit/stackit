@@ -474,7 +474,7 @@ func formatBranchRemoteDifference(status engine.BranchRemoteStatus) string {
 		return "(branch not found locally)"
 	}
 
-	localShort := shortSHA(status.LocalSha)
+	localShort := utils.ShortRevision(status.LocalSha, 0)
 	if status.RemoteSha == "" {
 		return fmt.Sprintf("local: %s (branch not found on remote)", localShort)
 	}
@@ -482,7 +482,7 @@ func formatBranchRemoteDifference(status engine.BranchRemoteStatus) string {
 		return ""
 	}
 
-	remoteShort := shortSHA(status.RemoteSha)
+	remoteShort := utils.ShortRevision(status.RemoteSha, 0)
 	switch {
 	case status.Behind():
 		return fmt.Sprintf("local is behind remote (local: %s, remote: %s)", localShort, remoteShort)
@@ -493,13 +493,6 @@ func formatBranchRemoteDifference(status engine.BranchRemoteStatus) string {
 	default:
 		return fmt.Sprintf("local: %s, remote: %s", localShort, remoteShort)
 	}
-}
-
-func shortSHA(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
 }
 
 // BuildMergePlan builds a Plan with strategy-specific steps from collected branch data.

@@ -199,6 +199,17 @@ type DeletionStatus struct {
 	HasUnpushedChanges bool               // Local branch is ahead of or diverged from remote
 }
 
+// DeletionStatuses maps branch name -> deletion status, as returned by
+// GetDeletionStatuses.
+type DeletionStatuses map[string]DeletionStatus
+
+// For returns the deletion status for a branch. A branch absent from the map
+// returns the zero DeletionStatus (SafeToDelete=false), so an unknown branch is
+// never treated as safe to delete. Safe to call on a nil map.
+func (s DeletionStatuses) For(name string) DeletionStatus {
+	return s[name]
+}
+
 // DeletionReasonKind is a machine-readable reason for branch deletion eligibility.
 type DeletionReasonKind string
 

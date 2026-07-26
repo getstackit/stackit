@@ -483,8 +483,8 @@ func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string,
 		}
 
 		// Get the old upstream (divergence point)
-		dOldUpstream := divergencePoints[d.GetName()]
-		if dOldUpstream == "" {
+		dOldUpstream, ok := divergencePoints.Rev(d.GetName())
+		if !ok || dOldUpstream == "" {
 			dOldUpstream = parentRev // Fallback
 		}
 

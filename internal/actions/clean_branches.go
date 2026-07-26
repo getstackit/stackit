@@ -47,7 +47,7 @@ type BranchDeletionPlan struct {
 	// internal plan for execution
 	plan           *deletionPlan
 	reparentMoves  []plannedReparentMove
-	deleteStatuses map[string]engine.DeletionStatus
+	deleteStatuses engine.DeletionStatuses
 }
 
 // branchDeletionInfo stores information about a branch marked for deletion
@@ -154,12 +154,12 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 
 	// If branchesToDelete filter is provided, remove branches not in the filter
 	if branchesToDelete != nil {
-		filteredStatuses := make(map[string]engine.DeletionStatus)
+		filteredStatuses := make(engine.DeletionStatuses)
 		for name := range plannedDeletion.plan.branches {
 			if !branchesToDelete[name] {
 				continue
 			}
-			status := plannedDeletion.deleteStatuses[name]
+			status := plannedDeletion.deleteStatuses.For(name)
 			if !status.SafeToDelete {
 				info := plannedDeletion.plan.branches[name]
 				status = engine.DeletionStatus{
@@ -199,7 +199,7 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 // identifyBranchesToDelete pre-calculates deletion status for all tracked branches.
 // Returns the branches to delete, any branches that were skipped due to being in a worktree,
 // and which branches are utility branches (e.g., consolidated merge branches).
-func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[string]engine.DeletionStatus, []string, map[string]bool, error) {
+func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engine.DeletionStatuses, []string, map[string]bool, error) {
 	eng := ctx.Engine
 	c := ctx.Context
 
@@ -219,14 +219,14 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 		return nil, nil, nil, fmt.Errorf("failed to get deletion statuses: %w", err)
 	}
 
-	deleteStatuses := make(map[string]engine.DeletionStatus) // name -> status
-	utilityBranches := make(map[string]bool)                 // branches that are utility type
+	deleteStatuses := make(engine.DeletionStatuses) // name -> status
+	utilityBranches := make(map[string]bool)        // branches that are utility type
 	var skippedInWorktree []string
 	remoteStatuses := opts.RemoteStatuses
 	if remoteStatuses == nil {
 		branchesNeedingRemoteStatus := engine.NewBranchesBuilder(len(candidateNames))
 		for _, name := range candidateNames {
-			if statuses[name].SafeToDelete {
+			if statuses.For(name).SafeToDelete {
 				branchesNeedingRemoteStatus.Add(eng.GetBranch(name))
 			}
 		}
@@ -236,7 +236,7 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 	}
 
 	for _, name := range candidateNames {
-		status := statuses[name]
+		status := statuses.For(name)
 		if !status.SafeToDelete {
 			continue
 		}
@@ -274,7 +274,7 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (map[
 
 // buildDeletionPlan constructs the deletion hierarchy and records parent updates
 // for surviving branches. It does not mutate branch metadata.
-func buildDeletionPlan(ctx *app.Context, deleteStatuses map[string]engine.DeletionStatus) (*deletionPlan, []string, []plannedReparentMove) {
+func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses) (*deletionPlan, []string, []plannedReparentMove) {
 	eng := ctx.Engine
 	out := ctx.Output
 
@@ -479,7 +479,7 @@ func getParentName(branch engine.Branch) string {
 // corresponding refs/heads/<name>. The most common cause is the user
 // running `git branch -D <merged-branch>` directly instead of letting
 // stackit clean up.
-func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStatuses map[string]engine.DeletionStatus, queue []string) []string {
+func appendStrandedRoots(eng engine.Engine, graph *engine.StackGraph, deleteStatuses engine.DeletionStatuses, queue []string) []string {
 	trunkName := eng.Trunk().GetName()
 	branchNames := eng.BranchNames()
 

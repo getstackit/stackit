@@ -314,14 +314,15 @@ func (e *engineImpl) ReparentBranchesToParents(ctx context.Context, moves []Bran
 	for _, m := range moves {
 		// The batch reader returns "" where the individual lookup would error;
 		// reparenting must not proceed with an unknown divergence point.
-		if divPoints[m.Branch] == "" {
+		if rev, ok := divPoints.Rev(m.Branch); !ok || rev == "" {
 			return fmt.Errorf("failed to determine divergence point for %s", m.Branch)
 		}
 	}
 
 	for _, m := range moves {
 		newParent := e.GetBranch(m.NewParent)
-		if err := e.setParentPreservingDivergence(ctx, e.GetBranch(m.Branch), newParent, divPoints[m.Branch]); err != nil {
+		divPoint, _ := divPoints.Rev(m.Branch)
+		if err := e.setParentPreservingDivergence(ctx, e.GetBranch(m.Branch), newParent, divPoint); err != nil {
 			return fmt.Errorf("failed to reparent %s to %s: %w", m.Branch, m.NewParent, err)
 		}
 		if err := e.syncStackIDFromParent(ctx, e.GetBranch(m.Branch)); err != nil {

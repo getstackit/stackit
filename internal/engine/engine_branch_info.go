@@ -40,10 +40,10 @@ func (e *engineImpl) GetRevisions(branchNames []string) (RevisionMap, []error) {
 // BatchDivergencePoints returns each branch's divergence point keyed by branch
 // name, matching GetDivergencePoint (the stored parent revision when present,
 // else the parent's current tip) but resolving the whole set in one batched pass.
-func (e *engineImpl) BatchDivergencePoints(branches Branches) map[string]string {
-	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) string {
+func (e *engineImpl) BatchDivergencePoints(branches Branches) RevisionMap {
+	return RevisionMap(batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) string {
 		return statBase(parentRev, storedBase)
-	})
+	}))
 }
 
 // commitCountBetween returns the commit count in (base, head], using the

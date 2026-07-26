@@ -343,7 +343,7 @@ func buildRebaseSpecsForAll(eng engine.Engine, plan *flattenPlan, branches engin
 		}
 
 		// Get the old upstream (divergence point)
-		oldUpstream, ok := divergence[branchName]
+		oldUpstream, ok := divergence.Rev(branchName)
 		if !ok {
 			continue
 		}
@@ -480,8 +480,10 @@ func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branc
 		// Get current parent info
 		origParentName := b.GetParentOrTrunk()
 
-		// The branch's base (divergence point from parent)
-		oldUpstream := divergence[bName]
+		// The branch's base (divergence point from parent). bName is always in
+		// the map (the loop iterates the same branch set), so a missing key here
+		// would be a programming error, not the expected empty-divergence case.
+		oldUpstream, _ := divergence.Rev(bName)
 
 		// Try to find the best (closest to trunk) parent this branch can move to
 		newParent := findBestParent(ctx, eng, bName, oldUpstream, potentialParents, revisions)

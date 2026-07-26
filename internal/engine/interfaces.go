@@ -56,7 +56,7 @@ type BranchStatus interface {
 	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
 	// SHAs in one batched rev-parse instead of a diff per branch.
 	BatchIsBranchEmpty(branchNames []string) BranchNameSet
-	GetDeletionStatuses(ctx context.Context, branchNames []string) (map[string]DeletionStatus, error)
+	GetDeletionStatuses(ctx context.Context, branchNames []string) (DeletionStatuses, error)
 	GetScope(branch Branch) Scope
 	GetStackDescription(branch Branch) *git.StackDescription
 	IsLocked(branch Branch) bool
@@ -102,7 +102,7 @@ type BranchInfo interface {
 	GetDivergencePoint(branchName string) (string, error)
 	// BatchDivergencePoints returns the divergence point for every branch in one
 	// batched (git-free when metadata is cached) pass, keyed by branch name.
-	BatchDivergencePoints(branches Branches) map[string]string
+	BatchDivergencePoints(branches Branches) RevisionMap
 	// BatchDiffStats, BatchCommits, and BatchChangedFileCounts each resolve one
 	// per-branch concern across the whole set in a single batched pass, returning
 	// a value map.

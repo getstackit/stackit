@@ -17,6 +17,7 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui/style"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewSyncCmd creates the sync command
@@ -156,7 +157,7 @@ func computeSyncDryRun(ctx context.Context, eng engine.Engine, opts sync.Options
 	remoteStatus := eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(trunk)).ForBranch(trunk)
 	if remoteStatus.Behind() {
 		plan.pullBranch = trunk.GetName()
-		plan.pullRev = shortSHA(remoteStatus.RemoteSha)
+		plan.pullRev = utils.ShortRevision(remoteStatus.RemoteSha, 0)
 	}
 
 	// Collect candidate branches for deletion and restack checks
@@ -329,12 +330,4 @@ func dryRunSummaryLine(plan dryRunPlan) string {
 		return ""
 	}
 	return "would " + strings.Join(parts, ", ")
-}
-
-// shortSHA truncates a full git SHA to its 7-character short form for display.
-func shortSHA(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
 }

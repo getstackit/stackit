@@ -7,6 +7,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/trunklog"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // logCommitJSON is the per-commit shape emitted by `stackit log --json`. It is a
@@ -42,7 +43,7 @@ func printLogJSON(out output.Output, res trunklog.Result) error {
 	}
 	for _, c := range res.Commits {
 		payload.Commits = append(payload.Commits, logCommitJSON{
-			SHA:           shortSHA(c.SHA),
+			SHA:           utils.ShortRevision(c.SHA, 0),
 			Message:       c.Message,
 			Author:        c.Author,
 			Date:          c.Date.Format(time.RFC3339),

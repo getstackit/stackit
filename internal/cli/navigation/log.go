@@ -16,6 +16,7 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // NewLogCmd creates the log command: a stack-aware view of trunk commit history.
@@ -193,7 +194,7 @@ func renderStackBand(stack stacklog.Result) string {
 			b.WriteString("\n  ")
 			b.WriteString(symbol)
 			b.WriteString(" ")
-			b.WriteString(output.Yellow(shortSHA(c.SHA)))
+			b.WriteString(output.Yellow(utils.ShortRevision(c.SHA, 0)))
 			b.WriteString("  ")
 			b.WriteString(c.Subject)
 			// The branch's own head ref is the header above; omit it here, but
@@ -210,7 +211,7 @@ func renderStackBand(stack stacklog.Result) string {
 // renderTrunkDivider draws the boundary between the stack and trunk history,
 // labeled with the trunk name, its short tip SHA, and any tags on the tip.
 func renderTrunkDivider(stack stacklog.Result) string {
-	label := output.Cyan(stack.TrunkName) + " " + output.Yellow(shortSHA(stack.TrunkTipSHA))
+	label := output.Cyan(stack.TrunkName) + " " + output.Yellow(utils.ShortRevision(stack.TrunkTipSHA, 0))
 	if deco := formatDecorations(stack.Decorations[stack.TrunkTipSHA], stack.TrunkName); deco != "" {
 		label += " " + deco
 	}
@@ -232,7 +233,7 @@ func renderLog(res trunklog.Result, decos map[string][]git.RefDecoration, exclud
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(output.Yellow(shortSHA(c.SHA)))
+		b.WriteString(output.Yellow(utils.ShortRevision(c.SHA, 0)))
 		b.WriteString("  ")
 		b.WriteString(c.Message)
 
@@ -367,12 +368,4 @@ func (m *logPagerModel) View() tea.View {
 	v := tea.NewView(title + "\n\n" + content)
 	v.AltScreen = true
 	return v
-}
-
-// shortSHA truncates a commit SHA to the conventional 7-character form.
-func shortSHA(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
 }

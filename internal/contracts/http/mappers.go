@@ -9,6 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // MapBranch converts an engine Branch and its StackNode into an API BranchResponse.
@@ -241,13 +242,6 @@ func mapCommitsWithDate(lines []string) []CommitResponse {
 	return commits
 }
 
-func shortSHA(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
-}
-
 // computeStackStatus determines the overall status of a stack.
 func computeStackStatus(graph *engine.StackGraph, branchNames []string) string {
 	allHavePR := true
@@ -300,7 +294,7 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []Trun
 		// Message substitution and constituent-title selection are shared with
 		// the `stackit log` command via internal/git.
 		resp := TrunkCommitResponse{
-			SHA:           shortSHA(c.SHA),
+			SHA:           utils.ShortRevision(c.SHA, 0),
 			Message:       c.DisplayMessage(prTitles),
 			Author:        c.Author,
 			Date:          c.Date.Format(time.RFC3339),

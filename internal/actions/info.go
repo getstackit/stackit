@@ -1,188 +1,180 @@
 package actions
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/output"
 )
 
-// SingleBranchInfo represents JSON-serializable info for a single branch (used by info --json)
-type SingleBranchInfo struct {
-	Name             string              `json:"name"`
-	IsCurrent        bool                `json:"is_current"`
-	IsTrunk          bool                `json:"is_trunk"`
-	IsLocked         bool                `json:"is_locked"`
-	IsFrozen         bool                `json:"is_frozen"`
-	NeedsRestack     bool                `json:"needs_restack"`
-	Scope            string              `json:"scope"`
-	CommitDate       string              `json:"commit_date,omitempty"`
-	Parent           string              `json:"parent,omitempty"`
-	Children         []string            `json:"children,omitempty"`
-	PR               *SingleBranchPRInfo `json:"pr,omitempty"`
-	CommitMessages   []string            `json:"commit_messages"`
-	DiffStats        SingleBranchStats   `json:"diff_stats"`
-	StackTitle       string              `json:"stack_title,omitempty"`
-	StackDescription string              `json:"stack_description,omitempty"`
+// BranchInfoPR represents pull request information for a branch.
+type BranchInfoPR struct {
+	Number  *int
+	Title   string
+	State   git.PRState
+	IsDraft bool
+	URL     string
+	Body    string
 }
 
-// SingleBranchPRInfo represents PR information for JSON output
-type SingleBranchPRInfo struct {
-	Number  int         `json:"number"`
-	Title   string      `json:"title"`
-	State   git.PRState `json:"state"`
-	IsDraft bool        `json:"is_draft"`
-	URL     string      `json:"url"`
+// BranchDiffStats represents summary diff information for a branch. It is pure
+// data; the JSON shape lives in the CLI adapter that renders it.
+type BranchDiffStats struct {
+	FilesChanged int
+	Additions    int
+	Deletions    int
 }
 
-// SingleBranchStats represents diff statistics for a branch
-type SingleBranchStats struct {
-	FilesChanged int `json:"files_changed"`
-	Additions    int `json:"additions"`
-	Deletions    int `json:"deletions"`
+// BranchInfoResult contains structured data for `stackit info` on a single branch.
+type BranchInfoResult struct {
+	Name             string
+	IsCurrent        bool
+	IsTrunk          bool
+	IsLocked         bool
+	IsFrozen         bool
+	NeedsRestack     bool
+	Scope            string
+	CommitDate       string
+	Parent           string
+	Children         []string
+	PR               *BranchInfoPR
+	CommitMessages   []string
+	DiffStats        BranchDiffStats
+	StackTitle       string
+	StackDescription string
+	PatchOutput      string
+	DiffOutput       string
 }
 
-// InfoOptions contains options for the info command
-type InfoOptions struct {
+// BranchInfoQueryOptions contains options for querying single-branch info.
+type BranchInfoQueryOptions struct {
 	BranchName string
-	Body       bool
 	Diff       bool
 	Patch      bool
 	Stat       bool
-	Stack      bool
-	JSON       bool
 }
 
-// InfoAction displays information about a branch or the entire stack
-func InfoAction(ctx *app.Context, opts InfoOptions) error {
-	if opts.Stack {
-		return StackInfoAction(ctx, StackInfoOptions{
-			JSON: opts.JSON,
-		})
-	}
+type branchInfoDebugLogger interface {
+	Debug(format string, args ...any)
+}
 
-	eng := ctx.Engine
-	out := ctx.Output
-
+// QueryBranchInfo gathers structured information for `stackit info`.
+func QueryBranchInfo(ctx context.Context, eng engine.Engine, opts BranchInfoQueryOptions, debug branchInfoDebugLogger) (BranchInfoResult, error) {
 	branchName, err := ResolveBranchName(eng, opts.BranchName)
 	if err != nil {
-		return err
+		return BranchInfoResult{}, err
 	}
 
 	branch := eng.GetBranch(branchName)
-
 	if !branch.IsTracked() && !branch.IsTrunk() {
-		_, err := eng.GetRevision(branch)
-		if err != nil {
-			return fmt.Errorf("branch %s does not exist", branchName)
+		if _, err := eng.GetRevision(branch); err != nil {
+			return BranchInfoResult{}, fmt.Errorf("branch %s does not exist", branchName)
 		}
-
-		// For remote branches, fetch metadata to show the latest info
-		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-		defer cancelRemote()
-		if err := eng.FetchRemoteMetadata(remoteCtx); err != nil {
-			out.Debug("Failed to fetch remote metadata: %v", err)
-		} else if err := eng.ApplyRemoteMetadataForBranches(remoteCtx, []string{branchName}); err != nil {
-			out.Debug("Failed to apply remote metadata for %s: %v", branchName, err)
-		}
+		refreshRemoteMetadataForBranchInfo(ctx, eng, branchName, debug)
 	}
 
-	// Handle JSON output for single branch
-	if opts.JSON {
-		return outputBranchInfoJSON(ctx, branch)
+	return buildBranchInfoResult(ctx, eng, branchName, branch, opts)
+}
+
+func refreshRemoteMetadataForBranchInfo(ctx context.Context, eng engine.Engine, branchName string, debug branchInfoDebugLogger) {
+	if err := eng.FetchRemoteMetadata(ctx); err != nil {
+		debugBranchInfof(debug, "Failed to fetch remote metadata: %v", err)
+		return
 	}
 
-	// If stat is set without diff or patch, it implies diff
-	effectiveDiff := opts.Diff || (opts.Stat && !opts.Patch)
-	effectivePatch := opts.Patch && !opts.Diff
+	if err := eng.LoadRemoteMetadataCache(); err != nil {
+		debugBranchInfof(debug, "Failed to load remote metadata cache: %v", err)
+		return
+	}
 
-	var outputLines []string
+	if err := eng.ApplyRemoteMetadataIfExists(branchName); err != nil {
+		debugBranchInfof(debug, "Failed to apply remote metadata for %s: %v", branchName, err)
+	}
+}
 
+func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName string, branch engine.Branch, opts BranchInfoQueryOptions) (BranchInfoResult, error) {
 	currentBranch := eng.CurrentBranch()
-	isCurrent := branchName == currentBranch.GetName()
+	isCurrent := currentBranch != nil && branchName == currentBranch.GetName()
 	isTrunk := branch.IsTrunk()
 
-	coloredBranchName := output.BranchWithTrunk(branchName, isCurrent, isTrunk)
-
-	if branch.IsLocked() {
-		coloredBranchName += " " + output.IconLocked() + " " + output.Dim("(locked)")
-	}
-	if branch.IsFrozen() {
-		coloredBranchName += " " + output.IconFrozen() + " " + output.Dim("(frozen)")
-	}
-
-	if !isTrunk && !branch.IsBranchUpToDate() {
-		coloredBranchName += " " + output.NeedsRestack("(needs restack)")
-	}
-
-	if scope := branch.GetScope(); !scope.IsNone() {
-		coloredBranchName += " " + output.Scope(scope.String())
-	}
-
-	outputLines = append(outputLines, coloredBranchName)
-
-	// Show stack description if present
-	stackDesc := eng.GetStackDescription(branch)
-	if stackDesc != nil && !stackDesc.IsEmpty() {
-		outputLines = append(outputLines, "")
-		// Render title and description together through glamour for consistent formatting
-		var markdown string
-		if stackDesc.Description != "" {
-			markdown = "# " + stackDesc.Title + "\n\n" + stackDesc.Description
-		} else {
-			markdown = "# " + stackDesc.Title
-		}
-		rendered := output.RenderMarkdown(markdown)
-		outputLines = append(outputLines, rendered)
+	result := BranchInfoResult{
+		Name:           branchName,
+		IsCurrent:      isCurrent,
+		IsTrunk:        isTrunk,
+		IsLocked:       branch.IsLocked(),
+		IsFrozen:       branch.IsFrozen(),
+		NeedsRestack:   !isTrunk && !branch.IsBranchUpToDate(),
+		Scope:          branch.GetScope().String(),
+		CommitMessages: []string{},
+		Children:       []string{},
 	}
 
 	commitDate, err := branch.GetCommitDate()
 	if err == nil {
-		dateStr := commitDate.Format(time.RFC3339)
-		outputLines = append(outputLines, output.Dim(dateStr))
+		result.CommitDate = commitDate.Format(time.RFC3339)
 	}
 
-	var prInfo *engine.PrInfo
-	if !isTrunk {
-		prInfo, _ = branch.GetPrInfo()
-		if prInfo != nil && prInfo.Number() != nil {
-			prTitleLine := getPRTitleLine(prInfo)
-			if prTitleLine != "" {
-				outputLines = append(outputLines, "")
-				outputLines = append(outputLines, prTitleLine)
-			}
-			if prInfo.URL() != "" {
-				outputLines = append(outputLines, output.Magenta(prInfo.URL()))
-			}
-		}
-	}
-
-	parentBranch := branch.GetParent()
-	if parentBranch != nil {
-		outputLines = append(outputLines, "")
-		outputLines = append(outputLines, fmt.Sprintf("%s: %s", output.Cyan("Parent"), output.BranchNameWithTrunk(parentBranch.GetName(), parentBranch.IsTrunk())))
+	if parent := branch.GetParent(); parent != nil {
+		result.Parent = parent.GetName()
 	}
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	children := graph.ChildBranches(branch)
-	if len(children) > 0 {
-		outputLines = append(outputLines, fmt.Sprintf("%s:", output.Cyan("Children")))
-		for _, child := range children {
-			outputLines = append(outputLines, fmt.Sprintf("▸ %s", output.BranchNameWithTrunk(child.GetName(), child.IsTrunk())))
+	for _, child := range graph.ChildBranches(branch) {
+		result.Children = append(result.Children, child.GetName())
+	}
+
+	if !isTrunk {
+		prInfo, _ := branch.GetPrInfo()
+		if prInfo != nil {
+			result.PR = &BranchInfoPR{
+				Number:  prInfo.Number(),
+				Title:   prInfo.Title(),
+				State:   prInfo.State(),
+				IsDraft: prInfo.IsDraft(),
+				URL:     prInfo.URL(),
+				Body:    prInfo.Body(),
+			}
 		}
 	}
 
-	if opts.Body && prInfo != nil && prInfo.Body() != "" {
-		outputLines = append(outputLines, "")
-		outputLines = append(outputLines, prInfo.Body())
+	commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
+	if err == nil {
+		result.CommitMessages = commits
 	}
 
-	outputLines = append(outputLines, "")
+	// Diff stats — resolved via the batched reader over a single-branch set,
+	// rather than a per-branch accessor.
+	diff := eng.BatchDiffStats(engine.BranchesOf(branch))[branchName]
+	result.DiffStats.Additions = diff.Added
+	result.DiffStats.Deletions = diff.Deleted
+
+	// Files changed — measured against the branch's divergence point, the same
+	// base BatchDiffStats uses above, so the file count stays consistent with the
+	// additions/deletions when the parent has advanced since the branch diverged.
+	if !isTrunk {
+		base, err := eng.GetDivergencePoint(branchName)
+		if err == nil && base != "" {
+			branchRev, err := branch.GetRevision()
+			if err == nil {
+				files, err := eng.GetChangedFiles(ctx, git.RevRange{Base: base, Head: branchRev})
+				if err == nil {
+					result.DiffStats.FilesChanged = len(files)
+				}
+			}
+		}
+	}
+
+	stackDesc := eng.GetStackDescription(branch)
+	if stackDesc != nil && !stackDesc.IsEmpty() {
+		result.StackTitle = stackDesc.Title
+		result.StackDescription = stackDesc.Description
+	}
+
+	effectiveDiff := opts.Diff || (opts.Stat && !opts.Patch)
+	effectivePatch := opts.Patch && !opts.Diff
+
 	if effectivePatch {
 		baseRevision := ""
 		if isTrunk {
@@ -196,30 +188,22 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 		}
 		branchRevision, err := branch.GetRevision()
 		if err == nil {
-			commitsOutput, err := eng.ShowCommits(ctx.Context, git.RevRange{Base: baseRevision, Head: branchRevision}, true, opts.Stat)
-			if err == nil && commitsOutput != "" {
-				outputLines = append(outputLines, commitsOutput)
-			}
-		}
-	} else {
-		commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
-		if err == nil {
-			for _, commit := range commits {
-				outputLines = append(outputLines, output.Dim(commit))
+			patchOutput, err := eng.ShowCommits(ctx, git.RevRange{Base: baseRevision, Head: branchRevision}, true, opts.Stat)
+			if err == nil {
+				result.PatchOutput = patchOutput
 			}
 		}
 	}
 
 	if effectiveDiff {
-		outputLines = append(outputLines, "")
 		if isTrunk {
 			headRevision, err := branch.GetRevision()
 			if err == nil {
 				parentSHA, err := eng.GetCommitSHA(branchName, 1)
 				if err == nil {
-					diffOutput, err := eng.ShowDiff(ctx.Context, parentSHA, headRevision, opts.Stat)
-					if err == nil && diffOutput != "" {
-						outputLines = append(outputLines, diffOutput)
+					diffOutput, err := eng.ShowDiff(ctx, parentSHA, headRevision, opts.Stat)
+					if err == nil {
+						result.DiffOutput = diffOutput
 					}
 				}
 			}
@@ -230,141 +214,21 @@ func InfoAction(ctx *app.Context, opts InfoOptions) error {
 				parentSHA, _ := eng.GetParentCommitSHA(oldestSHA)
 				branchRevision, err := branch.GetRevision()
 				if err == nil {
-					diffOutput, err := eng.ShowDiff(ctx.Context, parentSHA, branchRevision, opts.Stat)
-					if err == nil && diffOutput != "" {
-						outputLines = append(outputLines, diffOutput)
+					diffOutput, err := eng.ShowDiff(ctx, parentSHA, branchRevision, opts.Stat)
+					if err == nil {
+						result.DiffOutput = diffOutput
 					}
 				}
 			}
 		}
 	}
 
-	// Apply dimming for merged/closed PRs
-	if prInfo != nil && (prInfo.State() == git.PRStateMerged || prInfo.State() == git.PRStateClosed) {
-		for i := range outputLines {
-			outputLines[i] = output.Dim(outputLines[i])
-		}
-	}
-
-	out.Print(strings.Join(outputLines, "\n"))
-	out.Newline()
-
-	return nil
+	return result, nil
 }
 
-func getPRTitleLine(prInfo *engine.PrInfo) string {
-	if prInfo == nil || prInfo.Number() == nil || prInfo.Title() == "" {
-		return ""
+func debugBranchInfof(debug branchInfoDebugLogger, format string, args ...any) {
+	if debug == nil {
+		return
 	}
-
-	state := prInfo.State()
-
-	prNumber := output.PRNumber(*prInfo.Number())
-
-	switch state {
-	case git.PRStateMerged:
-		return fmt.Sprintf("%s (Merged) %s", prNumber, prInfo.Title())
-	case git.PRStateClosed:
-		return fmt.Sprintf("%s (Abandoned) %s", prNumber, output.Dim(prInfo.Title()))
-	default:
-		prState := ""
-		if prInfo.IsDraft() {
-			prState = output.Dim("(Draft)")
-		}
-		return fmt.Sprintf("%s %s %s", prNumber, prState, prInfo.Title())
-	}
-}
-
-// outputBranchInfoJSON outputs branch information as JSON
-func outputBranchInfoJSON(ctx *app.Context, branch engine.Branch) error {
-	eng := ctx.Engine
-	branchName := branch.GetName()
-	currentBranch := eng.CurrentBranch()
-	isCurrent := currentBranch != nil && branchName == currentBranch.GetName()
-	isTrunk := branch.IsTrunk()
-
-	info := SingleBranchInfo{
-		Name:           branchName,
-		IsCurrent:      isCurrent,
-		IsTrunk:        isTrunk,
-		IsLocked:       branch.IsLocked(),
-		IsFrozen:       branch.IsFrozen(),
-		NeedsRestack:   !isTrunk && !branch.IsBranchUpToDate(),
-		Scope:          branch.GetScope().String(),
-		CommitMessages: []string{},
-		Children:       []string{},
-	}
-
-	// Commit date
-	commitDate, err := branch.GetCommitDate()
-	if err == nil {
-		info.CommitDate = commitDate.Format(time.RFC3339)
-	}
-
-	// Parent
-	if parent := branch.GetParent(); parent != nil {
-		info.Parent = parent.GetName()
-	}
-
-	// Children
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	for _, child := range graph.ChildBranches(branch) {
-		info.Children = append(info.Children, child.GetName())
-	}
-
-	// PR info
-	if !isTrunk {
-		prInfo, _ := branch.GetPrInfo()
-		if prInfo != nil && prInfo.Number() != nil {
-			info.PR = &SingleBranchPRInfo{
-				Number:  *prInfo.Number(),
-				Title:   prInfo.Title(),
-				State:   prInfo.State(),
-				IsDraft: prInfo.IsDraft(),
-				URL:     prInfo.URL(),
-			}
-		}
-	}
-
-	// Commit messages
-	commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
-	if err == nil {
-		info.CommitMessages = commits
-	}
-
-	// Diff stats — resolved via the batched reader over a single-branch set,
-	// rather than a per-branch accessor.
-	diff := eng.BatchDiffStats(engine.BranchesOf(branch))[branchName]
-	info.DiffStats.Additions = diff.Added
-	info.DiffStats.Deletions = diff.Deleted
-
-	// Files changed — measured against the branch's divergence point, the same
-	// base GetDiffStats uses above, so the file count stays consistent with the
-	// additions/deletions when the parent has advanced since the branch diverged.
-	if !isTrunk {
-		base, err := eng.GetDivergencePoint(branchName)
-		if err == nil && base != "" {
-			branchRev, err := branch.GetRevision()
-			if err == nil {
-				files, err := eng.GetChangedFiles(ctx.Context, git.RevRange{Base: base, Head: branchRev})
-				if err == nil {
-					info.DiffStats.FilesChanged = len(files)
-				}
-			}
-		}
-	}
-
-	// Stack description
-	stackDesc := eng.GetStackDescription(branch)
-	if stackDesc != nil && !stackDesc.IsEmpty() {
-		info.StackTitle = stackDesc.Title
-		info.StackDescription = stackDesc.Description
-	}
-
-	data, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal branch info to JSON: %w", err)
-	}
-	ctx.Output.Info("%s", string(data))
-	return nil
+	debug.Debug(format, args...)
 }

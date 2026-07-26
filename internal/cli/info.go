@@ -33,20 +33,56 @@ If no branch is specified and --stack is not provided, displays information abou
 		SilenceUsage:      true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				branchName := ""
-				if len(args) > 0 {
-					branchName = args[0]
+				if stack {
+					remoteCtx, cancel := ctx.RemoteOperationContext()
+					defer cancel()
+
+					result, err := actions.QueryStackInfo(remoteCtx, ctx.Engine)
+					if err != nil {
+						return err
+					}
+
+					if json {
+						data, err := renderStackInfoJSON(result)
+						if err != nil {
+							return err
+						}
+						ctx.Output.Info("%s", string(data))
+						return nil
+					}
+
+					ctx.Output.Info("%s", renderStackInfoText(result))
+					return nil
 				}
 
-				return actions.InfoAction(ctx, actions.InfoOptions{
-					BranchName: branchName,
-					Body:       body,
-					Diff:       diff,
-					Patch:      patch,
-					Stat:       stat,
-					Stack:      stack,
-					JSON:       json,
-				})
+				opts := actions.BranchInfoQueryOptions{
+					Diff:  diff,
+					Patch: patch,
+					Stat:  stat,
+				}
+				if len(args) > 0 {
+					opts.BranchName = args[0]
+				}
+
+				info, err := actions.QueryBranchInfo(ctx.Context, ctx.Engine, opts, ctx.Output)
+				if err != nil {
+					return err
+				}
+
+				if json {
+					data, err := renderBranchInfoJSON(info)
+					if err != nil {
+						return err
+					}
+					ctx.Output.Info("%s", string(data))
+					return nil
+				}
+
+				ctx.Output.Print(renderBranchInfoText(info, branchInfoRenderOptions{
+					Body: body,
+				}))
+				ctx.Output.Newline()
+				return nil
 			})
 		},
 	}

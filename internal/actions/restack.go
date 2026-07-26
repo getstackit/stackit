@@ -142,15 +142,20 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 
 	ctx.Logger.Info("restack started branchCount=%v", branchCount)
 
-	// Take snapshot before modifying the repository
-	snapshotOpts := NewSnapshot("restack",
-		WithArg(opts.BranchName),
-		WithFlag(opts.AllStacks, "--all-stacks"),
-		WithFlagValue("--stacks", strings.Join(opts.StackRoots, ",")),
-		WithFlag(opts.ContinueOnConflict, "--continue-on-conflict"),
-		WithFlag(opts.Parallel, "--parallel"),
-	)
-	TakeBestEffortSnapshot(ctx, snapshotOpts)
+	// Take snapshot before modifying the repository. Skip it when no branch
+	// actually needs a rebase: an up-to-date restack mutates nothing, so there
+	// is nothing to undo and the snapshot is pure overhead (it hits every no-op
+	// restack, and sync runs restack often).
+	if plan.HasWork() {
+		snapshotOpts := NewSnapshot("restack",
+			WithArg(opts.BranchName),
+			WithFlag(opts.AllStacks, "--all-stacks"),
+			WithFlagValue("--stacks", strings.Join(opts.StackRoots, ",")),
+			WithFlag(opts.ContinueOnConflict, "--continue-on-conflict"),
+			WithFlag(opts.Parallel, "--parallel"),
+		)
+		TakeBestEffortSnapshot(ctx, snapshotOpts)
+	}
 
 	// If no handler provided, use NullRestackHandler (silent)
 	if handler == nil {

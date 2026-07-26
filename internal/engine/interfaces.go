@@ -319,6 +319,9 @@ type WorktreeRegistry interface {
 type Initializer interface {
 	Reset(newTrunkName string) error
 	Rebuild(newTrunkName string) error
+	// RebuildBranches refreshes cached state for only the named branches,
+	// merging into the existing graph instead of re-reading every branch.
+	RebuildBranches(branchNames []string) error
 }
 
 // BranchWriter is a composite interface for backward compatibility

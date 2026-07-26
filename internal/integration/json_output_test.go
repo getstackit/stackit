@@ -171,7 +171,7 @@ func TestJSONOutput(t *testing.T) {
 
 	t.Run("sync --dry-run --json outputs valid JSON", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t, WithRemote())
+		sh := NewTestShellInProcess(t)
 
 		// Create a stack
 		sh.Write("feature_a", "content a").
@@ -192,7 +192,7 @@ func TestJSONOutput(t *testing.T) {
 
 	t.Run("sync --dry-run --json --restack reports stack roots for would_restack branches", func(t *testing.T) {
 		t.Parallel()
-		sh := NewTestShellInProcess(t, WithRemote())
+		sh := NewTestShellInProcess(t)
 
 		// Build two independent stacks rooted at trunk:
 		//   main -> alpha-root -> alpha-child

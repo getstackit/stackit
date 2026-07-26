@@ -628,6 +628,87 @@ func TestRebuild(t *testing.T) {
 	})
 }
 
+func TestRebuildBranches(t *testing.T) {
+	t.Parallel()
+
+	// descendantsOf walks the childrenMap-backed traversal and returns each
+	// branch's depth below start. This is the accessor that breaks if a scoped
+	// rebuild leaves childrenMap inconsistent.
+	descendantsOf := func(eng engine.Engine, start string) map[string]int {
+		got := map[string]int{}
+		for b, depth := range eng.BranchesDepthFirst(eng.GetBranch(start)) {
+			got[b.GetName()] = depth
+		}
+		return got
+	}
+
+	t.Run("reparent merges without disturbing the rest of the graph", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithLinearStack("a", "b", "c") // main -> a -> b -> c
+
+		// Externally reparent b onto main (as a raw metadata write the engine
+		// did not observe through its own mutation path).
+		main := "main"
+		meta, err := s.Engine.Git().ReadMetadata("b")
+		require.NoError(t, err)
+		require.NoError(t, s.Engine.Git().WriteMetadata("b", meta.WithParentBranchName(&main)))
+
+		// Engine still shows the pre-write graph until we refresh.
+		require.Equal(t, "a", s.Engine.GetBranch("b").GetParent().GetName())
+
+		require.NoError(t, s.Engine.RebuildBranches([]string{"b"}))
+
+		// b now parents onto main; a and c are untouched.
+		require.Equal(t, "main", s.Engine.GetBranch("b").GetParent().GetName())
+		require.Equal(t, "main", s.Engine.GetBranch("a").GetParent().GetName())
+		require.Equal(t, "b", s.Engine.GetBranch("c").GetParent().GetName())
+
+		// childrenMap is consistent: a lost b, main gained b, b keeps c.
+		fromMain := descendantsOf(s.Engine, "main")
+		require.Equal(t, 1, fromMain["a"], "a stays a direct child of main")
+		require.Equal(t, 1, fromMain["b"], "b is now a direct child of main")
+		require.Equal(t, 2, fromMain["c"], "c stays under b")
+		// The traversal includes the start node at depth 0, so a with no
+		// children yields only itself.
+		require.Equal(t, map[string]int{"a": 0}, descendantsOf(s.Engine, "a"), "a has no children after b moved off")
+	})
+
+	t.Run("drops a branch that became untracked", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithLinearStack("a", "b") // main -> a -> b
+
+		require.NoError(t, s.Engine.Git().DeleteMetadata(context.Background(), "b"))
+
+		require.NoError(t, s.Engine.RebuildBranches([]string{"b"}))
+
+		require.False(t, s.Engine.GetBranch("b").IsTracked(), "b is no longer tracked")
+		// a's children no longer include b.
+		require.NotContains(t, descendantsOf(s.Engine, "a"), "b")
+	})
+
+	t.Run("only refreshes the listed branches", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithLinearStack("a", "b") // main -> a -> b
+
+		// Reparent a onto main->... actually change a's recorded parent revision
+		// externally, then rebuild only b. a must stay as the engine last saw it.
+		newRev := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+		metaA, err := s.Engine.Git().ReadMetadata("a")
+		require.NoError(t, err)
+		require.NoError(t, s.Engine.Git().WriteMetadata("a", metaA.WithParentBranchRevision(&newRev)))
+
+		require.NoError(t, s.Engine.RebuildBranches([]string{"b"}))
+
+		// a was not in the list, so its cached state is unchanged (still tracked
+		// under main, no surprise refresh).
+		require.Equal(t, "main", s.Engine.GetBranch("a").GetParent().GetName())
+		require.True(t, s.Engine.GetBranch("a").IsTracked())
+	})
+}
+
 func TestCreateBranchUpdatesBranchInventory(t *testing.T) {
 	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)

@@ -40,7 +40,7 @@ func main() {
 }
 
 func runSyncScenario(out output.Output, name string, delay time.Duration) {
-	scenario, found := stack.LookupSyncScenario(name)
+	scenario, found := LookupSyncScenario(name)
 	if !found {
 		_, _ = fmt.Fprintf(os.Stderr, "unknown sync scenario %q\n\n", name)
 		printUsage(os.Stderr)
@@ -54,7 +54,7 @@ func runSyncScenario(out output.Output, name string, delay time.Duration) {
 }
 
 func runSubmitScenario(out output.Output, name string, delay time.Duration) {
-	scenario, found := stack.LookupSubmitScenario(name)
+	scenario, found := LookupSubmitScenario(name)
 	if !found {
 		_, _ = fmt.Fprintf(os.Stderr, "unknown submit scenario %q\n\n", name)
 		printUsage(os.Stderr)
@@ -71,14 +71,14 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "Usage: st-tui [--delay duration] <command> <scenario>")
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "Sync scenarios:")
-	for _, name := range stack.SyncScenarioNames() {
-		scenario, _ := stack.LookupSyncScenario(name)
+	for _, name := range SyncScenarioNames() {
+		scenario, _ := LookupSyncScenario(name)
 		_, _ = fmt.Fprintf(w, "  %-10s %s\n", name, scenario.Description)
 	}
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "Submit scenarios:")
-	for _, name := range stack.SubmitScenarioNames() {
-		scenario, _ := stack.LookupSubmitScenario(name)
+	for _, name := range SubmitScenarioNames() {
+		scenario, _ := LookupSubmitScenario(name)
 		_, _ = fmt.Fprintf(w, "  %-10s %s\n", name, scenario.Description)
 	}
 	_, _ = fmt.Fprintln(w, "")

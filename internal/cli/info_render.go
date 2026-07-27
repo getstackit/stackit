@@ -88,15 +88,17 @@ func renderBranchInfoText(info actions.BranchInfoResult, opts branchInfoRenderOp
 		}
 	}
 
+	isTrunkName := func(name string) bool { return info.Trunk != "" && name == info.Trunk }
+
 	if info.Parent != "" {
 		outputLines = append(outputLines, "")
-		outputLines = append(outputLines, fmt.Sprintf("%s: %s", style.ColorCyan("Parent"), style.ColorBranchNameWithTrunk(info.Parent, false, false)))
+		outputLines = append(outputLines, fmt.Sprintf("%s: %s", style.ColorCyan("Parent"), style.ColorBranchNameWithTrunk(info.Parent, false, isTrunkName(info.Parent))))
 	}
 
 	if len(info.Children) > 0 {
 		outputLines = append(outputLines, fmt.Sprintf("%s:", style.ColorCyan("Children")))
 		for _, child := range info.Children {
-			outputLines = append(outputLines, fmt.Sprintf("▸ %s", style.ColorBranchNameWithTrunk(child, false, false)))
+			outputLines = append(outputLines, fmt.Sprintf("▸ %s", style.ColorBranchNameWithTrunk(child, false, isTrunkName(child))))
 		}
 	}
 

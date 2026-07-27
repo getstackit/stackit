@@ -29,16 +29,19 @@ type BranchDiffStats struct {
 
 // BranchInfoResult contains structured data for `stackit info` on a single branch.
 type BranchInfoResult struct {
-	Name             string
-	IsCurrent        bool
-	IsTrunk          bool
-	IsLocked         bool
-	IsFrozen         bool
-	NeedsRestack     bool
-	Scope            string
-	CommitDate       string
-	Parent           string
-	Children         []string
+	Name         string
+	IsCurrent    bool
+	IsTrunk      bool
+	IsLocked     bool
+	IsFrozen     bool
+	NeedsRestack bool
+	Scope        string
+	CommitDate   string
+	Parent       string
+	Children     []string
+	// Trunk is the repository's trunk branch name, so renderers can style a
+	// trunk parent or child without re-resolving it from the engine.
+	Trunk            string
 	PR               *BranchInfoPR
 	CommitMessages   []string
 	DiffStats        BranchDiffStats
@@ -102,6 +105,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		IsFrozen:       branch.IsFrozen(),
 		NeedsRestack:   !isTrunk && !branch.IsBranchUpToDate(),
 		Scope:          branch.GetScope().String(),
+		Trunk:          eng.Trunk().GetName(),
 		CommitMessages: []string{},
 		Children:       []string{},
 	}

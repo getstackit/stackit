@@ -1,4 +1,4 @@
-package stack
+package main
 
 import (
 	"testing"
@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/cli/stack"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -15,7 +16,7 @@ func TestSubmitScenarioReplayUsesProductionHandler(t *testing.T) {
 	require.True(t, found)
 
 	out := output.NewTestOutput()
-	scenario.Replay(NewSimpleSubmitHandler(out, SubmitVerbose), 0)
+	scenario.Replay(stack.NewSimpleSubmitHandler(out, stack.SubmitVerbose), 0)
 	got := ansi.Strip(out.String())
 
 	assert.Contains(t, got, "Submitting 2 branches")
@@ -38,7 +39,7 @@ func TestSubmitScenarioSSReplay(t *testing.T) {
 	require.True(t, found)
 
 	out := output.NewTestOutput()
-	scenario.Replay(NewSimpleSubmitHandler(out, SubmitVerbose), 0)
+	scenario.Replay(stack.NewSimpleSubmitHandler(out, stack.SubmitVerbose), 0)
 	got := ansi.Strip(out.String())
 
 	assert.Contains(t, got, "Will submit (1)")
@@ -69,7 +70,7 @@ func TestSubmitScenarioSpecialCases(t *testing.T) {
 			require.True(t, found)
 
 			out := output.NewTestOutput()
-			scenario.Replay(NewSimpleSubmitHandler(out, SubmitVerbose), 0)
+			scenario.Replay(stack.NewSimpleSubmitHandler(out, stack.SubmitVerbose), 0)
 			assert.Contains(t, ansi.Strip(out.String()), tt.want)
 		})
 	}

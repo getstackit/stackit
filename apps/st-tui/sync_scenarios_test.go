@@ -1,4 +1,4 @@
-package stack
+package main
 
 import (
 	"testing"
@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/cli/stack"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -15,7 +16,7 @@ func TestSyncScenarioReplayUsesProductionHandler(t *testing.T) {
 	require.True(t, found)
 
 	out := output.NewTestOutput()
-	scenario.Replay(NewSimpleSyncHandler(out), 0)
+	scenario.Replay(stack.NewSimpleSyncHandler(out), 0)
 	got := ansi.Strip(out.String())
 
 	assert.Contains(t, got, "main fast-forwarded to a1b2c3d")

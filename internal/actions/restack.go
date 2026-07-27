@@ -142,11 +142,20 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 
 	ctx.Logger.Info("restack started branchCount=%v", branchCount)
 
+	// Parallel mode dispatches each group to a worktree that recomputes its own
+	// plan, so the plan resolved here does not decide what those workers do.
+	parallelDispatch := opts.Parallel && len(plan.groups) > 1
+
 	// Take snapshot before modifying the repository. Skip it when no branch
 	// actually needs a rebase: an up-to-date restack mutates nothing, so there
 	// is nothing to undo and the snapshot is pure overhead (it hits every no-op
 	// restack, and sync runs restack often).
-	if plan.HasWork() {
+	//
+	// The sequential path can skip safely because HasWork() is the same
+	// predicate restackBranchesWithPlan early-returns on, so a false verdict
+	// provably means no mutation. Parallel dispatch has no such guarantee, and
+	// an undo snapshot is exactly what you want when that reasoning is wrong.
+	if plan.HasWork() || parallelDispatch {
 		snapshotOpts := NewSnapshot("restack",
 			WithArg(opts.BranchName),
 			WithFlag(opts.AllStacks, "--all-stacks"),
@@ -181,7 +190,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	// Parallel mode: dispatch independent stack groups to separate worktrees.
 	// The pre-computed engine plans are not portable across worktree engines,
 	// so each worker computes its own plan inside its worktree.
-	if opts.Parallel && len(plan.groups) > 1 {
+	if parallelDispatch {
 		var err error
 		restacked, skipped, conflicts, blocked, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
 		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))

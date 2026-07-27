@@ -64,7 +64,10 @@ If no branch is specified and --stack is not provided, displays information abou
 					opts.BranchName = args[0]
 				}
 
-				info, err := actions.QueryBranchInfo(ctx.Context, ctx.Engine, opts, ctx.Output)
+				remoteCtx, cancel := ctx.RemoteOperationContext()
+				defer cancel()
+
+				info, err := actions.QueryBranchInfo(remoteCtx, ctx.Engine, opts, ctx.Output)
 				if err != nil {
 					return err
 				}

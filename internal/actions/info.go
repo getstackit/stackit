@@ -84,12 +84,7 @@ func refreshRemoteMetadataForBranchInfo(ctx context.Context, eng engine.Engine, 
 		return
 	}
 
-	if err := eng.LoadRemoteMetadataCache(); err != nil {
-		debugBranchInfof(debug, "Failed to load remote metadata cache: %v", err)
-		return
-	}
-
-	if err := eng.ApplyRemoteMetadataIfExists(branchName); err != nil {
+	if err := eng.ApplyRemoteMetadataForBranches(ctx, []string{branchName}); err != nil {
 		debugBranchInfof(debug, "Failed to apply remote metadata for %s: %v", branchName, err)
 	}
 }

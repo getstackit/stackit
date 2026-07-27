@@ -165,6 +165,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	scopeMap := make(map[string]string)
 	worktreeMap := make(map[string]string)
 
+	// Look up managed worktrees once and index by stack root, rather than
+	// calling GetWorktreeForStack per branch (each call reads a git ref plus
+	// a blob). Branches sharing a stack root would otherwise repeat the same
+	// lookup.
+	worktreeByStackRoot := make(map[string]string)
+	if worktrees, err := ctx.Worktree().ListManagedWorktrees(); err == nil {
+		for _, wt := range worktrees {
+			worktreeByStackRoot[wt.AnchorBranch] = wt.Path
+		}
+	}
+
 	for i, branchName := range branches {
 		branch := branchObjs[i]
 		fixedMap[branchName] = statuses.IsUpToDate(branch)
@@ -172,10 +183,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Check if this branch belongs to a stack with a managed worktree.
 		stackRoot := ctx.Worktree().GetStackRootForBranch(branch)
-		if stackRoot != "" {
-			if wtInfo, err := ctx.Worktree().GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
-				worktreeMap[branchName] = wtInfo.Path
-			}
+		if path, ok := worktreeByStackRoot[stackRoot]; ok {
+			worktreeMap[branchName] = path
 		}
 	}
 

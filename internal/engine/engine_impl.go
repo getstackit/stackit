@@ -418,7 +418,16 @@ func (e *engineImpl) RebuildBranches(branchNames []string) error {
 		if meta == nil || meta.GetParentBranchName() == nil || *meta.GetParentBranchName() == name {
 			// No parent metadata (untracked, deleted, or self-parenting) → drop,
 			// matching applySharedMetadata's skip-then-absent behavior.
+			//
+			// removeBranch also deletes this branch's own child edges, but a full
+			// rebuild would keep them: applySharedMetadata derives childrenMap from
+			// every branch's parent metadata, so children that still name this
+			// branch as their parent survive the drop. Preserve them.
+			children := e.state.childrenMap[name]
 			e.state.removeBranch(name)
+			if len(children) > 0 {
+				e.state.childrenMap[name] = children
+			}
 			continue
 		}
 

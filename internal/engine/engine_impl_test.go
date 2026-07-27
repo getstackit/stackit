@@ -688,6 +688,23 @@ func TestRebuildBranches(t *testing.T) {
 		require.NotContains(t, descendantsOf(s.Engine, "a"), "b")
 	})
 
+	t.Run("dropping an untracked branch keeps the children still parented to it", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithLinearStack("a", "b", "c") // main -> a -> b -> c
+
+		// Untrack the middle branch. c's metadata still names b as its parent,
+		// so a full rebuild would keep the b -> c edge; a scoped rebuild must
+		// not diverge by erasing it.
+		require.NoError(t, s.Engine.Git().DeleteMetadata(context.Background(), "b"))
+
+		require.NoError(t, s.Engine.RebuildBranches([]string{"b"}))
+
+		require.False(t, s.Engine.GetBranch("b").IsTracked(), "b is no longer tracked")
+		require.NotContains(t, descendantsOf(s.Engine, "a"), "b")
+		require.Equal(t, 1, descendantsOf(s.Engine, "b")["c"], "c is still a child of b")
+	})
+
 	t.Run("only refreshes the listed branches", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).

@@ -337,3 +337,84 @@ func TestSimpleSubmitHandlerPrintsOutcomeWhenNothingSubmitted(t *testing.T) {
 
 	require.Contains(t, out.String(), "All PRs up to date")
 }
+
+// SubmitCompact is the default verbosity, so the assertions below cover what
+// every non-verbose user sees. Each compact branch in the handler is the "else"
+// of a check the SubmitVerbose tests above exercise from the other side.
+func TestSimpleSubmitHandlerCompactReportsOutcomeNotPerBranchRows(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out, SubmitCompact)
+	updated := "jonnii/20260511011552/update-me"
+	created := "jonnii/20260511011552/add-feature"
+	prNumber := 42
+
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:    []string{updated, created},
+		TrunkBranch: "main",
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{BranchName: updated, Action: "update", PRNumber: &prNumber})
+	handler.OnEvent(submitAction.BranchPlanEvent{BranchName: created, Action: "create"})
+	handler.OnEvent(submitAction.PlanningCompleteEvent{})
+	handler.OnEvent(submitAction.SubmissionStartEvent{
+		Branches: []submitAction.BranchInfo{
+			{Name: updated, Action: "update"},
+			{Name: created, Action: "create"},
+		},
+	})
+	handler.OnEvent(submitAction.BranchProgressEvent{
+		BranchName: updated,
+		Status:     submitAction.StatusDone,
+		URL:        "https://github.com/getstackit/stackit/pull/42",
+	})
+	handler.OnEvent(submitAction.BranchProgressEvent{
+		BranchName: created,
+		Status:     submitAction.StatusDone,
+		URL:        "https://github.com/getstackit/stackit/pull/51",
+	})
+	handler.OnEvent(submitAction.CompletionEvent{
+		Outcome:  submitAction.OutcomeComplete,
+		Message:  "Submit complete",
+		Duration: 2 * time.Second,
+	})
+
+	got := ansi.Strip(out.String())
+	require.Contains(t, got, "● Will open 1 PR · update 1 PR")
+	require.Contains(t, got, "Submitting 2 PRs...")
+	require.Contains(t, got, "✓ Opened 1 PR · updated 1 PR")
+	// Only the created PR's URL is worth pasting; the updated one is not.
+	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/51")
+	require.NotContains(t, got, "https://github.com/getstackit/stackit/pull/42")
+	// The per-branch audit trail belongs to --verbose.
+	require.NotContains(t, got, "Submit plan")
+	require.NotContains(t, got, "Will submit (2)")
+	require.NotContains(t, got, "update-me #42 updated")
+	require.NotContains(t, got, "add-feature #51 created")
+}
+
+func TestSimpleSubmitHandlerCompactStaysSilentWhenNothingToSubmit(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewSimpleSubmitHandler(out, SubmitCompact)
+	branch := "jonnii/20260511011552/up-to-date-branch"
+
+	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
+		Branches:      []string{branch},
+		CurrentBranch: branch,
+		TrunkBranch:   "main",
+	}})
+	handler.OnEvent(submitAction.BranchPlanEvent{
+		BranchName: branch,
+		Skipped:    true,
+		SkipReason: "no changes",
+	})
+	handler.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "Nothing to submit"})
+
+	got := ansi.Strip(out.String())
+	// An all-skipped plan has no work to describe, so compactSummary is empty
+	// and the outcome line carries the whole message.
+	require.NotContains(t, got, "●")
+	require.Contains(t, got, "Nothing to submit")
+}

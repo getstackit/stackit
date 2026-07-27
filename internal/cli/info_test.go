@@ -371,4 +371,27 @@ func TestInfoCommand(t *testing.T) {
 		require.NoError(t, err, "info command failed: %s", output)
 		require.Contains(t, output, "\"scope\": \"api\"")
 	})
+
+	t.Run("info shows no scope tag for the inheritance-breaking sentinel", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
+
+		if err := s.Scene.Repo.CreateChange("feature change", "test", false); err != nil {
+			t.Fatal(err)
+		}
+		s.RunCli("create", "feature", "-m", "feature change")
+		// Documented usage: "Use 'none' or 'clear' as the scope name to
+		// explicitly break the inheritance chain."
+		s.RunCli("scope", "none")
+
+		output, err := s.RunCliAndGetOutput("info")
+		require.NoError(t, err, "info command failed: %s", output)
+		require.NotContains(t, output, "[none]", "the sentinel is a directive, not a scope tag")
+
+		// GetScope resolves the sentinel to empty, so it never surfaces as a
+		// scope name in either rendering.
+		jsonOutput, err := s.RunCliAndGetOutput("info", "--json")
+		require.NoError(t, err, "info command failed: %s", jsonOutput)
+		require.Contains(t, jsonOutput, "\"scope\": \"\"")
+	})
 }

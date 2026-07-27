@@ -71,6 +71,9 @@ func TestQueryBranchInfo(t *testing.T) {
 		require.False(t, info.IsTrunk)
 		require.Equal(t, "PROJ-123", info.Scope)
 		require.Equal(t, "main", info.Parent)
+		// Renderers need the trunk name to style a trunk parent; resolving it
+		// again from the engine is not their job.
+		require.Equal(t, "main", info.Trunk)
 		require.Contains(t, info.Children, "child")
 		require.Contains(t, strings.Join(info.CommitMessages, "\n"), "feature change")
 		require.GreaterOrEqual(t, info.DiffStats.FilesChanged, 1)
@@ -94,6 +97,28 @@ func TestQueryBranchInfo(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, info.PatchOutput)
 		require.Empty(t, info.DiffOutput)
+	})
+
+	// GetScope resolves the inheritance-breaking sentinel ("none"/"clear") to an
+	// empty scope, so the sentinel never reaches a consumer as a scope name.
+	// This is why the renderer can gate purely on Scope being non-empty.
+	t.Run("resolves the inheritance-breaking scope sentinel to empty", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
+
+		require.NoError(t, s.Scene.Repo.CreateAndCheckoutBranch("feature"))
+		require.NoError(t, s.Scene.Repo.CreateChange("feature change", "feature.txt", false))
+		require.NoError(t, s.Scene.Repo.RunGitCommand("add", "."))
+		require.NoError(t, s.Scene.Repo.RunGitCommand("commit", "-m", "feature change"))
+		s.Rebuild()
+		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+		require.NoError(t, s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature"), engine.None()))
+
+		info, err := QueryBranchInfo(context.Background(), s.Engine, BranchInfoQueryOptions{
+			BranchName: "feature",
+		}, nil)
+		require.NoError(t, err)
+
+		require.Empty(t, info.Scope, "the sentinel is a directive, not a scope name")
 	})
 
 	t.Run("errors for a missing branch", func(t *testing.T) {

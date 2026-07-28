@@ -113,18 +113,13 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 	}
 	prsUpdated := len(updates)
 
-	// Emit completion event with count
+	// Report the refresh only when it changed something. "PR info up to date" is
+	// a non-event: it tells a developer nothing they did not already assume.
 	if prsUpdated > 0 {
 		handler.EmitEvent(Event{
 			Phase:   PhaseGitHub,
 			Type:    EventCompleted,
-			Message: fmt.Sprintf("Updated PR info for %d branches", prsUpdated),
-		})
-	} else {
-		handler.EmitEvent(Event{
-			Phase:   PhaseGitHub,
-			Type:    EventCompleted,
-			Message: "PR info up to date",
+			Message: fmt.Sprintf("Refreshed PR info for %d branches", prsUpdated),
 		})
 	}
 

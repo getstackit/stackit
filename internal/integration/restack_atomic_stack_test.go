@@ -51,11 +51,10 @@ func TestRestackAppliesStacksAtomically(t *testing.T) {
 
 	// Every branch is accounted for in the output: restacked, conflicted, blocked.
 	sh.Run("restack --continue-on-conflict").
-		OutputContains("Restacked a1").
-		OutputContains("Restacked a2").
+		OutputContains("Restacked 2 branches").
 		OutputContains("(conflict)").
 		OutputContains("blocked by conflict in stack").
-		OutputContains("restacked 2, skipped 1 (conflict), blocked 1")
+		OutputContains("Restacked 2, skipped 1 (conflict), blocked 1")
 
 	// Stack A restacked fully onto the new trunk.
 	require.Equal(t, mainRev, sh.revParse("main"), "trunk itself must not move")

@@ -31,13 +31,10 @@ func TestSyncCommand(t *testing.T) {
 		output, err := s.RunCliAndGetOutput("sync", "--no-restack")
 		require.NoError(t, err, "sync --no-restack failed: %s", output)
 		normalized := testhelpers.NormalizeOutput(output)
-		// Empty phases (branches, clean) are suppressed; completed items carry a ✓.
+		// A run that changed nothing says exactly that and nothing else: every
+		// phase reports only what it actually did.
 		require.Equal(t, testhelpers.NormalizeOutput(`
-📥 Pulling from remote...
-  ✓ main is up to date
-🔄 Fetching PR info from GitHub...
-  ✓ PR info up to date
-✨ Everything is up to date!
+Already up to date.
 `), normalized)
 
 		// 2. Restack not needed
@@ -45,13 +42,7 @@ func TestSyncCommand(t *testing.T) {
 		require.NoError(t, err, "sync --restack (not needed) failed: %s", output)
 		normalized = testhelpers.NormalizeOutput(output)
 		require.Equal(t, testhelpers.NormalizeOutput(`
-📥 Pulling from remote...
-  ✓ main is up to date
-🔄 Fetching PR info from GitHub...
-  ✓ PR info up to date
-📚 Restacking branches...
-  ✓ branch1 (current) up to date
-✨ Everything is up to date!
+Already up to date.
 `), normalized)
 
 		// 3. Restack needed
@@ -63,9 +54,8 @@ func TestSyncCommand(t *testing.T) {
 		require.NoError(t, err, "sync --restack (needed) failed: %s", output)
 		normalized = testhelpers.NormalizeOutput(output)
 		// We don't know the exact revision, so we'll check the structure
-		require.Contains(t, normalized, "Restacked branch1")
-		require.Contains(t, normalized, "→")
-		require.Contains(t, normalized, "✅ Summary: restacked 1")
+		require.Contains(t, normalized, "Restacked 1 branch")
+		require.Contains(t, normalized, "Restacked 1")
 	})
 
 	t.Run("sync failures and tips", func(t *testing.T) {
@@ -95,11 +85,7 @@ Error: you have uncommitted changes. Please commit or stash them before syncing
 		output, err = s.RunCliAndGetOutput("sync", "--no-restack")
 		require.NoError(t, err, "sync --no-restack failed: %s", output)
 		require.Equal(t, testhelpers.NormalizeOutput(`
-📥 Pulling from remote...
-  ✓ main is up to date
-🔄 Fetching PR info from GitHub...
-  ✓ PR info up to date
-✨ Everything is up to date!
+Already up to date.
 `), testhelpers.NormalizeOutput(output))
 	})
 
@@ -132,6 +118,6 @@ Error: you have uncommitted changes. Please commit or stash them before syncing
 		// (If dry-run had restacked, this would report "up to date" instead.)
 		output, err = s.RunCliAndGetOutput("sync", "--restack")
 		require.NoError(t, err, "sync --restack failed: %s", output)
-		require.Contains(t, testhelpers.NormalizeOutput(output), "Restacked branch1")
+		require.Contains(t, testhelpers.NormalizeOutput(output), "Restacked 1 branch")
 	})
 }

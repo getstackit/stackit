@@ -1,8 +1,5 @@
-📥 Pulling from remote...
-  ✓ main fast-forwarded to a1b2c3d
+main +4
 
-🔄 Fetching PR info from GitHub...
-  → Updating PR for feat-api
-  ✓ Updated 1 PR description
+Updated 1 PR description
 
-✅ Summary: pulled trunk
+Pulled trunk

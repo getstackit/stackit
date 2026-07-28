@@ -1,29 +1,22 @@
-📥 Pulling from remote...
-  ✓ main fast-forwarded to 9f8e7d6
+main +4
 
-🔄 Fetching PR info from GitHub...
-  ✓ Updated 2 PR descriptions
-
-📥 Syncing stack branches...
-  ✓ feat-api fast-forwarded to e4f5a6b
-
-🧹 Cleaning branches...
+Updated 2 PR descriptions
 
 ? Select branches to delete:
     [x] feat-old (#99 merged)
 › user selects: feat-old
-  ✓ Deleted feat-old (PR #99) merged
 
-📚 Restacking branches...
-  ✓ Restacked feat-ui (PR #202) on feat-api → c3d4e5f
-  ⚠ Skipped feat-report (PR #203) (conflict)
+Pulled 1 branch from remote
 
-⚠️  Found conflicts in 1 branch during restack; branches without conflicts were restacked.
-Resolve each with:
-  • st restack feat-report
+1 branch landed and cleaned up
+    #99 feat-old
 
+⚠️  1 branch conflicted; the rest of the stack was restacked.
 ? Resolve conflicts now? [y/N]
 › user answers: no
 
-✅ Summary: pulled trunk, synced 1 branch, restacked 1, deleted 1, skipped 1 (conflict)
-  Run st restack feat-report to resolve and continue
+Restacked 1 branch on main +4
+  ⚠ feat-report #203 conflict — needs resolving
+
+Pulled trunk, synced 1 branch, restacked 1, deleted 1, skipped 1 (conflict)
+   st restack feat-report

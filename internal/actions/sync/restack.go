@@ -81,7 +81,14 @@ func restackBranches(ctx context.Context, deps Deps, branchesToRestack []string,
 		Prompter:       handler,
 		PromptRerere:   deps.Restack.Interactive && !deps.Restack.Quiet && handler.IsInteractive(),
 		Pauser:         pauser,
-	}, actions.RestackBranchFunc(handler.OnRestackBranch))
+	}, actions.RestackBranchFunc(func(event actions.RestackBranchEvent) {
+		// Reparenting travels with every outcome: a branch can be reparented
+		// and rebased, or reparented and already current.
+		if event.Reparented {
+			summary.BranchesReparented++
+		}
+		handler.OnRestackBranch(event)
+	}))
 
 	summary.BranchesRestacked += outcome.Summary.Restacked
 	summary.BranchesSkipped += len(outcome.Summary.Conflicts)

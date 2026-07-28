@@ -211,3 +211,10 @@ func TestSimpleSyncHandler_IsNotInteractive(t *testing.T) {
 	handler := NewSimpleSyncHandler(output.NewNullOutput())
 	require.False(t, handler.IsInteractive())
 }
+
+func TestFormatSyncSummaryParts_Reparented(t *testing.T) {
+	t.Parallel()
+
+	parts := formatSyncSummaryParts(syncAction.Summary{BranchesRestacked: 1, BranchesReparented: 1})
+	require.Equal(t, []string{"restacked 1", "reparented 1"}, parts)
+}

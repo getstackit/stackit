@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -215,5 +216,27 @@ func TestBranchSnapshotStoredBaseSurvivesMissingParent(t *testing.T) {
 	_, err = s.Engine.ReadBranchCommits(t.Context(), branches).One()
 	require.Error(t, err, "without a stored base the missing parent must not become unbounded history")
 	_, err = s.Engine.ReadBranchCommitNodes(t.Context(), branches).One()
+	require.Error(t, err)
+}
+
+func TestCommitCountBetween(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithLinearStack3()
+
+	mainRev, err := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("main"))
+	require.NoError(t, err)
+	cRev, err := s.Engine.GetRevision(t.Context(), s.Engine.GetBranch("c"))
+	require.NoError(t, err)
+
+	count, err := s.Engine.CommitCountBetween(t.Context(), git.RevRange{Base: mainRev, Head: cRev})
+	require.NoError(t, err)
+	require.Equal(t, 3, count, "a, b and c each add one commit")
+
+	count, err = s.Engine.CommitCountBetween(t.Context(), git.RevRange{Base: cRev, Head: cRev})
+	require.NoError(t, err)
+	require.Zero(t, count)
+
+	_, err = s.Engine.CommitCountBetween(t.Context(), git.RevRange{Base: "not-a-revision", Head: cRev})
 	require.Error(t, err)
 }

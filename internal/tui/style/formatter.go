@@ -138,6 +138,12 @@ func ColorNeedsRestack(text string) string {
 		Render(text)
 }
 
+// Bold renders text bold with no color of its own. Used for section headers,
+// where bold alone is enough hierarchy against indented rows.
+func Bold(text string) string {
+	return lipgloss.NewStyle().Bold(true).Render(text)
+}
+
 // ColorDim makes text dim/gray (adaptive to terminal background)
 func ColorDim(text string) string {
 	return lipgloss.NewStyle().

@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-// OpenBrowser opens a URL in the default browser on Windows
-func OpenBrowser(url string) error {
+// openBrowser opens a URL in the default browser on Windows
+func openBrowser(url string) error {
 	return exec.Command("cmd", "/c", "start", url).Run()
 }

@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-// OpenBrowser opens a URL in the default browser on Linux
-func OpenBrowser(url string) error {
+// openBrowser opens a URL in the default browser on Linux
+func openBrowser(url string) error {
 	return exec.Command("xdg-open", url).Run()
 }

@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-// OpenBrowser opens a URL in the default browser on macOS
-func OpenBrowser(url string) error {
+// openBrowser opens a URL in the default browser on macOS
+func openBrowser(url string) error {
 	return exec.Command("open", url).Run()
 }

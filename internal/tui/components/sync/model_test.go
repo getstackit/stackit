@@ -5,32 +5,12 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/tui/style"
 )
-
-func TestDetailMark_Glyph(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		mark DetailMark
-		want string
-	}{
-		{"done shows ✓", MarkDone, style.GlyphSuccess},
-		{"warn shows ⚠", MarkWarn, style.GlyphWarning},
-		{"in progress shows →", MarkInProgress, style.GlyphProgress},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			// glyph() wraps the rune in color codes; assert the rune is present.
-			assert.Contains(t, tt.mark.glyph(), tt.want)
-		})
-	}
-}
 
 // viewString extracts the string content from a tea.View for test assertions.
 func viewString(v tea.View) string {
@@ -39,17 +19,15 @@ func viewString(v tea.View) string {
 
 func TestNewModel(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 
-	assert.Equal(t, 10, model.TotalOps)
-	assert.Equal(t, 0, model.CompletedOps)
 	assert.False(t, model.Done)
 	assert.Equal(t, Phase(""), model.CurrentPhase)
 }
 
 func TestModel_Init(t *testing.T) {
 	t.Parallel()
-	model := NewModel(0)
+	model := NewModel()
 
 	// Set up ready channel to capture signal
 	readyChan := make(chan struct{})
@@ -69,112 +47,70 @@ func TestModel_Init(t *testing.T) {
 	require.NotNil(t, cmd, "Init should return a command for spinner tick")
 }
 
-func TestModel_Update_PhaseStartMsg(t *testing.T) {
+func TestModel_View_ShowsPhaseStepAndElapsed(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
-	// Start trunk phase - the header is deferred (committed lazily on the first
-	// detail), so no command is returned yet.
-	newModel, cmd := model.Update(PhaseStartMsg{Phase: PhaseTrunk, Message: "📥 Pulling from remote..."})
+	// The step comes from the fixed pipeline, so it is known before any work
+	// happens — no denominator can be wrong and none can be missing.
+	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseRestack})
 	m := newModel.(*Model)
 
-	assert.Equal(t, PhaseTrunk, m.CurrentPhase)
-	assert.Equal(t, "", m.CurrentDetail) // Detail cleared on phase start
-	assert.Nil(t, cmd, "phase start should defer its header until the first detail")
-	assert.False(t, m.headers.Committed(PhaseTrunk), "header should not be committed before any detail")
+	view := viewString(m.View())
+	assert.Contains(t, ansi.Strip(view), "●●●●● Restacking branches...")
+	assert.Regexp(t, `\d+\.\ds`, view, "elapsed clock is always shown")
 }
 
-func TestModel_Update_EmptyPhaseSuppressed(t *testing.T) {
+func TestModel_Update_PrintMsg(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
-	// A phase that starts but never emits a detail must not commit a header.
-	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseBranches, Message: "📥 Syncing stack branches..."})
+	// The handler composes finished lines; the model only prints them.
+	_, cmd := model.Update(PrintMsg{Lines: []string{"", "🧹 2 branches landed and cleaned up", "  #1230 feat-a"}})
+	assert.NotNil(t, cmd, "should return print commands")
+}
+
+func TestModel_Update_ActivityMsg_NamesWorkOnLiveLine(t *testing.T) {
+	t.Parallel()
+	model := NewModel()
+	model.Init()
+
+	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseGitHub})
 	m := newModel.(*Model)
-	newModel, _ = m.Update(PhaseStartMsg{Phase: PhaseClean, Message: "🧹 Cleaning branches..."})
+	newModel, cmd := m.Update(ActivityMsg{Text: "Updating PR for feat/api"})
 	m = newModel.(*Model)
 
-	assert.False(t, m.headers.Committed(PhaseBranches), "empty branches phase should not commit a header")
-	assert.False(t, m.headers.Committed(PhaseClean), "empty clean phase should not commit a header")
-	assert.False(t, m.headers.Any(), "no headers should have been committed")
+	// Activity is live-line only: it is superseded by the phase's own report.
+	assert.Nil(t, cmd, "activity must not print to scrollback")
+	assert.Contains(t, ansi.Strip(viewString(m.View())), "Updating PR for feat/api")
+
+	// A new phase clears it.
+	newModel, _ = m.Update(PhaseStartMsg{Phase: PhaseRestack})
+	m = newModel.(*Model)
+	assert.Contains(t, ansi.Strip(viewString(m.View())), "Restacking branches...")
 }
 
 func TestModel_Update_PhaseTransition(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
 	// Start trunk phase
-	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseTrunk, Message: "📥 Pulling..."})
+	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseTrunk})
 	m := newModel.(*Model)
 
 	// Start github phase
-	newModel, _ = m.Update(PhaseStartMsg{Phase: PhaseGitHub, Message: "🔄 Fetching..."})
+	newModel, _ = m.Update(PhaseStartMsg{Phase: PhaseGitHub})
 	m = newModel.(*Model)
 
 	assert.Equal(t, PhaseGitHub, m.CurrentPhase)
 }
 
-func TestModel_Update_PhaseDetailMsg(t *testing.T) {
-	t.Parallel()
-	model := NewModel(10)
-	model.Init()
-
-	// Start trunk phase first
-	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseTrunk, Message: "📥 Pulling..."})
-	m := newModel.(*Model)
-
-	// Add a detail to trunk phase - returns a tea.Printf command
-	newModel, cmd := m.Update(PhaseDetailMsg{
-		Phase:   PhaseTrunk,
-		Message: "main fast-forwarded to abc1234",
-	})
-	m = newModel.(*Model)
-
-	assert.Equal(t, "main fast-forwarded to abc1234", m.CurrentDetail)
-	assert.NotNil(t, cmd, "should return print command")
-	assert.True(t, m.headers.Committed(PhaseTrunk), "first detail should commit the phase header")
-}
-
-func TestModel_Update_PhaseDetailMsg_WithWarn(t *testing.T) {
-	t.Parallel()
-	model := NewModel(10)
-	model.Init()
-
-	// Add a detail with warning mark
-	newModel, cmd := model.Update(PhaseDetailMsg{
-		Phase:   PhaseTrunk,
-		Message: "branch diverged",
-		Mark:    MarkWarn,
-	})
-	m := newModel.(*Model)
-
-	assert.Equal(t, "branch diverged", m.CurrentDetail)
-	assert.NotNil(t, cmd, "should return print command")
-}
-
-func TestModel_Update_ProgressTickMsg(t *testing.T) {
-	t.Parallel()
-	model := NewModel(10)
-	model.Init()
-
-	// Update progress
-	newModel, cmd := model.Update(ProgressTickMsg{
-		Completed: 5,
-		Total:     10,
-	})
-	m := newModel.(*Model)
-
-	assert.Equal(t, 5, m.CompletedOps)
-	assert.Equal(t, 10, m.TotalOps)
-	assert.NotNil(t, cmd, "should return progress update command")
-}
-
 func TestModel_Update_CompleteMsg(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
 	// Send complete message
@@ -203,7 +139,7 @@ func TestModel_Update_KeyMsg_Quit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			model := NewModel(10)
+			model := NewModel()
 			model.Init()
 
 			_, cmd := model.Update(tt.msg)
@@ -215,7 +151,7 @@ func TestModel_Update_KeyMsg_Quit(t *testing.T) {
 
 func TestModel_Update_WindowSizeMsg(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
 	newModel, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
@@ -223,13 +159,11 @@ func TestModel_Update_WindowSizeMsg(t *testing.T) {
 
 	assert.Equal(t, 100, m.Width)
 	assert.Equal(t, 50, m.Height)
-	// Progress width should be capped at 60
-	assert.Equal(t, 60, m.Progress.Width())
 }
 
 func TestModel_Update_WindowSizeMsg_NarrowTerminal(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
 	newModel, _ := model.Update(tea.WindowSizeMsg{Width: 50, Height: 30})
@@ -237,34 +171,27 @@ func TestModel_Update_WindowSizeMsg_NarrowTerminal(t *testing.T) {
 
 	assert.Equal(t, 50, m.Width)
 	assert.Equal(t, 30, m.Height)
-	// Progress width should be 40 (50 - 10)
-	assert.Equal(t, 40, m.Progress.Width())
 }
 
 func TestModel_View_InProgress(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
 	// Start a phase
-	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseTrunk, Message: "📥 Pulling..."})
+	newModel, _ := model.Update(PhaseStartMsg{Phase: PhaseTrunk})
 	m := newModel.(*Model)
-
-	// Update progress
-	newModel, _ = m.Update(ProgressTickMsg{Completed: 3, Total: 10})
-	m = newModel.(*Model)
 
 	view := viewString(m.View())
 
-	// Should contain progress info (package-manager style single line)
-	assert.Contains(t, view, "3/10")
-	// Should contain spinner
+	// One line: spinner, phase step, elapsed clock.
+	assert.Contains(t, ansi.Strip(view), "●○○○○ Pulling from remote...")
 	assert.NotEmpty(t, view)
 }
 
 func TestModel_View_Completed(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
 	// Complete the operation
@@ -279,7 +206,7 @@ func TestModel_View_Completed(t *testing.T) {
 
 func TestModel_Update_SpinnerTickMsg(t *testing.T) {
 	t.Parallel()
-	model := NewModel(10)
+	model := NewModel()
 	model.Init()
 
 	// Send a spinner tick
@@ -296,9 +223,9 @@ func TestMessageRecorder_Usage(t *testing.T) {
 	recorder := tui.NewMessageRecorder()
 
 	// Record some messages
-	recorder.Record(PhaseStartMsg{Phase: PhaseTrunk, Message: "📥 Pulling..."})
-	recorder.Record(PhaseDetailMsg{Phase: PhaseTrunk, Message: "test"})
-	recorder.Record(ProgressTickMsg{Completed: 1, Total: 5})
+	recorder.Record(PhaseStartMsg{Phase: PhaseTrunk})
+	recorder.Record(PrintMsg{Lines: []string{"first"}})
+	recorder.Record(ActivityMsg{Text: "second"})
 
 	assert.Equal(t, 3, recorder.Count())
 
@@ -327,21 +254,21 @@ func TestModel_GetStatusText(t *testing.T) {
 		phase    Phase
 		expected string
 	}{
-		{"trunk", PhaseTrunk, "Pulling from remote..."},
-		{"branches", PhaseBranches, "Syncing branches..."},
-		{"github", PhaseGitHub, "Fetching PR info..."},
-		{"clean", PhaseClean, "Cleaning branches..."},
-		{"restack", PhaseRestack, "Restacking branches..."},
+		{"trunk", PhaseTrunk, "●○○○○ Pulling from remote..."},
+		{"github", PhaseGitHub, "●●○○○ Fetching PR info..."},
+		{"branches", PhaseBranches, "●●●○○ Syncing branches..."},
+		{"clean", PhaseClean, "●●●●○ Cleaning branches..."},
+		{"restack", PhaseRestack, "●●●●● Restacking branches..."},
 		{"unknown", Phase(""), "Syncing..."},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			model := NewModel(10)
+			model := NewModel()
 			model.CurrentPhase = tt.phase
-			text := model.getStatusText()
-			assert.Equal(t, tt.expected, text)
+			// Strip color so the assertion is about the pip pattern, not the styling.
+			assert.Equal(t, tt.expected, ansi.Strip(model.getStatusText()))
 		})
 	}
 }

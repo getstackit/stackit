@@ -260,7 +260,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 ### Branch Management
 | Command | Description |
 |:---|:---|
-| `stackit create [name]` | Create a new branch on top of current (use `-w` to create with worktree) |
+| `stackit create [name]` | Create a new branch on top of current (use `-w` to create with worktree, `--onto <branch>` to target a specific parent without checking it out) |
 | `stackit modify` | Amend the current commit (like `git commit --amend`) |
 | `stackit absorb` | Intelligently amend changes to the correct commits in the stack |
 | `stackit split` | Split commits into branches (by commit, hunk, or file; use `--above` for upstack) |

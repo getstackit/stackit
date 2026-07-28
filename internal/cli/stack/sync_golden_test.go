@@ -60,9 +60,9 @@ func (h *transcriptSyncHandler) renderBranchDeletions(branches map[string]string
 	names, options, _ := buildDeletionOptions(branches, unpushed)
 	selected := toSet(selects)
 
-	// The deletion prompt belongs to the clean phase; emit that header first so
-	// the transcript matches the real ordering (header, then prompt, then items).
-	h.ensurePhaseHeader(syncAction.PhaseClean)
+	// The prompt happens *during* the clean phase, so it precedes that phase's
+	// header — the header states the outcome and is only written once the phase
+	// is over.
 	h.Output.Newline()
 	h.Output.Info("? Select branches to delete:")
 	for i, name := range names {
@@ -88,8 +88,8 @@ func phaseStarted(p syncAction.Phase) step {
 	return emit(syncAction.Event{Phase: p, Type: syncAction.EventStarted})
 }
 
-func trunkFF(rev string) step {
-	return emit(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main", NewRevision: rev})
+func trunkFF(rev string, commits int) step {
+	return emit(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main", NewRevision: rev, Commits: commits})
 }
 
 func trunkUpToDate() step {
@@ -126,6 +126,16 @@ func restacked(branch string, pr *int, parent, rev string) step {
 
 func restackUpToDate(branch string, pr *int) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: branch, PRNumber: pr})
+}
+
+// restackReparented is a branch whose parent landed, so it was re-anchored
+// elsewhere. This is the outcome a developer cannot infer for themselves.
+func restackReparented(branch string, pr *int, oldParent, newParent, rev string) step {
+	return emit(syncAction.Event{
+		Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted,
+		Branch: branch, PRNumber: pr, NewRevision: rev, Parent: newParent,
+		Reparented: true, OldParent: oldParent, NewParent: newParent,
+	})
 }
 
 func restackConflict(branch string, pr *int) step {
@@ -193,7 +203,7 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "trunk_fast_forwarded",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("a1b2c3d"),
+				trunkFF("a1b2c3d", 4),
 			},
 			summary: syncAction.Summary{TrunkUpdated: true, TrunkRevision: "a1b2c3d"},
 		},
@@ -201,7 +211,7 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "branch_synced",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("a1b2c3d"),
+				trunkFF("a1b2c3d", 4),
 				phaseStarted(syncAction.PhaseBranches),
 				branchSynced("feat-api", "e4f5a6b"),
 				branchUpToDate("feat-ui"),
@@ -212,7 +222,7 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "branch_diverged_skipped",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("a1b2c3d"),
+				trunkFF("a1b2c3d", 4),
 				phaseStarted(syncAction.PhaseBranches),
 				branchDiverged("feat-api"),
 			},
@@ -222,7 +232,7 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "clean_with_prompt_confirm",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("a1b2c3d"),
+				trunkFF("a1b2c3d", 4),
 				phaseStarted(syncAction.PhaseClean),
 				promptDeletions(
 					map[string]string{
@@ -240,13 +250,68 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "restack_done",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("a1b2c3d"),
+				trunkFF("a1b2c3d", 4),
 				phaseStarted(syncAction.PhaseRestack),
 				restacked("feat-api", new(201), "main", "b2c3d4e"),
 				restacked("feat-ui", new(202), "feat-api", "c3d4e5f"),
 				restackUpToDate("feat-docs", nil),
 			},
 			summary: syncAction.Summary{TrunkUpdated: true, BranchesRestacked: 2},
+		},
+		{
+			// A teammate's PR landed, so this branch's parent no longer exists and
+			// it was re-anchored onto trunk. Nothing else in sync's output tells a
+			// developer their stack changed shape, so this row is the whole point.
+			name: "restack_reparented_past_landed_parent",
+			steps: []step{
+				phaseStarted(syncAction.PhaseTrunk),
+				trunkFF("a1b2c3d", 9),
+				phaseStarted(syncAction.PhaseClean),
+				deleted("feat-parent", new(310), "merged into main"),
+				phaseStarted(syncAction.PhaseRestack),
+				restackReparented("feat-child", new(311), "feat-parent", "main", "d4e5f6a"),
+				restacked("feat-grandchild", new(312), "feat-child", "e5f6a7b"),
+			},
+			summary: syncAction.Summary{
+				TrunkUpdated:       true,
+				TrunkRevision:      "a1b2c3d",
+				TrunkCommits:       9,
+				BranchesDeleted:    1,
+				BranchesRestacked:  2,
+				BranchesReparented: 1,
+			},
+		},
+		{
+			// The everyday shape: generated `<user>/<timestamp>/<slug>` branch
+			// names, several branches anchored on trunk then a chain, and one
+			// conflict. Locks in that rows drop the timestamp prefix and only
+			// name a parent when it isn't already on screen.
+			name: "restack_generated_names",
+			steps: []step{
+				phaseStarted(syncAction.PhaseTrunk),
+				trunkUpToDate(),
+				phaseStarted(syncAction.PhaseGitHub),
+				githubMessage("Refreshed PR info for 6 branches"),
+				phaseStarted(syncAction.PhaseClean),
+				deleted("stack-merge-stack-1784862381", nil, "merged into main"),
+				deleted("jonnii/20260724022739/make-restack-output-terse-and-outcome-focused", nil, "merged into main"),
+				phaseStarted(syncAction.PhaseRestack),
+				restacked("info-query-cli-rendering", new(936), "main", "9e49378"),
+				restacked("jonnii/20260529015605/add-user-menu-to-header-and-extend-it-to-repo", new(1070), "main", "15d7955"),
+				restacked("jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", new(1164), "main", "b0d42a4"),
+				restacked("jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", new(1242),
+					"jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", "e1d9f30"),
+				restacked("jonnii/20260605033020/route-insert-s-child-select-prompt-through-the", new(1241),
+					"jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", "4cb45e0"),
+				restackUpToDate("jonnii/20260219034124/prompt-notes-wt", nil),
+				restackConflict("jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits", new(754)),
+			},
+			summary: syncAction.Summary{
+				BranchesRestacked: 5,
+				BranchesDeleted:   2,
+				BranchesSkipped:   1,
+				ConflictBranches:  []string{"jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits"},
+			},
 		},
 		{
 			name: "restack_conflict_declined",
@@ -266,7 +331,7 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "metadata_conflict_keep_local",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("a1b2c3d"),
+				trunkFF("a1b2c3d", 4),
 				promptMetadataConflict(&engine.MetadataDiff{
 					Branch: "feat-auth",
 					Differences: []engine.FieldDiff{
@@ -284,7 +349,7 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "orphaned_metadata_push",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("a1b2c3d"),
+				trunkFF("a1b2c3d", 4),
 				promptOrphanedMetadata(engine.OrphanedMetadataInfo{
 					BranchName: "feat-wip",
 					LocalMeta:  metaWith("WIP", git.LockReasonUser),
@@ -296,7 +361,7 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "github_pr_updated",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("a1b2c3d"),
+				trunkFF("a1b2c3d", 4),
 				phaseStarted(syncAction.PhaseGitHub),
 				githubUpdatingPR("feat-api"),
 				githubMessage("Updated 1 PR description"),
@@ -307,7 +372,7 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "full_sync",
 			steps: []step{
 				phaseStarted(syncAction.PhaseTrunk),
-				trunkFF("9f8e7d6"),
+				trunkFF("9f8e7d6", 4),
 				phaseStarted(syncAction.PhaseGitHub),
 				githubMessage("Updated 2 PR descriptions"),
 				phaseStarted(syncAction.PhaseBranches),

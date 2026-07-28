@@ -30,6 +30,10 @@ type Options struct {
 	// SelectedChildren is used to specify which children to move during insert
 	// in non-interactive mode (mostly for tests)
 	SelectedChildren []string
+	// Onto creates the branch as a tracked child of this branch instead of the
+	// current branch, without checking it out. Mutually exclusive with
+	// Worktree and Insert.
+	Onto string
 	// Worktree creates a dedicated worktree for this stack (only valid from trunk)
 	Worktree bool
 	// AllowEmpty permits creating a branch with no commit when the working tree
@@ -64,11 +68,27 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		}
 	}
 
+	// Validate --onto: it replaces the implicit "parent is the current
+	// branch" behavior, so it can't be combined with flags that also depend
+	// on that assumption.
+	if opts.Onto != "" {
+		if opts.Worktree {
+			return Result{}, fmt.Errorf("--onto cannot be combined with --worktree/-w")
+		}
+		if opts.Insert {
+			return Result{}, fmt.Errorf("--onto cannot be combined with --insert/-i")
+		}
+		if err := validateOntoTarget(eng, opts.Onto); err != nil {
+			return Result{}, err
+		}
+	}
+
 	// Take snapshot before modifying the repository
 	snapshotOpts := actions.NewSnapshot("create",
 		actions.WithArg(opts.BranchName),
 		actions.WithFlagValue("-m", opts.Message),
 		actions.WithFlagValue("--scope", opts.Scope),
+		actions.WithFlagValue("--onto", opts.Onto),
 		actions.WithFlag(opts.All, "--all"),
 		actions.WithFlag(opts.Insert, "--insert"),
 		actions.WithFlag(opts.Patch, "--patch"),
@@ -182,9 +202,36 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		return Result{}, fmt.Errorf("branch %s already exists", branchName)
 	}
 
-	// Create and checkout new branch
+	// Create and checkout new branch. With --onto, the branch is created at
+	// the target's tip SHA (not current HEAD) and tracked immediately, before
+	// checkout, so the divergence point stackit records is the target's tip
+	// rather than a merge-base that could wander into unrelated history the
+	// current branch happens to share with the target.
+	parentBranch := currentBranch
 	h.OnStep(StepBranchCreate, handler.StatusStarted, fmt.Sprintf("Creating branch %s", branchName))
-	if err := eng.CreateAndCheckoutBranch(ctx.Context, branch); err != nil {
+	if opts.Onto != "" {
+		parentBranch = opts.Onto
+		ontoBranch := eng.GetBranch(opts.Onto)
+		ontoSHA, err := ontoBranch.GetRevision()
+		if err != nil {
+			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
+			return Result{}, fmt.Errorf("failed to resolve %s: %w", opts.Onto, err)
+		}
+		if err := eng.CreateBranch(ctx.Context, branchName, ontoSHA); err != nil {
+			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
+			return Result{}, fmt.Errorf("failed to create branch: %w", err)
+		}
+		if err := eng.TrackBranch(ctx.Context, branchName, opts.Onto); err != nil {
+			_ = eng.DeleteBranch(ctx.Context, branch)
+			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
+			return Result{}, fmt.Errorf("failed to track branch: %w", err)
+		}
+		if err := eng.CheckoutBranch(ctx.Context, branch); err != nil {
+			_ = eng.DeleteBranch(ctx.Context, branch)
+			h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
+			return Result{}, fmt.Errorf("failed to check out %s onto %s: %w", branchName, opts.Onto, err)
+		}
+	} else if err := eng.CreateAndCheckoutBranch(ctx.Context, branch); err != nil {
 		h.OnStep(StepBranchCreate, handler.StatusFailed, err.Error())
 		return Result{}, fmt.Errorf("failed to create branch: %w", err)
 	}
@@ -207,14 +254,19 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		h.OnStep(StepCommit, handler.StatusSkipped, "No staged changes")
 	}
 
-	// Track the branch with current branch as parent
-	h.OnStep(StepTracking, handler.StatusStarted, "Setting up branch tracking")
-	if err := eng.TrackBranch(ctx.Context, branchName, currentBranch); err != nil {
-		// Log error but don't fail - branch is created, just not tracked
-		h.OnStep(StepTracking, handler.StatusFailed, err.Error())
-		out.Info("Warning: failed to track branch: %v", err)
-	} else {
-		h.OnStep(StepTracking, handler.StatusCompleted, "Branch tracked")
+	// Track the branch with its parent. With --onto, tracking already happened
+	// before checkout (see above) so the divergence point is correct; here we
+	// only need to track the common case, where the parent is the branch we
+	// started from.
+	if opts.Onto == "" {
+		h.OnStep(StepTracking, handler.StatusStarted, "Setting up branch tracking")
+		if err := eng.TrackBranch(ctx.Context, branchName, currentBranch); err != nil {
+			// Log error but don't fail - branch is created, just not tracked
+			h.OnStep(StepTracking, handler.StatusFailed, err.Error())
+			out.Info("Warning: failed to track branch: %v", err)
+		} else {
+			h.OnStep(StepTracking, handler.StatusCompleted, "Branch tracked")
+		}
 	}
 
 	// Opportunistically configure the metadata fetch refspec so a plain
@@ -225,7 +277,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		out.Debug("Failed to configure metadata refspec: %v", err)
 	}
 
-	ctx.Logger.Info("branch created name=%v parent=%v hasCommit=%v", branchName, currentBranch, hasStaged)
+	ctx.Logger.Info("branch created name=%v parent=%v hasCommit=%v", branchName, parentBranch, hasStaged)
 
 	// Create worktree if requested
 	var worktreePath string
@@ -291,7 +343,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 
 	result := Result{
 		BranchName:   branchName,
-		ParentBranch: currentBranch,
+		ParentBranch: parentBranch,
 		HasCommit:    hasStaged,
 		WorktreePath: worktreePath,
 	}
@@ -317,4 +369,27 @@ func determineBranch(ctx *app.Context, opts *Options, commitMessage string, scop
 	}
 
 	return ctx.Engine.GetBranch(branchName), nil
+}
+
+// validateOntoTarget checks that --onto refers to a branch the new branch can
+// be safely parented on: it must exist, be trunk or a stackit-tracked branch
+// (not a plain untracked git branch), not be a worktree anchor, and not be
+// locked or frozen.
+func validateOntoTarget(eng engine.Engine, ontoName string) error {
+	ontoBranch := eng.GetBranch(ontoName)
+
+	if ontoBranch.IsWorktreeAnchor() {
+		return fmt.Errorf("cannot create a branch onto worktree anchor %q; use 'stackit create' inside that worktree instead", ontoName)
+	}
+
+	switch {
+	case ontoBranch.IsTrunk():
+		return nil
+	case ontoBranch.IsTracked():
+		return ontoBranch.EnsureCanModify()
+	case eng.BranchNames().Contains(ontoName):
+		return fmt.Errorf("branch %q is not tracked by stackit; track it first with 'stackit track', or choose a tracked branch", ontoName)
+	default:
+		return fmt.Errorf("branch %q does not exist", ontoName)
+	}
 }

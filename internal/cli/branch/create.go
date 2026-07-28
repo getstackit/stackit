@@ -18,6 +18,7 @@ func NewCreateCmd() *cobra.Command {
 		insert      bool
 		message     string
 		messageFile string
+		onto        string
 		patch       bool
 		scope       string
 		update      bool
@@ -37,10 +38,16 @@ If you have any unstaged changes, you will be asked whether you'd like to stage 
 as a "forgot to stage" mistake and rejected — stage them, pass --all, or pass
 --allow-empty to create an empty branch anyway.
 
+Use --onto to create the branch as a child of a specific branch instead of
+the current one, without checking that branch out first. This also works
+when the target is checked out in another worktree. --onto cannot be
+combined with --worktree/-w or --insert/-i.
+
 Examples:
   stackit create -m "feat: add login"             # Inline message
   stackit create feature -F /tmp/msg              # Read message from a file
-  printf "feat: add login" | stackit create -F -  # Read message from stdin`,
+  printf "feat: add login" | stackit create -F -  # Read message from stdin
+  stackit create feature --onto main -m "feat: x" # Branch onto main directly`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
@@ -66,6 +73,7 @@ Examples:
 					Scope:         scope,
 					All:           all,
 					Insert:        insert,
+					Onto:          onto,
 					Patch:         patch,
 					Update:        update,
 					Verbose:       verbose,
@@ -100,6 +108,7 @@ Examples:
 	cmd.Flags().BoolVarP(&insert, "insert", "i", false, "Insert this branch between the current branch and its child. If there are multiple children, prompts you to select which should be moved onto the new branch")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "Specify a commit message")
 	cmd.Flags().StringVarP(&messageFile, "message-file", "F", "", "Read commit message from a file (use \"-\" for stdin). Mutually exclusive with --message.")
+	cmd.Flags().StringVar(&onto, "onto", "", "Create the branch as a tracked child of this branch, without checking it out first. Cannot be combined with --worktree/-w or --insert/-i.")
 	cmd.Flags().BoolVarP(&patch, "patch", "p", false, "Pick hunks to stage before committing")
 	cmd.Flags().StringVar(&scope, "scope", "", "Set a scope (e.g., Jira ticket ID, Linear ID) for the new branch. If not provided, inherits from parent branch")
 	cmd.Flags().BoolVarP(&update, "update", "u", false, "Stage all updates to tracked files before creating the branch")

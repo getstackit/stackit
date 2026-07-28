@@ -117,6 +117,10 @@ type BranchInfo interface {
 	// additions/deletions) for every branch in one batched pass — a use-case
 	// bundle over the per-concern readers, for annotation builders.
 	BatchBranchStats(branches Branches) map[string]BranchStat
+	// CommitCountBetween returns how many commits are in (base, head], for
+	// callers holding two plain revisions rather than a branch set — e.g.
+	// reporting how far trunk moved during a sync.
+	CommitCountBetween(ctx context.Context, rr git.RevRange) (int, error)
 }
 
 // GitDiffer handles diff and merge operations

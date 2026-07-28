@@ -115,6 +115,7 @@ Commit:  ` + commit + `
 	rootCmd.AddCommand(navigation.NewParentCmd())
 	rootCmd.AddCommand(branch.NewPopCmd())
 	rootCmd.AddCommand(stack.NewPluckCmd())
+	rootCmd.AddCommand(navigation.NewPrCmd())
 	rootCmd.AddCommand(newRebaseCmd())
 	rootCmd.AddCommand(branch.NewRenameCmd())
 	rootCmd.AddCommand(stack.NewReorderCmd())

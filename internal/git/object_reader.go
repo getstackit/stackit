@@ -117,7 +117,13 @@ func (r *objectReader) ReadObject(ref string) (string, bool, error) {
 			return "", false, fmt.Errorf("object reader write after restart: %w", err)
 		}
 	}
-	return r.readResponse(ref)
+	content, found, err := r.readResponse(ref)
+	if err != nil {
+		// Stdout stream is broken; discard the process so the next call
+		// restarts, mirroring ReadObjectsBatch.
+		r.killLocked()
+	}
+	return content, found, err
 }
 
 // ReadObjectsBatch sends all refs in one burst and reads all responses in order.

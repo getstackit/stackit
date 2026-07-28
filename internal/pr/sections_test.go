@@ -127,6 +127,44 @@ func TestCreatePRBodyFooter(t *testing.T) {
 	})
 }
 
+func TestStackedPRNotice(t *testing.T) {
+	t.Parallel()
+
+	newStack := func(t *testing.T) *scenario.Scenario {
+		t.Helper()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit().
+			CreateBranch("feature-a").
+			Commit("a1").
+			TrackBranch("feature-a", "main").
+			CreateBranch("feature-b").
+			Commit("b1").
+			TrackBranch("feature-b", "feature-a")
+
+		prNum := 1
+		require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("feature-a"),
+			engine.NewPrInfo(&prNum, "Title A", "Body A", "OPEN", "main", "http://pr/1", false)))
+		prNum2 := 2
+		require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("feature-b"),
+			engine.NewPrInfo(&prNum2, "Title B", "Body B", "OPEN", "feature-a", "http://pr/2", false)))
+		return s
+	}
+
+	opts := NavigationOptions{When: "always", Marker: "👈"}
+
+	t.Run("shown when the PR is based on another branch", func(t *testing.T) {
+		t.Parallel()
+		footer := CreatePRBodyFooterWithOptions("feature-b", newStack(t).Engine, opts)
+		assert.Contains(t, footer, "**Stacked PR**: based on `feature-a`, not `main`")
+	})
+
+	t.Run("hidden when the PR is based on trunk", func(t *testing.T) {
+		t.Parallel()
+		footer := CreatePRBodyFooterWithOptions("feature-a", newStack(t).Engine, opts)
+		assert.NotContains(t, footer, "**Stacked PR**")
+	})
+}
+
 func TestShouldShowNavigation(t *testing.T) {
 	t.Parallel()
 

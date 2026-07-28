@@ -148,6 +148,14 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 			fmt.Fprintf(&content, "**Scope**: %s\n\n", scope.String())
 		}
 
+		// Explain what a stacked PR means when this PR targets another PR's branch
+		// rather than trunk — merging it in the GitHub UI lands it on the parent, not trunk.
+		if parent := branchObj.GetParent(); parent != nil && !parent.IsTrunk() {
+			fmt.Fprintf(&content,
+				"> ⚠️ **Stacked PR**: based on `%s`, not `%s`. Merging here in the GitHub UI merges into `%s` — the PRs below must land first. Run `st merge` to merge the stack in order.\n\n",
+				parent.GetName(), eng.Trunk().GetName(), parent.GetName())
+		}
+
 		// Add notice if present in PrInfo
 		prInfo, _ := branchObj.GetPrInfo()
 		if prInfo != nil {

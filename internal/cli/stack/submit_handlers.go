@@ -91,7 +91,7 @@ func (p *planPrinter) SetStack(stack submit.StackSnapshot) {
 
 // decoratedName is the display name plus scope and worktree annotations.
 func (p *planPrinter) decoratedName(branchName string) string {
-	name := submitComponent.DisplayBranchName(branchName)
+	name := style.DisplayBranchName(branchName)
 	if scope := p.scopes[branchName]; scope != "" {
 		name += " [" + scope + "]"
 	}
@@ -237,7 +237,7 @@ func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
 // back to the trunk name.
 func (p *planPrinter) soloBase(branchName string) string {
 	if parent := p.parents[branchName]; parent != "" {
-		return submitComponent.DisplayBranchName(parent)
+		return style.DisplayBranchName(parent)
 	}
 	if p.trunk != "" {
 		return p.trunk
@@ -448,7 +448,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			if ref := submitComponent.PRRef(item.toSubmitItem()); ref != "" {
 				detail = ref + " " + actionDone
 			}
-			h.Output.Info("  ✓ %s %s", submitComponent.DisplayBranchName(ev.BranchName), detail)
+			h.Output.Info("  ✓ %s %s", style.DisplayBranchName(ev.BranchName), detail)
 			// A newly created PR is the one the user needs to open; updated
 			// PRs rarely need their URL re-pasted.
 			if item.action == engine.SubmitActionCreate && item.url != "" {
@@ -460,11 +460,11 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				h.Output.Info("  ✗ failed: %v", ev.Error)
 				return
 			}
-			h.Output.Info("  ✗ %s failed: %v", submitComponent.DisplayBranchName(ev.BranchName), ev.Error)
+			h.Output.Info("  ✗ %s failed: %v", style.DisplayBranchName(ev.BranchName), ev.Error)
 		}
 
 	case submit.BranchWarningEvent:
-		h.Output.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
+		h.Output.Warn("%s: %s", style.DisplayBranchName(ev.BranchName), ev.Warning)
 
 	case submit.GitHubStackSyncedEvent:
 		h.Output.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(ev.Action), ev.Number, formatGitHubStackPRs(ev.PullRequests))
@@ -666,7 +666,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			})
 			return
 		}
-		h.out.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
+		h.out.Warn("%s: %s", style.DisplayBranchName(ev.BranchName), ev.Warning)
 
 	case submit.GitHubStackSyncedEvent:
 		if h.runner.IsRunning() {

@@ -82,6 +82,12 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 				}
 			}
 
+			// Reparenting travels with every outcome: a branch can be reparented
+			// and rebased, or reparented and already current.
+			if p.Reparented {
+				summary.BranchesReparented++
+			}
+
 			switch p.Result {
 			case engine.RestackDone:
 				summary.BranchesRestacked++
@@ -96,6 +102,9 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					IsCurrent:           p.IsCurrent,
 					Parent:              parentName,
 					RerereResolvedCount: p.RerereResolvedCount,
+					Reparented:          p.Reparented,
+					OldParent:           p.OldParent,
+					NewParent:           p.NewParent,
 				})
 			case engine.RestackUnneeded:
 				handler.EmitEvent(Event{
@@ -108,6 +117,9 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					HeldBy:     p.HeldBy,
 					IsCurrent:  p.IsCurrent,
 					Parent:     parentName,
+					Reparented: p.Reparented,
+					OldParent:  p.OldParent,
+					NewParent:  p.NewParent,
 				})
 			case engine.RestackConflict:
 				summary.BranchesSkipped++
@@ -122,6 +134,9 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					Frozen:     p.Frozen,
 					IsCurrent:  p.IsCurrent,
 					Parent:     parentName,
+					Reparented: p.Reparented,
+					OldParent:  p.OldParent,
+					NewParent:  p.NewParent,
 				})
 			case engine.RestackBlocked:
 				summary.BranchesBlocked++
@@ -135,6 +150,9 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					Frozen:     p.Frozen,
 					IsCurrent:  p.IsCurrent,
 					Parent:     parentName,
+					Reparented: p.Reparented,
+					OldParent:  p.OldParent,
+					NewParent:  p.NewParent,
 				})
 			}
 		}, actions.ConflictModeContinue); err != nil {

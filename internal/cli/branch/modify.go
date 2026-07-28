@@ -16,6 +16,7 @@ func NewModifyCmd() *cobra.Command {
 		commit            bool
 		edit              bool
 		interactiveRebase bool
+		into              string
 		message           string
 		messageFile       string
 		noEdit            bool
@@ -40,7 +41,8 @@ Examples:
   stackit modify -a -e                    # Stage all and amend (opens editor)
   stackit modify -p                       # Interactive patch staging then amend
   stackit modify -c -a -m "New commit"    # Create new commit instead of amending
-  stackit modify --interactive-rebase     # Interactive rebase on branch commits`,
+  stackit modify --interactive-rebase     # Interactive rebase on branch commits
+  stackit modify -a --into feature-a      # Amend a downstack ancestor without checking it out`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
@@ -64,6 +66,7 @@ Examples:
 					ResetAuthor:       resetAuthor,
 					Verbose:           verbose,
 					InteractiveRebase: interactiveRebase,
+					Into:              into,
 				})
 			})
 		},
@@ -74,6 +77,7 @@ Examples:
 	cmd.Flags().BoolVarP(&commit, "commit", "c", false, "Create a new commit instead of amending the current commit. If this branch has no commits, this command always creates a new commit.")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "Open an editor to edit the commit message.")
 	cmd.Flags().BoolVar(&interactiveRebase, "interactive-rebase", false, "Ignore all other flags and start a git interactive rebase on the commits in this branch.")
+	cmd.Flags().StringVar(&into, "into", "", "Modify a downstack ancestor branch instead of the current branch, without checking it out first.")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "The message for the new or amended commit. If passed, no editor is opened.")
 	cmd.Flags().StringVarP(&messageFile, "message-file", "F", "", "Read commit message from a file (use \"-\" for stdin). Mutually exclusive with --message.")
 	cmd.Flags().BoolVarP(&noEdit, "no-edit", "n", false, "Don't modify the existing commit message. Takes precedence over --edit.")
@@ -81,6 +85,8 @@ Examples:
 	cmd.Flags().BoolVar(&resetAuthor, "reset-author", false, "Set the author of the commit to the current user if amending.")
 	cmd.Flags().BoolVarP(&update, "update", "u", false, "Stage all updates to tracked files before committing.")
 	cmd.Flags().CountVarP(&verbose, "verbose", "v", "Show unified diff between the HEAD commit and what would be committed at the bottom of the commit message template.")
+
+	_ = cmd.RegisterFlagCompletionFunc("into", common.CompleteBranches)
 
 	return cmd
 }

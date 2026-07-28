@@ -1,11 +1,13 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/utils"
@@ -28,10 +30,14 @@ type ModifyOptions struct {
 
 	// Interactive rebase
 	InteractiveRebase bool // Start interactive rebase on branch commits
+
+	// Into targets a downstack ancestor of the current branch instead of the
+	// current branch itself. Empty means "modify the current branch".
+	Into string
 }
 
 // ModifyAction performs the modify operation
-func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
+func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	eng := ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
@@ -40,8 +46,23 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 	if err := validation.ModifyBranchChain(eng, "modify").Validate(); err != nil {
 		return err
 	}
-	currentBranch := eng.CurrentBranch().GetName()
-	currentBranchObj := eng.GetBranch(currentBranch)
+	originalBranchName := eng.CurrentBranch().GetName()
+
+	if opts.Into != "" && opts.InteractiveRebase {
+		return fmt.Errorf("--into cannot be combined with --interactive-rebase")
+	}
+
+	targetBranchName := originalBranchName
+	if opts.Into != "" {
+		if err := validateModifyIntoTarget(eng, originalBranchName, opts.Into); err != nil {
+			return err
+		}
+		if err := ensureModifyTargetNotCheckedOutElsewhere(gctx, eng, opts.Into); err != nil {
+			return err
+		}
+		targetBranchName = opts.Into
+	}
+	targetBranchObj := eng.GetBranch(targetBranchName)
 
 	// Handle interactive rebase separately
 	if opts.InteractiveRebase {
@@ -53,9 +74,29 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 		return err
 	}
 
+	if targetBranchName != originalBranchName {
+		if err := eng.CheckoutBranch(gctx, targetBranchObj); err != nil {
+			return fmt.Errorf("failed to checkout %s: %w", targetBranchName, err)
+		}
+		out.Info("Modifying downstack branch %s.", output.CurrentBranch(targetBranchName))
+		defer func() {
+			// A conflict workflow deliberately leaves HEAD detached (see
+			// EnterConflictWorkflow); forcing a checkout back here would
+			// defeat that safety measure. `stackit continue`/`abort` own
+			// recovery from that state instead.
+			var conflictErr *errors.ConflictWorkflowError
+			if errors.As(err, &conflictErr) {
+				return
+			}
+			if checkoutErr := eng.CheckoutBranch(gctx, eng.GetBranch(originalBranchName)); checkoutErr != nil {
+				out.Error("Failed to return to %s: %v", originalBranchName, checkoutErr)
+			}
+		}()
+	}
+
 	// Check if branch is empty when amending
 	if !opts.CreateCommit {
-		isEmpty, err := eng.IsBranchEmpty(gctx, currentBranch)
+		isEmpty, err := eng.IsBranchEmpty(gctx, targetBranchName)
 		if err != nil {
 			return fmt.Errorf("failed to check if branch is empty: %w", err)
 		}
@@ -121,14 +162,15 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 
 	// Log success
 	if opts.CreateCommit {
-		out.Info("Created new commit in %s.", output.CurrentBranch(currentBranch))
+		out.Info("Created new commit in %s.", output.CurrentBranch(targetBranchName))
 	} else {
-		out.Info("Amended commit in %s.", output.CurrentBranch(currentBranch))
+		out.Info("Amended commit in %s.", output.CurrentBranch(targetBranchName))
 	}
 
-	// Restack upstack branches
+	// Restack upstack branches (rooted at the target so descendants of a
+	// downstack --into target, including the original current branch, are covered)
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	upstackBranches := graph.Range(currentBranchObj, engine.StackRange{RecursiveChildren: true})
+	upstackBranches := graph.Range(targetBranchObj, engine.StackRange{RecursiveChildren: true})
 
 	if len(upstackBranches) > 0 {
 		out.Info("Restacking %d upstack branch(es)...", len(upstackBranches))
@@ -137,6 +179,46 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) error {
 		}
 	}
 
+	return nil
+}
+
+// validateModifyIntoTarget ensures --into targets a genuine, modifiable
+// downstack ancestor of the current branch.
+func validateModifyIntoTarget(eng engine.Engine, currentBranchName, targetName string) error {
+	if !eng.BranchNames().Contains(targetName) {
+		return fmt.Errorf("branch %s does not exist", targetName)
+	}
+	if targetName == currentBranchName {
+		return fmt.Errorf("--into %s is the current branch; run modify without --into instead", targetName)
+	}
+
+	if err := (validation.Chain{
+		validation.BranchMustNotBeTrunk(eng, targetName),
+		validation.BranchMustBeTracked(eng, targetName),
+		validation.BranchMustBeModifiable(eng, targetName),
+	}).Validate(); err != nil {
+		return err
+	}
+
+	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	downstack := graph.Downstack(eng.GetBranch(currentBranchName), false)
+	if !downstack.Contains(targetName) {
+		return fmt.Errorf("branch %s is not a downstack ancestor of %s", targetName, currentBranchName)
+	}
+	return nil
+}
+
+// ensureModifyTargetNotCheckedOutElsewhere refuses to modify a branch that is
+// checked out in another worktree, pointing the user at that worktree instead
+// of silently detaching HEAD there (which is what a plain CheckoutBranch would do).
+func ensureModifyTargetNotCheckedOutElsewhere(ctx context.Context, eng engine.Engine, targetName string) error {
+	worktrees, err := eng.ListWorktrees(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check worktrees: %w", err)
+	}
+	if path := worktrees.PathForBranch(targetName); path != "" {
+		return fmt.Errorf("branch %s is checked out in worktree %s; run 'stackit modify' from there, or 'cd %s && stackit modify'", targetName, path, path)
+	}
 	return nil
 }
 

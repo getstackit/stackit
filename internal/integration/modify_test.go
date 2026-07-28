@@ -98,3 +98,97 @@ func TestModifyWorkflow(t *testing.T) {
 		sh.Checkout("feature-c").Run("info").OutputContains("feature-c")
 	})
 }
+
+func TestModifyInto(t *testing.T) {
+	t.Parallel()
+
+	t.Run("amends a downstack ancestor without checking it out, then returns", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.CreateLinearStack3().
+			OnBranch("c")
+
+		sh.Write("a_extra", "extra content for a").
+			Run("modify --into a -n").
+			OutputContains("Modifying downstack branch a").
+			OutputContains("Amended commit in a").
+			OutputContains("Restacking").
+			OnBranch("c")
+
+		sh.Git("show a:a_extra_test.txt").
+			OutputContains("extra content for a")
+
+		sh.Checkout("b").Run("info").OutputContains("b")
+		sh.Checkout("c").Run("info").OutputContains("c")
+	})
+
+	t.Run("with --commit creates a new commit on the target and restacks", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.CreateLinearStack3().
+			OnBranch("c").
+			CommitCount("main", "a", 1)
+
+		sh.Write("a_extra", "extra content").
+			Run("modify --into a -c -m 'Additional work on A'").
+			OutputContains("Created new commit in a").
+			CommitCount("main", "a", 2).
+			OnBranch("c")
+	})
+
+	t.Run("refuses a target that is not a downstack ancestor", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.CreateDiamondStack().
+			OnBranch("child2")
+
+		sh.Write("extra", "extra content").
+			RunExpectError("modify --into child1 -n").
+			OutputContains("not a downstack ancestor")
+	})
+
+	t.Run("refuses the current branch itself", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.CreateLinearStack3().
+			OnBranch("c")
+
+		sh.Write("extra", "extra content").
+			RunExpectError("modify --into c -n").
+			OutputContains("is the current branch")
+	})
+
+	t.Run("refuses a nonexistent branch", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.CreateLinearStack3().
+			OnBranch("c")
+
+		sh.Write("extra", "extra content").
+			RunExpectError("modify --into does-not-exist -n").
+			OutputContains("does not exist")
+	})
+
+	t.Run("refuses a target checked out in another worktree", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.CreateLinearStack3().
+			OnBranch("c")
+
+		worktreeDir := t.TempDir()
+		sh.Git("worktree add " + worktreeDir + " a")
+
+		sh.Write("extra", "extra content").
+			RunExpectError("modify --into a -n").
+			OutputContains("checked out in worktree").
+			OutputContains(worktreeDir)
+
+		sh.OnBranch("c")
+	})
+}

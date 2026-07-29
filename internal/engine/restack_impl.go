@@ -373,7 +373,16 @@ func (e *engineImpl) restackBranch(
 	}
 
 	// Get current SHAs for optimistic locking
-	oldBranchSHA, _ := branch.GetRevision()
+	oldBranchSHA, err := branch.GetRevision()
+	if err != nil {
+		return RestackBranchResult{
+			Result:            RestackConflict,
+			RebasedBranchBase: parentRev,
+			Reparented:        reparented,
+			OldParent:         oldParent,
+			NewParent:         parent,
+		}, fmt.Errorf("failed to get current branch revision for %s: %w", branchName, err)
+	}
 	oldMetadataSHA := snap.metaRefSHAs[branchName]
 
 	// Prepare metadata update
@@ -564,7 +573,10 @@ func (e *engineImpl) applyBranchAndMetadata(
 		}
 	}
 
-	oldBranchSHA, _ := branch.GetRevision()
+	oldBranchSHA, err := branch.GetRevision()
+	if err != nil {
+		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to get current branch revision for %s: %w", branchName, err)
+	}
 	oldMetadataSHA := snap.metaRefSHAs[branchName]
 
 	updatedMeta := meta.WithParentBranchRevision(&parentRev)

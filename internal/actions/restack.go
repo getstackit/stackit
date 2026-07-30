@@ -457,35 +457,59 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 	}}, nil
 }
 
-// skipDirtyWorktreeStacks drops every branch whose stack is rooted at a managed
-// worktree with uncommitted changes, warning once per skipped stack.
+// skipDirtyWorktreeStacks drops branches that cannot be restacked without
+// leaving a worktree out of sync with its own branch ref, warning once for each.
 //
-// Restacking such a stack fast-forwards the anchor's ref, but the working-directory
-// reset that would realign the anchor's worktree is deliberately suppressed while
-// that worktree is dirty (it would discard the user's uncommitted edits). The
-// worktree is then left reporting trunk's new files as deleted, so a `git add -A`
-// there would commit a revert of trunk. Leaving the stack alone until the worktree
-// is clean avoids that state entirely, and it self-heals on the next restack once
-// the user commits or stashes.
+// Moving a branch's ref is only half the operation: the worktree holding that
+// branch has to be reset to match. That reset is suppressed while the worktree
+// has uncommitted tracked changes, because it would discard them — which leaves
+// the worktree on the old commit's content under a moved ref. `git status` then
+// reports the new commit's files as deleted, and the next `stackit modify -a`
+// commits that deletion into the stack. Not restacking at all is the safe
+// outcome, and it self-heals once the user commits or stashes.
 //
-// Deliberately mirrors — rather than shares — sync's dirtyAnchorSet handling in
-// internal/actions/sync/sync.go: that type is package-private to sync, and
-// exporting it would mean touching every sync call site.
+// Two cases, because the unit that must be held back differs:
+//
+//   - A dirty *managed* worktree holds a whole stack, and its anchor is that
+//     stack's root, so the entire stack is dropped. This also matches what sync
+//     has always done (internal/actions/sync/sync.go).
+//   - Any other worktree — including the main one, which `stackit restack` is
+//     normally run from — holds a single branch, so only that branch is dropped.
+//     Its descendants stay: they are still correctly based on a branch that did
+//     not move, so restacking them is a no-op rather than a hazard.
+//
+// Deliberately mirrors — rather than shares — sync's dirtyAnchorSet handling:
+// that type is package-private to sync, and exporting it would mean touching
+// every sync call site.
 func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []restackBranchGroup {
 	eng := ctx.Engine
-	worktrees, err := eng.ListManagedWorktrees()
-	if err != nil || len(worktrees) == 0 {
-		return groups
-	}
 
 	dirtyAnchors := make(map[string]bool)
-	for _, wt := range worktrees {
-		if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
-			dirtyAnchors[wt.AnchorBranch] = true
-			ctx.Output.Warn("Skipping stack rooted at %s (worktree has uncommitted changes)", wt.AnchorBranch)
+	if managed, err := eng.ListManagedWorktrees(); err == nil {
+		for _, wt := range managed {
+			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
+				dirtyAnchors[wt.AnchorBranch] = true
+				ctx.Output.Warn("Skipping stack rooted at %s (worktree %s has uncommitted changes)", wt.AnchorBranch, wt.Path)
+			}
 		}
 	}
-	if len(dirtyAnchors) == 0 {
+
+	// Tracked changes only here: an untracked file cannot be destroyed by the
+	// reset, so it is no reason to hold a branch back.
+	dirtyBranches := make(map[string]bool)
+	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
+		for _, wt := range worktrees {
+			if wt.Branch == "" || dirtyAnchors[wt.Branch] {
+				continue
+			}
+			if hasChanges, _ := eng.WorktreeHasTrackedChanges(ctx.Context, wt.Path); hasChanges {
+				dirtyBranches[wt.Branch] = true
+				ctx.Output.Warn("Skipping %s (worktree %s has uncommitted changes; commit or stash them, then restack again)", wt.Branch, wt.Path)
+			}
+		}
+	}
+
+	if len(dirtyAnchors) == 0 && len(dirtyBranches) == 0 {
 		return groups
 	}
 
@@ -493,9 +517,10 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 	for _, g := range groups {
 		builder := engine.NewBranchesBuilder(len(g.branches))
 		for _, branch := range g.branches {
-			if !dirtyAnchors[eng.GetStackRootForBranch(branch)] {
-				builder.Add(branch)
+			if dirtyAnchors[eng.GetStackRootForBranch(branch)] || dirtyBranches[branch.GetName()] {
+				continue
 			}
+			builder.Add(branch)
 		}
 		if built := builder.Build(); len(built) > 0 {
 			kept = append(kept, restackBranchGroup{rootBranch: g.rootBranch, branches: built})

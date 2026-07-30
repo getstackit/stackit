@@ -158,7 +158,10 @@ func TestRestackWorktreeAnchorSkipsDirtyStack(t *testing.T) {
 	sh.Checkout("main").
 		Commit("trunk1.txt", "chore: trunk commit 1").
 		Run("restack --all-stacks").
-		OutputContains("worktree has uncommitted changes")
+		OutputContains("Skipping stack rooted at").
+		OutputContains("has uncommitted changes").
+		// The path is what tells the user where to go and clean up.
+		OutputContains(worktreePath)
 
 	// The anchor is left where it was rather than moving to trunk without its
 	// working directory.

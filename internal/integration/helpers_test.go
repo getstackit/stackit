@@ -270,6 +270,17 @@ func (s *TestShell) WriteFile(filename, content string) *TestShell {
 	return s.Git("add " + filename)
 }
 
+// WriteUntracked creates a file and deliberately does NOT stage it, so it shows
+// up as untracked. Use it to assert that operations gated on a "dirty" worktree
+// treat untracked files differently from real uncommitted work.
+func (s *TestShell) WriteUntracked(filename, content string) *TestShell {
+	s.t.Helper()
+	filePath := filepath.Join(s.scene.Dir, filename)
+	err := os.WriteFile(filePath, []byte(content), 0644)
+	require.NoError(s.t, err, "failed to write file %s", filename)
+	return s
+}
+
 // SetWorktreeBasePath sets the worktree base path for this repo.
 func (s *TestShell) SetWorktreeBasePath(path string) *TestShell {
 	s.t.Helper()

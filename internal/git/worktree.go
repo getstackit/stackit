@@ -306,6 +306,27 @@ func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath
 	return strings.TrimSpace(out) != "", nil
 }
 
+// WorktreeHasTrackedChanges reports whether a worktree has staged or unstaged
+// changes to tracked files, ignoring untracked ones — equivalent to
+// `git status --porcelain --untracked-files=no` returning empty output.
+//
+// This is the right question when deciding whether a `git reset --hard` would
+// destroy something: reset never touches untracked files, so counting them as
+// "dirty" suppresses a reset that could not have harmed them. Use
+// WorktreeHasUncommittedChanges instead when deciding whether it is polite to
+// operate on someone's worktree at all, where a stray untracked file still
+// signals work in progress.
+func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error) {
+	out, err := r.RunGitCommandRawWithContext(ctx,
+		"-C", worktreePath,
+		"status", "--porcelain", "--untracked-files=no",
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to check tracked status in worktree %s: %w", worktreePath, err)
+	}
+	return strings.TrimSpace(out) != "", nil
+}
+
 // GetWorktreeCurrentBranch returns the name of the branch currently checked out in a worktree.
 // Returns empty string if the worktree is in detached HEAD state. Real failures
 // (worktree missing, repo corruption, context cancellation) are surfaced — git

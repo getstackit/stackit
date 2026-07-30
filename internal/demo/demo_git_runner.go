@@ -509,6 +509,10 @@ func (d *demoGitRunner) WorktreeHasUncommittedChanges(_ context.Context, _ strin
 	return false, nil
 }
 
+func (d *demoGitRunner) WorktreeHasTrackedChanges(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
+
 func (d *demoGitRunner) UpdateRefWithLog(_ context.Context, _, _, _ string) error {
 	return nil
 }

@@ -82,6 +82,10 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 // fast-forwards the anchor and then unconditionally ran `git reset --hard` on
 // its worktree to match, discarding any uncommitted edit sitting there with no
 // prompt, no warning, and no recovery path.
+//
+// Restack now skips the whole stack while its worktree is dirty, so the anchor
+// stays put rather than moving to trunk without its working directory following.
+// See TestRestackWorktreeAnchorSkipsDirtyStack for that half.
 func TestRestackWorktreeAnchorPreservesUncommittedChanges(t *testing.T) {
 	t.Parallel()
 
@@ -103,17 +107,50 @@ func TestRestackWorktreeAnchorPreservesUncommittedChanges(t *testing.T) {
 
 	sh.Run("restack --all-stacks")
 
-	anchorBranch := findWorktreeAnchor(t, sh)
-	sh.Git("rev-parse main")
-	trunkRev := strings.TrimSpace(sh.Output())
-	sh.Git("rev-parse " + anchorBranch)
-	require.Equal(t, trunkRev, strings.TrimSpace(sh.Output()),
-		"anchor should still fast-forward to trunk even when its worktree is dirty")
-
 	content, err := os.ReadFile(filepath.Join(worktreePath, "init_test.txt"))
 	require.NoError(t, err)
 	require.Equal(t, uncommitted, string(content),
 		"restack must not discard uncommitted changes in the anchor's worktree")
+}
+
+// TestRestackWorktreeAnchorSkipsDirtyStack covers the other half of #1490:
+// suppressing only the working-directory reset would still fast-forward the
+// anchor's ref, leaving its worktree holding the old trunk content. `git status`
+// there then reports trunk's new files as deleted, so a `git add -A` in that
+// worktree would commit a revert of trunk. Restack instead skips the stack
+// entirely — visibly — until the worktree is clean, matching what sync already
+// does (internal/actions/sync/sync.go).
+func TestRestackWorktreeAnchorSkipsDirtyStack(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.SetWorktreeBasePath(t.TempDir())
+
+	sh.Run("worktree create my-wt")
+	sh.Run("worktree open my-wt")
+	worktreePath := strings.TrimSpace(sh.Output())
+
+	anchorBranch := findWorktreeAnchor(t, sh)
+	sh.Git("rev-parse " + anchorBranch)
+	anchorRevBefore := strings.TrimSpace(sh.Output())
+
+	sh.InWorktree(worktreePath).WriteFile("dirty.txt", "uncommitted work")
+
+	sh.Checkout("main").
+		Commit("trunk1.txt", "chore: trunk commit 1").
+		Run("restack --all-stacks").
+		OutputContains("worktree has uncommitted changes")
+
+	// The anchor is left where it was rather than moving to trunk without its
+	// working directory.
+	sh.Git("rev-parse " + anchorBranch)
+	require.Equal(t, anchorRevBefore, strings.TrimSpace(sh.Output()),
+		"dirty anchor must not be fast-forwarded while its worktree has uncommitted changes")
+
+	// And the uncommitted work is still there.
+	content, err := os.ReadFile(filepath.Join(worktreePath, "dirty.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "uncommitted work", string(content))
 }
 
 // findWorktreeAnchor returns the name of the hidden worktree-anchor branch.

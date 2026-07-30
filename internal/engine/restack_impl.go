@@ -66,14 +66,22 @@ func (e *engineImpl) restackWorktreeAnchor(
 	}
 	branchName := branch.GetName()
 
-	trunkRev, err := e.Trunk().GetRevision()
-	if err != nil {
-		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get trunk revision for anchor %s: %w", branchName, err)
+	trunkRev := snap.revs[e.trunk]
+	if trunkRev == "" {
+		var err error
+		trunkRev, err = e.Trunk().GetRevision()
+		if err != nil {
+			return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get trunk revision for anchor %s: %w", branchName, err)
+		}
 	}
 
-	anchorRev, err := branch.GetRevision()
-	if err != nil {
-		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get anchor revision for %s: %w", branchName, err)
+	anchorRev := snap.revs[branchName]
+	if anchorRev == "" {
+		var err error
+		anchorRev, err = branch.GetRevision()
+		if err != nil {
+			return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get anchor revision for %s: %w", branchName, err)
+		}
 	}
 
 	// If already at trunk, nothing to do
@@ -198,16 +206,24 @@ func (e *engineImpl) restackBranch(
 			return RestackBranchResult{Result: RestackUnneeded, Frozen: true}, nil
 		}
 
-		localSha, err := branch.GetRevision()
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get local revision for frozen branch %s: %w", branchName, err)
+		localSha := snap.revs[branchName]
+		if localSha == "" {
+			var err error
+			localSha, err = branch.GetRevision()
+			if err != nil {
+				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get local revision for frozen branch %s: %w", branchName, err)
+			}
 		}
 		if localSha != remoteSha {
 			// Get parent revision for metadata update
 			parentBranch := e.GetBranch(parent)
-			parentRev, err := parentBranch.GetRevision()
-			if err != nil {
-				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get parent revision for %s: %w", branchName, err)
+			parentRev := snap.revs[parent]
+			if parentRev == "" {
+				var err error
+				parentRev, err = parentBranch.GetRevision()
+				if err != nil {
+					return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get parent revision for %s: %w", branchName, err)
+				}
 			}
 
 			// Get current metadata SHA for optimistic locking
@@ -677,9 +693,13 @@ func (e *engineImpl) applyBranchAndMetadata(
 		}
 	}
 
-	oldBranchSHA, err := branch.GetRevision()
-	if err != nil {
-		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to get current branch revision for %s: %w", branchName, err)
+	oldBranchSHA := snap.revs[branchName]
+	if oldBranchSHA == "" {
+		var err error
+		oldBranchSHA, err = branch.GetRevision()
+		if err != nil {
+			return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to get current branch revision for %s: %w", branchName, err)
+		}
 	}
 	oldMetadataSHA := snap.metaRefSHAs[branchName]
 

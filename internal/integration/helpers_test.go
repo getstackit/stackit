@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/utils"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/inprocess"
@@ -46,6 +47,9 @@ func init() {
 		res := runner.Run(workDir, args...)
 		return res.Output, res.Err
 	})
+	// Integration tests run the CLI in-process; never launch a real browser
+	// window for `stackit pr`.
+	actions.SetBrowserOpener(func(string) error { return nil })
 }
 
 // =============================================================================

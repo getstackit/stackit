@@ -20,6 +20,20 @@ type OpenPROptions struct {
 	Stack bool
 }
 
+// openBrowser is the function OpenPRAction uses to open a URL in the user's
+// default browser. Overridable via SetBrowserOpener so tests don't launch
+// real browser windows.
+var openBrowser = utils.OpenBrowser
+
+// SetBrowserOpener overrides the function OpenPRAction uses to open a URL in
+// the browser. Intended for tests; pass nil to restore the default.
+func SetBrowserOpener(fn func(url string) error) {
+	if fn == nil {
+		fn = utils.OpenBrowser
+	}
+	openBrowser = fn
+}
+
 // OpenPRAction resolves the pull request opts identifies and opens it in the
 // default browser.
 func OpenPRAction(ctx *app.Context, opts OpenPROptions) error {
@@ -47,7 +61,7 @@ func OpenPRAction(ctx *app.Context, opts OpenPROptions) error {
 	ctx.Output.Info("Opening %s", prInfo.URL())
 	// Best-effort: environments without a browser (SSH, headless CI) still get
 	// the URL printed above, mirroring submit's --web behavior.
-	if err := utils.OpenBrowser(prInfo.URL()); err != nil {
+	if err := openBrowser(prInfo.URL()); err != nil {
 		ctx.Output.Debug("Failed to open browser: %v", err)
 	}
 	return nil

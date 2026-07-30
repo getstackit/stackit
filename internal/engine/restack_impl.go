@@ -40,7 +40,14 @@ func (e *engineImpl) resetWorktreeIfClean(ctx context.Context, worktreePath stri
 // metadata-ref SHAs from git. It is mutated in place as branches are rebased
 // so later branches in the same pass observe the updated values.
 type restackSnapshot struct {
-	meta        MetaMap
+	meta MetaMap
+	// revs is a read-through cache, not a source of truth. Read it via
+	// engineImpl.branchRev rather than indexing it: a miss yields "", and an
+	// empty SHA passed as a RefUpdate's OldSHA silently disables the
+	// compare-and-swap in UpdateRefsBatch, turning a lost-update guard into a
+	// blind overwrite. Never use a cached revision as a RefUpdate's *NewSHA* —
+	// staleness there is not caught by the compare-and-swap and writes a wrong
+	// value rather than failing.
 	revs        RevisionMap
 	worktrees   git.WorktreeList
 	metaRefSHAs map[string]string
@@ -48,6 +55,26 @@ type restackSnapshot struct {
 	// changes before this restack pass began. Captured once up front — see
 	// resetWorktreeIfClean for why it can't be checked lazily.
 	dirtyWorktrees map[string]bool
+}
+
+// branchRev returns branch's revision from the pass snapshot, falling back to a
+// live read when it isn't cached.
+//
+// This exists so the fallback can't be forgotten. Indexing snap.revs directly
+// yields "" for an absent branch, and an empty OldSHA makes UpdateRefsBatch skip
+// its compare-and-swap entirely — the lost-update hole #1487 closed. Routing
+// every cached revision read through here keeps that a single decision rather
+// than one repeated at each call site.
+//
+// Only safe for values used as a compare-and-swap operand or a comparison: if
+// the cached SHA is stale the swap fails, which is noisy but correct. A value
+// being *written* (a RefUpdate's NewSHA) must be read live — see
+// restackWorktreeAnchor.
+func (e *engineImpl) branchRev(snap *restackSnapshot, branch Branch) (string, error) {
+	if rev, ok := snap.revs.Rev(branch.GetName()); ok && rev != "" {
+		return rev, nil
+	}
+	return branch.GetRevision()
 }
 
 // restackWorktreeAnchor fast-forwards a worktree anchor to trunk instead of
@@ -66,12 +93,18 @@ func (e *engineImpl) restackWorktreeAnchor(
 	}
 	branchName := branch.GetName()
 
+	// Read live, not from snap.revs: trunkRev is written as the anchor ref's
+	// NewSHA below. A stale cached value would point the anchor at an old trunk
+	// commit, and the compare-and-swap guards the anchor's own ref rather than
+	// the value going into it, so nothing would catch it. One read per anchor,
+	// and there is one anchor per worktree.
 	trunkRev, err := e.Trunk().GetRevision()
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get trunk revision for anchor %s: %w", branchName, err)
 	}
 
-	anchorRev, err := branch.GetRevision()
+	// Safe to read cached: only compared against trunkRev and used as OldSHA.
+	anchorRev, err := e.branchRev(snap, branch)
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get anchor revision for %s: %w", branchName, err)
 	}
@@ -198,14 +231,14 @@ func (e *engineImpl) restackBranch(
 			return RestackBranchResult{Result: RestackUnneeded, Frozen: true}, nil
 		}
 
-		localSha, err := branch.GetRevision()
+		localSha, err := e.branchRev(snap, branch)
 		if err != nil {
 			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get local revision for frozen branch %s: %w", branchName, err)
 		}
 		if localSha != remoteSha {
 			// Get parent revision for metadata update
 			parentBranch := e.GetBranch(parent)
-			parentRev, err := parentBranch.GetRevision()
+			parentRev, err := e.branchRev(snap, parentBranch)
 			if err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get parent revision for %s: %w", branchName, err)
 			}
@@ -305,16 +338,9 @@ func (e *engineImpl) restackBranch(
 
 	// Get parent revision (needed for rebasedBranchBase even if restack is unneeded)
 	parentBranch := e.GetBranch(parent)
-	var parentRev string
-	var err error
-	if snap.revs != nil {
-		parentRev = snap.revs[parent]
-	}
-	if parentRev == "" {
-		parentRev, err = parentBranch.GetRevision()
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to get parent revision: %w", err)
-		}
+	parentRev, err := e.branchRev(snap, parentBranch)
+	if err != nil {
+		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to get parent revision: %w", err)
 	}
 
 	// A worktree anchor is a hidden marker at trunk. When a branch parented
@@ -677,7 +703,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 		}
 	}
 
-	oldBranchSHA, err := branch.GetRevision()
+	oldBranchSHA, err := e.branchRev(snap, branch)
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to get current branch revision for %s: %w", branchName, err)
 	}

@@ -2,6 +2,8 @@ package integration
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -71,6 +73,37 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		Commit("trunk2.txt", "chore: trunk commit 2").
 		Run("restack --all-stacks")
 	assertTracksTrunk("after second restack")
+}
+
+// TestRestackDoesNotDestroyUncommittedAnchorWorktreeChanges covers the data-loss
+// regression from fast-forwarding a worktree anchor: `worktree create` with no
+// --root-branch checks out the anchor itself, and restacking that anchor used
+// to run an unconditional `git reset --hard` in its worktree. An uncommitted
+// edit sitting there — exactly what a freshly created worktree tends to hold —
+// was silently discarded with no prompt and no recovery path.
+func TestRestackDoesNotDestroyUncommittedAnchorWorktreeChanges(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.SetWorktreeBasePath(t.TempDir())
+
+	sh.Run("worktree create my-wt")
+	sh.Run("worktree open my-wt")
+	worktreePath := strings.TrimSpace(sh.Output())
+
+	// Edit a tracked file in the anchor's worktree without committing.
+	trackedFile := filepath.Join(worktreePath, "init_test.txt")
+	require.NoError(t, os.WriteFile(trackedFile, []byte("uncommitted edit"), 0o644))
+
+	// Trunk advances, then restack fast-forwards the anchor to trunk.
+	sh.Checkout("main").
+		Commit("trunk1.txt", "chore: trunk commit").
+		Run("restack --all-stacks")
+
+	content, err := os.ReadFile(trackedFile)
+	require.NoError(t, err)
+	require.Equal(t, "uncommitted edit", string(content),
+		"restack must not discard uncommitted changes in a worktree-anchor's worktree")
 }
 
 // findWorktreeAnchor returns the name of the hidden worktree-anchor branch.

@@ -14,15 +14,37 @@ const (
 	reflogRestackAnchor = "stackit: restack (anchor)"
 )
 
+// resetWorktreeWorkingDirIfClean resets a worktree's working directory to
+// match its branch's new HEAD after a ref update, but only when the worktree
+// was clean *before* the restack pass touched anything. A worktree that had
+// uncommitted changes is left untouched: resetting it would discard the
+// user's in-progress edits with no prompt, no warning, and no recovery path.
+// Dirtiness must come from snap.dirtyWorktrees (checked once, up front) and
+// not a live check here — by the time a branch's ref is updated, its
+// worktree's on-disk content is legitimately stale relative to the new HEAD,
+// which git.WorktreeHasUncommittedChanges would misreport as user edits.
+// Leaving a clean worktree briefly out of sync with HEAD on error is the
+// existing best-effort tradeoff for this call.
+func (e *engineImpl) resetWorktreeWorkingDirIfClean(ctx context.Context, snap *restackSnapshot, worktreePath string) {
+	if worktreePath == "" {
+		return
+	}
+	if snap.dirtyWorktrees[worktreePath] {
+		return
+	}
+	_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
+}
+
 // restackSnapshot bundles the branch-keyed state captured once per restack
 // pass so per-branch steps don't re-read metadata, revisions, worktrees, or
 // metadata-ref SHAs from git. It is mutated in place as branches are rebased
 // so later branches in the same pass observe the updated values.
 type restackSnapshot struct {
-	meta        MetaMap
-	revs        RevisionMap
-	worktrees   git.WorktreeList
-	metaRefSHAs map[string]string
+	meta           MetaMap
+	revs           RevisionMap
+	worktrees      git.WorktreeList
+	dirtyWorktrees map[string]bool
+	metaRefSHAs    map[string]string
 }
 
 // restackBranch rebases a branch onto its parent
@@ -132,13 +154,9 @@ func (e *engineImpl) restackBranch(
 					return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to reset working tree for frozen branch %s: %w", branchName, err)
 				}
 			} else {
-				// If the branch is checked out in a different worktree, reset that worktree.
-				// This is best-effort: sync checks for uncommitted changes before proceeding,
-				// so failure here just means the worktree may be briefly out of sync with HEAD.
-				// The ResetWorktreeWorkingDir command itself is logged via debugLog.
-				if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-					_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
-				}
+				// If the branch is checked out in a different worktree, reset that
+				// worktree unless it has uncommitted changes.
+				e.resetWorktreeWorkingDirIfClean(ctx, snap, snap.worktrees.PathForBranch(branchName))
 			}
 
 			return RestackBranchResult{
@@ -204,12 +222,9 @@ func (e *engineImpl) restackBranch(
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to reset working tree for anchor %s: %w", branchName, err)
 			}
 		} else {
-			// If the branch is checked out in a different worktree, reset that worktree.
-			// This is best-effort: sync checks for uncommitted changes before proceeding,
-			// so failure here just means the worktree may be briefly out of sync with HEAD.
-			if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-				_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
-			}
+			// If the branch is checked out in a different worktree, reset that
+			// worktree unless it has uncommitted changes.
+			e.resetWorktreeWorkingDirIfClean(ctx, snap, snap.worktrees.PathForBranch(branchName))
 		}
 
 		return RestackBranchResult{
@@ -401,14 +416,12 @@ func (e *engineImpl) restackBranch(
 			NewParent:         parent,
 		}, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
-	// If this branch is checked out in a worktree, reset that worktree's working directory
-	// to match the new branch content. Without this, the worktree would have stale content
-	// that appears as staged changes reverting the rebased commits.
-	// This is best-effort: sync checks for uncommitted changes before proceeding,
-	// so failure here just means the worktree may be briefly out of sync with HEAD.
-	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
-	}
+	// If this branch is checked out in a worktree, reset that worktree's working
+	// directory to match the new branch content, unless it has uncommitted
+	// changes. Without this, a clean worktree would have stale content that
+	// appears as staged changes reverting the rebased commits; a dirty one is
+	// left alone rather than having its in-progress edits discarded.
+	e.resetWorktreeWorkingDirIfClean(ctx, snap, snap.worktrees.PathForBranch(branchName))
 
 	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
 	if err != nil {
@@ -602,9 +615,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update refs atomically: %w", err)
 	}
 
-	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
-	}
+	e.resetWorktreeWorkingDirIfClean(ctx, snap, snap.worktrees.PathForBranch(branchName))
 
 	if snap.meta != nil {
 		snap.meta[branchName] = updatedMeta

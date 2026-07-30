@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RestackBranches implements a hybrid batch approach for performance:
@@ -103,6 +105,23 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 		worktrees = git.WorktreeList{}
 	}
 
+	// Snapshot each worktree's dirty status once, before any branch ref in
+	// this pass moves. A branch's ref updates before its worktree's working
+	// directory is reset, so checking dirtiness afterward would see the
+	// worktree legitimately out of sync with its new HEAD and misreport that
+	// staleness as user edits. Checked up front, per worktree rather than per
+	// branch, and bounded by utils.Run rather than one goroutine per worktree.
+	dirtyWorktrees := make(map[string]bool, len(worktrees))
+	if len(worktrees) > 0 {
+		var dirtyMu sync.Mutex
+		utils.Run(worktrees, func(wt git.Worktree) {
+			dirty, _ := e.git.WorktreeHasUncommittedChanges(ctx, wt.Path)
+			dirtyMu.Lock()
+			dirtyWorktrees[wt.Path] = dirty
+			dirtyMu.Unlock()
+		})
+	}
+
 	// Snapshot every metadata ref's SHA once via a single in-process iterator
 	// (git.ListRefs). The previous code called GetRef per branch in three
 	// places (frozen path, anchor path, regular rebase) plus applyBranchAndMetadata
@@ -115,7 +134,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
-	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs}
+	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, dirtyWorktrees: dirtyWorktrees, metaRefSHAs: metaRefSHAs}
 
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)

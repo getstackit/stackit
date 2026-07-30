@@ -306,11 +306,11 @@ func holdBackConflictedStacks(eng engine.BranchReader, success engine.Branches, 
 // apply now, ones that conflicted, and ones blocked behind a conflict, using
 // the validation result as the source of truth instead of position-in-specs
 // arithmetic. A branch is applied only if its action proves it's safe:
-// Frozen/Anchor branches don't touch a rebase worktree at all, and Validated
-// branches need a confirmed SHA. Every planned branch lands in exactly one of
-// the three buckets so none silently disappears from reporting — a Validated
-// branch with no SHA that isn't in the failed set was skipped because an
-// ancestor failed, and is classified blocked.
+// Frozen/Anchor/MetadataRefresh branches don't touch a rebase worktree at
+// all, and Validated branches need a confirmed SHA. Every planned branch
+// lands in exactly one of the three buckets so none silently disappears from
+// reporting — a Validated branch with no SHA that isn't in the failed set was
+// skipped because an ancestor failed, and is classified blocked.
 func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPlan, validation *engine.RebaseValidation) (success engine.Branches, conflicts, blocked []string) {
 	if plan == nil || validation == nil {
 		return nil, nil, nil
@@ -331,7 +331,7 @@ func classifyValidatedBranches(branches engine.Branches, plan *engine.RestackPla
 		}
 
 		switch item.Action {
-		case engine.RestackPlanApplyFrozen, engine.RestackPlanApplyAnchor:
+		case engine.RestackPlanApplyFrozen, engine.RestackPlanApplyAnchor, engine.RestackPlanApplyMetadataRefresh:
 			builder.Add(branch)
 		case engine.RestackPlanApplyValidated:
 			switch {

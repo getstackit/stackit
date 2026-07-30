@@ -499,6 +499,8 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 	switch item.Action {
 	case RestackPlanApplyFrozen, RestackPlanApplyAnchor:
 		return e.applyPlannedRefUpdate(ctx, branch, item, snap)
+	case RestackPlanApplyMetadataRefresh:
+		return e.applyMetadataRefresh(ctx, branch, item, snap)
 	case RestackPlanApplyValidated:
 		return e.applyValidatedRestack(ctx, branch, validation, item, snap)
 	default:
@@ -571,6 +573,58 @@ func (e *engineImpl) applyPlannedRefUpdate(
 	}
 
 	return e.applyBranchAndMetadata(ctx, branch, item, item.TargetRev, parentRev, snap)
+}
+
+// applyMetadataRefresh corrects a branch's recorded parent revision without
+// touching its branch ref or working tree. It runs when planRestackBranch
+// finds the branch already sitting exactly on its parent's tip but the
+// recorded parentBranchRevision has drifted (never set, or stale from manual
+// git operations) — nothing needs to be rebased, only the record fixed, so
+// only the metadata ref moves and the result reports RestackUnneeded.
+func (e *engineImpl) applyMetadataRefresh(
+	ctx context.Context,
+	branch Branch,
+	item RestackPlanItem,
+	snap *restackSnapshot,
+) (RestackBranchResult, error) {
+	branchName := branch.GetName()
+	meta := snap.meta.Get(branchName)
+	if meta == nil {
+		var err error
+		meta, err = e.readMetadata(branchName)
+		if err != nil {
+			return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: item.ParentRev}, fmt.Errorf("failed to read metadata: %w", err)
+		}
+	}
+
+	oldMetadataSHA := snap.metaRefSHAs[branchName]
+	parentRev := item.ParentRev
+	updatedMeta := meta.WithParentBranchRevision(&parentRev)
+	metadataJSON, err := json.Marshal(updatedMeta)
+	if err != nil {
+		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	if err != nil {
+		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to prepare metadata blob: %w", err)
+	}
+
+	updates := []git.RefUpdate{
+		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+	}
+	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestack); err != nil {
+		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update metadata ref: %w", err)
+	}
+
+	if snap.meta != nil {
+		snap.meta[branchName] = updatedMeta
+	}
+
+	return RestackBranchResult{
+		Result:            RestackUnneeded,
+		RebasedBranchBase: parentRev,
+	}, nil
 }
 
 func (e *engineImpl) applyBranchAndMetadata(

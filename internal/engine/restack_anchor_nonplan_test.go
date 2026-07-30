@@ -83,3 +83,39 @@ func TestRestackBranchesDoesNotReplayTrunkOntoAnchorChild(t *testing.T) {
 			"round %d: feature must contain only its own commit, not replayed trunk commits", round+1)
 	}
 }
+
+// TestRestackBranchesMissingRecordedRevDoesNotReplayTrunk probes the remaining
+// half of #1493: the merge-base operand at restack_impl.go:337/343 is the stale
+// anchor rather than trunk. The `oldParentRev != ""` branch cannot reach it --
+// an anchor holds no commits, so its recorded revision is always a trunk commit
+// and therefore always an ancestor of a branch descended from trunk. The empty
+// branch can: with no recorded revision, merge-base is taken against the
+// anchor's stale tip while the rebase target is trunk, so every trunk commit
+// between the two falls inside the replay range.
+func TestRestackBranchesMissingRecordedRevDoesNotReplayTrunk(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	withWorktreeAnchor(t, s, "anchor")
+
+	s.CreateBranchFromQuiet("feature", "anchor").
+		CommitChange("feature", "feat: feature").
+		Rebuild()
+	s.TrackBranch("feature", "anchor")
+
+	// Trunk advances and feature is restacked onto it, leaving the anchor stale.
+	s.Checkout("main").Commit("trunk one").Rebuild()
+	_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")))
+	require.NoError(t, err)
+
+	// Legacy on-disk stack: no recorded parent revision.
+	meta, err := s.Engine.Git().ReadMetadata("feature")
+	require.NoError(t, err)
+	require.NoError(t, s.Engine.Git().WriteMetadata("feature", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild("main"))
+
+	s.Checkout("main").Commit("trunk two").Rebuild()
+	_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")))
+	require.NoError(t, err)
+
+	require.Equal(t, 1, s.BranchCommitCount("feature"),
+		"feature must contain only its own commit, not trunk commits replayed from a stale anchor merge-base")
+}

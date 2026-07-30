@@ -24,8 +24,23 @@ import (
 // the branch, which .claude/rules/multiplayer-safety.md forbids: after a
 // restack, <trunk>..<branch> must equal exactly the branch's own commits.
 //
-// Restacking twice is what exposes it. One restack is fine, because the anchor
-// revision really is where the branch is based.
+// The stack goes two levels deep (anchor -> feature -> feature2) to broaden
+// coverage of the newly-reachable anchor path beyond a single child.
+//
+// The commit-count assertions below are not, by themselves, a regression
+// test for the replay bug -- verified by reverting internal/engine/restack_plan.go
+// to its pre-fix version and running this test with only those assertions
+// left in: it still passes, at both stack depths. A reverted build treats
+// the anchor as already landed (it is always an ancestor of trunk) and skips
+// it before ever reaching the fast-forward path, so it never moves; every
+// descendant then keeps comparing itself to that same stale anchor tip and
+// also gets skipped as "up to date". Nothing gets replayed, so the commit
+// counts stay right by accident. What actually catches the regression is the
+// bookkeeping asserted above -- the anchor failing to fast-forward to trunk,
+// and the child's recorded parent revision failing to track it -- confirmed
+// by the same revert, which fails there instead. The commit counts stay as
+// an integrity check on the stack's contents once a restack has genuinely
+// happened, not as the primary regression signal.
 func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 	t.Parallel()
 
@@ -37,9 +52,11 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 	sh.Run("worktree open my-wt")
 	worktreePath := strings.TrimSpace(sh.Output())
 
-	sh.InWorktree(worktreePath).
-		WriteFile("feature.txt", "feature").
+	wt := sh.InWorktree(worktreePath)
+	wt.WriteFile("feature.txt", "feature").
 		Run("create feature -m 'feat: feature'")
+	wt.WriteFile("feature2.txt", "feature2").
+		Run("create feature2 -m 'feat: feature2'")
 
 	anchorBranch := findWorktreeAnchor(t, sh)
 
@@ -56,8 +73,10 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		require.Equal(t, trunkRev, recordedParentRev(t, sh, "feature"),
 			"%s: child's recorded parent revision must track trunk", stage)
 
-		// The invariant that actually protects the branch's contents.
+		// Integrity check once a restack has actually happened -- see the
+		// bookkeeping asserts above for what actually catches the regression.
 		sh.CommitCount("main", "feature", 1)
+		sh.CommitCount("main", "feature2", 2)
 	}
 
 	// Trunk advances and we restack. Correct even before the fix: the anchor
@@ -151,6 +170,57 @@ func TestRestackWorktreeAnchorSkipsDirtyStack(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join(worktreePath, "dirty.txt"))
 	require.NoError(t, err)
 	require.Equal(t, "uncommitted work", string(content))
+}
+
+// TestRestackUpstackConvergesForWorktreeAnchorChild covers #1491: `restack
+// --upstack` (and `--only`) on a child of a worktree anchor used to rewrite
+// the branch's commit on every run and never reach an up-to-date state, even
+// with no further trunk movement between runs. Contents stayed correct (no
+// replay), but each run minted a fresh SHA, which force-pushes on the next
+// submit, re-triggers CI, and detaches existing review threads from their
+// commits.
+//
+// Unlike TestRestackWorktreeAnchorTracksTrunk, this scope deliberately
+// excludes the anchor from the restack set (`--upstack` starts at feature),
+// so the anchor's ref never advances and the child's recorded parent
+// revision can never catch up to it. That keeps the branch "planned" forever
+// even once it is already correctly based, so what's under test is that the
+// conflict-free replay path stops minting a new commit once nothing is left
+// to replay.
+func TestRestackUpstackConvergesForWorktreeAnchorChild(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.SetWorktreeBasePath(t.TempDir())
+
+	sh.Run("worktree create my-wt")
+	sh.Run("worktree open my-wt")
+	worktreePath := strings.TrimSpace(sh.Output())
+
+	sh.InWorktree(worktreePath).
+		WriteFile("feature.txt", "feature").
+		Run("create feature -m 'feat: feature'")
+
+	// One trunk advance, then a real restack: feature actually needs to move.
+	sh.Checkout("main").
+		Commit("trunk1.txt", "chore: trunk commit 1").
+		Run("restack --branch feature --upstack")
+
+	sh.Git("rev-parse feature")
+	firstRev := strings.TrimSpace(sh.Output())
+
+	// No further trunk movement. Repeated restacks scoped to exclude the
+	// anchor must converge: same SHA, reported as already up to date.
+	for i := 2; i <= 3; i++ {
+		sh.Run("restack --branch feature --upstack").
+			OutputContains("up to date")
+
+		sh.Git("rev-parse feature")
+		require.Equal(t, firstRev, strings.TrimSpace(sh.Output()),
+			"run %d: feature's SHA must stay stable once it is already correctly based", i)
+	}
+
+	sh.CommitCount("main", "feature", 1)
 }
 
 // findWorktreeAnchor returns the name of the hidden worktree-anchor branch.

@@ -328,7 +328,16 @@ func (e *engineImpl) restackBranch(
 	// EnterConflictWorkflow's "expected conflict but rebase completed
 	// successfully" assertion and leaves the branch un-restacked.
 	rebaseOnto := parent
+	// Measure the other end of the replay range against trunk too. An anchor is
+	// never the branch's real rebase base, and its own revision is always a
+	// trunk commit -- so it stays an ancestor of any branch sitting on trunk and
+	// the is-ancestor check below cannot spot that it has gone stale. Taking the
+	// merge base against the anchor while rebasing onto trunk puts every trunk
+	// commit since the anchor was created inside the range, which
+	// .claude/rules/multiplayer-safety.md forbids. Mirrors planRestackBranch.
+	rebaseBase := parent
 	if e.IsWorktreeAnchor(parentBranch) {
+		rebaseBase = e.trunk
 		if trunkRev, trunkErr := e.Trunk().GetRevision(); trunkErr == nil && trunkRev != parentRev {
 			parentRev = trunkRev
 			rebaseOnto = trunkRev
@@ -357,13 +366,13 @@ func (e *engineImpl) restackBranch(
 	// This check MUST run before the early-exit checks to match buildRebaseSpecs behavior.
 	if oldParentRev != "" {
 		if isAncestor, _ := e.git.IsAncestor(ctx, oldParentRev, branchName); !isAncestor {
-			if mergeBase, err := e.git.GetMergeBase(ctx, branchName, parent); err == nil {
+			if mergeBase, err := e.git.GetMergeBase(ctx, branchName, rebaseBase); err == nil {
 				oldParentRev = mergeBase
 			}
 		}
 	} else {
 		// No old parent revision in metadata, try to find merge base
-		if mergeBase, err := e.git.GetMergeBase(ctx, branchName, parent); err == nil {
+		if mergeBase, err := e.git.GetMergeBase(ctx, branchName, rebaseBase); err == nil {
 			oldParentRev = mergeBase
 		}
 	}

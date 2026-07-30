@@ -22,8 +22,23 @@ import (
 // the branch, which .claude/rules/multiplayer-safety.md forbids: after a
 // restack, <trunk>..<branch> must equal exactly the branch's own commits.
 //
-// Restacking twice is what exposes it. One restack is fine, because the anchor
-// revision really is where the branch is based.
+// Restacking twice is what exposes the drift in the two bookkeeping asserts
+// below (the anchor fast-forwarding, and the child's recorded parent revision
+// tracking trunk): pre-fix, those fail on the second restack because the
+// anchor never moved and the recorded revision never caught up.
+//
+// The final sh.CommitCount assert is the invariant that actually protects the
+// branch's contents, but this scenario alone does not exercise it as
+// regression coverage: git silently drops an already-applied commit from a
+// rebase todo when its patch already matches history on the new base (the
+// "skipped previously applied commit" optimization), which is exactly what
+// happens to the widened-but-unchanged trunk commits replayed here. The
+// widening only becomes visible in the commit count once a replayed trunk
+// commit's patch no longer matches what is already on trunk — the shape a
+// squash or rebase merge produces — which is a separate scenario this test
+// does not construct. Do not treat CommitCount passing here as proof the
+// replay-widening bug (the data-loss shape, not just the bookkeeping) stays
+// fixed; the bookkeeping asserts are what is load-bearing in this test.
 func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 	t.Parallel()
 
@@ -54,7 +69,8 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		require.Equal(t, trunkRev, recordedParentRev(t, sh, "feature"),
 			"%s: child's recorded parent revision must track trunk", stage)
 
-		// The invariant that actually protects the branch's contents.
+		// Sanity check only in this scenario -- see the type comment on why
+		// this does not independently prove the replay-widening bug is fixed.
 		sh.CommitCount("main", "feature", 1)
 	}
 
@@ -65,8 +81,8 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		Run("restack --all-stacks")
 	assertTracksTrunk("after first restack")
 
-	// Trunk advances again. This is where the stale anchor used to widen the
-	// replay range to cover every trunk commit since the worktree was created.
+	// Trunk advances again. This is where the stale anchor and recorded
+	// revision used to fail to catch up (see the type comment).
 	sh.Checkout("main").
 		Commit("trunk2.txt", "chore: trunk commit 2").
 		Run("restack --all-stacks")

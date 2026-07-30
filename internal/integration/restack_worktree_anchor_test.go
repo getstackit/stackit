@@ -22,8 +22,23 @@ import (
 // the branch, which .claude/rules/multiplayer-safety.md forbids: after a
 // restack, <trunk>..<branch> must equal exactly the branch's own commits.
 //
-// Restacking twice is what exposes it. One restack is fine, because the anchor
-// revision really is where the branch is based.
+// The stack goes two levels deep (anchor -> feature -> feature2) to broaden
+// coverage of the newly-reachable anchor path beyond a single child.
+//
+// The commit-count assertions below are not, by themselves, a regression
+// test for the replay bug -- verified by reverting internal/engine/restack_plan.go
+// to its pre-fix version and running this test with only those assertions
+// left in: it still passes, at both stack depths. A reverted build treats
+// the anchor as already landed (it is always an ancestor of trunk) and skips
+// it before ever reaching the fast-forward path, so it never moves; every
+// descendant then keeps comparing itself to that same stale anchor tip and
+// also gets skipped as "up to date". Nothing gets replayed, so the commit
+// counts stay right by accident. What actually catches the regression is the
+// bookkeeping asserted above -- the anchor failing to fast-forward to trunk,
+// and the child's recorded parent revision failing to track it -- confirmed
+// by the same revert, which fails there instead. The commit counts stay as
+// an integrity check on the stack's contents once a restack has genuinely
+// happened, not as the primary regression signal.
 func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 	t.Parallel()
 
@@ -35,9 +50,11 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 	sh.Run("worktree open my-wt")
 	worktreePath := strings.TrimSpace(sh.Output())
 
-	sh.InWorktree(worktreePath).
-		WriteFile("feature.txt", "feature").
+	wt := sh.InWorktree(worktreePath)
+	wt.WriteFile("feature.txt", "feature").
 		Run("create feature -m 'feat: feature'")
+	wt.WriteFile("feature2.txt", "feature2").
+		Run("create feature2 -m 'feat: feature2'")
 
 	anchorBranch := findWorktreeAnchor(t, sh)
 
@@ -54,8 +71,10 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		require.Equal(t, trunkRev, recordedParentRev(t, sh, "feature"),
 			"%s: child's recorded parent revision must track trunk", stage)
 
-		// The invariant that actually protects the branch's contents.
+		// Integrity check once a restack has actually happened -- see the
+		// bookkeeping asserts above for what actually catches the regression.
 		sh.CommitCount("main", "feature", 1)
+		sh.CommitCount("main", "feature2", 2)
 	}
 
 	// Trunk advances and we restack. Correct even before the fix: the anchor

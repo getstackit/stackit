@@ -69,6 +69,79 @@ func (e *engineImpl) restackBranch(
 		return RestackBranchResult{Result: RestackUnneeded, LockReason: lockReason}, nil
 	}
 
+	// Handle worktree anchor branches: fast-forward to trunk instead of rebase.
+	// This must run before the branchLanded check below: an anchor holds no
+	// commits of its own, so it is always an ancestor of trunk and
+	// branchLanded would always report it as landed -- skipping the
+	// fast-forward and leaving the anchor stale forever. Mirrors the ordering
+	// PlanRestack uses (restack_plan.go).
+	if e.IsWorktreeAnchor(branch) {
+		// Get trunk's current SHA
+		trunkRev, err := e.Trunk().GetRevision()
+		if err != nil {
+			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get trunk revision for anchor %s: %w", branchName, err)
+		}
+
+		// Get anchor's current SHA
+		anchorRev, err := branch.GetRevision()
+		if err != nil {
+			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get anchor revision for %s: %w", branchName, err)
+		}
+
+		// If already at trunk, nothing to do
+		if anchorRev == trunkRev {
+			return RestackBranchResult{Result: RestackUnneeded}, nil
+		}
+
+		// Get current metadata SHA for optimistic locking
+		oldMetadataSHA := snap.metaRefSHAs[branchName]
+
+		// Prepare metadata update with new parent revision
+		meta, err := e.readMetadata(branchName)
+		if err != nil {
+			meta = git.NewMeta()
+		}
+		meta = meta.WithParentBranchRevision(&trunkRev)
+		metadataJSON, err := json.Marshal(meta)
+		if err != nil {
+			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to marshal metadata for anchor %s: %w", branchName, err)
+		}
+		metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+		if err != nil {
+			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to prepare metadata blob for anchor %s: %w", branchName, err)
+		}
+
+		// Atomic update of both branch ref and metadata ref
+		updates := []git.RefUpdate{
+			{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: trunkRev, OldSHA: anchorRev},
+			{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+		}
+		if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestackAnchor); err != nil {
+			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for anchor %s: %w", branchName, err)
+		}
+
+		// If the anchor branch is currently checked out in this context, reset the working tree
+		current := e.CurrentBranch()
+		if current != nil && current.GetName() == branchName {
+			if err := e.git.HardReset(ctx, "HEAD"); err != nil {
+				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to reset working tree for anchor %s: %w", branchName, err)
+			}
+		} else {
+			// If the branch is checked out in a different worktree, reset that worktree.
+			// This is best-effort: sync checks for uncommitted changes before proceeding,
+			// so failure here just means the worktree may be briefly out of sync with HEAD.
+			if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
+				_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
+			}
+		}
+
+		return RestackBranchResult{
+			Result:            RestackDone,
+			RebasedBranchBase: trunkRev,
+			NewRev:            trunkRev,
+		}, nil
+	}
+
 	if e.branchLanded(ctx, branchName, parent, squashCache) {
 		return RestackBranchResult{Result: RestackUnneeded}, nil
 	}
@@ -149,74 +222,6 @@ func (e *engineImpl) restackBranch(
 		}
 
 		return RestackBranchResult{Result: RestackUnneeded, Frozen: true}, nil
-	}
-
-	// Handle worktree anchor branches: fast-forward to trunk instead of rebase
-	if e.IsWorktreeAnchor(branch) {
-		// Get trunk's current SHA
-		trunkRev, err := e.Trunk().GetRevision()
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get trunk revision for anchor %s: %w", branchName, err)
-		}
-
-		// Get anchor's current SHA
-		anchorRev, err := branch.GetRevision()
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get anchor revision for %s: %w", branchName, err)
-		}
-
-		// If already at trunk, nothing to do
-		if anchorRev == trunkRev {
-			return RestackBranchResult{Result: RestackUnneeded}, nil
-		}
-
-		// Get current metadata SHA for optimistic locking
-		oldMetadataSHA := snap.metaRefSHAs[branchName]
-
-		// Prepare metadata update with new parent revision
-		meta, err := e.readMetadata(branchName)
-		if err != nil {
-			meta = git.NewMeta()
-		}
-		meta = meta.WithParentBranchRevision(&trunkRev)
-		metadataJSON, err := json.Marshal(meta)
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to marshal metadata for anchor %s: %w", branchName, err)
-		}
-		metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to prepare metadata blob for anchor %s: %w", branchName, err)
-		}
-
-		// Atomic update of both branch ref and metadata ref
-		updates := []git.RefUpdate{
-			{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: trunkRev, OldSHA: anchorRev},
-			{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
-		}
-		if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestackAnchor); err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for anchor %s: %w", branchName, err)
-		}
-
-		// If the anchor branch is currently checked out in this context, reset the working tree
-		current := e.CurrentBranch()
-		if current != nil && current.GetName() == branchName {
-			if err := e.git.HardReset(ctx, "HEAD"); err != nil {
-				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to reset working tree for anchor %s: %w", branchName, err)
-			}
-		} else {
-			// If the branch is checked out in a different worktree, reset that worktree.
-			// This is best-effort: sync checks for uncommitted changes before proceeding,
-			// so failure here just means the worktree may be briefly out of sync with HEAD.
-			if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-				_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
-			}
-		}
-
-		return RestackBranchResult{
-			Result:            RestackDone,
-			RebasedBranchBase: trunkRev,
-			NewRev:            trunkRev,
-		}, nil
 	}
 
 	// Track reparenting info
@@ -312,15 +317,21 @@ func (e *engineImpl) restackBranch(
 	// the parent was amended or rebased outside of stackit, or where metadata
 	// was set to a revision that was never actually an ancestor.
 	// This check MUST run before the early-exit checks to match buildRebaseSpecs behavior.
+	// Use rebaseOnto, not parent, as the merge-base operand: when parent is a
+	// stale worktree anchor, rebaseOnto was already substituted with trunk's
+	// tip above. Computing the merge base against the anchor's stale name
+	// here instead would reintroduce the widened rebase range that trunk
+	// substitution exists to prevent (see the rebaseOnto comment above and
+	// restack_plan.go's equivalent substitution).
 	if oldParentRev != "" {
 		if isAncestor, _ := e.git.IsAncestor(ctx, oldParentRev, branchName); !isAncestor {
-			if mergeBase, err := e.git.GetMergeBase(ctx, branchName, parent); err == nil {
+			if mergeBase, err := e.git.GetMergeBase(ctx, branchName, rebaseOnto); err == nil {
 				oldParentRev = mergeBase
 			}
 		}
 	} else {
 		// No old parent revision in metadata, try to find merge base
-		if mergeBase, err := e.git.GetMergeBase(ctx, branchName, parent); err == nil {
+		if mergeBase, err := e.git.GetMergeBase(ctx, branchName, rebaseOnto); err == nil {
 			oldParentRev = mergeBase
 		}
 	}

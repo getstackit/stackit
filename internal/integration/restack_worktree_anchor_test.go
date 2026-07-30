@@ -2,6 +2,8 @@ package integration
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -71,6 +73,47 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		Commit("trunk2.txt", "chore: trunk commit 2").
 		Run("restack --all-stacks")
 	assertTracksTrunk("after second restack")
+}
+
+// TestRestackWorktreeAnchorPreservesUncommittedChanges covers the regression
+// from #1490: `worktree create` with no root branch checks out the anchor
+// itself in the new worktree, and #1488 made the anchor reachable by restack
+// for the first time (it used to be skipped by the landed check). Restacking
+// fast-forwards the anchor and then unconditionally ran `git reset --hard` on
+// its worktree to match, discarding any uncommitted edit sitting there with no
+// prompt, no warning, and no recovery path.
+func TestRestackWorktreeAnchorPreservesUncommittedChanges(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.SetWorktreeBasePath(t.TempDir())
+
+	// No --root-branch: the new worktree checks out the anchor directly.
+	sh.Run("worktree create my-wt")
+	sh.Run("worktree open my-wt")
+	worktreePath := strings.TrimSpace(sh.Output())
+
+	// Edit a tracked file inside the worktree and leave it uncommitted — the
+	// shape of work that tends to live in a freshly created worktree.
+	const uncommitted = "uncommitted edit"
+	sh.InWorktree(worktreePath).WriteFile("init_test.txt", uncommitted)
+
+	// Trunk advances elsewhere, giving the anchor somewhere to fast-forward to.
+	sh.Checkout("main").Commit("trunk1.txt", "chore: trunk commit 1")
+
+	sh.Run("restack --all-stacks")
+
+	anchorBranch := findWorktreeAnchor(t, sh)
+	sh.Git("rev-parse main")
+	trunkRev := strings.TrimSpace(sh.Output())
+	sh.Git("rev-parse " + anchorBranch)
+	require.Equal(t, trunkRev, strings.TrimSpace(sh.Output()),
+		"anchor should still fast-forward to trunk even when its worktree is dirty")
+
+	content, err := os.ReadFile(filepath.Join(worktreePath, "init_test.txt"))
+	require.NoError(t, err)
+	require.Equal(t, uncommitted, string(content),
+		"restack must not discard uncommitted changes in the anchor's worktree")
 }
 
 // findWorktreeAnchor returns the name of the hidden worktree-anchor branch.

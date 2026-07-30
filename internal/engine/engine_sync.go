@@ -103,6 +103,20 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 		worktrees = git.WorktreeList{}
 	}
 
+	// Snapshot which of those worktrees have uncommitted changes before any
+	// branch in this pass is touched. This must happen up front: restacking a
+	// branch moves its ref before its worktree gets reset, so checking
+	// dirtiness lazily at reset time would compare the worktree's now-stale
+	// content against its own new ref and read as dirty every time, not just
+	// when the user actually had uncommitted work. Bounded by worktree count,
+	// not branch count, so this stays a handful of calls even for a large stack.
+	dirtyWorktrees := make(map[string]bool, len(worktrees))
+	for _, path := range worktrees.Paths() {
+		if dirty, dirtyErr := e.git.WorktreeHasUncommittedChanges(ctx, path); dirtyErr == nil && dirty {
+			dirtyWorktrees[path] = true
+		}
+	}
+
 	// Snapshot every metadata ref's SHA once via a single in-process iterator
 	// (git.ListRefs). The previous code called GetRef per branch in three
 	// places (frozen path, anchor path, regular rebase) plus applyBranchAndMetadata
@@ -115,7 +129,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
-	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs}
+	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees}
 
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)

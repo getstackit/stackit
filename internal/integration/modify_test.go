@@ -2,6 +2,8 @@ package integration
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestModifyWorkflow(t *testing.T) {
@@ -189,6 +191,61 @@ func TestModifyInto(t *testing.T) {
 			OutputContains("checked out in worktree").
 			OutputContains(worktreeDir)
 
+		sh.OnBranch("c")
+	})
+}
+
+func TestModifyUndo(t *testing.T) {
+	t.Parallel()
+
+	t.Run("undo restores the pre-amend commit", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.Write("a", "original content").
+			Run("create feature-a -m 'Feature A'").
+			OnBranch("feature-a")
+
+		before := sh.Git("rev-parse feature-a").Output()
+
+		sh.Modify("a_extra", "extra content").
+			OutputContains("Amended commit")
+
+		after := sh.Git("rev-parse feature-a").Output()
+		require.NotEqual(t, before, after, "modify should have amended the commit")
+
+		sh.UndoLatest()
+
+		require.Equal(t, before, sh.Git("rev-parse feature-a").Output(),
+			"undo should restore the pre-amend commit")
+	})
+
+	t.Run("undo restores both branches after modify --into", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.CreateLinearStack3().
+			OnBranch("c")
+
+		beforeA := sh.Git("rev-parse a").Output()
+		beforeB := sh.Git("rev-parse b").Output()
+
+		sh.Write("a_extra", "extra content for a").
+			Run("modify --into a -n").
+			OutputContains("Amended commit in a").
+			OnBranch("c")
+
+		require.NotEqual(t, beforeA, sh.Git("rev-parse a").Output(),
+			"modify --into should have amended the target branch")
+		require.NotEqual(t, beforeB, sh.Git("rev-parse b").Output(),
+			"restacking upstack branches should have moved b")
+
+		sh.UndoLatest()
+
+		require.Equal(t, beforeA, sh.Git("rev-parse a").Output(),
+			"undo should restore the target branch's pre-amend commit")
+		require.Equal(t, beforeB, sh.Git("rev-parse b").Output(),
+			"undo should restore the restacked branch's pre-restack commit")
 		sh.OnBranch("c")
 	})
 }

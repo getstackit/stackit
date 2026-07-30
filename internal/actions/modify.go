@@ -64,6 +64,18 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	}
 	targetBranchObj := eng.GetBranch(targetBranchName)
 
+	// Take snapshot before modifying the repository
+	snapshotOpts := NewSnapshot("modify",
+		WithFlagValue("--into", opts.Into),
+		WithFlagValue("-m", opts.Message),
+		WithFlag(opts.CreateCommit, "--commit"),
+		WithFlag(opts.Edit, "--edit"),
+		WithFlag(opts.NoEdit, "--no-edit"),
+		WithFlag(opts.ResetAuthor, "--reset-author"),
+		WithFlag(opts.InteractiveRebase, "--interactive-rebase"),
+	)
+	TakeBestEffortSnapshot(ctx, snapshotOpts)
+
 	// Handle interactive rebase separately
 	if opts.InteractiveRebase {
 		return interactiveRebaseAction(ctx, opts)

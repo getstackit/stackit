@@ -255,13 +255,13 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | `stackit children` | Show the children of the current branch |
 | `stackit parent` | Show the parent of the current branch |
 | `stackit share` | Print the current stack as Slack-ready markdown for copy-paste |
-| `stackit pr [branch|number]` | Open a pull request in the default browser (`--stack` for the stack's root PR) |
+| `stackit pr [branch\|number]` | Open a pull request in the default browser (`--stack` for the stack's root PR) |
 
 ### Branch Management
 | Command | Description |
 |:---|:---|
 | `stackit create [name]` | Create a new branch on top of current (use `-w` to create with worktree, `--onto <branch>` to target a specific parent without checking it out) |
-| `stackit modify` | Amend the current commit (like `git commit --amend`) |
+| `stackit modify` | Amend the current commit (like `git commit --amend`; use `--into <branch>` to amend a downstack ancestor without checking it out) |
 | `stackit absorb` | Intelligently amend changes to the correct commits in the stack |
 | `stackit split` | Split commits into branches (by commit, hunk, or file; use `--above` for upstack) |
 | `stackit squash` | Squash all commits on the current branch |
@@ -294,7 +294,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 |:---|:---|
 | `stackit flatten` | Move branches closer to trunk where possible |
 | `stackit restack` | Rebase branches to ensure proper ancestry (`--branch X --upstack`, `--all-stacks`, `--stacks root1,root2`, `--parallel`) |
-| `stackit get [branch|PR]` | Sync a stack or specific PR from remote |
+| `stackit get [branch\|PR]` | Sync a stack or specific PR from remote |
 | `stackit foreach` | Run a shell command on each branch (`--upstack`, `--all-stacks`, `--stacks`, `--parallel`) |
 | `stackit submit` | Push branches and create/update GitHub PRs (alias: `ss` for `--stack`) |
 | `stackit sync` | Pull trunk, delete merged branches, and restack |

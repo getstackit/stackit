@@ -14,6 +14,27 @@ const (
 	reflogRestackAnchor = "stackit: restack (anchor)"
 )
 
+// resetWorktreeIfClean resets a worktree's working directory to match its
+// branch ref's new content, unless the worktree had uncommitted changes
+// before this restack pass touched anything. dirtyWorktrees is captured once
+// up front (see restackSnapshot.dirtyWorktrees) rather than checked here,
+// because by the time any branch's reset runs, restack has already moved that
+// branch's ref — checking dirtiness at that point would compare the
+// worktree's now-stale content against its own new ref and always read as
+// dirty, silently disabling the reset for every branch, not just genuinely
+// dirty ones.
+//
+// Skipping the reset on a worktree that was genuinely dirty beforehand leaves
+// it briefly out of sync with its ref rather than discarding the uncommitted
+// changes — the same tradeoff sync makes when deciding whether to touch a
+// stack rooted at a dirty managed worktree.
+func (e *engineImpl) resetWorktreeIfClean(ctx context.Context, worktreePath string, snap *restackSnapshot) {
+	if snap.dirtyWorktrees[worktreePath] {
+		return
+	}
+	_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
+}
+
 // restackSnapshot bundles the branch-keyed state captured once per restack
 // pass so per-branch steps don't re-read metadata, revisions, worktrees, or
 // metadata-ref SHAs from git. It is mutated in place as branches are rebased
@@ -23,6 +44,10 @@ type restackSnapshot struct {
 	revs        RevisionMap
 	worktrees   git.WorktreeList
 	metaRefSHAs map[string]string
+	// dirtyWorktrees records, per worktree path, whether it had uncommitted
+	// changes before this restack pass began. Captured once up front — see
+	// resetWorktreeIfClean for why it can't be checked lazily.
+	dirtyWorktrees map[string]bool
 }
 
 // restackBranch rebases a branch onto its parent
@@ -133,11 +158,8 @@ func (e *engineImpl) restackBranch(
 				}
 			} else {
 				// If the branch is checked out in a different worktree, reset that worktree.
-				// This is best-effort: sync checks for uncommitted changes before proceeding,
-				// so failure here just means the worktree may be briefly out of sync with HEAD.
-				// The ResetWorktreeWorkingDir command itself is logged via debugLog.
 				if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-					_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
+					e.resetWorktreeIfClean(ctx, worktreePath, snap)
 				}
 			}
 
@@ -205,10 +227,8 @@ func (e *engineImpl) restackBranch(
 			}
 		} else {
 			// If the branch is checked out in a different worktree, reset that worktree.
-			// This is best-effort: sync checks for uncommitted changes before proceeding,
-			// so failure here just means the worktree may be briefly out of sync with HEAD.
 			if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-				_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
+				e.resetWorktreeIfClean(ctx, worktreePath, snap)
 			}
 		}
 
@@ -404,10 +424,8 @@ func (e *engineImpl) restackBranch(
 	// If this branch is checked out in a worktree, reset that worktree's working directory
 	// to match the new branch content. Without this, the worktree would have stale content
 	// that appears as staged changes reverting the rebased commits.
-	// This is best-effort: sync checks for uncommitted changes before proceeding,
-	// so failure here just means the worktree may be briefly out of sync with HEAD.
 	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
+		e.resetWorktreeIfClean(ctx, worktreePath, snap)
 	}
 
 	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
@@ -603,7 +621,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	}
 
 	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
+		e.resetWorktreeIfClean(ctx, worktreePath, snap)
 	}
 
 	if snap.meta != nil {

@@ -191,4 +191,40 @@ func TestModifyInto(t *testing.T) {
 
 		sh.OnBranch("c")
 	})
+
+	// Regression test for #1494/#1497: modify took no undo snapshot, so
+	// `stackit abort` fell back to whatever unrelated command's snapshot
+	// happened to be latest (typically the last `create`) instead of the
+	// state right before this modify ran — landing on the wrong branch and,
+	// in the worst case, deleting branches created since that stale snapshot.
+	t.Run("abort after a conflict restacking upstack returns to the original branch", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		// main -> a -> b -> d. d's own commit reverts b's change to file.txt,
+		// so file.txt is identical between a and d: checking out a to amend
+		// it hits no local-changes conflict. b's original edit to the same
+		// line still conflicts when b is replayed onto the amended a.
+		sh.WriteFile("file.txt", "L1\nL2\nL3\n").
+			Run("create a -m 'Add a'").
+			OnBranch("a")
+		sh.WriteFile("file.txt", "L1\nL2-changed\nL3\n").
+			Run("create b -m 'Add b'").
+			OnBranch("b")
+		sh.WriteFile("file.txt", "L1\nL2\nL3\n").
+			Run("create d -m 'Add d'").
+			OnBranch("d")
+
+		sh.WriteFile("file.txt", "L1\nL2-AMENDED\nL3\n")
+		sh.Git("add file.txt")
+		sh.RunExpectError("modify --into a -n").
+			OutputContains("conflict")
+
+		sh.Run("abort --force").
+			OutputContains("Successfully aborted")
+
+		sh.OnBranch("d")
+		sh.HasBranches("a", "b", "d", "main")
+		sh.Git("show a:file.txt").OutputContains("L1\nL2\nL3\n")
+	})
 }

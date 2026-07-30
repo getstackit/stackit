@@ -64,6 +64,21 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	}
 	targetBranchObj := eng.GetBranch(targetBranchName)
 
+	// Take snapshot before modifying the repository. Without this, `stackit
+	// abort` falls back to whatever unrelated command's snapshot happens to
+	// be latest, which can restore the wrong current branch or even delete
+	// branches created since (see #1497). This matters more with --into,
+	// which amends a branch other than the one the user is standing on.
+	snapshotOpts := NewSnapshot("modify",
+		WithFlagValue("--into", opts.Into),
+		WithFlagValue("-m", opts.Message),
+		WithFlag(opts.CreateCommit, "--commit"),
+		WithFlag(opts.All, "--all"),
+		WithFlag(opts.Update, "--update"),
+		WithFlag(opts.Patch, "--patch"),
+	)
+	TakeBestEffortSnapshot(ctx, snapshotOpts)
+
 	// Handle interactive rebase separately
 	if opts.InteractiveRebase {
 		return interactiveRebaseAction(ctx, opts)

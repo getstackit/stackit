@@ -120,6 +120,18 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 			item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
 			return item, true
 		}
+		// Fast-forwarding the anchor moves its branch ref and then hard-resets
+		// the anchor's checked-out worktree to match (applyBranchAndMetadata).
+		// That reset is destructive, so refuse to move the anchor while its
+		// worktree has uncommitted changes -- mirrors sync's dirtyAnchors skip
+		// (internal/actions/sync/sync.go) rather than discarding the user's work.
+		if worktreePath, err := e.git.GetWorktreePathForBranch(ctx, branchName); err == nil && worktreePath != "" {
+			if dirty, err := e.WorktreeHasUncommittedChanges(ctx, worktreePath); err == nil && dirty {
+				item.Skip = true
+				item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
+				return item, true
+			}
+		}
 		item.Action = RestackPlanApplyAnchor
 		item.NewParent = e.trunk
 		item.ParentRev = trunkRev

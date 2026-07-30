@@ -2,6 +2,8 @@ package integration
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -71,6 +73,48 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		Commit("trunk2.txt", "chore: trunk commit 2").
 		Run("restack --all-stacks")
 	assertTracksTrunk("after second restack")
+}
+
+// TestRestackWorktreeAnchorSkipsWhenDirty covers the regression where
+// restack fast-forwarded a worktree anchor by moving its branch ref and then
+// unconditionally hard-resetting the anchor's checked-out worktree to match
+// (see applyBranchAndMetadata / ResetWorktreeWorkingDir). If the anchor's
+// worktree has uncommitted changes, that reset silently destroys them with
+// no prompt and no recovery path. Restack must instead leave the anchor (and
+// the dirty worktree) untouched, the same way sync already skips whole
+// stacks rooted at a dirty anchor worktree.
+func TestRestackWorktreeAnchorSkipsWhenDirty(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.SetWorktreeBasePath(t.TempDir())
+
+	sh.Run("worktree create my-wt")
+	sh.Run("worktree open my-wt")
+	worktreePath := strings.TrimSpace(sh.Output())
+
+	anchorBranch := findWorktreeAnchor(t, sh)
+
+	// Dirty the anchor's worktree without committing (simulates in-progress,
+	// uncommitted work sitting in a freshly created worktree).
+	sh.InWorktree(worktreePath).WriteFile("dirty.txt", "uncommitted work")
+
+	sh.Git("rev-parse " + anchorBranch)
+	anchorRevBeforeRestack := strings.TrimSpace(sh.Output())
+
+	sh.Checkout("main").
+		Commit("trunk1.txt", "chore: trunk commit 1").
+		Run("restack --all-stacks")
+
+	// The uncommitted file must survive untouched.
+	content, err := os.ReadFile(filepath.Join(worktreePath, "dirty.txt"))
+	require.NoError(t, err, "restack must not delete uncommitted work in the anchor's worktree")
+	require.Equal(t, "uncommitted work", string(content))
+
+	// The anchor is left stale (not fast-forwarded) rather than risking the reset.
+	sh.Git("rev-parse " + anchorBranch)
+	require.Equal(t, anchorRevBeforeRestack, strings.TrimSpace(sh.Output()),
+		"dirty anchor must not be fast-forwarded to trunk while its worktree has uncommitted changes")
 }
 
 // findWorktreeAnchor returns the name of the hidden worktree-anchor branch.

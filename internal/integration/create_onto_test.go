@@ -65,6 +65,27 @@ func TestCreateOnto(t *testing.T) {
 		shW.OnBranch("shared")
 	})
 
+	t.Run("inherits scope from the --onto target, not the current branch", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.Run("config set branch.pattern \"{scope}/{message}\"")
+
+		// branch-a (current) carries scope JIRA-1; branch-b (--onto target)
+		// carries a different scope, JIRA-2.
+		sh.Write("a", "content a").Run("create branch-a -m 'a' --scope JIRA-1")
+		sh.Checkout("main")
+		sh.Write("b", "content b").Run("create branch-b -m 'b' --scope JIRA-2")
+		sh.Checkout("branch-a")
+
+		// No explicit branch name, so it's generated from the pattern. The
+		// generated name must use branch-b's scope, not branch-a's, since
+		// branch-b is the real parent.
+		sh.Write("c", "content c").Run("create --onto branch-b -m 'child feature'")
+
+		sh.OnBranch("JIRA-2/child-feature")
+		sh.ExpectBranchParent("JIRA-2/child-feature", "branch-b")
+	})
+
 	t.Run("errors for a nonexistent target", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)

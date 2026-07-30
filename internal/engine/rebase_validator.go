@@ -624,6 +624,19 @@ func (e *engineImpl) tryConflictFreeReplay(
 		if i+1 < len(commits) {
 			mergeBase = commits[i+1]
 		}
+		// mergeBase is this commit's original parent. When it already equals
+		// newBase, the commit is already correctly based -- reuse it as-is
+		// instead of minting an equivalent-but-different commit via
+		// commit-tree (a fresh commit object even with the same tree and
+		// parent, since the committer date isn't fixed). Without this, a
+		// spec whose upstream end is recomputed fresh every time it's
+		// planned -- as it is for a worktree-anchor child whose recorded
+		// parent revision never converges -- churns a new SHA on every
+		// restack even though nothing changed.
+		if mergeBase == newBase {
+			newBase = commits[i]
+			continue
+		}
 		newSHA, ok := e.replayCommitConflictFree(ctx, commits[i], mergeBase, newBase)
 		if !ok {
 			return "", false

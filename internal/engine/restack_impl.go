@@ -522,6 +522,34 @@ func (e *engineImpl) applyValidatedRestack(
 		parentRev = rev
 	}
 
+	// The conflict-free replay path is idempotent: when nothing needed to
+	// change, newRev is the branch's own current SHA. Applying it anyway
+	// would still rewrite the branch ref and metadata and report a restack
+	// even though nothing moved. This matters most for a child of a worktree
+	// anchor: its recorded parent revision can never converge (the anchor
+	// doesn't fast-forward outside the restack set), so it gets re-planned on
+	// every run -- without this check, that would mint a fresh no-op commit
+	// SHA every time, force-pushing and re-triggering CI for no reason.
+	//
+	// Skip this only when the branch isn't being reparented: reparenting past
+	// a landed branch is a metadata-only move (the branch keeps its own
+	// commits unchanged, see .claude/rules/multiplayer-safety.md), so an
+	// unchanged newRev there is the expected, correct case -- and the parent
+	// branch name/revision update must still happen.
+	if !item.Reparented {
+		currentRev, ok := snap.revs[branchName]
+		if !ok {
+			var err error
+			currentRev, err = branch.GetRevision()
+			if err != nil {
+				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get current branch revision for %s: %w", branchName, err)
+			}
+		}
+		if currentRev == newRev {
+			return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: parentRev}, nil
+		}
+	}
+
 	result, err := e.applyBranchAndMetadata(ctx, branch, item, newRev, parentRev, snap)
 	if err != nil {
 		return result, err

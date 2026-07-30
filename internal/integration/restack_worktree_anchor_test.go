@@ -92,6 +92,57 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 	assertTracksTrunk("after second restack")
 }
 
+// TestRestackUpstackConvergesForWorktreeAnchorChild covers #1491: `restack
+// --upstack` (and `--only`) on a child of a worktree anchor used to rewrite
+// the branch's commit on every run and never reach an up-to-date state, even
+// with no further trunk movement between runs. Contents stayed correct (no
+// replay), but each run minted a fresh SHA, which force-pushes on the next
+// submit, re-triggers CI, and detaches existing review threads from their
+// commits.
+//
+// Unlike TestRestackWorktreeAnchorTracksTrunk, this scope deliberately
+// excludes the anchor from the restack set (`--upstack` starts at feature),
+// so the anchor's ref never advances and the child's recorded parent
+// revision can never catch up to it. That keeps the branch "planned" forever
+// even once it is already correctly based, so what's under test is that the
+// conflict-free replay path stops minting a new commit once nothing is left
+// to replay.
+func TestRestackUpstackConvergesForWorktreeAnchorChild(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.SetWorktreeBasePath(t.TempDir())
+
+	sh.Run("worktree create my-wt")
+	sh.Run("worktree open my-wt")
+	worktreePath := strings.TrimSpace(sh.Output())
+
+	sh.InWorktree(worktreePath).
+		WriteFile("feature.txt", "feature").
+		Run("create feature -m 'feat: feature'")
+
+	// One trunk advance, then a real restack: feature actually needs to move.
+	sh.Checkout("main").
+		Commit("trunk1.txt", "chore: trunk commit 1").
+		Run("restack --branch feature --upstack")
+
+	sh.Git("rev-parse feature")
+	firstRev := strings.TrimSpace(sh.Output())
+
+	// No further trunk movement. Repeated restacks scoped to exclude the
+	// anchor must converge: same SHA, reported as already up to date.
+	for i := 2; i <= 3; i++ {
+		sh.Run("restack --branch feature --upstack").
+			OutputContains("up to date")
+
+		sh.Git("rev-parse feature")
+		require.Equal(t, firstRev, strings.TrimSpace(sh.Output()),
+			"run %d: feature's SHA must stay stable once it is already correctly based", i)
+	}
+
+	sh.CommitCount("main", "feature", 1)
+}
+
 // findWorktreeAnchor returns the name of the hidden worktree-anchor branch.
 func findWorktreeAnchor(t *testing.T, sh *TestShell) string {
 	t.Helper()

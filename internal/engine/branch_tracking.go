@@ -22,6 +22,7 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 	// Update current branch if it changed
 	if current, err := e.git.GetCurrentBranch(); err == nil {
 		e.currentBranch = current
+		e.normalizeCurrentBranchLocked()
 	}
 
 	// Validate branch exists
@@ -36,8 +37,9 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 		e.state.setBranches(branches)
 		branchExists = slices.Contains(e.state.branches, branchName)
 		if !branchExists {
+			hint := git.CaseMismatchHint(branchName, e.state.branches)
 			e.mu.Unlock()
-			return fmt.Errorf("branch %s does not exist", branchName)
+			return fmt.Errorf("branch %s does not exist%s", branchName, hint)
 		}
 	}
 
@@ -54,8 +56,9 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 			e.state.setBranches(branches)
 			parentExists = slices.Contains(e.state.branches, parentBranchName)
 			if !parentExists {
+				hint := git.CaseMismatchHint(parentBranchName, e.state.branches)
 				e.mu.Unlock()
-				return fmt.Errorf("parent branch %s does not exist", parentBranchName)
+				return fmt.Errorf("parent branch %s does not exist%s", parentBranchName, hint)
 			}
 		}
 	}

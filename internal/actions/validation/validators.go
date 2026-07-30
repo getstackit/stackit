@@ -15,6 +15,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // Validator validates a single precondition.
@@ -263,7 +264,8 @@ func ValidateTargetBranch(eng BranchValidationEngine, sourceName, targetName, op
 
 	// Target must exist - check if it's trunk, tracked, or at least a git branch
 	if !targetBranch.IsTrunk() && !targetBranch.IsTracked() && !eng.BranchNames().Contains(targetName) {
-		return fmt.Errorf("branch %s does not exist", targetName)
+		return fmt.Errorf("branch %s does not exist%s", targetName,
+			git.CaseMismatchHint(targetName, eng.BranchNames().Names()))
 	}
 
 	if targetBranch.IsWorktreeAnchor() {

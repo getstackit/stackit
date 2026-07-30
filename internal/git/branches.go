@@ -15,6 +15,63 @@ func (r *runner) GetCurrentBranch() (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
+// ResolveBranchNameCase reconciles a branch name reported by HEAD with the
+// casing the ref actually carries in refs/heads.
+//
+// On case-insensitive filesystems (macOS and Windows defaults) loose refs
+// `refs/heads/Claude/x` and `refs/heads/claude/x` are the same file, so
+// whichever casing created the directory first wins on disk. HEAD, however,
+// stores the name verbatim as requested at checkout time, so
+// `git symbolic-ref --short HEAD` can echo back a casing that for-each-ref
+// never reports. Every lookup of the current branch against the branch list
+// then misses, and stackit reports the branch you are standing on as
+// nonexistent.
+//
+// The exact match always wins, so this is a no-op on case-sensitive
+// filesystems. The case-insensitive fallback engages only when the exact name
+// is absent from branchNames and exactly one candidate differs by case alone —
+// a case-insensitive filesystem cannot hold two such refs, so a unique match
+// there is the ref HEAD meant.
+//
+// Caveat: on a case-sensitive filesystem an unborn branch (`git checkout
+// --orphan Feature`) whose name differs only in case from an existing branch
+// resolves to that existing branch. Harmless in practice, and the alternative
+// costs a git call on every current-branch read.
+func ResolveBranchNameCase(name string, branchNames []string) string {
+	if name == "" || slices.Contains(branchNames, name) {
+		return name
+	}
+
+	match := ""
+	for _, candidate := range branchNames {
+		if !strings.EqualFold(candidate, name) {
+			continue
+		}
+		if match != "" {
+			// Ambiguous: only possible on a case-sensitive filesystem, where
+			// HEAD's casing is authoritative anyway.
+			return name
+		}
+		match = candidate
+	}
+	if match == "" {
+		return name
+	}
+	return match
+}
+
+// CaseMismatchHint returns a parenthetical explaining that name is absent from
+// branchNames only because of casing, or "" when casing is not the problem.
+// Turns "branch X does not exist" — reported for a branch the user can see —
+// into a message that names both spellings.
+func CaseMismatchHint(name string, branchNames []string) string {
+	if resolved := ResolveBranchNameCase(name, branchNames); resolved != name {
+		return fmt.Sprintf(" (a branch named %s exists; the names differ only in case, "+
+			"which git cannot distinguish on case-insensitive filesystems)", resolved)
+	}
+	return ""
+}
+
 func (r *runner) GetAllBranchNames(ctx context.Context) ([]string, error) {
 	branches, err := r.allBranchHashes(ctx)
 	if err != nil {

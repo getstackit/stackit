@@ -110,6 +110,18 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		}
 	}
 
+	// Return to the branch the interrupted command was invoked from, when it
+	// differs from the one that was rebased. `modify --into` records this: it
+	// amends a downstack ancestor without checking it out and promises to put
+	// you back, and resolving a conflict along the way must not change where
+	// you end up. Unset for every other command, which correctly leaves the
+	// user on the branch they just resolved.
+	if continuation.ReturnToBranch != "" && continuation.ReturnToBranch != result.BranchName {
+		if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(continuation.ReturnToBranch)); err != nil {
+			out.Error("Failed to return to %s: %v", continuation.ReturnToBranch, err)
+		}
+	}
+
 	// Clear continuation state
 	if err := config.ClearContinuationState(ctx.RepoRoot); err != nil {
 		out.Debug("Failed to clear continuation state: %v", err)

@@ -15,6 +15,14 @@ type ContinuationState struct {
 	BranchesToSync        []string `json:"branchesToSync,omitempty"` // For future sync command
 	CurrentBranchOverride string   `json:"currentBranchOverride,omitempty"`
 	RebasedBranchBase     string   `json:"rebasedBranchBase,omitempty"`
+	// ReturnToBranch is the branch the interrupted command should leave the
+	// user on once the conflict workflow finishes, when that differs from the
+	// branch being rebased. `modify --into` sets it: it amends a downstack
+	// ancestor without checking it out and promises to return you, and a
+	// conflict must not silently break that. Empty means "stay on the branch
+	// that was being rebased", which is the right default for every other
+	// command.
+	ReturnToBranch string `json:"returnToBranch,omitempty"`
 }
 
 // GetContinuationState reads the continuation state from disk

@@ -6,6 +6,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -106,9 +107,12 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 			// A conflict workflow deliberately leaves HEAD detached (see
 			// EnterConflictWorkflow); forcing a checkout back here would
 			// defeat that safety measure. `stackit continue`/`abort` own
-			// recovery from that state instead.
+			// recovery from that state instead — so hand them the branch to
+			// return to, or --into's "without checking it out, then returns"
+			// contract quietly stops holding the moment a restack conflicts.
 			var conflictErr *errors.ConflictWorkflowError
 			if errors.As(err, &conflictErr) {
+				recordConflictReturnBranch(ctx, originalBranchName)
 				return
 			}
 			if checkoutErr := eng.CheckoutBranch(gctx, eng.GetBranch(originalBranchName)); checkoutErr != nil {
@@ -203,6 +207,30 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	}
 
 	return nil
+}
+
+// recordConflictReturnBranch tells the conflict workflow which branch to leave
+// the user on once it finishes. The continuation state has just been written by
+// EnterConflictWorkflow, so this reads it back and adds the one field it could
+// not know about — the branch modify was invoked from, as opposed to the branch
+// being rebased.
+//
+// Best-effort on purpose: failing to record where to return is a worse outcome
+// to surface as a hard error than the conflict the user is already dealing
+// with, and `continue` falls back to the rebased branch when it is unset.
+func recordConflictReturnBranch(ctx *app.Context, branchName string) {
+	state, err := config.GetContinuationState(ctx.RepoRoot)
+	if err != nil {
+		ctx.Output.Debug("Failed to read continuation state to record return branch: %v", err)
+		return
+	}
+	if state.CurrentBranchOverride == branchName {
+		return
+	}
+	state.ReturnToBranch = branchName
+	if err := config.PersistContinuationState(ctx.RepoRoot, state); err != nil {
+		ctx.Output.Debug("Failed to record return branch %s: %v", branchName, err)
+	}
 }
 
 // validateModifyIntoTarget ensures --into targets a genuine, modifiable

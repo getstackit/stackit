@@ -253,6 +253,42 @@ func TestModifyInto(t *testing.T) {
 		sh.HasBranches("a", "b", "d", "main")
 		sh.Git("show a:file.txt").OutputContains("L1\nL2\nL3\n")
 	})
+
+	// #1494: --into promises to amend a downstack ancestor "without checking it
+	// out" and put you back. `continue` knew only about the branch it rebased,
+	// so resolving a conflict silently changed where you ended up — on the
+	// conflicted ancestor rather than the branch you started from.
+	t.Run("continue after a conflict restacking upstack returns to the original branch", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		// Same shape as the abort case above: d reverts b's change, so checking
+		// out a from d is clean while replaying b onto the amended a conflicts.
+		sh.WriteFile("file.txt", "L1\nL2\nL3\n").
+			Run("create a -m 'Add a'").
+			OnBranch("a")
+		sh.WriteFile("file.txt", "L1\nL2-changed\nL3\n").
+			Run("create b -m 'Add b'").
+			OnBranch("b")
+		sh.WriteFile("file.txt", "L1\nL2\nL3\n").
+			Run("create d -m 'Add d'").
+			OnBranch("d")
+
+		sh.WriteFile("file.txt", "L1\nL2-AMENDED\nL3\n")
+		sh.Git("add file.txt")
+		sh.RunExpectError("modify --into a -n").
+			OutputContains("conflict")
+
+		// Resolve in b's favor, keeping b's exact content so that d — whose own
+		// commit reverts b — still applies cleanly and the restack runs to
+		// completion rather than stopping on a second conflict.
+		sh.WriteFile("file.txt", "L1\nL2-changed\nL3\n")
+		sh.Git("add file.txt")
+		sh.Run("continue")
+
+		sh.OnBranch("d")
+		sh.Git("show a:file.txt").OutputContains("L1\nL2-AMENDED\nL3\n")
+	})
 }
 
 // TestModifyUndo covers the success-path counterpart to the abort test above:

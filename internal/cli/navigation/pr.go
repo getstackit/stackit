@@ -26,8 +26,9 @@ Examples:
   stackit pr feature-x        # Open feature-x's PR
   stackit pr 1234             # Open PR #1234
   stackit pr --stack          # Open the root PR of the current stack`,
-		SilenceUsage: true,
-		Args:         cobra.MaximumNArgs(1),
+		SilenceUsage:      true,
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: common.CompleteBranches,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.RunReadOnlyCurrentBranch(cmd, func(ctx *app.Context) error {
 				target := ""

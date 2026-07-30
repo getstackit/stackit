@@ -100,6 +100,9 @@ func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Drop dirty-worktree stacks before the guard so a restack that has nothing
+	// left to move is a no-op rather than a guard error.
+	rawGroups = skipDirtyWorktreeStacks(ctx, rawGroups)
 	if err := guardUnpushedTrunk(ctx, eng, rawGroups); err != nil {
 		return nil, err
 	}
@@ -452,6 +455,53 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 	return []restackBranchGroup{{
 		branches: branches,
 	}}, nil
+}
+
+// skipDirtyWorktreeStacks drops every branch whose stack is rooted at a managed
+// worktree with uncommitted changes, warning once per skipped stack.
+//
+// Restacking such a stack fast-forwards the anchor's ref, but the working-directory
+// reset that would realign the anchor's worktree is deliberately suppressed while
+// that worktree is dirty (it would discard the user's uncommitted edits). The
+// worktree is then left reporting trunk's new files as deleted, so a `git add -A`
+// there would commit a revert of trunk. Leaving the stack alone until the worktree
+// is clean avoids that state entirely, and it self-heals on the next restack once
+// the user commits or stashes.
+//
+// Deliberately mirrors — rather than shares — sync's dirtyAnchorSet handling in
+// internal/actions/sync/sync.go: that type is package-private to sync, and
+// exporting it would mean touching every sync call site.
+func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []restackBranchGroup {
+	eng := ctx.Engine
+	worktrees, err := eng.ListManagedWorktrees()
+	if err != nil || len(worktrees) == 0 {
+		return groups
+	}
+
+	dirtyAnchors := make(map[string]bool)
+	for _, wt := range worktrees {
+		if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
+			dirtyAnchors[wt.AnchorBranch] = true
+			ctx.Output.Warn("Skipping stack rooted at %s (worktree has uncommitted changes)", wt.AnchorBranch)
+		}
+	}
+	if len(dirtyAnchors) == 0 {
+		return groups
+	}
+
+	kept := make([]restackBranchGroup, 0, len(groups))
+	for _, g := range groups {
+		builder := engine.NewBranchesBuilder(len(g.branches))
+		for _, branch := range g.branches {
+			if !dirtyAnchors[eng.GetStackRootForBranch(branch)] {
+				builder.Add(branch)
+			}
+		}
+		if built := builder.Build(); len(built) > 0 {
+			kept = append(kept, restackBranchGroup{rootBranch: g.rootBranch, branches: built})
+		}
+	}
+	return kept
 }
 
 func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptions) ([]restackBranchGroup, error) {

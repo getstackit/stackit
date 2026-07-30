@@ -76,6 +76,9 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 
 	if targetBranchName != originalBranchName {
 		if err := eng.CheckoutBranch(gctx, targetBranchObj); err != nil {
+			if git.IsLocalChangesError(err) {
+				return fmt.Errorf("cannot modify %s because your staged changes conflict with it; commit or stash them first, or use 'stackit absorb' to route the change to the commit that should own it", targetBranchName)
+			}
 			return fmt.Errorf("failed to checkout %s: %w", targetBranchName, err)
 		}
 		out.Info("Modifying downstack branch %s.", output.CurrentBranch(targetBranchName))

@@ -191,4 +191,28 @@ func TestModifyInto(t *testing.T) {
 
 		sh.OnBranch("c")
 	})
+
+	t.Run("gives actionable guidance instead of a raw git error on conflicting staged files", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.CreateLinearStack3().
+			OnBranch("c")
+
+		// Diverge the shared file between a and c: amend b's commit so the
+		// file differs between a's HEAD and c's HEAD, then stage yet another
+		// conflicting version on c. Checking out from c to a then requires
+		// overwriting the staged change, which git refuses to do silently.
+		sh.Checkout("b").
+			Modify("a.txt", "b's version of the shared file")
+
+		sh.Checkout("c").
+			Write("a.txt", "c's conflicting staged version").
+			RunExpectError("modify --into a -n").
+			OutputContains("stackit absorb").
+			OnBranch("c")
+
+		sh.Git("diff --cached --name-only").
+			OutputContains("a.txt_test.txt")
+	})
 }

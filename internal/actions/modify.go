@@ -64,6 +64,26 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	}
 	targetBranchObj := eng.GetBranch(targetBranchName)
 
+	// Take snapshot before modifying the repository. modify was the only
+	// history-rewriting action without one, so `stackit undo` / `abort` fell
+	// through to whatever unrelated command's snapshot happened to be latest --
+	// restoring the wrong branch, or deleting branches created since it. This
+	// matters most with --into, which rewrites a branch the user is not standing
+	// on and then restacks its whole subtree.
+	//
+	// Deliberately above the interactive-rebase branch: that path rewrites
+	// history too and needs the same safety net.
+	snapshotOpts := NewSnapshot("modify",
+		WithFlagValue("--into", opts.Into),
+		WithFlagValue("-m", opts.Message),
+		WithFlag(opts.CreateCommit, "--commit"),
+		WithFlag(opts.All, "--all"),
+		WithFlag(opts.Update, "--update"),
+		WithFlag(opts.Patch, "--patch"),
+		WithFlag(opts.InteractiveRebase, "--interactive-rebase"),
+	)
+	TakeBestEffortSnapshot(ctx, snapshotOpts)
+
 	// Handle interactive rebase separately
 	if opts.InteractiveRebase {
 		return interactiveRebaseAction(ctx, opts)

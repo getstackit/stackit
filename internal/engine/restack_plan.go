@@ -35,6 +35,13 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 			continue
 		}
 		plan.ApplyMap[item.Branch] = true
+		if item.Action == RestackPlanApplyAnchor {
+			// A moved anchor has to invalidate its children exactly like any
+			// other moved parent. Without this they stay "up to date" against
+			// the anchor's previous tip, so their recorded parent revision
+			// never catches up and every consumer reading it keeps drifting.
+			plan.BranchMap[item.Branch] = true
+		}
 		if item.Action == RestackPlanApplyValidated {
 			specNewParent := item.NewParent
 			if parentItem, ok := plan.Items[item.NewParent]; ok && parentItem.Action == RestackPlanApplyAnchor && parentItem.TargetRev != "" {
@@ -92,6 +99,34 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		}
 	}
 
+	// Worktree anchors are handled before the landed check below. An anchor
+	// holds no commits of its own -- it marks where trunk was when the worktree
+	// was created -- so it is always an ancestor of trunk and the landed check
+	// would always skip it. Skipping it means it never fast-forwards, and every
+	// consumer that measures a child against its recorded parent (restack
+	// ranges, tree commit counts and diffs) drifts further from reality with
+	// each trunk advance.
+	if branch.IsWorktreeAnchor() {
+		trunkRev, ok := e.planRev(revMap, e.trunk)
+		if !ok {
+			return item, false
+		}
+		anchorRev, ok := e.planRev(revMap, branchName)
+		if !ok {
+			return item, false
+		}
+		if anchorRev == trunkRev {
+			item.Skip = true
+			item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
+			return item, true
+		}
+		item.Action = RestackPlanApplyAnchor
+		item.NewParent = e.trunk
+		item.ParentRev = trunkRev
+		item.TargetRev = trunkRev
+		return item, true
+	}
+
 	// If this branch has already landed, do not rebase it during restack. This
 	// covers merged PR metadata for all GitHub methods, plus Git-detected merge,
 	// rebase, and multi-commit squash histories on trunk even when the merged
@@ -129,27 +164,6 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		return item, true
 	}
 
-	if branch.IsWorktreeAnchor() {
-		trunkRev, ok := e.planRev(revMap, e.trunk)
-		if !ok {
-			return item, false
-		}
-		anchorRev, ok := e.planRev(revMap, branchName)
-		if !ok {
-			return item, false
-		}
-		if anchorRev == trunkRev {
-			item.Skip = true
-			item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
-			return item, true
-		}
-		item.Action = RestackPlanApplyAnchor
-		item.NewParent = e.trunk
-		item.ParentRev = trunkRev
-		item.TargetRev = trunkRev
-		return item, true
-	}
-
 	e.mu.RLock()
 	needsReparent := state != nil && e.shouldReparentBranch(ctx, state.Parent, nil, squashCache)
 	if needsReparent {
@@ -174,20 +188,34 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		oldParentRev = *rev
 	}
 
+	// A worktree anchor is never the branch's real rebase base: children of an
+	// anchor are rebased onto trunk's tip below. Measure the other end of the
+	// range against trunk too, or the two ends sit on different bases. The
+	// anchor's recorded revision goes stale as soon as trunk advances, and the
+	// is-ancestor check below cannot detect that: a stale anchor revision is an
+	// ancestor of trunk, so it stays an ancestor of a branch sitting on trunk.
+	// Trusting it keeps every trunk commit since the anchor was created inside
+	// the replay range.
+	rebaseBase := parentName
+	if e.IsWorktreeAnchor(e.GetBranch(parentName)) {
+		rebaseBase = e.trunk
+		oldParentRev = ""
+	}
+
 	if oldParentRev != "" {
 		isAncestor, err := e.git.IsAncestor(ctx, oldParentRev, branchName)
 		if err != nil {
 			isAncestor = false
 		}
 		if !isAncestor {
-			mergeBase, err := e.git.GetMergeBase(ctx, branchName, parentName)
+			mergeBase, err := e.git.GetMergeBase(ctx, branchName, rebaseBase)
 			if err != nil {
 				return item, false
 			}
 			oldParentRev = mergeBase
 		}
 	} else {
-		mergeBase, err := e.git.GetMergeBase(ctx, branchName, parentName)
+		mergeBase, err := e.git.GetMergeBase(ctx, branchName, rebaseBase)
 		if err != nil {
 			return item, false
 		}
@@ -210,7 +238,21 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 	item.ParentRev = parentRev
 
-	if parentRev == oldParentRev && !plannedBranches.Contains(parentName) && !item.Reparented {
+	// Only skip when the recorded parent revision already agrees with the
+	// resolved one. A branch that needs no rebase never reaches a path that
+	// rewrites its metadata, so a recorded revision that has fallen behind can
+	// never catch up on its own — it just keeps drifting, and everything that
+	// reads it (tree commit counts and diffs, "restack suggested") drifts with
+	// it. This bites children of a worktree anchor, whose parent revision
+	// resolves to trunk while the metadata still holds whatever the anchor
+	// pointed at. Planning them keeps the no-op rebase that refreshes the
+	// record; the rebase itself has nothing to replay.
+	recordedRev := ""
+	if rev := meta.GetParentBranchRevision(); rev != nil {
+		recordedRev = *rev
+	}
+	upToDate := parentRev == oldParentRev && oldParentRev == recordedRev
+	if upToDate && !plannedBranches.Contains(parentName) && !item.Reparented {
 		item.Skip = true
 		item.SkipResult = RestackBranchResult{
 			Result:            RestackUnneeded,

@@ -165,12 +165,20 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	}
 
 	// Determine branch
+	// The branch's parent is --onto's target when given, otherwise the current
+	// branch. Resolved once, up front, so scope inheritance below and the
+	// tracking/Result parent further down agree on the same parent.
+	parentBranch := currentBranch
+	if opts.Onto != "" {
+		parentBranch = opts.Onto
+	}
+
 	// Use provided scope if given, otherwise inherit from parent
 	var scopeToUse string
 	if opts.Scope != "" {
 		scopeToUse = opts.Scope
 	} else {
-		parentScope := eng.GetScope(eng.GetBranch(currentBranch))
+		parentScope := eng.GetScope(eng.GetBranch(parentBranch))
 		scopeToUse = parentScope.String()
 	}
 
@@ -207,10 +215,8 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// checkout, so the divergence point stackit records is the target's tip
 	// rather than a merge-base that could wander into unrelated history the
 	// current branch happens to share with the target.
-	parentBranch := currentBranch
 	h.OnStep(StepBranchCreate, handler.StatusStarted, fmt.Sprintf("Creating branch %s", branchName))
 	if opts.Onto != "" {
-		parentBranch = opts.Onto
 		ontoBranch := eng.GetBranch(opts.Onto)
 		ontoSHA, err := ontoBranch.GetRevision()
 		if err != nil {

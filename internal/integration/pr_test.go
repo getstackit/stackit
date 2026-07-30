@@ -78,4 +78,25 @@ func TestPrCommand(t *testing.T) {
 
 		sh.RunExpectError("pr 999").OutputContains("no tracked branch found")
 	})
+
+	t.Run("errors when HEAD is detached", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		sh.Git("checkout --detach main")
+
+		sh.RunExpectError("pr").OutputContains("not on a branch")
+	})
+
+	t.Run("--stack errors when the stack root has no PR", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+
+		// main -> a -> b -> c, currently on c. Only c has a PR; the stack
+		// root (a) does not.
+		sh.CreateLinearStack3()
+		sh.SetPrMetadata("c", PRMetadata{Number: 3, URL: "https://github.com/owner/repo/pull/3"})
+
+		sh.RunExpectError("pr --stack").OutputContains("no associated pull request")
+	})
 }

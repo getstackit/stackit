@@ -94,6 +94,18 @@ func TestCreateOnto(t *testing.T) {
 			OutputContains("locked")
 	})
 
+	t.Run("errors for a worktree anchor target", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.SetWorktreeBasePath(t.TempDir())
+
+		sh.Run("worktree create my-wt")
+		anchorBranch := findWorktreeAnchor(t, sh)
+
+		sh.RunExpectError("create branch-x --onto " + anchorBranch + " -m 'feat: x' --allow-empty").
+			OutputContains("cannot create a branch onto worktree anchor")
+	})
+
 	t.Run("errors when combined with --worktree", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)

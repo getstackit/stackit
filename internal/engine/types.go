@@ -385,6 +385,11 @@ const (
 	RestackPlanApplyFrozen
 	// RestackPlanApplyAnchor updates a worktree anchor to trunk.
 	RestackPlanApplyAnchor
+	// RestackPlanApplyMetadataRefresh corrects a branch's recorded parent
+	// revision without moving its branch ref — used when the branch is
+	// already correctly based on its parent but the recorded revision has
+	// drifted.
+	RestackPlanApplyMetadataRefresh
 )
 
 // RestackPlanItem describes how a branch should be handled during restack.

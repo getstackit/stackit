@@ -238,26 +238,38 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 	item.ParentRev = parentRev
 
-	// Only skip when the recorded parent revision already agrees with the
-	// resolved one. A branch that needs no rebase never reaches a path that
-	// rewrites its metadata, so a recorded revision that has fallen behind can
-	// never catch up on its own — it just keeps drifting, and everything that
-	// reads it (tree commit counts and diffs, "restack suggested") drifts with
-	// it. This bites children of a worktree anchor, whose parent revision
-	// resolves to trunk while the metadata still holds whatever the anchor
-	// pointed at. Planning them keeps the no-op rebase that refreshes the
-	// record; the rebase itself has nothing to replay.
+	// A branch can already sit exactly on its parent's tip (parentRev ==
+	// oldParentRev) while its recorded parent revision has still drifted —
+	// never set, stale from manual git operations, or (for a worktree
+	// anchor's children) resolved to trunk while the metadata still holds
+	// whatever the anchor pointed at. A branch that needs no rebase never
+	// reaches a path that rewrites its metadata on its own, so a drifted
+	// record can never catch up by itself — it just keeps drifting, and
+	// everything that reads it (tree commit counts and diffs, "restack
+	// suggested") drifts with it.
+	//
+	// The two needs are handled separately rather than folded into one
+	// rebase: a branch that is not actually based where it should be gets a
+	// real rebase, but a branch that's already correctly based only gets its
+	// metadata corrected. Rebasing purely to fix the record would replay the
+	// branch's own commits onto themselves, minting a fresh SHA on every
+	// restack for no content change — forcing unnecessary force-pushes, CI
+	// re-runs, and detached review comments.
 	recordedRev := ""
 	if rev := meta.GetParentBranchRevision(); rev != nil {
 		recordedRev = *rev
 	}
-	upToDate := parentRev == oldParentRev && oldParentRev == recordedRev
-	if upToDate && !plannedBranches.Contains(parentName) && !item.Reparented {
+	correctlyBased := parentRev == oldParentRev
+	skippable := !plannedBranches.Contains(parentName) && !item.Reparented
+	switch {
+	case correctlyBased && oldParentRev == recordedRev && skippable:
 		item.Skip = true
 		item.SkipResult = RestackBranchResult{
 			Result:            RestackUnneeded,
 			RebasedBranchBase: parentRev,
 		}
+	case correctlyBased && skippable:
+		item.Action = RestackPlanApplyMetadataRefresh
 	}
 
 	return item, true

@@ -648,6 +648,110 @@ func TestRestackBranchesWithValidatedPlanAppliesAnchorBranch(t *testing.T) {
 	require.Equal(t, trunkSHA, anchorSHA)
 }
 
+// TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing
+// covers a legacy on-disk stack: the branch is already correctly based on
+// its parent, but parentBranchRevision was never recorded. Before this
+// behavior existed, the strengthened up-to-date check planned a full rebase
+// purely to fix the record, minting a new SHA for no content change.
+func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"parent": "main",
+			"child":  "parent",
+		})
+
+	parentRev, err := s.Engine.GetBranch("parent").GetRevision()
+	require.NoError(t, err)
+	childSHA, err := s.Scene.Repo.GetBranchSHA("child")
+	require.NoError(t, err)
+
+	meta, err := s.Engine.Git().ReadMetadata("child")
+	require.NoError(t, err)
+	require.NoError(t, s.Engine.Git().WriteMetadata("child", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Rebuild("main"))
+
+	child := s.Engine.GetBranch("child")
+	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(child))
+	require.NoError(t, err)
+	require.Empty(t, plan.Specs, "child is already correctly based on parent; no rebase should be planned")
+	require.True(t, plan.ApplyMap["child"])
+	require.Equal(t, engine.RestackPlanApplyMetadataRefresh, plan.Items["child"].Action)
+
+	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
+	result, err := s.Engine.RestackBranchesWithValidatedPlan(context.Background(), engine.BranchesOf(child), validation, plan, nil)
+	require.NoError(t, err)
+	require.Equal(t, engine.RestackUnneeded, result.Results["child"].Result)
+
+	newChildSHA, err := s.Scene.Repo.GetBranchSHA("child")
+	require.NoError(t, err)
+	require.Equal(t, childSHA, newChildSHA, "restack must not mint a new SHA when nothing needed replaying")
+
+	updatedMeta, err := s.Engine.Git().ReadMetadata("child")
+	require.NoError(t, err)
+	require.NotNil(t, updatedMeta.GetParentBranchRevision())
+	require.Equal(t, parentRev, *updatedMeta.GetParentBranchRevision(), "recorded parent revision should catch up")
+
+	// A second restack should now find the record fully caught up.
+	plan2, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(child))
+	require.NoError(t, err)
+	require.True(t, plan2.Items["child"].Skip)
+	require.Equal(t, engine.RestackUnneeded, plan2.PlannedResults["child"].Result)
+}
+
+// TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit covers the
+// other trigger from #1492: a child rebased outside stackit with raw git.
+// The branch ends up correctly based on its parent's current tip, but the
+// recorded parent revision in metadata still points at the parent's pre-amend
+// SHA, which is no longer an ancestor of the branch.
+func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"a": "main",
+			"b": "a",
+		})
+
+	oldARev, err := s.Engine.GetBranch("a").GetRevision()
+	require.NoError(t, err)
+
+	// Amend "a" outside stackit so its tip moves without stackit updating
+	// "b"'s recorded parent revision. The message must actually change --
+	// otherwise an amend moments after the original commit can produce a
+	// byte-identical (and thus identically-SHA'd) commit object.
+	s.Checkout("a").RunGit("commit", "--amend", "-m", "a, amended outside stackit")
+	newARev, err := s.Engine.GetBranch("a").GetRevision()
+	require.NoError(t, err)
+	require.NotEqual(t, oldARev, newARev)
+
+	// Manually rebase "b" onto the new tip of "a" with raw git, bypassing
+	// stackit entirely -- "b" ends up correctly based on "a", but its
+	// recorded parent revision still names the pre-amend SHA.
+	s.RunGit("rebase", "--onto", "a", oldARev, "b")
+	require.NoError(t, s.Engine.Rebuild("main"))
+
+	bSHA, err := s.Scene.Repo.GetBranchSHA("b")
+	require.NoError(t, err)
+
+	b := s.Engine.GetBranch("b")
+	plan, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(b))
+	require.NoError(t, err)
+	require.Empty(t, plan.Specs, "b is already correctly based on a; no rebase should replay its commits")
+	require.Equal(t, engine.RestackPlanApplyMetadataRefresh, plan.Items["b"].Action)
+
+	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
+	result, err := s.Engine.RestackBranchesWithValidatedPlan(context.Background(), engine.BranchesOf(b), validation, plan, nil)
+	require.NoError(t, err)
+	require.Equal(t, engine.RestackUnneeded, result.Results["b"].Result)
+
+	newBSHA, err := s.Scene.Repo.GetBranchSHA("b")
+	require.NoError(t, err)
+	require.Equal(t, bSHA, newBSHA, "restack must not mint a new SHA when the branch was already correctly based")
+
+	meta, err := s.Engine.Git().ReadMetadata("b")
+	require.NoError(t, err)
+	require.NotNil(t, meta.GetParentBranchRevision())
+	require.Equal(t, newARev, *meta.GetParentBranchRevision(), "recorded parent revision should catch up to a's current tip")
+}
+
 func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{

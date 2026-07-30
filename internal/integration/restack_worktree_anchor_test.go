@@ -20,12 +20,27 @@ import (
 // child's recorded parent revision (nothing invalidates it, because a skipped
 // anchor never counted as a moved parent), and the rebase range used to restack
 // the child, whose `upstream` end came from that stale revision while its `onto`
-// end was trunk's tip. The widening range replays trunk's own commits back onto
-// the branch, which .claude/rules/multiplayer-safety.md forbids: after a
-// restack, <trunk>..<branch> must equal exactly the branch's own commits.
+// end was trunk's tip.
 //
-// Restacking twice is what exposes it. One restack is fine, because the anchor
-// revision really is where the branch is based.
+// What this test actually proves: the anchor fast-forwards to trunk, and the
+// child's recorded parent revision converges to it, on every restack. That is
+// the bookkeeping half of the fix, and it is load-bearing — reverting it fails
+// at the first two assertions in assertTracksTrunk.
+//
+// It does NOT demonstrate the data-loss half — trunk's own commits replayed
+// back onto the branch, which .claude/rules/multiplayer-safety.md forbids
+// (<trunk>..<branch> must equal exactly the branch's own commits). With plain
+// sequential trunk commits, the branch's recorded revision always stays an
+// ancestor of the branch, so the merge-base substitution this bug is about
+// (restack_plan.go:199-223) is never reached: the fallback that would use the
+// wrong base only fires once the recorded revision stops being an ancestor,
+// which needs trunk history that has been rewritten (squash or rebase merge)
+// rather than only appended to. Git's patch-id dedup also drops any replayed
+// commit whose content already matches something reachable from the new base,
+// so even a widened range is invisible until a rewrite changes a commit's
+// patch-id. See the GitHub Merge Method Coverage section of
+// .claude/rules/testing.md for the same requirement elsewhere: a test with only
+// appended, unrewritten trunk commits cannot exercise this class of bug.
 func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 	t.Parallel()
 
@@ -56,7 +71,9 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		require.Equal(t, trunkRev, recordedParentRev(t, sh, "feature"),
 			"%s: child's recorded parent revision must track trunk", stage)
 
-		// The invariant that actually protects the branch's contents.
+		// Sanity check that the branch still contains only its own commit. It
+		// does not independently regression-cover the replay bug described
+		// above — see the package doc comment.
 		sh.CommitCount("main", "feature", 1)
 	}
 
@@ -67,8 +84,8 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 		Run("restack --all-stacks")
 	assertTracksTrunk("after first restack")
 
-	// Trunk advances again. This is where the stale anchor used to widen the
-	// replay range to cover every trunk commit since the worktree was created.
+	// Trunk advances again, so a second restack exercises the anchor and its
+	// child on a revision that isn't the one either was created against.
 	sh.Checkout("main").
 		Commit("trunk2.txt", "chore: trunk commit 2").
 		Run("restack --all-stacks")

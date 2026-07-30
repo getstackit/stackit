@@ -115,5 +115,7 @@ Examples:
 	cmd.Flags().CountVarP(&verbose, "verbose", "v", "Show unified diff between the HEAD commit and what would be committed at the bottom of the commit message template. If specified twice, show in addition the unified diff between what would be committed and the worktree files")
 	cmd.Flags().BoolVarP(&worktree, "worktree", "w", false, "Create a dedicated worktree for this stack (only valid when creating a new stack from trunk)")
 
+	_ = cmd.RegisterFlagCompletionFunc("onto", common.CompleteBranches)
+
 	return cmd
 }

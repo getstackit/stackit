@@ -150,6 +150,7 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 		currentBranch = ""
 	}
 	e.currentBranch = currentBranch
+	e.normalizeCurrentBranchLocked()
 
 	// Worktree snapshots are built only from fully-loaded parent engines (see
 	// SnapshotForWorktree), so the worktree engine starts with both gates open.
@@ -234,8 +235,19 @@ func (e *engineImpl) loadBranchList() error {
 	}
 	e.mu.Lock()
 	e.state.setBranches(branches)
+	e.normalizeCurrentBranchLocked()
 	e.mu.Unlock()
 	return nil
+}
+
+// normalizeCurrentBranchLocked realigns e.currentBranch with the casing the ref
+// carries in refs/heads. See git.ResolveBranchNameCase for why HEAD and the
+// branch list can disagree. Callers must hold e.mu for writing.
+func (e *engineImpl) normalizeCurrentBranchLocked() {
+	if e.currentBranch == "" {
+		return
+	}
+	e.currentBranch = git.ResolveBranchNameCase(e.currentBranch, e.state.branches)
 }
 
 // ensureSharedLoaded reads shared metadata for all known branches and applies

@@ -46,6 +46,7 @@ func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMe
 	if currentBranch != "" {
 		e.currentBranch = currentBranch
 	}
+	e.normalizeCurrentBranchLocked()
 	e.sharedLoaded.Store(true)
 	e.localLoaded.Store(true)
 }

@@ -54,6 +54,10 @@ func (e *engineImpl) CurrentBranch() *Branch {
 
 	e.mu.Lock()
 	e.currentBranch = current
+	// HEAD echoes the casing requested at checkout time, which can differ from
+	// the ref on disk on case-insensitive filesystems. Realign against the
+	// branch list we already hold so downstream lookups don't miss.
+	e.normalizeCurrentBranchLocked()
 	e.mu.Unlock()
 
 	e.mu.RLock()

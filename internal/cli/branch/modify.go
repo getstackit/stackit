@@ -76,7 +76,7 @@ Examples:
 	cmd.Flags().BoolVarP(&all, "all", "a", false, "Stage all changes before committing.")
 	cmd.Flags().BoolVarP(&commit, "commit", "c", false, "Create a new commit instead of amending the current commit. If this branch has no commits, this command always creates a new commit.")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "Open an editor to edit the commit message.")
-	cmd.Flags().BoolVar(&interactiveRebase, "interactive-rebase", false, "Ignore all other flags and start a git interactive rebase on the commits in this branch.")
+	cmd.Flags().BoolVar(&interactiveRebase, "interactive-rebase", false, "Start a git interactive rebase on the commits in this branch. Ignores the staging/message flags; cannot be combined with --into.")
 	cmd.Flags().StringVar(&into, "into", "", "Modify a downstack ancestor branch instead of the current branch, without checking it out first.")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "The message for the new or amended commit. If passed, no editor is opened.")
 	cmd.Flags().StringVarP(&messageFile, "message-file", "F", "", "Read commit message from a file (use \"-\" for stdin). Mutually exclusive with --message.")

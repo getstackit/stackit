@@ -50,6 +50,84 @@ type restackSnapshot struct {
 	dirtyWorktrees map[string]bool
 }
 
+// restackWorktreeAnchor fast-forwards a worktree anchor to trunk instead of
+// rebasing it. handled is false for any branch that isn't an anchor, so callers
+// fall through to the normal path.
+//
+// An anchor carries no commits of its own, so there is nothing to replay: the
+// ref and its recorded parent revision are moved to trunk in one atomic update.
+func (e *engineImpl) restackWorktreeAnchor(
+	ctx context.Context,
+	branch Branch,
+	snap *restackSnapshot,
+) (result RestackBranchResult, handled bool, err error) {
+	if !e.IsWorktreeAnchor(branch) {
+		return RestackBranchResult{}, false, nil
+	}
+	branchName := branch.GetName()
+
+	trunkRev, err := e.Trunk().GetRevision()
+	if err != nil {
+		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get trunk revision for anchor %s: %w", branchName, err)
+	}
+
+	anchorRev, err := branch.GetRevision()
+	if err != nil {
+		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to get anchor revision for %s: %w", branchName, err)
+	}
+
+	// If already at trunk, nothing to do
+	if anchorRev == trunkRev {
+		return RestackBranchResult{Result: RestackUnneeded}, true, nil
+	}
+
+	// Get current metadata SHA for optimistic locking
+	oldMetadataSHA := snap.metaRefSHAs[branchName]
+
+	// Prepare metadata update with new parent revision
+	meta, err := e.readMetadata(branchName)
+	if err != nil {
+		meta = git.NewMeta()
+	}
+	meta = meta.WithParentBranchRevision(&trunkRev)
+	metadataJSON, err := json.Marshal(meta)
+	if err != nil {
+		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to marshal metadata for anchor %s: %w", branchName, err)
+	}
+	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	if err != nil {
+		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to prepare metadata blob for anchor %s: %w", branchName, err)
+	}
+
+	// Atomic update of both branch ref and metadata ref
+	updates := []git.RefUpdate{
+		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: trunkRev, OldSHA: anchorRev},
+		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
+	}
+	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestackAnchor); err != nil {
+		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to update refs atomically for anchor %s: %w", branchName, err)
+	}
+
+	// If the anchor branch is currently checked out in this context, reset the working tree
+	current := e.CurrentBranch()
+	if current != nil && current.GetName() == branchName {
+		if err := e.git.HardReset(ctx, "HEAD"); err != nil {
+			return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to reset working tree for anchor %s: %w", branchName, err)
+		}
+	} else {
+		// If the branch is checked out in a different worktree, reset that worktree.
+		if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
+			e.resetWorktreeIfClean(ctx, worktreePath, snap)
+		}
+	}
+
+	return RestackBranchResult{
+		Result:            RestackDone,
+		RebasedBranchBase: trunkRev,
+		NewRev:            trunkRev,
+	}, true, nil
+}
+
 // restackBranch rebases a branch onto its parent
 // If the parent has been merged/deleted, it will automatically reparent to the nearest valid ancestor.
 // snap is the point-in-time state captured by the caller — passing it avoids
@@ -92,6 +170,17 @@ func (e *engineImpl) restackBranch(
 	lockReason := e.GetLockReason(branch)
 	if lockReason.IsLocked() && lockReason != LockReasonDraining {
 		return RestackBranchResult{Result: RestackUnneeded, LockReason: lockReason}, nil
+	}
+
+	// Worktree anchors are handled before the landed check, mirroring
+	// planRestackBranch. An anchor holds no commits of its own -- it marks where
+	// trunk was when the worktree was created -- so it is always an ancestor of
+	// trunk and branchLanded always reports it as landed. Checking that first
+	// meant the anchor returned "unneeded" before ever reaching the
+	// fast-forward below, so it never moved, and every consumer that measures a
+	// child against its recorded parent drifted further with each trunk advance.
+	if anchorResult, handled, err := e.restackWorktreeAnchor(ctx, branch, snap); handled {
+		return anchorResult, err
 	}
 
 	if e.branchLanded(ctx, branchName, parent, squashCache) {
@@ -171,72 +260,6 @@ func (e *engineImpl) restackBranch(
 		}
 
 		return RestackBranchResult{Result: RestackUnneeded, Frozen: true}, nil
-	}
-
-	// Handle worktree anchor branches: fast-forward to trunk instead of rebase
-	if e.IsWorktreeAnchor(branch) {
-		// Get trunk's current SHA
-		trunkRev, err := e.Trunk().GetRevision()
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get trunk revision for anchor %s: %w", branchName, err)
-		}
-
-		// Get anchor's current SHA
-		anchorRev, err := branch.GetRevision()
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to get anchor revision for %s: %w", branchName, err)
-		}
-
-		// If already at trunk, nothing to do
-		if anchorRev == trunkRev {
-			return RestackBranchResult{Result: RestackUnneeded}, nil
-		}
-
-		// Get current metadata SHA for optimistic locking
-		oldMetadataSHA := snap.metaRefSHAs[branchName]
-
-		// Prepare metadata update with new parent revision
-		meta, err := e.readMetadata(branchName)
-		if err != nil {
-			meta = git.NewMeta()
-		}
-		meta = meta.WithParentBranchRevision(&trunkRev)
-		metadataJSON, err := json.Marshal(meta)
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to marshal metadata for anchor %s: %w", branchName, err)
-		}
-		metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
-		if err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to prepare metadata blob for anchor %s: %w", branchName, err)
-		}
-
-		// Atomic update of both branch ref and metadata ref
-		updates := []git.RefUpdate{
-			{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: trunkRev, OldSHA: anchorRev},
-			{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
-		}
-		if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestackAnchor); err != nil {
-			return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for anchor %s: %w", branchName, err)
-		}
-
-		// If the anchor branch is currently checked out in this context, reset the working tree
-		current := e.CurrentBranch()
-		if current != nil && current.GetName() == branchName {
-			if err := e.git.HardReset(ctx, "HEAD"); err != nil {
-				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to reset working tree for anchor %s: %w", branchName, err)
-			}
-		} else {
-			// If the branch is checked out in a different worktree, reset that worktree.
-			if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
-				e.resetWorktreeIfClean(ctx, worktreePath, snap)
-			}
-		}
-
-		return RestackBranchResult{
-			Result:            RestackDone,
-			RebasedBranchBase: trunkRev,
-			NewRev:            trunkRev,
-		}, nil
 	}
 
 	// Track reparenting info

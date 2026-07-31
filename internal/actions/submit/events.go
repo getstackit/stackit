@@ -95,6 +95,15 @@ type BranchProgressEvent struct {
 
 func (BranchProgressEvent) submitEvent() {}
 
+// GitHubStackCreatedEvent reports that submit created GitHub's native Stack
+// metadata after every PR in the selected chain was submitted.
+type GitHubStackCreatedEvent struct {
+	Number       int
+	PullRequests []int
+}
+
+func (GitHubStackCreatedEvent) submitEvent() {}
+
 // CompletionOutcome classifies how a submit run ended, so handlers can decide
 // presentation without string-matching messages.
 type CompletionOutcome string

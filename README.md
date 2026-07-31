@@ -434,6 +434,17 @@ stackit get 123
 ```
 By default, `get` **freezes** the fetched branches locally. This prevents accidental local modifications while you build on top of them, without affecting the original author's metadata. Use `stackit unfreeze` if you need to modify them.
 
+### Native GitHub Stack Sync (Experimental)
+
+GitHub's native stacked PR UI requires a linear PR chain. To reconcile its Stack API metadata during submission, opt into linear topology and use the native-stack flag:
+
+```bash
+stackit config set stack.shape linear
+stackit submit --with-native-stack
+```
+
+This experimental option only syncs GitHub's server-side Stack resource; it does not change Stackit metadata or normal `stackit submit` behavior without the flag.
+
 ---
 
 ## Frozen & Locked Branches

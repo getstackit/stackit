@@ -21,6 +21,8 @@ type MockGitHubServerConfig struct {
 	CreatedPRs []*github.PullRequest
 	// UpdatedPRs stores PRs that were updated (for testing)
 	UpdatedPRs map[int]*github.PullRequest
+	// CreatedStacks records the PR numbers submitted as native GitHub Stacks.
+	CreatedStacks [][]int
 	// ErrorResponses maps endpoint+method to error responses
 	ErrorResponses map[string]error
 	// Owner and Repo for the mock server
@@ -36,6 +38,7 @@ func NewMockGitHubServerConfig() *MockGitHubServerConfig {
 		PRs:            make(map[string]*github.PullRequest),
 		CreatedPRs:     make([]*github.PullRequest, 0),
 		UpdatedPRs:     make(map[int]*github.PullRequest),
+		CreatedStacks:  make([][]int, 0),
 		ErrorResponses: make(map[string]error),
 		Owner:          "owner",
 		Repo:           "repo",

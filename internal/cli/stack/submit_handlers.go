@@ -465,6 +465,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 	case submit.BranchWarningEvent:
 		h.Output.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
 
+	case submit.GitHubStackCreatedEvent:
+		h.Output.Success("Created native GitHub Stack #%d from %s.", ev.Number, formatGitHubStackPRs(ev.PullRequests))
+
 	case submit.CompletionEvent:
 		h.plan.Flush()
 		switch ev.Outcome {
@@ -582,6 +585,7 @@ type InteractiveSubmitHandler struct {
 	out           output.Output
 	plan          planPrinter
 	inSubmitPhase bool
+	githubStack   *submit.GitHubStackCreatedEvent
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
@@ -659,6 +663,14 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		}
 		h.out.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
 
+	case submit.GitHubStackCreatedEvent:
+		if h.runner.IsRunning() {
+			created := ev
+			h.githubStack = &created
+			return
+		}
+		h.out.Success("Created native GitHub Stack #%d from %s.", ev.Number, formatGitHubStackPRs(ev.PullRequests))
+
 	case submit.CompletionEvent:
 		h.plan.Flush()
 		// If the submission phase never started (nothing to submit, dry run,
@@ -680,7 +692,18 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			Elapsed: ev.Duration,
 		})
 		h.runner.Wait()
+		if h.githubStack != nil {
+			h.out.Success("Created native GitHub Stack #%d from %s.", h.githubStack.Number, formatGitHubStackPRs(h.githubStack.PullRequests))
+		}
 	}
+}
+
+func formatGitHubStackPRs(pullRequests []int) string {
+	formatted := make([]string, len(pullRequests))
+	for i, number := range pullRequests {
+		formatted[i] = fmt.Sprintf("#%d", number)
+	}
+	return strings.Join(formatted, " → ")
 }
 
 // Confirm prompts for user confirmation

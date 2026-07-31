@@ -35,6 +35,16 @@ func (c *MockGitHubClient) Repo() githubpkg.Repo {
 	return githubpkg.Repo{Owner: c.owner, Name: c.repo}
 }
 
+// CreateStack records native GitHub Stack creation for submit integration tests.
+func (c *MockGitHubClient) CreateStack(_ context.Context, pullRequests []int) (*githubpkg.StackInfo, error) {
+	c.config.mu.Lock()
+	defer c.config.mu.Unlock()
+
+	created := append([]int(nil), pullRequests...)
+	c.config.CreatedStacks = append(c.config.CreatedStacks, created)
+	return &githubpkg.StackInfo{Number: len(c.config.CreatedStacks), PullRequests: make([]githubpkg.StackPRInfo, len(created))}, nil
+}
+
 // CreatePullRequest creates a new pull request
 func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, opts githubpkg.CreatePROptions) (*githubpkg.PullRequestInfo, error) {
 	pr := github.CreatePullRequest{

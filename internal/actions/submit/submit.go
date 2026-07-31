@@ -10,6 +10,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -46,6 +47,7 @@ type Options struct {
 	SubmitFooter         bool // Whether to include PR footer (from config)
 	NoLabels             bool // Skip applying default labels from config
 	NoAssignees          bool // Skip applying default assignees from config
+	CreateGitHubStack    bool // Create native GitHub Stack metadata after submitting PRs
 
 	// Config-driven options (these are merged with flags)
 	ConfigDraft     bool     // Default draft mode from config
@@ -73,6 +75,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Validate flags
 	if opts.Draft && opts.Publish {
 		return fmt.Errorf("can't use both --publish and --draft flags in one command")
+	}
+	if opts.CreateGitHubStack && (ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear) {
+		return fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
 	}
 
 	nav := ctx.Navigator()
@@ -155,7 +160,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	for i, branchName := range branches {
 		branchObjs[i] = nav.GetBranch(branchName)
 	}
-
 	// Resolve up-to-date status for every branch in one batched parent-revision
 	// read rather than a per-branch IsBranchUpToDate() (each of which shells a
 	// separate `git rev-parse` for the parent).
@@ -237,6 +241,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			branchObjs[i] = nav.GetBranch(branchName)
 		}
 	}
+	// Validate native Stack requirements against the final branch list. Submit
+	// validation can prune stale descendants, so validating earlier could let a
+	// one-PR list perform normal PR writes before native Stack creation fails.
+	if opts.CreateGitHubStack {
+		if err := validateGitHubStackChain(eng, branchObjs); err != nil {
+			return err
+		}
+		if len(branchObjs) < 2 {
+			return fmt.Errorf("a GitHub Stack requires at least two pull requests")
+		}
+	}
 
 	var remoteStatuses engine.BranchRemoteStatuses
 	if remoteStatusCh != nil {
@@ -261,6 +276,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	if len(submissionInfos) == 0 {
+		if opts.CreateGitHubStack {
+			if err := publishGitHubStackMetadata(ctx, branchObjs, handler); err != nil {
+				handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
+				return fmt.Errorf("PRs are already up to date, but creating native GitHub Stack metadata failed: %w", err)
+			}
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeComplete, Message: "GitHub Stack metadata submitted", Duration: time.Since(start)})
+			return nil
+		}
 		handler.OnEvent(CompletionEvent{Outcome: OutcomeUpToDate, Message: "All PRs up to date"})
 		return nil
 	}
@@ -389,10 +412,70 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("failed to push metadata to remote: %w. Your PRs were created/updated successfully, but metadata sync failed. Run 'st sync' and try submitting again", err)
 	}
 
+	if opts.CreateGitHubStack {
+		if err := publishGitHubStackMetadata(ctx, branchObjs, handler); err != nil {
+			handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
+			return fmt.Errorf("PRs were submitted successfully, but creating native GitHub Stack metadata failed: %w", err)
+		}
+	}
+
 	ctx.Logger.Info("submit completed branchCount=%v", len(branches))
 
 	handler.OnEvent(CompletionEvent{Outcome: OutcomeComplete, Message: "Submit complete", Duration: time.Since(start)})
 	return nil
+}
+
+func publishGitHubStackMetadata(ctx *app.Context, branches engine.Branches, handler Handler) error {
+	stack, pullRequests, err := createGitHubStackMetadata(ctx, branches)
+	if err != nil {
+		return err
+	}
+	handler.OnEvent(GitHubStackCreatedEvent{Number: stack.Number, PullRequests: pullRequests})
+	return nil
+}
+
+func validateGitHubStackChain(eng engine.Engine, branches engine.Branches) error {
+	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	for _, branch := range branches {
+		if children := graph.Children(branch); len(children) > 1 {
+			return fmt.Errorf("branch %q forks to %s; native GitHub Stacks require a linear chain", branch.GetName(), strings.Join(children, ", "))
+		}
+	}
+	return nil
+}
+
+// createGitHubStackMetadata creates GitHub's native Stack resource after the
+// normal submit flow has created or updated every PR in the selected chain.
+func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*github.StackInfo, []int, error) {
+	if len(branches) < 2 {
+		return nil, nil, fmt.Errorf("a GitHub Stack requires at least two pull requests")
+	}
+
+	pullRequests := make([]int, 0, len(branches))
+	for _, branch := range branches {
+		pr, err := branch.GetPrInfo()
+		if err != nil || pr == nil || pr.Number() == nil {
+			return nil, nil, fmt.Errorf("branch %q has no submitted pull request", branch.GetName())
+		}
+		pullRequests = append(pullRequests, *pr.Number())
+	}
+
+	client, err := getGitHubClient(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	stackClient, ok := client.(github.StackClient)
+	if !ok {
+		return nil, nil, fmt.Errorf("GitHub Stack API is unavailable for this client")
+	}
+
+	remoteCtx, cancel := ctx.RemoteOperationContext()
+	defer cancel()
+	stack, err := stackClient.CreateStack(remoteCtx, pullRequests)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stack, pullRequests, nil
 }
 
 // buildStackSnapshot captures the stack relationships and metadata that submit

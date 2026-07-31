@@ -210,6 +210,23 @@ func (e *engineImpl) restackBranch(
 		return RestackBranchResult{Result: RestackUnneeded, LockReason: lockReason}, nil
 	}
 
+	// Hold the branch back entirely when its worktree has uncommitted tracked
+	// changes. Moving the ref is only half the operation: the worktree has to be
+	// reset to match, and resetWorktreeIfClean deliberately refuses to do that
+	// while there is work to lose. Doing the first half without the second
+	// leaves the worktree on the old commit's content under a new ref, so
+	// `git status` there reports the new commit's files as deleted and the next
+	// `stackit modify -a` commits that deletion — silently reverting those files
+	// inside the branch.
+	//
+	// This sits here rather than only in actions.PlanRestack (skipDirtyWorktreeStacks,
+	// which warns and is reached solely by the `restack` command) so that every
+	// caller of RestackBranches inherits it — modify, sync, squash, absorb,
+	// delete, split, reorder, pluck and insert all arrive here directly.
+	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" && snap.dirtyWorktrees[worktreePath] {
+		return RestackBranchResult{Result: RestackUnneeded}, nil
+	}
+
 	// Worktree anchors are handled before the landed check, mirroring
 	// planRestackBranch. An anchor holds no commits of its own -- it marks where
 	// trunk was when the worktree was created -- so it is always an ancestor of
@@ -699,6 +716,17 @@ func (e *engineImpl) applyBranchAndMetadata(
 	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
+
+	// See the matching guard in restackBranch: moving the ref without resetting
+	// the worktree leaves a staged revert that the next `modify -a` commits, and
+	// resetWorktreeIfClean refuses to reset while there is uncommitted work.
+	// Hold the branch back instead. This is the plan path, reached by every
+	// caller of actions.RestackBranches (modify, squash, absorb, delete, split,
+	// reorder, pluck) as well as the `restack` command.
+	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" && snap.dirtyWorktrees[worktreePath] {
+		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: parentRev}, nil
+	}
+
 	meta := snap.meta.Get(branchName)
 	if meta == nil {
 		var err error

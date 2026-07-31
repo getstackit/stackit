@@ -11,6 +11,8 @@ const (
 	KeyTrunks = "stackit.trunks"
 	// KeyBranchPattern is the pattern used for generating branch names.
 	KeyBranchPattern = "stackit.branch.pattern"
+	// KeyStackShape controls whether Stackit allows tree-shaped or only linear stacks.
+	KeyStackShape = "stackit.stack.shape"
 	// KeySubmitFooter controls whether to include PR footer in submissions.
 	KeySubmitFooter = "stackit.submit.footer"
 	// KeyUndoDepth is the maximum number of undo snapshots to keep.
@@ -66,6 +68,7 @@ const (
 	YAMLPathTrunk                = "trunk"
 	YAMLPathTrunks               = "trunks"
 	YAMLPathBranchPattern        = "branch.pattern"
+	YAMLPathStackShape           = "stack.shape"
 	YAMLPathSubmitFooter         = "submit.footer"
 	YAMLPathSubmitDraft          = "submit.draft"
 	YAMLPathSubmitWeb            = "submit.web"
@@ -129,6 +132,7 @@ const (
 	SectionTrunk       = "trunk"
 	SectionTrunks      = "trunks" // array variant of trunk for YAML and validation
 	SectionBranch      = "branch"
+	SectionStack       = "stack"
 	SectionSubmit      = "submit"
 	SectionMerge       = "merge"
 	SectionCI          = "ci"
@@ -139,6 +143,16 @@ const (
 	SectionNavigation  = "navigation"
 	SectionHooks       = "hooks"
 )
+
+// Stack shape constants. Linear stacks are compatible with GitHub's native
+// stacked pull request model; tree remains the default Stackit topology.
+const (
+	StackShapeTree   = "tree"
+	StackShapeLinear = "linear"
+)
+
+// ValidStackShapes contains the allowed values for stack.shape.
+var ValidStackShapes = []string{StackShapeTree, StackShapeLinear}
 
 // Navigation when constants (valid values for KeyNavigationWhen).
 const (

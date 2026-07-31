@@ -16,6 +16,7 @@ type Configurer interface {
 	// Branch naming
 	BranchNamePattern() string
 	GetBranchPattern() BranchPattern
+	StackShape() string
 
 	// Submit settings
 	SubmitFooter() bool

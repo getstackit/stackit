@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/abort"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -79,6 +80,37 @@ func TestAbortAction(t *testing.T) {
 		restoredSHA, err := s.Engine.GetBranch("feature").GetRevision()
 		require.NoError(t, err)
 		require.Equal(t, initialSHA, restoredSHA)
+	})
+
+	t.Run("warns when linear mode restores a fork", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit().
+			CreateBranch("base").
+			Commit("base change").
+			CreateBranch("first").
+			Commit("first change").
+			Checkout("base").
+			CreateBranch("second").
+			Commit("second change").
+			Checkout("main").
+			TrackBranch("base", "main").
+			TrackBranch("first", "base").
+			TrackBranch("second", "base")
+
+		cfg, err := config.LoadConfig(s.Scene.Dir)
+		require.NoError(t, err)
+		require.NoError(t, cfg.SetStackShape(config.StackShapeLinear))
+		s.Context.Config = cfg
+
+		require.NoError(t, s.Engine.TakeSnapshot(engine.SnapshotOptions{Command: "restack"}))
+		require.NoError(t, s.Engine.SetParent(s.Context, s.Engine.GetBranch("second"), s.Engine.GetBranch("main"), engine.DivergenceRecompute))
+
+		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
+		require.NoError(t, os.WriteFile(continuationPath, []byte("{}"), 0644))
+
+		err = abort.Action(s.Context, abort.Options{Force: true}, nil)
+		require.NoError(t, err)
+		require.Contains(t, s.Output.String(), "Abort restored a non-linear stack")
 	})
 
 	t.Run("non-interactive handler without force does not abort", func(t *testing.T) {

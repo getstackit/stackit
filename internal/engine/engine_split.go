@@ -10,12 +10,28 @@ import (
 
 // ApplySplitToCommits creates branches at specified commit points
 func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOptions) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if len(opts.BranchNames) != len(opts.BranchPoints) {
 		return fmt.Errorf("invalid number of branch names: got %d names but %d branch points", len(opts.BranchNames), len(opts.BranchPoints))
 	}
+
+	// Sibling splits write metadata directly rather than going through
+	// TrackBranch, so validate their final topology before any refs move.
+	// This must happen before taking e.mu: the shared linear validator builds
+	// a graph and therefore takes its own read locks.
+	if opts.AsSibling && e.linearStacks {
+		meta, err := e.readMetadata(opts.BranchToSplit)
+		if err != nil {
+			return fmt.Errorf("failed to read metadata: %w", err)
+		}
+		if parent := meta.GetParentBranchName(); parent != nil {
+			if err := e.validateLinearSiblingSplit(*parent, opts.BranchToSplit, opts.BranchNames); err != nil {
+				return err
+			}
+		}
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
 
 	// Get metadata for the branch being split
 	meta, err := e.readMetadata(opts.BranchToSplit)

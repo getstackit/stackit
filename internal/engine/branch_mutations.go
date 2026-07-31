@@ -162,6 +162,14 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	}
 	e.mu.Unlock()
 
+	moves := make([]BranchParentMove, len(children))
+	for i, child := range children {
+		moves[i] = BranchParentMove{Branch: child, NewParent: parent}
+	}
+	if err := e.validateLinearParentMovesAfterRemovals(moves, []string{branchName}); err != nil {
+		return err
+	}
+
 	// Delete the head ref and both metadata refs atomically in one git invocation.
 	// update-ref --stdin tolerates missing refs, so this is safe even if the
 	// branch or its metadata refs were already absent.
@@ -173,18 +181,19 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 		return fmt.Errorf("failed to delete branch refs: %w", err)
 	}
 
-	// Reparent children to grandparent, preserving divergence points so
-	// children don't carry the deleted branch's commits after restacking.
-	parentBranch := e.GetBranch(parent)
-	reparentErr := e.ReparentBranches(ctx, children, parentBranch)
-
-	// Clean up in-memory cache for deleted branch
+	// Remove the deleted branch before reparenting so the regular linear guard
+	// sees the same final graph the operation will leave on disk.
 	e.mu.Lock()
 	e.state.removeBranch(branchName)
 	if i := slices.Index(e.state.branches, branchName); i >= 0 {
 		e.state.setBranches(slices.Delete(e.state.branches, i, i+1))
 	}
 	e.mu.Unlock()
+
+	// Reparent children to grandparent, preserving divergence points so
+	// children don't carry the deleted branch's commits after restacking.
+	parentBranch := e.GetBranch(parent)
+	reparentErr := e.ReparentBranches(ctx, children, parentBranch)
 
 	// Rebuild engine state from disk so callers don't need to track when to call
 	// eng.Rebuild() themselves. After this returns, GetBranch/GetParent/children
@@ -244,6 +253,29 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 	}
 	e.mu.Unlock()
 
+	// Resolve every surviving child directly to the nearest parent that will
+	// remain after the batch deletion. This models the final topology in one
+	// validation, rather than an intermediate graph containing deleted nodes.
+	moves := make([]BranchParentMove, 0)
+	allSurvivingChildren := make(map[string]bool)
+	for _, b := range branches {
+		name := b.GetName()
+		for _, child := range childrenByBranch[name] {
+			if toDeleteSet[child] {
+				continue
+			}
+			newParent := parentByBranch[name]
+			for toDeleteSet[newParent] {
+				newParent = parentByBranch[newParent]
+			}
+			moves = append(moves, BranchParentMove{Branch: child, NewParent: newParent})
+			allSurvivingChildren[child] = true
+		}
+	}
+	if err := e.validateLinearParentMovesAfterRemovals(moves, branches.Names()); err != nil {
+		return nil, err
+	}
+
 	// If the current branch is being deleted, switch to trunk first so we
 	// don't end up detached after `update-ref -d refs/heads/<current>`.
 	if needCheckoutTrunk {
@@ -271,33 +303,8 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 		return nil, fmt.Errorf("failed to delete branch refs: %w", err)
 	}
 
-	// Reparent surviving children of each deleted branch to that branch's
-	// parent. Children that are themselves being deleted in this batch are
-	// skipped — callers are expected to pass branches in a topological order
-	// (children before parents) so the parent already reflects the right
-	// grandparent by the time we get here.
-	allSurvivingChildren := make(map[string]bool)
-	var reparentErr error
-	for _, b := range branches {
-		name := b.GetName()
-		var surviving []string
-		for _, child := range childrenByBranch[name] {
-			if !toDeleteSet[child] {
-				surviving = append(surviving, child)
-				allSurvivingChildren[child] = true
-			}
-		}
-		if len(surviving) == 0 {
-			continue
-		}
-		parentBranch := e.GetBranch(parentByBranch[name])
-		if err := e.ReparentBranches(ctx, surviving, parentBranch); err != nil {
-			reparentErr = fmt.Errorf("failed to reparent children of %s: %w", name, err)
-			break
-		}
-	}
-
-	// Clean up in-memory state for the deleted branches.
+	// Remove all deleted nodes before applying the moves, so the regular linear
+	// validator sees the final graph rather than the just-deleted branches.
 	e.mu.Lock()
 	for name := range toDeleteSet {
 		e.state.removeBranch(name)
@@ -306,6 +313,13 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 		}
 	}
 	e.mu.Unlock()
+
+	var reparentErr error
+	if len(moves) > 0 {
+		if err := e.ReparentBranchesToParents(ctx, moves); err != nil {
+			reparentErr = fmt.Errorf("failed to reparent surviving children: %w", err)
+		}
+	}
 
 	childrenToRestack := make([]string, 0, len(allSurvivingChildren))
 	for child := range allSurvivingChildren {

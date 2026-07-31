@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -127,6 +128,9 @@ func (e *engineImpl) SetParent(ctx context.Context, branch Branch, parentBranch 
 
 	if branchName == parentBranchName {
 		return fmt.Errorf("branch %s cannot be its own parent", branchName)
+	}
+	if err := e.validateLinearParentMoves([]BranchParentMove{{Branch: branchName, NewParent: parentBranchName}}); err != nil {
+		return err
 	}
 
 	switch mode {
@@ -267,6 +271,9 @@ func (e *engineImpl) setParentPreservingDivergence(ctx context.Context, branch B
 // when the move crosses a stack boundary; same-stack reparenting is a no-op
 // for stack ID.
 func (e *engineImpl) ReparentBranch(ctx context.Context, branch Branch, newParent Branch) error {
+	if err := e.validateLinearParentMoves([]BranchParentMove{{Branch: branch.GetName(), NewParent: newParent.GetName()}}); err != nil {
+		return err
+	}
 	div, err := e.GetDivergencePoint(branch.GetName())
 	if err != nil {
 		return fmt.Errorf("failed to determine divergence point for %s: %w", branch.GetName(), err)
@@ -309,6 +316,10 @@ func (e *engineImpl) ReparentBranches(ctx context.Context, branchNames []string,
 // Automatically propagates each new parent's stack ID when a move crosses a
 // stack boundary.
 func (e *engineImpl) ReparentBranchesToParents(ctx context.Context, moves []BranchParentMove) error {
+	if err := e.validateLinearParentMoves(moves); err != nil {
+		return err
+	}
+
 	branches := make(Branches, len(moves))
 	for i, m := range moves {
 		branches[i] = e.GetBranch(m.Branch)
@@ -344,6 +355,14 @@ func (e *engineImpl) ReparentBranchesToParents(ctx context.Context, moves []Bran
 // Automatically propagates the new parent's stack ID when a move crosses a
 // stack boundary.
 func (e *engineImpl) ReparentBranchesRecompute(ctx context.Context, branchNames []string, newParent Branch) error {
+	moves := make([]BranchParentMove, len(branchNames))
+	for i, name := range branchNames {
+		moves[i] = BranchParentMove{Branch: name, NewParent: newParent.GetName()}
+	}
+	if err := e.validateLinearParentMoves(moves); err != nil {
+		return err
+	}
+
 	for _, name := range branchNames {
 		if err := e.SetParent(ctx, e.GetBranch(name), newParent, DivergenceRecompute); err != nil {
 			return fmt.Errorf("failed to reparent %s to %s: %w", name, newParent.GetName(), err)
@@ -353,6 +372,107 @@ func (e *engineImpl) ReparentBranchesRecompute(ctx context.Context, branchNames 
 		}
 	}
 	return nil
+}
+
+// validateLinearParentMoves rejects a set of parent changes that would create
+// a fork below a non-trunk branch. It evaluates the final topology as a batch
+// so valid reorder operations do not fail merely because of an intermediate
+// shape during their rewrite.
+func (e *engineImpl) validateLinearParentMoves(moves []BranchParentMove) error {
+	return e.validateLinearParentMovesAfterRemovals(moves, nil)
+}
+
+// validateLinearParentMovesAfterRemovals evaluates parent changes after the
+// named branches have been removed. Deletion paths use it to avoid rejecting a
+// valid chain collapse solely because the soon-to-be-deleted branch is still
+// present in the in-memory graph.
+func (e *engineImpl) validateLinearParentMovesAfterRemovals(moves []BranchParentMove, removed []string) error {
+	if !e.linearStacks || len(moves) == 0 {
+		return nil
+	}
+
+	graph := e.Graph(SortStrategyAlphabetical)
+	children := make(map[string]map[string]struct{})
+	for _, branch := range e.AllBranches() {
+		parent := graph.Parent(branch)
+		if parent == "" {
+			continue
+		}
+		if children[parent] == nil {
+			children[parent] = make(map[string]struct{})
+		}
+		children[parent][branch.GetName()] = struct{}{}
+	}
+
+	// Remove all moving branches first, then apply their proposed parents. This
+	// models the final graph rather than an arbitrary mutation order.
+	for _, move := range moves {
+		branch := e.GetBranch(move.Branch)
+		if parent := graph.Parent(branch); parent != "" {
+			delete(children[parent], move.Branch)
+		}
+	}
+	for _, branchName := range removed {
+		branch := e.GetBranch(branchName)
+		if parent := graph.Parent(branch); parent != "" {
+			delete(children[parent], branchName)
+		}
+		delete(children, branchName)
+	}
+	for _, move := range moves {
+		if children[move.NewParent] == nil {
+			children[move.NewParent] = make(map[string]struct{})
+		}
+		children[move.NewParent][move.Branch] = struct{}{}
+	}
+
+	for parent, childSet := range children {
+		if parent == e.trunk || len(childSet) <= 1 {
+			continue
+		}
+		childNames := make([]string, 0, len(childSet))
+		for child := range childSet {
+			childNames = append(childNames, child)
+		}
+		slices.Sort(childNames)
+		return fmt.Errorf("linear stacks are enabled: %s would have multiple children (%s); set stack.shape to tree to allow forks", parent, strings.Join(childNames, ", "))
+	}
+
+	return nil
+}
+
+// validateLinearSiblingSplit checks the final shape of a sibling commit split.
+// ApplySplitToCommits creates metadata directly, so these new children cannot
+// be represented as ordinary parent moves until after the mutation.
+func (e *engineImpl) validateLinearSiblingSplit(parent, branchToSplit string, branchNames []string) error {
+	if !e.linearStacks || parent == e.trunk {
+		return nil
+	}
+
+	graph := e.Graph(SortStrategyAlphabetical)
+	children := make(map[string]struct{})
+	for _, child := range graph.Children(e.GetBranch(parent)) {
+		children[child] = struct{}{}
+	}
+
+	// The original branch is removed when it is not retained as one of the
+	// split branches. The remaining names all become direct children.
+	if !slices.Contains(branchNames, branchToSplit) {
+		delete(children, branchToSplit)
+	}
+	for _, branchName := range branchNames {
+		children[branchName] = struct{}{}
+	}
+
+	if len(children) <= 1 {
+		return nil
+	}
+	childNames := make([]string, 0, len(children))
+	for child := range children {
+		childNames = append(childNames, child)
+	}
+	slices.Sort(childNames)
+	return fmt.Errorf("linear stacks are enabled: %s would have multiple children (%s); set stack.shape to tree to allow forks", parent, strings.Join(childNames, ", "))
 }
 
 // updateParentRevision updates the parent revision in metadata using transaction API

@@ -248,6 +248,7 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*CreateResult, error) {
 			RepoRoot:          mainRepoRoot,
 			Trunk:             mainCfg.Trunk(),
 			MaxUndoStackDepth: mainCfg.UndoStackDepth(),
+			LinearStacks:      mainCfg.StackShape() == config.StackShapeLinear,
 			Git:               mainGit,
 		})
 		if err != nil {

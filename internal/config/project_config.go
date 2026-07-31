@@ -19,6 +19,13 @@ type BranchConfig struct {
 	Pattern string `yaml:"pattern,omitempty"`
 }
 
+// StackConfig contains topology constraints for Stackit-managed branches.
+type StackConfig struct {
+	// Shape is "tree" (the default) or "linear". Linear mode prevents a
+	// non-trunk branch from gaining a second child.
+	Shape string `yaml:"shape,omitempty"`
+}
+
 // SubmitConfig contains PR submission configuration
 type SubmitConfig struct {
 	Footer    *bool    `yaml:"footer,omitempty"`    // Pointer to distinguish unset from false
@@ -73,6 +80,7 @@ type ProjectConfig struct {
 	Trunks []string `yaml:"trunks,omitempty"`
 
 	Branch         BranchConfig     `yaml:"branch,omitempty"`
+	Stack          StackConfig      `yaml:"stack,omitempty"`
 	Submit         SubmitConfig     `yaml:"submit,omitempty"`
 	Merge          MergeConfig      `yaml:"merge,omitempty"`
 	CI             CIConfig         `yaml:"ci,omitempty"`
@@ -100,6 +108,7 @@ var knownTopLevelKeys = map[string]bool{
 	SectionTrunk:      true,
 	SectionTrunks:     true,
 	SectionBranch:     true,
+	SectionStack:      true,
 	SectionSubmit:     true,
 	SectionMerge:      true,
 	SectionCI:         true,
@@ -166,6 +175,11 @@ func (c *ProjectConfig) HasTrunks() bool {
 // HasBranchPattern returns true if a branch naming pattern is configured
 func (c *ProjectConfig) HasBranchPattern() bool {
 	return c.Branch.Pattern != ""
+}
+
+// HasStackShape returns true if stack.shape is configured.
+func (c *ProjectConfig) HasStackShape() bool {
+	return c.Stack.Shape != ""
 }
 
 // HasSubmitFooter returns true if the submit footer setting is configured
@@ -315,6 +329,10 @@ func (c *ProjectConfig) Validate() error {
 		if _, err := NewBranchPattern(c.Branch.Pattern); err != nil {
 			return fmt.Errorf("invalid branch.pattern in %s: %w", ProjectConfigFileName, err)
 		}
+	}
+
+	if c.HasStackShape() && !slices.Contains(ValidStackShapes, c.Stack.Shape) {
+		return fmt.Errorf("invalid stack.shape in %s: %q (must be one of: %s)", ProjectConfigFileName, c.Stack.Shape, strings.Join(ValidStackShapes, ", "))
 	}
 
 	// Validate merge method if set

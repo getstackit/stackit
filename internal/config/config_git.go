@@ -208,6 +208,28 @@ func (c *GitConfig) GetBranchPattern() BranchPattern {
 	return pattern.WithDefault()
 }
 
+// StackShape returns the allowed stack topology. Personal git config takes
+// precedence over team project config; tree remains the backwards-compatible
+// default.
+func (c *GitConfig) StackShape() string {
+	shape, _ := c.store.Get(KeyStackShape)
+	if slices.Contains(ValidStackShapes, shape) {
+		return shape
+	}
+	if c.project != nil && c.project.HasStackShape() {
+		return c.project.Stack.Shape
+	}
+	return StackShapeTree
+}
+
+// SetStackShape sets the allowed stack topology.
+func (c *GitConfig) SetStackShape(shape string) error {
+	if !slices.Contains(ValidStackShapes, shape) {
+		return fmt.Errorf("invalid stack.shape: %s (must be one of: %s)", shape, strings.Join(ValidStackShapes, ", "))
+	}
+	return c.store.Set(KeyStackShape, shape)
+}
+
 // SubmitFooter returns whether to include PR footer.
 // Priority: personal git config > team project config > default.
 func (c *GitConfig) SubmitFooter() bool {
@@ -891,6 +913,11 @@ func (c *GitConfig) UnsetBranchNamePattern() error {
 	return c.store.Unset(KeyBranchPattern)
 }
 
+// UnsetStackShape removes the personal topology override.
+func (c *GitConfig) UnsetStackShape() error {
+	return c.store.Unset(KeyStackShape)
+}
+
 // UnsetSubmitFooter removes the personal submit footer setting, reverting to project/default.
 func (c *GitConfig) UnsetSubmitFooter() error {
 	return c.store.Unset(KeySubmitFooter)
@@ -993,6 +1020,7 @@ func (c *GitConfig) ResetAllPersonal() error {
 		KeyTrunk,
 		KeyTrunks,
 		KeyBranchPattern,
+		KeyStackShape,
 		KeySubmitFooter,
 		KeySubmitDraft,
 		KeySubmitWeb,

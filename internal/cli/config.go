@@ -28,6 +28,7 @@ const (
 	keyTrunksRemove         = "trunks.remove"
 	keyTrunksClear          = "trunks.clear"
 	keyBranchPattern        = "branch.pattern"
+	keyStackShape           = "stack.shape"
 	keySubmitFooter         = "submit.footer"
 	keySubmitDraft          = "submit.draft"
 	keySubmitWeb            = "submit.web"
@@ -149,6 +150,8 @@ func newConfigGetCmd() *cobra.Command {
 				}
 			case keyBranchPattern:
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.BranchNamePattern())
+			case keyStackShape:
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.StackShape())
 			case keySubmitFooter:
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.SubmitFooter())
 			case keySubmitDraft:
@@ -280,6 +283,11 @@ func newConfigSetCmd() *cobra.Command {
 					return fmt.Errorf("failed to set %s: %w", keyBranchPattern, err)
 				}
 				splog.Info("Set %s to: %s", keyBranchPattern, value)
+			case keyStackShape:
+				if err := cfg.SetStackShape(value); err != nil {
+					return fmt.Errorf("failed to set %s: %w", keyStackShape, err)
+				}
+				splog.Info("Set %s to: %s", keyStackShape, value)
 			case keySubmitFooter:
 				enabled, err := strconv.ParseBool(value)
 				if err != nil {
@@ -479,6 +487,11 @@ Examples:
 					return fmt.Errorf("failed to unset %s: %w", keyBranchPattern, err)
 				}
 				splog.Info("Unset %s (now using: %s)", keyBranchPattern, cfg.BranchNamePattern())
+			case keyStackShape:
+				if err := cfg.UnsetStackShape(); err != nil {
+					return fmt.Errorf("failed to unset %s: %w", keyStackShape, err)
+				}
+				splog.Info("Unset %s (now using: %s)", keyStackShape, cfg.StackShape())
 			case keySubmitFooter:
 				if err := cfg.UnsetSubmitFooter(); err != nil {
 					return fmt.Errorf("failed to unset %s: %w", keySubmitFooter, err)
@@ -843,6 +856,10 @@ func showConfigWithSources(repoRoot string, w io.Writer) error {
 	// branch.pattern
 	patternSource := getStringSource(config.KeyBranchPattern, projectCfg != nil && projectCfg.HasBranchPattern())
 	formatLine("branch.pattern", cfg.BranchNamePattern(), patternSource)
+
+	// stack.shape
+	stackShapeSource := getStringSource(config.KeyStackShape, projectCfg != nil && projectCfg.HasStackShape())
+	formatLine(keyStackShape, cfg.StackShape(), stackShapeSource)
 
 	// submit.footer
 	footerSource := getBoolSource(config.KeySubmitFooter, projectCfg != nil && projectCfg.HasSubmitFooter())

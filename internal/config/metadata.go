@@ -39,6 +39,7 @@ type Section struct {
 var Sections = []Section{
 	{Name: SectionTrunk, Title: "", DocsTitle: "Trunk branches"},
 	{Name: SectionBranch, Title: "Branch naming pattern", DocsTitle: "Branch naming"},
+	{Name: SectionStack, Title: "Stack topology", DocsTitle: "Stack topology"},
 	{Name: SectionSubmit, Title: "PR submission settings", DocsTitle: "PR submission"},
 	{Name: SectionMerge, Title: "Merge method: squash, merge, rebase", DocsTitle: "Merge settings"},
 	{Name: SectionCI, Title: "CI validation", DocsTitle: "CI validation"},
@@ -78,6 +79,14 @@ var Options = []Option{
 		Comment:     "Placeholders: {username}, {date}, {message}, {scope}",
 		Example:     "{username}/{date}/{message}",
 		Section:     SectionBranch,
+	},
+	{
+		YAMLPath:    YAMLPathStackShape,
+		GitKey:      KeyStackShape,
+		Description: "tree or linear (linear prevents forks below non-trunk branches)",
+		Default:     StackShapeTree,
+		ValidValues: ValidStackShapes,
+		Section:     SectionStack,
 	},
 
 	// Submit section

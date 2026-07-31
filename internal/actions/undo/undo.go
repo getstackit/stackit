@@ -4,6 +4,7 @@ package undo
 import (
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
@@ -144,6 +145,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	if err := eng.RestoreSnapshot(ctx.Context, selectedSnapshotID); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
+	actions.WarnIfLinearStackRestored(ctx, "Undo")
 
 	h.Complete(true, fmt.Sprintf("Successfully restored to state before '%s'.", selectedSnapshot.Command))
 

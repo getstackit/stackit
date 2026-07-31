@@ -380,6 +380,23 @@ trunks:
 		assert.Equal(t, "feature/{message}", cfg.Branch.Pattern)
 	})
 
+	t.Run("validates stack shape", func(t *testing.T) {
+		for _, shape := range []string{StackShapeTree, StackShapeLinear} {
+			tmpDir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ProjectConfigFileName), []byte("stack:\n  shape: "+shape+"\n"), 0600))
+
+			cfg, err := LoadProjectConfig(tmpDir)
+			require.NoError(t, err)
+			require.Equal(t, shape, cfg.Stack.Shape)
+		}
+
+		tmpDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ProjectConfigFileName), []byte("stack:\n  shape: invalid\n"), 0600))
+		_, err := LoadProjectConfig(tmpDir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid stack.shape")
+	})
+
 	t.Run("rejects invalid split.hunkSelector", func(t *testing.T) {
 		tmpDir := t.TempDir()
 

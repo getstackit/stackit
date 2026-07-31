@@ -92,8 +92,20 @@ func (d *defaultPRMergeAPI) mergePR(ctx context.Context, branchName string, meth
 //     - "not enabled on repo" + wait → poll until mergeable, then merge directly.
 //     - "not enabled on repo" + no wait → error with --wait suggestion.
 func orchestrateMerge(ctx *app.Context, opts orchestrateMergeOptions) (Outcome, error) {
-	api := &defaultPRMergeAPI{client: ctx.GitHub()}
+	api := newPRMergeAPI(ctx)
 	return doOrchestrateMerge(ctx.Context, ctx.Output, ctx.Engine.Git(), api, opts) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+}
+
+// newPRMergeAPI builds the merge API for a run. It is a variable so tests can
+// drive the commands that own the merge loop — `merge next` and `merge drain` —
+// rather than only doOrchestrateMerge, which already takes a prMergeAPI directly.
+//
+// The seam has to be here rather than on the github.Client: three of the five
+// prMergeAPI methods reach GitHub's GraphQL API by shelling out to `gh` through
+// the git runner, not through the client, so injecting a mock client leaves
+// them talking to the real thing.
+var newPRMergeAPI = func(ctx *app.Context) prMergeAPI {
+	return &defaultPRMergeAPI{client: ctx.GitHub()}
 }
 
 // doOrchestrateMerge contains the core merge orchestration logic, accepting a prMergeAPI

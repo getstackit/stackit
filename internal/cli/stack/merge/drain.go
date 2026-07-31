@@ -9,11 +9,13 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 )
 
@@ -268,6 +270,29 @@ func runMergeDrain(ctx *app.Context, opts mergeDrainOptions) error {
 		if len(drainHandler.summary.ConflictBranches) > 0 {
 			return fmt.Errorf("restack conflict in %s — resolve before continuing drain", drainHandler.summary.ConflictBranches[0])
 		}
+
+		// Publish what the restack just changed. The restack rewrote each
+		// remaining branch onto the new trunk and reparented the next one off
+		// the branch that just merged, and both of those live only locally
+		// until pushed. Leaving them behind strands the drain:
+		//
+		//   - The metadata ref still names the merged (now deleted) parent, so a
+		//     stack-order CI check reads a stale parent and reports the next PR
+		//     as "not at the bottom of the stack". That leaves the PR in an
+		//     unstable state and automerge refuses it, so the drain stalls on
+		//     its second PR and every one after.
+		//   - The remote branch still points at the pre-restack commits, so the
+		//     PR shows a diff against the old base — including the changes that
+		//     just merged.
+		//
+		// GitHub retargets the PR base itself when the base branch is deleted,
+		// which makes the PR *look* correct while both of the above are still
+		// wrong.
+		if len(restackScope) > 0 {
+			if pushErr := pushDrainedBranches(ctx, restackScope); pushErr != nil {
+				return fmt.Errorf("post-merge push failed after PR #%d: %w", bottomPR.PRNumber, pushErr)
+			}
+		}
 	}
 
 	out.Newline()
@@ -284,6 +309,48 @@ type drainSyncHandler struct {
 
 // Complete captures the sync summary for conflict detection.
 func (h *drainSyncHandler) Complete(s sync.Summary) { h.summary = s }
+
+// pushDrainedBranches publishes the branches the post-merge restack rewrote, so
+// the remote matches what drain just did locally.
+//
+// Goes through submit rather than pushing refs directly: submit already pushes
+// branch heads with the right force-with-lease, pushes metadata refs, and
+// retargets each PR's base. UpdateOnly keeps it to branches that already have a
+// PR — a drain must never open one — and NoEdit keeps it silent about
+// titles and descriptions, which are not drain's business to change.
+func pushDrainedBranches(ctx *app.Context, branchNames []string) error {
+	return submit.Action(ctx, submit.Options{
+		// branchNames[0] is the next PR to merge and needs pushing itself, so
+		// the range has to include it as well as its descendants.
+		Branch:     branchNames[0],
+		StackRange: engine.StackRangeUpstack(true),
+		UpdateOnly: true,
+		NoEdit:     true,
+	}, &drainSubmitHandler{out: ctx.Output})
+}
+
+// drainSubmitHandler reports per-branch results of drain's nested submit without
+// prompting, mirroring lock's nested-submit handler.
+type drainSubmitHandler struct {
+	out output.Output
+}
+
+func (h *drainSubmitHandler) OnEvent(e submit.Event) {
+	if ev, ok := e.(submit.BranchProgressEvent); ok {
+		switch ev.Status {
+		case submit.StatusDone:
+			h.out.Info("  ✓ %s updated → %s", ev.BranchName, ev.URL)
+		case submit.StatusError:
+			h.out.Warn("  ✗ %s failed to update: %v", ev.BranchName, ev.Error)
+		}
+	}
+}
+
+func (h *drainSubmitHandler) Confirm(_ string, defaultYes bool) (bool, error) {
+	return defaultYes, nil
+}
+
+func (h *drainSubmitHandler) IsInteractive() bool { return false }
 
 // remainingBranchNames extracts branch names from a slice of MergeBranch.
 func remainingBranchNames(branches []mergeAction.BranchMergeInfo) []string {

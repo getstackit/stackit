@@ -59,6 +59,14 @@ func (e *engineImpl) WorktreeHasUncommittedChanges(ctx context.Context, worktree
 	return e.git.WorktreeHasUncommittedChanges(ctx, worktreePath)
 }
 
+// WorktreeHasTrackedChanges reports whether the worktree at worktreePath has
+// staged or unstaged changes to tracked files, ignoring untracked ones. Use this
+// when the question is "would a hard reset destroy something", which untracked
+// files never answer yes to.
+func (e *engineImpl) WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error) {
+	return e.git.WorktreeHasTrackedChanges(ctx, worktreePath)
+}
+
 // PruneWorktrees removes stale worktree entries from .git/worktrees.
 // This cleans up worktree information for worktrees whose working directory
 // has been deleted or is otherwise unavailable.

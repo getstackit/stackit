@@ -211,6 +211,7 @@ type WorktreeOperations interface {
 	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
 	ResetWorktreeWorkingDir(ctx context.Context, worktreePath string) error
 	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
+	WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error)
 }
 
 // WorktreeRegistryOperations handles stackit-managed worktree tracking (local-only refs).

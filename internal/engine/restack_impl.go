@@ -15,7 +15,7 @@ const (
 )
 
 // resetWorktreeIfClean resets a worktree's working directory to match its
-// branch ref's new content, unless the worktree had uncommitted changes
+// branch ref's new content, unless the worktree had changes to TRACKED files
 // before this restack pass touched anything. dirtyWorktrees is captured once
 // up front (see restackSnapshot.dirtyWorktrees) rather than checked here,
 // because by the time any branch's reset runs, restack has already moved that
@@ -24,10 +24,14 @@ const (
 // dirty, silently disabling the reset for every branch, not just genuinely
 // dirty ones.
 //
-// Skipping the reset on a worktree that was genuinely dirty beforehand leaves
-// it briefly out of sync with its ref rather than discarding the uncommitted
-// changes — the same tradeoff sync makes when deciding whether to touch a
-// stack rooted at a dirty managed worktree.
+// Untracked files must not count: `git reset --hard` cannot destroy them, so
+// treating them as dirty suppresses a reset that was never a threat and leaves
+// the worktree holding the old commit's content under a moved ref.
+//
+// Skipping the reset on a worktree with real tracked changes leaves it out of
+// sync with its ref rather than discarding the user's work. That state is still
+// a footgun — `git status` shows the new commit's files as deleted — so callers
+// should avoid moving the ref at all in that case; see skipDirtyWorktreeStacks.
 func (e *engineImpl) resetWorktreeIfClean(ctx context.Context, worktreePath string, snap *restackSnapshot) {
 	if snap.dirtyWorktrees[worktreePath] {
 		return
@@ -51,9 +55,10 @@ type restackSnapshot struct {
 	revs        RevisionMap
 	worktrees   git.WorktreeList
 	metaRefSHAs map[string]string
-	// dirtyWorktrees records, per worktree path, whether it had uncommitted
-	// changes before this restack pass began. Captured once up front — see
-	// resetWorktreeIfClean for why it can't be checked lazily.
+	// dirtyWorktrees records, per worktree path, whether it had changes to
+	// tracked files before this restack pass began. Untracked files are
+	// deliberately excluded — see resetWorktreeIfClean for why, and for why this
+	// can't be checked lazily.
 	dirtyWorktrees map[string]bool
 }
 

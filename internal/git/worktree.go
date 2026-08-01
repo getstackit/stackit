@@ -297,10 +297,9 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 	if meta != nil {
 		pathRef := worktreePathRef(meta.Path)
 		if pathSHA, pathErr := r.GetRef(pathRef); pathErr == nil {
-			if pathSHA != sha {
-				return fmt.Errorf("worktree path index for %s does not match its anchor registration", meta.Path)
+			if pathSHA == sha {
+				updates = append(updates, RefUpdate{RefName: pathRef, OldSHA: sha, IsDelete: true})
 			}
-			updates = append(updates, RefUpdate{RefName: pathRef, OldSHA: sha, IsDelete: true})
 		}
 	}
 	if err := r.UpdateRefsBatch(ctx, updates); err != nil {

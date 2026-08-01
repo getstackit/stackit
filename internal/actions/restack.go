@@ -174,10 +174,8 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		handler = &handlers.NullRestackHandler{}
 	}
 
-	interactiveRererePrompt := ctx.Interactive && !ctx.Quiet && tui.IsTTY()
-	if _, jsonOutput := handler.(*handlers.JSONRestackHandler); jsonOutput {
-		interactiveRererePrompt = false
-	}
+	_, jsonOutput := handler.(*handlers.JSONRestackHandler)
+	interactiveRererePrompt := ctx.Interactive && !ctx.Quiet && tui.IsTTY() && !jsonOutput
 	pauser, _ := handler.(rerere.Pauser)
 	if _, err := rerere.EnsureEnabled(ctx.Context, ctx.Engine, interactiveRererePrompt, pauser); err != nil {
 		out.Warn("Failed to enable git rerere: %v", err)
@@ -204,8 +202,14 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		return nil
 	}
 
+	// JSON output never enters the conflict workflow: EnterConflictWorkflow
+	// prints human conflict guidance into the stream that must stay parseable
+	// JSON, leaves the repo mid-rebase, and its error skipped OnRestackComplete
+	// — so the documented "conflict" status was unreachable and a routine
+	// conflict surfaced as status "error" with conflict_count 0. Report
+	// conflicts like --continue-on-conflict instead.
 	conflictMode := ConflictModeEnterWorkflow
-	if opts.ContinueOnConflict || promptForConflicts {
+	if opts.ContinueOnConflict || promptForConflicts || jsonOutput {
 		conflictMode = ConflictModeContinue
 	}
 

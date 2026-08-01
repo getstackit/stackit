@@ -114,6 +114,17 @@ func TestRestackAction(t *testing.T) {
 		require.Equal(t, len(conflictBranches), jsonHandler.Result.ConflictCount)
 	})
 
+	t.Run("planning errors on a nonexistent branch", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		_, err := PlanRestack(s.Context, RestackOptions{
+			BranchName: "does-not-exist",
+			Scope:      engine.StackRangeFull(),
+		})
+		require.ErrorContains(t, err, "branch does-not-exist does not exist")
+	})
+
 	t.Run("JSON restack reports conflicts without entering the workflow", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)

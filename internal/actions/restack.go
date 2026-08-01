@@ -457,6 +457,11 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 	if opts.AllStacks || len(opts.StackRoots) > 0 {
 		return branchGroupsForIndependentStacks(eng, opts)
 	}
+	// A typo'd --branch would otherwise produce an empty range and a silent
+	// "No branches to restack." success.
+	if !eng.BranchNames().Contains(opts.BranchName) {
+		return nil, fmt.Errorf("branch %s does not exist", opts.BranchName)
+	}
 	branch := eng.GetBranch(opts.BranchName)
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 	branches := graph.Range(branch, opts.Scope).WithoutTrunk()

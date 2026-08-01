@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -197,6 +198,38 @@ func TestFrozenIntegration(t *testing.T) {
 
 		// Child should not be frozen
 		s.Run("info feature-b").OutputNotContains("(frozen)")
+	})
+
+	t.Run("remote advance restacks children in the same pass", func(t *testing.T) {
+		t.Parallel()
+		s := NewTestShellInProcess(t)
+
+		// Stack: main -> f -> c
+		s.Run("create f").
+			WriteFile("f.txt", "f1").
+			Git("commit -m 'F1'")
+		s.Run("create c").
+			WriteFile("c.txt", "c1").
+			Git("commit -m 'C1'")
+
+		// Teammate advances f's remote: build a commit on top of f without
+		// moving the local ref, then point origin/f at it.
+		s.Git("checkout --detach f").
+			WriteFile("f2.txt", "f2").
+			Git("commit -m 'F2'").
+			Git("update-ref refs/remotes/origin/f HEAD")
+		s.Checkout("c")
+		s.Run("freeze f")
+
+		s.Run("restack")
+
+		// f must hard-reset to its remote SHA, and c must follow onto the
+		// new f in the same restack pass — not report "up to date" against
+		// f's stale pre-reset tip.
+		remoteSHA := strings.TrimSpace(s.Git("rev-parse refs/remotes/origin/f").lastOutput)
+		localSHA := strings.TrimSpace(s.Git("rev-parse f").lastOutput)
+		require.Equal(t, remoteSHA, localSHA, "frozen branch must reset to its remote SHA")
+		s.Git("merge-base --is-ancestor f c")
 	})
 
 	t.Run("unfreeze allows modifications", func(t *testing.T) {

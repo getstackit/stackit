@@ -203,9 +203,29 @@ func (e *engineImpl) RegisterWorktree(stackRoot string, path string) error {
 
 // RegisterWorktreeWithName registers a worktree with a user-friendly name
 func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, name string) error {
-	absPath, err := filepath.Abs(path)
+	absPath, err := canonicalWorktreePath(path)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
+		return fmt.Errorf("failed to canonicalize worktree path: %w", err)
+	}
+
+	if existing, err := e.GetWorktreeForStack(anchorBranch); err != nil {
+		return fmt.Errorf("failed to check existing worktree registration: %w", err)
+	} else if existing != nil {
+		return fmt.Errorf("worktree anchor %s is already registered at %s", anchorBranch, existing.Path)
+	}
+
+	worktrees, err := e.ListManagedWorktrees()
+	if err != nil {
+		return fmt.Errorf("failed to list worktree registrations: %w", err)
+	}
+	for _, worktree := range worktrees {
+		worktreePath, pathErr := canonicalWorktreePath(worktree.Path)
+		if pathErr != nil {
+			return fmt.Errorf("failed to canonicalize registered worktree path %s: %w", worktree.Path, pathErr)
+		}
+		if worktreePath == absPath && worktree.AnchorBranch != anchorBranch {
+			return fmt.Errorf("worktree path %s is already registered to anchor %s", absPath, worktree.AnchorBranch)
+		}
 	}
 
 	meta := &git.WorktreeMeta{
@@ -217,6 +237,21 @@ func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, 
 	}
 
 	return e.git.WriteWorktreeMeta(anchorBranch, meta)
+}
+
+func canonicalWorktreePath(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err == nil {
+		return filepath.Clean(resolvedPath), nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+	return filepath.Clean(absPath), nil
 }
 
 // UnregisterWorktree removes worktree registration for a stack root

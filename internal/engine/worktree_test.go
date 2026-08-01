@@ -75,6 +75,22 @@ func TestWorktreeRegistry_OwningWorktree(t *testing.T) {
 	assert.Nil(t, owner)
 }
 
+func TestWorktreeRegistry_RejectsDuplicatePathAndAnchor(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit()
+
+	require.NoError(t, s.Engine.RegisterWorktreeWithName("feature-a", "/tmp/shared-worktree", "feature-a"))
+	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature-a") })
+
+	err := s.Engine.RegisterWorktreeWithName("feature-b", "/tmp/shared-worktree", "feature-b")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "already registered to anchor feature-a")
+
+	err = s.Engine.RegisterWorktreeWithName("feature-a", "/tmp/other-worktree", "feature-a")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "anchor feature-a is already registered")
+}
+
 func TestCreateTemporaryWorktree(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 

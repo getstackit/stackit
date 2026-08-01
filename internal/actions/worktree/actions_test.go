@@ -2,6 +2,7 @@ package worktree_test
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -176,7 +177,11 @@ func TestOpenAction(t *testing.T) {
 			AnchorBranch: "feature-stack",
 		})
 		require.NoError(t, err)
-		require.Equal(t, repoRoot, path)
+		canonicalRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+		require.NoError(t, err)
+		canonicalPath, err := filepath.EvalSymlinks(path)
+		require.NoError(t, err)
+		require.Equal(t, canonicalRepoRoot, canonicalPath)
 
 		// Clean up
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
@@ -341,7 +346,11 @@ func TestRepairAction(t *testing.T) {
 		repaired, err := s.Engine.GetWorktreeForStack(result.Repaired[0].AnchorBranch)
 		require.NoError(t, err)
 		require.NotNil(t, repaired)
-		require.Equal(t, worktreeDir, repaired.Path)
+		canonicalWorktreeDir, err := filepath.EvalSymlinks(worktreeDir)
+		require.NoError(t, err)
+		canonicalRepairedPath, err := filepath.EvalSymlinks(repaired.Path)
+		require.NoError(t, err)
+		require.Equal(t, canonicalWorktreeDir, canonicalRepairedPath)
 		require.True(t, s.Engine.GetBranch(result.Repaired[0].AnchorBranch).IsWorktreeAnchor())
 		require.Equal(t, result.Repaired[0].AnchorBranch, s.Engine.GetBranch("feature").GetParent().GetName())
 

@@ -52,6 +52,29 @@ func TestWorktreeRegistry_StackRootForBranch(t *testing.T) {
 	_ = s.Engine.UnregisterWorktree(s.Context, "branch1")
 }
 
+func TestWorktreeRegistry_OwningWorktree(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit()
+
+	s.CreateBranch("feature").Commit("feature change")
+	s.TrackBranch("feature", "main")
+	s.CreateBranch("feature-child").Commit("feature child change")
+	s.TrackBranch("feature-child", "feature")
+
+	require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", "/tmp/feature-worktree", "feature"))
+	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
+
+	owner, err := s.Engine.OwningWorktree(s.Engine.GetBranch("feature-child"))
+	require.NoError(t, err)
+	require.NotNil(t, owner)
+	assert.Equal(t, "feature", owner.AnchorBranch)
+	assert.Equal(t, "/tmp/feature-worktree", owner.Path)
+
+	owner, err = s.Engine.OwningWorktree(s.Engine.Trunk())
+	require.NoError(t, err)
+	assert.Nil(t, owner)
+}
+
 func TestCreateTemporaryWorktree(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 

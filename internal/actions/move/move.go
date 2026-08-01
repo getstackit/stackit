@@ -66,6 +66,9 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	if err != nil {
 		return err
 	}
+	if err := actions.EnsureCanModifyHere(ctx, plan.descendants.Concat(engine.BranchesOf(plan.ontoBranch))...); err != nil {
+		return err
+	}
 
 	if opts.DryRun {
 		return dryRun(ctx, plan.source, plan.oldParentName, plan.onto, plan.sourceBranch, plan.descendants, plan.rebaseSpecs)

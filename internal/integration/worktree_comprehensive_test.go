@@ -467,11 +467,9 @@ func TestWorktreeRestackOperations(t *testing.T) {
 		shW.WriteFile("b.txt", "b").Run("create b -m 'branch b'")
 		shW.WriteFile("c.txt", "c").Run("create c -m 'branch c'")
 
-		// Modify root branch from main repo to trigger restack
-		sh.Checkout("feature").
-			WriteFile("feature-update.txt", "update").
-			Run("modify -n").
-			Checkout("main")
+		// Advance trunk from the main repository to trigger the restack.
+		sh.WriteFile("trunk-update.txt", "update").
+			Git("commit -m 'trunk update'")
 
 		// Restack from main
 		sh.Run("restack")
@@ -485,9 +483,9 @@ func TestWorktreeRestackOperations(t *testing.T) {
 		})
 
 		// Worktree should have the updated content
-		shW.Git("ls-files feature-update.txt")
+		shW.Git("ls-files trunk-update.txt")
 		if shW.Output() == "" {
-			t.Error("feature-update.txt should exist in worktree after restack")
+			t.Error("trunk-update.txt should exist in worktree after restack")
 		}
 	})
 
@@ -561,7 +559,7 @@ func TestWorktreeModifyOperations(t *testing.T) {
 		}
 	})
 
-	run("modify parent from main repo restacks worktree children", func(t *testing.T, sh *TestShell) {
+	run("modify parent from main repo rejects worktree stack", func(t *testing.T, sh *TestShell) {
 		// Create stack in worktree
 		sh.WriteFile("feature.txt", "feature").
 			Run("create feature -w -m 'feature branch'")
@@ -572,24 +570,12 @@ func TestWorktreeModifyOperations(t *testing.T) {
 		// Create child in worktree
 		shW.WriteFile("child.txt", "child").Run("create child -m 'child branch'")
 
-		// Modify parent from main repo
+		// Modifying an owned branch from the main checkout must fail closed.
 		sh.Checkout("feature").
 			WriteFile("feature-from-main.txt", "from main").
-			Run("modify -n").
-			Checkout("main")
-
-		// Worktree child should have the modified file
-		shW.Checkout("child").
-			Git("ls-files feature-from-main.txt")
-		if shW.Output() == "" {
-			t.Error("worktree child should have feature-from-main.txt")
-		}
-
-		// Worktree should be clean
-		shW.Git("status --porcelain")
-		if output := shW.Output(); output != "" {
-			t.Errorf("Worktree should be clean, but has:\n%s", output)
-		}
+			RunExpectError("modify -n").
+			OutputContains("belongs to worktree")
+		shW.OnBranch("child")
 	})
 }
 
@@ -706,8 +692,8 @@ func TestWorktreeEdgeCases(t *testing.T) {
 
 		sh.Checkout("feature").
 			WriteFile("feature-update.txt", "update").
-			Run("modify -n").
-			Checkout("main")
+			RunExpectError("modify -n").
+			OutputContains("belongs to worktree")
 
 		dirtyFile := filepath.Join(worktreePath, "uncommitted.txt")
 		if _, err := os.Stat(dirtyFile); os.IsNotExist(err) {
@@ -794,12 +780,12 @@ func TestWorktreeMoveOperations(t *testing.T) {
 		shW1.WriteFile("child.txt", "child").
 			Run("create child -m 'child'")
 
-		// Move child to stack2 (use --onto for the target)
+		// Moving into a separately owned stack must be run from its worktree.
 		shW1.Checkout("child").
-			Run("move --onto stack2")
+			RunExpectError("move --onto stack2").
+			OutputContains("belongs to worktree")
 
-		// Verify new parent
-		sh.ExpectBranchParent("child", "stack2")
+		sh.ExpectBranchParent("child", "stack1")
 	})
 }
 
@@ -1018,24 +1004,13 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 		// Worktree is on grandchild
 		shW.OnBranch("grandchild")
 
-		// Modify feature from main repo (not in worktree)
+		// Modifying feature from the main repo must be rejected even though the
+		// managed worktree is currently on a descendant.
 		sh.Checkout("feature").
 			WriteFile("feature-update.txt", "updated").
-			Run("modify -n").
-			Checkout("main")
-
-		// Worktree should still be on grandchild and have the update
-		shW.OnBranch("grandchild").
-			Git("ls-files feature-update.txt")
-		if shW.Output() == "" {
-			t.Error("Grandchild should have feature-update.txt after modify")
-		}
-
-		// Working directory should be clean
-		shW.Git("status --porcelain")
-		if shW.Output() != "" {
-			t.Errorf("Worktree should be clean: %s", shW.Output())
-		}
+			RunExpectError("modify -n").
+			OutputContains("belongs to worktree")
+		shW.OnBranch("grandchild")
 	})
 }
 

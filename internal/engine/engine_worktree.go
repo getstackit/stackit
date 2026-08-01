@@ -243,6 +243,26 @@ func (e *engineImpl) GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error
 	}, nil
 }
 
+// OwningWorktree returns the managed worktree for branch's stack. Stack
+// ownership is derived from the stack root, which is the worktree anchor for
+// stacks that have been attached to a managed worktree.
+func (e *engineImpl) OwningWorktree(branch Branch) (*WorktreeInfo, error) {
+	stackRoot := e.GetStackRootForBranch(branch)
+	if stackRoot == "" {
+		return nil, nil
+	}
+
+	worktree, err := e.GetWorktreeForStack(stackRoot)
+	if err != nil || worktree == nil {
+		return worktree, err
+	}
+	if worktree.AnchorBranch != stackRoot {
+		return nil, fmt.Errorf("invalid worktree registration for stack %s: metadata anchor is %s", stackRoot, worktree.AnchorBranch)
+	}
+
+	return worktree, nil
+}
+
 // ListManagedWorktrees returns all stackit-managed worktrees, sorted by stack root name
 func (e *engineImpl) ListManagedWorktrees() ([]WorktreeInfo, error) {
 	metas, err := e.git.ListWorktreeMetas()

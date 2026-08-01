@@ -58,6 +58,9 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		return Result{}, err
 	}
 	currentBranch := eng.CurrentBranch().GetName()
+	if err := actions.EnsureCanModifyNamesHere(ctx, currentBranch); err != nil {
+		return Result{}, err
+	}
 
 	h.Start(currentBranch)
 

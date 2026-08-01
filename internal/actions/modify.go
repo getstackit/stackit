@@ -64,6 +64,9 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 		targetBranchName = opts.Into
 	}
 	targetBranchObj := eng.GetBranch(targetBranchName)
+	if err := EnsureCanModifyNamesHere(ctx, originalBranchName, targetBranchName); err != nil {
+		return err
+	}
 
 	// Take snapshot before modifying the repository. modify was the only
 	// history-rewriting action without one, so `stackit undo` / `abort` fell

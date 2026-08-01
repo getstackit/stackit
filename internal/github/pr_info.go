@@ -16,6 +16,19 @@ import (
 // SyncPrInfo syncs PR information for branches from GitHub. It fetches every
 // branch's PR in a single GraphQL query rather than one REST call per branch.
 func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []string, repo Repo, onUpdate func(string, *PullRequestInfo)) error {
+	return syncPrInfo(ctx, runner, branchNames, repo, nil, onUpdate)
+}
+
+// SyncPrInfoWithKnownPRNumbers also looks up stored PR numbers when a branch
+// no longer resolves on GitHub. GitHub removes the head ref when a user closes
+// a PR and chooses to delete its branch, but the PR itself remains available by
+// number. Looking it up preserves the normal closed-PR cleanup path without
+// treating a missing remote branch alone as permission to delete local work.
+func SyncPrInfoWithKnownPRNumbers(ctx context.Context, runner GitCommandRunner, branchNames []string, repo Repo, knownPRNumbers map[string]int, onUpdate func(string, *PullRequestInfo)) error {
+	return syncPrInfo(ctx, runner, branchNames, repo, knownPRNumbers, onUpdate)
+}
+
+func syncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []string, repo Repo, knownPRNumbers map[string]int, onUpdate func(string, *PullRequestInfo)) error {
 	if len(branchNames) == 0 {
 		return nil
 	}
@@ -38,6 +51,11 @@ func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 
 	infos, err := batchGetPRInfoByBranchGraphQL(ctx, runner, repo, branchNames)
 	if err == nil {
+		// A deleted head ref is returned as null and therefore absent from infos.
+		// Resolve only those branches through their locally recorded PR number.
+		// This is best-effort: a lookup failure must not discard successful
+		// branch-based updates or make sync destructive.
+		_ = supplementPRInfoByNumberGraphQL(ctx, runner, repo, infos, knownPRNumbers)
 		for name, info := range infos {
 			if info != nil && onUpdate != nil {
 				onUpdate(name, info)

@@ -378,7 +378,7 @@ func TestSubmitCreatesNativeGitHubStackWhenConfigured(t *testing.T) {
 	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
 	require.NoError(t, err)
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
-	require.NoError(t, cfg.SetSubmitGitHubStack(true))
+	require.NoError(t, cfg.SetGitHubStack(true))
 	s.Context.Config = cfg
 
 	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
@@ -401,7 +401,7 @@ func TestSubmitConfiguredGitHubStackFallsBackWhenValidationPrunesToOnePullReques
 	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
 	require.NoError(t, err)
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
-	require.NoError(t, cfg.SetSubmitGitHubStack(true))
+	require.NoError(t, cfg.SetGitHubStack(true))
 	s.Context.Config = cfg
 
 	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
@@ -418,10 +418,10 @@ func TestSubmitConfiguredGitHubStackSkipsSinglePullRequest(t *testing.T) {
 
 	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
 	require.NoError(t, err)
-	require.NoError(t, cfg.SetSubmitGitHubStack(true))
+	require.NoError(t, cfg.SetGitHubStack(true))
 	s.Context.Config = cfg
 
-	err = submit.Action(s.Context, submit.Options{DryRun: true, ConfigGitHubStack: cfg.SubmitGitHubStack()}, &noopHandler{})
+	err = submit.Action(s.Context, submit.Options{DryRun: true, ConfigGitHubStack: cfg.GitHubStack()}, &noopHandler{})
 	require.NoError(t, err)
 }
 
@@ -440,7 +440,7 @@ func TestSubmitConfiguredGitHubStackSkipsOversizedSubmission(t *testing.T) {
 	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
 	require.NoError(t, err)
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
-	require.NoError(t, cfg.SetSubmitGitHubStack(true))
+	require.NoError(t, cfg.SetGitHubStack(true))
 	s.Context.Config = cfg
 
 	err = submit.Action(s.Context, submit.Options{DryRun: true}, &noopHandler{})

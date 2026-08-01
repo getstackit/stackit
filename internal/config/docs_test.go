@@ -17,12 +17,14 @@ func TestGenerateConfigDocs(t *testing.T) {
 	assert.Contains(t, docs, "## Branch naming")
 	assert.Contains(t, docs, "## Stack topology")
 	assert.Contains(t, docs, "## PR submission")
+	assert.Contains(t, docs, "## GitHub integration")
 	assert.Contains(t, docs, "## PR navigation")
 
 	// Should have option documentation
 	assert.Contains(t, docs, "### branch.pattern")
 	assert.Contains(t, docs, "### stack.shape")
 	assert.Contains(t, docs, "### submit.footer")
+	assert.Contains(t, docs, "### github.stack")
 	assert.Contains(t, docs, "### navigation.when")
 
 	// Should have examples

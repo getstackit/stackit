@@ -161,7 +161,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// after validation. The explicit flag remains strict.
 	explicitGitHubStack := opts.CreateGitHubStack
 	configuredGitHubStack := opts.ConfigGitHubStack
-	if ctx.Config != nil && ctx.Config.SubmitGitHubStack() {
+	if ctx.Config != nil && ctx.Config.GitHubStack() {
 		configuredGitHubStack = true
 	}
 	if !explicitGitHubStack && configuredGitHubStack {

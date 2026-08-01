@@ -696,21 +696,21 @@ func (c *GitConfig) SetSubmitDraft(draft bool) error {
 	return c.store.SetBool(KeySubmitDraft, draft)
 }
 
-// SubmitGitHubStack returns whether submit should sync native GitHub Stack metadata.
+// GitHubStack returns whether Stackit should sync native GitHub Stack metadata.
 // Priority: personal git config > team project config > default.
-func (c *GitConfig) SubmitGitHubStack() bool {
-	if c.store.Exists(KeySubmitGitHubStack) {
-		return c.store.GetBoolWithDefault(KeySubmitGitHubStack, DefaultSubmitGitHubStack)
+func (c *GitConfig) GitHubStack() bool {
+	if c.store.Exists(KeyGitHubStack) {
+		return c.store.GetBoolWithDefault(KeyGitHubStack, DefaultGitHubStack)
 	}
-	if c.project != nil && c.project.HasSubmitGitHubStack() {
-		return c.project.GetSubmitGitHubStack()
+	if c.project != nil && c.project.HasGitHubStack() {
+		return c.project.GetGitHubStack()
 	}
-	return DefaultSubmitGitHubStack
+	return DefaultGitHubStack
 }
 
-// SetSubmitGitHubStack sets whether submit syncs native GitHub Stack metadata.
-func (c *GitConfig) SetSubmitGitHubStack(enabled bool) error {
-	return c.store.SetBool(KeySubmitGitHubStack, enabled)
+// SetGitHubStack sets whether Stackit syncs native GitHub Stack metadata.
+func (c *GitConfig) SetGitHubStack(enabled bool) error {
+	return c.store.SetBool(KeyGitHubStack, enabled)
 }
 
 // SubmitWeb returns when to open PRs in browser.
@@ -1010,9 +1010,9 @@ func (c *GitConfig) UnsetSubmitDraft() error {
 	return c.store.Unset(KeySubmitDraft)
 }
 
-// UnsetSubmitGitHubStack removes the personal GitHub Stack sync setting.
-func (c *GitConfig) UnsetSubmitGitHubStack() error {
-	return c.store.Unset(KeySubmitGitHubStack)
+// UnsetGitHubStack removes the personal GitHub Stack sync setting.
+func (c *GitConfig) UnsetGitHubStack() error {
+	return c.store.Unset(KeyGitHubStack)
 }
 
 // UnsetSubmitWeb removes the personal submit.web setting, reverting to project/default.
@@ -1045,7 +1045,7 @@ func (c *GitConfig) ResetAllPersonal() error {
 		KeyStackShape,
 		KeySubmitFooter,
 		KeySubmitDraft,
-		KeySubmitGitHubStack,
+		KeyGitHubStack,
 		KeySubmitWeb,
 		KeySubmitLabels,
 		KeySubmitReviewers,

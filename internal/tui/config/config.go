@@ -28,7 +28,7 @@ func TUIAction(repoRoot string) error {
 		// Get current values
 		branchPattern := cfg.BranchNamePattern()
 		submitFooter := cfg.SubmitFooter()
-		submitGitHubStack := cfg.SubmitGitHubStack()
+		githubStack := cfg.GitHubStack()
 		mergeMethod := cfg.MergeMethod()
 		if mergeMethod == "" {
 			mergeMethod = "(not set)"
@@ -51,8 +51,8 @@ func TUIAction(repoRoot string) error {
 				Value: "submit.footer",
 			},
 			{
-				Label: fmt.Sprintf("submit.githubStack: %v", submitGitHubStack),
-				Value: "submit.githubStack",
+				Label: fmt.Sprintf("github.stack: %v", githubStack),
+				Value: "github.stack",
 			},
 			{
 				Label: fmt.Sprintf("merge.method: %s", mergeMethod),
@@ -124,20 +124,20 @@ func TUIAction(repoRoot string) error {
 				out.Info("Set submit.footer to: %v", newValue)
 			}
 
-		case "submit.githubStack":
-			newValue, err := tui.PromptConfirm(fmt.Sprintf("Sync native GitHub Stack metadata for eligible linear submits? (current: %v):", submitGitHubStack), submitGitHubStack)
+		case "github.stack":
+			newValue, err := tui.PromptConfirm(fmt.Sprintf("Sync native GitHub Stack metadata for eligible linear submits? (current: %v):", githubStack), githubStack)
 			if err != nil {
 				if errors.Is(err, tui.ErrInteractiveDisabled) || strings.Contains(err.Error(), "canceled") {
 					continue
 				}
 				return err
 			}
-			if newValue != submitGitHubStack {
-				if err := cfg.SetSubmitGitHubStack(newValue); err != nil {
+			if newValue != githubStack {
+				if err := cfg.SetGitHubStack(newValue); err != nil {
 					out.Info("Failed to save config: %v", err)
 					continue
 				}
-				out.Info("Set submit.githubStack to: %v", newValue)
+				out.Info("Set github.stack to: %v", newValue)
 			}
 
 		case "merge.method":

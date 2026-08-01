@@ -31,7 +31,7 @@ const (
 	keyStackShape           = "stack.shape"
 	keySubmitFooter         = "submit.footer"
 	keySubmitDraft          = "submit.draft"
-	keySubmitGitHubStack    = "submit.githubStack"
+	keyGitHubStack          = "github.stack"
 	keySubmitWeb            = "submit.web"
 	keySubmitLabels         = "submit.labels"
 	keySubmitLabelsAdd      = "submit.labels.add"
@@ -157,8 +157,8 @@ func newConfigGetCmd() *cobra.Command {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.SubmitFooter())
 			case keySubmitDraft:
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.SubmitDraft())
-			case keySubmitGitHubStack:
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.SubmitGitHubStack())
+			case keyGitHubStack:
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.GitHubStack())
 			case keySubmitWeb:
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.SubmitWeb())
 			case keySubmitLabels:
@@ -309,15 +309,15 @@ func newConfigSetCmd() *cobra.Command {
 					return fmt.Errorf("failed to set %s: %w", keySubmitDraft, err)
 				}
 				splog.Info("Set %s to: %v", keySubmitDraft, enabled)
-			case keySubmitGitHubStack:
+			case keyGitHubStack:
 				enabled, err := strconv.ParseBool(value)
 				if err != nil {
-					return fmt.Errorf("invalid value for %s: %s (must be 'true' or 'false')", keySubmitGitHubStack, value)
+					return fmt.Errorf("invalid value for %s: %s (must be 'true' or 'false')", keyGitHubStack, value)
 				}
-				if err := cfg.SetSubmitGitHubStack(enabled); err != nil {
-					return fmt.Errorf("failed to set %s: %w", keySubmitGitHubStack, err)
+				if err := cfg.SetGitHubStack(enabled); err != nil {
+					return fmt.Errorf("failed to set %s: %w", keyGitHubStack, err)
 				}
-				splog.Info("Set %s to: %v", keySubmitGitHubStack, enabled)
+				splog.Info("Set %s to: %v", keyGitHubStack, enabled)
 			case keySubmitWeb:
 				if err := cfg.SetSubmitWeb(value); err != nil {
 					return fmt.Errorf("failed to set %s: %w", keySubmitWeb, err)
@@ -514,11 +514,11 @@ Examples:
 					return fmt.Errorf("failed to unset %s: %w", keySubmitDraft, err)
 				}
 				splog.Info("Unset %s (now using: %v)", keySubmitDraft, cfg.SubmitDraft())
-			case keySubmitGitHubStack:
-				if err := cfg.UnsetSubmitGitHubStack(); err != nil {
-					return fmt.Errorf("failed to unset %s: %w", keySubmitGitHubStack, err)
+			case keyGitHubStack:
+				if err := cfg.UnsetGitHubStack(); err != nil {
+					return fmt.Errorf("failed to unset %s: %w", keyGitHubStack, err)
 				}
-				splog.Info("Unset %s (now using: %v)", keySubmitGitHubStack, cfg.SubmitGitHubStack())
+				splog.Info("Unset %s (now using: %v)", keyGitHubStack, cfg.GitHubStack())
 			case keySubmitWeb:
 				if err := cfg.UnsetSubmitWeb(); err != nil {
 					return fmt.Errorf("failed to unset %s: %w", keySubmitWeb, err)
@@ -886,9 +886,9 @@ func showConfigWithSources(repoRoot string, w io.Writer) error {
 	draftSource := getBoolSource(config.KeySubmitDraft, projectCfg != nil && projectCfg.HasSubmitDraft())
 	formatLine("submit.draft", strconv.FormatBool(cfg.SubmitDraft()), draftSource)
 
-	// submit.githubStack
-	githubStackSource := getBoolSource(config.KeySubmitGitHubStack, projectCfg != nil && projectCfg.HasSubmitGitHubStack())
-	formatLine(keySubmitGitHubStack, strconv.FormatBool(cfg.SubmitGitHubStack()), githubStackSource)
+	// github.stack
+	githubStackSource := getBoolSource(config.KeyGitHubStack, projectCfg != nil && projectCfg.HasGitHubStack())
+	formatLine(keyGitHubStack, strconv.FormatBool(cfg.GitHubStack()), githubStackSource)
 
 	// submit.web
 	webSource := getStringSource(config.KeySubmitWeb, projectCfg != nil && projectCfg.HasSubmitWeb())

@@ -22,11 +22,14 @@
 # submit:
 #   footer: true # Include navigation footer
 #   draft: false # Create as draft
-#   githubStack: false # Sync native GitHub Stack metadata for eligible linear PR chains
 #   web: never # Open in browser: always, created, never
 #   labels: [] # Default labels
 #   reviewers: [] # Default reviewers
 #   assignees: [] # Default assignees
+
+# GitHub integration
+# github:
+#   stack: false # Sync native Stack metadata for eligible linear PR chains
 
 # Merge method: squash, merge, rebase
 # merge:

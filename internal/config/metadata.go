@@ -41,6 +41,7 @@ var Sections = []Section{
 	{Name: SectionBranch, Title: "Branch naming pattern", DocsTitle: "Branch naming"},
 	{Name: SectionStack, Title: "Stack topology", DocsTitle: "Stack topology"},
 	{Name: SectionSubmit, Title: "PR submission settings", DocsTitle: "PR submission"},
+	{Name: SectionGitHub, Title: "GitHub integration", DocsTitle: "GitHub integration"},
 	{Name: SectionMerge, Title: "Merge method: squash, merge, rebase", DocsTitle: "Merge settings"},
 	{Name: SectionCI, Title: "CI validation", DocsTitle: "CI validation"},
 	{Name: SectionUndo, Title: "Undo history", DocsTitle: "Other settings"},
@@ -105,13 +106,6 @@ var Options = []Option{
 		Section:     SectionSubmit,
 	},
 	{
-		YAMLPath:    YAMLPathSubmitGitHubStack,
-		GitKey:      KeySubmitGitHubStack,
-		Description: "Sync native GitHub Stack metadata for eligible linear PR chains",
-		Default:     DefaultSubmitGitHubStack,
-		Section:     SectionSubmit,
-	},
-	{
 		YAMLPath:    YAMLPathSubmitWeb,
 		GitKey:      KeySubmitWeb,
 		Description: "Open in browser: always, created, never",
@@ -139,6 +133,15 @@ var Options = []Option{
 		Description: "Default assignees",
 		IsArray:     true,
 		Section:     SectionSubmit,
+	},
+
+	// GitHub integration section
+	{
+		YAMLPath:    YAMLPathGitHubStack,
+		GitKey:      KeyGitHubStack,
+		Description: "Sync native Stack metadata for eligible linear PR chains",
+		Default:     DefaultGitHubStack,
+		Section:     SectionGitHub,
 	},
 
 	// Merge section

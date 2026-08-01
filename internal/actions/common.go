@@ -471,6 +471,20 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 	}
 }
 
+// ResolveConflictWorkflow enters the conflict workflow from an interactive
+// "resolve conflicts now?" prompt by re-running the conflicted stack in
+// ConflictModeEnterWorkflow. The prompt paths run their initial restack in
+// ConflictModeContinue, which holds back the ENTIRE conflicted stack — the
+// conflict branch's ancestors included. Calling EnterConflictWorkflow directly
+// from that state would rebase the conflict branch against its never-moved
+// parent, find no conflict, and fail after detaching HEAD. Re-running in
+// EnterWorkflow mode applies the ancestors first (that mode is exempt from
+// per-stack atomicity on purpose) and then enters the conflict on top of them.
+// stackBranches must be the conflicted stack in topological order.
+func ResolveConflictWorkflow(ctx *app.Context, stackBranches engine.Branches) error {
+	return restackBranchesWithPlan(ctx, stackBranches, nil, nil, ConflictModeEnterWorkflow)
+}
+
 // EnterConflictWorkflow performs the rebase to enter conflict state and persists continuation state.
 // This helper is shared between RestackBranchesWithHandler (standalone mode) and sync.RunSync (sync mode).
 func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches engine.Branches) error {
@@ -483,6 +497,13 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 	// failed rebase's target, corrupting the branch. Detaching first ensures
 	// abort can only touch HEAD, never a branch ref. `st continue` already
 	// re-attaches to the conflict branch on success.
+	// reattach undoes the detach below when the workflow is NOT entered after
+	// all (rebase errored without leaving a conflict, or unexpectedly completed
+	// clean). Failing on a detached HEAD would strand the user off their
+	// branch, violating the no-detached-HEAD invariant. Best-effort and gated
+	// on no rebase being in progress: checkout would fail on an unmerged index
+	// anyway, and a live conflict is the one state where detached is correct.
+	reattach := func() {}
 	if currentBranch := ctx.Engine.CurrentBranch(); currentBranch != nil {
 		currentRev, revErr := ctx.Engine.GetCurrentRevision(ctx.Context)
 		if revErr != nil {
@@ -491,17 +512,25 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 		if detachErr := ctx.Engine.Detach(ctx.Context, currentRev); detachErr != nil {
 			return fmt.Errorf("failed to detach HEAD before conflict workflow: %w", detachErr)
 		}
+		originalBranch := *currentBranch
+		reattach = func() {
+			if !ctx.Engine.IsRebaseInProgress(ctx.Context) {
+				_ = ctx.Engine.CheckoutBranch(ctx.Context, originalBranch)
+			}
+		}
 	}
 
 	// Perform rebase to enter conflict state
 	conflictBranch := ctx.Engine.GetBranch(firstConflict)
 	batchResult, err := ctx.Engine.RestackBranches(ctx.Context, engine.BranchesOf(conflictBranch))
 	if err != nil {
+		reattach()
 		return fmt.Errorf("failed to enter conflict state for %s: %w", firstConflict, err)
 	}
 
 	// Verify we're actually in conflict state
 	if !ctx.Engine.IsRebaseInProgress(ctx.Context) {
+		reattach()
 		return fmt.Errorf("expected conflict on %s but rebase completed successfully", firstConflict)
 	}
 

@@ -286,10 +286,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 
 		if resolve {
-			// User wants to resolve conflicts - enter conflict workflow for the first conflict
+			// User wants to resolve conflicts. The restack above ran in
+			// ConflictModeContinue, which held back the whole conflicted stack
+			// — ancestors included — so re-run that stack in EnterWorkflow
+			// mode (applies ancestors, then enters the conflict) rather than
+			// jumping straight to the conflict branch; see
+			// actions.ResolveConflictWorkflow.
 			firstConflict := summary.ConflictBranches[0]
-			allBranches := ctx.Navigator().AllBranches()
-			return actions.EnterConflictWorkflow(ctx, firstConflict, allBranches)
+			return actions.ResolveConflictWorkflow(ctx, conflictStackBranches(ctx, firstConflict))
 		}
 		// User chose to skip conflicts - continue with summary
 	}

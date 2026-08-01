@@ -304,7 +304,7 @@ func TestAbsorbComplex(t *testing.T) {
 		t.Fatal("stackit binary not built")
 	}
 
-	t.Run("absorb failure during restack preserves work and reports error", func(t *testing.T) {
+	t.Run("restack conflict after absorb holds the stack back and stays clean", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create branch A
@@ -346,27 +346,33 @@ func TestAbsorbComplex(t *testing.T) {
 			return nil
 		})
 
-		// Run absorb. It should successfully absorb into branchA, but then fail during restack of branchB
+		// Run absorb. It absorbs into branchA; the follow-up restack of branchB
+		// conflicts, so branchB is held back and absorb still succeeds — the
+		// hunks are already committed, and entering the conflict workflow here
+		// would leave the repo mid-rebase while the deferred stash restore
+		// re-staged already-absorbed content.
 		cmd := exec.Command(binaryPath, "absorb", "--force")
 		cmd.Dir = scene.Dir
 		output, err := cmd.CombinedOutput()
 
-		require.Error(t, err, "absorb should fail during restack. Output: %s", string(output))
-		// The conflict-workflow error is silenced (instructions are printed
-		// instead), so assert on the printed conflict status.
-		require.Contains(t, string(output), "Hit conflict restacking branchB", "should report restack conflict")
+		require.NoError(t, err, "absorb must succeed despite the restack conflict. Output: %s", string(output))
+		require.Contains(t, string(output), "hit conflicts", "should report the held-back restack conflict")
+		require.Contains(t, string(output), "stackit restack", "should point at restack to resolve")
 
-		// In case of restack conflict, stackit stays in rebase mode (detached HEAD)
-		rebaseDir := scene.Dir + "/.git/rebase-merge"
-		if _, err := os.Stat(rebaseDir); os.IsNotExist(err) {
-			rebaseDir = scene.Dir + "/.git/rebase-apply"
+		// The repo must be clean: no rebase in progress, nothing staged.
+		for _, dir := range []string{"/.git/rebase-merge", "/.git/rebase-apply"} {
+			_, statErr := os.Stat(scene.Dir + dir)
+			require.True(t, os.IsNotExist(statErr), "must not be mid-rebase (%s exists)", dir)
 		}
-		_, err = os.Stat(rebaseDir)
-		require.NoError(t, err, "should be in middle of rebase")
+		staged := exec.Command("git", "diff", "--cached", "--quiet")
+		staged.Dir = scene.Dir
+		require.NoError(t, staged.Run(), "nothing may be re-staged after absorb")
 
-		// Clean up for next tests
-		cmd = exec.Command("git", "rebase", "--abort")
-		cmd.Dir = scene.Dir
-		_ = cmd.Run()
+		// The absorbed change is committed on branchA.
+		show := exec.Command("git", "show", "branchA:conflict.txt")
+		show.Dir = scene.Dir
+		content, err := show.CombinedOutput()
+		require.NoError(t, err)
+		require.Contains(t, string(content), "line 1 modified", "absorbed hunk must be committed")
 	})
 }

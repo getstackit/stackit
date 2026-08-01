@@ -35,16 +35,22 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 			continue
 		}
 		plan.ApplyMap[item.Branch] = true
-		if item.Action == RestackPlanApplyAnchor {
-			// A moved anchor has to invalidate its children exactly like any
-			// other moved parent. Without this they stay "up to date" against
-			// the anchor's previous tip, so their recorded parent revision
-			// never catches up and every consumer reading it keeps drifting.
+		if item.Action == RestackPlanApplyAnchor || item.Action == RestackPlanApplyFrozen {
+			// A moved anchor or frozen branch has to invalidate its children
+			// exactly like any other moved parent. Without this they stay "up
+			// to date" against the parent's previous tip, so their recorded
+			// parent revision never catches up and every consumer reading it
+			// keeps drifting. For frozen this matters when the remote ref
+			// advanced: the branch hard-resets to the remote SHA, and its
+			// children must follow in the same pass.
 			plan.BranchMap[item.Branch] = true
 		}
 		if item.Action == RestackPlanApplyValidated {
 			specNewParent := item.NewParent
-			if parentItem, ok := plan.Items[item.NewParent]; ok && parentItem.Action == RestackPlanApplyAnchor && parentItem.TargetRev != "" {
+			// Anchor and frozen parents move to a known TargetRev at apply
+			// time; validate their children against that revision, not the
+			// parent's current (stale) ref.
+			if parentItem, ok := plan.Items[item.NewParent]; ok && parentItem.TargetRev != "" {
 				specNewParent = parentItem.TargetRev
 			} else if e.IsWorktreeAnchor(e.GetBranch(item.NewParent)) && item.ParentRev != "" {
 				if parentRev, ok := e.planRev(revMap, item.NewParent); ok && parentRev != item.ParentRev {

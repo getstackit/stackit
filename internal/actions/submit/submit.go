@@ -248,8 +248,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if err := validateGitHubStackChain(eng, branchObjs); err != nil {
 			return err
 		}
-		if len(branchObjs) < 2 {
-			return fmt.Errorf("a GitHub Stack requires at least two pull requests")
+		if err := github.ValidateStackPullRequestCount(len(branchObjs)); err != nil {
+			return err
 		}
 	}
 
@@ -426,11 +426,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 }
 
 func publishGitHubStackMetadata(ctx *app.Context, branches engine.Branches, handler Handler) error {
-	stack, pullRequests, err := createGitHubStackMetadata(ctx, branches)
+	stack, pullRequests, action, err := createGitHubStackMetadata(ctx, branches)
 	if err != nil {
 		return err
 	}
-	handler.OnEvent(GitHubStackCreatedEvent{Number: stack.Number, PullRequests: pullRequests})
+	handler.OnEvent(GitHubStackSyncedEvent{Number: stack.Number, PullRequests: pullRequests, Action: action})
 	return nil
 }
 
@@ -444,38 +444,38 @@ func validateGitHubStackChain(eng engine.Engine, branches engine.Branches) error
 	return nil
 }
 
-// createGitHubStackMetadata creates GitHub's native Stack resource after the
+// createGitHubStackMetadata reconciles GitHub's native Stack resource after the
 // normal submit flow has created or updated every PR in the selected chain.
-func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*github.StackInfo, []int, error) {
-	if len(branches) < 2 {
-		return nil, nil, fmt.Errorf("a GitHub Stack requires at least two pull requests")
+func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*github.StackInfo, []int, github.StackSyncAction, error) {
+	if err := github.ValidateStackPullRequestCount(len(branches)); err != nil {
+		return nil, nil, "", err
 	}
 
 	pullRequests := make([]int, 0, len(branches))
 	for _, branch := range branches {
 		pr, err := branch.GetPrInfo()
 		if err != nil || pr == nil || pr.Number() == nil {
-			return nil, nil, fmt.Errorf("branch %q has no submitted pull request", branch.GetName())
+			return nil, nil, "", fmt.Errorf("branch %q has no submitted pull request", branch.GetName())
 		}
 		pullRequests = append(pullRequests, *pr.Number())
 	}
 
 	client, err := getGitHubClient(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	stackClient, ok := client.(github.StackClient)
 	if !ok {
-		return nil, nil, fmt.Errorf("GitHub Stack API is unavailable for this client")
+		return nil, nil, "", fmt.Errorf("GitHub Stack API is unavailable for this client")
 	}
 
 	remoteCtx, cancel := ctx.RemoteOperationContext()
 	defer cancel()
-	stack, err := stackClient.CreateStack(remoteCtx, pullRequests)
+	stack, action, err := github.EnsureStack(remoteCtx, stackClient, pullRequests)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
-	return stack, pullRequests, nil
+	return stack, pullRequests, action, nil
 }
 
 // buildStackSnapshot captures the stack relationships and metadata that submit

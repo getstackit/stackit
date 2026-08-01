@@ -42,7 +42,49 @@ func (c *MockGitHubClient) CreateStack(_ context.Context, pullRequests []int) (*
 
 	created := append([]int(nil), pullRequests...)
 	c.config.CreatedStacks = append(c.config.CreatedStacks, created)
-	return &githubpkg.StackInfo{Number: len(c.config.CreatedStacks), PullRequests: make([]githubpkg.StackPRInfo, len(created))}, nil
+	return mockStackInfo(len(c.config.CreatedStacks), created), nil
+}
+
+// FindStackByPullRequest returns the mock native Stack containing pullRequest.
+func (c *MockGitHubClient) FindStackByPullRequest(_ context.Context, pullRequest int) (*githubpkg.StackInfo, error) {
+	c.config.mu.Lock()
+	defer c.config.mu.Unlock()
+
+	for i, stack := range c.config.CreatedStacks {
+		if containsInt(stack, pullRequest) {
+			return mockStackInfo(i+1, stack), nil
+		}
+	}
+	return nil, nil
+}
+
+// AddPullRequestsToStack extends a mock native Stack in place.
+func (c *MockGitHubClient) AddPullRequestsToStack(_ context.Context, stackNumber int, pullRequests []int) (*githubpkg.StackInfo, error) {
+	c.config.mu.Lock()
+	defer c.config.mu.Unlock()
+
+	if stackNumber < 1 || stackNumber > len(c.config.CreatedStacks) {
+		return nil, fmt.Errorf("GitHub Stack #%d does not exist", stackNumber)
+	}
+	c.config.CreatedStacks[stackNumber-1] = append(c.config.CreatedStacks[stackNumber-1], pullRequests...)
+	return mockStackInfo(stackNumber, c.config.CreatedStacks[stackNumber-1]), nil
+}
+
+func mockStackInfo(number int, pullRequests []int) *githubpkg.StackInfo {
+	stack := &githubpkg.StackInfo{Number: number, PullRequests: make([]githubpkg.StackPRInfo, len(pullRequests))}
+	for i, pullRequest := range pullRequests {
+		stack.PullRequests[i].Number = pullRequest
+	}
+	return stack
+}
+
+func containsInt(values []int, target int) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 // CreatePullRequest creates a new pull request

@@ -16,10 +16,11 @@ type JSONResult struct {
 	GitHubStack *JSONGitHubStackResult `json:"github_stack,omitempty"`
 }
 
-// JSONGitHubStackResult identifies native GitHub Stack metadata created by submit.
+// JSONGitHubStackResult identifies native GitHub Stack metadata reconciled by submit.
 type JSONGitHubStackResult struct {
-	Number       int   `json:"number"`
-	PullRequests []int `json:"pull_requests"`
+	Number       int    `json:"number"`
+	PullRequests []int  `json:"pull_requests"`
+	Action       string `json:"action"`
 }
 
 // JSONBranchResult is one branch's plan and result in submit JSON output.
@@ -97,8 +98,8 @@ func (h *JSONHandler) OnEvent(e Event) {
 		b := h.branch(ev.BranchName)
 		b.Warnings = append(b.Warnings, ev.Warning)
 
-	case GitHubStackCreatedEvent:
-		h.Result.GitHubStack = &JSONGitHubStackResult{Number: ev.Number, PullRequests: ev.PullRequests}
+	case GitHubStackSyncedEvent:
+		h.Result.GitHubStack = &JSONGitHubStackResult{Number: ev.Number, PullRequests: ev.PullRequests, Action: string(ev.Action)}
 
 	case CompletionEvent:
 		h.Result.Outcome = ev.Outcome

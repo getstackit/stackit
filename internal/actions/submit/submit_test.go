@@ -3,6 +3,7 @@ package submit_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	stackitconfig "github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -354,6 +356,33 @@ func TestSubmitCreatesNativeGitHubStackWhenRequested(t *testing.T) {
 	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
 	require.NoError(t, err)
 	require.Equal(t, []int{*basePR.Number(), *apiPR.Number()}, mockConfig.CreatedStacks[0])
+
+	// A repeated submit must leave the existing native Stack intact rather than
+	// trying to create a second resource for the same pull requests.
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	require.NoError(t, err)
+	require.Len(t, mockConfig.CreatedStacks, 1)
+}
+
+func TestSubmitGitHubStackRejectsMoreThanOneHundredBranchesBeforeSubmit(t *testing.T) {
+	t.Parallel()
+	branches := make(map[string]string, github.MaxStackPullRequests+1)
+	parent := "main"
+	for i := range github.MaxStackPullRequests + 1 {
+		branch := fmt.Sprintf("branch-%03d", i)
+		branches[branch] = parent
+		parent = branch
+	}
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithStack(branches)
+	s.Checkout(parent)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	s.Context.Config = cfg
+
+	err = submit.Action(s.Context, submit.Options{CreateGitHubStack: true}, &noopHandler{})
+	require.EqualError(t, err, "a GitHub Stack supports at most 100 pull requests (got 101)")
 }
 
 func TestSubmitNativeGitHubStackRejectsPrunedSinglePullRequestBeforeSubmit(t *testing.T) {

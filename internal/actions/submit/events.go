@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // Event represents a feedback event from the submit action.
@@ -95,14 +96,15 @@ type BranchProgressEvent struct {
 
 func (BranchProgressEvent) submitEvent() {}
 
-// GitHubStackCreatedEvent reports that submit created GitHub's native Stack
+// GitHubStackSyncedEvent reports that submit reconciled GitHub's native Stack
 // metadata after every PR in the selected chain was submitted.
-type GitHubStackCreatedEvent struct {
+type GitHubStackSyncedEvent struct {
 	Number       int
 	PullRequests []int
+	Action       github.StackSyncAction
 }
 
-func (GitHubStackCreatedEvent) submitEvent() {}
+func (GitHubStackSyncedEvent) submitEvent() {}
 
 // CompletionOutcome classifies how a submit run ended, so handlers can decide
 // presentation without string-matching messages.

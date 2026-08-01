@@ -70,7 +70,7 @@ func DefaultCommonStyles() CommonStyles {
 		Bold:    lipgloss.NewStyle().Bold(true),
 		Dim:     DimStyle(),
 		Subtle:  SubtleStyle(),
-		Branch:  BranchStyle(false, false, false),
+		Branch:  BranchStyle(BranchStyleOpts{}),
 		URL:     DimStyle(),
 		Spinner: lipgloss.NewStyle().Foreground(lipgloss.Color(ColorPrimary)),
 	}

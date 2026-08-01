@@ -73,13 +73,13 @@ func FormatShortLine(line string, circleIndex, arrowIndex int, isCurrent bool, o
 
 // ColorBranchName colors a branch name that is not the current branch.
 func ColorBranchName(branchName string) string {
-	return BranchStyle(false, false, false).Render(branchName)
+	return BranchStyle(BranchStyleOpts{}).Render(branchName)
 }
 
 // ColorCurrentBranch colors the checked-out branch and appends its
 // " (current)" marker.
 func ColorCurrentBranch(branchName string) string {
-	return BranchStyle(true, false, false).Render(branchName + " (current)")
+	return BranchStyle(BranchStyleOpts{IsCurrent: true}).Render(branchName + " (current)")
 }
 
 // ColorBranchNameIf renders the current-branch style (with the " (current)"
@@ -99,25 +99,32 @@ func ColorBranchNameWithTrunk(branchName string, isCurrent bool, isTrunk bool) s
 	if isCurrent {
 		name += " (current)"
 	}
-	return BranchStyle(isCurrent, isTrunk, false).Render(name)
+	return BranchStyle(BranchStyleOpts{IsCurrent: isCurrent, IsTrunk: isTrunk}).Render(name)
 }
 
 // ColorBranchNamePlain colors a branch name by current/trunk status without
 // appending the " (current)" marker, for callers that already convey
 // currency another way (e.g. a leading cursor or row highlight).
 func ColorBranchNamePlain(branchName string, isCurrent, isTrunk bool) string {
-	return BranchStyle(isCurrent, isTrunk, false).Render(branchName)
+	return BranchStyle(BranchStyleOpts{IsCurrent: isCurrent, IsTrunk: isTrunk}).Render(branchName)
+}
+
+// BranchStyleOpts configures the appearance BranchStyle renders.
+type BranchStyleOpts struct {
+	IsCurrent bool
+	IsTrunk   bool
+	IsDim     bool
 }
 
 // BranchStyle returns the unified style for a branch name
-func BranchStyle(isCurrent, isTrunk, isDim bool) lipgloss.Style {
-	if isDim {
+func BranchStyle(opts BranchStyleOpts) lipgloss.Style {
+	if opts.IsDim {
 		return lipgloss.NewStyle().Foreground(colorDimValue())
 	}
-	if isCurrent {
+	if opts.IsCurrent {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true) // Bold Green
 	}
-	if isTrunk {
+	if opts.IsTrunk {
 		// Distinct color for main/trunk: Pink (205)
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 	}

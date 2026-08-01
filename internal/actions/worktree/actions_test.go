@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
@@ -66,6 +67,29 @@ func TestListAction(t *testing.T) {
 		require.Equal(t, []string{"feature"}, result.Worktrees[0].RootBranches)
 
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature")
+	})
+
+	t.Run("reports branch checked out outside its owning worktree", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+		s.CreateBranch("feature").Commit("feature change")
+		s.TrackBranch("feature", "main")
+		s.Checkout("main")
+
+		worktreeDir := t.TempDir()
+		require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", worktreeDir, "feature-wt"))
+		t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
+
+		// Simulate raw `git checkout feature` from the main repository, bypassing
+		// Stackit's checkout redirect.
+		s.Checkout("feature")
+
+		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, result.OwnershipWarnings, 1)
+		assert.Contains(t, result.OwnershipWarnings[0], "branch feature belongs to managed worktree feature-wt")
+		assert.Contains(t, result.OwnershipWarnings[0], "but is checked out at")
 	})
 }
 

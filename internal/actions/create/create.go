@@ -58,6 +58,13 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		return Result{}, err
 	}
 	currentBranch := eng.CurrentBranch().GetName()
+	requestedParent := currentBranch
+	if opts.Onto != "" {
+		requestedParent = opts.Onto
+	}
+	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && requestedParent == eng.Trunk().GetName() {
+		return Result{}, fmt.Errorf("cannot create a branch from trunk inside managed worktree %s; first check out a branch owned by this worktree", ctx.WorktreeInfo.Name)
+	}
 	if err := actions.EnsureCanModifyNamesHere(ctx, currentBranch); err != nil {
 		return Result{}, err
 	}
@@ -82,6 +89,9 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 			return Result{}, fmt.Errorf("--onto cannot be combined with --insert/-i")
 		}
 		if err := validateOntoTarget(eng, opts.Onto); err != nil {
+			return Result{}, err
+		}
+		if err := actions.EnsureCanModifyNamesHere(ctx, opts.Onto); err != nil {
 			return Result{}, err
 		}
 	}

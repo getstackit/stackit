@@ -203,7 +203,11 @@ func (e *engineImpl) RegisterWorktree(stackRoot string, path string) error {
 
 // RegisterWorktreeWithName registers a worktree with a user-friendly name
 func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, name string) error {
-	absPath, err := canonicalWorktreePath(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute worktree path: %w", err)
+	}
+	canonicalPath, err := canonicalWorktreePath(absPath)
 	if err != nil {
 		return fmt.Errorf("failed to canonicalize worktree path: %w", err)
 	}
@@ -223,7 +227,7 @@ func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, 
 		if pathErr != nil {
 			return fmt.Errorf("failed to canonicalize registered worktree path %s: %w", worktree.Path, pathErr)
 		}
-		if worktreePath == absPath && worktree.AnchorBranch != anchorBranch {
+		if worktreePath == canonicalPath && worktree.AnchorBranch != anchorBranch {
 			return fmt.Errorf("worktree path %s is already registered to anchor %s", absPath, worktree.AnchorBranch)
 		}
 	}

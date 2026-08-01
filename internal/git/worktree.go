@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -21,8 +22,26 @@ const WorktreeRefPrefix = "refs/stackit/worktrees/"
 const WorktreePathRefPrefix = "refs/stackit/worktree-paths/"
 
 func worktreePathRef(path string) string {
+	if canonicalPath, err := canonicalWorktreePath(path); err == nil {
+		path = canonicalPath
+	}
 	hash := sha256.Sum256([]byte(path))
 	return fmt.Sprintf("%s%x", WorktreePathRefPrefix, hash)
+}
+
+func canonicalWorktreePath(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err == nil {
+		return filepath.Clean(resolvedPath), nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+	return filepath.Clean(absPath), nil
 }
 
 // Worktree represents a single entry from `git worktree list`.

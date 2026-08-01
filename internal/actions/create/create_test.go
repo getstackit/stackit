@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -50,6 +51,20 @@ func TestCreateAction_Stdin(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, commits, expectedMessage)
 	})
+}
+
+func TestCreateAction_RefusesTrunkInManagedWorktree(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit()
+	s.Context.InManagedWorktree = true
+	s.Context.WorktreeInfo = &engine.WorktreeInfo{
+		Name:         "feature-wt",
+		AnchorBranch: "feature-wt-anchor",
+	}
+
+	_, err := Action(s.Context, Options{BranchName: "new-branch", Message: "test"}, nil)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cannot create a branch from trunk inside managed worktree feature-wt")
 }
 
 func TestCreateAction_Insert(t *testing.T) {

@@ -454,7 +454,7 @@ func TestWorktreeRestackOperations(t *testing.T) {
 		})
 	}
 
-	run("restack from main updates worktree branches", func(t *testing.T, sh *TestShell) {
+	run("restack from main rejects worktree branches", func(t *testing.T, sh *TestShell) {
 		// Create stack in worktree
 		sh.WriteFile("feature.txt", "feature").
 			Run("create feature -w -m 'feature branch'")
@@ -467,26 +467,8 @@ func TestWorktreeRestackOperations(t *testing.T) {
 		shW.WriteFile("b.txt", "b").Run("create b -m 'branch b'")
 		shW.WriteFile("c.txt", "c").Run("create c -m 'branch c'")
 
-		// Advance trunk from the main repository to trigger the restack.
-		sh.WriteFile("trunk-update.txt", "update").
-			Git("commit -m 'trunk update'")
-
-		// Restack from main
-		sh.Run("restack")
-
-		// Verify stack structure maintained
-		sh.ExpectStackStructure(map[string]string{
-			"feature": "main",
-			"a":       "feature",
-			"b":       "a",
-			"c":       "b",
-		})
-
-		// Worktree should have the updated content
-		shW.Git("ls-files trunk-update.txt")
-		if shW.Output() == "" {
-			t.Error("trunk-update.txt should exist in worktree after restack")
-		}
+		sh.RunExpectError("restack").OutputContains("belongs to worktree")
+		shW.OnBranch("c")
 	})
 
 	run("restack from worktree works correctly", func(t *testing.T, sh *TestShell) {

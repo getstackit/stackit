@@ -51,9 +51,21 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 		return result, nil
 	}
 
+	// Keep the recorded PR numbers so a branch deleted on GitHub can still be
+	// resolved to its closed PR. A missing remote ref by itself is not enough to
+	// delete local work; this only supplies GitHub's PR state to normal cleanup.
+	knownPRNumbers := make(map[string]int)
+	for _, branch := range allBranches {
+		prInfo, err := branch.GetPrInfo()
+		if err != nil || prInfo == nil || prInfo.Number() == nil || *prInfo.Number() <= 0 {
+			continue
+		}
+		knownPRNumbers[branch.GetName()] = *prInfo.Number()
+	}
+
 	// Sync PR info from GitHub (this is already parallelized internally)
 	syncPrStart := time.Now()
-	if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branchNames, github.Repo{Owner: repoOwner, Name: repoName}, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	if err := github.SyncPrInfoWithKnownPRNumbers(remoteCtx, ctx.Git(), branchNames, github.Repo{Owner: repoOwner, Name: repoName}, knownPRNumbers, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 		result.mu.Lock()
 		result.PRInfos[name] = prInfo
 		result.mu.Unlock()

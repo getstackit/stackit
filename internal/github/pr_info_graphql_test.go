@@ -26,6 +26,15 @@ func TestBuildPRInfoByBranchQuery(t *testing.T) {
 	require.Equal(t, "refs/heads/jonnii/long/branch-name", variables["b1"])
 }
 
+func TestBuildPRInfoByNumberQuery(t *testing.T) {
+	t.Parallel()
+
+	query := buildPRNumberQuery([]int{42, 99}, pullRequestInfoFields)
+
+	require.Contains(t, query, "pr_42: pullRequest(number: 42) { number title body state url isDraft baseRefName headRefName }")
+	require.Contains(t, query, "pr_99: pullRequest(number: 99) { number title body state url isDraft baseRefName headRefName }")
+}
+
 func TestParsePRInfoByBranchResponse(t *testing.T) {
 	t.Parallel()
 
@@ -84,6 +93,34 @@ func TestParsePRInfoByBranchResponse_NullRefAndNoPR(t *testing.T) {
 	infos, err := parsePRInfoByBranchResponse(body, []string{"gone", "no-pr"})
 	require.NoError(t, err)
 	require.Empty(t, infos, "branches without an associated PR are skipped")
+}
+
+func TestParsePRInfoByNumberResponseAndSupplementMissingBranch(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"data": {
+			"repository": {
+				"pr_42": {"number": 42, "title": "closed PR", "body": "", "state": "CLOSED", "url": "https://gh/pr/42", "isDraft": false, "baseRefName": "main", "headRefName": "deleted-branch"}
+			}
+		}
+	}`)
+
+	byNumber, err := parsePRInfoByNumberResponse(body, []int{42})
+	require.NoError(t, err)
+	require.Equal(t, git.PRStateClosed, byNumber[42].State)
+
+	infos := map[string]*PullRequestInfo{
+		"active-branch": {Number: 7, State: git.PRStateOpen},
+	}
+	addPRInfoForKnownBranches(infos, map[string]int{
+		"deleted-branch": 42,
+		"active-branch":  42,
+	}, byNumber)
+
+	require.Equal(t, git.PRStateClosed, infos["deleted-branch"].State)
+	// An existing ref-based result remains authoritative for active branches.
+	require.Equal(t, 7, infos["active-branch"].Number)
 }
 
 func TestParsePRInfoByBranchResponse_MissingRepository(t *testing.T) {

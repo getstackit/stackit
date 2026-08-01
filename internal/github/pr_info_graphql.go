@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const pullRequestInfoFields = "number title body state url isDraft baseRefName headRefName"
+
 // batchGetPRInfoByBranchGraphQL fetches the most recent pull request associated
 // (as head ref) with each branch in a single GraphQL query, replacing one REST
 // list call per branch. Branches with no associated PR are absent from the
@@ -52,7 +54,7 @@ func buildPRInfoByBranchQuery(repo Repo, branches []string) (string, map[string]
 	for i := range branches {
 		fmt.Fprintf(&b, "    b%d: ref(qualifiedName: $b%d) {\n", i, i)
 		b.WriteString("      associatedPullRequests(first: 1, orderBy: {field: CREATED_AT, direction: DESC}) {\n")
-		b.WriteString("        nodes { number title body state url isDraft baseRefName headRefName }\n")
+		b.WriteString("        nodes { " + pullRequestInfoFields + " }\n")
 		b.WriteString("      }\n")
 		b.WriteString("    }\n")
 	}
@@ -67,6 +69,59 @@ func buildPRInfoByBranchQuery(repo Repo, branches []string) (string, map[string]
 		variables[fmt.Sprintf("b%d", i)] = "refs/heads/" + name
 	}
 	return b.String(), variables
+}
+
+// supplementPRInfoByNumberGraphQL resolves PRs for branches whose head refs
+// are no longer present. A missing ref is not itself a deletion signal: only a
+// previously recorded PR number is eligible for this supplemental lookup.
+func supplementPRInfoByNumberGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, infos map[string]*PullRequestInfo, knownPRNumbers map[string]int) error {
+	if len(knownPRNumbers) == 0 {
+		return nil
+	}
+
+	prNumbers := make([]int, 0, len(knownPRNumbers))
+	for branchName, number := range knownPRNumbers {
+		if number > 0 && infos[branchName] == nil {
+			prNumbers = append(prNumbers, number)
+		}
+	}
+	if len(prNumbers) == 0 {
+		return nil
+	}
+
+	query := buildPRNumberQuery(uniquePRNumbers(prNumbers), pullRequestInfoFields)
+	variables := map[string]any{
+		graphqlVarOwner: repo.Owner,
+		graphqlVarRepo:  repo.Name,
+	}
+	body, err := executeGraphQLQuery(ctx, runner, query, variables)
+	if err != nil {
+		return err
+	}
+
+	byNumber, err := parsePRInfoByNumberResponse(body, prNumbers)
+	if err != nil {
+		return err
+	}
+	addPRInfoForKnownBranches(infos, knownPRNumbers, byNumber)
+	return nil
+}
+
+func parsePRInfoByNumberResponse(body []byte, prNumbers []int) (map[int]*PullRequestInfo, error) {
+	return parsePRNumberQueryResponse(body, prNumbers, func(prData map[string]any) (*PullRequestInfo, bool) {
+		return pullRequestInfoFromGraphQLNode(prData), true
+	})
+}
+
+func addPRInfoForKnownBranches(infos map[string]*PullRequestInfo, knownPRNumbers map[string]int, byNumber map[int]*PullRequestInfo) {
+	for branchName, number := range knownPRNumbers {
+		if infos[branchName] != nil {
+			continue
+		}
+		if info := byNumber[number]; info != nil {
+			infos[branchName] = info
+		}
+	}
 }
 
 // parsePRInfoByBranchResponse maps each b<index> alias back to its branch name.

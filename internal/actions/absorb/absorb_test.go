@@ -860,6 +860,65 @@ func TestAbsorbRestoresUnabsorbableTextHunkToWorktree(t *testing.T) {
 	require.NotContains(t, stashList, absorbStashStagedMarker)
 }
 
+// TestAbsorbRestackConflictKeepsCleanWorktree verifies that a conflicted
+// follow-up restack does not fail the absorb: the rewrite already committed
+// the hunks, so the conflicted stack is held back and absorb finishes on a
+// clean worktree. Before the fix the restack entered the conflict workflow,
+// absorb returned its error, and the deferred restore took the failure path —
+// re-staging already-absorbed hunks onto a mid-rebase worktree.
+func TestAbsorbRestackConflictKeepsCleanWorktree(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	s.CreateBranch("branch-a")
+	s.TrackBranch("branch-a", "main")
+	aFile := filepath.Join(s.Scene.Dir, "a.txt")
+	require.NoError(t, os.WriteFile(aFile, []byte("a-line\n"), 0600))
+	conflictFile := filepath.Join(s.Scene.Dir, "conflict.txt")
+	require.NoError(t, os.WriteFile(conflictFile, []byte("base\n"), 0600))
+	s.RunGit("add", "a.txt", "conflict.txt")
+	s.RunGit("commit", "-m", "a: add files")
+
+	s.CreateBranch("branch-b")
+	s.TrackBranch("branch-b", "branch-a")
+	require.NoError(t, os.WriteFile(conflictFile, []byte("b-version\n"), 0600))
+	s.RunGit("add", "conflict.txt")
+	s.RunGit("commit", "-m", "b: change conflict file")
+
+	// Diverge branch-a so branch-b's replay conflicts during the restack.
+	s.Checkout("branch-a")
+	require.NoError(t, os.WriteFile(conflictFile, []byte("a-version\n"), 0600))
+	s.RunGit("add", "conflict.txt")
+	s.RunGit("commit", "-m", "a: conflicting change")
+	s.Rebuild()
+
+	// Stage a hunk that absorbs into branch-a's first commit.
+	require.NoError(t, os.WriteFile(aFile, []byte("a-line absorbed\n"), 0600))
+	s.RunGit("add", "a.txt")
+
+	err := Action(s.Context, Options{Force: true, Restack: RestackAll}, nil)
+	require.NoError(t, err)
+
+	// The absorbed hunk is committed on branch-a.
+	headA, err := s.Scene.Repo.RunGitCommandAndGetOutput("show", "branch-a:a.txt")
+	require.NoError(t, err)
+	require.Contains(t, headA, "a-line absorbed")
+
+	// The repo is clean: no rebase in progress, nothing staged (the absorbed
+	// hunk must NOT have been re-staged by the restore path), and no leftover
+	// absorb stashes.
+	require.False(t, s.Engine.Git().IsRebaseInProgress(context.Background()))
+	staged, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached")
+	require.NoError(t, err)
+	require.Empty(t, strings.TrimSpace(staged))
+	stashList, err := s.Scene.Repo.RunGitCommandAndGetOutput("stash", "list")
+	require.NoError(t, err)
+	require.NotContains(t, stashList, absorbStashMarker)
+
+	// branch-b was held back (still needs restack), not left mid-conflict.
+	require.NotEmpty(t, s.Engine.CurrentBranch())
+}
+
 // TestDropStagedStashIfRestored verifies the staged safety stash is dropped only
 // after the unabsorbable-hunk restore succeeds, and kept (as the recovery net)
 // when it fails. This mirrors the ordering guard in restoreStashedState.

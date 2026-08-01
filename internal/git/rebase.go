@@ -90,7 +90,7 @@ func AutoContinueRerereRebase(ctx context.Context, r Runner, originalErr error) 
 
 		unmergedFiles, err := applyRerereToUnmerged(ctx, r)
 		if err != nil {
-			return outcome, nil, originalErr
+			return outcome, nil, fmt.Errorf("failed to read unmerged files during rerere auto-continue: %s (rebase error: %w)", err.Error(), originalErr)
 		}
 		if len(unmergedFiles) > 0 {
 			return outcome, unmergedFiles, nil

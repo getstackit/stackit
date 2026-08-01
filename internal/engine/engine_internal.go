@@ -137,8 +137,14 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 	}
 
 	// Worktree anchor branches should never be reparented - they are permanent parents
-	// for their stacks, even though they may be at trunk HEAD
-	if e.IsWorktreeAnchor(e.GetBranch(parentBranchName)) {
+	// for their stacks, even though they may be at trunk HEAD.
+	//
+	// Callers hold e.mu, so read the branch type via readState directly:
+	// IsWorktreeAnchor goes through GetBranchType, which re-acquires e.mu.RLock
+	// (deadlock if a writer is queued between the two RLocks) and may take
+	// e.mu.Lock via ensureBranchSharedLoaded — a self-deadlock on a
+	// lazily-loaded engine.
+	if state := e.readState(parentBranchName); state != nil && state.BranchType == git.BranchTypeWorktreeAnchor {
 		return false
 	}
 

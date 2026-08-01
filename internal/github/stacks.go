@@ -7,9 +7,14 @@ import (
 	"slices"
 )
 
-// MaxStackPullRequests is GitHub's maximum number of pull requests in one
-// native Stack.
-const MaxStackPullRequests = 100
+const (
+	// MinStackPullRequests is GitHub's minimum number of pull requests in one
+	// native Stack.
+	MinStackPullRequests = 2
+	// MaxStackPullRequests is GitHub's maximum number of pull requests in one
+	// native Stack.
+	MaxStackPullRequests = 100
+)
 
 // StackClient is the narrow GitHub Stacks API surface used by the experimental
 // Stackit command. It is deliberately separate from Client while the feature
@@ -90,7 +95,7 @@ func EnsureStack(ctx context.Context, client StackClient, pullRequests []int) (*
 // ValidateStackPullRequestCount validates the GitHub Stacks API's request
 // bounds before a caller performs any irreversible PR writes.
 func ValidateStackPullRequestCount(count int) error {
-	if count < 2 {
+	if count < MinStackPullRequests {
 		return fmt.Errorf("a GitHub Stack requires at least two pull requests")
 	}
 	if count > MaxStackPullRequests {

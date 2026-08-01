@@ -52,6 +52,8 @@ const (
 	KeyNavigationShowMerged = "stackit.navigation.showMerged"
 	// KeySubmitDraft controls whether to create PRs as drafts by default.
 	KeySubmitDraft = "stackit.submit.draft"
+	// KeySubmitGitHubStack controls whether submit reconciles native GitHub Stack metadata.
+	KeySubmitGitHubStack = "stackit.submit.githubStack"
 	// KeySubmitWeb controls when to open PRs in browser (always/created/never).
 	KeySubmitWeb = "stackit.submit.web"
 	// KeySubmitLabels stores default labels for PRs (multi-value).
@@ -71,6 +73,7 @@ const (
 	YAMLPathStackShape           = "stack.shape"
 	YAMLPathSubmitFooter         = "submit.footer"
 	YAMLPathSubmitDraft          = "submit.draft"
+	YAMLPathSubmitGitHubStack    = "submit.githubStack"
 	YAMLPathSubmitWeb            = "submit.web"
 	YAMLPathSubmitLabels         = "submit.labels"
 	YAMLPathSubmitReviewers      = "submit.reviewers"
@@ -122,6 +125,8 @@ const (
 	DefaultNavigationShowMerged = true
 	// DefaultSubmitDraft is whether to create PRs as drafts by default.
 	DefaultSubmitDraft = false
+	// DefaultSubmitGitHubStack is whether submit syncs native GitHub Stack metadata.
+	DefaultSubmitGitHubStack = false
 	// DefaultSubmitWeb is when to open PRs in browser by default.
 	DefaultSubmitWeb = "never"
 )

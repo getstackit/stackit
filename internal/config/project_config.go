@@ -28,12 +28,13 @@ type StackConfig struct {
 
 // SubmitConfig contains PR submission configuration
 type SubmitConfig struct {
-	Footer    *bool    `yaml:"footer,omitempty"`    // Pointer to distinguish unset from false
-	Draft     *bool    `yaml:"draft,omitempty"`     // Pointer to distinguish unset from false
-	Web       string   `yaml:"web,omitempty"`       // "always", "created", "never"
-	Labels    []string `yaml:"labels,omitempty"`    // Default labels for PRs
-	Reviewers []string `yaml:"reviewers,omitempty"` // Default reviewers for PRs
-	Assignees []string `yaml:"assignees,omitempty"` // Default assignees for PRs
+	Footer      *bool    `yaml:"footer,omitempty"`      // Pointer to distinguish unset from false
+	Draft       *bool    `yaml:"draft,omitempty"`       // Pointer to distinguish unset from false
+	GitHubStack *bool    `yaml:"githubStack,omitempty"` // Sync native GitHub Stack metadata
+	Web         string   `yaml:"web,omitempty"`         // "always", "created", "never"
+	Labels      []string `yaml:"labels,omitempty"`      // Default labels for PRs
+	Reviewers   []string `yaml:"reviewers,omitempty"`   // Default reviewers for PRs
+	Assignees   []string `yaml:"assignees,omitempty"`   // Default assignees for PRs
 }
 
 // MergeConfig contains merge method configuration
@@ -206,6 +207,19 @@ func (c *ProjectConfig) GetSubmitDraft() bool {
 		return false // Default
 	}
 	return *c.Submit.Draft
+}
+
+// HasSubmitGitHubStack returns true if native GitHub Stack sync is configured.
+func (c *ProjectConfig) HasSubmitGitHubStack() bool {
+	return c.Submit.GitHubStack != nil
+}
+
+// GetSubmitGitHubStack returns the native GitHub Stack sync value.
+func (c *ProjectConfig) GetSubmitGitHubStack() bool {
+	if c.Submit.GitHubStack == nil {
+		return DefaultSubmitGitHubStack
+	}
+	return *c.Submit.GitHubStack
 }
 
 // HasSubmitWeb returns true if the submit web setting is configured

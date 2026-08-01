@@ -22,6 +22,7 @@
 # submit:
 #   footer: true # Include navigation footer
 #   draft: false # Create as draft
+#   githubStack: false # Sync native GitHub Stack metadata for eligible linear PR chains
 #   web: never # Open in browser: always, created, never
 #   labels: [] # Default labels
 #   reviewers: [] # Default reviewers

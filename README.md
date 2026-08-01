@@ -436,14 +436,15 @@ By default, `get` **freezes** the fetched branches locally. This prevents accide
 
 ### Native GitHub Stack Sync (Experimental)
 
-GitHub's native stacked PR UI requires a linear PR chain. To reconcile its Stack API metadata during submission, opt into linear topology and use the native-stack flag:
+GitHub's native stacked PR UI requires a linear PR chain. To reconcile its Stack API metadata automatically during normal submission, enable the submit option once:
 
 ```bash
 stackit config set stack.shape linear
-stackit submit --with-native-stack
+stackit config set submit.githubStack true
+stackit submit
 ```
 
-This experimental option only syncs GitHub's server-side Stack resource; it does not change Stackit metadata or normal `stackit submit` behavior without the flag.
+With this option enabled, submissions containing two or more PRs reconcile GitHub's server-side Stack resource. Single-PR submissions behave normally. Use `stackit submit --with-native-stack` for a one-off sync instead.
 
 ---
 

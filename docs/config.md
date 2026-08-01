@@ -58,6 +58,7 @@ git config --local --add stackit.trunks develop
 | `stackit.stack.shape` | string | `tree` | Stack topology (`tree` or `linear`; linear prevents forks below non-trunk branches) |
 | `stackit.submit.footer` | bool | `true` | Include PR footer in descriptions |
 | `stackit.submit.draft` | bool | `false` | Create PRs as drafts by default |
+| `stackit.submit.githubStack` | bool | `false` | Sync native GitHub Stack metadata for eligible linear PR chains |
 | `stackit.submit.web` | string | `never` | When to open PRs in browser (always/created/never) |
 | `stackit.submit.labels` | string[] | `[]` | Default labels for PRs |
 | `stackit.submit.reviewers` | string[] | `[]` | Default reviewers for PRs |
@@ -231,6 +232,7 @@ The table below shows all options available in `.stackit.yaml`. The "Team Fallba
 | `stack.shape` | string | `tree` | Stack topology (`tree` or `linear`; linear prevents forks below non-trunk branches) | Yes |
 | `submit.footer` | bool | `true` | Include PR footer | Yes |
 | `submit.draft` | bool | `false` | Create PRs as drafts by default | Yes |
+| `submit.githubStack` | bool | `false` | Sync native GitHub Stack metadata for eligible linear PR chains | Yes |
 | `submit.web` | string | `never` | Open PRs in browser (always/created/never) | Yes |
 | `submit.labels` | string[] | `[]` | Default labels for PRs | Yes (additive) |
 | `submit.reviewers` | string[] | `[]` | Default reviewers for PRs | Yes (additive) |

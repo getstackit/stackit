@@ -50,11 +50,12 @@ type Options struct {
 	CreateGitHubStack    bool // Create native GitHub Stack metadata after submitting PRs
 
 	// Config-driven options (these are merged with flags)
-	ConfigDraft     bool     // Default draft mode from config
-	ConfigWeb       string   // When to open browser from config (always/created/never)
-	ConfigLabels    []string // Default labels from config
-	ConfigReviewers []string // Default reviewers from config
-	ConfigAssignees []string // Default assignees from config
+	ConfigDraft       bool     // Default draft mode from config
+	ConfigGitHubStack bool     // Sync native GitHub Stack metadata for eligible submits
+	ConfigWeb         string   // When to open browser from config (always/created/never)
+	ConfigLabels      []string // Default labels from config
+	ConfigReviewers   []string // Default reviewers from config
+	ConfigAssignees   []string // Default assignees from config
 }
 
 // Info contains information about a branch to submit
@@ -76,10 +77,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if opts.Draft && opts.Publish {
 		return fmt.Errorf("can't use both --publish and --draft flags in one command")
 	}
-	if opts.CreateGitHubStack && (ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear) {
-		return fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
-	}
-
 	nav := ctx.Navigator()
 	eng := ctx.Engine
 
@@ -159,6 +156,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	branchObjs := make(engine.Branches, len(branches))
 	for i, branchName := range branches {
 		branchObjs[i] = nav.GetBranch(branchName)
+	}
+	// Configured Stack sync is assessed against the final submitted branch list
+	// after validation. The explicit flag remains strict.
+	explicitGitHubStack := opts.CreateGitHubStack
+	configuredGitHubStack := opts.ConfigGitHubStack
+	if ctx.Config != nil && ctx.Config.SubmitGitHubStack() {
+		configuredGitHubStack = true
+	}
+	if !explicitGitHubStack && configuredGitHubStack {
+		opts.CreateGitHubStack = true
 	}
 	// Resolve up-to-date status for every branch in one batched parent-revision
 	// read rather than a per-branch IsBranchUpToDate() (each of which shells a
@@ -245,11 +252,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// validation can prune stale descendants, so validating earlier could let a
 	// one-PR list perform normal PR writes before native Stack creation fails.
 	if opts.CreateGitHubStack {
-		if err := validateGitHubStackChain(eng, branchObjs); err != nil {
-			return err
-		}
-		if err := github.ValidateStackPullRequestCount(len(branchObjs)); err != nil {
-			return err
+		if !explicitGitHubStack && (len(branchObjs) < github.MinStackPullRequests || len(branchObjs) > github.MaxStackPullRequests) {
+			opts.CreateGitHubStack = false
+		} else {
+			if ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear {
+				return fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
+			}
+			if err := validateGitHubStackChain(eng, branchObjs); err != nil {
+				return err
+			}
+			if err := github.ValidateStackPullRequestCount(len(branchObjs)); err != nil {
+				return err
+			}
 		}
 	}
 

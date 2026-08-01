@@ -33,6 +33,7 @@ func TestOptionsCoversAllKeys(t *testing.T) {
 		KeyNavigationLocation,
 		KeyNavigationShowMerged,
 		KeySubmitDraft,
+		KeySubmitGitHubStack,
 		KeySubmitWeb,
 		KeySubmitLabels,
 		KeySubmitReviewers,

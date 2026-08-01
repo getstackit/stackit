@@ -364,6 +364,89 @@ func TestSubmitCreatesNativeGitHubStackWhenRequested(t *testing.T) {
 	require.Len(t, mockConfig.CreatedStacks, 1)
 }
 
+func TestSubmitCreatesNativeGitHubStackWhenConfigured(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"base": "main", "api": "base"})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	require.NoError(t, cfg.SetSubmitGitHubStack(true))
+	s.Context.Config = cfg
+
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
+	require.NoError(t, err)
+	require.Len(t, mockConfig.CreatedStacks, 1)
+}
+
+func TestSubmitConfiguredGitHubStackFallsBackWhenValidationPrunesToOnePullRequest(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"base": "main", "api": "base"})
+	s.Checkout("base").Commit("advance base").Checkout("api")
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	require.NoError(t, cfg.SetSubmitGitHubStack(true))
+	s.Context.Config = cfg
+
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
+	require.NoError(t, err)
+	require.Len(t, mockConfig.CreatedPRs, 1, "the valid parent should submit normally")
+	require.Empty(t, mockConfig.CreatedStacks, "one surviving PR must not create native Stack metadata")
+}
+
+func TestSubmitConfiguredGitHubStackSkipsSinglePullRequest(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"feature": "main"})
+	s.Checkout("feature")
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetSubmitGitHubStack(true))
+	s.Context.Config = cfg
+
+	err = submit.Action(s.Context, submit.Options{DryRun: true, ConfigGitHubStack: cfg.SubmitGitHubStack()}, &noopHandler{})
+	require.NoError(t, err)
+}
+
+func TestSubmitConfiguredGitHubStackSkipsOversizedSubmission(t *testing.T) {
+	t.Parallel()
+	branches := make(map[string]string, github.MaxStackPullRequests+1)
+	parent := "main"
+	for i := range github.MaxStackPullRequests + 1 {
+		branch := fmt.Sprintf("branch-%03d", i)
+		branches[branch] = parent
+		parent = branch
+	}
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithStack(branches)
+	s.Checkout(parent)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	require.NoError(t, cfg.SetSubmitGitHubStack(true))
+	s.Context.Config = cfg
+
+	err = submit.Action(s.Context, submit.Options{DryRun: true}, &noopHandler{})
+	require.NoError(t, err, "an oversized submission is ineligible for native Stack sync but should still submit normally")
+}
+
 func TestSubmitGitHubStackRejectsMoreThanOneHundredBranchesBeforeSubmit(t *testing.T) {
 	t.Parallel()
 	branches := make(map[string]string, github.MaxStackPullRequests+1)

@@ -174,6 +174,7 @@ branch:
 
 submit:
   footer: false
+  githubStack: true
 
 merge:
   method: squash
@@ -196,6 +197,7 @@ hooks:
 		assert.Equal(t, []string{"staging", "production"}, cfg.Trunks)
 		assert.Equal(t, "feature/{message}", cfg.Branch.Pattern)
 		assert.False(t, cfg.GetSubmitFooter())
+		assert.True(t, cfg.GetSubmitGitHubStack())
 		assert.Equal(t, "squash", cfg.Merge.Method)
 		assert.Equal(t, "make test", cfg.CI.Command)
 		assert.Equal(t, 300, cfg.CI.Timeout)
@@ -264,6 +266,17 @@ func TestProjectConfigHelpers(t *testing.T) {
 		cfg.Submit.Footer = &footer
 		assert.True(t, cfg.HasSubmitFooter())
 		assert.False(t, cfg.GetSubmitFooter())
+	})
+
+	t.Run("HasSubmitGitHubStack and GetSubmitGitHubStack", func(t *testing.T) {
+		cfg := &ProjectConfig{}
+		assert.False(t, cfg.HasSubmitGitHubStack())
+		assert.False(t, cfg.GetSubmitGitHubStack())
+
+		enabled := true
+		cfg.Submit.GitHubStack = &enabled
+		assert.True(t, cfg.HasSubmitGitHubStack())
+		assert.True(t, cfg.GetSubmitGitHubStack())
 	})
 
 	t.Run("HasMergeMethod", func(t *testing.T) {

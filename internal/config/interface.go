@@ -20,6 +20,7 @@ type Configurer interface {
 
 	// Submit settings
 	SubmitFooter() bool
+	SubmitGitHubStack() bool
 
 	// Undo settings
 	UndoStackDepth() int

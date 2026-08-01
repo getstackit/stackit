@@ -105,6 +105,13 @@ var Options = []Option{
 		Section:     SectionSubmit,
 	},
 	{
+		YAMLPath:    YAMLPathSubmitGitHubStack,
+		GitKey:      KeySubmitGitHubStack,
+		Description: "Sync native GitHub Stack metadata for eligible linear PR chains",
+		Default:     DefaultSubmitGitHubStack,
+		Section:     SectionSubmit,
+	},
+	{
 		YAMLPath:    YAMLPathSubmitWeb,
 		GitKey:      KeySubmitWeb,
 		Description: "Open in browser: always, created, never",

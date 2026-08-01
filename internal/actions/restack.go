@@ -230,7 +230,11 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 			return fmt.Errorf("failed to prompt for conflict resolution: %w", err)
 		}
 		if resolve {
-			return EnterConflictWorkflow(ctx, conflicts[0], branchesForConflict(plan, conflicts[0]))
+			// The prompt run used ConflictModeContinue, which held back the
+			// whole conflicted stack — ancestors included. Re-run that stack
+			// in EnterWorkflow mode so ancestors are applied before entering
+			// the conflict; see ResolveConflictWorkflow.
+			return ResolveConflictWorkflow(ctx, branchesForConflict(plan, conflicts[0]))
 		}
 	}
 

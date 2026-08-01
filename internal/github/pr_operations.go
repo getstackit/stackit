@@ -177,14 +177,18 @@ func UpdatePullRequest(ctx context.Context, client *github.Client, runner GitCom
 			}
 			if len(reviewers) > 0 || len(teamReviewers) > 0 {
 				// Remove and re-add reviewers
-				_, _ = client.PullRequests.RemoveReviewers(ctx, repo.Owner, repo.Name, prNumber, github.ReviewersRequest{
+				if _, err := client.PullRequests.RemoveReviewers(ctx, repo.Owner, repo.Name, prNumber, github.ReviewersRequest{
 					Reviewers:     reviewers,
 					TeamReviewers: teamReviewers,
-				})
-				_, _, _ = client.PullRequests.RequestReviewers(ctx, repo.Owner, repo.Name, prNumber, github.ReviewersRequest{
+				}); err != nil {
+					warnings = append(warnings, fmt.Sprintf("failed to remove reviewers for rerequest: %v", err))
+				}
+				if _, _, err := client.PullRequests.RequestReviewers(ctx, repo.Owner, repo.Name, prNumber, github.ReviewersRequest{
 					Reviewers:     reviewers,
 					TeamReviewers: teamReviewers,
-				})
+				}); err != nil {
+					warnings = append(warnings, fmt.Sprintf("failed to re-add reviewers: %v", err))
+				}
 			}
 		}
 	}

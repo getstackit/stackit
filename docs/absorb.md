@@ -150,6 +150,14 @@ warns when descendants of the rewritten commits are left un-restacked
 ("Skipped restacking N branches...") and points at `stackit restack --upstack`
 to finish the job.
 
+The follow-up restack runs in continue-on-conflict mode, never the interactive
+conflict workflow: a conflicted stack is held back and absorb finishes on a
+clean worktree, pointing at `stackit restack` to resolve. This is deliberate —
+the absorbed hunks are already committed by that point, and ending mid-rebase
+would make the deferred stash restore pop stashes onto a conflicted worktree
+(and its failure path would re-stage already-absorbed hunks, duplicating
+them).
+
 Implementation: `internal/actions/absorb/restack.go`
 
 ## Conflict and Recovery

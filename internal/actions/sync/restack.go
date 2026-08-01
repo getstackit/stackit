@@ -145,6 +145,28 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	return nil
 }
 
+// conflictStackBranches returns the full stack containing branchName (ancestors
+// and descendants, trunk excluded) in topological order — the branch set
+// ResolveConflictWorkflow needs to apply the held-back ancestors before
+// entering the conflict.
+func conflictStackBranches(ctx *app.Context, branchName string) engine.Branches {
+	nav := ctx.Navigator()
+	branch := nav.GetBranch(branchName)
+	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	stack := graph.Range(branch, engine.StackRange{
+		RecursiveParents:  true,
+		IncludeCurrent:    true,
+		RecursiveChildren: true,
+	})
+	builder := engine.NewBranchesBuilder(len(stack))
+	for _, b := range stack {
+		if b.IsTracked() && !b.IsTrunk() {
+			builder.Add(b)
+		}
+	}
+	return nav.SortBranchesTopologically(builder.Build())
+}
+
 // getPRNumber returns the PR number for a branch if it has one
 func getPRNumber(eng engine.BranchStatus, branchName string) *int {
 	branch := eng.GetBranch(branchName)

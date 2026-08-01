@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	stackiterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -111,6 +112,96 @@ func TestRestackAction(t *testing.T) {
 			conflictBranches,
 		)
 		require.Equal(t, len(conflictBranches), jsonHandler.Result.ConflictCount)
+	})
+
+	t.Run("planning errors on a nonexistent branch", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		_, err := PlanRestack(s.Context, RestackOptions{
+			BranchName: "does-not-exist",
+			Scope:      engine.StackRangeFull(),
+		})
+		require.ErrorContains(t, err, "branch does-not-exist does not exist")
+	})
+
+	t.Run("JSON restack reports conflicts without entering the workflow", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		s.Checkout("main")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("base", "conflict"))
+		s.CreateBranch("feature")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("feature change", "conflict"))
+		s.TrackBranch("feature", "main")
+		s.Checkout("main")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("main change", "conflict"))
+		s.Checkout("feature")
+
+		plan, err := PlanRestack(s.Context, RestackOptions{
+			BranchName: "feature",
+			Scope:      engine.StackRange{IncludeCurrent: true},
+		})
+		require.NoError(t, err)
+		require.True(t, plan.HasWork())
+
+		jsonHandler := handlers.NewJSONRestackHandler()
+		err = RestackAction(s.Context, plan, jsonHandler)
+
+		// A routine conflict is data, not an error: status "conflict" with
+		// the branch listed, and the repo left clean — never mid-rebase with
+		// human conflict guidance printed into the JSON stream.
+		require.NoError(t, err)
+		require.Equal(t, handlers.RestackJSONStatusConflict, jsonHandler.Result.Status)
+		require.Equal(t, 1, jsonHandler.Result.ConflictCount)
+		require.Equal(t, "feature", jsonHandler.Result.Conflicts[0].Branch)
+		require.False(t, s.Engine.Git().IsRebaseInProgress(context.Background()))
+	})
+
+	t.Run("resolving mid-stack conflict applies ancestors before entering workflow", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		s.Checkout("main")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("base", "conflict"))
+
+		// a rebases cleanly; b (child of a) conflicts with the trunk change.
+		s.CreateBranch("a")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("a change", "afile"))
+		s.TrackBranch("a", "main")
+
+		s.CreateBranch("b")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("b change", "conflict"))
+		s.TrackBranch("b", "a")
+
+		s.Checkout("main")
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("main change", "conflict"))
+		s.Checkout("b")
+
+		plan, err := PlanRestack(s.Context, RestackOptions{
+			BranchName: "b",
+			Scope:      engine.StackRangeFull(),
+		})
+		require.NoError(t, err)
+		require.True(t, plan.HasWork())
+
+		handler := &promptRestackHandler{resolveConflicts: true}
+		err = RestackAction(s.Context, plan, handler)
+		require.True(t, handler.prompted)
+		require.Equal(t, []string{"b"}, handler.conflicts)
+
+		// Answering "yes" must actually enter the conflict workflow: the
+		// held-back ancestors get applied first, then b's rebase stops in
+		// conflict state. Before the fix this errored with "expected conflict
+		// on b but rebase completed successfully" and left HEAD detached.
+		require.ErrorIs(t, err, stackiterrors.ErrConflictWorkflow)
+		require.True(t, s.Engine.Git().IsRebaseInProgress(context.Background()))
+
+		mainRev, err := s.Engine.GetRevision(engine.NewBranch("main", nil))
+		require.NoError(t, err)
+		isAncestor, err := s.Engine.Git().IsAncestor(context.Background(), mainRev, "a")
+		require.NoError(t, err)
+		require.True(t, isAncestor, "ancestor a must be restacked onto the new trunk before entering the conflict workflow")
 	})
 
 	t.Run("interactive restack prompts before entering conflict workflow", func(t *testing.T) {

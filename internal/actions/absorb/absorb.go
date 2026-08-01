@@ -410,6 +410,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("failed to refresh engine after absorb: %w", err)
 	}
 
+	// The rewrite is complete: the staged hunks now live in commits. Flip the
+	// restore flag BEFORE the follow-up restack — if anything below fails, the
+	// deferred restore must take the success path. The failure path re-stages
+	// the original hunks, which would duplicate content that is already
+	// committed.
+	absorbSucceeded = true
+
 	// Restack branches according to mode
 	if oldestModifiedBranch != "" {
 		// Rebuild graph with fresh engine state
@@ -417,8 +424,35 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		upstackBranches := selectRestackBranches(graph, eng, opts.Restack, currentBranch.GetName(), oldestModifiedBranch, currentScope)
 
 		if len(upstackBranches) > 0 {
-			if err := actions.RestackBranches(ctx, upstackBranches); err != nil {
+			// ConflictModeContinue, not EnterWorkflow: entering the conflict
+			// workflow would return with the repo mid-rebase, and the deferred
+			// stash restore would then pop stashes and apply patches onto a
+			// conflicted worktree. Continue mode holds conflicted stacks back,
+			// so absorb always finishes on a clean worktree; the user resolves
+			// with 'stackit restack'.
+			var conflicted, blocked []string
+			if err := actions.RestackBranchesWithHandler(ctx, upstackBranches, func(p actions.RestackProgress) {
+				switch p.Result {
+				case engine.RestackDone:
+					out.Info("Restacked %s on %s.",
+						output.BranchName(p.Branch),
+						output.BranchName(eng.GetBranch(p.Branch).GetParentOrTrunk()))
+				case engine.RestackConflict:
+					conflicted = append(conflicted, p.Branch)
+				case engine.RestackBlocked:
+					blocked = append(blocked, p.Branch)
+				}
+			}, actions.ConflictModeContinue); err != nil {
 				return fmt.Errorf("failed to restack upstack branches: %w", err)
+			}
+			if len(conflicted) > 0 {
+				if len(blocked) > 0 {
+					out.Warn("Absorbed changes are committed, but restacking %s hit conflicts; %d dependent %s left in place. Run 'stackit restack' to rebase and resolve.",
+						strings.Join(conflicted, ", "), len(blocked), actions.Pluralize("branch", len(blocked)))
+				} else {
+					out.Warn("Absorbed changes are committed, but restacking %s hit conflicts. Run 'stackit restack' to rebase and resolve.",
+						strings.Join(conflicted, ", "))
+				}
 			}
 		}
 
@@ -436,7 +470,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	absorbSucceeded = true
 	handler.Complete(Result{
 		Absorbed:    len(absorbedTargets),
 		Unabsorbed:  len(unabsorbedHunks),

@@ -388,6 +388,13 @@ func (e *engineImpl) processValidationLevel(
 	for _, spec := range level.specs {
 		wg.Add(1)
 		go func(spec RebaseSpec) {
+			// wg.Done must be the FIRST defer registered so it runs LAST
+			// (defers are LIFO): the panic-recovery defer below sends on
+			// results, and the collector closes that channel once wg.Wait
+			// returns. Done firing before the send would let the close race
+			// the send — a panic in the last goroutine of a level would then
+			// crash the process on a closed channel instead of being reported.
+			defer wg.Done()
 			// Panic recovery at outermost level to ensure cleanup always happens
 			defer func() {
 				if r := recover(); r != nil {
@@ -399,7 +406,6 @@ func (e *engineImpl) processValidationLevel(
 					}
 				}
 			}()
-			defer wg.Done()
 
 			// Check parent context before acquiring semaphore so an outer cancel
 			// (e.g. user Ctrl+C) short-circuits queued siblings.

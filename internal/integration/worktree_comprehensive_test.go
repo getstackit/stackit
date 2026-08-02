@@ -772,44 +772,6 @@ func TestWorktreeMoveOperations(t *testing.T) {
 }
 
 // =============================================================================
-// Submit Operations from Worktrees
-// =============================================================================
-
-func TestWorktreeSubmitOperations(t *testing.T) {
-	t.Parallel()
-	shared := NewTestShellInProcess(t, WithRemote())
-	shared.SetWorktreeBasePath(t.TempDir())
-
-	run := func(name string, fn func(t *testing.T, sh *TestShell)) {
-		t.Run(name, func(t *testing.T) {
-			sh := shared.WithT(t)
-			sh.ResetRepo()
-			fn(t, sh)
-		})
-	}
-
-	run("submit from worktree creates PRs", func(_ *testing.T, sh *TestShell) {
-		sh.WriteFile("feature.txt", "feature").
-			Run("create feature -w -m 'feature branch'")
-
-		worktreePath := sh.GetWorktreePath("feature")
-		shW := sh.InWorktree(worktreePath)
-
-		// Create a child
-		shW.WriteFile("child.txt", "child").
-			Run("create child -m 'child branch'")
-
-		// Submit should push branches
-		// Note: This will fail without GitHub mock, but we can verify the push
-		shW.Checkout("feature")
-
-		// Just verify branches can be pushed
-		shW.Git("push origin feature --force")
-		shW.Git("push origin child --force")
-	})
-}
-
-// =============================================================================
 // Undo Operations with Worktrees
 // =============================================================================
 

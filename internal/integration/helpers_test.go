@@ -227,6 +227,17 @@ func (s *TestShell) Git(args string) *TestShell {
 	return s
 }
 
+// gitStdin runs a raw git command with input piped to stdin. Used for batch ref
+// updates (`update-ref --stdin`), which replace a git process per ref.
+func (s *TestShell) gitStdin(input string, args ...string) {
+	s.t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = s.scene.Dir
+	cmd.Stdin = strings.NewReader(input)
+	output, err := cmd.CombinedOutput()
+	require.NoError(s.t, err, "$ git %s\n%s", strings.Join(args, " "), string(output))
+}
+
 // =============================================================================
 // Navigation Shortcuts
 // =============================================================================
@@ -316,20 +327,30 @@ func (s *TestShell) ResetRepo() *TestShell {
 	// Prune any stale worktrees
 	s.Git("worktree prune")
 
-	// Delete stackit refs (metadata, local metadata, worktree registrations)
+	// Delete stackit refs (metadata, local metadata, worktree registrations) in a
+	// single transaction — ResetRepo runs once per subtest, so a git process per
+	// ref dominates the integration tier's wall time.
 	s.Git("for-each-ref --format=%(refname) refs/stackit")
+	var deletes strings.Builder
 	for _, ref := range splitLines(s.lastOutput) {
 		if ref != "" {
-			s.Git("update-ref -d " + ref)
+			deletes.WriteString("delete " + ref + "\n")
 		}
+	}
+	if deletes.Len() > 0 {
+		s.gitStdin(deletes.String(), "update-ref", "--stdin")
 	}
 
 	// Delete local branches except main
 	s.Git("for-each-ref --format=%(refname:short) refs/heads")
+	var branches []string
 	for _, branch := range splitLines(s.lastOutput) {
 		if branch != "" && branch != "main" {
-			s.Git("branch -D " + branch)
+			branches = append(branches, branch)
 		}
+	}
+	if len(branches) > 0 {
+		s.Git("branch -D " + strings.Join(branches, " "))
 	}
 
 	// Reset main back to the root commit
@@ -594,12 +615,14 @@ func (s *TestShell) resetOrigin(root string) {
 	}
 
 	refs := runGitInDir(s.t, remotePath, "--git-dir", remotePath, "for-each-ref", "--format=%(refname)", "refs/heads", "refs/stackit")
+	var updates strings.Builder
 	for _, ref := range splitLines(refs) {
 		if ref != "" && ref != "refs/heads/main" {
-			_ = runGitInDir(s.t, remotePath, "--git-dir", remotePath, "update-ref", "-d", ref)
+			updates.WriteString("delete " + ref + "\n")
 		}
 	}
-	_ = runGitInDir(s.t, remotePath, "--git-dir", remotePath, "update-ref", "refs/heads/main", root)
+	updates.WriteString("update refs/heads/main " + root + "\n")
+	runGitStdinInDir(s.t, remotePath, updates.String(), "--git-dir", remotePath, "update-ref", "--stdin")
 	_ = runGitInDir(s.t, remotePath, "--git-dir", remotePath, "symbolic-ref", "HEAD", "refs/heads/main")
 }
 
@@ -611,6 +634,15 @@ func (s *TestShell) remotePath() string {
 		return ""
 	}
 	return strings.TrimSpace(string(output))
+}
+
+func runGitStdinInDir(t *testing.T, dir, input string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(input)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git %s failed: %s", strings.Join(args, " "), string(output))
 }
 
 func runGitInDir(t *testing.T, dir string, args ...string) string {

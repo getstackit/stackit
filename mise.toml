@@ -90,10 +90,8 @@ run = """
   if [ -d ./apps/st-tui ]; then
     go build -o bin/st-tui ./apps/st-tui
   fi
-  if [ ! -L ./bin/st ] && [ ! -f ./bin/st ]; then
-    ln -s stackit ./bin/st
-    echo "Created symlink: bin/st -> stackit"
-  fi
+  ln -sfn stackit ./bin/st
+  echo "Linked bin/st -> stackit"
 """
 
 [tasks.fmt]

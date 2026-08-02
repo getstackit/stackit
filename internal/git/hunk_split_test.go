@@ -95,9 +95,9 @@ func TestCanSplitHunk(t *testing.T) {
 				File:    "test.go",
 				Content: tt.content,
 			}
-			result := CanSplitHunk(hunk)
+			result := hunk.CanSplit()
 			if result != tt.expected {
-				t.Errorf("CanSplitHunk() = %v, expected %v", result, tt.expected)
+				t.Errorf("CanSplit() = %v, expected %v", result, tt.expected)
 			}
 		})
 	}
@@ -164,12 +164,12 @@ func TestSplitHunk(t *testing.T) {
 				NewStart: 1,
 				Content:  tt.content,
 			}
-			result, err := SplitHunk(hunk)
+			result, err := hunk.Split()
 			if err != nil {
-				t.Fatalf("SplitHunk() error = %v", err)
+				t.Fatalf("Split() error = %v", err)
 			}
 			if len(result) != tt.expectedCount {
-				t.Errorf("SplitHunk() returned %d hunks, expected %d", len(result), tt.expectedCount)
+				t.Errorf("Split() returned %d hunks, expected %d", len(result), tt.expectedCount)
 			}
 			if tt.validateContent != nil {
 				tt.validateContent(t, result)
@@ -258,26 +258,26 @@ func TestGetHunkPreview(t *testing.T) {
 	hunk := Hunk{Content: content}
 
 	// Test with maxLines = 2
-	preview, total, hasMore := GetHunkPreview(hunk, 2)
+	preview, total, hasMore := hunk.Preview(2)
 	if total != 6 {
-		t.Errorf("GetHunkPreview() totalLines = %d, expected 6", total)
+		t.Errorf("Preview() totalLines = %d, expected 6", total)
 	}
 	if !hasMore {
-		t.Error("GetHunkPreview() hasMore should be true")
+		t.Error("Preview() hasMore should be true")
 	}
 	lines := strings.Split(preview, "\n")
 	if len(lines) != 2 {
-		t.Errorf("GetHunkPreview() preview has %d lines, expected 2", len(lines))
+		t.Errorf("Preview() preview has %d lines, expected 2", len(lines))
 	}
 
 	// Test with maxLines >= total
-	preview, _, hasMore = GetHunkPreview(hunk, 10)
+	preview, _, hasMore = hunk.Preview(10)
 	if hasMore {
-		t.Error("GetHunkPreview() hasMore should be false when maxLines >= total")
+		t.Error("Preview() hasMore should be false when maxLines >= total")
 	}
 	lines = strings.Split(preview, "\n")
 	if len(lines) != 6 {
-		t.Errorf("GetHunkPreview() preview has %d lines, expected 6", len(lines))
+		t.Errorf("Preview() preview has %d lines, expected 6", len(lines))
 	}
 }
 
@@ -316,9 +316,9 @@ func TestGetHunkHeader(t *testing.T) {
 				NewStart: 0,
 				NewCount: 0,
 			}
-			result := GetHunkHeader(hunk)
+			result := hunk.Header()
 			if result != tt.expected {
-				t.Errorf("GetHunkHeader() = %q, expected %q", result, tt.expected)
+				t.Errorf("Header() = %q, expected %q", result, tt.expected)
 			}
 		})
 	}
@@ -586,14 +586,14 @@ func TestSplitHunk_TrailingEmptyLines(t *testing.T) {
 		Content:  content,
 	}
 
-	result, err := SplitHunk(hunk)
+	result, err := hunk.Split()
 	if err != nil {
-		t.Fatalf("SplitHunk() error = %v", err)
+		t.Fatalf("Split() error = %v", err)
 	}
 
 	// Should still be able to split despite trailing empty line
 	if len(result) != 2 {
-		t.Errorf("SplitHunk() returned %d hunks, expected 2", len(result))
+		t.Errorf("Split() returned %d hunks, expected 2", len(result))
 	}
 }
 
@@ -612,7 +612,7 @@ func TestCanSplitHunk_NoNewlineAtEnd(t *testing.T) {
 	}
 
 	// This hunk only has one change block, so it shouldn't be splittable
-	if CanSplitHunk(hunk) {
+	if hunk.CanSplit() {
 		t.Error("Hunk with single change block should not be splittable")
 	}
 }

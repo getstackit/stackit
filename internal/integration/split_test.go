@@ -277,23 +277,24 @@ func TestSplitAsSibling(t *testing.T) {
 			OutputContains("Custom extraction message")
 	})
 
-	run("split rejects --name with --by-commit", func(_ *testing.T, sh *TestShell) {
+	// These four invocations are rejected by flag validation in
+	// internal/cli/branch/split.go before any repo I/O, so one fixture serves
+	// all of them. Both spellings matter: an explicit incompatible style
+	// (--by-commit) and no style flag at all (which would otherwise autodetect).
+	run("split rejects --name/--message outside --by-file", func(_ *testing.T, sh *TestShell) {
 		sh.Write("file1", "content").
 			Run("create feature -m 'Commit 1'")
-		sh.Commit("file2", "Commit 2")
 
-		// Should error because --name only works with --by-file
 		sh.RunExpectError("split --by-commit --name bad-name").
 			OutputContains("--name can only be used with --by-file")
-	})
 
-	run("split rejects --message with --by-commit", func(_ *testing.T, sh *TestShell) {
-		sh.Write("file1", "content").
-			Run("create feature -m 'Commit 1'")
-		sh.Commit("file2", "Commit 2")
-
-		// Should error because --message only works with --by-file
 		sh.RunExpectError("split --by-commit --message 'bad message'").
+			OutputContains("--message/--message-file can only be used with --by-file")
+
+		sh.RunExpectError("split --name bad-name").
+			OutputContains("--name can only be used with --by-file")
+
+		sh.RunExpectError("split --message 'bad message'").
 			OutputContains("--message/--message-file can only be used with --by-file")
 	})
 
@@ -321,25 +322,6 @@ func TestSplitAsSibling(t *testing.T) {
 		// Verify child still has feature as parent
 		sh.Checkout("child").Run("info")
 		sh.OutputContains("feature")
-	})
-
-	run("split rejects --name without explicit --by-file", func(_ *testing.T, sh *TestShell) {
-		sh.Write("file1", "content").
-			Run("create feature -m 'Add feature'")
-
-		// Should error because --name requires explicit --by-file
-		// (without --by-file, style would be auto-detected)
-		sh.RunExpectError("split --name bad-name").
-			OutputContains("--name can only be used with --by-file")
-	})
-
-	run("split rejects --message without explicit --by-file", func(_ *testing.T, sh *TestShell) {
-		sh.Write("file1", "content").
-			Run("create feature -m 'Add feature'")
-
-		// Should error because --message requires explicit --by-file
-		sh.RunExpectError("split --message 'bad message'").
-			OutputContains("--message/--message-file can only be used with --by-file")
 	})
 
 	run("split --by-file --as-sibling rejects duplicate custom branch name", func(_ *testing.T, sh *TestShell) {
@@ -1409,50 +1391,29 @@ func TestSplitDryRun(t *testing.T) {
 		})
 	}
 
-	run("split --by-file --dry-run shows preview without executing", func(_ *testing.T, sh *TestShell) {
+	// Each direction re-checks that nothing was created, which is also what makes
+	// sharing one fixture across all three safe: --dry-run mutates nothing.
+	run("split --by-file --dry-run previews every direction without executing", func(_ *testing.T, sh *TestShell) {
 		sh.Write("keep", "keep content").
 			Write("extract", "extract content").
 			Run("create feature -m 'Add files'")
 
-		// Run with --dry-run
 		sh.Run("split --by-file extract_test.txt --dry-run").
 			OutputContains("Dry Run").
 			OutputContains("extract_test.txt").
 			OutputContains("Run without --dry-run to execute")
-
-		// Verify no new branch was created
 		sh.HasBranches("feature", "main")
-
-		// Verify still on feature
 		sh.OnBranch("feature")
-	})
 
-	run("split --by-file --above --dry-run shows child direction", func(_ *testing.T, sh *TestShell) {
-		sh.Write("keep", "keep content").
-			Write("extract", "extract content").
-			Run("create feature -m 'Add files'")
-
-		// Run with --dry-run and --above
 		sh.Run("split --by-file extract_test.txt --above --dry-run").
 			OutputContains("Dry Run").
 			OutputContains("above").
 			OutputContains("child")
-
-		// Verify no new branch was created
 		sh.HasBranches("feature", "main")
-	})
 
-	run("split --by-file --as-sibling --dry-run shows sibling direction", func(_ *testing.T, sh *TestShell) {
-		sh.Write("keep", "keep content").
-			Write("extract", "extract content").
-			Run("create feature -m 'Add files'")
-
-		// Run with --dry-run and --as-sibling
 		sh.Run("split --by-file extract_test.txt --as-sibling --dry-run").
 			OutputContains("Dry Run").
 			OutputContains("sibling")
-
-		// Verify no new branch was created
 		sh.HasBranches("feature", "main")
 	})
 }

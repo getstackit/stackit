@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strings"
 
 	ignore "github.com/sabhiram/go-gitignore"
+
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // WorktreeIncludeFile is the repository-root file that selects ignored files
@@ -23,6 +26,20 @@ type WarmStartResult struct {
 	Enabled         bool
 	Copied          []string
 	SkippedExisting []string
+}
+
+func warmStartWorktree(ctx context.Context, eng engine.Engine, sourceRoot, destinationRoot string) (WarmStartResult, error) {
+	if _, err := os.Stat(filepath.Join(sourceRoot, WorktreeIncludeFile)); os.IsNotExist(err) {
+		return WarmStartResult{}, nil
+	} else if err != nil {
+		return WarmStartResult{}, fmt.Errorf("inspect %s: %w", WorktreeIncludeFile, err)
+	}
+
+	ignoredPaths, err := eng.ListIgnoredFiles(ctx, sourceRoot)
+	if err != nil {
+		return WarmStartResult{}, err
+	}
+	return CopyIncludedIgnoredFiles(sourceRoot, destinationRoot, ignoredPaths)
 }
 
 // CopyIncludedIgnoredFiles copies selected ignored regular files from sourceRoot

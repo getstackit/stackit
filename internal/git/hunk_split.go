@@ -229,15 +229,3 @@ func (h Hunk) Header() string {
 	// Fallback: generate header from hunk metadata
 	return fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldCount, h.NewStart, h.NewCount)
 }
-
-// CanSplitHunk is retained for callers that have not migrated to Hunk.CanSplit.
-func CanSplitHunk(h Hunk) bool { return h.CanSplit() }
-
-// SplitHunk is retained for callers that have not migrated to Hunk.Split.
-func SplitHunk(h Hunk) (Hunks, error) { return h.Split() }
-
-// GetHunkPreview is retained for callers that have not migrated to Hunk.Preview.
-func GetHunkPreview(h Hunk, maxLines int) (string, int, bool) { return h.Preview(maxLines) }
-
-// GetHunkHeader is retained for callers that have not migrated to Hunk.Header.
-func GetHunkHeader(h Hunk) string { return h.Header() }

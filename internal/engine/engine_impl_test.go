@@ -101,6 +101,55 @@ func TestTrackBranch(t *testing.T) {
 	})
 }
 
+func TestLinearStacksRejectForks(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.CreateBranch("base").Commit("base change").
+		CreateBranch("first-child").Commit("first child change").
+		Checkout("base").CreateBranch("second-child").Commit("second child change").
+		Checkout("main")
+
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot:     s.Scene.Dir,
+		Trunk:        "main",
+		LinearStacks: true,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, eng.TrackBranch(context.Background(), "base", "main"))
+	require.NoError(t, eng.TrackBranch(context.Background(), "first-child", "base"))
+	err = eng.TrackBranch(context.Background(), "second-child", "base")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "linear stacks are enabled")
+	require.Contains(t, err.Error(), "stack.shape to tree")
+
+	// Independent roots remain valid: linear mode is a forest of chains.
+	require.NoError(t, eng.TrackBranch(context.Background(), "second-child", "main"))
+}
+
+func TestLinearStacksAllowDeletingMiddleBranch(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.CreateBranch("base").Commit("base change").
+		CreateBranch("middle").Commit("middle change").
+		CreateBranch("child").Commit("child change").
+		Checkout("main")
+
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot:     s.Scene.Dir,
+		Trunk:        "main",
+		LinearStacks: true,
+	})
+	require.NoError(t, err)
+	require.NoError(t, eng.TrackBranch(context.Background(), "base", "main"))
+	require.NoError(t, eng.TrackBranch(context.Background(), "middle", "base"))
+	require.NoError(t, eng.TrackBranch(context.Background(), "child", "middle"))
+
+	require.NoError(t, eng.DeleteBranch(context.Background(), eng.GetBranch("middle")))
+	require.Equal(t, "base", eng.GetBranch("child").GetParentOrTrunk())
+	require.False(t, eng.BranchNames().Contains("middle"))
+}
+
 func TestGetWorkingTreeStatus(t *testing.T) {
 	t.Parallel()
 

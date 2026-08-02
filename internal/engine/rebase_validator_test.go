@@ -792,6 +792,44 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	require.Equal(t, "branch1", history[0].BranchName)
 }
 
+func TestRestackBranchesWithValidatedPlanRejectsForkInLinearMode(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"base":   "main",
+			"middle": "base",
+			"child":  "middle",
+		})
+
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot:     s.Scene.Dir,
+		Trunk:        "main",
+		LinearStacks: true,
+	})
+	require.NoError(t, err)
+
+	child := eng.GetBranch("child")
+	childSHA, err := child.GetRevision()
+	require.NoError(t, err)
+	plan := &engine.RestackPlan{
+		Items: map[string]engine.RestackPlanItem{
+			"child": {
+				Branch:     "child",
+				NewParent:  "base",
+				Reparented: true,
+			},
+		},
+	}
+	validation := &engine.RebaseValidation{
+		Success: true,
+		NewSHAs: map[string]string{"child": childSHA},
+	}
+
+	_, err = eng.RestackBranchesWithValidatedPlan(context.Background(), engine.BranchesOf(child), validation, plan, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "linear stacks are enabled")
+	require.Equal(t, "middle", eng.GetBranch("child").GetParentOrTrunk())
+}
+
 func TestValidateRebasesParallel(t *testing.T) {
 	t.Parallel()
 

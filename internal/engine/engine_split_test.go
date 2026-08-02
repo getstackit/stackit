@@ -258,6 +258,43 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.Equal(t, "main", parentFeature.GetName(), "feature should have main as parent (sibling)")
 	})
 
+	t.Run("rejects sibling splits below a non-trunk branch in linear mode", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, testhelpers.BasicSceneSetup)
+		repo := scene.Repo
+
+		require.NoError(t, repo.CreateChangeAndCommit("main content", "mainfile"))
+		require.NoError(t, repo.CreateBranch("base"))
+		require.NoError(t, repo.CheckoutBranch("base"))
+		require.NoError(t, repo.CreateChangeAndCommit("base content", "basefile"))
+		require.NoError(t, repo.CreateBranch("feature"))
+		require.NoError(t, repo.CheckoutBranch("feature"))
+		require.NoError(t, repo.CreateChangeAndCommit("first commit", "file1"))
+		require.NoError(t, repo.CreateChangeAndCommit("second commit", "file2"))
+
+		eng, err := engine.NewEngine(engine.Options{
+			RepoRoot:     scene.Dir,
+			Trunk:        "main",
+			LinearStacks: true,
+		})
+		require.NoError(t, err)
+		require.NoError(t, eng.TrackBranch(context.Background(), "base", "main"))
+		require.NoError(t, eng.TrackBranch(context.Background(), "feature", "base"))
+
+		featureSHA, err := repo.GetBranchSHA("feature")
+		require.NoError(t, err)
+		require.NoError(t, repo.CheckoutDetached(featureSHA))
+
+		err = eng.ApplySplitToCommits(context.Background(), engine.ApplySplitOptions{
+			BranchToSplit: "feature",
+			BranchNames:   []string{"first", "feature"},
+			BranchPoints:  []int{0, 1},
+			AsSibling:     true,
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "linear stacks are enabled")
+		testhelpers.ExpectBranches(t, repo, []string{"main", "base", "feature"})
+	})
+
 	t.Run("sibling mode reparents children to last branch", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.BasicSceneSetup)
 		repo := scene.Repo

@@ -36,6 +36,18 @@ func TestGitConfigBasicOperations(t *testing.T) {
 		require.Equal(t, DefaultUndoDepth, cfg.UndoStackDepth())
 		require.Equal(t, DefaultCITimeout, cfg.CITimeout())
 		require.Equal(t, DefaultSplitHunkSelector, cfg.SplitHunkSelector())
+		require.Equal(t, StackShapeTree, cfg.StackShape())
+	})
+
+	t.Run("sets and gets stack shape", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+		cfg, err := LoadGitConfig(scene.Dir)
+		require.NoError(t, err)
+
+		require.NoError(t, cfg.SetStackShape(StackShapeLinear))
+		require.Equal(t, StackShapeLinear, cfg.StackShape())
+		require.Error(t, cfg.SetStackShape("forky"))
 	})
 
 	t.Run("sets and gets trunk", func(t *testing.T) {

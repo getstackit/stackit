@@ -76,6 +76,22 @@ func (e *engineImpl) collectRestackData(branchNames []string) (MetaMap, Revision
 }
 
 func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
+	// Validated restacks apply parent metadata directly from the plan to reuse
+	// dry-run rebase commits. Validate all of those moves as one final graph so
+	// this fast path observes the same linear-stack constraint as SetParent.
+	if plan != nil && e.linearStacks {
+		moves := make([]BranchParentMove, 0, len(branches))
+		for _, branch := range branches {
+			item, ok := plan.Items[branch.GetName()]
+			if ok && !item.Skip && item.Reparented {
+				moves = append(moves, BranchParentMove{Branch: item.Branch, NewParent: item.NewParent})
+			}
+		}
+		if err := e.validateLinearParentMoves(moves); err != nil {
+			return RestackBatchResult{}, err
+		}
+	}
+
 	// Save current branch to restore after restacking
 	originalBranch := e.CurrentBranch()
 	var originalRev string

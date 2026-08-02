@@ -407,6 +407,7 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 		MaxConcurrency:    maxConcurrency,
 		Git:               gitRunner,
 		LoadMode:          loadMode,
+		LinearStacks:      cfg.StackShape() == config.StackShapeLinear,
 	})
 	if err != nil {
 		return nil, err

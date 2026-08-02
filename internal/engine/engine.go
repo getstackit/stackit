@@ -207,6 +207,10 @@ type Options struct {
 	// Zero value (LoadModeFull) matches the pre-lite behavior — readers see
 	// all metadata populated synchronously after NewEngine returns.
 	LoadMode LoadMode
+
+	// LinearStacks prevents parent mutations from creating a fork below a
+	// non-trunk branch. It is supplied by the stack.shape configuration.
+	LinearStacks bool
 }
 
 // UndoManager provides operations for undo/redo functionality

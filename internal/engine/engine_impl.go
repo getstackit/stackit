@@ -20,6 +20,7 @@ type engineImpl struct {
 	remoteMetaCache   map[string]*git.Meta // branch -> remote metadata (can include non-local branches)
 	maxUndoStackDepth int
 	maxConcurrency    int
+	linearStacks      bool
 	git               git.Runner
 	mu                sync.RWMutex
 	worktreeMu        sync.Mutex // serializes worktree add/remove/prune to avoid git races on .git/worktrees/
@@ -59,6 +60,7 @@ type WorktreeSnapshot struct {
 	ChildrenMap     map[string][]string
 	RemoteMetaCache map[string]*git.Meta
 	MaxConcurrency  int
+	LinearStacks    bool
 }
 
 // SnapshotForWorktree creates a deep copy of the engine's mutable state for use in
@@ -106,6 +108,7 @@ func (e *engineImpl) SnapshotForWorktree() WorktreeSnapshot {
 		ChildrenMap:     childrenMap,
 		RemoteMetaCache: remoteMetaCache,
 		MaxConcurrency:  e.maxConcurrency,
+		LinearStacks:    e.linearStacks,
 	}
 }
 
@@ -141,6 +144,7 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 		remoteMetaCache:   opts.Snapshot.RemoteMetaCache,
 		maxUndoStackDepth: 0, // No undo in temporary worktrees
 		maxConcurrency:    opts.Snapshot.MaxConcurrency,
+		linearStacks:      opts.Snapshot.LinearStacks,
 		git:               g,
 	}
 
@@ -191,6 +195,7 @@ func NewEngine(opts Options) (Engine, error) {
 		remoteMetaCache:   make(map[string]*git.Meta),
 		maxUndoStackDepth: maxDepth,
 		maxConcurrency:    opts.MaxConcurrency,
+		linearStacks:      opts.LinearStacks,
 		git:               g,
 	}
 

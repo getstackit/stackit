@@ -3,6 +3,7 @@ package abort
 import (
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 )
@@ -81,6 +82,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if err := eng.RestoreSnapshot(ctx.Context, snapshots[0].ID); err != nil {
 			return fmt.Errorf("failed to restore snapshot: %w", err)
 		}
+		actions.WarnIfLinearStackRestored(ctx, "Abort")
 		out.Info("Successfully aborted and restored repository state.")
 	} else {
 		out.Info("Operation aborted. No undo history found to restore state.")

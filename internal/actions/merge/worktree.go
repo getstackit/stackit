@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -39,11 +40,16 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	// We need to know the trunk name for the new engine.
 	// Since we are currently in the main engine, we can get it from there.
 	trunk := eng.Trunk()
+	worktreeConfig, err := config.LoadConfig(worktreePath)
+	if err != nil {
+		return fmt.Errorf("failed to load worktree config: %w", err)
+	}
 
 	worktreeEng, err := engine.NewEngine(engine.Options{
 		RepoRoot:          worktreePath,
 		Trunk:             trunk.GetName(),
 		MaxUndoStackDepth: maxUndoDepth,
+		LinearStacks:      worktreeConfig.StackShape() == config.StackShapeLinear,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize engine in worktree: %w", err)

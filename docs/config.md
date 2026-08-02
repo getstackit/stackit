@@ -55,6 +55,7 @@ git config --local --add stackit.trunks develop
 | `stackit.trunk` | string | `main` | Primary trunk branch |
 | `stackit.trunks` | string[] | `[]` | Additional trunk branches |
 | `stackit.branch.pattern` | string | `{username}/{date}/{message}` | Branch naming template (placeholders: `{username}`, `{date}`, `{message}`, `{scope}`) |
+| `stackit.stack.shape` | string | `tree` | Stack topology (`tree` or `linear`; linear prevents forks below non-trunk branches) |
 | `stackit.submit.footer` | bool | `true` | Include PR footer in descriptions |
 | `stackit.submit.draft` | bool | `false` | Create PRs as drafts by default |
 | `stackit.submit.web` | string | `never` | When to open PRs in browser (always/created/never) |
@@ -172,6 +173,10 @@ trunks:
 branch:
   pattern: "{username}/{date}/{message}"
 
+# Stack topology. Linear mode is compatible with GitHub native Stacked PRs.
+stack:
+  shape: tree  # tree or linear
+
 # PR submission settings
 submit:
   footer: true  # Include stackit footer in PR descriptions
@@ -223,6 +228,7 @@ The table below shows all options available in `.stackit.yaml`. The "Team Fallba
 | `trunk` | string | `main` | Primary trunk branch | Yes |
 | `trunks` | string[] | `[]` | Additional trunk branches (merged with git config) | Yes (additive) |
 | `branch.pattern` | string | `{username}/{date}/{message}` | Branch naming template (placeholders: `{username}`, `{date}`, `{message}`, `{scope}`) | Yes |
+| `stack.shape` | string | `tree` | Stack topology (`tree` or `linear`; linear prevents forks below non-trunk branches) | Yes |
 | `submit.footer` | bool | `true` | Include PR footer | Yes |
 | `submit.draft` | bool | `false` | Create PRs as drafts by default | Yes |
 | `submit.web` | string | `never` | Open PRs in browser (always/created/never) | Yes |

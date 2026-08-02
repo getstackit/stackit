@@ -71,6 +71,7 @@ func Action(ctx context.Context, repoRoot string, opts Options, handler Handler)
 		RepoRoot:          repoRoot,
 		Trunk:             trunkName,
 		MaxUndoStackDepth: maxUndoDepth,
+		LinearStacks:      cfg.StackShape() == config.StackShapeLinear,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create engine: %w", err)

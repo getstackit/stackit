@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -242,4 +243,32 @@ func TestUndoAfterMove(t *testing.T) {
 		require.NotNil(t, restoredParent)
 		require.Equal(t, initialParent.GetName(), restoredParent.GetName())
 	})
+}
+
+func TestUndoWarnsWhenLinearModeRestoresFork(t *testing.T) {
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit().
+		CreateBranch("base").
+		Commit("base change").
+		CreateBranch("first").
+		Commit("first change").
+		Checkout("base").
+		CreateBranch("second").
+		Commit("second change").
+		Checkout("main").
+		TrackBranch("base", "main").
+		TrackBranch("first", "base").
+		TrackBranch("second", "base")
+
+	cfg, err := config.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(config.StackShapeLinear))
+	s.Context.Config = cfg
+
+	require.NoError(t, s.Engine.TakeSnapshot(engine.SnapshotOptions{Command: "move"}))
+	require.NoError(t, s.Engine.SetParent(s.Context, s.Engine.GetBranch("second"), s.Engine.GetBranch("main"), engine.DivergenceRecompute))
+
+	err = Action(s.Context, Options{Force: true}, nil)
+	require.NoError(t, err)
+	require.Contains(t, s.Output.String(), "Undo restored a non-linear stack")
 }

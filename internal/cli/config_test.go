@@ -41,6 +41,19 @@ func TestConfigCommand(t *testing.T) {
 		require.Equal(t, pattern, strings.TrimSpace(output))
 	})
 
+	t.Run("config set and get stack.shape", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
+
+		output, err := s.RunCliAndGetOutput("config", "set", "stack.shape", "linear")
+		require.NoError(t, err, "config set command failed: %s", output)
+		require.Contains(t, output, "Set stack.shape to: linear")
+
+		output, err = s.RunCliAndGetOutput("config", "get", "stack.shape")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "linear", strings.TrimSpace(output))
+	})
+
 	t.Run("config set rejects pattern without message placeholder", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)

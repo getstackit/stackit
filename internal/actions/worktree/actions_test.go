@@ -2,8 +2,10 @@ package worktree_test
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
@@ -65,6 +67,29 @@ func TestListAction(t *testing.T) {
 		require.Equal(t, []string{"feature"}, result.Worktrees[0].RootBranches)
 
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature")
+	})
+
+	t.Run("reports branch checked out outside its owning worktree", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+		s.CreateBranch("feature").Commit("feature change")
+		s.TrackBranch("feature", "main")
+		s.Checkout("main")
+
+		worktreeDir := t.TempDir()
+		require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", worktreeDir, "feature-wt"))
+		t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
+
+		// Simulate raw `git checkout feature` from the main repository, bypassing
+		// Stackit's checkout redirect.
+		s.Checkout("feature")
+
+		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, result.OwnershipWarnings, 1)
+		assert.Contains(t, result.OwnershipWarnings[0], "branch feature belongs to managed worktree feature-wt")
+		assert.Contains(t, result.OwnershipWarnings[0], "but is checked out at")
 	})
 }
 
@@ -176,7 +201,11 @@ func TestOpenAction(t *testing.T) {
 			AnchorBranch: "feature-stack",
 		})
 		require.NoError(t, err)
-		require.Equal(t, repoRoot, path)
+		canonicalRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+		require.NoError(t, err)
+		canonicalPath, err := filepath.EvalSymlinks(path)
+		require.NoError(t, err)
+		require.Equal(t, canonicalRepoRoot, canonicalPath)
 
 		// Clean up
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
@@ -341,7 +370,11 @@ func TestRepairAction(t *testing.T) {
 		repaired, err := s.Engine.GetWorktreeForStack(result.Repaired[0].AnchorBranch)
 		require.NoError(t, err)
 		require.NotNil(t, repaired)
-		require.Equal(t, worktreeDir, repaired.Path)
+		canonicalWorktreeDir, err := filepath.EvalSymlinks(worktreeDir)
+		require.NoError(t, err)
+		canonicalRepairedPath, err := filepath.EvalSymlinks(repaired.Path)
+		require.NoError(t, err)
+		require.Equal(t, canonicalWorktreeDir, canonicalRepairedPath)
 		require.True(t, s.Engine.GetBranch(result.Repaired[0].AnchorBranch).IsWorktreeAnchor())
 		require.Equal(t, result.Repaired[0].AnchorBranch, s.Engine.GetBranch("feature").GetParent().GetName())
 

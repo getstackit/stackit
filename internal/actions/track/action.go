@@ -3,6 +3,7 @@ package track
 import (
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/output"
 )
@@ -23,6 +24,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	eng := ctx.Engine
 	branchName := opts.BranchName
+	if branchName == "" {
+		currentBranch := eng.CurrentBranch()
+		if currentBranch != nil {
+			branchName = currentBranch.GetName()
+		}
+	}
+	if branchName != "" {
+		if err := actions.EnsureCanModifyNamesHere(ctx, branchName); err != nil {
+			return err
+		}
+	}
 
 	// Opportunistically configure the metadata fetch refspec so a plain
 	// `git fetch` keeps pulling branch metadata. Local, idempotent, and a no-op

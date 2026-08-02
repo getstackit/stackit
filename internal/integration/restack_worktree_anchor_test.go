@@ -83,14 +83,16 @@ func TestRestackWorktreeAnchorTracksTrunk(t *testing.T) {
 	// revision really is where the branch is based.
 	sh.Checkout("main").
 		Commit("trunk1.txt", "chore: trunk commit 1").
-		Run("restack --all-stacks")
+		OnBranch("main")
+	wt.Run("restack --branch " + anchorBranch + " --upstack")
 	assertTracksTrunk("after first restack")
 
 	// Trunk advances again. This is where the stale anchor used to widen the
 	// replay range to cover every trunk commit since the worktree was created.
 	sh.Checkout("main").
 		Commit("trunk2.txt", "chore: trunk commit 2").
-		Run("restack --all-stacks")
+		OnBranch("main")
+	wt.Run("restack --branch " + anchorBranch + " --upstack")
 	assertTracksTrunk("after second restack")
 }
 
@@ -200,14 +202,15 @@ func TestRestackUpstackConvergesForWorktreeAnchorChild(t *testing.T) {
 	sh.Run("worktree open my-wt")
 	worktreePath := strings.TrimSpace(sh.Output())
 
-	sh.InWorktree(worktreePath).
+	wt := sh.InWorktree(worktreePath)
+	wt.
 		WriteFile("feature.txt", "feature").
 		Run("create feature -m 'feat: feature'")
 
 	// One trunk advance, then a real restack: feature actually needs to move.
 	sh.Checkout("main").
-		Commit("trunk1.txt", "chore: trunk commit 1").
-		Run("restack --branch feature --upstack")
+		Commit("trunk1.txt", "chore: trunk commit 1")
+	wt.Run("restack --branch feature --upstack")
 
 	sh.Git("rev-parse feature")
 	firstRev := strings.TrimSpace(sh.Output())
@@ -215,7 +218,7 @@ func TestRestackUpstackConvergesForWorktreeAnchorChild(t *testing.T) {
 	// No further trunk movement. Repeated restacks scoped to exclude the
 	// anchor must converge: same SHA, reported as already up to date.
 	for i := 2; i <= 3; i++ {
-		sh.Run("restack --branch feature --upstack").
+		wt.Run("restack --branch feature --upstack").
 			OutputContains("up to date")
 
 		sh.Git("rev-parse feature")

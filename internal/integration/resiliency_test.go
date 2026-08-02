@@ -90,6 +90,8 @@ func TestRestackWorktreeAnchoredBranchAgainstAdvancedTrunk(t *testing.T) {
 	//    reparents the branch under the anchor, and opens the worktree on it.
 	sh.WriteFile("shared.txt", "feature version").
 		Run("create feature -w -m 'feature changes shared'")
+	worktreePath := sh.GetWorktreePath("feature")
+	anchorBranch := findWorktreeAnchor(t, sh)
 
 	// 3. Advance trunk with a conflicting change to the same file.
 	sh.Checkout("main").
@@ -99,13 +101,14 @@ func TestRestackWorktreeAnchoredBranchAgainstAdvancedTrunk(t *testing.T) {
 	// 4. Restack the worktree stack against the advanced trunk. Validation
 	//    predicts a real conflict; the buggy path instead completes a no-op
 	//    rebase onto the stale anchor.
-	sh.RunExpectError("restack --all-stacks")
+	worktree := sh.InWorktree(worktreePath)
+	worktree.RunExpectError("restack --branch " + anchorBranch + " --upstack")
 
 	// The bug manifests as "expected conflict ... but rebase completed
 	// successfully" — the branch was skipped as a no-op onto its stale anchor.
 	// The fix rebases onto trunk (the anchor's logical position), so the real
 	// conflict surfaces and the normal resolve/continue workflow engages.
-	sh.OutputNotContains("rebase completed successfully").
+	worktree.OutputNotContains("rebase completed successfully").
 		OutputContains("conflict")
 }
 

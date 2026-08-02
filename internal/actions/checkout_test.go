@@ -1,6 +1,7 @@
 package actions_test
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,10 @@ func TestCheckoutActionWorktreeSwitchIncludesTargetBranch(t *testing.T) {
 
 	result, err := actions.CheckoutAction(s.Context, actions.CheckoutOptions{BranchName: "feature"}, nil)
 	require.NoError(t, err)
-	require.Equal(t, s.Context.RepoRoot, result.WorktreeSwitchPath)
+	canonicalRepoRoot, err := filepath.EvalSymlinks(s.Context.RepoRoot)
+	require.NoError(t, err)
+	canonicalWorktreeSwitchPath, err := filepath.EvalSymlinks(result.WorktreeSwitchPath)
+	require.NoError(t, err)
+	require.Equal(t, canonicalRepoRoot, canonicalWorktreeSwitchPath)
 	require.Equal(t, "feature", result.TargetBranch)
 }

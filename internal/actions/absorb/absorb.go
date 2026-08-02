@@ -49,6 +49,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return err
 	}
 	currentBranch := eng.CurrentBranch()
+	if err := actions.EnsureCanModifyHere(ctx, *currentBranch); err != nil {
+		return err
+	}
 	opts.Restack = NormalizeRestackMode(opts.Restack)
 	if err := opts.Restack.Validate(); err != nil {
 		return err

@@ -30,6 +30,9 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 	if err := currentBranch.EnsureCanModify(); err != nil {
 		return err
 	}
+	if err := EnsureCanModifyHere(ctx, *currentBranch); err != nil {
+		return err
+	}
 
 	// Log entry point for diagnostics
 	ctx.Logger.Info("squash started branch=%v", currentBranch.GetName())

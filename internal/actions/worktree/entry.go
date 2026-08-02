@@ -3,6 +3,8 @@ package worktree
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
@@ -26,6 +28,10 @@ const (
 type ListResult struct {
 	Worktrees     []Entry
 	CurrentAnchor string // Anchor branch of the worktree we're currently in (if any)
+	// OwnershipWarnings report branches whose physical checkout location does
+	// not agree with Stackit's derived ownership model. They are warnings so
+	// `worktree list` remains useful for diagnosing a damaged repository.
+	OwnershipWarnings []string `json:"ownership_warnings,omitempty"`
 }
 
 // Entry represents a single managed worktree
@@ -179,7 +185,82 @@ func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 		result.Worktrees = append(result.Worktrees, entry)
 	}
 
+	result.OwnershipWarnings = ownershipWarnings(ctx)
+
 	return result, nil
+}
+
+func ownershipWarnings(ctx *app.Context) []string {
+	gitWorktrees, err := ctx.Engine.ListWorktrees(ctx.Context)
+	if err != nil {
+		return []string{fmt.Sprintf("could not inspect Git worktrees for ownership conflicts: %v", err)}
+	}
+
+	mainRepoPath, err := canonicalPath(ctx.Engine.GetRepoRoot())
+	if err != nil {
+		return []string{fmt.Sprintf("could not canonicalize the main repository path: %v", err)}
+	}
+
+	warnings := make([]string, 0)
+	for _, gitWorktree := range gitWorktrees {
+		if gitWorktree.Branch == "" {
+			// Porcelain does not identify the branch for detached worktrees, so
+			// it cannot establish stack ownership without a more expensive
+			// commit-membership scan.
+			continue
+		}
+
+		actualPath, pathErr := canonicalPath(gitWorktree.Path)
+		if pathErr != nil {
+			warnings = append(warnings, fmt.Sprintf("could not canonicalize Git worktree path %s: %v", gitWorktree.Path, pathErr))
+			continue
+		}
+
+		owner, ownerErr := ctx.Engine.OwningWorktree(ctx.Engine.GetBranch(gitWorktree.Branch))
+		if ownerErr != nil {
+			warnings = append(warnings, fmt.Sprintf("could not determine owner for branch %s checked out at %s: %v", gitWorktree.Branch, gitWorktree.Path, ownerErr))
+			continue
+		}
+		if owner == nil {
+			if actualPath != mainRepoPath {
+				warnings = append(warnings, fmt.Sprintf("branch %s is checked out in unmanaged worktree %s", gitWorktree.Branch, gitWorktree.Path))
+			}
+			continue
+		}
+
+		expectedPath, expectedPathErr := canonicalPath(owner.Path)
+		if expectedPathErr != nil {
+			warnings = append(warnings, fmt.Sprintf("could not canonicalize registered path %s for branch %s: %v", owner.Path, gitWorktree.Branch, expectedPathErr))
+			continue
+		}
+		if actualPath != expectedPath {
+			warnings = append(warnings, fmt.Sprintf("branch %s belongs to managed worktree %s (%s) but is checked out at %s", gitWorktree.Branch, worktreeDisplayName(owner), owner.Path, gitWorktree.Path))
+		}
+	}
+
+	return slices.Compact(slices.Sorted(slices.Values(warnings)))
+}
+
+func canonicalPath(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err == nil {
+		return filepath.Clean(resolvedPath), nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+	return filepath.Clean(absPath), nil
+}
+
+func worktreeDisplayName(worktree *engine.WorktreeInfo) string {
+	if worktree.Name != "" {
+		return worktree.Name
+	}
+	return worktree.AnchorBranch
 }
 
 // ListAction lists all managed worktrees

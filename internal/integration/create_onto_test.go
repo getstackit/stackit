@@ -42,7 +42,7 @@ func TestCreateOnto(t *testing.T) {
 		sh.CommitCount("main", "branch-d", 1)
 	})
 
-	t.Run("works when the target is checked out in another worktree", func(t *testing.T) {
+	t.Run("rejects a target owned by another worktree", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 		sh.SetWorktreeBasePath(t.TempDir())
@@ -54,14 +54,10 @@ func TestCreateOnto(t *testing.T) {
 		shW := sh.InWorktree(worktreePath)
 		shW.OnBranch("shared")
 
-		// From the main worktree, branch onto "shared" without disturbing it.
-		sh.Write("e", "content e").Run("create branch-e --onto shared -m 'feat: e'")
-
-		sh.OnBranch("branch-e")
-		sh.ExpectBranchParent("branch-e", "shared")
-		sh.CommitCount("shared", "branch-e", 1)
-
-		// The other worktree's checkout is untouched.
+		// Creating a child would mutate shared's stack, so it must be done from
+		// the worktree that owns shared.
+		sh.Write("e", "content e").RunExpectError("create branch-e --onto shared -m 'feat: e'").
+			OutputContains("belongs to worktree")
 		shW.OnBranch("shared")
 	})
 

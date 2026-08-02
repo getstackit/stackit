@@ -65,6 +65,9 @@ func ReorderAction(ctx *app.Context) error {
 				branch.GetName(), branch.IsTrunk(), branch.IsTracked())
 		}
 	}
+	if err := EnsureCanModifyNamesHere(ctx, branches...); err != nil {
+		return fmt.Errorf("cannot reorder stack: %w", err)
+	}
 	out.Debug("reorder: filtered to %d reorderable branches: %v", len(branches), branches)
 
 	// Minimum requirements: need at least 2 branches to reorder

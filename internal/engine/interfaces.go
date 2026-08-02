@@ -307,6 +307,11 @@ type WorktreeRegistry interface {
 	UnregisterWorktree(ctx context.Context, stackRoot string) error
 	// GetWorktreeForStack returns worktree info for a stack root, or nil if none
 	GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error)
+	// OwningWorktree returns the managed worktree that owns branch's stack, or
+	// nil when the branch belongs to an ordinary stack in the main repository.
+	// A malformed registration is returned as an error rather than being treated
+	// as unowned, so callers can fail closed before mutating the stack.
+	OwningWorktree(branch Branch) (*WorktreeInfo, error)
 	// ListManagedWorktrees returns all stackit-managed worktrees
 	ListManagedWorktrees() ([]WorktreeInfo, error)
 	// GetStackRootForBranch returns the stack root for a given branch

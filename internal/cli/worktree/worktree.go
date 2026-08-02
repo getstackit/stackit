@@ -235,6 +235,9 @@ Shows each worktree's name, root branch, stack size, registration health, and st
 					renderWorktreeEntry(ctx, wt, result.CurrentAnchor)
 					needsRepair = needsRepair || wt.NeedsRepair
 				}
+				for _, warning := range result.OwnershipWarnings {
+					ctx.Output.Warn("Ownership warning: %s", warning)
+				}
 				if needsRepair {
 					ctx.Output.Tip("Some managed worktrees need repair: stackit worktree repair")
 				}

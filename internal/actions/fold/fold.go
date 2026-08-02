@@ -114,6 +114,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			return err
 		}
 	}
+	if err := actions.EnsureCanModifyHere(ctx, currentBranchObj, parentBranch); err != nil {
+		return err
+	}
 
 	// Prohibit folding branches with different scopes
 	if !parentBranch.IsTrunk() {

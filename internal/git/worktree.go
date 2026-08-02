@@ -2,8 +2,10 @@ package git
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,6 +14,35 @@ import (
 
 // WorktreeRefPrefix is the prefix for Git refs where worktree metadata is stored (local-only)
 const WorktreeRefPrefix = "refs/stackit/worktrees/"
+
+// WorktreePathRefPrefix is a reverse index from canonical worktree path to
+// its anchor registration. Keeping this alongside WorktreeRefPrefix lets a
+// single update-ref transaction enforce both directions of the ownership
+// invariant.
+const WorktreePathRefPrefix = "refs/stackit/worktree-paths/"
+
+func worktreePathRef(path string) string {
+	if canonicalPath, err := canonicalWorktreePath(path); err == nil {
+		path = canonicalPath
+	}
+	hash := sha256.Sum256([]byte(path))
+	return fmt.Sprintf("%s%x", WorktreePathRefPrefix, hash)
+}
+
+func canonicalWorktreePath(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err == nil {
+		return filepath.Clean(resolvedPath), nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+	return filepath.Clean(absPath), nil
+}
 
 // Worktree represents a single entry from `git worktree list`.
 type Worktree struct {
@@ -232,9 +263,18 @@ func (r *runner) WriteWorktreeMeta(stackRoot string, meta *WorktreeMeta) error {
 		return fmt.Errorf("failed to create worktree metadata blob: %w", err)
 	}
 
-	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
-	if err := r.UpdateRef(refName, sha); err != nil {
-		return fmt.Errorf("failed to write worktree metadata ref: %w", err)
+	// Both refs are created only when absent. The forward ref protects one
+	// anchor from receiving two registrations; the reverse ref protects one
+	// path from being claimed by two anchors. update-ref applies the pair
+	// atomically, so a competing registration loses cleanly instead of creating
+	// an ambiguous ownership state.
+	zeroSHA := strings.Repeat("0", len(sha))
+	updates := []RefUpdate{
+		{RefName: fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot), NewSHA: sha, OldSHA: zeroSHA},
+		{RefName: worktreePathRef(meta.Path), NewSHA: sha, OldSHA: zeroSHA},
+	}
+	if err := r.UpdateRefsBatch(context.Background(), updates); err != nil {
+		return fmt.Errorf("failed to register worktree metadata refs: %w", err)
 	}
 
 	return nil
@@ -243,7 +283,29 @@ func (r *runner) WriteWorktreeMeta(stackRoot string, meta *WorktreeMeta) error {
 // DeleteWorktreeMeta deletes worktree metadata for a stack root
 func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error {
 	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
-	return r.DeleteRef(ctx, refName)
+	sha, err := r.GetRef(refName)
+	if err != nil {
+		// Preserve DeleteRef's idempotent behavior for absent legacy metadata.
+		return r.DeleteRef(ctx, refName)
+	}
+
+	meta, err := r.ReadWorktreeMeta(stackRoot)
+	if err != nil {
+		return err
+	}
+	updates := []RefUpdate{{RefName: refName, OldSHA: sha, IsDelete: true}}
+	if meta != nil {
+		pathRef := worktreePathRef(meta.Path)
+		if pathSHA, pathErr := r.GetRef(pathRef); pathErr == nil {
+			if pathSHA == sha {
+				updates = append(updates, RefUpdate{RefName: pathRef, OldSHA: sha, IsDelete: true})
+			}
+		}
+	}
+	if err := r.UpdateRefsBatch(ctx, updates); err != nil {
+		return fmt.Errorf("failed to unregister worktree metadata refs: %w", err)
+	}
+	return nil
 }
 
 // GetWorktreePathForBranch returns the worktree path where a branch is checked out.

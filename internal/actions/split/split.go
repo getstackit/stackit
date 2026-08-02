@@ -108,6 +108,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err := currentBranch.EnsureCanModify(); err != nil {
 		return err
 	}
+	if err := actions.EnsureCanModifyHere(ctx, *currentBranch); err != nil {
+		return err
+	}
 
 	// Check for uncommitted tracked changes
 	hasUnstaged, err := eng.HasUnstagedChanges(context)

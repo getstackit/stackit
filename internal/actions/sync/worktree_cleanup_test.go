@@ -88,6 +88,10 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		wt, err := s.Engine.GetWorktreeForStack("missing-anchor")
 		require.NoError(t, err)
 		assert.NotNil(t, wt, "registration should be preserved when physical worktree removal fails")
-		assert.Equal(t, worktreePath, wt.Path)
+		canonicalWorktreePath, err := filepath.EvalSymlinks(worktreePath)
+		require.NoError(t, err)
+		canonicalRegisteredPath, err := filepath.EvalSymlinks(wt.Path)
+		require.NoError(t, err)
+		assert.Equal(t, canonicalWorktreePath, canonicalRegisteredPath)
 	})
 }

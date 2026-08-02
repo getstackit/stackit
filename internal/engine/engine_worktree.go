@@ -205,7 +205,31 @@ func (e *engineImpl) RegisterWorktree(stackRoot string, path string) error {
 func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, name string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
+		return fmt.Errorf("failed to get absolute worktree path: %w", err)
+	}
+	canonicalPath, err := canonicalWorktreePath(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to canonicalize worktree path: %w", err)
+	}
+
+	if existing, err := e.GetWorktreeForStack(anchorBranch); err != nil {
+		return fmt.Errorf("failed to check existing worktree registration: %w", err)
+	} else if existing != nil {
+		return fmt.Errorf("worktree anchor %s is already registered at %s", anchorBranch, existing.Path)
+	}
+
+	worktrees, err := e.ListManagedWorktrees()
+	if err != nil {
+		return fmt.Errorf("failed to list worktree registrations: %w", err)
+	}
+	for _, worktree := range worktrees {
+		worktreePath, pathErr := canonicalWorktreePath(worktree.Path)
+		if pathErr != nil {
+			return fmt.Errorf("failed to canonicalize registered worktree path %s: %w", worktree.Path, pathErr)
+		}
+		if worktreePath == canonicalPath && worktree.AnchorBranch != anchorBranch {
+			return fmt.Errorf("worktree path %s is already registered to anchor %s", absPath, worktree.AnchorBranch)
+		}
 	}
 
 	meta := &git.WorktreeMeta{
@@ -217,6 +241,21 @@ func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, 
 	}
 
 	return e.git.WriteWorktreeMeta(anchorBranch, meta)
+}
+
+func canonicalWorktreePath(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err == nil {
+		return filepath.Clean(resolvedPath), nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+	return filepath.Clean(absPath), nil
 }
 
 // UnregisterWorktree removes worktree registration for a stack root
@@ -241,6 +280,26 @@ func (e *engineImpl) GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error
 		CreatedAt:    meta.CreatedAt,
 		MainRepoDir:  meta.MainRepoDir,
 	}, nil
+}
+
+// OwningWorktree returns the managed worktree for branch's stack. Stack
+// ownership is derived from the stack root, which is the worktree anchor for
+// stacks that have been attached to a managed worktree.
+func (e *engineImpl) OwningWorktree(branch Branch) (*WorktreeInfo, error) {
+	stackRoot := e.GetStackRootForBranch(branch)
+	if stackRoot == "" {
+		return nil, nil
+	}
+
+	worktree, err := e.GetWorktreeForStack(stackRoot)
+	if err != nil || worktree == nil {
+		return worktree, err
+	}
+	if worktree.AnchorBranch != stackRoot {
+		return nil, fmt.Errorf("invalid worktree registration for stack %s: metadata anchor is %s", stackRoot, worktree.AnchorBranch)
+	}
+
+	return worktree, nil
 }
 
 // ListManagedWorktrees returns all stackit-managed worktrees, sorted by stack root name

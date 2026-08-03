@@ -145,18 +145,12 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 
 	ctx.Logger.Info("restack started branchCount=%v", branchCount)
 
-	// Parallel mode dispatches each group to a worktree that recomputes its own
-	// plan, so the plan resolved here does not decide what those workers do.
+	// Restack is repository reconciliation, like sync: it may run from any
+	// worktree, but the engine holds branches whose checked-out worktree is
+	// dirty or cannot be inspected. Content-editing actions keep the ownership
+	// guard; applying it here would make unrelated main-repo stacks an
+	// all-or-nothing casualty of one managed worktree.
 	parallelDispatch := opts.Parallel && len(plan.groups) > 1
-	if !parallelDispatch {
-		branches := engine.Branches{}
-		for _, group := range plan.groups {
-			branches = branches.Concat(group.sortedBranches)
-		}
-		if err := EnsureCanModifyHere(ctx, branches...); err != nil {
-			return err
-		}
-	}
 
 	// Take snapshot before modifying the repository. Skip it when no branch
 	// actually needs a rebase: an up-to-date restack mutates nothing, so there

@@ -476,7 +476,7 @@ func TestWorktreeRestackOperations(t *testing.T) {
 		})
 	}
 
-	run("restack from main rejects worktree branches", func(t *testing.T, sh *TestShell) {
+	run("restack from main reconciles worktree branches", func(t *testing.T, sh *TestShell) {
 		// Create stack in worktree
 		sh.WriteFile("feature.txt", "feature").
 			Run("create feature -w -m 'feature branch'")
@@ -489,7 +489,7 @@ func TestWorktreeRestackOperations(t *testing.T) {
 		shW.WriteFile("b.txt", "b").Run("create b -m 'branch b'")
 		shW.WriteFile("c.txt", "c").Run("create c -m 'branch c'")
 
-		sh.RunExpectError("restack").OutputContains("belongs to worktree")
+		sh.Run("restack").OutputNotContains("belongs to worktree")
 		shW.OnBranch("c")
 	})
 

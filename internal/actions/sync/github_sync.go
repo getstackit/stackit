@@ -205,13 +205,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 		}
 
 		// Get local parent
-		currentParent := branch.GetParent()
-		localParentName := ""
-		if currentParent == nil {
-			localParentName = eng.Trunk().GetName()
-		} else {
-			localParentName = currentParent.GetName()
-		}
+		localParentName := githubParentName(eng, branch)
 
 		if prInfo.Base == localParentName {
 			continue
@@ -255,4 +249,23 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 	return &ParentsToGitHubResult{
 		BranchesUpdated: updated,
 	}, nil
+}
+
+// githubParentName skips hidden worktree anchors: they are local bookkeeping
+// branches and can never be valid GitHub PR bases.
+func githubParentName(nav engine.StackNavigator, branch engine.Branch) string {
+	parent := branch.GetParent()
+	visited := make(map[string]bool)
+	for parent != nil {
+		name := parent.GetName()
+		if visited[name] {
+			break
+		}
+		visited[name] = true
+		if !parent.IsWorktreeAnchor() {
+			return name
+		}
+		parent = parent.GetParent()
+	}
+	return nav.Trunk().GetName()
 }

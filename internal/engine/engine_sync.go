@@ -266,6 +266,21 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 
 // ContinueRebase continues an in-progress rebase
 func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, rebasedBranchBase string) (ContinueRebaseResult, error) {
+	worktrees, err := e.git.ListWorktrees(ctx)
+	if err != nil {
+		return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("refusing to continue rebase for %s: cannot inspect worktrees: %w", branchName, err)
+	}
+	worktreePath := worktrees.PathForBranch(branchName)
+	if worktreePath != "" {
+		dirty, statusErr := e.git.WorktreeHasTrackedChanges(ctx, worktreePath)
+		if statusErr != nil {
+			return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("refusing to continue rebase for %s: cannot inspect worktree %s: %w", branchName, worktreePath, statusErr)
+		}
+		if dirty {
+			return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("refusing to continue rebase for %s: worktree %s has uncommitted tracked changes", branchName, worktreePath)
+		}
+	}
+
 	// Call git rebase --continue
 	result, err := e.git.RebaseContinue(ctx)
 	if err != nil {
@@ -286,6 +301,11 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, reba
 	err = e.git.UpdateBranchRef(ctx, branchName, newRev)
 	if err != nil {
 		return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to update branch reference %s: %w", branchName, err)
+	}
+	if worktreePath != "" {
+		if err := e.git.ResetWorktreeWorkingDir(ctx, worktreePath); err != nil {
+			return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("updated branch %s but failed to reset clean worktree %s: %w", branchName, worktreePath, err)
+		}
 	}
 
 	// Update metadata

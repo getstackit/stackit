@@ -8,10 +8,14 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 )
 
+// mainCmdName is the command name for NewMainCmd, matching the conventional
+// trunk branch name it navigates to.
+const mainCmdName = "main"
+
 // NewMainCmd creates the main command
 func NewMainCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "main",
+		Use:     mainCmdName,
 		Aliases: []string{"m"},
 		Short:   "Switch to the main/trunk branch",
 		Long: `Switch to the main/trunk branch.

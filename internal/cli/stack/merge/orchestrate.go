@@ -29,6 +29,8 @@ const (
 	mergeStrategyShip     = "ship"
 	mergeStrategyBottomUp = "bottom-up"
 	mergeStrategyDone     = "done"
+
+	shipAliasSquash = "squash"
 )
 
 // Outcome represents the result of a merge orchestration attempt.

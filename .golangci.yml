@@ -96,6 +96,11 @@ linters:
       - path: internal/tui/.*stories\.go
         linters:
           - goconst
+      # st-tui lab scenario files contain fixture data with repeated string
+      # literals that don't benefit from extraction into constants.
+      - path: apps/st-tui/.*_scenarios\.go
+        linters:
+          - goconst
       # Benchmark mock data file with many repeated fixture strings.
       - path: internal/tui/components/tree/tree_mock\.go
         linters:

@@ -79,6 +79,9 @@ type CommitReader interface {
 	BatchGetRevisions(branchNames []string) (map[string]string, []error)
 	GetCommitDate(branchName string) (time.Time, error)
 	GetCommitAuthor(branchName string) (string, error)
+	// BatchCommitInfo resolves each branch's tip commit date and author in one
+	// `git for-each-ref` invocation instead of two `git log` processes per branch.
+	BatchCommitInfo(branchNames []string) map[string]CommitInfo
 	GetCommitRange(ctx context.Context, base, head, format string) ([]string, error)
 	GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error)
 	GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error)

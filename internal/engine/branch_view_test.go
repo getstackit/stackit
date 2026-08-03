@@ -105,6 +105,31 @@ func TestPerConcernBatchReaders(t *testing.T) {
 	}
 }
 
+// TestBatchCommitInfo asserts the batched commit info matches the per-branch
+// GetCommitDate/GetCommitAuthor accessors for every branch, including trunk.
+func TestBatchCommitInfo(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithLinearStack3()
+
+	branches := s.Engine.AllBranches()
+	info := s.Engine.BatchCommitInfo(branches)
+
+	for _, b := range branches {
+		name := b.GetName()
+		got, ok := info[name]
+		require.True(t, ok, "missing commit info for %s", name)
+
+		wantDate, err := s.Engine.GetCommitDate(b)
+		require.NoError(t, err)
+		require.True(t, wantDate.Equal(got.Date), "CommitDate for %s", name)
+
+		wantAuthor, err := s.Engine.GetCommitAuthor(b)
+		require.NoError(t, err)
+		require.Equal(t, wantAuthor, got.Author, "CommitAuthor for %s", name)
+	}
+}
+
 // TestCommitsFallBackToParentTipWithoutStoredDivergence verifies that a branch
 // with no recorded ParentBranchRevision lists only its own commits — measured
 // against the parent's current tip — rather than its entire history back to the

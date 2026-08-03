@@ -21,6 +21,16 @@ func (e *engineImpl) GetCommitAuthor(branch Branch) (string, error) {
 	return e.git.GetCommitAuthor(branchName)
 }
 
+// BatchCommitInfo returns each branch's tip commit date and author, keyed by
+// branch name, resolved in one batched pass.
+func (e *engineImpl) BatchCommitInfo(branches Branches) map[string]git.CommitInfo {
+	names := make([]string, len(branches))
+	for i, b := range branches {
+		names[i] = b.GetName()
+	}
+	return e.git.BatchCommitInfo(names)
+}
+
 // GetRevision returns the SHA of a branch
 func (e *engineImpl) GetRevision(branch Branch) (string, error) {
 	branchName := branch.GetName()

@@ -196,6 +196,16 @@ func (d *demoGitRunner) GetCommitAuthor(_ string) (string, error) {
 	return "Demo User", nil
 }
 
+func (d *demoGitRunner) BatchCommitInfo(branchNames []string) map[string]git.CommitInfo {
+	results := make(map[string]git.CommitInfo, len(branchNames))
+	for _, name := range branchNames {
+		date, _ := d.GetCommitDate(name)
+		author, _ := d.GetCommitAuthor(name)
+		results[name] = git.CommitInfo{Date: date, Author: author}
+	}
+	return results
+}
+
 func (d *demoGitRunner) GetCommitRange(_ context.Context, _, _, _ string) ([]string, error) {
 	return []string{"commit message"}, nil
 }

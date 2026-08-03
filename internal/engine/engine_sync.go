@@ -115,6 +115,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// check; the snapshot is stable across the restack loop since we don't
 	// add or remove worktrees here.
 	worktrees, err := e.git.ListWorktrees(ctx)
+	worktreeInspectionFailed := err != nil
 	if err != nil {
 		worktrees = git.WorktreeList{}
 	}
@@ -127,16 +128,19 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// when the user actually had uncommitted work. Bounded by worktree count,
 	// not branch count, so this stays a handful of calls even for a large stack.
 	//
-	// Tracked changes only, deliberately. This gates a `git reset --hard`, which
-	// cannot touch untracked files — so counting them would suppress a reset
-	// that was never a threat to them, leaving the worktree holding the old
-	// commit's content while its branch ref has moved. `git status` then reports
-	// the new commit's files as deleted, and the next `stackit modify -a`
-	// commits that deletion into the stack.
+	// Capture every local change. `git reset --hard` can delete an untracked
+	// file when the incoming commit needs that pathname, so excluding untracked
+	// files would risk user data loss.
 	dirtyWorktrees := make(map[string]bool, len(worktrees))
-	for _, path := range worktrees.Paths() {
-		if dirty, dirtyErr := e.git.WorktreeHasTrackedChanges(ctx, path); dirtyErr == nil && dirty {
+	heldBranches := make(BranchNameSet)
+	for _, worktree := range worktrees {
+		dirty, dirtyErr := e.git.WorktreeHasUncommittedChanges(ctx, worktree.Path)
+		if dirtyErr != nil || dirty {
+			path := worktree.Path
 			dirtyWorktrees[path] = true
+			if worktree.Branch != "" {
+				heldBranches[worktree.Branch] = true
+			}
 		}
 	}
 
@@ -152,7 +156,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
-	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees}
+	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, heldBranches: heldBranches, worktreeInspectionFailed: worktreeInspectionFailed}
 
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)

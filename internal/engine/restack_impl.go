@@ -695,6 +695,12 @@ func (e *engineImpl) applyMetadataRefresh(
 	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
+	// Metadata records the parent SHA consumed by later planning, so advancing
+	// it past a held parent would create the same phantom-parent state as a ref
+	// move. A held branch and every descendant must remain completely unchanged.
+	if e.branchHeldBack(branch, snap) {
+		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: item.ParentRev}, nil
+	}
 	meta := snap.meta.Get(branchName)
 	if meta == nil {
 		var err error

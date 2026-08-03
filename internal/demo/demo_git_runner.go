@@ -151,6 +151,10 @@ func (d *demoGitRunner) UpdateBranchRef(_ context.Context, _, _ string) error {
 	return nil
 }
 
+func (d *demoGitRunner) UpdateBranchRefCAS(_ context.Context, _, _, _ string) error {
+	return nil
+}
+
 func (d *demoGitRunner) GetRemoteRevision(_ string) (string, error) {
 	return "remote-rev", nil
 }

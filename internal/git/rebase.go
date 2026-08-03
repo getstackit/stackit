@@ -28,10 +28,14 @@ type RebaseOutcome struct {
 
 func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RebaseOutcome, error) {
 	outcome := RebaseOutcome{Result: RebaseDone}
+	oldRev, err := r.GetRevision(branchName)
+	if err != nil {
+		return RebaseOutcome{Result: RebaseConflict}, fmt.Errorf("failed to get revision before rebase: %w", err)
+	}
 
 	// Use detached HEAD to avoid "already used by worktree" errors
 	// We use branchName~0 to force a detached checkout of the branch tip
-	_, err := r.RunGitCommandWithContext(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
+	_, err = r.RunGitCommandWithContext(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
 	if err != nil {
 		if r.IsRebaseInProgress(ctx) {
 			autoOutcome, autoErr := r.continueRerereResolvedRebase(ctx, err)
@@ -53,7 +57,7 @@ func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream s
 		return RebaseOutcome{Result: RebaseConflict, RerereResolvedCount: outcome.RerereResolvedCount}, fmt.Errorf("failed to get revision after rebase: %w", err)
 	}
 
-	if err := r.UpdateBranchRef(ctx, branchName, newRev); err != nil {
+	if err := r.UpdateBranchRefCAS(ctx, branchName, newRev, oldRev); err != nil {
 		return RebaseOutcome{Result: RebaseConflict, RerereResolvedCount: outcome.RerereResolvedCount}, fmt.Errorf("failed to update branch ref %s: %w", branchName, err)
 	}
 

@@ -67,6 +67,11 @@ func (e *engineImpl) WorktreeHasTrackedChanges(ctx context.Context, worktreePath
 	return e.git.WorktreeHasTrackedChanges(ctx, worktreePath)
 }
 
+// ListIgnoredFiles returns every ignored, untracked file in a worktree.
+func (e *engineImpl) ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error) {
+	return e.git.ListIgnoredFiles(ctx, worktreePath)
+}
+
 // PruneWorktrees removes stale worktree entries from .git/worktrees.
 // This cleans up worktree information for worktrees whose working directory
 // has been deleted or is otherwise unavailable.

@@ -389,6 +389,25 @@ func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath str
 	return strings.TrimSpace(out) != "", nil
 }
 
+// ListIgnoredFiles returns every ignored, untracked file in worktreePath as a
+// repository-relative path. --exclude-standard ensures this has Git's actual
+// ignore semantics, rather than treating a warm-start include file as another
+// source of ignored paths.
+func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error) {
+	out, err := r.RunGitCommandRawWithContext(ctx,
+		"-C", worktreePath,
+		"ls-files", "--others", "--ignored", "--exclude-standard", "-z",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list ignored files in worktree %s: %w", worktreePath, err)
+	}
+
+	paths := strings.Split(out, "\x00")
+	paths = slices.DeleteFunc(paths, func(path string) bool { return path == "" })
+	slices.Sort(paths)
+	return paths, nil
+}
+
 // GetWorktreeCurrentBranch returns the name of the branch currently checked out in a worktree.
 // Returns empty string if the worktree is in detached HEAD state. Real failures
 // (worktree missing, repo corruption, context cancellation) are surfaced — git

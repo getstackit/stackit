@@ -75,6 +75,10 @@ func (d *demoGitRunner) GetGitCommonDir() (string, error) {
 	return "/demo/repo/.git", nil
 }
 
+func (d *demoGitRunner) ListIgnoredFiles(_ context.Context, _ string) ([]string, error) {
+	return nil, nil
+}
+
 func (d *demoGitRunner) EnsureMetadataRefspecConfigured() error {
 	return nil
 }

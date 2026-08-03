@@ -13,6 +13,20 @@ import (
 )
 
 func TestWorktree(t *testing.T) {
+	t.Run("lists ignored files", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+		require.NoError(t, os.WriteFile(filepath.Join(scene.Repo.Dir, ".gitignore"), []byte(".env\ncache/\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(scene.Repo.Dir, ".env"), []byte("secret"), 0o600))
+		require.NoError(t, os.MkdirAll(filepath.Join(scene.Repo.Dir, "cache"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(scene.Repo.Dir, "cache", "data"), []byte("cached"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(scene.Repo.Dir, "tracked.txt"), []byte("tracked"), 0o600))
+
+		ignored, err := runner.ListIgnoredFiles(context.Background(), scene.Repo.Dir)
+		require.NoError(t, err)
+		require.Equal(t, []string{".env", "cache/data"}, ignored)
+	})
+
 	t.Run("add and remove worktree", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)

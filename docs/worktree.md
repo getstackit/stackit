@@ -38,6 +38,41 @@ Git worktrees let you check out multiple branches simultaneously in separate dir
 
 ---
 
+## Warm starts
+
+A new worktree is normally a fresh checkout. To make agent worktrees ready
+without copying every ignored file, add a repository-root `.worktreeinclude`
+file. Its patterns use `.gitignore` syntax and select from files Git already
+classifies as ignored:
+
+```gitignore
+# Local configuration needed by every agent worktree
+.env
+.env.local
+
+# Reuse selected build inputs and dependency caches
+node_modules/
+.turbo/
+```
+
+Stackit copies matching regular files from the main repository into each new
+managed worktree created by `wt create`, `wt attach`, `wt run`, or `create -w`.
+The copy happens before `post-worktree-create` hooks, so setup hooks can use
+the warmed files immediately.
+
+Safety rules:
+
+- A pattern cannot copy a tracked file: it must also be ignored by Git.
+- Existing files in the destination are never overwritten.
+- Symlinks and non-regular files are skipped.
+- A warm-start failure aborts worktree creation and rolls it back, rather than
+  giving an agent a partially initialized workspace.
+
+Treat `.worktreeinclude` as an explicit local-data allowlist. In particular,
+include secrets only when every managed worktree is allowed to receive them.
+
+---
+
 ## Commands
 
 ### `worktree create` - Start a new stack in a worktree

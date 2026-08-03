@@ -17,6 +17,24 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	}
 
 	branchName := branch.GetName()
+	oldTip, err := branch.GetRevision()
+	if err != nil {
+		return fmt.Errorf("failed to get branch revision for %s: %w", branchName, err)
+	}
+	worktrees, err := e.git.ListWorktrees(ctx)
+	if err != nil {
+		return fmt.Errorf("refusing to rewrite %s: cannot inspect worktrees: %w", branchName, err)
+	}
+	worktreePath := worktrees.PathForBranch(branchName)
+	if worktreePath != "" {
+		dirty, statusErr := e.git.WorktreeHasUncommittedChanges(ctx, worktreePath)
+		if statusErr != nil {
+			return fmt.Errorf("refusing to rewrite %s: cannot inspect worktree %s: %w", branchName, worktreePath, statusErr)
+		}
+		if dirty {
+			return fmt.Errorf("refusing to rewrite %s: worktree %s has uncommitted changes", branchName, worktreePath)
+		}
+	}
 
 	// Save current state to restore later
 	originalRef, _ := e.git.GetCurrentBranchOrSHA(ctx)
@@ -143,8 +161,13 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	newTip = strings.TrimSpace(newTip)
 
 	// Update branch to point to new tip
-	if err := e.git.UpdateBranchRef(ctx, branchName, newTip); err != nil {
+	if err := e.git.UpdateBranchRefCAS(ctx, branchName, newTip, oldTip); err != nil {
 		return fmt.Errorf("failed to update branch %s: %w", branchName, err)
+	}
+	if worktreePath != "" {
+		if err := e.git.ResetWorktreeWorkingDir(ctx, worktreePath); err != nil {
+			return fmt.Errorf("updated %s but failed to reset clean worktree %s: %w", branchName, worktreePath, err)
+		}
 	}
 
 	return nil

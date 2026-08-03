@@ -464,6 +464,15 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 	}
 	worktreeCreated = true
 
+	warmStart, err := warmStartWorktree(ctx.Context, eng, repoRoot, worktreePath)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("failed to warm-start worktree: %w", err)
+	}
+	if warmStart.Enabled && len(warmStart.Copied) > 0 {
+		out.Info("Warm-started worktree with %d ignored file(s)", len(warmStart.Copied))
+	}
+
 	if err := eng.RegisterWorktreeWithName(anchorBranchName, worktreePath, opts.Name); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("failed to register worktree: %w", err)

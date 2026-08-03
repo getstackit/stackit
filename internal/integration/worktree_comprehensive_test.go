@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/getstackit/stackit/internal/cli/common"
 )
 
@@ -107,6 +109,26 @@ func TestWorktreeBasicOperations(t *testing.T) {
 		if meta.ParentBranchName == nil || *meta.ParentBranchName != wt.AnchorBranch {
 			t.Fatalf("expected first branch parent %s, got %#v", wt.AnchorBranch, meta.ParentBranchName)
 		}
+	})
+
+	run("warm-starts explicitly included ignored files", func(t *testing.T, sh *TestShell) {
+		sh.WriteFile(".gitignore", ".env\n.warm-cache\n.other-cache\n").
+			WriteFile(".worktreeinclude", ".env\n.warm-cache\n").
+			Git("add .gitignore .worktreeinclude").
+			Git("commit -m 'configure warm start'")
+		sh.WriteUnstaged(".env", "secret").
+			WriteUnstaged(".warm-cache", "cached").
+			WriteUnstaged(".other-cache", "not copied").
+			Run("worktree create warm-start")
+
+		worktreePath := sh.GetWorktreePath("warm-start")
+		contents, err := os.ReadFile(filepath.Join(worktreePath, ".env"))
+		require.NoError(t, err)
+		require.Equal(t, "secret", string(contents))
+		contents, err = os.ReadFile(filepath.Join(worktreePath, ".warm-cache"))
+		require.NoError(t, err)
+		require.Equal(t, "cached", string(contents))
+		require.NoFileExists(t, filepath.Join(worktreePath, ".other-cache"))
 	})
 
 	run("worktree run returns child process exit code", func(t *testing.T, sh *TestShell) {

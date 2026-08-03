@@ -262,7 +262,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 }
 
 // ContinueRebase continues an in-progress rebase
-func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, rebasedBranchBase string) (ContinueRebaseResult, error) {
+func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, rebasedBranchBase string, expectedBranchRevision string) (ContinueRebaseResult, error) {
 	// Call git rebase --continue
 	result, err := e.git.RebaseContinue(ctx)
 	if err != nil {
@@ -280,7 +280,13 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, reba
 	}
 
 	// Update the branch reference to the new rebased commit
-	err = e.git.UpdateBranchRef(ctx, branchName, newRev)
+	if expectedBranchRevision == "" {
+		expectedBranchRevision, err = e.git.GetRevision(branchName)
+		if err != nil {
+			return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to get expected branch revision for %s: %w", branchName, err)
+		}
+	}
+	err = e.git.UpdateBranchRefCAS(ctx, branchName, newRev, expectedBranchRevision)
 	if err != nil {
 		return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to update branch reference %s: %w", branchName, err)
 	}

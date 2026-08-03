@@ -61,7 +61,9 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	}
 
 	// Continue the rebase
-	result, err := eng.ContinueRebase(ctx.Context, continuation.CurrentBranchOverride, continuation.RebasedBranchBase)
+	// No expected revision recorded: ContinueRebase falls back to the branch's
+	// current tip, which still rejects a write racing this one.
+	result, err := eng.ContinueRebase(ctx.Context, continuation.CurrentBranchOverride, continuation.RebasedBranchBase, "")
 	if err != nil {
 		return fmt.Errorf("failed to continue rebase: %w", err)
 	}

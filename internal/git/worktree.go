@@ -22,26 +22,41 @@ const WorktreeRefPrefix = "refs/stackit/worktrees/"
 const WorktreePathRefPrefix = "refs/stackit/worktree-paths/"
 
 func worktreePathRef(path string) string {
-	if canonicalPath, err := canonicalWorktreePath(path); err == nil {
+	if canonicalPath, err := CanonicalWorktreePath(path); err == nil {
 		path = canonicalPath
 	}
 	hash := sha256.Sum256([]byte(path))
 	return fmt.Sprintf("%s%x", WorktreePathRefPrefix, hash)
 }
 
-func canonicalWorktreePath(path string) (string, error) {
+// CanonicalWorktreePath returns an absolute path with every existing path
+// component resolved. It deliberately resolves the deepest existing ancestor
+// instead of requiring the final worktree directory to exist: registration
+// happens after creation but unregistering often happens after removal. Using
+// the same canonical spelling in both cases keeps the reverse registration
+// ref addressable through symlinked bases such as /tmp on macOS.
+func CanonicalWorktreePath(path string) (string, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}
-	resolvedPath, err := filepath.EvalSymlinks(absPath)
-	if err == nil {
-		return filepath.Clean(resolvedPath), nil
+
+	for existing := absPath; ; existing = filepath.Dir(existing) {
+		resolvedPath, evalErr := filepath.EvalSymlinks(existing)
+		if evalErr == nil {
+			remainder, relErr := filepath.Rel(existing, absPath)
+			if relErr != nil {
+				return "", relErr
+			}
+			return filepath.Clean(filepath.Join(resolvedPath, remainder)), nil
+		}
+		if !os.IsNotExist(evalErr) {
+			return "", evalErr
+		}
+		if parent := filepath.Dir(existing); parent == existing {
+			return "", evalErr
+		}
 	}
-	if !os.IsNotExist(err) {
-		return "", err
-	}
-	return filepath.Clean(absPath), nil
 }
 
 // Worktree represents a single entry from `git worktree list`.

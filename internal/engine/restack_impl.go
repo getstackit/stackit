@@ -60,6 +60,34 @@ type restackSnapshot struct {
 	// deliberately excluded — see resetWorktreeIfClean for why, and for why this
 	// can't be checked lazily.
 	dirtyWorktrees map[string]bool
+	// heldBranches contains every branch whose checked-out worktree was dirty
+	// or could not be inspected before this pass. Descendants of these branches
+	// must be held too: a validated child may otherwise be built on the target
+	// SHA of a parent that was ultimately not allowed to move.
+	heldBranches BranchNameSet
+	// worktreeInspectionFailed means the physical checkout map is unknown, so
+	// no ref move is safe for this pass.
+	worktreeInspectionFailed bool
+}
+
+func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) bool {
+	if snap.worktreeInspectionFailed {
+		return true
+	}
+	for current := branch.GetName(); current != ""; {
+		if snap.heldBranches.Contains(current) {
+			return true
+		}
+		e.mu.RLock()
+		state := e.readState(current)
+		trunk := e.trunk
+		e.mu.RUnlock()
+		if state == nil || state.Parent == "" || current == trunk {
+			return false
+		}
+		current = state.Parent
+	}
+	return false
 }
 
 // branchRev returns branch's revision from the pass snapshot, falling back to a
@@ -223,7 +251,7 @@ func (e *engineImpl) restackBranch(
 	// which warns and is reached solely by the `restack` command) so that every
 	// caller of RestackBranches inherits it — modify, sync, squash, absorb,
 	// delete, split, reorder, pluck and insert all arrive here directly.
-	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" && snap.dirtyWorktrees[worktreePath] {
+	if e.branchHeldBack(branch, snap) {
 		return RestackBranchResult{Result: RestackUnneeded}, nil
 	}
 
@@ -723,7 +751,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	// Hold the branch back instead. This is the plan path, reached by every
 	// caller of actions.RestackBranches (modify, squash, absorb, delete, split,
 	// reorder, pluck) as well as the `restack` command.
-	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" && snap.dirtyWorktrees[worktreePath] {
+	if e.branchHeldBack(branch, snap) {
 		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: parentRev}, nil
 	}
 

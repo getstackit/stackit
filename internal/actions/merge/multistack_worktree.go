@@ -131,7 +131,7 @@ func (w *MultiStackWorktreeExecutor) tryGlobalOctopusMerge(ctx context.Context, 
 		// Abort the merge if it's in progress
 		if eng.IsMergeInProgress(ctx) {
 			if abortErr := eng.MergeAbort(ctx); abortErr != nil {
-				return fmt.Errorf("global octopus merge failed: %w", errors.Join(err, abortErr))
+				return fmt.Errorf("global octopus merge and cleanup failed: %w", errors.Join(err, fmt.Errorf("abort merge: %w", abortErr)))
 			}
 		}
 		return fmt.Errorf("global octopus merge failed: %w", err)
@@ -156,7 +156,7 @@ func (w *MultiStackWorktreeExecutor) tryMergeStack(ctx context.Context, eng engi
 		// Abort the merge if it's in progress
 		if eng.IsMergeInProgress(ctx) {
 			if abortErr := eng.MergeAbort(ctx); abortErr != nil {
-				return fmt.Errorf("conflict in stack %s: %w", stack.RootBranch, errors.Join(err, abortErr))
+				return fmt.Errorf("conflict in stack %s and cleanup failed: %w", stack.RootBranch, errors.Join(err, fmt.Errorf("abort merge: %w", abortErr)))
 			}
 		}
 		return fmt.Errorf("conflict in stack %s: %w", stack.RootBranch, err)

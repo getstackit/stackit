@@ -7,6 +7,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // WorktreeCleanupResult contains the results of worktree cleanup
@@ -59,6 +60,14 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 
 	// Check each anchored worktree and remove it once it is clean and empty.
 	for _, wt := range worktrees {
+		// The main worktree is never disposable, even if an invalid
+		// registration makes it look like an empty managed worktree. Skipping
+		// this candidate lets cleanup continue for the rest of the batch.
+		if git.IsMainWorktree(wt.Path, wt.MainRepoDir) {
+			ctx.Output.Debug("Skipping cleanup for main worktree %s", wt.Path)
+			continue
+		}
+
 		// Skip dirty worktrees - don't clean up while there are uncommitted changes
 		if dirtyAnchors[wt.AnchorBranch] {
 			continue
@@ -96,10 +105,13 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 			continue
 		}
 
-		if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, wt.AnchorBranch); unregErr != nil {
+		// Removing a directory can leave Git's administrative worktree entry
+		// behind. Prune it before deleting the anchor; an anchor deleted first
+		// is not recoverable from a later unregister failure.
+		if pruneErr := ctx.Engine.PruneWorktrees(ctx.Context); pruneErr != nil {
 			result.Errors = append(result.Errors,
-				"failed to unregister worktree for "+wt.AnchorBranch+": "+unregErr.Error())
-			ctx.Output.Debug("Failed to unregister worktree for %s: %v", wt.AnchorBranch, unregErr)
+				"failed to prune stale worktree entries for "+wt.AnchorBranch+": "+pruneErr.Error())
+			ctx.Output.Debug("Failed to prune stale worktree entries for %s: %v", wt.AnchorBranch, pruneErr)
 			continue
 		}
 
@@ -110,6 +122,13 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 				ctx.Output.Debug("Failed to delete anchor branch %s: %v", wt.AnchorBranch, deleteErr)
 				continue
 			}
+		}
+
+		if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, wt.AnchorBranch); unregErr != nil {
+			result.Errors = append(result.Errors,
+				"failed to unregister worktree for "+wt.AnchorBranch+": "+unregErr.Error())
+			ctx.Output.Debug("Failed to unregister worktree for %s: %v", wt.AnchorBranch, unregErr)
+			continue
 		}
 		result.RemovedWorktrees = append(result.RemovedWorktrees, wt.AnchorBranch)
 	}

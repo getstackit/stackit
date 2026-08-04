@@ -510,6 +510,10 @@ func worktreePathForName(repoRoot string, name string) string {
 	if basePath == "" {
 		repoName := filepath.Base(repoRoot)
 		basePath = filepath.Join(filepath.Dir(repoRoot), repoName+"-stacks")
+	} else if !filepath.IsAbs(basePath) {
+		// Configuration lives with the repository, so relative worktree bases
+		// must not depend on the directory from which stackit was invoked.
+		basePath = filepath.Join(repoRoot, basePath)
 	}
 
 	return filepath.Join(basePath, name)

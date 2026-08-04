@@ -182,7 +182,9 @@ func (r *runner) RemoveWorktree(ctx context.Context, path string) error {
 }
 
 func (r *runner) ForceRemoveWorktree(ctx context.Context, path string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", path)
+	// Git requires --force twice when the worktree is locked, in addition to
+	// using it to discard local changes.
+	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", "--force", path)
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}

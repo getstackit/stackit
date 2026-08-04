@@ -237,10 +237,15 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 		return "", nil, nil
 	}
 
-	if _, err := os.Stat(targetWorktree.Path); os.IsNotExist(err) {
-		ctx.Output.Warn("Worktree for stack %s is registered but path does not exist: %s",
-			output.BranchName(targetStackRoot), targetWorktree.Path)
-		ctx.Output.Tip("stackit worktree remove %s", targetStackRoot)
+	if _, err := os.Stat(targetWorktree.Path); err != nil {
+		if os.IsNotExist(err) {
+			ctx.Output.Warn("Worktree for stack %s is registered but path does not exist: %s",
+				output.BranchName(targetStackRoot), targetWorktree.Path)
+			ctx.Output.Tip("stackit worktree remove %s", targetStackRoot)
+			return "", nil, nil
+		}
+		ctx.Output.Warn("Cannot inspect worktree for stack %s at %s: %v",
+			output.BranchName(targetStackRoot), targetWorktree.Path, err)
 		return "", nil, nil
 	}
 

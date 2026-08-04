@@ -102,11 +102,11 @@ func (r *runner) getRevision(branchName string) (string, error) {
 }
 
 func (r *runner) getRemoteRevision(branchName string) (string, error) {
-	// Use the bare "origin/<branch>" form so git's normal ref lookup order
+	// Use the bare "<remote>/<branch>" form so git's normal ref lookup order
 	// applies (refs/heads/, refs/remotes/, etc.). Tests sometimes mock the
 	// remote SHA by creating a local branch named "origin/<branch>" and
 	// rely on that fallback resolving via refs/heads/.
-	return r.resolveRefSHA("origin/" + branchName)
+	return r.resolveRefSHA(r.getRemote() + "/" + branchName)
 }
 
 func (r *runner) batchGetRevisions(branchNames []string) (map[string]string, []error) {

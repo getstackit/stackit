@@ -88,6 +88,36 @@ func (e *engineImpl) PruneWorktrees(ctx context.Context) error {
 	return nil
 }
 
+// PruneOrphanedWorktreePathRefs removes reverse worktree path claims with no
+// matching forward registration, left behind by interrupted legacy cleanup.
+func (e *engineImpl) PruneOrphanedWorktreePathRefs(ctx context.Context) (int, error) {
+	forward, err := e.git.ListRefs(git.WorktreeRefPrefix)
+	if err != nil {
+		return 0, fmt.Errorf("list worktree registrations: %w", err)
+	}
+	pathRefs, err := e.git.ListRefs(git.WorktreePathRefPrefix)
+	if err != nil {
+		return 0, fmt.Errorf("list worktree path registrations: %w", err)
+	}
+	forwardSHAs := make(map[string]bool, len(forward))
+	for _, sha := range forward {
+		forwardSHAs[sha] = true
+	}
+	orphaned := make([]string, 0)
+	for ref, sha := range pathRefs {
+		if !forwardSHAs[sha] {
+			orphaned = append(orphaned, ref)
+		}
+	}
+	if len(orphaned) == 0 {
+		return 0, nil
+	}
+	if err := e.git.DeleteRefsBatch(ctx, orphaned); err != nil {
+		return 0, fmt.Errorf("delete orphaned worktree path registrations: %w", err)
+	}
+	return len(orphaned), nil
+}
+
 // CreateTemporaryWorktree creates a temporary directory and adds a detached worktree
 func (e *engineImpl) CreateTemporaryWorktree(ctx context.Context, branch string, prefix string) (string, func(), error) {
 	return e.CreateTemporaryWorktreeWithOptions(ctx, branch, prefix, WorktreeCheckoutFull, WorktreePruneAuto)

@@ -287,6 +287,8 @@ type WorktreeOperations interface {
 	// manually calling PruneWorktrees() once, to avoid race conditions.
 	CreateTemporaryWorktreeSkipPrune(ctx context.Context, branch string, prefix string) (path string, cleanup func(), err error)
 	PruneWorktrees(ctx context.Context) error
+	// PruneOrphanedWorktreePathRefs removes stale reverse registration refs.
+	PruneOrphanedWorktreePathRefs(ctx context.Context) (int, error)
 }
 
 // WorktreeInfo represents information about a stackit-managed worktree

@@ -25,6 +25,11 @@ type RepairResult struct {
 }
 
 func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
+	if count, err := ctx.Engine.PruneOrphanedWorktreePathRefs(ctx.Context); err != nil {
+		return nil, err
+	} else if count > 0 {
+		ctx.Output.Info("Removed %d orphaned worktree path registration(s)", count)
+	}
 	listResult, err := listEntries(ctx, ListOptions(opts))
 	if err != nil {
 		return nil, err

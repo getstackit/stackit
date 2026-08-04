@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -84,7 +85,8 @@ func (w *MultiStackWorktreeExecutor) ExecuteInWorktree(ctx context.Context, stac
 		if err := w.tryMergeStack(ctx, session.Engine, stack); err != nil {
 			w.output.Debug("Stack %s conflicts: %v", stack.RootBranch, err)
 			if resetErr := session.ResetToRef(ctx, baseline); resetErr != nil {
-				w.output.Debug("Failed to reset worktree after conflict: %v", resetErr)
+				session.Close()
+				return nil, fmt.Errorf("failed to reset merge worktree after %s conflict: %w", stack.RootBranch, resetErr)
 			}
 			result.ConflictStacks = append(result.ConflictStacks, MultiStackExcluded{
 				Stack:  stack,
@@ -129,7 +131,7 @@ func (w *MultiStackWorktreeExecutor) tryGlobalOctopusMerge(ctx context.Context, 
 		// Abort the merge if it's in progress
 		if eng.IsMergeInProgress(ctx) {
 			if abortErr := eng.MergeAbort(ctx); abortErr != nil {
-				w.output.Debug("Failed to abort merge: %v", abortErr)
+				return fmt.Errorf("global octopus merge failed: %w", errors.Join(err, abortErr))
 			}
 		}
 		return fmt.Errorf("global octopus merge failed: %w", err)
@@ -154,7 +156,7 @@ func (w *MultiStackWorktreeExecutor) tryMergeStack(ctx context.Context, eng engi
 		// Abort the merge if it's in progress
 		if eng.IsMergeInProgress(ctx) {
 			if abortErr := eng.MergeAbort(ctx); abortErr != nil {
-				w.output.Debug("Failed to abort merge: %v", abortErr)
+				return fmt.Errorf("conflict in stack %s: %w", stack.RootBranch, errors.Join(err, abortErr))
 			}
 		}
 		return fmt.Errorf("conflict in stack %s: %w", stack.RootBranch, err)

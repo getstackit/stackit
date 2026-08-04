@@ -95,6 +95,12 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 		IncludedStacks: worktreeResult.MergedStacks,
 		ExcludedStacks: worktreeResult.ConflictStacks,
 	}
+	consolidationCreated := false
+	defer func() {
+		if !consolidationCreated {
+			unlockConsolidatingStacks(ctx, eng, result.IncludedStacks)
+		}
+	}()
 
 	// 4.5. Generate branch name early and lock individual PRs before CI validation
 	// This indicates the PRs are part of a consolidation in progress
@@ -146,6 +152,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 				// Update result with binary search findings
 				result.IncludedStacks = searchResult.WorkingStacks
 				result.ExcludedStacks = append(result.ExcludedStacks, searchResult.FailedStacks...)
+				unlockExcludedMultiStackBranches(ctx, eng, searchResult.FailedStacks)
 
 				out.Success("Found %d stacks that pass CI together", len(result.IncludedStacks))
 			} else {
@@ -179,6 +186,8 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	result.PRNumber = pr.Number
 	result.PRURL = pr.HTMLURL
 	result.BranchName = branchName
+	consolidationCreated = true
+	unlockExcludedMultiStackBranches(ctx, eng, result.ExcludedStacks)
 
 	out.Success("Created PR #%d: %s", pr.Number, pr.HTMLURL)
 	out.Debug("multistack: PR created successfully")
@@ -224,6 +233,34 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 
 	out.Debug("multistack: completed successfully")
 	return result, nil
+}
+
+// unlockConsolidatingStacks releases only locks created for multi-stack
+// consolidation. User locks and other workflow locks are intentionally left
+// untouched.
+func unlockConsolidatingStacks(ctx *app.Context, eng engine.Engine, stacks []MultiStackInfo) {
+	branches := engine.NewBranchesBuilder(0)
+	for _, stack := range stacks {
+		for _, name := range stack.AllBranches {
+			branch := eng.GetBranch(name)
+			if branch.GetLockReason() == engine.LockReasonConsolidating {
+				branches.Add(branch)
+			}
+		}
+	}
+	if selected := branches.Build(); len(selected) > 0 {
+		if _, err := eng.SetLocked(ctx.Context, selected, engine.LockReasonNone); err != nil {
+			ctx.Output.Warn("Failed to unlock excluded multi-stack branches: %v", err)
+		}
+	}
+}
+
+func unlockExcludedMultiStackBranches(ctx *app.Context, eng engine.Engine, excluded []MultiStackExcluded) {
+	stacks := make([]MultiStackInfo, 0, len(excluded))
+	for _, item := range excluded {
+		stacks = append(stacks, item.Stack)
+	}
+	unlockConsolidatingStacks(ctx, eng, stacks)
 }
 
 // validateBranchesMatchRemote checks that all branches in the stacks match their remote.

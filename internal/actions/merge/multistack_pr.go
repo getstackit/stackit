@@ -33,7 +33,7 @@ func NewMultiStackPRCreator(ctx *app.Context, worktreeEng engine.Engine, worktre
 
 // GenerateMultiStackBranchName creates a unique branch name for the multi-stack PR
 func GenerateMultiStackBranchName() string {
-	return fmt.Sprintf("multi-stack/%s", time.Now().Format("20060102-150405"))
+	return fmt.Sprintf("multi-stack/%s-%d", time.Now().Format("20060102-150405"), time.Now().UnixNano())
 }
 
 // CreateAndPushBranch creates a named branch at the current HEAD and pushes it
@@ -41,6 +41,11 @@ func (p *MultiStackPRCreator) CreateAndPushBranch(ctx context.Context, branchNam
 	// Create a branch at current HEAD
 	if err := p.worktreeEng.CreateBranch(ctx, branchName, "HEAD"); err != nil {
 		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
+	}
+	// Utility metadata tells sync that this generated delivery branch can be
+	// safely cleaned up once the consolidation has landed.
+	if err := p.worktreeEng.SetBranchType(p.worktreeEng.GetBranch(branchName), git.BranchTypeUtility); err != nil {
+		return fmt.Errorf("mark multi-stack branch %s as utility: %w", branchName, err)
 	}
 
 	// Checkout the new branch

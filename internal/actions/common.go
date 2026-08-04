@@ -632,13 +632,17 @@ func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 	return nil
 }
 
+// wordBranch is the pluralizable noun passed to PluralSuffix/Pluralize by
+// callers describing a count of branches.
+const wordBranch = "branch"
+
 // PluralSuffix returns the appropriate plural suffix for the given word if plural is true, otherwise empty string
 func PluralSuffix(word string, plural bool) string {
 	if !plural {
 		return ""
 	}
 	switch word {
-	case "branch":
+	case wordBranch:
 		return "es"
 	case "PR":
 		return "s"

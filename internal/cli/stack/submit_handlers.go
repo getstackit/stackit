@@ -27,6 +27,9 @@ const (
 
 func (v SubmitVerbosity) verbose() bool { return v == SubmitVerbose }
 
+// skipReasonNoChanges is the SkipReason emitted for an up-to-date branch.
+const skipReasonNoChanges = "no changes"
+
 // NewSubmitUI creates a runner and handler pair for submit operations.
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
@@ -303,7 +306,7 @@ func sectionHeader(label string, count int, muted bool) string {
 
 func skipGroupTitle(reason string) string {
 	switch reason {
-	case "no changes":
+	case skipReasonNoChanges:
 		return "No changes"
 	case "no existing PR":
 		return "No existing PR"

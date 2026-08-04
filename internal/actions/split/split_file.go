@@ -19,6 +19,7 @@ type splitByFileEngine interface {
 	engine.BranchReader
 	engine.BranchWriter
 	engine.StackRewriter
+	splitStashEngine
 }
 
 // splitByFileOptions contains options for the splitByFile operation
@@ -222,6 +223,10 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 		_ = eng.ForceCheckoutBranch(ctx, branchToSplit)
 		return nil, fmt.Errorf("failed to stash staged changes: %w", err)
 	}
+	stashRef, err := splitStashRef(ctx, eng, stashName)
+	if err != nil {
+		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit, err)
+	}
 
 	// Track stash state for cleanup.
 	// Note: cleanupStash is called during error recovery, so we intentionally
@@ -230,7 +235,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	stashPopped := false
 	cleanupStash := func() {
 		if !stashPopped {
-			_ = eng.StashPop(ctx)
+			_ = eng.StashPopRef(ctx, stashRef)
 			stashPopped = true
 		}
 	}
@@ -278,7 +283,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Pop the stash to get the parent branch changes
-	if err := eng.StashPop(ctx); err != nil {
+	if err := eng.StashPopRef(ctx, stashRef); err != nil {
 		return nil, fmt.Errorf("failed to pop stash: %w. Recovery: check 'git stash list' for pending stash, resolve any conflicts manually", err)
 	}
 	stashPopped = true
@@ -406,6 +411,10 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("failed to stash staged changes: %w", err))
 	}
+	stashRef, err := splitStashRef(ctx, eng, stashName)
+	if err != nil {
+		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit, err)
+	}
 
 	// Track stash state for cleanup.
 	// Note: cleanupStash is called during error recovery, so we intentionally
@@ -414,7 +423,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	stashPopped := false
 	cleanupStash := func() {
 		if !stashPopped {
-			_ = eng.StashPop(ctx)
+			_ = eng.StashPopRef(ctx, stashRef)
 			stashPopped = true
 		}
 	}
@@ -482,7 +491,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	}
 
 	// Pop the stash to get the extract changes back
-	if err := eng.StashPop(ctx); err != nil {
+	if err := eng.StashPopRef(ctx, stashRef); err != nil {
 		cleanupChildBranch()
 		_ = eng.CheckoutBranch(ctx, branchToSplit)
 		return nil, fmt.Errorf("failed to pop stash: %w. Recovery: check 'git stash list' for pending stash, resolve any conflicts manually", err)

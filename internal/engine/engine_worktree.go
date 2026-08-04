@@ -367,7 +367,10 @@ func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
 
 	current := branchName
 	visited := make(map[string]bool)
-	for {
+	// Metadata should be acyclic, but cap the walk as a second line of
+	// defence against malformed or concurrently changing parent metadata.
+	maxSteps := e.BranchNames().Len() + 1
+	for range maxSteps {
 		if visited[current] {
 			return ""
 		}
@@ -395,6 +398,7 @@ func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
 
 		current = parent
 	}
+	return ""
 }
 
 // IsInManagedWorktree checks if the current directory is a stackit-managed worktree.

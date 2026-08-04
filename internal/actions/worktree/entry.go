@@ -139,6 +139,7 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 	default:
 		entry.NeedsRepair = true
 		entry.StatusMessage = "registered anchor branch is missing"
+		entry.CanDetach = !entry.IsCurrent
 
 		if entry.CurrentBranch != "" {
 			currentBranch := ctx.Engine.GetBranch(entry.CurrentBranch)
@@ -152,8 +153,15 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 			}
 		}
 
-		if !entry.Exists {
+		switch {
+		case !entry.Exists:
 			entry.StatusMessage = "registration is stale and the directory is missing"
+			entry.CanRemove = !entry.IsCurrent
+		case entry.CurrentBranch == "":
+			entry.StatusMessage = "registration is invalid and worktree is detached"
+			entry.CanRemove = !entry.IsCurrent
+		case len(entry.RootBranches) == 0:
+			entry.StatusMessage = "registration is invalid and worktree branch is untracked"
 			entry.CanRemove = !entry.IsCurrent
 		}
 	}

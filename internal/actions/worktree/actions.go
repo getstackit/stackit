@@ -119,7 +119,7 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 	if err != nil {
 		return err
 	}
-	if entry.NeedsRepair && (entry.RegistrationState != RegistrationStateInvalid || entry.Exists) {
+	if entry.NeedsRepair && (entry.RegistrationState != RegistrationStateInvalid || !entry.CanRemove) {
 		return fmt.Errorf("managed worktree %s cannot be removed because %s; %s", output.BranchName(entry.displayName()), output.Dim(entry.StatusMessage), repairHint(entry))
 	}
 	if entry.IsCurrent {
@@ -562,10 +562,6 @@ func PruneAction(ctx *app.Context, opts PruneOptions) (*PruneResult, error) {
 		// Clean up missing worktrees (directory deleted but registration remains)
 		if !wt.Exists {
 			if wt.NeedsRepair {
-				if opts.DryRun && wt.CanRemove {
-					result.Pruned = append(result.Pruned, name)
-					continue
-				}
 				result.Skipped = append(result.Skipped, SkippedEntry{
 					Name:   name,
 					Reason: wt.StatusMessage + "; " + repairHint(&wt),
@@ -799,7 +795,10 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 	if err != nil {
 		return err
 	}
-	if entry.NeedsRepair {
+	if entry.NeedsRepair && entry.RegistrationState != RegistrationStateInvalid {
+		return fmt.Errorf("managed worktree %s cannot be detached because %s; %s", output.BranchName(entry.displayName()), output.Dim(entry.StatusMessage), repairHint(entry))
+	}
+	if entry.NeedsRepair && !entry.CanDetach {
 		return fmt.Errorf("managed worktree %s cannot be detached because %s; %s", output.BranchName(entry.displayName()), output.Dim(entry.StatusMessage), repairHint(entry))
 	}
 
@@ -817,6 +816,23 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 	snapshot, err := snapshotWorktree(ctx, entry)
 	if err != nil {
 		return err
+	}
+	// An invalid registration cannot be reparented or repaired automatically
+	// when its checkout is detached or untracked. Detach still has a useful,
+	// safe meaning: remove the physical worktree and its stale registry entry.
+	if entry.NeedsRepair {
+		if entry.Exists {
+			if err := removeWorktreePath(ctx, entry.Path, opts.Force); err != nil {
+				return fmt.Errorf("failed to remove worktree at %s: %w", entry.Path, err)
+			}
+		} else if err := ctx.Engine.PruneWorktrees(ctx.Context); err != nil {
+			return fmt.Errorf("failed to prune stale worktree entries: %w", err)
+		}
+		if err := ctx.Engine.UnregisterWorktree(ctx.Context, entry.AnchorBranch); err != nil {
+			return fmt.Errorf("failed to unregister invalid worktree: %w", err)
+		}
+		out.Success("Detached invalid worktree %s", output.BranchName(entry.displayName()))
+		return nil
 	}
 
 	pathRemoved := false

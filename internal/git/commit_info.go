@@ -53,6 +53,50 @@ func (r *runner) getCommitAuthor(branchName string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
+// CommitInfo holds a branch tip commit's author date and author name.
+type CommitInfo struct {
+	Date   time.Time
+	Author string
+}
+
+// batchCommitInfo resolves each branch's tip commit date and author in one
+// `git for-each-ref` invocation instead of two `git log` processes per branch
+// (getCommitDate + getCommitAuthor). Branches with no matching ref are simply
+// absent from the result map rather than reported as errors, matching
+// for-each-ref's own behavior for unmatched patterns.
+func (r *runner) batchCommitInfo(branchNames []string) map[string]CommitInfo {
+	results := make(map[string]CommitInfo)
+	if len(branchNames) == 0 {
+		return results
+	}
+
+	args := []string{"for-each-ref", "--format=%(refname:short)\t%(authordate:iso-strict)\t%(authorname)"}
+	for _, name := range branchNames {
+		args = append(args, "refs/heads/"+name)
+	}
+
+	out, err := r.RunGitCommandWithContext(context.Background(), args...)
+	if err != nil {
+		return results
+	}
+
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		date, err := time.Parse(time.RFC3339, parts[1])
+		if err != nil {
+			continue
+		}
+		results[parts[0]] = CommitInfo{Date: date, Author: parts[2]}
+	}
+	return results
+}
+
 func (r *runner) getRevision(branchName string) (string, error) {
 	return r.resolveRefSHA(branchName)
 }

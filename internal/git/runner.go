@@ -743,6 +743,10 @@ func (r *runner) GetCommitAuthor(branchName string) (string, error) {
 	return r.getCommitAuthor(branchName)
 }
 
+func (r *runner) BatchCommitInfo(branchNames []string) map[string]CommitInfo {
+	return r.batchCommitInfo(branchNames)
+}
+
 func (r *runner) GetCommitRange(ctx context.Context, base, head, format string) ([]string, error) {
 	rangeArg := head
 	if base != "" {

@@ -503,11 +503,19 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 	dirtyAnchors := make(map[string]bool)
 	if managed, err := eng.ListManagedWorktrees(); err == nil {
 		for _, wt := range managed {
-			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
+			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+			if inspectErr != nil {
+				ctx.Output.Warn("Holding stack rooted at %s because worktree %s could not be inspected: %v", wt.AnchorBranch, wt.Path, inspectErr)
+				dirtyAnchors[wt.AnchorBranch] = true
+				continue
+			}
+			if hasChanges {
 				dirtyAnchors[wt.AnchorBranch] = true
 				ctx.Output.Warn("Skipping stack rooted at %s (worktree %s has uncommitted changes)", wt.AnchorBranch, wt.Path)
 			}
 		}
+	} else {
+		ctx.Output.Warn("Could not inspect managed worktrees; holding no known stacks: %v", err)
 	}
 
 	// Tracked changes only here: an untracked file cannot be destroyed by the
@@ -518,11 +526,19 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 			if wt.Branch == "" || dirtyAnchors[wt.Branch] {
 				continue
 			}
-			if hasChanges, _ := eng.WorktreeHasTrackedChanges(ctx.Context, wt.Path); hasChanges {
+			hasChanges, inspectErr := eng.WorktreeHasTrackedChanges(ctx.Context, wt.Path)
+			if inspectErr != nil {
+				ctx.Output.Warn("Holding %s because worktree %s could not be inspected: %v", wt.Branch, wt.Path, inspectErr)
+				dirtyBranches[wt.Branch] = true
+				continue
+			}
+			if hasChanges {
 				dirtyBranches[wt.Branch] = true
 				ctx.Output.Warn("Skipping %s (worktree %s has uncommitted changes; commit or stash them, then restack again)", wt.Branch, wt.Path)
 			}
 		}
+	} else {
+		ctx.Output.Warn("Could not inspect Git worktrees; restack safety checks were incomplete: %v", err)
 	}
 
 	if len(dirtyAnchors) == 0 && len(dirtyBranches) == 0 {

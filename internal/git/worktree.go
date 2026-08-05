@@ -73,10 +73,65 @@ type WorktreeList []Worktree
 // IsMainWorktree reports whether worktreePath is the repo's main worktree
 // (repoRoot), resolving symlinks on both sides for comparison (e.g. /var vs
 // /private/var on macOS).
+//
+// Only use this when repoRoot is known to be the main working tree. An engine
+// constructed inside a temporary worktree reports that worktree as its repo
+// root, which makes this answer "no" for the user's actual main checkout —
+// prefer WorktreeList.IsMain, which reads the answer from git instead of
+// trusting the caller's idea of where the repo lives.
 func IsMainWorktree(worktreePath, repoRoot string) bool {
-	resolvedWorktree, _ := filepath.EvalSymlinks(worktreePath)
-	resolvedRoot, _ := filepath.EvalSymlinks(repoRoot)
-	return resolvedWorktree == resolvedRoot
+	equal, known := samePath(worktreePath, repoRoot)
+	return known && equal
+}
+
+// samePath reports whether two paths name the same directory, and whether that
+// question could be answered at all. Resolving symlinks on both sides matters
+// on macOS, where /var and /private/var name the same place.
+//
+// The second return value exists because callers guard destructive operations
+// with this: previously both EvalSymlinks errors were discarded, so two
+// unresolvable paths yielded "" == "" and compared equal. Reporting "could not
+// tell" lets each caller pick the safe answer for its own operation.
+func samePath(a, b string) (equal, known bool) {
+	resolvedA, errA := filepath.EvalSymlinks(a)
+	resolvedB, errB := filepath.EvalSymlinks(b)
+	if errA != nil || errB != nil {
+		return false, false
+	}
+	return resolvedA == resolvedB, true
+}
+
+// MainPath returns the main working tree's path. `git worktree list` always
+// reports the main worktree first and linked worktrees after it, so the first
+// entry is authoritative regardless of which worktree the command ran from.
+func (l WorktreeList) MainPath() string {
+	if len(l) == 0 {
+		return ""
+	}
+	return l[0].Path
+}
+
+// IsMain reports whether path is the repo's main working tree, which can never
+// be removed with `git worktree remove`.
+//
+// Prefer this over IsMainWorktree for removal guards. IsMainWorktree compares
+// against whatever the caller believes the repo root to be, and an engine built
+// inside a temporary worktree believes it is that worktree — so the main
+// checkout does not match, the guard passes, and git is asked to remove the
+// user's working tree.
+//
+// Uncertainty resolves to true: with no list to compare against, or paths that
+// cannot be resolved, the caller must not proceed to remove.
+func (l WorktreeList) IsMain(path string) bool {
+	main := l.MainPath()
+	if main == "" {
+		return true
+	}
+	equal, known := samePath(path, main)
+	if !known {
+		return true
+	}
+	return equal
 }
 
 // PathForBranch returns the worktree path where branchName is checked out,

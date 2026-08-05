@@ -457,8 +457,11 @@ func removeWorktreeForBranch(ctx context.Context, branchName string, worktrees g
 		return nil // Branch not in any worktree
 	}
 
-	// Don't remove main worktree
-	if git.IsMainWorktree(worktreePath, eng.GetRepoRoot()) {
+	// Don't remove the main worktree. This asks the worktree list rather than
+	// the engine: a consolidation merge runs these steps with an engine rooted
+	// in a temporary worktree, so comparing against its repo root would never
+	// match the user's main checkout and git would be asked to remove it.
+	if worktrees.IsMain(worktreePath) {
 		out.Debug("Branch %s is in main worktree, cannot remove", branchName)
 		return fmt.Errorf("branch %s is checked out in main worktree", branchName)
 	}

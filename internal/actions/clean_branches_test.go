@@ -35,6 +35,17 @@ func (e *countingDeletionEngine) DeleteRemoteMetadataForBranches(ctx context.Con
 	return e.Engine.DeleteRemoteMetadataForBranches(ctx, branchNames)
 }
 
+// fixedWorktreeEngine reports a caller-supplied worktree list, so a test can
+// describe a checkout in a worktree other than the one it runs in.
+type fixedWorktreeEngine struct {
+	engine.Engine
+	list git.WorktreeList
+}
+
+func (e *fixedWorktreeEngine) ListWorktrees(context.Context) (git.WorktreeList, error) {
+	return e.list, nil
+}
+
 func TestCleanBranches(t *testing.T) {
 	t.Parallel()
 	t.Run("deletes merged branch and updates children", func(t *testing.T) {
@@ -114,6 +125,55 @@ func TestCleanBranches(t *testing.T) {
 		require.Equal(t, "main", parent3.GetName())
 		require.Contains(t, result.BranchesWithNewParents, "branch2")
 		require.Contains(t, result.BranchesWithNewParents, "branch3")
+	})
+
+	// A merged branch checked out in the *main* working tree cannot be deleted
+	// from anywhere else: that worktree cannot be removed to free the branch,
+	// and only the engine's own HEAD gets switched to trunk automatically.
+	//
+	// It used to be reported as ready to delete anyway. Refs are deleted in one
+	// atomic batch, so git rejected the entire batch over that single branch and
+	// every other merged branch stayed behind too, under one confusing error.
+	t.Run("skips branch checked out in another worktree without aborting the batch", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+				"branch2": "main",
+			})
+
+		s.Checkout("main").
+			RunGit("merge", "branch1").
+			RunGit("merge", "branch2")
+		require.NoError(t, s.Engine.Rebuild("main"))
+
+		for i, name := range []string{"branch1", "branch2"} {
+			prInfo := testhelpers.NewTestPrInfoMerged(i+1, "main")
+			require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name), prInfo))
+		}
+
+		// Stand in for running from a linked worktree: the main working tree is
+		// somewhere else and has branch1 checked out.
+		s.Context.Engine = &fixedWorktreeEngine{
+			Engine: s.Engine,
+			list: git.WorktreeList{
+				{Path: t.TempDir(), Branch: "branch1"},
+				{Path: s.Scene.Repo.Dir, Branch: "main"},
+			},
+		}
+
+		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+			Force: true,
+		})
+		require.NoError(t, err)
+
+		require.Contains(t, result.SkippedCheckedOut, "branch1")
+		require.True(t, s.Engine.GetBranch("branch1").IsTracked())
+		require.NotContains(t, result.DeletedBranches, "branch1")
+
+		// The rest of the batch still gets cleaned.
+		require.False(t, s.Engine.GetBranch("branch2").IsTracked())
+		require.Contains(t, result.DeletedBranches, "branch2")
 	})
 
 	t.Run("does not delete branch without PR when not merged", func(t *testing.T) {

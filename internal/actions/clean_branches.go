@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -27,6 +28,7 @@ type CleanBranchesResult struct {
 	BranchesWithNewParents []string
 	SkippedInWorktree      []string // branches that couldn't be deleted from worktree
 	SkippedUnpushed        []string // branches skipped due to unpushed local changes
+	SkippedCheckedOut      []string // branches checked out in the main working tree, which cannot be removed
 }
 
 // BranchDeletionPlan contains the planned branch deletions before execution
@@ -174,10 +176,12 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 		plan, branchesWithNewParents, reparentMoves = buildDeletionPlan(ctx, filteredStatuses)
 	}
 
-	// Capture planned deletions before executeDeletions removes them from plan.branches
-	deletedBranches := make(map[string]string)
+	// Record each planned branch's reason before execution, which removes them
+	// from plan.branches. Only the names execution actually deleted are
+	// reported back, so a branch it declined to touch is not announced as gone.
+	reasons := make(map[string]string, len(plan.branches))
 	for name, info := range plan.branches {
-		deletedBranches[name] = info.reason
+		reasons[name] = info.reason
 	}
 
 	if err := applyReparentMoves(ctx, reparentMoves); err != nil {
@@ -185,14 +189,21 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 	}
 
 	// Execute deletions
-	if err := executeDeletions(ctx, plan); err != nil {
+	deleted, skippedCheckedOut, err := executeDeletions(ctx, plan)
+	if err != nil {
 		return nil, err
+	}
+
+	deletedBranches := make(map[string]string, len(deleted))
+	for _, name := range deleted {
+		deletedBranches[name] = reasons[name]
 	}
 
 	return &CleanBranchesResult{
 		DeletedBranches:        deletedBranches,
 		BranchesWithNewParents: branchesWithNewParents,
 		SkippedInWorktree:      plannedDeletion.SkippedInWorktree,
+		SkippedCheckedOut:      skippedCheckedOut,
 	}, nil
 }
 
@@ -357,13 +368,21 @@ func buildDeletionPlan(ctx *app.Context, deleteStatuses engine.DeletionStatuses)
 	return plan, branchesWithNewParents, reparentMoves
 }
 
+// errMainWorktreeCheckout marks a branch that cannot be deleted because it is
+// checked out in the main working tree, which — unlike a linked worktree —
+// cannot be removed to free the branch.
+var errMainWorktreeCheckout = errors.New("checked out in the main working tree")
+
 // executeDeletions removes worktrees and then deletes every branch that can be
 // safely removed from the plan in one engine batch. The planning pass has
 // already reparented surviving children, so branches from different
 // topological layers can share a single ref update and engine rebuild.
-func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
+//
+// Returns the branches actually deleted and those skipped because they are
+// checked out in the main working tree.
+func executeDeletions(ctx *app.Context, plan *deletionPlan) ([]string, []string, error) {
 	if len(plan.branches) == 0 {
-		return nil
+		return nil, nil, nil
 	}
 
 	eng := ctx.Engine
@@ -385,9 +404,16 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 	selectionStart := time.Now()
 	worktreesRemoved := 0
 	worktreesFailed := 0
+	var skippedCheckedOut []string
 	branchNames := selectBranchesForDeletion(plan, func(name string) bool {
 		removed, removeErr := removeWorktreeIfCheckedOut(c, name, worktrees, eng, out)
-		if removeErr != nil {
+		switch {
+		case errors.Is(removeErr, errMainWorktreeCheckout):
+			// Drop just this branch. Keeping it would fail the atomic ref
+			// batch and take every other branch's cleanup down with it.
+			skippedCheckedOut = append(skippedCheckedOut, name)
+			return false
+		case removeErr != nil:
 			out.Warn("Could not remove worktree for branch %s: %v", name, removeErr)
 			worktreesFailed++
 			return false
@@ -399,11 +425,11 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 	}, func(name string) string {
 		return getParentName(eng.GetBranch(name))
 	})
-	ctx.Logger.Info("select branches for cleanup completed durationMs=%d branchCount=%d worktreesRemoved=%d worktreesFailed=%d",
-		time.Since(selectionStart).Milliseconds(), len(branchNames), worktreesRemoved, worktreesFailed)
+	ctx.Logger.Info("select branches for cleanup completed durationMs=%d branchCount=%d worktreesRemoved=%d worktreesFailed=%d skippedCheckedOut=%d",
+		time.Since(selectionStart).Milliseconds(), len(branchNames), worktreesRemoved, worktreesFailed, len(skippedCheckedOut))
 
 	if len(branchNames) == 0 {
-		return nil
+		return nil, skippedCheckedOut, nil
 	}
 
 	branches := engine.NewBranchesBuilder(len(branchNames))
@@ -416,7 +442,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 	ctx.Logger.Info("engine delete branches completed durationMs=%d branchCount=%d ok=%v",
 		time.Since(engineStart).Milliseconds(), len(branchNames), engineErr == nil)
 	if engineErr != nil {
-		return fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(branchNames, ", "), engineErr)
+		return nil, skippedCheckedOut, fmt.Errorf("failed to delete branches [%s]: %w", strings.Join(branchNames, ", "), engineErr)
 	}
 
 	pushStart := time.Now()
@@ -431,7 +457,7 @@ func executeDeletions(ctx *app.Context, plan *deletionPlan) error {
 		out.Info("Deleted branch %s", output.BranchName(name))
 	}
 
-	return nil
+	return branchNames, skippedCheckedOut, nil
 }
 
 // selectBranchesForDeletion resolves the deletion plan without mutating Git.
@@ -629,10 +655,19 @@ func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktree
 		return "", nil // Branch not in any worktree
 	}
 
-	// Don't remove main worktree
-	if git.IsMainWorktree(worktreePath, eng.GetRepoRoot()) {
-		out.Debug("Branch %s is in main worktree, not removing", branchName)
-		return "", nil
+	// The main working tree can never be removed to free its branch.
+	if worktrees.IsMain(worktreePath) {
+		// Unless it is where we are running: DeleteBranches checks out trunk
+		// when the batch contains its own HEAD, which frees the branch.
+		if git.IsMainWorktree(worktreePath, eng.GetRepoRoot()) {
+			out.Debug("Branch %s is checked out here; deletion will switch to trunk first", branchName)
+			return "", nil
+		}
+		// Someone else's checkout. Report it rather than claiming the branch is
+		// ready to delete: refs are deleted in one atomic batch, so git rejects
+		// the whole batch over this one branch and nothing gets cleaned.
+		out.Debug("Branch %s is checked out in the main worktree at %s, not removing", branchName, worktreePath)
+		return "", errMainWorktreeCheckout
 	}
 
 	out.Debug("Removing worktree at %s for branch %s", worktreePath, branchName)

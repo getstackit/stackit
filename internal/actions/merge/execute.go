@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -393,8 +394,17 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		if branch.IsTracked() {
 			// Check if branch is checked out in a worktree and remove it first
 			// Git refuses to delete a branch that is checked out in any worktree
-			if err := removeWorktreeForBranch(ctx.Context, step.BranchName, worktrees, eng, out); err != nil {
-				out.Warn("Failed to remove worktree for branch %s: %v", step.BranchName, err)
+			removeErr := removeWorktreeForBranch(ctx.Context, step.BranchName, worktrees, eng, out)
+			if errors.Is(removeErr, errBranchInMainWorktree) {
+				// Nothing to warn about: the branch cannot be deleted from here,
+				// but the post-merge trunk sync runs in that working tree and
+				// deletes it there, switching HEAD to trunk first. Attempting it
+				// now only produces two failures the user cannot act on.
+				out.Debug("Branch %s is checked out in a main working tree; leaving it to post-merge cleanup", step.BranchName)
+				return nil
+			}
+			if removeErr != nil {
+				out.Warn("Failed to remove worktree for branch %s: %v", step.BranchName, removeErr)
 				// Continue anyway - deletion might still work if worktree is gone
 			}
 
@@ -445,6 +455,11 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 	return nil
 }
 
+// errBranchInMainWorktree marks a branch whose checkout cannot be freed here:
+// it lives in a main working tree, which cannot be removed, and which is not
+// this engine's own HEAD during a consolidation merge.
+var errBranchInMainWorktree = errors.New("branch is checked out in a main working tree")
+
 // removeWorktreeForBranch removes any worktree that has the given branch checked out.
 // This is necessary because git refuses to delete a branch that is checked out in any worktree.
 // Returns nil if no worktree exists or if removal succeeds.
@@ -463,7 +478,7 @@ func removeWorktreeForBranch(ctx context.Context, branchName string, worktrees g
 	// match the user's main checkout and git would be asked to remove it.
 	if worktrees.IsMain(worktreePath) {
 		out.Debug("Branch %s is in main worktree, cannot remove", branchName)
-		return fmt.Errorf("branch %s is checked out in main worktree", branchName)
+		return fmt.Errorf("%w: %s", errBranchInMainWorktree, worktreePath)
 	}
 
 	out.Debug("Removing worktree at %s for branch %s", worktreePath, branchName)

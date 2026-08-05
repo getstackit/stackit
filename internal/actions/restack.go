@@ -503,6 +503,11 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 	dirtyAnchors := make(map[string]bool)
 	if managed, err := eng.ListManagedWorktrees(); err == nil {
 		for _, wt := range managed {
+			if eng.WorktreeRebaseInProgress(ctx.Context, wt.Path) {
+				dirtyAnchors[wt.AnchorBranch] = true
+				ctx.Output.Warn("Holding stack rooted at %s (worktree %s has a rebase in progress)", wt.AnchorBranch, wt.Path)
+				continue
+			}
 			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
 			if inspectErr != nil {
 				ctx.Output.Warn("Holding stack rooted at %s because worktree %s could not be inspected: %v", wt.AnchorBranch, wt.Path, inspectErr)
@@ -518,15 +523,20 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 		ctx.Output.Warn("Could not inspect managed worktrees; holding no known stacks: %v", err)
 	}
 
-	// Tracked changes only here: an untracked file cannot be destroyed by the
-	// reset, so it is no reason to hold a branch back.
+	// A hard reset can remove an untracked file when the incoming commit needs
+	// that pathname, so any local change must hold the branch back.
 	dirtyBranches := make(map[string]bool)
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
 			if wt.Branch == "" || dirtyAnchors[wt.Branch] {
 				continue
 			}
-			hasChanges, inspectErr := eng.WorktreeHasTrackedChanges(ctx.Context, wt.Path)
+			if eng.WorktreeRebaseInProgress(ctx.Context, wt.Path) {
+				dirtyBranches[wt.Branch] = true
+				ctx.Output.Warn("Holding %s (worktree %s has a rebase in progress)", wt.Branch, wt.Path)
+				continue
+			}
+			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
 			if inspectErr != nil {
 				ctx.Output.Warn("Holding %s because worktree %s could not be inspected: %v", wt.Branch, wt.Path, inspectErr)
 				dirtyBranches[wt.Branch] = true

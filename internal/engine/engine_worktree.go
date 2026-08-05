@@ -67,6 +67,11 @@ func (e *engineImpl) WorktreeHasTrackedChanges(ctx context.Context, worktreePath
 	return e.git.WorktreeHasTrackedChanges(ctx, worktreePath)
 }
 
+// WorktreeRebaseInProgress checks the target worktree's own git directory.
+func (e *engineImpl) WorktreeRebaseInProgress(ctx context.Context, worktreePath string) bool {
+	return git.NewRunnerWithPath(worktreePath, nil).IsRebaseInProgress(ctx)
+}
+
 // ListIgnoredFiles returns every ignored, untracked file in a worktree.
 func (e *engineImpl) ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error) {
 	return e.git.ListIgnoredFiles(ctx, worktreePath)

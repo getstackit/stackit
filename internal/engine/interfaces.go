@@ -283,6 +283,8 @@ type WorktreeOperations interface {
 	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
 	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
 	WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error)
+	// WorktreeRebaseInProgress reports whether a rebase is active in worktreePath.
+	WorktreeRebaseInProgress(ctx context.Context, worktreePath string) bool
 	ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error)
 	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string) (path string, cleanup func(), err error)
 	// CreateTemporaryWorktreeSkipPrune is like CreateTemporaryWorktree but skips the automatic

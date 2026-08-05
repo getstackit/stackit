@@ -233,3 +233,55 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.Equal(t, "/path/to/worktree2", metas["feature-2"].Path)
 	})
 }
+
+// TestWorktreeListIsMain covers the guard that stops a cleanup path from asking
+// git to remove the user's main working tree.
+//
+// The regression: the guard compared the candidate path against the *engine's*
+// repo root. A consolidation merge runs its steps with an engine rooted in a
+// temporary worktree, so the main checkout never matched, the guard passed, and
+// `git worktree remove <main repo>` was attempted (git refuses, but only after
+// the branch deletion that followed had already been derailed).
+func TestWorktreeListIsMain(t *testing.T) {
+	t.Parallel()
+
+	mainDir := t.TempDir()
+	linkedDir := t.TempDir()
+	list := git.WorktreeList{
+		{Path: mainDir, Branch: "main"},
+		{Path: linkedDir, Branch: "feature"},
+	}
+
+	t.Run("first entry is the main worktree", func(t *testing.T) {
+		t.Parallel()
+		require.Equal(t, mainDir, list.MainPath())
+		require.True(t, list.IsMain(mainDir))
+		require.False(t, list.IsMain(linkedDir))
+	})
+
+	t.Run("main worktree is recognized regardless of any repo root", func(t *testing.T) {
+		t.Parallel()
+		// This is the actual bug: an unrelated directory standing in for the
+		// temporary merge worktree's repo root must not change the answer.
+		require.False(t, git.IsMainWorktree(mainDir, t.TempDir()))
+		require.True(t, list.IsMain(mainDir))
+	})
+
+	t.Run("unresolvable paths are treated as main", func(t *testing.T) {
+		t.Parallel()
+		missing := filepath.Join(t.TempDir(), "gone")
+		// Cannot prove it is not the main worktree, so removal must not proceed.
+		require.True(t, list.IsMain(missing))
+		require.True(t, git.WorktreeList{}.IsMain(mainDir))
+	})
+
+	t.Run("two unresolvable paths are not equal", func(t *testing.T) {
+		t.Parallel()
+		// Both EvalSymlinks calls used to be discarded, so "" == "" reported a
+		// false positive match between any two nonexistent paths.
+		require.False(t, git.IsMainWorktree(
+			filepath.Join(t.TempDir(), "gone-a"),
+			filepath.Join(t.TempDir(), "gone-b"),
+		))
+	})
+}

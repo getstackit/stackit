@@ -69,7 +69,23 @@ func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) bool {
 	if snap.worktreeInspectionFailed {
 		return true
 	}
-	for current := branch.GetName(); current != ""; {
+	current := branch.GetName()
+	visited := make(map[string]bool)
+	// Metadata should be acyclic, but cap the walk as a second line of defense
+	// against malformed or concurrently changing parent metadata — a parent
+	// loop here would hang the whole restack pass. See GetStackRootForBranch,
+	// which guards its own walk the same way.
+	maxSteps := e.BranchNames().Len() + 1
+	for range maxSteps {
+		if current == "" {
+			return false
+		}
+		if visited[current] {
+			// A cycle means the metadata cannot be trusted to say what this
+			// branch is stacked on, so no ref move is safe: hold it.
+			return true
+		}
+		visited[current] = true
 		if snap.heldBranches.Contains(current) {
 			return true
 		}
@@ -82,7 +98,9 @@ func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) bool {
 		}
 		current = state.Parent
 	}
-	return false
+	// Ran out of steps without reaching trunk: the chain is longer than the
+	// branch count allows, so treat it as untrustworthy too.
+	return true
 }
 
 // branchRev returns branch's revision from the pass snapshot, falling back to a

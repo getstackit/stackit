@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -190,6 +191,26 @@ func TestDelete(t *testing.T) {
 	})
 }
 
+func TestDeleteRespectsManagedWorktreeOwnership(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.CreateBranch("feature").Commit("feature change")
+	s.TrackBranch("feature", "main")
+	s.CreateBranch("feature-child").Commit("child change")
+	s.TrackBranch("feature-child", "feature")
+	require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", "/tmp/feature-worktree", "feature-wt"))
+	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
+
+	_, err := Action(s.Context, Options{BranchName: "feature", Force: true}, nil)
+	require.ErrorContains(t, err, "belongs to worktree feature-wt")
+
+	ctx := *s.Context
+	ctx.InManagedWorktree = true
+	ctx.WorktreeInfo = &engine.WorktreeInfo{Name: "feature-wt", Path: "/tmp/feature-worktree", AnchorBranch: "feature"}
+	_, err = Action(&ctx, Options{BranchName: "feature", Upstack: true, Force: true}, nil)
+	require.NoError(t, err)
+}
+
 func TestDeleteCleansUpWorktrees(t *testing.T) {
 	t.Parallel()
 	t.Run("cleans worktree when stack root is deleted", func(t *testing.T) {
@@ -248,7 +269,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 			BranchName: "child-branch",
 			Force:      true,
 		}, nil)
-		require.NoError(t, err)
+		require.ErrorContains(t, err, "belongs to worktree")
 
 		// Verify worktree registration is preserved
 		wt, err = s.Engine.GetWorktreeForStack("stack-root")

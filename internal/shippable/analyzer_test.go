@@ -99,3 +99,20 @@ func TestAnalyzerReadsRemoteStatusOnceForUpdateStack(t *testing.T) {
 	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
 		"update stacks should read remote branch status once for the whole stack")
 }
+
+func TestAnalyzeAllReadsRemoteStatusOnceAcrossStacks(t *testing.T) {
+	t.Parallel()
+
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"P1": "main", "P2": "main"})
+	analyzer, eng, counting := newCountingAnalyzer(t, s.Scene.Dir)
+	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P1"), testhelpers.NewTestPrInfo(101)))
+	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P2"), testhelpers.NewTestPrInfo(102)))
+
+	result, err := analyzer.AnalyzeAll(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, result.Stacks, 2)
+	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
+		"AnalyzeAll should read remote branch status once for all stacks, not once per stack")
+}

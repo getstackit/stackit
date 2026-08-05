@@ -52,13 +52,16 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 		statusMap = make(github.ChecksByBranch)
 	}
 
-	// Analyze each stack
+	// Analyze each stack, sharing one remote-status provider so remote SHAs
+	// are listed once for the whole run instead of once per stack.
+	remoteStatuses := a.remoteStatusProviderFor(ctx, stacks)
+
 	result := &AnalysisResult{
 		Stacks: make([]Stack, 0, len(stacks)),
 	}
 
 	for _, stack := range stacks {
-		analyzed := a.analyzeStack(ctx, stack, statusMap)
+		analyzed := a.analyzeStack(ctx, stack, statusMap, remoteStatuses)
 		result.Stacks = append(result.Stacks, analyzed)
 
 		// Update counts
@@ -93,12 +96,36 @@ func (a *Analyzer) AnalyzeStack(ctx context.Context, stack merge.MultiStackInfo)
 		statusMap = make(github.ChecksByBranch)
 	}
 
-	analyzed := a.analyzeStack(ctx, stack, statusMap)
+	remoteStatuses := a.remoteStatusProviderFor(ctx, []merge.MultiStackInfo{stack})
+	analyzed := a.analyzeStack(ctx, stack, statusMap, remoteStatuses)
 	return &analyzed, nil
 }
 
+// remoteStatusProviderFor builds a single remote-status provider shared across
+// the given stacks, so remote branch SHAs are listed once for all of them
+// instead of once per stack. Only branches with updateable PRs need remote
+// status; missing and draft PRs return before the not-pushed check, so
+// incomplete stacks stay offline.
+func (a *Analyzer) remoteStatusProviderFor(ctx context.Context, stacks []merge.MultiStackInfo) *branchRemoteStatusProvider {
+	var remoteStatusBranches engine.Branches
+	for _, stack := range stacks {
+		for _, branchName := range stack.AllBranches {
+			branch := a.eng.GetBranch(branchName)
+			prInfo, err := branch.GetPrInfo()
+			if err == nil && prInfo != nil && prInfo.Number() != nil && !prInfo.IsDraft() {
+				remoteStatusBranches = append(remoteStatusBranches, branch)
+			}
+		}
+	}
+	return &branchRemoteStatusProvider{
+		ctx:      ctx,
+		eng:      a.eng,
+		branches: remoteStatusBranches,
+	}
+}
+
 // analyzeStack performs the actual analysis of a single stack.
-func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo, statusMap github.ChecksByBranch) Stack {
+func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo, statusMap github.ChecksByBranch, remoteStatuses *branchRemoteStatusProvider) Stack {
 	result := Stack{
 		Stack:       stack,
 		ApprovalOK:  true,
@@ -115,22 +142,6 @@ func (a *Analyzer) analyzeStack(ctx context.Context, stack merge.MultiStackInfo,
 			// Fall back to commit subject (DefaultPRTitle returns commit subject or branch name)
 			result.PRTitle = rootBranch.DefaultPRTitle()
 		}
-	}
-
-	// Only branches with updateable PRs need remote status. Missing and draft
-	// PRs return before the not-pushed check, so keep incomplete stacks offline.
-	remoteStatusBranches := make(engine.Branches, 0, len(stack.AllBranches))
-	for _, branchName := range stack.AllBranches {
-		branch := a.eng.GetBranch(branchName)
-		prInfo, err := branch.GetPrInfo()
-		if err == nil && prInfo != nil && prInfo.Number() != nil && !prInfo.IsDraft() {
-			remoteStatusBranches = append(remoteStatusBranches, branch)
-		}
-	}
-	remoteStatuses := &branchRemoteStatusProvider{
-		ctx:      ctx,
-		eng:      a.eng,
-		branches: remoteStatusBranches,
 	}
 
 	// Check each branch in the stack

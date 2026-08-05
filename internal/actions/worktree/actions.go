@@ -559,80 +559,23 @@ func PruneAction(ctx *app.Context, opts PruneOptions) (*PruneResult, error) {
 	for _, wt := range listResult.Worktrees {
 		name := wt.displayName()
 
-		// Clean up missing worktrees (directory deleted but registration remains)
-		if !wt.Exists {
-			if wt.NeedsRepair {
-				result.Skipped = append(result.Skipped, SkippedEntry{
-					Name:   name,
-					Reason: wt.StatusMessage + "; " + repairHint(&wt),
-				})
-				continue
-			}
-			if opts.DryRun {
-				result.Pruned = append(result.Pruned, name)
-				continue
-			}
-
-			// Unregister and delete anchor branch
-			if err := RemoveAction(ctx, RemoveOptions{
-				AnchorBranch: wt.AnchorBranch,
-				Force:        true, // Force since directory is missing
-			}); err != nil {
-				result.Skipped = append(result.Skipped, SkippedEntry{
-					Name:   name,
-					Reason: fmt.Sprintf("cleanup failed: %v", err),
-				})
-				continue
-			}
-			result.Pruned = append(result.Pruned, name)
+		// One decision drives both modes. Deciding separately is what let
+		// --dry-run promise removals the real run then refused.
+		if reason := pruneRefusal(&wt, listResult.CurrentAnchor); reason != "" {
+			result.Skipped = append(result.Skipped, SkippedEntry{Name: name, Reason: reason})
 			continue
 		}
 
-		if wt.NeedsRepair {
-			result.Skipped = append(result.Skipped, SkippedEntry{
-				Name:   name,
-				Reason: wt.StatusMessage + "; " + repairHint(&wt),
-			})
-			continue
-		}
-
-		// Skip worktrees with stacked branches
-		if len(wt.RootBranches) > 0 {
-			result.Skipped = append(result.Skipped, SkippedEntry{
-				Name:   name,
-				Reason: fmt.Sprintf("has %d stacked branches", wt.StackSize),
-			})
-			continue
-		}
-
-		// Skip worktrees with uncommitted changes
-		if wt.IsDirty {
-			result.Skipped = append(result.Skipped, SkippedEntry{
-				Name:   name,
-				Reason: "has uncommitted changes",
-			})
-			continue
-		}
-
-		// Skip if we're currently in this worktree
-		if listResult.CurrentAnchor != "" && wt.AnchorBranch == listResult.CurrentAnchor {
-			result.Skipped = append(result.Skipped, SkippedEntry{
-				Name:   name,
-				Reason: "currently in this worktree",
-			})
-			continue
-		}
-
-		// This worktree is empty and can be pruned
 		if opts.DryRun {
 			result.Pruned = append(result.Pruned, name)
 			continue
 		}
 
-		// Actually remove the worktree
 		if err := RemoveAction(ctx, RemoveOptions{
 			AnchorBranch: wt.AnchorBranch,
-			Force:        false,
+			// A missing directory has nothing to preserve, and a worktree that
+			// still exists has already been refused above if it was dirty.
+			Force: !wt.Exists,
 		}); err != nil {
 			result.Skipped = append(result.Skipped, SkippedEntry{
 				Name:   name,
@@ -645,6 +588,33 @@ func PruneAction(ctx *app.Context, opts PruneOptions) (*PruneResult, error) {
 	}
 
 	return result, nil
+}
+
+// pruneRefusal returns why a worktree cannot be pruned, or "" when it can.
+//
+// The first three checks mirror RemoveAction's own guards, because prune
+// executes through RemoveAction: anything it would reject must be reported as
+// skipped rather than counted as pruned. The rest are prune's own policy —
+// it never discards work, even though RemoveAction would with Force.
+func pruneRefusal(wt *Entry, currentAnchor string) string {
+	switch {
+	case wt.NeedsRepair && (wt.RegistrationState != RegistrationStateInvalid || !wt.CanRemove):
+		// An invalid registration that RemoveAction can still clean up is
+		// pruned rather than sent to `worktree repair`, which cannot fix it.
+		return wt.StatusMessage + "; " + repairHint(wt)
+	case currentAnchor != "" && wt.AnchorBranch == currentAnchor:
+		return "currently in this worktree"
+	case len(wt.RootBranches) > 0:
+		// Checked in both modes now: a registration whose directory is gone but
+		// whose stack still has branches was reported prunable, then rejected
+		// by RemoveAction. Carry RemoveAction's guidance so the refusal still
+		// says what to do about it.
+		return fmt.Sprintf("has %d stacked branches; use 'stackit worktree detach %s' to remove the worktree while keeping them",
+			wt.StackSize, wt.displayName())
+	case wt.Exists && wt.IsDirty:
+		return "has uncommitted changes"
+	}
+	return ""
 }
 
 // AttachOptions contains options for the attach action

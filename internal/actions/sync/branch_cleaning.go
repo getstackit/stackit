@@ -148,6 +148,13 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 			output.CurrentBranch(name))
 	}
 
+	// Branches checked out in the main working tree cannot be freed by removing
+	// a worktree, so switching branches is the only way to clean them up.
+	for _, name := range result.SkippedCheckedOut {
+		ctx.Output.Warn("Cannot delete %s — it is checked out here. Switch branches, then sync again.",
+			output.CurrentBranch(name))
+	}
+
 	// Warn about branches skipped due to unpushed changes
 	for _, name := range result.SkippedUnpushed {
 		ctx.Output.Warn("Skipped %s — has unpushed local changes. Push first or delete manually with 'git branch -D %s'.",

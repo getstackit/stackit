@@ -386,8 +386,10 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 				NeedsRestack: !statuses.IsUpToDate(branch) && !branch.IsTrunk(),
 			}
 
-			// Parent
-			if parent := branch.GetParent(); parent != nil {
+			// Worktree anchors are an implementation detail. JSON consumers only
+			// receive visible branches, so walk past anchors to avoid emitting a
+			// parent that does not exist in the result.
+			if parent := visibleTreeParent(branch); parent != nil {
 				info.Parent = parent.GetName()
 			}
 
@@ -397,11 +399,8 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 			}
 
 			// Children
-			children := graph.ChildBranches(branch)
-			for _, child := range children {
-				if !child.IsWorktreeAnchor() {
-					info.Children = append(info.Children, child.GetName())
-				}
+			for _, child := range visibleTreeChildren(graph, branch) {
+				info.Children = append(info.Children, child.GetName())
 			}
 
 			// Commits and diff stats from the batched stats resolved above.
@@ -474,4 +473,28 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 	})
 
 	return result
+}
+
+func visibleTreeParent(branch engine.Branch) *engine.Branch {
+	parent := branch.GetParent()
+	for parent != nil && parent.IsWorktreeAnchor() {
+		parent = parent.GetParent()
+	}
+	return parent
+}
+
+func visibleTreeChildren(graph *engine.StackGraph, branch engine.Branch) engine.Branches {
+	children := engine.NewBranchesBuilder(0)
+	var collect func(engine.Branch)
+	collect = func(parent engine.Branch) {
+		for _, child := range graph.ChildBranches(parent) {
+			if child.IsWorktreeAnchor() {
+				collect(child)
+				continue
+			}
+			children.Add(child)
+		}
+	}
+	collect(branch)
+	return children.Build()
 }

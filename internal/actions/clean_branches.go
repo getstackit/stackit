@@ -630,7 +630,7 @@ func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktree
 	}
 
 	// Don't remove main worktree
-	if git.IsMainWorktree(worktreePath, eng.GetRepoRoot()) {
+	if worktrees.IsMain(worktreePath) {
 		out.Debug("Branch %s is in main worktree, not removing", branchName)
 		return "", nil
 	}

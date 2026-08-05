@@ -15,7 +15,7 @@ const (
 )
 
 // resetWorktreeIfClean resets a worktree's working directory to match its
-// branch ref's new content, unless the worktree had changes to TRACKED files
+// branch ref's new content, unless the worktree had local changes
 // before this restack pass touched anything. dirtyWorktrees is captured once
 // up front (see restackSnapshot.dirtyWorktrees) rather than checked here,
 // because by the time any branch's reset runs, restack has already moved that
@@ -24,11 +24,7 @@ const (
 // dirty, silently disabling the reset for every branch, not just genuinely
 // dirty ones.
 //
-// Untracked files must not count: `git reset --hard` cannot destroy them, so
-// treating them as dirty suppresses a reset that was never a threat and leaves
-// the worktree holding the old commit's content under a moved ref.
-//
-// Skipping the reset on a worktree with real tracked changes leaves it out of
+// Skipping the reset on a worktree with changes leaves it out of
 // sync with its ref rather than discarding the user's work. That state is still
 // a footgun — `git status` shows the new commit's files as deleted — so callers
 // should avoid moving the ref at all in that case; see skipDirtyWorktreeStacks.

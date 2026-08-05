@@ -297,6 +297,46 @@ func TestCleanBranches(t *testing.T) {
 		require.True(t, plan.UnpushedBranches["branch1"], "branch1 should be marked as having unpushed changes")
 	})
 
+	t.Run("marks a closed PR with a deleted remote branch as unpushed", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+			})
+
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
+		require.NoError(t, err)
+		require.NoError(t, s.Scene.Repo.PushBranch("origin", "main"))
+		require.NoError(t, s.Scene.Repo.PushBranch("origin", "branch1"))
+
+		s.Checkout("branch1").CommitChange("follow-up.txt", "local-only follow-up").Checkout("main")
+		require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "--delete", "branch1"))
+		require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoClosed(1)))
+
+		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{Force: true})
+		require.NoError(t, err)
+		require.Contains(t, plan.BranchesToDelete, "branch1")
+		require.True(t, plan.UnpushedBranches["branch1"], "missing remote must preserve unverifiable local work")
+	})
+
+	t.Run("does not mark a merged PR with a deleted remote branch as unpushed", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{"branch1": "main"})
+
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
+		require.NoError(t, err)
+		require.NoError(t, s.Scene.Repo.PushBranch("origin", "main"))
+		require.NoError(t, s.Scene.Repo.PushBranch("origin", "branch1"))
+		require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "--delete", "branch1"))
+		require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main")))
+
+		plan, err := actions.PlanBranchDeletions(s.Context, actions.CleanBranchesOptions{Force: true})
+		require.NoError(t, err)
+		require.Contains(t, plan.BranchesToDelete, "branch1")
+		require.False(t, plan.UnpushedBranches["branch1"])
+	})
+
 	t.Run("planning does not reparent surviving children", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).

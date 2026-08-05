@@ -67,6 +67,11 @@ func (e *engineImpl) WorktreeHasTrackedChanges(ctx context.Context, worktreePath
 	return e.git.WorktreeHasTrackedChanges(ctx, worktreePath)
 }
 
+// WorktreeRebaseInProgress checks the target worktree's own git directory.
+func (e *engineImpl) WorktreeRebaseInProgress(ctx context.Context, worktreePath string) bool {
+	return git.NewRunnerWithPath(worktreePath, nil).IsRebaseInProgress(ctx)
+}
+
 // ListIgnoredFiles returns every ignored, untracked file in a worktree.
 func (e *engineImpl) ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error) {
 	return e.git.ListIgnoredFiles(ctx, worktreePath)
@@ -86,6 +91,36 @@ func (e *engineImpl) PruneWorktrees(ctx context.Context) error {
 	e.tempWorktreeNeedsPrune = false
 	e.tempWorktreePrunedOnce = true
 	return nil
+}
+
+// PruneOrphanedWorktreePathRefs removes reverse worktree path claims with no
+// matching forward registration, left behind by interrupted legacy cleanup.
+func (e *engineImpl) PruneOrphanedWorktreePathRefs(ctx context.Context) (int, error) {
+	forward, err := e.git.ListRefs(git.WorktreeRefPrefix)
+	if err != nil {
+		return 0, fmt.Errorf("list worktree registrations: %w", err)
+	}
+	pathRefs, err := e.git.ListRefs(git.WorktreePathRefPrefix)
+	if err != nil {
+		return 0, fmt.Errorf("list worktree path registrations: %w", err)
+	}
+	forwardSHAs := make(map[string]bool, len(forward))
+	for _, sha := range forward {
+		forwardSHAs[sha] = true
+	}
+	orphaned := make([]string, 0)
+	for ref, sha := range pathRefs {
+		if !forwardSHAs[sha] {
+			orphaned = append(orphaned, ref)
+		}
+	}
+	if len(orphaned) == 0 {
+		return 0, nil
+	}
+	if err := e.git.DeleteRefsBatch(ctx, orphaned); err != nil {
+		return 0, fmt.Errorf("delete orphaned worktree path registrations: %w", err)
+	}
+	return len(orphaned), nil
 }
 
 // CreateTemporaryWorktree creates a temporary directory and adds a detached worktree
@@ -212,7 +247,7 @@ func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, 
 	if err != nil {
 		return fmt.Errorf("failed to get absolute worktree path: %w", err)
 	}
-	canonicalPath, err := canonicalWorktreePath(absPath)
+	canonicalPath, err := git.CanonicalWorktreePath(absPath)
 	if err != nil {
 		return fmt.Errorf("failed to canonicalize worktree path: %w", err)
 	}
@@ -228,7 +263,7 @@ func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, 
 		return fmt.Errorf("failed to list worktree registrations: %w", err)
 	}
 	for _, worktree := range worktrees {
-		worktreePath, pathErr := canonicalWorktreePath(worktree.Path)
+		worktreePath, pathErr := git.CanonicalWorktreePath(worktree.Path)
 		if pathErr != nil {
 			return fmt.Errorf("failed to canonicalize registered worktree path %s: %w", worktree.Path, pathErr)
 		}
@@ -246,21 +281,6 @@ func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, 
 	}
 
 	return e.git.WriteWorktreeMeta(anchorBranch, meta)
-}
-
-func canonicalWorktreePath(path string) (string, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	resolvedPath, err := filepath.EvalSymlinks(absPath)
-	if err == nil {
-		return filepath.Clean(resolvedPath), nil
-	}
-	if !os.IsNotExist(err) {
-		return "", err
-	}
-	return filepath.Clean(absPath), nil
 }
 
 // UnregisterWorktree removes worktree registration for a stack root
@@ -352,7 +372,10 @@ func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
 
 	current := branchName
 	visited := make(map[string]bool)
-	for {
+	// Metadata should be acyclic, but cap the walk as a second line of
+	// defense against malformed or concurrently changing parent metadata.
+	maxSteps := e.BranchNames().Len() + 1
+	for range maxSteps {
 		if visited[current] {
 			return ""
 		}
@@ -380,6 +403,7 @@ func (e *engineImpl) GetStackRootForBranch(branch Branch) string {
 
 		current = parent
 	}
+	return ""
 }
 
 // IsInManagedWorktree checks if the current directory is a stackit-managed worktree.
@@ -407,19 +431,23 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 		return false, nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
-	// List all managed worktrees and check if current path matches
+	canonicalCurrentPath, err := git.CanonicalWorktreePath(currentPath)
+	if err != nil {
+		return false, nil, fmt.Errorf("failed to canonicalize current worktree path: %w", err)
+	}
+
+	// List all managed worktrees and check if current path matches.
 	worktrees, err := e.ListManagedWorktrees()
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to list managed worktrees: %w", err)
 	}
 
 	for _, wt := range worktrees {
-		// Compare paths (normalize both)
-		wtPath, err := filepath.Abs(wt.Path)
+		wtPath, err := git.CanonicalWorktreePath(wt.Path)
 		if err != nil {
 			continue
 		}
-		if wtPath == currentPath {
+		if wtPath == canonicalCurrentPath {
 			return true, &WorktreeInfo{
 				Name:         wt.Name,
 				Path:         wt.Path,

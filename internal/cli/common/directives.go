@@ -34,8 +34,11 @@ func HandleCheckoutResult(out output.Output, result actions.CheckoutResult) bool
 	return false
 }
 
-// CompleteCheckout handles a CheckoutAction result, including the fallback
-// checkout path when shell integration cannot switch worktrees for the caller.
+// CompleteCheckout handles a CheckoutAction result, including a worktree switch
+// when shell integration is available. Without shell integration, retain the
+// regular-checkout fallback only when the target is not already checked out in
+// another worktree; Git permits a branch to be checked out by only one
+// worktree at a time.
 func CompleteCheckout(ctx *app.Context, result actions.CheckoutResult, fallbackOpts actions.CheckoutOptions, handler actions.CheckoutHandler) error {
 	if HandleCheckoutResult(ctx.Output, result) {
 		return nil
@@ -44,15 +47,20 @@ func CompleteCheckout(ctx *app.Context, result actions.CheckoutResult, fallbackO
 		return nil
 	}
 
+	worktrees, err := ctx.Engine.ListWorktrees(ctx.Context)
+	if err == nil && worktrees.PathForBranch(result.TargetBranch) != "" {
+		return nil
+	}
+
 	if !fallbackOpts.CheckoutTrunk {
 		fallbackOpts.BranchName = result.TargetBranch
 	}
 	fallbackOpts.SkipWorktreeSwitch = true
-	_, err := actions.CheckoutAction(ctx, fallbackOpts, handler)
+	_, err = actions.CheckoutAction(ctx, fallbackOpts, handler)
 	return err
 }
 
-// Checkout runs CheckoutAction and completes any worktree-switch fallback.
+// Checkout runs CheckoutAction and completes any worktree switch.
 func Checkout(ctx *app.Context, opts actions.CheckoutOptions, handler actions.CheckoutHandler) (actions.CheckoutResult, error) {
 	result, err := actions.CheckoutAction(ctx, opts, handler)
 	if err != nil {

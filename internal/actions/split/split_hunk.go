@@ -31,6 +31,7 @@ type splitByHunkEngine interface {
 	engine.BranchWriter
 	engine.PRManager
 	engine.StackRewriter
+	splitStashEngine
 }
 
 // splitByHunkWithHandler splits a branch by interactively staging hunks using an InteractiveHandler.
@@ -402,12 +403,16 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	if err != nil {
 		return fmt.Errorf("failed to stash staged changes: %w", err)
 	}
+	stashRef, err := splitStashRef(gitCtx, eng, stashName)
+	if err != nil {
+		return err
+	}
 
 	// Track stash state for cleanup
 	stashPopped := false
 	cleanupStash := func() {
 		if !stashPopped {
-			_ = eng.StashPop(gitCtx)
+			_ = eng.StashPopRef(gitCtx, stashRef)
 			stashPopped = true
 		}
 	}
@@ -439,7 +444,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Pop the stash to get the parent branch changes
-	if err := eng.StashPop(gitCtx); err != nil {
+	if err := eng.StashPopRef(gitCtx, stashRef); err != nil {
 		return fmt.Errorf("failed to pop stash: %w. Recovery: run 'git stash pop' to restore changes", err)
 	}
 	stashPopped = true
@@ -692,12 +697,16 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	if err != nil {
 		return fmt.Errorf("failed to stash staged changes: %w", err)
 	}
+	stashRef, err := splitStashRef(gitCtx, eng, stashName)
+	if err != nil {
+		return err
+	}
 
 	// Track stash state for cleanup - once stash is pushed, we need to pop it on any error
 	stashPopped := false
 	cleanupStash := func() {
 		if !stashPopped {
-			_ = eng.StashPop(gitCtx)
+			_ = eng.StashPopRef(gitCtx, stashRef)
 			stashPopped = true
 		}
 	}
@@ -743,7 +752,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	}
 
 	// Pop the stash to get the extract changes back
-	if err := eng.StashPop(gitCtx); err != nil {
+	if err := eng.StashPopRef(gitCtx, stashRef); err != nil {
 		// Stash pop failed - this leaves the repo in a partially completed state.
 		// The original branch has been updated and the child branch exists but has no commit.
 		// Provide guidance on how to recover.

@@ -56,9 +56,11 @@ func resolveGitDir(repoRoot string) string {
 	}
 	gitDir = strings.TrimSpace(gitDir)
 	if !filepath.IsAbs(gitDir) {
-		gitDir = filepath.Join(repoRoot, gitDir)
+		// A relative gitdir is relative to the .git file, which may be in an
+		// ancestor when the caller supplied a repository subdirectory.
+		gitDir = filepath.Join(filepath.Dir(gitPath), gitDir)
 	}
-	return gitDir
+	return filepath.Clean(gitDir)
 }
 
 func findDotGit(path string) string {

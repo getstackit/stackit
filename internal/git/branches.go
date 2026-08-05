@@ -200,6 +200,24 @@ func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision strin
 	return nil
 }
 
+func (r *runner) UpdateBranchRefCAS(ctx context.Context, branchName, revision, expectedOld string) error {
+	sha, err := r.resolveRefSHA(revision)
+	if err != nil {
+		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)
+	}
+	if expectedOld == "" {
+		return fmt.Errorf("expected old revision is required when updating branch %s", branchName)
+	}
+	if err := r.UpdateRefsBatch(ctx, []RefUpdate{{
+		RefName: "refs/heads/" + branchName,
+		NewSHA:  sha,
+		OldSHA:  expectedOld,
+	}}); err != nil {
+		return fmt.Errorf("failed to compare-and-swap branch ref: %w", err)
+	}
+	return nil
+}
+
 func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
 	branch, err := r.GetCurrentBranch()
 	if err == nil {

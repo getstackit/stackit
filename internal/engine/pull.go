@@ -114,27 +114,45 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 		return fmt.Errorf("failed to get remote SHA: %w", err)
 	}
 
-	// Checkout trunk
-	trunkBranch := e.Trunk()
-	if err := e.CheckoutBranch(ctx, trunkBranch); err != nil {
-		return fmt.Errorf("failed to checkout trunk: %w", err)
+	oldTrunk, err := e.git.GetRevision(trunk)
+	if err != nil {
+		return fmt.Errorf("failed to get local trunk revision: %w", err)
 	}
-
-	// Hard reset to remote
-	if err := e.git.HardReset(ctx, remoteSha); err != nil {
-		// Try to switch back
-		if currentBranch != "" {
-			currentBranchObj := e.GetBranch(currentBranch)
-			_ = e.CheckoutBranch(ctx, currentBranchObj)
+	worktrees, err := e.git.ListWorktrees(ctx)
+	if err != nil {
+		return fmt.Errorf("refusing to reset trunk: cannot inspect worktrees: %w", err)
+	}
+	trunkWorktree := worktrees.PathForBranch(trunk)
+	if trunkWorktree != "" {
+		dirty, statusErr := e.git.WorktreeHasUncommittedChanges(ctx, trunkWorktree)
+		if statusErr != nil {
+			return fmt.Errorf("refusing to reset trunk: cannot inspect worktree %s: %w", trunkWorktree, statusErr)
 		}
-		return fmt.Errorf("failed to reset trunk: %w", err)
+		if dirty {
+			return fmt.Errorf("refusing to reset trunk: worktree %s has uncommitted changes", trunkWorktree)
+		}
 	}
 
-	// Switch back to original branch
-	if currentBranch != "" && currentBranch != trunk {
-		currentBranchObj := e.GetBranch(currentBranch)
-		if err := e.CheckoutBranch(ctx, currentBranchObj); err != nil {
-			return fmt.Errorf("failed to switch back: %w", err)
+	// Never check out the shared trunk in an analysis worktree. Move the ref
+	// with a CAS, then synchronize its clean holder; if this engine is itself
+	// detached, advance only its detached HEAD to the same remote revision.
+	if err := e.git.UpdateBranchRefCAS(ctx, trunk, remoteSha, oldTrunk); err != nil {
+		return fmt.Errorf("failed to reset trunk ref: %w", err)
+	}
+	if currentBranch == trunk {
+		if err := e.git.HardReset(ctx, "HEAD"); err != nil {
+			return fmt.Errorf("reset trunk ref but failed to reset current worktree: %w", err)
+		}
+	} else {
+		if trunkWorktree != "" {
+			if err := e.git.ResetWorktreeWorkingDir(ctx, trunkWorktree); err != nil {
+				return fmt.Errorf("reset trunk ref but failed to reset clean worktree %s: %w", trunkWorktree, err)
+			}
+		}
+		if currentBranch == "" {
+			if err := e.git.HardReset(ctx, remoteSha); err != nil {
+				return fmt.Errorf("reset trunk ref but failed to advance detached worktree: %w", err)
+			}
 		}
 	}
 

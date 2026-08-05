@@ -573,6 +573,13 @@ func TestMoveAction(t *testing.T) {
 		writeAndCommit(t, s, "conflict.txt", "branch2 content\n", "branch2 change")
 		s.TrackBranch("branch2", "main")
 
+		// Keep the new parent checked out elsewhere while the conflict is
+		// resolved. Continue must not treat this sibling worktree as a reason
+		// to abandon the interrupted rebase or fail its final checkout.
+		sibling := filepath.Join(t.TempDir(), "branch1-sibling")
+		s.RunGit("worktree", "add", sibling, "branch1")
+		t.Cleanup(func() { _ = s.Scene.Repo.RunGitCommand("worktree", "remove", "--force", sibling) })
+
 		// Attempt to move branch2 onto branch1 — this will conflict on conflict.txt.
 		// The interactive handler opts to proceed and resolve manually.
 		h := &interactiveTestHandler{proceed: true}

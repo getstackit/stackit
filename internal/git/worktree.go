@@ -22,26 +22,41 @@ const WorktreeRefPrefix = "refs/stackit/worktrees/"
 const WorktreePathRefPrefix = "refs/stackit/worktree-paths/"
 
 func worktreePathRef(path string) string {
-	if canonicalPath, err := canonicalWorktreePath(path); err == nil {
+	if canonicalPath, err := CanonicalWorktreePath(path); err == nil {
 		path = canonicalPath
 	}
 	hash := sha256.Sum256([]byte(path))
 	return fmt.Sprintf("%s%x", WorktreePathRefPrefix, hash)
 }
 
-func canonicalWorktreePath(path string) (string, error) {
+// CanonicalWorktreePath returns an absolute path with every existing path
+// component resolved. It deliberately resolves the deepest existing ancestor
+// instead of requiring the final worktree directory to exist: registration
+// happens after creation but unregistering often happens after removal. Using
+// the same canonical spelling in both cases keeps the reverse registration
+// ref addressable through symlinked bases such as /tmp on macOS.
+func CanonicalWorktreePath(path string) (string, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}
-	resolvedPath, err := filepath.EvalSymlinks(absPath)
-	if err == nil {
-		return filepath.Clean(resolvedPath), nil
+
+	for existing := absPath; ; existing = filepath.Dir(existing) {
+		resolvedPath, evalErr := filepath.EvalSymlinks(existing)
+		if evalErr == nil {
+			remainder, relErr := filepath.Rel(existing, absPath)
+			if relErr != nil {
+				return "", relErr
+			}
+			return filepath.Clean(filepath.Join(resolvedPath, remainder)), nil
+		}
+		if !os.IsNotExist(evalErr) {
+			return "", evalErr
+		}
+		if parent := filepath.Dir(existing); parent == existing {
+			return "", evalErr
+		}
 	}
-	if !os.IsNotExist(err) {
-		return "", err
-	}
-	return filepath.Clean(absPath), nil
 }
 
 // Worktree represents a single entry from `git worktree list`.
@@ -167,7 +182,9 @@ func (r *runner) RemoveWorktree(ctx context.Context, path string) error {
 }
 
 func (r *runner) ForceRemoveWorktree(ctx context.Context, path string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", path)
+	// Git requires --force twice when the worktree is locked, in addition to
+	// using it to discard local changes.
+	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", "--force", path)
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}
@@ -179,7 +196,8 @@ func (r *runner) ForceRemoveWorktree(ctx context.Context, path string) error {
 // up many branches should call this once and reuse the result rather than
 // invoking git per branch — see WorktreeList.PathForBranch.
 func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
-	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain")
+	// -z is required because worktree paths may legally contain newlines.
+	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -196,7 +214,7 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 		}
 		current = Worktree{}
 	}
-	for line := range strings.SplitSeq(output, "\n") {
+	for line := range strings.SplitSeq(output, "\x00") {
 		switch {
 		case line == "":
 			flush()
@@ -311,37 +329,11 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 // GetWorktreePathForBranch returns the worktree path where a branch is checked out.
 // Returns empty string if the branch is not checked out in any worktree.
 func (r *runner) GetWorktreePathForBranch(ctx context.Context, branchName string) (string, error) {
-	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain")
+	worktrees, err := r.ListWorktrees(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to list worktrees: %w", err)
 	}
-
-	if output == "" {
-		return "", nil
-	}
-
-	// Parse porcelain output to find worktree with this branch
-	// Format:
-	// worktree /path/to/worktree
-	// HEAD abc123
-	// branch refs/heads/branchname
-	// (blank line)
-	lines := strings.Split(output, "\n")
-	var currentWorktree string
-	targetRef := "refs/heads/" + branchName
-
-	for _, line := range lines {
-		if after, ok := strings.CutPrefix(line, "worktree "); ok {
-			currentWorktree = after
-		} else if after, ok := strings.CutPrefix(line, "branch "); ok {
-			branch := after
-			if branch == targetRef && currentWorktree != "" {
-				return currentWorktree, nil
-			}
-		}
-	}
-
-	return "", nil
+	return worktrees.PathForBranch(branchName), nil
 }
 
 // ResetWorktreeWorkingDir resets a worktree's working directory to match HEAD.

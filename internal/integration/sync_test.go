@@ -120,7 +120,7 @@ func TestSync(t *testing.T) {
 		meta, err := eng.Git().ReadMetadata(mergeBranch)
 		require.NoError(t, err)
 		prNum := 100
-		state := git.PRStateClosed
+		state := git.PRStateMerged
 		base := mainBranchName
 		meta = meta.WithPrInfo(&git.PrInfoPersistence{
 			Number: &prNum,

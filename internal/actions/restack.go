@@ -145,18 +145,12 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 
 	ctx.Logger.Info("restack started branchCount=%v", branchCount)
 
-	// Parallel mode dispatches each group to a worktree that recomputes its own
-	// plan, so the plan resolved here does not decide what those workers do.
+	// Restack is repository reconciliation, like sync: it may run from any
+	// worktree, but the engine holds branches whose checked-out worktree is
+	// dirty or cannot be inspected. Content-editing actions keep the ownership
+	// guard; applying it here would make unrelated main-repo stacks an
+	// all-or-nothing casualty of one managed worktree.
 	parallelDispatch := opts.Parallel && len(plan.groups) > 1
-	if !parallelDispatch {
-		branches := engine.Branches{}
-		for _, group := range plan.groups {
-			branches = branches.Concat(group.sortedBranches)
-		}
-		if err := EnsureCanModifyHere(ctx, branches...); err != nil {
-			return err
-		}
-	}
 
 	// Take snapshot before modifying the repository. Skip it when no branch
 	// actually needs a rebase: an up-to-date restack mutates nothing, so there
@@ -509,26 +503,52 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 	dirtyAnchors := make(map[string]bool)
 	if managed, err := eng.ListManagedWorktrees(); err == nil {
 		for _, wt := range managed {
-			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path); hasChanges {
+			if eng.WorktreeRebaseInProgress(ctx.Context, wt.Path) {
+				dirtyAnchors[wt.AnchorBranch] = true
+				ctx.Output.Warn("Holding stack rooted at %s (worktree %s has a rebase in progress)", wt.AnchorBranch, wt.Path)
+				continue
+			}
+			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+			if inspectErr != nil {
+				ctx.Output.Warn("Holding stack rooted at %s because worktree %s could not be inspected: %v", wt.AnchorBranch, wt.Path, inspectErr)
+				dirtyAnchors[wt.AnchorBranch] = true
+				continue
+			}
+			if hasChanges {
 				dirtyAnchors[wt.AnchorBranch] = true
 				ctx.Output.Warn("Skipping stack rooted at %s (worktree %s has uncommitted changes)", wt.AnchorBranch, wt.Path)
 			}
 		}
+	} else {
+		ctx.Output.Warn("Could not inspect managed worktrees; holding no known stacks: %v", err)
 	}
 
-	// Tracked changes only here: an untracked file cannot be destroyed by the
-	// reset, so it is no reason to hold a branch back.
+	// A hard reset can remove an untracked file when the incoming commit needs
+	// that pathname, so any local change must hold the branch back.
 	dirtyBranches := make(map[string]bool)
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
 			if wt.Branch == "" || dirtyAnchors[wt.Branch] {
 				continue
 			}
-			if hasChanges, _ := eng.WorktreeHasTrackedChanges(ctx.Context, wt.Path); hasChanges {
+			if eng.WorktreeRebaseInProgress(ctx.Context, wt.Path) {
+				dirtyBranches[wt.Branch] = true
+				ctx.Output.Warn("Holding %s (worktree %s has a rebase in progress)", wt.Branch, wt.Path)
+				continue
+			}
+			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+			if inspectErr != nil {
+				ctx.Output.Warn("Holding %s because worktree %s could not be inspected: %v", wt.Branch, wt.Path, inspectErr)
+				dirtyBranches[wt.Branch] = true
+				continue
+			}
+			if hasChanges {
 				dirtyBranches[wt.Branch] = true
 				ctx.Output.Warn("Skipping %s (worktree %s has uncommitted changes; commit or stash them, then restack again)", wt.Branch, wt.Path)
 			}
 		}
+	} else {
+		ctx.Output.Warn("Could not inspect Git worktrees; restack safety checks were incomplete: %v", err)
 	}
 
 	if len(dirtyAnchors) == 0 && len(dirtyBranches) == 0 {

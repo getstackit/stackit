@@ -125,6 +125,31 @@ func TestIsMainWorktree(t *testing.T) {
 }
 
 func TestWorktreeRegistry(t *testing.T) {
+	t.Run("removes reverse path registration after symlinked worktree is gone", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+
+		targetBase := t.TempDir()
+		linkBase := filepath.Join(t.TempDir(), "linked-base")
+		require.NoError(t, os.Symlink(targetBase, linkBase))
+		worktreePath := filepath.Join(linkBase, "worktree")
+
+		require.NoError(t, runner.WriteWorktreeMeta("first", &git.WorktreeMeta{
+			Path:         worktreePath,
+			AnchorBranch: "first",
+		}))
+		// Match real cleanup ordering: by this point the worktree directory is
+		// gone, while its symlinked base still exists.
+		require.NoError(t, runner.DeleteWorktreeMeta(context.Background(), "first"))
+
+		// Re-registration at the same path must not collide with an orphaned
+		// reverse path ref hashed with a different spelling.
+		require.NoError(t, runner.WriteWorktreeMeta("second", &git.WorktreeMeta{
+			Path:         worktreePath,
+			AnchorBranch: "second",
+		}))
+	})
+
 	t.Run("write and read worktree metadata", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)

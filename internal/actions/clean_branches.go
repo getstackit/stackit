@@ -251,9 +251,15 @@ func identifyBranchesToDelete(ctx *app.Context, opts CleanBranchesOptions) (engi
 		// Check if local branch has unpushed changes relative to remote
 		branch := eng.GetBranch(name)
 		remoteStatus := remoteStatuses[name]
-		if remoteStatus.Ahead() || remoteStatus.Diverged() {
+		// A missing remote branch cannot prove that the local tip was pushed.
+		// This is common after a closed PR's remote branch is deleted; treating
+		// it as clean would make non-interactive sync discard local follow-up
+		// commits without a prompt. Preserve the branch until an explicit user
+		// action decides otherwise.
+		if remoteStatus.Ahead() || remoteStatus.Diverged() ||
+			(status.Kind == engine.DeletionReasonClosedPR && remoteStatus.MissingRemote()) {
 			status.HasUnpushedChanges = true
-			ctx.Logger.Info("identifyBranchesToDelete branch has unpushed changes branch=%v ahead=%v diverged=%v", name, remoteStatus.Ahead(), remoteStatus.Diverged())
+			ctx.Logger.Info("identifyBranchesToDelete branch has unpushed or unverifiable changes branch=%v ahead=%v diverged=%v missingRemote=%v", name, remoteStatus.Ahead(), remoteStatus.Diverged(), remoteStatus.MissingRemote())
 		}
 
 		deleteStatuses[name] = status

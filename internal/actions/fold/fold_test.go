@@ -47,6 +47,33 @@ func TestFoldAction(t *testing.T) {
 		require.Contains(t, logOutput, "change on branch2")
 	})
 
+	t.Run("refuses when parent is checked out in another worktree", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+				"branch2": "branch1",
+			})
+		s.Checkout("branch2")
+		branch2Before, err := s.Engine.GetBranch("branch2").GetRevision()
+		require.NoError(t, err)
+
+		worktreePath := filepath.Join(t.TempDir(), "parent")
+		require.NoError(t, s.Scene.Repo.RunGitCommand("worktree", "add", worktreePath, "branch1"))
+		t.Cleanup(func() { _ = s.Scene.Repo.RunGitCommand("worktree", "remove", "--force", worktreePath) })
+
+		err = Action(s.Context, Options{Keep: false}, nil)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "failed to checkout parent branch")
+
+		branch2After, err := s.Engine.GetBranch("branch2").GetRevision()
+		require.NoError(t, err)
+		require.Equal(t, branch2Before, branch2After, "fold must not delete or rewrite its branch")
+		current, err := s.Scene.Repo.CurrentBranchName()
+		require.NoError(t, err)
+		require.Equal(t, "branch2", current, "fold must not leave the caller detached")
+	})
+
 	t.Run("reparents children when folding branch", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).

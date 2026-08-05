@@ -69,26 +69,27 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 	if err == nil && isRemoteAhead {
 		// Save current branch/detached HEAD immediately before mutating refs.
 		currentBranch, err := r.GetCurrentBranch()
-		var currentRev string
 		if err != nil {
 			currentBranch = ""
-			currentRev, _ = r.GetCurrentRevision(ctx)
 		}
 
-		// Before updating the ref, check if this branch is checked out in another worktree.
-		// update-ref is global and will affect all worktrees, so we need to sync any
-		// worktree that has this branch checked out to avoid corrupting its index/working tree.
-		//
-		// IMPORTANT: We must check for uncommitted changes BEFORE the update-ref,
-		// because after update-ref the worktree will appear to have inverse changes
-		// (old content vs new HEAD), which would cause the check to fail.
-		var otherWorktreePath string
-		var otherWorktreeClean bool
-		if currentBranch != branchName {
-			otherWorktreePath, _ = r.GetWorktreePathForBranch(ctx, branchName)
-			if otherWorktreePath != "" {
-				hasChanges, err := r.WorktreeHasUncommittedChanges(ctx, otherWorktreePath)
-				otherWorktreeClean = err == nil && !hasChanges
+		// A ref update is global, but the checked-out worktree's index and
+		// working directory are local. Never move a checked-out branch unless
+		// its holder is known clean and can be reset immediately afterwards.
+		// Importantly, an inspection failure is unsafe too: it must not silently
+		// turn into a ref move that strands an unknown worktree on old content.
+		worktrees, err := r.ListWorktrees(ctx)
+		if err != nil {
+			return PullConflict, fmt.Errorf("refusing to update %s: cannot inspect worktrees: %w", branchName, err)
+		}
+		worktreePath := worktrees.PathForBranch(branchName)
+		if worktreePath != "" {
+			hasChanges, statusErr := r.WorktreeHasUncommittedChanges(ctx, worktreePath)
+			if statusErr != nil {
+				return PullConflict, fmt.Errorf("refusing to update %s: cannot inspect worktree %s: %w", branchName, worktreePath, statusErr)
+			}
+			if hasChanges {
+				return PullConflict, fmt.Errorf("refusing to update %s: worktree %s has uncommitted changes", branchName, worktreePath)
 			}
 		}
 
@@ -107,15 +108,14 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 		// so hard reset is safe here.
 		if currentBranch == branchName {
 			_ = r.HardReset(ctx, "HEAD")
-		} else if currentRev != "" {
-			_ = r.CheckoutDetached(ctx, currentRev)
 		}
 
-		// If this branch is checked out in another worktree that was clean before
-		// the update-ref, we need to reset that worktree to match the new HEAD.
-		// Otherwise the worktree's index/working tree will appear as inverse changes.
-		if otherWorktreePath != "" && otherWorktreeClean {
-			_ = r.ResetWorktreeWorkingDir(ctx, otherWorktreePath)
+		// If this branch is checked out in another clean worktree, reset it to
+		// match the ref we just moved. The clean check above makes this safe.
+		if worktreePath != "" && currentBranch != branchName {
+			if err := r.ResetWorktreeWorkingDir(ctx, worktreePath); err != nil {
+				return PullConflict, fmt.Errorf("updated %s but failed to reset clean worktree %s: %w", branchName, worktreePath, err)
+			}
 		}
 
 		return PullDone, nil

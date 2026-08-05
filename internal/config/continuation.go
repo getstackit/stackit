@@ -15,6 +15,10 @@ type ContinuationState struct {
 	BranchesToSync        []string `json:"branchesToSync,omitempty"` // For future sync command
 	CurrentBranchOverride string   `json:"currentBranchOverride,omitempty"`
 	RebasedBranchBase     string   `json:"rebasedBranchBase,omitempty"`
+	// ExpectedBranchRevision is the branch tip before a conflict-driven rebase.
+	// Continue uses it as a compare-and-swap guard so it cannot overwrite work
+	// that another worktree added while the conflict was being resolved.
+	ExpectedBranchRevision string `json:"expectedBranchRevision,omitempty"`
 	// ReturnToBranch is the branch the interrupted command should leave the
 	// user on once the conflict workflow finishes, when that differs from the
 	// branch being rebased. `modify --into` sets it: it amends a downstack

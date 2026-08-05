@@ -64,7 +64,7 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	// Pull trunk in the worktree to ensure we have latest changes
 	pullResult, err := worktreeEng.PullTrunk(ctx.Context)
 	if err != nil {
-		out.Debug("Failed to pull trunk in worktree: %v", err)
+		return fmt.Errorf("failed to update trunk in merge worktree: %w", err)
 	} else if pullResult == engine.PullConflict {
 		if opts.Force {
 			out.Info("Trunk diverged from remote. Force-resetting trunk to match remote...")

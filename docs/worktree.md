@@ -36,6 +36,20 @@ Git worktrees let you check out multiple branches simultaneously in separate dir
 
 **Default location:** Worktrees are created in a sibling directory named `{repo}-stacks/`. For example, if your repo is at `~/projects/myapp`, worktrees go to `~/projects/myapp-stacks/`.
 
+### Ownership and reconciliation
+
+Branch-scoped content operations — including `create`, `modify`, `absorb`,
+`fold`, `squash`, `split`, `move`, and `reorder` — must run in the worktree
+that owns the stack. This ensures an edit is made in the working tree the user
+is actually viewing.
+
+`sync` and `restack` are whole-repository reconcilers and may run from any
+worktree. They never check out a foreign branch. Before either moves a ref,
+Stackit inspects every physical checkout: a clean holder is reset to the new
+ref, while a dirty or uninspectable holder (and its descendants) is held back
+and reported. This applies to ordinary Git worktrees too, not only worktrees
+registered with Stackit.
+
 ---
 
 ## Warm starts

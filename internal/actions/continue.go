@@ -51,6 +51,11 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 			BranchesToRestack:     []string{},
 			CurrentBranchOverride: currentBranch.GetName(),
 		}
+		expectedBranchRevision, err := currentBranch.GetRevision()
+		if err != nil {
+			return fmt.Errorf("failed to get current branch revision: %w", err)
+		}
+		continuation.ExpectedBranchRevision = expectedBranchRevision
 	}
 
 	// Stage all changes if --all flag is set
@@ -61,7 +66,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	}
 
 	// Continue the rebase
-	result, err := eng.ContinueRebase(ctx.Context, continuation.CurrentBranchOverride, continuation.RebasedBranchBase)
+	result, err := eng.ContinueRebase(ctx.Context, continuation.CurrentBranchOverride, continuation.RebasedBranchBase, continuation.ExpectedBranchRevision)
 	if err != nil {
 		return fmt.Errorf("failed to continue rebase: %w", err)
 	}

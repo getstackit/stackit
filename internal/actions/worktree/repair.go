@@ -25,6 +25,11 @@ type RepairResult struct {
 }
 
 func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
+	if count, err := ctx.Engine.PruneOrphanedWorktreePathRefs(ctx.Context); err != nil {
+		return nil, err
+	} else if count > 0 {
+		ctx.Output.Info("Removed %d orphaned worktree path registration(s)", count)
+	}
 	listResult, err := listEntries(ctx, ListOptions(opts))
 	if err != nil {
 		return nil, err
@@ -95,12 +100,18 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 		}
 
 		if entry.CurrentBranch == "" {
-			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because the worktree has no branch checked out", output.BranchName(entry.displayName()))
+			if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
+				return RepairEntry{}, fmt.Errorf("failed to remove detached invalid registration: %w", err)
+			}
+			return RepairEntry{Name: entry.displayName(), Action: "removed invalid detached registration"}, nil
 		}
 
 		currentBranch := ctx.Engine.GetBranch(entry.CurrentBranch)
 		if !currentBranch.IsTracked() {
-			return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because %s is not tracked by stackit", output.BranchName(entry.displayName()), output.BranchName(entry.CurrentBranch))
+			if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
+				return RepairEntry{}, fmt.Errorf("failed to remove untracked invalid registration: %w", err)
+			}
+			return RepairEntry{Name: entry.displayName(), Action: "removed invalid untracked registration"}, nil
 		}
 
 		stackRootName := ctx.Engine.GetStackRootForBranch(currentBranch)

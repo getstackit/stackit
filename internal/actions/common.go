@@ -522,6 +522,11 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 
 	// Perform rebase to enter conflict state
 	conflictBranch := ctx.Engine.GetBranch(firstConflict)
+	expectedBranchRevision, err := conflictBranch.GetRevision()
+	if err != nil {
+		reattach()
+		return fmt.Errorf("failed to get branch revision before conflict workflow: %w", err)
+	}
 	batchResult, err := ctx.Engine.RestackBranches(ctx.Context, engine.BranchesOf(conflictBranch))
 	if err != nil {
 		reattach()
@@ -557,9 +562,10 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 
 	// Persist continuation state
 	continuation := &config.ContinuationState{
-		BranchesToRestack:     remainingBranches,
-		RebasedBranchBase:     rebasedBranchBase,
-		CurrentBranchOverride: firstConflict,
+		BranchesToRestack:      remainingBranches,
+		RebasedBranchBase:      rebasedBranchBase,
+		CurrentBranchOverride:  firstConflict,
+		ExpectedBranchRevision: expectedBranchRevision,
 	}
 
 	if err := config.PersistContinuationState(ctx.RepoRoot, continuation); err != nil {

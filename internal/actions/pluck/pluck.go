@@ -69,6 +69,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Get source's direct children (they will be reparented to grandparent)
 	children := graph.ChildBranches(sourceBranch)
+	if err := actions.EnsureCanModifyHere(ctx, append(engine.BranchesOf(sourceBranch, ontoBranch), children...)...); err != nil {
+		return err
+	}
 
 	// Cycle detection: ensure onto is not a descendant of source
 	if graph.IsDescendant(sourceBranch, ontoBranch) {

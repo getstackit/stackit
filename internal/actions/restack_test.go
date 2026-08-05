@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	stackiterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/handlers"
@@ -173,6 +174,8 @@ func TestRestackAction(t *testing.T) {
 		s.CreateBranch("b")
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("b change", "conflict"))
 		s.TrackBranch("b", "a")
+		bBefore, err := s.Engine.GetRevision(engine.NewBranch("b", nil))
+		require.NoError(t, err)
 
 		s.Checkout("main")
 		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("main change", "conflict"))
@@ -196,6 +199,10 @@ func TestRestackAction(t *testing.T) {
 		// on b but rebase completed successfully" and left HEAD detached.
 		require.ErrorIs(t, err, stackiterrors.ErrConflictWorkflow)
 		require.True(t, s.Engine.Git().IsRebaseInProgress(context.Background()))
+
+		continuation, err := config.GetContinuationState(s.Scene.Dir)
+		require.NoError(t, err)
+		require.Equal(t, bBefore, continuation.ExpectedBranchRevision)
 
 		mainRev, err := s.Engine.GetRevision(engine.NewBranch("main", nil))
 		require.NoError(t, err)

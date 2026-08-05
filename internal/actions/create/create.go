@@ -13,6 +13,7 @@ import (
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -305,25 +306,23 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		// Checkout back to trunk first so we can create the worktree for the branch
 		trunkBranch := eng.Trunk()
 		if err := eng.CheckoutBranch(ctx.Context, trunkBranch); err != nil {
-			_ = eng.DeleteBranch(ctx.Context, branch)
 			h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
-			return Result{}, fmt.Errorf("failed to checkout trunk before creating worktree: %w", err)
-		}
+			out.Warn("Created %s, but could not create its worktree: %v", output.BranchName(branchName), err)
+		} else {
+			created, err := worktree.CreateAnchoredWorktreeForBranch(ctx, branchName, branchName, opts.Scope)
+			if err != nil {
+				h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
+				out.Warn("Created %s, but could not create its worktree: %v", output.BranchName(branchName), err)
+			} else {
+				worktreePath = created.Path
+				h.OnStep(StepWorktree, handler.StatusCompleted, fmt.Sprintf("Created worktree at %s", worktreePath))
+				out.Info("Created worktree at %s", worktreePath)
+			}
 
-		created, err := worktree.CreateAnchoredWorktreeForBranch(ctx, branchName, branchName, opts.Scope)
-		if err != nil {
-			// Clean up branch on worktree failure
-			_ = eng.DeleteBranch(ctx.Context, branch)
-			h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
-			return Result{}, fmt.Errorf("failed to create worktree: %w", err)
-		}
-		worktreePath = created.Path
-		h.OnStep(StepWorktree, handler.StatusCompleted, fmt.Sprintf("Created worktree at %s", worktreePath))
-		out.Info("Created worktree at %s", worktreePath)
-
-		// Run post-create hooks in the worktree
-		if hookErr := worktree.RunPostCreateHooks(ctx, worktreePath); hookErr != nil {
-			out.Warn("Post-create hooks failed: %v", hookErr)
+			// Run post-create hooks in the worktree
+			if hookErr := worktree.RunPostCreateHooks(ctx, worktreePath); hookErr != nil {
+				out.Warn("Post-create hooks failed: %v", hookErr)
+			}
 		}
 	}
 

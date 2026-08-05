@@ -4,6 +4,7 @@ package delete
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
@@ -73,6 +74,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	if opts.Downstack {
 		downstack := graph.Range(branch, engine.StackRange{RecursiveParents: true})
 		toDelete = downstack.Concat(toDelete)
+	}
+
+	// Deletion rewrites metadata and can reparent surviving children, so it has
+	// the same worktree-ownership boundary as other stack mutations. A caller
+	// operating from the owning managed worktree still passes this check, which
+	// preserves delete's deliberate full-stack worktree cleanup below.
+	managedCleanupAnchors, err := managedCleanupAnchors(ctx, toDelete)
+	if err != nil {
+		return Result{}, err
 	}
 
 	handler.Start(len(toDelete))
@@ -149,6 +159,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	// Cleanup worktrees and get path if user was in a deleted worktree
 	var mainRepoDirForSwitch string
+	deletedStackRoots = mergeUniqueBranchNames(deletedStackRoots, managedCleanupAnchors)
 	if len(deletedStackRoots) > 0 {
 		mainRepoDirForSwitch = cleanupWorktreesForDeletedStacks(ctx, deletedStackRoots)
 	}
@@ -165,6 +176,64 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 
 	handler.Complete(len(toDelete), 0)
 	return Result{MainRepoDirForSwitch: mainRepoDirForSwitch}, nil
+}
+
+// managedCleanupAnchors enforces normal worktree ownership unless a caller in
+// the main repository is deleting every non-anchor branch owned by a managed
+// worktree. That full-stack deletion is delete's intentional cleanup workflow:
+// it removes the worktree registration after removing its stack.
+func managedCleanupAnchors(ctx *app.Context, toDelete engine.Branches) ([]string, error) {
+	selected := make(map[string]bool, len(toDelete))
+	for _, branch := range toDelete {
+		selected[branch.GetName()] = true
+	}
+
+	anchors := make(map[string]bool)
+	for _, branch := range toDelete {
+		owner, err := ctx.Engine.OwningWorktree(branch)
+		if err != nil {
+			return nil, fmt.Errorf("cannot determine worktree ownership for branch %s: %w", branch.GetName(), err)
+		}
+		if owner != nil {
+			anchors[owner.AnchorBranch] = true
+		}
+	}
+
+	cleanup := make([]string, 0, len(anchors))
+	for anchor := range anchors {
+		complete := !ctx.InManagedWorktree
+		for _, candidate := range ctx.Engine.AllBranches() {
+			if candidate.IsWorktreeAnchor() {
+				continue
+			}
+			owner, err := ctx.Engine.OwningWorktree(candidate)
+			if err != nil {
+				return nil, fmt.Errorf("cannot determine worktree ownership for branch %s: %w", candidate.GetName(), err)
+			}
+			if owner != nil && owner.AnchorBranch == anchor && !selected[candidate.GetName()] {
+				complete = false
+				break
+			}
+		}
+		if complete {
+			cleanup = append(cleanup, anchor)
+		}
+	}
+
+	guarded := make([]engine.Branch, 0, len(toDelete))
+	for _, branch := range toDelete {
+		owner, err := ctx.Engine.OwningWorktree(branch)
+		if err != nil {
+			return nil, fmt.Errorf("cannot determine worktree ownership for branch %s: %w", branch.GetName(), err)
+		}
+		if owner == nil || !anchors[owner.AnchorBranch] || !slices.Contains(cleanup, owner.AnchorBranch) {
+			guarded = append(guarded, branch)
+		}
+	}
+	if err := actions.EnsureCanModifyHere(ctx, guarded...); err != nil {
+		return nil, err
+	}
+	return cleanup, nil
 }
 
 func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engine.Branches, statuses engine.DeletionStatuses) ([]string, error) {

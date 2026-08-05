@@ -15,7 +15,7 @@ const (
 )
 
 // resetWorktreeIfClean resets a worktree's working directory to match its
-// branch ref's new content, unless the worktree had changes to TRACKED files
+// branch ref's new content, unless the worktree had local changes
 // before this restack pass touched anything. dirtyWorktrees is captured once
 // up front (see restackSnapshot.dirtyWorktrees) rather than checked here,
 // because by the time any branch's reset runs, restack has already moved that
@@ -24,11 +24,7 @@ const (
 // dirty, silently disabling the reset for every branch, not just genuinely
 // dirty ones.
 //
-// Untracked files must not count: `git reset --hard` cannot destroy them, so
-// treating them as dirty suppresses a reset that was never a threat and leaves
-// the worktree holding the old commit's content under a moved ref.
-//
-// Skipping the reset on a worktree with real tracked changes leaves it out of
+// Skipping the reset on a worktree with changes leaves it out of
 // sync with its ref rather than discarding the user's work. That state is still
 // a footgun — `git status` shows the new commit's files as deleted — so callers
 // should avoid moving the ref at all in that case; see skipDirtyWorktreeStacks.
@@ -56,10 +52,37 @@ type restackSnapshot struct {
 	worktrees   git.WorktreeList
 	metaRefSHAs map[string]string
 	// dirtyWorktrees records, per worktree path, whether it had changes to
-	// tracked files before this restack pass began. Untracked files are
-	// deliberately excluded — see resetWorktreeIfClean for why, and for why this
-	// can't be checked lazily.
+	// local changes before this restack pass began. This cannot be checked
+	// lazily; see resetWorktreeIfClean for why.
 	dirtyWorktrees map[string]bool
+	// heldBranches contains every branch whose checked-out worktree was dirty
+	// or could not be inspected before this pass. Descendants of these branches
+	// must be held too: a validated child may otherwise be built on the target
+	// SHA of a parent that was ultimately not allowed to move.
+	heldBranches BranchNameSet
+	// worktreeInspectionFailed means the physical checkout map is unknown, so
+	// no ref move is safe for this pass.
+	worktreeInspectionFailed bool
+}
+
+func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) bool {
+	if snap.worktreeInspectionFailed {
+		return true
+	}
+	for current := branch.GetName(); current != ""; {
+		if snap.heldBranches.Contains(current) {
+			return true
+		}
+		e.mu.RLock()
+		state := e.readState(current)
+		trunk := e.trunk
+		e.mu.RUnlock()
+		if state == nil || state.Parent == "" || current == trunk {
+			return false
+		}
+		current = state.Parent
+	}
+	return false
 }
 
 // branchRev returns branch's revision from the pass snapshot, falling back to a
@@ -223,7 +246,7 @@ func (e *engineImpl) restackBranch(
 	// which warns and is reached solely by the `restack` command) so that every
 	// caller of RestackBranches inherits it — modify, sync, squash, absorb,
 	// delete, split, reorder, pluck and insert all arrive here directly.
-	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" && snap.dirtyWorktrees[worktreePath] {
+	if e.branchHeldBack(branch, snap) {
 		return RestackBranchResult{Result: RestackUnneeded}, nil
 	}
 
@@ -668,6 +691,12 @@ func (e *engineImpl) applyMetadataRefresh(
 	snap *restackSnapshot,
 ) (RestackBranchResult, error) {
 	branchName := branch.GetName()
+	// Metadata records the parent SHA consumed by later planning, so advancing
+	// it past a held parent would create the same phantom-parent state as a ref
+	// move. A held branch and every descendant must remain completely unchanged.
+	if e.branchHeldBack(branch, snap) {
+		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: item.ParentRev}, nil
+	}
 	meta := snap.meta.Get(branchName)
 	if meta == nil {
 		var err error
@@ -723,7 +752,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	// Hold the branch back instead. This is the plan path, reached by every
 	// caller of actions.RestackBranches (modify, squash, absorb, delete, split,
 	// reorder, pluck) as well as the `restack` command.
-	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" && snap.dirtyWorktrees[worktreePath] {
+	if e.branchHeldBack(branch, snap) {
 		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: parentRev}, nil
 	}
 

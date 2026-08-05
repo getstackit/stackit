@@ -70,6 +70,10 @@ type BranchWriter interface {
 	DeleteBranch(ctx context.Context, branchName string) error
 	RenameBranch(ctx context.Context, oldName, newName string) error
 	UpdateBranchRef(ctx context.Context, branchName, revision string) error
+	// UpdateBranchRefCAS moves a branch only if it still names expectedOld.
+	// Callers that prepared commits from a detached snapshot use this to avoid
+	// overwriting concurrent work from another worktree.
+	UpdateBranchRefCAS(ctx context.Context, branchName, revision, expectedOld string) error
 }
 
 // CommitReader provides read access to commit and revision information.

@@ -81,10 +81,11 @@ type BranchInfo struct {
 
 // ContinuationStateInfo represents continuation state
 type ContinuationStateInfo struct {
-	BranchesToRestack     []string `json:"branches_to_restack,omitempty"`
-	BranchesToSync        []string `json:"branches_to_sync,omitempty"`
-	CurrentBranchOverride string   `json:"current_branch_override,omitempty"`
-	RebasedBranchBase     string   `json:"rebased_branch_base,omitempty"`
+	BranchesToRestack      []string `json:"branches_to_restack,omitempty"`
+	BranchesToSync         []string `json:"branches_to_sync,omitempty"`
+	CurrentBranchOverride  string   `json:"current_branch_override,omitempty"`
+	RebasedBranchBase      string   `json:"rebased_branch_base,omitempty"`
+	ExpectedBranchRevision string   `json:"expected_branch_revision,omitempty"`
 }
 
 // RepositoryInfo represents basic repository information
@@ -191,10 +192,11 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 	contState, err := config.GetContinuationState(repoRoot)
 	if err == nil && contState != nil {
 		continuationState = &ContinuationStateInfo{
-			BranchesToRestack:     contState.BranchesToRestack,
-			BranchesToSync:        contState.BranchesToSync,
-			CurrentBranchOverride: contState.CurrentBranchOverride,
-			RebasedBranchBase:     contState.RebasedBranchBase,
+			BranchesToRestack:      contState.BranchesToRestack,
+			BranchesToSync:         contState.BranchesToSync,
+			CurrentBranchOverride:  contState.CurrentBranchOverride,
+			RebasedBranchBase:      contState.RebasedBranchBase,
+			ExpectedBranchRevision: contState.ExpectedBranchRevision,
 		}
 	}
 

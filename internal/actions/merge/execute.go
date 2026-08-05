@@ -319,6 +319,10 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		// if the parent has been merged/deleted
 		branch := eng.GetBranch(step.BranchName)
 		out.Debug("Executing StepRestack for branch %s", step.BranchName)
+		expectedBranchRevision, err := branch.GetRevision()
+		if err != nil {
+			return fmt.Errorf("failed to get branch revision before restack: %w", err)
+		}
 		batchResult, err := eng.RestackBranches(ctx.Context, engine.BranchesOf(branch))
 		result := batchResult.Results[step.BranchName]
 		if err != nil {
@@ -360,8 +364,9 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 				currentBranchName = currentBranch.GetName()
 			}
 			continuation := &config.ContinuationState{
-				RebasedBranchBase:     result.RebasedBranchBase,
-				CurrentBranchOverride: currentBranchName,
+				RebasedBranchBase:      result.RebasedBranchBase,
+				CurrentBranchOverride:  currentBranchName,
+				ExpectedBranchRevision: expectedBranchRevision,
 			}
 			if err := config.PersistContinuationState(repoRoot, continuation); err != nil {
 				return fmt.Errorf("failed to persist continuation: %w", err)

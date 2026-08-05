@@ -138,9 +138,15 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 	}
 
 	pathRemoved := false
+	anchorDeleted := false
 	unregistered := false
 	rollback := func(cause error) error {
 		var rollbackErrs []string
+		if anchorDeleted {
+			if err := restoreAnchorBranch(ctx, snapshot); err != nil {
+				rollbackErrs = append(rollbackErrs, err.Error())
+			}
+		}
 		if unregistered {
 			if err := restoreWorktreeRegistration(ctx, snapshot); err != nil {
 				rollbackErrs = append(rollbackErrs, err.Error())
@@ -172,20 +178,23 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 		}
 	}
 
-	if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, snapshot.Info.AnchorBranch); unregErr != nil {
-		if pathRemoved {
-			return rollback(fmt.Errorf("failed to unregister worktree: %w", unregErr))
-		}
-		return fmt.Errorf("failed to unregister worktree: %w", unregErr)
-	}
-	unregistered = true
-
+	// Delete the anchor before unregistering, the same order detach uses.
+	// Unregistering first means an interruption in between leaves an anchor
+	// branch with no registration — invisible to every worktree command and
+	// unreachable by repair. This order fails the other way: a leftover
+	// registration is visible in `worktree list` and can be repaired or removed.
 	if snapshot.AnchorExists {
 		if err := ctx.Engine.DeleteBranch(ctx.Context, ctx.Engine.GetBranch(snapshot.Info.AnchorBranch)); err != nil {
 			return rollback(fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err))
 		}
+		anchorDeleted = true
 		out.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
 	}
+
+	if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, snapshot.Info.AnchorBranch); unregErr != nil {
+		return rollback(fmt.Errorf("failed to unregister worktree: %w", unregErr))
+	}
+	unregistered = true
 
 	out.Success("Removed worktree for stack %s", output.BranchName(snapshot.Info.AnchorBranch))
 	return nil

@@ -641,7 +641,9 @@ func TestSplitByHunkWithPatch(t *testing.T) {
 		sh.HasBranches("main", "setup", "feature", "feature_split")
 	})
 
-	run("split by hunk with patch fails on empty patch", func(t *testing.T, sh *TestShell) {
+	// Unreadable/unparseable patches all fail before StageHunks touches the repo,
+	// so they share one fixture instead of paying a ResetRepo + two creates each.
+	run("split by hunk fails on unusable patch input", func(t *testing.T, sh *TestShell) {
 		tmpDir := t.TempDir()
 
 		// Setup: Create a file with multiple lines
@@ -652,24 +654,21 @@ func TestSplitByHunkWithPatch(t *testing.T) {
 		sh.Write("init", "line1\nline2\nline3\nline4\nline5\n").
 			Run("create feature -m 'Add lines'")
 
-		patchFile := filepath.Join(tmpDir, "empty.patch")
-		require.NoError(t, os.WriteFile(patchFile, []byte(""), 0644))
+		emptyPatch := filepath.Join(tmpDir, "empty.patch")
+		require.NoError(t, os.WriteFile(emptyPatch, []byte(""), 0644))
 
-		sh.RunExpectError("split --by-hunk --above --patch " + patchFile).
+		sh.RunExpectError("split --by-hunk --above --patch " + emptyPatch).
 			OutputContains("no hunks")
-	})
-
-	run("split by hunk with patch fails on nonexistent patch file", func(_ *testing.T, sh *TestShell) {
-		// Setup: Create a file with multiple lines
-		sh.Write("init", "line1\nline2\nline3\n").
-			Run("create setup -m 'Setup file'")
-
-		// Modify file to add more lines
-		sh.Write("init", "line1\nline2\nline3\nline4\nline5\n").
-			Run("create feature -m 'Add lines'")
 
 		sh.RunExpectError("split --by-hunk --above --patch /nonexistent/path.patch").
 			OutputContains("failed to read patch file")
+
+		// Malformed patch (invalid diff header) — parser returns empty hunks
+		malformedPatch := filepath.Join(tmpDir, "bad.patch")
+		require.NoError(t, os.WriteFile(malformedPatch, []byte("this is not a valid patch\njust some random text\n"), 0644))
+
+		sh.RunExpectError("split --patch " + malformedPatch).
+			OutputContains("no hunks")
 	})
 
 	run("split by hunk with patch fails when branch already exists", func(t *testing.T, sh *TestShell) {
@@ -860,28 +859,6 @@ func TestSplitByHunkWithPatch(t *testing.T) {
 		// Should fail because all changes would be staged, leaving nothing on feature
 		sh.RunExpectError("split --patch " + patchFile + " --above").
 			OutputContains("nothing would remain")
-	})
-
-	run("split by hunk with malformed patch fails gracefully", func(t *testing.T, sh *TestShell) {
-		tmpDir := t.TempDir()
-
-		// Setup
-		sh.Write("init", "content\n").
-			Run("create setup -m 'Setup'")
-
-		sh.Write("init", "modified content\n").
-			Run("create feature -m 'Modify'")
-
-		// Malformed patch (invalid diff header)
-		patchContent := `this is not a valid patch
-just some random text
-`
-		patchFile := filepath.Join(tmpDir, "bad.patch")
-		require.NoError(t, os.WriteFile(patchFile, []byte(patchContent), 0644))
-
-		// Should fail with no hunks error (parser returns empty when invalid)
-		sh.RunExpectError("split --patch " + patchFile).
-			OutputContains("no hunks")
 	})
 
 	run("split by hunk with multi-file patch extracts changes from multiple files", func(t *testing.T, sh *TestShell) {

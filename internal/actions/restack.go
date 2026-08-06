@@ -663,3 +663,36 @@ func handleRestackProgress(
 		}
 	}
 }
+
+// heldWorktreeReason returns why branchName's own checkout blocks a restack, or
+// "" when nothing does.
+//
+// Restack holds a branch whose worktree it cannot safely reset, and a held
+// branch is reported as RestackUnneeded — the same status as a branch that
+// needed no work. Callers that expected a rebase to start need to tell those
+// apart, because the remedy lives in the other worktree.
+//
+// Only the branch's own checkout is examined. A branch held because an ancestor
+// is held returns "", and the caller falls back to its generic message.
+func heldWorktreeReason(ctx *app.Context, branchName string) string {
+	eng := ctx.Engine
+	worktrees, err := eng.ListWorktrees(ctx.Context)
+	if err != nil {
+		return ""
+	}
+	path := worktrees.PathForBranch(branchName)
+	if path == "" {
+		return ""
+	}
+	if eng.WorktreeRebaseInProgress(ctx.Context, path) {
+		return fmt.Sprintf("worktree %s has a rebase in progress", path)
+	}
+	hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, path)
+	switch {
+	case inspectErr != nil:
+		return fmt.Sprintf("worktree %s could not be inspected: %v", path, inspectErr)
+	case hasChanges:
+		return fmt.Sprintf("worktree %s has uncommitted changes", path)
+	}
+	return ""
+}

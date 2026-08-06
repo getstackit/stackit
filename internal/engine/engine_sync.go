@@ -114,10 +114,16 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// `git worktree list` N times for the "reset other worktree's working dir"
 	// check; the snapshot is stable across the restack loop since we don't
 	// add or remove worktrees here.
+	//
+	// A failure here is fatal rather than conservative. Without the checkout map
+	// no ref move is safe, so branchHeldBack holds every branch — and a held
+	// branch returns RestackUnneeded, which every caller renders as "up to
+	// date". That turned an unreadable worktree list into commands reporting
+	// success while leaving the whole stack unrestacked, with only the restack
+	// command printing a warning and modify/sync/squash/absorb printing nothing.
 	worktrees, err := e.git.ListWorktrees(ctx)
-	worktreeInspectionFailed := err != nil
 	if err != nil {
-		worktrees = git.WorktreeList{}
+		return RestackBatchResult{}, fmt.Errorf("cannot restack without inspecting Git worktrees: %w", err)
 	}
 
 	// Snapshot which of those worktrees have tracked-file changes before any
@@ -190,7 +196,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
-	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldBranches: heldBranches, worktreeInspectionFailed: worktreeInspectionFailed}
+	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldBranches: heldBranches}
 
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)

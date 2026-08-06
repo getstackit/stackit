@@ -721,7 +721,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ### Requirements
 
-- **Git 2.25+**
+- **Git 2.36+** (`git worktree list -z`, used by every stack operation to see which branches are checked out where)
 - **GitHub CLI (`gh`)** for PR operations
 - **Go 1.26+** (if building from source)
 - **tmux** (required by overmind)

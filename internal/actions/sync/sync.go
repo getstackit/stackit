@@ -7,6 +7,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/handlers"
@@ -75,6 +76,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			dirtyAnchors[wt.AnchorBranch] = true
 			out.Warn("Skipping stack rooted at %s (%s)", wt.AnchorBranch, reason)
 		}
+	}
+
+	// Report branches checked out somewhere other than the worktree owning
+	// their stack. Sync is the command licensed to touch every stack, so it is
+	// the one place divergence reliably gets seen — previously it surfaced only
+	// if someone happened to run `worktree list`, while the guards that refuse
+	// mutations because of it said nothing about where to look.
+	for _, warning := range worktree.OwnershipWarnings(ctx) {
+		out.Warn("%s", warning)
 	}
 
 	// Calculate total operations for progress (rough estimate)

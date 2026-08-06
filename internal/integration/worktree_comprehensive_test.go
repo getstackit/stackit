@@ -380,9 +380,11 @@ func TestWorktreeSyncOperations(t *testing.T) {
 				AdvanceMain(sh, "main-update.txt")
 
 				if tt.syncFromWorktree {
-					shW.Run("sync --restack")
+					shW.Run("sync --restack").
+						OutputNotContains("conflict")
 				} else {
-					sh.Run("sync --restack")
+					sh.Run("sync --restack").
+						OutputNotContains("conflict")
 				}
 
 				sh.ExpectStackStructure(map[string]string{

@@ -4,59 +4,10 @@ import (
 	"testing"
 )
 
-// TestWorktreeWorkingDirAfterRestack tests that when a branch is restacked
-// from a different context, the worktree's working directory is properly updated.
-func TestWorktreeWorkingDirAfterRestack(t *testing.T) {
-	t.Parallel()
-	t.Run("worktree working dir updated after restack from main repo", func(t *testing.T) {
-		t.Parallel()
-		// This test reproduces a bug where:
-		// 1. Branch B is checked out in Worktree W
-		// 2. Main advances with new commits
-		// 3. Sync runs from main repo (not the worktree)
-		// 4. Branch B is rebased (ref updated via UpdateBranchRef)
-		// 5. But Worktree W's working directory is NOT updated
-		// 6. Result: git shows staged changes that "revert" the new content
-
-		sh := NewTestShellInProcess(t, WithRemote())
-
-		// Create a branch with worktree
-		sh.Log("Creating branch with worktree...")
-		sh.WriteFile("feature.txt", "feature content").
-			Run("create feature -w -m 'feature branch'").
-			OnBranch("main")
-
-		// Get worktree path
-		worktreePath := sh.GetWorktreePath("feature")
-		shW := sh.InWorktree(worktreePath)
-		shW.OnBranch("feature")
-
-		// Advance main with a change that the worktree will see after restack
-		sh.Log("Advancing main with new file...")
-		AdvanceMain(sh, "new-from-main.txt")
-
-		// Run sync from main repo - this will restack feature onto new main
-		sh.Log("Running sync from main repo...")
-		sh.Run("sync --restack")
-
-		// Check worktree status - it should be clean after restack
-		sh.Log("Checking worktree status...")
-		shW.Git("status --porcelain")
-		output := shW.Output()
-
-		// The bug: worktree shows staged changes reverting main's content
-		// After fix: worktree should be clean
-		if output != "" {
-			t.Errorf("Worktree should be clean after sync, but has changes:\n%s", output)
-		}
-
-		// Verify the new file exists in worktree after restack
-		shW.Git("ls-files new-from-main.txt")
-		if shW.Output() == "" {
-			t.Error("New file from main should exist in worktree after sync/restack")
-		}
-	})
-}
+// Coverage note: the "worktree working dir is updated after a restack driven
+// from the main repo" case lives in TestWorktreeSyncOperations
+// ("sync from main or worktree context restacks the stack") — same clean-status
+// and ls-files assertions on a deeper stack, sharing that test's fixture.
 
 // TestSyncWithMultipleWorktrees tests the sync command behavior when working
 // with multiple worktrees and stacked branches.
@@ -200,40 +151,10 @@ func TestSyncWithMultipleWorktrees(t *testing.T) {
 		})
 	})
 
-	run("sync from worktree context", func(_ *testing.T, sh *TestShell) {
-		// Test that sync works correctly when run from within a worktree
-		// (the opposite direction of the main bug)
-
-		// Create a stack in a worktree
-		sh.Log("Creating stack in worktree...")
-		sh.WriteFile("feature.txt", "feature").
-			Run("create feature -w -m 'feature branch'").
-			OnBranch("main")
-
-		worktree := sh.GetWorktreePath("feature")
-		shW := sh.InWorktree(worktree)
-		shW.OnBranch("feature").
-			WriteFile("child.txt", "child").
-			Run("create feature-child -m 'feature child'")
-
-		// Advance main in the main repo
-		sh.Log("Advancing main...")
-		AdvanceMain(sh, "main-update.txt")
-
-		// Sync from the worktree context with full restack
-		sh.Log("Running sync from worktree...")
-		shW.Checkout("feature").
-			Run("sync --restack")
-
-		// Verify no conflicts
-		shW.OutputNotContains("conflict")
-
-		// Verify stack structure
-		sh.ExpectStackStructure(map[string]string{
-			"feature":       "main",
-			"feature-child": "feature",
-		})
-	})
+	// Coverage note: "sync --restack run from inside a worktree" is covered by
+	// TestWorktreeSyncOperations ("sync from main or worktree context restacks
+	// the stack"), which asserts the same stack structure and no-conflict output
+	// on the same fixture shape.
 
 	run("bottom branch merged in worktree stack keeps worktree alive", func(t *testing.T, sh *TestShell) {
 		// Test scenario:

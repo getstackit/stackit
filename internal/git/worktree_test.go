@@ -150,6 +150,35 @@ func TestWorktreeRegistry(t *testing.T) {
 		}))
 	})
 
+	// A registration whose metadata blob cannot be parsed must still be
+	// deletable. Propagating the read error made the ref undeletable through
+	// every stackit path that retires one — remove, detach, prune, and sync's
+	// orphan cleanup — leaving a manual `git update-ref -d` as the only exit
+	// from a state the repair work in this area exists to recover from.
+	t.Run("deletes a registration whose metadata cannot be parsed", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+
+		require.NoError(t, runner.WriteWorktreeMeta(context.Background(), "corrupt", &git.WorktreeMeta{
+			Path:         filepath.Join(t.TempDir(), "worktree"),
+			AnchorBranch: "corrupt",
+		}))
+
+		// Point the registration at a blob that is not valid metadata.
+		garbage, err := runner.CreateBlob("this is not json")
+		require.NoError(t, err)
+		require.NoError(t, runner.UpdateRef("refs/stackit/worktrees/corrupt", garbage))
+
+		_, readErr := runner.ReadWorktreeMeta("corrupt")
+		require.Error(t, readErr, "precondition: metadata must be unreadable")
+
+		require.NoError(t, runner.DeleteWorktreeMeta(context.Background(), "corrupt"))
+
+		meta, err := runner.ReadWorktreeMeta("corrupt")
+		require.NoError(t, err)
+		require.Nil(t, meta)
+	})
+
 	t.Run("write and read worktree metadata", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)

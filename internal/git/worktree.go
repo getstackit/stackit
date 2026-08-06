@@ -362,9 +362,15 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 		return r.DeleteRef(ctx, refName)
 	}
 
+	// A metadata blob we cannot read or parse tells us nothing about which
+	// reverse path ref to retire, but it must not make the registration
+	// undeletable — that would leave remove, detach, prune and sync's orphan
+	// cleanup with no way to retire it short of a manual `git update-ref -d`.
+	// Drop the forward ref regardless; PruneOrphanedWorktreePathRefs sweeps the
+	// reverse claim once this ref is gone.
 	meta, err := r.ReadWorktreeMeta(stackRoot)
 	if err != nil {
-		return err
+		meta = nil
 	}
 	updates := []RefUpdate{{RefName: refName, OldSHA: sha, IsDelete: true}}
 	if meta != nil {

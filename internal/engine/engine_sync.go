@@ -140,23 +140,37 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	dirtyWorktrees := make(map[string]bool, len(worktrees))
 	untrackedByWorktree := make(map[string][]string)
 	heldBranches := make(BranchNameSet)
+
+	e.mu.RLock()
+	trunk := e.trunk
+	e.mu.RUnlock()
+
+	// A dirty worktree holds the branch it has checked out, because restacking
+	// that branch would reset the worktree and discard the work. Trunk is the
+	// exception: restack never moves trunk's ref and never resets trunk's
+	// worktree, so there is nothing to protect — while holding it would
+	// propagate through branchHeldBack's ancestry walk and silently hold every
+	// trunk-rooted branch in the repository. Marking the worktree dirty still
+	// stops any reset of it.
+	hold := func(branch string) {
+		if branch != "" && branch != trunk {
+			heldBranches[branch] = true
+		}
+	}
+
 	for _, worktree := range worktrees {
 		path := worktree.Path
 		tracked, trackedErr := e.git.WorktreeHasTrackedChanges(ctx, path)
 		if trackedErr != nil || tracked {
 			dirtyWorktrees[path] = true
-			if worktree.Branch != "" {
-				heldBranches[worktree.Branch] = true
-			}
+			hold(worktree.Branch)
 			continue
 		}
 		untracked, untrackedErr := e.git.GetUntrackedFilesIn(ctx, path)
 		if untrackedErr != nil {
 			// Cannot tell what is there, so no reset is safe.
 			dirtyWorktrees[path] = true
-			if worktree.Branch != "" {
-				heldBranches[worktree.Branch] = true
-			}
+			hold(worktree.Branch)
 			continue
 		}
 		if len(untracked) > 0 {

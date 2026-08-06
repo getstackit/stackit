@@ -527,9 +527,17 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 	// them. Untracked files hold it only when one occupies a path the incoming
 	// commit also writes, which is the only case a hard reset destroys.
 	dirtyBranches := make(map[string]bool)
+	trunk := eng.Trunk().GetName()
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
 			if wt.Branch == "" || dirtyAnchors[wt.Branch] {
+				continue
+			}
+			// Trunk is never restacked and its worktree is never reset, so a
+			// dirty trunk checkout holds nothing. Warning about it told users
+			// to stash work that was never at risk, for a restack that went on
+			// to succeed in full.
+			if wt.Branch == trunk {
 				continue
 			}
 			if eng.WorktreeRebaseInProgress(ctx.Context, wt.Path) {

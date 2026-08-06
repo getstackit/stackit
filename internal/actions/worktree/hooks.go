@@ -37,7 +37,16 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 //
 // The caller's context is honored so Ctrl-C interrupts a hook instead of
 // waiting out its timeout.
+// An empty worktreePath is refused rather than passed through: os/exec treats
+// an empty Dir as the current directory, which for these hooks is the user's
+// main checkout — the one place they must never run.
 func RunResolvedHooks(ctx context.Context, hookCmds []string, worktreePath string, out output.Output) {
+	if worktreePath == "" {
+		if len(hookCmds) > 0 {
+			out.Warn("Skipped post-worktree-create hooks: no worktree directory to run them in")
+		}
+		return
+	}
 	_ = hooks.Run(ctx, hookCmds, hooks.RunOptions{
 		Dir:      worktreePath,
 		Blocking: false,

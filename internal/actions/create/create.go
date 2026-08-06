@@ -317,11 +317,14 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 				worktreePath = created.Path
 				h.OnStep(StepWorktree, handler.StatusCompleted, fmt.Sprintf("Created worktree at %s", worktreePath))
 				out.Info("Created worktree at %s", worktreePath)
-			}
 
-			// Run post-create hooks in the worktree
-			if hookErr := worktree.RunPostCreateHooks(ctx, worktreePath); hookErr != nil {
-				out.Warn("Post-create hooks failed: %v", hookErr)
+				// Only when a worktree actually exists. On the failure path
+				// above worktreePath is still empty, which os/exec resolves to
+				// the current directory — the user's main checkout, which the
+				// CheckoutBranch above just moved to trunk.
+				if hookErr := worktree.RunPostCreateHooks(ctx, worktreePath); hookErr != nil {
+					out.Warn("Post-create hooks failed: %v", hookErr)
+				}
 			}
 		}
 	}

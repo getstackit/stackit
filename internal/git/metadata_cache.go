@@ -11,6 +11,12 @@ import (
 // without deep copying.
 type metadataCache struct {
 	entries sync.Map // map[string]*Meta
+	refSHAs sync.Map // map[string]string — ref SHA each entry was read from
+
+	// localRefSHAs tracks the same thing for local-metadata refs. Local
+	// metadata is not cached (its values are read fresh), but its writes still
+	// need something to compare against.
+	localRefSHAs sync.Map // map[string]string
 
 	// Instrumentation counters. Updated with atomics to stay lock-free on the
 	// hot Get path. Exposed via Summary() for logging and tests.
@@ -57,15 +63,62 @@ func (c *metadataCache) Put(branchName string, meta *Meta) {
 	c.entries.Store(branchName, meta)
 }
 
+// PutWithSHA stores the metadata along with the ref SHA it was read from, so a
+// later write of the same branch can require the ref to still hold that value.
+func (c *metadataCache) PutWithSHA(branchName string, meta *Meta, sha string) {
+	c.entries.Store(branchName, meta)
+	if sha == "" {
+		c.refSHAs.Delete(branchName)
+		return
+	}
+	c.refSHAs.Store(branchName, sha)
+}
+
+// SHAFor returns the ref SHA this process last read for the branch, or "" when
+// it has not read one. Writers treat "" as "no expectation to enforce" rather
+// than "the ref is absent", because the branch may simply never have been read
+// in this process.
+func (c *metadataCache) SHAFor(branchName string) string {
+	value, ok := c.refSHAs.Load(branchName)
+	if !ok {
+		return ""
+	}
+	sha, _ := value.(string)
+	return sha
+}
+
+// PutLocalSHA records the ref SHA a branch's local metadata was read from.
+func (c *metadataCache) PutLocalSHA(branchName, sha string) {
+	if sha == "" {
+		c.localRefSHAs.Delete(branchName)
+		return
+	}
+	c.localRefSHAs.Store(branchName, sha)
+}
+
+// LocalSHAFor returns the local-metadata ref SHA this process last read, or "".
+func (c *metadataCache) LocalSHAFor(branchName string) string {
+	value, ok := c.localRefSHAs.Load(branchName)
+	if !ok {
+		return ""
+	}
+	sha, _ := value.(string)
+	return sha
+}
+
 // Delete removes the cached metadata for the given branch.
 func (c *metadataCache) Delete(branchName string) {
 	c.entries.Delete(branchName)
+	c.refSHAs.Delete(branchName)
+	c.localRefSHAs.Delete(branchName)
 }
 
 // Clear removes all entries from the cache.
 // Used during Rebuild to ensure stale metadata from external changes is not retained.
 func (c *metadataCache) Clear() {
 	c.entries.Clear()
+	c.refSHAs.Clear()
+	c.localRefSHAs.Clear()
 }
 
 // InvalidateForRefs clears cached metadata for any refs in the given batch
@@ -74,7 +127,10 @@ func (c *metadataCache) Clear() {
 func (c *metadataCache) InvalidateForRefs(updates []RefUpdate) {
 	for _, update := range updates {
 		if branchName, ok := strings.CutPrefix(update.RefName, MetadataRefPrefix); ok {
-			c.entries.Delete(branchName)
+			c.Delete(branchName)
+		}
+		if branchName, ok := strings.CutPrefix(update.RefName, LocalMetadataRefPrefix); ok {
+			c.localRefSHAs.Delete(branchName)
 		}
 	}
 }
@@ -84,7 +140,10 @@ func (c *metadataCache) InvalidateForRefs(updates []RefUpdate) {
 func (c *metadataCache) InvalidateForRefNames(refNames []string) {
 	for _, refName := range refNames {
 		if branchName, ok := strings.CutPrefix(refName, MetadataRefPrefix); ok {
-			c.entries.Delete(branchName)
+			c.Delete(branchName)
+		}
+		if branchName, ok := strings.CutPrefix(refName, LocalMetadataRefPrefix); ok {
+			c.localRefSHAs.Delete(branchName)
 		}
 	}
 }

@@ -96,59 +96,9 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 
 		if hasHunks {
 			// 2. Apply hunks to this commit
-			tmpDir, err := os.MkdirTemp("", fmt.Sprintf("stackit-absorb-%s-*", commitSHA[:8]))
-			if err != nil {
+			if err := e.applyHunksForCommit(ctx, commitSHA, hunks); err != nil {
 				cleanup()
-				return fmt.Errorf("failed to create temp directory: %w", err)
-			}
-			defer func() { _ = os.RemoveAll(tmpDir) }()
-
-			patchFile := filepath.Join(tmpDir, "hunks.patch")
-			var patchContent strings.Builder
-			hunksByFile := make(map[string][]git.Hunk)
-			for _, hunk := range hunks {
-				hunksByFile[hunk.File] = append(hunksByFile[hunk.File], hunk)
-			}
-			for file, fileHunks := range hunksByFile {
-				fmt.Fprintf(&patchContent, "diff --git a/%s b/%s\n", file, file)
-				// Include index line if available (needed for --3way merge)
-				if len(fileHunks) > 0 && fileHunks[0].IndexLine != "" {
-					patchContent.WriteString(fileHunks[0].IndexLine + "\n")
-				}
-				fmt.Fprintf(&patchContent, "--- a/%s\n", file)
-				fmt.Fprintf(&patchContent, "+++ b/%s\n", file)
-				for _, hunk := range fileHunks {
-					patchContent.WriteString(hunk.Content)
-					if !strings.HasSuffix(hunk.Content, "\n") {
-						patchContent.WriteString("\n")
-					}
-				}
-			}
-			if err := os.WriteFile(patchFile, []byte(patchContent.String()), 0600); err != nil {
-				cleanup()
-				return fmt.Errorf("failed to write hunks patch: %w", err)
-			}
-
-			// Apply hunks to the worktree and index using --3way for better conflict handling
-			// --3way allows git to fall back to three-way merge when the patch context doesn't match exactly
-			if err := e.git.ApplyPatch(ctx, patchFile, true); err != nil {
-				cleanup()
-				return fmt.Errorf("failed to apply hunks for commit %s: %w", commitSHA[:8], err)
-			}
-
-			// Check for merge conflicts - git apply --3way can succeed but leave conflicts
-			unmerged, _ := e.git.GetUnmergedFiles(ctx)
-			if len(unmerged) > 0 {
-				// There are unmerged files - this means --3way resulted in conflicts
-				conflictFiles := strings.Join(unmerged, "\n")
-				cleanup()
-				return fmt.Errorf("merge conflict while applying hunks for commit %s. Conflicting files:\n%s\n\nThe changes could not be automatically merged. Consider manually applying the changes or splitting them into separate commits", commitSHA[:8], conflictFiles)
-			}
-
-			// 3. Amend the commit
-			if err := e.git.CommitAmendNoEdit(ctx); err != nil {
-				cleanup()
-				return fmt.Errorf("failed to amend commit %s: %w", commitSHA[:8], err)
+				return err
 			}
 		}
 	}
@@ -170,6 +120,63 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 		}
 	}
 
+	return nil
+}
+
+// applyHunksForCommit writes hunks to a patch file, applies it to the current
+// worktree/index, and amends the current commit. The temp directory is scoped
+// to this call so it's cleaned up per commit instead of accumulating across
+// every commit in the branch until ApplyHunksToBranch returns.
+func (e *engineImpl) applyHunksForCommit(ctx context.Context, commitSHA string, hunks []git.Hunk) error {
+	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("stackit-absorb-%s-*", commitSHA[:8]))
+	if err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	patchFile := filepath.Join(tmpDir, "hunks.patch")
+	var patchContent strings.Builder
+	hunksByFile := make(map[string][]git.Hunk)
+	for _, hunk := range hunks {
+		hunksByFile[hunk.File] = append(hunksByFile[hunk.File], hunk)
+	}
+	for file, fileHunks := range hunksByFile {
+		fmt.Fprintf(&patchContent, "diff --git a/%s b/%s\n", file, file)
+		// Include index line if available (needed for --3way merge)
+		if len(fileHunks) > 0 && fileHunks[0].IndexLine != "" {
+			patchContent.WriteString(fileHunks[0].IndexLine + "\n")
+		}
+		fmt.Fprintf(&patchContent, "--- a/%s\n", file)
+		fmt.Fprintf(&patchContent, "+++ b/%s\n", file)
+		for _, hunk := range fileHunks {
+			patchContent.WriteString(hunk.Content)
+			if !strings.HasSuffix(hunk.Content, "\n") {
+				patchContent.WriteString("\n")
+			}
+		}
+	}
+	if err := os.WriteFile(patchFile, []byte(patchContent.String()), 0600); err != nil {
+		return fmt.Errorf("failed to write hunks patch: %w", err)
+	}
+
+	// Apply hunks to the worktree and index using --3way for better conflict handling
+	// --3way allows git to fall back to three-way merge when the patch context doesn't match exactly
+	if err := e.git.ApplyPatch(ctx, patchFile, true); err != nil {
+		return fmt.Errorf("failed to apply hunks for commit %s: %w", commitSHA[:8], err)
+	}
+
+	// Check for merge conflicts - git apply --3way can succeed but leave conflicts
+	unmerged, _ := e.git.GetUnmergedFiles(ctx)
+	if len(unmerged) > 0 {
+		// There are unmerged files - this means --3way resulted in conflicts
+		conflictFiles := strings.Join(unmerged, "\n")
+		return fmt.Errorf("merge conflict while applying hunks for commit %s. Conflicting files:\n%s\n\nThe changes could not be automatically merged. Consider manually applying the changes or splitting them into separate commits", commitSHA[:8], conflictFiles)
+	}
+
+	// Amend the commit
+	if err := e.git.CommitAmendNoEdit(ctx); err != nil {
+		return fmt.Errorf("failed to amend commit %s: %w", commitSHA[:8], err)
+	}
 	return nil
 }
 

@@ -79,11 +79,26 @@ Safety rules:
 - A pattern cannot copy a tracked file: it must also be ignored by Git.
 - Existing files in the destination are never overwritten.
 - Symlinks and non-regular files are skipped.
-- A warm-start failure aborts worktree creation and rolls it back, rather than
-  giving an agent a partially initialized workspace.
+- A file that cannot be placed — because a tracked file already occupies a
+  directory name its path needs — is reported and skipped. The rest of the warm
+  start still runs, and the worktree is still created.
+- A symlinked parent directory in the destination aborts worktree creation and
+  rolls it back. `.worktreeinclude` is project-controlled, so this is the path
+  by which a warm start could be steered into writing outside the worktree.
 
 Treat `.worktreeinclude` as an explicit local-data allowlist. In particular,
 include secrets only when every managed worktree is allowed to receive them.
+
+### Warm-started files are not backed up
+
+Warm-started files are ignored by Git, so nothing else has a copy of them.
+`worktree remove` and `worktree prune` delete the worktree directory and
+everything in it, including every warm-started file — a `.env` you edited in
+that worktree is gone with it, with no Git history to recover it from.
+
+`worktree detach` removes the worktree while keeping its branches, but it also
+removes the directory. If a warm-started file has diverged from the copy in
+your main repository and you want to keep it, copy it out first.
 
 ---
 

@@ -75,7 +75,7 @@ func snapshotWorktree(ctx *app.Context, entry *Entry) (*worktreeSnapshot, error)
 }
 
 func restoreWorktreeRegistration(ctx *app.Context, snapshot *worktreeSnapshot) error {
-	return ctx.Engine.RegisterWorktreeWithName(snapshot.Info.AnchorBranch, snapshot.Info.Path, snapshot.Info.Name)
+	return ctx.Engine.RegisterWorktreeWithName(ctx.Context, snapshot.Info.AnchorBranch, snapshot.Info.Path, snapshot.Info.Name)
 }
 
 func restoreWorktreePath(ctx *app.Context, snapshot *worktreeSnapshot) error {
@@ -481,8 +481,11 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 	if warmStart.Enabled && len(warmStart.Copied) > 0 {
 		out.Info("Warm-started worktree with %d ignored file(s)", len(warmStart.Copied))
 	}
+	for _, skip := range warmStart.SkippedUnsafe {
+		out.Warn("Did not warm-start %s: %s (selected by %s)", skip.Path, skip.Reason, WorktreeIncludeFile)
+	}
 
-	if err := eng.RegisterWorktreeWithName(anchorBranchName, worktreePath, opts.Name); err != nil {
+	if err := eng.RegisterWorktreeWithName(ctx.Context, anchorBranchName, worktreePath, opts.Name); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("failed to register worktree: %w", err)
 	}
@@ -737,7 +740,12 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*AttachResult, error) {
 	})
 	if err != nil {
 		if needsCheckout && currentBranch != nil {
-			_ = eng.CheckoutBranch(ctx.Context, *currentBranch)
+			// Attach checked out trunk to free the stack root. Failing to get
+			// back leaves the user somewhere they did not ask to be, which they
+			// need to know about even though the attach error is the headline.
+			if restoreErr := eng.CheckoutBranch(ctx.Context, *currentBranch); restoreErr != nil {
+				out.Warn("Could not return to %s: %v", output.BranchName(currentBranch.GetName()), restoreErr)
+			}
 		}
 		return nil, err
 	}

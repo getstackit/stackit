@@ -32,7 +32,7 @@ func TestListAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree
-		err := s.Engine.RegisterWorktree("feature-stack", "/tmp/fake-worktree")
+		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", "/tmp/fake-worktree")
 		require.NoError(t, err)
 
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
@@ -57,7 +57,7 @@ func TestListAction(t *testing.T) {
 		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", worktreeDir, "feature"))
+		require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreeDir, "feature"))
 
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
 		require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestListAction(t *testing.T) {
 		s.Checkout("main")
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", worktreeDir, "feature-wt"))
+		require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreeDir, "feature-wt"))
 		t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 		// Simulate raw `git checkout feature` from the main repository, bypassing
@@ -114,7 +114,7 @@ func TestRemoveAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree (path doesn't exist)
-		err := s.Engine.RegisterWorktree("feature-stack", "/tmp/nonexistent-worktree")
+		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", "/tmp/nonexistent-worktree")
 		require.NoError(t, err)
 
 		// Verify it's registered
@@ -139,7 +139,7 @@ func TestRemoveAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := s.Engine.RegisterWorktree("feature-stack", "/tmp/nonexistent-worktree")
+		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", "/tmp/nonexistent-worktree")
 		require.NoError(t, err)
 
 		err = worktree.RemoveAction(s.Context, worktree.RemoveOptions{
@@ -174,7 +174,7 @@ func TestOpenAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree with non-existent path
-		err := s.Engine.RegisterWorktree("feature-stack", "/tmp/nonexistent-path-12345")
+		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", "/tmp/nonexistent-path-12345")
 		require.NoError(t, err)
 
 		_, err = worktree.OpenAction(s.Context, worktree.OpenOptions{
@@ -194,7 +194,7 @@ func TestOpenAction(t *testing.T) {
 
 		// Use a path that exists (the repo root)
 		repoRoot := s.Context.RepoRoot
-		err := s.Engine.RegisterWorktree("feature-stack", repoRoot)
+		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", repoRoot)
 		require.NoError(t, err)
 
 		path, err := worktree.OpenAction(s.Context, worktree.OpenOptions{
@@ -354,7 +354,7 @@ func TestRepairAction(t *testing.T) {
 		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", worktreeDir, "legacy-wt"))
+		require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreeDir, "legacy-wt"))
 
 		result, err := worktree.RepairAction(s.Context, worktree.RepairOptions{NameOrBranch: "legacy-wt"})
 		require.NoError(t, err)

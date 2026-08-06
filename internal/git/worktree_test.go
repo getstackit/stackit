@@ -134,7 +134,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.NoError(t, os.Symlink(targetBase, linkBase))
 		worktreePath := filepath.Join(linkBase, "worktree")
 
-		require.NoError(t, runner.WriteWorktreeMeta("first", &git.WorktreeMeta{
+		require.NoError(t, runner.WriteWorktreeMeta(context.Background(), "first", &git.WorktreeMeta{
 			Path:         worktreePath,
 			AnchorBranch: "first",
 		}))
@@ -144,7 +144,7 @@ func TestWorktreeRegistry(t *testing.T) {
 
 		// Re-registration at the same path must not collide with an orphaned
 		// reverse path ref hashed with a different spelling.
-		require.NoError(t, runner.WriteWorktreeMeta("second", &git.WorktreeMeta{
+		require.NoError(t, runner.WriteWorktreeMeta(context.Background(), "second", &git.WorktreeMeta{
 			Path:         worktreePath,
 			AnchorBranch: "second",
 		}))
@@ -160,7 +160,7 @@ func TestWorktreeRegistry(t *testing.T) {
 			AnchorBranch: "feature-branch",
 			MainRepoDir:  scene.Repo.Dir,
 		}
-		err := runner.WriteWorktreeMeta("feature-branch", meta)
+		err := runner.WriteWorktreeMeta(context.Background(), "feature-branch", meta)
 		require.NoError(t, err)
 
 		// Read it back
@@ -191,7 +191,7 @@ func TestWorktreeRegistry(t *testing.T) {
 			Path:         "/path/to/worktree",
 			AnchorBranch: "feature-branch",
 		}
-		err := runner.WriteWorktreeMeta("feature-branch", meta)
+		err := runner.WriteWorktreeMeta(context.Background(), "feature-branch", meta)
 		require.NoError(t, err)
 
 		// Delete it
@@ -213,14 +213,14 @@ func TestWorktreeRegistry(t *testing.T) {
 			Path:         "/path/to/worktree1",
 			AnchorBranch: "feature-1",
 		}
-		err := runner.WriteWorktreeMeta("feature-1", meta1)
+		err := runner.WriteWorktreeMeta(context.Background(), "feature-1", meta1)
 		require.NoError(t, err)
 
 		meta2 := &git.WorktreeMeta{
 			Path:         "/path/to/worktree2",
 			AnchorBranch: "feature-2",
 		}
-		err = runner.WriteWorktreeMeta("feature-2", meta2)
+		err = runner.WriteWorktreeMeta(context.Background(), "feature-2", meta2)
 		require.NoError(t, err)
 
 		// List all

@@ -190,6 +190,28 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 // getWorktreeSwitchInfo checks if the target branch belongs to a stack with a worktree,
 // or if we need to switch back to the main repo from a worktree.
 // Returns (switchPath, rerunArgs, fallbackTips) - all empty if no worktree switch is needed.
+// worktreePathUsable reports whether a registered worktree can actually be
+// switched to, warning when it cannot. Both switch directions check this: a
+// registration whose directory is gone must not be offered as a destination
+// from the main repo or from another worktree.
+func worktreePathUsable(ctx *app.Context, stackRoot, path string) bool {
+	_, err := os.Stat(path)
+	switch {
+	case err == nil:
+		return true
+	case os.IsNotExist(err):
+		ctx.Output.Warn("Worktree for stack %s is registered but path does not exist: %s",
+			output.BranchName(stackRoot), path)
+		// detach, not remove: remove refuses for any stack that still has
+		// branches, which is every stack worth checking out.
+		ctx.Output.Tip("stackit worktree detach %s", stackRoot)
+	default:
+		ctx.Output.Warn("Cannot inspect worktree for stack %s at %s: %v",
+			output.BranchName(stackRoot), path, err)
+	}
+	return false
+}
+
 func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName string) (string, []string, []string) {
 	targetStackRoot := ctx.Engine.GetStackRootForBranch(branch)
 
@@ -206,11 +228,12 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 		} else if targetStackRoot != currentStackRoot {
 			// Target is in a different stack - check if that stack has a worktree
 			targetWorktree, err := ctx.Engine.GetWorktreeForStack(targetStackRoot)
-			if err == nil && targetWorktree != nil {
+			switch {
+			case err == nil && targetWorktree != nil && worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path):
 				switchTarget = targetWorktree.Path
 				targetStack = targetStackRoot
-			} else {
-				// Target stack has no worktree - switch to main repo
+			default:
+				// Target stack has no usable worktree - switch to main repo
 				switchTarget = ctx.WorktreeInfo.MainRepoDir
 			}
 		}
@@ -237,15 +260,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 		return "", nil, nil
 	}
 
-	if _, err := os.Stat(targetWorktree.Path); err != nil {
-		if os.IsNotExist(err) {
-			ctx.Output.Warn("Worktree for stack %s is registered but path does not exist: %s",
-				output.BranchName(targetStackRoot), targetWorktree.Path)
-			ctx.Output.Tip("stackit worktree remove %s", targetStackRoot)
-			return "", nil, nil
-		}
-		ctx.Output.Warn("Cannot inspect worktree for stack %s at %s: %v",
-			output.BranchName(targetStackRoot), targetWorktree.Path, err)
+	if !worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path) {
 		return "", nil, nil
 	}
 

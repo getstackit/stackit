@@ -1,6 +1,7 @@
 package sync_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		s.TrackBranch("feature-branch", "main")
 
 		// Register a fake worktree for this branch (we won't actually create the worktree dir)
-		err := s.Engine.RegisterWorktree("feature-branch", "/tmp/fake-worktree-path")
+		err := s.Engine.RegisterWorktree(context.Background(), "feature-branch", "/tmp/fake-worktree-path")
 		require.NoError(t, err)
 
 		// Verify worktree is registered
@@ -56,7 +57,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		s.TrackBranch("feature-branch", "main")
 
 		// Register a worktree for this branch
-		err := s.Engine.RegisterWorktree("feature-branch", "/tmp/fake-worktree-path")
+		err := s.Engine.RegisterWorktree(context.Background(), "feature-branch", "/tmp/fake-worktree-path")
 		require.NoError(t, err)
 
 		// Go back to main and run sync
@@ -78,7 +79,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		worktreePath := filepath.Join(t.TempDir(), "not-a-git-worktree")
 		require.NoError(t, os.MkdirAll(worktreePath, 0o755))
 
-		err := s.Engine.RegisterWorktree("missing-anchor", worktreePath)
+		err := s.Engine.RegisterWorktree(context.Background(), "missing-anchor", worktreePath)
 		require.NoError(t, err)
 
 		handler := &sync.NullHandler{}

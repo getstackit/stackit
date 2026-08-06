@@ -262,7 +262,7 @@ func (r *runner) ReadMetadata(branchName string) (*Meta, error) {
 
 	// Pass the ref name directly to cat-file --batch: it resolves ref → blob in one
 	// step, replacing the two rev-parse subprocesses GetRef previously spawned.
-	content, found, err := r.objects.ReadObject(refName)
+	content, sha, found, err := r.objects.ReadObjectWithSHA(refName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata for %s: %w", branchName, err)
 	}
@@ -277,7 +277,9 @@ func (r *runner) ReadMetadata(branchName string) (*Meta, error) {
 		return nil, fmt.Errorf("failed to unmarshal metadata for %s: %w", branchName, err)
 	}
 
-	r.metadataCache.Put(branchName, &meta)
+	// Remember which blob this came from so WriteMetadata can refuse to
+	// overwrite a different one.
+	r.metadataCache.PutWithSHA(branchName, &meta, sha)
 	return &meta, nil
 }
 
@@ -293,11 +295,45 @@ func (r *runner) WriteMetadata(branchName string, meta *Meta) error {
 	}
 
 	refName := fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
-	if err := r.UpdateRef(refName, sha); err != nil {
-		return fmt.Errorf("failed to write metadata ref: %w", err)
+	if err := r.updateMetadataRefCAS(refName, branchName, sha); err != nil {
+		return err
 	}
 
-	r.metadataCache.Put(branchName, meta)
+	r.metadataCache.PutWithSHA(branchName, meta, sha)
+	return nil
+}
+
+// updateMetadataRefCAS writes a metadata ref, requiring it to still hold the
+// blob this process last read.
+//
+// Without the expectation, two stackit processes in different worktrees that
+// both read a branch's metadata and then wrote it would silently keep only the
+// second write. Failing is the right outcome: the caller based its new metadata
+// on state that no longer exists, so applying it would drop whatever the other
+// process recorded.
+//
+// An unknown expectation (never read in this process, or invalidated since)
+// falls back to an unconditional write, which is what creating metadata for a
+// newly tracked branch needs.
+func (r *runner) updateMetadataRefCAS(refName, branchName, newSHA string) error {
+	expected := r.metadataCache.SHAFor(branchName)
+	if expected == "" {
+		if err := r.UpdateRef(refName, newSHA); err != nil {
+			return fmt.Errorf("failed to write metadata ref: %w", err)
+		}
+		return nil
+	}
+	if expected == newSHA {
+		return nil // Identical content; nothing to write.
+	}
+	err := r.UpdateRefsBatch(context.Background(), []RefUpdate{{
+		RefName: refName,
+		NewSHA:  newSHA,
+		OldSHA:  expected,
+	}})
+	if err != nil {
+		return fmt.Errorf("failed to write metadata ref for %s (another process changed it; re-run to pick up their change): %w", branchName, err)
+	}
 	return nil
 }
 
@@ -350,13 +386,15 @@ func (r *runner) RenameMetadata(oldName, newName string) error {
 func (r *runner) ReadLocalMetadata(branchName string) (*LocalMeta, error) {
 	refName := fmt.Sprintf("%s%s", LocalMetadataRefPrefix, branchName)
 
-	content, found, err := r.objects.ReadObject(refName)
+	content, sha, found, err := r.objects.ReadObjectWithSHA(refName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read local metadata for %s: %w", branchName, err)
 	}
 	if !found || content == "" {
 		return &LocalMeta{}, nil
 	}
+	// Remember the blob so WriteLocalMetadata can refuse to clobber a different one.
+	r.metadataCache.PutLocalSHA(branchName, sha)
 
 	var meta LocalMeta
 	if err := json.Unmarshal([]byte(content), &meta); err != nil {
@@ -378,8 +416,20 @@ func (r *runner) WriteLocalMetadata(branchName string, meta *LocalMeta) error {
 	}
 
 	refName := fmt.Sprintf("%s%s", LocalMetadataRefPrefix, branchName)
-	if err := r.UpdateRef(refName, sha); err != nil {
+	if expected := r.metadataCache.LocalSHAFor(branchName); expected != "" && expected != sha {
+		err := r.UpdateRefsBatch(context.Background(), []RefUpdate{{
+			RefName: refName,
+			NewSHA:  sha,
+			OldSHA:  expected,
+		}})
+		if err != nil {
+			return fmt.Errorf("failed to write local metadata ref for %s (another process changed it; re-run to pick up their change): %w", branchName, err)
+		}
+		r.metadataCache.PutLocalSHA(branchName, sha)
+	} else if err := r.UpdateRef(refName, sha); err != nil {
 		return fmt.Errorf("failed to write local metadata ref: %w", err)
+	} else {
+		r.metadataCache.PutLocalSHA(branchName, sha)
 	}
 
 	return nil

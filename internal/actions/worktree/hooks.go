@@ -34,8 +34,11 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 
 // RunResolvedHooks executes a pre-resolved list of hooks in the given directory.
 // Failures are warned, not blocking — matches the existing worktree behavior.
-func RunResolvedHooks(hookCmds []string, worktreePath string, out output.Output) {
-	_ = hooks.Run(context.Background(), hookCmds, hooks.RunOptions{
+//
+// The caller's context is honored so Ctrl-C interrupts a hook instead of
+// waiting out its timeout.
+func RunResolvedHooks(ctx context.Context, hookCmds []string, worktreePath string, out output.Output) {
+	_ = hooks.Run(ctx, hookCmds, hooks.RunOptions{
 		Dir:      worktreePath,
 		Blocking: false,
 		Output:   out,
@@ -50,7 +53,7 @@ func RunPostCreateHooks(ctx *app.Context, worktreePath string) error {
 	if err != nil {
 		return err
 	}
-	RunResolvedHooks(approved, worktreePath, ctx.Output)
+	RunResolvedHooks(ctx.Context, approved, worktreePath, ctx.Output)
 	return nil
 }
 

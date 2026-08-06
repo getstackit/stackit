@@ -193,12 +193,16 @@ func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 		result.Worktrees = append(result.Worktrees, entry)
 	}
 
-	result.OwnershipWarnings = ownershipWarnings(ctx)
+	result.OwnershipWarnings = OwnershipWarnings(ctx)
 
 	return result, nil
 }
 
-func ownershipWarnings(ctx *app.Context) []string {
+// OwnershipWarnings reports branches whose physical checkout location does not
+// match the worktree that owns their stack. Exported so commands that mutate
+// across the whole repository — sync in particular — can surface divergence at
+// the time it matters, not only when someone happens to run `worktree list`.
+func OwnershipWarnings(ctx *app.Context) []string {
 	gitWorktrees, err := ctx.Engine.ListWorktrees(ctx.Context)
 	if err != nil {
 		return []string{fmt.Sprintf("could not inspect Git worktrees for ownership conflicts: %v", err)}

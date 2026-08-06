@@ -35,7 +35,7 @@ func TestWorktreeRegistry_StackRootForBranch(t *testing.T) {
 	s.TrackBranch("branch2", "branch1")
 
 	// Register a worktree for branch1 (as if it were the stack root)
-	err := s.Engine.RegisterWorktree("branch1", "/tmp/test-worktree-branch1")
+	err := s.Engine.RegisterWorktree(context.Background(), "branch1", "/tmp/test-worktree-branch1")
 	require.NoError(t, err)
 
 	// Stack root for branch2 should be branch1 (the first branch whose parent is trunk)
@@ -61,7 +61,7 @@ func TestWorktreeRegistry_OwningWorktree(t *testing.T) {
 	s.CreateBranch("feature-child").Commit("feature child change")
 	s.TrackBranch("feature-child", "feature")
 
-	require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", "/tmp/feature-worktree", "feature"))
+	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", "/tmp/feature-worktree", "feature"))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	owner, err := s.Engine.OwningWorktree(s.Engine.GetBranch("feature-child"))
@@ -79,14 +79,14 @@ func TestWorktreeRegistry_RejectsDuplicatePathAndAnchor(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
-	require.NoError(t, s.Engine.RegisterWorktreeWithName("feature-a", "/tmp/shared-worktree", "feature-a"))
+	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature-a", "/tmp/shared-worktree", "feature-a"))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature-a") })
 
-	err := s.Engine.RegisterWorktreeWithName("feature-b", "/tmp/shared-worktree", "feature-b")
+	err := s.Engine.RegisterWorktreeWithName(context.Background(), "feature-b", "/tmp/shared-worktree", "feature-b")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "already registered to anchor feature-a")
 
-	err = s.Engine.RegisterWorktreeWithName("feature-a", "/tmp/other-worktree", "feature-a")
+	err = s.Engine.RegisterWorktreeWithName(context.Background(), "feature-a", "/tmp/other-worktree", "feature-a")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "anchor feature-a is already registered")
 }

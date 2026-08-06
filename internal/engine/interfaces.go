@@ -283,6 +283,7 @@ type WorktreeOperations interface {
 	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
 	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
 	WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error)
+	UntrackedCollision(ctx context.Context, branchName string) (collides, known bool)
 	// WorktreeRebaseInProgress reports whether a rebase is active in worktreePath.
 	WorktreeRebaseInProgress(ctx context.Context, worktreePath string) bool
 	ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error)
@@ -308,9 +309,9 @@ type WorktreeInfo struct {
 // WorktreeRegistry handles stackit-managed worktree tracking
 type WorktreeRegistry interface {
 	// RegisterWorktree registers a worktree for a stack root
-	RegisterWorktree(stackRoot string, path string) error
+	RegisterWorktree(ctx context.Context, stackRoot string, path string) error
 	// RegisterWorktreeWithName registers a worktree with a user-friendly name
-	RegisterWorktreeWithName(anchorBranch string, path string, name string) error
+	RegisterWorktreeWithName(ctx context.Context, anchorBranch string, path string, name string) error
 	// UnregisterWorktree removes worktree registration for a stack root
 	UnregisterWorktree(ctx context.Context, stackRoot string) error
 	// GetWorktreeForStack returns worktree info for a stack root, or nil if none

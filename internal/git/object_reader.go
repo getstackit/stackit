@@ -68,62 +68,72 @@ func (r *objectReader) killLocked() {
 }
 
 // readResponse reads one response from stdout. Caller must hold r.mu.
-func (r *objectReader) readResponse(ref string) (string, bool, error) {
+func (r *objectReader) readResponse(ref string) (content, sha string, found bool, err error) {
 	header, err := r.stdout.ReadString('\n')
 	if err != nil {
-		return "", false, fmt.Errorf("object reader read header for %s: %w", ref, err)
+		return "", "", false, fmt.Errorf("object reader read header for %s: %w", ref, err)
 	}
 	header = strings.TrimSuffix(header, "\n")
 
 	// Missing: "<ref> missing"
 	if strings.HasSuffix(header, " missing") {
-		return "", false, nil
+		return "", "", false, nil
 	}
 
 	// Present: "<sha> <type> <size>"
 	parts := strings.Fields(header)
 	if len(parts) != 3 {
-		return "", false, fmt.Errorf("object reader unexpected header %q for %s", header, ref)
+		return "", "", false, fmt.Errorf("object reader unexpected header %q for %s", header, ref)
 	}
 	size, err := strconv.Atoi(parts[2])
 	if err != nil {
-		return "", false, fmt.Errorf("object reader bad size in header %q: %w", header, err)
+		return "", "", false, fmt.Errorf("object reader bad size in header %q: %w", header, err)
 	}
 
 	// Read exactly size bytes + the trailing newline git appends after each object
 	buf := make([]byte, size+1)
 	if _, err := io.ReadFull(r.stdout, buf); err != nil {
-		return "", false, fmt.Errorf("object reader read body for %s: %w", ref, err)
+		return "", "", false, fmt.Errorf("object reader read body for %s: %w", ref, err)
 	}
-	return string(buf[:size]), true, nil
+	// parts[0] is the resolved object's SHA. Metadata refs point straight at a
+	// blob, so this is the value a later compare-and-swap update must match.
+	return string(buf[:size]), parts[0], true, nil
 }
 
 // ReadObject reads one object by ref name or SHA, restarting the process once on I/O failure.
 func (r *objectReader) ReadObject(ref string) (string, bool, error) {
+	content, _, found, err := r.ReadObjectWithSHA(ref)
+	return content, found, err
+}
+
+// ReadObjectWithSHA is ReadObject plus the resolved object's SHA. Callers that
+// intend to write the ref back use the SHA to detect another process having
+// written it in between.
+func (r *objectReader) ReadObjectWithSHA(ref string) (content, sha string, found bool, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.cmd == nil {
 		if err := r.start(); err != nil {
-			return "", false, err
+			return "", "", false, err
 		}
 	}
 	if _, err := fmt.Fprintf(r.stdin, "%s\n", ref); err != nil {
 		// Process died; restart and retry once
 		r.killLocked()
 		if startErr := r.start(); startErr != nil {
-			return "", false, startErr
+			return "", "", false, startErr
 		}
 		if _, err := fmt.Fprintf(r.stdin, "%s\n", ref); err != nil {
-			return "", false, fmt.Errorf("object reader write after restart: %w", err)
+			return "", "", false, fmt.Errorf("object reader write after restart: %w", err)
 		}
 	}
-	content, found, err := r.readResponse(ref)
+	content, sha, found, err = r.readResponse(ref)
 	if err != nil {
 		// Stdout stream is broken; discard the process so the next call
 		// restarts, mirroring ReadObjectsBatch.
 		r.killLocked()
 	}
-	return content, found, err
+	return content, sha, found, err
 }
 
 // ReadObjectsBatch sends all refs in one burst and reads all responses in order.
@@ -149,7 +159,7 @@ func (r *objectReader) ReadObjectsBatch(refs []string) (map[string]string, error
 	}
 	results := make(map[string]string, len(refs))
 	for _, ref := range refs {
-		content, found, err := r.readResponse(ref)
+		content, _, found, err := r.readResponse(ref)
 		if err != nil {
 			// Stdout stream is broken; discard the process so the next call restarts.
 			r.killLocked()

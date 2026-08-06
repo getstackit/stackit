@@ -523,8 +523,9 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 		ctx.Output.Warn("Could not inspect managed worktrees; holding no known stacks: %v", err)
 	}
 
-	// A hard reset can remove an untracked file when the incoming commit needs
-	// that pathname, so any local change must hold the branch back.
+	// Changes to tracked files always hold the branch: the reset would discard
+	// them. Untracked files hold it only when one occupies a path the incoming
+	// commit also writes, which is the only case a hard reset destroys.
 	dirtyBranches := make(map[string]bool)
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
@@ -536,7 +537,7 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 				ctx.Output.Warn("Holding %s (worktree %s has a rebase in progress)", wt.Branch, wt.Path)
 				continue
 			}
-			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+			hasChanges, inspectErr := eng.WorktreeHasTrackedChanges(ctx.Context, wt.Path)
 			if inspectErr != nil {
 				ctx.Output.Warn("Holding %s because worktree %s could not be inspected: %v", wt.Branch, wt.Path, inspectErr)
 				dirtyBranches[wt.Branch] = true
@@ -545,6 +546,20 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 			if hasChanges {
 				dirtyBranches[wt.Branch] = true
 				ctx.Output.Warn("Skipping %s (worktree %s has uncommitted changes; commit or stash them, then restack again)", wt.Branch, wt.Path)
+				continue
+			}
+			// Untracked files only hold the branch when one of them occupies a
+			// path the incoming commit also writes — the only case a hard reset
+			// would destroy. Holding on any untracked file at all would stop a
+			// restack for the ordinary state of having written a new file and
+			// not staged it yet.
+			if collides, known := eng.UntrackedCollision(ctx.Context, wt.Branch); collides || !known {
+				dirtyBranches[wt.Branch] = true
+				if known {
+					ctx.Output.Warn("Skipping %s (an untracked file in worktree %s would be overwritten by the incoming commit; move or commit it, then restack again)", wt.Branch, wt.Path)
+				} else {
+					ctx.Output.Warn("Holding %s because untracked files in worktree %s could not be checked against the incoming commit", wt.Branch, wt.Path)
+				}
 			}
 		}
 	} else {

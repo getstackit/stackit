@@ -807,3 +807,11 @@ func (d *demoGitRunner) WriteStackMetaBlob(_ *git.StackMeta) (string, error) {
 func (d *demoGitRunner) GetStackMetaRefSHA(_ string) string {
 	return ""
 }
+
+func (d *demoGitRunner) TreeContainsAnyPath(_ context.Context, _ string, _ []string) (bool, bool) {
+	return false, true
+}
+
+func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]string, error) {
+	return nil, nil
+}

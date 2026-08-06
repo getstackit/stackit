@@ -244,6 +244,8 @@ type RefOperations interface {
 	GetRef(name string) (string, error)
 	UpdateRef(name, sha string) error
 	UpdateRefWithLog(ctx context.Context, refName, sha, message string) error
+	GetUntrackedFilesIn(ctx context.Context, worktreePath string) ([]string, error)
+	TreeContainsAnyPath(ctx context.Context, rev string, paths []string) (collides, known bool)
 	UpdateRefsBatch(ctx context.Context, updates []RefUpdate) error
 	UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate, reflogMessage string) error
 	DeleteRefsBatch(ctx context.Context, refNames []string) error

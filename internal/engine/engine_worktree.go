@@ -461,3 +461,44 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 	// It's a worktree but not managed by stackit
 	return false, nil, nil
 }
+
+// UntrackedCollision reports whether untracked files in the worktree holding
+// branchName would be destroyed by restacking it.
+//
+// `git reset --hard` overwrites an untracked file only when the incoming commit
+// contains that same path; every other untracked file survives untouched. The
+// incoming tree is the branch's base — its own commits cannot introduce a
+// colliding path, or the file would be tracked rather than untracked.
+//
+// known is false when the question could not be answered, which callers must
+// treat as unsafe rather than as "no collision".
+func (e *engineImpl) UntrackedCollision(ctx context.Context, branchName string) (collides, known bool) {
+	worktrees, err := e.git.ListWorktrees(ctx)
+	if err != nil {
+		return false, false
+	}
+	worktreePath := worktrees.PathForBranch(branchName)
+	if worktreePath == "" {
+		return false, true
+	}
+	untracked, err := e.git.GetUntrackedFilesIn(ctx, worktreePath)
+	if err != nil {
+		return false, false
+	}
+	if len(untracked) == 0 {
+		return false, true
+	}
+
+	e.mu.RLock()
+	state := e.readState(branchName)
+	parent := e.trunk
+	e.mu.RUnlock()
+	if state != nil && state.Parent != "" {
+		parent = state.Parent
+	}
+	baseRev, err := e.GetBranch(parent).GetRevision()
+	if err != nil || baseRev == "" {
+		return false, false
+	}
+	return e.git.TreeContainsAnyPath(ctx, baseRev, untracked)
+}

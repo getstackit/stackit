@@ -501,3 +501,34 @@ func (r *runner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
 
 	return result, nil
 }
+
+// maxUntrackedCollisionPaths bounds how many paths TreeContainsAnyPath will ask
+// git about in one invocation. Beyond this the caller is expected to fall back
+// to a conservative answer rather than build an unbounded argv.
+const maxUntrackedCollisionPaths = 200
+
+// TreeContainsAnyPath reports whether rev's tree contains any of paths.
+//
+// This answers the only question that makes an untracked file unsafe during a
+// restack: `git reset --hard` silently overwrites an untracked file whose path
+// the incoming commit also contains, and leaves every other untracked file
+// alone. Paths are repository-relative.
+//
+// The second return reports whether the question could be answered at all.
+// Callers guard destructive work with this, so "unknown" must not read as "no
+// collision".
+func (r *runner) TreeContainsAnyPath(ctx context.Context, rev string, paths []string) (collides, known bool) {
+	if rev == "" || len(paths) == 0 {
+		return false, true
+	}
+	if len(paths) > maxUntrackedCollisionPaths {
+		return false, false
+	}
+
+	args := append([]string{"ls-tree", "-r", "-z", "--name-only", rev, "--"}, paths...)
+	out, err := r.RunGitCommandRawWithContext(ctx, args...)
+	if err != nil {
+		return false, false
+	}
+	return strings.TrimSpace(strings.ReplaceAll(out, "\x00", "")) != "", true
+}

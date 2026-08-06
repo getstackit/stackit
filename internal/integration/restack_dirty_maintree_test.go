@@ -4,26 +4,19 @@ import (
 	"testing"
 )
 
-// TestRestackWithUntrackedFileHoldsBranchAndLeavesNoStagedRevert covers the
-// untracked half of the dirty-worktree hold.
+// TestRestackWithHarmlessUntrackedFileProceeds covers the ordinary state of
+// having written a new file and not staged it yet.
 //
-// The reset that realigns a worktree after its branch ref moves is gated on the
-// worktree being clean, so that it cannot discard uncommitted work. Untracked
-// files count: `git reset --hard` overwrites an untracked file whose pathname
-// the incoming commit also contains, so skipping the reset is not enough — the
-// ref must not move either, or the worktree ends up holding the old commit's
-// content under a new ref and `stackit modify -a` commits the revert.
-//
-// So a stray untracked file holds the branch back rather than being restacked
-// around it. The file survives, the ref stays put, and nothing is staged.
-func TestRestackWithUntrackedFileHoldsBranchAndLeavesNoStagedRevert(t *testing.T) {
+// `git reset --hard` overwrites an untracked file only when the incoming commit
+// contains that same path, and leaves every other untracked file alone. Holding
+// the branch for any untracked file at all stopped restacks for a state most
+// working repositories are in most of the time.
+func TestRestackWithHarmlessUntrackedFileProceeds(t *testing.T) {
 	t.Parallel()
 
 	sh := NewTestShellInProcess(t)
 
 	sh.CreateLinearStack3().Checkout("a")
-	sh.Git("rev-parse a")
-	revBefore := sh.Output()
 
 	// Trunk advances so the stack genuinely needs restacking. WriteFile stages
 	// under the exact name, which the assertions below rely on.
@@ -32,25 +25,57 @@ func TestRestackWithUntrackedFileHoldsBranchAndLeavesNoStagedRevert(t *testing.T
 		Git("commit -m 'chore: trunk commit'").
 		Checkout("a")
 
-	// A single untracked file — a scratch note, a build artifact, anything not
-	// in .gitignore.
+	// An untracked file at a path trunk knows nothing about. Nothing incoming
+	// can overwrite it.
 	sh.WriteUnstaged("scratch.txt", "scratch note")
 
 	sh.Run("restack --upstack")
 
-	// The branch must not have moved: holding it back is what keeps the
-	// worktree and its ref consistent.
-	sh.Git("rev-parse a")
-	if sh.Output() != revBefore {
-		t.Fatalf("branch a moved despite its worktree having an untracked file:\nbefore %safter  %s", revBefore, sh.Output())
-	}
+	// The restack happened: trunk's commit is now in this branch's history.
+	sh.Git("ls-tree HEAD -- trunk1.txt").OutputContains("trunk1.txt")
 
-	// The only thing git should report is the untracked file itself. A "D " or
-	// " D" entry here means trunk's content was left staged for deletion.
+	// The untracked file survived, and no staged revert was left behind.
 	sh.Git("status --porcelain").
 		OutputContains("?? scratch.txt").
 		OutputNotContains(" D ").
 		OutputNotContains("D  ")
+}
+
+// TestRestackHoldsBranchWhenUntrackedFileWouldBeOverwritten covers the case the
+// hold actually exists for.
+//
+// The incoming commit adds a file at the same path as an untracked file in the
+// worktree. `git reset --hard` overwrites it silently, and since the file was
+// never in Git there is nothing to recover it from — so the branch is held
+// instead and the ref does not move.
+func TestRestackHoldsBranchWhenUntrackedFileWouldBeOverwritten(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+
+	sh.CreateLinearStack3().Checkout("a")
+	sh.Git("rev-parse a")
+	revBefore := sh.Output()
+
+	// Trunk advances by adding a file the worktree also has, untracked.
+	sh.Checkout("main").
+		WriteFile("collide.txt", "from trunk").
+		Git("commit -m 'chore: trunk adds collide.txt'").
+		Checkout("a")
+
+	sh.WriteUnstaged("collide.txt", "my uncommitted work")
+
+	sh.Run("restack --upstack").
+		OutputContains("would be overwritten")
+
+	// The branch must not have moved.
+	sh.Git("rev-parse a")
+	if sh.Output() != revBefore {
+		t.Fatalf("branch a moved even though restacking it would overwrite an untracked file:\nbefore %safter  %s", revBefore, sh.Output())
+	}
+
+	// And the file still holds the user's content, not trunk's.
+	sh.Git("status --porcelain").OutputContains("?? collide.txt")
 }
 
 // TestRestackSkipsBranchWithTrackedChangesInItsWorktree covers the other half.

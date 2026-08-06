@@ -106,6 +106,20 @@ func (r *runner) listUntrackedFiles(ctx context.Context) ([]string, error) {
 	return splitNulTerminated(out), nil
 }
 
+// GetUntrackedFilesIn returns untracked, non-ignored files in an arbitrary
+// worktree, as repository-relative paths. Ignored files are excluded, so
+// gitignored build output never counts as work to protect.
+func (r *runner) GetUntrackedFilesIn(ctx context.Context, worktreePath string) ([]string, error) {
+	out, err := r.RunGitCommandRawWithContext(ctx,
+		"-C", worktreePath,
+		"ls-files", "--others", "--exclude-standard", "-z",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list untracked files in %s: %w", worktreePath, err)
+	}
+	return splitNulTerminated(out), nil
+}
+
 func (r *runner) ParseStagedHunks(ctx context.Context) ([]Hunk, error) {
 	diffOutput, err := r.RunGitCommandRawWithContext(ctx, "diff", "--cached")
 	if err != nil {

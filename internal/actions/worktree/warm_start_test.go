@@ -117,3 +117,61 @@ func requireWarmStartFile(t *testing.T, root, relativePath, expected string) {
 	require.NoError(t, err)
 	require.Equal(t, expected, string(contents))
 }
+
+// TestCopyIncludedIgnoredFilesSkipsFileOccupyingDirectoryName covers a warm-start
+// selection that cannot be placed because a tracked file already owns the name.
+//
+// Any warm-start error tears down the whole worktree — the caller cleans up on
+// failure — so one unplaceable file used to cost the entire `create -w`. Warm
+// start is an optimization; it reports the file and continues.
+func TestCopyIncludedIgnoredFilesSkipsFileOccupyingDirectoryName(t *testing.T) {
+	source := t.TempDir()
+	destination := t.TempDir()
+	writeWarmStartFile(t, source, WorktreeIncludeFile, "config/secret\nkeep.env\n")
+	writeWarmStartFile(t, source, "config/secret", "secret")
+	writeWarmStartFile(t, source, "keep.env", "kept")
+
+	// Trunk carries a tracked file named "config", so the directory the include
+	// file wants cannot exist.
+	writeWarmStartFile(t, destination, "config", "tracked file on trunk")
+
+	result, err := CopyIncludedIgnoredFiles(source, destination, []string{"config/secret", "keep.env"})
+	require.NoError(t, err, "one unplaceable file must not fail the whole warm start")
+
+	require.Len(t, result.SkippedUnsafe, 1)
+	require.Equal(t, "config/secret", result.SkippedUnsafe[0].Path)
+	require.Contains(t, result.SkippedUnsafe[0].Reason, "not a directory")
+
+	// Everything else still gets copied.
+	require.Equal(t, []string{"keep.env"}, result.Copied)
+	require.FileExists(t, filepath.Join(destination, "keep.env"))
+
+	// The tracked file is untouched.
+	contents, err := os.ReadFile(filepath.Join(destination, "config"))
+	require.NoError(t, err)
+	require.Equal(t, "tracked file on trunk", string(contents))
+}
+
+// TestCopyIncludedIgnoredFilesVerifiesEachDirectoryOnce guards the memoization
+// that keeps deep warm-start sets (node_modules being the motivating case) from
+// re-walking every path component for every file.
+func TestCopyIncludedIgnoredFilesVerifiesEachDirectoryOnce(t *testing.T) {
+	source := t.TempDir()
+	destination := t.TempDir()
+	writeWarmStartFile(t, source, WorktreeIncludeFile, "deps/**\n")
+
+	names := []string{"a", "b", "c", "d"}
+	paths := make([]string, 0, len(names))
+	for _, name := range names {
+		relativePath := filepath.Join("deps", "nested", "deeper", name)
+		writeWarmStartFile(t, source, relativePath, name)
+		paths = append(paths, filepath.ToSlash(relativePath))
+	}
+
+	result, err := CopyIncludedIgnoredFiles(source, destination, paths)
+	require.NoError(t, err)
+	require.Len(t, result.Copied, 4)
+	for _, name := range []string{"a", "b", "c", "d"} {
+		require.FileExists(t, filepath.Join(destination, "deps", "nested", "deeper", name))
+	}
+}

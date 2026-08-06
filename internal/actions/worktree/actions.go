@@ -481,6 +481,9 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 	if warmStart.Enabled && len(warmStart.Copied) > 0 {
 		out.Info("Warm-started worktree with %d ignored file(s)", len(warmStart.Copied))
 	}
+	for _, skip := range warmStart.SkippedUnsafe {
+		out.Warn("Did not warm-start %s: %s (selected by %s)", skip.Path, skip.Reason, WorktreeIncludeFile)
+	}
 
 	if err := eng.RegisterWorktreeWithName(ctx.Context, anchorBranchName, worktreePath, opts.Name); err != nil {
 		cleanup()

@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"os"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -41,6 +42,19 @@ func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 
 		if ctx.InManagedWorktree && ctx.WorktreeInfo != nil && ctx.WorktreeInfo.AnchorBranch == owner.AnchorBranch {
 			continue
+		}
+
+		// "cd there" is only useful advice if "there" still exists. A worktree
+		// whose directory was deleted leaves the branch owned by a path the
+		// user cannot go to, and the way out is detaching the registration —
+		// not a cd that will fail.
+		if _, statErr := os.Stat(owner.Path); statErr != nil {
+			if os.IsNotExist(statErr) {
+				return fmt.Errorf("branch %s belongs to worktree %s, whose directory no longer exists (%s); run 'stackit worktree detach %s' to release it, or 'stackit worktree list' to review",
+					branchName, worktreeDisplayName(owner), owner.Path, worktreeDisplayName(owner))
+			}
+			return fmt.Errorf("branch %s belongs to worktree %s, which cannot be inspected at %s: %w; 'stackit worktree list' shows the current state",
+				branchName, worktreeDisplayName(owner), owner.Path, statErr)
 		}
 
 		return fmt.Errorf("branch %s belongs to worktree %s; run this command from there: cd %s", branchName, worktreeDisplayName(owner), owner.Path)

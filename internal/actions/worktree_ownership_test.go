@@ -1,6 +1,8 @@
 package actions
 
 import (
+	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,14 +18,33 @@ func TestEnsureCanModifyHere(t *testing.T) {
 	s.WithInitialCommit()
 	s.CreateBranch("feature").Commit("feature change")
 	s.TrackBranch("feature", "main")
-	require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", "/tmp/feature-worktree", "feature-wt"))
+	worktreePath := t.TempDir()
+	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreePath, "feature-wt"))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	t.Run("refuses managed stack mutation from main repository", func(t *testing.T) {
 		err := EnsureCanModifyHere(s.Context, s.Engine.GetBranch("feature"))
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "belongs to worktree feature-wt")
-		assert.ErrorContains(t, err, "cd /tmp/feature-worktree")
+		assert.ErrorContains(t, err, "cd "+worktreePath)
+	})
+
+	// Telling someone to cd into a directory that no longer exists strands
+	// them: the branch is owned by a path they cannot go to, and only detaching
+	// the registration releases it.
+	t.Run("points at detach when the worktree directory is gone", func(t *testing.T) {
+		gone := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		gone.WithInitialCommit()
+		gone.CreateBranch("feature").Commit("feature change")
+		gone.TrackBranch("feature", "main")
+		missing := filepath.Join(t.TempDir(), "deleted-worktree")
+		require.NoError(t, gone.Engine.RegisterWorktreeWithName(context.Background(), "feature", missing, "feature-wt"))
+
+		err := EnsureCanModifyHere(gone.Context, gone.Engine.GetBranch("feature"))
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "no longer exists")
+		assert.ErrorContains(t, err, "worktree detach feature-wt")
+		assert.NotContains(t, err.Error(), "cd "+missing)
 	})
 
 	t.Run("allows mutation from owning worktree", func(t *testing.T) {
@@ -31,7 +52,7 @@ func TestEnsureCanModifyHere(t *testing.T) {
 		ctx.InManagedWorktree = true
 		ctx.WorktreeInfo = &engine.WorktreeInfo{
 			Name:         "feature-wt",
-			Path:         "/tmp/feature-worktree",
+			Path:         worktreePath,
 			AnchorBranch: "feature",
 		}
 		require.NoError(t, EnsureCanModifyHere(&ctx, s.Engine.GetBranch("feature")))
@@ -42,7 +63,7 @@ func TestEnsureCanModifyHere(t *testing.T) {
 		ctx.InManagedWorktree = true
 		ctx.WorktreeInfo = &engine.WorktreeInfo{
 			Name:         "feature-wt",
-			Path:         "/tmp/feature-worktree",
+			Path:         worktreePath,
 			AnchorBranch: "feature",
 			MainRepoDir:  s.Context.RepoRoot,
 		}

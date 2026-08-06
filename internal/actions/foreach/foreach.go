@@ -508,7 +508,7 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 	defer cleanup()
 
 	// Run post-worktree-create hooks (pre-resolved, no prompting)
-	worktree.RunResolvedHooks(hooks, worktreePath, appCtx.Output)
+	worktree.RunResolvedHooks(appCtx.Context, hooks, worktreePath, appCtx.Output)
 
 	var output strings.Builder
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", fullCommand)

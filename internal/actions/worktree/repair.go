@@ -167,8 +167,8 @@ func moveRegistration(ctx *app.Context, from engine.WorktreeInfo, toAnchor strin
 	if err := ctx.Engine.UnregisterWorktree(ctx.Context, from.AnchorBranch); err != nil {
 		return fmt.Errorf("failed to remove stale registration %s: %w", output.BranchName(from.AnchorBranch), err)
 	}
-	if err := ctx.Engine.RegisterWorktreeWithName(toAnchor, from.Path, from.Name); err != nil {
-		if restoreErr := ctx.Engine.RegisterWorktreeWithName(from.AnchorBranch, from.Path, from.Name); restoreErr != nil {
+	if err := ctx.Engine.RegisterWorktreeWithName(ctx.Context, toAnchor, from.Path, from.Name); err != nil {
+		if restoreErr := ctx.Engine.RegisterWorktreeWithName(ctx.Context, from.AnchorBranch, from.Path, from.Name); restoreErr != nil {
 			return fmt.Errorf("failed to register worktree under anchor %s: %w (also failed to restore %s: %w)", toAnchor, err, output.BranchName(from.AnchorBranch), restoreErr)
 		}
 		return fmt.Errorf("failed to register worktree under anchor %s: %w", toAnchor, err)
@@ -219,7 +219,7 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 			_ = ctx.Engine.UnregisterWorktree(ctx.Context, anchorBranchName)
 		}
 		if legacyUnregistered {
-			_ = ctx.Engine.RegisterWorktreeWithName(wtInfo.AnchorBranch, wtInfo.Path, wtInfo.Name)
+			_ = ctx.Engine.RegisterWorktreeWithName(ctx.Context, wtInfo.AnchorBranch, wtInfo.Path, wtInfo.Name)
 		}
 		if rootReparented {
 			_ = ctx.Engine.ReparentBranch(ctx.Context, ctx.Engine.GetBranch(rootBranchName), ctx.Engine.GetBranch(originalParent))
@@ -256,7 +256,7 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 		return "", fmt.Errorf("failed to remove legacy registration %s: %w", output.BranchName(wtInfo.AnchorBranch), err)
 	}
 	legacyUnregistered = true
-	if err := ctx.Engine.RegisterWorktreeWithName(anchorBranchName, wtInfo.Path, wtInfo.Name); err != nil {
+	if err := ctx.Engine.RegisterWorktreeWithName(ctx.Context, anchorBranchName, wtInfo.Path, wtInfo.Name); err != nil {
 		cleanup()
 		return "", fmt.Errorf("failed to register worktree under anchor %s: %w", output.BranchName(anchorBranchName), err)
 	}

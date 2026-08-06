@@ -523,8 +523,9 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 		ctx.Output.Warn("Could not inspect managed worktrees; holding no known stacks: %v", err)
 	}
 
-	// A hard reset can remove an untracked file when the incoming commit needs
-	// that pathname, so any local change must hold the branch back.
+	// Changes to tracked files always hold the branch: the reset would discard
+	// them. Untracked files hold it only when one occupies a path the incoming
+	// commit also writes, which is the only case a hard reset destroys.
 	dirtyBranches := make(map[string]bool)
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
@@ -536,7 +537,7 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 				ctx.Output.Warn("Holding %s (worktree %s has a rebase in progress)", wt.Branch, wt.Path)
 				continue
 			}
-			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+			hasChanges, inspectErr := eng.WorktreeHasTrackedChanges(ctx.Context, wt.Path)
 			if inspectErr != nil {
 				ctx.Output.Warn("Holding %s because worktree %s could not be inspected: %v", wt.Branch, wt.Path, inspectErr)
 				dirtyBranches[wt.Branch] = true
@@ -545,6 +546,20 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 			if hasChanges {
 				dirtyBranches[wt.Branch] = true
 				ctx.Output.Warn("Skipping %s (worktree %s has uncommitted changes; commit or stash them, then restack again)", wt.Branch, wt.Path)
+				continue
+			}
+			// Untracked files only hold the branch when one of them occupies a
+			// path the incoming commit also writes — the only case a hard reset
+			// would destroy. Holding on any untracked file at all would stop a
+			// restack for the ordinary state of having written a new file and
+			// not staged it yet.
+			if collides, known := eng.UntrackedCollision(ctx.Context, wt.Branch); collides || !known {
+				dirtyBranches[wt.Branch] = true
+				if known {
+					ctx.Output.Warn("Skipping %s (an untracked file in worktree %s would be overwritten by the incoming commit; move or commit it, then restack again)", wt.Branch, wt.Path)
+				} else {
+					ctx.Output.Warn("Holding %s because untracked files in worktree %s could not be checked against the incoming commit", wt.Branch, wt.Path)
+				}
 			}
 		}
 	} else {
@@ -662,4 +677,37 @@ func handleRestackProgress(
 			jsonHandler.SetLastBranchStackRoot(p.Branch, p.StackRoot)
 		}
 	}
+}
+
+// heldWorktreeReason returns why branchName's own checkout blocks a restack, or
+// "" when nothing does.
+//
+// Restack holds a branch whose worktree it cannot safely reset, and a held
+// branch is reported as RestackUnneeded — the same status as a branch that
+// needed no work. Callers that expected a rebase to start need to tell those
+// apart, because the remedy lives in the other worktree.
+//
+// Only the branch's own checkout is examined. A branch held because an ancestor
+// is held returns "", and the caller falls back to its generic message.
+func heldWorktreeReason(ctx *app.Context, branchName string) string {
+	eng := ctx.Engine
+	worktrees, err := eng.ListWorktrees(ctx.Context)
+	if err != nil {
+		return ""
+	}
+	path := worktrees.PathForBranch(branchName)
+	if path == "" {
+		return ""
+	}
+	if eng.WorktreeRebaseInProgress(ctx.Context, path) {
+		return fmt.Sprintf("worktree %s has a rebase in progress", path)
+	}
+	hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, path)
+	switch {
+	case inspectErr != nil:
+		return fmt.Sprintf("worktree %s could not be inspected: %v", path, inspectErr)
+	case hasChanges:
+		return fmt.Sprintf("worktree %s has uncommitted changes", path)
+	}
+	return ""
 }

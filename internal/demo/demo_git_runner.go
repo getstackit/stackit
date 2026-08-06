@@ -732,7 +732,7 @@ func (d *demoGitRunner) ReadWorktreeMeta(_ string) (*git.WorktreeMeta, error) {
 	return nil, nil
 }
 
-func (d *demoGitRunner) WriteWorktreeMeta(_ string, _ *git.WorktreeMeta) error {
+func (d *demoGitRunner) WriteWorktreeMeta(_ context.Context, _ string, _ *git.WorktreeMeta) error {
 	return nil
 }
 
@@ -806,4 +806,12 @@ func (d *demoGitRunner) WriteStackMetaBlob(_ *git.StackMeta) (string, error) {
 
 func (d *demoGitRunner) GetStackMetaRefSHA(_ string) string {
 	return ""
+}
+
+func (d *demoGitRunner) TreeContainsAnyPath(_ context.Context, _ string, _ []string) (bool, bool) {
+	return false, true
+}
+
+func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]string, error) {
+	return nil, nil
 }

@@ -55,6 +55,10 @@ type restackSnapshot struct {
 	// local changes before this restack pass began. This cannot be checked
 	// lazily; see resetWorktreeIfClean for why.
 	dirtyWorktrees map[string]bool
+	// untrackedByWorktree holds the untracked (non-ignored) paths found in
+	// worktrees that had no tracked changes. Whether those hold their branch
+	// depends on the incoming tree, which is only known per branch.
+	untrackedByWorktree map[string][]string
 	// heldBranches contains every branch whose checked-out worktree was dirty
 	// or could not be inspected before this pass. Descendants of these branches
 	// must be held too: a validated child may otherwise be built on the target
@@ -63,6 +67,69 @@ type restackSnapshot struct {
 	// worktreeInspectionFailed means the physical checkout map is unknown, so
 	// no ref move is safe for this pass.
 	worktreeInspectionFailed bool
+}
+
+// untrackedCollisionHold decides whether a worktree holding only untracked
+// files must still hold its branch back.
+//
+// `git reset --hard` silently overwrites an untracked file whose path the
+// incoming commit also contains, and leaves every other untracked file alone.
+// So the question is not "are there untracked files" — which is the ordinary
+// state of having written a new file and not staged it — but "does any of them
+// collide with what is about to land".
+//
+// The incoming tree is the branch's new base. A branch's own commits cannot
+// introduce a colliding path: if they did, the file would be tracked rather
+// than untracked. Parents are restacked before their children, so by the time
+// this runs the parent ref already holds the tree that is about to arrive.
+//
+// The decision is recorded in the snapshot: a held branch must also hold its
+// descendants, and its worktree must not be reset afterwards.
+func (e *engineImpl) untrackedCollisionHold(ctx context.Context, branch Branch, snap *restackSnapshot) bool {
+	branchName := branch.GetName()
+	worktreePath := snap.worktrees.PathForBranch(branchName)
+	if worktreePath == "" {
+		return false
+	}
+	untracked := snap.untrackedByWorktree[worktreePath]
+	if len(untracked) == 0 {
+		return false
+	}
+
+	hold := func() bool {
+		snap.dirtyWorktrees[worktreePath] = true
+		snap.heldBranches[branchName] = true
+		return true
+	}
+
+	e.mu.RLock()
+	state := e.readState(branchName)
+	parent := e.trunk
+	e.mu.RUnlock()
+	if state != nil && state.Parent != "" {
+		parent = state.Parent
+	}
+	baseRev, err := e.GetBranch(parent).GetRevision()
+	if err != nil || baseRev == "" {
+		// Cannot see what is about to land, so cannot rule out a collision.
+		return hold()
+	}
+
+	collides, known := e.git.TreeContainsAnyPath(ctx, baseRev, untracked)
+	if !known || collides {
+		return hold()
+	}
+	return false
+}
+
+// holdBranch is the single hold decision every restack path consults: an
+// ancestor already held, or this branch's own worktree holding something the
+// incoming tree would destroy.
+func (e *engineImpl) holdBranch(ctx context.Context, branch Branch, snap *restackSnapshot) bool {
+	if e.branchHeldBack(branch, snap) {
+		return true
+	}
+	return e.untrackedCollisionHold(ctx, branch, snap)
 }
 
 func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) bool {
@@ -264,7 +331,7 @@ func (e *engineImpl) restackBranch(
 	// which warns and is reached solely by the `restack` command) so that every
 	// caller of RestackBranches inherits it — modify, sync, squash, absorb,
 	// delete, split, reorder, pluck and insert all arrive here directly.
-	if e.branchHeldBack(branch, snap) {
+	if e.holdBranch(ctx, branch, snap) {
 		return RestackBranchResult{Result: RestackUnneeded}, nil
 	}
 
@@ -712,7 +779,7 @@ func (e *engineImpl) applyMetadataRefresh(
 	// Metadata records the parent SHA consumed by later planning, so advancing
 	// it past a held parent would create the same phantom-parent state as a ref
 	// move. A held branch and every descendant must remain completely unchanged.
-	if e.branchHeldBack(branch, snap) {
+	if e.holdBranch(ctx, branch, snap) {
 		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: item.ParentRev}, nil
 	}
 	meta := snap.meta.Get(branchName)
@@ -770,7 +837,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	// Hold the branch back instead. This is the plan path, reached by every
 	// caller of actions.RestackBranches (modify, squash, absorb, delete, split,
 	// reorder, pluck) as well as the `restack` command.
-	if e.branchHeldBack(branch, snap) {
+	if e.holdBranch(ctx, branch, snap) {
 		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: parentRev}, nil
 	}
 

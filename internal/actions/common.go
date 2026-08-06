@@ -536,6 +536,12 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 	// Verify we're actually in conflict state
 	if !ctx.Engine.IsRebaseInProgress(ctx.Context) {
 		reattach()
+		// A held branch reports RestackUnneeded, exactly like a branch that was
+		// already up to date, so "the rebase succeeded" is the wrong diagnosis
+		// and sends the user looking for a conflict that never started.
+		if reason := heldWorktreeReason(ctx, firstConflict); reason != "" {
+			return fmt.Errorf("cannot resolve the conflict on %s: it was held back because %s; resolve that, then re-run", firstConflict, reason)
+		}
 		return fmt.Errorf("expected conflict on %s but rebase completed successfully", firstConflict)
 	}
 

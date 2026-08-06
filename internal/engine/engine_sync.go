@@ -128,19 +128,39 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// when the user actually had uncommitted work. Bounded by worktree count,
 	// not branch count, so this stays a handful of calls even for a large stack.
 	//
-	// Capture every local change. `git reset --hard` can delete an untracked
-	// file when the incoming commit needs that pathname, so excluding untracked
-	// files would risk user data loss.
+	// Changes to tracked files hold their branch unconditionally: the reset
+	// would discard them.
+	//
+	// Untracked files are recorded but not decided here. `git reset --hard`
+	// overwrites an untracked file only when the incoming commit contains that
+	// same path, and leaves every other untracked file untouched — so holding
+	// on any untracked file at all stops a restack for the ordinary state of
+	// having written a new file and not staged it yet. The collision is checked
+	// per branch once its incoming tree is known; see untrackedCollisionHold.
 	dirtyWorktrees := make(map[string]bool, len(worktrees))
+	untrackedByWorktree := make(map[string][]string)
 	heldBranches := make(BranchNameSet)
 	for _, worktree := range worktrees {
-		dirty, dirtyErr := e.git.WorktreeHasUncommittedChanges(ctx, worktree.Path)
-		if dirtyErr != nil || dirty {
-			path := worktree.Path
+		path := worktree.Path
+		tracked, trackedErr := e.git.WorktreeHasTrackedChanges(ctx, path)
+		if trackedErr != nil || tracked {
 			dirtyWorktrees[path] = true
 			if worktree.Branch != "" {
 				heldBranches[worktree.Branch] = true
 			}
+			continue
+		}
+		untracked, untrackedErr := e.git.GetUntrackedFilesIn(ctx, path)
+		if untrackedErr != nil {
+			// Cannot tell what is there, so no reset is safe.
+			dirtyWorktrees[path] = true
+			if worktree.Branch != "" {
+				heldBranches[worktree.Branch] = true
+			}
+			continue
+		}
+		if len(untracked) > 0 {
+			untrackedByWorktree[path] = untracked
 		}
 	}
 
@@ -156,7 +176,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
-	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, heldBranches: heldBranches, worktreeInspectionFailed: worktreeInspectionFailed}
+	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldBranches: heldBranches, worktreeInspectionFailed: worktreeInspectionFailed}
 
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)

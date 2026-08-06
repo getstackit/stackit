@@ -732,7 +732,7 @@ func (d *demoGitRunner) ReadWorktreeMeta(_ string) (*git.WorktreeMeta, error) {
 	return nil, nil
 }
 
-func (d *demoGitRunner) WriteWorktreeMeta(_ string, _ *git.WorktreeMeta) error {
+func (d *demoGitRunner) WriteWorktreeMeta(_ context.Context, _ string, _ *git.WorktreeMeta) error {
 	return nil
 }
 

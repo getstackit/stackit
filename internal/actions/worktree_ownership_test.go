@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +17,7 @@ func TestEnsureCanModifyHere(t *testing.T) {
 	s.WithInitialCommit()
 	s.CreateBranch("feature").Commit("feature change")
 	s.TrackBranch("feature", "main")
-	require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", "/tmp/feature-worktree", "feature-wt"))
+	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", "/tmp/feature-worktree", "feature-wt"))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	t.Run("refuses managed stack mutation from main repository", func(t *testing.T) {

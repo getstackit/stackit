@@ -325,7 +325,7 @@ func (r *runner) ReadWorktreeMeta(stackRoot string) (*WorktreeMeta, error) {
 }
 
 // WriteWorktreeMeta writes worktree metadata for a stack root to local git refs
-func (r *runner) WriteWorktreeMeta(stackRoot string, meta *WorktreeMeta) error {
+func (r *runner) WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *WorktreeMeta) error {
 	jsonData, err := json.Marshal(meta)
 	if err != nil {
 		return fmt.Errorf("failed to marshal worktree metadata: %w", err)
@@ -346,7 +346,7 @@ func (r *runner) WriteWorktreeMeta(stackRoot string, meta *WorktreeMeta) error {
 		{RefName: fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot), NewSHA: sha, OldSHA: zeroSHA},
 		{RefName: worktreePathRef(meta.Path), NewSHA: sha, OldSHA: zeroSHA},
 	}
-	if err := r.UpdateRefsBatch(context.Background(), updates); err != nil {
+	if err := r.UpdateRefsBatch(ctx, updates); err != nil {
 		return fmt.Errorf("failed to register worktree metadata refs: %w", err)
 	}
 

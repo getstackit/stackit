@@ -227,7 +227,7 @@ type WorktreeOperations interface {
 // WorktreeRegistryOperations handles stackit-managed worktree tracking (local-only refs).
 type WorktreeRegistryOperations interface {
 	ReadWorktreeMeta(stackRoot string) (*WorktreeMeta, error)
-	WriteWorktreeMeta(stackRoot string, meta *WorktreeMeta) error
+	WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *WorktreeMeta) error
 	DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 	ListWorktreeMetas() (map[string]*WorktreeMeta, error)
 }

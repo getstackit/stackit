@@ -198,7 +198,7 @@ func TestDeleteRespectsManagedWorktreeOwnership(t *testing.T) {
 	s.TrackBranch("feature", "main")
 	s.CreateBranch("feature-child").Commit("child change")
 	s.TrackBranch("feature-child", "feature")
-	require.NoError(t, s.Engine.RegisterWorktreeWithName("feature", "/tmp/feature-worktree", "feature-wt"))
+	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", "/tmp/feature-worktree", "feature-wt"))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	_, err := Action(s.Context, Options{BranchName: "feature", Force: true}, nil)
@@ -222,7 +222,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		s.TrackBranch("feature-branch", "main")
 
 		// Register a fake worktree for this stack root
-		err := s.Engine.RegisterWorktree("feature-branch", "/tmp/fake-worktree-path")
+		err := s.Engine.RegisterWorktree(context.Background(), "feature-branch", "/tmp/fake-worktree-path")
 		require.NoError(t, err)
 
 		// Verify worktree is registered
@@ -255,7 +255,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		s.TrackBranch("child-branch", "stack-root")
 
 		// Register a worktree for the stack root
-		err := s.Engine.RegisterWorktree("stack-root", "/tmp/fake-worktree-path")
+		err := s.Engine.RegisterWorktree(context.Background(), "stack-root", "/tmp/fake-worktree-path")
 		require.NoError(t, err)
 
 		// Verify worktree is registered
@@ -288,7 +288,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		s.TrackBranch("child-branch", "stack-root")
 
 		// Register a worktree for the stack root
-		err := s.Engine.RegisterWorktree("stack-root", "/tmp/fake-worktree-path")
+		err := s.Engine.RegisterWorktree(context.Background(), "stack-root", "/tmp/fake-worktree-path")
 		require.NoError(t, err)
 
 		// Verify worktree is registered

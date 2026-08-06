@@ -237,12 +237,12 @@ func (e *engineImpl) addWorktreeWithRetryLocked(ctx context.Context, path string
 }
 
 // RegisterWorktree registers a worktree for a stack root in local git refs
-func (e *engineImpl) RegisterWorktree(stackRoot string, path string) error {
-	return e.RegisterWorktreeWithName(stackRoot, path, "")
+func (e *engineImpl) RegisterWorktree(ctx context.Context, stackRoot string, path string) error {
+	return e.RegisterWorktreeWithName(ctx, stackRoot, path, "")
 }
 
 // RegisterWorktreeWithName registers a worktree with a user-friendly name
-func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, name string) error {
+func (e *engineImpl) RegisterWorktreeWithName(ctx context.Context, anchorBranch string, path string, name string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute worktree path: %w", err)
@@ -280,7 +280,7 @@ func (e *engineImpl) RegisterWorktreeWithName(anchorBranch string, path string, 
 		MainRepoDir:  e.repoRoot,
 	}
 
-	return e.git.WriteWorktreeMeta(anchorBranch, meta)
+	return e.git.WriteWorktreeMeta(ctx, anchorBranch, meta)
 }
 
 // UnregisterWorktree removes worktree registration for a stack root

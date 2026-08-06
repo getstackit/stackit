@@ -308,9 +308,9 @@ type WorktreeInfo struct {
 // WorktreeRegistry handles stackit-managed worktree tracking
 type WorktreeRegistry interface {
 	// RegisterWorktree registers a worktree for a stack root
-	RegisterWorktree(stackRoot string, path string) error
+	RegisterWorktree(ctx context.Context, stackRoot string, path string) error
 	// RegisterWorktreeWithName registers a worktree with a user-friendly name
-	RegisterWorktreeWithName(anchorBranch string, path string, name string) error
+	RegisterWorktreeWithName(ctx context.Context, anchorBranch string, path string, name string) error
 	// UnregisterWorktree removes worktree registration for a stack root
 	UnregisterWorktree(ctx context.Context, stackRoot string) error
 	// GetWorktreeForStack returns worktree info for a stack root, or nil if none

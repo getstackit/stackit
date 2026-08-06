@@ -35,6 +35,34 @@ func (e *engineImpl) resetWorktreeIfClean(ctx context.Context, worktreePath stri
 	_ = e.git.ResetWorktreeWorkingDir(ctx, worktreePath) //nolint:errcheck // best-effort
 }
 
+// branchWorktreeResetTarget resolves the worktree holding branchName and
+// reports whether it is safe to reset once the branch's ref moves. It is the
+// one-off equivalent of the restack snapshot's dirtyWorktrees for paths that
+// move a single ref outside a restack pass.
+//
+// This MUST be called before the ref moves. Asking afterwards compares the
+// worktree's now-stale content against its own new ref, which always reads as
+// dirty and silently disables the reset — the same trap resetWorktreeIfClean
+// documents for the batch path.
+//
+// Best-effort: a worktree that cannot be inspected returns "" and is left
+// alone, since a reset is what would discard uncommitted work.
+func (e *engineImpl) branchWorktreeResetTarget(ctx context.Context, branchName string) string {
+	worktrees, err := e.git.ListWorktrees(ctx)
+	if err != nil {
+		return ""
+	}
+	worktreePath := worktrees.PathForBranch(branchName)
+	if worktreePath == "" {
+		return ""
+	}
+	dirty, err := e.git.WorktreeHasTrackedChanges(ctx, worktreePath)
+	if err != nil || dirty {
+		return ""
+	}
+	return worktreePath
+}
+
 // restackSnapshot bundles the branch-keyed state captured once per restack
 // pass so per-branch steps don't re-read metadata, revisions, worktrees, or
 // metadata-ref SHAs from git. It is mutated in place as branches are rebased

@@ -320,9 +320,23 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, reba
 			return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to get expected branch revision for %s: %w", branchName, err)
 		}
 	}
+	// Moving the ref is only half the operation: a worktree holding this branch
+	// is still on the pre-rebase content, and `git status` there reports the
+	// rebased commit's files as deleted — which the next `stackit modify -a` in
+	// that worktree commits, silently reverting the rebase. restackBranch resets
+	// the branch's worktree for exactly this reason; the continue path moved its
+	// ref without doing so.
+	//
+	// Resolved before the ref moves; see branchWorktreeResetTarget for why.
+	worktreeToReset := e.branchWorktreeResetTarget(ctx, branchName)
+
 	err = e.git.UpdateBranchRefCAS(ctx, branchName, newRev, expectedBranchRevision)
 	if err != nil {
 		return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to update branch reference %s: %w", branchName, err)
+	}
+
+	if worktreeToReset != "" {
+		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreeToReset) //nolint:errcheck // best-effort
 	}
 
 	// Update metadata

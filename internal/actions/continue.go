@@ -97,9 +97,23 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		return errors.NewConflictWorkflowError(branchName)
 	}
 
-	// Success - checkout the branch (rebase leaves us in detached HEAD)
+	// Success - checkout the branch (rebase leaves us in detached HEAD).
+	//
+	// A branch checked out in another worktree cannot be attached here, and
+	// since CheckoutBranch stopped falling back to a detached checkout that is
+	// now a hard error. Failing the whole command for it abandons the branches
+	// still queued in BranchesToRestack and leaves the continuation state on
+	// disk, so the resolved conflict has to be redone. Report where the branch
+	// lives and carry on with the rest of the stack instead.
 	if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(result.BranchName)); err != nil {
-		return fmt.Errorf("failed to checkout branch %s: %w", result.BranchName, err)
+		otherWorktree := ""
+		if worktrees, listErr := eng.ListWorktrees(ctx.Context); listErr == nil {
+			otherWorktree = worktrees.PathForBranch(result.BranchName)
+		}
+		if otherWorktree == "" {
+			return fmt.Errorf("failed to checkout branch %s: %w", result.BranchName, err)
+		}
+		out.Warn("Updated %s, which is checked out in worktree %s; staying where you are.", result.BranchName, otherWorktree)
 	}
 
 	out.Info("Resolved rebase conflict for %s.", output.CurrentBranch(result.BranchName))

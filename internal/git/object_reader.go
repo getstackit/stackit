@@ -136,10 +136,23 @@ func (r *objectReader) ReadObjectWithSHA(ref string) (content, sha string, found
 	return content, sha, found, err
 }
 
+// BatchObject is one object's content together with the SHA the ref resolved
+// to. Callers that intend to write the ref back keep the SHA so they can detect
+// another process having written it in between.
+type BatchObject struct {
+	Content string
+	SHA     string
+}
+
 // ReadObjectsBatch sends all refs in one burst and reads all responses in order.
 // More efficient than N individual ReadObject calls: one lock acquisition, one
 // write loop, one read loop, zero per-item subprocess overhead.
-func (r *objectReader) ReadObjectsBatch(refs []string) (map[string]string, error) {
+//
+// The SHA comes back alongside the content because the batch path is the one
+// almost every command actually uses. Dropping it left those reads with no
+// compare-and-swap expectation to write against, so the lost-update guard only
+// ever engaged for the rare single-branch ReadMetadata caller.
+func (r *objectReader) ReadObjectsBatch(refs []string) (map[string]BatchObject, error) {
 	if len(refs) == 0 {
 		return nil, nil
 	}
@@ -157,16 +170,16 @@ func (r *objectReader) ReadObjectsBatch(refs []string) (map[string]string, error
 			return nil, fmt.Errorf("object reader write: %w", err)
 		}
 	}
-	results := make(map[string]string, len(refs))
+	results := make(map[string]BatchObject, len(refs))
 	for _, ref := range refs {
-		content, _, found, err := r.readResponse(ref)
+		content, sha, found, err := r.readResponse(ref)
 		if err != nil {
 			// Stdout stream is broken; discard the process so the next call restarts.
 			r.killLocked()
 			return nil, err
 		}
 		if found {
-			results[ref] = content
+			results[ref] = BatchObject{Content: content, SHA: sha}
 		}
 	}
 	return results, nil

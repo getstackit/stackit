@@ -182,19 +182,21 @@ func (r *runner) BatchReadMetadata(branchNames []string) (map[string]*Meta, map[
 	}
 
 	for i, name := range misses {
-		content := contents[refs[i]] // empty string when the ref is missing
-		if content == "" {
+		obj := contents[refs[i]] // zero value when the ref is missing
+		if obj.Content == "" {
 			empty := NewMeta()
 			r.metadataCache.Put(name, empty)
 			results[name] = empty
 			continue
 		}
 		var meta Meta
-		if unmarshalErr := json.Unmarshal([]byte(content), &meta); unmarshalErr != nil {
+		if unmarshalErr := json.Unmarshal([]byte(obj.Content), &meta); unmarshalErr != nil {
 			errs[name] = fmt.Errorf("failed to unmarshal metadata for %s: %w", name, unmarshalErr)
 			continue
 		}
-		r.metadataCache.Put(name, &meta)
+		// Record the blob this came from, the same way ReadMetadata does, so a
+		// later WriteMetadata compares against it instead of overwriting blind.
+		r.metadataCache.PutWithSHA(name, &meta, obj.SHA)
 		results[name] = &meta
 	}
 
@@ -231,17 +233,20 @@ func (r *runner) BatchReadLocalMetadata(branchNames []string) LocalMetaMap {
 	}
 
 	for i, name := range branchNames {
-		content := contents[refs[i]]
-		if content == "" {
+		obj := contents[refs[i]]
+		if obj.Content == "" {
 			results[name] = &LocalMeta{}
 			continue
 		}
 		var meta LocalMeta
-		if err := json.Unmarshal([]byte(content), &meta); err != nil {
+		if err := json.Unmarshal([]byte(obj.Content), &meta); err != nil {
 			// Non-critical; treat as missing
 			results[name] = &LocalMeta{}
 			continue
 		}
+		// Same reason as BatchReadMetadata: without the SHA, WriteLocalMetadata
+		// has nothing to compare against and falls back to a blind write.
+		r.metadataCache.PutLocalSHA(name, obj.SHA)
 		results[name] = &meta
 	}
 
@@ -323,15 +328,22 @@ func (r *runner) updateMetadataRefCAS(refName, branchName, newSHA string) error 
 		}
 		return nil
 	}
-	if expected == newSHA {
-		return nil // Identical content; nothing to write.
-	}
+	// Writing back what we read is still a write. expected is what *this*
+	// process last saw, not what the ref holds now, so short-circuiting here
+	// reported success for a ref another process may have moved in between —
+	// and the caller then cached metadata it never actually wrote. Let the
+	// compare-and-swap decide; it costs one update-ref.
 	err := r.UpdateRefsBatch(context.Background(), []RefUpdate{{
 		RefName: refName,
 		NewSHA:  newSHA,
 		OldSHA:  expected,
 	}})
 	if err != nil {
+		// The expectation is now known-stale. Dropping it forces the next read
+		// to come from disk: otherwise ReadMetadata answers from cache, recomputes
+		// the same expectation, and every retry in this process fails the same
+		// way — which the short-lived CLI hides but a long-lived server does not.
+		r.metadataCache.Delete(branchName)
 		return fmt.Errorf("failed to write metadata ref for %s (another process changed it; re-run to pick up their change): %w", branchName, err)
 	}
 	return nil
@@ -416,21 +428,26 @@ func (r *runner) WriteLocalMetadata(branchName string, meta *LocalMeta) error {
 	}
 
 	refName := fmt.Sprintf("%s%s", LocalMetadataRefPrefix, branchName)
-	if expected := r.metadataCache.LocalSHAFor(branchName); expected != "" && expected != sha {
+	// Mirrors updateMetadataRefCAS: an expectation we hold is compared even when
+	// the new content matches it, because "matches what I read" is not the same
+	// as "matches what is on disk now".
+	if expected := r.metadataCache.LocalSHAFor(branchName); expected != "" {
 		err := r.UpdateRefsBatch(context.Background(), []RefUpdate{{
 			RefName: refName,
 			NewSHA:  sha,
 			OldSHA:  expected,
 		}})
 		if err != nil {
+			r.metadataCache.Delete(branchName)
 			return fmt.Errorf("failed to write local metadata ref for %s (another process changed it; re-run to pick up their change): %w", branchName, err)
 		}
 		r.metadataCache.PutLocalSHA(branchName, sha)
-	} else if err := r.UpdateRef(refName, sha); err != nil {
-		return fmt.Errorf("failed to write local metadata ref: %w", err)
-	} else {
-		r.metadataCache.PutLocalSHA(branchName, sha)
+		return nil
 	}
+	if err := r.UpdateRef(refName, sha); err != nil {
+		return fmt.Errorf("failed to write local metadata ref: %w", err)
+	}
+	r.metadataCache.PutLocalSHA(branchName, sha)
 
 	return nil
 }

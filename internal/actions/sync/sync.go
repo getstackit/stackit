@@ -65,13 +65,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	managedWorktrees, err := eng.ListManagedWorktrees()
 	if err == nil {
 		for _, wt := range managedWorktrees {
-			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(gctx, wt.Path); hasChanges {
-				if dirtyAnchors == nil {
-					dirtyAnchors = make(dirtyAnchorSet)
-				}
-				dirtyAnchors[wt.AnchorBranch] = true
-				out.Warn("Skipping stack rooted at %s (worktree has uncommitted changes)", wt.AnchorBranch)
+			reason := SkipReasonForWorktree(gctx, eng, wt.Path)
+			if reason == "" {
+				continue
 			}
+			if dirtyAnchors == nil {
+				dirtyAnchors = make(dirtyAnchorSet)
+			}
+			dirtyAnchors[wt.AnchorBranch] = true
+			out.Warn("Skipping stack rooted at %s (%s)", wt.AnchorBranch, reason)
 		}
 	}
 

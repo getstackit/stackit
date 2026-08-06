@@ -215,11 +215,11 @@ func computeSyncDryRun(ctx context.Context, eng engine.Engine, opts sync.Options
 		}
 	}
 
-	// Check for dirty worktrees
+	// Same decision sync itself makes, so the preview cannot disagree with the run.
 	managedWorktrees, err := eng.ListManagedWorktrees()
 	if err == nil {
 		for _, wt := range managedWorktrees {
-			if hasChanges, _ := eng.WorktreeHasUncommittedChanges(ctx, wt.Path); hasChanges {
+			if sync.SkipReasonForWorktree(ctx, eng, wt.Path) != "" {
 				plan.skipped = append(plan.skipped, wt.AnchorBranch)
 			}
 		}

@@ -46,3 +46,20 @@ func TestBatchCommitInfo_Empty(t *testing.T) {
 	got := runner.BatchCommitInfo(nil)
 	require.Empty(t, got)
 }
+
+func TestGetRemoteRevision_UsesConfiguredRemote(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+	// Point main's configured remote at a name other than "origin" and stand
+	// in a local branch for that remote's tracking ref.
+	require.NoError(t, scene.Repo.RunGitCommand("config", "branch.main.remote", "upstream"))
+	mainSHA, err := scene.Repo.GetRevision("main")
+	require.NoError(t, err)
+	require.NoError(t, scene.Repo.RunGitCommand("branch", "upstream/main", mainSHA))
+
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	got, err := runner.GetRemoteRevision("main")
+	require.NoError(t, err)
+	require.Equal(t, mainSHA, got)
+}

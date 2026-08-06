@@ -16,6 +16,14 @@ const textFileName = "test.txt"
 func copyDir(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			// Git housekeeping (maintenance/auto-gc) creates and removes lock
+			// files such as .git/objects/maintenance.lock inside the template
+			// while we walk it. A file that vanished between readdir and lstat
+			// is nothing we need to copy, and failing the whole clone over it
+			// makes every template-backed test flaky.
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 
@@ -33,6 +41,11 @@ func copyDir(src, dst string) error {
 		// Copy file
 		srcFile, err := os.Open(path) //nolint:gosec // G122: test helper, no symlink risk
 		if err != nil {
+			// Same race as above: the file survived lstat but was removed
+			// before we opened it.
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		defer func() { _ = srcFile.Close() }()

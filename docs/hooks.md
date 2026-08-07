@@ -38,6 +38,13 @@ command path without the leading `stackit `, joined by hyphens.
 | `stackit merge ship` | `pre-merge-ship` | `post-merge-ship` |
 | `stackit worktree create` | — | `post-worktree-create` |
 
+`post-worktree-create` runs only when a worktree actually exists — it also fires
+for `stackit create -w`, `worktree attach`, and `worktree run`, but is skipped
+entirely when worktree creation fails. This is deliberate: the hook is invoked
+with the new worktree as its working directory, and an empty path resolves to
+the process CWD, which on the failure path is the user's main checkout sitting
+on trunk. A hook like `pnpm install` would run there instead.
+
 Every command that goes through `common.Run` participates in the lifecycle —
 including read-only commands like `log`, `status`, and `get`. When no hook is
 configured for a given command + phase the runner short-circuits, so the

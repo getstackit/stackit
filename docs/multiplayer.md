@@ -171,10 +171,17 @@ worktree is clean.
 | Worktree state | Held? |
 |----------------|-------|
 | Uncommitted changes to tracked files | Yes — the reset would discard them |
-| Rebase in progress | Yes — moving the ref strands the resolved rebase |
+| Rebase in progress | Yes on the `restack` command path; **not yet** in the engine snapshot (see below) |
 | Cannot be inspected | Yes — nothing is known, so no reset is safe |
 | Untracked files | Only when one occupies a path the incoming commit also writes |
 | Clean | No — reset to the new ref |
+
+Rebase-in-progress detection currently lives in `skipDirtyWorktreeStacks`, which
+only the `restack` command runs. The engine snapshot keys its hold set on the
+worktree's checked-out branch, and a mid-rebase worktree reports no branch — so
+`modify`, `squash`, and absorb-driven restacks can still move the ref of a
+branch being rebased elsewhere. Known gap, tracked in
+`docs/plans/worktree-audit-todo.md`.
 
 Untracked files are the case worth being careful about. `git reset --hard`
 overwrites an untracked file only when the incoming commit contains that same
@@ -213,12 +220,22 @@ for everything.
 
 ### Held is not up-to-date
 
-A held branch reports the same status as a branch that needed no work, so
-anything that could leave a user believing a restack happened must say
-otherwise. `restack` reports the branch, the worktree, and the reason; `sync`
-does the same. Only the branch's *own* checkout produces a specific reason — a
+A held branch returns `RestackUnneeded` — the same status as a branch that
+needed no work — so anything that could leave a user believing a restack
+happened must say otherwise.
+
+`stackit restack` reports both units: the stack held behind a managed worktree
+and the individual branch held behind any other checkout, each with the worktree
+and the reason. Only the branch's *own* checkout produces a specific reason — a
 branch held because an ancestor is held falls back to the generic message, since
 the remedy lives with the ancestor.
+
+`sync` reports the stack-level holds from its own gate
+(`SkipReasonForWorktree`), but **branch-level engine holds are not yet
+distinguished in sync**: `RestackBranchResult` carries no held marker, so they
+surface as ordinary completion. Two known gaps sit here — that marker, and
+rebase-in-progress detection in the engine snapshot and in sync's gate. Tracked
+in `docs/plans/worktree-audit-todo.md`.
 
 **Source**: `internal/engine/engine_sync.go` (hold set construction),
 `internal/actions/restack.go` (`skipDirtyWorktreeStacks`, `heldWorktreeReason`).

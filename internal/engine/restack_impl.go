@@ -102,9 +102,6 @@ type restackSnapshot struct {
 	// must be held too: a validated child may otherwise be built on the target
 	// SHA of a parent that was ultimately not allowed to move.
 	heldBranches BranchNameSet
-	// worktreeInspectionFailed means the physical checkout map is unknown, so
-	// no ref move is safe for this pass.
-	worktreeInspectionFailed bool
 }
 
 // untrackedCollisionHold decides whether a worktree holding only untracked
@@ -171,9 +168,6 @@ func (e *engineImpl) holdBranch(ctx context.Context, branch Branch, snap *restac
 }
 
 func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) bool {
-	if snap.worktreeInspectionFailed {
-		return true
-	}
 	current := branch.GetName()
 	visited := make(map[string]bool)
 	// Metadata should be acyclic, but cap the walk as a second line of defense

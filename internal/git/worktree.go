@@ -252,6 +252,12 @@ func (r *runner) ForceRemoveWorktree(ctx context.Context, path string) error {
 // invoking git per branch — see WorktreeList.PathForBranch.
 func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 	// -z is required because worktree paths may legally contain newlines.
+	// `git worktree list` only learned it in 2.36, and every caller treats an
+	// inspection failure as "no ref move is safe", so on an older git this
+	// would otherwise present as commands quietly declining to do anything.
+	if !r.isGitVersionAtLeast(ctx, 2, 36) {
+		return nil, fmt.Errorf("git worktree list -z requires Git 2.36 or later; please upgrade your Git installation")
+	}
 	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)

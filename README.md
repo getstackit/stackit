@@ -521,7 +521,7 @@ This allows teams to define shared settings that individual developers can overr
 | `trunks.add` | Add an additional trunk branch | `stackit config set trunks.add develop` |
 | `trunks.remove` | Remove an additional trunk branch | `stackit config set trunks.remove develop` |
 | `branch.pattern` | Customize how branch names are generated | `stackit config set branch.pattern "{username}/{date}/{message}"` |
-| `stack.shape` | `tree` (default) or `linear`; linear mode prevents forks below non-trunk branches | `stackit config set stack.shape linear` |
+| `stack.shape` | `tree` (default) or `linear`; linear mode prevents forks below non-trunk branches ([details](docs/config.md#stack-shape-stackshape)) | `stackit config set stack.shape linear` |
 | `submit.footer` | Include PR footer linking back to the stack (default: true) | `stackit config set submit.footer false` |
 | `merge.method` | Default merge strategy (squash, merge, or rebase) | `stackit config set merge.method squash` |
 | `ci.command` | CI validation command to run with `stackit foreach` | `stackit config set ci.command "make test"` |

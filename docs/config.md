@@ -353,6 +353,71 @@ Older repositories may have configuration in `.git/.stackit_config` (JSON format
 
 **Code:** `internal/config/migrate.go`
 
+## Stack Shape (`stack.shape`)
+
+Controls the topology Stackit will let you build.
+
+| Value | Meaning |
+|-------|---------|
+| `tree` (default) | A branch may have any number of children. Stacks can fork. |
+| `linear` | No non-trunk branch may have more than one child. Every stack is a simple chain. |
+
+Trunk is always exempt: independent stacks rooted at trunk are what parallel
+work looks like, so trunk keeps as many children as you like in both modes.
+
+Set it per-developer or team-wide:
+
+```bash
+stackit config set stack.shape linear
+```
+
+```yaml
+# .stackit.yaml
+stack:
+  shape: linear
+```
+
+### Why linear
+
+GitHub's native Stacked PRs model a stack as a chain. Setting `stack.shape:
+linear` keeps Stackit's topology within what that model can represent, so a
+stack stays expressible on both sides.
+
+### What it blocks
+
+Enforcement sits on the engine's parent-assignment primitives (`SetParent`,
+`ReparentBranch`, `ReparentBranchesToParents`, `ReparentBranchesRecompute`,
+`ApplySplitToCommits`, and the restack plan), so every command routed through
+them is covered rather than each having to remember the rule — `create`
+including `--onto`, `move`, `track`, `split --as-sibling`, and restack-time
+parent moves. The refusal names the parent and the children that would result:
+
+```
+linear stacks are enabled: api would have multiple children (api-tests, api-docs); set stack.shape to tree to allow forks
+```
+
+The fix is either to stack the new branch on the existing child instead of
+beside it, or to switch back to `stack.shape tree`.
+
+### Restored topologies stay valid
+
+`stackit undo` and other snapshot restores replay a topology that was recorded
+earlier, and that recorded shape may contain a fork created before linear mode
+was enabled. Restoring it is allowed — the alternative is an undo that cannot
+undo. Stackit warns instead:
+
+```
+undo restored a non-linear stack. stack.shape=linear will block new forks, but
+this restored topology remains valid; set stack.shape to tree to make that explicit.
+```
+
+Existing forks are never rewritten by enabling linear mode. It constrains new
+operations only.
+
+**Source**: `internal/engine/branch_tracking.go` (`validateLinearParentMoves`,
+`validateLinearSiblingSplit`), `internal/actions/linear_topology.go` (the
+restore warning).
+
 ## Worktree Handling
 
 For git worktrees, configuration is stored in the main repository's `.git` directory, ensuring all worktrees share the same configuration:

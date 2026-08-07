@@ -103,8 +103,10 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// since CheckoutBranch stopped falling back to a detached checkout that is
 	// now a hard error. Failing the whole command for it abandons the branches
 	// still queued in BranchesToRestack and leaves the continuation state on
-	// disk, so the resolved conflict has to be redone. Report where the branch
-	// lives and carry on with the rest of the stack instead.
+	// disk, so the resolved conflict has to be redone. Carry on with the rest of
+	// the stack instead — but do not leave the user silently detached, which is
+	// where `git rebase` left HEAD and how commits get orphaned.
+	attached := true
 	if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(result.BranchName)); err != nil {
 		otherWorktree := ""
 		if worktrees, listErr := eng.ListWorktrees(ctx.Context); listErr == nil {
@@ -113,10 +115,16 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 		if otherWorktree == "" {
 			return fmt.Errorf("failed to checkout branch %s: %w", result.BranchName, err)
 		}
-		out.Warn("Updated %s, which is checked out in worktree %s; staying where you are.", result.BranchName, otherWorktree)
+		attached = false
+		out.Warn("Updated %s, but it is checked out in worktree %s so it cannot be checked out here: %v",
+			result.BranchName, otherWorktree, err)
 	}
 
-	out.Info("Resolved rebase conflict for %s.", output.CurrentBranch(result.BranchName))
+	if attached {
+		out.Info("Resolved rebase conflict for %s.", output.CurrentBranch(result.BranchName))
+	} else {
+		out.Info("Resolved rebase conflict for %s.", output.BranchName(result.BranchName))
+	}
 	if result.RerereResolvedCount > 0 {
 		printRerereResolved(ctx, result.RerereResolvedCount)
 	}
@@ -136,8 +144,25 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// you end up. Unset for every other command, which correctly leaves the
 	// user on the branch they just resolved.
 	if continuation.ReturnToBranch != "" && continuation.ReturnToBranch != result.BranchName {
-		if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(continuation.ReturnToBranch)); err != nil {
+		if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(continuation.ReturnToBranch)); err == nil {
+			attached = true
+		} else {
 			out.Error("Failed to return to %s: %v", continuation.ReturnToBranch, err)
+		}
+	}
+
+	// The rebase left HEAD detached and the branch could not be checked out
+	// here, so land on a real branch rather than returning success from a
+	// detached HEAD, where the user's next commit belongs to nothing. Trunk is
+	// the one branch that is always present; if it too is held elsewhere, say
+	// plainly where the user ended up instead of implying they are on a branch.
+	if !attached {
+		trunk := eng.Trunk()
+		if err := eng.CheckoutBranch(ctx.Context, trunk); err == nil {
+			out.Info("Switched to %s; %s lives in its own worktree.",
+				output.BranchName(trunk.GetName()), output.BranchName(result.BranchName))
+		} else {
+			out.Warn("HEAD is detached here. Run 'stackit checkout <branch>' to get back onto a branch.")
 		}
 	}
 

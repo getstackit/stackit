@@ -60,6 +60,16 @@ func (e *engineImpl) branchWorktreeResetTarget(ctx context.Context, branchName s
 	if err != nil || dirty {
 		return ""
 	}
+	// Tracked changes are not the only thing a reset destroys.
+	// WorktreeHasTrackedChanges deliberately ignores untracked files, so it
+	// cannot see the one case `git reset --hard` does overwrite them: an
+	// untracked file sitting at a path the incoming tree also contains. That
+	// file was never in git, so there is no reflog or stash to recover it from.
+	// The batch path guards this through untrackedCollisionHold; this one-off
+	// path has to ask the same question.
+	if collides, known := e.UntrackedCollision(ctx, branchName); collides || !known {
+		return ""
+	}
 	return worktreePath
 }
 

@@ -55,6 +55,37 @@ Use these rules:
 - Do not load config inside the operation; pass resolved values in the request.
 - Do not construct GitHub clients inside the operation; inject ports/interfaces.
 - Do not render terminal output inside the operation; emit structured results or events.
+- **If the operation changes branch content, guard it with the worktree
+  ownership check before mutating** — see below.
+
+### Guard branch-content mutations by owning worktree
+
+Any operation that rewrites a branch's commits or moves its ref must refuse to
+run outside the worktree that owns the stack. Skipping the guard reintroduces
+cross-worktree corruption: the mutation lands under a ref whose worktree still
+holds the old content, and the next `modify -a` there commits the divergence.
+
+```go
+if err := actions.EnsureCanModifyNamesHere(ctx, branchName); err != nil {
+    return err
+}
+// or, when you already hold engine.Branch values:
+if err := actions.EnsureCanModifyHere(ctx, branches...); err != nil {
+    return err
+}
+```
+
+Call it **before** taking a snapshot or mutating anything, so a refusal is a
+no-op. `create` is the example to copy (`internal/actions/create/create.go`):
+it guards the current branch and, separately, the `--onto` target.
+
+Whole-repository reconcilers — `sync` and `restack` — are the deliberate
+exception. They run from any worktree and never check out a foreign branch;
+they inspect each physical checkout and hold back what they cannot safely
+reset instead. Do not add the guard to them.
+
+**Source**: `internal/actions/worktree_ownership.go`. The invariant is stated in
+`.claude/rules/worktree-safety.md`.
 
 ## Add a New CLI Command
 

@@ -399,6 +399,33 @@ During `stackit sync`, Stackit can automatically clean up managed worktrees that
 
 If you upgrade from an older Stackit version with pre-anchor managed worktrees, run `stackit worktree list` once. Any `legacy` or `repair` entries can be migrated in place with `stackit worktree repair`.
 
+#### Warm-starting new worktrees
+
+A new worktree is a fresh checkout, so ignored files your build needs — `.env`, dependency caches — aren't there. Add a `.worktreeinclude` file at the repository root to copy selected ignored files into every new managed worktree:
+
+```gitignore
+# .worktreeinclude — .gitignore syntax, selects from files Git already ignores
+.env
+.env.local
+node_modules/
+```
+
+The copy runs before `post-worktree-create` hooks, so setup hooks can use the warmed files. A pattern can never copy a tracked file, and existing files are never overwritten.
+
+Warm-started files are ignored by Git, so nothing else has a copy of them: `worktree remove`, `worktree prune`, and `worktree detach` all delete the worktree directory and everything in it. See [docs/worktree.md](docs/worktree.md#warm-starts) for the full safety rules.
+
+#### Run stack commands from the worktree that owns the stack
+
+Commands that change branch content — `create`, `modify`, `absorb`, `fold`, `squash`, `split`, `move`, `reorder`, `pluck`, `delete`, `track` — must run in the worktree that owns the stack, so the edit lands in the working tree you're actually looking at. From anywhere else Stackit refuses and tells you where to go:
+
+```
+branch payments-api belongs to worktree payments; run this command from there: cd ../myapp-stacks/payments
+```
+
+`sync` and `restack` are the exception: they reconcile the whole repository and can run from any worktree.
+
+Inside a managed worktree, `stackit create` builds on that worktree's own stack, so creating a branch directly from trunk there is refused — check out a branch the worktree owns first.
+
 ### Collaborating on Stacks
 To work on a stack created by someone else or on another machine:
 ```bash
@@ -460,6 +487,19 @@ call replaces combining `git status`, `stackit tree --json`, and `stackit info`
 
 `stackit log --json` is a separate trunk-history feed for release tooling. It
 emits collapsed recently merged commits, not the branch tree shape.
+
+**`stackit restack --json` never enters the interactive conflict workflow.** Like
+`--continue-on-conflict`, it holds conflicted stacks back and keeps the output
+stream pure JSON. A routine conflict reports `"status": "conflict"` with the
+branches listed under `conflicts` and their untouched descendants under
+`blocked`; `"status": "error"` is reserved for a restack that actually failed.
+The repository is left on the original branch, not mid-rebase.
+
+Restack also holds back any branch whose worktree it cannot safely reset — one
+with uncommitted changes, a rebase in progress, or that cannot be inspected —
+along with that branch's descendants. Held branches are reported with the
+worktree and the reason, and picked up on the next restack once the worktree is
+clean.
 
 ---
 
@@ -524,6 +564,10 @@ trunks:
 # Branch naming pattern for the team
 branch:
   pattern: "{username}/{date}/{message}"
+
+# Stack topology. Linear mode is compatible with GitHub native Stacked PRs.
+stack:
+  shape: tree  # tree or linear
 
 # PR submission settings
 submit:
@@ -635,6 +679,28 @@ stackit submit --stack
 ```
 
 This updates all PRs in the stack with correct base branches.
+
+### "Branch belongs to worktree X"
+
+Branch-content commands run only in the worktree that owns the stack. Either `cd` to the path in the message, or use `stackit worktree open <name>`.
+
+If the message says the owning worktree's directory no longer exists, the registration outlived the directory. Release it with `stackit worktree detach <name>`, or review the current state with `stackit worktree list`.
+
+### `create -w` created the branch but not the worktree
+
+`create -w` keeps the branch when worktree setup fails, and warns rather than erroring:
+
+```
+Created my-feature, but could not create its worktree: ...
+```
+
+Nothing is lost — the branch and its commit exist. Fix the underlying cause (a stale directory at the target path, a permissions problem, a symlinked parent directory), then give it a worktree:
+
+```bash
+stackit worktree attach my-feature
+```
+
+Post-create hooks do not run when worktree creation fails.
 
 ### "Cannot modify frozen/locked branch"
 

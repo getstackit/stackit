@@ -250,6 +250,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// Track statistics for summary
 	var branchesCreated, branchesUpdated int
 	branchFrozenStatus := make(map[string]bool) // branch -> is frozen
+	branchesToFreeze := engine.NewBranchesBuilder(len(branchesToSync))
 
 	// Fetch PR info for branches in parallel if possible
 	if ctx.GitHub() != nil {
@@ -300,9 +301,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			isFrozen := !opts.Unfrozen
 			branchFrozenStatus[branchName] = isFrozen
 			if isFrozen {
-				if _, err := eng.SetFrozen(ctx, engine.BranchesOf(eng.GetBranch(branchName)), true); err != nil {
-					out.Debug("Failed to freeze new branch %s: %v", branchName, err)
-				}
+				branchesToFreeze.Add(eng.GetBranch(branchName))
 			}
 			branchesCreated++
 
@@ -342,6 +341,12 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 				PRNumber: branchPRInfo[branchName],
 				IsNew:    false,
 			})
+		}
+	}
+
+	if freezeSet := branchesToFreeze.Build(); len(freezeSet) > 0 {
+		if _, err := eng.SetFrozen(ctx, freezeSet, true); err != nil {
+			out.Debug("Failed to freeze new branches: %v", err)
 		}
 	}
 

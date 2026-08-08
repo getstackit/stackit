@@ -1,11 +1,13 @@
 package sync
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 func syncFetchedTrunk(ctx *app.Context, opts *Options, handler Handler, summary *Summary) error {
@@ -16,7 +18,21 @@ func syncFetchedTrunk(ctx *app.Context, opts *Options, handler Handler, summary 
 	pullResult, err := eng.UpdateTrunkFromRemote(gctx)
 	ctx.Logger.Info("update trunk from remote completed durationMs=%d", time.Since(updateStart).Milliseconds())
 	if err != nil {
-		return fmt.Errorf("failed to update trunk from remote: %w", err)
+		// A worktree holding trunk is a hold, not a failure. Report it and let
+		// the rest of the sync run: cleanup and restack do not depend on trunk
+		// having moved, and aborting here strands the user in a directory whose
+		// state they cannot see from the one they are standing in.
+		var held *git.WorktreeHeldError
+		if !errors.As(err, &held) {
+			return fmt.Errorf("failed to update trunk from remote: %w", err)
+		}
+		handler.EmitEvent(Event{
+			Phase:  PhaseTrunk,
+			Type:   EventCompleted,
+			Branch: held.Branch,
+			HeldBy: fmt.Sprintf("worktree %s %s", held.WorktreePath, held.Reason),
+		})
+		return nil
 	}
 
 	return handleTrunkPullResult(ctx, opts, handler, summary, pullResult)

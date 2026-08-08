@@ -8,22 +8,27 @@ import (
 	"strings"
 )
 
-// MinGitMajor and MinGitMinor are the oldest Git that can run stackit's stack
-// operations. ListWorktrees needs `git worktree list -z`, which arrived in
-// 2.36, and every ref-moving command inspects worktrees before it moves
-// anything.
-const (
-	MinGitMajor = 2
-	MinGitMinor = 36
-)
+// Version identifies a Git release by the components Stackit needs for feature
+// gates. Patch versions do not affect any currently supported gate.
+type Version struct {
+	Major int
+	Minor int
+}
+
+// MinimumGitVersion is the oldest Git that can run stackit's stack operations.
+// ListWorktrees needs `git worktree list -z`, which arrived in 2.36, and every
+// ref-moving command inspects worktrees before it moves anything.
+var MinimumGitVersion = Version{Major: 2, Minor: 36}
 
 var gitVersionPattern = regexp.MustCompile(`git version (\d+)\.(\d+)`)
 
-// AtLeast reports whether the version major.minor is at least
-// wantMajor.wantMinor. Shared so the feature gates and `stackit doctor` cannot
-// disagree about what "too old" means.
-func AtLeast(major, minor, wantMajor, wantMinor int) bool {
-	return major > wantMajor || (major == wantMajor && minor >= wantMinor)
+// AtLeast reports whether v meets or exceeds minimum.
+func (v Version) AtLeast(minimum Version) bool {
+	return v.Major > minimum.Major || (v.Major == minimum.Major && v.Minor >= minimum.Minor)
+}
+
+func (v Version) String() string {
+	return fmt.Sprintf("%d.%d", v.Major, v.Minor)
 }
 
 // GitVersion reports the installed Git's major and minor version.
@@ -35,50 +40,50 @@ func AtLeast(major, minor, wantMajor, wantMinor int) bool {
 // perfectly modern Git as too old. In the CLI that means one bad probe poisons
 // the command; in the long-lived server it poisons the repo's runner until the
 // process restarts.
-func (r *runner) GitVersion(ctx context.Context) (major, minor int, err error) {
+func (r *runner) GitVersion(ctx context.Context) (Version, error) {
 	r.gitVersionMu.Lock()
 	defer r.gitVersionMu.Unlock()
 
 	if r.gitVersionParsed {
-		return r.gitVersionMajor, r.gitVersionMinor, nil
+		return r.gitVersion, nil
 	}
 
-	major, minor, err = r.probeGitVersion(ctx)
+	version, err := r.probeGitVersion(ctx)
 	if err != nil {
-		return 0, 0, err
+		return Version{}, err
 	}
 
-	r.gitVersionMajor, r.gitVersionMinor, r.gitVersionParsed = major, minor, true
-	return major, minor, nil
+	r.gitVersion, r.gitVersionParsed = version, true
+	return version, nil
 }
 
-func (r *runner) probeGitVersion(ctx context.Context) (int, int, error) {
+func (r *runner) probeGitVersion(ctx context.Context) (Version, error) {
 	output, err := r.RunGitCommandWithContext(ctx, "--version")
 	if err != nil {
-		return 0, 0, fmt.Errorf("could not run git --version: %w", err)
+		return Version{}, fmt.Errorf("could not run git --version: %w", err)
 	}
 	return parseGitVersion(output)
 }
 
 // parseGitVersion pulls major.minor out of `git --version` output.
 // Examples: "git version 2.39.2", "git version 2.35.1.windows.2".
-func parseGitVersion(output string) (int, int, error) {
+func parseGitVersion(output string) (Version, error) {
 	reported := strings.TrimSpace(output)
 	matches := gitVersionPattern.FindStringSubmatch(reported)
 	if len(matches) < 3 {
-		return 0, 0, fmt.Errorf("could not parse a version out of %q", reported)
+		return Version{}, fmt.Errorf("could not parse a version out of %q", reported)
 	}
 
 	major, err := strconv.Atoi(matches[1])
 	if err != nil {
-		return 0, 0, fmt.Errorf("could not parse major version out of %q: %w", reported, err)
+		return Version{}, fmt.Errorf("could not parse major version out of %q: %w", reported, err)
 	}
 	minor, err := strconv.Atoi(matches[2])
 	if err != nil {
-		return 0, 0, fmt.Errorf("could not parse minor version out of %q: %w", reported, err)
+		return Version{}, fmt.Errorf("could not parse minor version out of %q: %w", reported, err)
 	}
 
-	return major, minor, nil
+	return Version{Major: major, Minor: minor}, nil
 }
 
 // requireGitVersion reports why feature cannot run on the installed Git, or nil
@@ -89,17 +94,17 @@ func parseGitVersion(output string) (int, int, error) {
 // context was canceled sends them down entirely the wrong path, and these
 // gates now sit in front of ListWorktrees — which nearly every stack command
 // calls before it moves a ref.
-func (r *runner) requireGitVersion(ctx context.Context, major, minor int, feature string) error {
-	haveMajor, haveMinor, err := r.GitVersion(ctx)
+func (r *runner) requireGitVersion(ctx context.Context, minimum Version, feature string) error {
+	have, err := r.GitVersion(ctx)
 	if err != nil {
 		return fmt.Errorf("%s requires Git %d.%d or later, but the installed version could not be determined: %w",
-			feature, major, minor, err)
+			feature, minimum.Major, minimum.Minor, err)
 	}
 
-	if AtLeast(haveMajor, haveMinor, major, minor) {
+	if have.AtLeast(minimum) {
 		return nil
 	}
 
 	return fmt.Errorf("%s requires Git %d.%d or later (found %d.%d); please upgrade your Git installation",
-		feature, major, minor, haveMajor, haveMinor)
+		feature, minimum.Major, minimum.Minor, have.Major, have.Minor)
 }

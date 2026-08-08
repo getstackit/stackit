@@ -175,7 +175,7 @@ func (e *engineImpl) ApplyRemoteMetadataIfExists(branchName string) error {
 	if state := e.readState(branchName); state != nil {
 		state.LockReason = remote.GetLockReason()
 		if remote.GetScope() != nil {
-			state.Scope = *remote.GetScope()
+			state.Scope = NewScope(*remote.GetScope())
 		}
 	}
 

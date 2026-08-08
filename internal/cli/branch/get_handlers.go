@@ -6,7 +6,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/cli/common"
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
@@ -169,79 +168,79 @@ func (h *SimpleGetHandler) OnRestackStart(_ int) {
 }
 
 // OnRestackBranch implements RestackHandler for restack phase
-func (h *SimpleGetHandler) OnRestackBranch(branch string, result handlers.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, reparented bool, oldParent, newParent string, rerereResolvedCount int) {
+func (h *SimpleGetHandler) OnRestackBranch(event handlers.RestackBranchEvent) {
 	h.Lock()
 	defer h.Unlock()
 
-	if reparented {
+	if event.Reparented {
 		h.Output.Info("  Reparented %s from %s to %s",
-			style.ColorBranchNameIf(branch, isCurrent),
-			style.ColorBranchName(oldParent),
-			style.ColorBranchName(newParent))
+			style.ColorBranchNameIf(event.Branch, event.IsCurrent),
+			style.ColorBranchName(event.OldParent),
+			style.ColorBranchName(event.NewParent))
 	}
 
-	prInfo := common.FormatPRInfo(prNumber)
+	prInfo := common.FormatPRInfo(event.PRNumber)
 
-	switch result {
+	switch event.Result {
 	case handlers.RestackDone:
-		msg := fmt.Sprintf("Restacked %s%s", style.ColorBranchNameIf(branch, isCurrent), prInfo)
-		if parent != "" {
-			msg += fmt.Sprintf(" on %s", style.ColorBranchName(parent))
+		msg := fmt.Sprintf("Restacked %s%s", style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo)
+		if event.Parent != "" {
+			msg += fmt.Sprintf(" on %s", style.ColorBranchName(event.Parent))
 		}
-		msg += fmt.Sprintf(" -> %s", style.ColorDim(newRev))
+		msg += fmt.Sprintf(" -> %s", style.ColorDim(event.NewRevision))
 		h.Output.Info("  %s", msg)
-		if rerereResolvedCount > 0 {
-			h.Output.Info("%s", actions.FormatRerereResolved(rerereResolvedCount))
+		if event.RerereResolvedCount > 0 {
+			h.Output.Info("%s", actions.FormatRerereResolved(event.RerereResolvedCount))
 		}
 	case handlers.RestackUnneeded:
 		reason := common.ReasonNoRestackNeeded
-		if lockReason.IsLocked() {
-			reason = fmt.Sprintf("%s: %s", common.ReasonLocked, lockReason)
-		} else if frozen {
+		if event.LockReason.IsLocked() {
+			reason = fmt.Sprintf("%s: %s", common.ReasonLocked, event.LockReason)
+		} else if event.Frozen {
 			reason = common.ReasonFrozen
 		}
 
-		msg := fmt.Sprintf("%s%s %s", style.ColorBranchNameIf(branch, isCurrent), prInfo, reason)
+		msg := fmt.Sprintf("%s%s %s", style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo, reason)
 		if reason == common.ReasonNoRestackNeeded {
-			msg = fmt.Sprintf("%s%s up to date", style.ColorBranchNameIf(branch, isCurrent), prInfo)
+			msg = fmt.Sprintf("%s%s up to date", style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo)
 		}
 		h.Output.Info("  %s", msg)
 	case handlers.RestackConflict:
 		h.Output.Warn("  Skipped %s%s (conflict)",
-			style.ColorBranchNameIf(branch, isCurrent),
+			style.ColorBranchNameIf(event.Branch, event.IsCurrent),
 			prInfo)
 	case handlers.RestackBlocked:
 		h.Output.Warn("  Skipped %s%s (blocked by conflict in stack)",
-			style.ColorBranchNameIf(branch, isCurrent),
+			style.ColorBranchNameIf(event.Branch, event.IsCurrent),
 			prInfo)
 	}
 }
 
 // OnRestackComplete implements RestackHandler for restack phase
-func (h *SimpleGetHandler) OnRestackComplete(restacked, skipped int, conflicts, blocked []string) {
+func (h *SimpleGetHandler) OnRestackComplete(summary handlers.RestackSummary) {
 	h.Lock()
 	defer h.Unlock()
 
-	if restacked == 0 && skipped == 0 && len(blocked) == 0 {
+	if summary.Restacked == 0 && summary.Skipped == 0 && len(summary.Blocked) == 0 {
 		return // No restack summary needed if nothing happened
 	}
 
 	parts := []string{}
-	if restacked > 0 {
-		parts = append(parts, fmt.Sprintf("restacked %d", restacked))
+	if summary.Restacked > 0 {
+		parts = append(parts, fmt.Sprintf("restacked %d", summary.Restacked))
 	}
-	if skipped > 0 {
-		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", skipped))
+	if summary.Skipped > 0 {
+		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", summary.Skipped))
 	}
-	if len(blocked) > 0 {
-		parts = append(parts, fmt.Sprintf("blocked %d", len(blocked)))
+	if len(summary.Blocked) > 0 {
+		parts = append(parts, fmt.Sprintf("blocked %d", len(summary.Blocked)))
 	}
 
 	if len(parts) > 0 {
 		h.Output.Info("  %s", strings.Join(parts, ", "))
 	}
 
-	for _, conflict := range conflicts {
+	for _, conflict := range summary.Conflicts {
 		h.Output.Info("  Run %s to resolve and continue",
 			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
 	}

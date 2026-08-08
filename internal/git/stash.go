@@ -23,7 +23,7 @@ func (r *runner) StashPush(ctx context.Context, message string) (string, error) 
 // Note: The --staged flag requires Git 2.35 or later.
 func (r *runner) StashPushStaged(ctx context.Context, message string) (string, error) {
 	// Check Git version first - --staged requires Git 2.35+
-	if err := r.requireGitVersion(ctx, 2, 35, "git stash --staged"); err != nil {
+	if err := r.requireGitVersion(ctx, Version{Major: 2, Minor: 35}, "git stash --staged"); err != nil {
 		return "", err
 	}
 

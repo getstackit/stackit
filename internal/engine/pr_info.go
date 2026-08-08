@@ -119,177 +119,84 @@ func (p *PrInfo) MarshalJSON() ([]byte, error) {
 
 // WithNumber returns a new PrInfo with the number field updated
 func (p *PrInfo) WithNumber(number *int) *PrInfo {
-	return &PrInfo{
-		number:      number,
-		title:       p.title,
-		body:        p.body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.number = number
+	return copy
 }
 
 // WithTitle returns a new PrInfo with the title field updated
 func (p *PrInfo) WithTitle(title string) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       title,
-		body:        p.body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.title = title
+	return copy
 }
 
 // WithBody returns a new PrInfo with the body field updated
 func (p *PrInfo) WithBody(body string) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       p.title,
-		body:        body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.body = body
+	return copy
 }
 
 // WithTitleAndBody returns a new PrInfo with both title and body fields updated
 // This is more efficient than chaining WithTitle().WithBody() as it only creates one copy
 func (p *PrInfo) WithTitleAndBody(title, body string) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       title,
-		body:        body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.title = title
+	copy.body = body
+	return copy
 }
 
 // WithIsDraft returns a new PrInfo with the isDraft field updated
 func (p *PrInfo) WithIsDraft(isDraft bool) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       p.title,
-		body:        p.body,
-		isDraft:     isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.isDraft = isDraft
+	return copy
 }
 
 // WithState returns a new PrInfo with the state field updated
 func (p *PrInfo) WithState(state git.PRState) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       p.title,
-		body:        p.body,
-		isDraft:     p.isDraft,
-		state:       state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.state = state
+	return copy
 }
 
 // WithBase returns a new PrInfo with the base field updated
 func (p *PrInfo) WithBase(base string) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       p.title,
-		body:        p.body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.base = base
+	return copy
 }
 
 // WithBaseSHA returns a new PrInfo with the baseSHA field updated
 func (p *PrInfo) WithBaseSHA(sha string) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       p.title,
-		body:        p.body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     sha,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.baseSHA = sha
+	return copy
 }
 
 // WithURL returns a new PrInfo with the url field updated
 func (p *PrInfo) WithURL(url string) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       p.title,
-		body:        p.body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         url,
-		lockReason:  p.lockReason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.url = url
+	return copy
 }
 
 // WithLockReason returns a new PrInfo with the lockReason field updated
 func (p *PrInfo) WithLockReason(reason LockReason) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       p.title,
-		body:        p.body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  reason,
-		mergeBranch: p.mergeBranch,
-	}
+	copy := p.copy()
+	copy.lockReason = reason
+	return copy
 }
 
 // WithMergeBranch returns a new PrInfo with the mergeBranch field updated
 func (p *PrInfo) WithMergeBranch(branch string) *PrInfo {
-	return &PrInfo{
-		number:      p.number,
-		title:       p.title,
-		body:        p.body,
-		isDraft:     p.isDraft,
-		state:       p.state,
-		base:        p.base,
-		baseSHA:     p.baseSHA,
-		url:         p.url,
-		lockReason:  p.lockReason,
-		mergeBranch: branch,
-	}
+	copy := p.copy()
+	copy.mergeBranch = branch
+	return copy
+}
+
+func (p *PrInfo) copy() *PrInfo {
+	copy := *p
+	return &copy
 }

@@ -62,28 +62,14 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 	// If only one option, use it automatically
 	if len(options) == 1 {
 		method := github.MergeMethod(options[0].Value)
-		if err := cfg.SetMergeMethod(method); err != nil {
-			return "", fmt.Errorf("failed to save merge method: %w", err)
-		}
-		if err := cfg.Save(); err != nil {
-			return "", fmt.Errorf("failed to save config: %w", err)
-		}
-		ctx.Output.Info("Using merge method: %s (only option available)", method)
-		return method, nil
+		return persistMergeMethod(ctx, cfg, method, "Using merge method: %s (only option available)")
 	}
 
 	// Check if interactive mode is available
 	if err := tui.CheckInteractiveAllowed(); err != nil {
 		// Non-interactive mode: use the first allowed option
 		method := github.MergeMethod(options[0].Value)
-		if err := cfg.SetMergeMethod(method); err != nil {
-			return "", fmt.Errorf("failed to save merge method: %w", err)
-		}
-		if err := cfg.Save(); err != nil {
-			return "", fmt.Errorf("failed to save config: %w", err)
-		}
-		ctx.Output.Info("Using merge method: %s (auto-selected in non-interactive mode)", method)
-		return method, nil
+		return persistMergeMethod(ctx, cfg, method, "Using merge method: %s (auto-selected in non-interactive mode)")
 	}
 
 	// Prompt user to select
@@ -95,6 +81,10 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 
 	// Save to config
 	method := github.MergeMethod(selected)
+	return persistMergeMethod(ctx, cfg, method, "Saved merge.method = %s to config")
+}
+
+func persistMergeMethod(ctx *app.Context, cfg *config.GitConfig, method github.MergeMethod, message string) (github.MergeMethod, error) {
 	if err := cfg.SetMergeMethod(method); err != nil {
 		return "", fmt.Errorf("failed to save merge method: %w", err)
 	}
@@ -102,7 +92,7 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 		return "", fmt.Errorf("failed to save config: %w", err)
 	}
 
-	ctx.Output.Info("Saved merge.method = %s to config", method)
+	ctx.Output.Info(message, method)
 	return method, nil
 }
 

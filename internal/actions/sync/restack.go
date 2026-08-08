@@ -70,7 +70,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	if len(sortedBranches) > 0 {
 		restackStart := time.Now()
 		if err := actions.RestackBranchesWithHandler(ctx, sortedBranches, func(p actions.RestackProgress) {
-			prNumber := getPRNumber(ctx.Status(), p.Branch)
+			prNumber := actions.PRNumberForBranch(ctx.Status(), p.Branch)
 
 			parentName := ""
 			br := nav.GetBranch(p.Branch)
@@ -165,14 +165,4 @@ func conflictStackBranches(ctx *app.Context, branchName string) engine.Branches 
 		}
 	}
 	return nav.SortBranchesTopologically(builder.Build())
-}
-
-// getPRNumber returns the PR number for a branch if it has one
-func getPRNumber(eng engine.BranchStatus, branchName string) *int {
-	branch := eng.GetBranch(branchName)
-	prInfo, err := eng.GetPrInfo(branch)
-	if err != nil || prInfo == nil {
-		return nil
-	}
-	return prInfo.Number()
 }

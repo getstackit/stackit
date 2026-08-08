@@ -23,12 +23,12 @@ func NewGitHubClient(ctx context.Context, runner GitCommandRunner) (*StackitGitH
 		return nil, fmt.Errorf("failed to get GitHub token: %w", err)
 	}
 
-	repoInfo, err := getRepoInfoWithHostname(ctx, runner)
+	repo, err := getRemoteRepository(ctx, runner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
 	}
 
-	client, err := createGitHubClient(ctx, repoInfo.Hostname, token)
+	client, err := createGitHubClient(ctx, repo.Host, token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GitHub client: %w", err)
 	}
@@ -36,7 +36,7 @@ func NewGitHubClient(ctx context.Context, runner GitCommandRunner) (*StackitGitH
 	return &StackitGitHubClient{
 		client: client,
 		runner: runner,
-		repo:   Repo{Owner: repoInfo.Owner, Name: repoInfo.Repo},
+		repo:   Repo{Owner: repo.Owner, Name: repo.Name},
 	}, nil
 }
 

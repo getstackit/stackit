@@ -5,9 +5,9 @@ import (
 
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/errors"
 )
 
 // prepareBranchesForSubmit prepares submission info for each branch, emitting
@@ -229,12 +229,5 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 
 // resolveBranchNameFromNav resolves a branch name, defaulting to current branch if empty.
 func resolveBranchNameFromNav(nav engine.StackNavigator, branchName string) (string, error) {
-	if branchName != "" {
-		return branchName, nil
-	}
-	currentBranch := nav.CurrentBranch()
-	if currentBranch == nil {
-		return "", errors.ErrNotOnBranchNoBranchSpecified
-	}
-	return currentBranch.GetName(), nil
+	return actions.ResolveBranchName(nav, branchName)
 }

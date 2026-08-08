@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // checkRepository performs repository-related checks
@@ -26,12 +26,12 @@ func checkRepository(ctx *app.Context, handler Handler, warnings int, errors int
 		handler.OnCheck("remote", CheckWarning, "remote 'origin' is not configured")
 	} else {
 		// Check if it's a GitHub remote
-		repoInfo, err := github.ParseGitHubRemoteURL(remoteURL)
-		if err != nil {
+		repo, err := git.ParseRemoteRepository(remoteURL)
+		if err != nil || !repo.IsHosted() {
 			warnings++
 			handler.OnCheck("remote", CheckWarning, "remote 'origin' is not a GitHub repository")
 		} else {
-			handler.OnCheck("remote", CheckPassed, fmt.Sprintf("Remote 'origin' is configured to GitHub (%s/%s)", repoInfo.Owner, repoInfo.Repo))
+			handler.OnCheck("remote", CheckPassed, fmt.Sprintf("Remote 'origin' is configured to GitHub (%s/%s)", repo.Owner, repo.Name))
 		}
 	}
 

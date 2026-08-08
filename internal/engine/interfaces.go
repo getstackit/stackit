@@ -38,7 +38,7 @@ type StackNavigator interface {
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	GetScope(branch Branch) Scope
 	GetRemote() string
-	GetRepoInfo(ctx context.Context) (string, string, error)
+	GetRepoInfo(ctx context.Context) (git.RemoteRepository, error)
 	GetRepoRoot() string
 	GetUserName(ctx context.Context) (string, error)
 	IsInsideRepo() bool

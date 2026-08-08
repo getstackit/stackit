@@ -25,17 +25,17 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 	nav := ctx.Navigator()
 
 	// Sync PR info first
-	repoOwner, repoName, err := ctx.Engine.GetRepoInfo(ctx.Context)
+	repo, err := ctx.Engine.GetRepoInfo(ctx.Context)
 	if err != nil {
 		return nil, err
 	}
-	if repoOwner != "" && repoName != "" {
+	if repo.IsHosted() {
 		// Collect updates from the callback (which may be called concurrently in the
 		// REST fallback) then write all PR info in one atomic batch.
 		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 		var mu sync.Mutex
 		updates := make(map[string]*engine.PrInfo)
-		if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branches, github.Repo{Owner: repoOwner, Name: repoName}, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+		if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branches, github.Repo{Owner: repo.Owner, Name: repo.Name}, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 			branch := nav.GetBranch(name)
 
 			lockReason := engine.LockReasonNone

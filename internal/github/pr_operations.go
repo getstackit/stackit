@@ -227,17 +227,17 @@ func GetGitHubClient(ctx context.Context, runner GitCommandRunner) (*github.Clie
 		return nil, "", "", fmt.Errorf("failed to get GitHub token: %w", err)
 	}
 
-	repoInfo, err := getRepoInfoWithHostname(ctx, runner)
+	repo, err := getRemoteRepository(ctx, runner)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to get repository info: %w", err)
 	}
 
-	client, err := createGitHubClient(ctx, repoInfo.Hostname, token)
+	client, err := createGitHubClient(ctx, repo.Host, token)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
-	return client, repoInfo.Owner, repoInfo.Repo, nil
+	return client, repo.Owner, repo.Name, nil
 }
 
 // ParseReviewers parses a comma-separated string of reviewers
@@ -303,18 +303,18 @@ func executeGraphQLQuery(ctx context.Context, runner GitCommandRunner, query str
 	}
 
 	// Get repository info to determine hostname
-	repoInfo, err := getRepoInfoWithHostname(ctx, runner)
+	repo, err := getRemoteRepository(ctx, runner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
 	}
 
 	// Construct GraphQL endpoint URL
 	var graphqlURL string
-	if repoInfo.Hostname == "github.com" {
+	if repo.Host == "github.com" {
 		graphqlURL = "https://api.github.com/graphql"
 	} else {
 		// GitHub Enterprise: https://hostname/api/graphql
-		graphqlURL = fmt.Sprintf("https://%s/api/graphql", repoInfo.Hostname)
+		graphqlURL = fmt.Sprintf("https://%s/api/graphql", repo.Host)
 	}
 
 	// Create authenticated HTTP client

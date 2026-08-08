@@ -11,7 +11,7 @@ import (
 type BranchState struct {
 	Parent               string         // Parent branch name
 	ParentBranchRevision string         // Stored parent SHA from metadata; "" if none recorded
-	Scope                string         // Scope string (may be empty)
+	Scope                Scope          // Explicit scope (may be empty)
 	LockReason           git.LockReason // Lock reason (empty if not locked)
 	Frozen               bool           // Whether branch is frozen (local-only state)
 	BranchType           git.BranchType // Branch type (worktree-anchor, utility, etc.)
@@ -20,12 +20,12 @@ type BranchState struct {
 
 // HasScope returns true if this branch has an explicit scope set.
 func (s *BranchState) HasScope() bool {
-	return s.Scope != ""
+	return !s.Scope.IsEmpty()
 }
 
 // GetScope returns the scope as a Scope type.
 func (s *BranchState) GetScope() Scope {
-	return NewScope(s.Scope)
+	return s.Scope
 }
 
 // IsLocked returns true if this branch is locked.
@@ -177,7 +177,7 @@ func (s *stateCore) applySharedMetadata(
 			BranchType: meta.GetBranchType(),
 		}
 		if meta.GetScope() != nil {
-			state.Scope = *meta.GetScope()
+			state.Scope = NewScope(*meta.GetScope())
 		}
 		if rev := meta.GetParentBranchRevision(); rev != nil {
 			state.ParentBranchRevision = *rev
@@ -224,9 +224,9 @@ func (s *stateCore) updateBranchStateFromMeta(branch string, meta *git.Meta) {
 	}
 
 	if meta.GetScope() != nil {
-		state.Scope = *meta.GetScope()
+		state.Scope = NewScope(*meta.GetScope())
 	} else {
-		state.Scope = ""
+		state.Scope = Empty()
 	}
 
 	if rev := meta.GetParentBranchRevision(); rev != nil {

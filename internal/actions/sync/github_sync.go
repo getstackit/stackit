@@ -34,7 +34,7 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 	allBranches := nav.AllBranches()
 	branchNames := allBranches.Names()
 
-	repoOwner, repoName, err := nav.GetRepoInfo(remoteCtx)
+	repo, err := nav.GetRepoInfo(remoteCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
 	}
@@ -42,12 +42,12 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 
 	result := &GitHubSyncResult{
 		BranchNames: branchNames,
-		RepoOwner:   repoOwner,
-		RepoName:    repoName,
+		RepoOwner:   repo.Owner,
+		RepoName:    repo.Name,
 		PRInfos:     make(map[string]*github.PullRequestInfo),
 	}
 
-	if repoOwner == "" || repoName == "" {
+	if !repo.IsHosted() {
 		return result, nil
 	}
 
@@ -65,7 +65,7 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 
 	// Sync PR info from GitHub (this is already parallelized internally)
 	syncPrStart := time.Now()
-	if err := github.SyncPrInfoWithKnownPRNumbers(remoteCtx, ctx.Git(), branchNames, github.Repo{Owner: repoOwner, Name: repoName}, knownPRNumbers, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	if err := github.SyncPrInfoWithKnownPRNumbers(remoteCtx, ctx.Git(), branchNames, github.Repo{Owner: repo.Owner, Name: repo.Name}, knownPRNumbers, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
 		result.mu.Lock()
 		result.PRInfos[name] = prInfo
 		result.mu.Unlock()

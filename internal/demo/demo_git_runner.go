@@ -33,8 +33,8 @@ func (d *demoGitRunner) GetRemote() string {
 
 // GitVersion reports a version new enough to clear every feature gate, since
 // demo mode never shells out to git.
-func (d *demoGitRunner) GitVersion(_ context.Context) (int, int, error) {
-	return git.MinGitMajor, git.MinGitMinor, nil
+func (d *demoGitRunner) GitVersion(_ context.Context) (git.Version, error) {
+	return git.MinimumGitVersion, nil
 }
 
 func (d *demoGitRunner) FetchRemoteShas(_ context.Context, _ string) (map[string]string, error) {
@@ -409,8 +409,8 @@ func (d *demoGitRunner) StageChanges(_ context.Context, _ git.StagingOptions) er
 	return nil
 }
 
-func (d *demoGitRunner) GetRepoInfo(_ context.Context) (string, string, error) {
-	return "owner", "repo", nil
+func (d *demoGitRunner) GetRepoInfo(_ context.Context) (git.RemoteRepository, error) {
+	return git.RemoteRepository{Host: "github.com", Owner: "owner", Name: "repo"}, nil
 }
 
 func (d *demoGitRunner) HasStagedChanges(_ context.Context) (bool, error) {

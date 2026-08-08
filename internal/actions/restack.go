@@ -693,6 +693,7 @@ func handleRestackProgress(
 		PRNumber:            prNumber,
 		LockReason:          p.LockReason,
 		Frozen:              p.Frozen,
+		HeldBy:              p.HeldBy,
 		IsCurrent:           p.IsCurrent,
 		Parent:              parentName,
 		Reparented:          p.Reparented,

@@ -355,6 +355,7 @@ type RestackBranchResult struct {
 	NewParent           string     // The new parent branch name (only set if Reparented is true)
 	LockReason          LockReason // Reason why the branch is locked
 	Frozen              bool       // True if the branch is frozen
+	HeldBy              string     // Why a worktree held this branch back (empty if it was not held); Result is RestackUnneeded
 	RerereResolvedCount int        // Number of rebase continuations handled by git rerere
 }
 

@@ -370,6 +370,7 @@ type Event struct {
 	Conflict            bool              // Is this a conflict?
 	LockReason          engine.LockReason // Why the branch is locked (empty if not locked)
 	Frozen              bool              // Is the branch frozen?
+	HeldBy              string            // Why a worktree held this branch back (empty if it was not held)
 	IsCurrent           bool              // Is this the current branch?
 	Parent              string            // Parent branch name (if applicable)
 	RerereResolvedCount int               // Number of rebase continuations handled by git rerere

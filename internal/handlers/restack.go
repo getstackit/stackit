@@ -47,6 +47,7 @@ type RestackBranchEvent struct {
 	PRNumber            *int
 	LockReason          engine.LockReason
 	Frozen              bool
+	HeldBy              string // why a worktree held this branch back (empty if it was not held)
 	IsCurrent           bool
 	Parent              string
 	Reparented          bool
@@ -92,6 +93,7 @@ type RestackJSONResult struct {
 	Restacked     []RestackBranchInfo   `json:"restacked,omitempty"`
 	Skipped       []string              `json:"skipped,omitempty"`
 	Conflicts     []RestackConflictInfo `json:"conflicts,omitempty"`
+	Held          []RestackHeldInfo     `json:"held,omitempty"`        // Branches a worktree held back; also present in Skipped
 	Blocked       []string              `json:"blocked,omitempty"`     // Branches left untouched because their stack contained a conflict
 	StackRoots    []string              `json:"stack_roots,omitempty"` // Deduped independent stack roots that were processed
 	TotalCount    int                   `json:"total_count"`
@@ -108,6 +110,14 @@ type RestackBranchInfo struct {
 	NewRev              string `json:"new_rev,omitempty"`
 	PRNumber            *int   `json:"pr_number,omitempty"`
 	RerereResolvedCount int    `json:"rerere_resolved_count,omitempty"`
+}
+
+// RestackHeldInfo represents a branch a worktree held back during restack.
+// Held branches are skipped rather than restacked, so scripts must not read an
+// empty conflict list as "the whole stack moved".
+type RestackHeldInfo struct {
+	Branch string `json:"branch"`
+	Reason string `json:"reason"`
 }
 
 // RestackConflictInfo represents a conflict during restack
@@ -158,6 +168,9 @@ func (h *JSONRestackHandler) OnRestackBranch(event RestackBranchEvent) {
 		})
 	case RestackUnneeded:
 		h.Result.Skipped = append(h.Result.Skipped, event.Branch)
+		if event.HeldBy != "" {
+			h.Result.Held = append(h.Result.Held, RestackHeldInfo{Branch: event.Branch, Reason: event.HeldBy})
+		}
 	case RestackConflict:
 		h.Result.Conflicts = append(h.Result.Conflicts, RestackConflictInfo{
 			Branch:    event.Branch,

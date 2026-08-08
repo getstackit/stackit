@@ -180,8 +180,7 @@ Rebase-in-progress detection currently lives in `skipDirtyWorktreeStacks`, which
 only the `restack` command runs. The engine snapshot keys its hold set on the
 worktree's checked-out branch, and a mid-rebase worktree reports no branch — so
 `modify`, `squash`, and absorb-driven restacks can still move the ref of a
-branch being rebased elsewhere. Known gap, tracked in
-`docs/plans/worktree-audit-todo.md`.
+branch being rebased elsewhere. Known gap.
 
 Untracked files are the case worth being careful about. `git reset --hard`
 overwrites an untracked file only when the incoming commit contains that same
@@ -224,20 +223,29 @@ A held branch returns `RestackUnneeded` — the same status as a branch that
 needed no work — so anything that could leave a user believing a restack
 happened must say otherwise.
 
-`stackit restack` reports both units: the stack held behind a managed worktree
-and the individual branch held behind any other checkout, each with the worktree
-and the reason. Only the branch's *own* checkout produces a specific reason — a
-branch held because an ancestor is held falls back to the generic message, since
-the remedy lives with the ancestor.
+The engine carries the reason out on `RestackBranchResult.HeldBy`, phrased for
+the user and naming the worktree, so every command that restacks reports it
+rather than printing "up to date":
 
-`sync` reports the stack-level holds from its own gate
-(`SkipReasonForWorktree`), but **branch-level engine holds are not yet
-distinguished in sync**: `RestackBranchResult` carries no held marker, so they
-surface as ordinary completion. Two known gaps sit here — that marker, and
-rebase-in-progress detection in the engine snapshot and in sync's gate. Tracked
-in `docs/plans/worktree-audit-todo.md`.
+- `restack`, `modify`, `squash`, `absorb`, and the rest of the mutating commands
+  warn with `Held <branch> back: <reason>`.
+- `sync` renders the same reason on its restack row, in both the streaming and
+  interactive handlers, and excludes held branches from the "already current"
+  count (`isPlainUpToDate`).
+- `restack --json` lists them under `held` as `{branch, reason}`. They also stay
+  in `skipped`, so an empty `conflicts` list must not be read as "the whole
+  stack moved".
+
+A branch held because an *ancestor* is held reports the ancestor's reason
+prefixed with which ancestor it is, since the remedy lives there.
+
+`stackit restack` additionally reports the stack-level holds from its own gate
+(`skipDirtyWorktreeStacks`); `sync` reports those through
+`SkipReasonForWorktree`. Rebase-in-progress detection is still missing from the
+engine snapshot and from sync's gate — see "What holds a branch" above.
 
 **Source**: `internal/engine/engine_sync.go` (hold set construction),
+`internal/engine/restack_impl.go` (`holdBranch`, `branchHeldBack`),
 `internal/actions/restack.go` (`skipDirtyWorktreeStacks`, `heldWorktreeReason`).
 
 ## Performance: keep the squash scan cold

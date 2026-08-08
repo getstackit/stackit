@@ -421,6 +421,14 @@ type ContinueRebaseResult struct {
 	Result              int    // git.RebaseResult value (0 = RebaseDone, 1 = RebaseConflict)
 	BranchName          string // Only set if Result is RebaseDone
 	RerereResolvedCount int    // Number of rebase continuations handled by git rerere
+
+	// UnresetWorktree is a worktree holding BranchName that was left on
+	// pre-rebase content because resetting it would have discarded work. Its ref
+	// moved anyway — refusing that would throw away the conflict resolution the
+	// user just performed — so the divergence is real and only the user can
+	// clear it. Empty when nothing was held.
+	UnresetWorktree string
+	UnresetReason   string
 }
 
 // SubmitAction says whether submitting a branch will create a new PR or

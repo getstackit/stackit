@@ -45,20 +45,28 @@ func (e *engineImpl) resetWorktreeIfClean(ctx context.Context, worktreePath stri
 // dirty and silently disables the reset — the same trap resetWorktreeIfClean
 // documents for the batch path.
 //
-// Best-effort: a worktree that cannot be inspected returns "" and is left
-// alone, since a reset is what would discard uncommitted work.
-func (e *engineImpl) branchWorktreeResetTarget(ctx context.Context, branchName string) string {
+// Best-effort: a worktree that cannot be inspected is left alone, since a reset
+// is what would discard uncommitted work.
+//
+// Declining to reset is not a silent outcome. The ref still moves, so that
+// worktree is left holding pre-move content under a moved ref — the divergence
+// the user's next `stackit modify -a` commits as a deletion. The reason is
+// returned so the caller can say so; see worktreeResetDecision.
+func (e *engineImpl) branchWorktreeResetTarget(ctx context.Context, branchName string) worktreeResetDecision {
 	worktrees, err := e.git.ListWorktrees(ctx)
 	if err != nil {
-		return ""
+		return worktreeResetDecision{}
 	}
 	worktreePath := worktrees.PathForBranch(branchName)
 	if worktreePath == "" {
-		return ""
+		return worktreeResetDecision{}
 	}
 	dirty, err := e.git.WorktreeHasTrackedChanges(ctx, worktreePath)
-	if err != nil || dirty {
-		return ""
+	switch {
+	case err != nil:
+		return worktreeResetDecision{HeldPath: worktreePath, HeldReason: fmt.Sprintf("it could not be inspected: %v", err)}
+	case dirty:
+		return worktreeResetDecision{HeldPath: worktreePath, HeldReason: "it has uncommitted changes"}
 	}
 	// Tracked changes are not the only thing a reset destroys.
 	// WorktreeHasTrackedChanges deliberately ignores untracked files, so it
@@ -67,10 +75,22 @@ func (e *engineImpl) branchWorktreeResetTarget(ctx context.Context, branchName s
 	// file was never in git, so there is no reflog or stash to recover it from.
 	// The batch path guards this through untrackedCollisionHold; this one-off
 	// path has to ask the same question.
-	if collides, known := e.UntrackedCollision(ctx, branchName); collides || !known {
-		return ""
+	switch collides, known := e.UntrackedCollision(ctx, branchName); {
+	case !known:
+		return worktreeResetDecision{HeldPath: worktreePath, HeldReason: "its untracked files could not be inspected"}
+	case collides:
+		return worktreeResetDecision{HeldPath: worktreePath, HeldReason: "an untracked file there would be overwritten"}
 	}
-	return worktreePath
+	return worktreeResetDecision{ResetPath: worktreePath}
+}
+
+// worktreeResetDecision is the outcome of branchWorktreeResetTarget: either a
+// worktree that is safe to reset once the ref moves, or one that was left
+// diverged and why. Both are empty when no worktree holds the branch.
+type worktreeResetDecision struct {
+	ResetPath  string
+	HeldPath   string
+	HeldReason string
 }
 
 // restackSnapshot bundles the branch-keyed state captured once per restack

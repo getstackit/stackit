@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Stackit! This document outlines t
 
 ### Prerequisites
 
-- **Git 2.25+**
+- **Git 2.36+**
 - **GitHub CLI (`gh`)** for PR operations
 - **[mise](https://mise.jdx.dev/)** - Tool version manager and task runner
 

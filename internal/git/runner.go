@@ -417,6 +417,9 @@ type Runner interface {
 	MetadataOperations
 	StackMetadataOperations
 
+	// Environment
+	GitVersion(ctx context.Context) (major, minor int, err error)
+
 	// Raw command execution
 	RunGitCommandWithContext(ctx context.Context, args ...string) (string, error)
 	RunGitCommandRawWithContext(ctx context.Context, args ...string) (string, error)
@@ -472,8 +475,9 @@ type runner struct {
 	// Started lazily on first use; lives for the lifetime of the runner.
 	objects *objectReader
 
-	// Cached git version info
-	gitVersionOnce   sync.Once
+	// Cached git version info. Guarded by a mutex rather than a sync.Once so a
+	// failed probe can be retried — see GitVersion.
+	gitVersionMu     sync.Mutex
 	gitVersionMajor  int
 	gitVersionMinor  int
 	gitVersionParsed bool

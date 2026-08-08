@@ -31,6 +31,12 @@ func (d *demoGitRunner) GetRemote() string {
 	return "origin"
 }
 
+// GitVersion reports a version new enough to clear every feature gate, since
+// demo mode never shells out to git.
+func (d *demoGitRunner) GitVersion(_ context.Context) (int, int, error) {
+	return git.MinGitMajor, git.MinGitMinor, nil
+}
+
 func (d *demoGitRunner) FetchRemoteShas(_ context.Context, _ string) (map[string]string, error) {
 	return make(map[string]string), nil
 }

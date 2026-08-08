@@ -334,15 +334,15 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, reba
 	// ref without doing so.
 	//
 	// Resolved before the ref moves; see branchWorktreeResetTarget for why.
-	worktreeToReset := e.branchWorktreeResetTarget(ctx, branchName)
+	reset := e.branchWorktreeResetTarget(ctx, branchName)
 
 	err = e.git.UpdateBranchRefCAS(ctx, branchName, newRev, expectedBranchRevision)
 	if err != nil {
 		return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to update branch reference %s: %w", branchName, err)
 	}
 
-	if worktreeToReset != "" {
-		_ = e.git.ResetWorktreeWorkingDir(ctx, worktreeToReset) //nolint:errcheck // best-effort
+	if reset.ResetPath != "" {
+		_ = e.git.ResetWorktreeWorkingDir(ctx, reset.ResetPath) //nolint:errcheck // best-effort
 	}
 
 	// Update metadata
@@ -361,6 +361,8 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, reba
 		Result:              int(git.RebaseDone),
 		BranchName:          branchName,
 		RerereResolvedCount: result.RerereResolvedCount,
+		UnresetWorktree:     reset.HeldPath,
+		UnresetReason:       reset.HeldReason,
 	}, nil
 }
 

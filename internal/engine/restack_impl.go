@@ -117,11 +117,19 @@ type restackSnapshot struct {
 	// worktrees that had no tracked changes. Whether those hold their branch
 	// depends on the incoming tree, which is only known per branch.
 	untrackedByWorktree map[string][]string
-	// heldBranches contains every branch whose checked-out worktree was dirty
-	// or could not be inspected before this pass. Descendants of these branches
-	// must be held too: a validated child may otherwise be built on the target
-	// SHA of a parent that was ultimately not allowed to move.
-	heldBranches BranchNameSet
+	// heldReasons maps every branch whose checked-out worktree was dirty or
+	// could not be inspected before this pass to the reason, phrased for the
+	// user and naming the worktree. A held branch reports RestackUnneeded —
+	// the same status as one that needed no work — so the reason is what lets
+	// callers tell "I protected your work" from "there was nothing to do".
+	heldReasons map[string]string
+	// applyingBranches is the subset this restack pass will actually move. A
+	// held ancestor only blocks a validated child when it is in this set: then
+	// the child's plan may name the ancestor's would-be target SHA even though
+	// its ref was held back. A dirty current branch already amended by modify or
+	// squash is not being applied here, so descendants may safely use its
+	// current ref.
+	applyingBranches BranchNameSet
 }
 
 // untrackedCollisionHold decides whether a worktree holding only untracked
@@ -138,23 +146,24 @@ type restackSnapshot struct {
 // than untracked. Parents are restacked before their children, so by the time
 // this runs the parent ref already holds the tree that is about to arrive.
 //
-// The decision is recorded in the snapshot: a held branch must also hold its
-// descendants, and its worktree must not be reset afterwards.
-func (e *engineImpl) untrackedCollisionHold(ctx context.Context, branch Branch, snap *restackSnapshot) bool {
+// The decision is recorded in the snapshot. If this branch is also being
+// applied in the validated plan, its descendants must be held; its worktree
+// must not be reset in either case.
+func (e *engineImpl) untrackedCollisionHold(ctx context.Context, branch Branch, snap *restackSnapshot) string {
 	branchName := branch.GetName()
 	worktreePath := snap.worktrees.PathForBranch(branchName)
 	if worktreePath == "" {
-		return false
+		return ""
 	}
 	untracked := snap.untrackedByWorktree[worktreePath]
 	if len(untracked) == 0 {
-		return false
+		return ""
 	}
 
-	hold := func() bool {
+	hold := func(reason string) string {
 		snap.dirtyWorktrees[worktreePath] = true
-		snap.heldBranches[branchName] = true
-		return true
+		snap.heldReasons[branchName] = reason
+		return reason
 	}
 
 	e.mu.RLock()
@@ -167,28 +176,49 @@ func (e *engineImpl) untrackedCollisionHold(ctx context.Context, branch Branch, 
 	baseRev, err := e.GetBranch(parent).GetRevision()
 	if err != nil || baseRev == "" {
 		// Cannot see what is about to land, so cannot rule out a collision.
-		return hold()
+		return hold(fmt.Sprintf("untracked files in worktree %s could not be checked against the incoming commit", worktreePath))
 	}
 
 	collides, known := e.git.TreeContainsAnyPath(ctx, baseRev, untracked)
-	if !known || collides {
-		return hold()
+	switch {
+	case !known:
+		return hold(fmt.Sprintf("untracked files in worktree %s could not be checked against the incoming commit", worktreePath))
+	case collides:
+		return hold(fmt.Sprintf("worktree %s has untracked files the incoming commit would overwrite", worktreePath))
 	}
-	return false
+	return ""
 }
 
-// holdBranch is the single hold decision every restack path consults: an
-// ancestor already held, or this branch's own worktree holding something the
-// incoming tree would destroy.
-func (e *engineImpl) holdBranch(ctx context.Context, branch Branch, snap *restackSnapshot) bool {
-	if e.branchHeldBack(branch, snap) {
-		return true
+// holdBranchInOwnWorktree is the hold decision for the ordinary rebase path.
+// That path rebases onto the parent's current ref, so a dirty ancestor does not
+// make this branch unsafe to move. Only this branch's own worktree can need
+// protection from the reset that follows its ref update.
+// It returns the reason the branch is held, or "" when it is free to move.
+func (e *engineImpl) holdBranchInOwnWorktree(ctx context.Context, branch Branch, snap *restackSnapshot) string {
+	if reason := snap.heldReasons[branch.GetName()]; reason != "" {
+		return reason
 	}
 	return e.untrackedCollisionHold(ctx, branch, snap)
 }
 
-func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) bool {
-	current := branch.GetName()
+// holdBranch is the hold decision for the validated-plan application path: an
+// ancestor already held, or this branch's own worktree holding something the
+// incoming tree would destroy. A validated plan applies a parent's would-be
+// target SHA, so applying a child after holding its parent would record a
+// parent revision the child cannot actually be based on.
+// It returns the reason the branch is held, or "" when it is free to move.
+func (e *engineImpl) holdBranch(ctx context.Context, branch Branch, snap *restackSnapshot) string {
+	if reason := e.branchHeldBack(branch, snap); reason != "" {
+		return reason
+	}
+	return e.untrackedCollisionHold(ctx, branch, snap)
+}
+
+// branchHeldBack returns why branch cannot move — its own worktree, or a held
+// ancestor this pass is also applying — or "" when nothing holds it.
+func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) string {
+	start := branch.GetName()
+	current := start
 	visited := make(map[string]bool)
 	// Metadata should be acyclic, but cap the walk as a second line of defense
 	// against malformed or concurrently changing parent metadata — a parent
@@ -197,29 +227,32 @@ func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) bool {
 	maxSteps := e.BranchNames().Len() + 1
 	for range maxSteps {
 		if current == "" {
-			return false
+			return ""
 		}
 		if visited[current] {
 			// A cycle means the metadata cannot be trusted to say what this
 			// branch is stacked on, so no ref move is safe: hold it.
-			return true
+			return "its recorded parent chain contains a cycle, so what it is stacked on cannot be determined"
 		}
 		visited[current] = true
-		if snap.heldBranches.Contains(current) {
-			return true
+		if reason := snap.heldReasons[current]; reason != "" && snap.applyingBranches.Contains(current) {
+			if current == start {
+				return reason
+			}
+			return fmt.Sprintf("its ancestor %s is held back: %s", current, reason)
 		}
 		e.mu.RLock()
 		state := e.readState(current)
 		trunk := e.trunk
 		e.mu.RUnlock()
 		if state == nil || state.Parent == "" || current == trunk {
-			return false
+			return ""
 		}
 		current = state.Parent
 	}
 	// Ran out of steps without reaching trunk: the chain is longer than the
 	// branch count allows, so treat it as untrustworthy too.
-	return true
+	return "its recorded parent chain never reaches trunk, so what it is stacked on cannot be determined"
 }
 
 // branchRev returns branch's revision from the pass snapshot, falling back to a
@@ -379,12 +412,13 @@ func (e *engineImpl) restackBranch(
 	// `stackit modify -a` commits that deletion — silently reverting those files
 	// inside the branch.
 	//
-	// This sits here rather than only in actions.PlanRestack (skipDirtyWorktreeStacks,
-	// which warns and is reached solely by the `restack` command) so that every
-	// caller of RestackBranches inherits it — modify, sync, squash, absorb,
-	// delete, split, reorder, pluck and insert all arrive here directly.
-	if e.holdBranch(ctx, branch, snap) {
-		return RestackBranchResult{Result: RestackUnneeded}, nil
+	// The validated-plan path has a matching guard that also holds descendants:
+	// it applies planned parent targets rather than the parent's current ref.
+	// The ordinary rebase path only needs this branch's own hold, which keeps
+	// modify and squash able to restack clean children after moving their dirty
+	// current branch's ref.
+	if reason := e.holdBranchInOwnWorktree(ctx, branch, snap); reason != "" {
+		return RestackBranchResult{Result: RestackUnneeded, HeldBy: reason}, nil
 	}
 
 	// Worktree anchors are handled before the landed check, mirroring
@@ -831,8 +865,8 @@ func (e *engineImpl) applyMetadataRefresh(
 	// Metadata records the parent SHA consumed by later planning, so advancing
 	// it past a held parent would create the same phantom-parent state as a ref
 	// move. A held branch and every descendant must remain completely unchanged.
-	if e.holdBranch(ctx, branch, snap) {
-		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: item.ParentRev}, nil
+	if reason := e.holdBranch(ctx, branch, snap); reason != "" {
+		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: item.ParentRev, HeldBy: reason}, nil
 	}
 	meta := snap.meta.Get(branchName)
 	if meta == nil {
@@ -889,8 +923,8 @@ func (e *engineImpl) applyBranchAndMetadata(
 	// Hold the branch back instead. This is the plan path, reached by every
 	// caller of actions.RestackBranches (modify, squash, absorb, delete, split,
 	// reorder, pluck) as well as the `restack` command.
-	if e.holdBranch(ctx, branch, snap) {
-		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: parentRev}, nil
+	if reason := e.holdBranch(ctx, branch, snap); reason != "" {
+		return RestackBranchResult{Result: RestackUnneeded, RebasedBranchBase: parentRev, HeldBy: reason}, nil
 	}
 
 	meta := snap.meta.Get(branchName)

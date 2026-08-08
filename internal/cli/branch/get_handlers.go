@@ -193,6 +193,14 @@ func (h *SimpleGetHandler) OnRestackBranch(event handlers.RestackBranchEvent) {
 			h.Output.Info("%s", actions.FormatRerereResolved(event.RerereResolvedCount))
 		}
 	case handlers.RestackUnneeded:
+		// A held branch reports the same status as one that needed no work, so
+		// warn instead of quietly claiming it is up to date.
+		if event.HeldBy != "" {
+			h.Output.Warn("  Held %s%s back: %s",
+				style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo, event.HeldBy)
+			return
+		}
+
 		reason := common.ReasonNoRestackNeeded
 		if event.LockReason.IsLocked() {
 			reason = fmt.Sprintf("%s: %s", common.ReasonLocked, event.LockReason)

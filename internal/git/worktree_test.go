@@ -2,6 +2,7 @@ package git_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,32 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 )
+
+func TestTreeContainsAnyPathLargePathSet(t *testing.T) {
+	t.Parallel()
+
+	scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		return s.Repo.CreateChangeAndCommit("tracked", "tracked")
+	})
+	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+
+	// This must remain a known, non-collision result. An arbitrary path-count
+	// cap used to turn it into "unknown", which holds the branch and all of its
+	// validated-plan descendants despite none of the files being at risk.
+	// One over the old cap, plus room for the colliding path appended below.
+	paths := make([]string, 201, 202)
+	for i := range paths {
+		paths[i] = fmt.Sprintf("untracked-%03d.txt", i)
+	}
+	collides, known := runner.TreeContainsAnyPath(context.Background(), "HEAD", paths)
+	require.True(t, known)
+	require.False(t, collides)
+
+	paths = append(paths, "tracked_test.txt")
+	collides, known = runner.TreeContainsAnyPath(context.Background(), "HEAD", paths)
+	require.True(t, known)
+	require.True(t, collides)
+}
 
 func TestWorktree(t *testing.T) {
 	t.Run("lists ignored files", func(t *testing.T) {

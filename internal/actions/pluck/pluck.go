@@ -46,13 +46,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		source = currentBranch.GetName()
 	}
 
-	// Take snapshot before modifying the repository
-	snapshotOpts := actions.NewSnapshot("pluck",
-		actions.WithFlagValue("--source", opts.Source),
-		actions.WithFlagValue("--onto", opts.Onto),
-	)
-	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
-
 	// Validate source branch
 	if err := validation.ValidateSourceBranch(eng, source, "pluck"); err != nil {
 		return err
@@ -72,6 +65,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err := actions.EnsureCanModifyHere(ctx, append(engine.BranchesOf(sourceBranch, ontoBranch), children...)...); err != nil {
 		return err
 	}
+
+	// Take snapshot before modifying the repository, but after the ownership
+	// guard, so a refusal leaves the undo stack untouched rather than evicting
+	// a real snapshot with a no-op entry.
+	snapshotOpts := actions.NewSnapshot("pluck",
+		actions.WithFlagValue("--source", opts.Source),
+		actions.WithFlagValue("--onto", opts.Onto),
+	)
+	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 
 	// Cycle detection: ensure onto is not a descendant of source
 	if graph.IsDescendant(sourceBranch, ontoBranch) {

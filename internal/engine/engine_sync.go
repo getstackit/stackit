@@ -145,7 +145,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// per branch once its incoming tree is known; see untrackedCollisionHold.
 	dirtyWorktrees := make(map[string]bool, len(worktrees))
 	untrackedByWorktree := make(map[string][]string)
-	heldBranches := make(BranchNameSet)
+	heldReasons := make(map[string]string)
 
 	e.mu.RLock()
 	trunk := e.trunk
@@ -158,25 +158,30 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// propagate through branchHeldBack's ancestry walk and silently hold every
 	// trunk-rooted branch in the repository. Marking the worktree dirty still
 	// stops any reset of it.
-	hold := func(branch string) {
+	hold := func(branch string, reason string) {
 		if branch != "" && branch != trunk {
-			heldBranches[branch] = true
+			heldReasons[branch] = reason
 		}
 	}
 
 	for _, worktree := range worktrees {
 		path := worktree.Path
 		tracked, trackedErr := e.git.WorktreeHasTrackedChanges(ctx, path)
-		if trackedErr != nil || tracked {
+		if trackedErr != nil {
 			dirtyWorktrees[path] = true
-			hold(worktree.Branch)
+			hold(worktree.Branch, fmt.Sprintf("worktree %s could not be inspected: %v", path, trackedErr))
+			continue
+		}
+		if tracked {
+			dirtyWorktrees[path] = true
+			hold(worktree.Branch, fmt.Sprintf("worktree %s has uncommitted changes", path))
 			continue
 		}
 		untracked, untrackedErr := e.git.GetUntrackedFilesIn(ctx, path)
 		if untrackedErr != nil {
 			// Cannot tell what is there, so no reset is safe.
 			dirtyWorktrees[path] = true
-			hold(worktree.Branch)
+			hold(worktree.Branch, fmt.Sprintf("untracked files in worktree %s could not be listed: %v", path, untrackedErr))
 			continue
 		}
 		if len(untracked) > 0 {
@@ -196,7 +201,11 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
-	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldBranches: heldBranches}
+	applyingBranches := make(BranchNameSet, len(branches))
+	for _, branch := range branches {
+		applyingBranches[branch.GetName()] = true
+	}
+	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldReasons: heldReasons, applyingBranches: applyingBranches}
 
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)

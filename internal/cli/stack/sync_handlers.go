@@ -285,6 +285,10 @@ func (h *SimpleSyncHandler) printRestackEvent(event syncAction.Event) {
 			if event.RerereResolvedCount > 0 {
 				h.Output.Info("%s", actions.FormatRerereResolved(event.RerereResolvedCount))
 			}
+		case event.HeldBy != "":
+			// A hold reports the same status as "nothing to do", so say which
+			// one happened — the remedy lives in another worktree.
+			h.item(event.Phase, "  %s Held %s%s back: %s", style.MarkWarning(), branchStr, prInfo, event.HeldBy)
 		case event.IsLocked():
 			h.item(event.Phase, "  %s%s %s: %s", branchStr, prInfo, common.ReasonLocked, event.LockReason)
 		case event.Frozen:
@@ -337,7 +341,7 @@ func (h *SimpleSyncHandler) OnRestackBranch(restack handlers.RestackBranchEvent)
 	rerereResolvedCount := restack.RerereResolvedCount
 	// Already-current branches are the expected default; suppress their rows
 	// and fold them into the summary count so only movement and problems print.
-	if isPlainUpToDate(result, lockReason, frozen, reparented) {
+	if isPlainUpToDate(restack) {
 		h.restackUpToDate++
 		return
 	}
@@ -359,6 +363,7 @@ func (h *SimpleSyncHandler) OnRestackBranch(restack handlers.RestackBranchEvent)
 		NewRevision:         newRev,
 		LockReason:          lockReason,
 		Frozen:              frozen,
+		HeldBy:              restack.HeldBy,
 		IsCurrent:           isCurrent,
 		Parent:              parent,
 		RerereResolvedCount: rerereResolvedCount,
@@ -431,11 +436,17 @@ func formatRestackSummaryLine(restacked, skipped, blocked, upToDate int) string 
 }
 
 // isPlainUpToDate reports whether a restack result is a no-op with nothing
-// worth showing — the branch was already current, not locked, frozen, or
-// reparented. Standalone restack suppresses these rows and folds them into the
-// summary count instead.
-func isPlainUpToDate(result syncAction.RestackResult, lockReason engine.LockReason, frozen, reparented bool) bool {
-	return result == syncAction.RestackUnneeded && !lockReason.IsLocked() && !frozen && !reparented
+// worth showing — the branch was already current, not locked, frozen, held back
+// by a worktree, or reparented. Standalone restack suppresses these rows and
+// folds them into the summary count instead. A held branch reports the same
+// RestackUnneeded status as one that needed no work, so it must be excluded
+// here or "I protected your work" is silently counted as "already current".
+func isPlainUpToDate(event handlers.RestackBranchEvent) bool {
+	return event.Result == syncAction.RestackUnneeded &&
+		!event.LockReason.IsLocked() &&
+		!event.Frozen &&
+		event.HeldBy == "" &&
+		!event.Reparented
 }
 
 // InteractiveSyncHandler provides bubbletea TUI for TTY environments
@@ -661,24 +672,15 @@ func (h *InteractiveSyncHandler) OnRestackStart(branchCount int) {
 
 // OnRestackBranch implements RestackHandler for standalone restack operations
 func (h *InteractiveSyncHandler) OnRestackBranch(restack handlers.RestackBranchEvent) {
-	branch := restack.Branch
-	result := restack.Result
-	newRev := restack.NewRevision
-	prNumber := restack.PRNumber
-	lockReason := restack.LockReason
-	frozen := restack.Frozen
-	isCurrent := restack.IsCurrent
-	parent := restack.Parent
 	reparented := restack.Reparented
 	oldParent := restack.OldParent
 	newParent := restack.NewParent
-	rerereResolvedCount := restack.RerereResolvedCount
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	// Already-current branches are the expected default; skip their rows but
 	// still advance the progress bar and count them for the summary.
-	if isPlainUpToDate(result, lockReason, frozen, reparented) {
+	if isPlainUpToDate(restack) {
 		h.restackUpToDate++
 		h.completedOps++
 		h.runner.Send(syncComponent.ProgressTickMsg{Completed: h.completedOps, Total: h.totalOps})
@@ -686,7 +688,7 @@ func (h *InteractiveSyncHandler) OnRestackBranch(restack handlers.RestackBranchE
 	}
 
 	// Build detail message
-	detail, mark := h.formatRestackDetail(branch, result, newRev, prNumber, lockReason, frozen, isCurrent, parent, rerereResolvedCount)
+	detail, mark := h.formatRestackDetail(restack)
 	if detail != "" {
 		if reparented {
 			detail = fmt.Sprintf("Reparented %s → %s. %s", oldParent, newParent, detail)
@@ -710,30 +712,36 @@ func (h *InteractiveSyncHandler) OnRestackBranch(restack handlers.RestackBranchE
 // status mark that should lead its row. The conflict case returns MarkWarn
 // rather than baking a glyph into the string, so the model owns the marker (the
 // streaming handler does the same).
-func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncAction.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, rerereResolvedCount int) (string, syncComponent.DetailMark) {
+func (h *InteractiveSyncHandler) formatRestackDetail(event handlers.RestackBranchEvent) (string, syncComponent.DetailMark) {
 	prInfo := ""
-	if prNumber != nil {
-		prInfo = fmt.Sprintf(" (PR #%d)", *prNumber)
+	if event.PRNumber != nil {
+		prInfo = fmt.Sprintf(" (PR #%d)", *event.PRNumber)
 	}
 
-	displayName := style.ColorBranchNameIf(branch, isCurrent)
+	displayName := style.ColorBranchNameIf(event.Branch, event.IsCurrent)
 
-	switch result {
+	switch event.Result {
 	case syncAction.RestackDone:
 		msg := fmt.Sprintf("Restacked %s%s", displayName, prInfo)
-		if parent != "" {
-			msg += fmt.Sprintf(" on %s", parent)
+		if event.Parent != "" {
+			msg += fmt.Sprintf(" on %s", event.Parent)
 		}
-		msg += fmt.Sprintf(" → %s", newRev)
-		if rerereResolvedCount > 0 {
-			msg += " " + actions.FormatRerereResolved(rerereResolvedCount)
+		msg += fmt.Sprintf(" → %s", event.NewRevision)
+		if event.RerereResolvedCount > 0 {
+			msg += " " + actions.FormatRerereResolved(event.RerereResolvedCount)
 		}
 		return msg, syncComponent.MarkDone
 	case syncAction.RestackUnneeded:
+		// A hold reports the same status as "nothing to do", so mark it as a
+		// warning and say why — the remedy lives in another worktree.
+		if event.HeldBy != "" {
+			return fmt.Sprintf("Held %s%s back: %s", displayName, prInfo, event.HeldBy), syncComponent.MarkWarn
+		}
+
 		reason := common.ReasonNoRestackNeeded
-		if lockReason.IsLocked() {
-			reason = fmt.Sprintf("%s: %s", common.ReasonLocked, lockReason)
-		} else if frozen {
+		if event.LockReason.IsLocked() {
+			reason = fmt.Sprintf("%s: %s", common.ReasonLocked, event.LockReason)
+		} else if event.Frozen {
 			reason = common.ReasonFrozen
 		}
 

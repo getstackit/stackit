@@ -65,6 +65,7 @@ type RestackProgress struct {
 	Conflict            bool                 // true if this is a conflict
 	LockReason          engine.LockReason    // why the branch is locked (empty if not locked)
 	Frozen              bool                 // true if the branch is frozen
+	HeldBy              string               // why a worktree held this branch back (empty if it was not held)
 	IsCurrent           bool                 // true if this is the current branch
 	Reparented          bool                 // true if the branch was reparented
 	OldParent           string               // the old parent name if reparented
@@ -423,6 +424,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 			RerereResolvedCount: result.RerereResolvedCount,
 			LockReason:          result.LockReason,
 			Frozen:              result.Frozen,
+			HeldBy:              result.HeldBy,
 			IsCurrent:           branchName == currentBranchName,
 			Reparented:          result.Reparented,
 			OldParent:           result.OldParent,
@@ -452,6 +454,10 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 		}
 	case engine.RestackUnneeded:
 		switch {
+		case result.HeldBy != "":
+			// A hold and "nothing to do" are the same status, so say which one
+			// happened — the remedy lives in another worktree.
+			ctx.Output.Warn("Held %s back: %s", output.Branch(branchName, branchName == currentBranchName), result.HeldBy)
 		case result.LockReason.IsLocked():
 			ctx.Output.Info("%s locked: %s", output.Branch(branchName, branchName == currentBranchName), result.LockReason)
 		case result.Frozen:

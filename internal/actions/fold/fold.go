@@ -98,13 +98,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	currentBranch := eng.CurrentBranch().GetName()
 	currentBranchObj := eng.GetBranch(currentBranch)
 
-	// Take snapshot before modifying the repository
-	snapshotOpts := actions.NewSnapshot("fold",
-		actions.WithFlag(opts.Keep, "--keep"),
-		actions.WithFlag(opts.AllowTrunk, "--allow-trunk"),
-	)
-	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
-
 	// Get parent branch
 	parentName := currentBranchObj.GetParentOrTrunk()
 
@@ -117,6 +110,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err := actions.EnsureCanModifyHere(ctx, currentBranchObj, parentBranch); err != nil {
 		return err
 	}
+
+	// Take snapshot before modifying the repository, but after the ownership
+	// guard, so a refusal leaves the undo stack untouched rather than evicting
+	// a real snapshot with a no-op entry.
+	snapshotOpts := actions.NewSnapshot("fold",
+		actions.WithFlag(opts.Keep, "--keep"),
+		actions.WithFlag(opts.AllowTrunk, "--allow-trunk"),
+	)
+	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 
 	// Prohibit folding branches with different scopes
 	if !parentBranch.IsTrunk() {

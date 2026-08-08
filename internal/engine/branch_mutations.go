@@ -214,6 +214,26 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 // batch go through a single `git update-ref --stdin` invocation. The previous
 // implementation looped DeleteBranch per branch, spawning 4+ git subprocesses
 // per branch — at ~30-50ms each that dominated cleanup time during sync.
+// nearestSurvivingParent walks up from start through branches that are being
+// deleted and returns the first one that will still exist afterwards.
+//
+// The walk only passes through members of toDelete, so it terminates in at most
+// len(toDelete) steps. It is capped anyway: a parent cycle in malformed or
+// concurrently rewritten metadata would otherwise spin forever and hang the
+// whole deletion. GetStackRootForBranch and branchHeldBack guard their walks
+// the same way. When a cycle leaves no surviving ancestor reachable, the child
+// falls back to trunk rather than to a branch about to vanish.
+func nearestSurvivingParent(start string, parentOf map[string]string, toDelete map[string]bool, trunk string) string {
+	parent := start
+	for range len(toDelete) + 1 {
+		if !toDelete[parent] {
+			return parent
+		}
+		parent = parentOf[parent]
+	}
+	return trunk
+}
+
 func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]string, error) {
 	if len(branches) == 0 {
 		return nil, nil
@@ -263,10 +283,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 			if toDeleteSet[child] {
 				continue
 			}
-			newParent := parentByBranch[name]
-			for toDeleteSet[newParent] {
-				newParent = parentByBranch[newParent]
-			}
+			newParent := nearestSurvivingParent(parentByBranch[name], parentByBranch, toDeleteSet, trunkName)
 			moves = append(moves, BranchParentMove{Branch: child, NewParent: newParent})
 			allSurvivingChildren[child] = true
 		}

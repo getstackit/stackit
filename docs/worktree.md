@@ -200,6 +200,29 @@ Shows each worktree with:
 - Registration health (`healthy`, `legacy`, `missing`, or repair-needed)
 - Whether the worktree can be removed or detached
 
+#### Ownership warnings
+
+The listing also reports branches whose physical checkout does not match the
+worktree that owns their stack, under `ownership_warnings` in `--json`. Four
+kinds are emitted:
+
+| Warning | Meaning |
+|---------|---------|
+| `branch X belongs to managed worktree Y (path) but is checked out at Z` | The stack's owner and the actual checkout disagree. |
+| `branch X is checked out in unmanaged worktree Z` | A plain Git worktree holds a branch Stackit does not manage a worktree for. |
+| `could not determine owner for branch X checked out at Z` | Ownership could not be resolved; treat the branch as unsafe to mutate until resolved. |
+| `could not canonicalize ...` | A path could not be resolved to compare (broken symlink, permissions). |
+
+Detached worktrees are skipped: Git's porcelain does not name a branch for them,
+so ownership cannot be established without a much more expensive scan.
+
+`sync` reports the same warnings. That is deliberate — divergence is worth
+knowing about before it blocks a mutation, and `sync` is the command licensed to
+touch every stack, so it reaches users who would never think to run `worktree
+list`.
+
+**Source**: `internal/actions/worktree/entry.go` (`OwnershipWarnings`).
+
 ### `worktree open` - Navigate to a worktree
 
 ```bash

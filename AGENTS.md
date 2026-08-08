@@ -108,13 +108,14 @@ api/openapi/       API contract source of truth
 - `docs/absorb.md` - Absorb command: target selection, stash/restore safety model, restack modes
 - `docs/config.md` - Configuration system, keys, layered config
 - `docs/hooks.md` - Lifecycle hook configuration, env vars, approval flow, recipes
-- `docs/multiplayer.md` - Collaboration: detecting landed work from non-stackit teammates, the un-pushed trunk guard, reparent invariants
+- `docs/metadata.md` - Ref namespaces, branch/stack metadata, transactions, compare-and-swap ref writes
+- `docs/multiplayer.md` - Collaboration: detecting landed work from non-stackit teammates, the un-pushed trunk guard, the worktree hold, reparent invariants
 - `docs/performance.md` - Remote-operation tuning (SSH reuse), diagnosing slow commands with the tracer
 - `docs/recipes.md` - Step-by-step file lists for cross-cutting changes
 - `docs/shipping.md` - Merge strategies, consolidation, multi-stack shipping
 - `docs/tui.md` - TUI patterns, BaseModel, styling, components
 - `docs/web.md` - Web app architecture, components, data flow, styling
-- `docs/worktree.md` - Worktree management, create vs attach, workflows
+- `docs/worktree.md` - Worktree management, create vs attach, ownership and reconciliation, warm starts, workflows
 
 ## Common Development Tasks
 

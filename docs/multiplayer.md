@@ -152,6 +152,94 @@ Scope notes:
   — are unaffected; `sync` is in fact the recommended way to reconcile trunk.
 - Local-only repos (no remote) are never guarded.
 
+## The worktree hold
+
+The trunk guard protects the stack from commits your teammates do not have. A
+second guard protects *you* from the other direction: uncommitted work sitting in
+a worktree that a restack is about to reset.
+
+Restacking a branch moves its ref, and any worktree with that branch checked out
+must be reset to match. Suppressing the reset while leaving the ref moved is the
+hazard: the worktree keeps the old commit's content under a new ref, `git status`
+reports the new commit's files as deleted, and the next `stackit modify -a`
+commits that deletion into the stack. So Stackit does not restack the branch at
+all. The branch is **held**, and it self-heals on the next restack once the
+worktree is clean.
+
+### What holds a branch
+
+| Worktree state | Held? |
+|----------------|-------|
+| Uncommitted changes to tracked files | Yes — the reset would discard them |
+| Rebase in progress | Yes on the `restack` command path; **not yet** in the engine snapshot (see below) |
+| Cannot be inspected | Yes — nothing is known, so no reset is safe |
+| Untracked files | Only when one occupies a path the incoming commit also writes |
+| Clean | No — reset to the new ref |
+
+Rebase-in-progress detection currently lives in `skipDirtyWorktreeStacks`, which
+only the `restack` command runs. The engine snapshot keys its hold set on the
+worktree's checked-out branch, and a mid-rebase worktree reports no branch — so
+`modify`, `squash`, and absorb-driven restacks can still move the ref of a
+branch being rebased elsewhere. Known gap, tracked in
+`docs/plans/worktree-audit-todo.md`.
+
+Untracked files are the case worth being careful about. `git reset --hard`
+overwrites an untracked file only when the incoming commit contains that same
+path, and leaves every other one alone. Holding on *any* untracked file would
+stop a restack for the ordinary state of having written a new file and not
+staged it — so the collision is checked per branch, once the incoming tree is
+known.
+
+This applies to **every** physical checkout, not just Stackit-managed worktrees.
+A plain `git worktree` holding one of your branches is inspected the same way.
+
+### Blast radius
+
+The unit held differs by worktree kind:
+
+- A dirty **managed** worktree holds its whole stack — its anchor is the stack
+  root, so the stack is dropped as a unit.
+- Any **other** worktree, including the main one, holds a single branch. Its
+  descendants are still correctly based on a branch that did not move, so they
+  restack as a no-op rather than a hazard.
+
+A held branch does propagate to descendants through the ancestry walk when the
+hold sits mid-stack: a branch cannot be rebased onto a parent that did not move
+to where it was supposed to.
+
+### Trunk is never held
+
+Restack never moves trunk's ref and never resets trunk's worktree, so a dirty
+trunk checkout protects nothing. Trunk is excluded when the hold set is built.
+
+This exclusion matters more than it looks: without it, a main worktree parked on
+`main` with one untracked scratch file propagated "held" through the ancestry
+walk to every trunk-rooted branch in the repository, and `modify`, `sync
+--restack`, and absorb's follow-up restack all silently returned "nothing to do"
+for everything.
+
+### Held is not up-to-date
+
+A held branch returns `RestackUnneeded` — the same status as a branch that
+needed no work — so anything that could leave a user believing a restack
+happened must say otherwise.
+
+`stackit restack` reports both units: the stack held behind a managed worktree
+and the individual branch held behind any other checkout, each with the worktree
+and the reason. Only the branch's *own* checkout produces a specific reason — a
+branch held because an ancestor is held falls back to the generic message, since
+the remedy lives with the ancestor.
+
+`sync` reports the stack-level holds from its own gate
+(`SkipReasonForWorktree`), but **branch-level engine holds are not yet
+distinguished in sync**: `RestackBranchResult` carries no held marker, so they
+surface as ordinary completion. Two known gaps sit here — that marker, and
+rebase-in-progress detection in the engine snapshot and in sync's gate. Tracked
+in `docs/plans/worktree-audit-todo.md`.
+
+**Source**: `internal/engine/engine_sync.go` (hold set construction),
+`internal/actions/restack.go` (`skipDirtyWorktreeStacks`, `heldWorktreeReason`).
+
 ## Performance: keep the squash scan cold
 
 `IsSquashMerged` runs a bounded log (`-200`) plus a patch-id per scanned target

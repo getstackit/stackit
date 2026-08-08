@@ -8,11 +8,17 @@
 - Configuration changes → Update `docs/config.md`
 - TUI changes → Update `docs/tui.md`
 - Merge/shipping changes → Update `docs/shipping.md`
-- Worktree changes → Update `docs/worktree.md`
+- Worktree changes → Update `docs/worktree.md`; if ownership, hold, or
+  reconciliation behavior changes, also `.claude/rules/worktree-safety.md` and
+  the hold section of `docs/multiplayer.md`
+- Metadata storage or ref-write changes → Update `docs/metadata.md`
+- Hook phases or when hooks run → Update `docs/hooks.md` and README
 - Web component changes → Update `docs/web.md`
 - API endpoint changes → Update `api/openapi/stackit.yaml` and `docs/web.md`
 - Web build/config changes → Update `docs/web.md`
 - New reusable operation patterns or package moves → Update `docs/recipes.md` and `.claude/rules/package-dependencies.md`
+- Changes to `--json` output shape → Update the Automation & CI section in
+  README.md; scripts key on these fields
 
 ## Command Help Text
 
@@ -31,11 +37,16 @@ Examples:
 - `docs/absorb.md` - Absorb command: target selection, stash/restore safety model, restack modes
 - `docs/architecture.md` - Runtime layering, action boundaries, adapters, bootstrap
 - `docs/config.md` - Configuration keys, layered config, adding new keys
+- `docs/hooks.md` - Lifecycle hook configuration, env vars, approval flow, recipes
+- `docs/metadata.md` - Ref namespaces, branch/stack metadata, transactions, CAS writes
+- `docs/multiplayer.md` - Landed-work detection, the un-pushed trunk guard, the worktree hold, reparent invariants
+- `docs/performance.md` - Remote-operation tuning, diagnosing slow commands
+- `docs/recipes.md` - Step-by-step file lists for cross-cutting changes
 - `docs/tui.md` - TUI patterns, styling, components
 - `docs/testing.md` - Test tiers and layer-specific testing guidance
 - `docs/shipping.md` - Merge strategies, commands, flags, flow diagrams
 - `docs/web.md` - Web app architecture, components, data flow, styling
-- `docs/worktree.md` - Worktree management, create vs attach, workflows
+- `docs/worktree.md` - Worktree management, create vs attach, ownership, warm starts, workflows
 
 Keep these up-to-date when modifying related systems.
 

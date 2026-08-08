@@ -299,6 +299,43 @@ err := tx.Commit(ctx)  // All or nothing
 
 Concurrent modification errors trigger automatic retry with exponential backoff.
 
+### Compare-and-swap on individual writes
+
+CAS is not limited to `MetadataTx`. `WriteMetadata` and `WriteLocalMetadata`
+also write conditionally, because two Stackit processes in different worktrees
+that each read a branch and then wrote it used to keep only the second write —
+silently dropping whatever the first recorded (a parent change, a PR number, a
+scope).
+
+Metadata refs point straight at a blob, and `cat-file` already reports that
+blob's SHA in its header. Stackit keeps it and requires the ref to still hold
+that blob when writing back. A write based on state another process has already
+replaced fails and says so.
+
+Details that matter when working on this code:
+
+- **The expectation is what *this process* last read**, not what the ref holds
+  now. A write of unchanged content is therefore not short-circuited as a no-op:
+  doing so would report success for a ref another process may have moved.
+- **An unknown expectation falls back to an unconditional write.** This is what
+  creating metadata for a newly tracked branch needs.
+- **Both read paths record the SHA.** `ReadMetadata` and `BatchReadMetadata`
+  (via `ReadObjectsBatch`) populate it. This is load-bearing: engine graph loads
+  go through the batch path, so recording it only on `ReadMetadata` left the
+  expectation empty for essentially every command and silently degraded every
+  write to unconditional.
+- **A rejected write drops the cache entry.** The expectation is known-stale at
+  that point; keeping it meant a re-read answered from cache, recomputed the same
+  expectation, and failed identically forever — harmless in the short-lived CLI,
+  a wedge in the long-lived server.
+
+Branch refs rewritten by a rebase are also moved compare-and-swap
+(`internal/git/rebase.go`), so a concurrent update in another worktree is
+detected rather than overwritten.
+
+**Source**: `internal/git/metadata.go`, `internal/git/metadata_cache.go`,
+`internal/git/object_reader.go`.
+
 ---
 
 ## Viewing Metadata

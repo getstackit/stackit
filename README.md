@@ -495,11 +495,16 @@ branches listed under `conflicts` and their untouched descendants under
 `blocked`; `"status": "error"` is reserved for a restack that actually failed.
 The repository is left on the original branch, not mid-rebase.
 
+Because a conflict is reported as data, **it exits 0** — branch on
+`.status == "conflict"` or `.conflict_count`, not on the exit code.
+
 Restack also holds back any branch whose worktree it cannot safely reset — one
 with uncommitted changes, a rebase in progress, or that cannot be inspected —
 along with that branch's descendants. Held branches are reported with the
 worktree and the reason, and picked up on the next restack once the worktree is
-clean.
+clean. In JSON they appear under `held` as `{branch, reason}` — and also in
+`skipped`, so an empty `conflicts` list alone does not mean the whole stack
+moved.
 
 ---
 

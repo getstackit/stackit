@@ -56,8 +56,6 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		return err
 	}
 
-	takeSnapshot(ctx, opts)
-
 	if err := validateMoveTargets(eng, source, opts.Onto); err != nil {
 		return err
 	}
@@ -69,6 +67,10 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	if err := actions.EnsureCanModifyHere(ctx, plan.descendants.Concat(engine.BranchesOf(plan.ontoBranch))...); err != nil {
 		return err
 	}
+
+	// After the ownership guard, so a refusal leaves the undo stack untouched
+	// rather than evicting a real snapshot with a no-op entry.
+	takeSnapshot(ctx, opts)
 
 	if opts.DryRun {
 		return dryRun(ctx, plan.source, plan.oldParentName, plan.onto, plan.sourceBranch, plan.descendants, plan.rebaseSpecs)

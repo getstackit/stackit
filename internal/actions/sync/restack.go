@@ -105,6 +105,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					PRNumber:   prNumber,
 					LockReason: p.LockReason,
 					Frozen:     p.Frozen,
+					HeldBy:     p.HeldBy,
 					IsCurrent:  p.IsCurrent,
 					Parent:     parentName,
 				})

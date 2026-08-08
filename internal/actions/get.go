@@ -406,6 +406,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 					PRNumber:            prNumber,
 					LockReason:          p.LockReason,
 					Frozen:              p.Frozen,
+					HeldBy:              p.HeldBy,
 					IsCurrent:           p.IsCurrent,
 					Parent:              parentName,
 					Reparented:          p.Reparented,

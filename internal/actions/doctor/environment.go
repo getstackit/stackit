@@ -24,16 +24,16 @@ func checkEnvironment(runner git.Runner, handler Handler, warnings int, errors i
 		handler.OnCheck("git", CheckError, "git is not installed or not in PATH")
 	default:
 		version := strings.TrimSpace(string(gitVersion))
-		major, minor, versionErr := runner.GitVersion(context.Background())
+		installed, versionErr := runner.GitVersion(context.Background())
 		switch {
 		case versionErr != nil:
 			warnings++
 			handler.OnCheck("git", CheckWarning, fmt.Sprintf("%s (could not determine version: %v)", version, versionErr))
-		case !git.AtLeast(major, minor, git.MinGitMajor, git.MinGitMinor):
+		case !installed.AtLeast(git.MinimumGitVersion):
 			errors++
 			handler.OnCheck("git", CheckError, fmt.Sprintf(
 				"%s is too old; stackit requires Git %d.%d or later. Stack operations will fail until you upgrade.",
-				version, git.MinGitMajor, git.MinGitMinor))
+				version, git.MinimumGitVersion.Major, git.MinimumGitVersion.Minor))
 		default:
 			handler.OnCheck("git", CheckPassed, version)
 		}

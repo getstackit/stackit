@@ -418,7 +418,7 @@ type Runner interface {
 	StackMetadataOperations
 
 	// Environment
-	GitVersion(ctx context.Context) (major, minor int, err error)
+	GitVersion(ctx context.Context) (Version, error)
 
 	// Raw command execution
 	RunGitCommandWithContext(ctx context.Context, args ...string) (string, error)
@@ -478,8 +478,7 @@ type runner struct {
 	// Cached git version info. Guarded by a mutex rather than a sync.Once so a
 	// failed probe can be retried — see GitVersion.
 	gitVersionMu     sync.Mutex
-	gitVersionMajor  int
-	gitVersionMinor  int
+	gitVersion       Version
 	gitVersionParsed bool
 }
 

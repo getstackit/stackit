@@ -198,7 +198,12 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		var err error
 		restacked, skipped, conflicts, blocked, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
 		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
-		handler.OnRestackComplete(restacked, skipped, conflicts, blocked)
+		handler.OnRestackComplete(handlers.RestackSummary{
+			Restacked: restacked,
+			Skipped:   skipped,
+			Conflicts: conflicts,
+			Blocked:   blocked,
+		})
 		if err != nil {
 			return fmt.Errorf("restack failed: %w", err)
 		}
@@ -245,7 +250,12 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		}
 	}
 
-	handler.OnRestackComplete(restacked, skipped, conflicts, blocked)
+	handler.OnRestackComplete(handlers.RestackSummary{
+		Restacked: restacked,
+		Skipped:   skipped,
+		Conflicts: conflicts,
+		Blocked:   blocked,
+	})
 	return nil
 }
 
@@ -676,15 +686,21 @@ func handleRestackProgress(
 		}
 	}
 
-	handler.OnRestackBranch(p.Branch, res, p.NewRev, prNumber, p.LockReason, p.Frozen, p.IsCurrent, parentName, p.Reparented, p.OldParent, p.NewParent, p.RerereResolvedCount)
-
-	// Enrich JSON handler with stack root info (not part of the interface to avoid
-	// touching all implementors for a JSON-only concern).
-	if p.StackRoot != "" {
-		if jsonHandler, ok := handler.(*handlers.JSONRestackHandler); ok {
-			jsonHandler.SetLastBranchStackRoot(p.Branch, p.StackRoot)
-		}
-	}
+	handler.OnRestackBranch(handlers.RestackBranchEvent{
+		Branch:              p.Branch,
+		Result:              res,
+		NewRevision:         p.NewRev,
+		PRNumber:            prNumber,
+		LockReason:          p.LockReason,
+		Frozen:              p.Frozen,
+		IsCurrent:           p.IsCurrent,
+		Parent:              parentName,
+		Reparented:          p.Reparented,
+		OldParent:           p.OldParent,
+		NewParent:           p.NewParent,
+		RerereResolvedCount: p.RerereResolvedCount,
+		StackRoot:           p.StackRoot,
+	})
 }
 
 // heldWorktreeReason returns why branchName's own checkout blocks a restack, or

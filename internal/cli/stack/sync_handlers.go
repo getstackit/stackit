@@ -10,6 +10,7 @@ import (
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	syncComponent "github.com/getstackit/stackit/internal/tui/components/sync"
@@ -321,7 +322,19 @@ func (h *SimpleSyncHandler) OnRestackStart(_ int) {
 }
 
 // OnRestackBranch implements RestackHandler for standalone restack operations
-func (h *SimpleSyncHandler) OnRestackBranch(branch string, result syncAction.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, reparented bool, oldParent, newParent string, rerereResolvedCount int) {
+func (h *SimpleSyncHandler) OnRestackBranch(restack handlers.RestackBranchEvent) {
+	branch := restack.Branch
+	result := restack.Result
+	newRev := restack.NewRevision
+	prNumber := restack.PRNumber
+	lockReason := restack.LockReason
+	frozen := restack.Frozen
+	isCurrent := restack.IsCurrent
+	parent := restack.Parent
+	reparented := restack.Reparented
+	oldParent := restack.OldParent
+	newParent := restack.NewParent
+	rerereResolvedCount := restack.RerereResolvedCount
 	// Already-current branches are the expected default; suppress their rows
 	// and fold them into the summary count so only movement and problems print.
 	if isPlainUpToDate(result, lockReason, frozen, reparented) {
@@ -366,7 +379,11 @@ func (h *SimpleSyncHandler) OnRestackBranch(branch string, result syncAction.Res
 }
 
 // OnRestackComplete implements RestackHandler for standalone restack operations
-func (h *SimpleSyncHandler) OnRestackComplete(restacked, skipped int, conflicts, blocked []string) {
+func (h *SimpleSyncHandler) OnRestackComplete(summary handlers.RestackSummary) {
+	restacked := summary.Restacked
+	skipped := summary.Skipped
+	conflicts := summary.Conflicts
+	blocked := summary.Blocked
 	// Only separate from prior rows when some actually printed; a pure no-op
 	// prints just the one-line summary with no leading blank.
 	if h.restackPrinted {
@@ -643,7 +660,19 @@ func (h *InteractiveSyncHandler) OnRestackStart(branchCount int) {
 }
 
 // OnRestackBranch implements RestackHandler for standalone restack operations
-func (h *InteractiveSyncHandler) OnRestackBranch(branch string, result syncAction.RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, reparented bool, oldParent, newParent string, rerereResolvedCount int) {
+func (h *InteractiveSyncHandler) OnRestackBranch(restack handlers.RestackBranchEvent) {
+	branch := restack.Branch
+	result := restack.Result
+	newRev := restack.NewRevision
+	prNumber := restack.PRNumber
+	lockReason := restack.LockReason
+	frozen := restack.Frozen
+	isCurrent := restack.IsCurrent
+	parent := restack.Parent
+	reparented := restack.Reparented
+	oldParent := restack.OldParent
+	newParent := restack.NewParent
+	rerereResolvedCount := restack.RerereResolvedCount
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -721,12 +750,12 @@ func (h *InteractiveSyncHandler) formatRestackDetail(branch string, result syncA
 }
 
 // OnRestackComplete implements RestackHandler for standalone restack operations
-func (h *InteractiveSyncHandler) OnRestackComplete(restacked, skipped int, conflicts, blocked []string) {
+func (h *InteractiveSyncHandler) OnRestackComplete(summary handlers.RestackSummary) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	// Build summary message
-	summaryMsg := h.formatRestackSummary(restacked, skipped, conflicts, blocked)
+	summaryMsg := h.formatRestackSummary(summary.Restacked, summary.Skipped, summary.Conflicts, summary.Blocked)
 
 	// Send complete message
 	h.runner.Send(syncComponent.CompleteMsg{Summary: summaryMsg})

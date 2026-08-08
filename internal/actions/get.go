@@ -387,7 +387,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 				// local metadata otherwise.
 				prNumber := branchPRInfo[p.Branch]
 				if prNumber == nil {
-					prNumber = getPRNumber(eng, p.Branch)
+					prNumber = PRNumberForBranch(eng, p.Branch)
 				}
 
 				parentName := ""
@@ -400,26 +400,41 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 					}
 				}
 
+				event := handlers.RestackBranchEvent{
+					Branch:              p.Branch,
+					NewRevision:         p.NewRev,
+					PRNumber:            prNumber,
+					LockReason:          p.LockReason,
+					Frozen:              p.Frozen,
+					IsCurrent:           p.IsCurrent,
+					Parent:              parentName,
+					Reparented:          p.Reparented,
+					OldParent:           p.OldParent,
+					NewParent:           p.NewParent,
+					RerereResolvedCount: p.RerereResolvedCount,
+				}
+
 				switch p.Result {
 				case engine.RestackDone:
 					restacked++
-					handler.OnRestackBranch(p.Branch, handlers.RestackDone, p.NewRev, prNumber, p.LockReason, p.Frozen, p.IsCurrent, parentName, p.Reparented, p.OldParent, p.NewParent, p.RerereResolvedCount)
+					event.Result = handlers.RestackDone
 				case engine.RestackUnneeded:
-					handler.OnRestackBranch(p.Branch, handlers.RestackUnneeded, "", prNumber, p.LockReason, p.Frozen, p.IsCurrent, parentName, p.Reparented, p.OldParent, p.NewParent, p.RerereResolvedCount)
+					event.Result = handlers.RestackUnneeded
 				case engine.RestackConflict:
 					skipped++
 					conflicts = append(conflicts, p.Branch)
-					handler.OnRestackBranch(p.Branch, handlers.RestackConflict, "", prNumber, p.LockReason, p.Frozen, p.IsCurrent, parentName, p.Reparented, p.OldParent, p.NewParent, p.RerereResolvedCount)
+					event.Result = handlers.RestackConflict
 				case engine.RestackBlocked:
 					blocked = append(blocked, p.Branch)
-					handler.OnRestackBranch(p.Branch, handlers.RestackBlocked, "", prNumber, p.LockReason, p.Frozen, p.IsCurrent, parentName, p.Reparented, p.OldParent, p.NewParent, p.RerereResolvedCount)
+					event.Result = handlers.RestackBlocked
 				}
+				handler.OnRestackBranch(event)
 			}, ConflictModeEnterWorkflow); err != nil {
-				handler.OnRestackComplete(restacked, skipped, conflicts, blocked)
+				handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked})
 				return fmt.Errorf("restack failed: %w", err)
 			}
 
-			handler.OnRestackComplete(restacked, skipped, conflicts, blocked)
+			handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked})
 		}
 	}
 
@@ -524,14 +539,4 @@ func (targets *syncTargets) crawlAncestorsViaGitHub(ctx context.Context, gh gith
 			break // Avoid cycles
 		}
 	}
-}
-
-// getPRNumber returns the PR number for a branch, or nil if not available
-func getPRNumber(eng engine.Engine, branchName string) *int {
-	branch := eng.GetBranch(branchName)
-	prInfo, err := branch.GetPrInfo()
-	if err != nil || prInfo == nil {
-		return nil
-	}
-	return prInfo.Number()
 }

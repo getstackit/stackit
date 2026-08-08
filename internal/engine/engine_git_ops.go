@@ -246,8 +246,8 @@ func (e *engineImpl) HasUncommittedChanges(ctx context.Context) bool {
 	return e.git.HasUncommittedChanges(ctx)
 }
 
-// GetRepoInfo returns the repository owner and name
-func (e *engineImpl) GetRepoInfo(ctx context.Context) (string, string, error) {
+// GetRepoInfo returns the default remote repository identity.
+func (e *engineImpl) GetRepoInfo(ctx context.Context) (git.RemoteRepository, error) {
 	return e.git.GetRepoInfo(ctx)
 }
 

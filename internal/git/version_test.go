@@ -31,14 +31,13 @@ func TestParseGitVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			major, minor, err := parseGitVersion(tt.output)
+			version, err := parseGitVersion(tt.output)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, tt.major, major)
-			require.Equal(t, tt.minor, minor)
+			require.Equal(t, Version{Major: tt.major, Minor: tt.minor}, version)
 		})
 	}
 }
@@ -46,11 +45,12 @@ func TestParseGitVersion(t *testing.T) {
 func TestAtLeast(t *testing.T) {
 	t.Parallel()
 
-	require.True(t, AtLeast(2, 36, 2, 36), "equal meets the minimum")
-	require.True(t, AtLeast(2, 49, 2, 36), "same major, higher minor")
-	require.True(t, AtLeast(3, 0, 2, 36), "higher major with lower minor still passes")
-	require.False(t, AtLeast(2, 35, 2, 36), "same major, lower minor")
-	require.False(t, AtLeast(1, 99, 2, 36), "lower major with higher minor still fails")
+	minimum := Version{Major: 2, Minor: 36}
+	require.True(t, (Version{Major: 2, Minor: 36}).AtLeast(minimum), "equal meets the minimum")
+	require.True(t, (Version{Major: 2, Minor: 49}).AtLeast(minimum), "same major, higher minor")
+	require.True(t, (Version{Major: 3, Minor: 0}).AtLeast(minimum), "higher major with lower minor still passes")
+	require.False(t, (Version{Major: 2, Minor: 35}).AtLeast(minimum), "same major, lower minor")
+	require.False(t, (Version{Major: 1, Minor: 99}).AtLeast(minimum), "lower major with higher minor still fails")
 }
 
 // The version gate sits in front of ListWorktrees, which nearly every stack
@@ -60,10 +60,10 @@ func TestGitVersionClearsMinimum(t *testing.T) {
 	t.Parallel()
 
 	r := &runner{}
-	major, minor, err := r.GitVersion(context.Background())
+	version, err := r.GitVersion(context.Background())
 	require.NoError(t, err)
-	require.NoError(t, r.requireGitVersion(context.Background(), MinGitMajor, MinGitMinor, "test"),
-		"installed git %d.%d is below the minimum this test suite assumes", major, minor)
+	require.NoError(t, r.requireGitVersion(context.Background(), MinimumGitVersion, "test"),
+		"installed git %s is below the minimum this test suite assumes", version)
 }
 
 func TestRequireGitVersionDistinguishesTooOldFromUnknown(t *testing.T) {
@@ -72,7 +72,7 @@ func TestRequireGitVersionDistinguishesTooOldFromUnknown(t *testing.T) {
 	r := &runner{}
 
 	// Too old: name the versions so the user knows what they have.
-	err := r.requireGitVersion(context.Background(), 99, 0, "git future-feature")
+	err := r.requireGitVersion(context.Background(), Version{Major: 99}, "git future-feature")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "requires Git 99.0 or later")
 	require.Contains(t, err.Error(), "please upgrade")
@@ -80,7 +80,7 @@ func TestRequireGitVersionDistinguishesTooOldFromUnknown(t *testing.T) {
 	// Unknown: a probe failure must NOT be reported as an old git. Point the
 	// runner at a directory with no git to force the probe to fail.
 	broken := &runner{repoRoot: "/nonexistent-stackit-version-probe"}
-	brokenErr := broken.requireGitVersion(context.Background(), MinGitMajor, MinGitMinor, "git worktree list -z")
+	brokenErr := broken.requireGitVersion(context.Background(), MinimumGitVersion, "git worktree list -z")
 	require.Error(t, brokenErr)
 	require.Contains(t, brokenErr.Error(), "could not be determined")
 	require.NotContains(t, brokenErr.Error(), "please upgrade")
@@ -92,13 +92,13 @@ func TestGitVersionDoesNotCacheFailure(t *testing.T) {
 	t.Parallel()
 
 	r := &runner{repoRoot: "/nonexistent-stackit-version-probe"}
-	_, _, err := r.GitVersion(context.Background())
+	_, err := r.GitVersion(context.Background())
 	require.Error(t, err)
 	require.False(t, r.gitVersionParsed, "a failed probe must not be cached")
 
 	// Same runner, now able to reach git: the earlier failure must not persist.
 	r.repoRoot = ""
-	major, _, err := r.GitVersion(context.Background())
+	version, err := r.GitVersion(context.Background())
 	require.NoError(t, err, "a failed probe must be retried, not latched")
-	require.Positive(t, major)
+	require.Positive(t, version.Major)
 }

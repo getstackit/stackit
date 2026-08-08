@@ -29,12 +29,39 @@ type RestackHandler interface {
 	// OnRestackStart is called at the beginning of restack with branch count
 	OnRestackStart(branchCount int)
 
-	// OnRestackBranch is called for each branch during restack
-	OnRestackBranch(branch string, result RestackResult, newRev string, prNumber *int, lockReason engine.LockReason, frozen bool, isCurrent bool, parent string, reparented bool, oldParent, newParent string, rerereResolvedCount int)
+	// OnRestackBranch is called for each branch during restack.
+	OnRestackBranch(event RestackBranchEvent)
 
 	// OnRestackComplete is called when restack finishes. blocked lists
 	// branches left untouched because their stack contained a conflict.
-	OnRestackComplete(restacked, skipped int, conflicts, blocked []string)
+	OnRestackComplete(summary RestackSummary)
+}
+
+// RestackBranchEvent describes the outcome of restacking one branch.
+// Keeping these facts together makes the shared presentation contract safe to
+// extend without relying on positional arguments.
+type RestackBranchEvent struct {
+	Branch              string
+	Result              RestackResult
+	NewRevision         string
+	PRNumber            *int
+	LockReason          engine.LockReason
+	Frozen              bool
+	IsCurrent           bool
+	Parent              string
+	Reparented          bool
+	OldParent           string
+	NewParent           string
+	RerereResolvedCount int
+	StackRoot           string
+}
+
+// RestackSummary contains aggregate outcomes from a restack operation.
+type RestackSummary struct {
+	Restacked int
+	Skipped   int
+	Conflicts []string
+	Blocked   []string
 }
 
 // NullRestackHandler is a no-op handler for testing or when output is not needed
@@ -44,11 +71,10 @@ type NullRestackHandler struct{}
 func (h *NullRestackHandler) OnRestackStart(_ int) {}
 
 // OnRestackBranch implements RestackHandler.
-func (h *NullRestackHandler) OnRestackBranch(_ string, _ RestackResult, _ string, _ *int, _ engine.LockReason, _ bool, _ bool, _ string, _ bool, _, _ string, _ int) {
-}
+func (h *NullRestackHandler) OnRestackBranch(RestackBranchEvent) {}
 
 // OnRestackComplete implements RestackHandler.
-func (h *NullRestackHandler) OnRestackComplete(_, _ int, _, _ []string) {}
+func (h *NullRestackHandler) OnRestackComplete(RestackSummary) {}
 
 // RestackJSONStatus represents the aggregate outcome of a JSON restack operation.
 type RestackJSONStatus string
@@ -117,35 +143,41 @@ func (h *JSONRestackHandler) OnRestackStart(branchCount int) {
 }
 
 // OnRestackBranch implements RestackHandler.
-func (h *JSONRestackHandler) OnRestackBranch(branch string, result RestackResult, newRev string, prNumber *int, _ engine.LockReason, _ bool, _ bool, parent string, _ bool, _, _ string, rerereResolvedCount int) {
+func (h *JSONRestackHandler) OnRestackBranch(event RestackBranchEvent) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	switch result {
+	switch event.Result {
 	case RestackDone:
 		h.Result.Restacked = append(h.Result.Restacked, RestackBranchInfo{
-			Name:                branch,
-			Parent:              parent,
-			NewRev:              newRev,
-			PRNumber:            prNumber,
-			RerereResolvedCount: rerereResolvedCount,
+			Name:                event.Branch,
+			Parent:              event.Parent,
+			StackRoot:           event.StackRoot,
+			NewRev:              event.NewRevision,
+			PRNumber:            event.PRNumber,
+			RerereResolvedCount: event.RerereResolvedCount,
 		})
 	case RestackUnneeded:
-		h.Result.Skipped = append(h.Result.Skipped, branch)
+		h.Result.Skipped = append(h.Result.Skipped, event.Branch)
 	case RestackConflict:
 		h.Result.Conflicts = append(h.Result.Conflicts, RestackConflictInfo{
-			Branch: branch,
-			Parent: parent,
+			Branch:    event.Branch,
+			Parent:    event.Parent,
+			StackRoot: event.StackRoot,
 		})
 	case RestackBlocked:
-		h.Result.Blocked = append(h.Result.Blocked, branch)
+		h.Result.Blocked = append(h.Result.Blocked, event.Branch)
+	}
+
+	if event.StackRoot != "" && !slices.Contains(h.Result.StackRoots, event.StackRoot) {
+		h.Result.StackRoots = append(h.Result.StackRoots, event.StackRoot)
 	}
 }
 
 // OnRestackComplete implements RestackHandler.
-func (h *JSONRestackHandler) OnRestackComplete(restacked, _ int, _, _ []string) {
+func (h *JSONRestackHandler) OnRestackComplete(summary RestackSummary) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.Result.RestackCount = restacked
+	h.Result.RestackCount = summary.Restacked
 	h.Result.ConflictCount = len(h.Result.Conflicts)
 	h.Result.BlockedCount = len(h.Result.Blocked)
 
@@ -153,35 +185,6 @@ func (h *JSONRestackHandler) OnRestackComplete(restacked, _ int, _, _ []string) 
 		h.Result.Status = RestackJSONStatusConflict
 	} else {
 		h.Result.Status = RestackJSONStatusSuccess
-	}
-}
-
-// SetLastBranchStackRoot annotates the most recently added restacked or conflict
-// entry for the given branch with its independent stack root. It also maintains
-// the deduped top-level StackRoots list. Called outside the handler interface so
-// only JSON output is enriched without touching all implementors.
-func (h *JSONRestackHandler) SetLastBranchStackRoot(branch, stackRoot string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	// Annotate the matching restacked entry (search from end — just appended).
-	for i := len(h.Result.Restacked) - 1; i >= 0; i-- {
-		if h.Result.Restacked[i].Name == branch {
-			h.Result.Restacked[i].StackRoot = stackRoot
-			break
-		}
-	}
-	// Annotate the matching conflict entry.
-	for i := len(h.Result.Conflicts) - 1; i >= 0; i-- {
-		if h.Result.Conflicts[i].Branch == branch {
-			h.Result.Conflicts[i].StackRoot = stackRoot
-			break
-		}
-	}
-
-	// Maintain deduped StackRoots.
-	if !slices.Contains(h.Result.StackRoots, stackRoot) {
-		h.Result.StackRoots = append(h.Result.StackRoots, stackRoot)
 	}
 }
 

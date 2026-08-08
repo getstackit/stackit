@@ -11,136 +11,18 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 )
 
-func TestParseGitHubRemoteURL(t *testing.T) {
-	t.Run("parses HTTPS github.com URL", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("https://github.com/owner/repo.git")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.com", info.Hostname)
-		require.Equal(t, "owner", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("parses HTTPS github.com URL without .git suffix", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("https://github.com/owner/repo")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.com", info.Hostname)
-		require.Equal(t, "owner", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("parses SSH github.com URL", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("git@github.com:owner/repo.git")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.com", info.Hostname)
-		require.Equal(t, "owner", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("parses SSH github.com URL without .git suffix", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("git@github.com:owner/repo")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.com", info.Hostname)
-		require.Equal(t, "owner", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("parses HTTPS GitHub Enterprise URL", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("https://github.company.com/owner/repo.git")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.company.com", info.Hostname)
-		require.Equal(t, "owner", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("parses SSH GitHub Enterprise URL", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("git@github.company.com:owner/repo.git")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.company.com", info.Hostname)
-		require.Equal(t, "owner", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("parses HTTP URL (non-HTTPS)", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("http://github.company.com/owner/repo.git")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.company.com", info.Hostname)
-		require.Equal(t, "owner", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("parses Enterprise GitHub URL with simple hostname", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("https://my-internal-github/org/repo")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "my-internal-github", info.Hostname)
-		require.Equal(t, "org", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("handles URLs with extra path segments", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("https://github.company.com/org/team/repo.git")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.company.com", info.Hostname)
-		require.Equal(t, "team", info.Owner) // Second-to-last segment
-		require.Equal(t, "repo", info.Repo)  // Last segment
-	})
-
-	t.Run("handles URLs with whitespace", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("  https://github.com/owner/repo.git  ")
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		require.Equal(t, "github.com", info.Hostname)
-		require.Equal(t, "owner", info.Owner)
-		require.Equal(t, "repo", info.Repo)
-	})
-
-	t.Run("returns error for invalid SSH URL format", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("git@github.com")
-		require.Error(t, err)
-		require.Nil(t, info)
-		require.Contains(t, err.Error(), "invalid SSH remote URL")
-	})
-
-	t.Run("returns error for invalid HTTPS URL format", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("https://github.com")
-		require.Error(t, err)
-		require.Nil(t, info)
-		require.Contains(t, err.Error(), "invalid HTTPS remote URL")
-	})
-
-	t.Run("returns error for empty URL", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("")
-		require.Error(t, err)
-		require.Nil(t, info)
-	})
-
-	t.Run("returns error for URL missing owner", func(t *testing.T) {
-		info, err := githubpkg.ParseGitHubRemoteURL("https://github.com/repo.git")
-		require.Error(t, err)
-		require.Nil(t, info)
-	})
-}
-
 // Note: createGitHubClient is tested indirectly through TestGetGitHubClient
 // since it's an unexported function. The test verifies that:
 // 1. github.com clients use default GitHub API URLs (api.github.com and uploads.github.com)
 // 2. Enterprise clients use custom URLs with /api/v3/ and /api/uploads/ endpoints
 
-// Note: getRepoInfoWithHostname is tested indirectly through TestGetGitHubClient
+// Note: getRemoteRepository is tested indirectly through TestGetGitHubClient
 // since it's an unexported function. The test verifies that it correctly:
 // 1. Parses HTTPS and SSH remote URLs
 // 2. Extracts hostname, owner, and repo correctly
 // 3. Handles GitHub Enterprise URLs
 
-// TestGetGitHubClient tests GetGitHubClient which uses createGitHubClient and getRepoInfoWithHostname
+// TestGetGitHubClient tests GetGitHubClient which uses createGitHubClient and getRemoteRepository
 // Note: These tests require a valid git repository with a remote configured.
 // They may be skipped in environments where git operations are restricted.
 // NOTE: NewScene is NOT safe for parallel tests, so these tests must run sequentially.

@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-github/v89/github"
 	"golang.org/x/oauth2"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -41,12 +42,12 @@ func syncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 
 	// Resolve repository info. Even when owner/repo are provided, the hostname is
 	// needed for the REST fallback on GitHub Enterprise.
-	repoInfo, err := getRepoInfoWithHostname(ctx, runner)
+	remoteRepo, err := getRemoteRepository(ctx, runner)
 	if err != nil {
 		return nil //nolint:nilerr // Skip if can't determine repo
 	}
 	if repo.Owner == "" || repo.Name == "" {
-		repo = Repo{Owner: repoInfo.Owner, Name: repoInfo.Repo}
+		repo = Repo{Owner: remoteRepo.Owner, Name: remoteRepo.Name}
 	}
 
 	infos, err := batchGetPRInfoByBranchGraphQL(ctx, runner, repo, branchNames)
@@ -64,7 +65,7 @@ func syncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 		return nil
 	}
 
-	client, err := createGitHubClient(ctx, repoInfo.Hostname, token)
+	client, err := createGitHubClient(ctx, remoteRepo.Host, token)
 	if err != nil {
 		return nil //nolint:nilerr // Preserve best-effort PR sync behavior.
 	}
@@ -149,95 +150,25 @@ func getGitHubToken(runner GitCommandRunner) (string, error) {
 	return token, nil
 }
 
-// RepoInfo contains parsed information from a git remote URL
-type RepoInfo struct {
-	Hostname string
-	Owner    string
-	Repo     string
-}
-
-// ParseGitHubRemoteURL parses a git remote URL and extracts hostname, owner, and repo
-// Supports both github.com and GitHub Enterprise URLs
-// Examples:
-//   - https://github.com/owner/repo.git
-//   - git@github.com:owner/repo.git
-//   - https://github.company.com/owner/repo.git
-//   - git@github.company.com:owner/repo.git
-func ParseGitHubRemoteURL(remoteURL string) (*RepoInfo, error) {
-	remoteURL = strings.TrimSpace(remoteURL)
-	remoteURL = strings.TrimSuffix(remoteURL, ".git")
-
-	var hostname, owner, repo string
-
-	if strings.Contains(remoteURL, "@") {
-		// SSH format: git@hostname:owner/repo or git@hostname/owner/repo
-		// Split on @ first
-		parts := strings.SplitN(remoteURL, "@", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid SSH remote URL format")
-		}
-
-		// Get hostname and path
-		hostAndPath := parts[1]
-
-		// Handle both : and / separators after hostname
-		var path string
-		if strings.Contains(hostAndPath, ":") {
-			// Format: git@hostname:owner/repo
-			hostPathParts := strings.SplitN(hostAndPath, ":", 2)
-			hostname = hostPathParts[0]
-			path = hostPathParts[1]
-		} else {
-			// Format: git@hostname/owner/repo (less common)
-			pathParts := strings.SplitN(hostAndPath, "/", 2)
-			if len(pathParts) < 2 {
-				return nil, fmt.Errorf("invalid SSH remote URL: missing path")
-			}
-			hostname = pathParts[0]
-			path = pathParts[1]
-		}
-
-		// Parse owner/repo from path
-		pathParts := strings.Split(path, "/")
-		if len(pathParts) < 2 {
-			return nil, fmt.Errorf("invalid SSH remote URL: path must be owner/repo")
-		}
-		owner = pathParts[0]
-		repo = pathParts[len(pathParts)-1]
-	} else {
-		// HTTPS format: https://hostname/owner/repo
-		// Remove protocol
-		remoteURL = strings.TrimPrefix(remoteURL, "https://")
-		remoteURL = strings.TrimPrefix(remoteURL, "http://")
-
-		parts := strings.Split(remoteURL, "/")
-		if len(parts) < 3 {
-			return nil, fmt.Errorf("invalid HTTPS remote URL: must be protocol://hostname/owner/repo")
-		}
-
-		hostname = parts[0]
-		owner = parts[len(parts)-2]
-		repo = parts[len(parts)-1]
-	}
-
-	if hostname == "" || owner == "" || repo == "" {
-		return nil, fmt.Errorf("failed to parse hostname, owner, or repo from remote URL")
-	}
-
-	return &RepoInfo{
-		Hostname: hostname,
-		Owner:    owner,
-		Repo:     repo,
-	}, nil
-}
-
-// getRepoInfoWithHostname gets repository hostname, owner, and name from git remote
-func getRepoInfoWithHostname(_ context.Context, runner GitCommandRunner) (*RepoInfo, error) {
+// getRemoteRepository gets the hosted repository identity from the default
+// Git remote. GitHub-specific callers retain their established error messages
+// while sharing the canonical parser in the git package.
+func getRemoteRepository(_ context.Context, runner GitCommandRunner) (git.RemoteRepository, error) {
 	// Get remote URL
 	remoteURL, err := runner.GetConfig("remote.origin.url")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get remote URL: %w", err)
+		return git.RemoteRepository{}, fmt.Errorf("failed to get remote URL: %w", err)
 	}
 
-	return ParseGitHubRemoteURL(remoteURL)
+	repo, err := git.ParseRemoteRepository(remoteURL)
+	if err != nil {
+		if strings.HasPrefix(strings.TrimSpace(remoteURL), "http://") || strings.HasPrefix(strings.TrimSpace(remoteURL), "https://") {
+			return git.RemoteRepository{}, fmt.Errorf("invalid HTTPS remote URL: %w", err)
+		}
+		return git.RemoteRepository{}, err
+	}
+	if !repo.IsHosted() {
+		return git.RemoteRepository{}, fmt.Errorf("failed to parse hostname, owner, or repo from remote URL")
+	}
+	return repo, nil
 }

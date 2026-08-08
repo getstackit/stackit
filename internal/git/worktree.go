@@ -255,7 +255,7 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 	// `git worktree list` only learned it in 2.36, and every caller treats an
 	// inspection failure as "no ref move is safe", so on an older git this
 	// would otherwise present as commands quietly declining to do anything.
-	if err := r.requireGitVersion(ctx, MinGitMajor, MinGitMinor, "git worktree list -z"); err != nil {
+	if err := r.requireGitVersion(ctx, MinimumGitVersion, "git worktree list -z"); err != nil {
 		return nil, err
 	}
 	output, err := r.RunGitCommandWithContext(ctx, "worktree", "list", "--porcelain", "-z")

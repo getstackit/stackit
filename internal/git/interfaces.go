@@ -18,7 +18,7 @@ type RepositoryReader interface {
 	GetGitCommonDir() (string, error)
 	IsInsideRepo() bool
 	GetUserName(ctx context.Context) (string, error)
-	GetRepoInfo(ctx context.Context) (string, string, error)
+	GetRepoInfo(ctx context.Context) (RemoteRepository, error)
 }
 
 // RepositoryWriter provides write access to repository configuration.

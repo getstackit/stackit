@@ -8,6 +8,7 @@ import (
 
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	syncComponent "github.com/getstackit/stackit/internal/tui/components/sync"
@@ -144,19 +145,15 @@ func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 
 	// Simulate restacking a branch
 	prNumber := 42
-	handler.OnRestackBranch(
-		"feature-branch",
-		syncAction.RestackDone,
-		"def5678",
-		&prNumber,
-		engine.LockReason(""), // lockReason
-		false,                 // frozen
-		true,                  // isCurrent
-		"main",
-		false, // reparented
-		"", "",
-		0,
-	)
+	handler.OnRestackBranch(handlers.RestackBranchEvent{
+		Branch:      "feature-branch",
+		Result:      syncAction.RestackDone,
+		NewRevision: "def5678",
+		PRNumber:    &prNumber,
+		LockReason:  engine.LockReasonNone,
+		IsCurrent:   true,
+		Parent:      "main",
+	})
 
 	// Should send PhaseDetailMsg and ProgressTickMsg
 	messages := mockRunner.Messages()
@@ -180,7 +177,7 @@ func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
-	handler.OnRestackComplete(5, 2, nil, nil)
+	handler.OnRestackComplete(handlers.RestackSummary{Restacked: 5, Skipped: 2})
 
 	// Verify that OnRestackComplete sends a CompleteMsg
 	messages := mockRunner.Messages()

@@ -9,6 +9,7 @@ import (
 )
 
 func TestCopyIncludedIgnoredFiles(t *testing.T) {
+	t.Parallel()
 	source := t.TempDir()
 	destination := t.TempDir()
 
@@ -33,6 +34,7 @@ func TestCopyIncludedIgnoredFiles(t *testing.T) {
 }
 
 func TestCopyIncludedIgnoredFilesDoesNotOverwriteExistingFiles(t *testing.T) {
+	t.Parallel()
 	source := t.TempDir()
 	destination := t.TempDir()
 	writeWarmStartFile(t, source, WorktreeIncludeFile, ".env\n")
@@ -48,6 +50,7 @@ func TestCopyIncludedIgnoredFilesDoesNotOverwriteExistingFiles(t *testing.T) {
 }
 
 func TestCopyIncludedIgnoredFilesPreservesExecutableMode(t *testing.T) {
+	t.Parallel()
 	source := t.TempDir()
 	destination := t.TempDir()
 	writeWarmStartFile(t, source, WorktreeIncludeFile, "bin/tool\n")
@@ -63,6 +66,7 @@ func TestCopyIncludedIgnoredFilesPreservesExecutableMode(t *testing.T) {
 }
 
 func TestCopyIncludedIgnoredFilesSkipsSymlinks(t *testing.T) {
+	t.Parallel()
 	source := t.TempDir()
 	destination := t.TempDir()
 	writeWarmStartFile(t, source, WorktreeIncludeFile, "linked\n")
@@ -76,6 +80,7 @@ func TestCopyIncludedIgnoredFilesSkipsSymlinks(t *testing.T) {
 }
 
 func TestCopyIncludedIgnoredFilesRefusesSymlinkDestinationParents(t *testing.T) {
+	t.Parallel()
 	source := t.TempDir()
 	destination := t.TempDir()
 	outside := t.TempDir()
@@ -89,6 +94,7 @@ func TestCopyIncludedIgnoredFilesRefusesSymlinkDestinationParents(t *testing.T) 
 }
 
 func TestCopyIncludedIgnoredFilesRejectsEscapingPaths(t *testing.T) {
+	t.Parallel()
 	source := t.TempDir()
 	destination := t.TempDir()
 	writeWarmStartFile(t, source, WorktreeIncludeFile, "*\n")
@@ -98,6 +104,7 @@ func TestCopyIncludedIgnoredFilesRejectsEscapingPaths(t *testing.T) {
 }
 
 func TestCopyIncludedIgnoredFilesWithoutIncludeFileIsDisabled(t *testing.T) {
+	t.Parallel()
 	result, err := CopyIncludedIgnoredFiles(t.TempDir(), t.TempDir(), []string{".env"})
 	require.NoError(t, err)
 	require.False(t, result.Enabled)
@@ -125,6 +132,7 @@ func requireWarmStartFile(t *testing.T, root, relativePath, expected string) {
 // failure — so one unplaceable file used to cost the entire `create -w`. Warm
 // start is an optimization; it reports the file and continues.
 func TestCopyIncludedIgnoredFilesSkipsFileOccupyingDirectoryName(t *testing.T) {
+	t.Parallel()
 	source := t.TempDir()
 	destination := t.TempDir()
 	writeWarmStartFile(t, source, WorktreeIncludeFile, "config/secret\nkeep.env\n")
@@ -156,6 +164,7 @@ func TestCopyIncludedIgnoredFilesSkipsFileOccupyingDirectoryName(t *testing.T) {
 // that keeps deep warm-start sets (node_modules being the motivating case) from
 // re-walking every path component for every file.
 func TestCopyIncludedIgnoredFilesVerifiesEachDirectoryOnce(t *testing.T) {
+	t.Parallel()
 	source := t.TempDir()
 	destination := t.TempDir()
 	writeWarmStartFile(t, source, WorktreeIncludeFile, "deps/**\n")

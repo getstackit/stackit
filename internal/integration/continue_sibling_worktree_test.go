@@ -98,7 +98,13 @@ func TestContinueDoesNotDestroyUntrackedFileInSiblingWorktree(t *testing.T) {
 	wt.WriteUnstaged("shared.txt", "PRECIOUS UNSAVED WORK")
 
 	sh.WriteFile("common.txt", "base\na conflicting change\nb content").
-		Run("continue")
+		Run("continue").
+		// Holding the reset is the safe call, but the ref still moved — so that
+		// worktree is now diverged and only the user can clear it. Saying
+		// nothing leaves them to discover it via a `modify -a` that commits the
+		// divergence as a deletion.
+		OutputContains(worktreeDir).
+		OutputContains("untracked file")
 
 	// It must survive. Holding the reset leaves the worktree stale, which is
 	// recoverable; overwriting this file is not.
@@ -107,4 +113,44 @@ func TestContinueDoesNotDestroyUntrackedFileInSiblingWorktree(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "PRECIOUS UNSAVED WORK", strings.TrimSpace(string(content)),
 		"untracked file in sibling worktree was destroyed by continue")
+}
+
+// TestContinueReportsUnresetDirtySiblingWorktree covers the common hold reason:
+// the sibling worktree has uncommitted tracked changes, so it cannot be reset.
+//
+// The ref moves regardless — refusing it would discard the conflict resolution
+// the user just performed — so the divergence is real. A held branch that is
+// never mentioned is indistinguishable from one that needed no work, and the
+// remedy lives in a directory the user is not looking at.
+func TestContinueReportsUnresetDirtySiblingWorktree(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+
+	sh.WriteFile("common.txt", "base").Run("create a -m 'a'")
+	sh.WriteFile("common.txt", "base\nb content").Run("create b -m 'b'")
+
+	worktreeDir := t.TempDir()
+	sh.Checkout("a")
+	sh.Git("worktree add " + worktreeDir + " b")
+	wt := sh.InWorktree(worktreeDir)
+
+	sh.WriteFile("common.txt", "base\na conflicting change").
+		Git("commit --amend --no-edit")
+
+	sh.RunExpectError("restack --upstack").OutputContains("conflict")
+
+	// Uncommitted tracked work in the sibling, which a reset would destroy.
+	wt.WriteUnstaged("common.txt", "base\nb content\nwork in progress")
+
+	sh.WriteFile("common.txt", "base\na conflicting change\nb content").
+		Run("continue").
+		OutputContains(worktreeDir).
+		OutputContains("uncommitted changes")
+
+	// The work is still there.
+	content, err := os.ReadFile(filepath.Join(worktreeDir, "common.txt"))
+	require.NoError(t, err)
+	require.Contains(t, string(content), "work in progress",
+		"uncommitted work in sibling worktree was destroyed by continue")
 }

@@ -128,6 +128,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	if result.RerereResolvedCount > 0 {
 		printRerereResolved(ctx, result.RerereResolvedCount)
 	}
+	reportUnresetWorktree(out, result)
 
 	// Continue with remaining branches to restack
 	if len(continuation.BranchesToRestack) > 0 {
@@ -172,4 +173,22 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	}
 
 	return nil
+}
+
+// reportUnresetWorktree tells the user about a worktree left holding pre-rebase
+// content under a ref that has since moved.
+//
+// Nothing else will surface this. The worktree is not the one they are standing
+// in, `git status` there reports the rebased commit's files as deleted, and the
+// next `stackit modify -a` run in it commits that deletion — silently reverting
+// the rebase they just resolved. The remedy lives in a directory they are not
+// looking at, so name it.
+func reportUnresetWorktree(out output.Output, result engine.ContinueRebaseResult) {
+	if result.UnresetWorktree == "" {
+		return
+	}
+	out.Warn("Worktree %s still has %s checked out at the pre-rebase content because %s.",
+		result.UnresetWorktree, result.BranchName, result.UnresetReason)
+	out.Warn("Commit or discard the changes there, then run 'git reset --hard %s' in that worktree.",
+		result.BranchName)
 }

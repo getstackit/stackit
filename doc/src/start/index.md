@@ -18,7 +18,7 @@ Welcome to stackit! This guide will help you get up and running with stacked cha
 
 Make sure you have:
 
-- **Git 2.25+** installed
+- **Git 2.36+** installed (`git worktree list -z`, used by every stack operation to see which branches are checked out where)
 - **GitHub CLI (`gh`)** for PR operations
 - A GitHub repository to work with
 

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -79,10 +80,16 @@ func TestBranchHeldBackCyclicMetadata(t *testing.T) {
 			"parent": "main",
 		})
 
-		snap := &restackSnapshot{heldBranches: make(BranchNameSet)}
+		snap := &restackSnapshot{heldBranches: make(BranchNameSet), applyingBranches: make(BranchNameSet)}
 		require.False(t, e.branchHeldBack(NewBranch("child", nil), snap))
 
 		snap.heldBranches["parent"] = true
+		require.False(t, e.branchHeldBack(NewBranch("child", nil), snap),
+			"a held ancestor that is not being applied already has its final ref")
+
+		snap.applyingBranches["parent"] = true
 		require.True(t, e.branchHeldBack(NewBranch("child", nil), snap))
+		require.False(t, e.holdBranchInOwnWorktree(context.Background(), NewBranch("child", nil), snap),
+			"ordinary rebases use the parent's current ref, so a held parent does not make its clean child unsafe")
 	})
 }

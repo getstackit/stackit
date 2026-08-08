@@ -84,3 +84,45 @@ func TestModifyRestacksChildrenWhenTrunkWorktreeIsDirty(t *testing.T) {
 	// pre-amend a and this is the stale state modify claimed was up to date.
 	sh.Git("log b --format=%H").OutputContains(aRev)
 }
+
+// TestModifyRestacksCleanChildrenWhenCurrentWorktreeIsDirty covers the case
+// where modify has already moved the current branch's ref. Its own worktree is
+// necessarily dirty until the staged amendment and unrelated unstaged edit are
+// separated again, but clean descendants must still rebase onto that new ref.
+func TestModifyRestacksCleanChildrenWhenCurrentWorktreeIsDirty(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.CreateLinearStack3().Checkout("a")
+
+	// This staged change is the amendment. The tracked, unstaged edit is
+	// unrelated work in progress that must hold a's worktree, not b or c.
+	sh.Write("a_extra", "amended content").
+		WriteUnstaged("a.txt_test.txt", "work in progress on a").
+		Run("modify -n")
+
+	// b and c have no worktrees of their own, so they must be rebuilt on a's
+	// new tip rather than reported as up to date because a is held.
+	sh.Git("merge-base --is-ancestor a b")
+	sh.Git("merge-base --is-ancestor b c")
+	sh.Git("status --porcelain").OutputContains("a.txt_test.txt")
+}
+
+// TestSquashRestacksCleanChildrenWhenCurrentWorktreeIsDirty exercises the
+// same validated-plan application path for squash. Squash moves a's ref while
+// its unrelated tracked edit remains unstaged, then b must rebase onto a.
+func TestSquashRestacksCleanChildrenWhenCurrentWorktreeIsDirty(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.Write("a", "first commit").Run("create a -m 'feat: a'")
+	sh.Write("a_extra", "second commit").Run("modify -c -m 'feat: a extra'")
+	sh.Write("b", "child commit").Run("create b -m 'feat: b'")
+
+	sh.Checkout("a").
+		WriteUnstaged("a_test.txt", "work in progress on a").
+		Run("squash --no-edit")
+
+	sh.Git("merge-base --is-ancestor a b")
+	sh.Git("status --porcelain").OutputContains("a_test.txt")
+}

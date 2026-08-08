@@ -196,7 +196,11 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
 		}
 	}
-	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldBranches: heldBranches}
+	applyingBranches := make(BranchNameSet, len(branches))
+	for _, branch := range branches {
+		applyingBranches[branch.GetName()] = true
+	}
+	snap := &restackSnapshot{meta: allMeta, revs: allRevisions, worktrees: worktrees, metaRefSHAs: metaRefSHAs, dirtyWorktrees: dirtyWorktrees, untrackedByWorktree: untrackedByWorktree, heldBranches: heldBranches, applyingBranches: applyingBranches}
 
 	// 2. Apply the restack changes
 	results := make(map[string]RestackBranchResult)

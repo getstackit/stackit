@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -39,6 +40,34 @@ func TestRestackWithHarmlessUntrackedFileProceeds(t *testing.T) {
 		OutputContains("?? scratch.txt").
 		OutputNotContains(" D ").
 		OutputNotContains("D  ")
+}
+
+// TestRestackWithManyHarmlessUntrackedFilesProceeds keeps the safety rule
+// path-based even in repositories with generated or scratch files. More than
+// 200 non-colliding files must not turn collision detection into "unknown" and
+// hold this branch or its descendants.
+func TestRestackWithManyHarmlessUntrackedFilesProceeds(t *testing.T) {
+	t.Parallel()
+
+	sh := NewTestShellInProcess(t)
+	sh.CreateLinearStack3().Checkout("a")
+
+	sh.Checkout("main").
+		WriteFile("trunk1.txt", "trunk content").
+		Git("commit -m 'chore: trunk commit'").
+		Checkout("a")
+
+	for i := range 201 {
+		sh.WriteUnstaged(fmt.Sprintf("scratch-%03d.txt", i), "scratch note")
+	}
+
+	sh.Run("restack --upstack")
+
+	// a and its clean descendants all restacked despite the large harmless set.
+	for _, branch := range []string{"a", "b", "c"} {
+		sh.Git("ls-tree " + branch + " -- trunk1.txt").OutputContains("trunk1.txt")
+	}
+	sh.Git("status --porcelain").OutputContains("?? scratch-000.txt")
 }
 
 // TestRestackHoldsBranchWhenUntrackedFileWouldBeOverwritten covers the case the

@@ -514,11 +514,6 @@ func (r *runner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
 	return result, nil
 }
 
-// maxUntrackedCollisionPaths bounds how many paths TreeContainsAnyPath will ask
-// git about in one invocation. Beyond this the caller is expected to fall back
-// to a conservative answer rather than build an unbounded argv.
-const maxUntrackedCollisionPaths = 200
-
 // TreeContainsAnyPath reports whether rev's tree contains any of paths.
 //
 // This answers the only question that makes an untracked file unsafe during a
@@ -533,14 +528,24 @@ func (r *runner) TreeContainsAnyPath(ctx context.Context, rev string, paths []st
 	if rev == "" || len(paths) == 0 {
 		return false, true
 	}
-	if len(paths) > maxUntrackedCollisionPaths {
-		return false, false
+
+	// List the tree once and intersect it in-process instead of passing the
+	// untracked paths as pathspecs. This keeps an arbitrary number of ordinary
+	// untracked files from becoming an "unknown" safety result solely because
+	// they exceed an argv cap.
+	wanted := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		wanted[path] = struct{}{}
 	}
 
-	args := append([]string{"ls-tree", "-r", "-z", "--name-only", rev, "--"}, paths...)
-	out, err := r.RunGitCommandRawWithContext(ctx, args...)
+	out, err := r.RunGitCommandRawWithContext(ctx, "ls-tree", "-r", "-z", "--name-only", rev)
 	if err != nil {
 		return false, false
 	}
-	return strings.TrimSpace(strings.ReplaceAll(out, "\x00", "")) != "", true
+	for _, path := range splitNulTerminated(out) {
+		if _, ok := wanted[path]; ok {
+			return true, true
+		}
+	}
+	return false, true
 }

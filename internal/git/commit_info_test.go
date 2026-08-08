@@ -38,6 +38,30 @@ func TestBatchCommitInfo(t *testing.T) {
 	require.Equal(t, wantBranch1Author, got["branch1"].Author)
 }
 
+// A tag sharing a branch's name makes git disambiguate %(refname:short) to
+// "heads/<name>", which used to miss the caller's bare-branch-name lookup and
+// silently return a zero CommitInfo.
+func TestBatchCommitInfo_TagSharesBranchName(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+	err := scene.Repo.CreateAndCheckoutBranch("shadowed")
+	require.NoError(t, err)
+	err = scene.Repo.CreateChangeAndCommit("shadowed change", "s1")
+	require.NoError(t, err)
+	require.NoError(t, scene.Repo.RunGitCommand("tag", "shadowed", "main"))
+
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	wantDate, err := runner.GetCommitDate("refs/heads/shadowed")
+	require.NoError(t, err)
+
+	got := runner.BatchCommitInfo([]string{"shadowed"})
+
+	require.Contains(t, got, "shadowed", "result must be keyed by the bare branch name")
+	require.True(t, wantDate.Equal(got["shadowed"].Date))
+	require.NotEmpty(t, got["shadowed"].Author)
+}
+
 func TestBatchCommitInfo_Empty(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)

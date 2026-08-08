@@ -70,7 +70,10 @@ func (r *runner) batchCommitInfo(branchNames []string) map[string]CommitInfo {
 		return results
 	}
 
-	args := []string{"for-each-ref", "--format=%(refname:short)\t%(authordate:iso-strict)\t%(authorname)"}
+	// %(refname), not %(refname:short): the short form disambiguates to
+	// "heads/<name>" when a tag shares the branch's name, and the caller looks
+	// results up by bare branch name — a miss silently yields a zero CommitInfo.
+	args := []string{"for-each-ref", "--format=%(refname)\t%(authordate:iso-strict)\t%(authorname)"}
 	for _, name := range branchNames {
 		args = append(args, "refs/heads/"+name)
 	}
@@ -92,7 +95,7 @@ func (r *runner) batchCommitInfo(branchNames []string) map[string]CommitInfo {
 		if err != nil {
 			continue
 		}
-		results[parts[0]] = CommitInfo{Date: date, Author: parts[2]}
+		results[strings.TrimPrefix(parts[0], "refs/heads/")] = CommitInfo{Date: date, Author: parts[2]}
 	}
 	return results
 }

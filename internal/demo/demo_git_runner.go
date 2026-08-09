@@ -537,6 +537,10 @@ func (d *demoGitRunner) WorktreeHasTrackedChanges(_ context.Context, _ string) (
 	return false, nil
 }
 
+func (d *demoGitRunner) WorktreeResetBlocker(_ context.Context, _, _ string) string {
+	return ""
+}
+
 func (d *demoGitRunner) UpdateRefWithLog(_ context.Context, _, _, _ string) error {
 	return nil
 }

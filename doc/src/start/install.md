@@ -6,6 +6,18 @@ description: Install stackit via Homebrew on macOS or Linux. Set up shell integr
 
 # Installation
 
+## Requirements
+
+- **Git 2.36+** — required, not optional. Stack operations use
+  `git worktree list -z` to see which branches are checked out where, and
+  stackit refuses to run them on older Git rather than guess.
+- **GitHub CLI (`gh`)** for PR operations
+
+Check your version with `git --version`. Some still-supported distributions ship
+older Git than this — Ubuntu 22.04 has 2.34 and Debian 11 has 2.30 — so you may
+need to upgrade Git before stackit will work. Run $$stackit doctor$$ after
+installing to confirm your environment.
+
 ## Homebrew (macOS and Linux)
 
 The easiest way to install stackit is via Homebrew:

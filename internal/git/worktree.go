@@ -448,6 +448,62 @@ func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath str
 	return strings.TrimSpace(out) != "", nil
 }
 
+// WorktreeHeldError reports a ref move declined because a worktree holding the
+// branch would lose work.
+//
+// This is a hold, not a failure. Callers whose remaining work does not depend on
+// the ref move should report it and carry on rather than aborting: refusing to
+// fast-forward trunk is no reason to skip branch cleanup and restack. See "Hold
+// Trunk Never, Report Holds Always" in .claude/rules/worktree-safety.md.
+type WorktreeHeldError struct {
+	Branch       string
+	WorktreePath string
+	Reason       string
+}
+
+// "move" covers both callers: a fast-forward and a reset both move the branch
+// ref out from under whatever worktree has it checked out.
+func (e *WorktreeHeldError) Error() string {
+	return fmt.Sprintf("refusing to move %s: worktree %s %s", e.Branch, e.WorktreePath, e.Reason)
+}
+
+// WorktreeResetBlocker reports why resetting the worktree at worktreePath to
+// incomingRev would destroy work, or "" when the reset is safe.
+//
+// This is the question to ask before moving a ref that some worktree has checked
+// out. WorktreeHasUncommittedChanges is the wrong predicate here: it counts
+// untracked files as dirty, and refusing on those blocks the ref move for the
+// ordinary state of having written a new file and not staged it. See the
+// "Hold Trunk Never, Report Holds Always" invariant in
+// .claude/rules/worktree-safety.md.
+//
+// Tracked changes block unconditionally — a reset overwrites them. Untracked
+// files block only when one sits at a path incomingRev also contains, the single
+// case `git reset --hard` destroys them; that file was never in git, so there is
+// no reflog or stash to recover it from. An inspection failure blocks too:
+// unknown must never read as safe.
+func (r *runner) WorktreeResetBlocker(ctx context.Context, worktreePath, incomingRev string) string {
+	tracked, err := r.WorktreeHasTrackedChanges(ctx, worktreePath)
+	switch {
+	case err != nil:
+		return fmt.Sprintf("could not be inspected: %v", err)
+	case tracked:
+		return "has uncommitted changes"
+	}
+
+	untracked, err := r.GetUntrackedFilesIn(ctx, worktreePath)
+	if err != nil {
+		return fmt.Sprintf("its untracked files could not be inspected: %v", err)
+	}
+	switch collides, known := r.TreeContainsAnyPath(ctx, incomingRev, untracked); {
+	case !known:
+		return "its untracked files could not be compared against the incoming commit"
+	case collides:
+		return "an untracked file there would be overwritten"
+	}
+	return ""
+}
+
 // ListIgnoredFiles returns every ignored, untracked file in worktreePath as a
 // repository-relative path. --exclude-standard ensures this has Git's actual
 // ignore semantics, rather than treating a warm-start include file as another

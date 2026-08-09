@@ -84,12 +84,8 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 		}
 		worktreePath := worktrees.PathForBranch(branchName)
 		if worktreePath != "" {
-			hasChanges, statusErr := r.WorktreeHasUncommittedChanges(ctx, worktreePath)
-			if statusErr != nil {
-				return PullConflict, fmt.Errorf("refusing to update %s: cannot inspect worktree %s: %w", branchName, worktreePath, statusErr)
-			}
-			if hasChanges {
-				return PullConflict, fmt.Errorf("refusing to update %s: worktree %s has uncommitted changes", branchName, worktreePath)
+			if blocker := r.WorktreeResetBlocker(ctx, worktreePath, remoteRev); blocker != "" {
+				return PullConflict, &WorktreeHeldError{Branch: branchName, WorktreePath: worktreePath, Reason: blocker}
 			}
 		}
 

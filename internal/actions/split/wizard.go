@@ -41,6 +41,13 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 	if err := currentBranch.EnsureCanModify(); err != nil {
 		return err
 	}
+	// The wizard is the default `stackit split` path, so Action returns here
+	// before reaching its own ownership guard. Splitting rewrites the branch's
+	// commits, which is only safe in the worktree that owns it — guard before
+	// the snapshot below, so a refusal is a no-op.
+	if err := actions.EnsureCanModifyHere(ctx, *currentBranch); err != nil {
+		return err
+	}
 
 	// Check for uncommitted tracked changes
 	hasUnstaged, err := eng.HasUnstagedChanges(ctx.Context)

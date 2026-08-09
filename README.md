@@ -506,6 +506,15 @@ clean. In JSON they appear under `held` as `{branch, reason}` — and also in
 `skipped`, so an empty `conflicts` list alone does not mean the whole stack
 moved.
 
+Two smaller shapes changed alongside the worktree work. `stackit tree --json`
+has always omitted worktree anchors from its entries, but `parent` could still
+name one — a dangling reference to a branch absent from the result. Both
+`parent` and `children` now resolve past anchors, so a branch under an anchor
+reports the anchor's nearest visible ancestor as its parent and appears in that
+ancestor's `children`. `stackit worktree list --json` gained
+`ownership_warnings`, listing branches checked out somewhere their stack does
+not own.
+
 ---
 
 ## Configuration

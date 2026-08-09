@@ -202,12 +202,18 @@ func (h *SimpleSyncHandler) printEventLine(event syncAction.Event) {
 
 func (h *SimpleSyncHandler) printTrunkEvent(event syncAction.Event) {
 	if event.Type == syncAction.EventCompleted {
-		if event.NewRevision != "" {
+		switch {
+		case event.HeldBy != "":
+			// A held trunk reports no new revision, the same as one that needed
+			// no work. Say which one happened — the remedy is in another
+			// directory the user is not looking at.
+			h.item(event.Phase, "  %s Held %s back: %s", style.MarkWarning(), style.ColorBranchName(event.Branch), event.HeldBy)
+		case event.NewRevision != "":
 			h.item(event.Phase, "  %s %s fast-forwarded to %s",
 				style.MarkSuccess(),
 				style.ColorBranchName(event.Branch),
 				style.ColorDim(event.NewRevision))
-		} else {
+		default:
 			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch))
 		}
 	}
@@ -542,7 +548,10 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 	switch event.Phase {
 	case syncAction.PhaseTrunk:
 		if event.Type == syncAction.EventCompleted {
-			if event.NewRevision != "" {
+			switch {
+			case event.HeldBy != "":
+				return fmt.Sprintf("Held %s back: %s", event.Branch, event.HeldBy), syncComponent.MarkWarn
+			case event.NewRevision != "":
 				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), syncComponent.MarkDone
 			}
 			return fmt.Sprintf("%s is up to date", event.Branch), syncComponent.MarkDone

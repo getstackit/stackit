@@ -52,7 +52,7 @@ func (w *MultiStackWorktreeExecutor) ExecuteInWorktree(ctx context.Context, stac
 	result := &MultiStackWorktreeResult{
 		MergedStacks:   make(MultiStacks, 0),
 		ConflictStacks: make([]MultiStackExcluded, 0),
-		WorktreePath:   session.Path,
+		WorktreePath:   session.Path.String(),
 		WorktreeEngine: session.Engine,
 		Cleanup:        session.Close,
 	}

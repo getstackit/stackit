@@ -1,20 +1,31 @@
 package worktree
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 // ListOptions contains options for the list action
 type ListOptions struct {
-	NameOrBranch string
+	Selector WorktreeSelector
 }
+
+// WorktreeSelector identifies a managed worktree by either its display name or
+// hidden anchor branch. It keeps user-facing selectors distinct from branch
+// names used for stack graph operations.
+type WorktreeSelector string
+
+func (s WorktreeSelector) String() string { return string(s) }
+
+// WorktreePath is the engine-level identity of a managed checkout.
+type WorktreePath = engine.WorktreePath
 
 type RegistrationState string
 
@@ -23,6 +34,66 @@ const (
 	RegistrationStateLegacy  RegistrationState = "legacy"
 	RegistrationStateInvalid RegistrationState = "invalid"
 )
+
+// WorktreePresence describes whether the registered directory still exists.
+type WorktreePresence string
+
+const (
+	WorktreePresent WorktreePresence = "present"
+	WorktreeMissing WorktreePresence = "missing"
+)
+
+// WorktreeCheckout describes whether a managed worktree is the current one.
+type WorktreeCheckout string
+
+const (
+	WorktreeCheckoutElsewhere WorktreeCheckout = "elsewhere"
+	WorktreeCheckoutCurrent   WorktreeCheckout = "current"
+)
+
+// WorktreeChanges describes the inspected state of the worktree directory.
+type WorktreeChanges string
+
+const (
+	WorktreeChangesClean WorktreeChanges = "clean"
+	WorktreeChangesDirty WorktreeChanges = "dirty"
+)
+
+// LifecycleCapability describes whether a lifecycle operation is structurally
+// available. Uncommitted changes are deliberately not represented here: their
+// handling is an explicit RemovalPolicy chosen by the caller.
+type LifecycleCapability string
+
+const (
+	LifecycleAllowed     LifecycleCapability = "allowed"
+	LifecycleNeedsRepair LifecycleCapability = "needs_repair"
+	LifecycleCurrent     LifecycleCapability = "current"
+	LifecycleHasBranches LifecycleCapability = "has_branches"
+)
+
+// WorktreeLifecycle is the inspected lifecycle state of a managed worktree.
+// Keeping these dimensions typed makes a worktree's mutability explicit without
+// requiring callers to infer it from a combination of booleans.
+type WorktreeLifecycle struct {
+	Registration RegistrationState   `json:"registration_state"`
+	Presence     WorktreePresence    `json:"presence"`
+	Checkout     WorktreeCheckout    `json:"checkout"`
+	Changes      WorktreeChanges     `json:"changes"`
+	Remove       LifecycleCapability `json:"remove"`
+	Detach       LifecycleCapability `json:"detach"`
+}
+
+func (l WorktreeLifecycle) Exists() bool { return l.Presence == WorktreePresent }
+
+func (l WorktreeLifecycle) NeedsRepair() bool { return l.Registration != RegistrationStateOK }
+
+func (l WorktreeLifecycle) IsCurrent() bool { return l.Checkout == WorktreeCheckoutCurrent }
+
+func (l WorktreeLifecycle) IsDirty() bool { return l.Changes == WorktreeChangesDirty }
+
+func (l WorktreeLifecycle) CanRemove() bool { return l.Remove == LifecycleAllowed }
+
+func (l WorktreeLifecycle) CanDetach() bool { return l.Detach == LifecycleAllowed }
 
 // ListResult contains the results of listing worktrees
 type ListResult struct {
@@ -36,25 +107,61 @@ type ListResult struct {
 
 // Entry represents a single managed worktree
 type Entry struct {
-	Name              string            `json:"name"`          // User-provided name
-	AnchorBranch      string            `json:"anchor_branch"` // Registered anchor branch name
-	Path              string            `json:"path"`
-	Exists            bool              `json:"exists"`                   // Whether the path still exists on disk
-	StackSize         int               `json:"stack_size"`               // Number of real branches in the stack
-	CurrentBranch     string            `json:"current_branch,omitempty"` // Branch currently checked out in this worktree
-	IsDirty           bool              `json:"is_dirty"`
-	RootBranches      []string          `json:"root_branches,omitempty"`  // Real stack roots visible to the user
-	RegistrationState RegistrationState `json:"registration_state"`       // Whether the registration is anchored, legacy, or invalid
-	StatusMessage     string            `json:"status_message,omitempty"` // Human-readable summary of current state
-	CanRemove         bool              `json:"can_remove"`               // Empty anchored worktree can be removed
-	CanDetach         bool              `json:"can_detach"`               // Anchored worktree can be detached
-	NeedsRepair       bool              `json:"needs_repair"`             // Registration requires repair before lifecycle actions
-	IsCurrent         bool              `json:"is_current,omitempty"`     // Whether this is the current managed worktree
+	Name          engine.WorktreeName `json:"name"`          // User-provided name
+	AnchorBranch  string              `json:"anchor_branch"` // Registered anchor branch name
+	Path          WorktreePath        `json:"path"`
+	StackSize     int                 `json:"stack_size"`               // Number of real branches in the stack
+	CurrentBranch string              `json:"current_branch,omitempty"` // Branch currently checked out in this worktree
+	RootBranches  []string            `json:"root_branches,omitempty"`  // Real stack roots visible to the user
+	Lifecycle     WorktreeLifecycle   `json:"lifecycle"`
+	StatusMessage string              `json:"status_message,omitempty"` // Human-readable summary of current state
+	registration  engine.WorktreeInfo
+}
+
+// MarshalJSON preserves the established flat lifecycle fields while exposing
+// the typed lifecycle object to newer clients. The compatibility projection can
+// be removed only in a deliberately versioned output change.
+func (e Entry) MarshalJSON() ([]byte, error) {
+	type entryJSON struct {
+		Name              engine.WorktreeName `json:"name"`
+		AnchorBranch      string              `json:"anchor_branch"`
+		Path              WorktreePath        `json:"path"`
+		Exists            bool                `json:"exists"`
+		StackSize         int                 `json:"stack_size"`
+		CurrentBranch     string              `json:"current_branch,omitempty"`
+		IsDirty           bool                `json:"is_dirty"`
+		RootBranches      []string            `json:"root_branches,omitempty"`
+		RegistrationState RegistrationState   `json:"registration_state"`
+		Lifecycle         WorktreeLifecycle   `json:"lifecycle"`
+		StatusMessage     string              `json:"status_message,omitempty"`
+		CanRemove         bool                `json:"can_remove"`
+		CanDetach         bool                `json:"can_detach"`
+		NeedsRepair       bool                `json:"needs_repair"`
+		IsCurrent         bool                `json:"is_current,omitempty"`
+	}
+
+	return json.Marshal(entryJSON{
+		Name:              e.Name,
+		AnchorBranch:      e.AnchorBranch,
+		Path:              e.Path,
+		Exists:            e.Lifecycle.Exists(),
+		StackSize:         e.StackSize,
+		CurrentBranch:     e.CurrentBranch,
+		IsDirty:           e.Lifecycle.IsDirty(),
+		RootBranches:      e.RootBranches,
+		RegistrationState: e.Lifecycle.Registration,
+		Lifecycle:         e.Lifecycle,
+		StatusMessage:     e.StatusMessage,
+		CanRemove:         e.Lifecycle.CanRemove(),
+		CanDetach:         e.Lifecycle.CanDetach(),
+		NeedsRepair:       e.Lifecycle.NeedsRepair(),
+		IsCurrent:         e.Lifecycle.IsCurrent(),
+	})
 }
 
 func (e Entry) displayName() string {
 	if e.Name != "" {
-		return e.Name
+		return e.Name.String()
 	}
 	return e.AnchorBranch
 }
@@ -66,30 +173,69 @@ func (e Entry) primaryRootBranch() string {
 	return e.RootBranches[0]
 }
 
-func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engine.StackGraph, currentAnchor string) Entry {
+func (e Entry) removeRefusal(policy RemovalPolicy) string {
+	switch e.Lifecycle.Remove {
+	case LifecycleNeedsRepair:
+		return fmt.Sprintf("managed worktree %s cannot be removed because %s; %s", output.BranchName(e.displayName()), output.Dim(e.StatusMessage), repairHint(&e))
+	case LifecycleCurrent:
+		return "cannot remove the current worktree; cd to the main repo first"
+	case LifecycleHasBranches:
+		return fmt.Sprintf("worktree %s has %d branch(es); use 'stackit worktree detach %s' to remove the worktree while keeping branches", output.BranchName(e.displayName()), e.StackSize, e.displayName())
+	}
+	if e.Lifecycle.Exists() && e.Lifecycle.IsDirty() && !policy.DiscardsChanges() {
+		return "worktree has uncommitted changes; use --force to discard them"
+	}
+	return ""
+}
+
+func (e Entry) detachRefusal(policy RemovalPolicy) string {
+	switch e.Lifecycle.Detach {
+	case LifecycleNeedsRepair:
+		return fmt.Sprintf("managed worktree %s cannot be detached because %s; %s", output.BranchName(e.displayName()), output.Dim(e.StatusMessage), repairHint(&e))
+	case LifecycleCurrent:
+		return "cannot detach from inside the worktree; cd to main repo first"
+	}
+	if e.Lifecycle.Exists() && e.Lifecycle.IsDirty() && !policy.DiscardsChanges() {
+		return "worktree has uncommitted changes; use --force to override"
+	}
+	return ""
+}
+
+func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engine.StackGraph, currentAnchor string, branchesByPath map[string]string) Entry {
 	entry := Entry{
-		Name:              wt.Name,
-		AnchorBranch:      wt.AnchorBranch,
-		Path:              wt.Path,
-		Exists:            true,
-		RegistrationState: RegistrationStateInvalid,
-		StatusMessage:     "registration is invalid",
-		IsCurrent:         currentAnchor != "" && wt.AnchorBranch == currentAnchor,
+		Name:         wt.Name,
+		AnchorBranch: wt.AnchorBranch,
+		Path:         wt.Path,
+		Lifecycle: WorktreeLifecycle{
+			Registration: RegistrationStateInvalid,
+			Presence:     WorktreePresent,
+			Checkout:     WorktreeCheckoutElsewhere,
+			Changes:      WorktreeChangesClean,
+			Remove:       LifecycleNeedsRepair,
+			Detach:       LifecycleNeedsRepair,
+		},
+		StatusMessage: "registration is invalid",
+		registration:  wt,
+	}
+	if currentAnchor != "" && wt.AnchorBranch == currentAnchor {
+		entry.Lifecycle.Checkout = WorktreeCheckoutCurrent
 	}
 
-	if _, statErr := os.Stat(wt.Path); os.IsNotExist(statErr) {
-		entry.Exists = false
+	if _, statErr := os.Stat(wt.Path.String()); os.IsNotExist(statErr) {
+		entry.Lifecycle.Presence = WorktreeMissing
 	}
 
-	if entry.Exists {
-		currentBranch, err := ctx.Engine.GetWorktreeCurrentBranch(ctx.Context, wt.Path)
-		if err == nil && currentBranch != "" {
-			entry.CurrentBranch = currentBranch
+	if entry.Lifecycle.Exists() {
+		canonicalPath, err := git.CanonicalWorktreePath(wt.Path.String())
+		if err == nil {
+			entry.CurrentBranch = branchesByPath[canonicalPath]
 		}
 
-		isDirty, err := ctx.Engine.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+		isDirty, err := ctx.Engine.WorktreeHasUncommittedChanges(ctx.Context, wt.Path.String())
 		if err == nil {
-			entry.IsDirty = isDirty
+			if isDirty {
+				entry.Lifecycle.Changes = WorktreeChangesDirty
+			}
 		}
 	}
 
@@ -98,7 +244,7 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 
 	switch {
 	case anchorExists && ctx.Engine.IsWorktreeAnchor(anchorBranch):
-		entry.RegistrationState = RegistrationStateOK
+		entry.Lifecycle.Registration = RegistrationStateOK
 		entry.StatusMessage = "healthy"
 		children := graph.Children(anchorBranch)
 		entry.RootBranches = append(entry.RootBranches, children...)
@@ -108,23 +254,30 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 			IncludeCurrent:    false,
 		})
 		entry.StackSize = len(descendants)
-		entry.CanDetach = !entry.IsCurrent
-		entry.CanRemove = !entry.IsCurrent && len(children) == 0
+		entry.Lifecycle.Detach = LifecycleAllowed
+		if len(children) == 0 {
+			entry.Lifecycle.Remove = LifecycleAllowed
+		} else {
+			entry.Lifecycle.Remove = LifecycleHasBranches
+		}
+		if entry.Lifecycle.IsCurrent() {
+			entry.Lifecycle.Remove = LifecycleCurrent
+			entry.Lifecycle.Detach = LifecycleCurrent
+		}
 
 		switch {
-		case !entry.Exists:
+		case !entry.Lifecycle.Exists():
 			entry.StatusMessage = "worktree directory is missing"
-		case entry.IsDirty:
+		case entry.Lifecycle.IsDirty():
 			entry.StatusMessage = "has uncommitted changes"
 		case len(children) == 0:
 			entry.StatusMessage = "empty anchor"
 		}
 
 	case anchorExists:
-		entry.RegistrationState = RegistrationStateLegacy
+		entry.Lifecycle.Registration = RegistrationStateLegacy
 		entry.StatusMessage = "legacy registration points at a real branch"
 		entry.RootBranches = []string{wt.AnchorBranch}
-		entry.NeedsRepair = true
 
 		descendants := graph.Range(anchorBranch, engine.StackRange{
 			RecursiveChildren: true,
@@ -132,14 +285,15 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 		})
 		entry.StackSize = len(descendants)
 
-		if !entry.Exists {
+		if !entry.Lifecycle.Exists() {
 			entry.StatusMessage = "legacy registration points at a real branch and the directory is missing"
 		}
 
 	default:
-		entry.NeedsRepair = true
 		entry.StatusMessage = "registered anchor branch is missing"
-		entry.CanDetach = !entry.IsCurrent
+		if !entry.Lifecycle.IsCurrent() {
+			entry.Lifecycle.Detach = LifecycleAllowed
+		}
 
 		if entry.CurrentBranch != "" {
 			currentBranch := ctx.Engine.GetBranch(entry.CurrentBranch)
@@ -154,15 +308,21 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 		}
 
 		switch {
-		case !entry.Exists:
+		case !entry.Lifecycle.Exists():
 			entry.StatusMessage = "registration is stale and the directory is missing"
-			entry.CanRemove = !entry.IsCurrent
+			if !entry.Lifecycle.IsCurrent() {
+				entry.Lifecycle.Remove = LifecycleAllowed
+			}
 		case entry.CurrentBranch == "":
 			entry.StatusMessage = "registration is invalid and worktree is detached"
-			entry.CanRemove = !entry.IsCurrent
+			if !entry.Lifecycle.IsCurrent() {
+				entry.Lifecycle.Remove = LifecycleAllowed
+			}
 		case len(entry.RootBranches) == 0:
 			entry.StatusMessage = "registration is invalid and worktree branch is untracked"
-			entry.CanRemove = !entry.IsCurrent
+			if !entry.Lifecycle.IsCurrent() {
+				entry.Lifecycle.Remove = LifecycleAllowed
+			}
 		}
 	}
 
@@ -184,16 +344,30 @@ func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 	}
 
 	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
+	gitWorktrees, gitErr := ctx.Engine.ListWorktrees(ctx.Context)
+	branchesByPath := make(map[string]string, len(gitWorktrees))
+	if gitErr == nil {
+		for _, worktree := range gitWorktrees {
+			canonicalPath, err := git.CanonicalWorktreePath(worktree.Path)
+			if err == nil {
+				branchesByPath[canonicalPath] = worktree.Branch
+			}
+		}
+	}
 
 	for _, wt := range worktrees {
-		entry := inspectWorktreeEntry(ctx, wt, graph, result.CurrentAnchor)
-		if opts.NameOrBranch != "" && entry.AnchorBranch != opts.NameOrBranch && entry.Name != opts.NameOrBranch {
+		entry := inspectWorktreeEntry(ctx, wt, graph, result.CurrentAnchor, branchesByPath)
+		if opts.Selector != "" && entry.AnchorBranch != opts.Selector.String() && entry.Name != engine.WorktreeName(opts.Selector) {
 			continue
 		}
 		result.Worktrees = append(result.Worktrees, entry)
 	}
 
-	result.OwnershipWarnings = OwnershipWarnings(ctx)
+	if gitErr != nil {
+		result.OwnershipWarnings = []string{fmt.Sprintf("could not inspect Git worktrees for ownership conflicts: %v", gitErr)}
+	} else {
+		result.OwnershipWarnings = ownershipWarnings(ctx, gitWorktrees)
+	}
 
 	return result, nil
 }
@@ -207,13 +381,16 @@ func OwnershipWarnings(ctx *app.Context) []string {
 	if err != nil {
 		return []string{fmt.Sprintf("could not inspect Git worktrees for ownership conflicts: %v", err)}
 	}
+	return ownershipWarnings(ctx, gitWorktrees)
+}
 
+func ownershipWarnings(ctx *app.Context, gitWorktrees git.WorktreeList) []string {
 	// Ask git which checkout is the main one rather than trusting the engine's
 	// repo root: an engine constructed inside a managed worktree reports that
 	// worktree as its root, so the real main repository never matches and every
 	// branch checked out there gets reported as an unmanaged worktree. A warning
 	// channel that cries wolf on every sync is one nobody reads.
-	mainRepoPath, err := canonicalPath(gitWorktrees.MainPath())
+	mainRepoPath, err := git.CanonicalWorktreePath(gitWorktrees.MainPath())
 	if err != nil {
 		return []string{fmt.Sprintf("could not canonicalize the main repository path: %v", err)}
 	}
@@ -227,7 +404,7 @@ func OwnershipWarnings(ctx *app.Context) []string {
 			continue
 		}
 
-		actualPath, pathErr := canonicalPath(gitWorktree.Path)
+		actualPath, pathErr := git.CanonicalWorktreePath(gitWorktree.Path)
 		if pathErr != nil {
 			warnings = append(warnings, fmt.Sprintf("could not canonicalize Git worktree path %s: %v", gitWorktree.Path, pathErr))
 			continue
@@ -245,48 +422,27 @@ func OwnershipWarnings(ctx *app.Context) []string {
 			continue
 		}
 
-		expectedPath, expectedPathErr := canonicalPath(owner.Path)
+		expectedPath, expectedPathErr := git.CanonicalWorktreePath(owner.Path.String())
 		if expectedPathErr != nil {
 			warnings = append(warnings, fmt.Sprintf("could not canonicalize registered path %s for branch %s: %v", owner.Path, gitWorktree.Branch, expectedPathErr))
 			continue
 		}
 		if actualPath != expectedPath {
-			warnings = append(warnings, fmt.Sprintf("branch %s belongs to managed worktree %s (%s) but is checked out at %s", gitWorktree.Branch, worktreeDisplayName(owner), owner.Path, gitWorktree.Path))
+			warnings = append(warnings, fmt.Sprintf("branch %s belongs to managed worktree %s (%s) but is checked out at %s", gitWorktree.Branch, owner.DisplayName(), owner.Path, gitWorktree.Path))
 		}
 	}
 
 	return slices.Compact(slices.Sorted(slices.Values(warnings)))
 }
 
-func canonicalPath(path string) (string, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	resolvedPath, err := filepath.EvalSymlinks(absPath)
-	if err == nil {
-		return filepath.Clean(resolvedPath), nil
-	}
-	if !os.IsNotExist(err) {
-		return "", err
-	}
-	return filepath.Clean(absPath), nil
-}
-
-func worktreeDisplayName(worktree *engine.WorktreeInfo) string {
-	if worktree.Name != "" {
-		return worktree.Name
-	}
-	return worktree.AnchorBranch
-}
-
 // ListAction lists all managed worktrees
-func ListAction(ctx *app.Context, _ ListOptions) (*ListResult, error) {
-	return listEntries(ctx, ListOptions{})
+func ListAction(ctx *app.Context, opts ListOptions) (*ListResult, error) {
+	return listEntries(ctx, opts)
 }
 
 // findWorktreeByNameOrBranch looks up a worktree by name or anchor branch
-func findWorktreeByNameOrBranch(ctx *app.Context, nameOrBranch string) (*engine.WorktreeInfo, error) {
+func findWorktreeByNameOrBranch(ctx *app.Context, selector WorktreeSelector) (*engine.WorktreeInfo, error) {
+	nameOrBranch := selector.String()
 	// First try by anchor branch (original behavior)
 	wtInfo, err := ctx.Engine.GetWorktreeForStack(nameOrBranch)
 	if err != nil {
@@ -302,7 +458,7 @@ func findWorktreeByNameOrBranch(ctx *app.Context, nameOrBranch string) (*engine.
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 	for _, wt := range worktrees {
-		if wt.Name == nameOrBranch {
+		if wt.Name == engine.WorktreeName(nameOrBranch) {
 			return &wt, nil
 		}
 	}
@@ -310,13 +466,13 @@ func findWorktreeByNameOrBranch(ctx *app.Context, nameOrBranch string) (*engine.
 	return nil, fmt.Errorf("no worktree found for %s", output.BranchName(nameOrBranch))
 }
 
-func getWorktreeEntry(ctx *app.Context, nameOrBranch string) (*Entry, error) {
-	result, err := listEntries(ctx, ListOptions{NameOrBranch: nameOrBranch})
+func getWorktreeEntry(ctx *app.Context, selector WorktreeSelector) (*Entry, error) {
+	result, err := listEntries(ctx, ListOptions{Selector: selector})
 	if err != nil {
 		return nil, err
 	}
 	if len(result.Worktrees) == 0 {
-		return nil, fmt.Errorf("no worktree found for %s", output.BranchName(nameOrBranch))
+		return nil, fmt.Errorf("no worktree found for %s", output.BranchName(selector.String()))
 	}
 	entry := result.Worktrees[0]
 	return &entry, nil

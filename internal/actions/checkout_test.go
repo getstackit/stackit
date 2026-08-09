@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -20,7 +21,7 @@ func TestCheckoutActionWorktreeSwitchIncludesTargetBranch(t *testing.T) {
 			"feature": "main",
 		})
 
-	err := s.Engine.RegisterWorktree(context.Background(), "feature", s.Context.RepoRoot)
+	err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(s.Context.RepoRoot)})
 	require.NoError(t, err)
 	defer func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") }()
 

@@ -172,7 +172,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	worktreeByStackRoot := make(map[string]string)
 	if worktrees, err := ctx.Worktree().ListManagedWorktrees(); err == nil {
 		for _, wt := range worktrees {
-			worktreeByStackRoot[wt.AnchorBranch] = wt.Path
+			worktreeByStackRoot[wt.AnchorBranch] = wt.Path.String()
 		}
 	}
 

@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 type RepairOptions struct {
-	NameOrBranch string
+	Selector WorktreeSelector
 }
 
 type RepairEntry struct {
@@ -34,8 +34,8 @@ func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if opts.NameOrBranch != "" && len(listResult.Worktrees) == 0 {
-		return nil, fmt.Errorf("no worktree found for %s", output.BranchName(opts.NameOrBranch))
+	if opts.Selector != "" && len(listResult.Worktrees) == 0 {
+		return nil, fmt.Errorf("no worktree found for %s", output.BranchName(opts.Selector.String()))
 	}
 
 	result := &RepairResult{
@@ -44,7 +44,7 @@ func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
 	}
 
 	for _, entry := range listResult.Worktrees {
-		if !entry.NeedsRepair {
+		if !entry.Lifecycle.NeedsRepair() {
 			result.Skipped = append(result.Skipped, SkippedEntry{
 				Name:   entry.displayName(),
 				Reason: "registration is already healthy",
@@ -52,7 +52,7 @@ func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
 			continue
 		}
 
-		repaired, err := repairEntry(ctx, entry)
+		repaired, err := repairRegistration(ctx, entry, entry.registration)
 		if err != nil {
 			result.Skipped = append(result.Skipped, SkippedEntry{
 				Name:   entry.displayName(),
@@ -66,14 +66,10 @@ func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
 	return result, nil
 }
 
-func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
-	switch entry.RegistrationState {
+func repairRegistration(ctx *app.Context, entry Entry, wtInfo engine.WorktreeInfo) (RepairEntry, error) {
+	switch entry.Lifecycle.Registration {
 	case RegistrationStateLegacy:
-		wtInfo, err := findWorktreeByNameOrBranch(ctx, entry.AnchorBranch)
-		if err != nil {
-			return RepairEntry{}, err
-		}
-		anchorName, err := convertLegacyRegistration(ctx, *wtInfo, entry.AnchorBranch)
+		anchorName, err := convertLegacyRegistration(ctx, wtInfo, entry.AnchorBranch)
 		if err != nil {
 			return RepairEntry{}, err
 		}
@@ -84,12 +80,7 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 		}, nil
 
 	case RegistrationStateInvalid:
-		wtInfo, err := findWorktreeByNameOrBranch(ctx, entry.AnchorBranch)
-		if err != nil {
-			return RepairEntry{}, err
-		}
-
-		if !entry.Exists {
+		if !entry.Lifecycle.Exists() {
 			if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
 				return RepairEntry{}, fmt.Errorf("failed to remove stale registration: %w", err)
 			}
@@ -132,7 +123,7 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 				return RepairEntry{}, fmt.Errorf("cannot repair %s automatically because anchor %s is already registered to %s", output.BranchName(entry.displayName()), output.BranchName(stackRootName), existing.Path)
 			}
 			if existing == nil {
-				if err := moveRegistration(ctx, *wtInfo, stackRootName); err != nil {
+				if err := moveRegistration(ctx, wtInfo, stackRootName); err != nil {
 					return RepairEntry{}, err
 				}
 			} else if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
@@ -145,7 +136,7 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 			}, nil
 		}
 
-		anchorName, err := convertLegacyRegistration(ctx, *wtInfo, stackRootName)
+		anchorName, err := convertLegacyRegistration(ctx, wtInfo, stackRootName)
 		if err != nil {
 			return RepairEntry{}, err
 		}
@@ -159,21 +150,37 @@ func repairEntry(ctx *app.Context, entry Entry) (RepairEntry, error) {
 	return RepairEntry{}, fmt.Errorf("registration is already healthy")
 }
 
-// moveRegistration transfers a registration after the caller has established
-// that the destination anchor is safe. The registry's reverse path claim is
+// migrateRegistration transfers a registration after the caller has
+// established that the destination anchor is safe. The reverse path claim is
 // exclusive, so the old claim must be removed before creating the new one.
-// Restore the old registration if the replacement fails.
-func moveRegistration(ctx *app.Context, from engine.WorktreeInfo, toAnchor string) error {
+// The returned undo function restores the old registration for a later
+// lifecycle rollback.
+func migrateRegistration(ctx *app.Context, from engine.WorktreeInfo, toAnchor string) (func() error, error) {
 	if err := ctx.Engine.UnregisterWorktree(ctx.Context, from.AnchorBranch); err != nil {
-		return fmt.Errorf("failed to remove stale registration %s: %w", output.BranchName(from.AnchorBranch), err)
+		return nil, fmt.Errorf("failed to remove stale registration %s: %w", output.BranchName(from.AnchorBranch), err)
 	}
-	if err := ctx.Engine.RegisterWorktreeWithName(ctx.Context, toAnchor, from.Path, from.Name); err != nil {
-		if restoreErr := ctx.Engine.RegisterWorktreeWithName(ctx.Context, from.AnchorBranch, from.Path, from.Name); restoreErr != nil {
-			return fmt.Errorf("failed to register worktree under anchor %s: %w (also failed to restore %s: %w)", toAnchor, err, output.BranchName(from.AnchorBranch), restoreErr)
+	to := from.Registration()
+	to.AnchorBranch = toAnchor
+	if err := ctx.Engine.RegisterWorktree(ctx.Context, to); err != nil {
+		if restoreErr := ctx.Engine.RegisterWorktree(ctx.Context, from.Registration()); restoreErr != nil {
+			return nil, fmt.Errorf("failed to register worktree under anchor %s: %w (also failed to restore %s: %w)", toAnchor, err, output.BranchName(from.AnchorBranch), restoreErr)
 		}
-		return fmt.Errorf("failed to register worktree under anchor %s: %w", toAnchor, err)
+		return nil, fmt.Errorf("failed to register worktree under anchor %s: %w", toAnchor, err)
 	}
-	return nil
+	return func() error {
+		if err := ctx.Engine.UnregisterWorktree(ctx.Context, toAnchor); err != nil {
+			return fmt.Errorf("failed to remove replacement registration %s: %w", output.BranchName(toAnchor), err)
+		}
+		if err := ctx.Engine.RegisterWorktree(ctx.Context, from.Registration()); err != nil {
+			return fmt.Errorf("failed to restore registration %s: %w", output.BranchName(from.AnchorBranch), err)
+		}
+		return nil
+	}, nil
+}
+
+func moveRegistration(ctx *app.Context, from engine.WorktreeInfo, toAnchor string) error {
+	_, err := migrateRegistration(ctx, from, toAnchor)
+	return err
 }
 
 func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, rootBranchName string) (string, error) {
@@ -189,77 +196,43 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 	scope := rootBranch.GetScope().String()
 	name := wtInfo.Name
 	if name == "" {
-		name = rootBranchName
+		name = engine.WorktreeName(rootBranchName)
 	}
 
-	anchorBranchName, err := generateAnchorBranchName(ctx, wtInfo.MainRepoDir, name, scope)
+	cfg, err := config.LoadConfig(wtInfo.MainRepoDir)
+	if err != nil {
+		return "", fmt.Errorf("load worktree configuration: %w", err)
+	}
+	anchorBranchName, err := generateAnchorBranchName(ctx, cfg.BranchNamePattern(), name.String(), scope)
 	if err != nil {
 		return "", err
 	}
-	if ctx.Engine.BranchNames().Contains(anchorBranchName) {
-		return "", fmt.Errorf("generated anchor branch %s already exists", output.BranchName(anchorBranchName))
-	}
-
-	parentBranch := ctx.Engine.GetBranch(originalParent)
-	parentSHA, err := parentBranch.GetRevision()
+	anchorBranch, cleanupAnchor, err := createWorktreeAnchor(ctx, ctx.Engine, anchorBranchName, originalParent, scope)
 	if err != nil {
-		return "", fmt.Errorf("failed to get parent revision for %s: %w", output.BranchName(originalParent), err)
+		return "", err
 	}
-	if err := ctx.Engine.CreateBranch(ctx.Context, anchorBranchName, parentSHA); err != nil {
-		return "", fmt.Errorf("failed to create anchor branch %s: %w", output.BranchName(anchorBranchName), err)
-	}
-
-	anchorBranch := ctx.Engine.GetBranch(anchorBranchName)
-	anchorCreated := true
 	rootReparented := false
-	registered := false
-	legacyUnregistered := false
+	registrationMigrated := false
+	var undoRegistration func() error
 	cleanup := func() {
-		if registered {
-			_ = ctx.Engine.UnregisterWorktree(ctx.Context, anchorBranchName)
-		}
-		if legacyUnregistered {
-			_ = ctx.Engine.RegisterWorktreeWithName(ctx.Context, wtInfo.AnchorBranch, wtInfo.Path, wtInfo.Name)
+		if registrationMigrated {
+			_ = undoRegistration()
 		}
 		if rootReparented {
 			_ = ctx.Engine.ReparentBranch(ctx.Context, ctx.Engine.GetBranch(rootBranchName), ctx.Engine.GetBranch(originalParent))
 		}
-		if anchorCreated {
-			cleanupAnchorBranch(ctx.Context, ctx.Engine, anchorBranchName, ctx.Output)
-		}
-	}
-
-	if err := ctx.Engine.SetParent(ctx.Context, anchorBranch, parentBranch, engine.DivergenceRecompute); err != nil {
-		cleanup()
-		return "", fmt.Errorf("failed to set parent on anchor branch %s: %w", output.BranchName(anchorBranchName), err)
-	}
-	if err := ctx.Engine.SetBranchType(anchorBranch, git.BranchTypeWorktreeAnchor); err != nil {
-		cleanup()
-		return "", fmt.Errorf("failed to mark %s as a worktree anchor: %w", output.BranchName(anchorBranchName), err)
-	}
-	if scope != "" {
-		if err := ctx.Engine.SetScope(ctx.Context, anchorBranch, engine.NewScope(scope)); err != nil {
-			cleanup()
-			return "", fmt.Errorf("failed to set scope on anchor branch %s: %w", output.BranchName(anchorBranchName), err)
-		}
+		cleanupAnchor()
 	}
 	if err := ctx.Engine.ReparentBranch(ctx.Context, ctx.Engine.GetBranch(rootBranchName), anchorBranch); err != nil {
 		cleanup()
 		return "", fmt.Errorf("failed to reparent %s under anchor %s: %w", output.BranchName(rootBranchName), output.BranchName(anchorBranchName), err)
 	}
 	rootReparented = true
-	// The path's reverse registration claim is intentionally exclusive. Remove
-	// the legacy forward claim before creating the anchored one; cleanup restores
-	// it if the new registration cannot be written.
-	if err := ctx.Engine.UnregisterWorktree(ctx.Context, wtInfo.AnchorBranch); err != nil {
+	undoRegistration, err = migrateRegistration(ctx, wtInfo, anchorBranchName)
+	if err != nil {
 		cleanup()
-		return "", fmt.Errorf("failed to remove legacy registration %s: %w", output.BranchName(wtInfo.AnchorBranch), err)
+		return "", err
 	}
-	legacyUnregistered = true
-	if err := ctx.Engine.RegisterWorktreeWithName(ctx.Context, anchorBranchName, wtInfo.Path, wtInfo.Name); err != nil {
-		cleanup()
-		return "", fmt.Errorf("failed to register worktree under anchor %s: %w", output.BranchName(anchorBranchName), err)
-	}
-	registered = true
+	registrationMigrated = true
 	return anchorBranchName, nil
 }

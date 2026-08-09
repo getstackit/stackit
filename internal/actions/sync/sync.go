@@ -66,7 +66,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	managedWorktrees, err := eng.ListManagedWorktrees()
 	if err == nil {
 		for _, wt := range managedWorktrees {
-			reason := SkipReasonForWorktree(gctx, eng, wt.Path)
+			reason := SkipReasonForWorktree(gctx, eng, wt.Path.String())
 			if reason == "" {
 				continue
 			}

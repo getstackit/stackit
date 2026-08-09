@@ -10,6 +10,7 @@ import (
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
+	worktreeutil "github.com/getstackit/stackit/internal/worktree"
 )
 
 // WorktreeInspector is the narrow dependency SkipReasonForWorktree needs.
@@ -96,7 +97,7 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 		// The main worktree is never disposable, even if an invalid
 		// registration makes it look like an empty managed worktree. Skipping
 		// this candidate lets cleanup continue for the rest of the batch.
-		if git.IsMainWorktree(wt.Path, wt.MainRepoDir) {
+		if git.IsMainWorktree(wt.Path.String(), wt.MainRepoDir) {
 			ctx.Output.Debug("Skipping cleanup for main worktree %s", wt.Path)
 			continue
 		}
@@ -123,18 +124,11 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 
 		ctx.Output.Info("Removing empty worktree %s", wt.AnchorBranch)
 
-		if _, statErr := os.Stat(wt.Path); statErr == nil {
-			if removeErr := ctx.Engine.RemoveWorktree(ctx.Context, wt.Path); removeErr != nil {
-				result.Errors = append(result.Errors,
-					"failed to remove worktree at "+wt.Path+": "+removeErr.Error())
-				ctx.Output.Debug("Failed to remove worktree at %s: %v", wt.Path, removeErr)
-				continue
-			}
-		} else if os.IsNotExist(statErr) {
-		} else {
+		_, removeErr := worktreeutil.RemovePath(ctx.Context, ctx.Engine, wt.Path.String(), worktreeutil.RemovalRespectChanges)
+		if removeErr != nil {
 			result.Errors = append(result.Errors,
-				"failed to inspect worktree at "+wt.Path+": "+statErr.Error())
-			ctx.Output.Debug("Failed to stat worktree at %s: %v", wt.Path, statErr)
+				"failed to remove worktree at "+wt.Path.String()+": "+removeErr.Error())
+			ctx.Output.Debug("Failed to remove worktree at %s: %v", wt.Path, removeErr)
 			continue
 		}
 

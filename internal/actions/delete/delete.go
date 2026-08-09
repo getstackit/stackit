@@ -341,8 +341,8 @@ func cleanupWorktreesForDeletedStacks(ctx *app.Context, deletedStackRoots []stri
 		ctx.Output.Info("Removing worktree for deleted stack %s", output.BranchName(stackRoot))
 
 		// Remove worktree directory if it exists
-		if _, statErr := os.Stat(wt.Path); statErr == nil {
-			if removeErr := ctx.Engine.RemoveWorktree(ctx.Context, wt.Path); removeErr != nil {
+		if _, statErr := os.Stat(wt.Path.String()); statErr == nil {
+			if removeErr := ctx.Engine.RemoveWorktree(ctx.Context, wt.Path.String()); removeErr != nil {
 				ctx.Output.Debug("Failed to remove worktree at %s: %v", wt.Path, removeErr)
 			}
 		}

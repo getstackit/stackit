@@ -219,7 +219,7 @@ func computeSyncDryRun(ctx context.Context, eng engine.Engine, opts sync.Options
 	managedWorktrees, err := eng.ListManagedWorktrees()
 	if err == nil {
 		for _, wt := range managedWorktrees {
-			if sync.SkipReasonForWorktree(ctx, eng, wt.Path) != "" {
+			if sync.SkipReasonForWorktree(ctx, eng, wt.Path.String()) != "" {
 				plan.skipped = append(plan.skipped, wt.AnchorBranch)
 			}
 		}

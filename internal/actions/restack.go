@@ -513,12 +513,12 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 	dirtyAnchors := make(map[string]bool)
 	if managed, err := eng.ListManagedWorktrees(); err == nil {
 		for _, wt := range managed {
-			if eng.WorktreeRebaseInProgress(ctx.Context, wt.Path) {
+			if eng.WorktreeRebaseInProgress(ctx.Context, wt.Path.String()) {
 				dirtyAnchors[wt.AnchorBranch] = true
 				ctx.Output.Warn("Holding stack rooted at %s (worktree %s has a rebase in progress)", wt.AnchorBranch, wt.Path)
 				continue
 			}
-			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
+			hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx.Context, wt.Path.String())
 			if inspectErr != nil {
 				ctx.Output.Warn("Holding stack rooted at %s because worktree %s could not be inspected: %v", wt.AnchorBranch, wt.Path, inspectErr)
 				dirtyAnchors[wt.AnchorBranch] = true

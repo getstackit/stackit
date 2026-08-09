@@ -29,7 +29,7 @@ func TestExecutor_CreateSession(t *testing.T) {
 		defer session.Close()
 
 		// Verify worktree exists
-		assert.DirExists(t, session.Path)
+		assert.DirExists(t, session.Path.String())
 
 		// Verify engine is usable
 		trunk := session.Engine.Trunk()
@@ -55,8 +55,8 @@ func TestExecutor_CreateSession(t *testing.T) {
 		defer session.Close()
 
 		// Verify worktree is at feature branch (file is named prefix_test.txt)
-		assert.DirExists(t, session.Path)
-		featureFile := filepath.Join(session.Path, "feature_test.txt")
+		assert.DirExists(t, session.Path.String())
+		featureFile := filepath.Join(session.Path.String(), "feature_test.txt")
 		assert.FileExists(t, featureFile)
 	})
 
@@ -72,12 +72,12 @@ func TestExecutor_CreateSession(t *testing.T) {
 		require.NoError(t, err)
 
 		worktreePath := session.Path
-		assert.DirExists(t, worktreePath)
+		assert.DirExists(t, worktreePath.String())
 
 		session.Close()
 
 		// Worktree should be removed
-		_, err = os.Stat(worktreePath)
+		_, err = os.Stat(worktreePath.String())
 		assert.True(t, os.IsNotExist(err), "worktree should be removed after Close()")
 	})
 }
@@ -99,7 +99,7 @@ func TestSession_ResetToTrunk(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make a change in the worktree
-	testFile := filepath.Join(session.Path, "test.txt")
+	testFile := filepath.Join(session.Path.String(), "test.txt")
 	err = os.WriteFile(testFile, []byte("test"), 0644)
 	require.NoError(t, err)
 
@@ -164,7 +164,7 @@ func TestSession_ResetToRef(t *testing.T) {
 	assert.Equal(t, featureSHA, afterResetRev)
 
 	// Verify the feature file exists (file is named prefix_test.txt)
-	featureFile := filepath.Join(session.Path, "feature_test.txt")
+	featureFile := filepath.Join(session.Path.String(), "feature_test.txt")
 	assert.FileExists(t, featureFile)
 }
 
@@ -221,7 +221,7 @@ func TestSession_PullTrunk_StaysDetached(t *testing.T) {
 	_, err = worktreeGit.RunGitCommandWithContext(context.Background(), "checkout", "to-merge")
 	require.NoError(t, err)
 
-	testFile := filepath.Join(session.Path, "merge-test.txt")
+	testFile := filepath.Join(session.Path.String(), "merge-test.txt")
 	err = os.WriteFile(testFile, []byte("merge content"), 0644)
 	require.NoError(t, err)
 	_, err = worktreeGit.RunGitCommandWithContext(context.Background(), "add", ".")

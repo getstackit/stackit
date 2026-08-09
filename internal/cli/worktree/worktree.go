@@ -17,6 +17,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
@@ -84,10 +85,10 @@ Examples:
 					return err
 				}
 
-				ctx.Output.Info("Running %s in %s", style.ColorCyan(args[0]), style.ColorDim(result.Path))
+				ctx.Output.Info("Running %s in %s", style.ColorCyan(args[0]), style.ColorDim(result.Path.String()))
 
 				runCmd := exec.CommandContext(ctx.Context, args[0], args[1:]...)
-				runCmd.Dir = result.Path
+				runCmd.Dir = result.Path.String()
 				runCmd.Stdin = os.Stdin
 				runCmd.Stdout = cmd.OutOrStdout()
 				runCmd.Stderr = cmd.ErrOrStderr()
@@ -179,7 +180,7 @@ Use --no-open to skip the automatic directory change.`,
 
 				// Auto-cd to worktree by default when shell integration is available
 				if !noOpen && result.Path != "" && common.HasShellIntegration() {
-					ctx.Output.DirectiveCD(result.Path)
+					ctx.Output.DirectiveCD(result.Path.String())
 				} else if result.Path != "" {
 					// User opted out or no shell integration
 					ctx.Output.Tip("cd %s", result.Path)
@@ -233,7 +234,7 @@ Shows each worktree's name, root branch, stack size, registration health, and st
 				needsRepair := false
 				for _, wt := range result.Worktrees {
 					renderWorktreeEntry(ctx, wt, result.CurrentAnchor)
-					needsRepair = needsRepair || wt.NeedsRepair
+					needsRepair = needsRepair || wt.Lifecycle.NeedsRepair()
 				}
 				for _, warning := range result.OwnershipWarnings {
 					ctx.Output.Warn("Ownership warning: %s", warning)
@@ -264,9 +265,9 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 	// Name (use worktree name if available, otherwise anchor branch)
 	name := wt.Name
 	if name == "" {
-		name = wt.AnchorBranch
+		name = engine.WorktreeName(wt.AnchorBranch)
 	}
-	coloredName := style.ColorBranchNameIf(name, isCurrent)
+	coloredName := style.ColorBranchNameIf(name.String(), isCurrent)
 
 	// Stack size
 	stackInfo := style.ColorDim("empty")
@@ -294,21 +295,21 @@ func renderWorktreeEntry(ctx *app.Context, wt worktree.Entry, currentAnchor stri
 	if rootInfo != "" {
 		statusParts = append(statusParts, rootInfo)
 	}
-	if !wt.Exists {
+	if !wt.Lifecycle.Exists() {
 		statusParts = append(statusParts, style.ColorRed("missing"))
 	}
-	if wt.IsDirty {
+	if wt.Lifecycle.IsDirty() {
 		statusParts = append(statusParts, style.ColorYellow("dirty"))
 	}
 	switch {
-	case wt.NeedsRepair:
+	case wt.Lifecycle.NeedsRepair():
 		statusParts = append(statusParts, style.ColorYellow("repair"))
-	case wt.CanRemove:
+	case wt.Lifecycle.CanRemove():
 		statusParts = append(statusParts, style.ColorGreen("remove"))
-	case wt.CanDetach:
+	case wt.Lifecycle.CanDetach():
 		statusParts = append(statusParts, style.ColorGreen("detach"))
 	}
-	if wt.RegistrationState != worktree.RegistrationStateOK || wt.StatusMessage != "" {
+	if wt.Lifecycle.Registration != worktree.RegistrationStateOK || wt.StatusMessage != "" {
 		statusParts = append(statusParts, style.ColorDim(wt.StatusMessage))
 	}
 
@@ -347,8 +348,8 @@ warm-started .env files and caches have no copy in Git to recover from.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
 				return worktree.RemoveAction(ctx, worktree.RemoveOptions{
-					AnchorBranch: args[0],
-					Force:        force,
+					Selector: worktree.WorktreeSelector(args[0]),
+					Policy:   worktree.RemovalPolicyForForce(force),
 				})
 			})
 		},
@@ -438,19 +439,19 @@ To enable shell integration, add to your shell config:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
 				path, err := worktree.OpenAction(ctx, worktree.OpenOptions{
-					AnchorBranch: args[0],
+					Selector: worktree.WorktreeSelector(args[0]),
 				})
 				if err != nil {
 					return err
 				}
 
 				// Always print the path for scripting compatibility (cd $(stackit worktree open foo))
-				ctx.Output.Print(path)
+				ctx.Output.Print(path.String())
 				ctx.Output.Newline()
 
 				// Also emit directive for shell integration auto-cd
 				if common.HasShellIntegration() {
-					ctx.Output.DirectiveCD(path)
+					ctx.Output.DirectiveCD(path.String())
 				}
 				return nil
 			})
@@ -495,7 +496,7 @@ Use --no-open to skip the automatic directory change.`,
 
 				// Auto-cd to worktree by default when shell integration is available
 				if !noOpen && result.Path != "" && common.HasShellIntegration() {
-					ctx.Output.DirectiveCD(result.Path)
+					ctx.Output.DirectiveCD(result.Path.String())
 				} else if result.Path != "" {
 					// User opted out or no shell integration
 					ctx.Output.Tip("cd %s", result.Path)
@@ -540,8 +541,8 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
 				return worktree.DetachAction(ctx, worktree.DetachOptions{
-					NameOrBranch: args[0],
-					Force:        force,
+					Selector: worktree.WorktreeSelector(args[0]),
+					Policy:   worktree.RemovalPolicyForForce(force),
 				})
 			})
 		},
@@ -572,7 +573,7 @@ worktree anchors. Stale registrations with missing directories are removed.`,
 					target = args[0]
 				}
 
-				result, err := worktree.RepairAction(ctx, worktree.RepairOptions{NameOrBranch: target})
+				result, err := worktree.RepairAction(ctx, worktree.RepairOptions{Selector: worktree.WorktreeSelector(target)})
 				if err != nil {
 					return err
 				}

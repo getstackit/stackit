@@ -219,6 +219,9 @@ type WorktreeOperations interface {
 	ResetWorktreeWorkingDir(ctx context.Context, worktreePath string) error
 	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
 	WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error)
+	// WorktreeResetBlocker reports why resetting worktreePath to incomingRev
+	// would destroy work, or "" when it is safe.
+	WorktreeResetBlocker(ctx context.Context, worktreePath, incomingRev string) string
 	// ListIgnoredFiles returns repository-relative paths that Git currently
 	// classifies as ignored in the requested worktree.
 	ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error)

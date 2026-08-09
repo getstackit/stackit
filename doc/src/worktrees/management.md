@@ -50,6 +50,13 @@ This removes:
 The stack's branches remain intact. Use `--force` to remove even if there are errors.
 Use `--keep-branch` to preserve the anchor branch when removing the worktree.
 
+!!! warning "Ignored files are deleted with the directory"
+    Deleting the worktree directory deletes everything in it, including files
+    Git ignores — a `.env` you edited there, dependency caches, and anything
+    copied in by a [warm start](#warm-starting-new-worktrees). Git has no copy
+    of those, so there is nothing to recover them from. Copy out anything you
+    want to keep before removing.
+
 ## Attaching to an Existing Stack
 
 Attach an existing branch/stack to a new worktree:
@@ -62,13 +69,22 @@ This creates a worktree for an existing stack that wasn't originally created wit
 
 ## Detaching a Worktree
 
-Detach a worktree without removing it from disk:
+Stop working in a worktree while keeping all of its branches:
 
 ```bash
 stackit worktree detach my-feature
 ```
 
-This unregisters the worktree from stackit tracking while leaving the directory intact. Use `--force` if there are uncommitted changes.
+Unlike `remove`, which refuses when the worktree holds real branches, `detach`
+preserves them: it reparents the stack onto the hidden anchor's parent, deletes
+the anchor branch, and unregisters the worktree. Use `--force` if there are
+uncommitted changes.
+
+!!! warning "Detach also deletes the directory"
+    Detach preserves your *branches*, not the worktree directory — that is
+    removed, along with every ignored file in it. The same caution as
+    [Removing a Worktree](#removing-a-worktree) applies: copy out any
+    warm-started `.env` or cache you want to keep first.
 
 ## Pruning Stale Worktrees
 
@@ -79,6 +95,12 @@ stackit worktree prune
 ```
 
 Use `--dry-run` to preview what would be cleaned up without making changes.
+
+Prune skips worktrees that still hold stacked branches or have uncommitted
+changes. It does delete directories that are still on disk but empty of stack
+branches — and ignored files do not make a worktree count as dirty, so a
+worktree holding nothing but a warm-started `.env` is prunable and that file
+goes with it.
 
 ## Automatic Cleanup
 
@@ -106,6 +128,29 @@ stackit config set worktree.autoClean false
 
 **Default**: `true`
 
+## Warm-Starting New Worktrees
+
+A new worktree is a fresh checkout, so the ignored files your build needs —
+`.env`, dependency caches — aren't there. Add a `.worktreeinclude` file at the
+repository root to copy selected ignored files into every new managed worktree:
+
+```gitignore
+# .worktreeinclude — .gitignore syntax, selects from files Git already ignores
+.env
+.env.local
+node_modules/
+```
+
+The copy runs before `post-worktree-create` hooks, so setup hooks can use the
+warmed files. A pattern can only ever copy a file Git already ignores — never a
+tracked file — and an existing file in the destination is never overwritten.
+
+!!! warning "Treat `.worktreeinclude` as a secrets allowlist"
+    Every managed worktree receives these files. Include secrets only when that
+    is acceptable for all of them. And because warm-started files are ignored by
+    Git, nothing else has a copy: `remove`, `prune`, and `detach` all delete
+    them with the directory.
+
 ## Post-Create Hooks
 
 Run commands automatically after worktree creation by adding a `.stackit.yaml` file:
@@ -131,9 +176,26 @@ See [Configuration](../cli/config.md#worktree-hooks) for more examples.
 
 ## Working in Worktrees
 
+### Run Stack Commands Where the Stack Lives
+
+Commands that change branch content — `create`, `modify`, `absorb`, `fold`,
+`squash`, `split`, `move`, `reorder`, `pluck`, `delete`, `track` — must run in
+the worktree that owns the stack, so the edit lands in the working tree you are
+actually looking at. From anywhere else stackit refuses and says where to go:
+
+```
+branch payments-api belongs to worktree payments; run this command from there: cd ../myapp-stacks/payments
+```
+
+$$stackit sync$$ and $$stackit restack$$ are the exception — they reconcile the
+whole repository and can run from any worktree.
+
+If the owning worktree's directory no longer exists, `cd` is not an option; the
+refusal points at `stackit worktree detach` instead, which releases the branches.
+
 ### Creating Stacked Branches
 
-Once inside a worktree, create branches as usual:
+Once inside the worktree that owns the stack, create branches as usual:
 
 ```bash
 # Make changes

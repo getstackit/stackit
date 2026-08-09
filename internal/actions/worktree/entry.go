@@ -208,7 +208,12 @@ func OwnershipWarnings(ctx *app.Context) []string {
 		return []string{fmt.Sprintf("could not inspect Git worktrees for ownership conflicts: %v", err)}
 	}
 
-	mainRepoPath, err := canonicalPath(ctx.Engine.GetRepoRoot())
+	// Ask git which checkout is the main one rather than trusting the engine's
+	// repo root: an engine constructed inside a managed worktree reports that
+	// worktree as its root, so the real main repository never matches and every
+	// branch checked out there gets reported as an unmanaged worktree. A warning
+	// channel that cries wolf on every sync is one nobody reads.
+	mainRepoPath, err := canonicalPath(gitWorktrees.MainPath())
 	if err != nil {
 		return []string{fmt.Sprintf("could not canonicalize the main repository path: %v", err)}
 	}

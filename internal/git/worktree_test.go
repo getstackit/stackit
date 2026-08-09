@@ -39,6 +39,53 @@ func TestTreeContainsAnyPathLargePathSet(t *testing.T) {
 	require.True(t, collides)
 }
 
+// TestWorktreeResetBlocker pins the untracked-collision-vs-coexistence boundary
+// required by .claude/rules/worktree-safety.md. Blocking on any untracked file
+// at all stops a ref move for the ordinary state of having written a new file
+// and not staged it, which broke `sync` from a managed worktree.
+func TestWorktreeResetBlocker(t *testing.T) {
+	t.Parallel()
+
+	// Build an "incoming" commit containing incoming_test.txt, then rewind the
+	// worktree so that path is absent and can stand in as an untracked file.
+	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
+		return s.Repo.CreateChangeAndCommit("base", "base")
+	})
+	repo := scene.Repo
+	baseRev, err := repo.GetCurrentSHA()
+	require.NoError(t, err)
+	require.NoError(t, repo.CreateChangeAndCommit("incoming", "incoming"))
+	incomingRev, err := repo.GetCurrentSHA()
+	require.NoError(t, err)
+	require.NoError(t, repo.RunGitCommand("reset", "--hard", baseRev))
+
+	runner := git.NewRunnerWithPath(repo.Dir, nil)
+	ctx := context.Background()
+	scratch := filepath.Join(repo.Dir, "scratch.txt")
+	collider := filepath.Join(repo.Dir, "incoming_test.txt")
+
+	// Each phase mutates the shared worktree, so they run in order rather than
+	// as parallel subtests.
+	require.Empty(t, runner.WorktreeResetBlocker(ctx, repo.Dir, incomingRev),
+		"a clean worktree must not block")
+
+	require.NoError(t, os.WriteFile(scratch, []byte("notes"), 0o600))
+	require.Empty(t, runner.WorktreeResetBlocker(ctx, repo.Dir, incomingRev),
+		"an untracked file the incoming commit does not write must not block")
+	require.NoError(t, os.Remove(scratch))
+
+	require.NoError(t, os.WriteFile(collider, []byte("mine"), 0o600))
+	require.Equal(t, "an untracked file there would be overwritten",
+		runner.WorktreeResetBlocker(ctx, repo.Dir, incomingRev),
+		"an untracked file the incoming commit writes is the one case reset destroys")
+	require.NoError(t, os.Remove(collider))
+
+	require.NoError(t, os.WriteFile(filepath.Join(repo.Dir, "base_test.txt"), []byte("edited"), 0o600))
+	require.Equal(t, "has uncommitted changes",
+		runner.WorktreeResetBlocker(ctx, repo.Dir, incomingRev),
+		"a tracked change must block unconditionally")
+}
+
 func TestWorktree(t *testing.T) {
 	t.Run("lists ignored files", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)

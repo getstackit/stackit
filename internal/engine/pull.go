@@ -124,12 +124,8 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 	}
 	trunkWorktree := worktrees.PathForBranch(trunk)
 	if trunkWorktree != "" {
-		dirty, statusErr := e.git.WorktreeHasUncommittedChanges(ctx, trunkWorktree)
-		if statusErr != nil {
-			return fmt.Errorf("refusing to reset trunk: cannot inspect worktree %s: %w", trunkWorktree, statusErr)
-		}
-		if dirty {
-			return fmt.Errorf("refusing to reset trunk: worktree %s has uncommitted changes", trunkWorktree)
+		if blocker := e.git.WorktreeResetBlocker(ctx, trunkWorktree, remoteSha); blocker != "" {
+			return &git.WorktreeHeldError{Branch: trunk, WorktreePath: trunkWorktree, Reason: blocker}
 		}
 	}
 

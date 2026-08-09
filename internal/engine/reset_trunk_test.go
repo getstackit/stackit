@@ -77,7 +77,7 @@ func TestResetTrunkToRemote(t *testing.T) {
 
 		err = eng.ResetTrunkToRemote(context.Background())
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "refusing to reset trunk")
+		require.Contains(t, err.Error(), "refusing to move main")
 		require.Contains(t, err.Error(), "uncommitted changes")
 
 		after, revErr := scene.Repo.GetRevision("main")

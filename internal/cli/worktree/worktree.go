@@ -338,7 +338,10 @@ deletes the hidden anchor branch. You can specify either the worktree name or
 the anchor branch name.
 
 Worktrees with real branches are refused. Use 'stackit worktree detach' to
-remove the worktree while preserving those branches.`,
+remove the worktree while preserving those branches.
+
+The directory is deleted with everything in it, including files Git ignores —
+warm-started .env files and caches have no copy in Git to recover from.`,
 		SilenceUsage: true,
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -366,7 +369,11 @@ func newPruneCmd() *cobra.Command {
 		Long: `Remove all worktrees that have no stacked branches.
 
 Empty worktrees are those with only the anchor branch and no work in progress.
-Worktrees with uncommitted changes are skipped.`,
+Worktrees with uncommitted changes are skipped.
+
+Each directory is deleted with everything in it, including files Git ignores.
+Ignored files do not count as uncommitted, so a worktree holding only a
+warm-started .env is prunable and that file goes with it.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
@@ -519,6 +526,10 @@ Use this when you want to stop working in a worktree but keep all your branches.
 
 Detach removes the worktree, reparents children of the hidden anchor to the
 anchor's parent, then deletes the anchor branch.
+
+What is preserved is your branches, not the directory: that is deleted with
+everything in it, including files Git ignores. Copy out any warm-started .env
+or cache you want to keep first.
 
 Examples:
   stackit worktree detach my-feature   # Detach by worktree name

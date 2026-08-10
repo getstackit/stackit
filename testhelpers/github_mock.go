@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-github/v89/github"
+	"github.com/google/go-github/v90/github"
 )
 
 // MockGitHubServerConfig configures the behavior of a mock GitHub server
@@ -242,7 +242,7 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 			// Handle POST /repos/{owner}/{repo}/pulls (create PR)
 			if r.Method == "POST" {
 				// Parse request body
-				var newPR github.NewPullRequest
+				var newPR github.CreatePullRequest
 				if err := json.NewDecoder(r.Body).Decode(&newPR); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return
@@ -254,14 +254,14 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 					Number:  new(prNumber),
 					Title:   newPR.Title,
 					Body:    newPR.Body,
-					Head:    &github.PullRequestBranch{Ref: newPR.Head},
-					Base:    &github.PullRequestBranch{Ref: newPR.Base},
+					Head:    &github.PullRequestBranch{Ref: new(newPR.Head)},
+					Base:    &github.PullRequestBranch{Ref: new(newPR.Base)},
 					Draft:   newPR.Draft,
 					HTMLURL: new("https://github.com/" + config.Owner + "/" + config.Repo + "/pull/" + fmt.Sprintf("%d", prNumber)),
 				}
 
 				config.CreatedPRs = append(config.CreatedPRs, pr)
-				config.PRs[*newPR.Head] = pr
+				config.PRs[newPR.Head] = pr
 
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusCreated)

@@ -1,7 +1,7 @@
 package testhelpers
 
 import (
-	"github.com/google/go-github/v89/github"
+	"github.com/google/go-github/v90/github"
 )
 
 // prStateClosed is the GitHub API state for closed PRs

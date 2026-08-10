@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-github/v89/github"
+	"github.com/google/go-github/v90/github"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"

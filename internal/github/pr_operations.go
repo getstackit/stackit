@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v89/github"
+	"github.com/google/go-github/v90/github"
 	"golang.org/x/oauth2"
 )
 
@@ -91,10 +91,10 @@ func applyPRMetadata(ctx context.Context, client *github.Client, repo Repo, prNu
 // Returns warnings (non-fatal issues like failed label/assignee additions) and error,
 // matching the same contract as UpdatePullRequest.
 func CreatePullRequest(ctx context.Context, client *github.Client, repo Repo, opts CreatePROptions) ([]string, *github.PullRequest, error) {
-	pr := &github.NewPullRequest{
+	pr := github.CreatePullRequest{
 		Title: new(opts.Title),
-		Head:  new(opts.Head),
-		Base:  new(opts.Base),
+		Head:  opts.Head,
+		Base:  opts.Base,
 		Draft: new(opts.Draft),
 	}
 

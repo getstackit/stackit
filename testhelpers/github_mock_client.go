@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/google/go-github/v89/github"
+	"github.com/google/go-github/v90/github"
 
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/utils"
@@ -37,10 +37,10 @@ func (c *MockGitHubClient) Repo() githubpkg.Repo {
 
 // CreatePullRequest creates a new pull request
 func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, opts githubpkg.CreatePROptions) (*githubpkg.PullRequestInfo, error) {
-	pr := &github.NewPullRequest{
+	pr := github.CreatePullRequest{
 		Title: new(opts.Title),
-		Head:  new(opts.Head),
-		Base:  new(opts.Base),
+		Head:  opts.Head,
+		Base:  opts.Base,
 		Draft: new(opts.Draft),
 	}
 

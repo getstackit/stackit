@@ -11,21 +11,39 @@ import (
 	"github.com/getstackit/stackit/internal/github"
 )
 
+// getOpenPRInfo fetches PR info for a branch and validates it exists and is open.
+func getOpenPRInfo(eng mergeExecuteEngine, branchName string) (*engine.PrInfo, error) {
+	prInfo, err := getExistingPRInfo(eng, branchName)
+	if err != nil {
+		return nil, err
+	}
+	if prInfo.State() != git.PRStateOpen {
+		return nil, fmt.Errorf("PR #%d for branch %s is %s (not open)", *prInfo.Number(), branchName, prInfo.State())
+	}
+	return prInfo, nil
+}
+
+// getExistingPRInfo fetches PR info for a branch and validates it exists.
+func getExistingPRInfo(eng mergeExecuteEngine, branchName string) (*engine.PrInfo, error) {
+	branch := eng.GetBranch(branchName)
+	prInfo, err := branch.GetPrInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR info: %w", err)
+	}
+	if prInfo == nil || prInfo.Number() == nil {
+		return nil, fmt.Errorf("PR not found for branch %s", branchName)
+	}
+	return prInfo, nil
+}
+
 // validateStepPreconditions validates that a step can be executed
 func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExecuteEngine, githubClient github.Client, opts ExecuteOptions) error {
 	switch step.StepType {
 	case StepMergePR:
 		// Validate PR still exists and is open
-		branch := eng.GetBranch(step.BranchName)
-		prInfo, err := branch.GetPrInfo()
+		prInfo, err := getOpenPRInfo(eng, step.BranchName)
 		if err != nil {
-			return fmt.Errorf("failed to get PR info: %w", err)
-		}
-		if prInfo == nil || prInfo.Number() == nil {
-			return fmt.Errorf("PR not found for branch %s", step.BranchName)
-		}
-		if prInfo.State() != git.PRStateOpen {
-			return fmt.Errorf("PR #%d for branch %s is %s (not open)", *prInfo.Number(), step.BranchName, prInfo.State())
+			return err
 		}
 		// Optionally check CI checks haven't changed to failing or pending
 		if !opts.Force && githubClient != nil {
@@ -53,13 +71,8 @@ func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExec
 
 	case StepUpdatePRBase:
 		// Validate PR exists
-		branch := eng.GetBranch(step.BranchName)
-		prInfo, err := branch.GetPrInfo()
-		if err != nil {
-			return fmt.Errorf("failed to get PR info: %w", err)
-		}
-		if prInfo == nil || prInfo.Number() == nil {
-			return fmt.Errorf("PR not found for branch %s", step.BranchName)
+		if _, err := getExistingPRInfo(eng, step.BranchName); err != nil {
+			return err
 		}
 
 	case StepPullTrunk:
@@ -67,16 +80,8 @@ func validateStepPreconditions(ctx context.Context, step PlanStep, eng mergeExec
 
 	case StepWaitCI:
 		// Validate PR exists and is open
-		branch := eng.GetBranch(step.BranchName)
-		prInfo, err := branch.GetPrInfo()
-		if err != nil {
-			return fmt.Errorf("failed to get PR info: %w", err)
-		}
-		if prInfo == nil || prInfo.Number() == nil {
-			return fmt.Errorf("PR not found for branch %s", step.BranchName)
-		}
-		if prInfo.State() != git.PRStateOpen {
-			return fmt.Errorf("PR #%d for branch %s is %s (not open)", *prInfo.Number(), step.BranchName, prInfo.State())
+		if _, err := getOpenPRInfo(eng, step.BranchName); err != nil {
+			return err
 		}
 	}
 

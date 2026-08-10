@@ -19,7 +19,7 @@ func TestEnsureCanModifyHere(t *testing.T) {
 	s.CreateBranch("feature").Commit("feature change")
 	s.TrackBranch("feature", "main")
 	worktreePath := t.TempDir()
-	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreePath, "feature-wt"))
+	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreePath), Name: "feature-wt"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	t.Run("refuses managed stack mutation from main repository", func(t *testing.T) {
@@ -38,7 +38,7 @@ func TestEnsureCanModifyHere(t *testing.T) {
 		gone.CreateBranch("feature").Commit("feature change")
 		gone.TrackBranch("feature", "main")
 		missing := filepath.Join(t.TempDir(), "deleted-worktree")
-		require.NoError(t, gone.Engine.RegisterWorktreeWithName(context.Background(), "feature", missing, "feature-wt"))
+		require.NoError(t, gone.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(missing), Name: "feature-wt"}))
 
 		err := EnsureCanModifyHere(gone.Context, gone.Engine.GetBranch("feature"))
 		require.Error(t, err)
@@ -52,7 +52,7 @@ func TestEnsureCanModifyHere(t *testing.T) {
 		ctx.InManagedWorktree = true
 		ctx.WorktreeInfo = &engine.WorktreeInfo{
 			Name:         "feature-wt",
-			Path:         worktreePath,
+			Path:         engine.WorktreePath(worktreePath),
 			AnchorBranch: "feature",
 		}
 		require.NoError(t, EnsureCanModifyHere(&ctx, s.Engine.GetBranch("feature")))
@@ -63,7 +63,7 @@ func TestEnsureCanModifyHere(t *testing.T) {
 		ctx.InManagedWorktree = true
 		ctx.WorktreeInfo = &engine.WorktreeInfo{
 			Name:         "feature-wt",
-			Path:         worktreePath,
+			Path:         engine.WorktreePath(worktreePath),
 			AnchorBranch: "feature",
 			MainRepoDir:  s.Context.RepoRoot,
 		}

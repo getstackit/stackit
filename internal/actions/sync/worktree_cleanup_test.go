@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
@@ -24,7 +25,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		s.TrackBranch("feature-branch", "main")
 
 		// Register a fake worktree for this branch (we won't actually create the worktree dir)
-		err := s.Engine.RegisterWorktree(context.Background(), "feature-branch", "/tmp/fake-worktree-path")
+		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-branch", Path: "/tmp/fake-worktree-path"})
 		require.NoError(t, err)
 
 		// Verify worktree is registered
@@ -57,7 +58,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		s.TrackBranch("feature-branch", "main")
 
 		// Register a worktree for this branch
-		err := s.Engine.RegisterWorktree(context.Background(), "feature-branch", "/tmp/fake-worktree-path")
+		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-branch", Path: "/tmp/fake-worktree-path"})
 		require.NoError(t, err)
 
 		// Go back to main and run sync
@@ -79,7 +80,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		worktreePath := filepath.Join(t.TempDir(), "not-a-git-worktree")
 		require.NoError(t, os.MkdirAll(worktreePath, 0o755))
 
-		err := s.Engine.RegisterWorktree(context.Background(), "missing-anchor", worktreePath)
+		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "missing-anchor", Path: engine.WorktreePath(worktreePath)})
 		require.NoError(t, err)
 
 		handler := &sync.NullHandler{}
@@ -91,7 +92,7 @@ func TestSyncCleansOrphanedWorktrees(t *testing.T) {
 		assert.NotNil(t, wt, "registration should be preserved when physical worktree removal fails")
 		canonicalWorktreePath, err := filepath.EvalSymlinks(worktreePath)
 		require.NoError(t, err)
-		canonicalRegisteredPath, err := filepath.EvalSymlinks(wt.Path)
+		canonicalRegisteredPath, err := filepath.EvalSymlinks(wt.Path.String())
 		require.NoError(t, err)
 		assert.Equal(t, canonicalWorktreePath, canonicalRegisteredPath)
 	})

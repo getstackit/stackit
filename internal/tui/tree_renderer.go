@@ -261,7 +261,7 @@ func addWorktreeInfo(eng engine.Engine, branch engine.Branch, ann *tree.BranchAn
 	if wtData != nil {
 		if wtInfo, ok := wtData.EmptyWorktrees[branch.GetName()]; ok {
 			ann.IsEmptyWorktree = true
-			ann.WorktreePath = wtInfo.Path
+			ann.WorktreePath = wtInfo.Path.String()
 			return
 		}
 	}
@@ -270,10 +270,10 @@ func addWorktreeInfo(eng engine.Engine, branch engine.Branch, ann *tree.BranchAn
 	// Use pre-built map if available, otherwise fall back to engine call.
 	if wtData != nil {
 		if wtInfo, ok := wtData.WorktreeByStackRoot[stackRoot]; ok {
-			ann.WorktreePath = wtInfo.Path
+			ann.WorktreePath = wtInfo.Path.String()
 		}
 	} else if wtInfo, err := eng.GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
-		ann.WorktreePath = wtInfo.Path
+		ann.WorktreePath = wtInfo.Path.String()
 	}
 }
 

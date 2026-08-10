@@ -297,21 +297,56 @@ type WorktreeOperations interface {
 	PruneOrphanedWorktreePathRefs(ctx context.Context) (int, error)
 }
 
+// WorktreeName identifies a Stackit-managed worktree's user-facing name.
+type WorktreeName string
+
+func (n WorktreeName) String() string { return string(n) }
+
+// WorktreePath identifies a Stackit-managed worktree checkout.
+type WorktreePath string
+
+func (p WorktreePath) String() string { return string(p) }
+
+// WorktreeRegistration identifies the metadata needed to register a managed
+// worktree. Keeping these fields together prevents anchor, path, and display
+// name from being passed as unrelated primitive arguments.
+type WorktreeRegistration struct {
+	AnchorBranch string
+	Path         WorktreePath
+	Name         WorktreeName
+}
+
 // WorktreeInfo represents information about a stackit-managed worktree
 type WorktreeInfo struct {
-	Name         string    // User-provided name for display
-	Path         string    // Absolute path to worktree
-	AnchorBranch string    // Hidden worktree anchor branch name
-	CreatedAt    time.Time // When worktree was created
-	MainRepoDir  string    // Path to main repo
+	Name         WorktreeName // User-provided name for display
+	Path         WorktreePath // Absolute path to worktree
+	AnchorBranch string       // Hidden worktree anchor branch name
+	CreatedAt    time.Time    // When worktree was created
+	MainRepoDir  string       // Path to main repo
+}
+
+// DisplayName returns the user-provided worktree name, falling back to its
+// anchor when the registration predates named worktrees.
+func (w WorktreeInfo) DisplayName() string {
+	if w.Name != "" {
+		return w.Name.String()
+	}
+	return w.AnchorBranch
+}
+
+// Registration returns the mutable registration identity for this worktree.
+func (w WorktreeInfo) Registration() WorktreeRegistration {
+	return WorktreeRegistration{
+		AnchorBranch: w.AnchorBranch,
+		Path:         w.Path,
+		Name:         w.Name,
+	}
 }
 
 // WorktreeRegistry handles stackit-managed worktree tracking
 type WorktreeRegistry interface {
-	// RegisterWorktree registers a worktree for a stack root
-	RegisterWorktree(ctx context.Context, stackRoot string, path string) error
-	// RegisterWorktreeWithName registers a worktree with a user-friendly name
-	RegisterWorktreeWithName(ctx context.Context, anchorBranch string, path string, name string) error
+	// RegisterWorktree registers a managed worktree.
+	RegisterWorktree(ctx context.Context, registration WorktreeRegistration) error
 	// UnregisterWorktree removes worktree registration for a stack root
 	UnregisterWorktree(ctx context.Context, stackRoot string) error
 	// GetWorktreeForStack returns worktree info for a stack root, or nil if none

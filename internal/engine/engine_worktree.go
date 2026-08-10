@@ -236,14 +236,9 @@ func (e *engineImpl) addWorktreeWithRetryLocked(ctx context.Context, path string
 	return fmt.Errorf("failed to add worktree at %s after prune retry: %w", path, retryErr)
 }
 
-// RegisterWorktree registers a worktree for a stack root in local git refs
-func (e *engineImpl) RegisterWorktree(ctx context.Context, stackRoot string, path string) error {
-	return e.RegisterWorktreeWithName(ctx, stackRoot, path, "")
-}
-
-// RegisterWorktreeWithName registers a worktree with a user-friendly name
-func (e *engineImpl) RegisterWorktreeWithName(ctx context.Context, anchorBranch string, path string, name string) error {
-	absPath, err := filepath.Abs(path)
+// RegisterWorktree registers a managed worktree in local Git refs.
+func (e *engineImpl) RegisterWorktree(ctx context.Context, registration WorktreeRegistration) error {
+	absPath, err := filepath.Abs(registration.Path.String())
 	if err != nil {
 		return fmt.Errorf("failed to get absolute worktree path: %w", err)
 	}
@@ -252,10 +247,10 @@ func (e *engineImpl) RegisterWorktreeWithName(ctx context.Context, anchorBranch 
 		return fmt.Errorf("failed to canonicalize worktree path: %w", err)
 	}
 
-	if existing, err := e.GetWorktreeForStack(anchorBranch); err != nil {
+	if existing, err := e.GetWorktreeForStack(registration.AnchorBranch); err != nil {
 		return fmt.Errorf("failed to check existing worktree registration: %w", err)
 	} else if existing != nil {
-		return fmt.Errorf("worktree anchor %s is already registered at %s", anchorBranch, existing.Path)
+		return fmt.Errorf("worktree anchor %s is already registered at %s", registration.AnchorBranch, existing.Path)
 	}
 
 	worktrees, err := e.ListManagedWorktrees()
@@ -263,24 +258,24 @@ func (e *engineImpl) RegisterWorktreeWithName(ctx context.Context, anchorBranch 
 		return fmt.Errorf("failed to list worktree registrations: %w", err)
 	}
 	for _, worktree := range worktrees {
-		worktreePath, pathErr := git.CanonicalWorktreePath(worktree.Path)
+		worktreePath, pathErr := git.CanonicalWorktreePath(worktree.Path.String())
 		if pathErr != nil {
 			return fmt.Errorf("failed to canonicalize registered worktree path %s: %w", worktree.Path, pathErr)
 		}
-		if worktreePath == canonicalPath && worktree.AnchorBranch != anchorBranch {
+		if worktreePath == canonicalPath && worktree.AnchorBranch != registration.AnchorBranch {
 			return fmt.Errorf("worktree path %s is already registered to anchor %s", absPath, worktree.AnchorBranch)
 		}
 	}
 
 	meta := &git.WorktreeMeta{
-		Name:         name,
+		Name:         registration.Name.String(),
 		Path:         absPath,
-		AnchorBranch: anchorBranch,
+		AnchorBranch: registration.AnchorBranch,
 		CreatedAt:    timeNow(),
 		MainRepoDir:  e.repoRoot,
 	}
 
-	return e.git.WriteWorktreeMeta(ctx, anchorBranch, meta)
+	return e.git.WriteWorktreeMeta(ctx, registration.AnchorBranch, meta)
 }
 
 // UnregisterWorktree removes worktree registration for a stack root
@@ -299,8 +294,8 @@ func (e *engineImpl) GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error
 	}
 
 	return &WorktreeInfo{
-		Name:         meta.Name,
-		Path:         meta.Path,
+		Name:         WorktreeName(meta.Name),
+		Path:         WorktreePath(meta.Path),
 		AnchorBranch: meta.AnchorBranch,
 		CreatedAt:    meta.CreatedAt,
 		MainRepoDir:  meta.MainRepoDir,
@@ -345,8 +340,8 @@ func (e *engineImpl) ListManagedWorktrees() ([]WorktreeInfo, error) {
 	for _, k := range keys {
 		meta := metas[k]
 		result = append(result, WorktreeInfo{
-			Name:         meta.Name,
-			Path:         meta.Path,
+			Name:         WorktreeName(meta.Name),
+			Path:         WorktreePath(meta.Path),
 			AnchorBranch: meta.AnchorBranch,
 			CreatedAt:    meta.CreatedAt,
 			MainRepoDir:  meta.MainRepoDir,
@@ -443,7 +438,7 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 	}
 
 	for _, wt := range worktrees {
-		wtPath, err := git.CanonicalWorktreePath(wt.Path)
+		wtPath, err := git.CanonicalWorktreePath(wt.Path.String())
 		if err != nil {
 			continue
 		}

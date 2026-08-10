@@ -345,13 +345,13 @@ func TestCreateAction_Worktree(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, worktreeInfo)
 		require.Equal(t, stackRoot, worktreeInfo.AnchorBranch)
-		require.Contains(t, worktreeInfo.Path, "feature-branch")
+		require.Contains(t, worktreeInfo.Path.String(), "feature-branch")
 
 		require.True(t, eng.GetBranch(stackRoot).IsWorktreeAnchor())
 		require.Equal(t, stackRoot, eng.GetBranch("feature-branch").GetParent().GetName())
 
 		// Clean up worktree
-		_ = eng.RemoveWorktree(s.Context.Context, worktreeInfo.Path)
+		_ = eng.RemoveWorktree(s.Context.Context, worktreeInfo.Path.String())
 		_ = eng.UnregisterWorktree(s.Context.Context, stackRoot)
 	})
 

@@ -314,7 +314,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 				h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
 				out.Warn("Created %s, but could not create its worktree: %v", output.BranchName(branchName), err)
 			} else {
-				worktreePath = created.Path
+				worktreePath = created.Path.String()
 				h.OnStep(StepWorktree, handler.StatusCompleted, fmt.Sprintf("Created worktree at %s", worktreePath))
 				out.Info("Created worktree at %s", worktreePath)
 

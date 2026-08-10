@@ -48,26 +48,19 @@ func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 		// whose directory was deleted leaves the branch owned by a path the
 		// user cannot go to, and the way out is detaching the registration —
 		// not a cd that will fail.
-		if _, statErr := os.Stat(owner.Path); statErr != nil {
+		if _, statErr := os.Stat(owner.Path.String()); statErr != nil {
 			if os.IsNotExist(statErr) {
 				return fmt.Errorf("branch %s belongs to worktree %s, whose directory no longer exists (%s); run 'stackit worktree detach %s' to release it, or 'stackit worktree list' to review",
-					branchName, worktreeDisplayName(owner), owner.Path, worktreeDisplayName(owner))
+					branchName, owner.DisplayName(), owner.Path, owner.DisplayName())
 			}
 			return fmt.Errorf("branch %s belongs to worktree %s, which cannot be inspected at %s: %w; 'stackit worktree list' shows the current state",
-				branchName, worktreeDisplayName(owner), owner.Path, statErr)
+				branchName, owner.DisplayName(), owner.Path, statErr)
 		}
 
-		return fmt.Errorf("branch %s belongs to worktree %s; run this command from there: cd %s", branchName, worktreeDisplayName(owner), owner.Path)
+		return fmt.Errorf("branch %s belongs to worktree %s; run this command from there: cd %s", branchName, owner.DisplayName(), owner.Path)
 	}
 
 	return nil
-}
-
-func worktreeDisplayName(worktree *engine.WorktreeInfo) string {
-	if worktree.Name != "" {
-		return worktree.Name
-	}
-	return worktree.AnchorBranch
 }
 
 // EnsureCanModifyNamesHere is the convenient form for operations that resolve

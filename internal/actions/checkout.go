@@ -101,7 +101,7 @@ func CheckoutAction(ctx *app.Context, opts CheckoutOptions, handler CheckoutHand
 		wtInfo, _ := eng.GetWorktreeForStack(branchName)
 		displayName := branchName
 		if wtInfo != nil && wtInfo.Name != "" {
-			displayName = wtInfo.Name
+			displayName = wtInfo.Name.String()
 		}
 		return CheckoutResult{}, fmt.Errorf("cannot check out worktree anchor branch directly; use 'cd $(stackit worktree open %s)' to enter the worktree", displayName)
 	}
@@ -229,8 +229,8 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 			// Target is in a different stack - check if that stack has a worktree
 			targetWorktree, err := ctx.Engine.GetWorktreeForStack(targetStackRoot)
 			switch {
-			case err == nil && targetWorktree != nil && worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path):
-				switchTarget = targetWorktree.Path
+			case err == nil && targetWorktree != nil && worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path.String()):
+				switchTarget = targetWorktree.Path.String()
 				targetStack = targetStackRoot
 			default:
 				// Target stack has no usable worktree - switch to main repo
@@ -260,7 +260,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 		return "", nil, nil
 	}
 
-	if !worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path) {
+	if !worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path.String()) {
 		return "", nil, nil
 	}
 
@@ -269,7 +269,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 		fmt.Sprintf("cd %s && stackit co %s", targetWorktree.Path, branchName),
 		"For automatic worktree switching, enable shell integration: eval \"$(stackit shell zsh)\"",
 	}
-	return targetWorktree.Path, []string{"co", branchName}, fallbackTips
+	return targetWorktree.Path.String(), []string{"co", branchName}, fallbackTips
 }
 
 // resolveBranchName resolves a user input to a branch name.

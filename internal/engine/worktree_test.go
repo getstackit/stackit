@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -35,7 +36,7 @@ func TestWorktreeRegistry_StackRootForBranch(t *testing.T) {
 	s.TrackBranch("branch2", "branch1")
 
 	// Register a worktree for branch1 (as if it were the stack root)
-	err := s.Engine.RegisterWorktree(context.Background(), "branch1", "/tmp/test-worktree-branch1")
+	err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "branch1", Path: "/tmp/test-worktree-branch1"})
 	require.NoError(t, err)
 
 	// Stack root for branch2 should be branch1 (the first branch whose parent is trunk)
@@ -61,14 +62,14 @@ func TestWorktreeRegistry_OwningWorktree(t *testing.T) {
 	s.CreateBranch("feature-child").Commit("feature child change")
 	s.TrackBranch("feature-child", "feature")
 
-	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", "/tmp/feature-worktree", "feature"))
+	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	owner, err := s.Engine.OwningWorktree(s.Engine.GetBranch("feature-child"))
 	require.NoError(t, err)
 	require.NotNil(t, owner)
 	assert.Equal(t, "feature", owner.AnchorBranch)
-	assert.Equal(t, "/tmp/feature-worktree", owner.Path)
+	assert.Equal(t, "/tmp/feature-worktree", owner.Path.String())
 
 	owner, err = s.Engine.OwningWorktree(s.Engine.Trunk())
 	require.NoError(t, err)
@@ -79,14 +80,14 @@ func TestWorktreeRegistry_RejectsDuplicatePathAndAnchor(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
-	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature-a", "/tmp/shared-worktree", "feature-a"))
+	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-a", Path: "/tmp/shared-worktree", Name: "feature-a"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature-a") })
 
-	err := s.Engine.RegisterWorktreeWithName(context.Background(), "feature-b", "/tmp/shared-worktree", "feature-b")
+	err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-b", Path: "/tmp/shared-worktree", Name: "feature-b"})
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "already registered to anchor feature-a")
 
-	err = s.Engine.RegisterWorktreeWithName(context.Background(), "feature-a", "/tmp/other-worktree", "feature-a")
+	err = s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-a", Path: "/tmp/other-worktree", Name: "feature-a"})
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "anchor feature-a is already registered")
 }

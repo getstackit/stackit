@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -32,20 +33,43 @@ func TestListAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree
-		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", "/tmp/fake-worktree")
+		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/fake-worktree"})
 		require.NoError(t, err)
 
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, result.Worktrees, 1)
 		require.Equal(t, "feature-stack", result.Worktrees[0].AnchorBranch)
-		require.Equal(t, "/tmp/fake-worktree", result.Worktrees[0].Path)
-		require.False(t, result.Worktrees[0].Exists) // Path doesn't actually exist
-		require.Equal(t, worktree.RegistrationStateInvalid, result.Worktrees[0].RegistrationState)
-		require.True(t, result.Worktrees[0].NeedsRepair)
+		require.Equal(t, "/tmp/fake-worktree", result.Worktrees[0].Path.String())
+		require.Equal(t, worktree.WorktreeMissing, result.Worktrees[0].Lifecycle.Presence) // Path doesn't actually exist
+		require.Equal(t, worktree.RegistrationStateInvalid, result.Worktrees[0].Lifecycle.Registration)
+		require.True(t, result.Worktrees[0].Lifecycle.NeedsRepair())
 
 		// Clean up
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature-stack")
+	})
+
+	t.Run("filters by name or anchor branch", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "first-anchor", Path: engine.WorktreePath(t.TempDir()), Name: "first"}))
+		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "second-anchor", Path: engine.WorktreePath(t.TempDir()), Name: "second"}))
+		t.Cleanup(func() {
+			_ = s.Engine.UnregisterWorktree(s.Context, "first-anchor")
+			_ = s.Engine.UnregisterWorktree(s.Context, "second-anchor")
+		})
+
+		byName, err := worktree.ListAction(s.Context, worktree.ListOptions{Selector: "second"})
+		require.NoError(t, err)
+		require.Len(t, byName.Worktrees, 1)
+		assert.Equal(t, "second-anchor", byName.Worktrees[0].AnchorBranch)
+
+		byAnchor, err := worktree.ListAction(s.Context, worktree.ListOptions{Selector: "first-anchor"})
+		require.NoError(t, err)
+		require.Len(t, byAnchor.Worktrees, 1)
+		assert.Equal(t, "first", byAnchor.Worktrees[0].Name.String())
 	})
 
 	t.Run("marks legacy registrations", func(t *testing.T) {
@@ -57,13 +81,13 @@ func TestListAction(t *testing.T) {
 		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreeDir, "feature"))
+		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "feature"}))
 
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, result.Worktrees, 1)
-		require.Equal(t, worktree.RegistrationStateLegacy, result.Worktrees[0].RegistrationState)
-		require.True(t, result.Worktrees[0].NeedsRepair)
+		require.Equal(t, worktree.RegistrationStateLegacy, result.Worktrees[0].Lifecycle.Registration)
+		require.True(t, result.Worktrees[0].Lifecycle.NeedsRepair())
 		require.Equal(t, []string{"feature"}, result.Worktrees[0].RootBranches)
 
 		_ = s.Engine.UnregisterWorktree(s.Context, "feature")
@@ -78,7 +102,7 @@ func TestListAction(t *testing.T) {
 		s.Checkout("main")
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreeDir, "feature-wt"))
+		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "feature-wt"}))
 		t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 		// Simulate raw `git checkout feature` from the main repository, bypassing
@@ -102,7 +126,7 @@ func TestRemoveAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		err := worktree.RemoveAction(s.Context, worktree.RemoveOptions{
-			AnchorBranch: "nonexistent-stack",
+			Selector: "nonexistent-stack",
 		})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "no worktree found")
@@ -114,7 +138,7 @@ func TestRemoveAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree (path doesn't exist)
-		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", "/tmp/nonexistent-worktree")
+		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-worktree"})
 		require.NoError(t, err)
 
 		// Verify it's registered
@@ -124,7 +148,7 @@ func TestRemoveAction(t *testing.T) {
 
 		// Remove it
 		err = worktree.RemoveAction(s.Context, worktree.RemoveOptions{
-			AnchorBranch: "feature-stack",
+			Selector: "feature-stack",
 		})
 		require.NoError(t, err)
 
@@ -139,11 +163,11 @@ func TestRemoveAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", "/tmp/nonexistent-worktree")
+		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-worktree"})
 		require.NoError(t, err)
 
 		err = worktree.RemoveAction(s.Context, worktree.RemoveOptions{
-			AnchorBranch: "feature-stack",
+			Selector: "feature-stack",
 		})
 		require.NoError(t, err)
 
@@ -162,7 +186,7 @@ func TestOpenAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		_, err := worktree.OpenAction(s.Context, worktree.OpenOptions{
-			AnchorBranch: "nonexistent-stack",
+			Selector: "nonexistent-stack",
 		})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "no worktree found")
@@ -174,11 +198,11 @@ func TestOpenAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree with non-existent path
-		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", "/tmp/nonexistent-path-12345")
+		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-path-12345"})
 		require.NoError(t, err)
 
 		_, err = worktree.OpenAction(s.Context, worktree.OpenOptions{
-			AnchorBranch: "feature-stack",
+			Selector: "feature-stack",
 		})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "does not exist")
@@ -194,16 +218,16 @@ func TestOpenAction(t *testing.T) {
 
 		// Use a path that exists (the repo root)
 		repoRoot := s.Context.RepoRoot
-		err := s.Engine.RegisterWorktree(context.Background(), "feature-stack", repoRoot)
+		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: engine.WorktreePath(repoRoot)})
 		require.NoError(t, err)
 
 		path, err := worktree.OpenAction(s.Context, worktree.OpenOptions{
-			AnchorBranch: "feature-stack",
+			Selector: "feature-stack",
 		})
 		require.NoError(t, err)
 		canonicalRepoRoot, err := filepath.EvalSymlinks(repoRoot)
 		require.NoError(t, err)
-		canonicalPath, err := filepath.EvalSymlinks(path)
+		canonicalPath, err := filepath.EvalSymlinks(path.String())
 		require.NoError(t, err)
 		require.Equal(t, canonicalRepoRoot, canonicalPath)
 
@@ -236,7 +260,7 @@ func TestCreateAction(t *testing.T) {
 		require.True(t, parent.IsTrunk())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
+		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path.String())
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -283,7 +307,7 @@ func TestCreateAction(t *testing.T) {
 		require.Contains(t, err.Error(), "already exists")
 
 		// Clean up
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
+		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path.String())
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -315,7 +339,7 @@ func TestCreateAction(t *testing.T) {
 		require.True(t, parent.IsTrunk())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
+		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path.String())
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -337,7 +361,7 @@ func TestCreateAction(t *testing.T) {
 		require.Equal(t, "backend", scope.String())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
+		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path.String())
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 }
@@ -354,9 +378,9 @@ func TestRepairAction(t *testing.T) {
 		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreeDir, "legacy-wt"))
+		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "legacy-wt"}))
 
-		result, err := worktree.RepairAction(s.Context, worktree.RepairOptions{NameOrBranch: "legacy-wt"})
+		result, err := worktree.RepairAction(s.Context, worktree.RepairOptions{Selector: "legacy-wt"})
 		require.NoError(t, err)
 		require.Len(t, result.Repaired, 1)
 		require.Equal(t, "converted legacy registration to hidden anchor", result.Repaired[0].Action)
@@ -372,7 +396,7 @@ func TestRepairAction(t *testing.T) {
 		require.NotNil(t, repaired)
 		canonicalWorktreeDir, err := filepath.EvalSymlinks(worktreeDir)
 		require.NoError(t, err)
-		canonicalRepairedPath, err := filepath.EvalSymlinks(repaired.Path)
+		canonicalRepairedPath, err := filepath.EvalSymlinks(repaired.Path.String())
 		require.NoError(t, err)
 		require.Equal(t, canonicalWorktreeDir, canonicalRepairedPath)
 		require.True(t, s.Engine.GetBranch(result.Repaired[0].AnchorBranch).IsWorktreeAnchor())

@@ -12,9 +12,9 @@ import (
 // Session represents an active worktree session that can be used to execute operations.
 // The caller must call Close() when done to clean up the worktree.
 type Session struct {
-	Path    string        // Path to the worktree directory
-	Engine  engine.Engine // Engine initialized for the worktree
-	cleanup func()        // Internal cleanup function
+	Path    engine.WorktreePath // Path to the worktree directory
+	Engine  engine.Engine       // Engine initialized for the worktree
+	cleanup func()              // Internal cleanup function
 	output  output.Output
 }
 
@@ -86,7 +86,7 @@ func (e *Executor) CreateSession(ctx context.Context, opts CreateSessionOptions)
 	}
 
 	session := &Session{
-		Path:    worktreePath,
+		Path:    engine.WorktreePath(worktreePath),
 		Engine:  worktreeEng,
 		cleanup: cleanup,
 		output:  e.output,

@@ -149,7 +149,7 @@ func (c *Combiner) FindLargestCompatible(ctx context.Context, stacks []Stack, op
 		}
 
 		if opts.RunLocalCI && c.validator.IsConfigured() {
-			ciErr := c.validator.Validate(ctx, session.Path)
+			ciErr := c.validator.Validate(ctx, session.Path.String())
 			passed := ciErr == nil
 			result.LocalCIPassed = &passed
 			if ciErr != nil {
@@ -198,7 +198,7 @@ func (c *Combiner) FindLargestCompatible(ctx context.Context, stacks []Stack, op
 
 		// Optionally run CI
 		if opts.RunLocalCI && c.validator.IsConfigured() {
-			if ciErr := c.validator.Validate(ctx, session.Path); ciErr != nil {
+			if ciErr := c.validator.Validate(ctx, session.Path.String()); ciErr != nil {
 				excluded = append(excluded, ExcludedStack{
 					Stack:  stackMap[stack.RootBranch],
 					Reason: ReasonLocalCIFailed,
@@ -250,7 +250,7 @@ func (c *Combiner) tryMergeStacks(
 	result := &merge.MultiStackWorktreeResult{
 		MergedStacks:   make([]merge.MultiStackInfo, 0),
 		ConflictStacks: make([]merge.MultiStackExcluded, 0),
-		WorktreePath:   session.Path,
+		WorktreePath:   session.Path.String(),
 		WorktreeEngine: session.Engine,
 	}
 

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/split"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -41,7 +42,7 @@ func TestRunWizardRefusesBranchOwnedByAnotherWorktree(t *testing.T) {
 	s.Checkout("feature")
 
 	worktreePath := t.TempDir()
-	require.NoError(t, s.Engine.RegisterWorktreeWithName(context.Background(), "feature", worktreePath, "feature-wt"))
+	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreePath), Name: "feature-wt"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	err := split.RunWizard(s.Context, guardOnlyHandler{}, split.WizardOptions{})

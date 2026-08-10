@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/google/go-github/v89/github"
+	"github.com/google/go-github/v90/github"
 )
 
 // appHTTPTimeout is the client-level ceiling for GitHub App HTTP calls

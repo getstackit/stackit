@@ -1,7 +1,13 @@
 package integration
 
 import (
+	"context"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/testhelpers"
 )
 
 // TestReparentDivergencePreservation tests that reparenting operations
@@ -32,6 +38,23 @@ func TestReparentDivergencePreservation(t *testing.T) {
 		sh.Checkout("c")
 		sh.Run("restack")
 		sh.CommitCount("a", "c", 1)
+	})
+
+	t.Run("linear stack deletes a merged middle branch", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t)
+		sh.Run("config set stack.shape linear").CreateLinearStack3()
+
+		eng, err := engine.NewEngine(engine.Options{
+			RepoRoot:     sh.Dir(),
+			Trunk:        "main",
+			LinearStacks: true,
+		})
+		require.NoError(t, err)
+		require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("b"), testhelpers.NewTestPrInfoMerged(1, "a")))
+
+		sh.Run("delete b")
+		sh.ExpectBranchParent("c", "a")
 	})
 
 	t.Run("delete branch with multiple children preserves commit counts", func(t *testing.T) {

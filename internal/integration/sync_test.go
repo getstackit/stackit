@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -711,6 +713,41 @@ func TestSquashMergeMiddleOfStack(t *testing.T) {
 
 	// C keeps its own commits — A's squash content shouldn't replay into C.
 	require.Equal(t, 1, sh.BranchCommitCount("branch-c"))
+}
+
+func TestSyncLinearStackDeletesMergedMiddleBranch(t *testing.T) {
+	t.Parallel()
+	sh := scenario.NewRemoteScenario(t)
+	disableCommitSigning(t, sh)
+
+	// main -> a -> b -> c, with b squash-merged onto a.
+	sh.CreateBranch("a").CommitChange("a.txt", "a").TrackBranch("a", "main")
+	sh.CreateBranch("b").CommitChange("b.txt", "b").TrackBranch("b", "a")
+	sh.CreateBranch("c").CommitChange("c.txt", "c").TrackBranch("c", "b")
+	sh.Checkout("a").CommitChange("b.txt", "b")
+	markPrMerged(t, sh, "b", 2, "a")
+
+	// Recreate the action context from stack.shape, as the CLI does.
+	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "--local", "stackit.stack.shape", config.StackShapeLinear))
+	cfg, err := config.LoadConfig(sh.Scene.Dir)
+	require.NoError(t, err)
+	linearEngine, err := engine.NewEngine(engine.Options{
+		RepoRoot:     sh.Scene.Dir,
+		Trunk:        cfg.Trunk(),
+		LinearStacks: cfg.StackShape() == config.StackShapeLinear,
+	})
+	require.NoError(t, err)
+	sh.Engine = linearEngine
+	sh.Context.Engine = linearEngine
+
+	sh.Checkout("main")
+	require.NoError(t, sync.Action(sh.Context, sync.Options{Restack: true}, nil))
+
+	branches, err := sh.Scene.Repo.GetLocalBranches()
+	require.NoError(t, err)
+	require.NotContains(t, branches, "b")
+	require.Equal(t, "a", sh.Engine.GetBranch("c").GetParent().GetName())
+	require.Equal(t, 1, sh.BranchCommitCount("c"))
 }
 
 // TestSquashMergeMultipleAdjacentMergedInOneSync covers when both A and B

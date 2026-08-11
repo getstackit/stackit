@@ -89,6 +89,14 @@ func (p *deletionPlan) isDeleting(name string) bool {
 	return ok
 }
 
+func (p *deletionPlan) branchNames() []string {
+	names := make([]string, 0, len(p.branches))
+	for name := range p.branches {
+		names = append(names, name)
+	}
+	return names
+}
+
 func (p *deletionPlan) removeBlocker(branchName, blockerName string) {
 	if info, ok := p.branches[branchName]; ok {
 		delete(info.blockers, blockerName)
@@ -184,7 +192,7 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 		reasons[name] = info.reason
 	}
 
-	if err := applyReparentMoves(ctx, reparentMoves); err != nil {
+	if err := applyReparentMoves(ctx, reparentMoves, plan.branchNames()); err != nil {
 		return nil, err
 	}
 
@@ -570,7 +578,6 @@ func planReparentIfNecessary(branch engine.Branch, plan *deletionPlan, eng engin
 
 	// If parent changed, update it
 	if newParentName != parentName {
-		reparentOpts := buildReparentOptions(plan, parentName)
 		out.Debug("Planned parent update for %s from %s to %s.", branchName, parentName, newParentName)
 
 		// Remove this branch as a blocker for its old parent in the plan
@@ -578,22 +585,11 @@ func planReparentIfNecessary(branch engine.Branch, plan *deletionPlan, eng engin
 		return &plannedReparentMove{
 			branchName:         branchName,
 			newParentName:      newParentName,
-			preserveDivergence: reparentOpts.preserveDivergence,
+			preserveDivergence: shouldPreserveDivergenceOnReparent(plan, parentName),
 		}
 	}
 
 	return nil
-}
-
-type reparentOptions struct {
-	// Preserve existing divergence point when changing parent.
-	preserveDivergence bool
-}
-
-func buildReparentOptions(plan *deletionPlan, oldParentName string) reparentOptions {
-	return reparentOptions{
-		preserveDivergence: shouldPreserveDivergenceOnReparent(plan, oldParentName),
-	}
 }
 
 // Preserve divergence when old parent is being removed as merged/empty.
@@ -612,27 +608,28 @@ func shouldPreserveDivergenceOnReparent(plan *deletionPlan, oldParentName string
 	}
 }
 
-func applyReparent(ctx context.Context, eng engine.Engine, branch engine.Branch, newParentName string, opts reparentOptions) error {
-	newParent := eng.GetBranch(newParentName)
-	if opts.preserveDivergence {
-		return eng.ReparentBranch(ctx, branch, newParent)
-	}
-	return eng.SetParent(ctx, branch, newParent, engine.DivergenceRecompute)
-}
-
-func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove) error {
+func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove, removed []string) error {
 	if len(moves) == 0 {
 		return nil
 	}
 
 	eng := ctx.Engine
-	for _, move := range moves {
-		branch := eng.GetBranch(move.branchName)
-		if err := applyReparent(ctx.Context, eng, branch, move.newParentName, reparentOptions{
-			preserveDivergence: move.preserveDivergence,
-		}); err != nil {
-			return fmt.Errorf("failed to set parent for %s: %w", move.branchName, err)
+	updates := make([]engine.BranchParentUpdate, len(moves))
+	for i, move := range moves {
+		mode := engine.DivergenceRecompute
+		if move.preserveDivergence {
+			mode = engine.DivergencePreserve
 		}
+		updates[i] = engine.BranchParentUpdate{
+			Branch:    move.branchName,
+			NewParent: move.newParentName,
+			Mode:      mode,
+		}
+	}
+	if err := eng.ApplyParentUpdatesAfterRemovals(ctx.Context, updates, removed); err != nil {
+		return fmt.Errorf("failed to set parent updates: %w", err)
+	}
+	for _, move := range moves {
 		ctx.Output.Info("Set parent of %s to %s.",
 			output.BranchName(move.branchName),
 			output.BranchName(move.newParentName))

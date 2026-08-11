@@ -281,7 +281,15 @@ func preReparentChildrenWithPreservedDivergence(ctx *app.Context, toDelete engin
 	// Apply every pre-reparent in one batch; divergence points are captured
 	// before any mutation.
 	if len(moves) > 0 {
-		if err := eng.ReparentBranchesToParents(gctx, moves); err != nil {
+		updates := make([]engine.BranchParentUpdate, len(moves))
+		for i, move := range moves {
+			updates[i] = engine.BranchParentUpdate{
+				Branch:    move.Branch,
+				NewParent: move.NewParent,
+				Mode:      engine.DivergencePreserve,
+			}
+		}
+		if err := eng.ApplyParentUpdatesAfterRemovals(gctx, updates, toDelete.Names()); err != nil {
 			return nil, fmt.Errorf("failed to pre-reparent children: %w", err)
 		}
 	}

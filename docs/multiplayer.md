@@ -246,6 +246,7 @@ engine snapshot and from sync's gate — see "What holds a branch" above.
 
 **Source**: `internal/engine/engine_sync.go` (hold set construction),
 `internal/engine/restack_impl.go` (`holdBranch`, `branchHeldBack`),
+`internal/actions/worktree_holds.go` (restack command hold detection), and
 `internal/actions/restack.go` (`skipDirtyWorktreeStacks`, `heldWorktreeReason`).
 
 ## Performance: keep the squash scan cold

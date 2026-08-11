@@ -80,6 +80,35 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 	return result, nil
 }
 
+// AnalyzeAllLocal analyzes stacks using only locally cached metadata. It never
+// contacts the forge or lists remote refs, which makes it suitable for views
+// that must remain responsive and useful while offline.
+func (a *Analyzer) AnalyzeAllLocal() (*AnalysisResult, error) {
+	stacks, err := merge.DiscoverStacks(a.eng)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &AnalysisResult{Stacks: make([]Stack, 0, len(stacks))}
+	for _, stack := range stacks {
+		analyzed := a.analyzeStackLocal(stack)
+		result.Stacks = append(result.Stacks, analyzed)
+
+		switch analyzed.Status {
+		case StatusShippable:
+			result.ShippableCount++
+		case StatusPending:
+			result.PendingCount++
+		case StatusBlocked:
+			result.BlockedCount++
+		case StatusIncomplete:
+			result.IncompleteCount++
+		}
+	}
+
+	return result, nil
+}
+
 // AnalyzeStack analyzes a single stack for shippability.
 // This can be used when you already have a stack and status information.
 func (a *Analyzer) AnalyzeStack(ctx context.Context, stack merge.MultiStackInfo) (*Stack, error) {
@@ -176,6 +205,46 @@ func (a *Analyzer) analyzeStack(stack merge.MultiStackInfo, statusMap github.Che
 	// Determine overall status
 	result.Status = determineStatus(result)
 
+	return result
+}
+
+// analyzeStackLocal reports only the state that local branch metadata can
+// establish: whether every branch has a non-draft PR. Forge and remote status
+// are deliberately left for callers that explicitly opt into them.
+func (a *Analyzer) analyzeStackLocal(stack merge.MultiStackInfo) Stack {
+	result := Stack{
+		Stack:       stack,
+		ApprovalOK:  true,
+		GitHubCIOK:  true,
+		BlockingPRs: make([]BlockingPR, 0),
+	}
+
+	if stack.RootBranch != "" {
+		rootBranch := a.eng.GetBranch(stack.RootBranch)
+		if prInfo, err := rootBranch.GetPrInfo(); err == nil && prInfo != nil && prInfo.Title() != "" {
+			result.PRTitle = prInfo.Title()
+		} else {
+			result.PRTitle = rootBranch.DefaultPRTitle()
+		}
+	}
+
+	for _, branchName := range stack.AllBranches {
+		branch := a.eng.GetBranch(branchName)
+		prInfo, err := branch.GetPrInfo()
+		if err != nil || prInfo == nil || prInfo.Number() == nil {
+			result.BlockingPRs = append(result.BlockingPRs, BlockingPR{Branch: branchName, Reason: ReasonNoPR})
+			continue
+		}
+		if prInfo.IsDraft() {
+			result.BlockingPRs = append(result.BlockingPRs, BlockingPR{
+				Branch:   branchName,
+				PRNumber: *prInfo.Number(),
+				Reason:   ReasonDraft,
+			})
+		}
+	}
+
+	result.Status = determineStatus(result)
 	return result
 }
 

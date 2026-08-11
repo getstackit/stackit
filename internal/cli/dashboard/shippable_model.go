@@ -144,6 +144,10 @@ type shippableModel struct {
 
 	// Render cache - rebuilt on refresh to avoid git operations in render loop
 	cache renderCache
+
+	// companion is set when the shipping dashboard was opened from the
+	// companion panel. Escape then returns to the still-live panel.
+	companion *companionModel
 }
 
 // keyMap defines all keyboard shortcuts for the dashboard.
@@ -269,6 +273,11 @@ func newShippableModel(ctx *app.Context, cfg config.Configurer, opts ShippableOp
 		progress:        p,
 		detailsViewport: vp,
 	}
+}
+
+func (m *shippableModel) withCompanion(companion *companionModel) *shippableModel {
+	m.companion = companion
+	return m
 }
 
 // selectedStacks returns the stacks that are currently selected.

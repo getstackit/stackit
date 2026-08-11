@@ -116,3 +116,19 @@ func TestAnalyzeAllReadsRemoteStatusOnceAcrossStacks(t *testing.T) {
 	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
 		"AnalyzeAll should read remote branch status once for all stacks, not once per stack")
 }
+
+func TestAnalyzeAllLocalUsesOnlyCachedMetadata(t *testing.T) {
+	t.Parallel()
+
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"P": "main"})
+	analyzer, eng, counting := newCountingAnalyzer(t, s.Scene.Dir)
+	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P"), testhelpers.NewTestPrInfo(101)))
+
+	result, err := analyzer.AnalyzeAllLocal()
+	require.NoError(t, err)
+	require.Len(t, result.Stacks, 1)
+	require.Equal(t, StatusShippable, result.Stacks[0].Status)
+	require.Equal(t, int64(0), counting.fetchRemoteShas.Load(),
+		"local analysis must not contact a remote")
+}

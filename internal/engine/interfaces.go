@@ -187,6 +187,11 @@ type BranchTracking interface {
 	// parent (per-branch, unlike ReparentBranches) while preserving divergence
 	// points, all captured before any mutation begins.
 	ReparentBranchesToParents(ctx context.Context, moves []BranchParentMove) error
+	// ApplyParentUpdatesAfterRemovals applies parent updates while evaluating
+	// linear-stack validation after removed branches have disappeared. Cleanup
+	// actions use this before deleting merged parents, so a chain collapse is
+	// not mistaken for a temporary fork.
+	ApplyParentUpdatesAfterRemovals(ctx context.Context, updates []BranchParentUpdate, removed []string) error
 	// ReparentBranchesRecompute reparents multiple branches onto the same new
 	// parent and recomputes each divergence point against it (fresh merge-base).
 	// Use when moving branches under a newly created parent.

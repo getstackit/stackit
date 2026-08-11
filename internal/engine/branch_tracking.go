@@ -292,6 +292,68 @@ type BranchParentMove struct {
 	NewParent string
 }
 
+// BranchParentUpdate describes a parent change and how its divergence point
+// should be handled. It is used for cleanup rewrites that must validate the
+// topology after their obsolete parents are removed.
+type BranchParentUpdate struct {
+	Branch    string
+	NewParent string
+	Mode      DivergenceMode
+}
+
+// ApplyParentUpdatesAfterRemovals applies parent updates after validating the
+// final topology without the named removed branches. It captures divergence
+// points before any mutation so related updates remain correct.
+func (e *engineImpl) ApplyParentUpdatesAfterRemovals(ctx context.Context, updates []BranchParentUpdate, removed []string) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	moves := make([]BranchParentMove, len(updates))
+	preserveBranches := make(Branches, 0, len(updates))
+	for i, update := range updates {
+		if update.Branch == update.NewParent {
+			return fmt.Errorf("branch %s cannot be its own parent", update.Branch)
+		}
+		if update.Mode != DivergencePreserve && update.Mode != DivergenceRecompute {
+			return fmt.Errorf("unknown DivergenceMode: %d", update.Mode)
+		}
+		moves[i] = BranchParentMove{Branch: update.Branch, NewParent: update.NewParent}
+		if update.Mode == DivergencePreserve {
+			preserveBranches = append(preserveBranches, e.GetBranch(update.Branch))
+		}
+	}
+	if err := e.validateLinearParentMovesAfterRemovals(moves, removed); err != nil {
+		return err
+	}
+
+	divPoints := e.BatchDivergencePoints(preserveBranches)
+	for _, update := range updates {
+		branch := e.GetBranch(update.Branch)
+		parent := e.GetBranch(update.NewParent)
+
+		switch update.Mode {
+		case DivergencePreserve:
+			divPoint, ok := divPoints.Rev(update.Branch)
+			if !ok || divPoint == "" {
+				return fmt.Errorf("failed to determine divergence point for %s", update.Branch)
+			}
+			if err := e.setParentPreservingDivergence(ctx, branch, parent, divPoint); err != nil {
+				return fmt.Errorf("failed to reparent %s to %s: %w", update.Branch, update.NewParent, err)
+			}
+			if err := e.syncStackIDFromParent(ctx, e.GetBranch(update.Branch)); err != nil {
+				return fmt.Errorf("failed to sync stack ID for %s: %w", update.Branch, err)
+			}
+		case DivergenceRecompute:
+			if err := e.setParentRecomputingDivergence(ctx, branch, parent); err != nil {
+				return fmt.Errorf("failed to set parent for %s: %w", update.Branch, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // ReparentBranches changes multiple branches to the same new parent while
 // preserving each branch's divergence point. Divergence points are captured
 // for all branches before any reparenting begins, ensuring correctness when

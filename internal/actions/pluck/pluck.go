@@ -181,17 +181,35 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Start the operation
 	handler.Start(basehandler.Reparent{Branch: source, OldParent: oldParentName, NewParent: onto})
 
-	// Step 1: Reparent children to grandparent
-	var reparentedChildren []string
+	// Steps 1 and 2 both change parents, and they are applied as a single
+	// batch. Reparenting the children and then moving the source passes
+	// through an intermediate shape where the grandparent holds both the
+	// source and its former children — a fork the linear-stack validator
+	// rejects even when the completed transformation is a valid chain.
+	moves := make([]engine.BranchParentMove, 0, len(children)+1)
+	for _, child := range children {
+		moves = append(moves, engine.BranchParentMove{Branch: child.GetName(), NewParent: grandparentBranch.GetName()})
+	}
+	moves = append(moves, engine.BranchParentMove{Branch: source, NewParent: onto})
+
 	if len(children) > 0 {
 		handler.OnStep(StepReparentingChild, basehandler.StatusStarted, "Reparenting children...")
+	} else {
+		handler.OnStep(StepReparentingChild, basehandler.StatusSkipped, "No children to reparent")
+	}
+	handler.OnStep(StepMovingSource, basehandler.StatusStarted, "Moving source branch...")
 
-		// All children move to the same grandparent, so reparent them in one
-		// batch instead of a per-child engine call.
-		if err := eng.ReparentBranches(gctx, children.Names(), grandparentBranch); err != nil {
+	if err := eng.ReparentBranchesToParents(gctx, moves); err != nil {
+		if len(children) > 0 {
 			handler.OnStep(StepReparentingChild, basehandler.StatusFailed, err.Error())
-			return fmt.Errorf("failed to reparent children to %s: %w", grandparentBranch.GetName(), err)
 		}
+		handler.OnStep(StepMovingSource, basehandler.StatusFailed, err.Error())
+		return fmt.Errorf("failed to set parent: %w", err)
+	}
+
+	// Step 1: children are now on the grandparent.
+	var reparentedChildren []string
+	if len(children) > 0 {
 		for _, child := range children {
 			handler.OnChildReparented(basehandler.Reparent{Branch: child.GetName(), OldParent: source, NewParent: grandparentBranch.GetName()})
 			reparentedChildren = append(reparentedChildren, child.GetName())
@@ -200,18 +218,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				output.BranchName(source),
 				output.BranchName(grandparentBranch.GetName()))
 		}
-
 		handler.OnStep(StepReparentingChild, basehandler.StatusCompleted, "Children reparented")
-	} else {
-		handler.OnStep(StepReparentingChild, basehandler.StatusSkipped, "No children to reparent")
 	}
 
-	// Step 2: Move source to new parent
-	handler.OnStep(StepMovingSource, basehandler.StatusStarted, "Moving source branch...")
-	if err := eng.ReparentBranch(gctx, sourceBranch, ontoBranch); err != nil {
-		handler.OnStep(StepMovingSource, basehandler.StatusFailed, err.Error())
-		return fmt.Errorf("failed to set parent: %w", err)
-	}
+	// Step 2: the source is now on its new parent.
 	if eng.IsTrunk(ontoBranch) {
 		if _, err := eng.AssignBranchesToNewStack(gctx, sourceBranch, engine.BranchesOf(sourceBranch)); err != nil {
 			out.Warn("Failed to update stack ID for %s: %v", source, err)

@@ -481,6 +481,40 @@ func TestPluckAction(t *testing.T) {
 		require.Equal(t, "untracked", parent1.GetName())
 	})
 
+	t.Run("plucks middle branch in a linear stack", func(t *testing.T) {
+		t.Parallel()
+		// main -> branch1 -> branch2 -> branch3
+		// Pluck branch2 to main
+		// Result: main -> {branch1, branch2} and branch1 -> branch3, which has
+		// no fork below a non-trunk branch even though reparenting branch3
+		// before moving branch2 briefly puts both under branch1.
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+			WithStack(map[string]string{
+				"branch1": "main",
+				"branch2": "branch1",
+				"branch3": "branch2",
+			})
+
+		// Rebuild the engine with linear stacks, as the CLI does for
+		// stack.shape=linear.
+		linearEngine, err := engine.NewEngine(engine.Options{
+			RepoRoot:     s.Scene.Dir,
+			Trunk:        "main",
+			LinearStacks: true,
+		})
+		require.NoError(t, err)
+		s.Engine = linearEngine
+		s.Context.Engine = linearEngine
+
+		require.NoError(t, Action(s.Context, Options{
+			Source: "branch2",
+			Onto:   "main",
+		}, nil))
+
+		require.Equal(t, "main", s.Engine.GetBranch("branch2").GetParent().GetName())
+		require.Equal(t, "branch1", s.Engine.GetBranch("branch3").GetParent().GetName())
+	})
+
 	t.Run("plucks from middle of stack correctly", func(t *testing.T) {
 		t.Parallel()
 		// main -> A -> B -> C -> D

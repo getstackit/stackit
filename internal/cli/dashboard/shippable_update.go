@@ -12,6 +12,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/shippable"
+	"github.com/getstackit/stackit/internal/tui/core"
 )
 
 // Update handles all messages and updates the model.
@@ -170,6 +171,10 @@ func (m *shippableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg handles keyboard input.
 func (m *shippableModel) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.companion != nil && msg.String() == core.KeyEsc {
+		return m.companion, nil
+	}
+
 	// If showing confirmation, handle confirm/cancel
 	if m.state == stateConfirming {
 		return m.handleConfirmationKey(msg)

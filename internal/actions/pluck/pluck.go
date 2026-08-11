@@ -60,25 +60,25 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	sourceBranch := eng.GetBranch(source)
 	ontoBranch := eng.GetBranch(onto)
 
+	// Cycle detection: ensure onto is not a descendant of source
+	if graph.IsDescendant(sourceBranch, ontoBranch) {
+		return fmt.Errorf("cannot pluck %s onto its own descendant %s", source, onto)
+	}
+
 	// Get source's direct children (they will be reparented to grandparent)
 	children := graph.ChildBranches(sourceBranch)
 	if err := actions.EnsureCanModifyHere(ctx, append(engine.BranchesOf(sourceBranch, ontoBranch), children...)...); err != nil {
 		return err
 	}
 
-	// Take snapshot before modifying the repository, but after the ownership
-	// guard, so a refusal leaves the undo stack untouched rather than evicting
-	// a real snapshot with a no-op entry.
+	// Take snapshot before modifying the repository, but after every check that
+	// can reject the pluck, so a refusal leaves the undo stack untouched rather
+	// than evicting a real recovery point with a no-op entry.
 	snapshotOpts := actions.NewSnapshot("pluck",
 		actions.WithFlagValue("--source", opts.Source),
 		actions.WithFlagValue("--onto", opts.Onto),
 	)
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
-
-	// Cycle detection: ensure onto is not a descendant of source
-	if graph.IsDescendant(sourceBranch, ontoBranch) {
-		return fmt.Errorf("cannot pluck %s onto its own descendant %s", source, onto)
-	}
 
 	// Get current parent (grandparent for children)
 	oldParent := sourceBranch.GetParent()

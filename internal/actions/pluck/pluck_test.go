@@ -279,6 +279,12 @@ func TestPluckAction(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot pluck")
 		require.Contains(t, err.Error(), "onto its own descendant")
+
+		// A rejected pluck must not leave an undo snapshot behind: no-op entries
+		// evict real recovery points once undo.max-depth is reached.
+		snapshots, err := s.Engine.GetSnapshots()
+		require.NoError(t, err)
+		require.Empty(t, snapshots, "rejected cyclic pluck should not record a snapshot")
 	})
 
 	t.Run("fails when source branch is not tracked", func(t *testing.T) {

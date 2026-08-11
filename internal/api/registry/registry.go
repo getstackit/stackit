@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getstackit/stackit/internal/api/watcher"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/watcher"
 )
 
 // watcherDebounce is the interval the ref watcher coalesces filesystem

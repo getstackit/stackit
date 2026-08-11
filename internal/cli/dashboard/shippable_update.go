@@ -172,7 +172,8 @@ func (m *shippableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKeyMsg handles keyboard input.
 func (m *shippableModel) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.companion != nil && msg.String() == core.KeyEsc {
-		return m.companion, nil
+		m.companion.loading = true
+		return m.companion, m.companion.reload()
 	}
 
 	// If showing confirmation, handle confirm/cancel

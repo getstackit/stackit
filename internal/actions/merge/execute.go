@@ -12,6 +12,7 @@ import (
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // GetMergeMethod returns the merge method to use for PR merges.
@@ -294,10 +295,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		switch pullResult {
 		case engine.PullDone:
 			rev, _ := trunk.GetRevision()
-			revShort := rev
-			if len(rev) > 7 {
-				revShort = rev[:7]
-			}
+			revShort := utils.ShortRevision(rev, 0)
 			out.Debug("Trunk fast-forwarded to %s", revShort)
 		case engine.PullUnneeded:
 			out.Debug("Trunk is up to date")

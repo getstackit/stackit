@@ -25,6 +25,7 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // FormatRerereResolved renders the standard message describing how many
@@ -408,11 +409,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 		if rev == "" {
 			rev, _ = branch.GetRevision()
 		}
-		if len(rev) > 7 {
-			newRev = rev[:7]
-		} else {
-			newRev = rev
-		}
+		newRev = utils.ShortRevision(rev, 0)
 	}
 
 	// Report via callback if provided.
@@ -770,10 +767,7 @@ func PrintConflictStatus(ctx *app.Context, branchName string) error {
 	// Get rebase head
 	rebaseHead, err := reader.GetRebaseHead()
 	if err == nil && rebaseHead != "" {
-		rebaseHeadShort := rebaseHead
-		if len(rebaseHead) > 7 {
-			rebaseHeadShort = rebaseHead[:7]
-		}
+		rebaseHeadShort := utils.ShortRevision(rebaseHead, 0)
 		msg := output.Yellow(fmt.Sprintf("You are here (resolving %s):", rebaseHeadShort))
 		out.Info("%s", msg)
 		// Could show log here if needed

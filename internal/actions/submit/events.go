@@ -106,6 +106,16 @@ type GitHubStackSyncedEvent struct {
 
 func (GitHubStackSyncedEvent) submitEvent() {}
 
+// GitHubStackSkippedEvent reports that native GitHub Stack sync was enabled by
+// config but did not run, either because the submitted branches are ineligible
+// or because the Stacks API call failed. Configured sync is best-effort so the
+// submit still succeeds; the explicit --with-native-stack flag fails instead.
+type GitHubStackSkippedEvent struct {
+	Reason string
+}
+
+func (GitHubStackSkippedEvent) submitEvent() {}
+
 // CompletionOutcome classifies how a submit run ended, so handlers can decide
 // presentation without string-matching messages.
 type CompletionOutcome string

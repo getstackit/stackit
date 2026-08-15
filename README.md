@@ -444,7 +444,9 @@ stackit config set github.stack true
 stackit submit
 ```
 
-With this option enabled, submissions containing two or more PRs reconcile GitHub's server-side Stack resource. Single-PR submissions behave normally. Use `stackit submit --with-native-stack` for a one-off sync instead.
+With this option enabled, submissions containing two or more PRs reconcile GitHub's server-side Stack resource. Single-PR submissions behave normally.
+
+Sync configured this way is best-effort: if the stack is not a linear chain, or the Stacks API is unavailable for the repository, `submit` reports the reason and completes normally rather than failing. Use `stackit submit --with-native-stack` for a one-off sync that fails loudly instead.
 
 ---
 

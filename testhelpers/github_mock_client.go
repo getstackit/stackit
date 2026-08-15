@@ -40,6 +40,9 @@ func (c *MockGitHubClient) CreateStack(_ context.Context, pullRequests []int) (*
 	c.config.mu.Lock()
 	defer c.config.mu.Unlock()
 
+	if c.config.StackError != nil {
+		return nil, c.config.StackError
+	}
 	created := append([]int(nil), pullRequests...)
 	c.config.CreatedStacks = append(c.config.CreatedStacks, created)
 	return mockStackInfo(len(c.config.CreatedStacks), created), nil
@@ -50,6 +53,9 @@ func (c *MockGitHubClient) FindStackByPullRequest(_ context.Context, pullRequest
 	c.config.mu.Lock()
 	defer c.config.mu.Unlock()
 
+	if c.config.StackError != nil {
+		return nil, c.config.StackError
+	}
 	for i, stack := range c.config.CreatedStacks {
 		if containsInt(stack, pullRequest) {
 			return mockStackInfo(i+1, stack), nil

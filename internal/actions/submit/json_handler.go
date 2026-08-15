@@ -14,6 +14,8 @@ type JSONResult struct {
 	Error       string                 `json:"error,omitempty"`
 	Branches    []JSONBranchResult     `json:"branches"`
 	GitHubStack *JSONGitHubStackResult `json:"github_stack,omitempty"`
+	// GitHubStackSkipped explains why configured native Stack sync did not run.
+	GitHubStackSkipped string `json:"github_stack_skipped,omitempty"`
 }
 
 // JSONGitHubStackResult identifies native GitHub Stack metadata reconciled by submit.
@@ -100,6 +102,9 @@ func (h *JSONHandler) OnEvent(e Event) {
 
 	case GitHubStackSyncedEvent:
 		h.Result.GitHubStack = &JSONGitHubStackResult{Number: ev.Number, PullRequests: ev.PullRequests, Action: string(ev.Action)}
+
+	case GitHubStackSkippedEvent:
+		h.Result.GitHubStackSkipped = ev.Reason
 
 	case CompletionEvent:
 		h.Result.Outcome = ev.Outcome

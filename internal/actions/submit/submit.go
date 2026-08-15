@@ -252,17 +252,25 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// validation can prune stale descendants, so validating earlier could let a
 	// one-PR list perform normal PR writes before native Stack creation fails.
 	if opts.CreateGitHubStack {
-		if !explicitGitHubStack && (len(branchObjs) < github.MinStackPullRequests || len(branchObjs) > github.MaxStackPullRequests) {
+		countErr := github.ValidateStackPullRequestCount(len(branchObjs))
+		switch {
+		case countErr != nil && explicitGitHubStack:
+			return countErr
+		case countErr != nil:
+			// A submit that isn't stack-shaped (commonly a single branch) is the
+			// ordinary case when sync is configured, so skip it quietly.
 			opts.CreateGitHubStack = false
-		} else {
-			if ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear {
-				return fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
-			}
-			if err := validateGitHubStackChain(eng, branchObjs); err != nil {
-				return err
-			}
-			if err := github.ValidateStackPullRequestCount(len(branchObjs)); err != nil {
-				return err
+		default:
+			if err := validateGitHubStackShape(ctx, eng, branchObjs); err != nil {
+				if explicitGitHubStack {
+					return err
+				}
+				// Configured sync is best-effort. Failing here would break every
+				// multi-branch submit for a team whose .stackit.yaml enables the
+				// key without stack.shape=linear, including submits nested inside
+				// merge and lock.
+				opts.CreateGitHubStack = false
+				handler.OnEvent(GitHubStackSkippedEvent{Reason: err.Error()})
 			}
 		}
 	}
@@ -292,8 +300,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if len(submissionInfos) == 0 {
 		if opts.CreateGitHubStack {
 			if err := publishGitHubStackMetadata(ctx, branchObjs, handler); err != nil {
-				handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
-				return fmt.Errorf("PRs are already up to date, but creating native GitHub Stack metadata failed: %w", err)
+				if explicitGitHubStack {
+					handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
+					return fmt.Errorf("PRs are already up to date, but creating native GitHub Stack metadata failed: %w", err)
+				}
+				handler.OnEvent(GitHubStackSkippedEvent{Reason: err.Error()})
+				handler.OnEvent(CompletionEvent{Outcome: OutcomeUpToDate, Message: "All PRs up to date"})
+				return nil
 			}
 			handler.OnEvent(CompletionEvent{Outcome: OutcomeComplete, Message: "GitHub Stack metadata submitted", Duration: time.Since(start)})
 			return nil
@@ -428,8 +441,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	if opts.CreateGitHubStack {
 		if err := publishGitHubStackMetadata(ctx, branchObjs, handler); err != nil {
-			handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
-			return fmt.Errorf("PRs were submitted successfully, but creating native GitHub Stack metadata failed: %w", err)
+			if explicitGitHubStack {
+				handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
+				return fmt.Errorf("PRs were submitted successfully, but creating native GitHub Stack metadata failed: %w", err)
+			}
+			// Every PR already landed. Reporting the run as failed would exit
+			// non-zero on work that fully succeeded, so surface the Stacks API
+			// problem as a warning instead.
+			handler.OnEvent(GitHubStackSkippedEvent{Reason: err.Error()})
 		}
 	}
 
@@ -446,6 +465,15 @@ func publishGitHubStackMetadata(ctx *app.Context, branches engine.Branches, hand
 	}
 	handler.OnEvent(GitHubStackSyncedEvent{Number: stack.Number, PullRequests: pullRequests, Action: action})
 	return nil
+}
+
+// validateGitHubStackShape reports why the submitted branches cannot form a
+// native GitHub Stack, beyond the pull request count checked by the caller.
+func validateGitHubStackShape(ctx *app.Context, eng engine.Engine, branches engine.Branches) error {
+	if ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear {
+		return fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
+	}
+	return validateGitHubStackChain(eng, branches)
 }
 
 func validateGitHubStackChain(eng engine.Engine, branches engine.Branches) error {

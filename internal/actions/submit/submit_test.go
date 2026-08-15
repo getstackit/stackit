@@ -823,3 +823,128 @@ func TestSubmitDisplayTreeSkipsWorktreeAnchorParent(t *testing.T) {
 	_, hasAnchorFixedState := stack.FixedMap["wt-anchor"]
 	require.False(t, hasAnchorFixedState, "fixed map should not include non-submittable worktree anchors")
 }
+
+// captureSkipHandler records native GitHub Stack skip reasons and the final outcome.
+type captureSkipHandler struct {
+	reasons []string
+	outcome submit.CompletionOutcome
+}
+
+func (h *captureSkipHandler) OnEvent(e submit.Event) {
+	switch ev := e.(type) {
+	case submit.GitHubStackSkippedEvent:
+		h.reasons = append(h.reasons, ev.Reason)
+	case submit.CompletionEvent:
+		h.outcome = ev.Outcome
+	}
+}
+func (h *captureSkipHandler) Confirm(_ string, defaultYes bool) (bool, error) { return defaultYes, nil }
+func (h *captureSkipHandler) IsInteractive() bool                             { return false }
+
+// Configured sync is best-effort: a team whose .stackit.yaml enables github.stack
+// without stack.shape=linear must still be able to submit. Only the explicit
+// --with-native-stack flag hard-fails (TestSubmitGitHubStackRequiresLinearMode).
+func TestSubmitConfiguredGitHubStackSkipsNonLinearShape(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"base": "main", "api": "base"})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetGitHubStack(true)) // stack.shape stays the default "tree"
+	s.Context.Config = cfg
+
+	s.Checkout("api")
+	handler := &captureSkipHandler{}
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, handler)
+	require.NoError(t, err, "configured sync must not fail a submit on a tree-shaped stack")
+	require.Len(t, mockConfig.CreatedPRs, 2, "both PRs should still submit")
+	require.Empty(t, mockConfig.CreatedStacks, "native Stack metadata must be skipped")
+	require.Equal(t, submit.OutcomeComplete, handler.outcome)
+	require.Contains(t, handler.reasons, "native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
+}
+
+// A forked chain is likewise a skip, not a failure, when sync came from config.
+func TestSubmitConfiguredGitHubStackSkipsForkedChain(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"base": "main", "api": "base", "ui": "base"})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	require.NoError(t, cfg.SetGitHubStack(true))
+	s.Context.Config = cfg
+
+	s.Checkout("base")
+	handler := &captureSkipHandler{}
+	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
+	require.NoError(t, err, "configured sync must not fail a submit on a pre-existing fork")
+	require.Empty(t, mockConfig.CreatedStacks)
+	require.Contains(t, handler.reasons, "branch \"base\" forks to api, ui; native GitHub Stacks require a linear chain")
+}
+
+// A repo without access to the experimental Stacks API must not turn a submit
+// whose PRs all landed into a non-zero exit.
+func TestSubmitConfiguredGitHubStackWarnsWhenStacksAPIFails(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"base": "main", "api": "base"})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	mockConfig.StackError = fmt.Errorf("stacks API unavailable")
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	require.NoError(t, cfg.SetGitHubStack(true))
+	s.Context.Config = cfg
+
+	s.Checkout("api")
+	handler := &captureSkipHandler{}
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, handler)
+	require.NoError(t, err, "PRs landed, so the run must not report failure")
+	require.Len(t, mockConfig.CreatedPRs, 2)
+	require.Equal(t, submit.OutcomeComplete, handler.outcome)
+	require.Len(t, handler.reasons, 1)
+	require.Contains(t, handler.reasons[0], "stacks API unavailable")
+}
+
+// The explicit flag keeps the strict contract: a Stacks API failure fails the run.
+func TestSubmitExplicitGitHubStackFailsWhenStacksAPIFails(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"base": "main", "api": "base"})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	mockConfig.StackError = fmt.Errorf("stacks API unavailable")
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	s.Context.Config = cfg
+
+	s.Checkout("api")
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	require.ErrorContains(t, err, "creating native GitHub Stack metadata failed")
+}

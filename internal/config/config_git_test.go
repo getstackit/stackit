@@ -1165,6 +1165,31 @@ func TestGitConfigSubmitDraft(t *testing.T) {
 	})
 }
 
+func TestGitConfigGitHubStack(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns default when not set", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+
+		cfg, err := LoadGitConfig(scene.Dir)
+		require.NoError(t, err)
+		require.False(t, cfg.GitHubStack())
+	})
+
+	t.Run("sets and unsets native GitHub Stack sync", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+
+		cfg, err := LoadGitConfig(scene.Dir)
+		require.NoError(t, err)
+		require.NoError(t, cfg.SetGitHubStack(true))
+		require.True(t, cfg.GitHubStack())
+		require.NoError(t, cfg.UnsetGitHubStack())
+		require.False(t, cfg.GitHubStack())
+	})
+}
+
 func TestGitConfigSubmitWeb(t *testing.T) {
 	t.Parallel()
 
@@ -1383,6 +1408,27 @@ func TestGitConfigSubmitAssignees(t *testing.T) {
 
 func TestGitConfigSubmitWithProjectConfig(t *testing.T) {
 	t.Parallel()
+
+	t.Run("GitHub Stack sync falls back to project config", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, nil)
+		removeDefaultConfig(t, scene.Dir)
+
+		projectConfig := `github:
+  stack: true
+`
+		err := os.WriteFile(filepath.Join(scene.Dir, ProjectConfigFileName), []byte(projectConfig), 0600)
+		require.NoError(t, err)
+
+		cfg, err := LoadGitConfigWithProject(scene.Dir)
+		require.NoError(t, err)
+		require.True(t, cfg.GitHubStack())
+
+		require.NoError(t, cfg.SetGitHubStack(false))
+		require.False(t, cfg.GitHubStack())
+		require.NoError(t, cfg.UnsetGitHubStack())
+		require.True(t, cfg.GitHubStack())
+	})
 
 	t.Run("draft falls back to project config", func(t *testing.T) {
 		t.Parallel()

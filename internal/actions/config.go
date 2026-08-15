@@ -31,6 +31,7 @@ func ConfigListAction(repoRoot string, writer io.Writer) error {
 
 	// Get submit.footer
 	submitFooter := cfg.SubmitFooter()
+	githubStack := cfg.GitHubStack()
 
 	// Get merge.method
 	mergeMethod := cfg.MergeMethod()
@@ -56,6 +57,7 @@ func ConfigListAction(repoRoot string, writer io.Writer) error {
 
 	lines = append(lines, fmt.Sprintf("%s: %s", output.Cyan("branch.pattern"), branchPattern))
 	lines = append(lines, fmt.Sprintf("%s: %v", output.Cyan("submit.footer"), submitFooter))
+	lines = append(lines, fmt.Sprintf("%s: %v", output.Cyan("github.stack"), githubStack))
 	lines = append(lines, fmt.Sprintf("%s: %s", output.Cyan("merge.method"), mergeMethod))
 
 	// CI settings

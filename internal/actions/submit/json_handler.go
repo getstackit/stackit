@@ -9,10 +9,18 @@ import (
 
 // JSONResult is the machine-readable summary of a submit run.
 type JSONResult struct {
-	Outcome  CompletionOutcome  `json:"outcome"`
-	Message  string             `json:"message,omitempty"`
-	Error    string             `json:"error,omitempty"`
-	Branches []JSONBranchResult `json:"branches"`
+	Outcome     CompletionOutcome      `json:"outcome"`
+	Message     string                 `json:"message,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Branches    []JSONBranchResult     `json:"branches"`
+	GitHubStack *JSONGitHubStackResult `json:"github_stack,omitempty"`
+}
+
+// JSONGitHubStackResult identifies native GitHub Stack metadata reconciled by submit.
+type JSONGitHubStackResult struct {
+	Number       int    `json:"number"`
+	PullRequests []int  `json:"pull_requests"`
+	Action       string `json:"action"`
 }
 
 // JSONBranchResult is one branch's plan and result in submit JSON output.
@@ -89,6 +97,9 @@ func (h *JSONHandler) OnEvent(e Event) {
 	case BranchWarningEvent:
 		b := h.branch(ev.BranchName)
 		b.Warnings = append(b.Warnings, ev.Warning)
+
+	case GitHubStackSyncedEvent:
+		h.Result.GitHubStack = &JSONGitHubStackResult{Number: ev.Number, PullRequests: ev.PullRequests, Action: string(ev.Action)}
 
 	case CompletionEvent:
 		h.Result.Outcome = ev.Outcome

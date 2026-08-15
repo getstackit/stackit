@@ -6,6 +6,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // syncStackBranches pulls stack branches that are behind their remote counterparts.
@@ -167,10 +168,7 @@ func applyBranchSyncResult(branch engine.Branch, result engine.PullResult, err e
 		// Get the new revision (GetRevision reads live git, so it reflects the
 		// just-applied fast-forward without an engine rebuild).
 		rev, _ := branch.GetRevision()
-		revShort := rev
-		if len(rev) > 7 {
-			revShort = rev[:7]
-		}
+		revShort := utils.ShortRevision(rev, 0)
 		handler.EmitEvent(Event{
 			Phase:       PhaseBranches,
 			Type:        EventCompleted,

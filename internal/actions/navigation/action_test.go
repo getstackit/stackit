@@ -164,7 +164,7 @@ func TestFlattenThroughAnchorsPromotesGrandchildren(t *testing.T) {
 	t.Parallel()
 
 	// Stack: main -> anchor -> [child1, child2]
-	// flattenThroughAnchors should replace anchor with child1 and child2
+	// FlattenThroughAnchors should replace anchor with child1 and child2
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"anchor": "main",
@@ -179,7 +179,7 @@ func TestFlattenThroughAnchorsPromotesGrandchildren(t *testing.T) {
 	trunk := s.Engine.Trunk()
 	children := graph.ChildBranches(trunk)
 
-	flattened := flattenThroughAnchors(children, graph)
+	flattened := FlattenThroughAnchors(children, graph)
 	names := make([]string, len(flattened))
 	for i, b := range flattened {
 		names[i] = b.GetName()

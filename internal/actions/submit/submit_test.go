@@ -510,7 +510,7 @@ func TestSubmitGitHubStackRejectsForkedChain(t *testing.T) {
 	s.Context.Config = cfg
 
 	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), CreateGitHubStack: true}, &noopHandler{})
-	require.EqualError(t, err, "branch \"base\" forks to api, ui; native GitHub Stacks require a linear chain")
+	require.EqualError(t, err, "branch \"ui\" is stacked on \"base\", not on \"api\"; native GitHub Stacks require a single linear chain")
 }
 
 func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
@@ -893,7 +893,7 @@ func TestSubmitConfiguredGitHubStackSkipsForkedChain(t *testing.T) {
 	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
 	require.NoError(t, err, "configured sync must not fail a submit on a pre-existing fork")
 	require.Empty(t, mockConfig.CreatedStacks)
-	require.Contains(t, handler.reasons, "branch \"base\" forks to api, ui; native GitHub Stacks require a linear chain")
+	require.Contains(t, handler.reasons, "branch \"ui\" is stacked on \"base\", not on \"api\"; native GitHub Stacks require a single linear chain")
 }
 
 // A repo without access to the experimental Stacks API must not turn a submit
@@ -947,4 +947,83 @@ func TestSubmitExplicitGitHubStackFailsWhenStacksAPIFails(t *testing.T) {
 	s.Checkout("api")
 	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
 	require.ErrorContains(t, err, "creating native GitHub Stack metadata failed")
+}
+
+// `submit --stack` from trunk selects every branch in the repository. Each
+// independent stack is linear on its own and no branch forks, so a per-branch
+// fork check passes — but the set is not one chain, and GitHub rejects it with
+// "Pull requests must form a stack". Catch it before any PR writes.
+func TestSubmitGitHubStackRejectsDisjointStacksFromTrunk(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"one-bottom": "main",
+			"one-top":    "one-bottom",
+			"two-bottom": "main",
+			"two-top":    "two-bottom",
+		})
+	s.Checkout("main")
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	s.Context.Config = cfg
+
+	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), CreateGitHubStack: true}, &noopHandler{})
+	require.EqualError(t, err, "branches \"one-top\" and \"two-bottom\" are in different stacks; native GitHub Stacks require a single linear chain")
+}
+
+// The configured path skips disjoint stacks rather than failing the submit.
+func TestSubmitConfiguredGitHubStackSkipsDisjointStacksFromTrunk(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"one-bottom": "main",
+			"one-top":    "one-bottom",
+			"two-bottom": "main",
+			"two-top":    "two-bottom",
+		})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	require.NoError(t, cfg.SetGitHubStack(true))
+	s.Context.Config = cfg
+
+	s.Checkout("main")
+	handler := &captureSkipHandler{}
+	err = submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Draft: true}, handler)
+	require.NoError(t, err, "submitting every stack must still succeed")
+	require.Empty(t, mockConfig.CreatedStacks, "disjoint stacks must not create native Stack metadata")
+	require.Contains(t, handler.reasons, "branches \"one-top\" and \"two-bottom\" are in different stacks; native GitHub Stacks require a single linear chain")
+}
+
+// A genuine single chain still syncs.
+func TestSubmitGitHubStackAcceptsContiguousChain(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"bottom": "main", "middle": "bottom", "top": "middle"})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	s.Context.Config = cfg
+
+	s.Checkout("top")
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	require.NoError(t, err)
+	require.Len(t, mockConfig.CreatedStacks, 1)
+	require.Len(t, mockConfig.CreatedStacks[0], 3, "all three PRs should form one native Stack")
 }

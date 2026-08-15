@@ -476,12 +476,28 @@ func validateGitHubStackShape(ctx *app.Context, eng engine.Engine, branches engi
 	return validateGitHubStackChain(eng, branches)
 }
 
+// validateGitHubStackChain requires the submitted branches to form one
+// contiguous chain, each stacked directly on the one before it. Branches arrive
+// bottom-to-top from StackGraph.Range.
+//
+// Checking only that no branch forks is not enough. Trunk is excluded from the
+// submitted set, so several independent stacks rooted at trunk each satisfy a
+// per-branch fork check while together forming no chain at all — which is what
+// `submit --stack` from trunk selects. GitHub rejects that set with "Pull
+// requests must form a stack", so catch it here before any PR writes.
 func validateGitHubStackChain(eng engine.Engine, branches engine.Branches) error {
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	for _, branch := range branches {
-		if children := graph.Children(branch); len(children) > 1 {
-			return fmt.Errorf("branch %q forks to %s; native GitHub Stacks require a linear chain", branch.GetName(), strings.Join(children, ", "))
+	trunk := eng.Trunk().GetName()
+	for i := 1; i < len(branches); i++ {
+		parent := graph.Parent(branches[i])
+		previous := branches[i-1].GetName()
+		if parent == previous {
+			continue
 		}
+		if parent == trunk {
+			return fmt.Errorf("branches %q and %q are in different stacks; native GitHub Stacks require a single linear chain", previous, branches[i].GetName())
+		}
+		return fmt.Errorf("branch %q is stacked on %q, not on %q; native GitHub Stacks require a single linear chain", branches[i].GetName(), parent, previous)
 	}
 	return nil
 }

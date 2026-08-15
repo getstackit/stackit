@@ -469,6 +469,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 	case submit.GitHubStackSyncedEvent:
 		h.Output.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(ev.Action), ev.Number, formatGitHubStackPRs(ev.PullRequests))
 
+	case submit.GitHubStackSkippedEvent:
+		h.Output.Warn("Skipped native GitHub Stack sync: %s", ev.Reason)
+
 	case submit.CompletionEvent:
 		h.plan.Flush()
 		switch ev.Outcome {
@@ -581,12 +584,13 @@ func (h *SimpleSubmitHandler) Confirm(_ string, defaultYes bool) (bool, error) {
 
 // InteractiveSubmitHandler implements submit.Handler with bubbletea for animated progress
 type InteractiveSubmitHandler struct {
-	runner        *tui.Runner
-	model         *submitComponent.Model
-	out           output.Output
-	plan          planPrinter
-	inSubmitPhase bool
-	githubStack   *submit.GitHubStackSyncedEvent
+	runner             *tui.Runner
+	model              *submitComponent.Model
+	out                output.Output
+	plan               planPrinter
+	inSubmitPhase      bool
+	githubStack        *submit.GitHubStackSyncedEvent
+	githubStackSkipped string
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
@@ -672,6 +676,13 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		}
 		h.out.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(ev.Action), ev.Number, formatGitHubStackPRs(ev.PullRequests))
 
+	case submit.GitHubStackSkippedEvent:
+		if h.runner.IsRunning() {
+			h.githubStackSkipped = ev.Reason
+			return
+		}
+		h.out.Warn("Skipped native GitHub Stack sync: %s", ev.Reason)
+
 	case submit.CompletionEvent:
 		h.plan.Flush()
 		// If the submission phase never started (nothing to submit, dry run,
@@ -695,6 +706,9 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		h.runner.Wait()
 		if h.githubStack != nil {
 			h.out.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(h.githubStack.Action), h.githubStack.Number, formatGitHubStackPRs(h.githubStack.PullRequests))
+		}
+		if h.githubStackSkipped != "" {
+			h.out.Warn("Skipped native GitHub Stack sync: %s", h.githubStackSkipped)
 		}
 	}
 }

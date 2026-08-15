@@ -23,6 +23,9 @@ type MockGitHubServerConfig struct {
 	UpdatedPRs map[int]*github.PullRequest
 	// CreatedStacks records the PR numbers submitted as native GitHub Stacks.
 	CreatedStacks [][]int
+	// StackError, when set, is returned by every native GitHub Stacks API call.
+	// Repos without access to the experimental API fail this way.
+	StackError error
 	// ErrorResponses maps endpoint+method to error responses
 	ErrorResponses map[string]error
 	// Owner and Repo for the mock server

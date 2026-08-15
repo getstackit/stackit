@@ -144,9 +144,7 @@ func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branch
 func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
 	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) BranchStat {
 		st := BranchStat{}
-		if len(head) >= 7 {
-			st.ShortSHA = head[:7]
-		}
+		st.ShortSHA = utils.ShortRevision(head, 0)
 		if e.IsTrunk(b) {
 			return st
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
@@ -465,6 +466,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 	case submit.BranchWarningEvent:
 		h.Output.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
 
+	case submit.GitHubStackSyncedEvent:
+		h.Output.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(ev.Action), ev.Number, formatGitHubStackPRs(ev.PullRequests))
+
 	case submit.CompletionEvent:
 		h.plan.Flush()
 		switch ev.Outcome {
@@ -582,6 +586,7 @@ type InteractiveSubmitHandler struct {
 	out           output.Output
 	plan          planPrinter
 	inSubmitPhase bool
+	githubStack   *submit.GitHubStackSyncedEvent
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
@@ -659,6 +664,14 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		}
 		h.out.Warn("%s: %s", submitComponent.DisplayBranchName(ev.BranchName), ev.Warning)
 
+	case submit.GitHubStackSyncedEvent:
+		if h.runner.IsRunning() {
+			created := ev
+			h.githubStack = &created
+			return
+		}
+		h.out.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(ev.Action), ev.Number, formatGitHubStackPRs(ev.PullRequests))
+
 	case submit.CompletionEvent:
 		h.plan.Flush()
 		// If the submission phase never started (nothing to submit, dry run,
@@ -680,6 +693,28 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			Elapsed: ev.Duration,
 		})
 		h.runner.Wait()
+		if h.githubStack != nil {
+			h.out.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(h.githubStack.Action), h.githubStack.Number, formatGitHubStackPRs(h.githubStack.PullRequests))
+		}
+	}
+}
+
+func formatGitHubStackPRs(pullRequests []int) string {
+	formatted := make([]string, len(pullRequests))
+	for i, number := range pullRequests {
+		formatted[i] = fmt.Sprintf("#%d", number)
+	}
+	return strings.Join(formatted, " → ")
+}
+
+func githubStackActionLabel(action github.StackSyncAction) string {
+	switch action {
+	case github.StackSyncCreated:
+		return "Created"
+	case github.StackSyncExtended:
+		return "Extended"
+	default:
+		return "Already linked to"
 	}
 }
 

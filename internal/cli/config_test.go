@@ -187,6 +187,31 @@ func TestConfigCommand(t *testing.T) {
 		require.Equal(t, "true", strings.TrimSpace(output))
 	})
 
+	t.Run("config set, get, and unset github.stack", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)
+
+		output, err := s.RunCliAndGetOutput("config", "get", "github.stack")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "false", strings.TrimSpace(output))
+
+		output, err = s.RunCliAndGetOutput("config", "set", "github.stack", "true")
+		require.NoError(t, err, "config set command failed: %s", output)
+		require.Contains(t, output, "Set github.stack to: true")
+
+		output, err = s.RunCliAndGetOutput("config", "get", "github.stack")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "true", strings.TrimSpace(output))
+
+		output, err = s.RunCliAndGetOutput("config", "unset", "github.stack")
+		require.NoError(t, err, "config unset command failed: %s", output)
+		require.Contains(t, output, "Unset github.stack")
+
+		output, err = s.RunCliAndGetOutput("config", "get", "github.stack")
+		require.NoError(t, err, "config get command failed: %s", output)
+		require.Equal(t, "false", strings.TrimSpace(output))
+	})
+
 	t.Run("config set get and unset undo.enabled", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithInProcess(true)

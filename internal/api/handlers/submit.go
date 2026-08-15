@@ -11,6 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/api/registry"
 	"github.com/getstackit/stackit/internal/api/reqid"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
@@ -77,6 +78,12 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 	ctx.Context = r.Context()
 	ctx.GitHubClient = entry.GitHub
+	cfg, err := config.LoadConfig(entry.RepoRoot)
+	if err != nil {
+		http.Error(w, "failed to load repository configuration", http.StatusInternalServerError)
+		return
+	}
+	ctx.Config = cfg
 
 	opts := submit.Options{
 		Branch:     rootBranch,

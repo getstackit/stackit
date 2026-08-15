@@ -696,6 +696,23 @@ func (c *GitConfig) SetSubmitDraft(draft bool) error {
 	return c.store.SetBool(KeySubmitDraft, draft)
 }
 
+// GitHubStack returns whether Stackit should sync native GitHub Stack metadata.
+// Priority: personal git config > team project config > default.
+func (c *GitConfig) GitHubStack() bool {
+	if c.store.Exists(KeyGitHubStack) {
+		return c.store.GetBoolWithDefault(KeyGitHubStack, DefaultGitHubStack)
+	}
+	if c.project != nil && c.project.HasGitHubStack() {
+		return c.project.GetGitHubStack()
+	}
+	return DefaultGitHubStack
+}
+
+// SetGitHubStack sets whether Stackit syncs native GitHub Stack metadata.
+func (c *GitConfig) SetGitHubStack(enabled bool) error {
+	return c.store.SetBool(KeyGitHubStack, enabled)
+}
+
 // SubmitWeb returns when to open PRs in browser.
 // Priority: personal git config > team project config > default.
 func (c *GitConfig) SubmitWeb() string {
@@ -993,6 +1010,11 @@ func (c *GitConfig) UnsetSubmitDraft() error {
 	return c.store.Unset(KeySubmitDraft)
 }
 
+// UnsetGitHubStack removes the personal GitHub Stack sync setting.
+func (c *GitConfig) UnsetGitHubStack() error {
+	return c.store.Unset(KeyGitHubStack)
+}
+
 // UnsetSubmitWeb removes the personal submit.web setting, reverting to project/default.
 func (c *GitConfig) UnsetSubmitWeb() error {
 	return c.store.Unset(KeySubmitWeb)
@@ -1023,6 +1045,7 @@ func (c *GitConfig) ResetAllPersonal() error {
 		KeyStackShape,
 		KeySubmitFooter,
 		KeySubmitDraft,
+		KeyGitHubStack,
 		KeySubmitWeb,
 		KeySubmitLabels,
 		KeySubmitReviewers,

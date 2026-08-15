@@ -46,6 +46,7 @@ type submitFlags struct {
 	noAssignees          bool
 	jsonOutput           bool
 	verbose              bool
+	withNativeStack      bool
 }
 
 func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
@@ -79,6 +80,7 @@ func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
 	cmd.Flags().BoolVar(&f.noAssignees, "no-assignees", false, "Don't apply default assignees from config.")
 	cmd.Flags().BoolVar(&f.jsonOutput, "json", false, "Output the plan and per-branch results as JSON.")
 	cmd.Flags().BoolVar(&f.verbose, "verbose", false, "Show the full branch-by-branch submission plan and results.")
+	cmd.Flags().BoolVar(&f.withNativeStack, "with-native-stack", false, "Sync native GitHub Stack metadata once (or enable github.stack for eligible submits).")
 }
 
 func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
@@ -131,12 +133,14 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			SubmitFooter:         submitFooter,
 			NoLabels:             f.noLabels,
 			NoAssignees:          f.noAssignees,
+			CreateGitHubStack:    f.withNativeStack,
 			// Config-driven options
-			ConfigDraft:     cfg.SubmitDraft(),
-			ConfigWeb:       cfg.SubmitWeb(),
-			ConfigLabels:    configLabels,
-			ConfigReviewers: cfg.SubmitReviewers(),
-			ConfigAssignees: configAssignees,
+			ConfigDraft:       cfg.SubmitDraft(),
+			ConfigGitHubStack: cfg.GitHubStack(),
+			ConfigWeb:         cfg.SubmitWeb(),
+			ConfigLabels:      configLabels,
+			ConfigReviewers:   cfg.SubmitReviewers(),
+			ConfigAssignees:   configAssignees,
 		}
 
 		if f.jsonOutput {

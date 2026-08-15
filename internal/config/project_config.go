@@ -36,6 +36,11 @@ type SubmitConfig struct {
 	Assignees []string `yaml:"assignees,omitempty"` // Default assignees for PRs
 }
 
+// GitHubConfig contains GitHub integration configuration.
+type GitHubConfig struct {
+	Stack *bool `yaml:"stack,omitempty"` // Sync native GitHub Stack metadata
+}
+
 // MergeConfig contains merge method configuration
 type MergeConfig struct {
 	Method string `yaml:"method,omitempty"`
@@ -82,6 +87,7 @@ type ProjectConfig struct {
 	Branch         BranchConfig     `yaml:"branch,omitempty"`
 	Stack          StackConfig      `yaml:"stack,omitempty"`
 	Submit         SubmitConfig     `yaml:"submit,omitempty"`
+	GitHub         GitHubConfig     `yaml:"github,omitempty"`
 	Merge          MergeConfig      `yaml:"merge,omitempty"`
 	CI             CIConfig         `yaml:"ci,omitempty"`
 	Undo           UndoConfig       `yaml:"undo,omitempty"`
@@ -110,6 +116,7 @@ var knownTopLevelKeys = map[string]bool{
 	SectionBranch:     true,
 	SectionStack:      true,
 	SectionSubmit:     true,
+	SectionGitHub:     true,
 	SectionMerge:      true,
 	SectionCI:         true,
 	SectionUndo:       true,
@@ -206,6 +213,19 @@ func (c *ProjectConfig) GetSubmitDraft() bool {
 		return false // Default
 	}
 	return *c.Submit.Draft
+}
+
+// HasGitHubStack returns true if native GitHub Stack sync is configured.
+func (c *ProjectConfig) HasGitHubStack() bool {
+	return c.GitHub.Stack != nil
+}
+
+// GetGitHubStack returns the native GitHub Stack sync value.
+func (c *ProjectConfig) GetGitHubStack() bool {
+	if c.GitHub.Stack == nil {
+		return DefaultGitHubStack
+	}
+	return *c.GitHub.Stack
 }
 
 // HasSubmitWeb returns true if the submit web setting is configured

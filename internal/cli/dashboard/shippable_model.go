@@ -398,14 +398,10 @@ func (m *shippableModel) rebuildCache() {
 	for _, stack := range m.stacks {
 		rootBranch := stack.RootBranch()
 
-		// Compute display title from commit subject (this calls git log)
-		title := rootBranch // Default fallback
-		if branch := m.engine.GetBranch(rootBranch); branch.GetName() != "" {
-			if prTitle := branch.DefaultPRTitle(); prTitle != "" {
-				title = prTitle
-			}
-		}
-		m.cache.stackTitles[rootBranch] = title
+		// Use the title the analyzer already computed (PR title > commit subject > branch name)
+		// rather than recomputing from commit subject alone, which both discards a real PR
+		// title when one exists and re-spawns git to redo work the analyzer already did.
+		m.cache.stackTitles[rootBranch] = stack.DisplayTitle()
 
 		// Get stack description from metadata
 		if branch := m.engine.GetBranch(rootBranch); branch.GetName() != "" {

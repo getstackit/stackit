@@ -277,8 +277,8 @@ func buildTreeAnnotation(
 		// The short style does not batch stats, so resolve the SHA directly.
 		if stat.ShortSHA != "" {
 			annotation.LocalSHA = stat.ShortSHA
-		} else if sha, err := branch.GetRevision(); err == nil && len(sha) >= 7 {
-			annotation.LocalSHA = sha[:7]
+		} else if sha, err := branch.GetRevision(); err == nil {
+			annotation.LocalSHA = utils.ShortRevision(sha, 0)
 		}
 	}
 	return annotation

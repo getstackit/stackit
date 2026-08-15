@@ -103,7 +103,9 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 		// NOTE: st sync checks for uncommitted changes before calling this,
 		// so hard reset is safe here.
 		if currentBranch == branchName {
-			_ = r.HardReset(ctx, "HEAD")
+			if err := r.HardReset(ctx, "HEAD"); err != nil {
+				return PullConflict, fmt.Errorf("updated %s but failed to reset current worktree: %w", branchName, err)
+			}
 		}
 
 		// If this branch is checked out in another clean worktree, reset it to

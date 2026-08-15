@@ -290,29 +290,7 @@ func IsDemoMode() bool {
 // Run runs the given worker function for each item in the slice in parallel.
 // It uses runtime.GOMAXPROCS(0) as the default number of workers.
 func Run[T any](items []T, worker func(item T)) {
-	if len(items) == 0 {
-		return
-	}
-
-	numWorkers := min(runtime.GOMAXPROCS(0), len(items))
-
-	jobs := make(chan T, len(items))
-	for _, item := range items {
-		jobs <- item
-	}
-	close(jobs)
-
-	var wg sync.WaitGroup
-	wg.Add(numWorkers)
-	for range numWorkers {
-		go func() {
-			defer wg.Done()
-			for item := range jobs {
-				worker(item)
-			}
-		}()
-	}
-	wg.Wait()
+	RunWithWorkers(items, 0, worker)
 }
 
 // ShortRevision returns a shortened version of a git revision hash.
@@ -349,7 +327,7 @@ func RunWithWorkers[T any](items []T, numWorkers int, worker func(item T)) {
 
 	var wg sync.WaitGroup
 	wg.Add(numWorkers)
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		go func() {
 			defer wg.Done()
 			for item := range jobs {

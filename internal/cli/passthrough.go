@@ -155,7 +155,7 @@ func HandlePassthroughWithResult(args []string, exit bool, out, errWriter io.Wri
 
 			// Print passthrough message
 			_, _ = fmt.Fprintf(errWriter, "\033[90mPassing command through to git...\033[0m\n")
-			_, _ = fmt.Fprintf(errWriter, "\033[90mRunning: \"git %s\"\033[0m\n\n", joinArgs(gitArgs))
+			_, _ = fmt.Fprintf(errWriter, "\033[90mRunning: \"git %s\"\033[0m\n\n", strings.Join(gitArgs, " "))
 
 			err := gitCmd.Run()
 			if err != nil {
@@ -181,15 +181,18 @@ func HandlePassthroughWithResult(args []string, exit bool, out, errWriter io.Wri
 	return false, nil
 }
 
-func joinArgs(args []string) string {
-	var result strings.Builder
-	for i, arg := range args {
-		if i > 0 {
-			result.WriteString(" ")
-		}
-		result.WriteString(arg)
+// readRefMetadata reads the blob at refName and unmarshals it into dest,
+// returning false if the ref, blob, or JSON is missing or invalid.
+func readRefMetadata(runner git.Runner, refName string, dest any) bool {
+	sha, err := runner.GetRef(refName)
+	if err != nil {
+		return false
 	}
-	return result.String()
+	content, err := runner.CatFile(sha)
+	if err != nil {
+		return false
+	}
+	return json.Unmarshal([]byte(content), dest) == nil
 }
 
 func isCurrentBranchLockedOrFrozen(runner git.Runner) (bool, bool, string) {
@@ -199,31 +202,15 @@ func isCurrentBranchLockedOrFrozen(runner git.Runner) (bool, bool, string) {
 	}
 	branch = strings.TrimSpace(branch)
 
-	locked := false
-	refName := "refs/stackit/metadata/" + branch
-	if sha, err := runner.GetRef(refName); err == nil {
-		if content, err := runner.CatFile(sha); err == nil {
-			var meta struct {
-				LockReason engine.LockReason `json:"lockReason"`
-			}
-			if err := json.Unmarshal([]byte(content), &meta); err == nil {
-				locked = meta.LockReason.IsLocked()
-			}
-		}
+	var lockMeta struct {
+		LockReason engine.LockReason `json:"lockReason"`
 	}
+	locked := readRefMetadata(runner, "refs/stackit/metadata/"+branch, &lockMeta) && lockMeta.LockReason.IsLocked()
 
-	frozen := false
-	localRefName := "refs/stackit/local-metadata/" + branch
-	if sha, err := runner.GetRef(localRefName); err == nil {
-		if content, err := runner.CatFile(sha); err == nil {
-			var meta struct {
-				Frozen bool `json:"frozen"`
-			}
-			if err := json.Unmarshal([]byte(content), &meta); err == nil {
-				frozen = meta.Frozen
-			}
-		}
+	var frozenMeta struct {
+		Frozen bool `json:"frozen"`
 	}
+	frozen := readRefMetadata(runner, "refs/stackit/local-metadata/"+branch, &frozenMeta) && frozenMeta.Frozen
 
 	return locked, frozen, branch
 }

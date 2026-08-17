@@ -216,6 +216,20 @@ func (g *StackGraph) ChildBranches(branch Branch) Branches {
 	return NewBranches(branches)
 }
 
+// FlattenThroughAnchors replaces worktree anchor branches with their non-anchor
+// children, recursively, so callers see only real (non-anchor) branches.
+func (g *StackGraph) FlattenThroughAnchors(branches Branches) Branches {
+	result := Branches{}
+	for _, b := range branches {
+		if b.IsWorktreeAnchor() {
+			result = result.Concat(g.FlattenThroughAnchors(g.ChildBranches(b)))
+		} else {
+			result = result.Append(b)
+		}
+	}
+	return result
+}
+
 // Parent returns the parent branch name (empty string if none).
 func (g *StackGraph) Parent(branch Branch) string {
 	if node := g.nodes[branch.GetName()]; node != nil {

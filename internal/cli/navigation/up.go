@@ -56,7 +56,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 				// Traverse up the specified number of steps
 				targetBranch := currentBranch.GetName()
 				for i := 0; i < steps; i++ {
-					children := flattenThroughAnchors(graph.ChildBranches(ctx.Engine.GetBranch(targetBranch)), graph)
+					children := graph.FlattenThroughAnchors(graph.ChildBranches(ctx.Engine.GetBranch(targetBranch)))
 					if len(children) == 0 {
 						if i == 0 {
 							ctx.Output.Info("Already at the top of the stack.")
@@ -127,20 +127,6 @@ the --to flag is used to specify a target branch to navigate towards.`,
 	_ = cmd.RegisterFlagCompletionFunc("to", common.CompleteBranches)
 
 	return cmd
-}
-
-// flattenThroughAnchors replaces worktree anchor branches with their non-anchor children.
-func flattenThroughAnchors(branches engine.Branches, graph *engine.StackGraph) engine.Branches {
-	result := engine.Branches{}
-	for _, b := range branches {
-		if b.IsWorktreeAnchor() {
-			grandchildren := graph.ChildBranches(b)
-			result = result.Concat(flattenThroughAnchors(grandchildren, graph))
-		} else {
-			result = result.Append(b)
-		}
-	}
-	return result
 }
 
 func promptForChild(children []string, parent string) (string, error) {

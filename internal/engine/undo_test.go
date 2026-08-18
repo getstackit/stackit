@@ -1,18 +1,93 @@
 package engine_test
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+func TestFailedSnapshotClearsPreviousBinding(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit()
+	require.NoError(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("create")))
+	require.NotEmpty(t, s.Engine.LastSnapshotID())
+	dir := filepath.Join(s.Scene.Dir, ".git", engine.UndoDir)
+	require.NoError(t, os.Rename(dir, dir+"-saved"))
+	require.NoError(t, os.WriteFile(dir, []byte("block snapshot write"), 0o600))
+	require.Error(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("modify")))
+	require.NoError(t, os.Remove(dir))
+	require.NoError(t, os.Rename(dir+"-saved", dir))
+	require.Empty(t, s.Engine.LastSnapshotID())
+	snapshots, err := s.Engine.GetSnapshots()
+	require.NoError(t, err)
+	require.Len(t, snapshots, 1, "the earlier snapshot should remain available for explicit undo")
+}
+
+type failingUntrackedRestore struct {
+	git.Runner
+}
+
+func (f failingUntrackedRestore) RestoreUntracked(context.Context, string) (int, error) {
+	return 0, errors.New("restore failed")
+}
+
+func TestUntrackedRecoveryUsesArchive(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit()
+	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("tracked content", "tracked"))
+	require.NoError(t, s.Scene.Repo.CreateChange("captured notes", "fresh", true))
+	eng, err := engine.NewEngine(engine.Options{
+		RepoRoot: s.Scene.Dir, Trunk: "main",
+		Git: failingUntrackedRestore{git.NewRunnerWithPath(s.Scene.Dir, nil)},
+	})
+	require.NoError(t, err)
+	require.NoError(t, eng.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
+	id := eng.LastSnapshotID()
+	_, err = eng.RestoreWorktree(t.Context(), id)
+	require.ErrorContains(t, err, "extracting 'git archive "+engine.UndoRefPrefix+id+"-untracked' into a new, empty directory")
+
+	// The recommended command exports captured content without changing the
+	// worktree or deleting tracked files absent from the capture.
+	archive, err := exec.CommandContext(t.Context(), "git", "-C", s.Scene.Dir, "archive", engine.UndoRefPrefix+id+"-untracked").Output()
+	require.NoError(t, err)
+	reader := tar.NewReader(bytes.NewReader(archive))
+	files := make(map[string]string)
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err)
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+		content, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		files[header.Name] = string(content)
+	}
+	require.Equal(t, map[string]string{"fresh_test.txt": "captured notes"}, files)
+	content, err := os.ReadFile(filepath.Join(s.Scene.Dir, "tracked_test.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "tracked content", string(content))
+}
 
 // snapshotOpts is a helper to create SnapshotOptions for tests
 func snapshotOpts(command string, args ...string) engine.SnapshotOptions {
@@ -20,6 +95,14 @@ func snapshotOpts(command string, args ...string) engine.SnapshotOptions {
 		Command: command,
 		Args:    args,
 	}
+}
+
+// capturingSnapshotOpts mirrors what a command that consumes the working tree
+// (modify, create, absorb, split) asks for.
+func capturingSnapshotOpts() engine.SnapshotOptions {
+	opts := snapshotOpts("modify")
+	opts.CaptureWorktree = true
+	return opts
 }
 
 func TestTakeSnapshot(t *testing.T) {
@@ -42,7 +125,7 @@ func TestTakeSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Take snapshot
-		err = s.Engine.TakeSnapshot(snapshotOpts("test", "arg1", "arg2"))
+		err = s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test", "arg1", "arg2"))
 		require.NoError(t, err)
 
 		// Verify snapshot was created
@@ -69,7 +152,7 @@ func TestTakeSnapshot(t *testing.T) {
 		undoDir := filepath.Join(s.Scene.Dir, ".git", "stackit", "undo")
 		require.NoDirExists(t, undoDir)
 
-		err := s.Engine.TakeSnapshot(snapshotOpts("test"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
 		require.DirExists(t, undoDir)
@@ -83,7 +166,7 @@ func TestTakeSnapshot(t *testing.T) {
 			Commit("feature change")
 
 		// Take snapshot while on feature branch
-		err := s.Engine.TakeSnapshot(snapshotOpts("test"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
 		snapshots, err := s.Engine.GetSnapshots()
@@ -112,13 +195,13 @@ func TestGetSnapshots(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Take multiple snapshots with small delays
-		err := s.Engine.TakeSnapshot(snapshotOpts("first"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("first"))
 		require.NoError(t, err)
 		time.Sleep(50 * time.Millisecond) // Longer delay to ensure different timestamps
-		err = s.Engine.TakeSnapshot(snapshotOpts("second"))
+		err = s.Engine.TakeSnapshot(t.Context(), snapshotOpts("second"))
 		require.NoError(t, err)
 		time.Sleep(50 * time.Millisecond)
-		err = s.Engine.TakeSnapshot(snapshotOpts("third"))
+		err = s.Engine.TakeSnapshot(t.Context(), snapshotOpts("third"))
 		require.NoError(t, err)
 
 		snapshots, err := s.Engine.GetSnapshots()
@@ -146,7 +229,7 @@ func TestGetSnapshots(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := s.Engine.TakeSnapshot(snapshotOpts("move", "branch-a", "onto", "branch-b"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("move", "branch-a", "onto", "branch-b"))
 		require.NoError(t, err)
 
 		snapshots, err := s.Engine.GetSnapshots()
@@ -169,7 +252,7 @@ func TestLoadSnapshot(t *testing.T) {
 			Checkout("main").
 			TrackBranch("feature", "main")
 
-		err := s.Engine.TakeSnapshot(snapshotOpts("test", "arg"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test", "arg"))
 		require.NoError(t, err)
 
 		snapshots, err := s.Engine.GetSnapshots()
@@ -212,7 +295,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Take snapshot
-		err = s.Engine.TakeSnapshot(snapshotOpts("test"))
+		err = s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
 		// Make changes: add commits to both branches
@@ -255,7 +338,7 @@ func TestRestoreSnapshot(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Take snapshot
-		err := s.Engine.TakeSnapshot(snapshotOpts("test"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
 		// Create new branch after snapshot
@@ -303,7 +386,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NotEmpty(t, initialFeatureMetadataSHA)
 
 		// Take snapshot
-		err = s.Engine.TakeSnapshot(snapshotOpts("test"))
+		err = s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
 		// Modify metadata by changing parent
@@ -331,7 +414,7 @@ func TestRestoreSnapshot(t *testing.T) {
 			Checkout("main")
 
 		// Take snapshot while on main
-		err := s.Engine.TakeSnapshot(snapshotOpts("test"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
 		// Switch to feature branch
@@ -363,7 +446,7 @@ func TestRestoreSnapshot(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Take snapshot
-		err := s.Engine.TakeSnapshot(snapshotOpts("test"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
 		// Delete feature branch manually
@@ -394,7 +477,7 @@ func TestRestoreSnapshot(t *testing.T) {
 			Commit("feature change")
 
 		// Take snapshot while on feature
-		err := s.Engine.TakeSnapshot(snapshotOpts("test"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test"))
 		require.NoError(t, err)
 
 		// Delete feature branch
@@ -436,7 +519,7 @@ func TestEnforceMaxStackDepth(t *testing.T) {
 
 		// Create more snapshots than default max (10)
 		for i := range 12 {
-			err := s.Engine.TakeSnapshot(snapshotOpts("test", string(rune('a'+i))))
+			err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test", string(rune('a'+i))))
 			require.NoError(t, err)
 			time.Sleep(10 * time.Millisecond) // Ensure different timestamps
 		}
@@ -462,7 +545,7 @@ func TestSnapshotFileFormat(t *testing.T) {
 			Checkout("main").
 			TrackBranch("feature", "main")
 
-		err := s.Engine.TakeSnapshot(snapshotOpts("test", "arg1", "arg2"))
+		err := s.Engine.TakeSnapshot(t.Context(), snapshotOpts("test", "arg1", "arg2"))
 		require.NoError(t, err)
 
 		// Read the snapshot file directly
@@ -480,5 +563,165 @@ func TestSnapshotFileFormat(t *testing.T) {
 		require.NoError(t, err)
 		_, err = s.Engine.LoadSnapshot(snapshots[0].ID)
 		require.NoError(t, err)
+	})
+}
+
+// TestSnapshotWorktreeCapture covers the half of "restore me to before the
+// command" that branch refs cannot express: the uncommitted changes a command
+// like modify turns into a commit. Rolling the ref back without handing those
+// changes back deletes work the user never committed themselves.
+func TestSnapshotWorktreeCapture(t *testing.T) {
+	t.Parallel()
+
+	t.Run("captures and re-applies tracked changes", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		// Commit a file, then leave an uncommitted edit on it.
+		require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("committed", "tracked"))
+		trackedPath := filepath.Join(s.Scene.Dir, "tracked_test.txt")
+		require.NoError(t, os.WriteFile(trackedPath, []byte("work in progress"), 0600))
+
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
+
+		snapshots, err := s.Engine.GetSnapshots()
+		require.NoError(t, err)
+		require.Len(t, snapshots, 1)
+
+		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, snapshot.WorktreeSHA, "a dirty working tree must be captured with the snapshot")
+
+		// The capture must survive gc: `git stash create` leaves the commit
+		// unreachable, so the snapshot anchors it under a ref.
+		anchored, err := s.Scene.Repo.GetRef(engine.UndoRefPrefix + snapshots[0].ID)
+		require.NoError(t, err, "the capture must be anchored under a ref")
+		require.Equal(t, snapshot.WorktreeSHA, strings.TrimSpace(anchored))
+
+		// Simulate the command consuming the edit and the rollback discarding it.
+		require.NoError(t, os.WriteFile(trackedPath, []byte("committed"), 0600))
+
+		restored, err := s.Engine.RestoreWorktree(t.Context(), snapshots[0].ID)
+		require.NoError(t, err)
+		require.True(t, restored)
+
+		content, err := os.ReadFile(trackedPath)
+		require.NoError(t, err)
+		require.Equal(t, "work in progress", string(content),
+			"the uncommitted edit must be back in the working tree")
+	})
+
+	t.Run("captures and re-applies untracked files", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		// A stash cannot hold untracked files, but `modify -a` stages and
+		// commits them — so the rollback deletes their only copy.
+		require.NoError(t, s.Scene.Repo.CreateChange("brand new", "fresh", true))
+		freshPath := filepath.Join(s.Scene.Dir, "fresh_test.txt")
+
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
+
+		snapshots, err := s.Engine.GetSnapshots()
+		require.NoError(t, err)
+		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, snapshot.UntrackedSHA, "untracked files must be captured with the snapshot")
+
+		require.NoError(t, os.Remove(freshPath))
+
+		_, err = s.Engine.RestoreWorktree(t.Context(), snapshots[0].ID)
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(freshPath)
+		require.NoError(t, err, "the captured file must be back in the working tree")
+		require.Equal(t, "brand new", string(content))
+	})
+
+	t.Run("leaves an existing file alone", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		require.NoError(t, s.Scene.Repo.CreateChange("captured", "fresh", true))
+		freshPath := filepath.Join(s.Scene.Dir, "fresh_test.txt")
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
+
+		// The file survived the rollback and has since moved on. A safety net
+		// must not overwrite content that is currently on disk.
+		require.NoError(t, os.WriteFile(freshPath, []byte("newer content"), 0600))
+
+		snapshots, err := s.Engine.GetSnapshots()
+		require.NoError(t, err)
+		_, err = s.Engine.RestoreWorktree(t.Context(), snapshots[0].ID)
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(freshPath)
+		require.NoError(t, err)
+		require.Equal(t, "newer content", string(content))
+	})
+
+	t.Run("captures nothing without an opt-in", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		// A dirty tree that a reconciler would never consume: restack and sync
+		// hold back a worktree with uncommitted changes rather than rebasing
+		// it, so they must not pay for a capture they cannot need.
+		require.NoError(t, s.Scene.Repo.CreateChange("not for capture", "wip", true))
+
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("restack")))
+
+		snapshots, err := s.Engine.GetSnapshots()
+		require.NoError(t, err)
+		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
+		require.NoError(t, err)
+		require.Empty(t, snapshot.WorktreeSHA, "a snapshot without CaptureWorktree must not stash")
+		require.Empty(t, snapshot.UntrackedSHA)
+
+		restored, err := s.Engine.RestoreWorktree(t.Context(), snapshots[0].ID)
+		require.NoError(t, err)
+		require.False(t, restored, "restoring an uncaptured snapshot is a no-op")
+	})
+
+	t.Run("captures nothing when the working tree is clean", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
+
+		snapshots, err := s.Engine.GetSnapshots()
+		require.NoError(t, err)
+		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
+		require.NoError(t, err)
+		require.Empty(t, snapshot.WorktreeSHA)
+		require.Empty(t, snapshot.UntrackedSHA)
+	})
+
+	t.Run("prunes the anchor refs with the snapshot that owns them", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		// Overflow the undo stack so the oldest snapshot is pruned. Each
+		// snapshot captures a dirty tree, so each anchors refs.
+		var oldestID string
+		for i := range engine.DefaultMaxUndoStackDepth + 1 {
+			require.NoError(t, s.Scene.Repo.CreateChange("wip "+strconv.Itoa(i), "wip", true))
+			require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
+			if i == 0 {
+				snapshots, err := s.Engine.GetSnapshots()
+				require.NoError(t, err)
+				require.Len(t, snapshots, 1)
+				oldestID = snapshots[0].ID
+			}
+		}
+
+		_, err := s.Scene.Repo.GetRef(engine.UndoRefPrefix + oldestID + "-untracked")
+		require.Error(t, err, "the pruned snapshot's capture must not outlive it")
 	})
 }

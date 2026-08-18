@@ -258,6 +258,34 @@ func (d *demoGitRunner) FetchRefs(_ context.Context, _ string, _ ...string) erro
 	return nil
 }
 
+func (d *demoGitRunner) StashCreate(_ context.Context, _ string) (git.StashCapture, error) {
+	return git.StashCapture{}, nil
+}
+
+func (d *demoGitRunner) RestoreIntentToAdd(_ context.Context, _ []string) error {
+	return nil
+}
+
+func (d *demoGitRunner) StashApplyRef(_ context.Context, _ string, _ git.StashApplyMode) error {
+	return nil
+}
+
+func (d *demoGitRunner) CaptureUntracked(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
+func (d *demoGitRunner) RestoreUntracked(_ context.Context, _ string) (int, error) {
+	return 0, nil
+}
+
+func (d *demoGitRunner) Fetch(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (d *demoGitRunner) FetchRefSpecs(_ context.Context, _ string, _ []string) error {
+	return nil
+}
+
 func (d *demoGitRunner) CreateBranch(_ context.Context, _, _ string) error {
 	return nil
 }

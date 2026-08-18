@@ -85,6 +85,10 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 		WithFlag(opts.Update, "--update"),
 		WithFlag(opts.Patch, "--patch"),
 		WithFlag(opts.InteractiveRebase, "--interactive-rebase"),
+		// modify amends the working tree into a commit before it restacks, so
+		// a rollback that dropped the working tree would delete the user's
+		// uncommitted work along with the commit.
+		WithWorktreeCapture(),
 	)
 	TakeBestEffortSnapshot(ctx, snapshotOpts)
 

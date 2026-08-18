@@ -4,6 +4,7 @@ package submit
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -244,6 +245,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Restack if requested
 	if opts.Restack {
+		// Only when a branch actually needs it: submit runs constantly, and a
+		// stack that is already stacked correctly must not pay for a snapshot.
+		// When the restack does run it can halt on a conflict, and abort needs
+		// a rollback point belonging to this submit rather than to whatever
+		// command snapshotted last. Reuses the batched statuses read above;
+		// per-branch NeedsRestack() would shell a git rev-parse each.
+		if slices.ContainsFunc(branchObjs, func(b engine.Branch) bool { return !statuses.IsUpToDate(b) }) {
+			actions.TakeBestEffortSnapshot(ctx, actions.NewSnapshot("submit",
+				actions.WithFlag(opts.Restack, "--restack"),
+			))
+		}
 		handler.OnEvent(RestackEvent{Started: true})
 		if err := actions.RestackBranches(ctx, branchObjs); err != nil {
 			return fmt.Errorf("failed to restack branches: %w", err)

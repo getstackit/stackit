@@ -423,3 +423,38 @@ func TestWorktreeListIsMain(t *testing.T) {
 		))
 	})
 }
+
+func TestTreeContainsAnyPathFileDirectoryCollisions(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	for _, name := range []string{"file", "dir/deep/leaf"} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(scene.Dir, name)), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(scene.Dir, name), []byte("tracked"), 0o600))
+	}
+	_, err := runner.RunGitCommandWithContext(t.Context(), "add", "--", "file", "dir")
+	require.NoError(t, err)
+	_, err = runner.RunGitCommandWithContext(t.Context(), "commit", "-m", "tracked paths")
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		path     string
+		collides bool
+	}{
+		{"file", true},
+		{"file/notes.txt", true},
+		{"file/deep/notes.txt", true},
+		{"dir", true},
+		{"dir/deep", true},
+		{"dir/deep/leaf", true},
+		{"dir/deep/notes.txt", false},
+		{"file-other", false},
+		{"dir-other", false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			t.Parallel()
+			collides, known := runner.TreeContainsAnyPath(t.Context(), "HEAD", []string{tc.path})
+			require.True(t, known)
+			require.Equal(t, tc.collides, collides)
+		})
+	}
+}

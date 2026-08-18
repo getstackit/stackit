@@ -161,6 +161,11 @@ type StashOperations interface {
 	StashDrop(ctx context.Context, ref string) error
 	StashPop(ctx context.Context) error
 	StashPopRef(ctx context.Context, ref string) error
+	StashCreate(ctx context.Context, message string) (StashCapture, error)
+	RestoreIntentToAdd(ctx context.Context, paths []string) error
+	StashApplyRef(ctx context.Context, ref string, mode StashApplyMode) error
+	CaptureUntracked(ctx context.Context, message string) (string, error)
+	RestoreUntracked(ctx context.Context, commitSHA string) (int, error)
 	ListStash(ctx context.Context) (string, error)
 }
 

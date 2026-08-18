@@ -56,7 +56,7 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Take snapshot
-		err = s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err = s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "restack",
 			Args:    []string{"feature"},
 		})
@@ -102,7 +102,7 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, cfg.SetStackShape(config.StackShapeLinear))
 		s.Context.Config = cfg
 
-		require.NoError(t, s.Engine.TakeSnapshot(engine.SnapshotOptions{Command: "restack"}))
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "restack"}))
 		require.NoError(t, s.Engine.SetParent(s.Context, s.Engine.GetBranch("second"), s.Engine.GetBranch("main"), engine.DivergenceRecompute))
 
 		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
@@ -150,7 +150,7 @@ func TestAbortAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Take snapshot
-		err := s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "restack",
 			Args:    []string{"feature"},
 		})
@@ -213,7 +213,7 @@ func TestAbortAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Take snapshot
-		err := s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "restack",
 			Args:    []string{"feature"},
 		})

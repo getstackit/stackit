@@ -35,12 +35,20 @@ started. Commands like `modify` and `create` turn the working tree into a
 commit, so rolling that commit away without the working tree deletes work the
 user never committed themselves.
 
-Each snapshot therefore also captures the uncommitted state:
+Snapshots taken by those commands therefore also capture the uncommitted state:
 
 - a stash commit (`git stash create`) holding tracked modifications and the
   index, which preserves the staged/unstaged split on restore
 - a separate commit holding untracked, non-ignored files, which stashes exclude
   but `git add -A` would have committed
+
+Capturing is opt-in per command (`SnapshotOptions.CaptureWorktree`, or
+`actions.WithWorktreeCapture()`), and only `modify`, `create`, `absorb`, and
+`split` set it — they are the commands that turn the working tree into a commit.
+Everything else pays nothing: `restack` and `sync` hold back a worktree with
+uncommitted changes instead of rebasing it, so they can neither consume such
+work nor destroy it on rollback, and a capture there would be ~35ms of wasted
+`git stash create` per invocation on a 30k-file repository.
 
 Both are unreachable commits, so each is anchored under `refs/stackit/undo/` —
 otherwise `git gc` is free to collect the user's work — and both are deleted

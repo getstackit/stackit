@@ -6,6 +6,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 // Options contains options for the abort command
@@ -82,6 +83,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if err := eng.RestoreSnapshot(ctx.Context, snapshots[0].ID); err != nil {
 			return fmt.Errorf("failed to restore snapshot: %w", err)
 		}
+		restoreUncommittedWork(ctx, snapshots[0])
 		actions.WarnIfLinearStackRestored(ctx, "Abort")
 		out.Info("Successfully aborted and restored repository state.")
 	} else {
@@ -89,4 +91,27 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	return nil
+}
+
+// restoreUncommittedWork hands back the uncommitted changes the halted command
+// consumed. Restoring refs alone is not "where I started": modify amends the
+// working tree into a commit before it restacks, so rolling that commit away
+// without replacing the changes deletes work the user never committed
+// themselves, leaving it reachable through nothing but the reflog.
+//
+// Best effort by design. The rollback has already succeeded at this point, and
+// failing the whole abort over the working tree would strand the user mid-
+// conflict; the failure names the ref the capture is anchored under instead, so
+// the work is still reachable.
+func restoreUncommittedWork(ctx *app.Context, snapshot engine.SnapshotInfo) {
+	out := ctx.Output
+
+	restored, err := ctx.Engine.RestoreWorktree(ctx.Context, snapshot.ID)
+	if err != nil {
+		out.Warn("Could not restore the uncommitted changes from before '%s': %v", snapshot.Command, err)
+		return
+	}
+	if restored {
+		out.Info("Restored the uncommitted changes you had before '%s'.", snapshot.Command)
+	}
 }

@@ -143,7 +143,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 	// Take snapshot before any modifications
 	snapshotArgs := []string{string(style), string(direction)}
-	if err := eng.TakeSnapshot(engine.SnapshotOptions{
+	if err := eng.TakeSnapshot(ctx.Context, engine.SnapshotOptions{
 		Command: "split",
 		Args:    snapshotArgs,
 	}); err != nil {

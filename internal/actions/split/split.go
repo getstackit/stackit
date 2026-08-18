@@ -169,7 +169,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		snapshotArgs = append(snapshotArgs, opts.Pathspecs...)
 	}
 
-	if err := eng.TakeSnapshot(engine.SnapshotOptions{
+	if err := eng.TakeSnapshot(ctx.Context, engine.SnapshotOptions{
 		Command: "split",
 		Args:    snapshotArgs,
 	}); err != nil {

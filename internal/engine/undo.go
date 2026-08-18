@@ -61,6 +61,17 @@ type SnapshotInfo struct {
 type SnapshotOptions struct {
 	Command string
 	Args    []string
+	// CaptureWorktree records the uncommitted changes alongside the branch
+	// SHAs. Set it for commands that turn the working tree into a commit
+	// (modify, create, absorb, split) — restoring their snapshot without the
+	// working tree destroys work the user never committed themselves.
+	//
+	// Left unset, a snapshot costs exactly what it always did. Reconcilers
+	// (restack, sync) hold back a worktree with uncommitted changes rather
+	// than rebasing it, so they have nothing to consume and nothing to
+	// capture; paying `git stash create` on every one of them would be ~35ms
+	// of pure overhead per invocation on a 30k-file repository.
+	CaptureWorktree bool
 }
 
 // getUndoDir returns the path to the undo directory
@@ -165,6 +176,12 @@ func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) err
 	filename := getSnapshotFilename(timestamp, opts.Command)
 	snapshotID := strings.TrimSuffix(filename, jsonExt)
 
+	var worktreeSHA, untrackedSHA string
+	if opts.CaptureWorktree {
+		worktreeSHA = e.captureWorktree(ctx, snapshotID, opts.Command)
+		untrackedSHA = e.captureUntracked(ctx, snapshotID, opts.Command)
+	}
+
 	snapshot := &Snapshot{
 		Timestamp:     timestamp,
 		Command:       opts.Command,
@@ -172,8 +189,8 @@ func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) err
 		CurrentBranch: currentBranch,
 		BranchSHAs:    branchSHAs,
 		MetadataSHAs:  metadataSHAs,
-		WorktreeSHA:   e.captureWorktree(ctx, snapshotID, opts.Command),
-		UntrackedSHA:  e.captureUntracked(ctx, snapshotID, opts.Command),
+		WorktreeSHA:   worktreeSHA,
+		UntrackedSHA:  untrackedSHA,
 	}
 
 	// Serialize to JSON
@@ -311,17 +328,37 @@ func (e *engineImpl) enforceMaxStackDepth(ctx context.Context) error {
 
 	// Delete oldest snapshots
 	toDelete := len(snapshots) - e.maxUndoStackDepth
+	var captureRefs []string
 	for i := range toDelete {
+		// Read the snapshot before removing it: it names the captures that
+		// have to go with it. Snapshots that captured nothing — every command
+		// that does not consume the working tree — contribute no refs, so
+		// pruning them stays free of git processes.
+		snapshotID := strings.TrimSuffix(snapshots[i].Name(), jsonExt)
+		var owned []string
+		if snapshot, err := e.LoadSnapshot(snapshotID); err == nil {
+			if snapshot.WorktreeSHA != "" {
+				owned = append(owned, snapshotWorktreeRef(snapshotID))
+			}
+			if snapshot.UntrackedSHA != "" {
+				owned = append(owned, snapshotUntrackedRef(snapshotID))
+			}
+		}
+
 		filePath := filepath.Join(dir, snapshots[i].Name())
 		if err := os.Remove(filePath); err != nil {
-			// Continue deleting others even if one fails
+			// Continue deleting others even if one fails. The captures stay
+			// anchored: a snapshot still on disk names them, and dropping its
+			// refs would leave it pointing at commits gc is free to collect.
 			continue
 		}
-		// The captures are only reachable through these refs, so they go when
-		// the snapshot that owns them goes.
-		snapshotID := strings.TrimSuffix(snapshots[i].Name(), jsonExt)
-		_ = e.git.DeleteRef(ctx, snapshotWorktreeRef(snapshotID))
-		_ = e.git.DeleteRef(ctx, snapshotUntrackedRef(snapshotID))
+		captureRefs = append(captureRefs, owned...)
+	}
+
+	// The captures are only reachable through these refs, so they go when the
+	// snapshots that own them go. One batched write, not one per ref.
+	if len(captureRefs) > 0 {
+		_ = e.git.DeleteRefsBatch(ctx, captureRefs)
 	}
 
 	return nil

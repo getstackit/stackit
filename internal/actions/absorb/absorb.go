@@ -64,6 +64,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		actions.WithFlag(opts.Force, "--force"),
 		actions.WithFlag(opts.Patch, "--patch"),
 		actions.WithFlagValue("--restack", string(opts.Restack)),
+		// absorb runs on a deliberately dirty tree: staged hunks are its input.
+		actions.WithWorktreeCapture(),
 	)
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 

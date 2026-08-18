@@ -697,6 +697,17 @@ func NewSnapshot(command string, options ...SnapshotOption) engine.SnapshotOptio
 	return opts
 }
 
+// WithWorktreeCapture records the uncommitted changes with the snapshot, so a
+// later abort or undo can hand them back. Use it on commands that turn the
+// working tree into a commit — modify, create, absorb, split — and nowhere
+// else: capturing costs a `git stash create` plus an untracked scan, which is
+// wasted on commands that cannot consume uncommitted work.
+func WithWorktreeCapture() SnapshotOption {
+	return func(opts *engine.SnapshotOptions) {
+		opts.CaptureWorktree = true
+	}
+}
+
 // WithArg appends a single argument if it's not empty
 func WithArg(arg string) SnapshotOption {
 	return func(opts *engine.SnapshotOptions) {

@@ -13,7 +13,7 @@ Stackit uses **Git refs** as the storage mechanism for all metadata. Metadata is
 
 ## Ref Namespaces
 
-Stackit uses four ref namespaces:
+Stackit uses five ref namespaces:
 
 | Namespace | Purpose | Synced to Remote |
 |-----------|---------|------------------|
@@ -21,6 +21,34 @@ Stackit uses four ref namespaces:
 | `refs/stackit/local-metadata/{branch}` | Local-only branch state (frozen, cached IDs) | No |
 | `refs/stackit/stacks/{stack-id}` | Stack-level metadata (title, description) | Yes |
 | `refs/stackit/remote-stacks/{stack-id}` | Fetched remote stack metadata (read-only) | N/A (fetched) |
+| `refs/stackit/undo/{snapshot-id}` | Working-tree captures anchored to an undo snapshot | No |
+
+## Undo Snapshot Captures
+
+**Refs**: `refs/stackit/undo/{snapshot-id}` and `refs/stackit/undo/{snapshot-id}-untracked`
+
+**Source**: `internal/engine/undo.go`
+
+A snapshot records branch and metadata SHAs (`.git/stackit/undo/*.json`), which
+is enough to roll refs back but not enough to put the user back where they
+started. Commands like `modify` and `create` turn the working tree into a
+commit, so rolling that commit away without the working tree deletes work the
+user never committed themselves.
+
+Each snapshot therefore also captures the uncommitted state:
+
+- a stash commit (`git stash create`) holding tracked modifications and the
+  index, which preserves the staged/unstaged split on restore
+- a separate commit holding untracked, non-ignored files, which stashes exclude
+  but `git add -A` would have committed
+
+Both are unreachable commits, so each is anchored under `refs/stackit/undo/` —
+otherwise `git gc` is free to collect the user's work — and both are deleted
+when the snapshot that owns them is pruned by `undo.depth`.
+
+`abort` and `undo` restore refs first, then re-apply the capture onto the
+rolled-back tree. Restoring a captured file never overwrites a file that
+currently exists on disk.
 
 ## Branch Metadata (`Meta`)
 

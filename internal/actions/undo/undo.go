@@ -145,6 +145,15 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	if err := eng.RestoreSnapshot(ctx.Context, selectedSnapshotID); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
+	// "Before the command" includes the working tree the command consumed, so
+	// restoring only refs would drop the user's uncommitted changes on the
+	// floor. Best effort: the rollback itself has already succeeded, and the
+	// capture is named so the work stays reachable either way.
+	if restored, worktreeErr := eng.RestoreWorktree(ctx.Context, selectedSnapshotID); worktreeErr != nil {
+		ctx.Output.Warn("Could not restore the uncommitted changes from before '%s': %v", selectedSnapshot.Command, worktreeErr)
+	} else if restored {
+		ctx.Output.Info("Restored the uncommitted changes you had before '%s'.", selectedSnapshot.Command)
+	}
 	actions.WarnIfLinearStackRestored(ctx, "Undo")
 
 	h.Complete(true, fmt.Sprintf("Successfully restored to state before '%s'.", selectedSnapshot.Command))

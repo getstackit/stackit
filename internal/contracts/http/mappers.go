@@ -13,16 +13,17 @@ import (
 )
 
 // MapBranch converts an engine Branch and its StackNode into an API BranchResponse.
-// remoteStatus, stat, commits, and commitInfo should each come from a single
-// batch call covering all branches being mapped in the current request
-// (ReadBranchRemoteStatuses, BatchBranchStats, BatchCommits, BatchCommitInfo),
-// not per-branch calls — per-branch reads spawn a git process per field per branch.
-func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus, remoteStatus engine.BranchRemoteStatus, stat engine.BranchStat, commits []string, commitInfo git.CommitInfo) BranchResponse {
+// remoteStatus, stat, commits, commitInfo, and needsRestack should each come
+// from a single batch call covering all branches being mapped in the current
+// request (ReadBranchRemoteStatuses, BatchBranchStats, BatchCommits,
+// BatchCommitInfo, ReadBranchStatuses), not per-branch calls — per-branch
+// reads spawn a git process per field per branch.
+func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus, remoteStatus engine.BranchRemoteStatus, stat engine.BranchStat, commits []string, commitInfo git.CommitInfo, needsRestack bool) BranchResponse {
 	resp := BranchResponse{
 		Name:         branch.GetName(),
 		Depth:        node.Depth,
 		IsCurrent:    branch.GetName() == eng.CurrentBranchName(),
-		NeedsRestack: branch.NeedsRestack(),
+		NeedsRestack: needsRestack,
 		IsLocked:     branch.IsLocked(),
 		IsFrozen:     branch.IsFrozen(),
 		Children:     node.Children,
@@ -95,8 +96,16 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 		}
 	}
 
-	// Compute stack status using display branches (anchor excluded)
-	status := computeStackStatus(graph, displayBranches)
+	// Compute stack status using display branches (anchor excluded). Parent
+	// revisions are resolved in one batch call instead of one per branch.
+	displayBranchObjs := make(engine.Branches, 0, len(displayBranches))
+	for _, name := range displayBranches {
+		if node := graph.GetNode(name); node != nil {
+			displayBranchObjs = append(displayBranchObjs, node.Branch)
+		}
+	}
+	statuses := eng.ReadBranchStatuses(displayBranchObjs)
+	status := computeStackStatus(graph, displayBranches, statuses)
 
 	// Title and description come exclusively from explicit stack descriptions
 	// set via `stackit describe`. No fallback to PR titles or branch names.
@@ -152,18 +161,20 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 		stackBranches = append(stackBranches, node.Branch)
 	}
 
-	// One remote listing, one stats pass, one commits pass, and one commit-info
-	// pass for the whole stack instead of one of each per branch.
+	// One remote listing, one stats pass, one commits pass, one commit-info
+	// pass, and one restack-status pass for the whole stack instead of one of
+	// each per branch.
 	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx, stackBranches)
 	stats := eng.BatchBranchStats(stackBranches)
 	commitsByBranch := eng.BatchCommits(stackBranches, engine.CommitFormatReadableWithDate)
 	commitInfoByBranch := eng.BatchCommitInfo(stackBranches)
+	statuses := eng.ReadBranchStatuses(stackBranches)
 
 	branches := make([]BranchResponse, 0, len(nodes))
 	for _, node := range nodes {
 		name := node.Branch.GetName()
 		checks := checksMap.Get(name)
-		br := MapBranch(eng, node.Branch, node, checks, remoteStatuses.ForBranch(node.Branch), stats[name], commitsByBranch[name], commitInfoByBranch[name])
+		br := MapBranch(eng, node.Branch, node, checks, remoteStatuses.ForBranch(node.Branch), stats[name], commitsByBranch[name], commitInfoByBranch[name], !statuses.IsUpToDate(node.Branch))
 		if isAnchor {
 			// Anchor's direct children become display roots
 			if br.Parent == anchorName {
@@ -240,8 +251,10 @@ func mapCommitsWithDate(lines []string) []CommitResponse {
 	return commits
 }
 
-// computeStackStatus determines the overall status of a stack.
-func computeStackStatus(graph *engine.StackGraph, branchNames []string) string {
+// computeStackStatus determines the overall status of a stack. statuses
+// should come from a single ReadBranchStatuses batch call covering
+// branchNames, not per-branch NeedsRestack() calls.
+func computeStackStatus(graph *engine.StackGraph, branchNames []string, statuses engine.BranchStatuses) string {
 	allHavePR := true
 	anyNeedsRestack := false
 	anyLocked := false
@@ -253,7 +266,7 @@ func computeStackStatus(graph *engine.StackGraph, branchNames []string) string {
 		}
 		branch := node.Branch
 
-		if branch.NeedsRestack() {
+		if !statuses.IsUpToDate(branch) {
 			anyNeedsRestack = true
 		}
 		if branch.IsLocked() {

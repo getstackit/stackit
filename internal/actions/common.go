@@ -44,7 +44,7 @@ func TakeBestEffortSnapshot(ctx *app.Context, opts engine.SnapshotOptions) {
 	if ctx.Config != nil && !ctx.Config.UndoEnabled() {
 		return
 	}
-	if err := ctx.Undo().TakeSnapshot(opts); err != nil {
+	if err := ctx.Undo().TakeSnapshot(ctx.Context, opts); err != nil {
 		ctx.Output.Debug("Failed to take snapshot: %v", err)
 	}
 }

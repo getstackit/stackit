@@ -36,7 +36,7 @@ func TestUndoAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Take snapshot
-		err = s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err = s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "move",
 			Args:    []string{"feature", "onto", "main"},
 		})
@@ -72,7 +72,7 @@ func TestUndoAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Create at least one snapshot so GetSnapshots doesn't return empty
-		err := s.Engine.TakeSnapshot(engine.SnapshotOptions{Command: "test"})
+		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "test"})
 		require.NoError(t, err)
 
 		err = Action(s.Context, Options{
@@ -96,7 +96,7 @@ func TestUndoAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Take first snapshot (captures initial state)
-		err = s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err = s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "create",
 			Args:    []string{"feature1"},
 		})
@@ -112,7 +112,7 @@ func TestUndoAction(t *testing.T) {
 		require.NotEqual(t, initialFeature1SHA, afterFirstChangeSHA)
 
 		// Take second snapshot (captures state after first change)
-		err = s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err = s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "move",
 			Args:    []string{"feature1", "onto", "main"},
 		})
@@ -153,7 +153,7 @@ func TestUndoAfterCreate(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Take snapshot BEFORE creating branch
-		err := s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "create",
 			Args:    []string{"feature"},
 		})
@@ -214,7 +214,7 @@ func TestUndoAfterMove(t *testing.T) {
 		require.Equal(t, "feature1", initialParent.GetName())
 
 		// Take snapshot before move
-		err := s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "move",
 			Args:    []string{"feature2", "onto", "main"},
 		})
@@ -265,7 +265,7 @@ func TestUndoWarnsWhenLinearModeRestoresFork(t *testing.T) {
 	require.NoError(t, cfg.SetStackShape(config.StackShapeLinear))
 	s.Context.Config = cfg
 
-	require.NoError(t, s.Engine.TakeSnapshot(engine.SnapshotOptions{Command: "move"}))
+	require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "move"}))
 	require.NoError(t, s.Engine.SetParent(s.Context, s.Engine.GetBranch("second"), s.Engine.GetBranch("main"), engine.DivergenceRecompute))
 
 	err = Action(s.Context, Options{Force: true}, nil)

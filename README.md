@@ -693,7 +693,7 @@ Or abort and try a different approach: `stackit abort`
 to their pre-command state, and any uncommitted changes the command consumed —
 the edit `stackit modify` amended into a commit, the files `git add -A` staged
 before `stackit create` — come back to your working tree with their original
-staged/unstaged split.
+staged/unstaged split. The same applies to `absorb` and `split`.
 
 ### Recovering from a failed operation
 

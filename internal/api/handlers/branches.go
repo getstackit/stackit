@@ -63,13 +63,15 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), names)
 	}
 
-	// One remote listing, one stats pass, one commits pass, and one commit-info
-	// pass for all branches instead of one of each per branch.
+	// One remote listing, one stats pass, one commits pass, one commit-info
+	// pass, and one restack-status pass for all branches instead of one of
+	// each per branch.
 	branchSet := engine.BranchesOf(branches...)
 	remoteStatuses := entry.Engine.ReadBranchRemoteStatuses(r.Context(), branchSet)
 	stats := entry.Engine.BatchBranchStats(branchSet)
 	commitsByBranch := entry.Engine.BatchCommits(branchSet, engine.CommitFormatReadableWithDate)
 	commitInfoByBranch := entry.Engine.BatchCommitInfo(branchSet)
+	statuses := entry.Engine.ReadBranchStatuses(branchSet)
 
 	responses := make([]httpcontract.BranchResponse, 0, len(branches))
 	for _, branch := range branches {
@@ -79,7 +81,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		}
 		checks := checksMap.Get(branch.GetName())
 		name := branch.GetName()
-		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatuses.ForBranch(branch), stats[name], commitsByBranch[name], commitInfoByBranch[name]))
+		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatuses.ForBranch(branch), stats[name], commitsByBranch[name], commitInfoByBranch[name], !statuses.IsUpToDate(branch)))
 	}
 
 	writeJSON(w, responses)
@@ -110,6 +112,7 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entr
 	stat := entry.Engine.BatchBranchStats(branchSet)[branchName]
 	commits := entry.Engine.BatchCommits(branchSet, engine.CommitFormatReadableWithDate)[branchName]
 	commitInfo := entry.Engine.BatchCommitInfo(branchSet)[branchName]
-	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatus, stat, commits, commitInfo)
+	needsRestack := !entry.Engine.ReadBranchStatuses(branchSet).IsUpToDate(branch)
+	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatus, stat, commits, commitInfo, needsRestack)
 	writeJSON(w, resp)
 }

@@ -24,6 +24,14 @@ func snapshotOpts(command string, args ...string) engine.SnapshotOptions {
 	}
 }
 
+// capturingSnapshotOpts mirrors what a command that consumes the working tree
+// (modify, create, absorb, split) asks for.
+func capturingSnapshotOpts() engine.SnapshotOptions {
+	opts := snapshotOpts("modify")
+	opts.CaptureWorktree = true
+	return opts
+}
+
 func TestTakeSnapshot(t *testing.T) {
 	t.Parallel()
 	t.Run("creates snapshot with branch and metadata SHAs", func(t *testing.T) {
@@ -502,7 +510,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 		trackedPath := filepath.Join(s.Scene.Dir, "tracked_test.txt")
 		require.NoError(t, os.WriteFile(trackedPath, []byte("work in progress"), 0600))
 
-		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("modify")))
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
 
 		snapshots, err := s.Engine.GetSnapshots()
 		require.NoError(t, err)
@@ -541,7 +549,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.CreateChange("brand new", "fresh", true))
 		freshPath := filepath.Join(s.Scene.Dir, "fresh_test.txt")
 
-		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("modify")))
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
 
 		snapshots, err := s.Engine.GetSnapshots()
 		require.NoError(t, err)
@@ -566,7 +574,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 
 		require.NoError(t, s.Scene.Repo.CreateChange("captured", "fresh", true))
 		freshPath := filepath.Join(s.Scene.Dir, "fresh_test.txt")
-		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("modify")))
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
 
 		// The file survived the rollback and has since moved on. A safety net
 		// must not overwrite content that is currently on disk.
@@ -582,10 +590,15 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 		require.Equal(t, "newer content", string(content))
 	})
 
-	t.Run("captures nothing when the working tree is clean", func(t *testing.T) {
+	t.Run("captures nothing without an opt-in", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
+
+		// A dirty tree that a reconciler would never consume: restack and sync
+		// hold back a worktree with uncommitted changes rather than rebasing
+		// it, so they must not pay for a capture they cannot need.
+		require.NoError(t, s.Scene.Repo.CreateChange("not for capture", "wip", true))
 
 		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("restack")))
 
@@ -593,12 +606,27 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 		require.NoError(t, err)
 		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
 		require.NoError(t, err)
-		require.Empty(t, snapshot.WorktreeSHA)
+		require.Empty(t, snapshot.WorktreeSHA, "a snapshot without CaptureWorktree must not stash")
 		require.Empty(t, snapshot.UntrackedSHA)
 
 		restored, err := s.Engine.RestoreWorktree(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
-		require.False(t, restored, "restoring a clean snapshot is a no-op")
+		require.False(t, restored, "restoring an uncaptured snapshot is a no-op")
+	})
+
+	t.Run("captures nothing when the working tree is clean", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit()
+
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
+
+		snapshots, err := s.Engine.GetSnapshots()
+		require.NoError(t, err)
+		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
+		require.NoError(t, err)
+		require.Empty(t, snapshot.WorktreeSHA)
+		require.Empty(t, snapshot.UntrackedSHA)
 	})
 
 	t.Run("prunes the anchor refs with the snapshot that owns them", func(t *testing.T) {
@@ -611,7 +639,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 		var oldestID string
 		for i := range engine.DefaultMaxUndoStackDepth + 1 {
 			require.NoError(t, s.Scene.Repo.CreateChange("wip "+strconv.Itoa(i), "wip", true))
-			require.NoError(t, s.Engine.TakeSnapshot(t.Context(), snapshotOpts("modify")))
+			require.NoError(t, s.Engine.TakeSnapshot(t.Context(), capturingSnapshotOpts()))
 			if i == 0 {
 				snapshots, err := s.Engine.GetSnapshots()
 				require.NoError(t, err)

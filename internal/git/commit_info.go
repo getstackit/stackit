@@ -13,9 +13,23 @@ import (
 //
 // On failure the returned error string contains "reference not found" so
 // downstream callers that match on that legacy phrase continue to work.
+// stackitRefPrefix is the namespace holding stackit's metadata refs, which
+// point at blobs rather than commits.
+const stackitRefPrefix = "refs/stackit/"
+
 func (r *runner) resolveRefSHA(ref string) (string, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
-	if err != nil {
+	var out string
+	var err error
+
+	// Refs under refs/stackit/ address metadata blobs, never commits, so the
+	// ^{commit} peel can only ever fail for them — it was costing a guaranteed
+	// wasted git process on every metadata read. Skipping it is safe beyond
+	// blobs too: peeling is only load-bearing for annotated tags, and no tag
+	// lives in this namespace.
+	if !strings.HasPrefix(ref, stackitRefPrefix) {
+		out, err = r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+	}
+	if err != nil || out == "" {
 		// Fall back to the non-commit form: tags pointing at trees/blobs, or
 		// generic ref lookups that aren't commits. Most stackit call sites
 		// only care about commits, so try ^{commit} first to fail fast on

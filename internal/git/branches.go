@@ -3,16 +3,50 @@ package git
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 )
 
 func (r *runner) GetCurrentBranch() (string, error) {
+	if name, ok := r.readHeadBranch(); ok {
+		return name, nil
+	}
 	out, err := r.RunGitCommandWithContext(context.Background(), "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("HEAD is not on a branch: %w", err)
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// readHeadBranch reads the checked-out branch straight out of the HEAD file,
+// which is all `git symbolic-ref --short HEAD` does. The current branch is
+// read constantly — it was the second-largest source of git processes in the
+// suite — and a file read is orders of magnitude cheaper than a process.
+//
+// Reports ok=false for anything other than a plain refs/heads symref (detached
+// HEAD, an unreadable file, a symref pointing outside refs/heads). The caller
+// then runs the real command, so git stays the authority on every case except
+// the overwhelmingly common one. Note this reads the worktree's own git dir,
+// not the common dir: each worktree has its own HEAD.
+func (r *runner) readHeadBranch() (string, bool) {
+	if err := r.ensureRepo(); err != nil {
+		return "", false
+	}
+	gitDir := r.getGitDir(context.Background())
+	if gitDir == "" {
+		return "", false
+	}
+	data, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
+	if err != nil {
+		return "", false
+	}
+	name, ok := strings.CutPrefix(strings.TrimSpace(string(data)), "ref: refs/heads/")
+	if !ok || name == "" {
+		return "", false
+	}
+	return name, true
 }
 
 // ResolveBranchNameCase reconciles a branch name reported by HEAD with the

@@ -3,6 +3,7 @@ package testhelpers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/google/go-github/v90/github"
@@ -135,8 +136,22 @@ func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, opts githubpkg
 	return githubpkg.ToPullRequestInfo(createdPR), nil
 }
 
-// UpdatePullRequest updates an existing pull request
+// UpdatePullRequest updates an existing pull request. A base change is rejected
+// while the pull request sits in a native Stack, mirroring GitHub.
 func (c *MockGitHubClient) UpdatePullRequest(ctx context.Context, prNumber int, opts githubpkg.UpdatePROptions) ([]string, error) {
+	if opts.Base != nil && c.isStacked(prNumber) {
+		return nil, fmt.Errorf("failed to update pull request: %w", &github.ErrorResponse{
+			Response: &http.Response{StatusCode: http.StatusUnprocessableEntity},
+			Message:  "Validation Failed",
+			Errors: []github.Error{{
+				Resource: "PullRequest",
+				Field:    "base",
+				Code:     "invalid",
+				Message:  "Cannot change the base branch because the pull request is part of a stack.",
+			}},
+		})
+	}
+
 	update := &github.PullRequest{}
 
 	if opts.Title != nil {
@@ -153,6 +168,19 @@ func (c *MockGitHubClient) UpdatePullRequest(ctx context.Context, prNumber int, 
 
 	_, _, err := c.client.PullRequests.Edit(ctx, c.owner, c.repo, prNumber, update)
 	return nil, err
+}
+
+// isStacked reports whether prNumber currently belongs to a mock native Stack.
+func (c *MockGitHubClient) isStacked(prNumber int) bool {
+	c.config.mu.Lock()
+	defer c.config.mu.Unlock()
+
+	for _, stack := range c.config.CreatedStacks {
+		if containsInt(stack, prNumber) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetPullRequestByBranch gets a pull request for a branch

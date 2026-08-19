@@ -2,9 +2,13 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
+
+	"github.com/google/go-github/v90/github"
 )
 
 const (
@@ -145,6 +149,21 @@ func (c *StackitGitHubClient) UnstackStack(ctx context.Context, stackNumber int)
 		return true, nil
 	}
 	return len(remaining.PullRequests) == 0, nil
+}
+
+// IsStackBaseConflict reports whether err is GitHub refusing to retarget a pull
+// request because it belongs to a native Stack. Any stackit operation that
+// reparents a branch — move, reorder, sync past a merged parent — has to change
+// the PR base, and GitHub rejects that outright while the PR sits in a Stack.
+// Callers treat this as "the recorded Stack is stale", not as a user error.
+func IsStackBaseConflict(err error) bool {
+	var resp *github.ErrorResponse
+	if !errors.As(err, &resp) || resp.Response == nil || resp.Response.StatusCode != http.StatusUnprocessableEntity {
+		return false
+	}
+	return slices.ContainsFunc(resp.Errors, func(e github.Error) bool {
+		return e.Field == "base" && strings.Contains(e.Message, "part of a stack")
+	})
 }
 
 // ValidateStackPullRequestCount validates the GitHub Stacks API's request

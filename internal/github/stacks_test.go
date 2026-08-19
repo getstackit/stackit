@@ -3,6 +3,8 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -177,4 +179,43 @@ func TestEnsureStackRefusesRebuildWhenMergedPRsRemain(t *testing.T) {
 
 	_, _, err = EnsureStack(context.Background(), stackClient, []int{12, 78})
 	require.ErrorContains(t, err, "merged or queued to merge and cannot be unstacked")
+}
+
+func TestIsStackBaseConflict(t *testing.T) {
+	t.Parallel()
+
+	stackConflict := &github.ErrorResponse{
+		Response: &http.Response{StatusCode: http.StatusUnprocessableEntity},
+		Errors: []github.Error{{
+			Resource: "PullRequest",
+			Field:    "base",
+			Code:     "invalid",
+			Message:  "Cannot change the base branch because the pull request is part of a stack.",
+		}},
+	}
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil},
+		{name: "plain error", err: errors.New("boom")},
+		{name: "stack conflict", err: stackConflict, want: true},
+		{name: "wrapped stack conflict", err: fmt.Errorf("failed to update pull request: %w", stackConflict), want: true},
+		{
+			name: "other 422",
+			err: &github.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusUnprocessableEntity},
+				Errors:   []github.Error{{Field: "base", Code: "invalid", Message: "No commits between main and feature"}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, IsStackBaseConflict(tt.err))
+		})
+	}
 }

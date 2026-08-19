@@ -1027,3 +1027,39 @@ func TestSubmitGitHubStackAcceptsContiguousChain(t *testing.T) {
 	require.Len(t, mockConfig.CreatedStacks, 1)
 	require.Len(t, mockConfig.CreatedStacks[0], 3, "all three PRs should form one native Stack")
 }
+
+// TestSubmitDissolvesNativeGitHubStackToRetargetBase covers reparenting a branch
+// out of a submitted native GitHub Stack (`stackit move` onto trunk). GitHub
+// refuses to change a stacked PR's base, so submit must dissolve the stale
+// Stack and retry rather than failing every time from then on.
+func TestSubmitDissolvesNativeGitHubStackToRetargetBase(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"base": "main", "api": "base"})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	s.Context.Config = cfg
+
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	require.NoError(t, err)
+	require.Len(t, mockConfig.CreatedStacks, 1)
+
+	// Move "api" out of the stack onto trunk, then resubmit just that branch —
+	// too few PRs for a native Stack, so nothing else clears the stale one.
+	s.TrackBranch("api", "main").Checkout("api")
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
+	require.NoError(t, err)
+
+	require.Empty(t, mockConfig.CreatedStacks[0], "the stale native Stack should have been dissolved")
+	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
+	require.NoError(t, err)
+	require.Equal(t, "main", apiPR.Base())
+}

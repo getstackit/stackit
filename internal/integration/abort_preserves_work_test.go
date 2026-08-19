@@ -196,3 +196,51 @@ func TestUndoRefusesToOverwriteUncommittedWork(t *testing.T) {
 	require.Equal(t, "top\nMY OWN WORK\n", sh.fileContent("shared.txt"),
 		"a refused undo must leave the working tree untouched")
 }
+
+// TestAbortRestoresWorkInsideWorktree runs the same contract from a linked
+// worktree, which is where stackit tells you to run `modify` for a stack it
+// manages.
+//
+// A linked worktree's .git is a file, so a snapshot directory resolved by
+// joining ".git" onto the repo root lands under a file and every snapshot
+// write fails with ENOTDIR. TakeBestEffortSnapshot swallows that at debug
+// level, so the whole rollback story silently evaporated in exactly the
+// checkout the worktree workflow puts you in: abort reported it had no
+// rollback point, and the edit modify consumed was gone.
+func TestAbortRestoresWorkInsideWorktree(t *testing.T) {
+	t.Parallel()
+	sh := NewTestShellInProcess(t)
+	sh.SetWorktreeBasePath(t.TempDir())
+
+	// main -> a -> b, where b edits the same line a is about to.
+	sh.WriteFile("shared.txt", "top\nbottom\n").
+		Run("create a -m 'a commit'")
+	sh.WriteFile("shared.txt", "top\nB EDIT\n").
+		Run("create b -m 'b commit'")
+
+	sh.Run("worktree attach a")
+	shW := sh.InWorktree(sh.GetWorktreePath("a"))
+
+	shW.Checkout("a")
+	originalA := shW.revParse("a")
+
+	shW.WriteUnstaged("shared.txt", "top\nA EDIT\n").
+		WriteUnstaged("notes.txt", "scratch notes\n")
+	statusBefore := shW.gitStatus()
+
+	shW.RunExpectError("modify -a").
+		OutputContains("Conflicted files")
+
+	shW.Run("abort --force").
+		OutputContains("Restored the uncommitted changes")
+
+	shW.OnBranch("a")
+	require.Equal(t, originalA, shW.revParse("a"),
+		"abort must roll the amended commit back off a")
+	require.Equal(t, statusBefore, shW.gitStatus(),
+		"abort must restore the worktree's own working tree")
+	require.Equal(t, "top\nA EDIT\n", shW.fileContent("shared.txt"),
+		"the edit modify consumed must be back in the worktree")
+	require.Equal(t, "scratch notes\n", shW.fileContent("notes.txt"),
+		"an untracked file modify committed must be back on disk")
+}

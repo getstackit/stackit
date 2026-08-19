@@ -710,6 +710,8 @@ stackit undo
 
 This restores branches, metadata, and the working tree to the state before the
 last command, including uncommitted changes that command turned into a commit.
+Because it resets the working tree onto the restored commits, `undo` refuses to
+run while you have uncommitted changes of your own — commit or stash them first.
 
 ### Stack is out of sync with remote
 

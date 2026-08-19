@@ -100,6 +100,20 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		}
 	}
 
+	// Undo hard-resets the working tree onto the restored refs and then applies
+	// whatever the snapshot captured. Both steps assume the tree holds nothing
+	// of the user's: the reset destroys tracked edits outright, and the stash
+	// apply would otherwise merge the capture into them. Untracked files are
+	// deliberately not counted — a reset cannot destroy them, and the untracked
+	// half of a capture never overwrites a file that already exists.
+	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx.Context, ctx.RepoRoot)
+	switch {
+	case dirtyErr != nil:
+		return fmt.Errorf("failed to check for uncommitted changes: %w", dirtyErr)
+	case dirty:
+		return fmt.Errorf("you have uncommitted changes; undo would overwrite them.\nCommit them, or run 'git stash' and 'git stash pop' around the undo")
+	}
+
 	// Show confirmation prompt
 	confirmMessage := fmt.Sprintf(
 		"This will restore the repository to the state before '%s' (%s).",

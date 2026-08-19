@@ -53,7 +53,11 @@ func buildPRInfoByBranchQuery(repo Repo, branches []string) (string, map[string]
 	b.WriteString("  repository(owner: $owner, name: $repo) {\n")
 	for i := range branches {
 		fmt.Fprintf(&b, "    b%d: ref(qualifiedName: $b%d) {\n", i, i)
-		b.WriteString("      associatedPullRequests(first: 1, orderBy: {field: CREATED_AT, direction: DESC}) {\n")
+		// GitHub does not honor orderBy on associatedPullRequests, so asking
+		// for a single node returns an arbitrary one — in practice the oldest,
+		// which is a closed PR whenever a branch has been resubmitted. Fetch
+		// the set and choose in selectPullRequestInfo instead.
+		fmt.Fprintf(&b, "      associatedPullRequests(first: %d) {\n", associatedPRFetchLimit)
 		b.WriteString("        nodes { " + pullRequestInfoFields + " }\n")
 		b.WriteString("      }\n")
 		b.WriteString("    }\n")
@@ -165,13 +169,64 @@ func parsePRInfoByBranchResponse(body []byte, branches []string) (map[string]*Pu
 		if !ok || len(nodes) == 0 {
 			continue
 		}
-		node, ok := nodes[0].(map[string]any)
-		if !ok {
-			continue
+		infos := make([]*PullRequestInfo, 0, len(nodes))
+		for _, n := range nodes {
+			node, ok := n.(map[string]any)
+			if !ok {
+				continue
+			}
+			infos = append(infos, pullRequestInfoFromGraphQLNode(node))
 		}
-		results[name] = pullRequestInfoFromGraphQLNode(node)
+		if selected := selectPullRequestInfo(infos); selected != nil {
+			results[name] = selected
+		}
 	}
 	return results, nil
+}
+
+// associatedPRFetchLimit caps how many of a branch's associated PRs are
+// examined. A branch accumulates one per submission cycle; ten covers any
+// realistic history without paging.
+const associatedPRFetchLimit = 10
+
+// selectPullRequestInfo picks the PR that represents a branch's current state.
+//
+// A branch can have several associated PRs — closing one and opening another
+// for the same head leaves both attached forever. An OPEN PR is always the
+// live one; failing that a MERGED PR describes what happened to the branch,
+// and only then does a CLOSED PR apply. Within a state the highest number is
+// the most recent.
+//
+// Getting this wrong is not cosmetic: adopting a stale CLOSED PR makes submit
+// try to create a PR that already exists, and makes sync treat a live branch
+// as landed work to delete.
+func selectPullRequestInfo(infos []*PullRequestInfo) *PullRequestInfo {
+	rank := func(state git.PRState) int {
+		switch state {
+		case git.PRStateOpen:
+			return 3
+		case git.PRStateMerged:
+			return 2
+		default:
+			return 1
+		}
+	}
+
+	var best *PullRequestInfo
+	for _, info := range infos {
+		if info == nil {
+			continue
+		}
+		switch {
+		case best == nil:
+		case rank(info.State) > rank(best.State):
+		case rank(info.State) == rank(best.State) && info.Number > best.Number:
+		default:
+			continue
+		}
+		best = info
+	}
+	return best
 }
 
 // pullRequestInfoFromGraphQLNode converts a single associatedPullRequests node

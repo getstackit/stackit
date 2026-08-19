@@ -16,7 +16,7 @@ func TestBuildPRInfoByBranchQuery(t *testing.T) {
 	require.Contains(t, query, "repository(owner: $owner, name: $repo)")
 	require.Contains(t, query, "b0: ref(qualifiedName: $b0)")
 	require.Contains(t, query, "b1: ref(qualifiedName: $b1)")
-	require.Contains(t, query, "associatedPullRequests(first: 1, orderBy: {field: CREATED_AT, direction: DESC})")
+	require.Contains(t, query, "associatedPullRequests(first: 10)")
 	require.Contains(t, query, "number title body state url isDraft baseRefName headRefName")
 
 	require.Equal(t, "octo", variables["owner"])
@@ -137,4 +137,63 @@ func TestParsePRInfoByBranchResponse_InvalidJSON(t *testing.T) {
 
 	_, err := parsePRInfoByBranchResponse([]byte(`{invalid`), []string{"feature"})
 	require.Error(t, err)
+}
+
+// TestParsePRInfoByBranchResponse_PrefersLivePR covers the shape GitHub
+// actually returns for a resubmitted branch: several associated PRs, with a
+// closed one first because orderBy is not honored on this connection.
+// Adopting that closed PR made submit try to create a PR that already existed
+// and made sync treat a live branch as landed work.
+func TestParsePRInfoByBranchResponse_PrefersLivePR(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"data":{"repository":{
+		"b0":{"associatedPullRequests":{"nodes":[
+			{"number":1677,"state":"CLOSED","baseRefName":"old-base","headRefName":"feature"},
+			{"number":1680,"state":"OPEN","baseRefName":"new-base","headRefName":"feature"}
+		]}}
+	}}}`)
+
+	infos, err := parsePRInfoByBranchResponse(body, []string{"feature"})
+	require.NoError(t, err)
+	require.Equal(t, 1680, infos["feature"].Number)
+	require.Equal(t, git.PRStateOpen, infos["feature"].State)
+	require.Equal(t, "new-base", infos["feature"].Base)
+}
+
+func TestSelectPullRequestInfo(t *testing.T) {
+	t.Parallel()
+
+	open1 := &PullRequestInfo{Number: 10, State: git.PRStateOpen}
+	open2 := &PullRequestInfo{Number: 12, State: git.PRStateOpen}
+	merged := &PullRequestInfo{Number: 20, State: git.PRStateMerged}
+	closedOld := &PullRequestInfo{Number: 3, State: git.PRStateClosed}
+	closedNew := &PullRequestInfo{Number: 30, State: git.PRStateClosed}
+
+	tests := []struct {
+		name  string
+		infos []*PullRequestInfo
+		want  int
+	}{
+		{"open beats closed regardless of number", []*PullRequestInfo{closedNew, open1}, 10},
+		{"open beats merged regardless of number", []*PullRequestInfo{merged, open1}, 10},
+		{"newest open wins among open", []*PullRequestInfo{open1, open2}, 12},
+		{"merged beats closed", []*PullRequestInfo{closedNew, merged}, 20},
+		{"newest closed when nothing else", []*PullRequestInfo{closedOld, closedNew}, 30},
+		{"nil entries ignored", []*PullRequestInfo{nil, open1}, 10},
+		{"empty yields nothing", nil, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := selectPullRequestInfo(tt.infos)
+			if tt.want == 0 {
+				require.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			require.Equal(t, tt.want, got.Number)
+		})
+	}
 }

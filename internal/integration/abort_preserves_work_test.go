@@ -156,3 +156,43 @@ func TestUndoRestoresWorkConsumedByModify(t *testing.T) {
 	require.Equal(t, statusBefore, sh.gitStatus())
 	require.Equal(t, "top\nA EDIT\n", sh.fileContent("shared.txt"))
 }
+
+// TestUndoRefusesToOverwriteUncommittedWork covers the other direction: undo
+// resets the working tree onto the restored commits, so running it with edits
+// of your own in the tree would destroy them — and then merge the snapshot's
+// capture into the wreckage. Refusing is the only outcome that keeps the work.
+//
+// Untracked files are deliberately not a refusal: a reset cannot destroy them,
+// and the untracked half of a capture never overwrites a file already on disk.
+func TestUndoRefusesToOverwriteUncommittedWork(t *testing.T) {
+	t.Parallel()
+	sh := NewTestShellInProcess(t)
+
+	sh.WriteFile("shared.txt", "top\nbottom\n").
+		Run("create a -m 'a commit'").
+		OnBranch("a")
+
+	// A snapshot to undo to, and a commit for undo to roll back.
+	sh.WriteFile("shared.txt", "top\namended\n").
+		Run("modify -m 'amended a'")
+	amendedA := sh.revParse("a")
+
+	// An untracked file alone must not block undo.
+	sh.WriteUnstaged("scratch.txt", "untracked\n").
+		Run("undo -y")
+	require.NotEqual(t, amendedA, sh.revParse("a"),
+		"an untracked file must not stop undo from rolling the amend back")
+	require.Equal(t, "untracked\n", sh.fileContent("scratch.txt"),
+		"undo must leave untracked files alone")
+
+	// A tracked edit must.
+	sh.WriteUnstaged("shared.txt", "top\nMY OWN WORK\n")
+	beforeA := sh.revParse("a")
+
+	sh.RunExpectError("undo -y")
+
+	require.Equal(t, beforeA, sh.revParse("a"),
+		"a refused undo must not move any ref")
+	require.Equal(t, "top\nMY OWN WORK\n", sh.fileContent("shared.txt"),
+		"a refused undo must leave the working tree untouched")
+}

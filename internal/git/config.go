@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -22,11 +24,95 @@ func GetCurrentDate() string {
 // `git config` invocations rather than parsing the config file in process.
 type ConfigStore struct {
 	repoRoot string
+
+	// stackitKeys is a one-shot snapshot of every stackit.* key, read with a
+	// single `git config --get-regexp`. A command reads half a dozen of these
+	// (trunk, undo.depth, stack.shape, maxConcurrency, branch.pattern, ...)
+	// and each one used to cost its own git process.
+	mu          sync.Mutex
+	stackitKeys map[string]string
+	snapshotGen uint64
+}
+
+// configGen is bumped by every write through any ConfigStore, invalidating
+// snapshots taken before it. Reads are otherwise served from a snapshot for
+// the lifetime of one command, which is the same freshness a single `git
+// config --get` per key gave.
+var configGen atomic.Uint64
+
+// invalidateSnapshots stales every stackit.* snapshot after a write. Only
+// stackit.* writes matter — nothing else is in the snapshot.
+func invalidateSnapshots(key string) {
+	if snapshotServes(key) {
+		configGen.Add(1)
+	}
 }
 
 // NewConfigStore creates a new ConfigStore for the given repository root.
 func NewConfigStore(repoRoot string) *ConfigStore {
 	return &ConfigStore{repoRoot: repoRoot}
+}
+
+// snapshotServes reports whether key can be answered from the stackit.*
+// snapshot.
+//
+// Restricted to stackit.* on purpose. Keys like branch.<name>.remote carry a
+// branch name as their subsection, and a branch name's case is significant —
+// serving those from a normalized map would conflate two different branches.
+func snapshotServes(key string) bool {
+	return strings.HasPrefix(key, "stackit.")
+}
+
+// normalizeConfigKey renders a key the way `git config --get-regexp` reports
+// it: git lowercases the section and the trailing key name, but preserves the
+// subsection in between verbatim (stackit.worktree.basePath is reported as
+// stackit.worktree.basepath, while branch.Feature-A.remote keeps Feature-A).
+func normalizeConfigKey(key string) string {
+	first := strings.Index(key, ".")
+	last := strings.LastIndex(key, ".")
+	if first < 0 {
+		return strings.ToLower(key)
+	}
+	section := strings.ToLower(key[:first])
+	name := strings.ToLower(key[last+1:])
+	if first == last {
+		return section + "." + name
+	}
+	return section + key[first:last+1] + name
+}
+
+// stackitSnapshot returns the current stackit.* key/value snapshot, reading it
+// with a single git process if it is missing or stale.
+func (c *ConfigStore) stackitSnapshot() (map[string]string, error) {
+	gen := configGen.Load()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stackitKeys != nil && c.snapshotGen == gen {
+		return c.stackitKeys, nil
+	}
+
+	out, err := c.runGitConfig("--get-regexp", `^stackit\.`)
+	// Exit code 1 means no stackit.* key is set at all — an empty snapshot,
+	// not a failure.
+	if err != nil && !isExitCode(err, 1) {
+		return nil, fmt.Errorf("failed to list stackit config: %w", err)
+	}
+
+	keys := make(map[string]string)
+	for _, line := range strings.Split(out, "\n") {
+		name, value, found := strings.Cut(line, " ")
+		if !found || name == "" {
+			continue
+		}
+		// Later lines win, matching `git config --get` precedence
+		// (system, then global, then local).
+		keys[name] = value
+	}
+
+	c.stackitKeys = keys
+	c.snapshotGen = gen
+	return keys, nil
 }
 
 // runGitConfig invokes `git config` in the configured repo. Returns the
@@ -54,6 +140,14 @@ func isExitCode(err error, codes ...int) bool {
 // key isn't set in any scope. Use this for keys whose canonical home is
 // often the user's global config (e.g. user.name, user.email).
 func (c *ConfigStore) Get(key string) (string, error) {
+	if snapshotServes(key) {
+		keys, err := c.stackitSnapshot()
+		if err != nil {
+			return "", err
+		}
+		return keys[normalizeConfigKey(key)], nil
+	}
+
 	out, err := c.runGitConfig("--get", key)
 	if err == nil {
 		return out, nil
@@ -84,6 +178,7 @@ func (c *ConfigStore) GetAll(key string) ([]string, error) {
 
 // Set sets a config value in local git config.
 func (c *ConfigStore) Set(key, value string) error {
+	defer invalidateSnapshots(key)
 	if _, err := c.runGitConfig(key, value); err != nil {
 		return fmt.Errorf("failed to set config %s: %w", key, err)
 	}
@@ -102,6 +197,7 @@ func (c *ConfigStore) SetInt(key string, value int) error {
 
 // Add adds a value to a multi-value config key.
 func (c *ConfigStore) Add(key, value string) error {
+	defer invalidateSnapshots(key)
 	if _, err := c.runGitConfig("--add", key, value); err != nil {
 		return fmt.Errorf("failed to add config %s: %w", key, err)
 	}
@@ -111,6 +207,7 @@ func (c *ConfigStore) Add(key, value string) error {
 // Unset removes all values for a config key.
 // Does not return an error if the key doesn't exist.
 func (c *ConfigStore) Unset(key string) error {
+	defer invalidateSnapshots(key)
 	_, err := c.runGitConfig("--unset-all", key)
 	if err == nil {
 		return nil

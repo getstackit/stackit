@@ -12,12 +12,13 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 )
 
-// removeDefaultConfig removes the default JSON config file created by test setup
-// so we can test fresh/uninitialized state.
+// removeDefaultConfig returns a scene to fresh/uninitialized state. Scenes are
+// marked initialized at setup (stackit.trunk in git config); clearing that key
+// is what "never ran stackit init" means, and it is also what makes
+// needsMigration act on a legacy .stackit_config a test writes.
 func removeDefaultConfig(t *testing.T, dir string) {
 	t.Helper()
-	configPath := filepath.Join(dir, ".git", ".stackit_config")
-	_ = os.Remove(configPath)
+	testhelpers.MakeUninitialized(t, dir)
 }
 
 func TestGitConfigBasicOperations(t *testing.T) {
@@ -388,6 +389,8 @@ func TestMigrationFromJSON(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		// Create JSON config (overwrite the default one created by test setup)
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		footer := false
 		depth := 15
@@ -445,6 +448,8 @@ func TestMigrationFromJSON(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		// Create JSON config with legacy combine.* fields
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		timeout := 120
 		config := &RepoConfig{
@@ -469,6 +474,8 @@ func TestMigrationFromJSON(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		// Create JSON config with both new and legacy CI fields
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		newTimeout := 300
 		legacyTimeout := 120
@@ -503,7 +510,8 @@ func TestMigrationFromJSON(t *testing.T) {
 		err = cfg.SetSubmitFooter(false)
 		require.NoError(t, err)
 
-		// Now create a JSON config that would migrate differently
+		// Now create a JSON config that would migrate differently. Trunk is
+		// deliberately left set — that is what must suppress the migration.
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		footer := true
 		config := &RepoConfig{
@@ -544,6 +552,8 @@ func TestMigrationFromJSON(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		// Create empty JSON config
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		err := os.WriteFile(configPath, []byte("{}"), 0600)
 		require.NoError(t, err)
@@ -558,6 +568,8 @@ func TestMigrationFromJSON(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		// Create corrupt JSON config
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		err := os.WriteFile(configPath, []byte("not valid json{"), 0600)
 		require.NoError(t, err)

@@ -27,6 +27,10 @@ func TestInitIntegration(t *testing.T) {
 
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
+		// Migration only runs on a repo that has not been initialized in git
+		// config — that key is exactly what the migration writes.
+		testhelpers.MakeUninitialized(t, scene.Dir)
+
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		jsonConfig := `{
 			"trunk": "main",

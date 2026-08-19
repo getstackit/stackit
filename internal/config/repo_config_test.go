@@ -29,6 +29,8 @@ func TestConfigSubmitFooter(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		// Create config file without submit.footer
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
 			Trunk: new("main"),
@@ -48,6 +50,8 @@ func TestConfigSubmitFooter(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		// Create config file with submit.footer = true
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		enabled := true
 		config := &RepoConfig{
@@ -69,6 +73,8 @@ func TestConfigSubmitFooter(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, nil)
 
 		// Create config file with submit.footer = false
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		enabled := false
 		config := &RepoConfig{
@@ -233,6 +239,8 @@ func TestConfigCICommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
 			Trunk:     new("main"),
@@ -252,6 +260,8 @@ func TestConfigCICommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
 			Trunk:            new("main"),
@@ -271,6 +281,8 @@ func TestConfigCICommand(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		config := &RepoConfig{
 			Trunk:            new("main"),
@@ -323,6 +335,8 @@ func TestConfigCITimeout(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		timeout := 300
 		config := &RepoConfig{
@@ -343,6 +357,8 @@ func TestConfigCITimeout(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		timeout := 120
 		config := &RepoConfig{
@@ -363,6 +379,8 @@ func TestConfigCITimeout(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 
+		// Migration only acts on a repo that has not been initialized in git config.
+		testhelpers.MakeUninitialized(t, scene.Dir)
 		configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 		newTimeout := 180
 		legacyTimeout := 300
@@ -409,6 +427,8 @@ func TestConfigApprovedHooks_LegacyJSONMigration(t *testing.T) {
 	// the new per-phase API so older repos keep working.
 	scene := testhelpers.NewSceneParallel(t, nil)
 
+	// Migration only acts on a repo that has not been initialized in git config.
+	testhelpers.MakeUninitialized(t, scene.Dir)
 	configPath := filepath.Join(scene.Dir, ".git", ".stackit_config")
 	legacy := &RepoConfig{
 		Trunk:                           new("main"),

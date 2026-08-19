@@ -172,6 +172,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return parallelErr
 	}
 
+	// Everything above this line is read-only — a fetch into remote-tracking
+	// refs, a GitHub query, an ls-remote — and syncFetchedTrunk below is the
+	// first thing to move a ref the user can see. Sync goes on to delete merged
+	// branches and reparent their children before it reaches the restack phase
+	// that can halt on a conflict, so a snapshot taken any later would let
+	// `abort` claim it restored the state before sync while leaving every one
+	// of those deletions in place.
+	actions.TakeBestEffortSnapshot(ctx, actions.NewSnapshot("sync",
+		actions.WithFlag(opts.Restack, "--restack"),
+		actions.WithFlag(opts.All, "--all"),
+	))
+
 	trunkErr = syncFetchedTrunk(ctx, &opts, handler, &trunkSummary)
 	if trunkErr != nil {
 		return trunkErr

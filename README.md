@@ -695,6 +695,11 @@ the edit `stackit modify` amended into a commit, the files `git add -A` staged
 before `stackit create` — come back to your working tree with their original
 staged/unstaged split. The same applies to `absorb` and `split`.
 
+`abort` only ever rolls back the command that halted. If that command recorded
+no rollback point, it says so and leaves your branches as the command left them
+rather than restoring an unrelated snapshot — use `stackit undo` to pick a
+state to return to.
+
 ### Recovering from a failed operation
 
 Stackit automatically saves state before operations. To undo:

@@ -55,8 +55,38 @@ otherwise `git gc` is free to collect the user's work — and both are deleted
 when the snapshot that owns them is pruned by `undo.depth`.
 
 `abort` and `undo` restore refs first, then re-apply the capture onto the
-rolled-back tree. Restoring a captured file never overwrites a file that
-currently exists on disk.
+rolled-back tree: the tracked stash, then the untracked files. Restoring an
+untracked file never overwrites a file that currently exists on disk. The stash
+apply is an ordinary `git stash apply`, so it does merge into whatever the
+working tree holds — which is why `undo` refuses to run against a dirty tree it
+did not capture.
+
+### Which snapshot abort rolls back to
+
+`abort` restores the snapshot named by `SnapshotID` in the continuation state
+(`.git/.stackit_continue`), written by `EnterConflictWorkflow` from
+`Engine.LastSnapshotID()` — the snapshot the halted command itself recorded.
+
+It restores that snapshot or nothing. When the field is empty, or the snapshot
+has aged out of the undo stack, `abort` unwinds the Git state, says it has no
+rollback point, and points at `stackit undo` for a manual choice. Reaching for
+the newest snapshot on disk instead is what let a conflicted `reorder` or
+`delete` roll the repository back past an unrelated `create` and delete the
+branch that `create` had made.
+
+Any command that can enter the conflict workflow therefore needs a snapshot of
+its own, taken before its first mutation. Commands take one as late as that rule
+allows: `submit` only when a branch actually needs restacking, `reorder` only
+once the order has changed, and `restack` only when `plan.HasWork()`.
+
+`sync` is the exception that shows where the line is. Its conflict comes from
+the restack phase at the very end, but by then it has already updated trunk,
+deleted merged branches, and reparented their children. Snapshotting at the
+restack phase would be cheaper and would still bind `abort` to the right
+command — but `abort` would report that it restored the state before `sync`
+while leaving every one of those deletions in place. So `sync` snapshots before
+`syncFetchedTrunk`, its first visible ref move, and a sync that turns out to
+have nothing to do pays for one anyway.
 
 ## Branch Metadata (`Meta`)
 

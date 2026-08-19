@@ -19,6 +19,10 @@ type engineImpl struct {
 	state             *stateCore
 	remoteMetaCache   map[string]*git.Meta // branch -> remote metadata (can include non-local branches)
 	maxUndoStackDepth int
+	// lastSnapshotID names the undo snapshot this engine recorded, so a
+	// conflict workflow can bind its rollback to that snapshot rather than to
+	// whatever happens to be newest on disk.
+	lastSnapshotID string
 	maxConcurrency    int
 	linearStacks      bool
 	git               git.Runner

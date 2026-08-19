@@ -54,6 +54,15 @@ Both are unreachable commits, so each is anchored under `refs/stackit/undo/` —
 otherwise `git gc` is free to collect the user's work — and both are deleted
 when the snapshot that owns them is pruned by `undo.depth`.
 
+Snapshots live under `<git-dir>/stackit/undo`, resolved with `git.GetGitDir`
+rather than by joining `.git` onto the repo root. A linked worktree's `.git` is
+a file, so the naive path lands under a file and every snapshot write fails —
+silently, since snapshots are best-effort — in exactly the checkout the worktree
+workflow tells you to run `modify` from. Resolving the git directory also gives
+each worktree its own undo stack, which is what you want: a capture holds the
+uncommitted state of the tree it was taken from, and applying it to a different
+worktree would be wrong.
+
 `abort` and `undo` restore refs first, then re-apply the capture onto the
 rolled-back tree: the tracked stash, then the untracked files. Restoring an
 untracked file never overwrites a file that currently exists on disk. The stash

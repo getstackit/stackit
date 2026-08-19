@@ -18,8 +18,14 @@ import (
 const (
 	// DefaultMaxUndoStackDepth is the default number of snapshots we keep
 	DefaultMaxUndoStackDepth = 10
-	// UndoDir is the directory where undo snapshots are stored
-	UndoDir = ".git/stackit/undo"
+	// UndoDir is the path, relative to the git directory, where undo snapshots
+	// are stored. It is joined onto git.GetGitDir rather than onto the repo
+	// root: in a linked worktree `.git` is a file, so joining onto the root
+	// gives a path under a file and every snapshot write fails with ENOTDIR.
+	// Resolving the git directory also gives each worktree its own undo stack,
+	// which is what you want — a snapshot's working-tree capture belongs to the
+	// tree it was taken from.
+	UndoDir = "stackit/undo"
 	// UndoRefPrefix anchors the working-tree captures taken with each snapshot.
 	// `git stash create` produces an unreachable commit, which `git gc` is free
 	// to collect; a ref keeps the user's uncommitted work alive until the
@@ -76,7 +82,7 @@ type SnapshotOptions struct {
 
 // getUndoDir returns the path to the undo directory
 func getUndoDir(repoRoot string) string {
-	return filepath.Join(repoRoot, UndoDir)
+	return filepath.Join(git.GetGitDir(repoRoot), UndoDir)
 }
 
 // ensureUndoDir creates the undo directory if it doesn't exist

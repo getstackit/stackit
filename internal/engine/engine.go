@@ -221,6 +221,7 @@ type UndoManager interface {
 	LoadSnapshot(snapshotID string) (*Snapshot, error)
 	RestoreSnapshot(ctx context.Context, snapshotID string) error
 	RestoreWorktree(ctx context.Context, snapshotID string) (bool, error)
+	LastSnapshotID() string
 }
 
 // Engine is the core interface for branch state management

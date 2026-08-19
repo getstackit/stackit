@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/actions/undo"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -1140,4 +1141,29 @@ func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 	require.Equal(t, 1, sh.BranchCommitCount("branch-b"))
 
 	requireCleanWorkingTree(t, sh)
+}
+
+// TestSyncSnapshotPrecedesBranchCleanup pins where sync takes its rollback
+// point. Sync deletes merged branches and reparents their children long before
+// it reaches the restack phase that can halt on a conflict, so a snapshot taken
+// at the restack phase would let `abort` announce it had restored the state
+// before sync while every one of those deletions survived. Undoing a sync has
+// to bring the deleted branch back.
+func TestSyncSnapshotPrecedesBranchCleanup(t *testing.T) {
+	t.Parallel()
+	sh := scenario.NewRemoteScenario(t)
+	setupTwoBranchSquashScenario(t, sh)
+
+	require.NoError(t, sync.Action(sh.Context, sync.Options{}, nil))
+
+	branches, err := sh.Scene.Repo.GetLocalBranches()
+	require.NoError(t, err)
+	require.NotContains(t, branches, "branch-a", "sync should have deleted the merged branch")
+
+	require.NoError(t, undo.Action(sh.Context, undo.Options{Force: true}, nil))
+
+	branches, err = sh.Scene.Repo.GetLocalBranches()
+	require.NoError(t, err)
+	require.Contains(t, branches, "branch-a",
+		"sync's snapshot must predate the cleanup it performs, or abort/undo silently keeps the deletions")
 }

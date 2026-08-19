@@ -575,6 +575,10 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 		RebasedBranchBase:      rebasedBranchBase,
 		CurrentBranchOverride:  firstConflict,
 		ExpectedBranchRevision: expectedBranchRevision,
+		// Bind abort's rollback to the snapshot this command took. Empty when
+		// the command took none, which abort reads as "no rollback point"
+		// rather than reaching for an unrelated command's snapshot.
+		SnapshotID: ctx.Engine.LastSnapshotID(),
 	}
 
 	if err := config.PersistContinuationState(ctx.RepoRoot, continuation); err != nil {

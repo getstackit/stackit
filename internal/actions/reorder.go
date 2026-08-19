@@ -147,6 +147,13 @@ func ReorderAction(ctx *app.Context) error {
 	}
 	out.Debug("reorder: order changed, proceeding with reorder")
 
+	// Snapshot only now: everything above this line is read-only, and an
+	// unchanged order returns without mutating anything. Reorder rewrites
+	// parent metadata and then restacks, so a conflict partway through needs a
+	// rollback point of its own — without one, abort reached for an unrelated
+	// command's snapshot.
+	TakeBestEffortSnapshot(ctx, NewSnapshot("reorder"))
+
 	// Update parent relationships
 	out.Debug("reorder: updating parent relationships")
 	if err := updateParentRelationships(gctx, eng, newOrder, out); err != nil {

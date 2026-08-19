@@ -370,6 +370,14 @@ func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalO
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
+	return newContextWithConfig(ctx, repoRoot, opts, writer, cfg)
+}
+
+// newContextWithConfig builds the runtime context from an already-loaded
+// config. Callers that have had to load the config anyway — GetContextWithWriter
+// reads it to check initialization — reuse it instead of paying for a second
+// load, which costs a git process and a project-config read on every command.
+func newContextWithConfig(ctx context.Context, repoRoot string, opts GlobalOptions, writer io.Writer, cfg *config.GitConfig) (*Context, error) {
 	trunk := cfg.Trunk()
 	maxUndoDepth := cfg.UndoStackDepth()
 	maxConcurrency := cfg.MaxConcurrency()
@@ -459,5 +467,7 @@ func GetContextWithWriter(ctx context.Context, opts GlobalOptions, writer io.Wri
 		return nil, fmt.Errorf("stackit not initialized. Run 'stackit init' first")
 	}
 
-	return NewContextAutoWithWriter(ctx, repoRoot, opts, writer)
+	// Demo mode returned above, so the demo branch in NewContextAutoWithWriter
+	// cannot apply here; go straight to the builder and reuse cfg.
+	return newContextWithConfig(ctx, repoRoot, opts, writer, cfg)
 }

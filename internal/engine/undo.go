@@ -281,13 +281,19 @@ func (e *engineImpl) RestoreWorktree(ctx context.Context, snapshotID string) (bo
 		}
 	}
 
+	restored := snapshot.WorktreeSHA != ""
 	if snapshot.UntrackedSHA != "" {
-		if _, err := e.git.RestoreUntracked(ctx, snapshot.UntrackedSHA); err != nil {
+		// The count matters: every captured file may already be on disk, in
+		// which case the restore is a deliberate no-op and saying "restored
+		// your uncommitted changes" would be a lie.
+		count, err := e.git.RestoreUntracked(ctx, snapshot.UntrackedSHA)
+		if err != nil {
 			return false, fmt.Errorf("%w (recover them with: git restore --source %s --worktree -- .)", err, snapshotUntrackedRef(snapshotID))
 		}
+		restored = restored || count > 0
 	}
 
-	return true, nil
+	return restored, nil
 }
 
 // restoreStash re-applies a captured stash, preferring the staged/unstaged

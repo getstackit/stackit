@@ -76,6 +76,27 @@ func (c *MockGitHubClient) AddPullRequestsToStack(_ context.Context, stackNumber
 	return mockStackInfo(stackNumber, c.config.CreatedStacks[stackNumber-1]), nil
 }
 
+// UnstackStack empties a mock native Stack, mirroring GitHub dissolving one
+// whose pull requests can all be unstacked. MergedStackPRs, if set, models the
+// pull requests GitHub refuses to remove.
+func (c *MockGitHubClient) UnstackStack(_ context.Context, stackNumber int) (bool, error) {
+	c.config.mu.Lock()
+	defer c.config.mu.Unlock()
+
+	if stackNumber < 1 || stackNumber > len(c.config.CreatedStacks) {
+		return false, fmt.Errorf("GitHub Stack #%d does not exist", stackNumber)
+	}
+
+	var pinned []int
+	for _, pullRequest := range c.config.CreatedStacks[stackNumber-1] {
+		if containsInt(c.config.MergedStackPRs, pullRequest) {
+			pinned = append(pinned, pullRequest)
+		}
+	}
+	c.config.CreatedStacks[stackNumber-1] = pinned
+	return len(pinned) == 0, nil
+}
+
 func mockStackInfo(number int, pullRequests []int) *githubpkg.StackInfo {
 	stack := &githubpkg.StackInfo{Number: number, PullRequests: make([]githubpkg.StackPRInfo, len(pullRequests))}
 	for i, pullRequest := range pullRequests {

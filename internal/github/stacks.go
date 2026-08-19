@@ -23,6 +23,7 @@ type StackClient interface {
 	CreateStack(ctx context.Context, pullRequests []int) (*StackInfo, error)
 	FindStackByPullRequest(ctx context.Context, pullRequest int) (*StackInfo, error)
 	AddPullRequestsToStack(ctx context.Context, stackNumber int, pullRequests []int) (*StackInfo, error)
+	UnstackStack(ctx context.Context, stackNumber int) (bool, error)
 }
 
 // StackInfo is GitHub's server-side representation of a linear stack of pull
@@ -61,6 +62,7 @@ const (
 	StackSyncCreated   StackSyncAction = "created"
 	StackSyncExtended  StackSyncAction = "extended"
 	StackSyncUnchanged StackSyncAction = "unchanged"
+	StackSyncRebuilt   StackSyncAction = "rebuilt"
 )
 
 // EnsureStack creates, extends, or leaves unchanged the native GitHub Stack
@@ -89,7 +91,60 @@ func EnsureStack(ctx context.Context, client StackClient, pullRequests []int) (*
 		return stack, StackSyncExtended, err
 	}
 
-	return nil, "", fmt.Errorf("GitHub Stack #%d has PRs %v, which do not match the submitted chain %v", existing.Number, existingPRs, pullRequests)
+	return rebuildStack(ctx, client, existing, existingPRs, pullRequests)
+}
+
+// rebuildStack dissolves a stack whose contents no longer match the submitted
+// chain and recreates it from that chain.
+//
+// GitHub's Stacks API can only append to the top of a stack — there is no
+// endpoint that removes an individual pull request. So a stack that diverges
+// (typically because a PR in it was closed and resubmitted as a new one, or a
+// branch was folded away) has exactly one repair: unstack it and create it
+// again. Without this, every later submit reported a mismatch and skipped
+// native Stack sync forever, with nothing the user could do from stackit.
+//
+// Unstack removes only the pull requests GitHub allows to leave a stack;
+// merged, merging, and queued ones stay. Rather than guess which those are —
+// the API reports a merged PR's state as "closed", indistinguishable from a
+// closed one — attempt the unstack and let GitHub answer: the stack dissolves
+// only when nothing was pinned in place.
+func rebuildStack(ctx context.Context, client StackClient, existing *StackInfo, existingPRs, pullRequests []int) (*StackInfo, StackSyncAction, error) {
+	dissolved, err := client.UnstackStack(ctx, existing.Number)
+	if err != nil {
+		return nil, "", fmt.Errorf("GitHub Stack #%d has PRs %v, which do not match the submitted chain %v, and it could not be dissolved to rebuild: %w", existing.Number, existingPRs, pullRequests, err)
+	}
+	if !dissolved {
+		return nil, "", fmt.Errorf("GitHub Stack #%d has PRs %v, which do not match the submitted chain %v; the pull requests still in it are merged or queued to merge and cannot be unstacked", existing.Number, existingPRs, pullRequests)
+	}
+
+	stack, err := client.CreateStack(ctx, pullRequests)
+	if err != nil {
+		return nil, "", fmt.Errorf("dissolved GitHub Stack #%d but could not recreate it from %v: %w", existing.Number, pullRequests, err)
+	}
+	return stack, StackSyncRebuilt, nil
+}
+
+// UnstackStack removes every pull request GitHub permits from a native Stack.
+// Reports whether the stack was dissolved outright; false means merged or
+// queued pull requests remain in it.
+func (c *StackitGitHubClient) UnstackStack(ctx context.Context, stackNumber int) (bool, error) {
+	path := fmt.Sprintf("repos/%s/%s/stacks/%d/unstack", c.repo.Owner, c.repo.Name, stackNumber)
+	req, err := c.client.NewRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return false, fmt.Errorf("build GitHub Stack unstack request: %w", err)
+	}
+
+	var remaining StackInfo
+	resp, err := c.client.Do(req, &remaining)
+	if err != nil {
+		return false, fmt.Errorf("unstack GitHub Stack #%d: %w", stackNumber, err)
+	}
+	// 204 means the stack is gone; 200 returns whatever is still stacked.
+	if resp != nil && resp.StatusCode == http.StatusNoContent {
+		return true, nil
+	}
+	return len(remaining.PullRequests) == 0, nil
 }
 
 // ValidateStackPullRequestCount validates the GitHub Stacks API's request

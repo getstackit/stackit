@@ -269,11 +269,21 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 
 	var result WorktreeList
 	var current Worktree
+	var prunable bool
 	flush := func() {
-		if current.Path != "" {
+		// Drop worktrees git reports as prunable: their directory is gone, so
+		// they are registrations without a checkout. Every caller here asks a
+		// question about a physical checkout — does this worktree hold
+		// uncommitted work, which worktree owns this branch, is a branch
+		// checked out somewhere unmanaged — and a path that does not exist
+		// answers all of them wrongly. Worst of these, an inspection failure
+		// is treated as "unknown, so hold", which turned a leftover temp
+		// worktree into a permanent hold on a branch and its descendants.
+		if current.Path != "" && !prunable {
 			result = append(result, current)
 		}
 		current = Worktree{}
+		prunable = false
 	}
 	for line := range strings.SplitSeq(output, "\x00") {
 		switch {
@@ -284,6 +294,8 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 			current.Path = strings.TrimPrefix(line, "worktree ")
 		case strings.HasPrefix(line, "branch "):
 			current.Branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
+		case line == "prunable" || strings.HasPrefix(line, "prunable "):
+			prunable = true
 		}
 	}
 	flush()

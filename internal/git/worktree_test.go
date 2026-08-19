@@ -140,6 +140,41 @@ func TestWorktree(t *testing.T) {
 		require.NotContains(t, worktrees.Paths(), worktreePath)
 	})
 
+	t.Run("omits worktrees whose directory is gone", func(t *testing.T) {
+		// A temp worktree deleted without `git worktree remove` — what a
+		// crashed or interrupted merge leaves behind. Git keeps the
+		// registration and marks it prunable.
+		//
+		// Such an entry used to reach the hold logic, which cannot inspect a
+		// missing directory and treats "unknown" as "hold". That pinned the
+		// branch and its descendants out of every restack, permanently, over a
+		// worktree with nothing in it to protect.
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+
+		require.NoError(t, scene.Repo.CreateAndCheckoutBranch("stale-branch"))
+		require.NoError(t, scene.Repo.RunGitCommand("checkout", "main"))
+
+		tmpDir, err := filepath.EvalSymlinks(t.TempDir())
+		require.NoError(t, err)
+		worktreePath := filepath.Join(tmpDir, "doomed")
+		require.NoError(t, runner.AddWorktree(context.Background(), worktreePath, "stale-branch", git.WorktreeAttached))
+
+		worktrees, err := runner.ListWorktrees(context.Background())
+		require.NoError(t, err)
+		require.Contains(t, worktrees.Paths(), worktreePath)
+
+		// Delete the directory behind git's back.
+		require.NoError(t, os.RemoveAll(worktreePath))
+
+		worktrees, err = runner.ListWorktrees(context.Background())
+		require.NoError(t, err)
+		require.NotContains(t, worktrees.Paths(), worktreePath,
+			"a worktree whose directory is gone must not be reported as a checkout")
+		require.Empty(t, worktrees.PathForBranch("stale-branch"),
+			"no worktree should be reported as holding the branch")
+	})
+
 	t.Run("add detached worktree", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)

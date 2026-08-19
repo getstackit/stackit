@@ -244,3 +244,39 @@ func TestAbortRestoresWorkInsideWorktree(t *testing.T) {
 	require.Equal(t, "scratch notes\n", shW.fileContent("notes.txt"),
 		"an untracked file modify committed must be back on disk")
 }
+
+// TestUndoWorksOutOfAConflictedRebase guards the ordering of undo's clean-tree
+// check against the rebase it aborts first.
+//
+// A conflicted rebase leaves resolution markers in tracked files, so a
+// clean-tree check placed before the abort refuses on the repository's own
+// conflict state — making undo useless for the one situation people most want
+// it in. The check belongs after the abort, where `git rebase --abort` has
+// already put the tree back the way the rebase found it.
+func TestUndoWorksOutOfAConflictedRebase(t *testing.T) {
+	t.Parallel()
+	sh := NewTestShellInProcess(t)
+
+	sh.WriteFile("shared.txt", "top\nbottom\n").
+		Run("create a -m 'a commit'")
+	sh.WriteFile("shared.txt", "top\nB EDIT\n").
+		Run("create b -m 'b commit'")
+
+	sh.Checkout("a")
+	originalA := sh.revParse("a")
+	sh.WriteUnstaged("shared.txt", "top\nA EDIT\n")
+	statusBefore := sh.gitStatus()
+
+	sh.RunExpectError("modify -a").
+		OutputContains("Conflicted files")
+
+	// The tree is full of conflict markers right now. Undo must still work.
+	sh.Run("undo --yes").
+		OutputContains("Restored the uncommitted changes")
+
+	sh.OnBranch("a")
+	require.Equal(t, originalA, sh.revParse("a"))
+	require.Equal(t, statusBefore, sh.gitStatus(),
+		"undo must land on the pre-command working tree, not the conflicted one")
+	require.Equal(t, "top\nA EDIT\n", sh.fileContent("shared.txt"))
+}

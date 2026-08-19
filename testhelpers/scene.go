@@ -409,14 +409,16 @@ func NewRemoteSceneParallel(t *testing.T) *Scene {
 // writeStackitConfigs writes the default Stackit configuration files to a directory.
 // This is used both for templates and for non-template repos.
 func writeStackitConfigs(dir string) error {
-	// Write repo config (JSON format, matching cuteString output)
-	repoConfigPath := filepath.Join(dir, ".git", ".stackit_config")
-	repoConfig := `{
-  "trunk": "main",
-  "isGithubIntegrationEnabled": false
-}
-`
-	if err := os.WriteFile(repoConfigPath, []byte(repoConfig), 0600); err != nil {
+	// Mark the repo initialized in git config, the modern storage location.
+	//
+	// This used to pre-bake a legacy .stackit_config JSON file and rely on the
+	// first LoadConfig migrating it into git config. That made every scene look
+	// like an un-migrated legacy repo, so needsMigration got past its os.Stat
+	// short-circuit and spawned `git config --get stackit.trunk` on EVERY
+	// LoadConfig call, in every test — and the migration never completed,
+	// because it writes the same key it checks. Tests that need a genuinely
+	// uninitialized repo call MakeUninitialized.
+	if err := MarkInitialized(dir); err != nil {
 		return err
 	}
 
@@ -431,6 +433,34 @@ func writeStackitConfigs(dir string) error {
 	}
 
 	return nil
+}
+
+// MarkInitialized sets the trunk key that marks a repo as having run
+// `stackit init`, without paying for the command. Scenes start uninitialized;
+// harnesses whose tests assume an initialized repo call this once at setup.
+func MarkInitialized(dir string) error {
+	cmd := exec.Command("git", "config", "--local", "stackit.trunk", "main")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set stackit.trunk in %s: %w", dir, err)
+	}
+	return nil
+}
+
+// MakeUninitialized returns a scene directory to the state of a repo that has
+// never run `stackit init`, by clearing the trunk key that marks it
+// initialized. Use it in tests that exercise init or legacy-JSON migration —
+// both branch on stackit.trunk being unset.
+func MakeUninitialized(t *testing.T, dir string) {
+	t.Helper()
+	cmd := exec.Command("git", "config", "--local", "--unset", "stackit.trunk")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null")
+	// Exit code 5 means the key was already absent, which is the desired state.
+	if err := cmd.Run(); err != nil && cmd.ProcessState.ExitCode() != 5 {
+		t.Fatalf("failed to unset stackit.trunk in %s: %v", dir, err)
+	}
 }
 
 // BasicSceneSetup is a setup function that creates a basic scene with a single commit.

@@ -544,19 +544,48 @@ func (r *runner) ensureRepo() error {
 		dir = wd
 	}
 
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	root, err := resolveToplevel(dir)
 	if err != nil {
-		return fmt.Errorf("not a git repository at %s: %w", dir, err)
-	}
-	root := strings.TrimSpace(string(out))
-	if root == "" {
-		return fmt.Errorf("not a git repository at %s: empty toplevel", dir)
+		return err
 	}
 	r.repoRoot = root
 	r.repoChecked = true
 	return nil
+}
+
+// toplevelCache memoizes `git rev-parse --show-toplevel` per directory.
+//
+// The cache is per-runner otherwise, and runners are constructed constantly —
+// one per config load, per action, per worktree session — so the same handful
+// of directories were re-resolved thousands of times, each costing a git
+// process. A directory's toplevel cannot change while the repo is there, and
+// the cheap os.Stat below catches the case where it is not.
+var toplevelCache sync.Map // dir (abs) -> toplevel
+
+func resolveToplevel(dir string) (string, error) {
+	if cached, ok := toplevelCache.Load(dir); ok {
+		root := cached.(string)
+		// Confirm the repo is still present rather than trusting the memo
+		// blindly: a removed worktree must still report "not a git
+		// repository". A stat costs microseconds against a ~7ms process.
+		if _, err := os.Stat(filepath.Join(root, ".git")); err == nil {
+			return root, nil
+		}
+		toplevelCache.Delete(dir)
+	}
+
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("not a git repository at %s: %w", dir, err)
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		return "", fmt.Errorf("not a git repository at %s: empty toplevel", dir)
+	}
+	toplevelCache.Store(dir, root)
+	return root, nil
 }
 
 func (r *runner) InitDefaultRepo() error {

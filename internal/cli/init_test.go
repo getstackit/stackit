@@ -1,8 +1,6 @@
 package cli_test
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,10 +17,8 @@ func TestInitCommand(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
-		// Remove existing config to test fresh init
-		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
-		_ = os.Remove(configPath)
-		// Ignore error if file doesn't exist
+		// Start from a repo that has never run `stackit init`.
+		testhelpers.MakeUninitialized(t, s.Scene.Dir)
 
 		// Run init command
 		output, err := s.RunCliAndGetOutput("init", "--trunk", "main")
@@ -61,9 +57,8 @@ Pro-tip: enhance your workflow with integrations:
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
-		// Remove existing config
-		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
-		os.Remove(configPath)
+		// Start from a repo that has never run `stackit init`.
+		testhelpers.MakeUninitialized(t, s.Scene.Dir)
 
 		// Run init with non-existent branch
 		output, err := s.RunCliAndGetOutput("init", "--trunk", "random")
@@ -84,9 +79,8 @@ Pro-tip: enhance your workflow with integrations:
 			return sc.Repo.RunGitCommand("branch", "-m", "main2")
 		}).WithInProcess(true)
 
-		// Remove existing config
-		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
-		os.Remove(configPath)
+		// Start from a repo that has never run `stackit init`.
+		testhelpers.MakeUninitialized(t, s.Scene.Dir)
 
 		// Run init with non-existent branch and no way to infer
 		output, err := s.RunCliAndGetOutput("init", "--trunk", "random")
@@ -100,9 +94,8 @@ Pro-tip: enhance your workflow with integrations:
 		t.Parallel()
 		s := scenario.NewScenarioParallel(t, testhelpers.InitialCommitSceneSetup).WithInProcess(true)
 
-		// Remove existing config
-		configPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_config")
-		os.Remove(configPath)
+		// Start from a repo that has never run `stackit init`.
+		testhelpers.MakeUninitialized(t, s.Scene.Dir)
 
 		// Run init without specifying trunk (should infer main)
 		output, err := s.RunCliAndGetOutput("init")

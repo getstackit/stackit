@@ -727,6 +727,8 @@ func githubStackActionLabel(action github.StackSyncAction) string {
 		return "Created"
 	case github.StackSyncExtended:
 		return "Extended"
+	case github.StackSyncRebuilt:
+		return "Rebuilt"
 	default:
 		return "Already linked to"
 	}

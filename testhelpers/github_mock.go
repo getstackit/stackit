@@ -26,6 +26,9 @@ type MockGitHubServerConfig struct {
 	// StackError, when set, is returned by every native GitHub Stacks API call.
 	// Repos without access to the experimental API fail this way.
 	StackError error
+	// MergedStackPRs lists PR numbers GitHub refuses to unstack because they
+	// are merged, merging, or queued to merge. Such a stack cannot be rebuilt.
+	MergedStackPRs []int
 	// ErrorResponses maps endpoint+method to error responses
 	ErrorResponses map[string]error
 	// Owner and Repo for the mock server

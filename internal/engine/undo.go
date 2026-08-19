@@ -205,6 +205,11 @@ func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) err
 		return fmt.Errorf("failed to write snapshot: %w", err)
 	}
 
+	// Remember what this run recorded. A conflict workflow binds its rollback
+	// to this exact snapshot, so that an abort can never restore an unrelated
+	// command's snapshot — see EnterConflictWorkflow.
+	e.lastSnapshotID = snapshotID
+
 	// Enforce max stack depth by removing oldest snapshots. Best-effort: the
 	// snapshot above was already saved, so a failure here just means the
 	// undo stack temporarily exceeds the configured max depth.
@@ -282,16 +287,45 @@ func (e *engineImpl) RestoreWorktree(ctx context.Context, snapshotID string) (bo
 // restoreStash re-applies a captured stash, preferring the staged/unstaged
 // split it was created with.
 func (e *engineImpl) restoreStash(ctx context.Context, stashSHA string) error {
-	if err := e.git.StashApplyRef(ctx, stashSHA, git.StashApplyWithIndex); err == nil {
+	indexErr := e.git.StashApplyRef(ctx, stashSHA, git.StashApplyWithIndex)
+	if indexErr == nil {
 		return nil
 	}
 
-	// --index reinstates the staged/unstaged split, and fails as a unit when it
-	// cannot. Losing which hunks were staged beats losing the changes.
+	// --index writes the working tree first and reinstates the staged/unstaged
+	// split afterwards, so a failure can leave the changes already applied and
+	// only the split missing. Retrying then applies the same diff onto itself
+	// and litters the tree with conflict markers. Callers arrive here with a
+	// clean tree — refs restored, working tree reset — so a tree that is still
+	// clean is proof the failed attempt wrote nothing and a retry is safe.
+	dirty, dirtyErr := e.git.WorktreeHasTrackedChanges(ctx, e.repoRoot)
+	if dirtyErr != nil || dirty {
+		return fmt.Errorf("failed to restore uncommitted changes: %w", indexErr)
+	}
+
+	// Nothing landed. Losing which hunks were staged beats losing the changes.
 	if err := e.git.StashApplyRef(ctx, stashSHA, git.StashApplyWorktreeOnly); err != nil {
 		return fmt.Errorf("failed to restore uncommitted changes: %w", err)
 	}
 	return nil
+}
+
+// LastSnapshotID returns the snapshot this engine recorded, or empty when it
+// has taken none. It answers "did the command now running record a rollback
+// point", which is what binds a conflict workflow to its own snapshot.
+//
+// That reading holds because the CLI runs one command per process, so an
+// engine that has taken no snapshot reports empty. A long-lived engine — the
+// API server keeps one per repository across requests — carries the value
+// forward, so a later command that takes no snapshot of its own would inherit
+// the previous one. Any command that can enter the conflict workflow must
+// therefore take a snapshot before it can conflict; every one of them does.
+// Add a new conflict-capable path without one and it will silently bind to a
+// stranger's rollback point on the server.
+func (e *engineImpl) LastSnapshotID() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lastSnapshotID
 }
 
 // enforceMaxStackDepth removes the oldest snapshots if we exceed MaxUndoStackDepth

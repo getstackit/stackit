@@ -536,6 +536,39 @@ func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*git
 	return stack, pullRequests, action, nil
 }
 
+// dissolveGitHubStack removes the native GitHub Stack containing pullRequest.
+// GitHub's Stacks API has no endpoint that drops a single pull request, so
+// unstacking the whole resource is the only way to free a PR's base branch.
+func dissolveGitHubStack(ctx *app.Context, pullRequest int) error {
+	client, err := getGitHubClient(ctx)
+	if err != nil {
+		return err
+	}
+	stackClient, ok := client.(github.StackClient)
+	if !ok {
+		return fmt.Errorf("GitHub Stack API is unavailable for this client")
+	}
+
+	remoteCtx, cancel := ctx.RemoteOperationContext()
+	defer cancel()
+
+	stack, err := stackClient.FindStackByPullRequest(remoteCtx, pullRequest)
+	if err != nil {
+		return err
+	}
+	if stack == nil {
+		return fmt.Errorf("pull request %d is not in a native GitHub Stack", pullRequest)
+	}
+	dissolved, err := stackClient.UnstackStack(remoteCtx, stack.Number)
+	if err != nil {
+		return err
+	}
+	if !dissolved {
+		return fmt.Errorf("GitHub Stack #%d still holds pull requests that are merged or queued to merge", stack.Number)
+	}
+	return nil
+}
+
 // buildStackSnapshot captures the stack relationships and metadata that submit
 // adapters need for rendering.
 func buildStackSnapshot(
@@ -825,6 +858,23 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 	}
 
 	updateWarnings, err := ctx.GitHub().UpdatePullRequest(ctx.Context, *submissionInfo.PRNumber, updateOpts)
+	if err != nil && github.IsStackBaseConflict(err) {
+		// The branch was reparented locally (move, reorder, sync past a merged
+		// parent), so the native GitHub Stack recorded for it no longer describes
+		// the chain — and GitHub refuses base changes while the PR is in one.
+		// Dissolve it; the stack sync at the end of submit rebuilds it from the
+		// current chain. Without this the user is stuck: no stackit command can
+		// retarget the PR, and the stack cannot be repaired from the GitHub UI.
+		if dissolveErr := dissolveGitHubStack(ctx, *submissionInfo.PRNumber); dissolveErr != nil {
+			ctx.Output.Debug("Failed to dissolve native GitHub Stack for %s: %v", submissionInfo.BranchName, dissolveErr)
+		} else {
+			handler.OnEvent(BranchWarningEvent{
+				BranchName: submissionInfo.BranchName,
+				Warning:    "dissolved the native GitHub Stack so the pull request base could be retargeted",
+			})
+			updateWarnings, err = ctx.GitHub().UpdatePullRequest(ctx.Context, *submissionInfo.PRNumber, updateOpts)
+		}
+	}
 	if err != nil {
 		if retargetedToTrunk {
 			// The PR is currently targeting trunk from the base.sha refresh above; restore

@@ -100,20 +100,6 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		}
 	}
 
-	// Undo hard-resets the working tree onto the restored refs and then applies
-	// whatever the snapshot captured. Both steps assume the tree holds nothing
-	// of the user's: the reset destroys tracked edits outright, and the stash
-	// apply would otherwise merge the capture into them. Untracked files are
-	// deliberately not counted — a reset cannot destroy them, and the untracked
-	// half of a capture never overwrites a file that already exists.
-	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx.Context, ctx.RepoRoot)
-	switch {
-	case dirtyErr != nil:
-		return fmt.Errorf("failed to check for uncommitted changes: %w", dirtyErr)
-	case dirty:
-		return fmt.Errorf("you have uncommitted changes; undo would overwrite them.\nCommit them, or run 'git stash' and 'git stash pop' around the undo")
-	}
-
 	// Show confirmation prompt
 	confirmMessage := fmt.Sprintf(
 		"This will restore the repository to the state before '%s' (%s).",
@@ -152,6 +138,29 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 			return fmt.Errorf("failed to abort merge: %w", err)
 		}
 		h.OnStep("Aborted in-progress merge", handler.StatusCompleted)
+	}
+
+	// Undo hard-resets the working tree onto the restored refs and then applies
+	// whatever the snapshot captured. Both steps assume the tree holds nothing
+	// of the user's: the reset destroys tracked edits outright, and the stash
+	// apply would otherwise merge the capture into them.
+	//
+	// Checked here, after the aborts above rather than before them: a
+	// conflicted rebase leaves resolution edits in the tree, and refusing on
+	// those would make undo unusable for the one thing people reach for it
+	// during. `git rebase --abort` puts the tree back the way the rebase found
+	// it — clean, since rebase refuses to start otherwise — so by this point
+	// tracked changes really are the user's own.
+	//
+	// Untracked files are deliberately not counted: a reset cannot destroy
+	// them, and the untracked half of a capture never overwrites a file that
+	// already exists.
+	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx.Context, ctx.RepoRoot)
+	switch {
+	case dirtyErr != nil:
+		return fmt.Errorf("failed to check for uncommitted changes: %w", dirtyErr)
+	case dirty:
+		return fmt.Errorf("you have uncommitted changes; undo would overwrite them.\nCommit them, or run 'git stash' and 'git stash pop' around the undo")
 	}
 
 	// Perform the restoration

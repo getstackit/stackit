@@ -239,16 +239,6 @@ func (g *StackGraph) IsDescendant(branch Branch, potentialDescendant Branch) boo
 	return false
 }
 
-// GetBranchesByDepth returns a map from depth to branch names at that depth.
-// This is useful for parallel operations where branches at the same depth are independent.
-func (g *StackGraph) GetBranchesByDepth() map[int][]string {
-	byDepth := make(map[int][]string)
-	for _, group := range g.DepthGroups() {
-		byDepth[group.Depth] = group.Branches.Names()
-	}
-	return byDepth
-}
-
 // DepthGroups returns the graph's branches grouped by depth in traversal order.
 func (g *StackGraph) DepthGroups() []DepthGroup {
 	if len(g.nodes) == 0 {
@@ -432,47 +422,6 @@ func (g *StackGraph) isAncestorOf(ancestor, descendant string) bool {
 		current = node.Parent
 	}
 	return false
-}
-
-// ForEachDepth iterates over branches grouped by depth, calling fn for each depth level.
-// The function receives the depth (0 = trunk level) and branches at that depth.
-// If fn returns an error, iteration stops and that error is returned.
-// Branches at the same depth can be processed in parallel by fn.
-// This is useful for operations like restacking where parents must complete before children.
-func (g *StackGraph) ForEachDepth(fn func(depth int, branches Branches) error) error {
-	for group := range g.DepthGroupsSeq() {
-		if err := fn(group.Depth, group.Branches); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// MaxDepth returns the maximum depth in the graph.
-// Returns -1 if the graph is empty.
-func (g *StackGraph) MaxDepth() int {
-	maxDepth := -1
-	for _, node := range g.nodes {
-		if node.Depth > maxDepth {
-			maxDepth = node.Depth
-		}
-	}
-	return maxDepth
-}
-
-// BranchesAtDepth returns all branches at the specified depth.
-// Returns nil if no branches exist at that depth.
-func (g *StackGraph) BranchesAtDepth(depth int) Branches {
-	var branches []Branch
-	for _, node := range g.nodes {
-		if node.Depth == depth {
-			branches = append(branches, node.Branch)
-		}
-	}
-	if len(branches) == 0 {
-		return nil
-	}
-	return NewBranches(branches)
 }
 
 // Upstack returns children of the branch (upstack).

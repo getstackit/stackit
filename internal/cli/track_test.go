@@ -104,7 +104,7 @@ func TestTrackCommand(t *testing.T) {
 		// Try to track non-existent branch
 		output, err := s.RunCliAndGetOutput("track", "nonexistent", "--parent", "main")
 		require.Error(t, err, "track should fail when branch doesn't exist")
-		require.Contains(t, output, "reference not found")
+		require.Contains(t, output, "failed to get branch revision")
 	})
 
 	t.Run("track with --force finds most recent tracked ancestor", func(t *testing.T) {

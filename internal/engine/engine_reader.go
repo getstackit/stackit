@@ -198,10 +198,9 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 
 // FindBranchesForCommits maps each requested commit SHA to the tracked branch
 // that owns it (the branch whose parent..tip range contains the commit). It
-// scans each branch at most once, so the cost is O(branches) git-log
-// invocations regardless of how many SHAs are requested — the batch counterpart
-// to looking up commits one at a time. Commits not owned by any branch are
-// simply absent from the returned map.
+// resolves every branch's commits in one batched, cache-backed pass
+// (BatchCommits) rather than scanning branches one at a time. Commits not
+// owned by any branch are simply absent from the returned map.
 func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) map[string]string {
 	result := make(map[string]string, len(commitSHAs))
 	if len(commitSHAs) == 0 {
@@ -218,15 +217,9 @@ func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) map[string]stri
 	copy(branches, e.state.branches)
 	e.mu.RUnlock()
 
+	commitsByBranch := e.BatchCommits(BranchesFromNames(e, branches), CommitFormatSHA)
 	for _, branchName := range branches {
-		if len(result) == len(want) {
-			break
-		}
-		commits, err := e.GetAllCommits(NewBranch(branchName, e), CommitFormatSHA)
-		if err != nil {
-			continue
-		}
-		for _, sha := range commits {
+		for _, sha := range commitsByBranch[branchName] {
 			if _, ok := want[sha]; !ok {
 				continue
 			}

@@ -78,10 +78,11 @@ After absorb, only the modified branches and their descendants have changed. A `
 
 `absorb.go:121–130` calls `GetAllCommits(SHA)` per branch and then walks. One `git rev-list --boundary <trunk>..<current>` returns all SHAs in one process. The per-branch attribution can be done from the parent-revision metadata already in the cache.
 
-> Note: the separate target→branch attribution step (`FindBranchesForCommits`,
-> `engine_reader.go:201`) *also* calls `GetAllCommits` per branch. If win #4
-> builds a `commitSHA → branchName` map during the single rev-list walk, that
-> batched scan can be dropped too — folding former win #5 into this one.
+> **Status:** Partly done. The separate target→branch attribution step
+> (`FindBranchesForCommits`, `engine_reader.go:205`) now resolves via
+> `BatchCommits` instead of calling `GetAllCommits` per branch. The downstack
+> loop at `absorb.go:121–130` this section describes is unchanged and still the
+> remaining win.
 
 ## Validation
 

@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -209,7 +208,7 @@ func TestStackGraphIsRelated(t *testing.T) {
 	})
 }
 
-func TestStackGraphForEachDepth(t *testing.T) {
+func TestStackGraphDepthGroups(t *testing.T) {
 	t.Parallel()
 
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
@@ -222,18 +221,6 @@ func TestStackGraphForEachDepth(t *testing.T) {
 		})
 
 	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-
-	t.Run("iterates depths in order", func(t *testing.T) {
-		t.Parallel()
-
-		depthOrder := []int{}
-		err := graph.ForEachDepth(func(depth int, _ engine.Branches) error {
-			depthOrder = append(depthOrder, depth)
-			return nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, []int{0, 1, 2, 3}, depthOrder)
-	})
 
 	t.Run("DepthGroups exposes named grouped traversal", func(t *testing.T) {
 		t.Parallel()
@@ -258,90 +245,5 @@ func TestStackGraphForEachDepth(t *testing.T) {
 		}
 
 		require.Equal(t, []int{0, 1}, seen)
-	})
-
-	t.Run("branches at same depth are independent", func(t *testing.T) {
-		t.Parallel()
-
-		branchesAtDepth1 := []string{}
-		err := graph.ForEachDepth(func(depth int, branches engine.Branches) error {
-			if depth == 1 {
-				branchesAtDepth1 = branches.Names()
-			}
-			return nil
-		})
-		require.NoError(t, err)
-		require.ElementsMatch(t, []string{"a", "b"}, branchesAtDepth1)
-	})
-
-	t.Run("stops on error", func(t *testing.T) {
-		t.Parallel()
-
-		testErr := errors.New("test error")
-		callCount := 0
-		err := graph.ForEachDepth(func(depth int, _ engine.Branches) error {
-			callCount++
-			if depth == 1 {
-				return testErr
-			}
-			return nil
-		})
-		require.ErrorIs(t, err, testErr)
-		require.Equal(t, 2, callCount) // depth 0 and 1
-	})
-}
-
-func TestStackGraphMaxDepth(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns max depth", func(t *testing.T) {
-		t.Parallel()
-
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
-			WithStack(map[string]string{
-				"a":  "main",
-				"a1": "a",
-				"a2": "a1",
-			})
-
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		require.Equal(t, 3, graph.MaxDepth())
-	})
-
-	t.Run("returns -1 for empty graph", func(t *testing.T) {
-		t.Parallel()
-
-		// Empty graph by filtering out everything
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, func(engine.Branch) bool {
-			return false
-		})
-		require.Equal(t, -1, graph.MaxDepth())
-	})
-}
-
-func TestStackGraphBranchesAtDepth(t *testing.T) {
-	t.Parallel()
-
-	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
-		WithStack(map[string]string{
-			"a":  "main",
-			"b":  "main",
-			"a1": "a",
-		})
-
-	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-
-	t.Run("returns branches at depth 1", func(t *testing.T) {
-		t.Parallel()
-		branches := graph.BranchesAtDepth(1)
-		names := branches.Names()
-		require.ElementsMatch(t, []string{"a", "b"}, names)
-	})
-
-	t.Run("returns nil for non-existent depth", func(t *testing.T) {
-		t.Parallel()
-		branches := graph.BranchesAtDepth(100)
-		require.Nil(t, branches)
 	})
 }

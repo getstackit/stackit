@@ -17,6 +17,9 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
+// msgSubmitFailed is the completion message for a failed submit.
+const msgSubmitFailed = "Submit failed"
+
 // Options contains options for the submit command
 type Options struct {
 	Branch               string
@@ -301,7 +304,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if opts.CreateGitHubStack {
 			if err := publishGitHubStackMetadata(ctx, branchObjs, handler); err != nil {
 				if explicitGitHubStack {
-					handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
+					handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: msgSubmitFailed})
 					return fmt.Errorf("PRs are already up to date, but creating native GitHub Stack metadata failed: %w", err)
 				}
 				handler.OnEvent(GitHubStackSkippedEvent{Reason: err.Error()})
@@ -411,7 +414,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	if submitErr != nil {
-		handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: msgSubmitFailed})
 		return submitErr
 	}
 
@@ -435,14 +438,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Push metadata refs for successfully submitted branches
 	if err := pushMetadataRefs(ctx, branchObjs); err != nil {
-		handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
+		handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: msgSubmitFailed})
 		return fmt.Errorf("failed to push metadata to remote: %w. Your PRs were created/updated successfully, but metadata sync failed. Run 'st sync' and try submitting again", err)
 	}
 
 	if opts.CreateGitHubStack {
 		if err := publishGitHubStackMetadata(ctx, branchObjs, handler); err != nil {
 			if explicitGitHubStack {
-				handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: "Submit failed"})
+				handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: msgSubmitFailed})
 				return fmt.Errorf("PRs were submitted successfully, but creating native GitHub Stack metadata failed: %w", err)
 			}
 			// Every PR already landed. Reporting the run as failed would exit

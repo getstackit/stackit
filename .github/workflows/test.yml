@@ -8,11 +8,7 @@ on:
 jobs:
   test:
     name: Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        go-version: ['stable']
+    runs-on: ubuntu-latest
 
     services:
       # Postgres backs the API server's repo store (internal/api/store). Store
@@ -41,7 +37,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: '1.26'
           cache: true
           check-latest: true
 
@@ -80,7 +76,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          go-version: '1.26'
           cache: true
           check-latest: true
 
@@ -101,7 +97,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
+          go-version: '1.26'
           cache: true
           check-latest: true
 

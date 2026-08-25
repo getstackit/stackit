@@ -95,9 +95,22 @@ func (a *ViewAssembler) mapStackDetails(
 	stacks []merge.MultiStackInfo,
 	checksMap github.ChecksByBranch,
 ) []httpcontract.StackDetail {
+	// One remote listing, one stats pass, one commits pass, one commit-info
+	// pass, and one restack-status pass for every stack combined, instead of
+	// one of each per stack (ReadBranchRemoteStatuses alone is a network call).
+	branchCount := 0
+	for _, stack := range stacks {
+		branchCount += len(stack.AllBranches)
+	}
+	allBranches := make(engine.Branches, 0, branchCount)
+	for _, stack := range stacks {
+		allBranches = append(allBranches, graph.BranchesByNames(stack.AllBranches)...)
+	}
+	data := httpcontract.BatchReadStackData(ctx, a.eng, allBranches)
+
 	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {
-		detail := httpcontract.MapStackDetail(ctx, a.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap)
+		detail := httpcontract.MapStackDetail(a.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap, data)
 		details = append(details, detail)
 	}
 	return details

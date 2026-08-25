@@ -78,7 +78,10 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 }
 
 // MapStackSummary creates a StackSummary from stack discovery info.
-func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, owner string) StackSummary {
+// statuses should come from a single ReadBranchStatuses batch call covering
+// every branch across every stack in the request, not a call scoped to this
+// stack alone — see BatchReadStackData.
+func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, owner string, statuses engine.BranchStatuses) StackSummary {
 	currentBranch := eng.CurrentBranchName()
 	isCurrent := slices.Contains(allBranches, currentBranch)
 
@@ -96,15 +99,6 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 		}
 	}
 
-	// Compute stack status using display branches (anchor excluded). Parent
-	// revisions are resolved in one batch call instead of one per branch.
-	displayBranchObjs := make(engine.Branches, 0, len(displayBranches))
-	for _, name := range displayBranches {
-		if node := graph.GetNode(name); node != nil {
-			displayBranchObjs = append(displayBranchObjs, node.Branch)
-		}
-	}
-	statuses := eng.ReadBranchStatuses(displayBranchObjs)
 	status := computeStackStatus(graph, displayBranches, statuses)
 
 	// Title and description come exclusively from explicit stack descriptions
@@ -131,8 +125,34 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 	}
 }
 
-// MapStackDetail creates a full StackDetail with all branch info.
-func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap github.ChecksByBranch) StackDetail {
+// BranchBatchData holds status/stat data for a set of branches, read in one
+// batch pass per field. Callers with multiple stacks should compute this once
+// over the union of every stack's branches and reuse it across every
+// MapStackDetail/MapStackSummary call, instead of computing it per stack.
+type BranchBatchData struct {
+	RemoteStatuses     engine.BranchRemoteStatuses
+	Stats              map[string]engine.BranchStat
+	CommitsByBranch    map[string][]string
+	CommitInfoByBranch map[string]git.CommitInfo
+	Statuses           engine.BranchStatuses
+}
+
+// BatchReadStackData reads remote status, stats, commits, commit info, and
+// restack status for branches in one batch call per field.
+func BatchReadStackData(ctx context.Context, eng engine.BranchReader, branches engine.Branches) BranchBatchData {
+	return BranchBatchData{
+		RemoteStatuses:     eng.ReadBranchRemoteStatuses(ctx, branches),
+		Stats:              eng.BatchBranchStats(branches),
+		CommitsByBranch:    eng.BatchCommits(branches, engine.CommitFormatReadableWithDate),
+		CommitInfoByBranch: eng.BatchCommitInfo(branches),
+		Statuses:           eng.ReadBranchStatuses(branches),
+	}
+}
+
+// MapStackDetail creates a full StackDetail with all branch info. data should
+// come from BatchReadStackData covering every branch across every stack in
+// the request — see BranchBatchData.
+func MapStackDetail(eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap github.ChecksByBranch, data BranchBatchData) StackDetail {
 	// Derive owner from root branch's PR author
 	var owner string
 	if checksMap != nil {
@@ -141,40 +161,27 @@ func MapStackDetail(ctx context.Context, eng engine.BranchReader, graph *engine.
 		}
 	}
 
-	summary := MapStackSummary(eng, graph, rootBranch, allBranches, prCount, scope, owner)
+	summary := MapStackSummary(eng, graph, rootBranch, allBranches, prCount, scope, owner, data.Statuses)
 
 	// Check if root is a worktree anchor to filter it from branches
 	isAnchor := summary.HasWorktree
 	anchorName := rootBranch
 
 	nodes := make([]*engine.StackNode, 0, len(allBranches))
-	stackBranches := make(engine.Branches, 0, len(allBranches))
 	for _, name := range allBranches {
 		if isAnchor && name == anchorName {
 			continue
 		}
-		node := graph.GetNode(name)
-		if node == nil {
-			continue
+		if node := graph.GetNode(name); node != nil {
+			nodes = append(nodes, node)
 		}
-		nodes = append(nodes, node)
-		stackBranches = append(stackBranches, node.Branch)
 	}
-
-	// One remote listing, one stats pass, one commits pass, one commit-info
-	// pass, and one restack-status pass for the whole stack instead of one of
-	// each per branch.
-	remoteStatuses := eng.ReadBranchRemoteStatuses(ctx, stackBranches)
-	stats := eng.BatchBranchStats(stackBranches)
-	commitsByBranch := eng.BatchCommits(stackBranches, engine.CommitFormatReadableWithDate)
-	commitInfoByBranch := eng.BatchCommitInfo(stackBranches)
-	statuses := eng.ReadBranchStatuses(stackBranches)
 
 	branches := make([]BranchResponse, 0, len(nodes))
 	for _, node := range nodes {
 		name := node.Branch.GetName()
 		checks := checksMap.Get(name)
-		br := MapBranch(eng, node.Branch, node, checks, remoteStatuses.ForBranch(node.Branch), stats[name], commitsByBranch[name], commitInfoByBranch[name], !statuses.IsUpToDate(node.Branch))
+		br := MapBranch(eng, node.Branch, node, checks, data.RemoteStatuses.ForBranch(node.Branch), data.Stats[name], data.CommitsByBranch[name], data.CommitInfoByBranch[name], !data.Statuses.IsUpToDate(node.Branch))
 		if isAnchor {
 			// Anchor's direct children become display roots
 			if br.Parent == anchorName {

@@ -50,9 +50,21 @@ func (h *StacksHandler) listStacks(w http.ResponseWriter, entry *registry.RepoEn
 
 	graph := entry.Engine.Graph(engine.SortStrategySmart)
 
+	// One restack-status pass for every stack combined, instead of one per
+	// stack.
+	branchCount := 0
+	for _, stack := range stacks {
+		branchCount += len(stack.AllBranches)
+	}
+	allBranches := make(engine.Branches, 0, branchCount)
+	for _, stack := range stacks {
+		allBranches = append(allBranches, graph.BranchesByNames(stack.AllBranches)...)
+	}
+	statuses := entry.Engine.ReadBranchStatuses(allBranches)
+
 	summaries := make([]httpcontract.StackSummary, 0, len(stacks))
 	for _, stack := range stacks {
-		summary := httpcontract.MapStackSummary(entry.Engine, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, "")
+		summary := httpcontract.MapStackSummary(entry.Engine, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, "", statuses)
 		summaries = append(summaries, summary)
 	}
 
@@ -85,6 +97,7 @@ func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, entry *
 		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), found.AllBranches)
 	}
 
-	detail := httpcontract.MapStackDetail(r.Context(), entry.Engine, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap)
+	data := httpcontract.BatchReadStackData(r.Context(), entry.Engine, graph.BranchesByNames(found.AllBranches))
+	detail := httpcontract.MapStackDetail(entry.Engine, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap, data)
 	writeJSON(w, detail)
 }

@@ -180,6 +180,18 @@ func (g *StackGraph) Node(branch Branch) *StackNode {
 	return g.nodes[branch.GetName()]
 }
 
+// BranchesByNames resolves branch names to their Branch objects via the
+// graph, skipping any name with no node.
+func (g *StackGraph) BranchesByNames(names []string) Branches {
+	branches := make(Branches, 0, len(names))
+	for _, name := range names {
+		if node := g.GetNode(name); node != nil {
+			branches = append(branches, node.Branch)
+		}
+	}
+	return branches
+}
+
 // CurrentBranch returns the name of the currently checked-out branch.
 func (g *StackGraph) CurrentBranch() string {
 	return g.current

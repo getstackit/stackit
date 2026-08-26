@@ -49,6 +49,52 @@ func (r *runner) readHeadBranch() (string, bool) {
 	return name, true
 }
 
+// readHeadRevision reads the commit HEAD points at straight out of the HEAD
+// file when HEAD is detached, the same way readHeadBranch fast-paths the
+// on-a-branch case. Detached HEAD is exactly the state worktree-based
+// rebases, restacks, and validation runs are required to leave HEAD in (see
+// safety-invariants.md, "Worktree Operations Must Use Detached HEAD"), so
+// `git rev-parse --verify HEAD` runs once per branch touched in every one of
+// those operations.
+//
+// Reports ok=false for anything other than a raw SHA (HEAD on a branch, an
+// unreadable file, malformed content). The caller then runs the real
+// command, so git stays the authority on every case except detached HEAD.
+func (r *runner) readHeadRevision() (string, bool) {
+	if err := r.ensureRepo(); err != nil {
+		return "", false
+	}
+	gitDir := r.getGitDir(context.Background())
+	if gitDir == "" {
+		return "", false
+	}
+	data, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
+	if err != nil {
+		return "", false
+	}
+	sha := strings.TrimSpace(string(data))
+	if !isHexSHA(sha) {
+		return "", false
+	}
+	return sha, true
+}
+
+// isHexSHA reports whether s looks like a full SHA-1 (40 hex chars) or
+// SHA-256 (64 hex chars) object id.
+func isHexSHA(s string) bool {
+	switch len(s) {
+	case 40, 64:
+	default:
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // ResolveBranchNameCase reconciles a branch name reported by HEAD with the
 // casing the ref actually carries in refs/heads.
 //

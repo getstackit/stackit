@@ -1339,6 +1339,45 @@ func TestReadBranchRemoteStatuses(t *testing.T) {
 			require.Equal(t, status.RemoteSha, status.CommonAncestor, "branch %s common ancestor should be the pushed remote sha", branchName)
 		}
 	})
+
+	t.Run("falls back to remote-tracking refs for branches the remote listing omits", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
+		require.NoError(t, err)
+		err = s.Scene.Repo.PushBranch("origin", "main")
+		require.NoError(t, err)
+
+		// Two branches that ls-remote will not report, each with a stale
+		// remote-tracking ref left behind — the shape you get when the
+		// remote branch is gone but nothing has pruned locally yet. Both
+		// must resolve, not just the first: the fallback is one batched
+		// rev-parse, so a mapping bug there would surface as a branch
+		// silently reporting no remote at all.
+		for _, name := range []string{"feature1", "feature2"} {
+			s.Checkout("main")
+			s.CreateBranch(name).Commit(name + " change")
+
+			sha, err := s.Scene.Repo.GetRevision(name)
+			require.NoError(t, err)
+			require.NoError(t, s.Scene.Repo.RunGitCommand("update-ref", "refs/remotes/origin/"+name, sha))
+		}
+		s.Checkout("main")
+
+		branches := engine.BranchesOf(
+			s.Engine.GetBranch("feature1"),
+			s.Engine.GetBranch("feature2"),
+		)
+		statuses := s.Engine.ReadBranchRemoteStatuses(context.Background(), branches)
+
+		for _, branchName := range []string{"feature1", "feature2"} {
+			status := statuses[branchName]
+			require.NotEmpty(t, status.RemoteSha, "branch %s should resolve a remote sha from its tracking ref", branchName)
+			require.Equal(t, status.LocalSha, status.RemoteSha, "branch %s tracking ref should match local", branchName)
+			require.True(t, status.Matches(), "branch %s should match its tracking ref", branchName)
+		}
+	})
 }
 
 func TestTrunkRemoteState(t *testing.T) {

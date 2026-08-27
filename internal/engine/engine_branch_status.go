@@ -263,6 +263,19 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 		remoteShas = map[string]string{}
 	}
 
+	// Branches the remote listing did not cover fall back to the local
+	// remote-tracking ref. That is resolved in one batched call up front,
+	// before the parallel pass: it is a single git invocation for the whole
+	// set, so it must not be re-entered per worker.
+	var missingRefs []string
+	for _, branch := range branches {
+		branchName := branch.GetName()
+		if remoteShas[branchName] == "" {
+			missingRefs = append(missingRefs, remote+"/"+branchName)
+		}
+	}
+	fallbackShas, _ := e.git.BatchGetRevisions(missingRefs)
+
 	// Each worker writes only its own index, so the slice is filled without
 	// synchronization and assembled into the result map serially afterward,
 	// mirroring batchByBranch in branch_view.go.
@@ -281,9 +294,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 		localSha := localShas[branchName]
 		remoteSha := remoteShas[branchName]
 		if remoteSha == "" {
-			if sha, err := e.git.GetRemoteRevision(branchName); err == nil {
-				remoteSha = sha
-			}
+			remoteSha = fallbackShas[remote+"/"+branchName]
 		}
 
 		status := BranchRemoteStatus{

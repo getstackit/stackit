@@ -172,7 +172,7 @@ func branchWorktreeHoldReason(ctx *app.Context, branch, path string) string {
 	if hasChanges {
 		return restackWorktreeHoldReasonUncommittedChanges
 	}
-	if collides, known := eng.UntrackedCollision(ctx.Context, branch); collides || !known {
+	if collides, known := eng.UntrackedCollision(ctx.Context, branch, path); collides || !known {
 		if !known {
 			return restackWorktreeHoldReasonUntrackedCheckFailed
 		}

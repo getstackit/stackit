@@ -457,8 +457,10 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 	return false, nil, nil
 }
 
-// UntrackedCollision reports whether untracked files in the worktree holding
-// branchName would be destroyed by restacking it.
+// UntrackedCollision reports whether untracked files in worktreePath, the
+// worktree holding branchName, would be destroyed by restacking it. Callers
+// resolve worktreePath themselves (typically already have it in hand from
+// ListWorktrees) rather than having this re-list worktrees on every call.
 //
 // `git reset --hard` overwrites an untracked file only when the incoming commit
 // contains that same path; every other untracked file survives untouched. The
@@ -467,12 +469,7 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 //
 // known is false when the question could not be answered, which callers must
 // treat as unsafe rather than as "no collision".
-func (e *engineImpl) UntrackedCollision(ctx context.Context, branchName string) (collides, known bool) {
-	worktrees, err := e.git.ListWorktrees(ctx)
-	if err != nil {
-		return false, false
-	}
-	worktreePath := worktrees.PathForBranch(branchName)
+func (e *engineImpl) UntrackedCollision(ctx context.Context, branchName, worktreePath string) (collides, known bool) {
 	if worktreePath == "" {
 		return false, true
 	}

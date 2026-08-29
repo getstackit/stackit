@@ -73,6 +73,46 @@ type Info struct {
 	Metadata   *PRMetadata
 }
 
+type nativeStackSyncMode uint8
+
+const (
+	nativeStackSyncDisabled nativeStackSyncMode = iota
+	nativeStackSyncConfigured
+	nativeStackSyncExplicit
+)
+
+func (m nativeStackSyncMode) IsExplicit() bool {
+	return m == nativeStackSyncExplicit
+}
+
+// nativeStackChain is one root-to-tip branch chain that GitHub can represent
+// as a native Stack. A submit selection may contain several such chains.
+type nativeStackChain struct {
+	Root     engine.Branch
+	Branches engine.Branches
+}
+
+type nativeStackChainSkip struct {
+	Chain  nativeStackChain
+	Reason error
+}
+
+func (s nativeStackChainSkip) Error() string {
+	return fmt.Sprintf("native GitHub Stack rooted at %q: %v", s.Chain.Root.GetName(), s.Reason)
+}
+
+// nativeStackSyncPlan keeps valid chains separate from components that cannot
+// be represented by GitHub. This lets configured sync proceed for every
+// eligible chain while still reporting invalid components individually.
+type nativeStackSyncPlan struct {
+	Eligible []nativeStackChain
+	Skipped  []nativeStackChainSkip
+}
+
+func (p nativeStackSyncPlan) HasEligibleChains() bool {
+	return len(p.Eligible) > 0
+}
+
 // Action performs the submit operation with an event handler for progress feedback.
 func Action(ctx *app.Context, opts Options, handler Handler) error {
 	start := time.Now()
@@ -162,14 +202,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	// Configured Stack sync is assessed against the final submitted branch list
 	// after validation. The explicit flag remains strict.
-	explicitGitHubStack := opts.CreateGitHubStack
-	configuredGitHubStack := opts.ConfigGitHubStack
-	if ctx.Config != nil && ctx.Config.GitHubStack() {
-		configuredGitHubStack = true
-	}
-	if !explicitGitHubStack && configuredGitHubStack {
-		opts.CreateGitHubStack = true
-	}
+	nativeStackMode := nativeStackSyncModeFor(ctx, opts)
 	// Resolve up-to-date status for every branch in one batched parent-revision
 	// read rather than a per-branch IsBranchUpToDate() (each of which shells a
 	// separate `git rev-parse` for the parent).
@@ -251,29 +284,34 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			branchObjs[i] = nav.GetBranch(branchName)
 		}
 	}
-	// Validate native Stack requirements against the final branch list. Submit
-	// validation can prune stale descendants, so validating earlier could let a
-	// one-PR list perform normal PR writes before native Stack creation fails.
-	if opts.CreateGitHubStack {
-		countErr := github.ValidateStackPullRequestCount(len(branchObjs))
-		switch {
-		case countErr != nil && explicitGitHubStack:
-			return countErr
-		case countErr != nil:
-			// A submit that isn't stack-shaped (commonly a single branch) is the
-			// ordinary case when sync is configured, so skip it quietly.
-			opts.CreateGitHubStack = false
-		default:
-			if err := validateGitHubStackShape(ctx, eng, branchObjs); err != nil {
-				if explicitGitHubStack {
-					return err
+	// Resolve native Stack chains from the final branch list. Submit validation
+	// can prune stale descendants, so resolving earlier could let a one-PR list
+	// perform normal PR writes before an explicitly requested native Stack
+	// creation fails.
+	var nativeStackPlan nativeStackSyncPlan
+	if nativeStackMode != nativeStackSyncDisabled {
+		var err error
+		nativeStackPlan, err = planNativeStackSync(ctx, eng, branchObjs)
+		if err != nil {
+			if nativeStackMode.IsExplicit() {
+				return err
+			}
+			// Configured sync is best-effort. Failing here would break every
+			// multi-branch submit for a team whose .stackit.yaml enables the
+			// key without stack.shape=linear, including submits nested inside
+			// merge and lock.
+			handler.OnEvent(GitHubStackSkippedEvent{Reason: err.Error()})
+		} else {
+			if nativeStackMode.IsExplicit() && len(nativeStackPlan.Skipped) > 0 {
+				return nativeStackPlan.Skipped[0].Reason
+			}
+			if !nativeStackMode.IsExplicit() {
+				for _, skipped := range nativeStackPlan.Skipped {
+					handler.OnEvent(GitHubStackSkippedEvent{Reason: skipped.Error()})
 				}
-				// Configured sync is best-effort. Failing here would break every
-				// multi-branch submit for a team whose .stackit.yaml enables the
-				// key without stack.shape=linear, including submits nested inside
-				// merge and lock.
-				opts.CreateGitHubStack = false
-				handler.OnEvent(GitHubStackSkippedEvent{Reason: err.Error()})
+			}
+			if nativeStackMode.IsExplicit() && !nativeStackPlan.HasEligibleChains() {
+				return fmt.Errorf("a GitHub Stack requires at least two pull requests")
 			}
 		}
 	}
@@ -301,9 +339,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	if len(submissionInfos) == 0 {
-		if opts.CreateGitHubStack {
-			if err := publishGitHubStackMetadata(ctx, branchObjs, handler); err != nil {
-				if explicitGitHubStack {
+		if nativeStackPlan.HasEligibleChains() {
+			if err := publishGitHubStackMetadata(ctx, nativeStackPlan.Eligible, handler); err != nil {
+				if nativeStackMode.IsExplicit() {
 					handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: msgSubmitFailed})
 					return fmt.Errorf("PRs are already up to date, but creating native GitHub Stack metadata failed: %w", err)
 				}
@@ -442,9 +480,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("failed to push metadata to remote: %w. Your PRs were created/updated successfully, but metadata sync failed. Run 'st sync' and try submitting again", err)
 	}
 
-	if opts.CreateGitHubStack {
-		if err := publishGitHubStackMetadata(ctx, branchObjs, handler); err != nil {
-			if explicitGitHubStack {
+	if nativeStackPlan.HasEligibleChains() {
+		if err := publishGitHubStackMetadata(ctx, nativeStackPlan.Eligible, handler); err != nil {
+			if nativeStackMode.IsExplicit() {
 				handler.OnEvent(CompletionEvent{Outcome: OutcomeFailed, Message: msgSubmitFailed})
 				return fmt.Errorf("PRs were submitted successfully, but creating native GitHub Stack metadata failed: %w", err)
 			}
@@ -461,33 +499,96 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	return nil
 }
 
-func publishGitHubStackMetadata(ctx *app.Context, branches engine.Branches, handler Handler) error {
-	stack, pullRequests, action, err := createGitHubStackMetadata(ctx, branches)
-	if err != nil {
-		return err
+func nativeStackSyncModeFor(ctx *app.Context, opts Options) nativeStackSyncMode {
+	if opts.CreateGitHubStack {
+		return nativeStackSyncExplicit
 	}
-	handler.OnEvent(GitHubStackSyncedEvent{Number: stack.Number, PullRequests: pullRequests, Action: action})
-	return nil
+	if opts.ConfigGitHubStack || ctx.Config != nil && ctx.Config.GitHubStack() {
+		return nativeStackSyncConfigured
+	}
+	return nativeStackSyncDisabled
 }
 
-// validateGitHubStackShape reports why the submitted branches cannot form a
-// native GitHub Stack, beyond the pull request count checked by the caller.
-func validateGitHubStackShape(ctx *app.Context, eng engine.Engine, branches engine.Branches) error {
-	if ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear {
-		return fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
+func publishGitHubStackMetadata(ctx *app.Context, chains []nativeStackChain, handler Handler) error {
+	var errs []error
+	for _, chain := range chains {
+		stack, pullRequests, action, err := createGitHubStackMetadata(ctx, chain.Branches)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("native GitHub Stack rooted at %q: %w", chain.Root.GetName(), err))
+			continue
+		}
+		handler.OnEvent(GitHubStackSyncedEvent{Number: stack.Number, PullRequests: pullRequests, Action: action})
 	}
-	return validateGitHubStackChain(eng, branches)
+	return errors.Join(errs...)
+}
+
+// planNativeStackSync partitions the submitted forest and classifies every
+// component. Singleton chains are intentionally ignored: GitHub requires at
+// least two pull requests for a native Stack.
+func planNativeStackSync(ctx *app.Context, eng engine.Engine, branches engine.Branches) (nativeStackSyncPlan, error) {
+	if ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear {
+		return nativeStackSyncPlan{}, fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
+	}
+
+	chains := partitionGitHubStackChains(eng, branches)
+	plan := nativeStackSyncPlan{Eligible: make([]nativeStackChain, 0, len(chains))}
+	for _, chain := range chains {
+		component := nativeStackChain{Root: chain[0], Branches: chain}
+		switch {
+		case len(chain) < github.MinStackPullRequests:
+			continue
+		case len(chain) > github.MaxStackPullRequests:
+			plan.Skipped = append(plan.Skipped, nativeStackChainSkip{
+				Chain:  component,
+				Reason: fmt.Errorf("a GitHub Stack supports at most %d pull requests (got %d)", github.MaxStackPullRequests, len(chain)),
+			})
+			continue
+		}
+		if err := validateGitHubStackChain(eng, chain); err != nil {
+			plan.Skipped = append(plan.Skipped, nativeStackChainSkip{Chain: component, Reason: err})
+			continue
+		}
+		plan.Eligible = append(plan.Eligible, component)
+	}
+	return plan, nil
+}
+
+// partitionGitHubStackChains separates a submission's branches by the first
+// selected ancestor. `submit --stack` from trunk intentionally includes every
+// independent Stackit stack; GitHub needs those roots synchronized as distinct
+// native Stacks rather than one invalid combined chain.
+func partitionGitHubStackChains(eng engine.Engine, branches engine.Branches) []engine.Branches {
+	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	selected := make(map[string]bool, len(branches))
+	for _, branch := range branches {
+		selected[branch.GetName()] = true
+	}
+
+	chainsByRoot := make(map[string]int)
+	chains := make([]engine.Branches, 0)
+	for _, branch := range branches {
+		root := branch
+		for parentName := graph.Parent(root); selected[parentName]; parentName = graph.Parent(root) {
+			root = eng.GetBranch(parentName)
+		}
+
+		index, ok := chainsByRoot[root.GetName()]
+		if !ok {
+			index = len(chains)
+			chainsByRoot[root.GetName()] = index
+			chains = append(chains, nil)
+		}
+		chains[index] = append(chains[index], branch)
+	}
+	return chains
 }
 
 // validateGitHubStackChain requires the submitted branches to form one
 // contiguous chain, each stacked directly on the one before it. Branches arrive
 // bottom-to-top from StackGraph.Range.
 //
-// Checking only that no branch forks is not enough. Trunk is excluded from the
-// submitted set, so several independent stacks rooted at trunk each satisfy a
-// per-branch fork check while together forming no chain at all — which is what
-// `submit --stack` from trunk selects. GitHub rejects that set with "Pull
-// requests must form a stack", so catch it here before any PR writes.
+// A selected component with a fork cannot be represented as a native GitHub
+// Stack. Independent roots are partitioned before this validation runs.
 func validateGitHubStackChain(eng engine.Engine, branches engine.Branches) error {
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 	trunk := eng.Trunk().GetName()

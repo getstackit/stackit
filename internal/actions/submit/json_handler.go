@@ -9,12 +9,20 @@ import (
 
 // JSONResult is the machine-readable summary of a submit run.
 type JSONResult struct {
-	Outcome     CompletionOutcome      `json:"outcome"`
-	Message     string                 `json:"message,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	Branches    []JSONBranchResult     `json:"branches"`
+	Outcome  CompletionOutcome  `json:"outcome"`
+	Message  string             `json:"message,omitempty"`
+	Error    string             `json:"error,omitempty"`
+	Branches []JSONBranchResult `json:"branches"`
+	// GitHubStacks contains every native GitHub Stack reconciled during submit.
+	GitHubStacks []JSONGitHubStackResult `json:"github_stacks,omitempty"`
+	// GitHubStackSkips contains every reason configured native Stack sync skipped
+	// an otherwise submitted component.
+	GitHubStackSkips []string `json:"github_stack_skips,omitempty"`
+	// GitHubStack is retained for backwards compatibility when exactly one
+	// native Stack was reconciled. Use GitHubStacks for new consumers.
 	GitHubStack *JSONGitHubStackResult `json:"github_stack,omitempty"`
-	// GitHubStackSkipped explains why configured native Stack sync did not run.
+	// GitHubStackSkipped is retained for backwards compatibility when exactly
+	// one component was skipped. Use GitHubStackSkips for new consumers.
 	GitHubStackSkipped string `json:"github_stack_skipped,omitempty"`
 }
 
@@ -101,10 +109,21 @@ func (h *JSONHandler) OnEvent(e Event) {
 		b.Warnings = append(b.Warnings, ev.Warning)
 
 	case GitHubStackSyncedEvent:
-		h.Result.GitHubStack = &JSONGitHubStackResult{Number: ev.Number, PullRequests: ev.PullRequests, Action: string(ev.Action)}
+		stack := JSONGitHubStackResult{Number: ev.Number, PullRequests: ev.PullRequests, Action: string(ev.Action)}
+		h.Result.GitHubStacks = append(h.Result.GitHubStacks, stack)
+		if len(h.Result.GitHubStacks) == 1 {
+			h.Result.GitHubStack = &h.Result.GitHubStacks[0]
+		} else {
+			h.Result.GitHubStack = nil
+		}
 
 	case GitHubStackSkippedEvent:
-		h.Result.GitHubStackSkipped = ev.Reason
+		h.Result.GitHubStackSkips = append(h.Result.GitHubStackSkips, ev.Reason)
+		if len(h.Result.GitHubStackSkips) == 1 {
+			h.Result.GitHubStackSkipped = ev.Reason
+		} else {
+			h.Result.GitHubStackSkipped = ""
+		}
 
 	case CompletionEvent:
 		h.Result.Outcome = ev.Outcome

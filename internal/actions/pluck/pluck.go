@@ -114,9 +114,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	// Capture old divergence point for source branch
-	sourceOldParentRev, _ := eng.GetDivergencePoint(source)
-
 	// Build rebase specs for validation
 	// Order matters: children first (they depend on grandparent), then source
 	rebaseSpecs := make([]engine.RebaseSpec, 0, len(children)+1)
@@ -135,6 +132,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	sourceRev, err := eng.GetRevision(sourceBranch)
 	if err != nil {
 		return fmt.Errorf("failed to get revision for %s: %w", source, err)
+	}
+
+	// Capture old divergence point for source branch, falling back to the
+	// grandparent's revision (source's old parent) when unavailable.
+	sourceOldParentRev, divErr := eng.GetDivergencePoint(source)
+	if divErr != nil || sourceOldParentRev == "" {
+		sourceOldParentRev = grandparentRev
 	}
 
 	// Children: rebase onto grandparent (source's old parent)

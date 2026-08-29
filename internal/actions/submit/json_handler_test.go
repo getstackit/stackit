@@ -58,3 +58,25 @@ func TestJSONHandlerSetErrorDefaultsOutcome(t *testing.T) {
 	require.Equal(t, "boom", h.Result.Error)
 	require.Equal(t, OutcomeFailed, h.Result.Outcome)
 }
+
+func TestJSONHandlerCollectsEveryGitHubStackEvent(t *testing.T) {
+	t.Parallel()
+
+	h := NewJSONHandler()
+	h.OnEvent(GitHubStackSyncedEvent{Number: 1, PullRequests: []int{10, 11}, Action: "created"})
+	h.OnEvent(GitHubStackSkippedEvent{Reason: "first skipped component"})
+
+	require.NotNil(t, h.Result.GitHubStack, "the legacy field remains available for one Stack")
+	require.Equal(t, "first skipped component", h.Result.GitHubStackSkipped)
+
+	h.OnEvent(GitHubStackSyncedEvent{Number: 2, PullRequests: []int{12, 13}, Action: "extended"})
+	h.OnEvent(GitHubStackSkippedEvent{Reason: "second skipped component"})
+
+	require.Equal(t, []JSONGitHubStackResult{
+		{Number: 1, PullRequests: []int{10, 11}, Action: "created"},
+		{Number: 2, PullRequests: []int{12, 13}, Action: "extended"},
+	}, h.Result.GitHubStacks)
+	require.Equal(t, []string{"first skipped component", "second skipped component"}, h.Result.GitHubStackSkips)
+	require.Nil(t, h.Result.GitHubStack, "the legacy field must not silently discard all but the final Stack")
+	require.Empty(t, h.Result.GitHubStackSkipped, "the legacy field must not silently discard skipped components")
+}

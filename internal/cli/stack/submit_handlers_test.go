@@ -205,6 +205,26 @@ func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {
 	require.Contains(t, got, "All PRs up to date")
 }
 
+func TestInteractiveSubmitHandlerPrintsEveryBufferedNativeStackEvent(t *testing.T) {
+	t.Parallel()
+
+	out := output.NewTestOutput()
+	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitVerbose)
+	handler.githubStacks = []submitAction.GitHubStackSyncedEvent{
+		{Number: 1, PullRequests: []int{10, 11}, Action: "created"},
+		{Number: 2, PullRequests: []int{12, 13}, Action: "extended"},
+	}
+	handler.githubStackSkips = []string{"first skipped component", "second skipped component"}
+
+	handler.printNativeStackEvents()
+
+	got := ansi.Strip(out.String())
+	require.Contains(t, got, "Created native GitHub Stack #1 from #10 → #11.")
+	require.Contains(t, got, "Extended native GitHub Stack #2 from #12 → #13.")
+	require.Contains(t, got, "Skipped native GitHub Stack sync: first skipped component")
+	require.Contains(t, got, "Skipped native GitHub Stack sync: second skipped component")
+}
+
 func TestPlanPrinterShowsPRNumbersAndEmptyAnnotation(t *testing.T) {
 	t.Parallel()
 

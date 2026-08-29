@@ -75,7 +75,7 @@ func (e *engineImpl) branchWorktreeResetTarget(ctx context.Context, branchName s
 	// file was never in git, so there is no reflog or stash to recover it from.
 	// The batch path guards this through untrackedCollisionHold; this one-off
 	// path has to ask the same question.
-	switch collides, known := e.UntrackedCollision(ctx, branchName); {
+	switch collides, known := e.UntrackedCollision(ctx, branchName, worktreePath); {
 	case !known:
 		return worktreeResetDecision{HeldPath: worktreePath, HeldReason: "its untracked files could not be inspected"}
 	case collides:

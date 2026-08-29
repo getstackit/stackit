@@ -288,7 +288,7 @@ type WorktreeOperations interface {
 	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
 	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
 	WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error)
-	UntrackedCollision(ctx context.Context, branchName string) (collides, known bool)
+	UntrackedCollision(ctx context.Context, branchName, worktreePath string) (collides, known bool)
 	// WorktreeRebaseInProgress reports whether a rebase is active in worktreePath.
 	WorktreeRebaseInProgress(ctx context.Context, worktreePath string) bool
 	ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error)

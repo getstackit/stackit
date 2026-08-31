@@ -118,20 +118,24 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Order matters: children first (they depend on grandparent), then source
 	rebaseSpecs := make([]engine.RebaseSpec, 0, len(children)+1)
 
-	// Get revisions needed for rebase specs
-	ontoRev, err := eng.GetRevision(ontoBranch)
-	if err != nil {
-		return fmt.Errorf("failed to get revision for %s: %w", onto, err)
+	// Get revisions needed for rebase specs in a single batched call instead
+	// of one git process per branch.
+	grandparentName := grandparentBranch.GetName()
+	revisions, _ := eng.GetRevisions([]string{onto, grandparentName, source})
+
+	ontoRev, ok := revisions.Rev(onto)
+	if !ok {
+		return fmt.Errorf("failed to get revision for %s", onto)
 	}
 
-	grandparentRev, err := eng.GetRevision(grandparentBranch)
-	if err != nil {
-		return fmt.Errorf("failed to get revision for %s: %w", grandparentBranch.GetName(), err)
+	grandparentRev, ok := revisions.Rev(grandparentName)
+	if !ok {
+		return fmt.Errorf("failed to get revision for %s", grandparentName)
 	}
 
-	sourceRev, err := eng.GetRevision(sourceBranch)
-	if err != nil {
-		return fmt.Errorf("failed to get revision for %s: %w", source, err)
+	sourceRev, ok := revisions.Rev(source)
+	if !ok {
+		return fmt.Errorf("failed to get revision for %s", source)
 	}
 
 	// Capture old divergence point for source branch, falling back to the

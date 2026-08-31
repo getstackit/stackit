@@ -65,13 +65,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Validate parent is an ancestor (unless force is used)
 		if !opts.Force {
-			parentRev, err := eng.GetRevision(eng.GetBranch(parent))
-			if err != nil {
-				return fmt.Errorf("failed to get parent revision: %w", err)
+			revisions, _ := eng.GetRevisions([]string{parent, branchName})
+			parentRev, ok := revisions.Rev(parent)
+			if !ok {
+				return fmt.Errorf("failed to get parent revision")
 			}
-			branchRev, err := eng.GetRevision(eng.GetBranch(branchName))
-			if err != nil {
-				return fmt.Errorf("failed to get branch revision: %w", err)
+			branchRev, ok := revisions.Rev(branchName)
+			if !ok {
+				return fmt.Errorf("failed to get branch revision")
 			}
 			isAnc, err := eng.IsAncestor(ctx.Context, parentRev, branchRev)
 			if err != nil {

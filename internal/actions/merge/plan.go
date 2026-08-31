@@ -3,7 +3,6 @@ package merge
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -265,24 +264,20 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 	// 3. Identify upstack branches that need restacking (moved up for batch loading)
 	upstackBranches := []string{}
+	mergedMap := make(map[string]bool, len(allBranches))
+	for _, b := range allBranches {
+		mergedMap[b] = true
+	}
 	if opts.Scope != "" {
 		// In scope mode, find all tracked branches with the scope that are not being merged
 		for _, branch := range eng.AllBranches() {
-			if branch.IsTracked() && eng.GetScope(branch).String() == opts.Scope {
-				// Check if this branch is not already being merged
-				isBeingMerged := slices.Contains(allBranches, branch.GetName())
-				if !isBeingMerged {
-					upstackBranches = append(upstackBranches, branch.GetName())
-				}
+			if branch.IsTracked() && eng.GetScope(branch).String() == opts.Scope && !mergedMap[branch.GetName()] {
+				upstackBranches = append(upstackBranches, branch.GetName())
 			}
 		}
 	} else {
 		// For upstack branches, we want branches that are descendants of the current branch,
 		// but NOT in the list of branches we're merging.
-		mergedMap := make(map[string]bool)
-		for _, b := range allBranches {
-			mergedMap[b] = true
-		}
 
 		// Only get upstack of the current branch (the top of the stack being merged)
 		upstack := graph.Range(eng.GetBranch(planCurrentBranch), engine.StackRange{RecursiveChildren: true})

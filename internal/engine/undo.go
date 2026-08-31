@@ -158,12 +158,10 @@ func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
 		return fmt.Errorf("failed to write snapshot: %w", err)
 	}
 
-	// Enforce max stack depth by removing oldest snapshots
-	if err := e.enforceMaxStackDepth(); err != nil {
-		// Log but don't fail - snapshot was already saved
-		// We'll just have more than the max snapshots
-		_ = err
-	}
+	// Enforce max stack depth by removing oldest snapshots. Best-effort: the
+	// snapshot above was already saved, so a failure here just means the
+	// undo stack temporarily exceeds the configured max depth.
+	_ = e.enforceMaxStackDepth() //nolint:errcheck // best-effort
 
 	return nil
 }
@@ -436,14 +434,11 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 				if err := e.git.HardReset(ctx, "HEAD"); err != nil {
 					return fmt.Errorf("failed to reset working directory: %w", err)
 				}
-			} else {
-				if err := e.git.CheckoutBranch(ctx, branch.GetName()); err != nil {
-					// If checkout fails, try to continue - we're still in a valid state
-					_ = err
-				} else {
-					e.currentBranch = snapshot.CurrentBranch
-				}
+			} else if err := e.git.CheckoutBranch(ctx, branch.GetName()); err == nil {
+				e.currentBranch = snapshot.CurrentBranch
 			}
+			// If checkout fails, continue anyway - the restore already applied the refs,
+			// so we're still in a valid state even if HEAD wasn't switched.
 		} else {
 			// Branch was deleted, switch to trunk
 			// Access trunk directly while holding the lock (avoid deadlock from e.Trunk() trying to acquire RLock)

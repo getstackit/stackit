@@ -103,7 +103,7 @@ func traverseUpward(currentBranch string, ctx *app.Context, graph *engine.StackG
 	children := graph.ChildBranches(ctx.Engine.GetBranch(currentBranch))
 
 	// Filter out worktree anchors, but include their children
-	children = flattenThroughAnchors(children, graph)
+	children = FlattenThroughAnchors(children, graph)
 
 	if len(children) == 0 {
 		// No children, we're at the tip
@@ -128,14 +128,14 @@ func traverseUpward(currentBranch string, ctx *app.Context, graph *engine.StackG
 	return traverseUpward(nextBranch, ctx, graph, handler)
 }
 
-// flattenThroughAnchors replaces worktree anchor branches with their non-anchor children.
-func flattenThroughAnchors(branches engine.Branches, graph *engine.StackGraph) engine.Branches {
+// FlattenThroughAnchors replaces worktree anchor branches with their non-anchor children.
+func FlattenThroughAnchors(branches engine.Branches, graph *engine.StackGraph) engine.Branches {
 	result := engine.Branches{}
 	for _, b := range branches {
 		if b.IsWorktreeAnchor() {
 			// Replace anchor with its children (recursively flatten)
 			grandchildren := graph.ChildBranches(b)
-			result = result.Concat(flattenThroughAnchors(grandchildren, graph))
+			result = result.Concat(FlattenThroughAnchors(grandchildren, graph))
 		} else {
 			result = result.Append(b)
 		}

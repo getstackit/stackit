@@ -179,7 +179,7 @@ func TestFlattenThroughAnchorsPromotesGrandchildren(t *testing.T) {
 	trunk := s.Engine.Trunk()
 	children := graph.ChildBranches(trunk)
 
-	flattened := flattenThroughAnchors(children, graph)
+	flattened := FlattenThroughAnchors(children, graph)
 	names := make([]string, len(flattened))
 	for i, b := range flattened {
 		names[i] = b.GetName()

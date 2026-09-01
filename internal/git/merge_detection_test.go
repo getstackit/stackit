@@ -14,8 +14,11 @@ import (
 )
 
 func TestIsMerged(t *testing.T) {
+	t.Parallel()
+
 	t.Run("returns false for unmerged branch", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create branch
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")
@@ -35,7 +38,8 @@ func TestIsMerged(t *testing.T) {
 	})
 
 	t.Run("returns true for merged branch", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create branch
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")
@@ -59,7 +63,8 @@ func TestIsMerged(t *testing.T) {
 	})
 
 	t.Run("returns true for rebase-merged branch", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")
 		require.NoError(t, err)
@@ -93,7 +98,8 @@ func TestIsMerged(t *testing.T) {
 	// IsSquashMerged can. This split keeps the expensive scan off the hot
 	// IsMerged path.
 	t.Run("multi-commit squash: IsMerged false, IsSquashMerged true", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")
 		require.NoError(t, err)
@@ -150,7 +156,9 @@ func (l *captureGitLogger) countDebugContaining(needle string) int {
 }
 
 func TestIsSquashMergedCachesTargetCommitPatchIDs(t *testing.T) {
-	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	t.Parallel()
+
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	err := scene.Repo.CreateAndCheckoutBranch("branch1")
 	require.NoError(t, err)

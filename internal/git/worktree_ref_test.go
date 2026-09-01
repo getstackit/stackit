@@ -12,7 +12,9 @@ import (
 )
 
 func TestResolveRefInWorktree(t *testing.T) {
-	scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+	t.Parallel()
+
+	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 		if err := s.Repo.CreateChangeAndCommit("initial", "main"); err != nil {
 			return err
 		}

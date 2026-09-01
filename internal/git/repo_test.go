@@ -11,6 +11,8 @@ import (
 )
 
 func TestGetRepoInfo(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		url  string
@@ -28,7 +30,8 @@ func TestGetRepoInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+			t.Parallel()
+			scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 			require.NoError(t, scene.Repo.RunGitCommand("config", "remote.origin.url", tt.url))
 
 			got, err := git.NewRunnerWithPath(scene.Dir, nil).GetRepoInfo(context.Background())
@@ -38,7 +41,8 @@ func TestGetRepoInfo(t *testing.T) {
 	}
 
 	t.Run("returns zero value for missing remote", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		got, err := git.NewRunnerWithPath(scene.Dir, nil).GetRepoInfo(context.Background())
 		require.NoError(t, err)
 		require.False(t, got.IsHosted())

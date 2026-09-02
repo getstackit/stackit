@@ -10,8 +10,11 @@ import (
 )
 
 func TestConfigStore_GetSet(t *testing.T) {
+	t.Parallel()
+
 	t.Run("sets and gets a string value", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -24,7 +27,8 @@ func TestConfigStore_GetSet(t *testing.T) {
 	})
 
 	t.Run("returns empty string for non-existent key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -34,7 +38,8 @@ func TestConfigStore_GetSet(t *testing.T) {
 	})
 
 	t.Run("overwrites existing value", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -51,8 +56,11 @@ func TestConfigStore_GetSet(t *testing.T) {
 }
 
 func TestConfigStore_Bool(t *testing.T) {
+	t.Parallel()
+
 	t.Run("sets and gets true", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -65,7 +73,8 @@ func TestConfigStore_Bool(t *testing.T) {
 	})
 
 	t.Run("sets and gets false", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -78,7 +87,8 @@ func TestConfigStore_Bool(t *testing.T) {
 	})
 
 	t.Run("returns false for non-existent key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -88,7 +98,8 @@ func TestConfigStore_Bool(t *testing.T) {
 	})
 
 	t.Run("GetBoolWithDefault returns default for non-existent key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -100,7 +111,8 @@ func TestConfigStore_Bool(t *testing.T) {
 	})
 
 	t.Run("GetBoolWithDefault returns actual value when set", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -113,8 +125,11 @@ func TestConfigStore_Bool(t *testing.T) {
 }
 
 func TestConfigStore_Int(t *testing.T) {
+	t.Parallel()
+
 	t.Run("sets and gets positive integer", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -127,7 +142,8 @@ func TestConfigStore_Int(t *testing.T) {
 	})
 
 	t.Run("sets and gets zero", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -140,7 +156,8 @@ func TestConfigStore_Int(t *testing.T) {
 	})
 
 	t.Run("returns 0 for non-existent key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -150,7 +167,8 @@ func TestConfigStore_Int(t *testing.T) {
 	})
 
 	t.Run("GetIntWithDefault returns default for non-existent key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -159,7 +177,8 @@ func TestConfigStore_Int(t *testing.T) {
 	})
 
 	t.Run("GetIntWithDefault returns actual value when set", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -171,7 +190,8 @@ func TestConfigStore_Int(t *testing.T) {
 	})
 
 	t.Run("GetIntWithDefault returns 0 when explicitly set to 0", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -185,8 +205,11 @@ func TestConfigStore_Int(t *testing.T) {
 }
 
 func TestConfigStore_MultiValue(t *testing.T) {
+	t.Parallel()
+
 	t.Run("adds and gets multiple values", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -205,7 +228,8 @@ func TestConfigStore_MultiValue(t *testing.T) {
 	})
 
 	t.Run("returns nil for non-existent multi-value key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -216,8 +240,11 @@ func TestConfigStore_MultiValue(t *testing.T) {
 }
 
 func TestConfigStore_Unset(t *testing.T) {
+	t.Parallel()
+
 	t.Run("removes existing key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -233,7 +260,8 @@ func TestConfigStore_Unset(t *testing.T) {
 	})
 
 	t.Run("does not error for non-existent key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -242,7 +270,8 @@ func TestConfigStore_Unset(t *testing.T) {
 	})
 
 	t.Run("removes all values for multi-value key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -262,8 +291,11 @@ func TestConfigStore_Unset(t *testing.T) {
 }
 
 func TestConfigStore_Exists(t *testing.T) {
+	t.Parallel()
+
 	t.Run("returns true for existing key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 
@@ -274,7 +306,8 @@ func TestConfigStore_Exists(t *testing.T) {
 	})
 
 	t.Run("returns false for non-existent key", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		store := git.NewConfigStore(scene.Dir)
 

@@ -12,8 +12,11 @@ import (
 )
 
 func TestApplySplitToCommits(t *testing.T) {
+	t.Parallel()
+
 	t.Run("creates branches at specified commit points", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.BasicSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.BasicSceneSetup)
 		repo := scene.Repo
 
 		// Create a stack: main -> feature
@@ -98,13 +101,14 @@ func TestApplySplitToCommits(t *testing.T) {
 	})
 
 	t.Run("successfully applies split when branch ref is updated after new commits", func(t *testing.T) {
+		t.Parallel()
 		// This test simulates what split --by-hunk does:
 		// 1. Start with feature branch
 		// 2. Create new commits in detached HEAD (on top of main)
 		// 3. Update feature branch ref to point to the new tip
 		// 4. Apply split
 
-		scene := testhelpers.NewScene(t, testhelpers.BasicSceneSetup)
+		scene := testhelpers.NewSceneParallel(t, testhelpers.BasicSceneSetup)
 		repo := scene.Repo
 
 		// Trunk commit
@@ -162,7 +166,8 @@ func TestApplySplitToCommits(t *testing.T) {
 	})
 
 	t.Run("validates branch names and points match", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.BasicSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.BasicSceneSetup)
 		eng, err := engine.NewEngine(engine.Options{
 			RepoRoot: scene.Dir,
 			Trunk:    "main",
@@ -181,15 +186,18 @@ func TestApplySplitToCommits(t *testing.T) {
 	})
 
 	t.Run("fails when branch has no parent", func(t *testing.T) {
+		t.Parallel()
 		t.Skip("Requires engine with metadata setup")
 	})
 
 	t.Run("successfully applies split with valid inputs", func(t *testing.T) {
+		t.Parallel()
 		t.Skip("Requires full git repository and engine setup")
 	})
 
 	t.Run("creates sibling branches when AsSibling is true", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.BasicSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.BasicSceneSetup)
 		repo := scene.Repo
 
 		// Create a stack: main -> feature
@@ -259,7 +267,8 @@ func TestApplySplitToCommits(t *testing.T) {
 	})
 
 	t.Run("rejects sibling splits below a non-trunk branch in linear mode", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.BasicSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.BasicSceneSetup)
 		repo := scene.Repo
 
 		require.NoError(t, repo.CreateChangeAndCommit("main content", "mainfile"))
@@ -296,7 +305,8 @@ func TestApplySplitToCommits(t *testing.T) {
 	})
 
 	t.Run("sibling mode reparents children to last branch", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.BasicSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.BasicSceneSetup)
 		repo := scene.Repo
 
 		// Setup main
@@ -370,6 +380,8 @@ func TestApplySplitToCommits(t *testing.T) {
 // Test helper functions
 
 func TestContains(t *testing.T) {
+	t.Parallel()
+
 	// Test slices.Contains used in ApplySplitToCommits
 	require.True(t, slices.Contains([]string{"a", "b", "c"}, "b"))
 	require.False(t, slices.Contains([]string{"a", "b", "c"}, "d"))

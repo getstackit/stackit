@@ -13,8 +13,11 @@ import (
 )
 
 func TestIsAncestor(t *testing.T) {
+	t.Parallel()
+
 	t.Run("returns true when commit is ancestor", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		err := runner.InitDefaultRepo()
@@ -37,7 +40,8 @@ func TestIsAncestor(t *testing.T) {
 	})
 
 	t.Run("returns false when commit is not ancestor", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		err := runner.InitDefaultRepo()
@@ -60,7 +64,8 @@ func TestIsAncestor(t *testing.T) {
 	})
 
 	t.Run("returns true when commits are the same", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		err := runner.InitDefaultRepo()
@@ -77,6 +82,8 @@ func TestIsAncestor(t *testing.T) {
 }
 
 func TestIsAncestor_AfterFetch(t *testing.T) {
+	t.Parallel()
+
 	// This test verifies the runner can resolve and walk to a newly fetched
 	// commit. We test this by creating a scenario similar to a PR merge:
 	// 1. Local repo has main at commit A
@@ -85,8 +92,9 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 	// 4. IsAncestor should still resolve through `git merge-base --is-ancestor`
 
 	t.Run("works after fetch with fresh runner", func(t *testing.T) {
+		t.Parallel()
 		// 1. Setup a "remote" repository
-		remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		remoteScene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
 		require.NoError(t, err)
 		err = remoteScene.Repo.PushBranch("upstream", "main")
@@ -135,8 +143,9 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 	})
 
 	t.Run("works with diverged branches", func(t *testing.T) {
+		t.Parallel()
 		// Test that IsAncestor correctly returns false for diverged branches
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		err := runner.InitDefaultRepo()

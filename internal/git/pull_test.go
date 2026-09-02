@@ -13,11 +13,13 @@ import (
 )
 
 func TestPullBranch_Reproduction(t *testing.T) {
+	t.Parallel()
+
 	// This test attempts to reproduce the "false conflict" where PullBranch
 	// returns PullConflict even though a fast-forward is possible.
 
 	// 1. Setup a "remote" repository
-	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	remoteScene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
 	require.NoError(t, err)
 	err = remoteScene.Repo.PushBranch("upstream", "main")
@@ -86,12 +88,14 @@ func TestPullBranch_Reproduction(t *testing.T) {
 }
 
 func TestPullBranch_FetchFailureReturnsError(t *testing.T) {
+	t.Parallel()
+
 	// Regression: a failed fetch against a remote that IS configured (e.g. a
 	// network/auth error, or here an unreachable URL) must surface as an
 	// error instead of silently falling through to UpdateBranchFromRemote,
 	// which only reads the (now stale) remote-tracking ref and can report
 	// PullUnneeded even though the branch was never actually synced.
-	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 	err := runner.InitDefaultRepo()
 	require.NoError(t, err)
@@ -105,10 +109,12 @@ func TestPullBranch_FetchFailureReturnsError(t *testing.T) {
 }
 
 func TestPullBranch_NoRemoteConfiguredReturnsUnneeded(t *testing.T) {
+	t.Parallel()
+
 	// Ephemeral setups (e.g. worktree sessions created without a remote)
 	// must NOT have "no remote configured" treated as a pull failure -
 	// UpdateBranchFromRemote already tolerates this via GetRemoteSha.
-	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 	err := runner.InitDefaultRepo()
 	require.NoError(t, err)
@@ -119,6 +125,8 @@ func TestPullBranch_NoRemoteConfiguredReturnsUnneeded(t *testing.T) {
 }
 
 func TestBranchFetchRefspec_ForcesUpdate(t *testing.T) {
+	t.Parallel()
+
 	// The refspec must carry a leading '+' so that force-pushed (non-fast-forward)
 	// remote branches still update the remote-tracking ref. A missing '+' is the
 	// difference between a successful fetch and a non-fast-forward rejection.
@@ -129,6 +137,8 @@ func TestBranchFetchRefspec_ForcesUpdate(t *testing.T) {
 }
 
 func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
+	t.Parallel()
+
 	// Regression: fetching an explicit branch refspec must tolerate a remote
 	// branch that was force-pushed to a divergent history after the local
 	// remote-tracking ref already saw the previous tip. Without the '+' force
@@ -136,7 +146,7 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 	// exits non-zero as a non-fast-forward update.
 
 	// 1. Setup a "remote" repository
-	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	remoteScene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
 	require.NoError(t, err)
 	err = remoteScene.Repo.PushBranch("upstream", "main")
@@ -195,11 +205,13 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 }
 
 func TestResolveExternallyCreatedCommits(t *testing.T) {
+	t.Parallel()
+
 	// The runner resolves commits created outside it (e.g. by a fetch) by
 	// passing through to git; there is no per-process cache to invalidate.
 
 	// 1. Setup a repository
-	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	// Create a runner and initialize it
 	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
@@ -233,11 +245,13 @@ func TestResolveExternallyCreatedCommits(t *testing.T) {
 }
 
 func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
+	t.Parallel()
+
 	// Test that PullBranch works correctly with the refspec fix: a commit fetched
 	// from the remote is resolvable through the long-lived runner afterward.
 
 	// 1. Setup a "remote" repository
-	remoteScene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	remoteScene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
 	require.NoError(t, err)
 	err = remoteScene.Repo.PushBranch("upstream", "main")
@@ -291,6 +305,8 @@ func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
 }
 
 func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
+	t.Parallel()
+
 	// This test reproduces a critical bug where pulling trunk in a worktree
 	// corrupts the main workspace's index/working tree.
 	//
@@ -307,7 +323,7 @@ func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 	// Root cause: update-ref is global but the index sync is local to the worktree.
 
 	// 1. Setup a "remote" repository with initial content
-	remoteScene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+	remoteScene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 		return s.Repo.CreateChangeAndCommit("initial content", "shared")
 	})
 	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")
@@ -409,6 +425,8 @@ func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 }
 
 func TestPullBranch_WorkingDirSyncWhenOnBranch(t *testing.T) {
+	t.Parallel()
+
 	// This test reproduces a bug where PullBranch leaves the working directory
 	// with uncommitted changes after pulling when we're already on the branch.
 	// The changes appear as the inverse of what was just pulled (reverting the merge).
@@ -417,7 +435,7 @@ func TestPullBranch_WorkingDirSyncWhenOnBranch(t *testing.T) {
 	// we're already on that branch - it doesn't sync the index/working tree.
 
 	// 1. Setup a "remote" repository with initial content
-	remoteScene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+	remoteScene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 		return s.Repo.CreateChangeAndCommit("initial content", "init")
 	})
 	remotePath, err := remoteScene.Repo.CreateBareRemote("upstream")

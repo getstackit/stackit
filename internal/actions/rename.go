@@ -6,7 +6,6 @@ import (
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -16,8 +15,18 @@ type RenameOptions struct {
 	Force   bool
 }
 
+// RenameHandler supplies a new branch name interactively when one is not given
+// on the command line. The CLI adapter implements it; the action layer does not
+// import the TUI.
+type RenameHandler interface {
+	// PromptNewName asks the user for a new branch name, given the current one.
+	// Implementations should return an error when prompting is not possible
+	// (e.g. non-interactive mode).
+	PromptNewName(currentName string) (string, error)
+}
+
 // RenameAction renames the current branch and updates metadata
-func RenameAction(ctx *app.Context, opts RenameOptions) error {
+func RenameAction(ctx *app.Context, opts RenameOptions, handler RenameHandler) error {
 	eng := ctx.Engine
 	out := ctx.Output
 
@@ -29,12 +38,8 @@ func RenameAction(ctx *app.Context, opts RenameOptions) error {
 
 	newName := opts.NewName
 	if newName == "" {
-		if !utils.IsInteractive() {
-			return fmt.Errorf("branch name is required in non-interactive mode")
-		}
-
 		var err error
-		newName, err = tui.PromptTextInput("Enter new branch name:", currentBranch)
+		newName, err = handler.PromptNewName(currentBranch)
 		if err != nil {
 			return err
 		}

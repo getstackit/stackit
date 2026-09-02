@@ -667,8 +667,21 @@ func dissolveGitHubStack(ctx *app.Context, pullRequest int) error {
 	if err != nil {
 		return err
 	}
-	if !dissolved {
-		return fmt.Errorf("GitHub Stack #%d still holds pull requests that are merged or queued to merge", stack.Number)
+	if dissolved {
+		return nil
+	}
+
+	// GitHub refuses to unstack merged or queued pull requests, so a stack that
+	// outlived one of its members never dissolves outright — and after any
+	// member merges, that is the normal state. What actually gates the base
+	// change is whether *this* pull request is still stacked, not whether the
+	// stack is empty: the leftovers belong to PRs that have already landed.
+	remaining, err := stackClient.FindStackByPullRequest(remoteCtx, pullRequest)
+	if err != nil {
+		return err
+	}
+	if remaining != nil {
+		return fmt.Errorf("GitHub Stack #%d still holds pull request %d, which is merged or queued to merge", remaining.Number, pullRequest)
 	}
 	return nil
 }
@@ -971,6 +984,13 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		// retarget the PR, and the stack cannot be repaired from the GitHub UI.
 		if dissolveErr := dissolveGitHubStack(ctx, *submissionInfo.PRNumber); dissolveErr != nil {
 			ctx.Output.Debug("Failed to dissolve native GitHub Stack for %s: %v", submissionInfo.BranchName, dissolveErr)
+			// The GitHub error that follows only says the base cannot change
+			// while the PR is in a Stack. Say that the recovery was attempted
+			// and why it did not work, or the failure looks unexplained.
+			handler.OnEvent(BranchWarningEvent{
+				BranchName: submissionInfo.BranchName,
+				Warning:    fmt.Sprintf("could not dissolve the native GitHub Stack to retarget the base: %v", dissolveErr),
+			})
 		} else {
 			handler.OnEvent(BranchWarningEvent{
 				BranchName: submissionInfo.BranchName,

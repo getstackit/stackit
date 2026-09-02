@@ -422,7 +422,7 @@ Commands that change branch content — `create`, `modify`, `absorb`, `fold`, `s
 branch payments-api belongs to worktree payments; run this command from there: cd ../myapp-stacks/payments
 ```
 
-`sync` and `restack` are the exception: they reconcile the whole repository and can run from any worktree.
+`sync` and `restack` are the exception: they reconcile the whole repository and can run from any worktree, but skip branches whose worktree has uncommitted changes. See [docs/worktree.md](docs/worktree.md) for details.
 
 Inside a managed worktree, `stackit create` builds on that worktree's own stack, so creating a branch directly from trunk there is refused — check out a branch the worktree owns first.
 

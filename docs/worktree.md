@@ -324,6 +324,59 @@ Similarly, checking out trunk or an untracked branch from within a worktree swit
 
 ---
 
+## Stack Ownership
+
+A stack is owned by the worktree its anchor belongs to. Commands that rewrite
+history — `create`, `modify`, `absorb`, `fold`, `move`, `reorder`, `split`,
+`squash`, `pluck`, `delete`, `track` — refuse to run from anywhere else:
+
+```bash
+# From the main repo, targeting a branch that lives in a worktree:
+stackit modify --into payments-api
+# → Error: branch payments-api belongs to worktree payments; run this command
+#   from there: cd ../myapp-stacks/payments
+```
+
+The reverse is also enforced: from inside a managed worktree you cannot mutate
+a branch that belongs to the main repository stack.
+
+The rule exists because moving a branch ref is only half the operation — the
+worktree holding that branch has to be reset to match. Doing that from a
+different directory would leave the owning worktree's files out of sync with
+its own ref.
+
+`stackit worktree list` reports ownership divergence as warnings rather than
+errors, so it stays usable for diagnosing a repository whose physical checkouts
+no longer match Stackit's model:
+
+```
+Ownership warning: branch feature belongs to managed worktree payments (../myapp-stacks/payments) but is checked out at ../myapp-stacks/other
+```
+
+### Dirty Worktrees Are Held Back
+
+`restack` and `sync` skip branches whose worktree has uncommitted tracked
+changes, because the reset that follows the ref move would discard them:
+
+- A dirty **managed** worktree holds a whole stack, so the entire stack is
+  skipped.
+- Any other worktree — including the main one — holds a single branch. That
+  branch's descendants are held with it: a child cannot be rebased onto a
+  parent revision that did not move.
+
+```
+Skipping stack rooted at wt-anchor-payments (worktree ../myapp-stacks/payments has uncommitted changes)
+Skipping feature (worktree ../myapp-stacks/other has uncommitted changes; commit or stash them, then restack again)
+```
+
+Untracked files hold a branch back only when one occupies a path the incoming
+commit also writes — that is the only case where the reset would destroy them.
+An untracked file the commit does not touch is left alone and does not block
+the restack. If the check cannot be performed, the branch is held as a
+precaution. Commit or stash the changes and run the command again.
+
+---
+
 ## Create vs Attach
 
 | | `wt create` | `wt attach` |

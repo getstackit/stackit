@@ -314,6 +314,14 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 				IsNew:    true,
 			})
 		} else {
+			// Both updates below act on the branch that is currently checked
+			// out: `git reset --hard` moves HEAD's branch, and a merge lands in
+			// HEAD's branch. Without this checkout, running get while trunk is
+			// checked out rewrites trunk to the fetched branch instead of
+			// updating that branch, which silently destroys the local trunk.
+			if err := eng.CheckoutBranch(gctx, branch); err != nil {
+				return fmt.Errorf("failed to check out branch %s: %w", branchName, err)
+			}
 			if opts.Force {
 				if err := eng.ResetHard(gctx, fmt.Sprintf("%s/%s", remote, branchName)); err != nil {
 					return fmt.Errorf("failed to reset branch %s: %w", branchName, err)

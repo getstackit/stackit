@@ -56,6 +56,14 @@ func (e *engineImpl) BatchDivergencePoints(branches Branches) RevisionMap {
 	}))
 }
 
+// CommitCountBetween returns how many commits are in (base, head]. It is the
+// exported entry point to the cached counter for callers that have two plain
+// revisions rather than a branch set — e.g. reporting how far trunk moved
+// during a sync.
+func (e *engineImpl) CommitCountBetween(base, head string) (int, error) {
+	return e.commitCountBetween(git.RevRange{Base: base, Head: head})
+}
+
 // commitCountBetween returns the commit count in (base, head], using the
 // (base, head)-keyed cache. It takes pre-resolved revisions so batched callers
 // need not re-resolve a branch's head.

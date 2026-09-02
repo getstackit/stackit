@@ -116,6 +116,10 @@ type BranchInfo interface {
 	// additions/deletions) for every branch in one batched pass — a use-case
 	// bundle over the per-concern readers, for annotation builders.
 	BatchBranchStats(branches Branches) map[string]BranchStat
+	// CommitCountBetween returns how many commits are in (base, head]. Backed by
+	// the same content-keyed cache as the batched readers, so repeated calls for
+	// the same pair are free.
+	CommitCountBetween(base, head string) (int, error)
 }
 
 // GitDiffer handles diff and merge operations

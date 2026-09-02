@@ -5,7 +5,9 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Options contains options for the track command
@@ -183,21 +185,35 @@ func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler
 	// branchRev is loop-invariant; a failed lookup just disables child detection.
 	branchRev, revErr := eng.GetRevision(eng.GetBranch(branchName))
 	if revErr == nil {
+		// GetMergeBase spawns a git subprocess per call with no batch/cached
+		// equivalent, so candidates are checked concurrently with a bounded
+		// worker pool instead of serially. Each worker writes only its own
+		// index, so isChild is assembled without synchronization.
+		type indexedCandidate struct {
+			index     int
+			candidate engine.Branch
+		}
+		candidates := make([]indexedCandidate, 0, len(allBranches))
 		for _, candidateBranch := range allBranches {
-			candidate := candidateBranch.GetName()
-			if candidate == branchName {
+			if candidateBranch.GetName() == branchName {
 				continue
 			}
+			candidates = append(candidates, indexedCandidate{index: len(candidates), candidate: candidateBranch})
+		}
 
-			// Check if candidate is a child (has this branch as merge base)
-			mergeBase, err := eng.GetMergeBase(ctx.Context, candidate, branchName)
+		isChild := make([]bool, len(candidates))
+		utils.Run(candidates, func(item indexedCandidate) {
+			mergeBase, err := eng.GetMergeBase(ctx.Context, item.candidate.GetName(), branchName)
 			if err != nil {
-				continue
+				return
 			}
-
 			// If merge base is the branch we just tracked, candidate is a child
-			if mergeBase == branchRev && !candidateBranch.IsTracked() {
-				untrackedChildren = append(untrackedChildren, candidate)
+			isChild[item.index] = mergeBase == branchRev && !item.candidate.IsTracked()
+		})
+
+		for _, item := range candidates {
+			if isChild[item.index] {
+				untrackedChildren = append(untrackedChildren, item.candidate.GetName())
 			}
 		}
 	}

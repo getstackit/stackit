@@ -105,6 +105,9 @@ type syncTargets struct {
 	branches       []string
 	parentByBranch map[string]string
 	prByBranch     map[string]*int
+	// Full PR records for branches resolved through GitHub, so the details
+	// already paid for are recorded rather than reduced to a number.
+	prInfoByBranch map[string]*engine.PrInfo
 }
 
 func newSyncTargets(targetBranch string) *syncTargets {
@@ -112,6 +115,7 @@ func newSyncTargets(targetBranch string) *syncTargets {
 		branches:       []string{targetBranch},
 		parentByBranch: make(map[string]string),
 		prByBranch:     make(map[string]*int),
+		prInfoByBranch: make(map[string]*engine.PrInfo),
 	}
 }
 
@@ -195,6 +199,9 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	branchesToSync := targets.branches
 	parentMap := targets.parentByBranch
 	branchPRInfo := targets.prByBranch
+	// Full PR records for every branch whose PR we resolved, persisted after the
+	// sync loop so the branches carry GitHub state immediately.
+	fetchedPRs := targets.prInfoByBranch
 
 	// If target branch exists locally, identify local descendants
 	targetBranchObj := eng.GetBranch(targetBranch)
@@ -271,8 +278,14 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		utils.Run(branchesToFetch, func(branchName string) {
 			if pr, err := ctx.GitHub().GetPullRequestByBranch(remoteCtx, branchName); err == nil && pr != nil {
 				prNum := pr.Number
+				// Keep the whole record, not just the number: get already paid
+				// for this round trip, and without it the branch lands with no
+				// PR metadata at all, so `tree full` renders no GitHub state
+				// until the next sync repeats the same fetch.
+				info := engine.NewPrInfo(&prNum, pr.Title, pr.Body, pr.State, pr.Base, pr.HTMLURL, pr.Draft)
 				mu.Lock()
 				branchPRInfo[branchName] = &prNum
+				fetchedPRs[branchName] = info
 				mu.Unlock()
 			}
 		})
@@ -347,6 +360,15 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	if freezeSet := branchesToFreeze.Build(); len(freezeSet) > 0 {
 		if _, err := eng.SetFrozen(ctx, freezeSet, true); err != nil {
 			out.Debug("Failed to freeze new branches: %v", err)
+		}
+	}
+
+	// Record the PR details fetched above. Without this the branch has no PR
+	// metadata locally, and every consumer that filters on it — `tree full`
+	// most visibly — shows nothing until a later sync refetches the same data.
+	if len(fetchedPRs) > 0 {
+		if err := eng.BatchUpsertPrInfo(gctx, fetchedPRs); err != nil {
+			out.Debug("Failed to record PR info: %v", err)
 		}
 	}
 
@@ -525,6 +547,7 @@ func (targets *syncTargets) crawlAncestorsViaGitHub(ctx context.Context, gh gith
 		}
 		prNum := pr.Number
 		targets.prByBranch[current] = &prNum
+		targets.prInfoByBranch[current] = engine.NewPrInfo(&prNum, pr.Title, pr.Body, pr.State, pr.Base, pr.HTMLURL, pr.Draft)
 
 		base := pr.Base
 		if base == "" || base == eng.Trunk().GetName() {

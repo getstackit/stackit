@@ -890,28 +890,6 @@ func (c *GitConfig) AddSubmitAssignee(assignee string) error {
 	return c.store.Add(KeySubmitAssignees, assignee)
 }
 
-// Deprecated methods for backwards compatibility during migration.
-
-// CombineCICommand returns the CI command (deprecated, use CICommand).
-func (c *GitConfig) CombineCICommand() string {
-	return c.CICommand()
-}
-
-// SetCombineCICommand sets the CI command (deprecated, use SetCICommand).
-func (c *GitConfig) SetCombineCICommand(cmd string) {
-	_ = c.SetCICommand(cmd)
-}
-
-// CombineCITimeout returns the CI timeout (deprecated, use CITimeout).
-func (c *GitConfig) CombineCITimeout() int {
-	return c.CITimeout()
-}
-
-// SetCombineCITimeout sets the CI timeout (deprecated, use SetCITimeout).
-func (c *GitConfig) SetCombineCITimeout(seconds int) {
-	_ = c.SetCITimeout(seconds)
-}
-
 // Save is a no-op for GitConfig since git config writes are immediate.
 // This method exists for API compatibility with the old Config type.
 func (c *GitConfig) Save() error {

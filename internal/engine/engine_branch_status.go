@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // IsTrunk checks if a branch is the trunk
@@ -262,8 +263,21 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 		remoteShas = map[string]string{}
 	}
 
-	for _, branch := range branches {
-		branchName := branch.GetName()
+	// Each worker writes only its own index, so the slice is filled without
+	// synchronization and assembled into the result map serially afterward,
+	// mirroring batchByBranch in branch_view.go.
+	type indexedBranch struct {
+		index  int
+		branch Branch
+	}
+	indexed := make([]indexedBranch, len(branches))
+	statuses := make([]BranchRemoteStatus, len(branches))
+	for i, b := range branches {
+		indexed[i] = indexedBranch{index: i, branch: b}
+	}
+
+	utils.Run(indexed, func(item indexedBranch) {
+		branchName := item.branch.GetName()
 		localSha := localShas[branchName]
 		remoteSha := remoteShas[branchName]
 		if remoteSha == "" {
@@ -287,7 +301,11 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 			}
 		}
 
-		results[branchName] = status
+		statuses[item.index] = status
+	})
+
+	for i, b := range branches {
+		results[b.GetName()] = statuses[i]
 	}
 
 	return results

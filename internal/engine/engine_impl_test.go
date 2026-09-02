@@ -1302,6 +1302,43 @@ func TestReadBranchRemoteStatuses(t *testing.T) {
 		status := s.Engine.ReadBranchRemoteStatuses(context.Background(), engine.BranchesOf(main)).ForBranch(main)
 		require.False(t, status.Matches(), "main should not match empty remote")
 	})
+
+	t.Run("computes common ancestor for multiple diverged branches concurrently", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+		_, err := s.Scene.Repo.CreateBareRemote("origin")
+		require.NoError(t, err)
+		err = s.Scene.Repo.PushBranch("origin", "main")
+		require.NoError(t, err)
+
+		// Push feature1 and feature2, then diverge each with a local-only commit
+		// so every branch needs its own merge-base computation.
+		s.CreateBranch("feature1").Commit("feature1 base")
+		err = s.Scene.Repo.PushBranch("origin", "feature1")
+		require.NoError(t, err)
+		s.Commit("feature1 local-only change")
+
+		s.Checkout("main")
+		s.CreateBranch("feature2").Commit("feature2 base")
+		err = s.Scene.Repo.PushBranch("origin", "feature2")
+		require.NoError(t, err)
+		s.Commit("feature2 local-only change")
+
+		branches := engine.BranchesOf(
+			s.Engine.GetBranch("feature1"),
+			s.Engine.GetBranch("feature2"),
+		)
+		statuses := s.Engine.ReadBranchRemoteStatuses(context.Background(), branches)
+
+		for _, branchName := range []string{"feature1", "feature2"} {
+			status := statuses[branchName]
+			require.False(t, status.Matches(), "branch %s should have diverged from remote", branchName)
+			require.NotEmpty(t, status.CommonAncestor, "branch %s should have a common ancestor with remote", branchName)
+			require.NotEqual(t, status.LocalSha, status.CommonAncestor, "branch %s local sha should be ahead of the common ancestor", branchName)
+			require.Equal(t, status.RemoteSha, status.CommonAncestor, "branch %s common ancestor should be the pushed remote sha", branchName)
+		}
+	})
 }
 
 func TestTrunkRemoteState(t *testing.T) {

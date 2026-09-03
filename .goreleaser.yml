@@ -5,6 +5,12 @@ before:
     - go mod tidy
     - pnpm install --frozen-lockfile
     - pnpm --filter @stackit/web build
+    # sync-web-static.sh deliberately falls back to a placeholder page when the
+    # web export is missing, so `mise run build` works on a fresh clone. A
+    # release must not ship that placeholder, so assert the real export exists
+    # before it runs. `pnpm --filter` exits 0 on a no-match, so a renamed
+    # package or workspace glob would otherwise sail through both hooks.
+    - test -f apps/web/out/index.html
     - ./scripts/sync-web-static.sh
 
 builds:

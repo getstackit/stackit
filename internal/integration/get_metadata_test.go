@@ -146,6 +146,42 @@ func TestGetMetadataDiscovery(t *testing.T) {
 			"get should fall back to the GitHub crawl when metadata is absent")
 	})
 
+	// get pays for a GetPullRequestByBranch round trip whenever metadata cannot
+	// supply the PR. Discarding everything but the number left the branch with no
+	// PR metadata at all, so `tree full` — which only renders GitHub state for
+	// branches that have a recorded PR — showed nothing until a later sync
+	// refetched the very same data.
+	t.Run("records the PR it fetched so the branch carries GitHub state", func(t *testing.T) {
+		t.Parallel()
+		sh := scenario.NewRemoteScenario(t)
+
+		sh.CreateBranchQuiet("feature-y")
+		sh.CommitChange("fy.txt", "feature y")
+		require.NoError(t, sh.Scene.Repo.RunGitCommand("push", "-u", "origin", "feature-y"))
+		sh.CheckoutQuiet("main")
+		require.NoError(t, sh.Scene.Repo.RunGitCommand("branch", "-D", "feature-y"))
+		sh.Rebuild()
+
+		config := testhelpers.NewMockGitHubServerConfig()
+		config.PRs["feature-y"] = &github.PullRequest{
+			Number: new(77),
+			Title:  new("Add feature y"),
+			Head:   &github.PullRequestBranch{Ref: new("feature-y")},
+			Base:   &github.PullRequestBranch{Ref: new("main")},
+			State:  new("open"),
+		}
+		sh.Context.GitHubClient = newCountingGitHubClient(t, config)
+
+		require.NoError(t, actions.GetAction(sh.Context, "feature-y", actions.GetOptions{Restack: true}, &actions.GetNullHandler{}))
+		sh.Rebuild()
+
+		prInfo, err := sh.Engine.GetPrInfo(sh.Engine.GetBranch("feature-y"))
+		require.NoError(t, err)
+		require.NotNil(t, prInfo, "get should record the PR it fetched")
+		require.NotNil(t, prInfo.Number())
+		require.Equal(t, 77, *prInfo.Number())
+	})
+
 	t.Run("falls back to GitHub when ancestor metadata is missing", func(t *testing.T) {
 		t.Parallel()
 		sh := scenario.NewRemoteScenario(t)

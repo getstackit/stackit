@@ -1,7 +1,10 @@
 package integration
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetCommand(t *testing.T) {
@@ -66,5 +69,42 @@ func TestGetCommand(t *testing.T) {
 		// Verify local matches remote
 		sh.Run("info").
 			OutputContains("Remote change")
+	})
+
+	// Both update paths act on the checked-out branch: `git reset --hard` moves
+	// HEAD's branch and a merge lands in HEAD's branch. Running get from trunk
+	// used to rewrite trunk to the fetched branch, silently destroying it.
+	t.Run("get does not move trunk when run from trunk", func(t *testing.T) {
+		t.Parallel()
+		sh := NewTestShellInProcess(t, WithRemote())
+
+		sh.Git("checkout -b feature-a").
+			WriteFile("a", "remote content").
+			Git("commit -m 'Remote change'").
+			Git("push -u origin feature-a")
+
+		sh.Run("track feature-a --parent main")
+
+		// Diverge locally so the update path (not the create path) is taken.
+		sh.WriteFile("a", "local content").
+			Git("commit --amend --no-edit")
+
+		// Run get from trunk, which is what triggered the bug.
+		sh.Git("checkout main")
+		sh.Git("rev-parse main")
+		trunkBefore := strings.TrimSpace(sh.Output())
+
+		sh.Run("get feature-a --force --no-restack")
+
+		sh.Git("rev-parse main")
+		require.Equal(t, trunkBefore, strings.TrimSpace(sh.Output()),
+			"get must not move trunk")
+
+		// And the branch it was asked to update actually matches the remote.
+		sh.Git("rev-parse feature-a")
+		branchSHA := strings.TrimSpace(sh.Output())
+		sh.Git("rev-parse origin/feature-a")
+		require.Equal(t, strings.TrimSpace(sh.Output()), branchSHA,
+			"get --force must reset the target branch to the remote")
 	})
 }

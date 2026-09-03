@@ -25,12 +25,12 @@ func Branch(name string, isCurrent bool) string {
 
 // BranchNameWithTrunk renders a non-current branch name, with trunk in a distinct color.
 func BranchNameWithTrunk(name string, isTrunk bool) string {
-	return style.ColorBranchNameWithTrunk(name, false, isTrunk)
+	return style.ColorBranchNameWithTrunk(name, style.BranchStyleOpts{IsTrunk: isTrunk})
 }
 
 // BranchWithTrunk is like Branch but renders the trunk branch in a distinct color.
 func BranchWithTrunk(name string, isCurrent, isTrunk bool) string {
-	return style.ColorBranchNameWithTrunk(name, isCurrent, isTrunk)
+	return style.ColorBranchNameWithTrunk(name, style.BranchStyleOpts{IsCurrent: isCurrent, IsTrunk: isTrunk})
 }
 
 // Dim renders text in a dim/gray style.

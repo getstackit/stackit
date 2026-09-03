@@ -128,7 +128,7 @@ func (p *planPrinter) Flush() {
 
 	header := style.ColorMagenta("Submit plan")
 	if p.trunk != "" {
-		header += " → " + style.ColorBranchNameWithTrunk(p.trunk, false, true)
+		header += " → " + style.ColorBranchNameWithTrunk(p.trunk, style.BranchStyleOpts{IsTrunk: true})
 	}
 	p.out.Info("%s", header)
 
@@ -216,8 +216,8 @@ func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
 
 	if ev.Skipped {
 		p.out.Info("%s → %s %s",
-			style.ColorBranchNamePlain(name, ev.IsCurrent, false),
-			style.ColorBranchNameWithTrunk(base, false, base == p.trunk),
+			style.ColorBranchNamePlain(name, style.BranchStyleOpts{IsCurrent: ev.IsCurrent}),
+			style.ColorBranchNameWithTrunk(base, style.BranchStyleOpts{IsTrunk: base == p.trunk}),
 			style.ColorDim("— "+ev.SkipReason))
 		return
 	}
@@ -226,7 +226,7 @@ func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
 	if ev.PRNumber != nil {
 		action = fmt.Sprintf("%s %s", action, style.ColorYellow(fmt.Sprintf("#%d", *ev.PRNumber)))
 	}
-	line := fmt.Sprintf("%s → %s  %s", style.ColorBranchNamePlain(name, ev.IsCurrent, false), style.ColorBranchNameWithTrunk(base, false, base == p.trunk), colorAction(ev.Action, action))
+	line := fmt.Sprintf("%s → %s  %s", style.ColorBranchNamePlain(name, style.BranchStyleOpts{IsCurrent: ev.IsCurrent}), style.ColorBranchNameWithTrunk(base, style.BranchStyleOpts{IsTrunk: base == p.trunk}), colorAction(ev.Action, action))
 	if ev.Empty {
 		line += " " + style.ColorDim("(empty)")
 	}
@@ -254,7 +254,7 @@ func (p *planPrinter) pad(name string, dim bool, current bool) string {
 	if dim {
 		return style.ColorDim(padded)
 	}
-	return style.ColorBranchNamePlain(padded, current, false)
+	return style.ColorBranchNamePlain(padded, style.BranchStyleOpts{IsCurrent: current})
 }
 
 // skippedCount is the number of plan rows that were skipped.

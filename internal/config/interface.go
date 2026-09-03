@@ -58,10 +58,6 @@ type Configurer interface {
 	ApprovedHooks(phase string) []string
 	IsHookApproved(phase, command string) bool
 	AddApprovedHook(phase, command string) error
-
-	// Deprecated methods (for backwards compatibility)
-	CombineCICommand() string
-	CombineCITimeout() int
 }
 
 // Ensure GitConfig implements the interface

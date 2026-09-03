@@ -53,6 +53,24 @@ func TestConfigStore_GetSet(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "second", val)
 	})
+
+	t.Run("round-trips a value containing newlines", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+		store := git.NewConfigStore(scene.Dir)
+
+		// stackit.ci.command is free-form user text and gates merge CI
+		// validation, so a multi-line value silently truncated to its first
+		// line would run half the command and report a clean gate.
+		multiline := "make lint\nmake test"
+		err := store.Set("stackit.ci.command", multiline)
+		require.NoError(t, err)
+
+		val, err := store.Get("stackit.ci.command")
+		require.NoError(t, err)
+		require.Equal(t, multiline, val)
+	})
 }
 
 func TestConfigStore_Bool(t *testing.T) {

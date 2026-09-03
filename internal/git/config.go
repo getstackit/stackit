@@ -92,7 +92,12 @@ func (c *ConfigStore) stackitSnapshot() (map[string]string, error) {
 		return c.stackitKeys, nil
 	}
 
-	out, err := c.runGitConfig("--get-regexp", `^stackit\.`)
+	// -z is what makes this parseable: it frames each entry as
+	// "key\nvalue\0", so a value containing a newline (a multi-line
+	// stackit.ci.command, say) stays one record. Without it git separates
+	// entries by newline too, and a multi-line value is indistinguishable
+	// from the start of the next key.
+	out, err := c.runGitConfig("-z", "--get-regexp", `^stackit\.`)
 	// Exit code 1 means no stackit.* key is set at all — an empty snapshot,
 	// not a failure.
 	if err != nil && !isExitCode(err, 1) {
@@ -100,12 +105,14 @@ func (c *ConfigStore) stackitSnapshot() (map[string]string, error) {
 	}
 
 	keys := make(map[string]string)
-	for _, line := range strings.Split(out, "\n") {
-		name, value, found := strings.Cut(line, " ")
-		if !found || name == "" {
+	for _, record := range strings.Split(out, "\x00") {
+		if record == "" {
 			continue
 		}
-		// Later lines win, matching `git config --get` precedence
+		// A valueless key ("[stackit]\n\tfoo") has no newline at all; it
+		// reads as an empty value, which is what Get returned for it before.
+		name, value, _ := strings.Cut(record, "\n")
+		// Later records win, matching `git config --get` precedence
 		// (system, then global, then local).
 		keys[name] = value
 	}

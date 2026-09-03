@@ -108,6 +108,7 @@ type dryRunPlan struct {
 	restackStacks []string            // deduped stack roots covering the restack set (JSON only)
 	skipped       []string            // dirty-worktree anchors whose stacks are skipped
 	restacked     bool                // whether --restack was requested
+	trunkUnknown  bool                // trunk's remote relationship could not be resolved
 }
 
 type dryRunCleanItem struct {
@@ -130,6 +131,7 @@ func (p dryRunPlan) toResult() sync.DryRunResult {
 		WouldRestack:       []string{},
 		WouldRestackStacks: p.restackStacks,
 		SkippedStacks:      p.skipped,
+		TrunkStateUnknown:  p.trunkUnknown,
 	}
 	for _, c := range p.clean {
 		result.WouldClean = append(result.WouldClean, c.branch)
@@ -155,7 +157,13 @@ func computeSyncDryRun(ctx context.Context, eng engine.Engine, opts sync.Options
 	// Check if trunk needs to be pulled from remote
 	trunk := eng.Trunk()
 	remoteStatus := eng.ReadBranchRemoteStatuses(ctx, engine.BranchesOf(trunk)).ForBranch(trunk)
-	if remoteStatus.Behind() {
+	switch {
+	case remoteStatus.Unknown():
+		// Report the uncertainty rather than the absence of work: the remote
+		// SHA is known but its objects are not local, so Behind() is false for
+		// want of a merge base, not because trunk is current.
+		plan.trunkUnknown = true
+	case remoteStatus.Behind():
 		plan.pullBranch = trunk.GetName()
 		plan.pullRev = utils.ShortRevision(remoteStatus.RemoteSha, 0)
 	}
@@ -291,6 +299,12 @@ func renderSyncDryRunText(out output.Output, plan dryRunPlan) {
 		for _, name := range plan.skipped {
 			out.Info("  %s", style.ColorBranchName(name))
 		}
+		printed = true
+	}
+
+	if plan.trunkUnknown {
+		out.Newline()
+		out.Warn("Could not determine whether trunk is behind its remote; fetch and retry.")
 		printed = true
 	}
 

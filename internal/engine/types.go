@@ -261,6 +261,21 @@ func (s BranchRemoteStatus) Behind() bool {
 	return s.CommonAncestor == s.LocalSha
 }
 
+// Unknown reports that the local/remote relationship could not be determined:
+// both sides exist and differ, but no merge base was resolvable. That happens
+// when the remote object is not in the local object database — the remote SHA
+// came from a listing (ls-remote) and nothing has fetched the objects yet.
+//
+// Behind, Ahead and Diverged all return false in that state, which is
+// indistinguishable from "in sync". Callers that act on being up to date must
+// check this first rather than treating a silent false as a clean bill.
+func (s BranchRemoteStatus) Unknown() bool {
+	if s.Matches() || s.LocalSha == "" || s.RemoteSha == "" {
+		return false
+	}
+	return s.CommonAncestor == ""
+}
+
 // Diverged returns true if both local and remote have unique commits
 func (s BranchRemoteStatus) Diverged() bool {
 	if s.Matches() || s.LocalSha == "" || s.RemoteSha == "" {

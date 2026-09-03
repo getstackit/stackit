@@ -520,6 +520,13 @@ clean. In JSON they appear under `held` as `{branch, reason}` — and also in
 `skipped`, so an empty `conflicts` list alone does not mean the whole stack
 moved.
 
+**`stackit sync --dry-run --json` reports `trunk_state_unknown`.** The preview
+resolves the remote trunk SHA from a listing without fetching its objects, so
+the ancestry check can be unresolvable — in which case trunk is neither reported
+as behind nor proven current. When `trunk_state_unknown` is `true`, an absent
+`would_pull` does **not** mean trunk is up to date; fetch and re-run before
+acting on the preview.
+
 Two smaller shapes changed alongside the worktree work. `stackit tree --json`
 has always omitted worktree anchors from its entries, but `parent` could still
 name one — a dangling reference to a branch absent from the result. Both

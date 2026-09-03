@@ -23,6 +23,7 @@ type DryRunResult struct {
 	WouldRestack       []string `json:"would_restack,omitempty"`        // Branches that would be restacked
 	WouldRestackStacks []string `json:"would_restack_stacks,omitempty"` // Deduped independent stack roots covering the current dry-run's would_restack set; recompute after sync before passing to `restack --stacks <roots>` because cleanup/reparenting can change roots
 	SkippedStacks      []string `json:"skipped_stacks,omitempty"`       // Stacks skipped due to dirty worktrees
+	TrunkStateUnknown  bool     `json:"trunk_state_unknown,omitempty"`  // Trunk's relationship to its remote could not be resolved (objects not fetched); an absent would_pull does NOT mean trunk is current
 }
 
 // Options contains options for the sync command

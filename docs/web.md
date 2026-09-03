@@ -18,6 +18,13 @@ The stackit web app is a dashboard for visualizing stacked branches. It displays
 
 The web app is built as a **static export** (no server-side rendering). The built output (`apps/web/out/`) is copied into `apps/server/static/` and embedded in the Go binary via `//go:embed static`. The API server serves these static files alongside the `/api/` endpoints, creating a single self-contained binary.
 
+The copy step is `scripts/sync-web-static.sh` (`mise run web:sync-static`). The
+web output is gitignored, so a fresh clone has none — rather than fail the build
+and leave `mise run build` half-finished, the script embeds a placeholder page
+explaining that the UI was not built and exits successfully. The API is
+unaffected; run `mise run web:build` then `mise run web:sync-static` for the
+real UI.
+
 ```
 Browser → Go API server → /api/* (JSON endpoints)
                         → /*    (embedded static files)

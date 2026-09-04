@@ -1,6 +1,7 @@
 package branch
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -59,6 +60,101 @@ func (h *SimpleGetHandler) EmitEvent(event actions.GetEvent) {
 
 	// Handle progress events
 	h.printEventLine(event)
+}
+
+// describeLandedAncestors writes the human-readable explanation of branches
+// re-anchored past landed work. Split from the prompt so the text is identical
+// whether or not there is a terminal to ask on.
+func describeLandedAncestors(out output.Output, report actions.LandedAncestorReport) {
+	out.Newline()
+	out.Warn("Landed work in this stack is no longer on the remote:")
+	for _, r := range report.Reanchored {
+		out.Info("  • %s%s has landed; %s is now tracked against %s",
+			style.ColorBranchName(r.LandedParent),
+			common.FormatPRInfo(r.LandedPR),
+			style.ColorBranchName(r.Branch),
+			style.ColorBranchName(r.NewParent))
+	}
+
+	// Re-anchoring moved the parent pointer, not the commits. Say so plainly:
+	// a frozen branch mirrors the remote, and restack resets it instead of
+	// rebasing it, so its diff keeps the landed commits until it is unfrozen.
+	if unfreezable := report.Unfreezable(); len(unfreezable) > 0 {
+		out.Newline()
+		out.Info("  %s still %s the landed commits. Frozen branches mirror the remote, so restack won't rebase %s.",
+			formatBranchList(unfreezable),
+			pluralWord(len(unfreezable), "contains", "contain"),
+			actions.PluralIt(len(unfreezable) != 1))
+	}
+
+	// Without the parent tip a branch was pushed on top of, there is nothing to
+	// separate the landed commits from the branch's own, and a rebase replays
+	// them rather than dropping them. Staying frozen is the only safe answer,
+	// so say that rather than pointing at a remedy that would do damage.
+	if unanchored := report.Unanchored(); len(unanchored) > 0 {
+		out.Newline()
+		out.Info("  No record on the remote of the parent tip for %s, so the landed commits can't be separated from %s own work.",
+			formatBranchList(unanchored),
+			pluralWord(len(unanchored), "its", "their"))
+		out.Info("  Left frozen — rebasing by hand would replay the landed work.")
+	}
+}
+
+// ReportLandedAncestors implements GetHandler. Explains the re-anchoring and,
+// when there is something safe to offer and a terminal to ask on, offers to
+// unfreeze the affected branches so this run rebases them.
+func (h *SimpleGetHandler) ReportLandedAncestors(report actions.LandedAncestorReport) (actions.LandedAncestorDecision, error) {
+	h.Lock()
+	defer h.Unlock()
+
+	describeLandedAncestors(h.Output, report)
+
+	unfreezable := report.Unfreezable()
+	if len(unfreezable) == 0 || !report.CanRestack {
+		return actions.LeaveFrozen, nil
+	}
+
+	// Unstyled, and naming the branches rather than a parent: more than one
+	// ancestor can have landed, and then they do not share a new parent.
+	confirmed, err := tui.PromptConfirm(
+		fmt.Sprintf("Unfreeze and restack %s now?", strings.Join(unfreezable, ", ")), false)
+	if err != nil && !errors.Is(err, tui.ErrInteractiveDisabled) {
+		return actions.LeaveFrozen, err
+	}
+	if confirmed {
+		return actions.UnfreezeAndRestack, nil
+	}
+
+	// `st unfreeze` takes one branch and thaws its upstack with it, so naming
+	// the trunk-most branch covers the rest of the subtree.
+	h.Output.Info("  Run %s then %s when you're ready to rebase.",
+		style.ColorCyan("st unfreeze "+unfreezable[0]),
+		style.ColorCyan("st restack"))
+	return actions.LeaveFrozen, nil
+}
+
+// pluralWord picks the singular or plural form for a count of branches.
+func pluralWord(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
+}
+
+// formatBranchList renders branch names for prose: "a", "a and b", "a, b and c".
+func formatBranchList(names []string) string {
+	styled := make([]string, len(names))
+	for i, name := range names {
+		styled[i] = style.ColorBranchName(name)
+	}
+	switch len(styled) {
+	case 0:
+		return ""
+	case 1:
+		return styled[0]
+	default:
+		return strings.Join(styled[:len(styled)-1], ", ") + " and " + styled[len(styled)-1]
+	}
 }
 
 // Complete is called when get finishes

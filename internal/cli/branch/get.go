@@ -27,7 +27,16 @@ to opt out of this behavior, use the --downstack flag.
 
 Note that remote-only branches upstack of the branch are not currently synced. 
 
-If no branch is provided, sync the current stack.`,
+If an ancestor has merged and its branch was deleted on the remote, get tracks
+what is left against the nearest branch that still exists and offers to unfreeze
+and restack it, since a frozen branch keeps the landed commits until it is rebased.
+
+If no branch is provided, sync the current stack.
+
+Examples:
+  stackit get 123           # Sync the stack for PR #123
+  stackit get my-branch     # Sync the stack down to my-branch
+  stackit get -U my-branch  # ...and leave the fetched branches editable`,
 		SilenceUsage: true,
 		Args:         cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

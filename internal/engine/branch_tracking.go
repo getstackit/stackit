@@ -70,6 +70,60 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 	return e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(parentBranchName), DivergenceRecompute)
 }
 
+// PriorParent records the parent a branch was built on, as read from a source
+// outside the local repository: stackit metadata fetched from the remote, or a
+// PR base. It carries what SetParent would normally find in existing local
+// metadata for a branch that has none yet.
+type PriorParent struct {
+	// Branch is the name of the parent the branch was built on.
+	Branch string
+	// Revision is that parent's tip at the time the branch was pushed. It is
+	// still reachable from the branch itself even after the parent's ref is
+	// deleted, which is what makes it usable as a divergence anchor.
+	Revision string
+}
+
+// TrackBranchPastLandedParent tracks branchName under parentBranchName when the
+// parent it was actually built on is not available locally — an ancestor that
+// landed and was deleted on the remote before the branch was fetched.
+//
+// Recording prior first is what makes the divergence point correct. SetParent's
+// recompute path keeps an existing parent revision when that revision has
+// landed in the new parent, so a later restack replays only this branch's own
+// commits. Without it the branch starts with no history at all and the
+// merge-base against the new parent is taken instead — which, for every merge
+// method that rewrites SHAs (squash and rebase), puts the landed parent's
+// commits back into the replay range.
+//
+// When prior.Revision has not landed, the recompute path falls back to the
+// merge-base on its own and the branch keeps the abandoned parent's commits.
+func (e *engineImpl) TrackBranchPastLandedParent(ctx context.Context, branchName string, parentBranchName string, prior PriorParent) error {
+	if branchName == e.trunk {
+		return fmt.Errorf("cannot track trunk branch %s", e.trunk)
+	}
+	if branchName == parentBranchName {
+		return fmt.Errorf("branch cannot be its own parent")
+	}
+
+	if prior.Branch != "" && prior.Revision != "" && prior.Branch != branchName {
+		meta, err := e.readMetadata(branchName)
+		if err != nil {
+			meta = git.NewMeta()
+		}
+		meta = meta.WithParentBranchName(&prior.Branch).WithParentBranchRevision(&prior.Revision)
+
+		tx := e.BeginTx(fmt.Sprintf("record prior parent: %s -> %s", branchName, prior.Branch))
+		if err := tx.UpdateMeta(branchName, meta); err != nil {
+			return fmt.Errorf("failed to record prior parent for %s: %w", branchName, err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("failed to record prior parent for %s: %w", branchName, err)
+		}
+	}
+
+	return e.SetParent(ctx, e.GetBranch(branchName), e.GetBranch(parentBranchName), DivergenceRecompute)
+}
+
 // UntrackBranch stops tracking a branch by deleting its metadata
 func (e *engineImpl) UntrackBranch(ctx context.Context, branchName string) error {
 	// Delete metadata

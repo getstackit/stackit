@@ -56,7 +56,7 @@ type branchInfoRenderOptions struct {
 func renderBranchInfoText(info actions.BranchInfoResult, opts branchInfoRenderOptions) string {
 	var outputLines []string
 
-	coloredBranchName := style.ColorBranchNameWithTrunk(info.Name, info.IsCurrent, info.IsTrunk)
+	coloredBranchName := style.ColorBranchNameWithTrunk(info.Name, style.BranchStyleOpts{IsCurrent: info.IsCurrent, IsTrunk: info.IsTrunk})
 	if info.IsLocked {
 		coloredBranchName += " " + style.IconLocked() + " " + style.ColorDim("(locked)")
 	}
@@ -92,13 +92,13 @@ func renderBranchInfoText(info actions.BranchInfoResult, opts branchInfoRenderOp
 
 	if info.Parent != "" {
 		outputLines = append(outputLines, "")
-		outputLines = append(outputLines, fmt.Sprintf("%s: %s", style.ColorCyan("Parent"), style.ColorBranchNameWithTrunk(info.Parent, false, isTrunkName(info.Parent))))
+		outputLines = append(outputLines, fmt.Sprintf("%s: %s", style.ColorCyan("Parent"), style.ColorBranchNameWithTrunk(info.Parent, style.BranchStyleOpts{IsTrunk: isTrunkName(info.Parent)})))
 	}
 
 	if len(info.Children) > 0 {
 		outputLines = append(outputLines, fmt.Sprintf("%s:", style.ColorCyan("Children")))
 		for _, child := range info.Children {
-			outputLines = append(outputLines, fmt.Sprintf("▸ %s", style.ColorBranchNameWithTrunk(child, false, isTrunkName(child))))
+			outputLines = append(outputLines, fmt.Sprintf("▸ %s", style.ColorBranchNameWithTrunk(child, style.BranchStyleOpts{IsTrunk: isTrunkName(child)})))
 		}
 	}
 

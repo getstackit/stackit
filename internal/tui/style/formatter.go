@@ -94,19 +94,19 @@ func ColorBranchNameIf(branchName string, isCurrent bool) string {
 }
 
 // ColorBranchNameWithTrunk colors a branch name based on whether it's current and trunk status
-func ColorBranchNameWithTrunk(branchName string, isCurrent bool, isTrunk bool) string {
+func ColorBranchNameWithTrunk(branchName string, opts BranchStyleOpts) string {
 	name := branchName
-	if isCurrent {
+	if opts.IsCurrent {
 		name += " (current)"
 	}
-	return BranchStyle(BranchStyleOpts{IsCurrent: isCurrent, IsTrunk: isTrunk}).Render(name)
+	return BranchStyle(opts).Render(name)
 }
 
 // ColorBranchNamePlain colors a branch name by current/trunk status without
 // appending the " (current)" marker, for callers that already convey
 // currency another way (e.g. a leading cursor or row highlight).
-func ColorBranchNamePlain(branchName string, isCurrent, isTrunk bool) string {
-	return BranchStyle(BranchStyleOpts{IsCurrent: isCurrent, IsTrunk: isTrunk}).Render(branchName)
+func ColorBranchNamePlain(branchName string, opts BranchStyleOpts) string {
+	return BranchStyle(opts).Render(branchName)
 }
 
 // BranchStyleOpts configures the appearance BranchStyle renders.

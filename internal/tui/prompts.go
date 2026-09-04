@@ -332,11 +332,11 @@ func (m promptListModel) Init() tea.Cmd {
 func (m promptListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		if msg.String() == "ctrl+c" {
+		if msg.String() == KeyCtrlC {
 			m.err = errors.ErrCanceled
 			return m, tea.Quit
 		}
-		if msg.String() == "enter" {
+		if msg.String() == KeyEnter {
 			if i, ok := m.list.SelectedItem().(listItem); ok {
 				m.selected = i.value
 				return m, tea.Quit

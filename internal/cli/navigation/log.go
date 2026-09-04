@@ -16,6 +16,7 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui/core"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -343,7 +344,7 @@ func (m *logPagerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		case core.KeyQuit, core.KeyEsc, core.KeyCtrlC:
 			return m, tea.Quit
 		case "g", "home":
 			m.viewport.GotoTop()

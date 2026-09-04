@@ -5,6 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/getstackit/stackit/internal/tui/core"
 )
 
 // Model wraps StackTreeRenderer to make it a tea.Model for the storyboard
@@ -42,7 +44,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Options.Mode = RenderModeFull
 			}
 			return m, nil
-		case "q", "ctrl+c", "esc":
+		case core.KeyQuit, core.KeyCtrlC, core.KeyEsc:
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:

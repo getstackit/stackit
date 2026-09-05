@@ -12,17 +12,10 @@ import (
 
 func TestNavigationCommands(t *testing.T) {
 	t.Parallel()
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
-	}
 
 	t.Run("linear stack navigation", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create stack: main -> a -> b -> c
 		s.RunCli("create", "a", "-m", "a").
@@ -88,7 +81,7 @@ func TestNavigationCommands(t *testing.T) {
 
 	t.Run("quiet down and bottom navigate correctly under light load path", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create stack: main -> a -> b -> c
 		s.RunCli("create", "a", "-m", "a").
@@ -111,7 +104,7 @@ func TestNavigationCommands(t *testing.T) {
 
 	t.Run("trunk and first branch navigation", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		s.RunCli("init")
 
@@ -172,7 +165,7 @@ func TestNavigationCommands(t *testing.T) {
 
 	t.Run("forked stack navigation", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create branches:
 		// main -> a -> b
@@ -224,7 +217,7 @@ func TestNavigationCommands(t *testing.T) {
 
 	t.Run("edge cases and error handling", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create stack: main -> a -> b
 		s.RunCli("create", "a", "-m", "a").
@@ -253,7 +246,7 @@ func TestNavigationCommands(t *testing.T) {
 
 	t.Run("trunk management", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		s.RunCli("init")
 
@@ -284,7 +277,7 @@ func TestNavigationCommands(t *testing.T) {
 	// not real subcommands.
 	t.Run("restack suggestion references real commands when branch falls behind", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create stack: main -> a -> b
 		s.RunCli("create", "a", "-m", "a").

@@ -63,43 +63,8 @@ func GetBinaryError() error {
 
 // buildBinary builds the stackit binary and returns its path.
 func buildBinary() (string, error) {
-	// Find the module root by walking up from the current directory
-	// looking for go.mod file
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get working directory: %w", err)
-	}
-
-	moduleRoot := findModuleRoot(wd)
-	if moduleRoot == "" {
-		return "", fmt.Errorf("could not find module root (go.mod) starting from %s", wd)
-	}
-
-	// Create temp directory for binary
-	tmpDir, err := os.MkdirTemp("", "stackit-test-binary-*")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
-	}
-
-	binaryPath := filepath.Join(tmpDir, "stackit")
-
-	// Build the binary
-	cmd := exec.Command("go", "build", "-o", binaryPath, "./apps/cli")
-	cmd.Dir = moduleRoot
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		_ = os.RemoveAll(tmpDir) // Ignore cleanup errors
-		return "", fmt.Errorf("failed to build: %s: %w", string(output), err)
-	}
-
-	// Make it executable
-	//nolint:gosec // 0755 is correct for an executable binary
-	if err := os.Chmod(binaryPath, 0755); err != nil {
-		_ = os.RemoveAll(tmpDir) // Ignore cleanup errors
-		return "", fmt.Errorf("failed to chmod: %w", err)
-	}
-
-	return binaryPath, nil
+	path, _, err := buildBinaryOnce()
+	return path, err
 }
 
 // findModuleRoot walks up the directory tree from startDir to find the module root
@@ -148,6 +113,21 @@ func TestMain(m *testing.M, cleanup func()) {
 
 // buildBinaryOnce builds the stackit binary once and returns its path and cleanup function.
 func buildBinaryOnce() (string, func(), error) {
+	if path := os.Getenv("STACKIT_TEST_BINARY"); path != "" {
+		if !filepath.IsAbs(path) {
+			return "", nil, fmt.Errorf("STACKIT_TEST_BINARY must be an absolute path: %s", path)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return "", nil, fmt.Errorf("invalid STACKIT_TEST_BINARY: %w", err)
+		}
+		if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+			return "", nil, fmt.Errorf("STACKIT_TEST_BINARY is not an executable file: %s", path)
+		}
+		// The runner owns this binary; individual packages must not delete it.
+		return path, func() {}, nil
+	}
+
 	// Get the module root (go up from current directory to stackit root)
 	wd, err := os.Getwd()
 	if err != nil {

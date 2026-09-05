@@ -59,9 +59,9 @@ jobs:
         run: |
           PACKAGES="$(bash scripts/go-test-packages.sh all)"
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            go test -v -race -p=1 -parallel=2 -coverprofile=coverage.out $PACKAGES
+            bash scripts/with-test-binary.sh go test -v -race -p=1 -parallel=2 -coverprofile=coverage.out $PACKAGES
           else
-            go test -v -coverprofile=coverage.out $PACKAGES
+            bash scripts/with-test-binary.sh go test -v -coverprofile=coverage.out $PACKAGES
           fi
 
 

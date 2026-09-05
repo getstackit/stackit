@@ -14,6 +14,24 @@ Stackit has several kinds of Go tests. Keep the tier explicit so local checks st
 
 Package selection is centralized in `scripts/go-test-packages.sh`. Update that script when adding or reclassifying package-level tiers.
 
+## Shared CLI binary
+
+The all, git, and integration runners build the CLI once with
+`scripts/with-test-binary.sh` and pass its path through `STACKIT_TEST_BINARY`.
+The binary lives at a content-addressed path in the Go build cache, so unchanged
+runs retain Go's test-result caching and concurrent revisions use separate files.
+Fast and unit tiers do not pay for this build.
+
+Direct `go test` and `test:pkg` invocations still build lazily per package when
+they need a subprocess. To share a binary for a custom multi-package run:
+
+```bash
+bash scripts/with-test-binary.sh go test ./internal/cli/...
+```
+
+An explicitly supplied `STACKIT_TEST_BINARY` must be an absolute path to an
+executable file. Test packages validate it and never delete a caller-owned binary.
+
 ## Organizing New Tests
 
 Prefer the cheapest test shape that proves the behavior:

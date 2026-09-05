@@ -1,7 +1,6 @@
 package stack_test
 
 import (
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,13 +10,6 @@ import (
 
 func TestMoveCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
-	}
 
 	t.Run("successful moves", func(t *testing.T) {
 		t.Parallel()
@@ -25,13 +17,13 @@ func TestMoveCommand(t *testing.T) {
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
+			runCliCommand(s.Dir, "init")
 			// Create branch1 -> branch2 -> branch3
 			for _, b := range []string{"branch1", "branch2", "branch3"} {
 				if err := s.Repo.CreateChange(b+" change", b, false); err != nil {
 					return err
 				}
-				runCliCommand(binaryPath, s.Dir, "create", b, "-m", b+" change")
+				runCliCommand(s.Dir, "create", b, "-m", b+" change")
 			}
 			return nil
 		})
@@ -39,7 +31,7 @@ func TestMoveCommand(t *testing.T) {
 		// 1. Move branch2 to main (downstack)
 		// Note: "Stack membership updated" messages only appear when branches have stack IDs
 		// which are only created when descriptions/scopes are set.
-		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "move", "--source", "branch2", "--onto", "main", "-y")
+		output := runCliCommandSuccess(t, scene.Dir, "move", "--source", "branch2", "--onto", "main", "-y")
 		normalized := testhelpers.NormalizeOutput(output)
 		require.Equal(t, testhelpers.NormalizeOutput(`
 Moved branch2 (current) from branch1 to main.
@@ -50,7 +42,7 @@ Restacked branch3 (current) on branch2.
 		// 2. Move current branch (branch3) to branch1 (different stack)
 		err := scene.Repo.CheckoutBranch("branch3")
 		require.NoError(t, err)
-		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "move", "--onto", "branch1", "-y")
+		output = runCliCommandSuccess(t, scene.Dir, "move", "--onto", "branch1", "-y")
 		require.Equal(t, testhelpers.NormalizeOutput(`
 Moved branch3 (current) from branch2 to branch1.
 Restacked branch3 (current) on branch1.
@@ -65,7 +57,7 @@ Restacked branch3 (current) on branch1.
 		err = scene.Repo.CreateChangeAndCommit("main change", "main")
 		require.NoError(t, err)
 
-		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "move", "--source", "branch1", "--onto", "main", "-y")
+		output = runCliCommandSuccess(t, scene.Dir, "move", "--source", "branch1", "--onto", "main", "-y")
 		require.Equal(t, testhelpers.NormalizeOutput(`
 Moved branch1 (current) from main to main.
 Restacked branch1 on main.
@@ -79,21 +71,21 @@ Restacked branch3 on branch1.
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
+			runCliCommand(s.Dir, "init")
 			// Create branch1 -> branch2
 			if err := s.Repo.CreateChange("branch1 change", "branch1", false); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "create", "branch1", "-m", "branch1 change")
+			runCliCommand(s.Dir, "create", "branch1", "-m", "branch1 change")
 			if err := s.Repo.CreateChange("branch2 change", "branch2", false); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "create", "branch2", "-m", "branch2 change")
+			runCliCommand(s.Dir, "create", "branch2", "-m", "branch2 change")
 			return nil
 		})
 
 		// Run dry-run move
-		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "move", "--source", "branch2", "--onto", "main", "--dry-run")
+		output := runCliCommandSuccess(t, scene.Dir, "move", "--source", "branch2", "--onto", "main", "--dry-run")
 		require.Contains(t, output, "Dry-run:")
 		require.Contains(t, output, "Move: branch2")
 		require.Contains(t, output, "From: branch1")
@@ -103,7 +95,7 @@ Restacked branch3 on branch1.
 		require.Contains(t, output, "Run without --dry-run to execute")
 
 		// Verify branch was NOT actually moved (still has branch1 as parent)
-		treeOutput := runCliCommandSuccess(t, binaryPath, scene.Dir, "tree")
+		treeOutput := runCliCommandSuccess(t, scene.Dir, "tree")
 		require.Contains(t, treeOutput, "branch2")
 		require.Contains(t, treeOutput, "branch1")
 	})
@@ -114,17 +106,15 @@ Restacked branch3 on branch1.
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
+			runCliCommand(s.Dir, "init")
 			if err := s.Repo.CreateChange("branch1 change", "branch1", false); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "create", "branch1", "-m", "branch1 change")
+			runCliCommand(s.Dir, "create", "branch1", "-m", "branch1 change")
 			return nil
 		})
 
-		cmd := exec.Command(binaryPath, "move", "--dry-run")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "move", "--dry-run")
 		require.Error(t, err)
 		require.Contains(t, string(output), "--onto flag is required when using --dry-run")
 	})
@@ -136,13 +126,13 @@ Restacked branch3 on branch1.
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
+			runCliCommand(s.Dir, "init")
 
 			// Create branch1 with a change to a file
 			if err := s.Repo.CreateChange("branch1 content", "conflict.txt", false); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "create", "branch1", "-m", "branch1 change")
+			runCliCommand(s.Dir, "create", "branch1", "-m", "branch1 change")
 
 			// Go back to main and create branch2 with conflicting change
 			if err := s.Repo.CheckoutBranch("main"); err != nil {
@@ -151,14 +141,12 @@ Restacked branch3 on branch1.
 			if err := s.Repo.CreateChange("branch2 content", "conflict.txt", false); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "create", "branch2", "-m", "branch2 change")
+			runCliCommand(s.Dir, "create", "branch2", "-m", "branch2 change")
 			return nil
 		})
 
 		// Try to move branch2 onto branch1 (will conflict)
-		cmd := exec.Command(binaryPath, "move", "--source", "branch2", "--onto", "branch1", "--dry-run")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "move", "--source", "branch2", "--onto", "branch1", "--dry-run")
 		require.Error(t, err)
 		outputStr := string(output)
 		require.Contains(t, outputStr, "Dry-run:")
@@ -171,9 +159,9 @@ Restacked branch3 on branch1.
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
-			runCliCommand(binaryPath, s.Dir, "create", "branch1", "-m", "branch1")
-			runCliCommand(binaryPath, s.Dir, "create", "branch2", "-m", "branch2")
+			runCliCommand(s.Dir, "init")
+			runCliCommand(s.Dir, "create", "branch1", "-m", "branch1")
+			runCliCommand(s.Dir, "create", "branch2", "-m", "branch2")
 			return nil
 		})
 
@@ -215,9 +203,7 @@ Restacked branch3 on branch1.
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				cmd := exec.Command(binaryPath, tc.args...)
-				cmd.Dir = scene.Dir
-				output, err := cmd.CombinedOutput()
+				output, err := runCliCommandOutput(scene.Dir, tc.args...)
 				require.Error(t, err)
 				require.Contains(t, string(output), tc.expected)
 			})

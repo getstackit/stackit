@@ -1117,3 +1117,46 @@ func TestSubmitDissolvesNativeGitHubStackToRetargetBase(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "main", apiPR.Base())
 }
+
+// TestSubmitRetargetsBaseWhenStackKeepsMergedPullRequest covers the state a
+// stack lands in as soon as one of its members merges: GitHub refuses to
+// unstack a merged pull request, so the Stack never dissolves outright. Treating
+// that as a failed dissolve left the base retarget blocked and surfaced GitHub's
+// raw 422, even though the pull request being retargeted had in fact left the
+// Stack — and a later submit would then succeed, making it look intermittent.
+func TestSubmitRetargetsBaseWhenStackKeepsMergedPullRequest(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"base": "main", "api": "base"})
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
+
+	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
+	s.Context.Config = cfg
+
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true, CreateGitHubStack: true}, &noopHandler{})
+	require.NoError(t, err)
+	require.Len(t, mockConfig.CreatedStacks, 1)
+	require.NotEmpty(t, mockConfig.CreatedStacks[0])
+
+	// The bottom pull request merges. GitHub keeps it in the Stack and will not
+	// unstack it, so the Stack can never be emptied from here on.
+	mockConfig.MergedStackPRs = []int{mockConfig.CreatedStacks[0][0]}
+
+	s.TrackBranch("api", "main").Checkout("api")
+	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})
+	require.NoError(t, err, "a Stack pinned open by a merged PR must not block retargeting the others")
+
+	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
+	require.NoError(t, err)
+	require.Equal(t, "main", apiPR.Base())
+
+	require.Equal(t, mockConfig.MergedStackPRs, mockConfig.CreatedStacks[0],
+		"only the merged pull request should remain stacked")
+}

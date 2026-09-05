@@ -434,6 +434,10 @@ stackit get 123
 ```
 By default, `get` **freezes** the fetched branches locally. This prevents accidental local modifications while you build on top of them, without affecting the original author's metadata. Use `stackit unfreeze` if you need to modify them.
 
+If part of the stack has already merged and GitHub deleted those branches, `get` tracks what is left against the nearest branch that still exists — usually trunk — and says which landed branch it moved past. The fetched branch still contains the landed commits until it is rebased, and a frozen branch is never rebased, so `get` offers to unfreeze and restack it there and then. Declining is fine: the branch keeps mirroring the remote, and `stackit unfreeze` followed by `stackit restack` finishes the job whenever you are ready.
+
+Occasionally there is nothing on the remote recording which commit the branch was pushed on top of — a branch pushed without stackit whose parent has since merged. `get` still re-anchors it, but it says the landed commits can't be told apart from the branch's own and leaves it frozen, because rebasing it would duplicate the merged work rather than drop it.
+
 ### Native GitHub Stack Sync (Experimental)
 
 GitHub's native stacked PR UI requires a linear PR chain. To reconcile its server-side Stack metadata automatically during normal submission, enable the option once:

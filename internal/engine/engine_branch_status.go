@@ -612,3 +612,35 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 func (e *engineImpl) GetRemote() string {
 	return e.git.GetRemote()
 }
+
+// MissingRemoteBranches returns the subset of branchNames that no longer have a
+// branch ref on the configured remote, preserving the order they were given in.
+// It lists the remote's refs once and mutates nothing locally.
+//
+// Callers use it to recover from an all-or-nothing fetch: an explicit refspec
+// for a deleted branch fails the whole `git fetch`, including the refspecs for
+// branches that do exist. A branch discovered through stackit metadata or a PR
+// base was pushed at some point, so its absence now means it was deleted —
+// nearly always because it landed.
+func (e *engineImpl) MissingRemoteBranches(ctx context.Context, branchNames []string) ([]string, error) {
+	if len(branchNames) == 0 {
+		return nil, nil
+	}
+	remote := e.GetRemote()
+
+	remoteShas, err := e.git.FetchRemoteShas(ctx, remote)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list branches on %s: %w", remote, err)
+	}
+
+	var missing []string
+	for _, name := range branchNames {
+		if name == "" {
+			continue
+		}
+		if _, ok := remoteShas[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	return missing, nil
+}

@@ -77,6 +77,9 @@ type BranchStatus interface {
 	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)
 	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
+	// MissingRemoteBranches returns the subset of the given branches that no
+	// longer exist on the configured remote.
+	MissingRemoteBranches(ctx context.Context, branchNames []string) ([]string, error)
 	// TrunkRemoteState reports how the local trunk relates to its
 	// remote-tracking branch using only local refs (no network).
 	TrunkRemoteState(ctx context.Context) TrunkRemoteState
@@ -176,6 +179,11 @@ type BranchReader interface {
 // BranchTracking handles branch tracking operations
 type BranchTracking interface {
 	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
+	// TrackBranchPastLandedParent tracks a branch under a substitute parent
+	// when the parent it was built on is gone locally, using the recorded
+	// prior parent to anchor the divergence point so a later restack does not
+	// replay landed commits.
+	TrackBranchPastLandedParent(ctx context.Context, branchName string, parentBranchName string, prior PriorParent) error
 	// UntrackBranches stops tracking multiple branches, deleting their metadata
 	// and triggering a single engine rebuild.
 	UntrackBranches(ctx context.Context, branchNames []string) error

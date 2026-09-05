@@ -102,6 +102,91 @@ Stackit must also never move an unrelated branch ref to a merged **sibling's**
 stale pre-merge tip, and must never delete or reparent metadata based solely on
 SHA equality.
 
+## Fetching a branch whose parent has landed
+
+`stackit get` faces the same landed work one step earlier: it fetches a branch
+from the remote before there is any local history to reason about. The child's
+pushed metadata still names the parent it was submitted against, and GitHub has
+already deleted that branch as part of the merge.
+
+Two things go wrong without care.
+
+**The fetch is all-or-nothing.** `get` resolves the target's ancestry from the
+fetched metadata and then asks for every ancestor head in one refspec list.
+`git fetch` fails the whole command when a single explicit refspec names a ref
+that no longer exists, so the branch the user actually asked for never arrives:
+
+```
+Error: failed to fetch branches from origin: git fetch failed:
+fatal: couldn't find remote ref refs/heads/<merged-parent>
+```
+
+`get` recovers by listing the remote's refs (`MissingRemoteBranches`), dropping
+the branches that are gone, and fetching the rest. That listing runs **only on
+the failure path**, so a healthy stack still fetches in one round trip.
+
+**The substitute parent needs the right divergence point.** A branch discovered
+through metadata that has no ref on the remote was pushed once and has landed,
+so `get` drops it from the sync set and tracks its children against the nearest
+ancestor that still exists — usually trunk. Recording that parent alone is not
+enough: the fetched branch still contains the landed parent's commits, and a
+plain merge-base against trunk puts them all back into a later restack's replay
+range for every merge method that rewrites SHAs.
+
+`TrackBranchPastLandedParent` records the parent the branch was actually pushed
+on top of, plus that parent's tip from the same metadata, before setting the new
+parent. The tip is still reachable from the fetched branch even though its ref
+is gone, so `SetParent`'s recompute path can check whether it landed and keep it
+as the divergence anchor. The reparent invariant above then holds through `get`
+as well: `<trunk>..<branch>` is exactly the branch's own commits.
+
+A parent that is gone from the remote but **still checked out locally** is left
+alone. It is a branch the user may still be working with, and restack's own
+landed-parent handling reparents past it.
+
+### Where the anchor comes from, and what happens without one
+
+The anchor is a branch's own recorded `ParentBranchRevision`, so it survives the
+landed parent's metadata being deleted — but only if `get` goes looking for it.
+
+`crawlAncestorsViaMetadata` collects anchors as it walks, and abandons the whole
+walk the moment one ancestor has no metadata. That is exactly the state a merged
+parent is left in: branch cleanup deletes a merged branch's remote metadata ref
+during the author's own `stackit sync`, so by the time a teammate runs
+`stackit get`, the ancestry crawl gives up and the GitHub crawl takes over. PR
+bases carry parents but no revisions, so that path knows no anchors at all.
+
+`harvestAnchors` closes the gap: after whichever crawl ran, it reads
+`ParentBranchRevision` out of the remote metadata cache for every branch in the
+sync set that does not have one yet. The child's own metadata ref is still on the
+remote, and it is the record that matters.
+
+When nothing anywhere records the tip — a branch pushed by a collaborator who
+does not use stackit, whose parent then landed and was deleted — there is no way
+to tell the landed commits apart from the branch's own. Re-anchoring still
+happens, because tracking a branch against a parent that no longer exists is
+worse. Rebasing does not: `LandedAncestorReport.Unanchored` names those branches,
+`Unfreezable` excludes them, and `get` reports them and leaves them frozen rather
+than offering a rebase that would replay the landed work.
+
+### Re-anchoring is reported, never silent
+
+`get` checks branches out **frozen** by default: a frozen branch mirrors the
+remote and restack resets it rather than rebasing it. So re-anchoring moves the
+parent pointer while the branch keeps carrying the landed commits, and restack
+will not fix that on its own.
+
+`get` says so and offers the remedy — unfreeze the affected branches so this run
+rebases them onto the new parent. Declining is a valid answer, not a failure:
+the branch goes on mirroring the remote, correctly tracked, and `st unfreeze`
+plus `st restack` finishes the job later.
+
+The offer is only ever made for branches `get` can actually rebase: frozen (so
+restack skips them as things stand) and anchored (so the rebase drops the landed
+commits rather than replaying them). It is also only made when the run has a
+restack phase to feed — unfreezing under `--no-restack` would drop the protection
+and rebase nothing.
+
 ## The un-pushed trunk guard
 
 Restack rebases trunk-anchored branches onto the **local trunk tip**. In a
@@ -266,6 +351,10 @@ expensive per-commit patch-id walk on every merge check.
 | Non-stackit collaborator squash/rebase, including fully untracked parent | `internal/integration/restack_untracked_collaborator_test.go` |
 | Multi-commit squash with stale/absent PR state, conflict-abort, reflog | `internal/integration/restack_squash_merge_test.go`, `internal/integration/restack_squash_conflict_abort_test.go` |
 | Un-pushed/diverged trunk guard (integration) | `internal/integration/restack_trunk_guard_test.go` |
+| `get` past a parent that landed and left the remote (all merge methods) | `internal/integration/get_landed_parent_test.go` |
+| Same, with the landed parent's remote metadata already cleaned up | `internal/integration/get_landed_parent_test.go` (`TestGetPastLandedParentWithoutParentMetadata`) |
+| Same, with no stackit metadata at all — reported, never rebased | `internal/integration/get_landed_parent_test.go` (`TestGetPastLandedParentWithNoMetadataAtAll`) |
+| Re-anchor target selection, anchor harvesting, report views (actions unit) | `internal/actions/get_internal_test.go` |
 | `TrunkRemoteState` predicate (engine unit) | `internal/engine/engine_impl_test.go` (`TestTrunkRemoteState`) |
 
 When changing any of detection, reparenting, or the guard, cover **all three
@@ -283,3 +372,7 @@ matches it.
 | Reparent target selection | `internal/engine/engine_internal.go` (`shouldReparentBranch`, `findNearestValidAncestor`) |
 | Trunk-remote state | `internal/engine/engine_branch_status.go` (`TrunkRemoteState`) |
 | Restack guard | `internal/actions/restack.go` (`guardUnpushedTrunk`) |
+| Fetch recovery and re-anchoring in `get` | `internal/actions/get.go` (`reanchorPastLanded`) |
+| Remote branch existence | `internal/engine/engine_branch_status.go` (`MissingRemoteBranches`) |
+| Divergence anchor for a fetched branch | `internal/engine/branch_tracking.go` (`TrackBranchPastLandedParent`) |
+| Anchor recovery when the crawl gave up | `internal/actions/get.go` (`harvestAnchors`) |

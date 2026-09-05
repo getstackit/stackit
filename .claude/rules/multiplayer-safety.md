@@ -90,6 +90,23 @@ commits — never the landed parent's pre-merge commits.**
 - Never delete or reparent branch metadata based solely on SHA equality. Deletion
   stays gated on submitted-PR metadata (`metaHasSubmittedPR`); reparenting is the
   non-destructive path and does not require that gate.
+- This holds for `get` too, before any local history exists. A landed parent that
+  GitHub deleted must not fail the fetch (explicit refspecs are all-or-nothing:
+  drop the gone branches and fetch the rest), and the child tracked against a
+  substitute parent must carry the landed parent's recorded tip as its
+  divergence anchor — a plain merge-base against trunk replays the landed
+  commits for squash and rebase merges. See `TrackBranchPastLandedParent`.
+- `get` checks branches out frozen, and restack never rebases a frozen branch. A
+  re-anchored branch is therefore still stale: report it and offer the unfreeze,
+  never re-anchor silently.
+- The anchor must be recovered from **any** metadata that survives, not only from
+  a clean ancestry crawl. Branch cleanup deletes a merged branch's remote metadata
+  ref, so the crawl routinely falls back to a GitHub walk that reads PR bases and
+  knows no revisions; the child's own metadata ref still records the tip it was
+  pushed on top of. See `harvestAnchors`.
+- With **no** anchor available, re-anchor but never offer to rebase. Report the
+  branch as unanchored and leave it frozen: a rebase there replays the landed
+  commits instead of dropping them, which is the data-loss shape itself.
 
 ## Performance: Keep The Squash Scan Cold
 
@@ -111,5 +128,13 @@ Any change to detection, reparenting, or the guard must cover:
 - **A multi-commit squash** case specifically.
 - **Guard boundaries**: ahead/diverged rejected; equal/behind/no-remote/no-branches
   allowed.
+- **Trunk that moved on after the merge.** A landed parent whose commits are
+  replayed onto an unchanged trunk applies as a no-op and `git rebase` drops it,
+  so the test passes for the wrong reason. Advance trunk past the merge before
+  asserting.
+- **Every degree of surviving metadata**, for anything touching `get`: all refs
+  intact, the landed parent's metadata ref already cleaned up (the common case
+  after the author syncs), and no stackit metadata at all. The middle case is the
+  one a single "happy path" test misses.
 
 See `docs/multiplayer.md` for the test-file map.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -500,92 +501,96 @@ func TestTransaction_ConcurrentModificationLocalMeta(t *testing.T) {
 
 func TestWithRetry_RetriesOnConcurrentModification(t *testing.T) {
 	t.Parallel()
-	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	synctest.Test(t, func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-	// Create and track a branch
-	s.CreateBranch("feature-1").
-		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
-	require.NoError(t, err)
+		// Create and track a branch
+		s.CreateBranch("feature-1").
+			Commit("feature 1 change")
+		err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+		require.NoError(t, err)
 
-	// Get the engine implementation
-	eng := s.Engine.(interface {
-		WithRetry(ctx context.Context, operation func() error) error
-		BeginTx(message string) *engine.MetadataTx
-		Git() git.Runner
+		// Get the engine implementation
+		eng := s.Engine.(interface {
+			WithRetry(ctx context.Context, operation func() error) error
+			BeginTx(message string) *engine.MetadataTx
+			Git() git.Runner
+		})
+
+		attemptCount := 0
+		maxFailures := 2 // Fail first 2 attempts, succeed on 3rd
+
+		err = eng.WithRetry(context.Background(), func() error {
+			attemptCount++
+
+			tx := eng.BeginTx("retry test")
+			meta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
+			if stageErr := tx.UpdateMeta("feature-1", meta); stageErr != nil {
+				return stageErr
+			}
+
+			// Simulate concurrent modification for first N attempts
+			// Use different scope values to ensure different blob SHAs
+			if attemptCount <= maxFailures {
+				scope := fmt.Sprintf("conflict-%d", attemptCount)
+				otherMeta := git.NewMetaFrom(git.MetaFields{Scope: &scope})
+				if writeErr := eng.Git().WriteMetadata("feature-1", otherMeta); writeErr != nil {
+					return writeErr
+				}
+			}
+
+			return tx.Commit(context.Background())
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, maxFailures+1, attemptCount, "expected %d attempts", maxFailures+1)
 	})
+}
 
-	attemptCount := 0
-	maxFailures := 2 // Fail first 2 attempts, succeed on 3rd
+func TestWithRetry_ExhaustsRetries(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-	err = eng.WithRetry(context.Background(), func() error {
-		attemptCount++
+		// Create and track a branch
+		s.CreateBranch("feature-1").
+			Commit("feature 1 change")
+		err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+		require.NoError(t, err)
 
-		tx := eng.BeginTx("retry test")
-		meta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
-		if stageErr := tx.UpdateMeta("feature-1", meta); stageErr != nil {
-			return stageErr
-		}
+		// Get the engine implementation
+		eng := s.Engine.(interface {
+			WithRetry(ctx context.Context, operation func() error) error
+			BeginTx(message string) *engine.MetadataTx
+			Git() git.Runner
+		})
 
-		// Simulate concurrent modification for first N attempts
-		// Use different scope values to ensure different blob SHAs
-		if attemptCount <= maxFailures {
+		attemptCount := 0
+
+		err = eng.WithRetry(context.Background(), func() error {
+			attemptCount++
+
+			tx := eng.BeginTx("exhaustion test")
+			meta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
+			if stageErr := tx.UpdateMeta("feature-1", meta); stageErr != nil {
+				return stageErr
+			}
+
+			// Always cause concurrent modification with unique content - never succeed
 			scope := fmt.Sprintf("conflict-%d", attemptCount)
 			otherMeta := git.NewMetaFrom(git.MetaFields{Scope: &scope})
 			if writeErr := eng.Git().WriteMetadata("feature-1", otherMeta); writeErr != nil {
 				return writeErr
 			}
-		}
 
-		return tx.Commit(context.Background())
+			return tx.Commit(context.Background())
+		})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed after")
+		assert.Contains(t, err.Error(), "retries")
+		assert.Equal(t, engine.MaxRetries, attemptCount, "expected exactly %d attempts", engine.MaxRetries)
 	})
-
-	require.NoError(t, err)
-	assert.Equal(t, maxFailures+1, attemptCount, "expected %d attempts", maxFailures+1)
-}
-
-func TestWithRetry_ExhaustsRetries(t *testing.T) {
-	t.Parallel()
-	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-
-	// Create and track a branch
-	s.CreateBranch("feature-1").
-		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
-	require.NoError(t, err)
-
-	// Get the engine implementation
-	eng := s.Engine.(interface {
-		WithRetry(ctx context.Context, operation func() error) error
-		BeginTx(message string) *engine.MetadataTx
-		Git() git.Runner
-	})
-
-	attemptCount := 0
-
-	err = eng.WithRetry(context.Background(), func() error {
-		attemptCount++
-
-		tx := eng.BeginTx("exhaustion test")
-		meta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
-		if stageErr := tx.UpdateMeta("feature-1", meta); stageErr != nil {
-			return stageErr
-		}
-
-		// Always cause concurrent modification with unique content - never succeed
-		scope := fmt.Sprintf("conflict-%d", attemptCount)
-		otherMeta := git.NewMetaFrom(git.MetaFields{Scope: &scope})
-		if writeErr := eng.Git().WriteMetadata("feature-1", otherMeta); writeErr != nil {
-			return writeErr
-		}
-
-		return tx.Commit(context.Background())
-	})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed after")
-	assert.Contains(t, err.Error(), "retries")
-	assert.Equal(t, engine.MaxRetries, attemptCount, "expected exactly %d attempts", engine.MaxRetries)
 }
 
 func TestWithRetry_NonRetryableError(t *testing.T) {

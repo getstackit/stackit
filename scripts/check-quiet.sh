@@ -140,10 +140,15 @@ go_test() {
     repro="mise run test:$tier"
   fi
 
+  local -a runner=(gotestsum)
+  case "$tier" in
+    all | git | integration) runner=(bash scripts/with-test-binary.sh gotestsum) ;;
+  esac
+
   run_phase \
     "test:$tier" \
     "$repro" \
-    gotestsum \
+    "${runner[@]}" \
       --format standard-quiet \
       --hide-summary=skipped,output \
       -- \

@@ -11,17 +11,10 @@ import (
 
 func TestCheckoutCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
-	}
 
 	t.Run("successful navigation", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create a stack: main -> a -> b
 		s.RunCli("create", "a", "-m", "a").
@@ -60,7 +53,7 @@ func TestCheckoutCommand(t *testing.T) {
 
 	t.Run("failure and interactive flags", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// 1. Invalid branch
 		output, err := s.RunCliAndGetOutput("checkout", "nonexistent")

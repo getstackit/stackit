@@ -12,13 +12,6 @@ import (
 
 func TestSubmitCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
-	}
 
 	t.Run("dry-run output format", func(t *testing.T) {
 		t.Parallel()
@@ -26,9 +19,9 @@ func TestSubmitCommand(t *testing.T) {
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
+			runCliCommand(s.Dir, "init")
 			for _, b := range []string{"branch-a", "branch-b", "branch-c"} {
-				runCliCommand(binaryPath, s.Dir, "create", b)
+				runCliCommand(s.Dir, "create", b)
 			}
 			return s.Repo.CheckoutBranch("branch-b")
 		})
@@ -42,14 +35,14 @@ Will submit (2)
 ● branch-b → create (empty)
 Dry run complete
 `)
-		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
+		output := runCliCommandSuccess(t, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
 		require.Equal(t, expected, testhelpers.NormalizeOutput(output))
 
-		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive", "--verbose")
+		output = runCliCommandSuccess(t, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive", "--verbose")
 		require.Equal(t, expected, testhelpers.NormalizeOutput(output))
 
 		// 2. Submit --stack (full stack)
-		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--stack", "--dry-run", "--no-edit", "--draft", "--no-interactive")
+		output = runCliCommandSuccess(t, scene.Dir, "submit", "--stack", "--dry-run", "--no-edit", "--draft", "--no-interactive")
 		expectedStack := testhelpers.NormalizeOutput(`
 Submit plan → main
 Will submit (3)
@@ -61,7 +54,7 @@ Dry run complete
 		require.Equal(t, expectedStack, testhelpers.NormalizeOutput(output))
 
 		// 3. ss alias (same as submit --stack)
-		output = runCliCommandSuccess(t, binaryPath, scene.Dir, "ss", "--dry-run", "--no-edit", "--draft", "--no-interactive")
+		output = runCliCommandSuccess(t, scene.Dir, "ss", "--dry-run", "--no-edit", "--draft", "--no-interactive")
 		require.Equal(t, expectedStack, testhelpers.NormalizeOutput(output), "ss alias should behave like submit --stack")
 	})
 
@@ -71,9 +64,9 @@ Dry run complete
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
+			runCliCommand(s.Dir, "init")
 			for _, b := range []string{"branch-a", "branch-b", "branch-c"} {
-				runCliCommand(binaryPath, s.Dir, "create", b)
+				runCliCommand(s.Dir, "create", b)
 			}
 			if _, err := s.Repo.CreateBareRemote("origin"); err != nil {
 				return err
@@ -101,7 +94,7 @@ Dry run complete
 			return s.Repo.CheckoutBranch("branch-b")
 		})
 
-		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "ss", "--no-edit", "--no-interactive")
+		output := runCliCommandSuccess(t, scene.Dir, "ss", "--no-edit", "--no-interactive")
 		expected := testhelpers.NormalizeOutput(`
 ✓ Nothing to submit
 `)
@@ -114,14 +107,14 @@ Dry run complete
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
-			runCliCommand(binaryPath, s.Dir, "create", "solo-branch")
+			runCliCommand(s.Dir, "init")
+			runCliCommand(s.Dir, "create", "solo-branch")
 			return nil
 		})
 
 		// A lone branch off trunk reads as "name → base", with no "Stack to
 		// submit" header.
-		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
+		output := runCliCommandSuccess(t, scene.Dir, "submit", "--dry-run", "--no-edit", "--draft", "--no-interactive")
 		expected := testhelpers.NormalizeOutput(`
 solo-branch → main  create (empty)
 Dry run complete
@@ -135,14 +128,14 @@ Dry run complete
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			runCliCommand(binaryPath, s.Dir, "init")
+			runCliCommand(s.Dir, "init")
 			return nil
 		})
 
 		// On trunk with no stacked branches there is nothing to submit. Standing
 		// on trunk is surfaced distinctly: the action points the user at creating
 		// or checking out a branch rather than printing a bare "nothing to submit".
-		output := runCliCommandSuccess(t, binaryPath, scene.Dir, "submit", "--no-edit", "--no-interactive")
+		output := runCliCommandSuccess(t, scene.Dir, "submit", "--no-edit", "--no-interactive")
 		expected := testhelpers.NormalizeOutput(`
 You're on main — nothing to submit from here.
 💡 Check out a branch to submit its stack, or create one:

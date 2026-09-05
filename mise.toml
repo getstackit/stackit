@@ -126,14 +126,14 @@ run = "scripts/check-quiet.sh test:fresh"
 description = "Run tests with verbose output"
 run = """
   PACKAGES=$(bash scripts/go-test-packages.sh all)
-  gotestsum --format standard-verbose -- $PACKAGES
+  bash scripts/with-test-binary.sh gotestsum --format standard-verbose -- $PACKAGES
 """
 
 [tasks."test:coverage"]
 description = "Run tests with coverage"
 run = """
   PACKAGES=$(bash scripts/go-test-packages.sh all)
-  gotestsum --format pkgname-and-test-fails -- -coverprofile=coverage.out $PACKAGES
+  bash scripts/with-test-binary.sh gotestsum --format pkgname-and-test-fails -- -coverprofile=coverage.out $PACKAGES
   go tool cover -html=coverage.out -o coverage.html
 """
 

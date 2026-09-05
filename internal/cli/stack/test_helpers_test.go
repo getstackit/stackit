@@ -1,24 +1,35 @@
 package stack_test
 
 import (
-	"os/exec"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getstackit/stackit/testhelpers/inprocess"
+	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-func runCliCommand(binaryPath, dir string, args ...string) error {
-	cmd := exec.Command(binaryPath, args...)
-	cmd.Dir = dir
-	return cmd.Run()
+func init() {
+	scenario.SetGlobalInProcessRunner(func(workDir string, args ...string) (string, error) {
+		result := inprocess.NewInProcessCLI().Run(workDir, args...)
+		return result.Output, result.Err
+	})
 }
 
-func runCliCommandSuccess(t *testing.T, binaryPath, dir string, args ...string) string {
+func runCliCommand(dir string, args ...string) error {
+	_, err := runCliCommandOutput(dir, args...)
+	return err
+}
+
+func runCliCommandOutput(dir string, args ...string) ([]byte, error) {
+	result := inprocess.NewInProcessCLI().Run(dir, args...)
+	return []byte(result.Output), result.Err
+}
+
+func runCliCommandSuccess(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command(binaryPath, args...)
-	cmd.Dir = dir
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "command failed: %s %v\nOutput: %s", binaryPath, args, string(output))
+	output, err := runCliCommandOutput(dir, args...)
+	require.NoError(t, err, "command failed: stackit %v\nOutput: %s", args, string(output))
 	return ansi.Strip(string(output))
 }

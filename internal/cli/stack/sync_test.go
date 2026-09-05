@@ -11,17 +11,10 @@ import (
 
 func TestSyncCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
-	}
 
 	t.Run("successful sync scenarios", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create a remote to avoid sync errors related to missing remote
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
@@ -77,7 +70,7 @@ func TestSyncCommand(t *testing.T) {
 
 	t.Run("sync failures and tips", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create a remote to avoid sync errors related to missing remote
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
@@ -112,7 +105,7 @@ Error: you have uncommitted changes. Please commit or stash them before syncing
 
 	t.Run("dry-run previews without mutating", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		_, err := s.Scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)

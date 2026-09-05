@@ -11,18 +11,10 @@ import (
 
 func TestLogCommand(t *testing.T) {
 	t.Parallel()
-	// Build the stackit binary first
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
-	}
 
 	t.Run("tree in empty repo", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Run tree command
 		output, err := s.RunCliAndGetOutput("tree")
@@ -34,7 +26,7 @@ func TestLogCommand(t *testing.T) {
 
 	t.Run("tree with branches", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create a branch
 		s.CreateBranch("feature").
@@ -53,7 +45,7 @@ func TestLogCommand(t *testing.T) {
 
 	t.Run("tree with --stack flag", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 
 		// Create and checkout a branch
 		s.CreateBranch("feature")
@@ -67,7 +59,7 @@ func TestLogCommand(t *testing.T) {
 
 	t.Run("t aliases tree short", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 		s.CreateBranch("feature")
 
 		shortOutput, err := s.RunCliAndGetOutput("tree", "short")
@@ -82,7 +74,7 @@ func TestLogCommand(t *testing.T) {
 
 	t.Run("tree shows worktree indicator for stack with worktree", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 		s.WithInitialCommit()
 
 		// Create a staged change for the branch

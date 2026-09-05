@@ -255,6 +255,30 @@ func TestConfigStore_MultiValue(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, vals)
 	})
+
+	t.Run("round-trips a value containing newlines without splitting it", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+
+		store := git.NewConfigStore(scene.Dir)
+
+		// stackit.hooks.approved.* stores free-form approved hook commands.
+		// A multi-line command split into fragments here would never match
+		// the original string again, so approval would never stick.
+		multiline := "make lint\nmake test"
+		err := store.Add("stackit.test.list", "first")
+		require.NoError(t, err)
+
+		err = store.Add("stackit.test.list", multiline)
+		require.NoError(t, err)
+
+		err = store.Add("stackit.test.list", "third")
+		require.NoError(t, err)
+
+		vals, err := store.GetAll("stackit.test.list")
+		require.NoError(t, err)
+		require.Equal(t, []string{"first", multiline, "third"}, vals)
+	})
 }
 
 func TestConfigStore_Unset(t *testing.T) {

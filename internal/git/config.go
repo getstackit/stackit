@@ -169,7 +169,11 @@ func (c *ConfigStore) Get(key string) (string, error) {
 // GetAll retrieves all values for a multi-value config key.
 // Returns empty slice if the key doesn't exist.
 func (c *ConfigStore) GetAll(key string) ([]string, error) {
-	out, err := c.runGitConfig("--get-all", key)
+	// -z NUL-terminates each value instead of newline-separating them, so a
+	// value containing an embedded newline (a multi-line approved hook
+	// command, say) stays one entry instead of splitting into extras that
+	// never match the original value again.
+	out, err := c.runGitConfig("-z", "--get-all", key)
 	if err != nil {
 		if isExitCode(err, 1) {
 			return nil, nil
@@ -179,8 +183,11 @@ func (c *ConfigStore) GetAll(key string) ([]string, error) {
 	if out == "" {
 		return nil, nil
 	}
-	values := strings.Split(out, "\n")
-	return values, nil
+	// -z terminates every value, leaving one trailing empty element after
+	// Split; drop it rather than filtering all empties, which would also
+	// discard a legitimate empty-string value.
+	values := strings.Split(out, "\x00")
+	return values[:len(values)-1], nil
 }
 
 // Set sets a config value in local git config.

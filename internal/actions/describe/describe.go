@@ -6,11 +6,11 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -173,7 +173,7 @@ func showDescription(ctx *app.Context, branch engine.Branch, stackRoot string) e
 func openEditor(existing *git.StackDescription) (*git.StackDescription, error) {
 	template := buildEditorTemplate(existing)
 
-	content, err := tui.OpenEditor(template, "STACK_DESCRIPTION-*")
+	content, err := editor.Open(template, "STACK_DESCRIPTION-*")
 	if err != nil {
 		return nil, fmt.Errorf("editor failed: %w", err)
 	}

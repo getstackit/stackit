@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -14,7 +14,7 @@ func getCommitMessage(ctx *app.Context) (string, error) {
 		return "", err
 	}
 
-	msg, err := tui.OpenEditor(template, "COMMIT_EDITMSG-*")
+	msg, err := editor.Open(template, "COMMIT_EDITMSG-*")
 	if err != nil {
 		return "", err
 	}

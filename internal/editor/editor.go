@@ -1,4 +1,8 @@
-package tui
+// Package editor opens the user's configured text editor on a temporary file
+// and returns the edited content. It is intentionally separate from internal/tui
+// so that callers needing only an editor (not a Bubble Tea UI) don't depend on
+// the heavier TUI package.
+package editor
 
 import (
 	"fmt"
@@ -9,25 +13,29 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-// OpenEditor opens the user's preferred editor with the given initial content.
-// It returns the edited content or an error.
-func OpenEditor(initialContent, filenamePattern string) (string, error) {
-	// Get editor from environment first
-	// Precedence: GIT_EDITOR > EDITOR
+// Open opens the user's preferred editor with the given initial content and
+// returns the edited content, or an error.
+//
+// Editor precedence: GIT_EDITOR > EDITOR > git config core.editor > vi.
+// When no editor is set in the environment, it first checks that interactive
+// use is allowed (so it doesn't hang in CI / non-interactive contexts).
+func Open(initialContent, filenamePattern string) (string, error) {
+	// Get editor from environment first. Precedence: GIT_EDITOR > EDITOR.
 	editor := os.Getenv("GIT_EDITOR")
 	if editor == "" {
 		editor = os.Getenv("EDITOR")
 	}
 
-	// If no editor is explicitly set in the environment, we check if we're allowed
-	// to proceed with interactive defaults. This prevents hangs in non-interactive
-	// environments (like CI) while allowing tests to provide a non-interactive editor script.
+	// If no editor is explicitly set in the environment, check whether we're
+	// allowed to proceed with interactive defaults. This prevents hangs in
+	// non-interactive environments (like CI) while allowing tests to provide a
+	// non-interactive editor script via the environment.
 	if editor == "" {
-		if err := CheckInteractiveAllowed(); err != nil {
+		if err := utils.CheckInteractiveAllowed(); err != nil {
 			return "", err
 		}
 
-		// Try to get from git config
+		// Try to get from git config.
 		output, err := exec.Command("git", "config", "--get", "core.editor").Output()
 		if err == nil && len(output) > 0 {
 			editor = strings.TrimSpace(string(output))
@@ -35,17 +43,17 @@ func OpenEditor(initialContent, filenamePattern string) (string, error) {
 	}
 
 	if editor == "" {
-		editor = "vi" // Default to vi
+		editor = "vi" // Default to vi.
 	}
 
-	// Create temporary file
+	// Create temporary file.
 	tmpFile, err := os.CreateTemp("", filenamePattern)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
-	// Write initial content
+	// Write initial content.
 	if _, err := tmpFile.WriteString(initialContent); err != nil {
 		return "", fmt.Errorf("failed to write temp file: %w", err)
 	}
@@ -53,7 +61,7 @@ func OpenEditor(initialContent, filenamePattern string) (string, error) {
 		return "", fmt.Errorf("failed to close temp file: %w", err)
 	}
 
-	// Open editor
+	// Open editor.
 	cmd, err := utils.BuildEditorCommand(editor, tmpFile.Name())
 	if err != nil {
 		return "", fmt.Errorf("failed to build editor command: %w", err)
@@ -66,7 +74,7 @@ func OpenEditor(initialContent, filenamePattern string) (string, error) {
 		return "", fmt.Errorf("editor exited with error: %w", err)
 	}
 
-	// Read edited content
+	// Read edited content.
 	content, err := os.ReadFile(tmpFile.Name())
 	if err != nil {
 		return "", fmt.Errorf("failed to read edited file: %w", err)

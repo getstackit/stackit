@@ -8,6 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
@@ -119,7 +120,7 @@ func ReorderAction(ctx *app.Context) error {
 		out.Debug("reorder: editor content prepared (%d bytes)", len(editorContent))
 
 		// Open editor
-		editedContent, err := tui.OpenEditor(editorContent, "stackit-reorder-*.txt")
+		editedContent, err := editor.Open(editorContent, "stackit-reorder-*.txt")
 		if err != nil {
 			out.Debug("reorder: failed to open editor: %v", err)
 			return fmt.Errorf("failed to open editor: %w", err)

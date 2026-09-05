@@ -470,7 +470,7 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case tea.KeyPressMsg:
-		if msg.String() == "q" || msg.String() == "esc" || msg.String() == "ctrl+c" {
+		if msg.String() == KeyQuit || msg.String() == KeyEsc || msg.String() == KeyCtrlC {
 			return m, tea.Quit
 		}
 	}

@@ -345,6 +345,31 @@ func TestGetPastLandedParentWithNoMetadataAtAll(t *testing.T) {
 	requireCleanWorkingTree(t, sh)
 }
 
+// --unfrozen skips the freeze that otherwise keeps restack off an unanchored
+// branch. The exclusion must therefore be keyed on the missing anchor itself,
+// not on the freeze: rebasing here replays the landed commits rather than
+// dropping them, which is the data-loss shape re-anchoring exists to avoid.
+func TestGetPastLandedParentUnfrozenLeavesUnanchoredAlone(t *testing.T) {
+	t.Parallel()
+	sh := stackWithLandedParent(t, squashLanding, forgetAllMetadata)
+
+	handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
+	require.NoError(t, actions.GetAction(sh.Context, "b",
+		actions.GetOptions{Restack: true, Unfrozen: true}, handler))
+	sh.Rebuild()
+
+	require.Len(t, handler.reports, 1)
+	require.Equal(t, []string{"b"}, handler.reports[0].Unanchored(),
+		"nothing recorded a's tip, so b has no safe replay range")
+
+	sh.ExpectStackStructure(map[string]string{"b": "main"})
+	require.False(t, sh.Engine.GetBranch("b").IsFrozen(),
+		"--unfrozen still leaves the branch unfrozen; the anchor is what protects it")
+	require.Equal(t, 3, commitsInB(t, sh),
+		"b keeps its own commits instead of replaying the landed parent's")
+	requireCleanWorkingTree(t, sh)
+}
+
 // --restack=false leaves nothing for an unfreeze to feed, so get must not act
 // on a handler that asks for one anyway.
 func TestGetPastLandedParentWithoutRestack(t *testing.T) {

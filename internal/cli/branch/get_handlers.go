@@ -238,6 +238,16 @@ func (h *SimpleGetHandler) printFetchEvent(event actions.GetEvent) {
 }
 
 func (h *SimpleGetHandler) printSyncEvent(event actions.GetEvent) {
+	// A skipped branch is the one case where saying nothing is wrong: the
+	// branch silently keeps its old content, and the remedy lives in another
+	// worktree the user is not looking at.
+	if event.Type == actions.GetEventSkipped {
+		h.Output.Warn("  Skipped %s: %s",
+			style.ColorBranchName(event.Branch),
+			event.Message)
+		return
+	}
+
 	if event.Type != actions.GetEventCompleted {
 		return
 	}

@@ -48,6 +48,11 @@ type Handler interface {
 	// PromptScope prompts user for a scope value when pattern contains {scope}
 	// The patternHint shows the current branch pattern to the user
 	PromptScope(patternHint string) (string, error)
+
+	// PromptChildToMove asks which of the current branch's children should be
+	// moved onto a newly inserted branch. Returns "all" to move every child, or
+	// a specific child name. Only called when IsInteractive() is true.
+	PromptChildToMove(children []string) (string, error)
 }
 
 // NullHandler is a no-op handler for when nil is passed
@@ -67,3 +72,6 @@ func (h *NullHandler) PromptStageChanges() (bool, error) { return false, nil }
 
 // PromptScope implements Handler.
 func (h *NullHandler) PromptScope(_ string) (string, error) { return "", nil }
+
+// PromptChildToMove implements Handler. Returns "all" (move every child).
+func (h *NullHandler) PromptChildToMove(_ []string) (string, error) { return "all", nil }

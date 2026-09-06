@@ -346,7 +346,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// Handle insert logic
 	if opts.Insert {
 		h.OnStep(StepInsert, handler.StatusStarted, "Inserting branch into stack")
-		if err := handleInsert(ctx.Context, branchName, currentBranch, ctx, &opts); err != nil {
+		if err := handleInsert(ctx.Context, branchName, currentBranch, ctx, &opts, h); err != nil {
 			h.OnStep(StepInsert, handler.StatusFailed, err.Error())
 			out.Info("Warning: failed to insert branch: %v", err)
 		} else {

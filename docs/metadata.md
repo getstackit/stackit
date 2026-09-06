@@ -13,7 +13,7 @@ Stackit uses **Git refs** as the storage mechanism for all metadata. Metadata is
 
 ## Ref Namespaces
 
-Stackit uses four ref namespaces:
+Stackit uses five ref namespaces:
 
 | Namespace | Purpose | Synced to Remote |
 |-----------|---------|------------------|
@@ -21,6 +21,81 @@ Stackit uses four ref namespaces:
 | `refs/stackit/local-metadata/{branch}` | Local-only branch state (frozen, cached IDs) | No |
 | `refs/stackit/stacks/{stack-id}` | Stack-level metadata (title, description) | Yes |
 | `refs/stackit/remote-stacks/{stack-id}` | Fetched remote stack metadata (read-only) | N/A (fetched) |
+| `refs/stackit/undo/{snapshot-id}` | Working-tree captures anchored to an undo snapshot | No |
+
+## Undo Snapshot Captures
+
+**Refs**: `refs/stackit/undo/{snapshot-id}` and `refs/stackit/undo/{snapshot-id}-untracked`
+
+**Source**: `internal/engine/undo.go`
+
+A snapshot records branch and metadata SHAs (`.git/stackit/undo/*.json`), which
+is enough to roll refs back but not enough to put the user back where they
+started. Commands like `modify` and `create` turn the working tree into a
+commit, so rolling that commit away without the working tree deletes work the
+user never committed themselves.
+
+Snapshots taken by those commands therefore also capture the uncommitted state:
+
+- a stash commit (`git stash create`) holding tracked modifications and the
+  index, which preserves the staged/unstaged split on restore
+- a separate commit holding untracked, non-ignored files, which stashes exclude
+  but `git add -A` would have committed
+
+Capturing is opt-in per command (`SnapshotOptions.CaptureWorktree`, or
+`actions.WithWorktreeCapture()`), and only `modify`, `create`, `absorb`, and
+`split` set it — they are the commands that turn the working tree into a commit.
+Everything else pays nothing: `restack` and `sync` hold back a worktree with
+uncommitted changes instead of rebasing it, so they can neither consume such
+work nor destroy it on rollback, and a capture there would be ~35ms of wasted
+`git stash create` per invocation on a 30k-file repository.
+
+Both are unreachable commits, so each is anchored under `refs/stackit/undo/` —
+otherwise `git gc` is free to collect the user's work — and both are deleted
+when the snapshot that owns them is pruned by `undo.depth`.
+
+Snapshots live under `<git-dir>/stackit/undo`, resolved with `git.GetGitDir`
+rather than by joining `.git` onto the repo root. A linked worktree's `.git` is
+a file, so the naive path lands under a file and every snapshot write fails —
+silently, since snapshots are best-effort — in exactly the checkout the worktree
+workflow tells you to run `modify` from. Resolving the git directory also gives
+each worktree its own undo stack, which is what you want: a capture holds the
+uncommitted state of the tree it was taken from, and applying it to a different
+worktree would be wrong.
+
+`abort` and `undo` restore refs first, then re-apply the capture onto the
+rolled-back tree: the tracked stash, then the untracked files. Restoring an
+untracked file never overwrites a file that currently exists on disk. The stash
+apply is an ordinary `git stash apply`, so it does merge into whatever the
+working tree holds — which is why `undo` refuses to run against a dirty tree it
+did not capture.
+
+### Which snapshot abort rolls back to
+
+`abort` restores the snapshot named by `SnapshotID` in the continuation state
+(`.git/.stackit_continue`), written by `EnterConflictWorkflow` from
+`Engine.LastSnapshotID()` — the snapshot the halted command itself recorded.
+
+It restores that snapshot or nothing. When the field is empty, or the snapshot
+has aged out of the undo stack, `abort` unwinds the Git state, says it has no
+rollback point, and points at `stackit undo` for a manual choice. Reaching for
+the newest snapshot on disk instead is what let a conflicted `reorder` or
+`delete` roll the repository back past an unrelated `create` and delete the
+branch that `create` had made.
+
+Any command that can enter the conflict workflow therefore needs a snapshot of
+its own, taken before its first mutation. Commands take one as late as that rule
+allows: `submit` only when a branch actually needs restacking, `reorder` only
+once the order has changed, and `restack` only when `plan.HasWork()`.
+
+`sync` is the exception that shows where the line is. Its conflict comes from
+the restack phase at the very end, but by then it has already updated trunk,
+deleted merged branches, and reparented their children. Snapshotting at the
+restack phase would be cheaper and would still bind `abort` to the right
+command — but `abort` would report that it restored the state before `sync`
+while leaving every one of those deletions in place. So `sync` snapshots before
+`syncFetchedTrunk`, its first visible ref move, and a sync that turns out to
+have nothing to do pays for one anyway.
 
 ## Branch Metadata (`Meta`)
 

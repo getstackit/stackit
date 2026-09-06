@@ -143,9 +143,12 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 	// Take snapshot before any modifications
 	snapshotArgs := []string{string(style), string(direction)}
-	if err := eng.TakeSnapshot(engine.SnapshotOptions{
+	if err := eng.TakeSnapshot(ctx.Context, engine.SnapshotOptions{
 		Command: "split",
-		Args:    snapshotArgs,
+		// split stages and commits whatever is in the working tree as it
+		// rebuilds the branch, so uncommitted changes are its input too.
+		CaptureWorktree: true,
+		Args:            snapshotArgs,
 	}); err != nil {
 		return fmt.Errorf("failed to take snapshot: %w", err)
 	}

@@ -44,7 +44,7 @@ func TakeBestEffortSnapshot(ctx *app.Context, opts engine.SnapshotOptions) {
 	if ctx.Config != nil && !ctx.Config.UndoEnabled() {
 		return
 	}
-	if err := ctx.Undo().TakeSnapshot(opts); err != nil {
+	if err := ctx.Undo().TakeSnapshot(ctx.Context, opts); err != nil {
 		ctx.Output.Debug("Failed to take snapshot: %v", err)
 	}
 }
@@ -575,6 +575,10 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 		RebasedBranchBase:      rebasedBranchBase,
 		CurrentBranchOverride:  firstConflict,
 		ExpectedBranchRevision: expectedBranchRevision,
+		// Bind abort's rollback to the snapshot this command took. Empty when
+		// the command took none, which abort reads as "no rollback point"
+		// rather than reaching for an unrelated command's snapshot.
+		SnapshotID: ctx.Engine.LastSnapshotID(),
 	}
 
 	if err := config.PersistContinuationState(ctx.RepoRoot, continuation); err != nil {
@@ -695,6 +699,17 @@ func NewSnapshot(command string, options ...SnapshotOption) engine.SnapshotOptio
 		option(&opts)
 	}
 	return opts
+}
+
+// WithWorktreeCapture records the uncommitted changes with the snapshot, so a
+// later abort or undo can hand them back. Use it on commands that turn the
+// working tree into a commit — modify, create, absorb, split — and nowhere
+// else: capturing costs a `git stash create` plus an untracked scan, which is
+// wasted on commands that cannot consume uncommitted work.
+func WithWorktreeCapture() SnapshotOption {
+	return func(opts *engine.SnapshotOptions) {
+		opts.CaptureWorktree = true
+	}
 }
 
 // WithArg appends a single argument if it's not empty

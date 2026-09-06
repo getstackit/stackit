@@ -689,6 +689,17 @@ When `stackit restack` encounters conflicts (use `--continue-on-conflict` to ski
 
 Or abort and try a different approach: `stackit abort`
 
+`abort` puts you back exactly where you started: branches and metadata roll back
+to their pre-command state, and any uncommitted changes the command consumed —
+the edit `stackit modify` amended into a commit, the files `git add -A` staged
+before `stackit create` — come back to your working tree with their original
+staged/unstaged split. The same applies to `absorb` and `split`.
+
+`abort` only ever rolls back the command that halted. If that command recorded
+no rollback point, it says so and leaves your branches as the command left them
+rather than restoring an unrelated snapshot — use `stackit undo` to pick a
+state to return to.
+
 ### Recovering from a failed operation
 
 Stackit automatically saves state before operations. To undo:
@@ -697,7 +708,10 @@ Stackit automatically saves state before operations. To undo:
 stackit undo
 ```
 
-This restores branches and metadata to the state before the last command.
+This restores branches, metadata, and the working tree to the state before the
+last command, including uncommitted changes that command turned into a commit.
+Because it resets the working tree onto the restored commits, `undo` refuses to
+run while you have uncommitted changes of your own — commit or stash them first.
 
 ### Stack is out of sync with remote
 

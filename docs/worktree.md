@@ -293,6 +293,28 @@ Repair can:
 
 ---
 
+## Undo History Is Per-Worktree
+
+Undo snapshots live under the git directory (`<git-dir>/stackit/undo`), and a
+linked worktree has its own. So `stackit undo` in a worktree lists only the
+snapshots taken *in that worktree*, and `stackit abort` rolls back to the
+snapshot the halted command recorded there.
+
+That separation is deliberate rather than incidental. A snapshot taken by
+`modify`, `create`, `absorb`, or `split` captures the uncommitted changes that
+command was about to consume, and those changes belong to one physical working
+tree. Sharing one undo stack across worktrees would let an undo in one checkout
+restore another checkout's uncommitted work into it.
+
+The practical consequence: run `undo` from the same worktree as the command you
+want to undo. Snapshots are not visible from anywhere else, and the branch refs
+a snapshot restores are repository-wide even though the snapshot itself is not.
+
+See [metadata.md](metadata.md) ("Undo Snapshot Captures") for what a snapshot
+holds and how the captures are anchored.
+
+---
+
 ## How Anchor Branches Work
 
 When you create a worktree with `wt create`, Stackit creates an **anchor branch** — a special marker branch with no commits that connects your worktree's stack to trunk. Anchors are an implementation detail that you generally don't need to think about; Stackit handles them transparently.

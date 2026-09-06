@@ -216,10 +216,12 @@ type Options struct {
 // UndoManager provides operations for undo/redo functionality
 // Thread-safe: All methods are safe for concurrent use
 type UndoManager interface {
-	TakeSnapshot(opts SnapshotOptions) error
+	TakeSnapshot(ctx context.Context, opts SnapshotOptions) error
 	GetSnapshots() ([]SnapshotInfo, error)
 	LoadSnapshot(snapshotID string) (*Snapshot, error)
 	RestoreSnapshot(ctx context.Context, snapshotID string) error
+	RestoreWorktree(ctx context.Context, snapshotID string) (bool, error)
+	LastSnapshotID() string
 }
 
 // Engine is the core interface for branch state management

@@ -18,8 +18,19 @@ import (
 const (
 	// DefaultMaxUndoStackDepth is the default number of snapshots we keep
 	DefaultMaxUndoStackDepth = 10
-	// UndoDir is the directory where undo snapshots are stored
-	UndoDir = ".git/stackit/undo"
+	// UndoDir is the path, relative to the git directory, where undo snapshots
+	// are stored. It is joined onto git.GetGitDir rather than onto the repo
+	// root: in a linked worktree `.git` is a file, so joining onto the root
+	// gives a path under a file and every snapshot write fails with ENOTDIR.
+	// Resolving the git directory also gives each worktree its own undo stack,
+	// which is what you want — a snapshot's working-tree capture belongs to the
+	// tree it was taken from.
+	UndoDir = "stackit/undo"
+	// UndoRefPrefix anchors the working-tree captures taken with each snapshot.
+	// `git stash create` produces an unreachable commit, which `git gc` is free
+	// to collect; a ref keeps the user's uncommitted work alive until the
+	// snapshot it belongs to is pruned.
+	UndoRefPrefix = "refs/stackit/undo/"
 	// jsonExt is the file extension for snapshot files
 	jsonExt = ".json"
 )
@@ -32,6 +43,14 @@ type Snapshot struct {
 	CurrentBranch string            `json:"current_branch"`
 	BranchSHAs    map[string]string `json:"branch_shas"`   // branch name -> SHA
 	MetadataSHAs  map[string]string `json:"metadata_shas"` // branch name -> metadata ref SHA
+	// WorktreeSHA is a stash commit holding the uncommitted changes the
+	// command was about to consume. Empty when the working tree was clean, or
+	// when it could not be captured.
+	WorktreeSHA string `json:"worktree_sha,omitempty"`
+	// UntrackedSHA is a commit holding the untracked files present alongside
+	// it. Stashes exclude untracked files, but a command that stages
+	// everything commits them, so a rollback deletes their only copy.
+	UntrackedSHA string `json:"untracked_sha,omitempty"`
 }
 
 // SnapshotInfo provides metadata about a snapshot for display
@@ -48,11 +67,22 @@ type SnapshotInfo struct {
 type SnapshotOptions struct {
 	Command string
 	Args    []string
+	// CaptureWorktree records the uncommitted changes alongside the branch
+	// SHAs. Set it for commands that turn the working tree into a commit
+	// (modify, create, absorb, split) — restoring their snapshot without the
+	// working tree destroys work the user never committed themselves.
+	//
+	// Left unset, a snapshot costs exactly what it always did. Reconcilers
+	// (restack, sync) hold back a worktree with uncommitted changes rather
+	// than rebasing it, so they have nothing to consume and nothing to
+	// capture; paying `git stash create` on every one of them would be ~35ms
+	// of pure overhead per invocation on a 30k-file repository.
+	CaptureWorktree bool
 }
 
 // getUndoDir returns the path to the undo directory
 func getUndoDir(repoRoot string) string {
-	return filepath.Join(repoRoot, UndoDir)
+	return filepath.Join(git.GetGitDir(repoRoot), UndoDir)
 }
 
 // ensureUndoDir creates the undo directory if it doesn't exist
@@ -66,6 +96,18 @@ func getSnapshotFilename(timestamp time.Time, command string) string {
 	// Format: YYYYMMDDHHMMSS_command.json
 	// This ensures chronological ordering when sorted by filename
 	return fmt.Sprintf("%s_%s.json", timestamp.Format("20060102150405.000"), command)
+}
+
+// snapshotWorktreeRef names the ref anchoring a snapshot's working-tree capture.
+func snapshotWorktreeRef(snapshotID string) string {
+	return UndoRefPrefix + snapshotID
+}
+
+// snapshotUntrackedRef names the ref anchoring a snapshot's untracked-file
+// capture. It is a sibling of snapshotWorktreeRef rather than a child, which
+// Git would reject as a directory/file conflict.
+func snapshotUntrackedRef(snapshotID string) string {
+	return UndoRefPrefix + snapshotID + "-untracked"
 }
 
 // parseSnapshotFilename extracts timestamp and command from a filename
@@ -104,8 +146,9 @@ func parseSnapshotFilename(filename string) (time.Time, string, error) {
 	return timestamp, command, nil
 }
 
-// TakeSnapshot captures the current state of the repository
-func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
+// TakeSnapshot captures the current state of the repository, including the
+// uncommitted changes the command is about to consume.
+func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -136,6 +179,15 @@ func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
 
 	// Create snapshot
 	timestamp := time.Now()
+	filename := getSnapshotFilename(timestamp, opts.Command)
+	snapshotID := strings.TrimSuffix(filename, jsonExt)
+
+	var worktreeSHA, untrackedSHA string
+	if opts.CaptureWorktree {
+		worktreeSHA = e.captureWorktree(ctx, snapshotID, opts.Command)
+		untrackedSHA = e.captureUntracked(ctx, snapshotID, opts.Command)
+	}
+
 	snapshot := &Snapshot{
 		Timestamp:     timestamp,
 		Command:       opts.Command,
@@ -143,6 +195,8 @@ func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
 		CurrentBranch: currentBranch,
 		BranchSHAs:    branchSHAs,
 		MetadataSHAs:  metadataSHAs,
+		WorktreeSHA:   worktreeSHA,
+		UntrackedSHA:  untrackedSHA,
 	}
 
 	// Serialize to JSON
@@ -152,22 +206,142 @@ func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
 	}
 
 	// Write to file
-	filename := getSnapshotFilename(timestamp, opts.Command)
 	filePath := filepath.Join(getUndoDir(e.repoRoot), filename)
 	if err := os.WriteFile(filePath, jsonData, 0600); err != nil {
 		return fmt.Errorf("failed to write snapshot: %w", err)
 	}
 
+	// Remember what this run recorded. A conflict workflow binds its rollback
+	// to this exact snapshot, so that an abort can never restore an unrelated
+	// command's snapshot — see EnterConflictWorkflow.
+	e.lastSnapshotID = snapshotID
+
 	// Enforce max stack depth by removing oldest snapshots. Best-effort: the
 	// snapshot above was already saved, so a failure here just means the
 	// undo stack temporarily exceeds the configured max depth.
-	_ = e.enforceMaxStackDepth() //nolint:errcheck // best-effort
+	_ = e.enforceMaxStackDepth(ctx) //nolint:errcheck // best-effort
 
 	return nil
 }
 
+// captureWorktree records the uncommitted changes present when the snapshot is
+// taken, so restoring the snapshot can hand them back.
+//
+// Rolling branch refs back is only half of "put me back where I started":
+// commands like modify and create turn the working tree into a commit, and a
+// ref-only rollback leaves that work reachable through nothing but the reflog.
+//
+// Best effort throughout — a repository that cannot be stashed (mid-rebase, for
+// instance) still gets a ref-only snapshot, which is what every snapshot was
+// before this existed.
+func (e *engineImpl) captureWorktree(ctx context.Context, snapshotID, command string) string {
+	sha, err := e.git.StashCreate(ctx, fmt.Sprintf("stackit snapshot: %s", command))
+	if err != nil || sha == "" {
+		return ""
+	}
+	// The commit is unreachable until it is anchored. An un-anchored capture is
+	// still worth recording — gc is unlikely to run in the seconds before an
+	// abort — so a failed anchor does not discard it.
+	_ = e.git.UpdateRef(snapshotWorktreeRef(snapshotID), sha)
+	return sha
+}
+
+// captureUntracked records the untracked files a stash cannot hold. Best effort,
+// for the same reasons as captureWorktree.
+func (e *engineImpl) captureUntracked(ctx context.Context, snapshotID, command string) string {
+	sha, err := e.git.CaptureUntracked(ctx, fmt.Sprintf("stackit snapshot (untracked): %s", command))
+	if err != nil || sha == "" {
+		return ""
+	}
+	_ = e.git.UpdateRef(snapshotUntrackedRef(snapshotID), sha)
+	return sha
+}
+
+// RestoreWorktree re-applies the uncommitted changes captured with a snapshot,
+// reporting whether there was anything to restore. A failure names the ref the
+// capture is anchored under, so the work stays recoverable by hand.
+//
+// Callers restore the snapshot's refs first: the capture was taken against
+// those commits, so applying it to the rolled-back tree is a clean apply.
+func (e *engineImpl) RestoreWorktree(ctx context.Context, snapshotID string) (bool, error) {
+	snapshot, err := e.LoadSnapshot(snapshotID)
+	if err != nil {
+		return false, fmt.Errorf("failed to load snapshot: %w", err)
+	}
+	if snapshot.WorktreeSHA == "" && snapshot.UntrackedSHA == "" {
+		return false, nil
+	}
+
+	// Tracked content first, while the rolled-back tree still matches the
+	// commits the stash was created against. Untracked files are additive and
+	// never collide with it.
+	if snapshot.WorktreeSHA != "" {
+		if err := e.restoreStash(ctx, snapshot.WorktreeSHA); err != nil {
+			return false, fmt.Errorf("%w (recover them with: git stash apply %s)", err, snapshotWorktreeRef(snapshotID))
+		}
+	}
+
+	restored := snapshot.WorktreeSHA != ""
+	if snapshot.UntrackedSHA != "" {
+		// The count matters: every captured file may already be on disk, in
+		// which case the restore is a deliberate no-op and saying "restored
+		// your uncommitted changes" would be a lie.
+		count, err := e.git.RestoreUntracked(ctx, snapshot.UntrackedSHA)
+		if err != nil {
+			return false, fmt.Errorf("%w (recover them with: git restore --source %s --worktree -- .)", err, snapshotUntrackedRef(snapshotID))
+		}
+		restored = restored || count > 0
+	}
+
+	return restored, nil
+}
+
+// restoreStash re-applies a captured stash, preferring the staged/unstaged
+// split it was created with.
+func (e *engineImpl) restoreStash(ctx context.Context, stashSHA string) error {
+	indexErr := e.git.StashApplyRef(ctx, stashSHA, git.StashApplyWithIndex)
+	if indexErr == nil {
+		return nil
+	}
+
+	// --index writes the working tree first and reinstates the staged/unstaged
+	// split afterwards, so a failure can leave the changes already applied and
+	// only the split missing. Retrying then applies the same diff onto itself
+	// and litters the tree with conflict markers. Callers arrive here with a
+	// clean tree — refs restored, working tree reset — so a tree that is still
+	// clean is proof the failed attempt wrote nothing and a retry is safe.
+	dirty, dirtyErr := e.git.WorktreeHasTrackedChanges(ctx, e.repoRoot)
+	if dirtyErr != nil || dirty {
+		return fmt.Errorf("failed to restore uncommitted changes: %w", indexErr)
+	}
+
+	// Nothing landed. Losing which hunks were staged beats losing the changes.
+	if err := e.git.StashApplyRef(ctx, stashSHA, git.StashApplyWorktreeOnly); err != nil {
+		return fmt.Errorf("failed to restore uncommitted changes: %w", err)
+	}
+	return nil
+}
+
+// LastSnapshotID returns the snapshot this engine recorded, or empty when it
+// has taken none. It answers "did the command now running record a rollback
+// point", which is what binds a conflict workflow to its own snapshot.
+//
+// That reading holds because the CLI runs one command per process, so an
+// engine that has taken no snapshot reports empty. A long-lived engine — the
+// API server keeps one per repository across requests — carries the value
+// forward, so a later command that takes no snapshot of its own would inherit
+// the previous one. Any command that can enter the conflict workflow must
+// therefore take a snapshot before it can conflict; every one of them does.
+// Add a new conflict-capable path without one and it will silently bind to a
+// stranger's rollback point on the server.
+func (e *engineImpl) LastSnapshotID() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lastSnapshotID
+}
+
 // enforceMaxStackDepth removes the oldest snapshots if we exceed MaxUndoStackDepth
-func (e *engineImpl) enforceMaxStackDepth() error {
+func (e *engineImpl) enforceMaxStackDepth(ctx context.Context) error {
 	dir := getUndoDir(e.repoRoot)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -200,12 +374,37 @@ func (e *engineImpl) enforceMaxStackDepth() error {
 
 	// Delete oldest snapshots
 	toDelete := len(snapshots) - e.maxUndoStackDepth
+	var captureRefs []string
 	for i := range toDelete {
+		// Read the snapshot before removing it: it names the captures that
+		// have to go with it. Snapshots that captured nothing — every command
+		// that does not consume the working tree — contribute no refs, so
+		// pruning them stays free of git processes.
+		snapshotID := strings.TrimSuffix(snapshots[i].Name(), jsonExt)
+		var owned []string
+		if snapshot, err := e.LoadSnapshot(snapshotID); err == nil {
+			if snapshot.WorktreeSHA != "" {
+				owned = append(owned, snapshotWorktreeRef(snapshotID))
+			}
+			if snapshot.UntrackedSHA != "" {
+				owned = append(owned, snapshotUntrackedRef(snapshotID))
+			}
+		}
+
 		filePath := filepath.Join(dir, snapshots[i].Name())
 		if err := os.Remove(filePath); err != nil {
-			// Continue deleting others even if one fails
+			// Continue deleting others even if one fails. The captures stay
+			// anchored: a snapshot still on disk names them, and dropping its
+			// refs would leave it pointing at commits gc is free to collect.
 			continue
 		}
+		captureRefs = append(captureRefs, owned...)
+	}
+
+	// The captures are only reachable through these refs, so they go when the
+	// snapshots that own them go. One batched write, not one per ref.
+	if len(captureRefs) > 0 {
+		_ = e.git.DeleteRefsBatch(ctx, captureRefs)
 	}
 
 	return nil

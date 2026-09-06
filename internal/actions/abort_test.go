@@ -31,6 +31,19 @@ func (h *testAbortHandler) Cleanup() {}
 
 func (h *testAbortHandler) IsInteractive() bool { return h.isInteractive }
 
+// bindContinuationToLatestSnapshot writes the continuation state a conflict
+// workflow leaves behind: one that names the snapshot the halted command took.
+// Abort restores that snapshot and no other.
+func bindContinuationToLatestSnapshot(t *testing.T, s *scenario.Scenario) {
+	t.Helper()
+	snapshots, err := s.Engine.GetSnapshots()
+	require.NoError(t, err)
+	require.NotEmpty(t, snapshots, "test needs a snapshot to bind to")
+	require.NoError(t, config.PersistContinuationState(s.Scene.Dir, &config.ContinuationState{
+		SnapshotID: snapshots[0].ID,
+	}))
+}
+
 func TestAbortAction(t *testing.T) {
 	t.Parallel()
 	t.Run("reports when no operation is in progress", func(t *testing.T) {
@@ -56,16 +69,22 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Take snapshot
-		err = s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err = s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "restack",
 			Args:    []string{"feature"},
 		})
 		require.NoError(t, err)
 
-		// Manually create continuation state
+		// The conflict workflow binds the rollback to the snapshot the halted
+		// command took.
+		bindContinuationToLatestSnapshot(t, s)
 		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
-		err = os.WriteFile(continuationPath, []byte("{}"), 0644)
+
+		// Move the branch on, so restoring it is observable.
+		s.Checkout("feature").Commit("work the halted command did")
+		movedSHA, err := s.Engine.GetBranch("feature").GetRevision()
 		require.NoError(t, err)
+		require.NotEqual(t, initialSHA, movedSHA)
 
 		// Run abort
 		err = abort.Action(s.Context, abort.Options{Force: true}, nil)
@@ -80,6 +99,37 @@ func TestAbortAction(t *testing.T) {
 		restoredSHA, err := s.Engine.GetBranch("feature").GetRevision()
 		require.NoError(t, err)
 		require.Equal(t, initialSHA, restoredSHA)
+	})
+
+	t.Run("does not restore a snapshot it did not record", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit().
+			CreateBranch("feature").
+			Commit("feature change").
+			TrackBranch("feature", "main")
+
+		// A snapshot from some earlier command, exactly what abort used to
+		// reach for when the halted command had recorded none of its own.
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "create"}))
+
+		s.Checkout("feature").Commit("work the halted command did")
+		haltedSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		require.NoError(t, err)
+
+		// Continuation state naming no snapshot: the halted command left no
+		// rollback point.
+		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
+		require.NoError(t, os.WriteFile(continuationPath, []byte("{}"), 0600))
+
+		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
+
+		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		require.NoError(t, err)
+		require.Equal(t, haltedSHA, afterSHA,
+			"abort must leave branches as the halted command left them when it recorded no rollback point")
+		require.Contains(t, s.Output.String(), "no rollback point")
 	})
 
 	t.Run("warns when linear mode restores a fork", func(t *testing.T) {
@@ -102,11 +152,10 @@ func TestAbortAction(t *testing.T) {
 		require.NoError(t, cfg.SetStackShape(config.StackShapeLinear))
 		s.Context.Config = cfg
 
-		require.NoError(t, s.Engine.TakeSnapshot(engine.SnapshotOptions{Command: "restack"}))
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "restack"}))
 		require.NoError(t, s.Engine.SetParent(s.Context, s.Engine.GetBranch("second"), s.Engine.GetBranch("main"), engine.DivergenceRecompute))
 
-		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
-		require.NoError(t, os.WriteFile(continuationPath, []byte("{}"), 0644))
+		bindContinuationToLatestSnapshot(t, s)
 
 		err = abort.Action(s.Context, abort.Options{Force: true}, nil)
 		require.NoError(t, err)
@@ -150,7 +199,7 @@ func TestAbortAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Take snapshot
-		err := s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "restack",
 			Args:    []string{"feature"},
 		})
@@ -213,7 +262,7 @@ func TestAbortAction(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Take snapshot
-		err := s.Engine.TakeSnapshot(engine.SnapshotOptions{
+		err := s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{
 			Command: "restack",
 			Args:    []string{"feature"},
 		})

@@ -117,6 +117,17 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 		}
 	}
 
+	// Snapshot once the deletion is settled — after the confirmation prompt, so
+	// declining leaves the undo stack untouched, and before the first mutation.
+	// Deleting reparents surviving children and restacks them, which can
+	// conflict, and abort needs a rollback point that belongs to this delete.
+	actions.TakeBestEffortSnapshot(ctx, actions.NewSnapshot("delete",
+		actions.WithArgs(toDeleteNames...),
+		actions.WithFlag(opts.Upstack, "--upstack"),
+		actions.WithFlag(opts.Downstack, "--downstack"),
+		actions.WithFlag(opts.Force, "--force"),
+	))
+
 	// Preserve divergence for survivors whose parent is being deleted as merged/empty.
 	// This mirrors clean-branches behavior and avoids replaying already-merged parent commits.
 	preReparentedChildren, err := preReparentChildrenWithPreservedDivergence(ctx, toDelete, statuses)

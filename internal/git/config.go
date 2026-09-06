@@ -5,7 +5,9 @@ package git
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,9 +31,10 @@ type ConfigStore struct {
 	// single `git config --get-regexp`. A command reads half a dozen of these
 	// (trunk, undo.depth, stack.shape, maxConcurrency, branch.pattern, ...)
 	// and each one used to cost its own git process.
-	mu          sync.Mutex
-	stackitKeys map[string]string
-	snapshotGen uint64
+	mu            sync.Mutex
+	stackitKeys   map[string]string
+	snapshotGen   uint64
+	snapshotStamp string
 }
 
 // configGen is bumped by every write through any ConfigStore, invalidating
@@ -46,6 +49,84 @@ func invalidateSnapshots(key string) {
 	if snapshotServes(key) {
 		configGen.Add(1)
 	}
+}
+
+// sharedSnapshot is one repository's stackit.* snapshot, reusable by every
+// ConfigStore pointing at that repository. Stores are constructed constantly —
+// one per config load, per action, per runner config accessor — and each fresh
+// one re-ran `git config --get-regexp`, so a single repository's config was
+// re-read thousands of times per command batch (2,364 git processes in one
+// integration-tier run). The map is never mutated after publication.
+type sharedSnapshot struct {
+	keys  map[string]string
+	gen   uint64
+	stamp string
+}
+
+// sharedSnapshots maps a repository root to its sharedSnapshot.
+var sharedSnapshots sync.Map
+
+// configFiles lists the config files that feed the stackit.* snapshot, in
+// git's own precedence order. The snapshot comes from `git config
+// --get-regexp` with no scope flag, so it merges global and local — stamping
+// only the local file would let a shared snapshot serve a stale global value
+// for the life of the process, which matters in the long-lived server where
+// a ConfigStore is built per call.
+//
+// System config (/etc/gitconfig) is deliberately not stamped: it is
+// root-owned and effectively static for a process's lifetime.
+func configFiles(repoRoot string) []string {
+	paths := []string{filepath.Join(GetGitCommonDir(repoRoot), "config")}
+
+	// GIT_CONFIG_GLOBAL replaces the default global paths rather than adding
+	// to them, so honor it to the exclusion of the rest. The test helpers
+	// set it to /dev/null, which stats cleanly and never changes.
+	if p := os.Getenv("GIT_CONFIG_GLOBAL"); p != "" {
+		return append(paths, p)
+	}
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		paths = append(paths, filepath.Join(xdg, "git", "config"))
+	} else if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".config", "git", "config"))
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".gitconfig"))
+	}
+	return paths
+}
+
+// configStamp identifies the config files feeding the snapshot by size and
+// modification time.
+//
+// configGen covers writes made through a ConfigStore, but these files are also
+// written out of band — `git config` invoked directly, a hook, the user's
+// editor, a test helper — and those must invalidate a snapshot shared beyond
+// the writing store. Returns "" when a file exists but cannot be stat'ed,
+// which disables sharing for that repository and leaves the per-store snapshot
+// as the only cache.
+func configStamp(repoRoot string) string {
+	if repoRoot == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	for _, path := range configFiles(repoRoot) {
+		fi, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Absent is itself a stampable state: the file contributes
+				// nothing now, and creating it later changes the stamp.
+				b.WriteString("-;")
+				continue
+			}
+			return ""
+		}
+		b.WriteString(strconv.FormatInt(fi.Size(), 10))
+		b.WriteByte(':')
+		b.WriteString(strconv.FormatInt(fi.ModTime().UnixNano(), 10))
+		b.WriteByte(';')
+	}
+	return b.String()
 }
 
 // NewConfigStore creates a new ConfigStore for the given repository root.
@@ -85,11 +166,22 @@ func normalizeConfigKey(key string) string {
 // with a single git process if it is missing or stale.
 func (c *ConfigStore) stackitSnapshot() (map[string]string, error) {
 	gen := configGen.Load()
+	stamp := configStamp(c.repoRoot)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.stackitKeys != nil && c.snapshotGen == gen {
+	if c.stackitKeys != nil && c.snapshotGen == gen && c.snapshotStamp == stamp {
 		return c.stackitKeys, nil
+	}
+	if stamp != "" {
+		if v, ok := sharedSnapshots.Load(c.repoRoot); ok {
+			if shared, ok := v.(sharedSnapshot); ok && shared.gen == gen && shared.stamp == stamp {
+				c.stackitKeys = shared.keys
+				c.snapshotGen = gen
+				c.snapshotStamp = stamp
+				return shared.keys, nil
+			}
+		}
 	}
 
 	// -z is what makes this parseable: it frames each entry as
@@ -119,6 +211,10 @@ func (c *ConfigStore) stackitSnapshot() (map[string]string, error) {
 
 	c.stackitKeys = keys
 	c.snapshotGen = gen
+	c.snapshotStamp = stamp
+	if stamp != "" {
+		sharedSnapshots.Store(c.repoRoot, sharedSnapshot{keys: keys, gen: gen, stamp: stamp})
+	}
 	return keys, nil
 }
 

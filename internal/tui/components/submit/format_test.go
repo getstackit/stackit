@@ -12,17 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDisplayBranchNameStripsStackitPrefix(t *testing.T) {
-	t.Parallel()
-
-	require.Equal(t,
-		"guard-runner.repoRoot-reads-with-repoMu-to-fix",
-		DisplayBranchName("jonnii/20260511011552/guard-runner.repoRoot-reads-with-repoMu-to-fix"))
-	require.Equal(t,
-		"refactor-unify-editor-command-launching",
-		DisplayBranchName("refactor-unify-editor-command-launching"))
-}
-
 func TestFormatCompactRowOmitsInlineURL(t *testing.T) {
 	t.Parallel()
 

@@ -7,35 +7,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"charm.land/lipgloss/v2"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 const defaultSubmitWidth = 80
-
-// DisplayBranchName returns a compact branch name for submit output.
-func DisplayBranchName(branchName string) string {
-	parts := strings.Split(branchName, "/")
-	if len(parts) >= 3 && isTimestampSegment(parts[1]) {
-		return strings.Join(parts[2:], "/")
-	}
-	return branchName
-}
-
-func isTimestampSegment(s string) bool {
-	if len(s) < 12 {
-		return false
-	}
-	for _, r := range s {
-		if !unicode.IsDigit(r) {
-			return false
-		}
-	}
-	return true
-}
 
 // TruncateMiddle shortens s to maxWidth display cells, preserving both ends.
 func TruncateMiddle(s string, maxWidth int) string {
@@ -101,7 +80,7 @@ func FormatCompactRow(item Item, width int, spinnerView string, styles Styles) s
 	icon, detail := rowParts(item, spinnerView, styles)
 	fixedWidth := lipgloss.Width("  "+icon+" ") + lipgloss.Width(detail) + 1
 	nameWidth := max(1, width-fixedWidth)
-	plainName := TruncateMiddle(DisplayBranchName(item.BranchName), nameWidth)
+	plainName := TruncateMiddle(style.DisplayBranchName(item.BranchName), nameWidth)
 	name := styles.BranchStyle.Render(plainName)
 
 	if detail == "" {
@@ -248,7 +227,7 @@ func hyperlink(url, text string) string {
 func FormatFinalList(items []Item) string {
 	rows := make([]string, 0, len(items))
 	for _, item := range items {
-		name := DisplayBranchName(item.BranchName)
+		name := style.DisplayBranchName(item.BranchName)
 		switch item.Status {
 		case StatusError:
 			rows = append(rows, fmt.Sprintf("✗ %s — %s", name, errorText(item.Error)))
@@ -419,7 +398,7 @@ func FormatFailureSummary(items []Item) string {
 		if item.Status != StatusError {
 			continue
 		}
-		rows = append(rows, fmt.Sprintf("✗ %s — %s", DisplayBranchName(item.BranchName), errorText(item.Error)))
+		rows = append(rows, fmt.Sprintf("✗ %s — %s", style.DisplayBranchName(item.BranchName), errorText(item.Error)))
 	}
 	if len(rows) == 0 {
 		return ""

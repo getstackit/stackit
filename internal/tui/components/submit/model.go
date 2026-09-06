@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/getstackit/stackit/internal/tui/core"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // Model is the bubbletea model for submit progress.
@@ -82,7 +83,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case WarningMsg:
-		m.Warnings = append(m.Warnings, fmt.Sprintf("⚠️  %s: %s", DisplayBranchName(msg.BranchName), msg.Warning))
+		m.Warnings = append(m.Warnings, fmt.Sprintf("⚠️  %s: %s", style.DisplayBranchName(msg.BranchName), msg.Warning))
 		return m, nil
 
 	case ProgressUpdateMsg:

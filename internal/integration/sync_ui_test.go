@@ -47,6 +47,6 @@ func TestSyncUIReporting(t *testing.T) {
 		require.Contains(t, output, "feature-c is frozen")
 
 		// Assert feature-a is restacked (or at least attempted)
-		require.Contains(t, output, "Restacked feature-a")
+		require.Contains(t, output, "Restacked 1 branch")
 	})
 }

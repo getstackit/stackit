@@ -77,10 +77,7 @@ func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks []merge.MultiSta
 		return nil
 	}
 
-	var allBranches []string
-	for _, stack := range stacks {
-		allBranches = append(allBranches, stack.AllBranches...)
-	}
+	allBranches := allStackBranches(stacks)
 	if len(allBranches) == 0 {
 		return nil
 	}
@@ -95,12 +92,25 @@ func (a *ViewAssembler) mapStackDetails(
 	stacks []merge.MultiStackInfo,
 	checksMap github.ChecksByBranch,
 ) []httpcontract.StackDetail {
+	// One batch pass over every branch in every stack, not one per stack —
+	// see httpcontract.BranchBatchData.
+	branches := httpcontract.BranchesFromNames(graph, allStackBranches(stacks))
+	data := httpcontract.FetchBranchBatchData(ctx, a.eng, branches)
+
 	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {
-		detail := httpcontract.MapStackDetail(ctx, a.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap)
+		detail := httpcontract.MapStackDetail(a.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap, data)
 		details = append(details, detail)
 	}
 	return details
+}
+
+func allStackBranches(stacks []merge.MultiStackInfo) []string {
+	var allBranches []string
+	for _, stack := range stacks {
+		allBranches = append(allBranches, stack.AllBranches...)
+	}
+	return allBranches
 }
 
 func (a *ViewAssembler) fetchRecentlyMerged(ctx context.Context) []httpcontract.TrunkCommitResponse {

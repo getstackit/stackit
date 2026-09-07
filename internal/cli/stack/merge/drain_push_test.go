@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	gogithub "github.com/google/go-github/v90/github"
+	gogithub "github.com/google/go-github/v91/github"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -59,13 +59,13 @@ func (f *drainFakeMergeAPI) mergePR(_ context.Context, branchName string, _ gith
 // since drain refuses a PR without one).
 func seedMockPR(cfg *testhelpers.MockGitHubServerConfig, branch, base string, number int) {
 	pr := &gogithub.PullRequest{
-		Number:  gogithub.Ptr(number),
-		NodeID:  gogithub.Ptr(fmt.Sprintf("PR_node%d", number)),
-		State:   gogithub.Ptr("open"),
-		Title:   gogithub.Ptr("PR for " + branch),
-		HTMLURL: gogithub.Ptr(fmt.Sprintf("https://github.com/owner/repo/pull/%d", number)),
-		Head:    &gogithub.PullRequestBranch{Ref: gogithub.Ptr(branch)},
-		Base:    &gogithub.PullRequestBranch{Ref: gogithub.Ptr(base)},
+		Number:  new(number),
+		NodeID:  new(fmt.Sprintf("PR_node%d", number)),
+		State:   new("open"),
+		Title:   new("PR for " + branch),
+		HTMLURL: new(fmt.Sprintf("https://github.com/owner/repo/pull/%d", number)),
+		Head:    &gogithub.PullRequestBranch{Ref: new(branch)},
+		Base:    &gogithub.PullRequestBranch{Ref: new(base)},
 	}
 	cfg.PRs[branch] = pr
 	cfg.UpdatedPRs[number] = pr

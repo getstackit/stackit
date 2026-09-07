@@ -46,6 +46,8 @@ func printAbsorbPreview(
 	// Resolve owning branches in one batched scan instead of one lookup per commit.
 	commitSHAs := sortedCommitSHAs(hunksByCommit)
 	commitBranches := eng.FindBranchesForCommits(commitSHAs)
+	// Fetch each owning branch's commit log once instead of once per commit.
+	branchCommits := eng.BatchCommits(branchesFor(eng, commitBranches), engine.CommitFormatReadable)
 	for _, commitSHA := range commitSHAs {
 		hunks := sortedHunks(hunksByCommit[commitSHA])
 		branchName := commitBranches[commitSHA]
@@ -54,7 +56,7 @@ func printAbsorbPreview(
 		}
 
 		splog.Info("  %s  %s", shortSHA(commitSHA), output.BranchName(branchName))
-		if subject := commitSubject(eng, branchName, commitSHA); subject != "" {
+		if subject := commitSubject(branchCommits[branchName], commitSHA); subject != "" {
 			splog.Info("    %s", subject)
 		}
 		for _, hunk := range hunks {
@@ -202,16 +204,24 @@ func shortSHA(commitSHA string) string {
 	return commitSHA[:8]
 }
 
-func commitSubject(eng engine.Engine, branchName, commitSHA string) string {
-	if branchName == unknown {
-		return ""
+// branchesFor returns the distinct, resolved owning branches from a
+// commit-SHA-to-branch-name map, suitable for a single BatchCommits call.
+func branchesFor(eng engine.Engine, commitBranches map[string]string) engine.Branches {
+	seen := make(map[string]bool, len(commitBranches))
+	branches := make(engine.Branches, 0, len(commitBranches))
+	for _, branchName := range commitBranches {
+		if branchName == "" || branchName == unknown || seen[branchName] {
+			continue
+		}
+		seen[branchName] = true
+		branches = append(branches, eng.GetBranch(branchName))
 	}
-	branch := eng.GetBranch(branchName)
-	commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
-	if err != nil {
-		return ""
-	}
+	return branches
+}
 
+// commitSubject finds the subject line for commitSHA within a branch's
+// already-fetched commit log.
+func commitSubject(commits []string, commitSHA string) string {
 	for _, commit := range commits {
 		fields := strings.Fields(commit)
 		if len(fields) == 0 {

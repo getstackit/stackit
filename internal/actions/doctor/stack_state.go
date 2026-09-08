@@ -32,23 +32,32 @@ func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, wa
 		branchSet[branch] = true
 	}
 
-	orphanedCount := 0
-	prunedCount := 0
+	var orphanedBranches []string
 	for branchName := range metadataRefs {
 		if !branchSet[branchName] {
-			orphanedCount++
-			if fix {
-				if err := eng.DeleteMetadataRef(ctx, branchName); err != nil {
-					warnings++
-					handler.OnCheck("orphaned_metadata", CheckWarning, fmt.Sprintf("orphaned metadata for '%s' (fix failed: %v)", branchName, err))
-				} else {
-					prunedCount++
-					handler.OnCheck("orphaned_metadata", CheckPassed, fmt.Sprintf("Pruned orphaned metadata for deleted branch %s", branchName))
-				}
-			} else {
-				warnings++
+			orphanedBranches = append(orphanedBranches, branchName)
+		}
+	}
+	orphanedCount := len(orphanedBranches)
+	prunedCount := 0
+
+	switch {
+	case orphanedCount == 0:
+		// Nothing orphaned; skip straight to the summary below.
+	case fix:
+		if err := eng.DeleteMetadataRefsBatch(ctx, orphanedBranches); err != nil {
+			warnings += orphanedCount
+			for _, branchName := range orphanedBranches {
+				handler.OnCheck("orphaned_metadata", CheckWarning, fmt.Sprintf("orphaned metadata for '%s' (fix failed: %v)", branchName, err))
+			}
+		} else {
+			prunedCount = orphanedCount
+			for _, branchName := range orphanedBranches {
+				handler.OnCheck("orphaned_metadata", CheckPassed, fmt.Sprintf("Pruned orphaned metadata for deleted branch %s", branchName))
 			}
 		}
+	default:
+		warnings += orphanedCount
 	}
 
 	if orphanedCount > 0 {

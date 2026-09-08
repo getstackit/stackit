@@ -43,7 +43,7 @@ func TestCheckStackStatePrunesOrphanedMetadataInOneBatch(t *testing.T) {
 	require.Equal(t, 0, errors)
 	require.Equal(t, 0, warnings)
 
-	var messages []string
+	messages := make([]string, 0, len(h.checks))
 	for _, c := range h.checks {
 		messages = append(messages, c.message)
 	}

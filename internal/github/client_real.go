@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v90/github"
+	"github.com/google/go-github/v91/github"
 )
 
 // StackitGitHubClient implements Client using the real GitHub API
@@ -142,8 +142,8 @@ func (c *StackitGitHubClient) ClosePullRequest(ctx context.Context, prNumber int
 
 // CreatePRComment creates a new comment on a pull request
 func (c *StackitGitHubClient) CreatePRComment(ctx context.Context, prNumber int, body string) (int64, error) {
-	comment, _, err := c.client.Issues.CreateComment(ctx, c.repo.Owner, c.repo.Name, prNumber, &github.IssueComment{
-		Body: new(body),
+	comment, _, err := c.client.Issues.CreateComment(ctx, c.repo.Owner, c.repo.Name, prNumber, github.IssueCommentRequest{
+		Body: body,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to create comment on PR #%d: %w", prNumber, err)
@@ -153,8 +153,8 @@ func (c *StackitGitHubClient) CreatePRComment(ctx context.Context, prNumber int,
 
 // UpdatePRComment updates an existing pull request comment
 func (c *StackitGitHubClient) UpdatePRComment(ctx context.Context, commentID int64, body string) error {
-	_, _, err := c.client.Issues.EditComment(ctx, c.repo.Owner, c.repo.Name, commentID, &github.IssueComment{
-		Body: new(body),
+	_, _, err := c.client.Issues.UpdateComment(ctx, c.repo.Owner, c.repo.Name, commentID, github.IssueCommentRequest{
+		Body: body,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update comment %d: %w", commentID, err)

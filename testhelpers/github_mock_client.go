@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/google/go-github/v90/github"
+	"github.com/google/go-github/v91/github"
 
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/utils"
@@ -283,8 +283,8 @@ func (c *MockGitHubClient) ClosePullRequest(ctx context.Context, prNumber int) e
 
 // CreatePRComment creates a new comment on a pull request
 func (c *MockGitHubClient) CreatePRComment(ctx context.Context, prNumber int, body string) (int64, error) {
-	comment, _, err := c.client.Issues.CreateComment(ctx, c.owner, c.repo, prNumber, &github.IssueComment{
-		Body: new(body),
+	comment, _, err := c.client.Issues.CreateComment(ctx, c.owner, c.repo, prNumber, github.IssueCommentRequest{
+		Body: body,
 	})
 	if err != nil {
 		return 0, err
@@ -294,8 +294,8 @@ func (c *MockGitHubClient) CreatePRComment(ctx context.Context, prNumber int, bo
 
 // UpdatePRComment updates an existing pull request comment
 func (c *MockGitHubClient) UpdatePRComment(ctx context.Context, commentID int64, body string) error {
-	_, _, err := c.client.Issues.EditComment(ctx, c.owner, c.repo, commentID, &github.IssueComment{
-		Body: new(body),
+	_, _, err := c.client.Issues.UpdateComment(ctx, c.owner, c.repo, commentID, github.IssueCommentRequest{
+		Body: body,
 	})
 	return err
 }

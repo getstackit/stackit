@@ -421,6 +421,10 @@ type MetadataInspector interface {
 	// the transactional rebuild performed by DeleteMetadata. Intended for
 	// pruning orphaned refs whose branches no longer exist.
 	DeleteMetadataRef(ctx context.Context, branchName string) error
+	// DeleteMetadataRefsBatch deletes many branches' metadata refs in a single
+	// atomic git call. Same use case as DeleteMetadataRef, batched for callers
+	// pruning more than one orphaned ref at a time.
+	DeleteMetadataRefsBatch(ctx context.Context, branchNames []string) error
 }
 
 // GitConfig provides access to git configuration values. Exposed so helpers

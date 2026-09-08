@@ -302,6 +302,17 @@ func (e *engineImpl) DeleteMetadataRef(ctx context.Context, branchName string) e
 	return e.git.DeleteMetadata(ctx, branchName)
 }
 
+// DeleteMetadataRefsBatch deletes many branches' metadata refs in a single
+// atomic git call. Same use case as DeleteMetadataRef, batched for callers
+// pruning more than one orphaned ref at a time.
+func (e *engineImpl) DeleteMetadataRefsBatch(ctx context.Context, branchNames []string) error {
+	refNames := make([]string, len(branchNames))
+	for i, branchName := range branchNames {
+		refNames[i] = git.MetadataRefPrefix + branchName
+	}
+	return e.git.DeleteRefsBatch(ctx, refNames)
+}
+
 // IsInsideRepo checks if the current directory is inside a git repository
 func (e *engineImpl) IsInsideRepo() bool {
 	return e.git.IsInsideRepo()

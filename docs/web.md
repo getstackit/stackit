@@ -98,12 +98,19 @@ layout.tsx
         │   │   └── ...
         │   ├── TrunkLine (divider)
         │   └── RecentlyMerged (trunk commit history)
-        └── RightPanel (400px fixed)
+        └── RightPanel (360px, 420px on wide screens)
             ├── BranchDetail / StackDetailPanel
             └── EventFeed
 ```
 
 ## Data Flow
+
+The dashboard toolbar searches stack titles, scopes, branch names, PR titles or
+numbers, and owners (including `#123` and `@owner`). Matching is case-insensitive;
+multiple words must all match within a stack. Results retain each complete stack
+and do not dismiss selected details. Clear the query with the search field's
+clear button or Escape. On mobile, the empty detail panel is hidden to leave
+more room for stacks; selecting a stack opens the panel below the board.
 
 1. **RepoProvider** calls `fetchView(repoRef)` on mount → GET `/api/v1/repos/{owner}/{repo}/view`
 2. Response contains: repo metadata, all stack details, recently merged commits
@@ -147,9 +154,10 @@ GitHub coordinates (no remote) and so can't be addressed in the path UI.
 
 The API base URL is configured via `NEXT_PUBLIC_API_URL`. Default is empty
 (same-origin) so the embedded production build, served by the Go binary,
-hits whatever host the page came from. Set it explicitly when running
-`next dev` on `:3000` against a Go server on a different port — e.g.
-`NEXT_PUBLIC_API_URL=http://localhost:8080` in `apps/web/.env.local`.
+hits whatever host the page came from. Next dev proxies `/api/*` and `/auth/*`
+to the Go server at `127.0.0.1:8080`, so remote browsers use the same origin
+as the dashboard. Set `NEXT_PUBLIC_API_URL` only to override that routing;
+`mise run dev` explicitly clears it.
 
 ### Type Contracts
 
@@ -216,18 +224,40 @@ mise run web:dev
 go run ./apps/server --port 8080
 ```
 
-`dev` and `dev:hosted` share `Procfile.dev`; they differ only in whether
-`STACKIT_DATABASE_URL` is set (the `dev` task clears it). When the server
+`dev` and `dev:hosted` share `Procfile.dev`. They pass an explicit
+`--database-url` through `STACKIT_DEV_DATABASE_URL`: empty for `dev`, or copied
+from `STACKIT_DATABASE_URL` for `dev:hosted`. This keeps local mode independent
+of environment variables reloaded by child shells. When the server
 reports `singleRepo` via `/api/v1/config`, the web client skips the picker
 and navigates straight to the sole repo.
 
-The web dev server runs at `http://localhost:3000` and proxies API requests to `http://localhost:8080`.
+The web dev server listens on port 3000 on all interfaces and proxies API
+requests to the Go server on loopback port 8080. It allows Next.js dev assets
+from the machine hostname and interface addresses. Add custom hostnames in
+`apps/web/.env.local` (gitignored), which Next.js loads automatically:
+
+```dotenv
+STACKIT_DEV_HOSTNAMES=workstation.internal,stackit.workstation.internal
+```
+
+Use comma-separated hostnames without schemes or ports. Restart `mise run dev`
+after changing this setting. Use this on a trusted development network: the proxy
+provides access to the local API, which is anonymous by default.
+
+To use `http://stackit.workstation.internal:3000`, point that hostname at the
+dev box's IP in your local DNS (an A record, or a CNAME to the box's hostname).
+Alternatively, add an entry to the hosts file on the machine running your
+browser, mapping the dev box's IP to your custom hostname. The name must resolve
+on the browser's machine, not just on the dev box. To omit `:3000`, configure
+a reverse proxy on port 80 for that hostname, forwarding to `127.0.0.1:3000`
+with WebSocket support for hot reload.
 
 ### Environment Variables
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | API server URL |
+| `NEXT_PUBLIC_API_URL` | Empty (same origin) | Optional API server URL override |
+| `STACKIT_DEV_HOSTNAMES` | Empty | Additional comma-separated hostnames allowed to load dev assets; set in `apps/web/.env.local` |
 
 ### Build & Deploy
 

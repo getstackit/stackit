@@ -2,8 +2,8 @@
 
 // Empty default = same-origin requests. The embedded production build is
 // served from the Go server itself, so relative URLs hit the right host
-// without baking it in at build time. Set NEXT_PUBLIC_API_URL when running
-// `next dev` against a separate Go server on another port.
+// without baking it in at build time. Next dev proxies these same relative
+// URLs to the local Go server. NEXT_PUBLIC_API_URL overrides that routing.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 // CSRF_HEADER must be sent on every non-safe request. The server doesn't

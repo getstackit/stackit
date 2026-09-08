@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Layers, RefreshCw } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
 import { formatTimeAgo } from "@/lib/time";
@@ -16,42 +17,41 @@ interface HeaderProps {
 
 export function Header({ repo, lastUpdated, refresh }: HeaderProps) {
   return (
-    <header className="relative flex items-center justify-between px-4 py-2 border-b shrink-0">
-      <div className="flex items-center gap-3">
-        <Link href="/" className="font-semibold text-sm hover:text-foreground/80 transition-colors">
+    <header className="relative z-10 flex min-h-14 shrink-0 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <Link href="/" className="flex shrink-0 items-center gap-2 rounded-md text-sm font-semibold tracking-tight transition-colors hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Layers aria-hidden="true" className="size-4" />
           stackit
         </Link>
         {repo && (
-          <span className="text-sm text-muted-foreground font-mono">
-            {repo.owner}/{repo.repo}
-          </span>
+          <>
+            <span aria-hidden="true" className="text-border">/</span>
+            <span className="truncate text-sm text-muted-foreground" title={`${repo.owner}/${repo.repo}`}>
+              <span className="hidden lg:inline">{repo.owner}/</span><span className="font-medium text-foreground">{repo.repo}</span>
+            </span>
+          </>
         )}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
         {lastUpdated && (
-          <span className="text-xs text-muted-foreground">
-            {formatTimeAgo(lastUpdated)}
+          <span className="hidden text-xs text-muted-foreground lg:inline">
+            Updated {formatTimeAgo(lastUpdated)}
           </span>
         )}
         <ThemeToggle />
         {refresh && (
           <button
+            type="button"
             onClick={refresh}
-            className="text-xs text-muted-foreground hover:text-foreground"
+            aria-label="Refresh repository"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title="Refresh"
           >
-            &#x21BB;
+            <RefreshCw aria-hidden="true" className="size-3.5" />
           </button>
         )}
         <UserMenu />
       </div>
-      {/* Animated gradient accent bar */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-0.5 animate-gradient-shift"
-        style={{
-          background: "linear-gradient(90deg, var(--gradient-start), var(--gradient-mid), var(--gradient-end), var(--gradient-start))",
-        }}
-      />
     </header>
   );
 }

@@ -1,9 +1,9 @@
 # Shared dev Procfile for both `mise run dev` and `mise run dev:hosted`. The two
-# tasks differ only by STACKIT_DATABASE_URL, set at the task level in mise.toml:
-#   - `dev`        clears it → single-repo mode (discovers the cwd git repo, no
+# tasks set STACKIT_DEV_DATABASE_URL at the task level in mise.toml:
+#   - `dev`        leaves it empty -> single-repo mode (discovers the cwd git repo, no
 #                  picker; the web UI opens that repo directly).
-#   - `dev:hosted` keeps the mise [env] value → DB-backed multi-tenant mode
+#   - `dev:hosted` copies STACKIT_DATABASE_URL -> DB-backed multi-tenant mode
 #                  (serves repos from the store, shows the picker; run
 #                  `mise run db:up` first).
-server: watchexec -r -e go -w apps/server -w internal -w api -- go run ./apps/server --port 8080
-web: NEXT_PUBLIC_API_URL=http://localhost:8080 pnpm --filter @stackit/web dev
+server: watchexec -r -e go -w apps/server -w internal -w api -- go run ./apps/server --port 8080 --database-url="${STACKIT_DEV_DATABASE_URL:-}"
+web: NEXT_PUBLIC_API_URL= pnpm --filter @stackit/web dev --hostname 0.0.0.0 --port 3000

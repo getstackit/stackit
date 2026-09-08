@@ -54,7 +54,7 @@ export function UserMenu() {
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-xs font-medium text-background">
           {initial}
         </span>
-        <span className="max-w-[14ch] truncate">{user.login}</span>
+        <span className="sr-only sm:not-sr-only sm:max-w-[14ch] sm:truncate">{user.login}</span>
       </button>
 
       {open && (

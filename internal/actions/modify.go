@@ -90,7 +90,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 
 	// Handle interactive rebase separately
 	if opts.InteractiveRebase {
-		return interactiveRebaseAction(ctx, opts)
+		return interactiveRebaseAction(ctx)
 	}
 
 	// Check if rebase is in progress (only for non-interactive mode)
@@ -277,7 +277,7 @@ func ensureModifyTargetNotCheckedOutElsewhere(ctx context.Context, eng engine.En
 }
 
 // interactiveRebaseAction performs an interactive rebase on the branch's commits
-func interactiveRebaseAction(ctx *app.Context, _ ModifyOptions) error {
+func interactiveRebaseAction(ctx *app.Context) error {
 	eng := ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context

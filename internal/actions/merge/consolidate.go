@@ -85,7 +85,7 @@ func (c *ConsolidateMergeExecutor) Execute(ctx context.Context, opts ExecuteOpti
 	splog.Info("✅ Created consolidation branch: %s", consolidationBranch)
 
 	// Lock individual PRs and update them with a notice
-	if err := c.lockAndNotifyIndividualPRs(ctx, consolidationBranch); err != nil {
+	if err := c.lockAndNotifyIndividualPRs(consolidationBranch); err != nil {
 		splog.Warn("Failed to lock and notify individual PRs: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func (c *ConsolidateMergeExecutor) Execute(ctx context.Context, opts ExecuteOpti
 			c.consolidationUser = userName
 		}
 
-		c.postMergeCleanup(ctx)
+		c.postMergeCleanup()
 
 		splog.Info("🎉 Stack consolidation merge completed successfully!")
 	} else {
@@ -264,7 +264,7 @@ func (c *ConsolidateMergeExecutor) waitForConsolidationMerge(ctx context.Context
 	return waiter.WaitAndMerge(ctx, branchName, pr, expectChecks, mergeOpts)
 }
 
-func (c *ConsolidateMergeExecutor) postMergeCleanup(_ context.Context) {
+func (c *ConsolidateMergeExecutor) postMergeCleanup() {
 	c.ctx.Output.Info("🧹 Updating individual PRs...")
 
 	c.updateIndividualPRs()
@@ -288,7 +288,7 @@ func (c *ConsolidateMergeExecutor) updateIndividualPRs() {
 	cleaner.LogResult(result)
 }
 
-func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(_ context.Context, consolidationBranch string) error {
+func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(consolidationBranch string) error {
 	splog := c.ctx.Output
 	splog.Info("🔒 Locking individual PRs and updating status...")
 

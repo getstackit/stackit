@@ -15,14 +15,14 @@ export function SwimlaneLabel({
 }: SwimlaneLabelProps) {
   return (
     <div
-      className={`flex items-center justify-center w-full rounded-b-xl ${compact ? "gap-1.5 px-2 py-0.5" : "gap-2 px-3 py-1"}`}
-      style={{ backgroundColor: color }}
+      className={`flex w-full items-center ${compact ? "gap-1.5 px-1 pb-1" : "gap-2 px-1 pb-3"}`}
     >
+      <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: color }} />
       <span className={`${compact ? "text-[11px]" : "text-xs"} font-semibold text-foreground/80`}>
         {label}
       </span>
       {lastActive && (
-        <span className={`${compact ? "text-[9px]" : "text-[10px]"} text-foreground/60`}>
+        <span className={`${compact ? "text-[10px]" : "text-xs"} text-muted-foreground`}>
           active {formatLastActive(lastActive)}
         </span>
       )}
@@ -44,7 +44,7 @@ function swimlaneHue(name: string): number {
  */
 export function swimlaneColor(name: string): string {
   const hue = swimlaneHue(name);
-  return `light-dark(hsl(${hue} 30% 95%), hsl(${hue} 20% 18%))`;
+  return `light-dark(hsl(${hue} 16% 95%), hsl(${hue} 10% 17%))`;
 }
 
 /** Saturated accent color for borders/highlights derived from the swimlane hue. */

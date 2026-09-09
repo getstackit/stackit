@@ -129,7 +129,7 @@ export function EventFeed() {
       {!collapsed && (
         <div className="max-h-[300px] overflow-auto">
           {events.length === 0 ? (
-            <p className="text-xs text-muted-foreground/60 py-4 text-center">
+            <p className="text-xs text-muted-foreground py-4 text-center">
               No recent activity
             </p>
           ) : (

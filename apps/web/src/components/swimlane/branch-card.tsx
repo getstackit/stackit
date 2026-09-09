@@ -28,8 +28,9 @@ export function BranchCard({
     <button
       onClick={() => onClick(branch)}
       className={`text-left bg-card transition-all duration-200
-        ${compact ? "px-2.5 py-1.5" : "px-3 py-2.5"}
-        ${isSelected ? "!bg-accent z-10 relative" : "hover:!bg-muted/80 hover:shadow-sm"}
+        outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring
+        ${compact ? "px-2.5 py-1.5" : "px-3.5 py-3.5"}
+        ${isSelected ? "!bg-accent z-10 relative ring-2 ring-inset ring-ring" : "hover:!bg-muted/80"}
         ${branch.isCurrent ? "border-l-[3px] border-l-[var(--glow-color-current)] bg-accent/30" : ""}
         ${branch.isLocked ? "opacity-60" : ""}
         ${className}
@@ -42,8 +43,8 @@ export function BranchCard({
       }}
     >
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-sm font-medium truncate" title={branch.name}>
-          {branch.commits?.at(-1)?.message || shortenBranchName(branch.name)}
+        <span className={`text-sm font-medium leading-snug ${compact ? "truncate" : "line-clamp-2 break-words"}`} title={branch.pr?.title || branch.commits?.at(-1)?.message || branch.name}>
+          {branch.pr?.title || branch.commits?.at(-1)?.message || shortenBranchName(branch.name)}
         </span>
         {branch.isLocked && (
           <Tooltip>
@@ -62,7 +63,7 @@ export function BranchCard({
         )}
       </div>
       {!compact && (
-        <div className="flex items-center gap-2 mt-1">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
           {branch.pr ? (
             <PRBadge pr={branch.pr} />
           ) : (

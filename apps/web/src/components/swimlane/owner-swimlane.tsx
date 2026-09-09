@@ -43,9 +43,10 @@ export function OwnerSwimlane({
 
   return (
     <div className="flex flex-col shrink-0">
+      <SwimlaneLabel label={label} lastActive={lastActive} color={accentColor} compact={compact} />
       <div
-        className={`flex items-end ${compact ? "gap-3 px-2 py-2" : "gap-4 px-3 pt-3"} rounded-t-xl border-t-2`}
-        style={{ backgroundColor: color, borderColor: accentColor }}
+        className={`flex items-end ${compact ? "gap-3 p-2" : "gap-4 p-3"} rounded-xl border`}
+        style={{ backgroundColor: color }}
       >
         <AnimatePresence mode="popLayout">
           {visibleStacks.map((stack) => (
@@ -90,8 +91,6 @@ export function OwnerSwimlane({
           </motion.button>
         )}
       </div>
-      <SwimlaneLabel label={label} lastActive={lastActive} color={color} compact={compact} />
     </div>
   );
 }
-

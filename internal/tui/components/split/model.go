@@ -145,8 +145,9 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle common messages first
 	if handled, cmd := m.HandleCommonMsg(msg); handled {
-		// Don't quit on ctrl+c/q, instead mark as canceled
-		if m.Done {
+		// HandleCommonMsg also reports "handled" for spinner ticks; only a
+		// ctrl+c/q keypress should be treated as a cancel.
+		if _, isKey := msg.(tea.KeyPressMsg); isKey {
 			m.state = StateCanceled
 			m.result.Canceled = true
 			return m, tea.Quit

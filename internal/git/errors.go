@@ -53,6 +53,7 @@ const (
 	gitLiteralPathspecs = "--literal-pathspecs"
 	gitCmdPush          = "push"
 	gitCmdDiff          = "diff"
+	gitCmdLog           = "log"
 	gitCmdStash         = "stash"
 	gitEditorTrue       = "GIT_EDITOR=true"
 )

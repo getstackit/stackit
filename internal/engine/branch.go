@@ -3,7 +3,6 @@ package engine
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -80,16 +79,6 @@ func (b Branch) IsBranchUpToDate() bool {
 // parent has moved and the branch is no longer based on the current parent tip.
 func (b Branch) NeedsRestack() bool {
 	return !b.IsBranchUpToDate()
-}
-
-// GetCommitDate returns the commit date for this branch
-func (b Branch) GetCommitDate() (time.Time, error) {
-	return b.reader.GetCommitDate(b)
-}
-
-// GetCommitAuthor returns the commit author for this branch
-func (b Branch) GetCommitAuthor() (string, error) {
-	return b.reader.GetCommitAuthor(b)
 }
 
 // GetRevision returns the SHA of this branch

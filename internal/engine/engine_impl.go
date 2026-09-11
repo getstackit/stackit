@@ -45,9 +45,9 @@ type engineImpl struct {
 	tempWorktreePrunedOnce bool
 
 	// Per-request caches for expensive git operations.
-	// Key: "base:head" (both are resolved SHAs); value type noted inline.
-	diffStatsCache   sync.Map // value: [2]int{added, deleted}
-	commitCountCache sync.Map // value: int
+	// Both caches use resolved SHAs so rewritten branches get fresh results.
+	diffStatsCache   sync.Map // key: git.RevRange; value: cachedDiffStat
+	commitCountCache sync.Map // key: "base:head"; value: int
 }
 
 // WorktreeSnapshot holds a deep copy of engine state for initializing worktree engines.

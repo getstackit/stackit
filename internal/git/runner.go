@@ -940,11 +940,6 @@ func (r *runner) GetReflog(ctx context.Context, count int, format string) (strin
 	return r.RunGitCommandWithContext(ctx, args...)
 }
 
-func (r *runner) GetDiffNumstat(rr RevRange) (string, error) {
-	base, head := rr.Base, rr.Head
-	return r.runGitCommandInternal(gitCmdDiff, "--numstat", base, head)
-}
-
 func (r *runner) GetCommitLog(sha, format string) (string, error) {
 	return r.runGitCommandInternal("log", "-1", "--format="+format, sha)
 }

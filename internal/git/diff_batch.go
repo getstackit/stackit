@@ -7,7 +7,7 @@ import (
 )
 
 // BatchDiffNumstat compares independent ranges with one diff-tree process.
-// It returns the same line-oriented numstat format as GetDiffNumstat. Callers
+// It returns Git's line-oriented numstat format. Callers
 // may fall back to individual reads on error; no partial results are returned.
 func (r *runner) BatchDiffNumstat(ctx context.Context, ranges []RevRange) (map[RevRange]string, error) {
 	result := make(map[RevRange]string, len(ranges))

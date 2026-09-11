@@ -55,7 +55,7 @@ func TestBatchDiffNumstatMatchesGitDiff(t *testing.T) {
 		require.Equal(t, before+1, logger.countDebugContaining("git diff-tree "), "one diff process for all ranges")
 		require.Len(t, got, 4)
 		for _, rr := range ranges {
-			want, err := r.GetDiffNumstat(rr)
+			want, err := r.RunGitCommandWithContext(ctx, "diff", "--numstat", rr.Base, rr.Head)
 			require.NoError(t, err)
 			require.Equal(t, want, got[rr], "%s with renames=%s", rr, setting)
 		}
@@ -102,7 +102,7 @@ func TestBatchDiffNumstatSubmoduleConfig(t *testing.T) {
 		require.NoError(t, r.SetConfig("diff.ignoreSubmodules", setting))
 		got, err := r.BatchDiffNumstat(ctx, []git.RevRange{rr})
 		require.NoError(t, err)
-		want, err := r.GetDiffNumstat(rr)
+		want, err := r.RunGitCommandWithContext(ctx, "diff", "--numstat", rr.Base, rr.Head)
 		require.NoError(t, err)
 		require.Equal(t, want, got[rr], "ignoreSubmodules=%s", setting)
 	}

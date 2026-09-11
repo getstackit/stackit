@@ -469,14 +469,10 @@ func (d *demoGitRunner) GetDiffBetween(_ context.Context, _ git.RevRange, _ ...s
 	return "", nil
 }
 
-func (d *demoGitRunner) GetDiffNumstat(_ git.RevRange) (string, error) {
-	return "1\t1\ttest.txt", nil
-}
-
 func (d *demoGitRunner) BatchDiffNumstat(_ context.Context, ranges []git.RevRange) (map[git.RevRange]string, error) {
 	result := make(map[git.RevRange]string, len(ranges))
 	for _, rr := range ranges {
-		result[rr], _ = d.GetDiffNumstat(rr)
+		result[rr] = "1\t1\ttest.txt"
 	}
 	return result, nil
 }

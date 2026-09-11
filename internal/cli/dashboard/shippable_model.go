@@ -395,6 +395,24 @@ func (m *shippableModel) rebuildCache() {
 	}
 
 	// Precompute titles, descriptions, and annotations for all stacks
+	//
+	// Branch stats and commits are batched once across every stack's branches
+	// (not per stack) to avoid N separate git subprocess round-trips for N
+	// shippable stacks. This runs on every refresh and on the auto-refresh
+	// timer, so the savings compound. The view renders with
+	// ShowCommitMessages, so resolve commit messages once via BatchCommits and
+	// skip the per-branch GetAllCommits inside GetBranchAnnotation.
+	allBranches := engine.Branches{}
+	for _, stack := range m.stacks {
+		for _, branchName := range stack.Stack.AllBranches {
+			if branch := m.engine.GetBranch(branchName); branch.GetName() != "" {
+				allBranches = allBranches.Append(branch)
+			}
+		}
+	}
+	stats := m.engine.BatchBranchStats(allBranches)
+	commits := m.engine.BatchCommits(allBranches, engine.CommitFormatReadable)
+
 	for _, stack := range m.stacks {
 		rootBranch := stack.RootBranch()
 
@@ -415,20 +433,11 @@ func (m *shippableModel) rebuildCache() {
 			}
 		}
 
-		// Compute annotations for all branches in the stack, reading their
-		// git-computed stats from batched value maps rather than per branch (this
-		// runs on every refresh and on the auto-refresh timer). The view renders
-		// with ShowCommitMessages, so resolve commit messages once via BatchCommits
-		// and skip the per-branch GetAllCommits inside GetBranchAnnotation.
-		stackBranches := engine.Branches{}
 		for _, branchName := range stack.Stack.AllBranches {
-			if branch := m.engine.GetBranch(branchName); branch.GetName() != "" {
-				stackBranches = stackBranches.Append(branch)
+			branch := m.engine.GetBranch(branchName)
+			if branch.GetName() == "" {
+				continue
 			}
-		}
-		stats := m.engine.BatchBranchStats(stackBranches)
-		commits := m.engine.BatchCommits(stackBranches, engine.CommitFormatReadable)
-		for _, branch := range stackBranches {
 			name := branch.GetName()
 			ann := tui.GetBranchAnnotation(m.engine, branch, stats[name], tui.AnnotationOptions{SkipCommitMessages: true})
 			if msgs := commits[name]; msgs != nil {

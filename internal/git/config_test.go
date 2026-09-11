@@ -256,6 +256,29 @@ func TestConfigStore_MultiValue(t *testing.T) {
 		require.Nil(t, vals)
 	})
 
+	for _, tt := range []struct {
+		name   string
+		values []string
+		want   []string
+	}{
+		{name: "single empty value returns nil", values: []string{""}},
+		{name: "preserves empty entries in a list", values: []string{"", "value", ""}, want: []string{"", "value", ""}},
+		{name: "preserves newline-only value", values: []string{"\n"}, want: []string{"\n"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+			store := git.NewConfigStore(scene.Dir)
+			for _, value := range tt.values {
+				require.NoError(t, store.Add("stackit.test.list", value))
+			}
+
+			vals, err := store.GetAll("stackit.test.list")
+			require.NoError(t, err)
+			require.Equal(t, tt.want, vals)
+		})
+	}
+
 	t.Run("round-trips a value containing newlines without splitting it", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)

@@ -263,7 +263,7 @@ func (c *ConfigStore) Get(key string) (string, error) {
 }
 
 // GetAll retrieves all values for a multi-value config key.
-// Returns empty slice if the key doesn't exist.
+// Returns nil if the key doesn't exist or has a single empty value.
 func (c *ConfigStore) GetAll(key string) ([]string, error) {
 	// -z NUL-terminates each value instead of newline-separating them, so a
 	// value containing an embedded newline (a multi-line approved hook
@@ -276,12 +276,12 @@ func (c *ConfigStore) GetAll(key string) ([]string, error) {
 		}
 		return nil, fmt.Errorf("failed to get config %s: %w", key, err)
 	}
-	if out == "" {
+	if out == "" || out == "\x00" {
 		return nil, nil
 	}
 	// -z terminates every value, leaving one trailing empty element after
 	// Split; drop it rather than filtering all empties, which would also
-	// discard a legitimate empty-string value.
+	// discard empty-string entries in a multi-value list.
 	values := strings.Split(out, "\x00")
 	return values[:len(values)-1], nil
 }

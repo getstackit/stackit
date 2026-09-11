@@ -9,6 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/pr"
 )
@@ -65,8 +66,9 @@ func GetReviewersWithPrompt(prompter handler.TextInputPrompter, reviewersFlag st
 	return reviewers, teamReviewers, nil
 }
 
-// PreparePRMetadata prepares PR metadata for a branch
-func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Context) (*PRMetadata, error) {
+// PreparePRMetadata prepares PR metadata for a branch. current holds PR content
+// prefetched in bulk; a PR missing from it (or a nil map) is fetched directly.
+func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Context, current map[git.PRNumber]github.PRContent) (*PRMetadata, error) {
 	prInfo, _ := branch.GetPrInfo()
 	nav := ctx.Navigator()
 
@@ -81,13 +83,20 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 
 	// If PR exists and local metadata is missing title or body, fetch from GitHub
 	if prInfo != nil && prInfo.Number() != nil && (metadata.Title == "" || metadata.Body == "") && ctx.GitHub() != nil {
-		currentPR, err := ctx.GitHub().GetPullRequest(ctx.Context, *prInfo.Number())
-		if err == nil && currentPR != nil {
+		content, ok := current[*prInfo.Number()]
+		if !ok {
+			currentPR, err := ctx.GitHub().GetPullRequest(ctx.Context, *prInfo.Number())
+			if err == nil && currentPR != nil {
+				content = github.PRContent{Title: currentPR.Title, Body: currentPR.Body}
+				ok = true
+			}
+		}
+		if ok {
 			if metadata.Title == "" {
-				metadata.Title = currentPR.Title
+				metadata.Title = content.Title
 			}
 			if metadata.Body == "" {
-				metadata.Body = currentPR.Body
+				metadata.Body = content.Body
 			}
 		}
 	}

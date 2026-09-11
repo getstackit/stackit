@@ -102,17 +102,28 @@ export function StackStatusFooter({
   );
 }
 
-/** Walk the branch tree root→leaf in depth-first order. */
-function orderBranches(branches: BranchResponse[]): BranchResponse[] {
+/**
+ * Walk the branch tree root→leaf in depth-first order. Siblings and roots keep
+ * the API's order; a branch whose parent is absent from the list is a root.
+ */
+export function orderBranches(branches: BranchResponse[]): BranchResponse[] {
   const byName = new Map(branches.map((b) => [b.name, b]));
   const roots = branches.filter((b) => !b.parent || !byName.has(b.parent));
+  const childrenOf = new Map<string, BranchResponse[]>();
+  for (const branch of branches) {
+    if (branch.parent) {
+      const children = childrenOf.get(branch.parent) ?? [];
+      children.push(branch);
+      childrenOf.set(branch.parent, children);
+    }
+  }
   const ordered: BranchResponse[] = [];
 
   function walk(name: string) {
     const branch = byName.get(name);
     if (!branch) return;
     ordered.push(branch);
-    const children = branches.filter((b) => b.parent === name);
+    const children = childrenOf.get(name) ?? [];
     for (const child of children) {
       walk(child.name);
     }

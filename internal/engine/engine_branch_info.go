@@ -4,22 +4,9 @@ import (
 	"context"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/getstackit/stackit/internal/git"
 )
-
-// GetCommitDate returns the commit date for a branch
-func (e *engineImpl) GetCommitDate(branch Branch) (time.Time, error) {
-	branchName := branch.GetName()
-	return e.git.GetCommitDate(branchName)
-}
-
-// GetCommitAuthor returns the commit author for a branch
-func (e *engineImpl) GetCommitAuthor(branch Branch) (string, error) {
-	branchName := branch.GetName()
-	return e.git.GetCommitAuthor(branchName)
-}
 
 // BatchCommitInfo returns each branch's tip commit date and author, keyed by
 // branch name, resolved in one batched pass.

@@ -106,7 +106,7 @@ func (r *runner) ShowDiff(ctx context.Context, left, right string, stat bool) (s
 
 func (r *runner) ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error) {
 	base, head := rr.Base, rr.Head
-	args := []string{"-c", "color.ui=always", "--no-pager", "log"}
+	args := []string{"-c", "color.ui=always", "--no-pager", gitCmdLog}
 	switch {
 	case patch && stat:
 		args = append(args, "--stat")

@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -106,7 +107,7 @@ func TestPerConcernBatchReaders(t *testing.T) {
 }
 
 // TestBatchCommitInfo asserts the batched commit info matches the per-branch
-// GetCommitDate/GetCommitAuthor accessors for every branch, including trunk.
+// date accessor and raw Git author for every branch, including trunk.
 func TestBatchCommitInfo(t *testing.T) {
 	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
@@ -120,11 +121,11 @@ func TestBatchCommitInfo(t *testing.T) {
 		got, ok := info[name]
 		require.True(t, ok, "missing commit info for %s", name)
 
-		wantDate, err := s.Engine.GetCommitDate(b)
+		wantDate, err := s.Engine.Git().RunGitCommandWithContext(context.Background(), "log", "-1", "--format=%aI", name)
 		require.NoError(t, err)
-		require.True(t, wantDate.Equal(got.Date), "CommitDate for %s", name)
+		require.Equal(t, wantDate, got.Date.Format(time.RFC3339), "CommitDate for %s", name)
 
-		wantAuthor, err := s.Engine.GetCommitAuthor(b)
+		wantAuthor, err := s.Engine.Git().RunGitCommandWithContext(context.Background(), "log", "-1", "--format=%an", name)
 		require.NoError(t, err)
 		require.Equal(t, wantAuthor, got.Author, "CommitAuthor for %s", name)
 	}

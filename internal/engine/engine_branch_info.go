@@ -87,44 +87,6 @@ func (e *engineImpl) commitCountBetween(rr git.RevRange) (int, error) {
 	return count, nil
 }
 
-// diffStatsBetween returns the additions/deletions between two revisions, using
-// the (base, head)-keyed cache. It takes pre-resolved revisions so batched
-// callers (the Batch* readers) need not re-resolve a branch's head.
-func (e *engineImpl) diffStatsBetween(rr git.RevRange) (int, int, error) {
-	base, head := rr.Base, rr.Head
-	if head == base {
-		return 0, 0, nil
-	}
-
-	cacheKey := base + ":" + head
-	if v, ok := e.diffStatsCache.Load(cacheKey); ok {
-		stats := v.([2]int)
-		return stats[0], stats[1], nil
-	}
-
-	output, err := e.git.GetDiffNumstat(rr)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	added, deleted := 0, 0
-	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) >= 2 {
-			a, _ := strconv.Atoi(fields[0])
-			d, _ := strconv.Atoi(fields[1])
-			added += a
-			deleted += d
-		}
-	}
-
-	e.diffStatsCache.Store(cacheKey, [2]int{added, deleted})
-	return added, deleted, nil
-}
-
 // GetRecentTrunkCommits returns the most recent commits on the trunk branch,
 // including any stack trailer metadata embedded in consolidation merge commits.
 func (e *engineImpl) GetRecentTrunkCommits(count int) ([]git.RecentCommit, error) {

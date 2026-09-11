@@ -21,6 +21,8 @@ trap 'rm -rf "$build_dir"' EXIT
 # A content-addressed path changes when the CLI changes, but stays stable on
 # unchanged runs so Go can reuse test results. Never replace a binary being
 # used by a concurrent suite running against a different revision.
+# Old revisions are retained until `mise run clean`; run it between test suites
+# to reclaim the cache without removing binaries that a suite is still using.
 binary_id="$(git hash-object "$build_dir/stackit")"
 binary_dir="$cache_root/$binary_id"
 mkdir -p "$binary_dir"

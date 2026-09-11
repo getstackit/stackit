@@ -295,16 +295,9 @@ func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (MetaMap, map[st
 	return e.git.BatchReadMetadata(branchNames)
 }
 
-// DeleteMetadataRef deletes a single branch's metadata ref directly, without
-// the transactional rebuild performed by DeleteMetadata. Intended for pruning
-// orphaned refs whose branches no longer exist.
-func (e *engineImpl) DeleteMetadataRef(ctx context.Context, branchName string) error {
-	return e.git.DeleteMetadata(ctx, branchName)
-}
-
 // DeleteMetadataRefsBatch deletes many branches' metadata refs in a single
-// atomic git call. Same use case as DeleteMetadataRef, batched for callers
-// pruning more than one orphaned ref at a time.
+// atomic git call, without the transactional rebuild performed by
+// DeleteMetadata. Intended for pruning refs whose branches no longer exist.
 func (e *engineImpl) DeleteMetadataRefsBatch(ctx context.Context, branchNames []string) error {
 	refNames := make([]string, len(branchNames))
 	for i, branchName := range branchNames {

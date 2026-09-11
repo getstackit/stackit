@@ -473,6 +473,14 @@ func (d *demoGitRunner) GetDiffNumstat(_ git.RevRange) (string, error) {
 	return "1\t1\ttest.txt", nil
 }
 
+func (d *demoGitRunner) BatchDiffNumstat(_ context.Context, ranges []git.RevRange) (map[git.RevRange]string, error) {
+	result := make(map[git.RevRange]string, len(ranges))
+	for _, rr := range ranges {
+		result[rr], _ = d.GetDiffNumstat(rr)
+	}
+	return result, nil
+}
+
 func (d *demoGitRunner) GetCommitLog(_, _ string) (string, error) {
 	return "demo commit", nil
 }

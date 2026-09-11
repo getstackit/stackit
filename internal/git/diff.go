@@ -54,7 +54,7 @@ func (r *runner) ShowDiff(ctx context.Context, rr RevRange, format DiffFormat) (
 
 func (r *runner) ShowCommits(ctx context.Context, rr RevRange, format CommitLogFormat) (string, error) {
 	base, head := rr.Base, rr.Head
-	args := []string{"-c", "color.ui=always", "--no-pager", "log"}
+	args := []string{"-c", "color.ui=always", "--no-pager", gitCmdLog}
 	switch format {
 	case CommitLogStat:
 		args = append(args, "--stat")

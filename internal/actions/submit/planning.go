@@ -1,13 +1,13 @@
 package submit
 
 import (
-	"github.com/getstackit/stackit/internal/git"
-
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // prepareBranchesForSubmit prepares submission info for each branch, emitting
@@ -46,6 +46,24 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		return nil, err
 	}
 
+	// Fetch missing content only for branches that will actually be prepared.
+	// Batch misses (including a failed query) retain the single-PR fallback.
+	missingContent := make([]string, 0, len(branches))
+	for _, branch := range branches {
+		status := statuses[branch.GetName()]
+		if _, skip := submissionSkipReason(status, opts); skip {
+			continue
+		}
+		info, _ := branch.GetPrInfo()
+		if info != nil && info.Number() != nil && (info.Title() == "" || info.Body() == "") {
+			missingContent = append(missingContent, branch.GetName())
+		}
+	}
+	var current map[int]github.PRContent
+	if len(missingContent) > 0 && ctx.GitHub() != nil {
+		current = actions.FetchPRContentForBranches(ctx, missingContent)
+	}
+
 	for _, branch := range branches {
 		branchName := branch.GetName()
 		status := statuses[branchName]
@@ -63,43 +81,16 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 
 		isCurrent := branchName == currentBranch
 
-		// Check if we should skip
-		if opts.UpdateOnly && action == engine.SubmitActionCreate {
+		if reason, skip := submissionSkipReason(status, opts); skip {
 			handler.OnEvent(BranchPlanEvent{
 				BranchName: branchName,
 				Action:     action,
+				PRNumber:   prNumber,
 				IsCurrent:  isCurrent,
 				Skipped:    true,
-				SkipReason: "no existing PR",
+				SkipReason: reason,
 			})
 			continue
-		}
-
-		needsUpdate := status.NeedsUpdate
-		if action == engine.SubmitActionUpdate {
-			// Check if draft status needs to change
-			draftStatusNeedsChange := false
-			if prInfo != nil {
-				if opts.Draft && !prInfo.IsDraft() {
-					draftStatusNeedsChange = true
-				} else if opts.Publish && prInfo.IsDraft() {
-					draftStatusNeedsChange = true
-				}
-			}
-
-			needsUpdate = needsUpdate || opts.Edit || opts.Always || draftStatusNeedsChange
-
-			if !needsUpdate && !opts.Draft && !opts.Publish {
-				handler.OnEvent(BranchPlanEvent{
-					BranchName: branchName,
-					Action:     action,
-					PRNumber:   prNumber,
-					IsCurrent:  isCurrent,
-					Skipped:    true,
-					SkipReason: status.Reason,
-				})
-				continue
-			}
 		}
 
 		// Prepare metadata
@@ -121,7 +112,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 			ConfigAssignees: opts.ConfigAssignees,
 		}
 
-		metadata, err := PreparePRMetadata(branch, metadataOpts, ctx)
+		metadata, err := preparePRMetadataWithContent(branch, metadataOpts, ctx, current)
 		if err != nil {
 			return nil, fmt.Errorf("failed to prepare metadata for %s: %w", branchName, err)
 		}
@@ -165,6 +156,22 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	}
 
 	return submissionInfos, nil
+}
+
+// submissionSkipReason is shared by metadata prefetch and plan emission so
+// skipped branches never cause extra network reads.
+func submissionSkipReason(status engine.PRSubmissionStatus, opts Options) (string, bool) {
+	action := status.Action
+	if info := status.PRInfo; info != nil && (info.State() == git.PRStateClosed || info.State() == git.PRStateMerged) {
+		action = engine.SubmitActionCreate
+	}
+	if opts.UpdateOnly && action == engine.SubmitActionCreate {
+		return "no existing PR", true
+	}
+	if action == engine.SubmitActionUpdate && !status.NeedsUpdate && !opts.Edit && !opts.Always && !opts.Draft && !opts.Publish {
+		return status.Reason, true
+	}
+	return "", false
 }
 
 // confirmPrompt describes what --confirm is about to do in concrete terms.

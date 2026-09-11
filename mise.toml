@@ -165,13 +165,17 @@ description = "Run integration tests only with compact, actionable output"
 run = "scripts/check-quiet.sh test integration"
 
 [tasks.clean]
-description = "Clean built binaries, shims, and test artifacts"
+description = "Clean built binaries, shims, test artifacts, and cached test binaries"
 run = """
+  go_cache="$(go env GOCACHE)"
+  if [ -n "$go_cache" ] && [ "$go_cache" != "off" ]; then
+    rm -rf "$go_cache/stackit-test-binaries"
+  fi
   rm -f coverage.out coverage.html
   rm -rf bin/
   rm -f ./stackit ./st
   find . -type d -name "stackit-test-*" -exec rm -rf {} + 2>/dev/null || true
-  echo "Cleaned: binaries (bin/), shims (./stackit, ./st), and test artifacts"
+  echo "Cleaned: binaries (bin/), shims (./stackit, ./st), test artifacts, and cached test binaries"
 """
 
 [tasks.check]

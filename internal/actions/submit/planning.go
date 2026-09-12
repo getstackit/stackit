@@ -61,7 +61,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		}
 	}
 	var current map[git.PRNumber]github.PRContent
-	if len(missingContent) > 0 && ctx.GitHub() != nil {
+	if !opts.Regenerate && len(missingContent) > 0 && ctx.GitHub() != nil {
 		current = actions.FetchPRContentForBranches(ctx, missingContent)
 	}
 
@@ -86,6 +86,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 
 		// Prepare metadata
 		metadataOpts := MetadataOptions{
+			Regenerate:        opts.Regenerate,
 			Edit:              opts.Edit && !opts.NoEdit,
 			EditTitle:         opts.EditTitle && !opts.NoEditTitle,
 			EditDescription:   opts.EditDescription && !opts.NoEditDescription,
@@ -125,13 +126,20 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 			Metadata:   metadata,
 		}
 
+		var regenerated *PRContentPreview
+		// Show replacement text wherever the user reviews the plan before
+		// anything is written: a dry run, or the --confirm prompt.
+		if opts.Regenerate && (opts.DryRun || opts.Confirm) {
+			regenerated = &PRContentPreview{Title: metadata.Title, Body: metadata.Body}
+		}
 		handler.OnEvent(BranchPlanEvent{
-			BranchName: branchName,
-			Action:     action,
-			PRNumber:   prNumber,
-			IsCurrent:  isCurrent,
-			Empty:      empty[branchName],
-			Skipped:    false,
+			Regenerated: regenerated,
+			BranchName:  branchName,
+			Action:      action,
+			PRNumber:    prNumber,
+			IsCurrent:   isCurrent,
+			Empty:       empty[branchName],
+			Skipped:     false,
 		})
 
 		submissionInfos = append(submissionInfos, submissionInfo)
@@ -140,7 +148,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	// Persist all prepared PR info in one batched write so a later submit
 	// failure can recover the titles/bodies. Non-fatal, like the per-branch
 	// write it replaces.
-	if len(prUpdates) > 0 {
+	if !opts.DryRun && len(prUpdates) > 0 {
 		if err := ctx.Engine.BatchUpsertPrInfo(ctx.Context, prUpdates); err != nil {
 			ctx.Output.Debug("Failed to save PR metadata: %v", err)
 		}
@@ -164,7 +172,7 @@ func submissionSkipReason(status engine.PRSubmissionStatus, action engine.Submit
 	if opts.UpdateOnly && action == engine.SubmitActionCreate {
 		return "no existing PR", true
 	}
-	if action == engine.SubmitActionUpdate && !status.NeedsUpdate && !opts.Edit && !opts.Always && !opts.Draft && !opts.Publish {
+	if action == engine.SubmitActionUpdate && !status.NeedsUpdate && !opts.Edit && !opts.Always && !opts.Regenerate && !opts.Draft && !opts.Publish {
 		return status.Reason, true
 	}
 	return "", false

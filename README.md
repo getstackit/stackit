@@ -349,6 +349,13 @@ If you receive feedback on a branch in the middle of your stack:
 3. Run `stackit restack --upstack` to update child branches (or `--all-stacks` to cover every independent stack).
 4. Run `stackit submit` to update the PRs on GitHub.
 
+### Regenerating PR Text
+Existing PR titles and descriptions are preserved on resubmit. After rewording
+commits or regrouping branches, `stackit submit --regenerate` replaces them with
+text generated from the current commits — even for branches with nothing new to
+push. In a terminal it shows the replacement and asks first; preview without
+writing anything using `stackit submit --regenerate --dry-run`.
+
 ### Using `stackit absorb`
 `absorb` is like magic for stacked PRs. If you have small fixes for multiple branches in your stack, just stage them all and run `stackit absorb`. Stackit will figure out which changes belong to which branch and amend them automatically.
 
@@ -546,6 +553,8 @@ Every reconciled Stack appears in `github_stacks`, and every skipped one in
 `github_stack_skips`. The older scalar fields `github_stack` and
 `github_stack_skipped` are populated **only when there is exactly one** — with
 two or more they are omitted entirely, so scripts should read the arrays.
+With `--regenerate --dry-run`, each entry in `branches` also carries
+`regenerated: {title, body}`, the replacement text that would be written.
 
 Two smaller shapes changed alongside the worktree work. `stackit tree --json`
 has always omitted worktree anchors from its entries, but `parent` could still

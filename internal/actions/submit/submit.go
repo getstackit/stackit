@@ -29,6 +29,7 @@ type Options struct {
 	Confirm              bool
 	UpdateOnly           bool
 	Always               bool
+	Regenerate           bool // Replace PR titles/bodies with current commit-derived defaults
 	Restack              bool
 	Draft                bool
 	Publish              bool
@@ -472,6 +473,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// apply each footer/title update in parallel.
 	if opts.SubmitFooter {
 		prContent := actions.FetchPRContentForBranches(ctx, branches)
+		if opts.Regenerate {
+			overlaySentContent(prContent, submissionInfos)
+		}
 		utils.Run(branches, func(name string) {
 			handler.OnEvent(BranchProgressEvent{
 				BranchName: name,
@@ -932,8 +936,9 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		RerequestReview: opts.RerequestReview,
 	}
 
-	// Only update body if it's not empty. GitHub will preserve the existing body if omitted.
-	if submissionInfo.Metadata.Body != "" {
+	// An explicitly regenerated empty body clears old text; ordinary submits
+	// preserve the existing body when there is no replacement.
+	if submissionInfo.Metadata.Body != "" || opts.Regenerate {
 		updateOpts.Body = &submissionInfo.Metadata.Body
 	}
 
@@ -1141,4 +1146,17 @@ func isRaceConditionError(err error) bool {
 			strings.Contains(errStr, "fetch first") ||
 			strings.Contains(errStr, "needs force") ||
 			strings.Contains(errStr, "updates were rejected"))
+}
+
+// overlaySentContent replaces fetched PR content with the text this submit just
+// wrote. The footer pass rebuilds each body from what it reads; if GitHub
+// serves a read from before the regenerated update, that pass would otherwise
+// write the old description back with a fresh footer.
+func overlaySentContent(current map[git.PRNumber]github.PRContent, infos []Info) {
+	for _, info := range infos {
+		if info.Action != engine.SubmitActionUpdate || info.PRNumber == nil || info.Metadata == nil {
+			continue
+		}
+		current[*info.PRNumber] = github.PRContent{Title: info.Metadata.Title, Body: info.Metadata.Body}
+	}
 }

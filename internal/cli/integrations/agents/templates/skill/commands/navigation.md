@@ -33,6 +33,8 @@ Commands for moving through your stack and viewing stack state.
 
 ## Quick Tips
 
-- Always run `stackit tree --no-interactive` first to understand your position
+- Use `stackit tree short --stack --no-interactive` for relationships; use
+  `info` for detailed branch data and `state --json` for working-tree/conflict state.
+  Do not gather every view when one answers the question.
 - Use `stackit checkout <branch> --no-interactive` to switch to a specific branch
 - `stackit tree full --no-interactive` shows PR status - useful before submitting

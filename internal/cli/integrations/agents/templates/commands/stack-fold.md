@@ -6,64 +6,46 @@ allowed-tools: Bash(stackit:*), Bash(git:*), Read, AskUserQuestion, Skill
 
 # Stack Fold
 
-Fold (squash) granular branches into their parent branches.
+Combine related branches into one reviewable PR. Folding preserves commits;
+`stackit squash` is optional when the user also wants one commit. Prefer grouping
+by behavior and dependencies rather than treating every small diff as a fixup.
 
-## Context
-- Current branch: !`git branch --show-current`
-- Stack info (branches, parents, commit messages, diff stats): !`stackit info --stack --json --no-interactive`
+## Workflow
 
-## Instructions
+1. Use `stackit tree short --stack --no-interactive` for relationships. Use
+   `stackit info --stack --json --no-interactive` when commit messages, scopes,
+   or diff statistics are needed. Use `stackit state --json` when checking the
+   working tree or an interrupted operation; filter its output to relevant branches.
+2. Identify the branch to fold and its parent. Both must be modifiable in this
+   worktree, unlocked, unfrozen, and in the same scope. Never fold into trunk
+   unless explicitly requested (`--allow-trunk`).
+3. Branches **may have children**: fold reparents them and restacks the affected
+   descendants automatically. There is no leaf-only restriction.
+4. Explain the proposed grouping. If the user already authorized that grouping,
+   proceed; otherwise obtain approval before changing it. Do not ask again for
+   an action already authorized in the conversation.
+5. Check out the child and preview the operation, using separate commands:
 
-1. Analyze the stack info JSON to identify fold candidates:
-   - Small branches (few commits, small diffs)
-   - Minor fix messages ("fix typo", "address review", "tweak")
-   - Must not be locked or frozen
-   - Parent must not be locked or frozen
-   - Must match parent's scope
-2. Propose a fold plan to user with reasoning
-3. Run `stackit fold --dry-run --no-interactive` to preview
-4. Use `AskUserQuestion` to confirm fold plan:
-   - Header: "Fold plan"
-   - Question: "Ready to fold these branches into their parents?"
-   - Options:
-     - "Execute" - Proceed with folding
-     - "Show details" - Show what will be squashed
-     - "Cancel" - Abort fold
-5. Before each fold, verify:
-   - Branch has no children (fold leaf branches first)
-   - Parent still not locked/frozen
-6. Execute as two separate commands (don't chain with `&&` — keeps permission rules stable):
    ```bash
-   stackit checkout <branch> --no-interactive
+   stackit checkout <branch-to-fold> --no-interactive
+   stackit fold --dry-run --no-interactive
+   ```
+
+6. Apply the fold:
+
+   ```bash
    stackit fold --no-interactive
    ```
-7. `stackit fold` automatically restacks descendants. Only restack manually if it reports remaining work: `stackit restack --branch <parent-branch> --upstack --no-interactive`
-8. Show final stack state
 
-## Tool Trust
+   The parent branch name survives by default. `--keep` instead retains the
+   child's name and removes the parent. If `.git` is read-only in the sandbox,
+   request escalation on the first mutating command.
+7. Check the result. Do not run another restack unless fold reports unfinished
+   work. If it stops on a conflict, resolve it through the reported recovery
+   path before continuing other operations.
+8. Use `stackit tree short --stack --no-interactive` to verify relationships.
+   Continue with submission if already authorized. Fold does not close the
+   removed branch's PR; account for that cleanup when updating the remote stack.
 
-Trust all tools work without error. Don't run exploratory commands to verify tool behavior.
-
-## Do NOT
-- Fold into trunk unless user explicitly requests it
-- Fold locked or frozen branches
-- Fold across different scopes
-- Fold branches that have children (fold children first)
-
-## Follow-up
-
-After successful fold, use `AskUserQuestion`:
-- Header: "Next step"
-- Question: "Branches folded successfully. What would you like to do next?"
-- Options:
-  - label: "Restack branches (Recommended)"
-    description: "Rebase affected descendants to ensure consistency after fold"
-  - label: "Submit changes"
-    description: "Push folded changes to update PRs"
-  - label: "Done for now"
-    description: "No follow-up action needed"
-
-Based on response:
-- **"Restack branches"**: Invoke `/stack-restack` skill using the `Skill` tool and pass the folded parent branch as the target
-- **"Submit changes"**: Invoke `/stack-submit` skill using the `Skill` tool
-- **"Done for now"**: End with summary of what was folded
+A combined PR can contain multiple commits. Do not squash merely because a
+branch was folded, and do not offer a redundant restack as the next step.

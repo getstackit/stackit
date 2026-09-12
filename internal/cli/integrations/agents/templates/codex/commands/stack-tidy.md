@@ -43,7 +43,7 @@ When a `jq` snippet is shown, use it only if `jq` is available. If not, run `sta
    of noise commits. Expand commit lists only when asking about a branch that
    needs manual review.
 
-7. Wait for explicit user approval before any squash. If the user asks to review one branch at a time, confirm each before squashing.
+7. Obtain approval for the proposed squashes unless already authorized in this conversation. If the user asks to review one branch at a time, confirm each before squashing.
 
 8. Execute bottom-up (closest to trunk first). For each squash branch:
 
@@ -72,6 +72,6 @@ When a `jq` snippet is shown, use it only if `jq` is available. If not, run `sta
 
 - Squash a branch the user has not approved.
 - Squash branches with only one commit.
-- Process top-down — children before parents corrupts ancestry.
+- Restack separately after every squash; squash already restacks descendants.
 - Modify branches flagged for manual review.
 - Use `git rebase -i`; use `stackit squash`.

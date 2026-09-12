@@ -1,7 +1,11 @@
 package sync
 
 import (
+	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
@@ -133,7 +137,7 @@ func TestModel_Update_PhaseDetailMsg(t *testing.T) {
 	})
 	m = newModel.(*Model)
 
-	assert.Equal(t, "main fast-forwarded to abc1234", m.CurrentDetail)
+	assert.Empty(t, m.CurrentDetail)
 	assert.NotNil(t, cmd, "should return print command")
 	assert.True(t, m.headers.Committed(PhaseTrunk), "first detail should commit the phase header")
 }
@@ -151,7 +155,7 @@ func TestModel_Update_PhaseDetailMsg_WithWarn(t *testing.T) {
 	})
 	m := newModel.(*Model)
 
-	assert.Equal(t, "branch diverged", m.CurrentDetail)
+	assert.Empty(t, m.CurrentDetail)
 	assert.NotNil(t, cmd, "should return print command")
 }
 
@@ -169,7 +173,7 @@ func TestModel_Update_ProgressTickMsg(t *testing.T) {
 
 	assert.Equal(t, 5, m.CompletedOps)
 	assert.Equal(t, 10, m.TotalOps)
-	assert.NotNil(t, cmd, "should return progress update command")
+	assert.Nil(t, cmd)
 }
 
 func TestModel_Update_CompleteMsg(t *testing.T) {
@@ -223,8 +227,7 @@ func TestModel_Update_WindowSizeMsg(t *testing.T) {
 
 	assert.Equal(t, 100, m.Width)
 	assert.Equal(t, 50, m.Height)
-	// Progress width should be capped at 60
-	assert.Equal(t, 60, m.Progress.Width())
+	assert.LessOrEqual(t, lipgloss.Width(m.View().Content), 100)
 }
 
 func TestModel_Update_WindowSizeMsg_NarrowTerminal(t *testing.T) {
@@ -237,8 +240,7 @@ func TestModel_Update_WindowSizeMsg_NarrowTerminal(t *testing.T) {
 
 	assert.Equal(t, 50, m.Width)
 	assert.Equal(t, 30, m.Height)
-	// Progress width should be 40 (50 - 10)
-	assert.Equal(t, 40, m.Progress.Width())
+	assert.LessOrEqual(t, lipgloss.Width(m.View().Content), 50)
 }
 
 func TestModel_View_InProgress(t *testing.T) {
@@ -329,7 +331,7 @@ func TestModel_GetStatusText(t *testing.T) {
 	}{
 		{"trunk", PhaseTrunk, "Pulling from remote..."},
 		{"branches", PhaseBranches, "Syncing branches..."},
-		{"github", PhaseGitHub, "Fetching PR info..."},
+		{"github", PhaseGitHub, "Fetching remote branches and PR status..."},
 		{"clean", PhaseClean, "Cleaning branches..."},
 		{"restack", PhaseRestack, "Restacking branches..."},
 		{"unknown", Phase(""), "Syncing..."},
@@ -344,4 +346,19 @@ func TestModel_GetStatusText(t *testing.T) {
 			assert.Equal(t, tt.expected, text)
 		})
 	}
+}
+
+func TestLiveActivityFitsTerminal(t *testing.T) {
+	for _, width := range []int{1, 20, 40, 80, 120} {
+		m := NewModel(0)
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		_, cmd := m.Update(PhaseDetailMsg{Phase: PhaseGitHub, Mark: MarkInProgress, Message: "Checking PR for " + strings.Repeat("branch", 30)})
+		require.Nil(t, cmd, "in-flight activity must not print to scrollback")
+		require.LessOrEqual(t, lipgloss.Width(m.View().Content), width)
+		require.NotContains(t, m.View().Content, "0/0")
+	}
+	m := NewModel(0)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Update(PhaseStartMsg{Phase: PhaseGitHub})
+	require.Contains(t, ansi.Strip(m.View().Content), "Fetching remote branches and PR status...")
 }

@@ -24,7 +24,7 @@ import (
 // Caller must defer runner.Cleanup() to restore terminal on exit.
 func NewSyncUI(out output.Output, logger output.Logger) (*tui.Runner, syncAction.Handler) {
 	if tui.IsTTY() {
-		model := syncComponent.NewModel(0) // Start with 0, will be updated in Start()
+		model := syncComponent.NewModel()
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()
 		return runner, NewInteractiveSyncHandler(runner, model, out, logger)
@@ -41,9 +41,7 @@ func NewSyncUI(out output.Output, logger output.Logger) (*tui.Runner, syncAction
 // internal/tui/style, so they align in one column and match the interactive TUI.
 type SimpleSyncHandler struct {
 	common.BaseHandler
-	totalOps  int
-	currentOp int
-	headers   *utils.LazyHeaders[syncAction.Phase]
+	headers *utils.LazyHeaders[syncAction.Phase]
 
 	// restack-only state: standalone restack suppresses already-current rows
 	// and reports them as a count in the summary instead.
@@ -59,13 +57,8 @@ func NewSimpleSyncHandler(out output.Output) *SimpleSyncHandler {
 	}
 }
 
-// Start is called at the beginning of sync
-func (h *SimpleSyncHandler) Start(totalOps int) {
-	h.Lock()
-	defer h.Unlock()
-	h.totalOps = totalOps
-	h.currentOp = 0
-}
+// Start implements Handler. The streaming handler keeps no per-run state.
+func (h *SimpleSyncHandler) Start() {}
 
 // EmitEvent handles progress updates
 func (h *SimpleSyncHandler) EmitEvent(event syncAction.Event) {
@@ -80,7 +73,9 @@ func (h *SimpleSyncHandler) EmitEvent(event syncAction.Event) {
 		return
 	}
 
-	h.currentOp++
+	if isRoutineSyncEvent(event) {
+		return
+	}
 	h.printEventLine(event)
 }
 
@@ -214,8 +209,6 @@ func (h *SimpleSyncHandler) printTrunkEvent(event syncAction.Event) {
 				style.MarkSuccess(),
 				style.ColorBranchName(event.Branch),
 				style.ColorDim(event.NewRevision))
-		default:
-			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch))
 		}
 	}
 }
@@ -228,8 +221,6 @@ func (h *SimpleSyncHandler) printBranchSyncEvent(event syncAction.Event) {
 				style.MarkSuccess(),
 				style.ColorBranchName(event.Branch),
 				style.ColorDim(event.NewRevision))
-		} else {
-			h.item(event.Phase, "  %s %s is up to date", style.MarkSuccess(), style.ColorBranchName(event.Branch))
 		}
 	case syncAction.EventSkipped:
 		if event.Conflict {
@@ -243,8 +234,8 @@ func (h *SimpleSyncHandler) printBranchSyncEvent(event syncAction.Event) {
 func (h *SimpleSyncHandler) printGitHubEvent(event syncAction.Event) {
 	switch event.Type {
 	case syncAction.EventProgress:
-		if event.Branch != "" {
-			h.item(event.Phase, "  %s Updating PR for %s", style.MarkProgress(), style.ColorBranchName(event.Branch))
+		if event.Message != "" {
+			h.item(event.Phase, "  %s %s", style.MarkProgress(), event.Message)
 		}
 	case syncAction.EventCompleted:
 		if event.Message != "" {
@@ -409,6 +400,29 @@ func isPlainUpToDate(event handlers.RestackBranchEvent) bool {
 		!event.Reparented
 }
 
+// isRoutineSyncEvent reports whether a sync event only confirms the expected
+// default — trunk, a synced branch, or a restacked branch that was already
+// current — so both sync handlers hide its row; the final summary still says
+// "Everything is up to date!" when nothing moved. Holds, locks, freezes,
+// conflicts, divergence, and anything that moved a ref always show, because
+// those are the rows that tell the user something happened or needs action.
+func isRoutineSyncEvent(event syncAction.Event) bool {
+	if event.Type != syncAction.EventCompleted || event.NewRevision != "" || event.HeldBy != "" {
+		return false
+	}
+	switch event.Phase {
+	case syncAction.PhaseTrunk, syncAction.PhaseBranches:
+		return true
+	case syncAction.PhaseRestack:
+		return event.Branch != "" && isPlainUpToDate(handlers.RestackBranchEvent{
+			Result:     syncAction.RestackUnneeded,
+			LockReason: event.LockReason,
+			Frozen:     event.Frozen,
+		})
+	}
+	return false
+}
+
 // InteractiveSyncHandler provides bubbletea TUI for TTY environments
 type InteractiveSyncHandler struct {
 	runner       tui.Sender
@@ -435,20 +449,13 @@ func NewInteractiveSyncHandler(runner tui.Sender, model *syncComponent.Model, ou
 	}
 }
 
-// Start is called at the beginning of sync
-func (h *InteractiveSyncHandler) Start(totalOps int) {
-	h.logger.Debug("InteractiveSyncHandler.Start entering totalOps=%v", totalOps)
-
+// Start implements Handler. Sync has no reliable up-front item count, so the
+// live line shows activity and elapsed time rather than a k/N counter.
+func (h *InteractiveSyncHandler) Start() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-
-	h.totalOps = totalOps
+	h.totalOps = 0
 	h.completedOps = 0
-
-	// Update model with total ops
-	h.runner.Send(syncComponent.ProgressTickMsg{Completed: 0, Total: totalOps})
-
-	h.logger.Debug("InteractiveSyncHandler.Start completed")
 }
 
 // phaseMessages maps phases to their display messages
@@ -487,18 +494,14 @@ func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 			Mark:    mark,
 		})
 	}
-
-	// Update progress
-	h.completedOps++
-	h.runner.Send(syncComponent.ProgressTickMsg{
-		Completed: h.completedOps,
-		Total:     h.totalOps,
-	})
 }
 
 // formatEventDetail formats an event into a detail string and the status mark
 // that should lead its row in the TUI.
 func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (detail string, mark syncComponent.DetailMark) {
+	if isRoutineSyncEvent(event) {
+		return "", syncComponent.MarkDone
+	}
 	switch event.Phase {
 	case syncAction.PhaseTrunk:
 		if event.Type == syncAction.EventCompleted {
@@ -508,7 +511,6 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			case event.NewRevision != "":
 				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), syncComponent.MarkDone
 			}
-			return fmt.Sprintf("%s is up to date", event.Branch), syncComponent.MarkDone
 		}
 	case syncAction.PhaseBranches:
 		switch event.Type {
@@ -516,7 +518,6 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			if event.NewRevision != "" {
 				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), syncComponent.MarkDone
 			}
-			return fmt.Sprintf("%s is up to date", event.Branch), syncComponent.MarkDone
 		case syncAction.EventSkipped:
 			if event.Conflict {
 				return fmt.Sprintf("%s diverged from remote (skipping)", event.Branch), syncComponent.MarkWarn
@@ -525,8 +526,8 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 	case syncAction.PhaseGitHub:
 		switch event.Type {
 		case syncAction.EventProgress:
-			if event.Branch != "" {
-				return fmt.Sprintf("Updating PR for %s", event.Branch), syncComponent.MarkInProgress
+			if event.Message != "" {
+				return event.Message, syncComponent.MarkInProgress
 			}
 		case syncAction.EventCompleted:
 			if event.Message != "" {
@@ -565,15 +566,10 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 				msg += fmt.Sprintf(" → %s", event.NewRevision)
 				return msg, syncComponent.MarkDone
 			}
-			reason := common.ReasonNoRestackNeeded
+			// Plain up-to-date rows were filtered by isRoutineSyncEvent above.
+			reason := common.ReasonFrozen
 			if event.IsLocked() {
 				reason = fmt.Sprintf("%s: %s", common.ReasonLocked, event.LockReason)
-			} else if event.Frozen {
-				reason = common.ReasonFrozen
-			}
-
-			if reason == common.ReasonNoRestackNeeded {
-				return fmt.Sprintf("%s%s up to date", displayName, prInfo), syncComponent.MarkDone
 			}
 			return fmt.Sprintf("%s%s %s", displayName, prInfo, reason), syncComponent.MarkDone
 		case syncAction.EventSkipped:
@@ -648,7 +644,7 @@ func (h *InteractiveSyncHandler) OnRestackBranch(restack handlers.RestackBranchE
 	defer h.mu.Unlock()
 
 	// Already-current branches are the expected default; skip their rows but
-	// still advance the progress bar and count them for the summary.
+	// still advance the k/N counter and count them for the summary.
 	if isPlainUpToDate(restack) {
 		h.restackUpToDate++
 		h.completedOps++

@@ -108,8 +108,8 @@ func branchDiverged(branch string) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventSkipped, Branch: branch, Conflict: true})
 }
 
-func githubUpdatingPR(branch string) step {
-	return emit(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Branch: branch})
+func githubProgress(msg string) step {
+	return emit(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Message: msg})
 }
 
 func githubMessage(msg string) step {
@@ -309,8 +309,9 @@ func syncGoldenCases() []syncGoldenCase {
 				phaseStarted(syncAction.PhaseTrunk),
 				trunkFF("a1b2c3d"),
 				phaseStarted(syncAction.PhaseGitHub),
-				githubUpdatingPR("feat-api"),
-				githubMessage("Updated 1 PR description"),
+				githubMessage("Updated PR info for 1 branches"),
+				githubProgress("Updating PR metadata for 1 branch..."),
+				githubMessage("Updated PR metadata for 1 branch"),
 			},
 			summary: syncAction.Summary{TrunkUpdated: true},
 		},
@@ -351,7 +352,7 @@ func playSyncScenario(c syncGoldenCase) string {
 	buf := &bytes.Buffer{}
 	h := newTranscriptSyncHandler(output.NewConsoleOutput(buf, false))
 
-	h.Start(0)
+	h.Start()
 	for _, s := range c.steps {
 		s(h)
 	}

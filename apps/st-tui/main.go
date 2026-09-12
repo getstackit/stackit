@@ -64,6 +64,9 @@ func runSubmitScenario(out output.Output, name string, delay time.Duration) {
 	if runner != nil {
 		defer runner.Cleanup()
 	}
+	if interactive, ok := handler.(*stack.InteractiveSubmitHandler); ok {
+		defer interactive.Cleanup()
+	}
 	scenario.Replay(handler, delay)
 }
 

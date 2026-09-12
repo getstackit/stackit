@@ -3,6 +3,8 @@ package stack
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -591,6 +593,8 @@ type InteractiveSubmitHandler struct {
 	inSubmitPhase    bool
 	githubStacks     []submit.GitHubStackSyncedEvent
 	githubStackSkips []string
+	preparingMu      sync.Mutex
+	preparingTimer   *time.Timer
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
@@ -614,15 +618,28 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		// No output for completion
 
 	case submit.PreparingEvent:
-		// Quiet - the plan lines follow immediately
+		if ev.Completed {
+			h.Cleanup()
+		} else {
+			h.startPreparationNotice(500 * time.Millisecond)
+		}
+
+	case submit.PushEvent:
+		message := ""
+		if !ev.Completed {
+			message = fmt.Sprintf("Pushing %d %s...", ev.BranchCount, pluralizeBranches(ev.BranchCount))
+		}
+		h.runner.Send(submitComponent.ActivityMsg{Message: message})
 
 	case submit.BranchPlanEvent:
 		h.plan.AddLine(ev)
 
 	case submit.PlanningCompleteEvent:
+		h.Cleanup()
 		h.plan.Flush()
 
 	case submit.SubmissionStartEvent:
+		h.Cleanup()
 		h.plan.Flush()
 		h.inSubmitPhase = true
 
@@ -683,6 +700,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		h.out.Warn("Skipped native GitHub Stack sync: %s", ev.Reason)
 
 	case submit.CompletionEvent:
+		h.Cleanup()
 		h.plan.Flush()
 		// If the submission phase never started (nothing to submit, dry run,
 		// canceled), the TUI isn't running — print the outcome plainly.
@@ -704,6 +722,35 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		})
 		h.runner.Wait()
 		h.printNativeStackEvents()
+	}
+}
+
+// startPreparationNotice leaves quick no-op submissions silent. Preparation
+// uses regular output so validation warnings remain visible before the TUI starts.
+func (h *InteractiveSubmitHandler) startPreparationNotice(delay time.Duration) {
+	h.preparingMu.Lock()
+	defer h.preparingMu.Unlock()
+	if h.preparingTimer != nil {
+		h.preparingTimer.Stop()
+	}
+	h.preparingTimer = time.AfterFunc(delay, func() {
+		h.preparingMu.Lock()
+		defer h.preparingMu.Unlock()
+		if h.preparingTimer != nil {
+			h.out.Info("Checking remote branches and PR status...")
+			h.preparingTimer = nil
+		}
+	})
+}
+
+// Cleanup cancels preparation feedback on every exit, including validation errors.
+// The lock also waits for a notice already being printed before the TUI starts.
+func (h *InteractiveSubmitHandler) Cleanup() {
+	h.preparingMu.Lock()
+	defer h.preparingMu.Unlock()
+	if h.preparingTimer != nil {
+		h.preparingTimer.Stop()
+		h.preparingTimer = nil
 	}
 }
 
@@ -739,6 +786,7 @@ func githubStackActionLabel(action github.StackSyncAction) string {
 
 // Confirm prompts for user confirmation
 func (h *InteractiveSubmitHandler) Confirm(message string, defaultYes bool) (bool, error) {
+	h.Cleanup()
 	h.runner.Pause()
 	confirmed, err := tui.PromptConfirm(message, defaultYes)
 	h.runner.Resume()

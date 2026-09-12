@@ -171,8 +171,8 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		if f.verbose || f.dryRun || (f.regenerate && opts.Confirm) {
 			verbosity = SubmitVerbose
 		}
-		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger, verbosity)
-		defer runner.Cleanup()
+		handler, stop := NewSubmitUI(ctx.Output, ctx.Logger, verbosity)
+		defer stop()
 		return submit.Action(ctx, opts, handler)
 	})
 }

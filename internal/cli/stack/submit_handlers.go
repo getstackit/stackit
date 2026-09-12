@@ -3,6 +3,8 @@ package stack
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -42,10 +44,11 @@ const (
 // skipReasonNoChanges is the SkipReason emitted for an up-to-date branch.
 const skipReasonNoChanges = "no changes"
 
-// NewSubmitUI creates a runner and handler pair for submit operations.
-// The runner manages terminal state; the handler processes events.
-// Caller must defer runner.Cleanup() to restore terminal on exit.
-func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbosity) (*tui.Runner, submit.Handler) {
+// NewSubmitUI creates the handler for submit operations and the stop function
+// that releases everything it holds: the pending preparation notice and the
+// terminal runner. Caller must defer stop() so every exit path, including
+// validation errors, cancels the notice and restores the terminal.
+func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbosity) (submit.Handler, func()) {
 	if tui.IsTTY() {
 		model := submitComponent.NewModel(nil)
 		model.Verbose = verbosity.verbose()
@@ -54,10 +57,18 @@ func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbos
 		// stack and plan print as plain lines, so a submit that turns out to
 		// have nothing to do never flashes the bubbletea startup/teardown
 		// sequence. See InteractiveSubmitHandler.OnEvent.
-		return runner, NewInteractiveSubmitHandler(runner, model, out, verbosity)
+		handler := NewInteractiveSubmitHandler(runner, model, out, verbosity)
+		return handler, func() {
+			handler.StopPreparationNotice()
+			runner.Cleanup()
+		}
 	}
-	return nil, NewSimpleSubmitHandler(out, verbosity)
+	return NewSimpleSubmitHandler(out, verbosity), func() {}
 }
+
+// preparationNoticeDelay keeps quick submits silent: the "checking remote"
+// notice only prints when preparation outlasts it.
+const preparationNoticeDelay = 500 * time.Millisecond
 
 // maxNamedSkipGroup is the largest skipped-branch group that still lists its
 // branch names when there is active work; bigger groups show only the count.
@@ -388,6 +399,12 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 	case submit.PreparingEvent:
 		// Skip - we'll show progress during actual submission
 
+	case submit.PushEvent:
+		// The batched push is often the slowest step; give CI logs a line.
+		if !ev.Completed {
+			h.Output.Info("Pushing %d %s...", ev.BranchCount, pluralizeBranches(ev.BranchCount))
+		}
+
 	case submit.BranchPlanEvent:
 		h.plan.AddLine(ev)
 
@@ -595,20 +612,42 @@ func (h *SimpleSubmitHandler) Confirm(_ string, defaultYes bool) (bool, error) {
 	return defaultYes, nil
 }
 
+// submitRunner is the slice of *tui.Runner the interactive handler drives;
+// tests substitute a tui.MockRunner.
+type submitRunner interface {
+	tui.Sender
+	Start()
+	IsRunning() bool
+}
+
 // InteractiveSubmitHandler implements submit.Handler with bubbletea for animated progress
 type InteractiveSubmitHandler struct {
-	runner           *tui.Runner
+	runner           submitRunner
+	promptConfirm    func(message string, defaultYes bool) (bool, error)
 	model            *submitComponent.Model
 	out              output.Output
 	plan             planPrinter
 	inSubmitPhase    bool
 	githubStacks     []submit.GitHubStackSyncedEvent
 	githubStackSkips []string
+	preparingMu      sync.Mutex
+	preparingTimer   *time.Timer
+	preparingDelay   time.Duration
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
-func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output, verbosity SubmitVerbosity) *InteractiveSubmitHandler {
-	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out, verbose: verbosity.verbose()}}
+func NewInteractiveSubmitHandler(runner submitRunner, model *submitComponent.Model, out output.Output, verbosity SubmitVerbosity) *InteractiveSubmitHandler {
+	return &InteractiveSubmitHandler{
+		runner: runner,
+		// Late-bound so a stubbed tui.PromptConfirm still takes effect.
+		promptConfirm: func(message string, defaultYes bool) (bool, error) {
+			return tui.PromptConfirm(message, defaultYes)
+		},
+		model:          model,
+		out:            out,
+		plan:           planPrinter{out: out, verbose: verbosity.verbose()},
+		preparingDelay: preparationNoticeDelay,
+	}
 }
 
 // OnEvent handles events from the submit action
@@ -627,7 +666,18 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		// No output for completion
 
 	case submit.PreparingEvent:
-		// Quiet - the plan lines follow immediately
+		if ev.Completed {
+			h.StopPreparationNotice()
+		} else {
+			h.startPreparationNotice()
+		}
+
+	case submit.PushEvent:
+		message := ""
+		if !ev.Completed {
+			message = fmt.Sprintf("Pushing %d %s...", ev.BranchCount, pluralizeBranches(ev.BranchCount))
+		}
+		h.runner.Send(submitComponent.ActivityMsg{Message: message})
 
 	case submit.BranchPlanEvent:
 		h.plan.AddLine(ev)
@@ -696,6 +746,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		h.out.Warn("Skipped native GitHub Stack sync: %s", ev.Reason)
 
 	case submit.CompletionEvent:
+		h.StopPreparationNotice()
 		h.plan.Flush()
 		// If the submission phase never started (nothing to submit, dry run,
 		// canceled), the TUI isn't running — print the outcome plainly.
@@ -717,6 +768,42 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		})
 		h.runner.Wait()
 		h.printNativeStackEvents()
+	}
+}
+
+// startPreparationNotice leaves quick no-op submissions silent. Preparation
+// uses regular output so validation warnings remain visible before the TUI starts.
+func (h *InteractiveSubmitHandler) startPreparationNotice() {
+	h.preparingMu.Lock()
+	defer h.preparingMu.Unlock()
+	if h.preparingTimer != nil {
+		h.preparingTimer.Stop()
+	}
+	var timer *time.Timer
+	timer = time.AfterFunc(h.preparingDelay, func() {
+		h.preparingMu.Lock()
+		defer h.preparingMu.Unlock()
+		// A stopped or replaced timer can still fire once Stop loses the race;
+		// only the timer that is still current may print.
+		if h.preparingTimer != timer {
+			return
+		}
+		h.out.Info("Checking remote branches and PR status...")
+		h.preparingTimer = nil
+	})
+	h.preparingTimer = timer
+}
+
+// StopPreparationNotice cancels a pending preparation notice. It runs when
+// preparation ends, before any prompt, and from NewSubmitUI's stop function on
+// every exit. The lock also waits out a notice already being printed, so
+// nothing prints over a prompt or the TUI.
+func (h *InteractiveSubmitHandler) StopPreparationNotice() {
+	h.preparingMu.Lock()
+	defer h.preparingMu.Unlock()
+	if h.preparingTimer != nil {
+		h.preparingTimer.Stop()
+		h.preparingTimer = nil
 	}
 }
 
@@ -752,8 +839,9 @@ func githubStackActionLabel(action github.StackSyncAction) string {
 
 // Confirm prompts for user confirmation
 func (h *InteractiveSubmitHandler) Confirm(message string, defaultYes bool) (bool, error) {
+	h.StopPreparationNotice()
 	h.runner.Pause()
-	confirmed, err := tui.PromptConfirm(message, defaultYes)
+	confirmed, err := h.promptConfirm(message, defaultYes)
 	h.runner.Resume()
 	return confirmed, err
 }

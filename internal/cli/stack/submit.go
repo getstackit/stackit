@@ -168,6 +168,9 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		}
 		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger, verbosity)
 		defer runner.Cleanup()
+		if interactive, ok := handler.(*InteractiveSubmitHandler); ok {
+			defer interactive.Cleanup()
+		}
 		return submit.Action(ctx, opts, handler)
 	})
 }

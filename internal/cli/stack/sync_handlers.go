@@ -473,11 +473,11 @@ func (h *InteractiveSyncHandler) Start(totalOps int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.totalOps = totalOps
+	h.totalOps = 0
 	h.completedOps = 0
 
 	// Update model with total ops
-	h.runner.Send(syncComponent.ProgressTickMsg{Completed: 0, Total: totalOps})
+	h.runner.Send(syncComponent.ProgressTickMsg{Completed: 0, Total: 0})
 
 	h.logger.Debug("InteractiveSyncHandler.Start completed")
 }
@@ -525,13 +525,6 @@ func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 			Mark:    mark,
 		})
 	}
-
-	// Update progress
-	h.completedOps++
-	h.runner.Send(syncComponent.ProgressTickMsg{
-		Completed: h.completedOps,
-		Total:     h.totalOps,
-	})
 }
 
 // formatEventDetail formats an event into a detail string and the status mark
@@ -554,7 +547,7 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			if event.NewRevision != "" {
 				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), syncComponent.MarkDone
 			}
-			return fmt.Sprintf("%s is up to date", event.Branch), syncComponent.MarkDone
+			return "", syncComponent.MarkDone
 		case syncAction.EventSkipped:
 			if event.Conflict {
 				return fmt.Sprintf("%s diverged from remote (skipping)", event.Branch), syncComponent.MarkWarn
@@ -611,7 +604,7 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			}
 
 			if reason == common.ReasonNoRestackNeeded {
-				return fmt.Sprintf("%s%s up to date", displayName, prInfo), syncComponent.MarkDone
+				return "", syncComponent.MarkDone
 			}
 			return fmt.Sprintf("%s%s %s", displayName, prInfo, reason), syncComponent.MarkDone
 		case syncAction.EventSkipped:

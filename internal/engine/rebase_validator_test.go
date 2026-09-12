@@ -52,7 +52,17 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		events := make(chan engine.RebaseProgress, 2)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, func(event engine.RebaseProgress) {
+			events <- event
+		})
+		require.Len(t, events, 2)
+		started, finished := <-events, <-events
+		require.Equal(t, "branch1", started.Branch)
+		require.Equal(t, mainRev, started.Parent)
+		require.False(t, started.Finished)
+		require.Equal(t, started.Branch, finished.Branch)
+		require.True(t, finished.Finished)
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		require.Empty(t, result.FailedBranch)

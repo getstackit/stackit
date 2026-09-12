@@ -37,6 +37,20 @@ type RestackHandler interface {
 	OnRestackComplete(summary RestackSummary)
 }
 
+// RestackActivityHandler optionally receives live rebase validation activity.
+// Result-only handlers (including JSON) need not implement it.
+type RestackActivityHandler interface {
+	OnRestackActivity(engine.RebaseProgress)
+}
+
+// RestackActivity returns an optional callback without changing result events.
+func RestackActivity(handler RestackHandler) engine.RebaseProgressFunc {
+	if h, ok := handler.(RestackActivityHandler); ok {
+		return h.OnRestackActivity
+	}
+	return nil
+}
+
 // RestackBranchEvent describes the outcome of restacking one branch.
 // Keeping these facts together makes the shared presentation contract safe to
 // extend without relying on positional arguments.

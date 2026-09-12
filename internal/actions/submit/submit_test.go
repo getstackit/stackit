@@ -1153,3 +1153,73 @@ func TestSubmitRetargetsBaseWhenStackKeepsMergedPullRequest(t *testing.T) {
 	require.Equal(t, mockConfig.MergedStackPRs, mockConfig.CreatedStacks[0],
 		"only the merged pull request should remain stacked")
 }
+
+// eventRecorder records every submit event in order.
+type eventRecorder struct {
+	events []submit.Event
+}
+
+func (h *eventRecorder) OnEvent(e submit.Event)                          { h.events = append(h.events, e) }
+func (h *eventRecorder) Confirm(_ string, defaultYes bool) (bool, error) { return defaultYes, nil }
+func (h *eventRecorder) IsInteractive() bool                             { return false }
+
+func (h *eventRecorder) pushEvents() []submit.PushEvent {
+	var pushes []submit.PushEvent
+	for _, e := range h.events {
+		if ev, ok := e.(submit.PushEvent); ok {
+			pushes = append(pushes, ev)
+		}
+	}
+	return pushes
+}
+
+// indexOf returns the position of the first event matching match, or -1.
+func (h *eventRecorder) indexOf(match func(submit.Event) bool) int {
+	for i, e := range h.events {
+		if match(e) {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestSubmitReportsBatchedPush(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"P": "main", "C1": "P"})
+	s.Checkout("P")
+	_, err := s.Scene.Repo.CreateBareRemote("origin")
+	require.NoError(t, err)
+
+	config := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
+
+	first := &eventRecorder{}
+	require.NoError(t, submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true}, first))
+	require.Equal(t, []submit.PushEvent{{BranchCount: 2}, {BranchCount: 2, Completed: true}}, first.pushEvents())
+
+	// Preparation ends before the first plan line: planning can prompt for PR
+	// metadata, and the "checking remote" notice must be stopped by then.
+	prepared := first.indexOf(func(e submit.Event) bool {
+		ev, ok := e.(submit.PreparingEvent)
+		return ok && ev.Completed
+	})
+	firstPlan := first.indexOf(func(e submit.Event) bool {
+		_, ok := e.(submit.BranchPlanEvent)
+		return ok
+	})
+	require.NotEqual(t, -1, prepared)
+	require.NotEqual(t, -1, firstPlan)
+	require.Less(t, prepared, firstPlan)
+
+	// Forcing updates of PRs whose branches already match the remote submits
+	// every branch but has nothing to push.
+	second := &eventRecorder{}
+	require.NoError(t, submit.Action(s.Context, submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true, Always: true}, second))
+	require.NotEqual(t, -1, second.indexOf(func(e submit.Event) bool {
+		ev, ok := e.(submit.SubmissionStartEvent)
+		return ok && len(ev.Branches) == 2
+	}), "both PRs should still be updated")
+	require.Empty(t, second.pushEvents())
+}

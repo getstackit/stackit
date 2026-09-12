@@ -183,6 +183,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 // worktree. That full-stack deletion is delete's intentional cleanup workflow:
 // it removes the worktree registration after removing its stack.
 func managedCleanupAnchors(ctx *app.Context, toDelete engine.Branches) ([]string, error) {
+	// Resolve worktree ownership from a single ListManagedWorktrees call
+	// instead of one OwningWorktree call (two git reads each) per branch
+	// examined below, including every branch in the repo while checking anchor
+	// completeness.
+	worktreeByStackRoot, err := actions.WorktreesByStackRoot(ctx.Engine)
+	if err != nil {
+		return nil, fmt.Errorf("cannot list managed worktrees: %w", err)
+	}
+	owningWorktree := func(branch engine.Branch) *engine.WorktreeInfo {
+		return worktreeByStackRoot[ctx.Engine.GetStackRootForBranch(branch)]
+	}
+
 	selected := make(map[string]bool, len(toDelete))
 	for _, branch := range toDelete {
 		selected[branch.GetName()] = true
@@ -190,11 +202,7 @@ func managedCleanupAnchors(ctx *app.Context, toDelete engine.Branches) ([]string
 
 	anchors := make(map[string]bool)
 	for _, branch := range toDelete {
-		owner, err := ctx.Engine.OwningWorktree(branch)
-		if err != nil {
-			return nil, fmt.Errorf("cannot determine worktree ownership for branch %s: %w", branch.GetName(), err)
-		}
-		if owner != nil {
+		if owner := owningWorktree(branch); owner != nil {
 			anchors[owner.AnchorBranch] = true
 		}
 	}
@@ -206,11 +214,7 @@ func managedCleanupAnchors(ctx *app.Context, toDelete engine.Branches) ([]string
 			if candidate.IsWorktreeAnchor() {
 				continue
 			}
-			owner, err := ctx.Engine.OwningWorktree(candidate)
-			if err != nil {
-				return nil, fmt.Errorf("cannot determine worktree ownership for branch %s: %w", candidate.GetName(), err)
-			}
-			if owner != nil && owner.AnchorBranch == anchor && !selected[candidate.GetName()] {
+			if owner := owningWorktree(candidate); owner != nil && owner.AnchorBranch == anchor && !selected[candidate.GetName()] {
 				complete = false
 				break
 			}
@@ -222,10 +226,7 @@ func managedCleanupAnchors(ctx *app.Context, toDelete engine.Branches) ([]string
 
 	guarded := make([]engine.Branch, 0, len(toDelete))
 	for _, branch := range toDelete {
-		owner, err := ctx.Engine.OwningWorktree(branch)
-		if err != nil {
-			return nil, fmt.Errorf("cannot determine worktree ownership for branch %s: %w", branch.GetName(), err)
-		}
+		owner := owningWorktree(branch)
 		if owner == nil || !anchors[owner.AnchorBranch] || !slices.Contains(cleanup, owner.AnchorBranch) {
 			guarded = append(guarded, branch)
 		}

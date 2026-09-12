@@ -102,7 +102,7 @@ func (h *SimpleSyncHandler) Complete(summary syncAction.Summary) {
 		h.Output.Newline()
 	}
 
-	if summary.UpToDate && len(h.heldBranches) == 0 {
+	if summary.UpToDate && !summary.Failed && len(h.heldBranches) == 0 {
 		h.Output.Info("✨ Everything is up to date!")
 		return
 	}
@@ -659,7 +659,7 @@ func (h *InteractiveSyncHandler) formatSummary(summary syncAction.Summary) strin
 
 func formatSyncSummary(summary syncAction.Summary, held int) string {
 	incomplete := summary.BranchesSkipped > 0 || len(summary.ConflictBranches) > 0 || summary.BranchesBlocked > 0 || len(summary.SkippedStacks) > 0 || held > 0
-	if summary.UpToDate && !incomplete {
+	if summary.UpToDate && !incomplete && !summary.Failed {
 		return "✨ Everything is up to date!"
 	}
 	parts := syncAction.FormatSummaryParts(summary)
@@ -670,7 +670,10 @@ func formatSyncSummary(summary syncAction.Summary, held int) string {
 	if incomplete {
 		prefix = "⚠ Sync incomplete: "
 	}
-	return withConflictAdvice(prefix+strings.Join(parts, ", "), summary.ConflictBranches)
+	if summary.Failed {
+		prefix = "✗ Sync failed: "
+	}
+	return withConflictAdvice(strings.TrimSuffix(prefix+strings.Join(parts, ", "), ": "), summary.ConflictBranches)
 }
 
 func withConflictAdvice(summary string, conflicts []string) string {
@@ -903,12 +906,23 @@ func describeRestackConflicts(out output.Output, conflictBranches []string) {
 
 // PromptResolveConflicts implements Handler. Pauses TUI, displays conflicts, prompts user.
 func (h *InteractiveSyncHandler) PromptResolveConflicts(conflictBranches []string) (bool, error) {
+	return h.promptResolveConflicts(conflictBranches, tui.PromptConfirm)
+}
+
+func (h *InteractiveSyncHandler) promptResolveConflicts(conflictBranches []string, prompt func(string, bool) (bool, error)) (bool, error) {
 	h.runner.Pause()
-	defer h.runner.Resume()
-
 	describeRestackConflicts(h.output, conflictBranches)
-
-	return tui.PromptConfirm("Resolve conflicts now?", false)
+	resolve, err := prompt("Resolve conflicts now?", false)
+	if resolve && err == nil {
+		// The action now hands off to the real conflict workflow. Release the
+		// terminal permanently so file lists and continue/abort advice are visible.
+		h.runner.Send(syncComponent.CompleteMsg{})
+		h.runner.Wait()
+		h.runner.Cleanup()
+	} else {
+		h.runner.Resume()
+	}
+	return resolve, err
 }
 
 // buildDeletionOptions returns the alphabetically sorted branch names alongside
@@ -971,7 +985,7 @@ func (h *InteractiveSyncHandler) PromptBranchDeletions(branches map[string]strin
 // formatRestackOutcome preserves holds and conflicts in the final outcome.
 func formatRestackOutcome(summary handlers.RestackSummary, upToDate, held int) string {
 	incomplete := summary.Skipped > 0 || len(summary.Conflicts) > 0 || len(summary.Blocked) > 0 || held > 0
-	if summary.Restacked == 0 && !incomplete {
+	if summary.Restacked == 0 && !incomplete && !summary.Failed {
 		return "✨ Everything is up to date!"
 	}
 	line := formatRestackSummaryLine(summary.Restacked, summary.Skipped, len(summary.Blocked), upToDate)
@@ -982,5 +996,8 @@ func formatRestackOutcome(summary handlers.RestackSummary, upToDate, held int) s
 	if incomplete {
 		prefix = "⚠ Restack incomplete: "
 	}
-	return withConflictAdvice(prefix+line, summary.Conflicts)
+	if summary.Failed {
+		prefix = "✗ Restack failed: "
+	}
+	return withConflictAdvice(strings.TrimSuffix(prefix+line, ": "), summary.Conflicts)
 }

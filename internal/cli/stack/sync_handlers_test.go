@@ -389,3 +389,33 @@ func TestSyncPRMetadataProgressIsLiveOnly(t *testing.T) {
 	NewSimpleSyncHandler(out).EmitEvent(progress)
 	require.Contains(t, out.String(), progress.Message)
 }
+
+func TestSyncCountsOnlyRestackResults(t *testing.T) {
+	t.Parallel()
+	runner := tui.NewMockRunner()
+	h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+	h.Start()
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted, Total: 2})
+	h.OnRestackActivity(engine.RebaseProgress{Branch: "feat/api", Parent: "main"})
+	h.OnRestackActivity(engine.RebaseProgress{Branch: "feat/api", Finished: true})
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Message: "Updating PR metadata for 1 branch..."})
+	require.Zero(t, h.completedOps)
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/api", NewRevision: "1234567"})
+	// A hidden up-to-date row still counts toward k/N.
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/web"})
+	require.Equal(t, 2, h.completedOps)
+	require.Equal(t, 2, h.totalOps)
+}
+
+func TestRestackActivityOnlyForInteractiveHandler(t *testing.T) {
+	t.Parallel()
+	require.Nil(t, handlers.RestackActivity(NewSimpleSyncHandler(output.NewTestOutput())), "simple handler prints results only")
+	require.Nil(t, handlers.RestackActivity(handlers.NewJSONRestackHandler()), "JSON output must not carry live activity")
+
+	runner := tui.NewMockRunner()
+	h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+	activity := handlers.RestackActivity(h)
+	require.NotNil(t, activity)
+	activity(engine.RebaseProgress{Branch: "feat/api", Parent: "main"})
+	require.Contains(t, runner.Messages(), syncComponent.ActivityMsg{Branch: "feat/api", Parent: "main"})
+}

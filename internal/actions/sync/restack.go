@@ -7,6 +7,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/handlers"
 )
 
 // restackBranches handles restacking branches after sync operations.
@@ -68,6 +69,11 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 
 	// Restack branches with handler for progress
 	if len(sortedBranches) > 0 {
+		// Total is every branch handed to restack. Each normally reports exactly
+		// one result, but PlanRestack drops a branch whose revision, metadata,
+		// or merge base it cannot read, and that branch reports nothing — so
+		// the k/N counter can finish short of N rather than overshoot it.
+		handler.EmitEvent(Event{Phase: PhaseRestack, Type: EventStarted, Total: len(sortedBranches)})
 		restackStart := time.Now()
 		if err := actions.RestackBranchesWithHandler(ctx, sortedBranches, func(p actions.RestackProgress) {
 			prNumber := actions.PRNumberForBranch(ctx.Engine, p.Branch)
@@ -140,7 +146,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					Parent:     parentName,
 				})
 			}
-		}, actions.ConflictModeContinue); err != nil {
+		}, actions.ConflictModeContinue, actions.RestackBranchesOpts{Activity: handlers.RestackActivity(handler)}); err != nil {
 			return fmt.Errorf("failed to restack branches: %w", err)
 		}
 		ctx.Logger.Info("restack branches completed durationMs=%d branchCount=%d", time.Since(restackStart).Milliseconds(), len(sortedBranches))

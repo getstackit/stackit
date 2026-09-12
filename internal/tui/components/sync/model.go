@@ -3,6 +3,8 @@ package sync
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -75,6 +77,7 @@ type Model struct {
 	elapsed        time.Duration
 	spinner        spinner.Model
 	Summary        string
+	active         map[string]string
 
 	// Phase headers commit to scrollback lazily: only when a phase emits its
 	// first detail. Phases that do nothing (nothing to sync/clean/restack) never
@@ -115,8 +118,17 @@ type PhaseDetailMsg struct {
 	Mark    DetailMark // Status glyph for the row (defaults to MarkDone)
 }
 
+// ActivityMsg names an in-flight rebase check; several may run concurrently.
+type ActivityMsg struct {
+	Branch   string
+	Parent   string
+	Finished bool
+}
+
 // ProgressTickMsg updates the k/N counter shown beside the elapsed time when a
-// phase knows its exact item count (e.g. standalone restack).
+// phase knows its item count up front (e.g. standalone restack). The total is
+// the number of branches handed to restack; a branch the planner cannot read
+// produces no result, so Completed can stop short of Total.
 type ProgressTickMsg struct {
 	Completed int
 	Total     int
@@ -208,6 +220,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.printing = false
 		return m, m.flush()
 
+	case ActivityMsg:
+		if m.active == nil {
+			m.active = make(map[string]string)
+		}
+		if msg.Finished {
+			delete(m.active, msg.Branch)
+		} else {
+			m.active[msg.Branch] = msg.Parent
+		}
+		return m, nil
+
 	case ProgressTickMsg:
 		m.CompletedOps = msg.Completed
 		m.TotalOps = msg.Total
@@ -278,6 +301,14 @@ func (m *Model) View() tea.View {
 
 // getStatusText returns the current status text to display
 func (m *Model) getStatusText() string {
+	if len(m.active) > 0 {
+		names := slices.Sorted(maps.Keys(m.active))
+		text := "Checking rebase: " + style.DisplayBranchName(names[0]) + " onto " + style.DisplayBranchName(m.active[names[0]])
+		if len(names) > 1 {
+			text += fmt.Sprintf(" (+%d active)", len(names)-1)
+		}
+		return text
+	}
 	if m.CurrentDetail != "" {
 		return m.CurrentDetail
 	}

@@ -80,14 +80,6 @@ func TestRestackAction(t *testing.T) {
 				"beta-root":   "main",
 			})
 
-		originalNewWorktreeEngine := newWorktreeEngine
-		newWorktreeEngine = func(engine.WorktreeEngineOptions) (engine.Engine, error) {
-			return nil, errors.New("boom")
-		}
-		t.Cleanup(func() {
-			newWorktreeEngine = originalNewWorktreeEngine
-		})
-
 		jsonHandler := handlers.NewJSONRestackHandler()
 		plan, err := PlanRestack(s.Context, RestackOptions{
 			AllStacks: true,
@@ -95,6 +87,9 @@ func TestRestackAction(t *testing.T) {
 			Jobs:      2,
 		})
 		require.NoError(t, err)
+		plan.newWorktreeEngine = func(engine.WorktreeEngineOptions) (engine.Engine, error) {
+			return nil, errors.New("boom")
+		}
 		err = RestackAction(s.Context, plan, jsonHandler)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "restack failed")

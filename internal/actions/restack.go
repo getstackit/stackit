@@ -16,7 +16,8 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-var newWorktreeEngine = engine.NewEngineForWorktree
+// worktreeEngineFactory builds the engine each parallel restack worker runs in.
+type worktreeEngineFactory func(engine.WorktreeEngineOptions) (engine.Engine, error)
 
 // RestackOptions contains options for the restack command
 type RestackOptions struct {
@@ -42,6 +43,10 @@ type RestackPlan struct {
 	// They never reach the engine, so RestackAction reports them in the
 	// summary itself.
 	held []handlers.RestackHeldInfo
+	// newWorktreeEngine builds parallel workers' engines. It is a field rather
+	// than a package variable so a test can inject failures without racing
+	// other parallel tests.
+	newWorktreeEngine worktreeEngineFactory
 }
 
 type restackConflictPrompter interface {
@@ -117,7 +122,7 @@ func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 	if err := guardUnpushedTrunk(ctx, eng, rawGroups); err != nil {
 		return nil, err
 	}
-	plan := &RestackPlan{opts: opts, held: held}
+	plan := &RestackPlan{opts: opts, held: held, newWorktreeEngine: engine.NewEngineForWorktree}
 	for _, g := range rawGroups {
 		sorted := eng.SortBranchesTopologically(g.branches)
 		var enginePlan *engine.RestackPlan
@@ -216,7 +221,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	if parallelDispatch {
 		var err error
 		var runtimeHeld []handlers.RestackHeldInfo
-		restacked, skipped, conflicts, blocked, runtimeHeld, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
+		restacked, skipped, conflicts, blocked, runtimeHeld, err = restackGroupsParallel(ctx, opts, plan.groups, plan.newWorktreeEngine, handler)
 		held = append(held, runtimeHeld...)
 		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
 		handler.OnRestackComplete(handlers.RestackSummary{
@@ -251,7 +256,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 			handleRestackProgress(eng, handler, p, &restacked, &skipped, &conflicts, &blocked, &held)
 		}
 
-		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode, nil); err != nil {
+		if err := restackBranchesWithPlan(ctx, group.sortedBranches, progress, conflictMode, restackPlanOpts{prePlan: group.enginePlan, activity: handlers.RestackActivity(handler)}); err != nil {
 			return fmt.Errorf("restack failed: %w", err)
 		}
 	}
@@ -374,6 +379,7 @@ func restackGroupsParallel(
 	ctx *app.Context,
 	opts RestackOptions,
 	groups []restackPlannedGroup,
+	newWorktreeEngine worktreeEngineFactory,
 	handler handlers.RestackHandler,
 ) (restacked, skipped int, conflicts, blocked []string, held []handlers.RestackHeldInfo, err error) {
 	eng := ctx.Engine
@@ -432,7 +438,7 @@ func restackGroupsParallel(
 		// Parallel mode always reports conflicts via callback: the interactive conflict
 		// workflow writes rebase state into the worktree, which defer cleanup() tears
 		// down, so entering it would silently destroy what the user needs to resolve.
-		if err := RestackBranchesWithHandler(&wtCtx, group.sortedBranches, progress, ConflictModeContinue); err != nil {
+		if err := RestackBranchesWithHandler(&wtCtx, group.sortedBranches, progress, ConflictModeContinue, RestackBranchesOpts{Activity: handlers.RestackActivity(handler)}); err != nil {
 			wrappedErr := fmt.Errorf("stack %s: %w", group.rootBranch, err)
 			ctx.Logger.Warn("parallel restack group failed: %v", wrappedErr)
 			collector.recordRebaseError(wrappedErr)

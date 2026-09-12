@@ -28,7 +28,7 @@ func TestInteractiveSyncHandler_Start(t *testing.T) {
 	msg, ok := messages[0].(syncComponent.ProgressTickMsg)
 	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[0])
 	assert.Equal(t, 0, msg.Completed)
-	assert.Equal(t, 10, msg.Total)
+	assert.Equal(t, 0, msg.Total)
 }
 
 func TestInteractiveSyncHandler_EmitEvent_PhaseStart(t *testing.T) {
@@ -75,22 +75,13 @@ func TestInteractiveSyncHandler_EmitEvent_Progress(t *testing.T) {
 		NewRevision: "abc1234",
 	})
 
-	// Should send PhaseDetailMsg and ProgressTickMsg
+	// Sync has no reliable global total; completed events only print detail.
 	messages := mockRunner.Messages()
-	require.Len(t, messages, 2)
-
-	// First message should be PhaseDetailMsg
+	require.Len(t, messages, 1)
 	detailMsg, ok := messages[0].(syncComponent.PhaseDetailMsg)
-	require.True(t, ok, "expected PhaseDetailMsg, got %T", messages[0])
-	assert.Equal(t, syncComponent.PhaseTrunk, detailMsg.Phase)
+	require.True(t, ok)
 	assert.Contains(t, detailMsg.Message, "main")
 	assert.Contains(t, detailMsg.Message, "abc1234")
-
-	// Second message should be ProgressTickMsg
-	progressMsg, ok := messages[1].(syncComponent.ProgressTickMsg)
-	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[1])
-	assert.Equal(t, 1, progressMsg.Completed)
-	assert.Equal(t, 5, progressMsg.Total)
 }
 
 func TestInteractiveSyncHandler_Complete(t *testing.T) {

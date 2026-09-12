@@ -87,7 +87,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 				}
 			}
 
-			needsUpdate = needsUpdate || opts.Edit || opts.Always || draftStatusNeedsChange
+			needsUpdate = needsUpdate || opts.Edit || opts.Always || opts.Regenerate || draftStatusNeedsChange
 
 			if !needsUpdate && !opts.Draft && !opts.Publish {
 				handler.OnEvent(BranchPlanEvent{
@@ -104,6 +104,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 
 		// Prepare metadata
 		metadataOpts := MetadataOptions{
+			Regenerate:        opts.Regenerate,
 			Edit:              opts.Edit && !opts.NoEdit,
 			EditTitle:         opts.EditTitle && !opts.NoEditTitle,
 			EditDescription:   opts.EditDescription && !opts.NoEditDescription,
@@ -143,13 +144,18 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 			Metadata:   metadata,
 		}
 
+		var regenerated *PRContentPreview
+		if opts.Regenerate && opts.DryRun {
+			regenerated = &PRContentPreview{Title: metadata.Title, Body: metadata.Body}
+		}
 		handler.OnEvent(BranchPlanEvent{
-			BranchName: branchName,
-			Action:     action,
-			PRNumber:   prNumber,
-			IsCurrent:  isCurrent,
-			Empty:      empty[branchName],
-			Skipped:    false,
+			Regenerated: regenerated,
+			BranchName:  branchName,
+			Action:      action,
+			PRNumber:    prNumber,
+			IsCurrent:   isCurrent,
+			Empty:       empty[branchName],
+			Skipped:     false,
 		})
 
 		submissionInfos = append(submissionInfos, submissionInfo)
@@ -158,7 +164,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	// Persist all prepared PR info in one batched write so a later submit
 	// failure can recover the titles/bodies. Non-fatal, like the per-branch
 	// write it replaces.
-	if len(prUpdates) > 0 {
+	if !opts.DryRun && len(prUpdates) > 0 {
 		if err := ctx.Engine.BatchUpsertPrInfo(ctx.Context, prUpdates); err != nil {
 			ctx.Output.Debug("Failed to save PR metadata: %v", err)
 		}

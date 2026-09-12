@@ -47,15 +47,23 @@ type PreparingEvent struct{}
 
 func (PreparingEvent) submitEvent() {}
 
+// PRContentPreview is the replacement text proposed by submit --regenerate.
+// Generated stack sections are added by the normal footer synchronization.
+type PRContentPreview struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
 // BranchPlanEvent indicates what will happen to each branch.
 type BranchPlanEvent struct {
-	BranchName string
-	Action     engine.SubmitAction
-	PRNumber   *int // existing PR number for updates, nil for creates
-	IsCurrent  bool
-	Empty      bool // branch has no commits relative to its parent
-	Skipped    bool
-	SkipReason string
+	Regenerated *PRContentPreview // present for regeneration dry runs
+	BranchName  string
+	Action      engine.SubmitAction
+	PRNumber    *int // existing PR number for updates, nil for creates
+	IsCurrent   bool
+	Empty       bool // branch has no commits relative to its parent
+	Skipped     bool
+	SkipReason  string
 }
 
 func (BranchPlanEvent) submitEvent() {}

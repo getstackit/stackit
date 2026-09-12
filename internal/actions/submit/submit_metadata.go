@@ -76,11 +76,15 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 		IsDraft: false,
 	}
 
+	if opts.Regenerate {
+		metadata.Title, metadata.Body = "", ""
+	}
+
 	shouldEditTitle := opts.EditTitle || (opts.Edit && !opts.NoEditTitle)
 	shouldEditBody := opts.EditDescription || (opts.Edit && !opts.NoEditDescription)
 
 	// If PR exists and local metadata is missing title or body, fetch from GitHub
-	if prInfo != nil && prInfo.Number() != nil && (metadata.Title == "" || metadata.Body == "") && ctx.GitHub() != nil {
+	if !opts.Regenerate && prInfo != nil && prInfo.Number() != nil && (metadata.Title == "" || metadata.Body == "") && ctx.GitHub() != nil {
 		currentPR, err := ctx.GitHub().GetPullRequest(ctx.Context, *prInfo.Number())
 		if err == nil && currentPR != nil {
 			if metadata.Title == "" {
@@ -175,6 +179,7 @@ func pendingPrInfo(branch engine.Branch, metadata *PRMetadata) *engine.PrInfo {
 
 // MetadataOptions contains options for PR metadata collection
 type MetadataOptions struct {
+	Regenerate        bool
 	Edit              bool
 	EditTitle         bool
 	EditDescription   bool

@@ -80,3 +80,13 @@ Based on response:
 - **"Sync with trunk"**: Invoke `/stack-sync` skill using the `Skill` tool
 - **"Check PR status"**: Run `stackit tree full --no-interactive`
 - **"Done for now"**: End with summary including PR URLs from the submit output
+
+## Regenerate PR text
+
+When the user wants existing PR titles and descriptions replaced from current
+commit messages (for example after regrouping branches), use
+`stackit submit --regenerate --no-edit --no-interactive`. Preview with
+`--dry-run` (and `--json` for structured replacement text). This overwrites
+editable PR text, including clearing a body when the generated body is empty.
+Use `--regenerate --edit` for interactive edits of the regenerated defaults.
+Ordinary submit preserves existing text; `--always` does not regenerate it.

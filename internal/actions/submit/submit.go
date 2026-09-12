@@ -29,6 +29,7 @@ type Options struct {
 	Confirm              bool
 	UpdateOnly           bool
 	Always               bool
+	Regenerate           bool // Replace PR titles/bodies with current commit-derived defaults
 	Restack              bool
 	Draft                bool
 	Publish              bool
@@ -921,8 +922,9 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		RerequestReview: opts.RerequestReview,
 	}
 
-	// Only update body if it's not empty. GitHub will preserve the existing body if omitted.
-	if submissionInfo.Metadata.Body != "" {
+	// An explicitly regenerated empty body clears old text; ordinary submits
+	// preserve the existing body when there is no replacement.
+	if submissionInfo.Metadata.Body != "" || opts.Regenerate {
 		updateOpts.Body = &submissionInfo.Metadata.Body
 	}
 

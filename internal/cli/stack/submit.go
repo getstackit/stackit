@@ -23,6 +23,7 @@ type submitFlags struct {
 	confirm              bool
 	updateOnly           bool
 	always               bool
+	regenerate           bool
 	restack              bool
 	draft                bool
 	publish              bool
@@ -57,6 +58,7 @@ func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
 	cmd.Flags().BoolVarP(&f.confirm, "confirm", "c", false, "Reports the PRs that would be submitted and asks for confirmation before pushing branches and opening/updating PRs.")
 	cmd.Flags().BoolVarP(&f.updateOnly, "update-only", "u", false, "Only push branches and update PRs for branches that already have PRs open.")
 	cmd.Flags().BoolVar(&f.always, "always", false, "Always push updates, even if the branch has not changed.")
+	cmd.Flags().BoolVar(&f.regenerate, "regenerate", false, "Regenerate PR titles and descriptions from commits, overwriting existing text.")
 	cmd.Flags().BoolVar(&f.restack, "restack", false, "Restack branches before submitting.")
 	cmd.Flags().BoolVarP(&f.draft, "draft", "d", false, "If set, all new PRs will be created in draft mode.")
 	cmd.Flags().BoolVarP(&f.publish, "publish", "p", false, "If set, publishes all PRs being submitted.")
@@ -112,6 +114,7 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			Confirm:              f.confirm,
 			UpdateOnly:           f.updateOnly,
 			Always:               f.always,
+			Regenerate:           f.regenerate,
 			Restack:              f.restack,
 			Draft:                f.draft,
 			Publish:              f.publish,

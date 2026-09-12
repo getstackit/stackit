@@ -113,7 +113,9 @@ type Summary struct {
 	BranchesUpdated int    // Number of branches updated
 	Restacked       int    // Number of branches restacked
 	IsFrozen        bool   // Was the target branch frozen?
-	UpToDate        bool   // Everything was already current
+	UpToDate        bool   // Everything was already current (nothing held back)
+	// Held lists branches a worktree held back during the restack phase.
+	Held []actions.RestackHeldInfo
 }
 
 // Reanchored records a branch whose recorded parent has landed and been deleted
@@ -697,6 +699,7 @@ func Action(ctx context.Context, deps Deps, branchOrPR string, opts Options, han
 
 	// Restack if requested
 	var restacked int
+	var held []actions.RestackHeldInfo
 	if opts.Restack {
 		uniqueBranches := engine.NewBranchesBuilder(len(targets.branches))
 		seen := make(map[string]bool)
@@ -728,6 +731,7 @@ func Action(ctx context.Context, deps Deps, branchOrPR string, opts Options, han
 			PRNumber:       prNumber,
 		}, handler)
 		restacked = outcome.Summary.Restacked
+		held = outcome.Summary.Held
 		if err != nil {
 			// RunRestack leaves completion to the caller on error; get still
 			// reports what it restacked before the conflict stopped it.
@@ -739,12 +743,13 @@ func Action(ctx context.Context, deps Deps, branchOrPR string, opts Options, han
 	// Complete with summary
 	targetBranchObj = eng.GetBranch(targetBranch)
 	isFrozenFinal := targetBranchObj.IsFrozen()
-	upToDate := branchesCreated == 0 && branchesUpdated == 0 && restacked == 0
+	upToDate := branchesCreated == 0 && branchesUpdated == 0 && restacked == 0 && len(held) == 0
 	handler.Complete(Summary{
 		TargetBranch:    targetBranch,
 		BranchesCreated: branchesCreated,
 		BranchesUpdated: branchesUpdated,
 		Restacked:       restacked,
+		Held:            held,
 		IsFrozen:        isFrozenFinal,
 		UpToDate:        upToDate,
 	})

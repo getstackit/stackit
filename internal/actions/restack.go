@@ -52,6 +52,10 @@ type RestackOptions struct {
 type RestackPlan struct {
 	opts   RestackOptions
 	groups []restackPlannedGroup
+	// held lists branches pruned from the plan because a worktree holds them.
+	// They never reach the engine, so RestackAction reports them in the
+	// summary itself.
+	held []RestackHeldInfo
 }
 
 // restackPlannedGroup pairs an independent stack with the engine plan that
@@ -69,6 +73,12 @@ func (p *RestackPlan) HasBranches() bool {
 	return slices.ContainsFunc(p.groups, func(g restackPlannedGroup) bool {
 		return len(g.sortedBranches) > 0
 	})
+}
+
+// HasHolds reports whether a worktree held back any branch in the requested
+// scope. A plan with holds but no branches is incomplete, not empty.
+func (p *RestackPlan) HasHolds() bool {
+	return len(p.held) > 0
 }
 
 // HasWork reports whether any resolved branch needs an actual rebase.
@@ -109,11 +119,11 @@ func PlanRestack(ctx context.Context, deps RestackDeps, opts RestackOptions) (*R
 	}
 	// Drop dirty-worktree stacks before the guard so a restack that has nothing
 	// left to move is a no-op rather than a guard error.
-	rawGroups = skipDirtyWorktreeStacks(ctx, deps, rawGroups)
+	rawGroups, held := skipDirtyWorktreeStacks(ctx, deps, rawGroups)
 	if err := guardUnpushedTrunk(ctx, eng, rawGroups); err != nil {
 		return nil, err
 	}
-	plan := &RestackPlan{opts: opts}
+	plan := &RestackPlan{opts: opts, held: held}
 	for _, g := range rawGroups {
 		sorted := eng.SortBranchesTopologically(ctx, g.branches)
 		var enginePlan *engine.RestackPlan
@@ -143,9 +153,20 @@ func RestackAction(ctx context.Context, deps RestackDeps, plan *RestackPlan, han
 	out := deps.Out
 	opts := plan.opts
 
+	if handler == nil {
+		handler = &NullRestackHandler{}
+	}
+
 	branchCount := plan.BranchCount()
 	if branchCount == 0 {
-		out.Info("No branches to restack.")
+		if !plan.HasHolds() {
+			out.Info("No branches to restack.")
+			return nil
+		}
+		// Every branch in scope was held back: report that as an incomplete
+		// restack rather than "nothing to do".
+		handler.OnRestackStart(0)
+		handler.OnRestackComplete(RestackSummary{Held: plan.held})
 		return nil
 	}
 
@@ -191,6 +212,7 @@ func RestackAction(ctx context.Context, deps RestackDeps, plan *RestackPlan, han
 
 	_, err := RunRestack(ctx, deps, RestackRequest{
 		groups:         plan.groups,
+		held:           plan.held,
 		ConflictPolicy: policy,
 		Prompter:       prompter,
 		PromptRerere:   deps.Interactive && !deps.Quiet && term.IsInteractive() && !opts.NonInteractive,
@@ -282,19 +304,22 @@ func planRestackBranchGroups(ctx context.Context, eng engine.BranchReader, opts 
 //     normally run from — holds a single branch, so only that branch is dropped.
 //     Its descendants stay: they are still correctly based on a branch that did
 //     not move, so restacking them is a no-op rather than a hazard.
-func skipDirtyWorktreeStacks(ctx context.Context, deps RestackDeps, groups []restackBranchGroup) []restackBranchGroup {
+func skipDirtyWorktreeStacks(ctx context.Context, deps RestackDeps, groups []restackBranchGroup) ([]restackBranchGroup, []RestackHeldInfo) {
 	report := CollectRestackWorktreeHolds(ctx, deps.Engine)
 	for _, message := range report.Messages() {
 		deps.Out.Warn("%s", message)
 	}
 
+	var held []RestackHeldInfo
 	kept := make([]restackBranchGroup, 0, len(groups))
 	for _, g := range groups {
-		if built := report.Filter(deps.Engine, g.branches); len(built) > 0 {
+		built, groupHeld := report.Filter(deps.Engine, g.branches)
+		held = append(held, groupHeld...)
+		if len(built) > 0 {
 			kept = append(kept, restackBranchGroup{rootBranch: g.rootBranch, branches: built})
 		}
 	}
-	return kept
+	return kept, held
 }
 
 func branchGroupsForIndependentStacks(ctx context.Context, eng engine.BranchReader, opts RestackOptions) ([]restackBranchGroup, error) {

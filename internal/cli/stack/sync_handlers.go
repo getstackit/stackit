@@ -102,12 +102,9 @@ func (h *SimpleSyncHandler) Complete(summary syncAction.Summary) {
 		h.Output.Newline()
 	}
 
-	if summary.UpToDate {
-		h.Output.Info("✨ Everything is up to date!")
-		return
+	if line := formatSyncSummary(summary, "  "); line != "" {
+		h.Output.Info("%s", line)
 	}
-
-	h.printSummary(summary)
 }
 
 // ensurePhaseHeader prints a phase header the first time the phase emits a line,
@@ -273,19 +270,6 @@ func (h *SimpleSyncHandler) printCleanEvent(event syncAction.Event) {
 	}
 }
 
-func (h *SimpleSyncHandler) printSummary(summary syncAction.Summary) {
-	parts := formatSyncSummaryParts(summary)
-
-	if len(parts) > 0 {
-		h.Output.Info("✅ Summary: %s", strings.Join(parts, ", "))
-	}
-
-	// Print actionable advice for every conflict, not just the first
-	for _, conflict := range summary.ConflictBranches {
-		h.Output.Info("  %s", common.FormatRestackResolveHint(conflict))
-	}
-}
-
 // OnRestackStart implements RestackHandler for standalone restack operations
 func (h *SimpleSyncHandler) OnRestackStart(_ int) {
 	// For sync, we use EmitEvent with PhaseRestack instead
@@ -316,18 +300,7 @@ func (h *SimpleSyncHandler) OnRestackComplete(summary actions.RestackSummary) {
 		h.Output.Newline()
 	}
 
-	if !common.RestackChanged(summary) {
-		h.Output.Info("✨ Everything is up to date!")
-		return
-	}
-
-	if line := common.FormatRestackSummary(summary, h.restackUpToDate); line != "" {
-		h.Output.Info("✅ Summary: %s", line)
-	}
-
-	for _, conflict := range summary.Conflicts {
-		h.Output.Info("  %s", common.FormatRestackResolveHint(conflict))
-	}
+	h.Output.Info("%s", common.FormatRestackOutcome(summary, h.restackUpToDate, "  "))
 }
 
 // InteractiveSyncHandler provides bubbletea TUI for TTY environments
@@ -488,23 +461,27 @@ func (h *InteractiveSyncHandler) Complete(summary syncAction.Summary) {
 
 // formatSummary formats the sync summary
 func (h *InteractiveSyncHandler) formatSummary(summary syncAction.Summary) string {
-	if summary.UpToDate {
+	return formatSyncSummary(summary, "   ")
+}
+
+// formatSyncSummary renders the final sync line from the action's summary,
+// which carries holds, conflicts, and skips alongside the completed work.
+// Anything left outstanding makes it read as incomplete, never as success.
+func formatSyncSummary(summary syncAction.Summary, indent string) string {
+	incomplete := summary.Incomplete()
+	if summary.UpToDate && !incomplete {
 		return "✨ Everything is up to date!"
 	}
-
 	parts := formatSyncSummaryParts(summary)
-
-	var lines []string
-	if len(parts) > 0 {
-		lines = append(lines, "✅ Summary: "+strings.Join(parts, ", "))
+	if len(parts) == 0 && !incomplete {
+		// Nothing happened worth summarizing (e.g. sync stopped on an error).
+		return ""
 	}
-
-	// Add actionable advice for every conflict, not just the first
-	for _, conflict := range summary.ConflictBranches {
-		lines = append(lines, "   "+common.FormatRestackResolveHint(conflict))
+	prefix := "✅ Summary: "
+	if incomplete {
+		prefix = "⚠ Sync incomplete: "
 	}
-
-	return strings.Join(lines, "\n")
+	return common.WithResolveHints(prefix+strings.Join(parts, ", "), summary.ConflictBranches, indent)
 }
 
 // OnRestackStart implements RestackHandler for standalone restack operations
@@ -648,14 +625,14 @@ func (h *InteractiveSyncHandler) PromptOrphanedMetadata(info engine.OrphanedMeta
 func describeRestackConflicts(out output.Output, conflictBranches []string) {
 	out.Newline()
 	// out.Warn already prefixes "⚠️ "; don't hardcode another one here.
-	out.Warn("Found conflicts in %d %s during restack; branches without conflicts were restacked.",
+	out.Warn("Found conflicts in %d %s during restack. Affected stacks were left untouched; independent stacks were processed.",
 		len(conflictBranches),
 		map[bool]string{true: "branch", false: "branches"}[len(conflictBranches) == 1])
 	// Bullets are detail lines, not warnings — use Info so they don't each
 	// pick up a ⚠️ prefix.
 	out.Info("Resolve each with:")
 	for _, name := range conflictBranches {
-		out.Info("  • %s", style.ColorCyan("st restack "+name))
+		out.Info("  • %s", style.ColorCyan("st restack --branch "+name))
 	}
 	out.Newline()
 }
@@ -725,15 +702,7 @@ func (h *InteractiveSyncHandler) PromptBranchDeletions(branches map[string]strin
 
 // formatRestackSummary formats the restack summary
 func (h *InteractiveSyncHandler) formatRestackSummary(summary actions.RestackSummary) string {
-	if !common.RestackChanged(summary) {
-		return "✨ Everything is up to date!"
-	}
-
-	lines := []string{"✅ Summary: " + common.FormatRestackSummary(summary, h.restackUpToDate)}
-	for _, conflict := range summary.Conflicts {
-		lines = append(lines, "   "+common.FormatRestackResolveHint(conflict))
-	}
-	return strings.Join(lines, "\n")
+	return common.FormatRestackOutcome(summary, h.restackUpToDate, "   ")
 }
 
 // formatSyncSummaryParts returns the sync summary parts, shared between
@@ -741,6 +710,11 @@ func (h *InteractiveSyncHandler) formatRestackSummary(summary actions.RestackSum
 func formatSyncSummaryParts(summary syncAction.Summary) []string {
 	parts := []string{}
 
+	// Holds lead: the remedy lives in another worktree the user is not
+	// looking at, so it must not be buried behind routine counts.
+	if len(summary.HeldBranches) > 0 {
+		parts = append(parts, fmt.Sprintf("held %d (worktree)", len(summary.HeldBranches)))
+	}
 	if summary.TrunkUpdated {
 		parts = append(parts, "pulled trunk")
 	}

@@ -228,7 +228,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 			handleRestackProgress(eng, handler, p, &restacked, &skipped, &conflicts, &blocked)
 		}
 
-		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode); err != nil {
+		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode, handlers.RestackActivity(handler)); err != nil {
 			return fmt.Errorf("restack failed: %w", err)
 		}
 	}
@@ -407,7 +407,7 @@ func restackGroupsParallel(
 		// Parallel mode always reports conflicts via callback: the interactive conflict
 		// workflow writes rebase state into the worktree, which defer cleanup() tears
 		// down, so entering it would silently destroy what the user needs to resolve.
-		if err := RestackBranchesWithHandler(&wtCtx, group.sortedBranches, progress, ConflictModeContinue); err != nil {
+		if err := RestackBranchesWithHandler(&wtCtx, group.sortedBranches, progress, ConflictModeContinue, handlers.RestackActivity(handler)); err != nil {
 			wrappedErr := fmt.Errorf("stack %s: %w", group.rootBranch, err)
 			ctx.Logger.Warn("parallel restack group failed: %v", wrappedErr)
 			collector.recordRebaseError(wrappedErr)

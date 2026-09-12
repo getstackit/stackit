@@ -46,6 +46,17 @@ type RebaseSpec struct {
 	OldUpstream string // Current base to replay commits from
 }
 
+// RebaseProgress reports live validation activity. Finished means the check
+// ended; success or conflict remains part of RebaseValidation.
+type RebaseProgress struct {
+	Branch   string
+	Parent   string
+	Finished bool
+}
+
+// RebaseProgressFunc may be called concurrently for independent branches.
+type RebaseProgressFunc func(RebaseProgress)
+
 // FailedRebase describes a single spec that failed validation.
 type FailedRebase struct {
 	Branch           string              // Branch whose rebase failed
@@ -83,8 +94,8 @@ type RebaseValidation struct {
 // Uses parallel validation for improved performance on wide stacks. Branches at
 // the same depth are validated concurrently, providing 2-3x speedup for stacks
 // with many sibling branches.
-func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error) {
-	return e.ValidateRebasesParallel(ctx, specs)
+func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec, progress ...RebaseProgressFunc) (*RebaseValidation, error) {
+	return e.ValidateRebasesParallel(ctx, specs, progress...)
 }
 
 // dryRunRebase performs a rebase without updating branch refs.
@@ -192,7 +203,7 @@ type validationResult struct {
 //
 // The function respects a maximum concurrency limit to avoid creating too many worktrees.
 // Results are tracked thread-safely across parallel validations.
-func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error) {
+func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []RebaseSpec, progress ...RebaseProgressFunc) (*RebaseValidation, error) {
 	if len(specs) == 0 {
 		return &RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}, nil
 	}
@@ -262,7 +273,7 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 		if len(runnable) == 0 {
 			continue
 		}
-		failures := e.processValidationLevel(ctx, validationLevel{depth: level.depth, specs: runnable}, maxConcurrency, pool, result, rebasedByName, rebasedBySHA)
+		failures := e.processValidationLevel(ctx, validationLevel{depth: level.depth, specs: runnable}, maxConcurrency, pool, result, rebasedByName, rebasedBySHA, progress...)
 		for _, f := range failures {
 			failedOrBlocked[f.Branch] = true
 		}
@@ -379,6 +390,7 @@ func (e *engineImpl) processValidationLevel(
 	result *RebaseValidation,
 	rebasedByName *sync.Map,
 	rebasedBySHA *sync.Map,
+	progress ...RebaseProgressFunc,
 ) []FailedRebase {
 	// Within each level, validate specs in parallel
 	semaphore := make(chan struct{}, maxConcurrency)
@@ -421,6 +433,13 @@ func (e *engineImpl) processValidationLevel(
 			case semaphore <- struct{}{}:
 				// Acquired semaphore, ensure it's always released
 				defer func() { <-semaphore }()
+			}
+
+			for _, report := range progress {
+				if report != nil {
+					report(RebaseProgress{Branch: spec.Branch, Parent: spec.NewParent})
+					defer report(RebaseProgress{Branch: spec.Branch, Parent: spec.NewParent, Finished: true})
+				}
 			}
 
 			// Validate this single spec

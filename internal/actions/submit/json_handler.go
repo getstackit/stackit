@@ -35,14 +35,15 @@ type JSONGitHubStackResult struct {
 
 // JSONBranchResult is one branch's plan and result in submit JSON output.
 type JSONBranchResult struct {
-	Branch     string   `json:"branch"`
-	Action     string   `json:"action,omitempty"` // "create" or "update"
-	Status     string   `json:"status"`           // pending, done, error, skipped
-	PR         *int     `json:"pr,omitempty"`
-	URL        string   `json:"url,omitempty"`
-	SkipReason string   `json:"skip_reason,omitempty"`
-	Error      string   `json:"error,omitempty"`
-	Warnings   []string `json:"warnings,omitempty"`
+	Regenerated *PRContentPreview `json:"regenerated,omitempty"`
+	Branch      string            `json:"branch"`
+	Action      string            `json:"action,omitempty"` // "create" or "update"
+	Status      string            `json:"status"`           // pending, done, error, skipped
+	PR          *int              `json:"pr,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	SkipReason  string            `json:"skip_reason,omitempty"`
+	Error       string            `json:"error,omitempty"`
+	Warnings    []string          `json:"warnings,omitempty"`
 }
 
 // JSONHandler collects submit events into a JSONResult.
@@ -78,6 +79,7 @@ func (h *JSONHandler) OnEvent(e Event) {
 	switch ev := e.(type) {
 	case BranchPlanEvent:
 		b := h.branch(ev.BranchName)
+		b.Regenerated = ev.Regenerated
 		b.Action = string(ev.Action)
 		b.PR = ev.PRNumber
 		if ev.Skipped {

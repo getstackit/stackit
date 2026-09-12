@@ -12,7 +12,8 @@ import (
 	"github.com/getstackit/stackit/internal/term"
 )
 
-var newWorktreeEngine = engine.NewEngineForWorktree
+// worktreeEngineFactory builds the engine each parallel restack worker runs in.
+type worktreeEngineFactory func(context.Context, engine.WorktreeEngineOptions) (engine.Engine, error)
 
 // RestackDeps are the collaborators the restack command pipeline (PlanRestack,
 // RestackAction, RunRestack) needs.
@@ -56,6 +57,9 @@ type RestackPlan struct {
 	// They never reach the engine, so RestackAction reports them in the
 	// summary itself.
 	held []RestackHeldInfo
+	// newWorktreeEngine overrides how parallel workers build their engines;
+	// nil uses engine.NewEngineForWorktree. Tests set it to inject failures.
+	newWorktreeEngine worktreeEngineFactory
 }
 
 // restackPlannedGroup pairs an independent stack with the engine plan that
@@ -211,13 +215,14 @@ func RestackAction(ctx context.Context, deps RestackDeps, plan *RestackPlan, han
 	}
 
 	_, err := RunRestack(ctx, deps, RestackRequest{
-		groups:         plan.groups,
-		held:           plan.held,
-		ConflictPolicy: policy,
-		Prompter:       prompter,
-		PromptRerere:   deps.Interactive && !deps.Quiet && term.IsInteractive() && !opts.NonInteractive,
-		Parallel:       parallelDispatch,
-		Jobs:           opts.Jobs,
+		groups:            plan.groups,
+		held:              plan.held,
+		newWorktreeEngine: plan.newWorktreeEngine,
+		ConflictPolicy:    policy,
+		Prompter:          prompter,
+		PromptRerere:      deps.Interactive && !deps.Quiet && term.IsInteractive() && !opts.NonInteractive,
+		Parallel:          parallelDispatch,
+		Jobs:              opts.Jobs,
 	}, handler)
 	if err != nil {
 		return fmt.Errorf("restack failed: %w", err)

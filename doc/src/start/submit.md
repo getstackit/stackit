@@ -23,11 +23,13 @@ This command:
 
 ## Submit options
 
-### Submit only the current branch
+### Submit from a specific branch
 
 ```bash
-stackit submit --branch
+stackit submit --branch feature
 ```
+
+This selects that branch and its ancestors. Add `--stack` to include its descendants.
 
 ### Submit as draft PRs
 
@@ -81,17 +83,42 @@ After making changes to your stack:
    stackit modify  # Amend the current commit
    ```
 
-2. Restack child branches:
-   ```bash
-   stackit restack --upstack
-   ```
+   `modify` automatically restacks descendants; follow any reported recovery
+   steps if it stops on a conflict.
 
-3. Update the PRs:
+2. Update the PRs:
    ```bash
    stackit submit
    ```
 
 Stackit will update existing PRs instead of creating duplicates.
+
+### Regenerate titles and descriptions
+
+After changing commit messages or regrouping branches, replace existing PR text
+with descriptions generated from the current commits:
+
+```bash
+stackit submit --regenerate --no-edit
+```
+
+This overwrites titles and descriptions for the selected PRs even when their
+branches have no new commits to push. One commit supplies its subject and body;
+multiple commits use the oldest subject and a chronological list of subjects.
+An empty generated description clears the old editable text. Stackit maintains
+its generated stack sections through the normal submission flow.
+
+Preview replacement text without saving it or updating PRs:
+
+```bash
+stackit submit --regenerate --dry-run --no-edit
+```
+
+Add `--json` for structured previews, or use `--regenerate --edit` to edit the
+regenerated text before submitting. `--no-edit` suppresses prompts; it does not
+cancel regeneration. Without `--regenerate`, existing text is preserved.
+`--always` forces submission but does not regenerate text, and `--force` controls
+Git push protection independently.
 
 ## Merge your stack
 

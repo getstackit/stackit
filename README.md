@@ -293,11 +293,11 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | Command | Description |
 |:---|:---|
 | `stackit flatten` | Move branches closer to trunk where possible |
-| `stackit restack` | Rebase branches to ensure proper ancestry (`--branch X --upstack`, `--all-stacks`, `--stacks root1,root2`, `--parallel`) |
+| `stackit restack` | Rebase branches to ensure proper ancestry (`--branch X --upstack`, `--all-stacks`, `--stacks root1,root2`, `--parallel`; `--verbose` shows full branch names and revision hashes in interactive output; piped output always shows full names) |
 | `stackit get [branch\|PR]` | Sync a stack or specific PR from remote |
 | `stackit foreach` | Run a shell command on each branch (`--upstack`, `--all-stacks`, `--stacks`, `--parallel`) |
 | `stackit submit` | Push branches and create/update GitHub PRs (alias: `ss` for `--stack`) |
-| `stackit sync` | Pull trunk, delete merged branches, and restack |
+| `stackit sync` | Pull trunk, delete merged branches, and restack (`--verbose` shows full branch names and revision hashes in interactive output; piped output always shows full names) |
 | `stackit merge` | Interactive merge wizard (use `merge next` or `merge ship` for non-interactive) |
 | `stackit reorder` | Interactively reorder branches in your stack |
 | `stackit move` | Rebase a branch (and its children) onto a new parent |

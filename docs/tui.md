@@ -427,7 +427,33 @@ func (m Model) View() string {
 }
 ```
 
+## Branch Names in Command Output
+
+Interactive rows shorten `<user>/<timestamp>/<slug>` branch names to the slug
+with `style.DisplayBranchName`. Route names through a `style.BranchNameResolver`
+seeded with every branch the run may render: when two branches share a slug,
+both print in full. `--verbose` on `sync` and `restack` shows full names and
+revision hashes. Keep full names where the user needs the real ref (diverged
+and deleted rows, `st restack --branch` advice), and in all piped (non-TTY)
+output so scripts can pass names back to `stackit checkout`.
+
 ## Debugging
+
+### Replay Command Output
+
+The TUI lab replays deterministic events through the production command handlers,
+without changing Git branches or making remote requests. Run it in a terminal:
+
+```bash
+mise exec -- go run ./apps/st-tui restack success
+mise exec -- go run ./apps/st-tui restack held
+mise exec -- go run ./apps/st-tui sync diverged
+mise exec -- go run ./apps/st-tui submit success
+```
+
+Run without arguments to list scenarios. Use `--delay 100ms` before the command
+to speed up playback. Review both the live display and the output retained after
+exit: warnings, exceptional skips, and recovery commands must survive completion.
 
 ### Message Inspection
 

@@ -25,6 +25,7 @@ func NewSyncCmd() *cobra.Command {
 		noRestack  bool
 		dryRun     bool
 		jsonOutput bool
+		verbose    bool
 	)
 
 	cmd := &cobra.Command{
@@ -71,7 +72,7 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 				}
 
 				// Create runner (manages terminal state) and handler (processes events)
-				runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
+				runner, handler := NewSyncUI(ctx.Output, ctx.Logger, SyncUIOptions{Verbose: verbose, BranchNames: ctx.Engine.AllBranches().Names()})
 				defer runner.Cleanup()
 
 				// Run sync action with handler
@@ -80,6 +81,7 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 		},
 	}
 
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "In interactive (TTY) output, show full branch names and revision hashes. Piped output always shows full names.")
 	cmd.Flags().BoolVarP(&all, "all", "a", false, "Sync branches across all configured trunks")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Don't prompt for confirmation before overwriting or deleting a branch")
 	cmd.Flags().BoolVar(&restack, "restack", false, "Restack all branches in the current stack")

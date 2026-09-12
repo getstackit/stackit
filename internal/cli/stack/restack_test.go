@@ -503,7 +503,7 @@ No branches to restack.
 		normalized := testhelpers.NormalizeOutput(string(output))
 		require.Contains(t, normalized, "Skipped stackA (conflict)")
 		require.Contains(t, normalized, "Restacked stackB on main")
-		require.Contains(t, normalized, "Summary: restacked 1, skipped 1 (conflict)")
+		require.Contains(t, normalized, "Restack incomplete: restacked 1, skipped 1 (conflict)")
 
 		stackAAfter, err := scene.Repo.GetBranchSHA("stackA")
 		require.NoError(t, err)

@@ -101,8 +101,8 @@ func RestackBranches(ctx *app.Context, branches engine.Branches) error {
 
 // RestackBranchesWithHandler restacks branches with optional progress callback.
 // See ConflictMode for how mode controls conflict handling.
-func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, callback RestackProgressCallback, mode ConflictMode) error {
-	return restackBranchesWithPlan(ctx, branches, nil, callback, mode)
+func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, callback RestackProgressCallback, mode ConflictMode, activity ...engine.RebaseProgressFunc) error {
+	return restackBranchesWithPlan(ctx, branches, nil, callback, mode, activity...)
 }
 
 // restackBranchesWithPlan is the implementation of RestackBranchesWithHandler
@@ -110,7 +110,7 @@ func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, call
 // engine.PlanRestack call is skipped — used by RestackAction when the CLI
 // already built the plan to gate TUI initialization, so we don't pay for
 // roughly 3 git operations per branch twice per invocation.
-func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan *engine.RestackPlan, callback RestackProgressCallback, mode ConflictMode) error {
+func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan *engine.RestackPlan, callback RestackProgressCallback, mode ConflictMode, activity ...engine.RebaseProgressFunc) error {
 	if len(branches) == 0 {
 		return nil
 	}
@@ -142,7 +142,16 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 	// Validate all rebases in a temporary worktree (clean, no side effects)
 	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
 	if len(specs) > 0 {
-		validation, err = ctx.Engine.ValidateRebases(ctx.Context, specs)
+		validation, err = ctx.Engine.ValidateRebases(ctx.Context, specs, func(event engine.RebaseProgress) {
+			if item, ok := plan.Items[event.Branch]; ok {
+				event.Parent = item.NewParent
+			}
+			for _, report := range activity {
+				if report != nil {
+					report(event)
+				}
+			}
+		})
 		if err != nil {
 			return fmt.Errorf("failed to validate rebases: %w", err)
 		}

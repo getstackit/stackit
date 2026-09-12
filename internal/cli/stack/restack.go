@@ -12,6 +12,8 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/handlers"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewRestackCmd creates the restack command
@@ -141,6 +143,25 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 				// terminals that don't recognize them.
 				if !plan.HasWork() {
 					return actions.RestackAction(ctx, plan, NewSimpleSyncHandler(ctx.Output))
+				}
+
+				if tui.IsTTY() {
+					scope := "current stack"
+					switch {
+					case allStacks:
+						scope = "all stacks"
+					case len(stacks) > 0:
+						scope = "selected stacks"
+					case only:
+						scope = style.DisplayBranchName(targetBranch)
+					case upstack:
+						scope = "upstack from " + style.DisplayBranchName(targetBranch)
+					case downstack:
+						scope = "downstack from " + style.DisplayBranchName(targetBranch)
+					case branch != "":
+						scope = "stack containing " + style.DisplayBranchName(targetBranch)
+					}
+					ctx.Output.Info("Restacking %s · %d %s", scope, plan.BranchCount(), pluralizeBranches(plan.BranchCount()))
 				}
 
 				// Create runner (manages terminal state) and handler (processes events)

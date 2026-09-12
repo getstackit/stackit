@@ -362,3 +362,17 @@ func TestLiveActivityFitsTerminal(t *testing.T) {
 	m.Update(PhaseStartMsg{Phase: PhaseGitHub})
 	require.Contains(t, ansi.Strip(m.View().Content), "Fetching remote branches and PR status...")
 }
+
+func TestConcurrentRebaseActivity(t *testing.T) {
+	m := NewModel(3)
+	m.Update(PhaseStartMsg{Phase: PhaseRestack})
+	m.Update(ActivityMsg{Branch: "feat/api", Parent: "main"})
+	m.Update(ActivityMsg{Branch: "feat/web", Parent: "main"})
+	require.Contains(t, m.getStatusText(), "feat/api onto main (+1 active)")
+	m.Update(ActivityMsg{Branch: "feat/api", Finished: true})
+	require.Contains(t, m.getStatusText(), "feat/web onto main")
+	require.NotContains(t, m.getStatusText(), "feat/api")
+	m.Update(ActivityMsg{Branch: "feat/web", Finished: true})
+	require.Equal(t, "Restacking branches...", m.getStatusText())
+	require.Zero(t, m.CompletedOps, "validation does not mark branch refs as updated")
+}

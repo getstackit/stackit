@@ -217,7 +217,7 @@ func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) map[string]stri
 	copy(branches, e.state.branches)
 	e.mu.RUnlock()
 
-	commitsByBranch := e.BatchCommits(BranchesFromNames(e, branches), CommitFormatSHA)
+	commitsByBranch := e.BatchCommits(BranchesFromNames(e, branches), CommitFormatSHA).Commits
 	for _, branchName := range branches {
 		for _, sha := range commitsByBranch[branchName] {
 			if _, ok := want[sha]; !ok {

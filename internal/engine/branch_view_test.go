@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,7 +75,7 @@ func TestBatchChangedFileCountsUsesDivergenceBase(t *testing.T) {
 }
 
 // TestPerConcernBatchReaders asserts each per-concern batch reader matches the
-// single-branch accessor it batches, so consumers can compose the value maps.
+// independent Git reads, so consumers can compose the value maps.
 func TestPerConcernBatchReaders(t *testing.T) {
 	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
@@ -100,14 +101,14 @@ func TestPerConcernBatchReaders(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, engine.DiffStat{Added: wantAdded, Deleted: wantDeleted}, diffs[name], "diff for %s", name)
 
-		wantCommits, err := s.Engine.GetAllCommits(b, engine.CommitFormatReadable)
+		raw, err := s.Engine.Git().RunGitCommandWithContext(context.Background(), "log", "--format=%h %s", wantDiv+".."+name)
 		require.NoError(t, err)
-		require.Equal(t, wantCommits, commits[name], "commits for %s", name)
+		require.Equal(t, strings.Split(raw, "\n"), commits.Commits[name], "commits for %s", name)
 	}
 }
 
 // TestBatchCommitInfo asserts the batched commit info matches the per-branch
-// date accessor and raw Git author for every branch, including trunk.
+// raw Git date and author for every branch, including trunk.
 func TestBatchCommitInfo(t *testing.T) {
 	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
@@ -134,8 +135,7 @@ func TestBatchCommitInfo(t *testing.T) {
 // TestCommitsFallBackToParentTipWithoutStoredDivergence verifies that a branch
 // with no recorded ParentBranchRevision lists only its own commits — measured
 // against the parent's current tip — rather than its entire history back to the
-// repo root (which an empty base would produce). Both GetAllCommits and the
-// batched BatchCommits must agree with the commit count on this fallback.
+// repo root (which an empty base would produce).
 func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
@@ -150,17 +150,14 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 
 	b := s.Engine.GetBranch("b")
 
-	commits, err := s.Engine.GetAllCommits(b, engine.CommitFormatReadable)
+	commits, err := s.Engine.BatchCommits(engine.BranchesOf(b), engine.CommitFormatReadable).ForBranch(b)
 	require.NoError(t, err)
 
-	// Without the fallback, GetAllCommits walks b's whole history to the repo
+	// Without the fallback, a commit read walks b's whole history to the repo
 	// root while a parent..b walk covers only b's own commits, so the two
 	// disagree. The raw-git count against the parent tip is the oracle here.
 	count, err := s.Scene.Repo.GetCommitCount(b.GetParent().GetName(), "b")
 	require.NoError(t, err)
 	require.Equal(t, count, len(commits),
 		"commit messages and count must use the same base when no divergence is stored")
-
-	batched := s.Engine.BatchCommits(engine.BranchesOf(b), engine.CommitFormatReadable)["b"]
-	require.Equal(t, commits, batched, "batched commits must match the single-branch accessor")
 }

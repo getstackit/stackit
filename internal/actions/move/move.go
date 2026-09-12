@@ -207,7 +207,7 @@ func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, erro
 	out := ctx.Output
 
 	validation, validationErr := eng.ValidateRebases(ctx.Context, plan.rebaseSpecs)
-	commits, _ := eng.GetAllCommits(plan.sourceBranch, engine.CommitFormatSubject)
+	commits, _ := eng.BatchCommits(engine.BranchesOf(plan.sourceBranch), engine.CommitFormatSubject).ForBranch(plan.sourceBranch)
 
 	preview := buildPreview(plan, commits, validation, validationErr)
 
@@ -365,7 +365,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	validation, validationErr := eng.ValidateRebases(gctx, rebaseSpecs)
 
 	// Get commits that will be moved
-	commits, _ := eng.GetAllCommits(sourceBranch, engine.CommitFormatSubject)
+	commits, _ := eng.BatchCommits(engine.BranchesOf(sourceBranch), engine.CommitFormatSubject).ForBranch(sourceBranch)
 
 	// Get descendant names (excluding source itself)
 	descNames := descendantNames(descendants, source)

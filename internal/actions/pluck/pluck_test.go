@@ -394,7 +394,7 @@ func TestPluckAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 only has its own commit
-		branch2Commits, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"), engine.CommitFormatSubject)
+		branch2Commits, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branch2")), engine.CommitFormatSubject).ForBranch(s.Engine.GetBranch("branch2"))
 		require.NoError(t, err)
 		require.Equal(t, 1, len(branch2Commits))
 		require.Equal(t, "commit in branch2", branch2Commits[0])

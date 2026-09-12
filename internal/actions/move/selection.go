@@ -76,6 +76,6 @@ func (s *Selection) ValidateOnto(ctx context.Context, onto string) (*engine.Reba
 		return nil, nil, rebaseSpecs, err
 	}
 
-	commits, _ := s.eng.GetAllCommits(s.sourceBranch, engine.CommitFormatSubject)
+	commits, _ := s.eng.BatchCommits(engine.BranchesOf(s.sourceBranch), engine.CommitFormatSubject).ForBranch(s.sourceBranch)
 	return validation, commits, rebaseSpecs, nil
 }

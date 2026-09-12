@@ -360,7 +360,7 @@ func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch, stat eng
 
 		// Commit messages for the detailed view; otherwise the batched count.
 		if !opts.SkipCommitMessages {
-			if commits, err := branch.GetAllCommits(engine.CommitFormatReadable); err == nil {
+			if commits, err := eng.BatchCommits(engine.BranchesOf(branch), engine.CommitFormatReadable).ForBranch(branch); err == nil {
 				ann.CommitMessages = commits
 				ann.CommitCount = len(commits)
 			}

@@ -52,7 +52,7 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 	// Read each per-branch concern the projection needs as its own batched value
 	// map — commits, diff stats, changed-file counts, PR status, and restack
 	// status — instead of warming an engine-global cache.
-	commits := eng.BatchCommits(stackBranches, engine.CommitFormatReadable)
+	commits := eng.BatchCommits(stackBranches, engine.CommitFormatReadable).Commits
 	diffs := eng.BatchDiffStats(stackBranches)
 	fileCounts := eng.BatchChangedFileCounts(ctx, stackBranches)
 	prStatuses, _ := eng.BatchGetPRSubmissionStatus(ctx, stackBranches)

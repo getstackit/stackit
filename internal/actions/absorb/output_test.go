@@ -24,10 +24,10 @@ func TestPrintAbsorbPreviewMultipleCommitsSameBranch(t *testing.T) {
 	s.Scene.Repo.CreateChangeAndCommit("first commit", "file-a")
 	s.Scene.Repo.CreateChangeAndCommit("second commit", "file-b")
 
-	commits, err := s.Engine.GetBranch("branch-a").GetAllCommits(engine.CommitFormatSHA)
+	commits, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branch-a")), engine.CommitFormatSHA).ForBranch(s.Engine.GetBranch("branch-a"))
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(commits), 2)
-	// GetAllCommits returns newest-first; "first commit" was made before
+	// BatchCommits returns newest-first; "first commit" was made before
 	// "second commit".
 	secondSHA, firstSHA := commits[0], commits[1]
 

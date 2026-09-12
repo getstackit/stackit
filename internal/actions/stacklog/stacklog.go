@@ -19,7 +19,7 @@ type Source interface {
 	CurrentBranch() *engine.Branch
 	Trunk() engine.Branch
 	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	BatchCommits(branches engine.Branches, format engine.CommitFormat) map[string][]string
+	BatchCommits(branches engine.Branches, format engine.CommitFormat) engine.CommitBatch
 	RefDecorations() (map[string][]git.RefDecoration, error)
 	GetRevisionForName(branchName string) (string, error)
 }
@@ -92,7 +92,7 @@ func Gather(src Source) (Result, error) {
 
 	// One combined walk per branch yields both SHA and subject on each record,
 	// so the two never desync (an empty subject can't shift the pairing).
-	commitsByBranch := src.BatchCommits(branches, engine.CommitFormatSHASubject)
+	commitsByBranch := src.BatchCommits(branches, engine.CommitFormatSHASubject).Commits
 
 	currentName := current.GetName()
 	for _, b := range branches {

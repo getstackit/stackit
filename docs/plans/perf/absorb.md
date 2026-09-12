@@ -78,11 +78,11 @@ After absorb, only the modified branches and their descendants have changed. A `
 
 `absorb.go:121–130` calls `GetAllCommits(SHA)` per branch and then walks. One `git rev-list --boundary <trunk>..<current>` returns all SHAs in one process. The per-branch attribution can be done from the parent-revision metadata already in the cache.
 
-> **Status:** Partly done. The separate target→branch attribution step
-> (`FindBranchesForCommits`, `engine_reader.go:205`) now resolves via
-> `BatchCommits` instead of calling `GetAllCommits` per branch. The downstack
-> loop at `absorb.go:121–130` this section describes is unchanged and still the
-> remaining win.
+> **Status:** Metadata and revision resolution are batched for both downstack
+> collection and target attribution. `BatchCommits` now reports per-branch
+> errors, so absorb no longer rereads empty histories and `GetAllCommits` has
+> been removed. History still uses one bounded `git log` call per branch range;
+> combining those range walks remains a separate optimization.
 
 ## Validation
 

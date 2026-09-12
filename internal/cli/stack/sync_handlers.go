@@ -313,16 +313,8 @@ func (h *SimpleSyncHandler) printRestackEvent(event syncAction.Event) {
 }
 
 func (h *SimpleSyncHandler) printSummary(summary syncAction.Summary) {
-	parts := syncAction.FormatSummaryParts(summary)
-
-	if len(parts) > 0 {
-		h.Output.Info("✅ Summary: %s", strings.Join(parts, ", "))
-	}
-
-	// Print actionable advice for every conflict, not just the first
-	for _, conflict := range summary.ConflictBranches {
-		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
+	if line := formatSyncSummary(summary); line != "" {
+		h.Output.Info("%s", line)
 	}
 }
 
@@ -392,55 +384,16 @@ func (h *SimpleSyncHandler) OnRestackBranch(restack handlers.RestackBranchEvent)
 
 // OnRestackComplete implements RestackHandler for standalone restack operations
 func (h *SimpleSyncHandler) OnRestackComplete(summary handlers.RestackSummary) {
-	restacked := summary.Restacked
-	skipped := summary.Skipped
-	conflicts := summary.Conflicts
-	blocked := summary.Blocked
-	// Only separate from prior rows when some actually printed; a pure no-op
-	// prints just the one-line summary with no leading blank.
 	if h.restackPrinted {
 		h.Output.Newline()
 	}
-
-	if restacked == 0 && skipped == 0 && len(blocked) == 0 {
-		h.Output.Info("✨ Everything is up to date!")
-		return
-	}
-
-	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked), h.restackUpToDate); summary != "" {
-		h.Output.Info("✅ Summary: %s", summary)
-	}
-
-	for _, conflict := range conflicts {
-		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
-	}
+	h.Output.Info("%s", common.FormatRestackOutcome(summary, h.restackUpToDate))
 }
 
 // reasonBlockedByConflict annotates branches held back because another branch
 // in their stack conflicted. The stack is applied atomically, so these were
 // left untouched rather than restacked onto a moved parent.
 const reasonBlockedByConflict = "(blocked by conflict in stack)"
-
-// formatRestackSummaryLine renders the shared "restacked N, skipped M
-// (conflict), blocked K, P already current" summary used by both restack
-// handlers. Returns "" when there is nothing to summarize.
-func formatRestackSummaryLine(restacked, skipped, blocked, upToDate int) string {
-	parts := []string{}
-	if restacked > 0 {
-		parts = append(parts, fmt.Sprintf("restacked %d", restacked))
-	}
-	if skipped > 0 {
-		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", skipped))
-	}
-	if blocked > 0 {
-		parts = append(parts, fmt.Sprintf("blocked %d", blocked))
-	}
-	if upToDate > 0 {
-		parts = append(parts, fmt.Sprintf("%d already current", upToDate))
-	}
-	return strings.Join(parts, ", ")
-}
 
 // isPlainUpToDate reports whether a restack result is a no-op with nothing
 // worth showing — the branch was already current, not locked, frozen, held back
@@ -601,6 +554,9 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 
 		switch event.Type {
 		case syncAction.EventCompleted:
+			if event.HeldBy != "" {
+				return fmt.Sprintf("Held %s%s back: %s", displayName, prInfo, event.HeldBy), syncComponent.MarkWarn
+			}
 			if event.NewRevision != "" {
 				msg := fmt.Sprintf("Restacked %s%s", displayName, prInfo)
 				if event.Parent != "" {
@@ -624,7 +580,7 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			if event.Conflict {
 				return fmt.Sprintf("Skipped %s%s (conflict)", displayName, prInfo), syncComponent.MarkWarn
 			}
-			return fmt.Sprintf("Skipped %s%s %s", displayName, prInfo, event.Message), syncComponent.MarkDone
+			return fmt.Sprintf("Skipped %s%s %s", displayName, prInfo, event.Message), syncComponent.MarkWarn
 		}
 	}
 	return "", syncComponent.MarkDone
@@ -645,23 +601,26 @@ func (h *InteractiveSyncHandler) Complete(summary syncAction.Summary) {
 
 // formatSummary formats the sync summary
 func (h *InteractiveSyncHandler) formatSummary(summary syncAction.Summary) string {
-	if summary.UpToDate {
+	return formatSyncSummary(summary)
+}
+
+// formatSyncSummary renders the final sync line from the action's summary,
+// which carries holds, conflicts, and skips alongside the completed work.
+func formatSyncSummary(summary syncAction.Summary) string {
+	incomplete := summary.BranchesSkipped > 0 || len(summary.ConflictBranches) > 0 || summary.BranchesBlocked > 0 || len(summary.SkippedStacks) > 0 || len(summary.HeldBranches) > 0
+	if summary.UpToDate && !incomplete {
 		return "✨ Everything is up to date!"
 	}
-
 	parts := syncAction.FormatSummaryParts(summary)
-
-	var lines []string
-	if len(parts) > 0 {
-		lines = append(lines, "✅ Summary: "+strings.Join(parts, ", "))
+	if len(parts) == 0 && !incomplete {
+		// Nothing happened worth summarizing (e.g. sync stopped on an error).
+		return ""
 	}
-
-	// Add actionable advice for every conflict, not just the first
-	for _, conflict := range summary.ConflictBranches {
-		lines = append(lines, fmt.Sprintf("   Run 'st restack %s' to resolve and continue", conflict))
+	prefix := "✅ Summary: "
+	if incomplete {
+		prefix = "⚠ Sync incomplete: "
 	}
-
-	return strings.Join(lines, "\n")
+	return common.WithConflictAdvice(prefix+strings.Join(parts, ", "), summary.ConflictBranches)
 }
 
 // OnRestackStart implements RestackHandler for standalone restack operations
@@ -773,7 +732,7 @@ func (h *InteractiveSyncHandler) OnRestackComplete(summary handlers.RestackSumma
 	defer h.mu.Unlock()
 
 	// Build summary message
-	summaryMsg := h.formatRestackSummary(summary.Restacked, summary.Skipped, summary.Conflicts, summary.Blocked)
+	summaryMsg := common.FormatRestackOutcome(summary, h.restackUpToDate)
 
 	// Send complete message
 	h.runner.Send(syncComponent.CompleteMsg{Summary: summaryMsg})
@@ -852,14 +811,14 @@ func (h *InteractiveSyncHandler) PromptOrphanedMetadata(info engine.OrphanedMeta
 func describeRestackConflicts(out output.Output, conflictBranches []string) {
 	out.Newline()
 	// out.Warn already prefixes "⚠️ "; don't hardcode another one here.
-	out.Warn("Found conflicts in %d %s during restack; branches without conflicts were restacked.",
+	out.Warn("Found conflicts in %d %s during restack. Affected stacks were left untouched; independent stacks were processed.",
 		len(conflictBranches),
 		map[bool]string{true: "branch", false: "branches"}[len(conflictBranches) == 1])
 	// Bullets are detail lines, not warnings — use Info so they don't each
 	// pick up a ⚠️ prefix.
 	out.Info("Resolve each with:")
 	for _, name := range conflictBranches {
-		out.Info("  • %s", style.ColorCyan("st restack "+name))
+		out.Info("  • %s", style.ColorCyan("st restack --branch "+name))
 	}
 	out.Newline()
 }
@@ -925,22 +884,4 @@ func (h *InteractiveSyncHandler) PromptBranchDeletions(branches map[string]strin
 	}
 
 	return confirmed, nil
-}
-
-// formatRestackSummary formats the restack summary
-func (h *InteractiveSyncHandler) formatRestackSummary(restacked, skipped int, conflicts, blocked []string) string {
-	if restacked == 0 && skipped == 0 && len(blocked) == 0 {
-		return "✨ Everything is up to date!"
-	}
-
-	result := ""
-	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked), h.restackUpToDate); summary != "" {
-		result = "✅ Summary: " + summary
-	}
-
-	for _, conflict := range conflicts {
-		result += fmt.Sprintf("\n   Run 'st restack %s' to resolve and continue", conflict)
-	}
-
-	return result
 }

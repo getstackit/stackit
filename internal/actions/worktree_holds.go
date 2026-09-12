@@ -92,16 +92,17 @@ func collectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 	return report
 }
 
-func (r RestackWorktreeHoldReport) blocks(branch, stackRoot string) bool {
+// holdFor returns the hold that keeps branch from being restacked, if any.
+func (r RestackWorktreeHoldReport) holdFor(branch, stackRoot string) (RestackWorktreeHold, bool) {
 	for _, hold := range r.Holds {
 		if hold.Scope == RestackWorktreeHoldStack && hold.StackRoot == stackRoot {
-			return true
+			return hold, true
 		}
 		if hold.Scope == RestackWorktreeHoldBranch && hold.Branch == branch {
-			return true
+			return hold, true
 		}
 	}
-	return false
+	return RestackWorktreeHold{}, false
 }
 
 func (r RestackWorktreeHoldReport) blocksStack(stackRoot string) bool {
@@ -137,6 +138,28 @@ func (h RestackWorktreeHold) warning() string {
 	default:
 		return fmt.Sprintf("Holding %s because worktree %s %s", h.Branch, h.WorktreePath, h.Reason)
 	}
+}
+
+// heldBy renders the hold as the per-branch reason carried in restack results
+// (the same "worktree <path> …" shape sync and the engine report).
+func (h RestackWorktreeHold) heldBy() string {
+	var reason string
+	switch h.Reason {
+	case restackWorktreeHoldReasonRebase:
+		reason = fmt.Sprintf("worktree %s has a rebase in progress", h.WorktreePath)
+	case restackWorktreeHoldReasonUncommittedChanges:
+		reason = fmt.Sprintf("worktree %s has uncommitted changes", h.WorktreePath)
+	case restackWorktreeHoldReasonUntrackedCollision:
+		reason = fmt.Sprintf("an untracked file in worktree %s would be overwritten by the incoming commit", h.WorktreePath)
+	case restackWorktreeHoldReasonUntrackedCheckFailed:
+		reason = fmt.Sprintf("untracked files in worktree %s could not be checked against the incoming commit", h.WorktreePath)
+	default:
+		reason = fmt.Sprintf("worktree %s %s", h.WorktreePath, h.Reason)
+	}
+	if h.Scope == RestackWorktreeHoldStack {
+		reason += fmt.Sprintf(" (holds the stack rooted at %s)", h.StackRoot)
+	}
+	return reason
 }
 
 func managedWorktreeHoldReason(ctx *app.Context, path engine.WorktreePath) string {

@@ -733,9 +733,8 @@ func Action(ctx context.Context, deps Deps, branchOrPR string, opts Options, han
 		restacked = outcome.Summary.Restacked
 		held = outcome.Summary.Held
 		if err != nil {
-			// RunRestack leaves completion to the caller on error; get still
-			// reports what it restacked before the conflict stopped it.
-			handler.OnRestackComplete(outcome.Summary)
+			// RunRestack already reported the outcome, unless it handed off to
+			// the conflict workflow, whose guidance must be the last output.
 			return fmt.Errorf("restack failed: %w", err)
 		}
 	}

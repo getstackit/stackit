@@ -285,6 +285,20 @@ func (h *InteractiveHandler) PromptConfirm(preview Preview) (bool, error) {
 }
 ```
 
+**Handing off to a plain-terminal workflow.** When a prompt answer hands control
+to a workflow that writes to the plain terminal (e.g. "Resolve conflicts now?" →
+the conflict workflow's file list and continue/abort guidance), release the TUI
+permanently instead of resuming it: send `CompleteMsg{}`, `Wait()`, then
+`Cleanup()`. The sync model drains its ordered print queue before quitting, so
+rows already sent still land above the workflow's output. After the release,
+`Send`/`Complete` on the runner are no-ops, so any outcome reported later must
+go to plain output — `InteractiveSyncHandler` records the release and prints its
+final summary through `output.Output` instead (see `promptResolveConflicts` and
+`finish` in `internal/cli/stack/sync_handlers.go`). Actions skip that summary
+when the workflow returns `ErrConflictWorkflow`, so the workflow's instructions
+stay the last thing on screen. On decline, cancel, or error, `Resume()` as
+usual.
+
 ### Error Handling
 
 ```go

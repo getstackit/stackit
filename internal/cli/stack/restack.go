@@ -30,6 +30,7 @@ func NewRestackCmd() *cobra.Command {
 		parallel           bool
 		jobs               int
 		jsonOutput         bool
+		verbose            bool
 	)
 
 	cmd := &cobra.Command{
@@ -163,7 +164,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 				}
 
 				// Create runner (manages terminal state) and handler (processes events)
-				runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
+				runner, handler := NewSyncUI(ctx.Output, ctx.Logger, SyncUIOptions{Verbose: verbose, BranchNames: ctx.Engine.AllBranches().Names()})
 				defer runner.Cleanup()
 
 				return actions.RestackAction(ctx, plan, handler)
@@ -171,6 +172,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 		},
 	}
 
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "In interactive (TTY) output, show full branch names and revision hashes. Piped output always shows full names.")
 	cmd.Flags().StringVar(&branch, "branch", "", "Which branch to run this command from. Defaults to the current branch.")
 	cmd.Flags().BoolVar(&downstack, "downstack", false, "Only restack this branch and its ancestors.")
 	cmd.Flags().BoolVar(&only, "only", false, "Only restack this branch.")

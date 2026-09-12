@@ -3,6 +3,7 @@ package stack
 import (
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -418,4 +419,90 @@ func TestRestackActivityOnlyForInteractiveHandler(t *testing.T) {
 	require.NotNil(t, activity)
 	activity(engine.RebaseProgress{Branch: "feat/api", Parent: "main"})
 	require.Contains(t, runner.Messages(), syncComponent.ActivityMsg{Branch: "feat/api", Parent: "main"})
+}
+
+func TestInteractiveRestackDetailVerbosity(t *testing.T) {
+	t.Parallel()
+	h := NewInteractiveSyncHandler(tui.NewMockRunner(), syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+	event := handlers.RestackBranchEvent{Branch: "user/20260912000000/feat-api", Parent: "user/20260911000000/feat-base", Result: handlers.RestackDone, NewRevision: "abc1234"}
+	compact, _ := h.formatRestackDetail(event)
+	compact = ansi.Strip(compact)
+	require.Contains(t, compact, "Restacked feat-api on feat-base")
+	require.NotContains(t, compact, "2026091")
+	require.NotContains(t, compact, "abc1234")
+	h.verbose = true
+	verbose, _ := h.formatRestackDetail(event)
+	verbose = ansi.Strip(verbose)
+	require.Contains(t, verbose, "Restacked "+event.Branch+" on "+event.Parent)
+	require.Contains(t, verbose, "abc1234")
+}
+
+// detailMessages collects the row text the handler sent to the TUI.
+func detailMessages(runner *tui.MockRunner) []string {
+	var rows []string
+	for _, msg := range runner.Messages() {
+		if detail, ok := msg.(syncComponent.PhaseDetailMsg); ok {
+			rows = append(rows, ansi.Strip(detail.Message))
+		}
+	}
+	return rows
+}
+
+func TestInteractiveSyncRowsFallBackToFullNamesOnCollision(t *testing.T) {
+	t.Parallel()
+	alice := "alice/20260901000000/fix-tests"
+	bob := "bob/20260905000000/fix-tests"
+
+	t.Run("seeded names collide before either renders", func(t *testing.T) {
+		t.Parallel()
+		runner := tui.NewMockRunner()
+		h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+		h.names.Observe(alice, bob, "carol/20260906000000/docs")
+		h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: bob, Parent: alice, NewRevision: "abc1234"})
+		h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "carol/20260906000000/docs", Parent: "main", NewRevision: "def5678"})
+		rows := detailMessages(runner)
+		require.Contains(t, rows[0], "Restacked "+bob+" on "+alice)
+		require.Contains(t, rows[1], "Restacked docs on main", "unambiguous names stay short")
+	})
+
+	t.Run("names learned from events", func(t *testing.T) {
+		t.Parallel()
+		runner := tui.NewMockRunner()
+		h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+		h.OnRestackBranch(handlers.RestackBranchEvent{Branch: bob, Parent: alice, Result: handlers.RestackDone, NewRevision: "abc1234"})
+		require.Contains(t, detailMessages(runner)[0], "Restacked "+bob+" on "+alice)
+	})
+}
+
+func TestInteractiveSyncKeepsFullNamesForRecoveryRows(t *testing.T) {
+	t.Parallel()
+	branch := "alice/20260901000000/fix-tests"
+	runner := tui.NewMockRunner()
+	h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventSkipped, Branch: branch, Conflict: true})
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: branch, Message: "merged into main"})
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventCompleted, Branch: branch, NewRevision: "abc1234"})
+	rows := detailMessages(runner)
+	require.Equal(t, branch+" diverged from remote (skipping)", rows[0])
+	require.Equal(t, "Deleted "+branch+" merged into main", rows[1])
+	require.Equal(t, "fix-tests fast-forwarded to abc1234", rows[2], "routine rows stay short")
+}
+
+func TestInteractiveReparentNamesFollowVerbosity(t *testing.T) {
+	t.Parallel()
+	event := handlers.RestackBranchEvent{
+		Branch: "user/20260912000000/feat-api", Parent: "main", Result: handlers.RestackDone, NewRevision: "abc1234",
+		Reparented: true, OldParent: "user/20260911000000/landed", NewParent: "main",
+	}
+	for _, verbose := range []bool{false, true} {
+		runner := tui.NewMockRunner()
+		h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+		h.verbose = verbose
+		h.OnRestackBranch(event)
+		want := "Reparented landed → main."
+		if verbose {
+			want = "Reparented " + event.OldParent + " → main."
+		}
+		require.Contains(t, detailMessages(runner)[0], want)
+	}
 }

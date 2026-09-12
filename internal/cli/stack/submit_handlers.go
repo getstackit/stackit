@@ -41,9 +41,6 @@ const (
 	nameStyleDim
 )
 
-// skipReasonNoChanges is the SkipReason emitted for an up-to-date branch.
-const skipReasonNoChanges = "no changes"
-
 // NewSubmitUI creates the handler for submit operations and the stop function
 // that releases everything it holds: the pending preparation notice and the
 // terminal runner. Caller must defer stop() so every exit path, including
@@ -81,6 +78,8 @@ const maxNamedSkipGroup = 3
 type planPrinter struct {
 	out       output.Output
 	verbose   bool
+	fullNames bool // print full branch names (piped output) instead of short ones
+	names     *style.BranchNameResolver
 	scopes    map[string]string
 	worktrees map[string]engine.WorktreePath
 	parents   map[string]string
@@ -103,6 +102,8 @@ func (p *planPrinter) SetStack(stack submit.StackSnapshot) {
 	p.events = p.events[:0]
 	p.printed = false
 	p.nameWidth = 0
+	p.names = style.NewBranchNameResolver(stack.Branches...)
+	p.names.Observe(stack.TrunkBranch)
 
 	for _, name := range stack.Branches {
 		if w := lipgloss.Width(p.decoratedName(name)); w > p.nameWidth {
@@ -111,9 +112,22 @@ func (p *planPrinter) SetStack(stack submit.StackSnapshot) {
 	}
 }
 
+// name renders a branch name. Piped output keeps the full name so scripts and
+// agents can pass it back to `stackit checkout`; terminals get the short form
+// unless another branch in the stack shares it.
+func (p *planPrinter) name(branchName string) string {
+	if p.fullNames {
+		return branchName
+	}
+	if p.names == nil {
+		p.names = style.NewBranchNameResolver()
+	}
+	return p.names.Short(branchName)
+}
+
 // decoratedName is the display name plus scope and worktree annotations.
 func (p *planPrinter) decoratedName(branchName string) string {
-	name := style.DisplayBranchName(branchName)
+	name := p.name(branchName)
 	if scope := p.scopes[branchName]; scope != "" {
 		name += " [" + scope + "]"
 	}
@@ -140,6 +154,7 @@ func (p *planPrinter) Flush() {
 		if summary := p.compactSummary(); summary != "" {
 			p.out.Info("● %s", summary)
 		}
+		p.printCompactExceptions()
 		return
 	}
 
@@ -172,6 +187,40 @@ func (p *planPrinter) Flush() {
 			p.printSkippedName(ev)
 		}
 	}
+}
+
+// printCompactExceptions keeps the plan rows a compact run must not hide: one
+// line per unexpected skip reason, and active branches with no commits.
+// Unchanged branches are the expected default and stay silent.
+func (p *planPrinter) printCompactExceptions() {
+	active, skipped := p.partition()
+	for _, group := range skipped {
+		if group.reason == engine.ReasonNoChanges {
+			continue
+		}
+		p.out.Info("  ○ %s skipped: %s", p.nameList(group.events), group.reason)
+	}
+	for _, ev := range active {
+		// Planning only marks submittable branches as empty.
+		if ev.Empty {
+			p.out.Info("  ○ %s has no commits", p.name(ev.BranchName))
+		}
+	}
+}
+
+// nameList joins up to maxNamedSkipGroup branch names, summarizing the rest
+// as a count so a large group stays on one short line.
+func (p *planPrinter) nameList(events []submit.BranchPlanEvent) string {
+	shown := min(len(events), maxNamedSkipGroup)
+	names := make([]string, shown)
+	for i, ev := range events[:shown] {
+		names[i] = p.name(ev.BranchName)
+	}
+	list := strings.Join(names, ", ")
+	if rest := len(events) - shown; rest > 0 {
+		list += fmt.Sprintf(" and %d more", rest)
+	}
+	return list
 }
 
 // compactSummary describes only the work that submit will perform. The
@@ -261,7 +310,7 @@ func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
 // back to the trunk name.
 func (p *planPrinter) soloBase(branchName string) string {
 	if parent := p.parents[branchName]; parent != "" {
-		return style.DisplayBranchName(parent)
+		return p.name(parent)
 	}
 	if p.trunk != "" {
 		return p.trunk
@@ -331,7 +380,7 @@ func sectionHeader(label string, count int, muted bool) string {
 
 func skipGroupTitle(reason string) string {
 	switch reason {
-	case skipReasonNoChanges:
+	case engine.ReasonNoChanges:
 		return "No changes"
 	case "no existing PR":
 		return "No existing PR"
@@ -375,7 +424,7 @@ type branchItem struct {
 func NewSimpleSubmitHandler(out output.Output, verbosity SubmitVerbosity) *SimpleSubmitHandler {
 	return &SimpleSubmitHandler{
 		BaseHandler: common.NewBaseHandler(out),
-		plan:        planPrinter{out: out, verbose: verbosity.verbose()},
+		plan:        planPrinter{out: out, verbose: verbosity.verbose(), fullNames: true},
 		items:       make(map[string]*branchItem),
 	}
 }
@@ -478,7 +527,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			if ref := submitComponent.PRRef(item.toSubmitItem()); ref != "" {
 				detail = ref + " " + actionDone
 			}
-			h.Output.Info("  ✓ %s %s", style.DisplayBranchName(ev.BranchName), detail)
+			h.Output.Info("  ✓ %s %s", h.plan.name(ev.BranchName), detail)
 			// A newly created PR is the one the user needs to open; updated
 			// PRs rarely need their URL re-pasted.
 			if item.action == engine.SubmitActionCreate && item.url != "" {
@@ -490,11 +539,11 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				h.Output.Info("  ✗ failed: %v", ev.Error)
 				return
 			}
-			h.Output.Info("  ✗ %s failed: %v", style.DisplayBranchName(ev.BranchName), ev.Error)
+			h.Output.Info("  ✗ %s failed: %v", h.plan.name(ev.BranchName), ev.Error)
 		}
 
 	case submit.BranchWarningEvent:
-		h.Output.Warn("%s: %s", style.DisplayBranchName(ev.BranchName), ev.Warning)
+		h.Output.Warn("%s: %s", h.plan.name(ev.BranchName), ev.Warning)
 
 	case submit.GitHubStackSyncedEvent:
 		h.Output.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(ev.Action), ev.Number, formatGitHubStackPRs(ev.PullRequests))
@@ -510,7 +559,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				if summary := submitComponent.FormatOutcomeSummary(h.submitItems(), ev.Duration); summary != "" {
 					h.Output.Info("%s", summary)
 				}
-				if urls := submitComponent.FormatCreatedURLs(h.submitItems()); urls != "" {
+				if urls := submitComponent.FormatPRResults(h.submitItems(), submitComponent.PRLinksPlain); urls != "" {
 					h.Output.Info("%s", urls)
 				}
 				return
@@ -692,10 +741,11 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		items := make([]submitComponent.Item, len(ev.Branches))
 		for i, branch := range ev.Branches {
 			items[i] = submitComponent.Item{
-				BranchName: branch.Name,
-				Action:     branch.Action,
-				PRNumber:   branch.PRNumber,
-				Status:     submitComponent.StatusPending,
+				BranchName:  branch.Name,
+				DisplayName: h.plan.name(branch.Name),
+				Action:      branch.Action,
+				PRNumber:    branch.PRNumber,
+				Status:      submitComponent.StatusPending,
 			}
 		}
 		h.model.Items = items
@@ -729,7 +779,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			})
 			return
 		}
-		h.out.Warn("%s: %s", style.DisplayBranchName(ev.BranchName), ev.Warning)
+		h.out.Warn("%s: %s", h.plan.name(ev.BranchName), ev.Warning)
 
 	case submit.GitHubStackSyncedEvent:
 		if h.runner.IsRunning() {

@@ -146,6 +146,17 @@ func TestModelCompletionSummaryIncludesFailuresAndWarnings(t *testing.T) {
 	require.Contains(t, summary, "⚠️  add-feature: failed to add labels")
 }
 
+func TestCompactCompletionPreservesWarnings(t *testing.T) {
+	t.Parallel()
+	m := NewModel([]Item{{BranchName: "feat/web", Action: ActionCreate, Status: StatusDone}})
+	m.Verbose = false
+	m.Update(WarningMsg{BranchName: "feat/web", Warning: "could not apply reviewer @octo"})
+
+	summary := m.finalSummary(ProgressCompleteMsg{Elapsed: time.Second})
+	require.Contains(t, summary, "Opened 1 PR")
+	require.Contains(t, summary, "feat/web: could not apply reviewer @octo")
+}
+
 func TestFormatCompactRowTruncatesLongErrors(t *testing.T) {
 	t.Parallel()
 

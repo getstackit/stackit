@@ -168,6 +168,15 @@ func TestSubmitSharedActivity(t *testing.T) {
 	require.Contains(t, m.View().Content, "creating")
 }
 
+func TestSubmitFailureAfterPRCreation(t *testing.T) {
+	m := NewModel([]Item{{BranchName: "feat/api", Action: ActionCreate, Status: StatusDone, URL: "https://github.com/o/r/pull/1"}})
+	m.Verbose = false
+	summary := m.finalSummary(ProgressCompleteMsg{Failed: true})
+	require.True(t, strings.HasPrefix(summary, "✗ Submit failed\n"))
+	require.Contains(t, summary, "Opened 1 PR")
+	require.Contains(t, summary, "feat/api  #1")
+}
+
 func TestFormatCompactRowTruncatesLongErrors(t *testing.T) {
 	t.Parallel()
 

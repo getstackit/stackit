@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -267,4 +268,44 @@ func TestInteractiveRestackDetailVerbosity(t *testing.T) {
 	verbose, _ := h.formatRestackDetail(event)
 	require.Contains(t, verbose, event.Branch)
 	require.Contains(t, verbose, "abc1234")
+}
+
+func TestPartialFailuresCannotReportSuccess(t *testing.T) {
+	summary := formatSyncSummary(syncAction.Summary{TrunkUpdated: true, Failed: true}, 0)
+	require.Contains(t, summary, "✗ Sync failed")
+	require.Contains(t, summary, "pulled trunk")
+	require.NotContains(t, summary, "✅")
+	require.Equal(t, "✗ Restack failed", formatRestackOutcome(handlers.RestackSummary{Failed: true}, 0, 0))
+}
+
+type conflictPromptRunner struct {
+	*tui.MockRunner
+	resumed bool
+	cleaned bool
+}
+
+func (r *conflictPromptRunner) Resume()  { r.resumed = true }
+func (r *conflictPromptRunner) Cleanup() { r.cleaned = true }
+
+func TestConflictPromptTerminalHandoff(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		resolve bool
+		err     error
+		cleanup bool
+	}{
+		{name: "resolve", resolve: true, cleanup: true},
+		{name: "decline"},
+		{name: "prompt error", err: errors.New("interrupted")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runner := &conflictPromptRunner{MockRunner: tui.NewMockRunner()}
+			h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(0), output.NewNullOutput(), output.NewNullLogger())
+			resolve, err := h.promptResolveConflicts([]string{"feat/web"}, func(string, bool) (bool, error) { return test.resolve, test.err })
+			require.Equal(t, test.resolve, resolve)
+			require.Equal(t, test.err, err)
+			require.Equal(t, test.cleanup, runner.cleaned)
+			require.Equal(t, !test.cleanup, runner.resumed)
+		})
+	}
 }

@@ -40,7 +40,7 @@ executeTree → common.Run                         (same bootstrap family as co)
 
 For `tree short` and `tree` (NORMAL): no GitHub round trip. `tree short` skips `BatchBranchStats` entirely (`opts.Style != TreeStyleShort` gate), so annotation construction dominates.
 
-For `tree --json`: same shape as the embedded `state --json` stack snapshot (`BuildTreeJSON`), including PR check status only for branches that have PR metadata.
+For `tree --json` (normal and full styles): same shape as the embedded `state --json` stack snapshot (`BuildTreeJSON`), including PR check status only for branches that have PR metadata.
 
 ## Proposed wins (ranked)
 

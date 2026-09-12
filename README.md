@@ -496,12 +496,21 @@ For machine-readable status, **`stackit state --json`** is the single snapshot t
 read: the current branch and trunk, working-tree state (`staged`/`unstaged`/
 `untracked`), any in-progress `operation` (`rebase`/`merge`) with its
 `conflicted_files`, and the full `stack`. The embedded `stack` is the same shape as
-`stackit tree --json` — each branch reports its structure (`parent`, `children`),
+the normal `stackit tree --json` — each branch reports its structure (`parent`, `children`),
 PR/CI state (`pr.state`, `pr.ci_status`, `pr.review_status`), and stack health
 (`needs_restack`, `is_locked`, `is_frozen`, `scope`), with the status booleans
 always present (an explicit `false`, never omitted). One `stackit state --json`
 call replaces combining `git status`, `stackit tree --json`, and `stackit info`
 (and `stackit status` still passes through to `git status`).
+
+`stackit tree --json` honors the view flags. `tree short --json` (and `t --json`)
+is local and structural: it never contacts GitHub, and omits `commits`,
+`additions`, `deletions`, `pr`, `github_available`, and the summary's
+`approved_count`/`in_review_count` rather than reporting them as zero. Normal and
+full JSON — and `state --json` — always include them. `--stack` and
+`--steps N` scope the output to exactly the branches the text tree would draw:
+`branches`, `children`, and `summary` all cover that set, so every child named
+is present (a branch's `parent` may still be outside it).
 
 `stackit log --json` is a separate trunk-history feed for release tooling. It
 emits collapsed recently merged commits, not the branch tree shape.

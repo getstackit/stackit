@@ -9,6 +9,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	stackErrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/rerere"
 	"github.com/getstackit/stackit/internal/utils"
@@ -188,6 +189,11 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 
 	var restacked, skipped int
 	var conflicts, blocked []string
+	complete := func(failed bool) {
+		handler.OnRestackComplete(handlers.RestackSummary{
+			Failed: failed, Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked,
+		})
+	}
 	prompter, promptForConflicts := conflictPrompter(handler, opts)
 
 	// Parallel mode: dispatch independent stack groups to separate worktrees.
@@ -197,12 +203,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		var err error
 		restacked, skipped, conflicts, blocked, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
 		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
-		handler.OnRestackComplete(handlers.RestackSummary{
-			Restacked: restacked,
-			Skipped:   skipped,
-			Conflicts: conflicts,
-			Blocked:   blocked,
-		})
+		complete(err != nil)
 		if err != nil {
 			return fmt.Errorf("restack failed: %w", err)
 		}
@@ -229,6 +230,10 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		}
 
 		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode, handlers.RestackActivity(handler)); err != nil {
+			// A deliberate handoff already printed continue/abort guidance.
+			if !errors.Is(err, stackErrors.ErrConflictWorkflow) {
+				complete(true)
+			}
 			return fmt.Errorf("restack failed: %w", err)
 		}
 	}
@@ -238,6 +243,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	if promptForConflicts && len(conflicts) > 0 {
 		resolve, err := prompter.PromptResolveConflicts(conflicts)
 		if err != nil {
+			complete(true)
 			return fmt.Errorf("failed to prompt for conflict resolution: %w", err)
 		}
 		if resolve {
@@ -249,12 +255,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		}
 	}
 
-	handler.OnRestackComplete(handlers.RestackSummary{
-		Restacked: restacked,
-		Skipped:   skipped,
-		Conflicts: conflicts,
-		Blocked:   blocked,
-	})
+	complete(false)
 	return nil
 }
 

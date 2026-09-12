@@ -46,6 +46,7 @@ type WarningMsg struct {
 
 // ProgressCompleteMsg is sent when all submissions are finished.
 type ProgressCompleteMsg struct {
+	Failed  bool          // the overall operation can fail after PR creation succeeds
 	Skipped int           // branches skipped in the plan, shown as "unchanged"
 	Elapsed time.Duration // total run time; zero when unknown
 }
@@ -154,6 +155,9 @@ func (m *Model) finalSummary(msg ProgressCompleteMsg) string {
 		if len(m.Warnings) > 0 {
 			summary += "\n\n" + strings.Join(m.Warnings, "\n")
 		}
+	}
+	if msg.Failed {
+		summary = strings.TrimSpace("✗ Submit failed\n" + summary)
 	}
 	return summary
 }

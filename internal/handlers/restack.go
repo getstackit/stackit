@@ -73,6 +73,7 @@ type RestackBranchEvent struct {
 
 // RestackSummary contains aggregate outcomes from a restack operation.
 type RestackSummary struct {
+	Failed    bool // unexpected operation error, possibly after partial progress
 	Restacked int
 	Skipped   int
 	Conflicts []string

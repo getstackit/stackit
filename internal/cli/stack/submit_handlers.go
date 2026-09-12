@@ -724,6 +724,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			return
 		}
 		h.runner.Send(submitComponent.ProgressCompleteMsg{
+			Failed:  ev.Outcome == submit.OutcomeFailed,
 			Skipped: h.plan.skippedCount(),
 			Elapsed: ev.Duration,
 		})

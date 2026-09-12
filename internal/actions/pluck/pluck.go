@@ -24,7 +24,7 @@ type pluckEngine interface {
 	BatchRevisions(branches engine.Branches) engine.RevisionMap
 	GetDivergencePoint(branchName string) (string, error)
 	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
-	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
+	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec, opts engine.ValidateRebasesOpts) (*engine.RebaseValidation, error)
 	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
 	AssignBranchesToNewStack(ctx context.Context, root engine.Branch, branches engine.Branches) (string, error)
 }
@@ -189,7 +189,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Validate rebases before modifying any state
 	handler.OnStep(StepValidating, basehandler.StatusStarted, "Validating rebases...")
-	validation, err := eng.ValidateRebases(gctx, rebaseSpecs)
+	validation, err := eng.ValidateRebases(gctx, rebaseSpecs, engine.ValidateRebasesOpts{})
 	if err != nil {
 		handler.OnStep(StepValidating, basehandler.StatusFailed, err.Error())
 		return fmt.Errorf("failed to validate rebases: %w", err)

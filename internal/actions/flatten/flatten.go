@@ -27,7 +27,7 @@ type flattenEngine interface {
 	SortBranchesTopologically(branches engine.Branches) engine.Branches
 	BatchRevisions(branches engine.Branches) engine.RevisionMap
 	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
-	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
+	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec, opts engine.ValidateRebasesOpts) (*engine.RebaseValidation, error)
 	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
 }
 
@@ -167,7 +167,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// ValidateRebases tracks rebased SHAs, so chained rebases work correctly.
 	// Parents are rebased first, and their new SHAs are used for child rebases.
 	conflicts := make(map[string]string) // branch -> error message
-	validation, err := eng.ValidateRebases(gctx, allRebaseSpecs)
+	validation, err := eng.ValidateRebases(gctx, allRebaseSpecs, engine.ValidateRebasesOpts{})
 	if err != nil {
 		handler.OnStep(StepValidating, basehandler.StatusFailed, err.Error())
 		return fmt.Errorf("failed to validate rebases: %w", err)
@@ -559,7 +559,7 @@ func canRebaseOnto(ctx *app.Context, eng flattenEngine, branchName, targetRev, o
 		OldUpstream: oldUpstream,
 	}}
 
-	validation, err := eng.ValidateRebases(ctx.Context, specs)
+	validation, err := eng.ValidateRebases(ctx.Context, specs, engine.ValidateRebasesOpts{})
 	if err != nil {
 		ctx.Logger.Debug("Validation error for %s onto %s: %v", branchName, targetRev, err)
 		return false

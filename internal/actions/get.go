@@ -719,7 +719,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 					event.Result = handlers.RestackBlocked
 				}
 				handler.OnRestackBranch(event)
-			}, ConflictModeEnterWorkflow); err != nil {
+			}, ConflictModeEnterWorkflow, RestackBranchesOpts{}); err != nil {
 				handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked, Held: held})
 				return fmt.Errorf("restack failed: %w", err)
 			}

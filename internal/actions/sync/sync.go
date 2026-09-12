@@ -365,6 +365,7 @@ type Event struct {
 	Branch              string            // Branch name (if applicable)
 	PRNumber            *git.PRNumber     // PR number (if applicable)
 	Message             string            // Human-readable description
+	Total               int               // Branches handed to restack, set on the restack phase's EventStarted (an upper bound; see restackBranches)
 	OldRevision         string            // For position changes
 	NewRevision         string            // For position changes
 	Conflict            bool              // Is this a conflict?

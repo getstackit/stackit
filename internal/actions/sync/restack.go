@@ -134,6 +134,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 				})
 			case engine.RestackBlocked:
 				summary.BranchesBlocked++
+				summary.blockedBranches = append(summary.blockedBranches, p.Branch)
 				handler.EmitEvent(Event{
 					Phase:      PhaseRestack,
 					Type:       EventSkipped,

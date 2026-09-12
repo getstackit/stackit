@@ -10,6 +10,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	stackErrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/rerere"
@@ -213,6 +214,11 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	var restacked, skipped int
 	var conflicts, blocked []string
 	held := slices.Clone(plan.held)
+	complete := func(failed bool) {
+		handler.OnRestackComplete(handlers.RestackSummary{
+			Failed: failed, Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked, Held: held,
+		})
+	}
 	prompter, promptForConflicts := conflictPrompter(handler, opts)
 
 	// Parallel mode: dispatch independent stack groups to separate worktrees.
@@ -224,13 +230,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		restacked, skipped, conflicts, blocked, runtimeHeld, err = restackGroupsParallel(ctx, opts, plan.groups, plan.newWorktreeEngine, handler)
 		held = append(held, runtimeHeld...)
 		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
-		handler.OnRestackComplete(handlers.RestackSummary{
-			Restacked: restacked,
-			Skipped:   skipped,
-			Conflicts: conflicts,
-			Blocked:   blocked,
-			Held:      held,
-		})
+		complete(err != nil)
 		if err != nil {
 			return fmt.Errorf("restack failed: %w", err)
 		}
@@ -257,6 +257,10 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		}
 
 		if err := restackBranchesWithPlan(ctx, group.sortedBranches, progress, conflictMode, restackPlanOpts{prePlan: group.enginePlan, activity: handlers.RestackActivity(handler)}); err != nil {
+			// A deliberate handoff already printed continue/abort guidance.
+			if !errors.Is(err, stackErrors.ErrConflictWorkflow) {
+				complete(true)
+			}
 			return fmt.Errorf("restack failed: %w", err)
 		}
 	}
@@ -265,26 +269,48 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 
 	if promptForConflicts && len(conflicts) > 0 {
 		resolve, err := prompter.PromptResolveConflicts(conflicts)
-		if err != nil {
+		switch {
+		case errors.Is(err, stackErrors.ErrCanceled):
+			// Canceling the prompt is a decline: report the conflicts as
+			// incomplete work, not as a failed restack.
+		case err != nil:
+			complete(true)
 			return fmt.Errorf("failed to prompt for conflict resolution: %w", err)
-		}
-		if resolve {
+		case resolve:
 			// The prompt run used ConflictModeContinue, which held back the
 			// whole conflicted stack — ancestors included. Re-run that stack
 			// in EnterWorkflow mode so ancestors are applied before entering
 			// the conflict; see ResolveConflictWorkflow.
-			return ResolveConflictWorkflow(ctx, branchesForConflict(plan, conflicts[0]))
+			stack := branchesForConflict(plan, conflicts[0])
+			workflowErr := ResolveConflictWorkflow(ctx, stack)
+			if errors.Is(workflowErr, stackErrors.ErrConflictWorkflow) {
+				// The workflow's continue/abort guidance is the last word.
+				return workflowErr
+			}
+			// The workflow finished without stopping (e.g. rerere resolved
+			// every conflict) or failed outright. The handler already released
+			// the terminal, so it reports this outcome as plain output.
+			if workflowErr == nil {
+				restacked, skipped, conflicts, blocked = resolveRestackedStack(stack.Names(), restacked, skipped, conflicts, blocked)
+			}
+			complete(workflowErr != nil && !errors.Is(workflowErr, stackErrors.ErrCanceled))
+			return workflowErr
 		}
 	}
 
-	handler.OnRestackComplete(handlers.RestackSummary{
-		Restacked: restacked,
-		Skipped:   skipped,
-		Conflicts: conflicts,
-		Blocked:   blocked,
-		Held:      held,
-	})
+	complete(false)
 	return nil
+}
+
+// resolveRestackedStack moves a stack the conflict workflow finished without
+// stopping out of the conflicted and blocked lists and into the restacked count.
+func resolveRestackedStack(stack []string, restacked, skipped int, conflicts, blocked []string) (int, int, []string, []string) {
+	inStack := func(name string) bool { return slices.Contains(stack, name) }
+	remainingConflicts := slices.DeleteFunc(slices.Clone(conflicts), inStack)
+	remainingBlocked := slices.DeleteFunc(slices.Clone(blocked), inStack)
+	resolved := len(conflicts) - len(remainingConflicts)
+	unblocked := len(blocked) - len(remainingBlocked)
+	return restacked + resolved + unblocked, skipped - resolved, remainingConflicts, remainingBlocked
 }
 
 func conflictPrompter(handler handlers.RestackHandler, opts RestackOptions) (restackConflictPrompter, bool) {

@@ -80,6 +80,7 @@ type RestackBranchEvent struct {
 
 // RestackSummary contains aggregate outcomes from a restack operation.
 type RestackSummary struct {
+	Failed    bool // unexpected operation error, possibly after partial progress
 	Restacked int
 	Skipped   int
 	Conflicts []string
@@ -225,9 +226,15 @@ func (h *JSONRestackHandler) OnRestackComplete(summary RestackSummary) {
 		}
 	}
 
-	if h.Result.ConflictCount > 0 {
+	// Status follows the summary alone so it never depends on whether the
+	// caller also reports the error via SetError. Conflicts outrank a failure,
+	// matching SetError.
+	switch {
+	case h.Result.ConflictCount > 0:
 		h.Result.Status = RestackJSONStatusConflict
-	} else {
+	case summary.Failed:
+		h.Result.Status = RestackJSONStatusError
+	default:
 		h.Result.Status = RestackJSONStatusSuccess
 	}
 }

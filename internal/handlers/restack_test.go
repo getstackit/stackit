@@ -181,3 +181,18 @@ func restackEvent(branch string, result RestackResult, revision string, prNumber
 		Parent:      parent,
 	}
 }
+
+func TestJSONRestackHandlerStatusFromFailedSummary(t *testing.T) {
+	t.Parallel()
+
+	failed := NewJSONRestackHandler()
+	failed.OnRestackBranch(restackEvent("branch-a", RestackDone, "abc123", nil, "main"))
+	failed.OnRestackComplete(RestackSummary{Failed: true, Restacked: 1})
+	require.Equal(t, RestackJSONStatusError, failed.Result.Status)
+	require.Equal(t, 1, failed.Result.RestackCount)
+
+	conflicted := NewJSONRestackHandler()
+	conflicted.OnRestackBranch(restackEvent("branch-a", RestackConflict, "", nil, "main"))
+	conflicted.OnRestackComplete(RestackSummary{Failed: true, Conflicts: []string{"branch-a"}})
+	require.Equal(t, RestackJSONStatusConflict, conflicted.Result.Status)
+}

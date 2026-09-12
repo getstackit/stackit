@@ -170,6 +170,29 @@ func TestSubmitSharedActivity(t *testing.T) {
 	require.Contains(t, m.View().Content, "creating")
 }
 
+func TestSubmitFailureAfterPRCreation(t *testing.T) {
+	t.Parallel()
+	m := NewModel([]Item{{BranchName: "feat/api", Action: ActionCreate, Status: StatusDone, URL: "https://github.com/o/r/pull/1"}})
+	m.Verbose = false
+	summary := m.finalSummary(ProgressCompleteMsg{Failed: true})
+	require.True(t, strings.HasPrefix(summary, "✗ Submit failed: opened 1 PR\n"), summary)
+	require.Contains(t, summary, "feat/api  #1")
+	require.NotContains(t, summary, "✓")
+
+	// A failed item already marks the count line; the failure must not add a
+	// second marker on top of it.
+	m = NewModel([]Item{
+		{BranchName: "feat/api", Action: ActionUpdate, Status: StatusDone, URL: "https://github.com/o/r/pull/1"},
+		{BranchName: "feat/web", Action: ActionUpdate, Status: StatusError, Error: errors.New("rejected")},
+	})
+	m.Verbose = false
+	summary = m.finalSummary(ProgressCompleteMsg{Failed: true})
+	require.True(t, strings.HasPrefix(summary, "✗ Submit failed: updated 1 PR · 1 PR failed\n"), summary)
+	require.Equal(t, 1, strings.Count(summary, "Submit failed"))
+
+	require.Equal(t, "✗ Submit failed", NewModel(nil).finalSummary(ProgressCompleteMsg{Failed: true}))
+}
+
 func TestFormatCompactRowTruncatesLongErrors(t *testing.T) {
 	t.Parallel()
 

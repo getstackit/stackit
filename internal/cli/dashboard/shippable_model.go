@@ -401,7 +401,7 @@ func (m *shippableModel) rebuildCache() {
 	// shippable stacks. This runs on every refresh and on the auto-refresh
 	// timer, so the savings compound. The view renders with
 	// ShowCommitMessages, so resolve commit messages once via BatchCommits and
-	// skip the per-branch GetAllCommits inside GetBranchAnnotation.
+	// skip the per-branch commit read inside GetBranchAnnotation.
 	allBranches := engine.Branches{}
 	for _, stack := range m.stacks {
 		for _, branchName := range stack.Stack.AllBranches {
@@ -411,7 +411,7 @@ func (m *shippableModel) rebuildCache() {
 		}
 	}
 	stats := m.engine.BatchBranchStats(allBranches)
-	commits := m.engine.BatchCommits(allBranches, engine.CommitFormatReadable)
+	commits := m.engine.BatchCommits(allBranches, engine.CommitFormatReadable).Commits
 
 	for _, stack := range m.stacks {
 		rootBranch := stack.RootBranch()

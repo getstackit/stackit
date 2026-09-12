@@ -145,7 +145,7 @@ func FetchBranchBatchData(ctx context.Context, eng engine.BranchReader, branches
 	return BranchBatchData{
 		RemoteStatuses: eng.ReadBranchRemoteStatuses(ctx, branches),
 		Stats:          eng.BatchBranchStats(branches),
-		Commits:        eng.BatchCommits(branches, engine.CommitFormatReadableWithDate),
+		Commits:        eng.BatchCommits(branches, engine.CommitFormatReadableWithDate).Commits,
 		CommitInfo:     eng.BatchCommitInfo(branches),
 		Statuses:       eng.ReadBranchStatuses(branches),
 	}

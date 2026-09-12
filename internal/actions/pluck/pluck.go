@@ -93,7 +93,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Prompt for confirmation in interactive mode
 	if handler.IsInteractive() && !opts.SkipConfirm {
-		commits, _ := eng.GetAllCommits(sourceBranch, engine.CommitFormatSubject)
+		commits, _ := eng.BatchCommits(engine.BranchesOf(sourceBranch), engine.CommitFormatSubject).ForBranch(sourceBranch)
 
 		preview := Preview{
 			SourceBranch:   source,

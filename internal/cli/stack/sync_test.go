@@ -31,10 +31,9 @@ func TestSyncCommand(t *testing.T) {
 		output, err := s.RunCliAndGetOutput("sync", "--no-restack")
 		require.NoError(t, err, "sync --no-restack failed: %s", output)
 		normalized := testhelpers.NormalizeOutput(output)
-		// Empty phases (branches, clean) are suppressed; completed items carry a ✓.
+		// Empty phases (branches, clean) and routine "already current" rows
+		// (trunk, restacked branches) are suppressed; completed items carry a ✓.
 		require.Equal(t, testhelpers.NormalizeOutput(`
-📥 Pulling from remote...
-  ✓ main is up to date
 🔄 Fetching PR info from GitHub...
   ✓ PR info up to date
 ✨ Everything is up to date!
@@ -45,12 +44,8 @@ func TestSyncCommand(t *testing.T) {
 		require.NoError(t, err, "sync --restack (not needed) failed: %s", output)
 		normalized = testhelpers.NormalizeOutput(output)
 		require.Equal(t, testhelpers.NormalizeOutput(`
-📥 Pulling from remote...
-  ✓ main is up to date
 🔄 Fetching PR info from GitHub...
   ✓ PR info up to date
-📚 Restacking branches...
-  ✓ branch1 (current) up to date
 ✨ Everything is up to date!
 `), normalized)
 
@@ -95,8 +90,6 @@ Error: you have uncommitted changes. Please commit or stash them before syncing
 		output, err = s.RunCliAndGetOutput("sync", "--no-restack")
 		require.NoError(t, err, "sync --no-restack failed: %s", output)
 		require.Equal(t, testhelpers.NormalizeOutput(`
-📥 Pulling from remote...
-  ✓ main is up to date
 🔄 Fetching PR info from GitHub...
   ✓ PR info up to date
 ✨ Everything is up to date!

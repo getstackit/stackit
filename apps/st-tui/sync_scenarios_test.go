@@ -19,7 +19,8 @@ func TestSyncScenarioReplayUsesProductionHandler(t *testing.T) {
 	scenario.Replay(stack.NewSimpleSyncHandler(out), 0)
 	got := ansi.Strip(out.String())
 
-	assert.Contains(t, got, "main is up to date")
+	assert.NotContains(t, got, "main is up to date", "routine rows are hidden")
+	assert.NotContains(t, got, "prompt-notes-wt", "routine rows are hidden")
 	assert.Contains(t, got, "Updated PR info for 6 branches")
 	assert.Contains(t, got, "Deleted stack-merge-stack-1784862381 merged into main")
 	assert.Contains(t, got, "Restacked info-query-cli-rendering (PR #936) on main → 9e49378")

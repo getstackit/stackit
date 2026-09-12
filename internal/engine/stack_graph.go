@@ -5,26 +5,6 @@ import (
 	"slices"
 )
 
-// isOnActivePath checks if branchName is on the path from trunk to current branch
-func isOnActivePath(nodes map[string]*StackNode, branchName, current string) bool {
-	if current == "" {
-		return false
-	}
-	// Walk from current up to trunk, checking if branchName is on the path
-	cur := current
-	for cur != "" {
-		if cur == branchName {
-			return true
-		}
-		node := nodes[cur]
-		if node == nil {
-			break
-		}
-		cur = node.Parent
-	}
-	return false
-}
-
 // StackNode represents a branch within a stack snapshot.
 type StackNode struct {
 	Branch   Branch
@@ -102,6 +82,20 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 		}
 	}
 
+	// Resolve the active path once. Walking ancestry inside every comparison
+	// makes smart sorting quadratic for deep stacks with siblings at each level.
+	activePath := make(map[string]bool)
+	if strategy == SortStrategySmart {
+		for name := current; name != "" && !activePath[name]; {
+			node := graph.nodes[name]
+			if node == nil {
+				break
+			}
+			activePath[name] = true
+			name = node.Parent
+		}
+	}
+
 	// Sort children based on strategy
 	for _, node := range graph.nodes {
 		if len(node.Children) > 1 {
@@ -110,8 +104,8 @@ func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch
 				// Smart sort: hoist the active path (current branch first) and then sort descending
 				slices.SortFunc(node.Children, func(a, b string) int {
 					// Current branch or its ancestors come first
-					aOnPath := isOnActivePath(graph.nodes, a, current)
-					bOnPath := isOnActivePath(graph.nodes, b, current)
+					aOnPath := activePath[a]
+					bOnPath := activePath[b]
 					if aOnPath && !bOnPath {
 						return -1
 					}
@@ -256,7 +250,9 @@ func (g *StackGraph) DepthGroups() []DepthGroup {
 		}
 		builder := builders[node.Depth]
 		if builder == nil {
-			builder = NewBranchesBuilder(len(g.nodes))
+			// Grow with this depth's width, not the size of the whole graph.
+			// Reserving every node at every depth uses quadratic space in a chain.
+			builder = NewBranchesBuilder(0)
 			builders[node.Depth] = builder
 		}
 		builder.Add(node.Branch)

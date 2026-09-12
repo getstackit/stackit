@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/tui/style"
@@ -25,7 +26,7 @@ func TruncateMiddle(s string, maxWidth int) string {
 		return s
 	}
 	if maxWidth <= 3 {
-		return truncateRunes(s, maxWidth)
+		return ansi.Truncate(s, maxWidth, "")
 	}
 
 	ellipsis := "..."
@@ -33,42 +34,9 @@ func TruncateMiddle(s string, maxWidth int) string {
 	leftWidth := (available + 1) / 2
 	rightWidth := available / 2
 
-	left := takeRunes(s, leftWidth)
-	right := takeLastRunes(s, rightWidth)
+	left := ansi.Truncate(s, leftWidth, "")
+	right := ansi.TruncateLeft(s, lipgloss.Width(s)-rightWidth, "")
 	return left + ellipsis + right
-}
-
-func truncateRunes(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	return string(runes[:n])
-}
-
-func takeRunes(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	return string(runes[:n])
-}
-
-func takeLastRunes(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	return string(runes[len(runes)-n:])
 }
 
 // FormatCompactRow renders a single submit progress row.
@@ -78,17 +46,20 @@ func FormatCompactRow(item Item, width int, spinnerView string, styles Styles) s
 	}
 
 	icon, detail := rowParts(item, spinnerView, styles)
+	// Reserve branch identity before allocating space to a long error/status.
+	reservedName := min(24, max(1, width/3))
+	detail = ansi.Truncate(detail, max(0, width-lipgloss.Width("  "+icon+" ")-reservedName-1), "…")
 	fixedWidth := lipgloss.Width("  "+icon+" ") + lipgloss.Width(detail) + 1
 	nameWidth := max(1, width-fixedWidth)
 	plainName := TruncateMiddle(style.DisplayBranchName(item.BranchName), nameWidth)
 	name := styles.BranchStyle.Render(plainName)
 
 	if detail == "" {
-		return fmt.Sprintf("  %s %s", icon, name)
+		return ansi.Truncate(fmt.Sprintf("  %s %s", icon, name), width, "…")
 	}
 	prefixWidth := lipgloss.Width("  "+icon+" ") + lipgloss.Width(plainName)
 	gapWidth := max(1, width-prefixWidth-lipgloss.Width(detail))
-	return fmt.Sprintf("  %s %s%s%s", icon, name, strings.Repeat(" ", gapWidth), detail)
+	return ansi.Truncate(fmt.Sprintf("  %s %s%s%s", icon, name, strings.Repeat(" ", gapWidth), detail), width, "…")
 }
 
 // FormatSoloRow renders the progress row for a single-branch submit. The branch
@@ -356,22 +327,29 @@ func FormatOutcomeSummary(items []Item, elapsed time.Duration) string {
 	return line
 }
 
-// FormatCreatedURLs lists the URLs of newly created PRs, one indented "#N  url"
-// line each. Updated PRs are omitted — they rarely need their URL re-pasted,
-// matching the per-branch and solo output. Returns "" when nothing was created.
-func FormatCreatedURLs(items []Item) string {
+// FormatPRResults preserves branch-to-PR identity after the progress rows clear.
+// New PRs include a copyable URL; updated PRs retain a linked reference.
+func FormatPRResults(items []Item) string {
 	rows := make([]string, 0, len(items))
 	for _, item := range items {
-		if item.Status != StatusDone || item.Action != ActionCreate || item.URL == "" {
+		if item.Status != StatusDone {
 			continue
 		}
-		if ref := PRRef(item); ref != "" {
-			rows = append(rows, fmt.Sprintf("  %s  %s", ref, item.URL))
-		} else {
-			rows = append(rows, "  "+item.URL)
+		name := style.DisplayBranchName(item.BranchName)
+		ref := PRRef(item)
+		if item.Action == ActionCreate && item.URL != "" {
+			rows = append(rows, strings.TrimSpace(name+"  "+ref)+"  "+item.URL)
+			continue
 		}
+		if ref != "" && item.URL != "" {
+			ref = hyperlink(item.URL, ref)
+		}
+		rows = append(rows, strings.TrimSpace(name+"  "+ref+" "+pastTense(item.Action)))
 	}
-	return strings.Join(rows, "\n")
+	if len(rows) == 0 {
+		return ""
+	}
+	return "  " + strings.Join(rows, "\n  ")
 }
 
 func pluralPR(count int) string {

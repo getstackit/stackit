@@ -139,7 +139,7 @@ func (m *Model) finalSummary(msg ProgressCompleteMsg) string {
 		}
 	} else {
 		summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
-		if urls := FormatCreatedURLs(m.Items); urls != "" {
+		if urls := FormatPRResults(m.Items); urls != "" {
 			if summary != "" {
 				summary += "\n"
 			}

@@ -18,15 +18,22 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
+// SyncUIOptions controls interactive detail without changing action behavior.
+type SyncUIOptions struct{ Verbose bool }
+
 // NewSyncUI creates a runner and handler pair for sync operations.
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
-func NewSyncUI(out output.Output, logger output.Logger) (*tui.Runner, syncAction.Handler) {
+func NewSyncUI(out output.Output, logger output.Logger, options ...SyncUIOptions) (*tui.Runner, syncAction.Handler) {
 	if tui.IsTTY() {
 		model := syncComponent.NewModel(0) // Start with 0, will be updated in Start()
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()
-		return runner, NewInteractiveSyncHandler(runner, model, out, logger)
+		handler := NewInteractiveSyncHandler(runner, model, out, logger)
+		if len(options) > 0 {
+			handler.verbose = options[0].Verbose
+		}
+		return runner, handler
 	}
 	return nil, NewSimpleSyncHandler(out)
 }
@@ -449,6 +456,7 @@ type InteractiveSyncHandler struct {
 	totalOps     int
 	completedOps int
 	currentPhase syncAction.Phase
+	verbose      bool
 
 	// restack-only: count of already-current branches whose rows were
 	// suppressed, reported as a summary count instead.
@@ -539,6 +547,9 @@ func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 // formatEventDetail formats an event into a detail string and the status mark
 // that should lead its row in the TUI.
 func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (detail string, mark syncComponent.DetailMark) {
+	if !h.verbose {
+		event.Branch = style.DisplayBranchName(event.Branch)
+	}
 	switch event.Phase {
 	case syncAction.PhaseTrunk:
 		if event.Type == syncAction.EventCompleted {
@@ -600,9 +611,11 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 			if event.NewRevision != "" {
 				msg := fmt.Sprintf("Restacked %s%s", displayName, prInfo)
 				if event.Parent != "" {
-					msg += fmt.Sprintf(" on %s", event.Parent)
+					msg += fmt.Sprintf(" on %s", style.DisplayBranchName(event.Parent))
 				}
-				msg += fmt.Sprintf(" → %s", event.NewRevision)
+				if h.verbose {
+					msg += fmt.Sprintf(" → %s", event.NewRevision)
+				}
 				return msg, syncComponent.MarkDone
 			}
 			reason := common.ReasonNoRestackNeeded
@@ -720,7 +733,7 @@ func (h *InteractiveSyncHandler) OnRestackBranch(restack handlers.RestackBranchE
 	detail, mark := h.formatRestackDetail(restack)
 	if detail != "" {
 		if reparented {
-			detail = fmt.Sprintf("Reparented %s → %s. %s", oldParent, newParent, detail)
+			detail = fmt.Sprintf("Reparented %s → %s. %s", style.DisplayBranchName(oldParent), style.DisplayBranchName(newParent), detail)
 		}
 		h.runner.Send(syncComponent.PhaseDetailMsg{
 			Phase:   syncComponent.Phase(syncAction.PhaseRestack),
@@ -742,6 +755,9 @@ func (h *InteractiveSyncHandler) OnRestackBranch(restack handlers.RestackBranchE
 // rather than baking a glyph into the string, so the model owns the marker (the
 // streaming handler does the same).
 func (h *InteractiveSyncHandler) formatRestackDetail(event handlers.RestackBranchEvent) (string, syncComponent.DetailMark) {
+	if !h.verbose {
+		event.Branch = style.DisplayBranchName(event.Branch)
+	}
 	prInfo := ""
 	if event.PRNumber != nil {
 		prInfo = fmt.Sprintf(" (PR #%d)", *event.PRNumber)
@@ -753,9 +769,11 @@ func (h *InteractiveSyncHandler) formatRestackDetail(event handlers.RestackBranc
 	case syncAction.RestackDone:
 		msg := fmt.Sprintf("Restacked %s%s", displayName, prInfo)
 		if event.Parent != "" {
-			msg += fmt.Sprintf(" on %s", event.Parent)
+			msg += fmt.Sprintf(" on %s", style.DisplayBranchName(event.Parent))
 		}
-		msg += fmt.Sprintf(" → %s", event.NewRevision)
+		if h.verbose {
+			msg += fmt.Sprintf(" → %s", event.NewRevision)
+		}
 		if event.RerereResolvedCount > 0 {
 			msg += " " + actions.FormatRerereResolved(event.RerereResolvedCount)
 		}

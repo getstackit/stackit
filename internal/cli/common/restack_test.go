@@ -69,7 +69,7 @@ func TestFormatRestackRow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			row, status := FormatRestackRow(tt.event)
+			row, status := FormatRestackRow(tt.event, RestackRowStyle{})
 			require.Equal(t, tt.row, ansi.Strip(row))
 			require.Equal(t, tt.status, status)
 		})

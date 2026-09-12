@@ -48,3 +48,38 @@ func TestDisplayBranchName(t *testing.T) {
 		})
 	}
 }
+
+func TestBranchNameResolver(t *testing.T) {
+	t.Parallel()
+	alice := "alice/20260901000000/fix-tests"
+	bob := "bob/20260905000000/fix-tests"
+
+	t.Run("unique short names stay short", func(t *testing.T) {
+		t.Parallel()
+		r := NewBranchNameResolver(alice, "carol/20260906000000/docs")
+		require.Equal(t, "fix-tests", r.Short(alice))
+		require.Equal(t, "docs", r.Short("carol/20260906000000/docs"))
+	})
+
+	t.Run("seeded collision renders both in full", func(t *testing.T) {
+		t.Parallel()
+		r := NewBranchNameResolver(alice, bob)
+		require.Equal(t, alice, r.Short(alice))
+		require.Equal(t, bob, r.Short(bob))
+	})
+
+	t.Run("collision learned while rendering", func(t *testing.T) {
+		t.Parallel()
+		r := NewBranchNameResolver()
+		require.Equal(t, "fix-tests", r.Short(alice))
+		require.Equal(t, bob, r.Short(bob))
+		require.Equal(t, alice, r.Short(alice))
+	})
+
+	t.Run("short name shared with an untimestamped branch", func(t *testing.T) {
+		t.Parallel()
+		r := NewBranchNameResolver("fix-tests", alice)
+		require.Equal(t, alice, r.Short(alice))
+		require.Equal(t, "fix-tests", r.Short("fix-tests"))
+	})
+}

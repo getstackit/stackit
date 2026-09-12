@@ -20,15 +20,29 @@ import (
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
+// SyncUIOptions controls interactive detail without changing action behavior.
+type SyncUIOptions struct {
+	// Verbose shows full branch names and revision hashes in interactive rows.
+	Verbose bool
+	// BranchNames seeds the short-name collision check with every branch the
+	// run may render, so a row never prints a short name another branch shares.
+	BranchNames []string
+}
+
 // NewSyncUI creates a runner and handler pair for sync operations.
 // The runner manages terminal state; the handler processes events.
 // Caller must defer runner.Cleanup() to restore terminal on exit.
-func NewSyncUI(out output.Output, logger output.Logger) (*tui.Runner, syncAction.Handler) {
+func NewSyncUI(out output.Output, logger output.Logger, options ...SyncUIOptions) (*tui.Runner, syncAction.Handler) {
 	if term.IsInteractive() {
 		model := syncComponent.NewModel()
 		runner := tui.NewRunner(model, out, logger)
 		runner.Start()
-		return runner, NewInteractiveSyncHandler(runner, model, out, logger)
+		handler := NewInteractiveSyncHandler(runner, model, out, logger)
+		if len(options) > 0 {
+			handler.verbose = options[0].Verbose
+			handler.names.Observe(options[0].BranchNames...)
+		}
+		return runner, handler
 	}
 	return nil, NewSimpleSyncHandler(out)
 }
@@ -311,6 +325,8 @@ type InteractiveSyncHandler struct {
 	totalOps     int
 	completedOps int
 	currentPhase syncAction.Phase
+	verbose      bool
+	names        *style.BranchNameResolver
 
 	// restack-only: count of already-current branches whose rows were
 	// suppressed, reported as a summary count instead.
@@ -324,7 +340,20 @@ func NewInteractiveSyncHandler(runner tui.Sender, model *syncComponent.Model, ou
 		model:  model,
 		output: out,
 		logger: logger,
+		names:  style.NewBranchNameResolver(),
 	}
+}
+
+// displayName renders a branch or parent name for an interactive row: full
+// with --verbose, otherwise shortened unless another branch in this run shares
+// the short form. Rows that name a ref the user must act on (diverged,
+// deleted) use the full name directly instead.
+func (h *InteractiveSyncHandler) displayName(name string) string {
+	if h.verbose || name == "" {
+		h.names.Observe(name)
+		return name
+	}
+	return h.names.Short(name)
 }
 
 // Start implements Handler. Sync has no reliable up-front item count, so the
@@ -368,6 +397,8 @@ func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 		return
 	}
 
+	h.names.Observe(event.Branch)
+
 	// Build detail message and determine status
 	detail, mark := h.formatEventDetail(event)
 	if detail != "" {
@@ -389,21 +420,24 @@ func (h *InteractiveSyncHandler) formatEventDetail(event syncAction.Event) (deta
 	if isRoutineSyncEvent(event) {
 		return "", syncComponent.MarkDone
 	}
+	// Diverged and deleted rows keep event.Branch in full: the user needs the
+	// real ref to reconcile or restore it.
+	name := h.displayName(event.Branch)
 	switch event.Phase {
 	case syncAction.PhaseTrunk:
 		if event.Type == syncAction.EventCompleted {
 			switch {
 			case event.HeldBy != "":
-				return fmt.Sprintf("Held %s back: %s", event.Branch, event.HeldBy), syncComponent.MarkWarn
+				return fmt.Sprintf("Held %s back: %s", name, event.HeldBy), syncComponent.MarkWarn
 			case event.NewRevision != "":
-				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), syncComponent.MarkDone
+				return fmt.Sprintf("%s fast-forwarded to %s", name, event.NewRevision), syncComponent.MarkDone
 			}
 		}
 	case syncAction.PhaseBranches:
 		switch event.Type {
 		case syncAction.EventCompleted:
 			if event.NewRevision != "" {
-				return fmt.Sprintf("%s fast-forwarded to %s", event.Branch, event.NewRevision), syncComponent.MarkDone
+				return fmt.Sprintf("%s fast-forwarded to %s", name, event.NewRevision), syncComponent.MarkDone
 			}
 		case syncAction.EventSkipped:
 			if event.Conflict {
@@ -503,6 +537,7 @@ func (h *InteractiveSyncHandler) OnRestackStart(branchCount int) {
 func (h *InteractiveSyncHandler) OnRestackBranch(restack actions.RestackBranchEvent) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.names.Observe(restack.Branch, restack.Parent, restack.OldParent, restack.NewParent)
 
 	// Already-current branches are the expected default; skip their rows but
 	// still advance the k/N counter and count them for the summary.
@@ -513,10 +548,11 @@ func (h *InteractiveSyncHandler) OnRestackBranch(restack actions.RestackBranchEv
 		return
 	}
 
-	if reparent := common.FormatRestackReparent(restack); reparent != "" {
+	rowStyle := common.RestackRowStyle{Name: h.displayName, HideRevision: !h.verbose}
+	if reparent := common.FormatRestackReparent(restack, rowStyle); reparent != "" {
 		h.sendRestackDetail(reparent, syncComponent.MarkDone)
 	}
-	row, status := common.FormatRestackRow(restack)
+	row, status := common.FormatRestackRow(restack, rowStyle)
 	mark := syncComponent.MarkDone
 	if status == common.RestackRowWarning {
 		mark = syncComponent.MarkWarn

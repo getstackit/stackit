@@ -17,6 +17,7 @@ import (
 // It embeds core.BaseModel for standard lifecycle handling.
 type Model struct {
 	core.BaseModel // Embedded for ReadySignaler interface
+	Activity       string
 	Items          []Item
 	Warnings       []string      // formatted warning lines, rendered after the rows and persisted on exit
 	Solo           bool          // single-branch submit — drop the count header and per-row name
@@ -32,6 +33,9 @@ type ProgressUpdateMsg struct {
 	URL        string
 	Err        error
 }
+
+// ActivityMsg labels work shared by the entire submission, such as the push.
+type ActivityMsg struct{ Message string }
 
 // WarningMsg surfaces a non-fatal warning for a branch (e.g. labels could not
 // be applied). Warnings render below the progress rows and persist on exit.
@@ -82,6 +86,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case ActivityMsg:
+		m.Activity = msg.Message
+		return m, nil
+
 	case WarningMsg:
 		m.Warnings = append(m.Warnings, fmt.Sprintf("⚠️  %s: %s", style.DisplayBranchName(msg.BranchName), msg.Warning))
 		return m, nil
@@ -221,6 +229,9 @@ func (m *Model) completionSummary() string {
 }
 
 func (m *Model) header() string {
+	if m.Activity != "" {
+		return m.spinner.View() + " " + m.Activity
+	}
 	// A solo submit is framed by the plan line printed above the TUI; a count
 	// header would just restate it.
 	if m.Solo {

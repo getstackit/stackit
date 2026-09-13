@@ -13,6 +13,30 @@ import (
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
 )
 
+func TestPreparationNoticeLifecycle(t *testing.T) {
+	t.Run("quick preparation stays silent", func(t *testing.T) {
+		out := output.NewTestOutput()
+		h := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitCompact)
+		h.startPreparationNotice(time.Hour)
+		h.OnEvent(submitAction.PreparingEvent{Completed: true})
+		require.Empty(t, out.String())
+		require.Nil(t, h.preparingTimer)
+	})
+	t.Run("slow preparation explains the wait", func(t *testing.T) {
+		out := output.NewTestOutput()
+		h := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitCompact)
+		defer h.Cleanup()
+		h.startPreparationNotice(time.Millisecond)
+		require.Eventually(t, func() bool {
+			h.preparingMu.Lock()
+			defer h.preparingMu.Unlock()
+			return strings.Contains(out.String(), "Checking remote branches and PR status")
+		}, time.Second, time.Millisecond)
+		h.Cleanup()
+		require.Equal(t, 1, strings.Count(out.String(), "Checking remote"))
+	})
+}
+
 func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 	t.Parallel()
 

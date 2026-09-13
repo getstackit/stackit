@@ -33,3 +33,22 @@ func RunShippable(ctx *app.Context, opts ShippableOptions) error {
 	_, err = p.Run()
 	return err
 }
+
+// RunCompanion starts the live local-state companion panel.
+func RunCompanion(ctx *app.Context, opts CompanionOptions) error {
+	if !tui.IsTTY() {
+		return fmt.Errorf("dashboard requires an interactive terminal")
+	}
+
+	cfg, err := config.LoadConfig(ctx.RepoRoot)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	m := newCompanionModel(ctx, cfg, opts)
+	p := tea.NewProgram(m, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
+	m.startWatcher(p)
+	_, err = p.Run()
+	m.stopWatcher()
+	return err
+}

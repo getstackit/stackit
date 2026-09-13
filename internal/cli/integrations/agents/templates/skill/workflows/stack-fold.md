@@ -1,70 +1,45 @@
-# Workflow: Intelligent Branch Folding (`/stack-fold`)
+# Stack Fold
 
-This workflow guides the LLM through analyzing a branch stack and recommending branches to fold (squash) into their parents to maintain stack health and PR quality.
+Combine related branches into one reviewable PR. Folding preserves commits;
+`stackit squash` is optional when the user also wants one commit. Prefer grouping
+by behavior and dependencies rather than treating every small diff as a fixup.
 
-## Objectives
-- Identify "too granular" branches (e.g., small typo fixes, minor adjustments).
-- Combine them with their parent branches to reduce PR noise.
-- Ensure safety by respecting locks, freezes, and scope boundaries.
+## Workflow
 
-## Steps
+1. Use `stackit tree short --stack --no-interactive` for relationships. Use
+   `stackit info --stack --json --no-interactive` when commit messages, scopes,
+   or diff statistics are needed. Use `stackit state --json` when checking the
+   working tree or an interrupted operation; filter its output to relevant branches.
+2. Identify the branch to fold and its parent. Both must be modifiable in this
+   worktree, unlocked, unfrozen, and in the same scope. Never fold into trunk
+   unless explicitly requested (`--allow-trunk`).
+3. Branches **may have children**: fold reparents them and restacks the affected
+   descendants automatically. There is no leaf-only restriction.
+4. Explain the proposed grouping. If the user already authorized that grouping,
+   proceed; otherwise obtain approval before changing it. Do not ask again for
+   an action already authorized in the conversation.
+5. Check out the child and preview the operation, using separate commands:
 
-### 1. Gather Context
-Fetch the complete metadata for the current stack:
-```bash
-stackit info --stack --json --no-interactive
-```
+   ```bash
+   stackit checkout <branch-to-fold> --no-interactive
+   stackit fold --dry-run --no-interactive
+   ```
 
-### 2. Identify Candidates
-Analyze the JSON output to find folding candidates.
+6. Apply the fold:
 
-**Criteria for a "Good" Fold Candidate:**
-- **Granularity:** The branch has few commits (often just 1) and small diff stats (few files changed, few lines added/deleted).
-- **Descriptiveness:** The commit message suggests a minor fix or follow-up (e.g., "fix typo", "address review feedback", "tweak styles").
-- **Safety:**
-    - `is_locked`: Must be `false`.
-    - `is_frozen`: Must be `false`.
-    - `scope`: Must match the parent's scope (folding across scopes is forbidden).
-    - **Target Parent:** The parent branch must also not be locked or frozen.
+   ```bash
+   stackit fold --no-interactive
+   ```
 
-### 3. Detailed Analysis (Optional but Recommended)
-For high-confidence candidates, verify the actual changes to ensure they are safe to merge into the parent:
-```bash
-stackit info <branch-name> --diff --no-interactive
-```
+   The parent branch name survives by default. `--keep` instead retains the
+   child's name and removes the parent. If `.git` is read-only in the sandbox,
+   request escalation on the first mutating command.
+7. Check the result. Do not run another restack unless fold reports unfinished
+   work. If it stops on a conflict, resolve it through the reported recovery
+   path before continuing other operations.
+8. Use `stackit tree short --stack --no-interactive` to verify relationships.
+   Continue with submission if already authorized. Fold does not close the
+   removed branch's PR; account for that cleanup when updating the remote stack.
 
-### 4. Propose a Fold Plan
-Present your findings to the user. For each recommendation, include:
-- **Branch to fold:** The name of the granular branch.
-- **Target parent:** The branch it will be folded into.
-- **Reasoning:** Why this branch is a good candidate (e.g., "It's a single-line typo fix").
-- **Impact:** What the combined commit message or PR might look like.
-
-### 5. Execute Fold
-Wait for user confirmation. If confirmed, perform the fold:
-```bash
-# Folds the current branch into its parent; the combined branch takes the PARENT
-# name by default. Do NOT pass --keep unless you specifically want to retain the
-# child (current) branch's name instead.
-stackit checkout <branch-to-fold> --no-interactive
-stackit fold --no-interactive
-```
-
-### 6. Post-Fold Cleanup
-After folding, restack only the affected subtree. The parent branch now carries the folded commits, so descendants of the parent need their ancestry refreshed:
-
-```bash
-# Scope restack to the parent and its descendants — avoid a broad restack
-stackit restack --branch <parent-branch> --upstack --no-interactive
-
-# If you folded in multiple independent stacks in one session, prefer:
-# stackit restack --all-stacks --continue-on-conflict --no-interactive
-```
-
-Use `--json` to verify only the expected branches were touched; skip a follow-up restack when output shows nothing pending.
-
-## Safety Constraints
-- **Never fold into trunk** unless explicitly requested by the user.
-- **Never fold locked or frozen branches.**
-- **Never fold across different scopes.**
-- If you are unsure if a fold is appropriate, ask the user for clarification.
+A combined PR can contain multiple commits. Do not squash merely because a
+branch was folded, and do not offer a redundant restack as the next step.

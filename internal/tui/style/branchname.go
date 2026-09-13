@@ -10,7 +10,7 @@ import (
 // two segments carry no information a reader needs, and they dominate the line
 // width when a name appears next to its parent or a PR number. The full name is
 // still used anywhere the output is meant to be copy-pasted (e.g. the
-// `st restack <branch>` advice line).
+// `st restack --branch <branch>` advice line).
 func DisplayBranchName(branchName string) string {
 	parts := strings.Split(branchName, "/")
 	if len(parts) >= 3 && isTimestampSegment(parts[1]) {

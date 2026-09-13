@@ -98,19 +98,24 @@ layout.tsx
         │   │   └── ...
         │   ├── TrunkLine (divider)
         │   └── RecentlyMerged (trunk commit history)
-        └── RightPanel (360px, 420px on wide screens)
+        └── RightPanel (320px, 360px on wide screens)
             ├── BranchDetail / StackDetailPanel
             └── EventFeed
 ```
 
 ## Data Flow
 
-The dashboard toolbar searches stack titles, scopes, branch names, PR titles or
-numbers, and owners (including `#123` and `@owner`). Matching is case-insensitive;
+The centered header search covers stack titles, scopes, branch names, PR titles
+or numbers, owners, commit messages, authors, and hashes (including `#123` and
+`@owner`). It also filters the loaded recent trunk history, including merged
+stack PR metadata. Matching is case-insensitive;
 multiple words must all match within a stack. Results retain each complete stack
 and do not dismiss selected details. Clear the query with the search field's
 clear button or Escape. On mobile, the empty detail panel is hidden to leave
 more room for stacks; selecting a stack opens the panel below the board.
+The desktop overview shows repository-wide stack, branch, and PR totals plus
+stack status counts, independent of the current search. Owner labels sit above
+their stacks, and branch cards prefer PR titles with a two-line preview.
 
 1. **RepoProvider** calls `fetchView(repoRef)` on mount → GET `/api/v1/repos/{owner}/{repo}/view`
 2. Response contains: repo metadata, all stack details, recently merged commits

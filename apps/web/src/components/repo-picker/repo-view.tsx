@@ -16,8 +16,8 @@ import { BackgroundMesh } from "@/components/ui/background-mesh";
 import { SkeletonSwimlane } from "@/components/ui/skeleton-shimmer";
 import { useUrlSelection } from "@/hooks/use-url-selection";
 import { groupStacksByOwner } from "@/lib/swimlane-grouping";
-import { filterStacks } from "@/lib/stack-search";
-import { StackToolbar } from "@/components/swimlane/stack-toolbar";
+import { filterRecentCommits, filterStacks } from "@/lib/stack-search";
+import { RepositorySearch } from "@/components/layout/repository-search";
 import { cn } from "@/lib/utils";
 
 const BranchDiffWorkspace = dynamic(
@@ -39,6 +39,7 @@ export function RepoView() {
   const {
     repo,
     stackDetails,
+    recentlyMerged,
     loading,
     error,
     lastUpdated,
@@ -62,6 +63,10 @@ export function RepoView() {
     () => filterStacks(stackDetails, searchQuery),
     [stackDetails, searchQuery]
   );
+  const filteredCommits = useMemo(
+    () => filterRecentCommits(recentlyMerged ?? [], searchQuery),
+    [recentlyMerged, searchQuery]
+  );
   const { yourStacks, otherOwners } = useMemo(
     () => groupStacksByOwner(filteredStacks, repo?.currentUser),
     [filteredStacks, repo?.currentUser]
@@ -72,29 +77,29 @@ export function RepoView() {
   const showRecentCommits = selectedBranch ? false : recentCommitsPreference;
   const branchOverlayMode = Boolean(selectedBranch && selectedBranchStack);
   const stacksAndHistoryContent =
-    stackDetails.length > 0 ? (
-      <div className="flex flex-col justify-end min-h-full">
-        {filteredStacks.length === 0 && (
+    stackDetails.length > 0 || (recentlyMerged?.length ?? 0) > 0 ? (
+      <div className={cn("flex min-h-full flex-col", branchOverlayMode && "justify-end")}>
+        {filteredStacks.length === 0 && filteredCommits.length === 0 && (
           <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
             <div className="mb-4 rounded-2xl border bg-background p-3 text-muted-foreground shadow-sm">
               <SearchX aria-hidden="true" className="size-5" />
             </div>
-            <h2 className="text-sm font-medium">No stacks match your search.</h2>
+            <h2 className="text-sm font-medium">No results found.</h2>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-              Try a branch name, PR number, or owner.
+              Try a branch, PR, owner, or commit message.
             </p>
             <button
               type="button"
               onClick={() => setSearchQuery("")}
               className="mt-4 rounded-lg border bg-background px-3 py-2 text-sm font-medium shadow-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Show all stacks
+              Clear search
             </button>
           </div>
         )}
         {/* Swimlanes: only this area scrolls horizontally */}
-        <div className="overflow-x-auto">
-          <div className="flex items-end gap-6 p-6 pb-4 min-w-max">
+        <div className={cn("overflow-x-auto", filteredStacks.length === 0 && "hidden")}>
+          <div className="flex min-w-max items-end gap-6 p-4 pb-6 sm:p-6 sm:pb-8">
             {/* Your stacks */}
             {yourStacks.length > 0 && (
               <OwnerSwimlane
@@ -160,7 +165,7 @@ export function RepoView() {
           }}
         >
           <div className="overflow-hidden">
-            <RecentlyMerged compact={branchOverlayMode} />
+            <RecentlyMerged compact={branchOverlayMode} commits={filteredCommits} />
           </div>
         </div>
       </div>
@@ -204,8 +209,24 @@ export function RepoView() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-muted/20">
-      <Header repo={repo ?? null} lastUpdated={lastUpdated ?? null} refresh={refresh} />
+    <div className="flex h-dvh flex-col bg-muted/40">
+      <h1 className="sr-only">{repo?.repo} repository</h1>
+      <Header
+        repo={repo ?? null}
+        lastUpdated={lastUpdated ?? null}
+        refresh={refresh}
+        search={
+          <RepositorySearch
+            query={searchQuery}
+            onQueryChange={(query) => {
+              setSearchQuery(query);
+              if (query.trim()) setRecentCommitsPreference(true);
+            }}
+            stackCount={filteredStacks.length}
+            commitCount={filteredCommits.length}
+          />
+        }
+      />
 
       {/* Main content: stacks area + detail panel.
           Stacks vertically on mobile (detail panel below) and sits side-by-side
@@ -214,12 +235,6 @@ export function RepoView() {
           so no data renders. */}
       <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
         <div className="flex flex-1 flex-col overflow-hidden min-h-0 min-w-0">
-          <StackToolbar
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
-            matchingCount={filteredStacks.length}
-            totalCount={stackDetails.length}
-          />
           {branchOverlayMode && selectedBranch && selectedBranchStack ? (
             <>
               <div className="min-h-0 flex-1 overflow-hidden border-b">
@@ -244,10 +259,10 @@ export function RepoView() {
         <div className="flex shrink-0 flex-col border-t md:flex-row md:border-t-0">
           <div aria-hidden className="hidden w-px shrink-0 bg-border md:block" />
           <aside aria-label="Stack details and activity" className={cn(
-            "flex w-full shrink-0 flex-col overflow-hidden bg-background md:h-auto md:w-[360px] xl:w-[420px]",
+            "flex w-full shrink-0 flex-col overflow-hidden bg-background md:h-auto md:w-[320px] 2xl:w-[360px]",
             hasSelection ? "h-[45dvh]" : "max-h-[25dvh] md:max-h-none"
           )}>
-            <div className={cn("shrink-0 items-center justify-between border-b px-4 py-3", hasSelection ? "flex" : "hidden md:flex")}>
+            <div className={cn("min-h-14 shrink-0 items-center justify-between border-b px-5 py-3", hasSelection ? "flex" : "hidden md:flex")}>
               <h2 className="text-sm font-medium">{hasSelection ? "Stack details" : "Overview"}</h2>
               {hasSelection && (
                 <button
@@ -285,8 +300,8 @@ export function RepoView() {
                 )}
               </div>
             ) : (
-              <div className="hidden min-h-0 flex-1 md:block">
-                <DetailEmptyState />
+              <div className="hidden min-h-0 flex-1 overflow-y-auto md:block">
+                <DetailEmptyState stacks={stackDetails} />
               </div>
             )}
             {!branchOverlayMode && (

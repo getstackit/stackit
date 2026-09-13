@@ -95,7 +95,7 @@ export function StackStatusFooter({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center justify-center px-3 rounded-b-lg border-x border-b font-medium cursor-pointer transition-all duration-200 ${compact ? "py-1 text-[11px]" : "py-1.5 text-xs"} ${c.text} ${selected ? `${c.selectedBg} font-semibold` : `${c.bg} ${c.shadow} hover:brightness-95 dark:hover:brightness-110`}`}
+      className={`flex items-center justify-center px-3 rounded-b-lg border-x border-b font-medium cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? "py-1 text-[11px]" : "py-2 text-xs"} ${c.text} ${selected ? `${c.selectedBg} ring-2 ring-ring font-semibold` : `${c.bg} hover:brightness-95 dark:hover:brightness-110`}`}
     >
       {c.label}
     </button>

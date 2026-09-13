@@ -4,13 +4,14 @@ import { useMemo } from "react";
 import { useRepo } from "@/components/providers/repo-provider";
 import { groupByTime } from "@/lib/time";
 import { CommitItem } from "./commit-items";
+import type { TrunkCommitResponse } from "@/lib/api";
 
-export function RecentlyMerged({ compact = false }: { compact?: boolean }) {
-  const { recentlyMerged, repo } = useRepo();
+export function RecentlyMerged({ compact = false, commits }: { compact?: boolean; commits: TrunkCommitResponse[] }) {
+  const { repo } = useRepo();
 
   const groups = useMemo(
-    () => groupByTime(recentlyMerged ?? []),
-    [recentlyMerged]
+    () => groupByTime(commits),
+    [commits]
   );
 
   if (groups.length === 0) {
@@ -23,7 +24,7 @@ export function RecentlyMerged({ compact = false }: { compact?: boolean }) {
     >
       {groups.map((group) => (
         <div key={group.label}>
-          <div className={`${compact ? "text-[9px]" : "text-[10px]"} font-medium text-muted-foreground/50 uppercase tracking-wider mb-0.5`}>
+          <div className={`${compact ? "text-[10px]" : "text-[11px]"} font-medium text-muted-foreground uppercase tracking-wider mb-2`}>
             {group.label}
           </div>
           <div>

@@ -109,7 +109,7 @@ type DiffOperations interface {
 	GetChangedFiles(ctx context.Context, rr RevRange) ([]string, error)
 	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
 	ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error)
-	GetDiffNumstat(rr RevRange) (string, error)
+	BatchDiffNumstat(ctx context.Context, ranges []RevRange) (map[RevRange]string, error)
 	GetStagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary

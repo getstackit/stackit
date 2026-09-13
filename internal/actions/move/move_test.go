@@ -373,7 +373,7 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify branch2 only has its own commit relative to main
 		// branch1's commit should NOT be in branch2's history anymore
-		branch2Commits, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"), engine.CommitFormatSHA)
+		branch2Commits, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branch2")), engine.CommitFormatSHA).ForBranch(s.Engine.GetBranch("branch2"))
 		require.NoError(t, err)
 
 		// branch2 should only have 1 commit (the one we added to it)
@@ -381,7 +381,7 @@ func TestMoveAction(t *testing.T) {
 		require.NotEqual(t, branch1Commit, branch2Commits[0], "branch1's commit should not be in branch2")
 
 		// Verify the commit message matches
-		branch2Messages, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"), engine.CommitFormatSubject)
+		branch2Messages, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branch2")), engine.CommitFormatSubject).ForBranch(s.Engine.GetBranch("branch2"))
 		require.NoError(t, err)
 		require.Equal(t, "commit in branch2", branch2Messages[0])
 	})
@@ -436,7 +436,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branch2 still has 1 commit relative to main (the amended one)
-		branch2Commits, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"), engine.CommitFormatSubject)
+		branch2Commits, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branch2")), engine.CommitFormatSubject).ForBranch(s.Engine.GetBranch("branch2"))
 		require.NoError(t, err)
 		require.Equal(t, 1, len(branch2Commits))
 		require.Equal(t, "amended commit", branch2Commits[0])
@@ -467,14 +467,14 @@ func TestMoveAction(t *testing.T) {
 
 		// Verify branchA2 only has its own commit relative to branchB1
 		// branchA1's commit should NOT be in branchA2's history relative to branchB1
-		branchA2Commits, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchA2"), engine.CommitFormatSHA)
+		branchA2Commits, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branchA2")), engine.CommitFormatSHA).ForBranch(s.Engine.GetBranch("branchA2"))
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(branchA2Commits), "branchA2 should only have 1 commit after move")
 		require.NotEqual(t, branchA1Commit, branchA2Commits[0], "branchA1's commit should not be in branchA2")
 
 		// Verify the commit message matches
-		branchA2Messages, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchA2"), engine.CommitFormatSubject)
+		branchA2Messages, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branchA2")), engine.CommitFormatSubject).ForBranch(s.Engine.GetBranch("branchA2"))
 		require.NoError(t, err)
 		require.Equal(t, "commit A2", branchA2Messages[0])
 	})
@@ -501,7 +501,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify branchB only has its own commit (not A's commit)
-		branchBCommits, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchB"), engine.CommitFormatSubject)
+		branchBCommits, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branchB")), engine.CommitFormatSubject).ForBranch(s.Engine.GetBranch("branchB"))
 		require.NoError(t, err)
 		require.Equal(t, 1, len(branchBCommits), "branchB should only have 1 commit after move")
 		require.Equal(t, "commit B", branchBCommits[0])
@@ -513,7 +513,7 @@ func TestMoveAction(t *testing.T) {
 		require.False(t, mergedIntoMain, "branchA should NOT be merged into main after moving branchB")
 
 		// Verify branchA still has its own commit
-		branchACommits, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchA"), engine.CommitFormatSubject)
+		branchACommits, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branchA")), engine.CommitFormatSubject).ForBranch(s.Engine.GetBranch("branchA"))
 		require.NoError(t, err)
 		require.Equal(t, 1, len(branchACommits), "branchA should still have 1 commit")
 		require.Equal(t, "commit A", branchACommits[0])
@@ -523,7 +523,7 @@ func TestMoveAction(t *testing.T) {
 		require.NotNil(t, branchCParent)
 		require.Equal(t, "branchB", branchCParent.GetName())
 
-		branchCCommits, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchC"), engine.CommitFormatSubject)
+		branchCCommits, err := s.Engine.BatchCommits(engine.BranchesOf(s.Engine.GetBranch("branchC")), engine.CommitFormatSubject).ForBranch(s.Engine.GetBranch("branchC"))
 		require.NoError(t, err)
 		require.Equal(t, 1, len(branchCCommits), "branchC should have 1 commit")
 		require.Equal(t, "commit C", branchCCommits[0])

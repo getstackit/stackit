@@ -940,7 +940,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		if submissionInfo.BaseSHA != submissionInfo.HeadSHA {
 			// Check if there are actually commits between base and head
 			branch := nav.GetBranch(submissionInfo.BranchName)
-			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
+			commits, err := ctx.Engine.BatchCommits(engine.BranchesOf(branch), engine.CommitFormatSHA).ForBranch(branch)
 			if err == nil && len(commits) > 0 {
 				// There are commits, safe to update base
 				updateOpts.Base = &submissionInfo.Base

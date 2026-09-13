@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 
-	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -98,21 +97,6 @@ func (e *engineImpl) BatchDiffStats(branches Branches) map[string]DiffStat {
 		result[name] = stats[rr].DiffStat
 	}
 	return result
-}
-
-// BatchCommits returns each non-trunk branch's formatted commits, keyed by
-// branch name, resolved in one batched pass. It matches GetAllCommits: the base
-// is the stored divergence point, or the parent's current tip when none is
-// recorded — never an empty base, which would list a branch's entire history
-// back to the repo root.
-func (e *engineImpl) BatchCommits(branches Branches, format CommitFormat) map[string][]string {
-	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) []string {
-		if e.IsTrunk(b) {
-			return nil
-		}
-		commits, _ := e.commitsBetween(git.RevRange{Base: statBase(parentRev, storedBase), Head: head}, format)
-		return commits
-	})
 }
 
 // BatchChangedFileCounts returns each non-trunk branch's number of files changed

@@ -90,54 +90,7 @@ func (e *engineImpl) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit
 	return e.git.GetRecentCommitsInRange(context.Background(), rr.String())
 }
 
-// GetAllCommits returns commits for a branch in various formats
-func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string, error) {
-	branchName := branch.GetName()
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	// Check if branch is trunk
-	if branchName == e.trunk {
-		// Trunk is the base, so it has no commits "on" it relative to a parent
-		return []string{}, nil
-	}
-
-	// Get metadata to find parent revision
-	meta, err := e.readMetadata(branchName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get branch revision
-	branchRevision, err := e.git.GetRevision(branchName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Base for the commit range: the stored divergence point, or the parent's
-	// current tip when none is recorded. Falling back to the parent tip — not an
-	// empty base, which lists the branch's entire history back to the repo root —
-	// keeps the result to the branch's own commits and consistent with the base
-	// the batched diff-stat / commit-count readers use (statBase).
-	var baseRevision string
-	if rev := meta.GetParentBranchRevision(); rev != nil && *rev != "" {
-		baseRevision = *rev
-	} else {
-		parent := e.trunk
-		if state := e.readState(branchName); state != nil {
-			parent = state.Parent
-		}
-		if parentRev, err := e.git.GetRevision(parent); err == nil {
-			baseRevision = parentRev
-		}
-	}
-
-	return e.commitsBetween(git.RevRange{Base: baseRevision, Head: branchRevision}, format)
-}
-
-// commitsBetween returns the formatted commits in (base, head]. It handles
-// formatting in-process via go-git, avoiding per-commit git process spawns, and
-// takes pre-resolved revisions so batched callers need not re-resolve the head.
+// commitsBetween reads formatted commits using Git with pre-resolved revisions.
 func (e *engineImpl) commitsBetween(rr git.RevRange, format CommitFormat) ([]string, error) {
 	return e.git.GetCommitRange(context.Background(), rr.Base, rr.Head, string(format))
 }

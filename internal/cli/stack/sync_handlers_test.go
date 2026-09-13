@@ -240,3 +240,18 @@ func TestConflictRecoveryTargetsReportedBranch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "feat/web", branch)
 }
+
+func TestSyncCountsOnlyRestackResults(t *testing.T) {
+	runner := tui.NewMockRunner()
+	h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(0), output.NewNullOutput(), output.NewNullLogger())
+	h.Start(99) // The action's old estimate is not an exact total.
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted, Total: 2})
+	h.OnRestackActivity(engine.RebaseProgress{Branch: "feat/api", Parent: "main"})
+	h.OnRestackActivity(engine.RebaseProgress{Branch: "feat/api", Finished: true})
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Branch: "feat/api"})
+	require.Zero(t, h.completedOps)
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/api", NewRevision: "1234567"})
+	h.EmitEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/web"})
+	require.Equal(t, 2, h.completedOps)
+	require.Equal(t, 2, h.totalOps)
+}

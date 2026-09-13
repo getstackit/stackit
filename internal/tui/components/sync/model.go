@@ -3,6 +3,7 @@ package sync
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -67,6 +68,7 @@ type Model struct {
 	elapsed        time.Duration
 	spinner        spinner.Model
 	Summary        string
+	active         map[string]string
 
 	// Phase headers commit to scrollback lazily: only when a phase emits its
 	// first detail. Phases that do nothing (nothing to sync/clean/restack) never
@@ -95,6 +97,13 @@ type PhaseDetailMsg struct {
 	Phase   Phase
 	Message string
 	Mark    DetailMark // Status glyph for the row (defaults to MarkDone)
+}
+
+// ActivityMsg names an in-flight rebase check; several may run concurrently.
+type ActivityMsg struct {
+	Branch   string
+	Parent   string
+	Finished bool
 }
 
 // ProgressTickMsg updates the progress bar
@@ -188,6 +197,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, detail
 
+	case ActivityMsg:
+		if m.active == nil {
+			m.active = make(map[string]string)
+		}
+		if msg.Finished {
+			delete(m.active, msg.Branch)
+		} else {
+			m.active[msg.Branch] = msg.Parent
+		}
+		return m, nil
+
 	case ProgressTickMsg:
 		m.CompletedOps = msg.Completed
 		m.TotalOps = msg.Total
@@ -234,6 +254,18 @@ func (m *Model) View() tea.View {
 
 // getStatusText returns the current status text to display
 func (m *Model) getStatusText() string {
+	if len(m.active) > 0 {
+		names := make([]string, 0, len(m.active))
+		for name := range m.active {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		text := "Checking rebase: " + style.DisplayBranchName(names[0]) + " onto " + style.DisplayBranchName(m.active[names[0]])
+		if len(names) > 1 {
+			text += fmt.Sprintf(" (+%d active)", len(names)-1)
+		}
+		return text
+	}
 	if m.CurrentDetail != "" {
 		return m.CurrentDetail
 	}

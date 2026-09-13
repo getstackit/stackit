@@ -361,6 +361,7 @@ const (
 
 // Event represents a progress update during sync
 type Event struct {
+	Total               int               // exact branch count when starting a restack phase
 	Phase               Phase             // Current phase
 	Type                EventType         // Event type
 	Branch              string            // Branch name (if applicable)

@@ -223,7 +223,7 @@ func NewEngine(opts Options) (Engine, error) {
 		fallthrough
 	default:
 		// Don't refresh currentBranch here since we just set it
-		if err := e.rebuildInternal(false); err != nil {
+		if err := e.rebuildInternal(skipCurrentBranchRefresh); err != nil {
 			return nil, fmt.Errorf("failed to rebuild engine: %w", err)
 		}
 	}

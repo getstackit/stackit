@@ -416,7 +416,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	}
 
 	// Rebuild engine state
-	if err := e.rebuildInternal(true); err != nil {
+	if err := e.rebuildInternal(refreshCurrentBranchFromGit); err != nil {
 		return fmt.Errorf("failed to rebuild engine after restore: %w", err)
 	}
 

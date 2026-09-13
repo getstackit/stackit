@@ -8,9 +8,20 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 )
 
+// currentBranchRefreshMode controls whether rebuildInternal re-reads the
+// current branch from Git, instead of a bare bool at call sites.
+type currentBranchRefreshMode int
+
+const (
+	// skipCurrentBranchRefresh keeps the engine's existing current-branch state.
+	skipCurrentBranchRefresh currentBranchRefreshMode = iota
+	// refreshCurrentBranchFromGit re-reads the current branch from Git, needed
+	// when called from Rebuild/Reset after branch switches.
+	refreshCurrentBranchFromGit
+)
+
 // rebuildInternal is the internal rebuild logic without locking
-// refreshCurrentBranch indicates whether to refresh currentBranch from Git
-func (e *engineImpl) rebuildInternal(refreshCurrentBranch bool) error {
+func (e *engineImpl) rebuildInternal(mode currentBranchRefreshMode) error {
 	// Get all branch names
 	branches, err := e.git.GetAllBranchNames(context.Background())
 	if err != nil {
@@ -18,8 +29,7 @@ func (e *engineImpl) rebuildInternal(refreshCurrentBranch bool) error {
 	}
 
 	var currentBranch string
-	// Refresh current branch from Git if requested (needed when called from Rebuild/Reset after branch switches)
-	if refreshCurrentBranch {
+	if mode == refreshCurrentBranchFromGit {
 		cb, err := e.git.GetCurrentBranch()
 		if err == nil {
 			currentBranch = cb

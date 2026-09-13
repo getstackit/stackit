@@ -1,7 +1,11 @@
 package stack
 
 import (
+	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,24 +20,20 @@ import (
 
 func TestInteractiveSyncHandler_Start(t *testing.T) {
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	handler.Start(10)
 
-	// Verify that Start sends a ProgressTickMsg
-	messages := mockRunner.Messages()
-	require.Len(t, messages, 1)
-
-	msg, ok := messages[0].(syncComponent.ProgressTickMsg)
-	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[0])
-	assert.Equal(t, 0, msg.Completed)
-	assert.Equal(t, 10, msg.Total)
+	// Start seeds nothing. Its argument was a run-level item estimate that drove
+	// a progress bar; the live line now shows the phase's position in a pipeline
+	// that is known without any estimate.
+	assert.Empty(t, mockRunner.Messages())
 }
 
 func TestInteractiveSyncHandler_EmitEvent_PhaseStart(t *testing.T) {
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	// Emit a phase start event
@@ -53,7 +53,7 @@ func TestInteractiveSyncHandler_EmitEvent_PhaseStart(t *testing.T) {
 
 func TestInteractiveSyncHandler_EmitEvent_Progress(t *testing.T) {
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	// Set up initial state
@@ -73,29 +73,38 @@ func TestInteractiveSyncHandler_EmitEvent_Progress(t *testing.T) {
 		Type:        syncAction.EventCompleted,
 		Branch:      "main",
 		NewRevision: "abc1234",
+		Commits:     3,
 	})
 
-	// Should send PhaseDetailMsg and ProgressTickMsg
-	messages := mockRunner.Messages()
-	require.Len(t, messages, 2)
+	// Nothing is printed yet: a phase's outcome header can only be written once
+	// the phase is over, so its rows are still buffered in the report.
+	assert.Empty(t, mockRunner.Messages())
 
-	// First message should be PhaseDetailMsg
-	detailMsg, ok := messages[0].(syncComponent.PhaseDetailMsg)
-	require.True(t, ok, "expected PhaseDetailMsg, got %T", messages[0])
-	assert.Equal(t, syncComponent.PhaseTrunk, detailMsg.Phase)
-	assert.Contains(t, detailMsg.Message, "main")
-	assert.Contains(t, detailMsg.Message, "abc1234")
+	// Ending the run flushes the trunk phase, which reports that trunk moved.
+	handler.Complete(syncAction.Summary{TrunkUpdated: true, TrunkRevision: "abc1234", TrunkCommits: 3})
+	printed := printedLines(mockRunner.Messages())
+	assert.Contains(t, printed, "main")
+	assert.Contains(t, printed, "+3")
+}
 
-	// Second message should be ProgressTickMsg
-	progressMsg, ok := messages[1].(syncComponent.ProgressTickMsg)
-	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[1])
-	assert.Equal(t, 1, progressMsg.Completed)
-	assert.Equal(t, 5, progressMsg.Total)
+// printedLines concatenates every line the handler sent for printing, with color
+// stripped, for assertions about what reached the transcript.
+func printedLines(messages []tea.Msg) string {
+	var b strings.Builder
+	for _, msg := range messages {
+		if print, ok := msg.(syncComponent.PrintMsg); ok {
+			for _, line := range print.Lines {
+				b.WriteString(ansi.Strip(line))
+				b.WriteString("\n")
+			}
+		}
+	}
+	return b.String()
 }
 
 func TestInteractiveSyncHandler_Complete(t *testing.T) {
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	handler.Complete(syncAction.Summary{
@@ -113,30 +122,24 @@ func TestInteractiveSyncHandler_Complete(t *testing.T) {
 
 func TestInteractiveSyncHandler_OnRestackStart(t *testing.T) {
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	handler.OnRestackStart(3)
 
-	// Should send ProgressTickMsg and PhaseStartMsg
+	// One PhaseStartMsg. The branch count no longer feeds a bar, so it isn't
+	// forwarded to the model — the live line shows the phase's pipeline position.
 	messages := mockRunner.Messages()
-	require.Len(t, messages, 2)
+	require.Len(t, messages, 1)
 
-	// First message should be ProgressTickMsg
-	progressMsg, ok := messages[0].(syncComponent.ProgressTickMsg)
-	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[0])
-	assert.Equal(t, 0, progressMsg.Completed)
-	assert.Equal(t, 3, progressMsg.Total)
-
-	// Second message should be PhaseStartMsg
-	phaseMsg, ok := messages[1].(syncComponent.PhaseStartMsg)
-	require.True(t, ok, "expected PhaseStartMsg, got %T", messages[1])
+	phaseMsg, ok := messages[0].(syncComponent.PhaseStartMsg)
+	require.True(t, ok, "expected PhaseStartMsg, got %T", messages[0])
 	assert.Equal(t, syncComponent.PhaseRestack, phaseMsg.Phase)
 }
 
 func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	// Set up initial state
@@ -155,26 +158,43 @@ func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 		Parent:      "main",
 	})
 
-	// Should send PhaseDetailMsg and ProgressTickMsg
-	messages := mockRunner.Messages()
-	require.Len(t, messages, 2)
+	// A plain successful restack is what the developer assumed would happen, so
+	// it contributes a count rather than a row.
+	handler.OnRestackComplete(handlers.RestackSummary{Restacked: 1})
+	assert.Contains(t, printedLines(mockRunner.Messages()), "Restacked 1 branch")
+}
 
-	// First message should be PhaseDetailMsg
-	detailMsg, ok := messages[0].(syncComponent.PhaseDetailMsg)
-	require.True(t, ok, "expected PhaseDetailMsg, got %T", messages[0])
-	assert.Equal(t, syncComponent.PhaseRestack, detailMsg.Phase)
-	assert.Contains(t, detailMsg.Message, "feature-branch")
-	assert.Contains(t, detailMsg.Message, "PR #42")
+func TestInteractiveSyncHandler_ReportsReparenting(t *testing.T) {
+	mockRunner := tui.NewMockRunner()
+	model := syncComponent.NewModel()
+	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
-	// Second message should be ProgressTickMsg
-	progressMsg, ok := messages[1].(syncComponent.ProgressTickMsg)
-	require.True(t, ok, "expected ProgressTickMsg, got %T", messages[1])
-	assert.Equal(t, 1, progressMsg.Completed)
+	handler.OnRestackStart(1)
+	mockRunner.Reset()
+
+	// A reparent is the one sync outcome a developer cannot infer: the shape of
+	// their stack changed because the old parent landed. It must be reported.
+	handler.OnRestackBranch(handlers.RestackBranchEvent{
+		Branch:      "child",
+		Result:      syncAction.RestackDone,
+		NewRevision: "def5678",
+		LockReason:  engine.LockReasonNone,
+		Parent:      "main",
+		Reparented:  true,
+		OldParent:   "landed-parent",
+		NewParent:   "main",
+	})
+	handler.OnRestackComplete(handlers.RestackSummary{Restacked: 1})
+
+	printed := printedLines(mockRunner.Messages())
+	assert.Contains(t, printed, "child")
+	assert.Contains(t, printed, "reparented onto main")
+	assert.Contains(t, printed, "landed-parent")
 }
 
 func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	handler.OnRestackComplete(handlers.RestackSummary{Restacked: 5, Skipped: 2})
@@ -185,13 +205,13 @@ func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
 
 	msg, ok := messages[0].(syncComponent.CompleteMsg)
 	require.True(t, ok, "expected CompleteMsg, got %T", messages[0])
-	assert.Contains(t, msg.Summary, "restacked 5")
+	assert.Contains(t, msg.Summary, "Restacked 5")
 	assert.Contains(t, msg.Summary, "skipped 2")
 }
 
 func TestInteractiveSyncHandler_IsInteractive(t *testing.T) {
 	mockRunner := tui.NewMockRunner()
-	model := syncComponent.NewModel(0)
+	model := syncComponent.NewModel()
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
 	assert.True(t, handler.IsInteractive())

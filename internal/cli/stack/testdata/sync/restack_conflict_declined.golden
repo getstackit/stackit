@@ -1,13 +1,9 @@
-📚 Restacking branches...
-  ✓ Restacked feat-api (PR #201) on main → b2c3d4e
-  ⚠ Skipped feat-ui (PR #202) (conflict)
 
-⚠️  Found conflicts in 1 branch during restack; branches without conflicts were restacked.
-Resolve each with:
-  • st restack feat-ui
-
+⚠️  1 branch conflicted; the rest of the stack was restacked.
 ? Resolve conflicts now? [y/N]
 › user answers: no
+Restacked 1 branch
+  ⚠ feat-ui #202 conflict — needs resolving
 
-✅ Summary: restacked 1, skipped 1 (conflict)
-  Run st restack feat-ui to resolve and continue
+Restacked 1, skipped 1 (conflict)
+   st restack feat-ui

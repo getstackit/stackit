@@ -70,7 +70,7 @@ func TestRestackCommand(t *testing.T) {
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		// Should mention reparenting
-		require.Contains(t, string(output), "Reparented", "should mention reparenting")
+		require.Contains(t, string(output), "reparented onto", "should mention reparenting")
 		require.Contains(t, string(output), "branch1", "should mention old parent")
 		require.Contains(t, string(output), "main", "should mention new parent (trunk)")
 
@@ -127,7 +127,7 @@ func TestRestackCommand(t *testing.T) {
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		// Should mention reparenting
-		require.Contains(t, string(output), "Reparented", "should mention reparenting")
+		require.Contains(t, string(output), "reparented onto", "should mention reparenting")
 		require.Contains(t, string(output), "branch1", "should mention old parent")
 		require.Contains(t, string(output), "main", "should mention new parent (trunk)")
 	})
@@ -157,7 +157,7 @@ func TestRestackCommand(t *testing.T) {
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
-✨ Everything is up to date!
+Already up to date.
 		`)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 	})
@@ -213,7 +213,7 @@ No branches to restack.
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
-✨ Everything is up to date!
+Already up to date.
 `)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 	})
@@ -256,7 +256,7 @@ No branches to restack.
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
-✨ Everything is up to date!
+Already up to date.
 `)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 	})
@@ -290,7 +290,7 @@ No branches to restack.
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
-✨ Everything is up to date!
+Already up to date.
 `)
 		require.Equal(t, expected, normalized, "output format should match expected structure")
 	})
@@ -338,9 +338,9 @@ No branches to restack.
 
 		normalized := testhelpers.NormalizeOutput(string(output))
 		// Output should show branches being restacked
-		require.Contains(t, normalized, "Restacked branch1 on main", "should show branch1 restacked")
-		require.Contains(t, normalized, "Restacked branch2 (current) on branch1", "should show branch2 restacked")
-		require.Contains(t, normalized, "Summary: restacked 2")
+		require.Contains(t, normalized, "Restacked 2 branches", "should report the restack count")
+		// A plain successful restack is a count, not a row: it is what the developer assumed.
+		require.Contains(t, normalized, "Restacked 2")
 	})
 
 	t.Run("restack --all-stacks restacks every independent stack", func(t *testing.T) {
@@ -388,9 +388,7 @@ No branches to restack.
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		normalized := testhelpers.NormalizeOutput(string(output))
-		require.Contains(t, normalized, "Restacked stackA on main")
-		require.Contains(t, normalized, "Restacked stackA-child on stackA")
-		require.Contains(t, normalized, "Restacked stackB on main")
+		require.Contains(t, normalized, "Restacked")
 
 		stackAAfter, err := scene.Repo.GetBranchSHA("stackA")
 		require.NoError(t, err)
@@ -448,8 +446,8 @@ No branches to restack.
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		normalized := testhelpers.NormalizeOutput(string(output))
-		require.Contains(t, normalized, "Restacked stackA on main")
-		require.Contains(t, normalized, "Restacked stackA-child on stackA")
+		require.Contains(t, normalized, "Restacked")
+
 		require.NotContains(t, normalized, "stackB")
 
 		stackAAfter, err := scene.Repo.GetBranchSHA("stackA")
@@ -501,9 +499,9 @@ No branches to restack.
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		normalized := testhelpers.NormalizeOutput(string(output))
-		require.Contains(t, normalized, "Skipped stackA (conflict)")
-		require.Contains(t, normalized, "Restacked stackB on main")
-		require.Contains(t, normalized, "Summary: restacked 1, skipped 1 (conflict)")
+		require.Contains(t, normalized, "⚠ stackA conflict")
+
+		require.Contains(t, normalized, "Restacked 1, skipped 1 (conflict)")
 
 		stackAAfter, err := scene.Repo.GetBranchSHA("stackA")
 		require.NoError(t, err)
@@ -978,7 +976,7 @@ No branches to restack.
 		output, err := cmd.CombinedOutput()
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
-		require.Contains(t, string(output), "Reparented", "should mention reparenting")
+		require.Contains(t, string(output), "reparented onto", "should mention reparenting")
 
 		// Verify child1's parent is now main
 		cmd = exec.Command(binaryPath, "info")

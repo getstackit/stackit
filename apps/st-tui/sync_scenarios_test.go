@@ -19,13 +19,17 @@ func TestSyncScenarioReplayUsesProductionHandler(t *testing.T) {
 	scenario.Replay(stack.NewSimpleSyncHandler(out), 0)
 	got := ansi.Strip(out.String())
 
-	assert.Contains(t, got, "main is up to date")
-	assert.Contains(t, got, "Updated PR info for 6 branches")
-	assert.Contains(t, got, "Deleted stack-merge-stack-1784862381 merged into main")
-	assert.Contains(t, got, "Restacked info-query-cli-rendering (PR #936) on main → 9e49378")
-	assert.Contains(t, got, "Skipped jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits (PR #754) (conflict)")
-	assert.Contains(t, got, "✅ Summary: restacked 5, deleted 2, skipped 1 (conflict)")
-	assert.Contains(t, got, "Run st restack jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits to resolve and continue")
+	// An already-current trunk is not reported: only movement gets a row.
+	assert.NotContains(t, got, "main is up to date")
+	assert.NotContains(t, got, "Pulling from remote")
+	assert.Contains(t, got, "Refreshed PR info for 6 branches")
+	assert.Contains(t, got, "2 branches landed and cleaned up")
+	assert.Contains(t, got, "stack-merge-stack-1784862381")
+	// A successful restack is a count, not a row.
+	assert.Contains(t, got, "Restacked 5 branches")
+	assert.Contains(t, got, "⚠ add-prompt-notes-to-track-LLM-context-on-commits #754 conflict")
+	assert.Contains(t, got, "Restacked 5, deleted 2, skipped 1 (conflict)")
+	assert.Contains(t, got, "st restack jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits")
 }
 
 func TestLookupSyncScenario(t *testing.T) {

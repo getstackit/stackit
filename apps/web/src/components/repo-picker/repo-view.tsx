@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { ChevronDown, GitBranch, SearchX, X } from "lucide-react";
 import { useRepo } from "@/components/providers/repo-provider";
 import { OwnerSwimlane } from "@/components/swimlane/owner-swimlane";
 import { getLastActiveDate } from "@/lib/swimlane-grouping";
@@ -15,6 +16,9 @@ import { BackgroundMesh } from "@/components/ui/background-mesh";
 import { SkeletonSwimlane } from "@/components/ui/skeleton-shimmer";
 import { useUrlSelection } from "@/hooks/use-url-selection";
 import { groupStacksByOwner } from "@/lib/swimlane-grouping";
+import { filterStacks } from "@/lib/stack-search";
+import { StackToolbar } from "@/components/swimlane/stack-toolbar";
+import { cn } from "@/lib/utils";
 
 const BranchDiffWorkspace = dynamic(
   () =>
@@ -53,9 +57,14 @@ export function RepoView() {
     handleStackBranchSelect,
   } = useUrlSelection(stackDetails);
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredStacks = useMemo(
+    () => filterStacks(stackDetails, searchQuery),
+    [stackDetails, searchQuery]
+  );
   const { yourStacks, otherOwners } = useMemo(
-    () => groupStacksByOwner(stackDetails, repo?.currentUser),
-    [stackDetails, repo?.currentUser]
+    () => groupStacksByOwner(filteredStacks, repo?.currentUser),
+    [filteredStacks, repo?.currentUser]
   );
 
   const [recentCommitsPreference, setRecentCommitsPreference] = useState(true);
@@ -65,6 +74,24 @@ export function RepoView() {
   const stacksAndHistoryContent =
     stackDetails.length > 0 ? (
       <div className="flex flex-col justify-end min-h-full">
+        {filteredStacks.length === 0 && (
+          <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
+            <div className="mb-4 rounded-2xl border bg-background p-3 text-muted-foreground shadow-sm">
+              <SearchX aria-hidden="true" className="size-5" />
+            </div>
+            <h2 className="text-sm font-medium">No stacks match your search.</h2>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+              Try a branch name, PR number, or owner.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="mt-4 rounded-lg border bg-background px-3 py-2 text-sm font-medium shadow-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Show all stacks
+            </button>
+          </div>
+        )}
         {/* Swimlanes: only this area scrolls horizontally */}
         <div className="overflow-x-auto">
           <div className="flex items-end gap-6 p-6 pb-4 min-w-max">
@@ -107,10 +134,16 @@ export function RepoView() {
             </span>
           ) : (
             <button
+              type="button"
+              aria-expanded={showRecentCommits}
+              aria-controls="recent-trunk-commits"
               onClick={() => setRecentCommitsPreference((prev) => !prev)}
-              className="text-xs font-mono text-muted-foreground/70 px-2 hover:text-muted-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {repo?.trunk}
+              <GitBranch aria-hidden="true" className="size-3.5" />
+              <span className="font-mono">{repo?.trunk}</span>
+              <span>Recent commits</span>
+              <ChevronDown aria-hidden="true" className={cn("size-3.5 transition-transform", !showRecentCommits && "-rotate-90")} />
             </button>
           )}
           <div className="flex-1 h-[2px] bg-gradient-to-l from-transparent via-muted-foreground/30 to-muted-foreground/30" />
@@ -118,6 +151,8 @@ export function RepoView() {
 
         {/* Recent trunk commits */}
         <div
+          id="recent-trunk-commits"
+          inert={!showRecentCommits}
           className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
           style={{
             gridTemplateRows: showRecentCommits ? "1fr" : "0fr",
@@ -130,8 +165,14 @@ export function RepoView() {
         </div>
       </div>
     ) : (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        No stacks found
+      <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="mb-4 rounded-2xl border bg-background p-3 text-muted-foreground shadow-sm">
+          <GitBranch aria-hidden="true" className="size-5" />
+        </div>
+        <h2 className="text-base font-medium">No stacks yet</h2>
+        <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
+          Tracked branches will appear here, grouped into stacks by owner.
+        </p>
       </div>
     );
 
@@ -163,8 +204,7 @@ export function RepoView() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
-      <BackgroundMesh />
+    <div className="flex h-dvh flex-col bg-muted/20">
       <Header repo={repo ?? null} lastUpdated={lastUpdated ?? null} refresh={refresh} />
 
       {/* Main content: stacks area + detail panel.
@@ -174,6 +214,12 @@ export function RepoView() {
           so no data renders. */}
       <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
         <div className="flex flex-1 flex-col overflow-hidden min-h-0 min-w-0">
+          <StackToolbar
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            matchingCount={filteredStacks.length}
+            totalCount={stackDetails.length}
+          />
           {branchOverlayMode && selectedBranch && selectedBranchStack ? (
             <>
               <div className="min-h-0 flex-1 overflow-hidden border-b">
@@ -197,7 +243,23 @@ export function RepoView() {
             mobile (bounded height), beside them on desktop (fixed width). */}
         <div className="flex shrink-0 flex-col border-t md:flex-row md:border-t-0">
           <div aria-hidden className="hidden w-px shrink-0 bg-border md:block" />
-          <div className="flex h-[45vh] w-full shrink-0 flex-col overflow-hidden md:h-auto md:w-[480px]">
+          <aside aria-label="Stack details and activity" className={cn(
+            "flex w-full shrink-0 flex-col overflow-hidden bg-background md:h-auto md:w-[360px] xl:w-[420px]",
+            hasSelection ? "h-[45dvh]" : "max-h-[25dvh] md:max-h-none"
+          )}>
+            <div className={cn("shrink-0 items-center justify-between border-b px-4 py-3", hasSelection ? "flex" : "hidden md:flex")}>
+              <h2 className="text-sm font-medium">{hasSelection ? "Stack details" : "Overview"}</h2>
+              {hasSelection && (
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  aria-label="Close details"
+                  className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </button>
+              )}
+            </div>
             {branchOverlayMode && selectedBranchStack ? (
               <div className="flex-1 overflow-auto p-4">
                 <StackDetailPanel
@@ -223,7 +285,7 @@ export function RepoView() {
                 )}
               </div>
             ) : (
-              <div className="flex-1">
+              <div className="hidden min-h-0 flex-1 md:block">
                 <DetailEmptyState />
               </div>
             )}
@@ -235,7 +297,7 @@ export function RepoView() {
                 </div>
               </>
             )}
-          </div>
+          </aside>
         </div>
       </div>
     </div>

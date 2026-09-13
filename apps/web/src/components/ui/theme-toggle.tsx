@@ -20,7 +20,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={next}
-      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      className="inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       title={`Theme: ${label}. Click to cycle.`}
     >
       <Icon className="w-3.5 h-3.5" />

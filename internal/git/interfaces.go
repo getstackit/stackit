@@ -2,7 +2,6 @@ package git
 
 import (
 	"context"
-	"time"
 )
 
 // RepositoryReader provides read access to repository configuration and state.
@@ -81,10 +80,8 @@ type CommitReader interface {
 	GetRevision(branchName string) (string, error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	BatchGetRevisions(branchNames []string) (map[string]string, []error)
-	GetCommitDate(branchName string) (time.Time, error)
-	GetCommitAuthor(branchName string) (string, error)
-	// BatchCommitInfo resolves each branch's tip commit date and author in one
-	// `git for-each-ref` invocation instead of two `git log` processes per branch.
+	// BatchCommitInfo resolves dates and authors for branches and arbitrary refs.
+	// Local branches use one process; other refs are resolved and read in bulk.
 	BatchCommitInfo(branchNames []string) map[string]CommitInfo
 	GetCommitRange(ctx context.Context, base, head, format string) ([]string, error)
 	GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error)

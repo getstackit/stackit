@@ -88,10 +88,8 @@ type BranchStatus interface {
 
 // BranchInfo provides commit and diff metadata
 type BranchInfo interface {
-	GetCommitDate(branch Branch) (time.Time, error)
-	GetCommitAuthor(branch Branch) (string, error)
-	// BatchCommitInfo resolves each branch's tip commit date and author in one
-	// batched pass instead of two `git log` processes per branch.
+	// BatchCommitInfo resolves commit dates and authors in bulk, including when
+	// a Branch names an arbitrary ref such as HEAD or a commit SHA.
 	BatchCommitInfo(branches Branches) map[string]git.CommitInfo
 	GetRevision(branch Branch) (string, error)
 	GetAllCommits(branch Branch, format CommitFormat) ([]string, error)

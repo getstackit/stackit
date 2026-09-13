@@ -770,14 +770,6 @@ func (r *runner) IsAncestor(ctx context.Context, ancestor, descendant string) (b
 	return r.isAncestor(ctx, ancestor, descendant)
 }
 
-func (r *runner) GetCommitDate(branchName string) (time.Time, error) {
-	return r.getCommitDate(branchName)
-}
-
-func (r *runner) GetCommitAuthor(branchName string) (string, error) {
-	return r.getCommitAuthor(branchName)
-}
-
 func (r *runner) BatchCommitInfo(branchNames []string) map[string]CommitInfo {
 	return r.batchCommitInfo(branchNames)
 }

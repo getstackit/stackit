@@ -46,38 +46,15 @@ func (r *runner) resolveRefSHA(ref string) (string, error) {
 	return sha, nil
 }
 
-func (r *runner) getCommitDate(branchName string) (time.Time, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(), "log", "-1", "--format=%aI", branchName)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to get commit date for %s: %w", branchName, err)
-	}
-	s := strings.TrimSpace(out)
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to parse commit date %q: %w", s, err)
-	}
-	return t, nil
-}
-
-func (r *runner) getCommitAuthor(branchName string) (string, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(), "log", "-1", "--format=%an", branchName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get commit author for %s: %w", branchName, err)
-	}
-	return strings.TrimSpace(out), nil
-}
-
 // CommitInfo holds a branch tip commit's author date and author name.
 type CommitInfo struct {
 	Date   time.Time
 	Author string
 }
 
-// batchCommitInfo resolves each branch's tip commit date and author in one
-// `git for-each-ref` invocation instead of two `git log` processes per branch
-// (getCommitDate + getCommitAuthor). Branches with no matching ref are simply
-// absent from the result map rather than reported as errors, matching
-// for-each-ref's own behavior for unmatched patterns.
+// batchCommitInfo keeps local branches on a one-process fast path. Other refs
+// (HEAD, tags, SHAs, revision expressions) are peeled and read in bulk. Invalid
+// or non-commit refs are omitted; results are keyed by the original input.
 func (r *runner) batchCommitInfo(branchNames []string) map[string]CommitInfo {
 	results := make(map[string]CommitInfo)
 	if len(branchNames) == 0 {
@@ -88,8 +65,16 @@ func (r *runner) batchCommitInfo(branchNames []string) map[string]CommitInfo {
 	// "heads/<name>" when a tag shares the branch's name, and the caller looks
 	// results up by bare branch name — a miss silently yields a zero CommitInfo.
 	args := []string{"for-each-ref", "--format=%(refname)\t%(authordate:iso-strict)\t%(authorname)"}
+	requested := make(map[string]bool, len(branchNames))
 	for _, name := range branchNames {
+		if requested[name] || name == "" || strings.ContainsAny(name, "\r\n") {
+			continue
+		}
+		requested[name] = true
 		args = append(args, "refs/heads/"+name)
+	}
+	if len(requested) == 0 {
+		return results
 	}
 
 	out, err := r.RunGitCommandWithContext(context.Background(), args...)
@@ -109,9 +94,68 @@ func (r *runner) batchCommitInfo(branchNames []string) map[string]CommitInfo {
 		if err != nil {
 			continue
 		}
-		results[strings.TrimPrefix(parts[0], "refs/heads/")] = CommitInfo{Date: date, Author: parts[2]}
+		name := strings.TrimPrefix(parts[0], "refs/heads/")
+		if requested[name] {
+			results[name] = CommitInfo{Date: date, Author: parts[2]}
+		}
 	}
+	r.readOtherCommitInfo(requested, results)
 	return results
+}
+
+func (r *runner) readOtherCommitInfo(requested map[string]bool, results map[string]CommitInfo) {
+	var missing []string
+	var input strings.Builder
+	for name := range requested {
+		if _, ok := results[name]; !ok {
+			missing = append(missing, name)
+			input.WriteString(name + "^{commit}\n")
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	// Batch-check isolates invalid refs without per-ref retries.
+	out, err := r.runGitInternal(context.Background(), input.String(), nil, false, "cat-file", "--batch-check=%(objectname)")
+	if err != nil {
+		return
+	}
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != len(missing) {
+		return
+	}
+	bySHA := make(map[string][]string)
+	args := []string{gitCmdLog, "--no-walk=unsorted", "--format=%H%x00%aI%x00%an", "--end-of-options"}
+	for i, sha := range lines {
+		if strings.ContainsAny(sha, " \t") || sha == "" {
+			continue // "<ref> missing" or "<ref> ambiguous"
+		}
+		if len(bySHA[sha]) == 0 {
+			args = append(args, sha)
+		}
+		bySHA[sha] = append(bySHA[sha], missing[i])
+	}
+	if len(bySHA) == 0 {
+		return
+	}
+	args = append(args, "--")
+	out, err = r.RunGitCommandWithContext(context.Background(), args...)
+	if err != nil {
+		return
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		parts := strings.SplitN(line, "\x00", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		date, err := time.Parse(time.RFC3339, parts[1])
+		if err != nil {
+			continue
+		}
+		for _, name := range bySHA[parts[0]] {
+			results[name] = CommitInfo{Date: date, Author: parts[2]}
+		}
+	}
 }
 
 func (r *runner) getRevision(branchName string) (string, error) {

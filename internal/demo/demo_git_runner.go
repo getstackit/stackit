@@ -198,20 +198,10 @@ func (d *demoGitRunner) IsAncestor(_ context.Context, _, _ string) (bool, error)
 	return true, nil
 }
 
-func (d *demoGitRunner) GetCommitDate(_ string) (time.Time, error) {
-	return time.Now(), nil
-}
-
-func (d *demoGitRunner) GetCommitAuthor(_ string) (string, error) {
-	return "Demo User", nil
-}
-
 func (d *demoGitRunner) BatchCommitInfo(branchNames []string) map[string]git.CommitInfo {
 	results := make(map[string]git.CommitInfo, len(branchNames))
 	for _, name := range branchNames {
-		date, _ := d.GetCommitDate(name)
-		author, _ := d.GetCommitAuthor(name)
-		results[name] = git.CommitInfo{Date: date, Author: author}
+		results[name] = git.CommitInfo{Date: time.Now(), Author: "Demo User"}
 	}
 	return results
 }

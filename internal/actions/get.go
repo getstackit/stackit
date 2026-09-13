@@ -472,6 +472,15 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		})
 	}
 
+	// Updating an existing branch needs it at HEAD, and git refuses to check
+	// out a branch another worktree holds. Resolve the holders once up front so
+	// those branches are reported and skipped, rather than aborting the run
+	// partway through with the earlier branches already updated.
+	heldElsewhere, err := branchesHeldByOtherWorktrees(gctx, eng)
+	if err != nil {
+		out.Debug("Could not inspect worktrees; no branch will be skipped: %v", err)
+	}
+
 	// Sync each branch
 	for _, branchName := range targets.branches {
 		if branchName == eng.Trunk().GetName() {
@@ -519,6 +528,19 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 				IsNew:    true,
 			})
 		} else {
+			// Another worktree holds this branch, so it cannot come to HEAD
+			// here. Leave both its content and its metadata alone: updating the
+			// recorded parent for content we could not fetch is exactly the
+			// ref/worktree divergence the worktree rules exist to prevent.
+			if path, held := heldElsewhere[branchName]; held {
+				handler.EmitEvent(GetEvent{
+					Phase:   GetPhaseSync,
+					Type:    GetEventSkipped,
+					Branch:  branchName,
+					Message: fmt.Sprintf("checked out in worktree %s", path),
+				})
+				continue
+			}
 			// Both updates below act on the branch that is currently checked
 			// out: `git reset --hard` moves HEAD's branch, and a merge lands in
 			// HEAD's branch. Without this checkout, running get while trunk is
@@ -564,11 +586,21 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// a frozen branch is never rebased — restack skips it and resets it to the
 	// remote instead. Explain that, and let the user opt into unfreezing so the
 	// restack phase below can finish the job.
+	// Branches re-anchored without a divergence anchor must never be rebased:
+	// the replay range still starts before the landed commits, so restacking
+	// reintroduces them instead of dropping them. Freezing normally keeps
+	// restack off them, but --unfrozen skips the freeze entirely, so the
+	// restack phase below excludes them by name rather than trusting the freeze.
+	unanchored := make(map[string]bool)
+
 	if len(reanchored) > 0 {
 		report := LandedAncestorReport{
 			Reanchored: targets.reanchoredInSyncOrder(reanchored),
 			Stale:      targets.staleAfterReanchor(eng, reanchored, freezeSet),
 			CanRestack: opts.Restack,
+		}
+		for _, name := range report.Unanchored() {
+			unanchored[name] = true
 		}
 		decision, err := handler.ReportLandedAncestors(report)
 		if err != nil {
@@ -617,6 +649,9 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		for _, name := range targets.branches {
 			if !seen[name] {
 				seen[name] = true
+				if unanchored[name] {
+					continue
+				}
 				b := eng.GetBranch(name)
 				if b.IsTracked() {
 					uniqueBranches.Add(b)
@@ -700,6 +735,33 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	})
 
 	return nil
+}
+
+// branchesHeldByOtherWorktrees maps each branch checked out somewhere other
+// than here to the worktree path holding it.
+//
+// No path comparison is needed to decide what "here" means: git allows a branch
+// to be checked out in one worktree at a time, so the only entry this worktree
+// can own is the current branch. Everything else in the list is elsewhere.
+//
+// A worktree listing that cannot be read holds nothing back — get then behaves
+// as it did before, failing on the checkout if a branch really is held.
+func branchesHeldByOtherWorktrees(ctx context.Context, eng engine.Engine) (map[string]string, error) {
+	worktrees, err := eng.ListWorktrees(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	current := eng.CurrentBranchName()
+	held := make(map[string]string, len(worktrees))
+	for _, wt := range worktrees {
+		// A detached worktree reports no branch, and so holds none.
+		if wt.Branch == "" || wt.Branch == current {
+			continue
+		}
+		held[wt.Branch] = wt.Path
+	}
+	return held, nil
 }
 
 // localBranchSet reports whether a branch name exists locally. engine.BranchSet

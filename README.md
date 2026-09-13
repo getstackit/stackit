@@ -531,6 +531,13 @@ as behind nor proven current. When `trunk_state_unknown` is `true`, an absent
 `would_pull` does **not** mean trunk is up to date; fetch and re-run before
 acting on the preview.
 
+**`stackit submit --json` reports native GitHub Stacks as arrays.** A submit can
+reconcile more than one native Stack, since chains are synced independently.
+Every reconciled Stack appears in `github_stacks`, and every skipped one in
+`github_stack_skips`. The older scalar fields `github_stack` and
+`github_stack_skipped` are populated **only when there is exactly one** — with
+two or more they are omitted entirely, so scripts should read the arrays.
+
 Two smaller shapes changed alongside the worktree work. `stackit tree --json`
 has always omitted worktree anchors from its entries, but `parent` could still
 name one — a dangling reference to a branch absent from the result. Both

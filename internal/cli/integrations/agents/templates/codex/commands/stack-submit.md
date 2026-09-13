@@ -50,3 +50,13 @@ When a `jq` snippet is shown, use it only if `jq` is available. If not, run `sta
 Do not use `gh pr create`; Stackit owns PR parentage and metadata. Do not submit
 PRs with placeholder content (TODO/TBD, empty sections) — generate a real summary
 and test plan, or leave the field for stackit to auto-generate.
+
+## Regenerate PR text
+
+When the user wants existing PR titles and descriptions replaced from current
+commit messages (for example after regrouping branches), use
+`stackit submit --regenerate --no-edit --no-interactive`. Preview with
+`--dry-run` (and `--json` for structured replacement text). This overwrites
+editable PR text, including clearing a body when the generated body is empty.
+Use `--regenerate --edit` for interactive edits of the regenerated defaults.
+Ordinary submit preserves existing text; `--always` does not regenerate it.

@@ -27,6 +27,16 @@ type ContinuationState struct {
 	// that was being rebased", which is the right default for every other
 	// command.
 	ReturnToBranch string `json:"returnToBranch,omitempty"`
+	// SnapshotID names the undo snapshot taken by the command that hit this
+	// conflict, and is the only snapshot `stackit abort` may roll back to.
+	//
+	// Without it abort restored whatever snapshot was newest on disk, which
+	// for a command that took none belonged to some earlier, unrelated command
+	// — aborting a conflicted reorder or delete would happily roll the repo
+	// back past a `create`, deleting the branch that create had made. Empty
+	// means the halted command recorded no rollback point, and abort must
+	// restore nothing rather than guess.
+	SnapshotID string `json:"snapshotId,omitempty"`
 }
 
 // GetContinuationState reads the continuation state from disk

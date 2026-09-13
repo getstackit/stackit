@@ -6,6 +6,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for the abort command
@@ -26,11 +27,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	rebaseInProgress := eng.IsRebaseInProgress(ctx.Context)
 	mergeInProgress := eng.IsMergeInProgress(ctx.Context)
 
-	// Check for continuation state
-	hasContinuation := false
-	if _, err := config.GetContinuationState(ctx.RepoRoot); err == nil {
-		hasContinuation = true
-	}
+	// Check for continuation state. It also names the snapshot the halted
+	// command recorded, which is the only one abort may roll back to.
+	continuation, continuationErr := config.GetContinuationState(ctx.RepoRoot)
+	hasContinuation := continuationErr == nil
 
 	if !rebaseInProgress && !mergeInProgress && !hasContinuation {
 		out.Info("No operation in progress to abort.")
@@ -70,23 +70,69 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
-	// Restore latest snapshot
-	snapshots, err := eng.GetSnapshots()
-	if err != nil {
-		return fmt.Errorf("failed to get snapshots: %w", err)
+	return restoreBoundSnapshot(ctx, continuation)
+}
+
+// restoreBoundSnapshot rolls back to the snapshot the halted command recorded,
+// and to no other.
+//
+// Abort used to restore whichever snapshot was newest on disk, on the
+// assumption that it belonged to the halted command. For a command that took
+// no snapshot — reorder, delete, submit and sync all used to — that assumption
+// picked up some earlier command's snapshot instead: aborting a conflicted
+// reorder would roll the repository back past a `create` and delete the branch
+// that create had made. Restoring nothing is the only safe answer when the
+// halted command left no rollback point.
+func restoreBoundSnapshot(ctx *app.Context, continuation *config.ContinuationState) error {
+	eng := ctx.Engine
+	out := ctx.Output
+
+	if continuation == nil || continuation.SnapshotID == "" {
+		out.Info("Operation aborted. It recorded no rollback point, so branches are as it left them.")
+		out.Info("Use %s to roll back to an earlier state.", output.Cyan("stackit undo"))
+		return nil
 	}
 
-	if len(snapshots) > 0 {
-		out.Info("Restoring to state before the command started...")
-		// The latest snapshot should be the one taken before the command that halted
-		if err := eng.RestoreSnapshot(ctx.Context, snapshots[0].ID); err != nil {
-			return fmt.Errorf("failed to restore snapshot: %w", err)
-		}
-		actions.WarnIfLinearStackRestored(ctx, "Abort")
-		out.Info("Successfully aborted and restored repository state.")
-	} else {
-		out.Info("Operation aborted. No undo history found to restore state.")
+	snapshot, err := eng.LoadSnapshot(continuation.SnapshotID)
+	if err != nil {
+		// The snapshot aged out of the undo stack (undo.depth) or was removed
+		// by hand. Guessing at a different one is what this function exists to
+		// prevent.
+		out.Warn("The rollback point recorded for this operation is no longer available.")
+		out.Info("Operation aborted; branches are as it left them. Use %s to roll back to an earlier state.", output.Cyan("stackit undo"))
+		return nil //nolint:nilerr // a missing snapshot is reported, not an abort failure
 	}
+
+	out.Info("Restoring to state before %s started...", output.Cyan("stackit "+snapshot.Command))
+	if err := eng.RestoreSnapshot(ctx.Context, continuation.SnapshotID); err != nil {
+		return fmt.Errorf("failed to restore snapshot: %w", err)
+	}
+	restoreUncommittedWork(ctx, continuation.SnapshotID, snapshot.Command)
+	actions.WarnIfLinearStackRestored(ctx, "Abort")
+	out.Info("Successfully aborted and restored repository state.")
 
 	return nil
+}
+
+// restoreUncommittedWork hands back the uncommitted changes the halted command
+// consumed. Restoring refs alone is not "where I started": modify amends the
+// working tree into a commit before it restacks, so rolling that commit away
+// without replacing the changes deletes work the user never committed
+// themselves, leaving it reachable through nothing but the reflog.
+//
+// Best effort by design. The rollback has already succeeded at this point, and
+// failing the whole abort over the working tree would strand the user mid-
+// conflict; the failure names the ref the capture is anchored under instead, so
+// the work is still reachable.
+func restoreUncommittedWork(ctx *app.Context, snapshotID, command string) {
+	out := ctx.Output
+
+	restored, err := ctx.Engine.RestoreWorktree(ctx.Context, snapshotID)
+	if err != nil {
+		out.Warn("Could not restore the uncommitted changes from before '%s': %v", command, err)
+		return
+	}
+	if restored {
+		out.Info("Restored the uncommitted changes you had before '%s'.", command)
+	}
 }

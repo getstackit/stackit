@@ -51,6 +51,7 @@ func NewCommandError(command string, args []string, stdout, stderr string, err e
 const (
 	gitCmdPush    = "push"
 	gitCmdDiff    = "diff"
+	gitCmdStash   = "stash"
 	gitEditorTrue = "GIT_EDITOR=true"
 )
 

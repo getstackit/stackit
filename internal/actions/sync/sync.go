@@ -286,6 +286,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	if err := restackBranches(ctx, branchesToRestack, opts.RestackScope, expandScope, dirtyAnchors, handler, summary); err != nil {
 		// Even on error, complete with summary
+		summary.Failed = true
 		handler.Complete(*summary)
 		return err
 	}
@@ -294,6 +295,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if len(summary.ConflictBranches) > 0 && handler.IsInteractive() {
 		resolve, err := handler.PromptResolveConflicts(summary.ConflictBranches)
 		if err != nil {
+			summary.Failed = true
 			handler.Complete(*summary)
 			return fmt.Errorf("failed to prompt for conflict resolution: %w", err)
 		}
@@ -386,6 +388,7 @@ func (e Event) IsLocked() bool {
 
 // Summary holds aggregate results from a sync operation
 type Summary struct {
+	Failed            bool     // unexpected error after sync started
 	TrunkUpdated      bool     // Was trunk updated?
 	TrunkRevision     string   // New trunk revision (short hash)
 	BranchesSynced    int      // Number of branches synced from remote

@@ -181,21 +181,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.CurrentDetail = ""
-		detail := tea.Printf("  %s %s", msg.Mark.glyph(), msg.Message)
+		detail := fmt.Sprintf("  %s %s", msg.Mark.glyph(), msg.Message)
 
 		// Commit the phase header the first time the phase produces a detail,
 		// separated from the previous phase group by a blank line. A detail for
 		// a phase that was never started (e.g. standalone restack) just prints
 		// without a header.
 		if emit, separate := m.headers.CommitOnItem(msg.Phase); emit {
-			var cmds []tea.Cmd
+			var lines []string
 			if separate {
-				cmds = append(cmds, tea.Printf(""))
+				lines = append(lines, "")
 			}
-			cmds = append(cmds, tea.Printf("%s", m.phaseHeaders[msg.Phase]), detail)
-			return m, tea.Sequence(cmds...)
+			// Keep the header and its first row in one print message. Separate
+			// commands can interleave with a subsequent branch's result.
+			lines = append(lines, m.phaseHeaders[msg.Phase], detail)
+			return m, tea.Printf("%s", strings.Join(lines, "\n"))
 		}
-		return m, detail
+		return m, tea.Printf("%s", detail)
 
 	case ActivityMsg:
 		if m.active == nil {
@@ -216,6 +218,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CompleteMsg:
 		m.Done = true
 		m.Summary = msg.Summary
+		if msg.Summary == "" {
+			return m, tea.Quit
+		}
 		// Print summary and quit
 		return m, tea.Sequence(
 			tea.Printf("\n%s", msg.Summary),

@@ -1,7 +1,6 @@
 package rerere
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +23,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return true, nil
 		}
 
-		enabled, err := ensureEnabled(context.Background(), runner, false, nil, confirm)
+		enabled, err := ensureEnabled(runner, false, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 		require.False(t, prompted)
@@ -41,7 +40,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return true, nil
 		}
 
-		enabled, err := ensureEnabled(context.Background(), runner, true, nil, confirm)
+		enabled, err := ensureEnabled(runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.True(t, enabled)
 
@@ -63,7 +62,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return false, nil
 		}
 
-		enabled, err := ensureEnabled(context.Background(), runner, true, nil, confirm)
+		enabled, err := ensureEnabled(runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 
@@ -77,7 +76,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return true, nil
 		}
 
-		enabled, err = ensureEnabled(context.Background(), runner, true, nil, confirm)
+		enabled, err = ensureEnabled(runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 		require.False(t, promptedAgain)
@@ -95,7 +94,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return true, nil
 		}
 
-		enabled, err := ensureEnabled(context.Background(), runner, true, nil, confirm)
+		enabled, err := ensureEnabled(runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 		require.False(t, prompted)
@@ -120,7 +119,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return false, nil
 		}
 
-		enabled, err := ensureEnabled(context.Background(), runner, true, nil, confirm)
+		enabled, err := ensureEnabled(runner, true, nil, confirm)
 		require.NoError(t, err)
 		require.False(t, enabled)
 
@@ -141,7 +140,7 @@ func TestEnsureEnabled(t *testing.T) {
 			return false, nil
 		}
 
-		_, err := ensureEnabled(context.Background(), runner, true, p, confirm)
+		_, err := ensureEnabled(runner, true, p, confirm)
 		require.NoError(t, err)
 		require.Equal(t, 1, p.pauseCount)
 		require.Equal(t, 1, p.resumeCount)

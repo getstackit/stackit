@@ -39,10 +39,10 @@ type Pauser interface {
 // If pauser is non-nil, it is paused around the confirmation prompt so a
 // surrounding TUI does not contend for stdin/stdout.
 func EnsureEnabled(ctx context.Context, cfg GitConfigurer, interactive bool, pauser Pauser) (bool, error) {
-	return ensureEnabled(ctx, cfg, interactive, pauser, tui.PromptConfirm)
+	return ensureEnabled(cfg, interactive, pauser, tui.PromptConfirm)
 }
 
-func ensureEnabled(_ context.Context, cfg GitConfigurer, interactive bool, pauser Pauser, confirm ConfirmFunc) (bool, error) {
+func ensureEnabled(cfg GitConfigurer, interactive bool, pauser Pauser, confirm ConfirmFunc) (bool, error) {
 	if configBool(cfg, "rerere.enabled") {
 		if !configBool(cfg, "rerere.autoupdate") {
 			if err := cfg.SetConfig("rerere.autoupdate", "true"); err != nil {

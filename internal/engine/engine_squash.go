@@ -86,7 +86,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 
 	// Rebuild to refresh cache (parent/children relationships remain the same)
 	// Don't refresh currentBranch - we're still on the same branch
-	if err := e.rebuildInternal(false); err != nil {
+	if err := e.rebuildInternal(skipCurrentBranchRefresh); err != nil {
 		return fmt.Errorf("failed to rebuild after squash: %w", err)
 	}
 

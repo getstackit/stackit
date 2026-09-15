@@ -93,7 +93,7 @@ func CopyIncludedIgnoredFiles(sourceRoot, destinationRoot string, ignoredPaths [
 		}
 
 		sourcePath := filepath.Join(sourceRoot, relativePath)
-		if err := ensureWarmStartParents(sourceRoot, relativePath, false, sourceVerified); err != nil {
+		if err := ensureWarmStartParents(sourceRoot, relativePath, warmStartVerifyOnly, sourceVerified); err != nil {
 			if skip, ok := asWarmStartSkip(relativePath, err); ok {
 				result.SkippedUnsafe = append(result.SkippedUnsafe, skip)
 				continue
@@ -116,7 +116,7 @@ func CopyIncludedIgnoredFiles(sourceRoot, destinationRoot string, ignoredPaths [
 		// platform-specific "not a directory" errno rather than "does not
 		// exist", and the path check reports the same condition portably.
 		destinationPath := filepath.Join(destinationRoot, relativePath)
-		if err := ensureWarmStartParents(destinationRoot, relativePath, true, destinationVerified); err != nil {
+		if err := ensureWarmStartParents(destinationRoot, relativePath, warmStartCreateIfMissing, destinationVerified); err != nil {
 			if skip, ok := asWarmStartSkip(relativePath, err); ok {
 				result.SkippedUnsafe = append(result.SkippedUnsafe, skip)
 				continue
@@ -195,13 +195,26 @@ func asWarmStartSkip(relativePath string, err error) (WarmStartSkip, bool) {
 	return WarmStartSkip{Path: relativePath, Reason: err.Error()}, true
 }
 
+// warmStartParentMode selects whether ensureWarmStartParents may create
+// missing parent directories or must only verify existing ones.
+type warmStartParentMode int
+
+const (
+	// warmStartVerifyOnly checks that parent directories are safe without
+	// creating any that are missing.
+	warmStartVerifyOnly warmStartParentMode = iota
+	// warmStartCreateIfMissing creates missing parent directories in
+	// addition to verifying existing ones.
+	warmStartCreateIfMissing
+)
+
 // ensureWarmStartParents verifies (and optionally creates) every directory
 // leading to relativePath under root.
 //
 // verified memoizes directories already checked under this root for this run.
 // Warm-start sets share deep prefixes, so without it each file re-Lstats every
 // component of its path on both roots.
-func ensureWarmStartParents(root, relativePath string, create bool, verified map[string]bool) error {
+func ensureWarmStartParents(root, relativePath string, mode warmStartParentMode, verified map[string]bool) error {
 	directory := filepath.Dir(relativePath)
 	if directory == "." {
 		return nil
@@ -214,7 +227,7 @@ func ensureWarmStartParents(root, relativePath string, create bool, verified map
 			continue
 		}
 		info, err := os.Lstat(current)
-		if os.IsNotExist(err) && create {
+		if os.IsNotExist(err) && mode == warmStartCreateIfMissing {
 			if mkErr := os.Mkdir(current, 0o750); mkErr != nil && !os.IsExist(mkErr) {
 				// Most often a tracked file already occupies this name, which
 				// is a conflict with this one file's path — not a reason to

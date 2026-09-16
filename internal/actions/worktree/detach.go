@@ -54,19 +54,19 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 	}
 	if snapshot.AnchorExists && len(snapshot.ChildNames) > 0 {
 		if err := ctx.Engine.ReparentBranches(ctx.Context, snapshot.ChildNames, ctx.Engine.GetBranch(snapshot.AnchorParent)); err != nil {
-			return mutation.rollback(ctx, fmt.Errorf("failed to reparent children to %s: %w", snapshot.AnchorParent, err), true)
+			return mutation.rollback(ctx, fmt.Errorf("failed to reparent children to %s: %w", snapshot.AnchorParent, err), RestoreChildren)
 		}
 		mutation.reparented = true
 	}
 	if snapshot.AnchorExists {
 		if err := ctx.Engine.DeleteBranch(ctx.Context, ctx.Engine.GetBranch(snapshot.Info.AnchorBranch)); err != nil {
-			return mutation.rollback(ctx, fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err), true)
+			return mutation.rollback(ctx, fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err), RestoreChildren)
 		}
 		mutation.anchorDeleted = true
 		ctx.Output.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
 	}
 	if err := ctx.Engine.UnregisterWorktree(ctx.Context, snapshot.Info.AnchorBranch); err != nil {
-		return mutation.rollback(ctx, fmt.Errorf("failed to unregister worktree: %w", err), true)
+		return mutation.rollback(ctx, fmt.Errorf("failed to unregister worktree: %w", err), RestoreChildren)
 	}
 	mutation.unregistered = true
 	ctx.Output.Success("Detached worktree %s", output.BranchName(snapshot.Info.Name.String()))

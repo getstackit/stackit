@@ -37,7 +37,18 @@ type worktreeMutation struct {
 	unregistered  bool
 }
 
-func (m *worktreeMutation) rollback(ctx *app.Context, cause error, restoreChildren bool) error {
+// ChildRestoreMode controls whether rollback also reparents children back to
+// the worktree's anchor branch. Remove never reparents children (they stay on
+// the anchor), so it always skips this step; detach reparents them away from
+// the anchor before deleting it, so it must restore them on failure.
+type ChildRestoreMode int
+
+const (
+	SkipChildRestore ChildRestoreMode = iota
+	RestoreChildren
+)
+
+func (m *worktreeMutation) rollback(ctx *app.Context, cause error, childMode ChildRestoreMode) error {
 	return rollbackWorktree(cause,
 		func() error {
 			if !m.anchorDeleted {
@@ -46,7 +57,7 @@ func (m *worktreeMutation) rollback(ctx *app.Context, cause error, restoreChildr
 			return restoreAnchorBranch(ctx, m.snapshot)
 		},
 		func() error {
-			if !restoreChildren || !m.reparented || len(m.snapshot.ChildNames) == 0 {
+			if childMode != RestoreChildren || !m.reparented || len(m.snapshot.ChildNames) == 0 {
 				return nil
 			}
 			return ctx.Engine.ReparentBranches(ctx.Context, m.snapshot.ChildNames, ctx.Engine.GetBranch(m.snapshot.Info.AnchorBranch))
@@ -232,14 +243,14 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 	// registration is visible in `worktree list` and can be repaired or removed.
 	if snapshot.AnchorExists {
 		if err := ctx.Engine.DeleteBranch(ctx.Context, ctx.Engine.GetBranch(snapshot.Info.AnchorBranch)); err != nil {
-			return mutation.rollback(ctx, fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err), false)
+			return mutation.rollback(ctx, fmt.Errorf("failed to delete anchor branch %s: %w", snapshot.Info.AnchorBranch, err), SkipChildRestore)
 		}
 		mutation.anchorDeleted = true
 		out.Debug("Deleted anchor branch %s", snapshot.Info.AnchorBranch)
 	}
 
 	if unregErr := ctx.Engine.UnregisterWorktree(ctx.Context, snapshot.Info.AnchorBranch); unregErr != nil {
-		return mutation.rollback(ctx, fmt.Errorf("failed to unregister worktree: %w", unregErr), false)
+		return mutation.rollback(ctx, fmt.Errorf("failed to unregister worktree: %w", unregErr), SkipChildRestore)
 	}
 	mutation.unregistered = true
 

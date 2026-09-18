@@ -82,7 +82,7 @@ func (h *cliInitHandler) OnSuccess(trunkName string, wasInitialized bool, isRese
 	splog.Info("Run '%s' to change these settings.", style.ColorCyan("stackit config"))
 
 	if !h.noInteractive && tui.IsTTY() {
-		if _, err := rerere.EnsureEnabled(context.Background(), h.runner, true, nil); err != nil {
+		if _, err := rerere.EnsureEnabled(h.runner, true, nil); err != nil {
 			splog.Warn("Failed to enable git rerere: %v", err)
 		}
 	}

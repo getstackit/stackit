@@ -179,7 +179,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	_, jsonOutput := handler.(*handlers.JSONRestackHandler)
 	interactiveRererePrompt := ctx.Interactive && !ctx.Quiet && utils.IsTTY() && !jsonOutput
 	pauser, _ := handler.(rerere.Pauser)
-	if _, err := rerere.EnsureEnabled(ctx.Context, ctx.Engine, interactiveRererePrompt, pauser); err != nil {
+	if _, err := rerere.EnsureEnabled(ctx.Engine, interactiveRererePrompt, pauser); err != nil {
 		out.Warn("Failed to enable git rerere: %v", err)
 	}
 

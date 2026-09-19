@@ -1,5 +1,8 @@
 # CLI benchmarks
 
+See [the commit-read and restack-planning comparison](benchmarks-commit-reads.md)
+for the latest release/parent comparison, including multi-commit branches.
+
 See [the batched diff comparison](benchmarks-diff-reads.md) for a recorded comparison
 against v0.27.1 at 5, 10, and 50 branches.
 

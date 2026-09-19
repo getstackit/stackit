@@ -15,7 +15,7 @@ import (
 // prCleanupEngine is the minimal interface needed for PR cleanup
 type prCleanupEngine interface {
 	GetBranch(name string) engine.Branch
-	UpsertPrInfo(ctx context.Context, branch engine.Branch, prInfo *engine.PrInfo) error
+	BatchUpsertPrInfo(ctx context.Context, updates map[string]*engine.PrInfo) error
 }
 
 // PRCleanupSource identifies how a consolidation happened (for footer text)
@@ -115,6 +115,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		prDetails = map[int]github.PRStateBody{}
 	}
 
+	prInfoUpdates := make(map[string]*engine.PrInfo, len(branchPRs))
 	for _, bpr := range branchPRs {
 		branch := bpr.branch
 		prInfo := bpr.prInfo
@@ -153,12 +154,15 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 			result.ClosedPRs = append(result.ClosedPRs, prNumber)
 		}
 
-		// Upsert PR info to keep metadata in sync
-		if err := c.engine.UpsertPrInfo(ctx, branch, prInfo); err != nil {
-			out.Debug("Failed to upsert PR info for %s: %v", branch.GetName(), err)
-		}
+		// Queue PR info for a single batched metadata write below
+		prInfoUpdates[branch.GetName()] = prInfo
 
 		affectedBranches = append(affectedBranches, branch.GetName())
+	}
+
+	// Upsert all PR info in one batched write instead of one ref write per branch
+	if err := c.engine.BatchUpsertPrInfo(ctx, prInfoUpdates); err != nil {
+		out.Debug("Failed to upsert PR info: %v", err)
 	}
 
 	// Sync metadata to remote

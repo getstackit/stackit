@@ -182,24 +182,6 @@ func (d *demoGitRunner) IsAncestor(_ context.Context, _, _ string) (bool, error)
 	return true, nil
 }
 
-func (d *demoGitRunner) GetCommitDate(_ string) (time.Time, error) {
-	return time.Now(), nil
-}
-
-func (d *demoGitRunner) GetCommitAuthor(_ string) (string, error) {
-	return "Demo User", nil
-}
-
-func (d *demoGitRunner) BatchCommitInfo(branchNames []string) map[string]git.CommitInfo {
-	results := make(map[string]git.CommitInfo, len(branchNames))
-	for _, name := range branchNames {
-		date, _ := d.GetCommitDate(name)
-		author, _ := d.GetCommitAuthor(name)
-		results[name] = git.CommitInfo{Date: date, Author: author}
-	}
-	return results
-}
-
 func (d *demoGitRunner) GetCommitRange(_ context.Context, _, _, _ string) ([]string, error) {
 	return []string{"commit message"}, nil
 }
@@ -818,6 +800,14 @@ func (d *demoGitRunner) ReadRevisions(_ context.Context, refs ...string) git.Rea
 	result := git.ReadResults[string]{Values: make(map[string]string), Errors: make(map[string]error)}
 	for _, ref := range refs {
 		result.Values[ref] = d.readRevision(ref)
+	}
+	return result
+}
+
+func (d *demoGitRunner) ReadCommitInfo(_ context.Context, refs ...string) git.ReadResults[git.CommitInfo] {
+	result := git.ReadResults[git.CommitInfo]{Values: make(map[string]git.CommitInfo)}
+	for _, ref := range refs {
+		result.Values[ref] = git.CommitInfo{Date: time.Now(), Author: "Demo User"}
 	}
 	return result
 }

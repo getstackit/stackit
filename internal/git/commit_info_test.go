@@ -3,6 +3,7 @@ package git_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -10,66 +11,41 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 )
 
-func TestBatchCommitInfo(t *testing.T) {
+func TestReadCommitInfo(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-
-	err := scene.Repo.CreateAndCheckoutBranch("branch1")
+	require.NoError(t, scene.Repo.CreateAndCheckoutBranch("branch1"))
+	require.NoError(t, scene.Repo.CreateChangeAndCommit("branch1 change", "b1"))
+	require.NoError(t, scene.Repo.RunGitCommand("tag", "branch1", "main"))
+	logger := &traceCaptureLogger{}
+	runner := git.NewRunnerWithPath(scene.Dir, logger)
+	_, err := runner.RunGitCommandWithEnv(t.Context(), []string{
+		"GIT_AUTHOR_NAME=Renée Example", "GIT_AUTHOR_EMAIL=author@example.com",
+		"GIT_AUTHOR_DATE=2026-06-02T09:30:00+05:30",
+	}, "commit", "--amend", "--no-edit", "--reset-author")
 	require.NoError(t, err)
-	err = scene.Repo.CreateChangeAndCommit("branch1 change", "b1")
+	logger.calls = 0
+	refs := []string{"main", "HEAD", "refs/heads/branch1", "refs/tags/branch1", "missing"}
+	got := runner.ReadCommitInfo(t.Context(), refs...)
+	require.Equal(t, 1, logger.calls, "all commit fields and refs use one subprocess")
+	require.Len(t, got.Values, 4)
+	require.ErrorContains(t, got.Errors["missing"], "commit not found")
+	for ref, info := range got.Values {
+		wantDate, err := runner.RunGitCommandWithContext(t.Context(), "log", "-1", "--format=%aI", ref)
+		require.NoError(t, err)
+		wantAuthor, err := runner.RunGitCommandWithContext(t.Context(), "log", "-1", "--format=%an", ref)
+		require.NoError(t, err)
+		require.Equal(t, wantDate, info.Date.Format(time.RFC3339))
+		require.Equal(t, wantAuthor, info.Author)
+	}
+	require.Equal(t, got.Values["HEAD"], got.Values["refs/heads/branch1"])
+	require.Equal(t, got.Values["main"], got.Values["refs/tags/branch1"])
+	require.Empty(t, runner.ReadCommitInfo(t.Context()).Values)
+	blob, err := runner.CreateBlob("not a commit")
 	require.NoError(t, err)
-
-	runner := git.NewRunnerWithPath(scene.Dir, nil)
-
-	wantMainDate, err := runner.GetCommitDate("main")
-	require.NoError(t, err)
-	wantMainAuthor, err := runner.GetCommitAuthor("main")
-	require.NoError(t, err)
-	wantBranch1Date, err := runner.GetCommitDate("branch1")
-	require.NoError(t, err)
-	wantBranch1Author, err := runner.GetCommitAuthor("branch1")
-	require.NoError(t, err)
-
-	got := runner.BatchCommitInfo([]string{"main", "branch1", "no-such-branch"})
-
-	require.Len(t, got, 2, "unmatched branch should be omitted, not errored")
-	require.True(t, wantMainDate.Equal(got["main"].Date))
-	require.Equal(t, wantMainAuthor, got["main"].Author)
-	require.True(t, wantBranch1Date.Equal(got["branch1"].Date))
-	require.Equal(t, wantBranch1Author, got["branch1"].Author)
-}
-
-// A tag sharing a branch's name makes git disambiguate %(refname:short) to
-// "heads/<name>", which used to miss the caller's bare-branch-name lookup and
-// silently return a zero CommitInfo.
-func TestBatchCommitInfo_TagSharesBranchName(t *testing.T) {
-	t.Parallel()
-	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-
-	err := scene.Repo.CreateAndCheckoutBranch("shadowed")
-	require.NoError(t, err)
-	err = scene.Repo.CreateChangeAndCommit("shadowed change", "s1")
-	require.NoError(t, err)
-	require.NoError(t, scene.Repo.RunGitCommand("tag", "shadowed", "main"))
-
-	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	wantDate, err := runner.GetCommitDate("refs/heads/shadowed")
-	require.NoError(t, err)
-
-	got := runner.BatchCommitInfo([]string{"shadowed"})
-
-	require.Contains(t, got, "shadowed", "result must be keyed by the bare branch name")
-	require.True(t, wantDate.Equal(got["shadowed"].Date))
-	require.NotEmpty(t, got["shadowed"].Author)
-}
-
-func TestBatchCommitInfo_Empty(t *testing.T) {
-	t.Parallel()
-	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-
-	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	got := runner.BatchCommitInfo(nil)
-	require.Empty(t, got)
+	mixed := runner.ReadCommitInfo(t.Context(), blob, "HEAD")
+	require.Contains(t, mixed.Values, "HEAD")
+	require.Contains(t, mixed.Errors, blob)
 }
 
 func TestGetRemoteRevision_UsesConfiguredRemote(t *testing.T) {

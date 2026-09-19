@@ -104,31 +104,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ProgressCompleteMsg:
 		m.Done = true
-		var summary string
-		if m.Verbose {
-			summary = m.completionSummary()
-			// The solo summary already names the single result; a count line
-			// would just restate it.
-			if !m.Solo && summary != "" {
-				if closing := FormatClosingSummary(m.Items, msg.Skipped, msg.Elapsed); closing != "" {
-					summary += "\n\n" + closing
-				}
-			}
-		} else {
-			summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
-			if urls := FormatCreatedURLs(m.Items); urls != "" {
-				if summary != "" {
-					summary += "\n"
-				}
-				summary += urls
-			}
-			if failures := FormatFailureSummary(m.Items); failures != "" {
-				if summary != "" {
-					summary += "\n\n"
-				}
-				summary += failures
-			}
-		}
+		summary := m.finalSummary(msg)
 		if summary != "" {
 			return m, tea.Sequence(
 				tea.Printf("\n%s", summary),
@@ -139,6 +115,39 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// finalSummary is the output retained after the live display closes.
+func (m *Model) finalSummary(msg ProgressCompleteMsg) string {
+	var summary string
+	if m.Verbose {
+		summary = m.completionSummary()
+		// The solo summary already names the single result; a count line
+		// would just restate it.
+		if !m.Solo && summary != "" {
+			if closing := FormatClosingSummary(m.Items, msg.Skipped, msg.Elapsed); closing != "" {
+				summary += "\n\n" + closing
+			}
+		}
+	} else {
+		summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
+		if urls := FormatCreatedURLs(m.Items); urls != "" {
+			if summary != "" {
+				summary += "\n"
+			}
+			summary += urls
+		}
+		if failures := FormatFailureSummary(m.Items); failures != "" {
+			if summary != "" {
+				summary += "\n\n"
+			}
+			summary += failures
+		}
+		if len(m.Warnings) > 0 {
+			summary += "\n\n" + strings.Join(m.Warnings, "\n")
+		}
+	}
+	return summary
 }
 
 // View renders the model as a string.

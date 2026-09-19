@@ -13,6 +13,40 @@ import (
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
 )
 
+func TestPreparationNoticeLifecycle(t *testing.T) {
+	t.Run("quick preparation stays silent", func(t *testing.T) {
+		out := output.NewTestOutput()
+		h := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitCompact)
+		h.startPreparationNotice(time.Hour)
+		h.OnEvent(submitAction.PreparingEvent{Completed: true})
+		require.Empty(t, out.String())
+		require.Nil(t, h.preparingTimer)
+	})
+	t.Run("slow preparation explains the wait", func(t *testing.T) {
+		out := output.NewTestOutput()
+		h := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitCompact)
+		defer h.Cleanup()
+		h.startPreparationNotice(time.Millisecond)
+		require.Eventually(t, func() bool {
+			h.preparingMu.Lock()
+			defer h.preparingMu.Unlock()
+			return strings.Contains(out.String(), "Checking remote branches and PR status")
+		}, time.Second, time.Millisecond)
+		h.Cleanup()
+		require.Equal(t, 1, strings.Count(out.String(), "Checking remote"))
+	})
+}
+
+func TestCompactPlanRetainsExceptionalSkips(t *testing.T) {
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "feat/current", Skipped: true, SkipReason: "no existing PR", IsCurrent: true})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "feat/parent", Skipped: true, SkipReason: "no changes"})
+	h.OnEvent(submitAction.PlanningCompleteEvent{})
+	require.Contains(t, out.String(), "feat/current skipped: no existing PR")
+	require.NotContains(t, out.String(), "feat/parent")
+}
+
 func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 	t.Parallel()
 
@@ -406,11 +440,11 @@ func TestSimpleSubmitHandlerCompactReportsOutcomeNotPerBranchRows(t *testing.T) 
 	// Only the created PR's URL is worth pasting; the updated one is not.
 	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/51")
 	require.NotContains(t, got, "https://github.com/getstackit/stackit/pull/42")
-	// The per-branch audit trail belongs to --verbose.
+	// Compact output preserves PR identity without repeating the full plan.
 	require.NotContains(t, got, "Submit plan")
 	require.NotContains(t, got, "Will submit (2)")
-	require.NotContains(t, got, "update-me #42 updated")
-	require.NotContains(t, got, "add-feature #51 created")
+	require.Contains(t, got, "update-me  #42 updated")
+	require.Contains(t, got, "add-feature  #51  https://")
 }
 
 func TestSimpleSubmitHandlerCompactStaysSilentWhenNothingToSubmit(t *testing.T) {

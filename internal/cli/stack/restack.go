@@ -12,6 +12,8 @@ import (
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/handlers"
+	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 // NewRestackCmd creates the restack command
@@ -27,6 +29,7 @@ func NewRestackCmd() *cobra.Command {
 		parallel           bool
 		jobs               int
 		jsonOutput         bool
+		verbose            bool
 	)
 
 	cmd := &cobra.Command{
@@ -143,8 +146,27 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 					return actions.RestackAction(ctx, plan, NewSimpleSyncHandler(ctx.Output))
 				}
 
+				if tui.IsTTY() {
+					scope := "current stack"
+					switch {
+					case allStacks:
+						scope = "all stacks"
+					case len(stacks) > 0:
+						scope = "selected stacks"
+					case only:
+						scope = style.DisplayBranchName(targetBranch)
+					case upstack:
+						scope = "upstack from " + style.DisplayBranchName(targetBranch)
+					case downstack:
+						scope = "downstack from " + style.DisplayBranchName(targetBranch)
+					case branch != "":
+						scope = "stack containing " + style.DisplayBranchName(targetBranch)
+					}
+					ctx.Output.Info("Restacking %s · %d %s", scope, plan.BranchCount(), pluralizeBranches(plan.BranchCount()))
+				}
+
 				// Create runner (manages terminal state) and handler (processes events)
-				runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
+				runner, handler := NewSyncUI(ctx.Output, ctx.Logger, SyncUIOptions{Verbose: verbose})
 				defer runner.Cleanup()
 
 				return actions.RestackAction(ctx, plan, handler)
@@ -152,6 +174,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 		},
 	}
 
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "Include revision hashes in interactive restack results.")
 	cmd.Flags().StringVar(&branch, "branch", "", "Which branch to run this command from. Defaults to the current branch.")
 	cmd.Flags().BoolVar(&downstack, "downstack", false, "Only restack this branch and its ancestors.")
 	cmd.Flags().BoolVar(&only, "only", false, "Only restack this branch.")

@@ -3,12 +3,14 @@ package sync
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
-	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/getstackit/stackit/internal/tui/core"
 	"github.com/getstackit/stackit/internal/tui/style"
@@ -62,9 +64,11 @@ type Model struct {
 	CurrentDetail  string // Current operation being performed
 	TotalOps       int
 	CompletedOps   int
-	Progress       progress.Model
+	started        time.Time
+	elapsed        time.Duration
 	spinner        spinner.Model
 	Summary        string
+	active         map[string]string
 
 	// Phase headers commit to scrollback lazily: only when a phase emits its
 	// first detail. Phases that do nothing (nothing to sync/clean/restack) never
@@ -95,6 +99,13 @@ type PhaseDetailMsg struct {
 	Mark    DetailMark // Status glyph for the row (defaults to MarkDone)
 }
 
+// ActivityMsg names an in-flight rebase check; several may run concurrently.
+type ActivityMsg struct {
+	Branch   string
+	Parent   string
+	Finished bool
+}
+
 // ProgressTickMsg updates the progress bar
 type ProgressTickMsg struct {
 	Completed int
@@ -108,12 +119,6 @@ type CompleteMsg struct {
 
 // NewModel creates a new sync model
 func NewModel(totalOps int) *Model {
-	p := progress.New(
-		progress.WithDefaultBlend(),
-		progress.WithWidth(40),
-		progress.WithoutPercentage(),
-	)
-
 	commonStyles := style.DefaultCommonStyles()
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -121,7 +126,6 @@ func NewModel(totalOps int) *Model {
 
 	m := &Model{
 		TotalOps:     totalOps,
-		Progress:     p,
 		spinner:      s,
 		phaseHeaders: make(map[Phase]string),
 		headers:      utils.NewLazyHeaders[Phase](),
@@ -133,6 +137,7 @@ func NewModel(totalOps int) *Model {
 // Init initializes the model
 func (m *Model) Init() tea.Cmd {
 	// Signal that the program is ready to receive messages via BaseModel
+	m.started = time.Now()
 	m.SignalReady()
 	return m.spinner.Tick
 }
@@ -142,6 +147,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle spinner ticks with our custom spinner BEFORE HandleCommonMsg
 	// (HandleCommonMsg would update BaseModel.Spinner instead)
 	if tickMsg, ok := msg.(spinner.TickMsg); ok {
+		m.elapsed = time.Since(m.started)
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(tickMsg)
 		return m, cmd
@@ -153,16 +159,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		// BaseModel already set Width/Height, but we also need to update Progress.Width
-		m.Progress.SetWidth(min(msg.Width-10, 60))
-		return m, nil
-
-	case progress.FrameMsg:
-		var cmd tea.Cmd
-		m.Progress, cmd = m.Progress.Update(msg)
-		return m, cmd
-
 	case PhaseStartMsg:
 		// Mark the phase active (drives the live spinner) and remember its
 		// header, but don't commit it to scrollback yet — the header prints
@@ -179,36 +175,52 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case PhaseDetailMsg:
-		// Print completed item above the TUI (package-manager pattern)
-		m.CurrentDetail = msg.Message
-		detail := tea.Printf("  %s %s", msg.Mark.glyph(), msg.Message)
+		// In-flight details belong only in the live status line.
+		if msg.Mark == MarkInProgress {
+			m.CurrentDetail = msg.Message
+			return m, nil
+		}
+		m.CurrentDetail = ""
+		detail := fmt.Sprintf("  %s %s", msg.Mark.glyph(), msg.Message)
 
 		// Commit the phase header the first time the phase produces a detail,
 		// separated from the previous phase group by a blank line. A detail for
 		// a phase that was never started (e.g. standalone restack) just prints
 		// without a header.
 		if emit, separate := m.headers.CommitOnItem(msg.Phase); emit {
-			var cmds []tea.Cmd
+			var lines []string
 			if separate {
-				cmds = append(cmds, tea.Printf(""))
+				lines = append(lines, "")
 			}
-			cmds = append(cmds, tea.Printf("%s", m.phaseHeaders[msg.Phase]), detail)
-			return m, tea.Sequence(cmds...)
+			// Keep the header and its first row in one print message. Separate
+			// commands can interleave with a subsequent branch's result.
+			lines = append(lines, m.phaseHeaders[msg.Phase], detail)
+			return m, tea.Printf("%s", strings.Join(lines, "\n"))
 		}
-		return m, detail
+		return m, tea.Printf("%s", detail)
+
+	case ActivityMsg:
+		if m.active == nil {
+			m.active = make(map[string]string)
+		}
+		if msg.Finished {
+			delete(m.active, msg.Branch)
+		} else {
+			m.active[msg.Branch] = msg.Parent
+		}
+		return m, nil
 
 	case ProgressTickMsg:
 		m.CompletedOps = msg.Completed
 		m.TotalOps = msg.Total
-		if m.TotalOps > 0 {
-			cmd := m.Progress.SetPercent(float64(m.CompletedOps) / float64(m.TotalOps))
-			return m, cmd
-		}
 		return m, nil
 
 	case CompleteMsg:
 		m.Done = true
 		m.Summary = msg.Summary
+		if msg.Summary == "" {
+			return m, tea.Quit
+		}
 		// Print summary and quit
 		return m, tea.Sequence(
 			tea.Printf("\n%s", msg.Summary),
@@ -227,49 +239,51 @@ func (m *Model) View() tea.View {
 		return tea.NewView("")
 	}
 
-	var b strings.Builder
-
-	// Progress bar with count (single line, like package-manager)
-	n := m.TotalOps
-	w := lipgloss.Width(fmt.Sprintf("%d", n))
-	pkgCount := fmt.Sprintf(" %*d/%*d", w, m.CompletedOps, w, n)
-
+	status := m.getStatusText()
+	suffix := fmt.Sprintf("  %.1fs", m.elapsed.Seconds())
+	if m.TotalOps > 0 {
+		suffix = fmt.Sprintf("  %d/%d", m.CompletedOps, m.TotalOps) + suffix
+	}
 	spin := m.spinner.View() + " "
-	prog := m.Progress.View()
-
-	// Calculate available space for status text
-	cellsAvail := max(0, m.Width-lipgloss.Width(spin+prog+pkgCount))
-
-	// Show current phase/operation
-	statusText := m.getStatusText()
-	info := lipgloss.NewStyle().MaxWidth(cellsAvail).Render(statusText)
-
-	// Fill remaining space
-	cellsRemaining := max(0, m.Width-lipgloss.Width(spin+info+prog+pkgCount))
-	gap := strings.Repeat(" ", cellsRemaining)
-
-	b.WriteString(spin + info + gap + prog + pkgCount)
-
-	return tea.NewView(b.String())
+	width := max(1, m.Width)
+	available := width - lipgloss.Width(spin+suffix)
+	if available < 12 {
+		// Activity is more useful than counters in a narrow terminal.
+		suffix = ""
+		available = max(0, width-lipgloss.Width(spin))
+	}
+	status = ansi.Truncate(status, available, "…")
+	gap := strings.Repeat(" ", max(0, width-lipgloss.Width(spin+status+suffix)))
+	return tea.NewView(ansi.Truncate(spin+status+gap+suffix, width, "…"))
 }
 
 // getStatusText returns the current status text to display
 func (m *Model) getStatusText() string {
-	commonStyles := style.DefaultCommonStyles()
-
+	if len(m.active) > 0 {
+		names := make([]string, 0, len(m.active))
+		for name := range m.active {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		text := "Checking rebase: " + style.DisplayBranchName(names[0]) + " onto " + style.DisplayBranchName(m.active[names[0]])
+		if len(names) > 1 {
+			text += fmt.Sprintf(" (+%d active)", len(names)-1)
+		}
+		return text
+	}
+	if m.CurrentDetail != "" {
+		return m.CurrentDetail
+	}
 	switch m.CurrentPhase {
 	case PhaseTrunk:
 		return "Pulling from remote..."
 	case PhaseBranches:
 		return "Syncing branches..."
 	case PhaseGitHub:
-		return "Fetching PR info..."
+		return "Fetching remote branches and PR status..."
 	case PhaseClean:
 		return "Cleaning branches..."
 	case PhaseRestack:
-		if m.CurrentDetail != "" {
-			return commonStyles.Dim.Render("Restacking...")
-		}
 		return "Restacking branches..."
 	default:
 		return "Syncing..."

@@ -28,6 +28,11 @@ func main() {
 
 	out := output.NewDefaultOutput()
 	switch args[0] {
+	case "restack":
+		if err := runRestackScenario(out, args[1], *delay); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
 	case "sync":
 		runSyncScenario(out, args[1], *delay)
 	case "submit":
@@ -64,11 +69,16 @@ func runSubmitScenario(out output.Output, name string, delay time.Duration) {
 	if runner != nil {
 		defer runner.Cleanup()
 	}
+	if interactive, ok := handler.(*stack.InteractiveSubmitHandler); ok {
+		defer interactive.Cleanup()
+	}
 	scenario.Replay(handler, delay)
 }
 
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "Usage: st-tui [--delay duration] <command> <scenario>")
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, "Restack scenarios: success, current, held, conflict")
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "Sync scenarios:")
 	for _, name := range SyncScenarioNames() {

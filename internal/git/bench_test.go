@@ -156,6 +156,39 @@ func BenchmarkBatchGetRevisions(b *testing.B) {
 	}
 }
 
+// BenchmarkBatchGetRevisionsMissing compares the previous individual fallback
+// with the batched fallback for a mix of valid and unpublished branch refs.
+func BenchmarkBatchGetRevisionsMissing(b *testing.B) {
+	for _, batch := range []bool{false, true} {
+		b.Run(fmt.Sprintf("batch=%t", batch), func(b *testing.B) {
+			br := newBenchRepo(b, 1, 0)
+			names := make([]string, 1, 31)
+			names[0] = "main"
+			for i := range 30 {
+				names = append(names, fmt.Sprintf("origin/unpublished-%d", i))
+			}
+			for b.Loop() {
+				if batch {
+					got, errs := br.runner.BatchGetRevisions(names)
+					if len(got) != 1 || len(errs) != 30 {
+						b.Fatalf("unexpected results: %v, %v", got, errs)
+					}
+					continue
+				}
+				if _, err := br.runner.RunGitCommandWithContext(context.Background(), append([]string{"rev-parse"}, names...)...); err == nil {
+					b.Fatal("expected missing refs")
+				}
+				for i, name := range names {
+					_, err := br.runner.GetRevision(name)
+					if (err != nil) != (i > 0) {
+						b.Fatalf("unexpected error for %s: %v", name, err)
+					}
+				}
+			}
+		})
+	}
+}
+
 // BenchmarkGetMergeBase exercises the merge-base API, implemented as a single
 // `git merge-base <a> <b>` invocation.
 func BenchmarkGetMergeBase(b *testing.B) {

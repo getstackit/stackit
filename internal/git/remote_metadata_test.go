@@ -42,7 +42,7 @@ func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
 		}
 
 		// Delete multiple refs
-		err = runner.BatchDeleteRemoteMetadataRefs(context.Background(), branches[0:2]) // branch1, branch2
+		err = runner.DeleteRemoteMetadataRefs(context.Background(), branches[0:2]...) // branch1, branch2
 		require.NoError(t, err)
 
 		// Verify branch1 and branch2 are gone from remote, but branch3 remains
@@ -74,7 +74,7 @@ func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
 		err = scene.Repo.RunGitCommand("push", "origin", refName)
 		require.NoError(t, err)
 
-		err = runner.BatchDeleteRemoteMetadataRefs(context.Background(), []string{"branch1"})
+		err = runner.DeleteRemoteMetadataRefs(context.Background(), []string{"branch1"}...)
 		require.NoError(t, err)
 
 		out, _ := scene.Repo.RunGitCommandAndGetOutput("ls-remote", "origin", refName)
@@ -83,7 +83,7 @@ func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
 
 	t.Run("handles empty slice gracefully", func(t *testing.T) {
 		runner := git.NewRunner(nil)
-		err := runner.BatchDeleteRemoteMetadataRefs(context.Background(), []string{})
+		err := runner.DeleteRemoteMetadataRefs(context.Background(), []string{}...)
 		require.NoError(t, err)
 	})
 }
@@ -113,10 +113,10 @@ func TestFetchRefSpecsFetchesBranchAndMetadataFromCustomRemote(t *testing.T) {
 	err = scene.Repo.RunGitCommand("update-ref", "-d", "refs/remotes/upstream/feature")
 	require.NoError(t, err)
 
-	err = runner.FetchRefSpecs(context.Background(), "upstream", []string{
+	err = runner.FetchRefs(context.Background(), "upstream", []string{
 		"refs/heads/feature:refs/remotes/upstream/feature",
 		"+refs/stackit/metadata/*:refs/stackit/remote-metadata/*",
-	})
+	}...)
 	require.NoError(t, err)
 
 	branchSHA, err := scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", "refs/remotes/upstream/feature")

@@ -94,7 +94,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
 	metaRef := git.MetadataRefPrefix + "feature"
-	realMetadataSHA, err := realGit.GetRef(metaRef)
+	realMetadataSHA, err := realGit.ReadRevisions(context.Background(), metaRef).One()
 	require.NoError(t, err)
 	realBranchSHA, err := realGit.ReadRevisions(context.Background(), "feature").One()
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	require.Error(t, err, "a failed branch-revision read must fail the restack, not silently bypass the optimistic lock")
 	require.Equal(t, RestackConflict, result.Result)
 
-	afterMetadataSHA, getErr := realGit.GetRef(metaRef)
+	afterMetadataSHA, getErr := realGit.ReadRevisions(context.Background(), metaRef).One()
 	require.NoError(t, getErr)
 	require.Equal(t, realMetadataSHA, afterMetadataSHA, "metadata ref must be untouched when the branch revision can't be verified")
 
@@ -142,7 +142,7 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
 	metaRef := git.MetadataRefPrefix + "feature"
-	realMetadataSHA, err := realGit.GetRef(metaRef)
+	realMetadataSHA, err := realGit.ReadRevisions(context.Background(), metaRef).One()
 	require.NoError(t, err)
 	featureSHA, err := realGit.ReadRevisions(context.Background(), "feature").One()
 	require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	require.Error(t, err, "a failed branch-revision read must fail the update, not silently bypass the optimistic lock")
 	require.Equal(t, RestackConflict, result.Result)
 
-	afterMetadataSHA, getErr := realGit.GetRef(metaRef)
+	afterMetadataSHA, getErr := realGit.ReadRevisions(context.Background(), metaRef).One()
 	require.NoError(t, getErr)
 	require.Equal(t, realMetadataSHA, afterMetadataSHA, "metadata ref must be untouched when the branch revision can't be verified")
 

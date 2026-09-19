@@ -176,7 +176,7 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	err = runner.Fetch(ctx, "origin", "feature")
+	err = runner.FetchRefs(ctx, "origin", git.BranchFetchRefspec("origin", "feature"))
 	require.NoError(t, err)
 	trackedA, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/feature")
 	require.NoError(t, err)
@@ -197,7 +197,7 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 
 	// 5. Fetch again — with the '+' force prefix this succeeds and advances the
 	// remote-tracking ref to B instead of failing as non-fast-forward.
-	err = runner.Fetch(ctx, "origin", "feature")
+	err = runner.FetchRefs(ctx, "origin", git.BranchFetchRefspec("origin", "feature"))
 	require.NoError(t, err, "fetch should tolerate force-updated remote branch")
 	trackedB, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/feature")
 	require.NoError(t, err)

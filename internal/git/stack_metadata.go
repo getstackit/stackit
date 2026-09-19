@@ -135,7 +135,7 @@ func (r *runner) WriteStackMetaBlob(meta *StackMeta) (string, error) {
 
 // GetStackMetaRefSHA returns the current SHA of a stack metadata ref, or empty string if not found.
 func (r *runner) GetStackMetaRefSHA(stackID string) string {
-	sha, err := r.GetRef(StackMetaRefName(stackID))
+	sha, err := r.ReadRevisions(context.Background(), StackMetaRefName(stackID)).One()
 	if err != nil {
 		return ""
 	}

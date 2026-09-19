@@ -48,7 +48,7 @@ func (e *engineImpl) MergeAbort(ctx context.Context) error {
 
 // Merge merges a revision into the current branch
 func (e *engineImpl) Merge(ctx context.Context, revision string, opts MergeOptions) error {
-	return e.git.Merge(ctx, revision, git.MergeOptions{
+	return e.git.MergeBranches(ctx, []string{revision}, git.MergeOptions{
 		FFOnly:  opts.FFOnly,
 		NoEdit:  opts.NoEdit,
 		NoFF:    opts.NoFF,
@@ -58,7 +58,7 @@ func (e *engineImpl) Merge(ctx context.Context, revision string, opts MergeOptio
 
 // MergeMultiple performs an octopus merge of multiple branches into the current branch
 func (e *engineImpl) MergeMultiple(ctx context.Context, branches []string, opts MergeOptions) error {
-	return e.git.MergeMultiple(ctx, branches, git.MergeOptions{
+	return e.git.MergeBranches(ctx, branches, git.MergeOptions{
 		NoEdit:  opts.NoEdit,
 		NoFF:    opts.NoFF,
 		Message: opts.Message,
@@ -104,7 +104,7 @@ func (e *engineImpl) FetchRemote(ctx context.Context, req RemoteFetchRequest) er
 		add("+refs/stackit/stacks/*:refs/stackit/remote-stacks/*")
 	}
 
-	return e.git.FetchRefSpecs(ctx, remote, refspecs)
+	return e.git.FetchRefs(ctx, remote, refspecs...)
 }
 
 // InteractiveRebase starts an interactive rebase
@@ -421,7 +421,7 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 
 	oldLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, oldName)
 	newLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, newName)
-	if sha, err := e.git.GetRef(oldLocalRef); err == nil {
+	if sha, err := e.git.ReadRevisions(ctx, oldLocalRef).One(); err == nil {
 		if updateErr := e.git.UpdateRefs(ctx, []git.RefUpdate{{RefName: newLocalRef, NewSHA: sha}}, ""); updateErr == nil {
 			_ = e.git.DeleteRefs(ctx, oldLocalRef)
 		}

@@ -346,7 +346,7 @@ func (r *runner) RenameMetadata(oldName, newName string) error {
 	oldRefName := fmt.Sprintf("%s%s", MetadataRefPrefix, oldName)
 	newRefName := fmt.Sprintf("%s%s", MetadataRefPrefix, newName)
 
-	sha, err := r.GetRef(oldRefName)
+	sha, err := r.ReadRevisions(context.Background(), oldRefName).One()
 	if err != nil {
 		return nil //nolint:nilerr // Nothing to rename
 	}
@@ -459,7 +459,7 @@ func (r *runner) WriteLocalMetadataBlobs(ctx context.Context, metas []*LocalMeta
 // GetMetadataRefSHA returns the current SHA of a metadata ref, or empty string if not found.
 func (r *runner) GetMetadataRefSHA(branchName string) string {
 	refName := fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
-	sha, err := r.GetRef(refName)
+	sha, err := r.ReadRevisions(context.Background(), refName).One()
 	if err != nil {
 		return ""
 	}
@@ -469,7 +469,7 @@ func (r *runner) GetMetadataRefSHA(branchName string) string {
 // GetLocalMetadataRefSHA returns the current SHA of a local metadata ref, or empty string if not found.
 func (r *runner) GetLocalMetadataRefSHA(branchName string) string {
 	refName := fmt.Sprintf("%s%s", LocalMetadataRefPrefix, branchName)
-	sha, err := r.GetRef(refName)
+	sha, err := r.ReadRevisions(context.Background(), refName).One()
 	if err != nil {
 		return ""
 	}

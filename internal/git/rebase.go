@@ -231,7 +231,7 @@ func (r *runner) GetRebaseHead() (string, error) {
 	}
 
 	for _, refName := range refs {
-		output, err := r.GetRef(refName)
+		output, err := r.ReadRevisions(context.Background(), refName).One()
 		if err == nil && output != "" {
 			return strings.TrimSpace(output), nil
 		}

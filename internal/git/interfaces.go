@@ -32,18 +32,15 @@ type RepositoryWriter interface {
 // RemoteOperations handles interaction with remote repositories.
 type RemoteOperations interface {
 	FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error)
-	GetRemoteSha(remote, branchName string) (string, error)
 	FindRemoteBranch(ctx context.Context, remote string) (string, error)
 	PushBranch(ctx context.Context, branchName, remote string, opts PushOptions) error
 	PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) map[string]error
 	PullBranch(ctx context.Context, remote, branchName string) (PullResult, error)
 	UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error)
-	Fetch(ctx context.Context, remote, branch string) error
-	FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error
+	FetchRefs(ctx context.Context, remote string, refspecs ...string) error
 	PushMetadataRefs(ctx context.Context, branches []string) error
 	FetchMetadataRefs(ctx context.Context) error
-	DeleteRemoteMetadataRef(ctx context.Context, branch string) error
-	BatchDeleteRemoteMetadataRefs(ctx context.Context, branches []string) error
+	DeleteRemoteMetadataRefs(ctx context.Context, branches ...string) error
 	TestRemoteRefCompatibility(ctx context.Context) error
 	PushStackMetaRefs(ctx context.Context, stackIDs []string) error
 	FetchStackMetaRefs(ctx context.Context) error
@@ -82,12 +79,10 @@ type CommitReader interface {
 	GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error)
 	GetCommitRangeMetadata(ctx context.Context, rr RevRange) ([]CommitMetadata, error)
 	GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error)
-	GetCommitSHA(branchName string, offset int) (string, error)
 	GetCommitLog(sha, format string) (string, error)
 	GetRecentCommits(ctx context.Context, branchName string, count int) ([]RecentCommit, error)
 	GetRecentCommitsInRange(ctx context.Context, revRange string) ([]RecentCommit, error)
 	GetCommitTemplate(ctx context.Context) (string, error)
-	GetParentCommitSHA(commitSHA string) (string, error)
 }
 
 // DiffOperations provides access to diff and comparison operations.
@@ -151,8 +146,7 @@ type RebaseOperations interface {
 
 // MergeOperations handles merge operations.
 type MergeOperations interface {
-	Merge(ctx context.Context, branchName string, opts MergeOptions) error
-	MergeMultiple(ctx context.Context, branches []string, opts MergeOptions) error
+	MergeBranches(ctx context.Context, branches []string, opts MergeOptions) error
 	IsMergeInProgress(ctx context.Context) bool
 	MergeAbort(ctx context.Context) error
 	GetUnmergedFiles(ctx context.Context) ([]string, error)
@@ -237,7 +231,6 @@ type StatusOperations interface {
 
 // RefOperations provides low-level reference operations.
 type RefOperations interface {
-	GetRef(name string) (string, error)
 	GetUntrackedFilesIn(ctx context.Context, worktreePath string) ([]string, error)
 	TreeContainsAnyPath(ctx context.Context, rev string, paths []string) (collides, known bool)
 	UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMessage string) error

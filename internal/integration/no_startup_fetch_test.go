@@ -30,9 +30,9 @@ type countingFetchRunner struct {
 	fetchRemoteShas atomic.Int64
 }
 
-func (c *countingFetchRunner) FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error {
+func (c *countingFetchRunner) FetchRefs(ctx context.Context, remote string, refspecs ...string) error {
 	c.fetchRefSpecs.Add(1)
-	return c.Runner.FetchRefSpecs(ctx, remote, refspecs)
+	return c.Runner.FetchRefs(ctx, remote, refspecs...)
 }
 
 func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {

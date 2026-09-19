@@ -189,7 +189,7 @@ func (e *engineImpl) FindTargetCommitForHunk(hunk git.Hunk, commitSHAs []string)
 	// Iterate through commits from newest to oldest
 	for i, commitSHA := range commitSHAs {
 		// Get parent commit SHA
-		parentSHA, err := e.git.GetParentCommitSHA(commitSHA)
+		parentSHA, err := e.git.ReadRevisions(context.Background(), commitSHA+"^").One()
 		if err != nil {
 			// If we can't get parent, skip this commit
 			continue

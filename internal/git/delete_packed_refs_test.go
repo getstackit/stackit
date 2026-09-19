@@ -142,13 +142,13 @@ func scriptGit(repoDir string, args ...string) (string, error) {
 
 func requireRefAbsent(t *testing.T, runner git.Runner, refName string) {
 	t.Helper()
-	_, err := runner.GetRef(refName)
+	_, err := runner.ReadRevisions(context.Background(), refName).One()
 	require.Error(t, err, "ref %s should not resolve", refName)
 }
 
 func requireRefPresent(t *testing.T, runner git.Runner, refName string) {
 	t.Helper()
-	_, err := runner.GetRef(refName)
+	_, err := runner.ReadRevisions(context.Background(), refName).One()
 	require.NoError(t, err, "ref %s should still resolve", refName)
 }
 

@@ -213,12 +213,12 @@ func (e *engineImpl) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 
 // GetParentCommitSHA returns the parent commit SHA of a commit
 func (e *engineImpl) GetParentCommitSHA(commitSHA string) (string, error) {
-	return e.git.GetParentCommitSHA(commitSHA)
+	return e.git.ReadRevisions(context.Background(), commitSHA+"^").One()
 }
 
 // GetCommitSHA returns the SHA at a relative position (0 = HEAD, 1 = HEAD~1)
 func (e *engineImpl) GetCommitSHA(branchName string, offset int) (string, error) {
-	return e.git.GetCommitSHA(branchName, offset)
+	return e.git.ReadRevisions(context.Background(), fmt.Sprintf("%s~%d", branchName, offset)).One()
 }
 
 // IsAncestor checks if one commit is an ancestor of another

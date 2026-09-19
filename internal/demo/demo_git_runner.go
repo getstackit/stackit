@@ -41,10 +41,6 @@ func (d *demoGitRunner) FetchRemoteShas(_ context.Context, _ string) (map[string
 	return make(map[string]string), nil
 }
 
-func (d *demoGitRunner) GetRemoteSha(_, _ string) (string, error) {
-	return "remote-sha", nil
-}
-
 func (d *demoGitRunner) GetConfig(_ string) (string, error) {
 	return "", nil
 }
@@ -186,10 +182,6 @@ func (d *demoGitRunner) GetCommitRange(_ context.Context, _, _, _ string) ([]str
 	return []string{"commit message"}, nil
 }
 
-func (d *demoGitRunner) GetCommitSHA(_ string, _ int) (string, error) {
-	return "commit-sha", nil
-}
-
 func (d *demoGitRunner) PullBranch(_ context.Context, _, _ string) (git.PullResult, error) {
 	return git.PullDone, nil
 }
@@ -258,11 +250,7 @@ func (d *demoGitRunner) StashPopRef(_ context.Context, _ string) error {
 	return nil
 }
 
-func (d *demoGitRunner) Fetch(_ context.Context, _, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) FetchRefSpecs(_ context.Context, _ string, _ []string) error {
+func (d *demoGitRunner) FetchRefs(_ context.Context, _ string, _ ...string) error {
 	return nil
 }
 
@@ -275,11 +263,7 @@ func (d *demoGitRunner) CreateBranchForce(_ context.Context, branchName, _ strin
 	return nil
 }
 
-func (d *demoGitRunner) Merge(_ context.Context, _ string, _ git.MergeOptions) error {
-	return nil
-}
-
-func (d *demoGitRunner) MergeMultiple(_ context.Context, _ []string, _ git.MergeOptions) error {
+func (d *demoGitRunner) MergeBranches(_ context.Context, _ []string, _ git.MergeOptions) error {
 	return nil
 }
 
@@ -567,10 +551,6 @@ func (d *demoGitRunner) RunGitCommandInteractive(_ ...string) error {
 	return nil
 }
 
-func (d *demoGitRunner) GetRef(_ string) (string, error) {
-	return "ref-sha", nil
-}
-
 func (d *demoGitRunner) CatFile(_ string) (string, error) {
 	return "{}", nil
 }
@@ -616,10 +596,6 @@ func (d *demoGitRunner) ListMetadata() (map[string]string, error) {
 	return make(map[string]string), nil
 }
 
-func (d *demoGitRunner) GetParentCommitSHA(_ string) (string, error) {
-	return "parent-sha", nil
-}
-
 func (d *demoGitRunner) CheckCommutation(_ git.Hunk, _, _ string) (bool, error) {
 	return true, nil
 }
@@ -644,11 +620,7 @@ func (d *demoGitRunner) DeleteRemoteStackMetaRefs(_ context.Context, _ []string)
 	return nil
 }
 
-func (d *demoGitRunner) DeleteRemoteMetadataRef(_ context.Context, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) BatchDeleteRemoteMetadataRefs(_ context.Context, _ []string) error {
+func (d *demoGitRunner) DeleteRemoteMetadataRefs(_ context.Context, _ ...string) error {
 	return nil
 }
 

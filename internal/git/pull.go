@@ -30,7 +30,7 @@ func BranchFetchRefspec(remote, branch string) string {
 func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (PullResult, error) {
 	// Worktree sessions and similar ephemeral setups intentionally have no
 	// remote configured; UpdateBranchFromRemote already tolerates that via
-	// GetRemoteSha's error handling. Skip the fetch attempt entirely in that
+	// missing remote-tracking revision handling. Skip the fetch attempt entirely in that
 	// case rather than surfacing "remote not configured" as a pull failure.
 	if !r.remoteConfigured(ctx, remote) {
 		return r.UpdateBranchFromRemote(ctx, remote, branchName)
@@ -54,7 +54,7 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 	}
 
 	// Get the SHA of the remote branch
-	remoteRev, err := r.GetRemoteSha(remote, branchName)
+	remoteRev, err := r.ReadRevisions(ctx, "refs/remotes/"+remote+"/"+branchName).One()
 	if err != nil {
 		// If we can't get remote rev, we can't pull, but it might just be because there's no remote
 		return PullUnneeded, nil //nolint:nilerr
@@ -129,14 +129,6 @@ func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName 
 	return PullConflict, nil
 }
 
-func (r *runner) Fetch(ctx context.Context, remote, branch string) error {
-	refspec := BranchFetchRefspec(remote, branch)
-	if err := r.fetchRemoteRefSpecs(ctx, remote, []string{refspec}); err != nil {
-		return fmt.Errorf("failed to fetch %s from %s: %w", branch, remote, err)
-	}
-	return nil
-}
-
-func (r *runner) FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error {
+func (r *runner) FetchRefs(ctx context.Context, remote string, refspecs ...string) error {
 	return r.fetchRemoteRefSpecs(ctx, remote, refspecs)
 }

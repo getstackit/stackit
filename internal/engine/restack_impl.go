@@ -547,7 +547,7 @@ func (e *engineImpl) restackBranch(
 		// SetParent + appendMergedDownstack bumped the metadata ref. Refresh
 		// the cached SHA so the later optimistic-locking UpdateRefsBatch
 		// doesn't fail with "is at X but expected Y".
-		if sha, refErr := e.git.GetRef(git.MetadataRefPrefix + branchName); refErr == nil {
+		if sha, refErr := e.git.ReadRevisions(ctx, git.MetadataRefPrefix+branchName).One(); refErr == nil {
 			snap.metaRefSHAs[branchName] = sha
 		}
 	}

@@ -47,11 +47,11 @@ func TestUpdateRefsBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify both refs are updated
-		ref1, err := runner.GetRef("refs/test/ref1")
+		ref1, err := runner.ReadRevisions(context.Background(), "refs/test/ref1").One()
 		require.NoError(t, err)
 		require.Equal(t, newSha1, ref1)
 
-		ref2, err := runner.GetRef("refs/test/ref2")
+		ref2, err := runner.ReadRevisions(context.Background(), "refs/test/ref2").One()
 		require.NoError(t, err)
 		require.Equal(t, newSha2, ref2)
 	})
@@ -90,11 +90,11 @@ func TestUpdateRefsBatch(t *testing.T) {
 		require.Error(t, err)
 
 		// Verify neither ref was updated (atomic rollback)
-		ref1, err := runner.GetRef("refs/test/ref1")
+		ref1, err := runner.ReadRevisions(context.Background(), "refs/test/ref1").One()
 		require.NoError(t, err)
 		require.Equal(t, sha1, ref1, "ref1 should not have been updated")
 
-		ref2, err := runner.GetRef("refs/test/ref2")
+		ref2, err := runner.ReadRevisions(context.Background(), "refs/test/ref2").One()
 		require.NoError(t, err)
 		require.Equal(t, sha2, ref2, "ref2 should not have been updated")
 	})
@@ -127,7 +127,7 @@ func TestUpdateRefsBatch(t *testing.T) {
 		err = runner.UpdateRefs(ctx, updates, "")
 		require.NoError(t, err)
 
-		ref, err := runner.GetRef("refs/test/newref")
+		ref, err := runner.ReadRevisions(context.Background(), "refs/test/newref").One()
 		require.NoError(t, err)
 		require.Equal(t, sha, ref)
 	})
@@ -154,7 +154,7 @@ func TestUpdateRefsBatchWithLog(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify ref was updated
-		ref, err := runner.GetRef("refs/stackit/metadata/testbranch")
+		ref, err := runner.ReadRevisions(context.Background(), "refs/stackit/metadata/testbranch").One()
 		require.NoError(t, err)
 		require.Equal(t, sha, ref)
 	})
@@ -178,7 +178,7 @@ func TestUpdateRefsBatchWithLog(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify ref was updated
-		ref, err := runner.GetRef("refs/heads/testbranch")
+		ref, err := runner.ReadRevisions(context.Background(), "refs/heads/testbranch").One()
 		require.NoError(t, err)
 		require.Equal(t, commitSha, ref)
 
@@ -218,10 +218,10 @@ func TestDeleteRefsBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify both refs are deleted
-		_, err = runner.GetRef("refs/stackit/metadata/branch1")
+		_, err = runner.ReadRevisions(context.Background(), "refs/stackit/metadata/branch1").One()
 		require.Error(t, err)
 
-		_, err = runner.GetRef("refs/stackit/metadata/branch2")
+		_, err = runner.ReadRevisions(context.Background(), "refs/stackit/metadata/branch2").One()
 		require.Error(t, err)
 	})
 
@@ -260,7 +260,7 @@ func TestDeleteRefsBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		// The existing ref should have been deleted
-		_, err = runner.GetRef("refs/test/exists")
+		_, err = runner.ReadRevisions(context.Background(), "refs/test/exists").One()
 		require.Error(t, err)
 	})
 }
@@ -308,11 +308,11 @@ func TestRefUpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify both are updated
-		branchRef, err := runner.GetRef("refs/heads/feature")
+		branchRef, err := runner.ReadRevisions(context.Background(), "refs/heads/feature").One()
 		require.NoError(t, err)
 		require.Equal(t, rebasedCommit, branchRef)
 
-		metaRef, err := runner.GetRef("refs/stackit/metadata/feature")
+		metaRef, err := runner.ReadRevisions(context.Background(), "refs/stackit/metadata/feature").One()
 		require.NoError(t, err)
 		require.Equal(t, newMetaSha, metaRef)
 	})
@@ -360,16 +360,16 @@ func TestRefUpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify all refs are restored
-		ref1, _ := runner.GetRef("refs/heads/branch1")
+		ref1, _ := runner.ReadRevisions(context.Background(), "refs/heads/branch1").One()
 		require.Equal(t, commit1, ref1)
 
-		ref2, _ := runner.GetRef("refs/heads/branch2")
+		ref2, _ := runner.ReadRevisions(context.Background(), "refs/heads/branch2").One()
 		require.Equal(t, commit1, ref2)
 
-		meta1, _ := runner.GetRef("refs/stackit/metadata/branch1")
+		meta1, _ := runner.ReadRevisions(context.Background(), "refs/stackit/metadata/branch1").One()
 		require.Equal(t, snapshotMeta1, meta1)
 
-		meta2, _ := runner.GetRef("refs/stackit/metadata/branch2")
+		meta2, _ := runner.ReadRevisions(context.Background(), "refs/stackit/metadata/branch2").One()
 		require.Equal(t, snapshotMeta2, meta2)
 	})
 }

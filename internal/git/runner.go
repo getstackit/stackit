@@ -63,7 +63,7 @@ func traceCmd(base string, args []string) string {
 }
 
 func (r *runner) VerifyRef(ctx context.Context, refName string) error {
-	_, err := r.GetRef(refName)
+	_, err := r.ReadRevisions(ctx, refName).One()
 	return err
 }
 
@@ -570,10 +570,6 @@ func (r *runner) FetchRemoteShas(ctx context.Context, remote string) (map[string
 	return r.fetchRemoteShas(ctx, remote)
 }
 
-func (r *runner) GetRemoteSha(remote, branchName string) (string, error) {
-	return r.getRemoteSha(remote, branchName)
-}
-
 func (r *runner) GetConfig(key string) (string, error) {
 	if err := r.ensureRepo(); err != nil {
 		return "", err
@@ -830,21 +826,6 @@ func (r *runner) GetCommitHistorySHAs(ctx context.Context, branchName string) ([
 	return r.GetCommitRangeSHAs(ctx, RevRange{Head: branchName})
 }
 
-func (r *runner) GetCommitSHA(branchName string, offset int) (string, error) {
-	if offset < 0 {
-		return "", fmt.Errorf("offset must be non-negative")
-	}
-	ref := branchName
-	if offset > 0 {
-		ref = fmt.Sprintf("%s~%d", branchName, offset)
-	}
-	out, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
-	if err != nil {
-		return "", fmt.Errorf("failed to walk %d commit(s) back from %s: %w", offset, branchName, err)
-	}
-	return strings.TrimSpace(out), nil
-}
-
 func (r *runner) CheckoutPaths(ctx context.Context, branch string, paths []string) error {
 	args := make([]string, 0, 3+len(paths))
 	args = append(args, "checkout", branch, "--")
@@ -911,10 +892,6 @@ func (r *runner) GetCommitTemplate(ctx context.Context) (string, error) {
 
 func (r *runner) runGitCommandInternal(args ...string) (string, error) {
 	return r.RunGitCommandWithContext(context.Background(), args...)
-}
-
-func (r *runner) GetRef(name string) (string, error) {
-	return r.resolveRefSHA(name)
 }
 
 func (r *runner) CatFile(sha string) (string, error) {
@@ -1064,13 +1041,7 @@ func (r *runner) DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []strin
 	return r.pushOriginRefSpecs(ctx, refspecs)
 }
 
-func (r *runner) DeleteRemoteMetadataRef(ctx context.Context, branch string) error {
-	return r.pushOriginRefSpecs(ctx, []string{
-		fmt.Sprintf(":refs/stackit/metadata/%s", branch),
-	})
-}
-
-func (r *runner) BatchDeleteRemoteMetadataRefs(ctx context.Context, branches []string) error {
+func (r *runner) DeleteRemoteMetadataRefs(ctx context.Context, branches ...string) error {
 	if len(branches) == 0 {
 		return nil
 	}
@@ -1134,14 +1105,6 @@ func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) erro
 		return fmt.Errorf("git push failed: %w", err)
 	}
 	return nil
-}
-
-func (r *runner) GetParentCommitSHA(commitSHA string) (string, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", commitSHA+"^")
-	if err != nil {
-		return "", fmt.Errorf("failed to get parent of %s: %w", commitSHA, err)
-	}
-	return strings.TrimSpace(out), nil
 }
 
 func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool, error) {

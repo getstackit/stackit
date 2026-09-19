@@ -28,6 +28,16 @@ const (
 
 func (v SubmitVerbosity) verbose() bool { return v == SubmitVerbose }
 
+// nameStyle selects how pad renders a branch name.
+type nameStyle int
+
+const (
+	// nameStylePlain renders the name in the normal branch-name color.
+	nameStylePlain nameStyle = iota
+	// nameStyleDim renders the name dimmed, for skipped branches.
+	nameStyleDim
+)
+
 // skipReasonNoChanges is the SkipReason emitted for an up-to-date branch.
 const skipReasonNoChanges = "no changes"
 
@@ -187,7 +197,7 @@ func (p *planPrinter) printActiveLine(ev submit.BranchPlanEvent) {
 	if ev.IsCurrent {
 		marker = "● "
 	}
-	name := p.pad(p.decoratedName(ev.BranchName), false, ev.IsCurrent)
+	name := p.pad(p.decoratedName(ev.BranchName), nameStylePlain, ev.IsCurrent)
 
 	action := string(ev.Action)
 	if ev.PRNumber != nil {
@@ -205,7 +215,7 @@ func (p *planPrinter) printSkippedName(ev submit.BranchPlanEvent) {
 	if ev.IsCurrent {
 		marker = style.ColorGreen("● ")
 	}
-	p.out.Info("%s%s", marker, p.pad(p.decoratedName(ev.BranchName), true, ev.IsCurrent))
+	p.out.Info("%s%s", marker, p.pad(p.decoratedName(ev.BranchName), nameStyleDim, ev.IsCurrent))
 }
 
 // printSoloLine renders the plan for a single branch as "name → base action",
@@ -246,12 +256,12 @@ func (p *planPrinter) soloBase(branchName string) string {
 }
 
 // pad right-pads name with spaces to nameWidth so the action column aligns.
-func (p *planPrinter) pad(name string, dim bool, current bool) string {
+func (p *planPrinter) pad(name string, ns nameStyle, current bool) string {
 	padded := name
 	if gap := p.nameWidth - lipgloss.Width(name); gap > 0 {
 		padded += strings.Repeat(" ", gap)
 	}
-	if dim {
+	if ns == nameStyleDim {
 		return style.ColorDim(padded)
 	}
 	return style.ColorBranchNamePlain(padded, style.BranchStyleOpts{IsCurrent: current})

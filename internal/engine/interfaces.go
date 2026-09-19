@@ -114,6 +114,7 @@ type BranchInfo interface {
 	// a value map.
 	BatchDiffStats(branches Branches) map[string]DiffStat
 	BatchCommits(branches Branches, format CommitFormat) map[string][]string
+	ReadBranchCommits(ctx context.Context, mode git.CommitReadMode, branches Branches) git.ReadResults[BranchCommitRange]
 	BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int
 	// BatchBranchStats resolves annotation stats (short SHA, commit count,
 	// additions/deletions) for every branch in one batched pass — a use-case

@@ -144,13 +144,81 @@ func (e *engineImpl) readBranchDiffs(ctx context.Context, ranges map[string]git.
 // recorded — never an empty base, which would list a branch's entire history
 // back to the repo root.
 func (e *engineImpl) BatchCommits(branches Branches, format CommitFormat) map[string][]string {
-	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) []string {
-		if e.IsTrunk(b) {
-			return nil
+	mode := git.CommitDetails
+	if format == CommitFormatSHA {
+		mode = git.CommitIDs
+	}
+	data := e.ReadBranchCommits(context.Background(), mode, branches)
+	result := make(map[string][]string, len(branches))
+	for _, branch := range branches {
+		history, err := data.Get(branch.GetName())
+		if err == nil {
+			result[branch.GetName()], _ = FormatCommits(history.Commits, format)
 		}
-		commits, _ := e.commitsBetween(git.RevRange{Base: statBase(parentRev, storedBase), Head: head}, format)
-		return commits
-	})
+	}
+	return result
+}
+
+// BranchCommitRange retains the resolved endpoints alongside their commits so
+// consumers can format history and diffs from the same point-in-time read.
+type BranchCommitRange struct {
+	Range   git.RevRange
+	Commits []git.CommitMetadata
+}
+
+// ReadBranchCommits retains per-branch errors for consumers such as absorb,
+// where an incomplete history cannot safely be treated as an empty branch.
+func (e *engineImpl) ReadBranchCommits(ctx context.Context, mode git.CommitReadMode, branches Branches) git.ReadResults[BranchCommitRange] {
+	result := git.ReadResults[BranchCommitRange]{Values: make(map[string]BranchCommitRange), Errors: make(map[string]error)}
+	refs := make([]string, 0, 2*len(branches))
+	for _, branch := range branches {
+		refs = append(refs, branch.GetName(), branch.GetParentOrTrunk())
+	}
+	revs := e.git.ReadRevisions(ctx, refs...)
+	metas := e.metadata.ReadMetadata(ctx, branches.Names()...)
+	ranges := make([]git.RevRange, 0, len(branches))
+	byBranch := make(map[string]git.RevRange)
+	for _, branch := range branches {
+		name := branch.GetName()
+		if e.IsTrunk(branch) {
+			result.Values[name] = BranchCommitRange{}
+			continue
+		}
+		meta, err := metas.Get(name)
+		if err != nil {
+			result.Errors[name] = err
+			continue
+		}
+		head, err := revs.Get(name)
+		if err != nil {
+			result.Errors[name] = err
+			continue
+		}
+		base := ""
+		if rev := meta.GetParentBranchRevision(); rev != nil {
+			base = *rev
+		}
+		if base == "" {
+			base, err = revs.Get(branch.GetParentOrTrunk())
+			if err != nil {
+				result.Errors[name] = err
+				continue
+			}
+		}
+		rr := git.RevRange{Base: base, Head: head}
+		ranges = append(ranges, rr)
+		byBranch[name] = rr
+	}
+	data := e.git.ReadCommitRanges(ctx, mode, ranges...)
+	for name, rr := range byBranch {
+		commits, err := data.Get(rr.String())
+		if err != nil {
+			result.Errors[name] = err
+		} else {
+			result.Values[name] = BranchCommitRange{Range: rr, Commits: commits}
+		}
+	}
+	return result
 }
 
 // BatchChangedFileCounts returns each non-trunk branch's number of files changed
@@ -187,27 +255,31 @@ func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
 	diffRead.Go(func() {
 		diffs = e.readBranchDiffs(context.Background(), ranges, git.DiffStats)
 	})
-	stats := make([]BranchStat, len(branches))
-	indices := make([]int, len(branches))
-	for i := range indices {
-		indices[i] = i
-	}
-	utils.Run(indices, func(i int) {
-		name := branches[i].GetName()
-		rr := ranges[name]
-		stats[i] = BranchStat{ShortSHA: utils.ShortRevision(rr.Head, 0)}
-		if rr.Base != "" && rr.Head != "" {
-			if count, err := e.commitCountBetween(rr); err == nil {
-				stats[i].CommitCount = count
+	pending := make([]git.RevRange, 0, len(ranges))
+	for _, rr := range ranges {
+		if rr.Base != "" && rr.Head != "" && rr.Base != rr.Head {
+			if _, cached := e.commitCountCache.Load(rr.Base + ":" + rr.Head); !cached {
+				pending = append(pending, rr)
 			}
 		}
-	})
+	}
+	counts := e.git.ReadCommitCounts(context.Background(), pending...)
+	for _, rr := range pending {
+		if count, err := counts.Get(rr.String()); err == nil {
+			e.commitCountCache.Store(rr.Base+":"+rr.Head, count)
+		}
+	}
 	diffRead.Wait()
 	result := make(map[string]BranchStat, len(branches))
-	for i, branch := range branches {
+	for _, branch := range branches {
+		rr := ranges[branch.GetName()]
+		stat := BranchStat{ShortSHA: utils.ShortRevision(rr.Head, 0)}
+		if count, ok := e.commitCountCache.Load(rr.Base + ":" + rr.Head); ok {
+			stat.CommitCount = count.(int)
+		}
 		diff := diffs[branch.GetName()]
-		stats[i].LinesAdded, stats[i].LinesDeleted = diff.Added, diff.Deleted
-		result[branch.GetName()] = stats[i]
+		stat.LinesAdded, stat.LinesDeleted = diff.Added, diff.Deleted
+		result[branch.GetName()] = stat
 	}
 	return result
 }

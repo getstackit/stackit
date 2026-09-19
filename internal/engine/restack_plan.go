@@ -18,14 +18,48 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 		Items:          make(map[string]RestackPlanItem),
 	}
 	squashCache := git.NewSquashMergeCache()
+	// Planning never changes refs or PR metadata. Reuse landing decisions when
+	// a branch is visited first as work and later as another branch's ancestor.
+	// Application keeps using fresh checks across mutations.
+	landedResults := make(map[[2]string]bool)
+	landed := func(branch, target string) bool {
+		key := [2]string{branch, target}
+		if value, ok := landedResults[key]; ok {
+			return value
+		}
+		value := e.branchLanded(ctx, branch, target, squashCache)
+		landedResults[key] = value
+		return value
+	}
 
 	// Resolve metadata and revisions for the branches, their tracked ancestors,
 	// and trunk in two batched reads instead of per-branch git calls. Planning
 	// is read-only, so the snapshot stays valid for the whole loop.
 	metaMap, revMap := e.collectRestackData(branches.Names())
+	ancestryRanges := make([]git.RevRange, 0, len(branches))
+	remoteRefs := make([]string, 0)
+	for _, branch := range branches {
+		name := branch.GetName()
+		if branch.IsFrozen() {
+			remoteRefs = append(remoteRefs, e.git.GetRemote()+"/"+name)
+			continue
+		}
+		if branch.IsWorktreeAnchor() || branch.IsLocked() {
+			continue
+		}
+		meta := metaMap[name]
+		if meta != nil && meta.GetParentBranchRevision() != nil && revMap[name] != "" {
+			base := *meta.GetParentBranchRevision()
+			if base != "" {
+				ancestryRanges = append(ancestryRanges, git.RevRange{Base: base, Head: revMap[name]})
+			}
+		}
+	}
+	ancestry := e.git.ReadAncestry(ctx, ancestryRanges...)
+	remoteRevs := e.git.ReadRevisions(ctx, remoteRefs...)
 
 	for _, branch := range branches {
-		item, ok := e.planRestackBranch(ctx, branch, plan.BranchMap, squashCache, metaMap, revMap)
+		item, ok := e.planRestackBranch(ctx, branch, plan.BranchMap, landed, metaMap, revMap, ancestry, remoteRevs)
 		if !ok {
 			continue
 		}
@@ -72,7 +106,7 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 // planRestackBranch builds the plan item for one branch. metaMap and revMap
 // are batch-resolved snapshots from collectRestackData; lookups fall back to
 // individual reads on a miss so the maps are an optimization, not a contract.
-func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches BranchNameSet, squashCache *git.SquashMergeCache, metaMap MetaMap, revMap RevisionMap) (RestackPlanItem, bool) {
+func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches BranchNameSet, landed func(string, string) bool, metaMap MetaMap, revMap RevisionMap, ancestry git.ReadResults[bool], remoteRevs git.ReadResults[string]) (RestackPlanItem, bool) {
 	branchName := branch.GetName()
 	item := RestackPlanItem{Branch: branchName, Action: RestackPlanApplyValidated}
 
@@ -137,7 +171,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	// covers merged PR metadata for all GitHub methods, plus Git-detected merge,
 	// rebase, and multi-commit squash histories on trunk even when the merged
 	// branch has no stackit PR metadata.
-	if e.branchLanded(ctx, branchName, parentName, squashCache) {
+	if landed(branchName, parentName) {
 		item.Skip = true
 		item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
 		return item, true
@@ -148,7 +182,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		if !ok {
 			return item, false
 		}
-		remoteSha, err := e.git.ReadRevisions(ctx, e.git.GetRemote()+"/"+branchName).One()
+		remoteSha, err := remoteRevs.Get(e.git.GetRemote() + "/" + branchName)
 		if err != nil || remoteSha == "" {
 			item.Skip = true
 			item.SkipResult = RestackBranchResult{Result: RestackUnneeded, Frozen: true}
@@ -171,11 +205,11 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 
 	e.mu.RLock()
-	needsReparent := state != nil && e.shouldReparentBranch(ctx, state.Parent, nil, squashCache)
+	needsReparent := state != nil && e.shouldReparentBranchWithLanded(state.Parent, metaMap, landed)
 	if needsReparent {
 		item.Reparented = true
 		item.OldParent = state.Parent
-		parentName = e.findNearestValidAncestor(ctx, branchName, nil, squashCache)
+		parentName = e.findNearestValidAncestorWithLanded(branchName, metaMap, landed)
 	}
 	e.mu.RUnlock()
 	item.NewParent = parentName
@@ -209,7 +243,11 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 
 	if oldParentRev != "" {
-		isAncestor, err := e.git.IsAncestor(ctx, oldParentRev, branchName)
+		key := (git.RevRange{Base: oldParentRev, Head: revMap[branchName]}).String()
+		isAncestor, err := ancestry.Get(key)
+		if err != nil {
+			isAncestor, err = e.git.IsAncestor(ctx, oldParentRev, branchName)
+		}
 		if err != nil {
 			isAncestor = false
 		}

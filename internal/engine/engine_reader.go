@@ -179,14 +179,14 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 	}
 
 	// Get history of the branch we're tracking
-	history, err := e.git.GetCommitHistorySHAs(ctx, branchName)
+	history, err := e.git.ReadCommitRanges(ctx, git.CommitIDs, git.RevRange{Head: branchName}).One()
 	if err != nil {
 		return nil, err
 	}
 
 	// Iterate through history (newest to oldest) and find the first tracked tip(s)
 	for i := range history {
-		sha := history[i]
+		sha := history[i].SHA
 		if ancestors, ok := trackedBranchTips[sha]; ok {
 			// Found the most recent tracked commit(s)
 			return ancestors, nil

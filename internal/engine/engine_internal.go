@@ -141,6 +141,12 @@ func (e *engineImpl) branchLanded(ctx context.Context, branchName, target string
 // - Has been merged into its own parent
 // - Has a "MERGED" PR state in metadata
 func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName string, metaMap MetaMap, squashCache *git.SquashMergeCache) bool {
+	return e.shouldReparentBranchWithLanded(parentBranchName, metaMap, func(branch, target string) bool {
+		return e.branchLanded(ctx, branch, target, squashCache)
+	})
+}
+
+func (e *engineImpl) shouldReparentBranchWithLanded(parentBranchName string, metaMap MetaMap, landed func(string, string) bool) bool {
 	// Check if parent is trunk (no need to reparent)
 	if parentBranchName == e.trunk {
 		return false
@@ -171,7 +177,7 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 	if state := e.readState(parentBranchName); state != nil && state.Parent != "" {
 		mergeTarget = state.Parent
 	}
-	if e.branchLanded(ctx, parentBranchName, mergeTarget, squashCache) {
+	if landed(parentBranchName, mergeTarget) {
 		return true
 	}
 
@@ -194,6 +200,12 @@ func (e *engineImpl) shouldReparentBranch(ctx context.Context, parentBranchName 
 // findNearestValidAncestor finds the nearest ancestor that hasn't been merged/deleted
 // Returns trunk if all ancestors have been merged
 func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName string, metaMap MetaMap, squashCache *git.SquashMergeCache) string {
+	return e.findNearestValidAncestorWithLanded(branchName, metaMap, func(branch, target string) bool {
+		return e.branchLanded(ctx, branch, target, squashCache)
+	})
+}
+
+func (e *engineImpl) findNearestValidAncestorWithLanded(branchName string, metaMap MetaMap, landed func(string, string) bool) string {
 	// Get the starting parent from branchState
 	state := e.readState(branchName)
 	if state == nil {
@@ -202,7 +214,7 @@ func (e *engineImpl) findNearestValidAncestor(ctx context.Context, branchName st
 	current := state.Parent
 
 	for current != "" && current != e.trunk {
-		if !e.shouldReparentBranch(ctx, current, metaMap, squashCache) {
+		if !e.shouldReparentBranchWithLanded(current, metaMap, landed) {
 			return current
 		}
 		// Move to the next parent

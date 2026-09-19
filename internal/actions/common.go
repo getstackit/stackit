@@ -612,21 +612,17 @@ func enterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 func validateBranchAncestry(ctx *app.Context, branches engine.Branches) error {
 	// Resolve every branch and parent revision in one batched call instead of
 	// a git rev-parse per branch (and per parent).
-	names := make(map[string]struct{}, len(branches)*2)
+	revBranches := make(engine.Branches, 0, len(branches)*2)
 	for _, branch := range branches {
 		if branch.IsTrunk() {
 			continue
 		}
-		names[branch.GetName()] = struct{}{}
+		revBranches = append(revBranches, branch)
 		if parent := branch.GetParent(); parent != nil {
-			names[parent.GetName()] = struct{}{}
+			revBranches = append(revBranches, *parent)
 		}
 	}
-	revNames := make([]string, 0, len(names))
-	for name := range names {
-		revNames = append(revNames, name)
-	}
-	revisions, _ := ctx.Engine.GetRevisions(revNames)
+	revisions := ctx.Engine.BatchRevisions(revBranches)
 
 	for _, branch := range branches {
 		branchName := branch.GetName()

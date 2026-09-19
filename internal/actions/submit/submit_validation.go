@@ -103,12 +103,12 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 			parentBranches := engine.Branches{}
 			seen := make(map[string]bool)
 			for _, branchName := range branches {
-				parentName := resolveSubmitParentName(nav, eng.GetBranch(branchName))
-				if seen[parentName] {
+				parent := resolveSubmitParent(nav, eng.GetBranch(branchName))
+				if seen[parent.GetName()] {
 					continue
 				}
-				seen[parentName] = true
-				parentBranches = parentBranches.Append(eng.GetBranch(parentName))
+				seen[parent.GetName()] = true
+				parentBranches = parentBranches.Append(parent)
 			}
 			remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 			remoteStatuses = eng.ReadBranchRemoteStatuses(remoteCtx, parentBranches)
@@ -130,9 +130,8 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 	kept := make([]string, 0, len(branches))
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)
-		parentBranchName := resolveSubmitParentName(nav, branch)
-
-		parentBranch := eng.GetBranch(parentBranchName)
+		parentBranch := resolveSubmitParent(nav, branch)
+		parentBranchName := parentBranch.GetName()
 		switch {
 		case prunedBranches[parentBranchName]:
 			// Parent was pruned from this submission; the child cannot be

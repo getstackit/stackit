@@ -467,13 +467,13 @@ func BuildRebaseSpecs(eng engine.Engine, out output.Output, source, onto string,
 
 	// Prefetch every descendant's parent revision and divergence point in one
 	// batch instead of a git rev-parse and metadata read per descendant.
-	parentNames := make([]string, 0, len(sortedDescendants))
+	parents := make(engine.Branches, 0, len(sortedDescendants))
 	for _, d := range sortedDescendants {
 		if parent := d.GetParent(); parent != nil {
-			parentNames = append(parentNames, parent.GetName())
+			parents = append(parents, *parent)
 		}
 	}
-	parentRevs, _ := eng.GetRevisions(parentNames)
+	parentRevs := eng.BatchRevisions(parents)
 	divergencePoints := eng.BatchDivergencePoints(sortedDescendants)
 
 	for _, d := range sortedDescendants {

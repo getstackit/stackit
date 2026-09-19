@@ -98,8 +98,9 @@ type BranchInfo interface {
 	GetCommitIDs(branch Branch) ([]string, error)
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
-	GetRevisionForName(branchName string) (string, error)
-	GetRevisions(branchNames []string) (RevisionMap, []error)
+	// BatchRevisions resolves every branch's tip SHA in one batched pass,
+	// keyed by branch name.
+	BatchRevisions(branches Branches) RevisionMap
 	GetCurrentRevision(ctx context.Context) (string, error)
 	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
 	GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit, error)

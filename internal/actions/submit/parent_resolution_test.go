@@ -22,8 +22,8 @@ func TestResolveSubmitParentNameSkipsWorktreeAnchors(t *testing.T) {
 	err := s.Engine.SetBranchType(s.Engine.GetBranch("wt-anchor"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
-	parent := resolveSubmitParentName(s.Engine, s.Engine.GetBranch("feature"))
-	require.Equal(t, "main", parent)
+	parent := resolveSubmitParent(s.Engine, s.Engine.GetBranch("feature"))
+	require.Equal(t, "main", parent.GetName())
 }
 
 func TestResolveSubmitParentNamePreservesNormalParents(t *testing.T) {
@@ -35,8 +35,8 @@ func TestResolveSubmitParentNamePreservesNormalParents(t *testing.T) {
 			"child":  "parent",
 		})
 
-	parent := resolveSubmitParentName(s.Engine, s.Engine.GetBranch("child"))
-	require.Equal(t, "parent", parent)
+	parent := resolveSubmitParent(s.Engine, s.Engine.GetBranch("child"))
+	require.Equal(t, "parent", parent.GetName())
 }
 
 func TestResolveSubmitParentNameSkipsNestedWorktreeAnchors(t *testing.T) {
@@ -56,6 +56,6 @@ func TestResolveSubmitParentNameSkipsNestedWorktreeAnchors(t *testing.T) {
 	err = s.Engine.SetBranchType(s.Engine.GetBranch("anchor2"), git.BranchTypeWorktreeAnchor)
 	require.NoError(t, err)
 
-	parent := resolveSubmitParentName(s.Engine, s.Engine.GetBranch("feature"))
-	require.Equal(t, "main", parent)
+	parent := resolveSubmitParent(s.Engine, s.Engine.GetBranch("feature"))
+	require.Equal(t, "main", parent.GetName())
 }

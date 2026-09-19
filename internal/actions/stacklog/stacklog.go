@@ -19,7 +19,7 @@ type Source interface {
 	Graph(strategy engine.SortStrategy) *engine.StackGraph
 	BatchCommits(branches engine.Branches) map[string]git.Commits
 	RefDecorations() (map[string][]git.RefDecoration, error)
-	GetRevisionForName(branchName string) (string, error)
+	GetRevision(branch engine.Branch) (string, error)
 }
 
 // Commit is one commit on a stack branch, identified by its full SHA so the
@@ -64,7 +64,7 @@ func Gather(src Source) (Result, error) {
 	}
 
 	trunk := src.Trunk()
-	trunkTip, err := src.GetRevisionForName(trunk.GetName())
+	trunkTip, err := src.GetRevision(trunk)
 	if err != nil {
 		return Result{}, err
 	}

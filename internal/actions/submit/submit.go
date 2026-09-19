@@ -714,7 +714,7 @@ func buildStackSnapshot(
 	for i, branch := range branches {
 		branchName := branch.GetName()
 		branchNames[i] = branchName
-		parentMap[branchName] = resolveSubmitParentName(nav, branch)
+		parentMap[branchName] = resolveSubmitParent(nav, branch).GetName()
 	}
 
 	return StackSnapshot{

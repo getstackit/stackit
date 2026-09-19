@@ -67,7 +67,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 		// Validate parent is an ancestor (unless force is used)
 		if !opts.Force {
-			revisions, _ := eng.GetRevisions([]string{parent, branchName})
+			revisions := eng.BatchRevisions(engine.BranchesOf(parentBranch, eng.GetBranch(branchName)))
 			parentRev, ok := revisions.Rev(parent)
 			if !ok {
 				return fmt.Errorf("failed to get parent revision")

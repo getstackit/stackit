@@ -574,7 +574,7 @@ func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, validation.NewSHAs["branch1"], newBranchRev)
 
-	meta, err := s.Engine.Git().ReadMetadata("branch1")
+	meta, err := s.Engine.Git().ReadMetadata(context.Background(), "branch1").One()
 	require.NoError(t, err)
 	require.NotNil(t, meta.GetParentBranchRevision())
 	require.Equal(t, mainRev, *meta.GetParentBranchRevision())
@@ -665,7 +665,7 @@ func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t 
 	childSHA, err := s.Scene.Repo.GetBranchSHA("child")
 	require.NoError(t, err)
 
-	meta, err := s.Engine.Git().ReadMetadata("child")
+	meta, err := s.Engine.Git().ReadMetadata(context.Background(), "child").One()
 	require.NoError(t, err)
 	require.NoError(t, s.Engine.Git().WriteMetadata("child", meta.WithParentBranchRevision(nil)))
 	require.NoError(t, s.Engine.Rebuild("main"))
@@ -686,7 +686,7 @@ func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t 
 	require.NoError(t, err)
 	require.Equal(t, childSHA, newChildSHA, "restack must not mint a new SHA when nothing needed replaying")
 
-	updatedMeta, err := s.Engine.Git().ReadMetadata("child")
+	updatedMeta, err := s.Engine.Git().ReadMetadata(context.Background(), "child").One()
 	require.NoError(t, err)
 	require.NotNil(t, updatedMeta.GetParentBranchRevision())
 	require.Equal(t, parentRev, *updatedMeta.GetParentBranchRevision(), "recorded parent revision should catch up")
@@ -746,7 +746,7 @@ func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, bSHA, newBSHA, "restack must not mint a new SHA when the branch was already correctly based")
 
-	meta, err := s.Engine.Git().ReadMetadata("b")
+	meta, err := s.Engine.Git().ReadMetadata(context.Background(), "b").One()
 	require.NoError(t, err)
 	require.NotNil(t, meta.GetParentBranchRevision())
 	require.Equal(t, newARev, *meta.GetParentBranchRevision(), "recorded parent revision should catch up to a's current tip")

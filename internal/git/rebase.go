@@ -28,7 +28,7 @@ type RebaseOutcome struct {
 
 func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RebaseOutcome, error) {
 	outcome := RebaseOutcome{Result: RebaseDone}
-	oldRev, err := r.GetRevision(branchName)
+	oldRev, err := r.ReadRevisions(ctx, branchName).One()
 	if err != nil {
 		return RebaseOutcome{Result: RebaseConflict}, fmt.Errorf("failed to get revision before rebase: %w", err)
 	}
@@ -52,7 +52,7 @@ func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream s
 	}
 
 	// Since we rebased in detached HEAD, we must manually update the branch ref
-	newRev, err := r.GetCurrentRevision(ctx)
+	newRev, err := r.ReadRevisions(ctx, "HEAD").One()
 	if err != nil {
 		return RebaseOutcome{Result: RebaseConflict, RerereResolvedCount: outcome.RerereResolvedCount}, fmt.Errorf("failed to get revision after rebase: %w", err)
 	}
@@ -231,7 +231,7 @@ func (r *runner) GetRebaseHead() (string, error) {
 	}
 
 	for _, refName := range refs {
-		output, err := r.GetRef(refName)
+		output, err := r.ReadRevisions(context.Background(), refName).One()
 		if err == nil && output != "" {
 			return strings.TrimSpace(output), nil
 		}

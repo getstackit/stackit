@@ -621,7 +621,7 @@ func TestMoveMarksBranchesForPRBodyUpdate(t *testing.T) {
 
 	needsPRUpdate := func(t *testing.T, s *scenario.Scenario, branch string) bool {
 		t.Helper()
-		meta, err := s.Engine.Git().ReadLocalMetadata(branch)
+		meta, err := s.Engine.Git().ReadLocalMetadata(context.Background(), branch).One()
 		require.NoError(t, err)
 		return meta != nil && meta.NeedsPRBodyUpdate
 	}

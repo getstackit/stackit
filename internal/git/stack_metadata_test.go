@@ -219,7 +219,7 @@ func TestWriteStackMetaBlob(t *testing.T) {
 
 		// Use UpdateRef to create the stack meta ref
 		refName := git.StackMetaRefName(stackID)
-		err = runner.UpdateRef(refName, sha)
+		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: refName, NewSHA: sha}}, "")
 		require.NoError(t, err)
 
 		// Verify we can read the metadata back

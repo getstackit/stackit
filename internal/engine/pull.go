@@ -98,7 +98,7 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 	e.mu.RUnlock()
 
 	// Get remote SHA
-	remoteSha, err := e.git.GetRemoteSha(remote, trunk)
+	remoteSha, err := e.git.ReadRevisions(ctx, "refs/remotes/"+remote+"/"+trunk).One()
 	if err != nil {
 		// Fallback: try to get it from ls-remote if the tracking branch is missing
 		remoteShas, fetchErr := e.git.FetchRemoteShas(ctx, remote)
@@ -114,7 +114,7 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 		return fmt.Errorf("failed to get remote SHA: %w", err)
 	}
 
-	oldTrunk, err := e.git.GetRevision(trunk)
+	oldTrunk, err := e.git.ReadRevisions(ctx, trunk).One()
 	if err != nil {
 		return fmt.Errorf("failed to get local trunk revision: %w", err)
 	}

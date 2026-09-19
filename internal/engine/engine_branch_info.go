@@ -12,13 +12,15 @@ import (
 // GetCommitDate returns the commit date for a branch
 func (e *engineImpl) GetCommitDate(branch Branch) (time.Time, error) {
 	branchName := branch.GetName()
-	return e.git.GetCommitDate(branchName)
+	info, err := e.git.ReadCommitInfo(context.Background(), "refs/heads/"+branchName).One()
+	return info.Date, err
 }
 
 // GetCommitAuthor returns the commit author for a branch
 func (e *engineImpl) GetCommitAuthor(branch Branch) (string, error) {
 	branchName := branch.GetName()
-	return e.git.GetCommitAuthor(branchName)
+	info, err := e.git.ReadCommitInfo(context.Background(), "refs/heads/"+branchName).One()
+	return info.Author, err
 }
 
 // BatchCommitInfo returns each branch's tip commit date and author, keyed by
@@ -26,25 +28,30 @@ func (e *engineImpl) GetCommitAuthor(branch Branch) (string, error) {
 func (e *engineImpl) BatchCommitInfo(branches Branches) map[string]git.CommitInfo {
 	names := make([]string, len(branches))
 	for i, b := range branches {
-		names[i] = b.GetName()
+		names[i] = "refs/heads/" + b.GetName()
 	}
-	return e.git.BatchCommitInfo(names)
+	data := e.git.ReadCommitInfo(context.Background(), names...)
+	result := make(map[string]git.CommitInfo, len(data.Values))
+	for ref, info := range data.Values {
+		result[strings.TrimPrefix(ref, "refs/heads/")] = info
+	}
+	return result
 }
 
 // GetRevision returns the SHA of a branch
 func (e *engineImpl) GetRevision(branch Branch) (string, error) {
 	branchName := branch.GetName()
-	return e.git.GetRevision(branchName)
+	return e.git.ReadRevisions(context.Background(), branchName).One()
 }
 
 // GetRevisionForName returns the SHA of a branch by name
 func (e *engineImpl) GetRevisionForName(branchName string) (string, error) {
-	return e.git.GetRevision(branchName)
+	return e.git.ReadRevisions(context.Background(), branchName).One()
 }
 
 // GetRevisions returns the SHAs for multiple branches.
 func (e *engineImpl) GetRevisions(branchNames []string) (RevisionMap, []error) {
-	return e.git.BatchGetRevisions(branchNames)
+	return e.git.ReadRevisions(context.Background(), branchNames...).ValuesAndErrors()
 }
 
 // BatchDivergencePoints returns each branch's divergence point keyed by branch
@@ -160,7 +167,7 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 	}
 
 	// Get branch revision
-	branchRevision, err := e.git.GetRevision(branchName)
+	branchRevision, err := e.git.ReadRevisions(context.Background(), branchName).One()
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +185,7 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 		if state := e.readState(branchName); state != nil {
 			parent = state.Parent
 		}
-		if parentRev, err := e.git.GetRevision(parent); err == nil {
+		if parentRev, err := e.git.ReadRevisions(context.Background(), parent).One(); err == nil {
 			baseRevision = parentRev
 		}
 	}

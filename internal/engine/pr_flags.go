@@ -9,7 +9,7 @@ import (
 
 // MarkBranchesForPRBodyUpdate marks multiple branches as needing a PR body update
 // in a single atomic operation. It batch-reads local metadata, sets the flag,
-// writes all the blobs in one `git hash-object` call via WriteLocalMetadataBlobsBatch,
+// writes all the blobs in one `git hash-object` call via WriteLocalMetadataBlobs,
 // and atomically updates all refs.
 func (e *engineImpl) MarkBranchesForPRBodyUpdate(ctx context.Context, branchNames []string) error {
 	if len(branchNames) == 0 {
@@ -31,7 +31,7 @@ func (e *engineImpl) MarkBranchesForPRBodyUpdate(ctx context.Context, branchName
 		orderedNames = append(orderedNames, name)
 	}
 
-	shas, err := e.git.WriteLocalMetadataBlobsBatch(ctx, metas)
+	shas, err := e.git.WriteLocalMetadataBlobs(ctx, metas)
 	if err != nil {
 		return fmt.Errorf("failed to create local metadata blobs: %w", err)
 	}
@@ -45,7 +45,7 @@ func (e *engineImpl) MarkBranchesForPRBodyUpdate(ctx context.Context, branchName
 	}
 
 	// Atomic batch update all refs
-	return e.git.UpdateRefsBatch(ctx, updates)
+	return e.git.UpdateRefs(ctx, updates, "")
 }
 
 // ClearNeedsPRBodyUpdate clears the PR body update flag for a branch

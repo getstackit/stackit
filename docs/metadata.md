@@ -319,11 +319,9 @@ Details that matter when working on this code:
   doing so would report success for a ref another process may have moved.
 - **An unknown expectation falls back to an unconditional write.** This is what
   creating metadata for a newly tracked branch needs.
-- **Both read paths record the SHA.** `ReadMetadata` and `BatchReadMetadata`
-  (via `ReadObjectsBatch`) populate it. This is load-bearing: engine graph loads
-  go through the batch path, so recording it only on `ReadMetadata` left the
-  expectation empty for essentially every command and silently degraded every
-  write to unconditional.
+- **Every read records the SHA.** `ReadMetadata` populates it for one or many
+  branches via `ReadObjectsBatch`. Engine graph loads use this same path, so
+  their subsequent writes retain the optimistic-locking expectation.
 - **A rejected write drops the cache entry.** The expectation is known-stale at
   that point; keeping it meant a re-read answered from cache, recomputed the same
   expectation, and failed identically forever — harmless in the short-lived CLI,

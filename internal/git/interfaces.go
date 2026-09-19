@@ -2,7 +2,6 @@ package git
 
 import (
 	"context"
-	"time"
 )
 
 // RepositoryReader provides read access to repository configuration and state.
@@ -33,19 +32,14 @@ type RepositoryWriter interface {
 // RemoteOperations handles interaction with remote repositories.
 type RemoteOperations interface {
 	FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error)
-	GetRemoteSha(remote, branchName string) (string, error)
-	GetRemoteRevision(branchName string) (string, error)
 	FindRemoteBranch(ctx context.Context, remote string) (string, error)
-	PushBranch(ctx context.Context, branchName, remote string, opts PushOptions) error
-	PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) map[string]error
+	PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) PushResults
 	PullBranch(ctx context.Context, remote, branchName string) (PullResult, error)
 	UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error)
-	Fetch(ctx context.Context, remote, branch string) error
-	FetchRefSpecs(ctx context.Context, remote string, refspecs []string) error
+	FetchRefs(ctx context.Context, remote string, refspecs ...string) error
 	PushMetadataRefs(ctx context.Context, branches []string) error
 	FetchMetadataRefs(ctx context.Context) error
-	DeleteRemoteMetadataRef(ctx context.Context, branch string) error
-	BatchDeleteRemoteMetadataRefs(ctx context.Context, branches []string) error
+	DeleteRemoteMetadataRefs(ctx context.Context, branches ...string) error
 	TestRemoteRefCompatibility(ctx context.Context) error
 	PushStackMetaRefs(ctx context.Context, stackIDs []string) error
 	FetchStackMetaRefs(ctx context.Context) error
@@ -79,24 +73,15 @@ type BranchWriter interface {
 // CommitReader provides read access to commit and revision information.
 type CommitReader interface {
 	ReadRevisions(ctx context.Context, refs ...string) ReadResults[string]
-	GetRevision(branchName string) (string, error)
-	GetCurrentRevision(ctx context.Context) (string, error)
-	BatchGetRevisions(branchNames []string) (map[string]string, []error)
-	GetCommitDate(branchName string) (time.Time, error)
-	GetCommitAuthor(branchName string) (string, error)
-	// BatchCommitInfo resolves each branch's tip commit date and author in one
-	// `git for-each-ref` invocation instead of two `git log` processes per branch.
-	BatchCommitInfo(branchNames []string) map[string]CommitInfo
+	ReadCommitInfo(ctx context.Context, refs ...string) ReadResults[CommitInfo]
 	GetCommitRange(ctx context.Context, base, head, format string) ([]string, error)
 	GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error)
 	GetCommitRangeMetadata(ctx context.Context, rr RevRange) ([]CommitMetadata, error)
 	GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error)
-	GetCommitSHA(branchName string, offset int) (string, error)
 	GetCommitLog(sha, format string) (string, error)
 	GetRecentCommits(ctx context.Context, branchName string, count int) ([]RecentCommit, error)
 	GetRecentCommitsInRange(ctx context.Context, revRange string) ([]RecentCommit, error)
 	GetCommitTemplate(ctx context.Context) (string, error)
-	GetParentCommitSHA(commitSHA string) (string, error)
 }
 
 // DiffOperations provides access to diff and comparison operations.
@@ -160,8 +145,7 @@ type RebaseOperations interface {
 
 // MergeOperations handles merge operations.
 type MergeOperations interface {
-	Merge(ctx context.Context, branchName string, opts MergeOptions) error
-	MergeMultiple(ctx context.Context, branches []string, opts MergeOptions) error
+	MergeBranches(ctx context.Context, branches []string, opts MergeOptions) error
 	IsMergeInProgress(ctx context.Context) bool
 	MergeAbort(ctx context.Context) error
 	GetUnmergedFiles(ctx context.Context) ([]string, error)
@@ -246,16 +230,11 @@ type StatusOperations interface {
 
 // RefOperations provides low-level reference operations.
 type RefOperations interface {
-	GetRef(name string) (string, error)
-	UpdateRef(name, sha string) error
-	UpdateRefWithLog(ctx context.Context, refName, sha, message string) error
 	GetUntrackedFilesIn(ctx context.Context, worktreePath string) ([]string, error)
 	TreeContainsAnyPath(ctx context.Context, rev string, paths []string) (collides, known bool)
-	UpdateRefsBatch(ctx context.Context, updates []RefUpdate) error
-	UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate, reflogMessage string) error
-	DeleteRefsBatch(ctx context.Context, refNames []string) error
+	UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMessage string) error
+	DeleteRefs(ctx context.Context, refNames ...string) error
 	VerifyRef(ctx context.Context, refName string) error
-	DeleteRef(ctx context.Context, name string) error
 	ListRefs(prefix string) (map[string]string, error)
 	// RefDecorations returns local branch and tag refs grouped by the commit SHA
 	// they point at, dereferencing annotated tags to the wrapped commit.
@@ -264,35 +243,26 @@ type RefOperations interface {
 
 // ObjectOperations provides low-level Git object operations.
 type ObjectOperations interface {
-	CreateBlob(content string) (string, error)
-	// CreateBlobsBatch writes N blobs in a single `git hash-object` invocation.
-	// Returns SHAs in input order. For small N (<3) callers should still use
-	// CreateBlob — the temp-file staging required by the batch path only pays
-	// off once per-blob subprocess overhead would dominate. ctx is honored for
-	// the underlying git invocation so long-running batches can be canceled.
-	CreateBlobsBatch(ctx context.Context, contents []string) ([]string, error)
+	// CreateBlobs writes one or many blobs, returning SHAs in input order.
+	CreateBlobs(ctx context.Context, contents ...string) ([]string, error)
 	ReadBlob(sha string) (string, error)
 	CatFile(sha string) (string, error)
 }
 
 // MetadataOperations handles stackit metadata persistence.
 type MetadataOperations interface {
-	ReadMetadata(branchName string) (*Meta, error)
-	BatchReadMetadata(branchNames []string) (map[string]*Meta, map[string]error)
+	ReadMetadata(ctx context.Context, branchNames ...string) ReadResults[*Meta]
 	WriteMetadata(branchName string, meta *Meta) error
 	DeleteMetadata(ctx context.Context, branchName string) error
 	RenameMetadata(oldName, newName string) error
 	ListMetadata() (map[string]string, error)
-	ReadLocalMetadata(branchName string) (*LocalMeta, error)
-	BatchReadLocalMetadata(branchNames []string) LocalMetaMap
+	ReadLocalMetadata(ctx context.Context, branchNames ...string) ReadResults[*LocalMeta]
 	WriteLocalMetadata(branchName string, meta *LocalMeta) error
 
-	// Transaction support methods. The batch forms marshal each entry and
-	// forward to CreateBlobsBatch — call them with len(metas) >= 1 from
-	// engine_writer.go and transaction.go's commit path. ctx is honored for
-	// the underlying git hash-object invocation.
-	WriteMetadataBlobsBatch(ctx context.Context, metas []*Meta) ([]string, error)
-	WriteLocalMetadataBlobsBatch(ctx context.Context, metas []*LocalMeta) ([]string, error)
+	// Transaction support: serialize metadata to blobs without updating refs.
+	// Callers write the returned SHAs atomically with UpdateRefs.
+	WriteMetadataBlobs(ctx context.Context, metas []*Meta) ([]string, error)
+	WriteLocalMetadataBlobs(ctx context.Context, metas []*LocalMeta) ([]string, error)
 	GetMetadataRefSHA(branchName string) string
 	GetLocalMetadataRefSHA(branchName string) string
 

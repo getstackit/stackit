@@ -17,7 +17,7 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 	logger := &traceCaptureLogger{}
 	runner := git.NewRunnerWithPath(scene.Dir, logger)
 	ctx := context.Background()
-	base, err := runner.GetRevision("HEAD")
+	base, err := runner.ReadRevisions(context.Background(), "HEAD").One()
 	require.NoError(t, err)
 
 	// Distinct authors, time zones, multiline and empty messages must survive

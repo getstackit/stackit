@@ -90,14 +90,3 @@ func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (map[string
 	}
 	return result, nil
 }
-
-func (r *runner) getRemoteSha(remote, branchName string) (string, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(),
-		"rev-parse", "--verify", "--end-of-options",
-		fmt.Sprintf("refs/remotes/%s/%s", remote, branchName),
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to get remote SHA for %s/%s: %w", remote, branchName, err)
-	}
-	return strings.TrimSpace(out), nil
-}

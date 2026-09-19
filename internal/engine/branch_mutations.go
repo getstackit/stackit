@@ -48,7 +48,7 @@ func (e *engineImpl) MergeAbort(ctx context.Context) error {
 
 // Merge merges a revision into the current branch
 func (e *engineImpl) Merge(ctx context.Context, revision string, opts MergeOptions) error {
-	return e.git.Merge(ctx, revision, git.MergeOptions{
+	return e.git.MergeBranches(ctx, []string{revision}, git.MergeOptions{
 		FFOnly:  opts.FFOnly,
 		NoEdit:  opts.NoEdit,
 		NoFF:    opts.NoFF,
@@ -58,7 +58,7 @@ func (e *engineImpl) Merge(ctx context.Context, revision string, opts MergeOptio
 
 // MergeMultiple performs an octopus merge of multiple branches into the current branch
 func (e *engineImpl) MergeMultiple(ctx context.Context, branches []string, opts MergeOptions) error {
-	return e.git.MergeMultiple(ctx, branches, git.MergeOptions{
+	return e.git.MergeBranches(ctx, branches, git.MergeOptions{
 		NoEdit:  opts.NoEdit,
 		NoFF:    opts.NoFF,
 		Message: opts.Message,
@@ -104,7 +104,7 @@ func (e *engineImpl) FetchRemote(ctx context.Context, req RemoteFetchRequest) er
 		add("+refs/stackit/stacks/*:refs/stackit/remote-stacks/*")
 	}
 
-	return e.git.FetchRefSpecs(ctx, remote, refspecs)
+	return e.git.FetchRefs(ctx, remote, refspecs...)
 }
 
 // InteractiveRebase starts an interactive rebase
@@ -114,7 +114,7 @@ func (e *engineImpl) InteractiveRebase(ctx context.Context, onto string) error {
 
 // PushBranch pushes a branch to the remote
 func (e *engineImpl) PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error {
-	return e.git.PushBranch(ctx, branch.GetName(), remote, opts)
+	return e.git.PushBranches(ctx, remote, []git.PushSpec{{BranchName: branch.GetName(), LeaseMode: git.PushLeaseNone}}, opts).One()
 }
 
 // PushBranches pushes multiple branches to the remote in a single git
@@ -172,11 +172,11 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	// Delete the head ref and both metadata refs atomically in one git invocation.
 	// update-ref --stdin tolerates missing refs, so this is safe even if the
 	// branch or its metadata refs were already absent.
-	if err := e.git.DeleteRefsBatch(ctx, []string{
+	if err := e.git.DeleteRefs(ctx, []string{
 		"refs/heads/" + branchName,
 		git.MetadataRefPrefix + branchName,
 		git.LocalMetadataRefPrefix + branchName,
-	}); err != nil {
+	}...); err != nil {
 		return fmt.Errorf("failed to delete branch refs: %w", err)
 	}
 
@@ -315,7 +315,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 			git.LocalMetadataRefPrefix+name,
 		)
 	}
-	if err := e.git.DeleteRefsBatch(ctx, refsToDelete); err != nil {
+	if err := e.git.DeleteRefs(ctx, refsToDelete...); err != nil {
 		return nil, fmt.Errorf("failed to delete branch refs: %w", err)
 	}
 
@@ -421,9 +421,9 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 
 	oldLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, oldName)
 	newLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, newName)
-	if sha, err := e.git.GetRef(oldLocalRef); err == nil {
-		if updateErr := e.git.UpdateRef(newLocalRef, sha); updateErr == nil {
-			_ = e.git.DeleteRef(ctx, oldLocalRef)
+	if sha, err := e.git.ReadRevisions(ctx, oldLocalRef).One(); err == nil {
+		if updateErr := e.git.UpdateRefs(ctx, []git.RefUpdate{{RefName: newLocalRef, NewSHA: sha}}, ""); updateErr == nil {
+			_ = e.git.DeleteRefs(ctx, oldLocalRef)
 		}
 	}
 

@@ -42,7 +42,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	// Warm up the runner's revision cache
 	initialLocalSha, err := runner.RunGitCommandWithContext(context.Background(), "rev-parse", "HEAD")
 	require.NoError(t, err)
-	_, err = runner.GetCommitAuthor(initialLocalSha)
+	_, err = runner.ReadCommitInfo(t.Context(), initialLocalSha).One()
 	require.NoError(t, err)
 
 	// 3. Simulate a PR merge on the remote
@@ -78,7 +78,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.Equal(t, git.PullDone, result, "PullBranch should return PullDone for a valid fast-forward")
 
 	// Verify the cached revision is updated to the newly fetched commit
-	_, err = runner.GetCommitAuthor(newRemoteSha)
+	_, err = runner.ReadCommitInfo(t.Context(), newRemoteSha).One()
 	require.NoError(t, err, "runner should resolve the newly fetched commit after reload")
 
 	// Verify that the local branch was actually updated
@@ -176,7 +176,7 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	err = runner.Fetch(ctx, "origin", "feature")
+	err = runner.FetchRefs(ctx, "origin", git.BranchFetchRefspec("origin", "feature"))
 	require.NoError(t, err)
 	trackedA, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/feature")
 	require.NoError(t, err)
@@ -197,7 +197,7 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 
 	// 5. Fetch again — with the '+' force prefix this succeeds and advances the
 	// remote-tracking ref to B instead of failing as non-fast-forward.
-	err = runner.Fetch(ctx, "origin", "feature")
+	err = runner.FetchRefs(ctx, "origin", git.BranchFetchRefspec("origin", "feature"))
 	require.NoError(t, err, "fetch should tolerate force-updated remote branch")
 	trackedB, err := runner.RunGitCommandWithContext(ctx, "rev-parse", "refs/remotes/origin/feature")
 	require.NoError(t, err)
@@ -223,7 +223,7 @@ func TestResolveExternallyCreatedCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify we can resolve the initial commit
-	_, err = runner.GetCommitAuthor(initialSha)
+	_, err = runner.ReadCommitInfo(t.Context(), initialSha).One()
 	require.NoError(t, err)
 
 	// Create a new commit directly via git command (outside the runner's cache)
@@ -236,11 +236,11 @@ func TestResolveExternallyCreatedCommits(t *testing.T) {
 	// full fetch flow is exercised in TestPullBranch_FetchResolvesNewCommits below.
 
 	// Verify the new commit is resolvable
-	_, err = runner.GetCommitAuthor(newSha)
+	_, err = runner.ReadCommitInfo(t.Context(), newSha).One()
 	require.NoError(t, err, "runner should resolve the new commit")
 
 	// Verify the initial commit is still resolvable
-	_, err = runner.GetCommitAuthor(initialSha)
+	_, err = runner.ReadCommitInfo(t.Context(), initialSha).One()
 	require.NoError(t, err, "runner should still resolve old commits")
 }
 
@@ -296,11 +296,11 @@ func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
 
 	// 6. Verify the newly fetched commit is resolvable through the runner
 	// (it falls through to git since the runner holds no per-process cache).
-	_, err = runner.GetCommitAuthor(remoteSha)
+	_, err = runner.ReadCommitInfo(t.Context(), remoteSha).One()
 	require.NoError(t, err, "runner should resolve the newly fetched commit")
 
 	// Verify initial commit is still accessible
-	_, err = runner.GetCommitAuthor(initialSha)
+	_, err = runner.ReadCommitInfo(t.Context(), initialSha).One()
 	require.NoError(t, err, "runner should still resolve old commits")
 }
 

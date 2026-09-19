@@ -22,7 +22,7 @@ func (r RevRange) String() string {
 }
 
 func (r *runner) IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error) {
-	branchRev, err := r.GetRevision(branchName)
+	branchRev, err := r.ReadRevisions(ctx, branchName).One()
 	if err != nil {
 		return false, fmt.Errorf("failed to get branch revision: %w", err)
 	}

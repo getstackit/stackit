@@ -8,7 +8,7 @@ import (
 
 // readMetadata loads branch metadata from the configured metadata store.
 func (e *engineImpl) readMetadata(branch string) (*git.Meta, error) {
-	return e.git.ReadMetadata(branch)
+	return e.git.ReadMetadata(context.Background(), branch).One()
 }
 
 // writeMetadata persists branch metadata to the configured metadata store.
@@ -18,12 +18,12 @@ func (e *engineImpl) writeMetadata(branch string, meta *git.Meta) error {
 
 // batchReadMetadata loads metadata for many branches in one call.
 func (e *engineImpl) batchReadMetadata(branches []string) (MetaMap, map[string]error) {
-	return e.git.BatchReadMetadata(branches)
+	return e.git.ReadMetadata(context.Background(), branches...).Split()
 }
 
 // readLocalMetadata loads local-only metadata for a branch.
 func (e *engineImpl) readLocalMetadata(branch string) (*git.LocalMeta, error) {
-	return e.git.ReadLocalMetadata(branch)
+	return e.git.ReadLocalMetadata(context.Background(), branch).One()
 }
 
 // writeLocalMetadata persists local-only metadata for a branch.
@@ -33,7 +33,7 @@ func (e *engineImpl) writeLocalMetadata(branch string, meta *git.LocalMeta) erro
 
 // batchReadLocalMetadata loads local metadata for many branches in one call.
 func (e *engineImpl) batchReadLocalMetadata(branches []string) git.LocalMetaMap {
-	return e.git.BatchReadLocalMetadata(branches)
+	return e.git.ReadLocalMetadata(context.Background(), branches...).Values
 }
 
 // withMetadataTx runs function logic inside a metadata transaction and commits once.

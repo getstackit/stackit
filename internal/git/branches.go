@@ -288,11 +288,11 @@ func (r *runner) UpdateBranchRefCAS(ctx context.Context, branchName, revision, e
 	if expectedOld == "" {
 		return fmt.Errorf("expected old revision is required when updating branch %s", branchName)
 	}
-	if err := r.UpdateRefsBatch(ctx, []RefUpdate{{
+	if err := r.UpdateRefs(ctx, []RefUpdate{{
 		RefName: "refs/heads/" + branchName,
 		NewSHA:  sha,
 		OldSHA:  expectedOld,
-	}}); err != nil {
+	}}, ""); err != nil {
 		return fmt.Errorf("failed to compare-and-swap branch ref: %w", err)
 	}
 	return nil
@@ -303,7 +303,7 @@ func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
 	if err == nil {
 		return branch, nil
 	}
-	return r.GetCurrentRevision(ctx)
+	return r.ReadRevisions(ctx, "HEAD").One()
 }
 
 // GetMergedBranches returns the set of local branches whose tip commit is

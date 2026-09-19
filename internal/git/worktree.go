@@ -319,7 +319,7 @@ func (r *runner) PruneWorktrees(ctx context.Context) error {
 func (r *runner) ReadWorktreeMeta(stackRoot string) (*WorktreeMeta, error) {
 	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
 
-	sha, err := r.GetRef(refName)
+	sha, err := r.ReadRevisions(context.Background(), refName).One()
 	if err != nil {
 		// If ref doesn't exist, it's not an error, just means no worktree registered
 		return nil, nil //nolint:nilerr
@@ -349,7 +349,7 @@ func (r *runner) WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *
 		return fmt.Errorf("failed to marshal worktree metadata: %w", err)
 	}
 
-	sha, err := r.CreateBlob(string(jsonData))
+	sha, err := One(r.CreateBlobs(ctx, string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create worktree metadata blob: %w", err)
 	}
@@ -364,7 +364,7 @@ func (r *runner) WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *
 		{RefName: fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot), NewSHA: sha, OldSHA: zeroSHA},
 		{RefName: worktreePathRef(meta.Path), NewSHA: sha, OldSHA: zeroSHA},
 	}
-	if err := r.UpdateRefsBatch(ctx, updates); err != nil {
+	if err := r.UpdateRefs(ctx, updates, ""); err != nil {
 		return fmt.Errorf("failed to register worktree metadata refs: %w", err)
 	}
 
@@ -374,10 +374,10 @@ func (r *runner) WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *
 // DeleteWorktreeMeta deletes worktree metadata for a stack root
 func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error {
 	refName := fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot)
-	sha, err := r.GetRef(refName)
+	sha, err := r.ReadRevisions(ctx, refName).One()
 	if err != nil {
 		// Preserve DeleteRef's idempotent behavior for absent legacy metadata.
-		return r.DeleteRef(ctx, refName)
+		return r.DeleteRefs(ctx, refName)
 	}
 
 	// A metadata blob we cannot read or parse tells us nothing about which
@@ -393,13 +393,13 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 	updates := []RefUpdate{{RefName: refName, OldSHA: sha, IsDelete: true}}
 	if meta != nil {
 		pathRef := worktreePathRef(meta.Path)
-		if pathSHA, pathErr := r.GetRef(pathRef); pathErr == nil {
+		if pathSHA, pathErr := r.ReadRevisions(ctx, pathRef).One(); pathErr == nil {
 			if pathSHA == sha {
 				updates = append(updates, RefUpdate{RefName: pathRef, OldSHA: sha, IsDelete: true})
 			}
 		}
 	}
-	if err := r.UpdateRefsBatch(ctx, updates); err != nil {
+	if err := r.UpdateRefs(ctx, updates, ""); err != nil {
 		return fmt.Errorf("failed to unregister worktree metadata refs: %w", err)
 	}
 	return nil

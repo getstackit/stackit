@@ -62,13 +62,8 @@ func traceCmd(base string, args []string) string {
 	return base + " " + strings.Join(args, " ")
 }
 
-func (r *runner) UpdateRefWithLog(ctx context.Context, refName, sha, message string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "update-ref", "-m", message, refName, sha)
-	return err
-}
-
 func (r *runner) VerifyRef(ctx context.Context, refName string) error {
-	_, err := r.GetRef(refName)
+	_, err := r.ReadRevisions(ctx, refName).One()
 	return err
 }
 
@@ -80,38 +75,9 @@ type RefUpdate struct {
 	IsDelete bool   // If true, this is a deletion instead of an update
 }
 
-// UpdateRefsBatch performs atomic updates of multiple references using git update-ref --stdin.
-// All updates succeed or all fail. Supports both updates and deletions via the IsDelete flag.
-func (r *runner) UpdateRefsBatch(ctx context.Context, updates []RefUpdate) error {
-	if len(updates) == 0 {
-		return nil
-	}
-
-	var stdin strings.Builder
-	for _, update := range updates {
-		switch {
-		case update.IsDelete && update.OldSHA != "":
-			fmt.Fprintf(&stdin, "delete %s %s\n", update.RefName, update.OldSHA)
-		case update.IsDelete:
-			fmt.Fprintf(&stdin, "delete %s\n", update.RefName)
-		case update.OldSHA != "":
-			fmt.Fprintf(&stdin, "update %s %s %s\n", update.RefName, update.NewSHA, update.OldSHA)
-		default:
-			fmt.Fprintf(&stdin, "update %s %s\n", update.RefName, update.NewSHA)
-		}
-	}
-
-	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, "update-ref", "--stdin")
-	if err != nil {
-		return fmt.Errorf("atomic ref update failed: %w", err)
-	}
-	r.metadataCache.InvalidateForRefs(updates)
-	return nil
-}
-
-// UpdateRefsBatchWithLog performs atomic updates with a reflog message.
+// UpdateRefs atomically applies one or many updates, with an optional reflog message.
 // Supports both updates and deletions via the IsDelete flag.
-func (r *runner) UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate, reflogMessage string) error {
+func (r *runner) UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMessage string) error {
 	if len(updates) == 0 {
 		return nil
 	}
@@ -130,7 +96,11 @@ func (r *runner) UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate
 		}
 	}
 
-	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, "update-ref", "--stdin", "-m", reflogMessage)
+	args := []string{"update-ref", "--stdin"}
+	if reflogMessage != "" {
+		args = append(args, "-m", reflogMessage)
+	}
+	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, args...)
 	if err != nil {
 		return fmt.Errorf("atomic ref update failed: %w", err)
 	}
@@ -138,8 +108,8 @@ func (r *runner) UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate
 	return nil
 }
 
-// DeleteRefsBatch atomically deletes multiple references.
-func (r *runner) DeleteRefsBatch(ctx context.Context, refNames []string) error {
+// DeleteRefs atomically deletes multiple references.
+func (r *runner) DeleteRefs(ctx context.Context, refNames ...string) error {
 	if len(refNames) == 0 {
 		return nil
 	}
@@ -600,10 +570,6 @@ func (r *runner) FetchRemoteShas(ctx context.Context, remote string) (map[string
 	return r.fetchRemoteShas(ctx, remote)
 }
 
-func (r *runner) GetRemoteSha(remote, branchName string) (string, error) {
-	return r.getRemoteSha(remote, branchName)
-}
-
 func (r *runner) GetConfig(key string) (string, error) {
 	if err := r.ensureRepo(); err != nil {
 		return "", err
@@ -735,29 +701,6 @@ func (r *runner) FindRemoteBranch(ctx context.Context, remote string) (string, e
 	return "", nil
 }
 
-func (r *runner) GetRemoteRevision(branchName string) (string, error) {
-	return r.getRemoteRevision(branchName)
-}
-
-func (r *runner) GetCurrentRevision(ctx context.Context) (string, error) {
-	if sha, ok := r.readHeadRevision(); ok {
-		return sha, nil
-	}
-	out, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--verify", "HEAD")
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve HEAD: %w", err)
-	}
-	return strings.TrimSpace(out), nil
-}
-
-func (r *runner) GetRevision(branchName string) (string, error) {
-	return r.getRevision(branchName)
-}
-
-func (r *runner) BatchGetRevisions(branchNames []string) (map[string]string, []error) {
-	return r.batchGetRevisions(branchNames)
-}
-
 func (r *runner) GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error) {
 	return r.getMergeBaseByRef(ctx, rev1, rev2)
 }
@@ -768,18 +711,6 @@ func (r *runner) GetMergeBaseByRef(ctx context.Context, ref1, ref2 string) (stri
 
 func (r *runner) IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error) {
 	return r.isAncestor(ctx, ancestor, descendant)
-}
-
-func (r *runner) GetCommitDate(branchName string) (time.Time, error) {
-	return r.getCommitDate(branchName)
-}
-
-func (r *runner) GetCommitAuthor(branchName string) (string, error) {
-	return r.getCommitAuthor(branchName)
-}
-
-func (r *runner) BatchCommitInfo(branchNames []string) map[string]CommitInfo {
-	return r.batchCommitInfo(branchNames)
 }
 
 func (r *runner) GetCommitRange(ctx context.Context, base, head, format string) ([]string, error) {
@@ -895,21 +826,6 @@ func (r *runner) GetCommitHistorySHAs(ctx context.Context, branchName string) ([
 	return r.GetCommitRangeSHAs(ctx, RevRange{Head: branchName})
 }
 
-func (r *runner) GetCommitSHA(branchName string, offset int) (string, error) {
-	if offset < 0 {
-		return "", fmt.Errorf("offset must be non-negative")
-	}
-	ref := branchName
-	if offset > 0 {
-		ref = fmt.Sprintf("%s~%d", branchName, offset)
-	}
-	out, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
-	if err != nil {
-		return "", fmt.Errorf("failed to walk %d commit(s) back from %s: %w", offset, branchName, err)
-	}
-	return strings.TrimSpace(out), nil
-}
-
 func (r *runner) CheckoutPaths(ctx context.Context, branch string, paths []string) error {
 	args := make([]string, 0, 3+len(paths))
 	args = append(args, "checkout", branch, "--")
@@ -978,59 +894,23 @@ func (r *runner) runGitCommandInternal(args ...string) (string, error) {
 	return r.RunGitCommandWithContext(context.Background(), args...)
 }
 
-func (r *runner) GetRef(name string) (string, error) {
-	return r.resolveRefSHA(name)
-}
-
-func (r *runner) UpdateRef(name, sha string) error {
-	if _, err := r.RunGitCommandWithContext(context.Background(), "update-ref", name, sha); err != nil {
-		return fmt.Errorf("failed to update ref %s: %w", name, err)
-	}
-	r.metadataCache.InvalidateForRefNames([]string{name})
-	return nil
-}
-
-func (r *runner) DeleteRef(ctx context.Context, name string) error {
-	// `git update-ref -d` rewrites packed-refs correctly and is lenient when
-	// the ref doesn't exist.
-	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", "-d", name); err != nil {
-		return fmt.Errorf("failed to delete ref %s: %w", name, err)
-	}
-
-	if err := r.verifyRefDeleted(ctx, name); err != nil {
-		return err
-	}
-
-	r.metadataCache.InvalidateForRefNames([]string{name})
-	return nil
-}
-
 func (r *runner) CatFile(sha string) (string, error) {
 	return r.ReadBlob(sha)
 }
 
-func (r *runner) CreateBlob(content string) (string, error) {
-	out, err := r.runGitInternal(context.Background(), content, nil, true, "hash-object", "-w", "--stdin")
-	if err != nil {
-		return "", fmt.Errorf("failed to create blob: %w", err)
-	}
-	return strings.TrimSpace(out), nil
-}
-
-// CreateBlobsBatch writes N blobs to the object store in a single
+// CreateBlobs writes N blobs to the object store in a single
 // `git hash-object -w --stdin-paths` invocation. Each content is staged to a
 // temp file (so git's path-based hashing can read it) and the SHAs come back
 // on stdout in input order.
 //
-// For very small N the overhead of staging temp files exceeds the savings
-// from collapsing subprocess calls; callers with N==1 should use CreateBlob
-// directly. We still handle N==0/1 here so the method's contract holds.
-func (r *runner) CreateBlobsBatch(ctx context.Context, contents []string) ([]string, error) {
+// Empty input does no work. One blob uses stdin directly; larger batches stage
+// temporary files. The implementation chooses the fast path for the input size.
+func (r *runner) CreateBlobs(ctx context.Context, contents ...string) ([]string, error) {
 	if len(contents) == 0 {
 		return nil, nil
 	}
 	if len(contents) == 1 {
-		sha, err := r.CreateBlob(contents[0])
+		sha, err := r.runGitInternal(ctx, contents[0], nil, true, "hash-object", "-w", "--stdin")
 		if err != nil {
 			return nil, err
 		}
@@ -1161,13 +1041,7 @@ func (r *runner) DeleteRemoteStackMetaRefs(ctx context.Context, stackIDs []strin
 	return r.pushOriginRefSpecs(ctx, refspecs)
 }
 
-func (r *runner) DeleteRemoteMetadataRef(ctx context.Context, branch string) error {
-	return r.pushOriginRefSpecs(ctx, []string{
-		fmt.Sprintf(":refs/stackit/metadata/%s", branch),
-	})
-}
-
-func (r *runner) BatchDeleteRemoteMetadataRefs(ctx context.Context, branches []string) error {
+func (r *runner) DeleteRemoteMetadataRefs(ctx context.Context, branches ...string) error {
 	if len(branches) == 0 {
 		return nil
 	}
@@ -1182,22 +1056,22 @@ func (r *runner) TestRemoteRefCompatibility(ctx context.Context) error {
 	testRef := "refs/stackit/metadata/stackit-compat-test"
 	testContent := fmt.Sprintf(`{"test":true,"timestamp":%d}`, time.Now().Unix())
 
-	sha, err := r.CreateBlob(testContent)
+	sha, err := One(r.CreateBlobs(ctx, testContent))
 	if err != nil {
 		return fmt.Errorf("failed to create test blob: %w", err)
 	}
 
-	if err := r.UpdateRef(testRef, sha); err != nil {
+	if err := r.UpdateRefs(ctx, []RefUpdate{{RefName: testRef, NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to update local test ref: %w", err)
 	}
 
 	if err := r.pushOriginRefSpecs(ctx, []string{"+" + testRef}); err != nil {
-		_ = r.DeleteRef(ctx, testRef)
+		_ = r.DeleteRefs(ctx, testRef)
 		return fmt.Errorf("remote rejected metadata ref push: %w", err)
 	}
 
 	_ = r.pushOriginRefSpecs(ctx, []string{":" + testRef})
-	_ = r.DeleteRef(ctx, testRef)
+	_ = r.DeleteRefs(ctx, testRef)
 
 	return nil
 }
@@ -1231,14 +1105,6 @@ func (r *runner) pushOriginRefSpecs(ctx context.Context, refspecs []string) erro
 		return fmt.Errorf("git push failed: %w", err)
 	}
 	return nil
-}
-
-func (r *runner) GetParentCommitSHA(commitSHA string) (string, error) {
-	out, err := r.RunGitCommandWithContext(context.Background(), "rev-parse", "--verify", "--end-of-options", commitSHA+"^")
-	if err != nil {
-		return "", fmt.Errorf("failed to get parent of %s: %w", commitSHA, err)
-	}
-	return strings.TrimSpace(out), nil
 }
 
 func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool, error) {

@@ -88,13 +88,10 @@ type BranchStatus interface {
 
 // BranchInfo provides commit and diff metadata
 type BranchInfo interface {
-	GetCommitDate(branch Branch) (time.Time, error)
-	GetCommitAuthor(branch Branch) (string, error)
-	// BatchCommitInfo resolves each branch's tip commit date and author in one
-	// batched pass instead of two `git log` processes per branch.
+	// BatchCommitInfo resolves commit dates and authors in bulk, including when
+	// a Branch names an arbitrary ref such as HEAD or a commit SHA.
 	BatchCommitInfo(branches Branches) map[string]git.CommitInfo
 	GetRevision(branch Branch) (string, error)
-	GetAllCommits(branch Branch, format CommitFormat) ([]string, error)
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetRevisionForName(branchName string) (string, error)
@@ -109,11 +106,12 @@ type BranchInfo interface {
 	// BatchDivergencePoints returns the divergence point for every branch in one
 	// batched (git-free when metadata is cached) pass, keyed by branch name.
 	BatchDivergencePoints(branches Branches) RevisionMap
-	// BatchDiffStats, BatchCommits, and BatchChangedFileCounts each resolve one
+	// BatchDiffStats and BatchChangedFileCounts each resolve one
 	// per-branch concern across the whole set in a single batched pass, returning
 	// a value map.
 	BatchDiffStats(branches Branches) map[string]DiffStat
-	BatchCommits(branches Branches, format CommitFormat) map[string][]string
+	// BatchCommits reports successful histories and errors separately by branch.
+	BatchCommits(branches Branches, format CommitFormat) CommitBatch
 	BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int
 	// BatchBranchStats resolves annotation stats (short SHA, commit count,
 	// additions/deletions) for every branch in one batched pass — a use-case

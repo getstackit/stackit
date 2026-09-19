@@ -128,17 +128,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	commitsByBranch := eng.BatchCommits(downstackBranches, engine.CommitFormatSHA)
 	commitSHAs := []string{}
 	for _, branch := range downstackBranches {
-		// BatchCommits returns newest to oldest per branch, matching our search
-		// order. The batch reader swallows errors as nil; absorb must not route
-		// hunks against an incomplete commit list, so re-read any empty non-trunk
-		// branch individually to distinguish "legitimately empty" from "error".
-		commits := commitsByBranch[branch.GetName()]
-		if len(commits) == 0 && !branch.IsTrunk() {
-			var err error
-			commits, err = branch.GetAllCommits(engine.CommitFormatSHA)
-			if err != nil {
-				return fmt.Errorf("failed to get commits for branch %s: %w", branch.GetName(), err)
-			}
+		// Absorb requires complete history before it can safely route hunks.
+		commits, err := commitsByBranch.ForBranch(branch)
+		if err != nil {
+			return fmt.Errorf("failed to get commits for branch %s: %w", branch.GetName(), err)
 		}
 		commitSHAs = append(commitSHAs, commits...)
 	}

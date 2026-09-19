@@ -3,7 +3,6 @@ package engine
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
@@ -82,24 +81,9 @@ func (b Branch) NeedsRestack() bool {
 	return !b.IsBranchUpToDate()
 }
 
-// GetCommitDate returns the commit date for this branch
-func (b Branch) GetCommitDate() (time.Time, error) {
-	return b.reader.GetCommitDate(b)
-}
-
-// GetCommitAuthor returns the commit author for this branch
-func (b Branch) GetCommitAuthor() (string, error) {
-	return b.reader.GetCommitAuthor(b)
-}
-
 // GetRevision returns the SHA of this branch
 func (b Branch) GetRevision() (string, error) {
 	return b.reader.GetRevision(b)
-}
-
-// GetAllCommits returns commits for this branch in various formats
-func (b Branch) GetAllCommits(format CommitFormat) ([]string, error) {
-	return b.reader.GetAllCommits(b, format)
 }
 
 // GetParent returns the parent branch (nil if no parent)
@@ -185,11 +169,11 @@ func (b Branch) EnsureCanModify() error {
 // DefaultPRTitle returns the default PR title for this branch.
 // Uses the oldest commit subject, falling back to the branch name.
 func (b Branch) DefaultPRTitle() string {
-	commits, err := b.GetAllCommits(CommitFormatSubject)
+	commits, err := b.reader.BatchCommits(BranchesOf(b), CommitFormatSubject).ForBranch(b)
 	if err != nil || len(commits) == 0 {
 		return b.name
 	}
-	// GetAllCommits returns newest to oldest, so oldest is last
+	// BatchCommits returns newest to oldest, so oldest is last
 	return commits[len(commits)-1]
 }
 
@@ -197,7 +181,7 @@ func (b Branch) DefaultPRTitle() string {
 // For single commit: uses the commit body (skips subject line).
 // For multiple commits: creates a bulleted list of subjects in chronological order.
 func (b Branch) DefaultPRBody() string {
-	messages, err := b.GetAllCommits(CommitFormatMessage)
+	messages, err := b.reader.BatchCommits(BranchesOf(b), CommitFormatMessage).ForBranch(b)
 	if err != nil || len(messages) == 0 {
 		return ""
 	}
@@ -213,7 +197,7 @@ func (b Branch) DefaultPRBody() string {
 
 	// Format as a bulleted list of subjects in chronological order
 	var sb strings.Builder
-	// GetAllCommits returns newest to oldest, so iterate in reverse
+	// BatchCommits returns newest to oldest, so iterate in reverse
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
 		subject := strings.TrimSpace(strings.SplitN(msg, "\n", 2)[0])

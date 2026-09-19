@@ -69,7 +69,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 	branchSet := engine.BranchesOf(branches...)
 	remoteStatuses := entry.Engine.ReadBranchRemoteStatuses(r.Context(), branchSet)
 	stats := entry.Engine.BatchBranchStats(branchSet)
-	commitsByBranch := entry.Engine.BatchCommits(branchSet, engine.CommitFormatReadableWithDate)
+	commitsByBranch := entry.Engine.BatchCommits(branchSet, engine.CommitFormatReadableWithDate).Commits
 	commitInfoByBranch := entry.Engine.BatchCommitInfo(branchSet)
 	statuses := entry.Engine.ReadBranchStatuses(branchSet)
 
@@ -110,7 +110,7 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entr
 	branchSet := engine.BranchesOf(branch)
 	remoteStatus := entry.Engine.ReadBranchRemoteStatuses(r.Context(), branchSet).ForBranch(branch)
 	stat := entry.Engine.BatchBranchStats(branchSet)[branchName]
-	commits := entry.Engine.BatchCommits(branchSet, engine.CommitFormatReadableWithDate)[branchName]
+	commits := entry.Engine.BatchCommits(branchSet, engine.CommitFormatReadableWithDate).Commits[branchName]
 	commitInfo := entry.Engine.BatchCommitInfo(branchSet)[branchName]
 	needsRestack := !entry.Engine.ReadBranchStatuses(branchSet).IsUpToDate(branch)
 	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatus, stat, commits, commitInfo, needsRestack)

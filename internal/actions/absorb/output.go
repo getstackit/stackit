@@ -47,7 +47,7 @@ func printAbsorbPreview(
 	commitSHAs := sortedCommitSHAs(hunksByCommit)
 	commitBranches := eng.FindBranchesForCommits(commitSHAs)
 	// Fetch each owning branch's commit log once instead of once per commit.
-	branchCommits := eng.BatchCommits(branchesFor(eng, commitBranches), engine.CommitFormatReadable)
+	branchCommits := eng.BatchCommits(branchesFor(eng, commitBranches), engine.CommitFormatReadable).Commits
 	for _, commitSHA := range commitSHAs {
 		hunks := sortedHunks(hunksByCommit[commitSHA])
 		branchName := commitBranches[commitSHA]

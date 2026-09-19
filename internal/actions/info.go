@@ -110,9 +110,9 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		Children:       []string{},
 	}
 
-	commitDate, err := branch.GetCommitDate()
-	if err == nil {
-		result.CommitDate = commitDate.Format(time.RFC3339)
+	info, ok := eng.BatchCommitInfo(engine.BranchesOf(branch))[branchName]
+	if ok {
+		result.CommitDate = info.Date.Format(time.RFC3339)
 	}
 
 	if parent := branch.GetParent(); parent != nil {
@@ -138,7 +138,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		}
 	}
 
-	commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
+	commits, err := eng.BatchCommits(engine.BranchesOf(branch), engine.CommitFormatReadable).ForBranch(branch)
 	if err == nil {
 		result.CommitMessages = commits
 	}
@@ -179,7 +179,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		if isTrunk {
 			baseRevision = branchName + "~"
 		} else {
-			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
+			commits, err := eng.BatchCommits(engine.BranchesOf(branch), engine.CommitFormatSHA).ForBranch(branch)
 			if err == nil && len(commits) > 0 {
 				oldestSHA := commits[0]
 				baseRevision, _ = eng.GetParentCommitSHA(oldestSHA)
@@ -207,7 +207,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 				}
 			}
 		} else {
-			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
+			commits, err := eng.BatchCommits(engine.BranchesOf(branch), engine.CommitFormatSHA).ForBranch(branch)
 			if err == nil && len(commits) > 0 {
 				oldestSHA := commits[0]
 				parentSHA, _ := eng.GetParentCommitSHA(oldestSHA)

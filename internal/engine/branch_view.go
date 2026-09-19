@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 
-	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -91,28 +90,13 @@ func statBase(parentRev, storedBase string) string {
 // BatchDiffStats returns each non-trunk branch's additions/deletions against its
 // divergence point, keyed by branch name, resolved in one batched pass.
 func (e *engineImpl) BatchDiffStats(branches Branches) map[string]DiffStat {
-	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) DiffStat {
-		if e.IsTrunk(b) {
-			return DiffStat{}
-		}
-		added, deleted, _ := e.diffStatsBetween(git.RevRange{Base: statBase(parentRev, storedBase), Head: head})
-		return DiffStat{Added: added, Deleted: deleted}
-	})
-}
-
-// BatchCommits returns each non-trunk branch's formatted commits, keyed by
-// branch name, resolved in one batched pass. It matches GetAllCommits: the base
-// is the stored divergence point, or the parent's current tip when none is
-// recorded — never an empty base, which would list a branch's entire history
-// back to the repo root.
-func (e *engineImpl) BatchCommits(branches Branches, format CommitFormat) map[string][]string {
-	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) []string {
-		if e.IsTrunk(b) {
-			return nil
-		}
-		commits, _ := e.commitsBetween(git.RevRange{Base: statBase(parentRev, storedBase), Head: head}, format)
-		return commits
-	})
+	ranges := e.branchStatRanges(branches)
+	stats := e.readDiffStats(context.Background(), ranges)
+	result := make(map[string]DiffStat, len(ranges))
+	for name, rr := range ranges {
+		result[name] = stats[rr].DiffStat
+	}
+	return result
 }
 
 // BatchChangedFileCounts returns each non-trunk branch's number of files changed
@@ -121,20 +105,13 @@ func (e *engineImpl) BatchCommits(branches Branches, format CommitFormat) map[st
 // keeps the file count consistent with the additions/deletions for a branch
 // whose parent has advanced since it diverged.
 func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int {
-	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) int {
-		if e.IsTrunk(b) {
-			return 0
-		}
-		base := statBase(parentRev, storedBase)
-		if base == "" || head == "" {
-			return 0
-		}
-		files, err := e.GetChangedFiles(ctx, git.RevRange{Base: base, Head: head})
-		if err != nil {
-			return 0
-		}
-		return len(files)
-	})
+	ranges := e.branchStatRanges(branches)
+	stats := e.readDiffStats(ctx, ranges)
+	result := make(map[string]int, len(ranges))
+	for name, rr := range ranges {
+		result[name] = stats[rr].Files
+	}
+	return result
 }
 
 // BatchBranchStats resolves the annotation stats (short SHA, commit count,
@@ -142,20 +119,22 @@ func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branch
 // name. Forge status (CI, reviews) is a separate concern joined at render time,
 // not part of this.
 func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
-	return batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) BranchStat {
-		st := BranchStat{}
-		st.ShortSHA = utils.ShortRevision(head, 0)
-		if e.IsTrunk(b) {
-			return st
+	ranges := e.branchStatRanges(branches)
+	diffs := e.readDiffStats(context.Background(), ranges)
+	result := make(map[string]BranchStat, len(branches))
+	values := make(map[string]*BranchStat, len(branches))
+	for name, rr := range ranges {
+		values[name] = &BranchStat{
+			ShortSHA:   utils.ShortRevision(rr.Head, 0),
+			LinesAdded: diffs[rr].Added, LinesDeleted: diffs[rr].Deleted,
 		}
-		base := statBase(parentRev, storedBase)
-		if c, err := e.commitCountBetween(git.RevRange{Base: base, Head: head}); err == nil {
-			st.CommitCount = c
-		}
-		if a, d, err := e.diffStatsBetween(git.RevRange{Base: base, Head: head}); err == nil {
-			st.LinesAdded = a
-			st.LinesDeleted = d
-		}
-		return st
+	}
+	utils.Run(branches, func(b Branch) {
+		name := b.GetName()
+		values[name].CommitCount, _ = e.commitCountBetween(ranges[name])
 	})
+	for name, stat := range values {
+		result[name] = *stat
+	}
+	return result
 }

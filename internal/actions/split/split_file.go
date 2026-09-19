@@ -144,7 +144,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Get commit message
-	commitMessages, err := branchToSplit.GetAllCommits(engine.CommitFormatMessage)
+	commitMessages, err := eng.BatchCommits(engine.BranchesOf(branchToSplit), engine.CommitFormatMessage).ForBranch(branchToSplit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commit messages: %w", err)
 	}

@@ -38,11 +38,11 @@ type branchGroup struct {
 func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngine, splog output.Output, pattern config.BranchPattern) (*Result, error) {
 	// Get commits in both readable and subject formats
 	branchToSplitObj := eng.GetBranch(branchToSplit)
-	readableCommits, err := branchToSplitObj.GetAllCommits(engine.CommitFormatReadable)
+	readableCommits, err := eng.BatchCommits(engine.BranchesOf(branchToSplitObj), engine.CommitFormatReadable).ForBranch(branchToSplitObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commits: %w", err)
 	}
-	subjectCommits, err := branchToSplitObj.GetAllCommits(engine.CommitFormatSubject)
+	subjectCommits, err := eng.BatchCommits(engine.BranchesOf(branchToSplitObj), engine.CommitFormatSubject).ForBranch(branchToSplitObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commit subjects: %w", err)
 	}

@@ -34,17 +34,17 @@ func (e *engineImpl) BatchCommitInfo(branches Branches) map[string]git.CommitInf
 // GetRevision returns the SHA of a branch
 func (e *engineImpl) GetRevision(branch Branch) (string, error) {
 	branchName := branch.GetName()
-	return e.git.GetRevision(branchName)
+	return e.git.ReadRevisions(context.Background(), branchName).One()
 }
 
 // GetRevisionForName returns the SHA of a branch by name
 func (e *engineImpl) GetRevisionForName(branchName string) (string, error) {
-	return e.git.GetRevision(branchName)
+	return e.git.ReadRevisions(context.Background(), branchName).One()
 }
 
 // GetRevisions returns the SHAs for multiple branches.
 func (e *engineImpl) GetRevisions(branchNames []string) (RevisionMap, []error) {
-	return e.git.BatchGetRevisions(branchNames)
+	return e.git.ReadRevisions(context.Background(), branchNames...).ValuesAndErrors()
 }
 
 // BatchDivergencePoints returns each branch's divergence point keyed by branch
@@ -160,7 +160,7 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 	}
 
 	// Get branch revision
-	branchRevision, err := e.git.GetRevision(branchName)
+	branchRevision, err := e.git.ReadRevisions(context.Background(), branchName).One()
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string
 		if state := e.readState(branchName); state != nil {
 			parent = state.Parent
 		}
-		if parentRev, err := e.git.GetRevision(parent); err == nil {
+		if parentRev, err := e.git.ReadRevisions(context.Background(), parent).One(); err == nil {
 			baseRevision = parentRev
 		}
 	}

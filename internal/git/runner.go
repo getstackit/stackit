@@ -735,29 +735,6 @@ func (r *runner) FindRemoteBranch(ctx context.Context, remote string) (string, e
 	return "", nil
 }
 
-func (r *runner) GetRemoteRevision(branchName string) (string, error) {
-	return r.getRemoteRevision(branchName)
-}
-
-func (r *runner) GetCurrentRevision(ctx context.Context) (string, error) {
-	if sha, ok := r.readHeadRevision(); ok {
-		return sha, nil
-	}
-	out, err := r.RunGitCommandWithContext(ctx, "rev-parse", "--verify", "HEAD")
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve HEAD: %w", err)
-	}
-	return strings.TrimSpace(out), nil
-}
-
-func (r *runner) GetRevision(branchName string) (string, error) {
-	return r.getRevision(branchName)
-}
-
-func (r *runner) BatchGetRevisions(branchNames []string) (map[string]string, []error) {
-	return r.batchGetRevisions(branchNames)
-}
-
 func (r *runner) GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error) {
 	return r.getMergeBaseByRef(ctx, rev1, rev2)
 }

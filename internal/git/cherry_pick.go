@@ -15,7 +15,7 @@ func (r *runner) CherryPick(ctx context.Context, commitSHA, onto string) (string
 		return "", fmt.Errorf("failed to cherry-pick %s: %w", commitSHA, err)
 	}
 
-	newSHA, err := r.GetCurrentRevision(ctx)
+	newSHA, err := r.ReadRevisions(ctx, "HEAD").One()
 	if err != nil {
 		return "", fmt.Errorf("failed to get new SHA after cherry-pick: %w", err)
 	}

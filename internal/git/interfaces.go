@@ -34,7 +34,6 @@ type RepositoryWriter interface {
 type RemoteOperations interface {
 	FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error)
 	GetRemoteSha(remote, branchName string) (string, error)
-	GetRemoteRevision(branchName string) (string, error)
 	FindRemoteBranch(ctx context.Context, remote string) (string, error)
 	PushBranch(ctx context.Context, branchName, remote string, opts PushOptions) error
 	PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) map[string]error
@@ -79,9 +78,6 @@ type BranchWriter interface {
 // CommitReader provides read access to commit and revision information.
 type CommitReader interface {
 	ReadRevisions(ctx context.Context, refs ...string) ReadResults[string]
-	GetRevision(branchName string) (string, error)
-	GetCurrentRevision(ctx context.Context) (string, error)
-	BatchGetRevisions(branchNames []string) (map[string]string, []error)
 	GetCommitDate(branchName string) (time.Time, error)
 	GetCommitAuthor(branchName string) (string, error)
 	// BatchCommitInfo resolves each branch's tip commit date and author in one

@@ -167,7 +167,7 @@ func TestUpdateRefsBatchWithLog(t *testing.T) {
 		ctx := context.Background()
 
 		// Get current commit SHA
-		commitSha, err := runner.GetCurrentRevision(ctx)
+		commitSha, err := runner.ReadRevisions(ctx, "HEAD").One()
 		require.NoError(t, err)
 
 		// Create a new branch ref using commit
@@ -276,13 +276,13 @@ func TestRefUpdateIntegration(t *testing.T) {
 		ctx := context.Background()
 
 		// Get initial commit for branch ref
-		initialCommit, err := runner.GetCurrentRevision(ctx)
+		initialCommit, err := runner.ReadRevisions(ctx, "HEAD").One()
 		require.NoError(t, err)
 
 		// Create a second commit for the "rebased" state
 		err = scene.Repo.CreateChangeAndCommit("second", "second commit")
 		require.NoError(t, err)
-		rebasedCommit, err := runner.GetCurrentRevision(ctx)
+		rebasedCommit, err := runner.ReadRevisions(ctx, "HEAD").One()
 		require.NoError(t, err)
 
 		// Create branch at initial commit (simulating pre-restack state)
@@ -325,13 +325,13 @@ func TestRefUpdateIntegration(t *testing.T) {
 		ctx := context.Background()
 
 		// Get initial commit
-		commit1, err := runner.GetCurrentRevision(ctx)
+		commit1, err := runner.ReadRevisions(ctx, "HEAD").One()
 		require.NoError(t, err)
 
 		// Create second commit
 		err = scene.Repo.CreateChangeAndCommit("second", "second commit")
 		require.NoError(t, err)
-		commit2, err := runner.GetCurrentRevision(ctx)
+		commit2, err := runner.ReadRevisions(ctx, "HEAD").One()
 		require.NoError(t, err)
 
 		// Create branches at current commit (simulating "current state")

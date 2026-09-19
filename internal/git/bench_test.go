@@ -102,7 +102,7 @@ func BenchmarkGetRecentCommits(b *testing.B) {
 func BenchmarkGetRevision(b *testing.B) {
 	br := newBenchRepo(b, 5, 1)
 	for b.Loop() {
-		if _, err := br.runner.GetRevision("branch-0"); err != nil {
+		if _, err := br.runner.ReadRevisions(context.Background(), "branch-0").One(); err != nil {
 			b.Fatalf("GetRevision: %v", err)
 		}
 	}
@@ -150,7 +150,7 @@ func BenchmarkBatchGetRevisions(b *testing.B) {
 		names[i] = fmt.Sprintf("branch-%d", i)
 	}
 	for b.Loop() {
-		if _, errs := br.runner.BatchGetRevisions(names); len(errs) > 0 {
+		if _, errs := br.runner.ReadRevisions(context.Background(), names...).ValuesAndErrors(); len(errs) > 0 {
 			b.Fatalf("BatchGetRevisions: %v", errs[0])
 		}
 	}
@@ -169,7 +169,7 @@ func BenchmarkBatchGetRevisionsMissing(b *testing.B) {
 			}
 			for b.Loop() {
 				if batch {
-					got, errs := br.runner.BatchGetRevisions(names)
+					got, errs := br.runner.ReadRevisions(context.Background(), names...).ValuesAndErrors()
 					if len(got) != 1 || len(errs) != 30 {
 						b.Fatalf("unexpected results: %v, %v", got, errs)
 					}
@@ -179,7 +179,7 @@ func BenchmarkBatchGetRevisionsMissing(b *testing.B) {
 					b.Fatal("expected missing refs")
 				}
 				for i, name := range names {
-					_, err := br.runner.GetRevision(name)
+					_, err := br.runner.ReadRevisions(context.Background(), name).One()
 					if (err != nil) != (i > 0) {
 						b.Fatalf("unexpected error for %s: %v", name, err)
 					}
@@ -387,7 +387,7 @@ func BenchmarkParallelGetRevision(b *testing.B) {
 		for pb.Next() {
 			name := names[i%branches]
 			i++
-			if _, err := br.runner.GetRevision(name); err != nil {
+			if _, err := br.runner.ReadRevisions(context.Background(), name).One(); err != nil {
 				b.Fatalf("GetRevision: %v", err)
 			}
 		}

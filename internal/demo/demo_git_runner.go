@@ -161,29 +161,13 @@ func (d *demoGitRunner) UpdateBranchRefCAS(_ context.Context, _, _, _ string) er
 	return nil
 }
 
-func (d *demoGitRunner) GetRemoteRevision(_ string) (string, error) {
-	return "remote-rev", nil
-}
-
-func (d *demoGitRunner) GetCurrentRevision(_ context.Context) (string, error) {
-	return "head-sha", nil
-}
-
-func (d *demoGitRunner) GetRevision(branchName string) (string, error) {
+func (d *demoGitRunner) readRevision(branchName string) string {
 	for _, b := range d.branches {
 		if b.Name == branchName {
-			return b.SHA, nil
+			return b.SHA
 		}
 	}
-	return "rev-sha", nil
-}
-
-func (d *demoGitRunner) BatchGetRevisions(branchNames []string) (map[string]string, []error) {
-	results := make(map[string]string)
-	for _, name := range branchNames {
-		results[name], _ = d.GetRevision(name)
-	}
-	return results, nil
+	return "rev-sha"
 }
 
 func (d *demoGitRunner) GetMergeBase(_ context.Context, _, _ string) (string, error) {
@@ -833,12 +817,7 @@ func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]stri
 func (d *demoGitRunner) ReadRevisions(_ context.Context, refs ...string) git.ReadResults[string] {
 	result := git.ReadResults[string]{Values: make(map[string]string), Errors: make(map[string]error)}
 	for _, ref := range refs {
-		sha, err := d.GetRevision(ref)
-		if err != nil {
-			result.Errors[ref] = err
-		} else {
-			result.Values[ref] = sha
-		}
+		result.Values[ref] = d.readRevision(ref)
 	}
 	return result
 }

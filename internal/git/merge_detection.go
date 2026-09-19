@@ -103,7 +103,7 @@ func (r *runner) IsMerged(ctx context.Context, branchName, target string) (bool,
 	}
 
 	// Get branch revision
-	branchRev, err := r.GetRevision(branchName)
+	branchRev, err := r.ReadRevisions(ctx, branchName).One()
 	if err != nil {
 		return false, fmt.Errorf("failed to get branch revision: %w", err)
 	}
@@ -164,7 +164,7 @@ func (r *runner) IsSquashMerged(ctx context.Context, branchName, target string, 
 	if err != nil {
 		return false, fmt.Errorf("failed to get merge base: %w", err)
 	}
-	branchRev, err := r.GetRevision(branchName)
+	branchRev, err := r.ReadRevisions(ctx, branchName).One()
 	if err != nil {
 		return false, fmt.Errorf("failed to get branch revision: %w", err)
 	}

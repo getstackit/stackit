@@ -438,7 +438,7 @@ func (e *engineImpl) restackBranch(
 
 	if e.IsFrozen(branch) {
 		// For frozen branches, we update via hard reset to remote instead of rebase
-		remoteSha, err := e.git.GetRemoteRevision(branchName)
+		remoteSha, err := e.git.ReadRevisions(ctx, e.git.GetRemote()+"/"+branchName).One()
 		if err != nil {
 			// If remote branch is not found, just skip restack
 			return RestackBranchResult{Result: RestackUnneeded, Frozen: true}, nil //nolint:nilerr
@@ -655,7 +655,7 @@ func (e *engineImpl) restackBranch(
 	}
 
 	// Get the new rebased SHA
-	newRev, err := e.git.GetCurrentRevision(ctx)
+	newRev, err := e.git.ReadRevisions(ctx, "HEAD").One()
 	if err != nil {
 		return RestackBranchResult{
 			Result:            RestackConflict,

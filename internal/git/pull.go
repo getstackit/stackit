@@ -48,7 +48,7 @@ func (r *runner) PullBranch(ctx context.Context, remote, branchName string) (Pul
 
 func (r *runner) UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error) {
 	// Get the SHA of the local branch
-	oldRev, err := r.GetRevision(branchName)
+	oldRev, err := r.ReadRevisions(ctx, branchName).One()
 	if err != nil {
 		return PullConflict, fmt.Errorf("failed to get local revision for %s: %w", branchName, err)
 	}

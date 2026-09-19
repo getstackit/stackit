@@ -303,7 +303,7 @@ func (r *runner) GetCurrentBranchOrSHA(ctx context.Context) (string, error) {
 	if err == nil {
 		return branch, nil
 	}
-	return r.GetCurrentRevision(ctx)
+	return r.ReadRevisions(ctx, "HEAD").One()
 }
 
 // GetMergedBranches returns the set of local branches whose tip commit is

@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -83,7 +84,7 @@ func TestGetRemoteRevision_UsesConfiguredRemote(t *testing.T) {
 	require.NoError(t, scene.Repo.RunGitCommand("branch", "upstream/main", mainSHA))
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	got, err := runner.GetRemoteRevision("main")
+	got, err := runner.ReadRevisions(context.Background(), runner.GetRemote()+"/"+"main").One()
 	require.NoError(t, err)
 	require.Equal(t, mainSHA, got)
 }

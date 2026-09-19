@@ -104,7 +104,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	}
 
 	// Get new tip
-	newTip, err := e.git.GetCurrentRevision(ctx)
+	newTip, err := e.git.ReadRevisions(ctx, "HEAD").One()
 	if err != nil {
 		return fmt.Errorf("failed to get new tip: %w", err)
 	}

@@ -118,7 +118,7 @@ func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
 	currentBranch := e.currentBranch
 
 	// Get all branch SHAs in one git rev-parse call; misses (deleted branches) are omitted.
-	branchSHAs, _ := e.git.BatchGetRevisions(e.state.branches)
+	branchSHAs, _ := e.git.ReadRevisions(context.Background(), e.state.branches...).ValuesAndErrors()
 	if branchSHAs == nil {
 		branchSHAs = make(map[string]string)
 	}

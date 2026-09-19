@@ -173,7 +173,7 @@ func (e *engineImpl) IsUpToDate(branch Branch) bool {
 	}
 
 	// Get current parent revision.
-	parentRev, err := e.git.GetRevision(state.Parent)
+	parentRev, err := e.git.ReadRevisions(context.Background(), state.Parent).One()
 	if err != nil {
 		return false // Can't determine, assume needs restack
 	}
@@ -232,7 +232,7 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 	}
 	slices.Sort(parents)
 
-	parentRevs, _ := e.git.BatchGetRevisions(parents)
+	parentRevs, _ := e.git.ReadRevisions(context.Background(), parents...).ValuesAndErrors()
 	for name, check := range pending {
 		parentRev, ok := parentRevs[check.parent]
 		results[name] = ok && check.expectedRev == parentRev
@@ -255,7 +255,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 	}
 
 	branchNames := branches.Names()
-	localShas, _ := e.git.BatchGetRevisions(branchNames)
+	localShas, _ := e.git.ReadRevisions(ctx, branchNames...).ValuesAndErrors()
 
 	remote := e.git.GetRemote()
 	remoteShas, err := e.git.FetchRemoteShas(ctx, remote)
@@ -274,7 +274,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 			missingRefs = append(missingRefs, remote+"/"+branchName)
 		}
 	}
-	fallbackShas, _ := e.git.BatchGetRevisions(missingRefs)
+	fallbackShas, _ := e.git.ReadRevisions(ctx, missingRefs...).ValuesAndErrors()
 
 	// Each worker writes only its own index, so the slice is filled without
 	// synchronization and assembled into the result map serially afterward,
@@ -348,7 +348,7 @@ func (e *engineImpl) TrunkRemoteState(ctx context.Context) TrunkRemoteState {
 	state.HasRemoteRef = true
 	state.RemoteSha = remoteSha
 
-	localSha, err := e.git.GetRevision(trunk)
+	localSha, err := e.git.ReadRevisions(ctx, trunk).One()
 	if err != nil || localSha == "" {
 		return state
 	}
@@ -390,7 +390,7 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 	}
 
 	// Get parent revision
-	parentRev, err := e.git.GetRevision(parent)
+	parentRev, err := e.git.ReadRevisions(ctx, parent).One()
 	if err != nil {
 		return false, err
 	}
@@ -437,7 +437,7 @@ func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
 		addRef(parents[name])
 	}
 
-	trees, _ := e.git.BatchGetRevisions(treeRefs)
+	trees, _ := e.git.ReadRevisions(context.Background(), treeRefs...).ValuesAndErrors()
 
 	for _, name := range branchNames {
 		branchTree, ok1 := trees[name+"^{tree}"]
@@ -493,7 +493,7 @@ func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames [
 
 	// Batch fetch all data
 	metadataMap, _ := e.batchReadMetadata(branchNames)
-	revisions, _ := e.git.BatchGetRevisions(refsToFetch)
+	revisions, _ := e.git.ReadRevisions(ctx, refsToFetch...).ValuesAndErrors()
 	mergedBranches, err := e.GetMergedBranches(ctx, trunkName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check merged branches: %w", err)

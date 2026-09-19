@@ -114,7 +114,7 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 		return fmt.Errorf("failed to get remote SHA: %w", err)
 	}
 
-	oldTrunk, err := e.git.GetRevision(trunk)
+	oldTrunk, err := e.git.ReadRevisions(ctx, trunk).One()
 	if err != nil {
 		return fmt.Errorf("failed to get local trunk revision: %w", err)
 	}

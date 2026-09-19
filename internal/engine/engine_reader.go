@@ -166,7 +166,7 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 		candidates = append(candidates, candidate)
 	}
 
-	revisions, _ := e.git.BatchGetRevisions(candidates)
+	revisions, _ := e.git.ReadRevisions(ctx, candidates...).ValuesAndErrors()
 
 	// Map of commit SHA to slice of tracked branch names
 	trackedBranchTips := make(map[string][]string)
@@ -333,5 +333,5 @@ func (e *engineImpl) GetDivergencePoint(branchName string) (string, error) {
 	}
 
 	// Fall back to parent's current revision
-	return e.git.GetRevision(parentName)
+	return e.git.ReadRevisions(context.Background(), parentName).One()
 }

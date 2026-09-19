@@ -156,8 +156,8 @@ func (e *engineImpl) GetRemoteURL(_ context.Context) (string, error) {
 }
 
 // GetCurrentRevision returns the current revision (HEAD)
-func (e *engineImpl) GetCurrentRevision(_ context.Context) (string, error) {
-	return e.git.GetRevision("HEAD")
+func (e *engineImpl) GetCurrentRevision(ctx context.Context) (string, error) {
+	return e.git.ReadRevisions(ctx, "HEAD").One()
 }
 
 // GetReflog returns the reflog

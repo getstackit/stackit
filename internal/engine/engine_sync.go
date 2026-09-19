@@ -71,7 +71,7 @@ func (e *engineImpl) collectRestackData(branchNames []string) (MetaMap, Revision
 	e.mu.RUnlock()
 
 	metaMap, _ := e.batchReadMetadata(involvedBranchNames)
-	revMap, _ := e.git.BatchGetRevisions(involvedBranchNames)
+	revMap, _ := e.git.ReadRevisions(context.Background(), involvedBranchNames...).ValuesAndErrors()
 	return metaMap, revMap
 }
 
@@ -96,7 +96,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	originalBranch := e.CurrentBranch()
 	var originalRev string
 	if originalBranch == nil {
-		originalRev, _ = e.git.GetCurrentRevision(ctx)
+		originalRev, _ = e.git.ReadRevisions(ctx, "HEAD").One()
 	}
 
 	defer func() {
@@ -323,14 +323,14 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, reba
 	}
 
 	// Get the new rebased SHA
-	newRev, err := e.git.GetCurrentRevision(ctx)
+	newRev, err := e.git.ReadRevisions(ctx, "HEAD").One()
 	if err != nil {
 		return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to get new revision after rebase: %w", err)
 	}
 
 	// Update the branch reference to the new rebased commit
 	if expectedBranchRevision == "" {
-		expectedBranchRevision, err = e.git.GetRevision(branchName)
+		expectedBranchRevision, err = e.git.ReadRevisions(ctx, branchName).One()
 		if err != nil {
 			return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to get expected branch revision for %s: %w", branchName, err)
 		}

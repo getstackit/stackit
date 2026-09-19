@@ -148,7 +148,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		if !ok {
 			return item, false
 		}
-		remoteSha, err := e.git.GetRemoteRevision(branchName)
+		remoteSha, err := e.git.ReadRevisions(ctx, e.git.GetRemote()+"/"+branchName).One()
 		if err != nil || remoteSha == "" {
 			item.Skip = true
 			item.SkipResult = RestackBranchResult{Result: RestackUnneeded, Frozen: true}

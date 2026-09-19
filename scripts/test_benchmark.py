@@ -1,6 +1,7 @@
 """Regression checks for benchmark timing boundaries and failure handling."""
 
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -9,6 +10,30 @@ import benchmark
 
 
 class MeasurementTests(unittest.TestCase):
+    def test_absorb_stages_an_existing_downstack_file_before_timing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Path(temporary) / "fixture"
+            fixture.mkdir()
+            (fixture / "branch-01.txt").write_text("fixture branch 1\nadditional commit 2\n")
+            events = []
+            case = next(case for case in benchmark.CASES if case.name == "absorb-dry-run")
+
+            def invoke(command, *, cwd):
+                events.append(command[0])
+                self.assertEqual((cwd / "branch-01.txt").read_text(), "fixture branch 1 (absorbed)\nadditional commit 2\n")
+
+            def clock():
+                events.append("clock")
+                return 0
+
+            with (
+                patch.object(benchmark, "run", side_effect=invoke),
+                patch.object(benchmark.time, "perf_counter_ns", side_effect=clock),
+            ):
+                benchmark.measure_case(Path("stackit"), fixture, case, runs=1, warmup=0, work=Path(temporary))
+            self.assertEqual(events, ["git", "clock", "stackit", "clock"])
+            self.assertEqual((fixture / "branch-01.txt").read_text(), "fixture branch 1\nadditional commit 2\n")
+
     def test_cleanup_is_outside_timer_and_warmup_is_excluded(self):
         events = []
         ticks = iter([0, 5_000_000, 10_000_000, 12_000_000])

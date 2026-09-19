@@ -39,6 +39,8 @@ CASES = [
     Case("tree-short", ["tree", "short"]),
     Case("tree", ["tree"]),
     Case("info", ["info"]),
+    Case("info-diff", ["info", "--diff"]),
+    Case("absorb-dry-run", ["absorb", "--dry-run"], fresh_copy=True),
     Case("parent", ["parent"]),
     Case("children", ["children"]),
     Case("checkout-exact", ["co", "branch-01", "--quiet"], fresh_copy=True),
@@ -92,7 +94,7 @@ def build(repo: Path, ref: str, directory: Path, go_binary: str, environment: di
     return binary, commit
 
 
-def create_fixture(binary: Path, directory: Path, branches: int) -> Path:
+def create_fixture(binary: Path, directory: Path, branches: int, commits_per_branch: int = 1) -> Path:
     fixture = directory / "fixture"
     fixture.mkdir()
     git(fixture, "init", "--initial-branch=main")
@@ -115,6 +117,11 @@ def create_fixture(binary: Path, directory: Path, branches: int) -> Path:
                 f"fixture creation failed for branch-{number:02}: "
                 f"{completed.stderr.strip() or completed.stdout.strip()}"
             )
+        for commit in range(2, commits_per_branch + 1):
+            with (fixture / f"branch-{number:02}.txt").open("a") as content:
+                content.write(f"additional commit {commit}\n")
+            git(fixture, "add", ".")
+            git(fixture, "commit", "-m", f"perf: branch {number} commit {commit}")
     return fixture
 
 
@@ -135,6 +142,10 @@ def measure_case(binary: Path, fixture: Path, case: Case, runs: int, warmup: int
             trial = work / f"{case.name}-{iteration}"
             shutil.copytree(fixture, trial)
         try:
+            if case.name == "absorb-dry-run":
+                target = trial / "branch-01.txt"
+                target.write_text(target.read_text().replace("fixture branch 1\n", "fixture branch 1 (absorbed)\n"))
+                git(trial, "add", "branch-01.txt")
             if case.name in {"modify-midstack", "restack-upstack"}:
                 git(trial, "checkout", "branch-01")
             if case.name in {"create", "modify", "modify-midstack", "restack-upstack"}:
@@ -174,6 +185,8 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=10, help="Measured runs per case (default: 10)")
     parser.add_argument("--warmup", type=int, default=2, help="Warmup runs per case (default: 2)")
     parser.add_argument("--branches", type=int, default=10, help="Linear stack depth (default: 10)")
+    parser.add_argument("--commits-per-branch", type=int, default=1, help="Commits on each branch (default: 1)")
+    parser.add_argument("--cases", nargs="+", choices=[case.name for case in CASES], help="Run only these cases")
     parser.add_argument("--output", type=Path, default=Path("benchmark-results.json"), help="JSON result path")
     parser.add_argument(
         "--cache-dir",
@@ -182,8 +195,8 @@ def main() -> int:
         help="Writable Go build and module cache (default: /tmp/stackit-benchmark-go-cache)",
     )
     args = parser.parse_args()
-    if args.runs < 1 or args.warmup < 0 or args.branches < 2:
-        parser.error("--runs must be positive, --warmup non-negative, and --branches at least 2")
+    if args.runs < 1 or args.warmup < 0 or args.branches < 2 or args.commits_per_branch < 1:
+        parser.error("--runs and --commits-per-branch must be positive, --warmup non-negative, and --branches at least 2")
 
     repo = Path(__file__).resolve().parents[1]
     output = args.output.resolve()
@@ -194,7 +207,7 @@ def main() -> int:
     # projects, so resolve the real compiler before changing into one.
     go_binary = run(["mise", "which", "go"], cwd=repo, capture=True).stdout.strip()
     result: dict[str, object] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "platform": {
             "python": sys.version.split()[0],
@@ -203,7 +216,7 @@ def main() -> int:
             "system": platform.platform(),
             "cpu_count": os.cpu_count(),
         },
-        "fixture": {"shape": "linear", "branches": args.branches},
+        "fixture": {"shape": "linear", "branches": args.branches, "commits_per_branch": args.commits_per_branch},
         "runs": args.runs,
         "warmup": args.warmup,
         "results": [],
@@ -228,10 +241,11 @@ def main() -> int:
             revision_dir = root / str(index)
             revision_dir.mkdir()
             binary, commit = build(repo, ref, revision_dir, go_binary, build_environment)
-            fixture = create_fixture(binary, revision_dir, args.branches)
+            fixture = create_fixture(binary, revision_dir, args.branches, args.commits_per_branch)
             work = revision_dir / "work"
             work.mkdir()
-            cases = [measure_case(binary, fixture, case, args.runs, args.warmup, work) for case in CASES]
+            cases = [measure_case(binary, fixture, case, args.runs, args.warmup, work)
+                     for case in CASES if args.cases is None or case.name in args.cases]
             result["results"].append({"ref": ref, "commit": commit, "cases": cases})  # type: ignore[index]
             output.write_text(json.dumps(result, indent=2) + "\n")
 

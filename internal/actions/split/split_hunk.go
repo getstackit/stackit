@@ -376,23 +376,15 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Check if anything was staged
-	hasStaged, err := eng.HasStagedChanges(gitCtx)
+	hasStaged, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(gitCtx)
 	if err != nil {
-		return fmt.Errorf("failed to check staged changes: %w", err)
+		return fmt.Errorf("failed to read working tree status: %w", err)
 	}
 	if !hasStaged {
 		return fmt.Errorf("no changes staged from patch file %q", opts.patchFile)
 	}
 
 	// Check if there are unstaged changes or untracked files (to keep on branchToSplit)
-	hasUnstaged, err := eng.HasUnstagedChanges(gitCtx)
-	if err != nil {
-		return fmt.Errorf("failed to check unstaged changes: %w", err)
-	}
-	hasUntracked, err := eng.HasUntrackedFiles(gitCtx)
-	if err != nil {
-		return fmt.Errorf("failed to check untracked files: %w", err)
-	}
 	if !hasUnstaged && !hasUntracked {
 		return fmt.Errorf("all changes were staged from patch - nothing would remain on %s", branchToSplit.GetName())
 	}
@@ -614,23 +606,16 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	}
 
 	// Check if anything was staged
-	hasStaged, err := eng.HasStagedChanges(gitCtx)
+	hasStaged, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(gitCtx)
 	if err != nil {
-		return fmt.Errorf("failed to check staged changes: %w", err)
+		return fmt.Errorf("failed to read working tree status: %w", err)
 	}
 	if !hasStaged {
 		return fmt.Errorf("no changes staged to extract")
 	}
 
 	// Check if there are unstaged changes or untracked files (to keep on current)
-	hasUnstaged, err := eng.HasUnstagedChanges(gitCtx)
-	if err != nil {
-		return fmt.Errorf("failed to check unstaged changes: %w", err)
-	}
-	hasUntracked, err := eng.HasUntrackedFiles(gitCtx)
-	if err != nil {
-		return fmt.Errorf("failed to check untracked files: %w", err)
-	}
+
 	if !hasUnstaged && !hasUntracked {
 		return fmt.Errorf("all changes were staged - nothing would remain on %s", branchToSplit.GetName())
 	}

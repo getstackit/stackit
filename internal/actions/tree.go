@@ -150,6 +150,14 @@ func TreeAction(ctx *app.Context, opts TreeOptions) error {
 		stats = ctx.Engine.BatchBranchStats(visibleBranches)
 	}
 
+	// The short style skips BatchBranchStats above, so with --shas it needs its
+	// own batched revision lookup instead of resolving each branch's SHA
+	// individually in the per-branch loop below.
+	var revisions engine.RevisionMap
+	if opts.Style == TreeStyleShort && opts.ShowSHAs {
+		revisions, _ = ctx.Engine.GetRevisions(visibleBranches.Names())
+	}
+
 	// Collect annotations only for branches that will be rendered.
 	annotations := make(map[string]tree.BranchAnnotation, len(visibleBranches))
 
@@ -176,7 +184,7 @@ func TreeAction(ctx *app.Context, opts TreeOptions) error {
 
 	if len(visibleBranches) > 0 {
 		utils.Run(visibleBranches.All(), func(branchObj engine.Branch) {
-			annotation := buildTreeAnnotation(ctx.Engine, branchObj, stats[branchObj.GetName()], opts, wtData, enrichment)
+			annotation := buildTreeAnnotation(ctx.Engine, branchObj, stats[branchObj.GetName()], revisions[branchObj.GetName()], opts, wtData, enrichment)
 			results <- result{branchObj.GetName(), annotation}
 		})
 	}
@@ -262,6 +270,7 @@ func buildTreeAnnotation(
 	eng engine.Engine,
 	branch engine.Branch,
 	stat engine.BranchStat,
+	revision string,
 	opts TreeOptions,
 	wtData *tui.WorktreeData,
 	enrichment *tui.AnnotationEnrichment,
@@ -274,11 +283,11 @@ func buildTreeAnnotation(
 
 	annotation := tui.GetMinimalAnnotationWithWorktreeAndEmpty(eng, branch, wtData)
 	if opts.ShowSHAs {
-		// The short style does not batch stats, so resolve the SHA directly.
-		if stat.ShortSHA != "" {
+		switch {
+		case stat.ShortSHA != "":
 			annotation.LocalSHA = stat.ShortSHA
-		} else if sha, err := branch.GetRevision(); err == nil {
-			annotation.LocalSHA = utils.ShortRevision(sha, 0)
+		case revision != "":
+			annotation.LocalSHA = utils.ShortRevision(revision, 0)
 		}
 	}
 	return annotation

@@ -416,6 +416,22 @@ func (m Model) View() string {
 
 ## Debugging
 
+### Replay Command Output
+
+The TUI lab replays deterministic events through the production command handlers,
+without changing Git branches or making remote requests. Run it in a terminal:
+
+```bash
+mise exec -- go run ./apps/st-tui restack success
+mise exec -- go run ./apps/st-tui restack held
+mise exec -- go run ./apps/st-tui sync diverged
+mise exec -- go run ./apps/st-tui submit success
+```
+
+Run without arguments to list scenarios. Use `--delay 100ms` before the command
+to speed up playback. Review both the live display and the output retained after
+exit: warnings, exceptional skips, and recovery commands must survive completion.
+
 ### Message Inspection
 
 Dump messages to a file during development for visibility into message flow:

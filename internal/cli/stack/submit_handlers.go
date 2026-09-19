@@ -120,6 +120,13 @@ func (p *planPrinter) Flush() {
 		if summary := p.compactSummary(); summary != "" {
 			p.out.Info("● %s", summary)
 		}
+		for _, event := range p.events {
+			if event.Skipped && event.SkipReason != skipReasonNoChanges && event.SkipReason != "already up to date" {
+				p.out.Info("  ○ %s skipped: %s", style.DisplayBranchName(event.BranchName), event.SkipReason)
+			} else if event.Empty && !event.Skipped {
+				p.out.Info("  ○ %s has no commits", style.DisplayBranchName(event.BranchName))
+			}
+		}
 		return
 	}
 
@@ -482,7 +489,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				if summary := submitComponent.FormatOutcomeSummary(h.submitItems(), ev.Duration); summary != "" {
 					h.Output.Info("%s", summary)
 				}
-				if urls := submitComponent.FormatCreatedURLs(h.submitItems()); urls != "" {
+				if urls := submitComponent.FormatPRResults(h.submitItems()); urls != "" {
 					h.Output.Info("%s", urls)
 				}
 				return

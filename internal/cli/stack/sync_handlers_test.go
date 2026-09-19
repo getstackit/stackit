@@ -255,3 +255,16 @@ func TestSyncCountsOnlyRestackResults(t *testing.T) {
 	require.Equal(t, 2, h.completedOps)
 	require.Equal(t, 2, h.totalOps)
 }
+
+func TestInteractiveRestackDetailVerbosity(t *testing.T) {
+	h := NewInteractiveSyncHandler(tui.NewMockRunner(), syncComponent.NewModel(0), output.NewNullOutput(), output.NewNullLogger())
+	event := handlers.RestackBranchEvent{Branch: "user/20260912000000/feat-api", Parent: "main", Result: handlers.RestackDone, NewRevision: "abc1234"}
+	compact, _ := h.formatRestackDetail(event)
+	require.Contains(t, compact, "feat-api")
+	require.NotContains(t, compact, "20260912")
+	require.NotContains(t, compact, "abc1234")
+	h.verbose = true
+	verbose, _ := h.formatRestackDetail(event)
+	require.Contains(t, verbose, event.Branch)
+	require.Contains(t, verbose, "abc1234")
+}

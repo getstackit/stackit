@@ -417,7 +417,7 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 
 	// Best-effort metadata-ref rename. The branch rename already succeeded;
 	// orphaned refs are reconciled by `sync`.
-	_ = e.git.RenameMetadata(oldName, newName)
+	_ = e.metadata.RenameMetadata(oldName, newName)
 
 	oldLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, oldName)
 	newLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, newName)
@@ -431,8 +431,8 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 	// stage every write in a single metadata transaction so a wide root costs
 	// one atomic ref update instead of two git processes per child.
 	if len(children) > 0 {
-		childMetas, _ := e.batchReadMetadata(children)
 		if err := e.withMetadataTx(ctx, fmt.Sprintf("rename %s to %s: reparent children", oldName, newName), func(tx *MetadataTx) error {
+			childMetas, _ := tx.ReadMetadata(ctx, children...).Split()
 			for _, child := range children {
 				childMeta := childMetas[child]
 				if childMeta == nil {

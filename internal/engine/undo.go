@@ -124,7 +124,7 @@ func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
 	}
 
 	// Get all metadata ref SHAs
-	metadataRefs, err := e.git.ListMetadata()
+	metadataRefs, err := e.metadata.ListMetadata()
 	if err != nil {
 		// If we can't get metadata refs, continue with empty map
 		metadataRefs = make(map[string]string)
@@ -402,7 +402,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	}
 
 	// Delete metadata refs that were created after the snapshot (separate operation)
-	currentMetadataRefs, err := e.git.ListMetadata()
+	currentMetadataRefs, err := e.metadata.ListMetadata()
 	if err == nil {
 		var toDelete []string
 		for branchName := range currentMetadataRefs {

@@ -8,32 +8,32 @@ import (
 
 // readMetadata loads branch metadata from the configured metadata store.
 func (e *engineImpl) readMetadata(branch string) (*git.Meta, error) {
-	return e.git.ReadMetadata(context.Background(), branch).One()
+	return e.metadata.ReadMetadata(context.Background(), branch).One()
 }
 
 // writeMetadata persists branch metadata to the configured metadata store.
 func (e *engineImpl) writeMetadata(branch string, meta *git.Meta) error {
-	return e.git.WriteMetadata(branch, meta)
+	return e.metadata.WriteMetadata(branch, meta)
 }
 
 // batchReadMetadata loads metadata for many branches in one call.
 func (e *engineImpl) batchReadMetadata(branches []string) (MetaMap, map[string]error) {
-	return e.git.ReadMetadata(context.Background(), branches...).Split()
+	return e.metadata.ReadMetadata(context.Background(), branches...).Split()
 }
 
 // readLocalMetadata loads local-only metadata for a branch.
 func (e *engineImpl) readLocalMetadata(branch string) (*git.LocalMeta, error) {
-	return e.git.ReadLocalMetadata(context.Background(), branch).One()
+	return e.metadata.ReadLocalMetadata(context.Background(), branch).One()
 }
 
 // writeLocalMetadata persists local-only metadata for a branch.
 func (e *engineImpl) writeLocalMetadata(branch string, meta *git.LocalMeta) error {
-	return e.git.WriteLocalMetadata(branch, meta)
+	return e.metadata.WriteLocalMetadata(branch, meta)
 }
 
 // batchReadLocalMetadata loads local metadata for many branches in one call.
 func (e *engineImpl) batchReadLocalMetadata(branches []string) git.LocalMetaMap {
-	return e.git.ReadLocalMetadata(context.Background(), branches...).Values
+	return e.metadata.ReadLocalMetadata(context.Background(), branches...).Values
 }
 
 // withMetadataTx runs function logic inside a metadata transaction and commits once.

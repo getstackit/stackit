@@ -280,19 +280,19 @@ func (e *engineImpl) GetAllBranchNames(ctx context.Context) ([]string, error) {
 // ListMetadataRefs returns a map of branch name to metadata-ref SHA for every
 // stackit metadata ref, including refs whose branches no longer exist.
 func (e *engineImpl) ListMetadataRefs() (map[string]string, error) {
-	return e.git.ListMetadata()
+	return e.metadata.ListMetadata()
 }
 
 // ReadMetadataRaw reads a single branch's metadata directly from its ref,
 // bypassing the engine's tracked-branch cache.
 func (e *engineImpl) ReadMetadataRaw(branchName string) (*git.Meta, error) {
-	return e.git.ReadMetadata(context.Background(), branchName).One()
+	return e.metadata.ReadMetadata(context.Background(), branchName).One()
 }
 
 // BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 // returning per-branch errors so callers can detect corrupted refs.
 func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error) {
-	return e.git.ReadMetadata(context.Background(), branchNames...).Split()
+	return e.metadata.ReadMetadata(context.Background(), branchNames...).Split()
 }
 
 // DeleteMetadataRefsBatch deletes many branches' metadata refs in a single

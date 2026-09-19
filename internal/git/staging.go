@@ -29,10 +29,6 @@ func (r *runner) StageTracked(ctx context.Context) error {
 	return nil
 }
 
-func (r *runner) AddAll(ctx context.Context) error {
-	return r.StageAll(ctx)
-}
-
 func (r *runner) StageChanges(ctx context.Context, opts StagingOptions) error {
 	if opts.Patch && !opts.All {
 		return r.RunGitCommandInteractive("add", "-p")

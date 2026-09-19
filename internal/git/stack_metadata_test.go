@@ -18,8 +18,9 @@ func TestStackMetaOperations(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
+		runnerMetadata := git.NewMetadataStore(runner)
 
-		meta, err := runner.ReadStackMeta("nonexistent-stack-id")
+		meta, err := runnerMetadata.ReadStackMeta("nonexistent-stack-id")
 		require.NoError(t, err)
 		require.Nil(t, meta)
 	})
@@ -28,6 +29,7 @@ func TestStackMetaOperations(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
+		runnerMetadata := git.NewMetadataStore(runner)
 
 		stackID := "1234567890-test-stack"
 		meta := &git.StackMeta{
@@ -39,11 +41,11 @@ func TestStackMetaOperations(t *testing.T) {
 		}
 
 		// Write
-		err := runner.WriteStackMeta(stackID, meta)
+		err := runnerMetadata.WriteStackMeta(stackID, meta)
 		require.NoError(t, err)
 
 		// Read back
-		readMeta, err := runner.ReadStackMeta(stackID)
+		readMeta, err := runnerMetadata.ReadStackMeta(stackID)
 		require.NoError(t, err)
 		require.NotNil(t, readMeta)
 		require.Equal(t, stackID, readMeta.ID)
@@ -56,6 +58,7 @@ func TestStackMetaOperations(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
+		runnerMetadata := git.NewMetadataStore(runner)
 
 		stackID := "delete-test-stack"
 		meta := &git.StackMeta{
@@ -65,15 +68,15 @@ func TestStackMetaOperations(t *testing.T) {
 		}
 
 		// Write
-		err := runner.WriteStackMeta(stackID, meta)
+		err := runnerMetadata.WriteStackMeta(stackID, meta)
 		require.NoError(t, err)
 
 		// Delete
-		err = runner.DeleteStackMeta(context.Background(), stackID)
+		err = runnerMetadata.DeleteStackMeta(context.Background(), stackID)
 		require.NoError(t, err)
 
 		// Verify deleted
-		readMeta, err := runner.ReadStackMeta(stackID)
+		readMeta, err := runnerMetadata.ReadStackMeta(stackID)
 		require.NoError(t, err)
 		require.Nil(t, readMeta)
 	})
@@ -82,6 +85,7 @@ func TestStackMetaOperations(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
+		runnerMetadata := git.NewMetadataStore(runner)
 
 		// Write multiple stacks
 		stacks := []string{"stack-1", "stack-2", "stack-3"}
@@ -90,12 +94,12 @@ func TestStackMetaOperations(t *testing.T) {
 				ID:        stackID,
 				CreatedAt: time.Now(),
 			}
-			err := runner.WriteStackMeta(stackID, meta)
+			err := runnerMetadata.WriteStackMeta(stackID, meta)
 			require.NoError(t, err)
 		}
 
 		// List
-		list, err := runner.ListStackMetas()
+		list, err := runnerMetadata.ListStackMetas()
 		require.NoError(t, err)
 		require.Len(t, list, 3)
 
@@ -198,6 +202,7 @@ func TestWriteStackMetaBlob(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
+		runnerMetadata := git.NewMetadataStore(runner)
 
 		stackID := "blob-test-stack"
 		meta := &git.StackMeta{
@@ -209,12 +214,12 @@ func TestWriteStackMetaBlob(t *testing.T) {
 		}
 
 		// Write blob (does not create ref)
-		sha, err := runner.WriteStackMetaBlob(meta)
+		sha, err := runnerMetadata.WriteStackMetaBlob(meta)
 		require.NoError(t, err)
 		require.NotEmpty(t, sha)
 
 		// Verify no ref exists yet
-		existingSHA := runner.GetStackMetaRefSHA(stackID)
+		existingSHA := runnerMetadata.GetStackMetaRefSHA(stackID)
 		require.Empty(t, existingSHA)
 
 		// Use UpdateRef to create the stack meta ref
@@ -223,7 +228,7 @@ func TestWriteStackMetaBlob(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify we can read the metadata back
-		readMeta, err := runner.ReadStackMeta(stackID)
+		readMeta, err := runnerMetadata.ReadStackMeta(stackID)
 		require.NoError(t, err)
 		require.NotNil(t, readMeta)
 		require.Equal(t, stackID, readMeta.ID)
@@ -240,6 +245,7 @@ func TestGetStackMetaRefSHA(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
+		runnerMetadata := git.NewMetadataStore(runner)
 
 		stackID := "sha-test-stack"
 		meta := &git.StackMeta{
@@ -249,11 +255,11 @@ func TestGetStackMetaRefSHA(t *testing.T) {
 		}
 
 		// Write stack meta
-		err := runner.WriteStackMeta(stackID, meta)
+		err := runnerMetadata.WriteStackMeta(stackID, meta)
 		require.NoError(t, err)
 
 		// Get SHA
-		sha := runner.GetStackMetaRefSHA(stackID)
+		sha := runnerMetadata.GetStackMetaRefSHA(stackID)
 		require.NotEmpty(t, sha)
 		require.Len(t, sha, 40) // Git SHAs are 40 hex characters
 	})
@@ -262,8 +268,9 @@ func TestGetStackMetaRefSHA(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, nil)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
+		runnerMetadata := git.NewMetadataStore(runner)
 
-		sha := runner.GetStackMetaRefSHA("nonexistent-stack-id")
+		sha := runnerMetadata.GetStackMetaRefSHA("nonexistent-stack-id")
 		require.Empty(t, sha)
 	})
 }

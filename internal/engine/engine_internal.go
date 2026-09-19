@@ -64,7 +64,7 @@ func (e *engineImpl) applyRebuild(branches []string, currentBranch string, allMe
 // rebuild loads all branches and their metadata from Git
 func (e *engineImpl) rebuild() error {
 	// Clear metadata cache to pick up external changes (e.g., branches created in another terminal)
-	e.git.ClearMetadataCache()
+	e.metadata.ClearMetadataCache()
 
 	// 1. Get all branch names (slow)
 	branches, err := e.git.GetAllBranchNames(context.Background())

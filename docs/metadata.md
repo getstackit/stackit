@@ -281,23 +281,40 @@ Scopes are applied to PR titles: `[PROJ-123] Feature description`
 
 ## Transactions
 
-**Source**: `internal/engine/transaction.go`
+**Source**: `internal/engine/transaction.go`, `internal/git/metadata_store.go`
+
+Each engine owns a `MetadataStore`. The store handles serialization, caching,
+and metadata persistence through a small blob/ref backend; these operations are
+no longer part of `git.Runner`.
 
 Metadata updates use transactions for atomicity. A `MetadataTx`:
 
-1. Batches multiple ref updates
-2. Uses compare-and-swap (CAS) validation to detect concurrent modifications
-3. Commits all changes atomically via `git update-ref --stdin`
-4. Updates in-memory cache on success
+1. Reads records in batches, retaining the exact blob SHA returned with each value
+2. Stages updates and deletions entirely in memory, requiring a prepared read
+3. Writes shared and local metadata blobs together in one `git hash-object` invocation
+4. Applies all ref changes atomically with compare-and-swap validation
+5. Updates engine state on success
 
 ```go
 tx := e.BeginTx("set parent: feature -> main")
-tx.UpdateMeta(branchName, meta)
-tx.UpdateLocalMeta(branchName, localMeta)
-err := tx.Commit(ctx)  // All or nothing
+meta, err := tx.ReadMetadata(ctx, branchName).One()
+if err != nil {
+    return err
+}
+if err := tx.UpdateMeta(branchName, meta.WithParentBranchName(&parentName)); err != nil {
+    return err
+}
+return tx.Commit(ctx)
 ```
 
-Concurrent modification errors trigger automatic retry with exponential backoff.
+Pass all known branch names to each read. Staging never rereads ref SHAs, and
+commit never replaces the captured versions with newer ones. This detects
+changes made after reading, including changes made before staging. A missing ref
+is an explicit absent-ref expectation, so a concurrent creation also conflicts.
+An existing empty blob retains its SHA and is distinct from a missing ref.
+
+Higher-level operations use `WithRetry` to rebuild and retry concurrent
+modifications with exponential backoff. `Commit` itself does not retry.
 
 ### Compare-and-swap on individual writes
 
@@ -317,8 +334,9 @@ Details that matter when working on this code:
 - **The expectation is what *this process* last read**, not what the ref holds
   now. A write of unchanged content is therefore not short-circuited as a no-op:
   doing so would report success for a ref another process may have moved.
-- **An unknown expectation falls back to an unconditional write.** This is what
-  creating metadata for a newly tracked branch needs.
+- **Standalone writes retain their legacy unknown-version behavior.** A store
+  write without a prior observed SHA is unconditional. Transactions instead
+  require preparation and enforce absence when their read found no ref.
 - **Every read records the SHA.** `ReadMetadata` populates it for one or many
   branches via `ReadObjectsBatch`. Engine graph loads use this same path, so
   their subsequent writes retain the optimistic-locking expectation.
@@ -331,7 +349,7 @@ Branch refs rewritten by a rebase are also moved compare-and-swap
 (`internal/git/rebase.go`), so a concurrent update in another worktree is
 detected rather than overwritten.
 
-**Source**: `internal/git/metadata.go`, `internal/git/metadata_cache.go`,
+**Source**: `internal/git/metadata_store.go`, `internal/git/metadata_cache.go`,
 `internal/git/object_reader.go`.
 
 ---

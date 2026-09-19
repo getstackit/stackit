@@ -26,7 +26,7 @@ func TestCreateBlobsChoosesFastPath(t *testing.T) {
 			require.Equal(t, 1, logger.calls)
 		}
 		for i, sha := range shas {
-			got, err := runner.ReadBlob(sha)
+			got, err := git.ObjectContent(runner.ReadObjects(context.Background(), sha))
 			require.NoError(t, err)
 			require.Equal(t, contents[i], got)
 		}

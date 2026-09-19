@@ -297,7 +297,7 @@ func TestRestoreSnapshot(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Get initial metadata SHA
-		initialMetadata, err := s.Engine.Git().ListMetadata()
+		initialMetadata, err := s.Engine.Metadata().ListMetadata()
 		require.NoError(t, err)
 		initialFeatureMetadataSHA := initialMetadata["feature"]
 		require.NotEmpty(t, initialFeatureMetadataSHA)
@@ -317,7 +317,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify metadata restored
-		restoredMetadata, err := s.Engine.Git().ListMetadata()
+		restoredMetadata, err := s.Engine.Metadata().ListMetadata()
 		require.NoError(t, err)
 		require.Equal(t, initialFeatureMetadataSHA, restoredMetadata["feature"])
 	})

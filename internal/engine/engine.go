@@ -203,6 +203,9 @@ type Options struct {
 	// Git is the git runner to use. If nil, a default real git runner is used.
 	Git git.Runner
 
+	// Metadata optionally injects the store used by this engine.
+	Metadata *git.MetadataStore
+
 	// LoadMode controls how much metadata is read at construction time.
 	// Zero value (LoadModeFull) matches the pre-lite behavior — readers see
 	// all metadata populated synchronously after NewEngine returns.
@@ -240,6 +243,7 @@ type Engine interface {
 	MetadataInspector
 	GitConfig
 	Git() git.Runner
+	Metadata() *git.MetadataStore
 
 	// SnapshotForWorktree creates a deep copy of engine state for initializing
 	// worktree engines without the cost of rebuildInternal.

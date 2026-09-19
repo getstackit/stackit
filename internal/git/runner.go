@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/getstackit/stackit/internal/utils"
@@ -69,10 +70,11 @@ func (r *runner) VerifyRef(ctx context.Context, refName string) error {
 
 // RefUpdate represents a single reference update operation.
 type RefUpdate struct {
-	RefName  string
-	NewSHA   string
-	OldSHA   string // Optional: for optimistic locking verification
-	IsDelete bool   // If true, this is a deletion instead of an update
+	RefName      string
+	NewSHA       string
+	OldSHA       string // Optional: for optimistic locking verification
+	MustNotExist bool   // Require the ref to be absent when creating it.
+	IsDelete     bool   // If true, this is a deletion instead of an update
 }
 
 // UpdateRefs atomically applies one or many updates, with an optional reflog message.
@@ -89,6 +91,8 @@ func (r *runner) UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMess
 			fmt.Fprintf(&stdin, "delete %s %s\n", update.RefName, update.OldSHA)
 		case update.IsDelete:
 			fmt.Fprintf(&stdin, "delete %s\n", update.RefName)
+		case update.MustNotExist:
+			fmt.Fprintf(&stdin, "create %s %s\n", update.RefName, update.NewSHA)
 		case update.OldSHA != "":
 			fmt.Fprintf(&stdin, "update %s %s %s\n", update.RefName, update.NewSHA, update.OldSHA)
 		default:
@@ -104,7 +108,9 @@ func (r *runner) UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMess
 	if err != nil {
 		return fmt.Errorf("atomic ref update failed: %w", err)
 	}
-	r.metadataCache.InvalidateForRefs(updates)
+	for _, update := range updates {
+		r.markRefChanged(update.RefName)
+	}
 	return nil
 }
 
@@ -127,7 +133,9 @@ func (r *runner) DeleteRefs(ctx context.Context, refNames ...string) error {
 	if err != nil {
 		return fmt.Errorf("atomic ref delete failed: %w", err)
 	}
-	r.metadataCache.InvalidateForRefNames(refNames)
+	for _, name := range refNames {
+		r.markRefChanged(name)
+	}
 	return nil
 }
 
@@ -384,8 +392,6 @@ type Runner interface {
 	// Low-level operations
 	RefOperations
 	ObjectOperations
-	MetadataOperations
-	StackMetadataOperations
 
 	// Environment
 	GitVersion(ctx context.Context) (Version, error)
@@ -437,9 +443,7 @@ type runner struct {
 	loggerMu    sync.RWMutex
 	logger      DebugLogger
 
-	// Cached metadata to avoid redundant ReadMetadata calls (each spawns 2 git processes).
-	// Thread-safe: sync.Map handles concurrent reads from worker pools.
-	metadataCache metadataCache
+	refGenerations sync.Map // ref name -> *atomic.Uint64
 
 	// objects is a persistent git cat-file --batch process for zero-spawn object reads.
 	// Started lazily on first use; lives for the lifetime of the runner.
@@ -475,18 +479,6 @@ func (r *runner) traceLog(op string, duration time.Duration, success bool, err e
 	r.loggerMu.RUnlock()
 	if tracer, ok := logger.(traceLogger); ok {
 		tracer.Trace(op, duration.Microseconds(), success, err, attrs...)
-	}
-}
-
-// infoLog emits an informational log entry through the attached logger.
-// Used for low-volume instrumentation events (e.g. metadata batch-load timings)
-// that should be visible at the default log level.
-func (r *runner) infoLog(format string, args ...any) {
-	r.loggerMu.RLock()
-	logger := r.logger
-	r.loggerMu.RUnlock()
-	if logger != nil {
-		logger.Info(format, args...)
 	}
 }
 
@@ -705,10 +697,6 @@ func (r *runner) GetMergeBase(ctx context.Context, rev1, rev2 string) (string, e
 	return r.getMergeBaseByRef(ctx, rev1, rev2)
 }
 
-func (r *runner) GetMergeBaseByRef(ctx context.Context, ref1, ref2 string) (string, error) {
-	return r.getMergeBaseByRef(ctx, ref1, ref2)
-}
-
 func (r *runner) IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error) {
 	return r.isAncestor(ctx, ancestor, descendant)
 }
@@ -894,10 +882,6 @@ func (r *runner) runGitCommandInternal(args ...string) (string, error) {
 	return r.RunGitCommandWithContext(context.Background(), args...)
 }
 
-func (r *runner) CatFile(sha string) (string, error) {
-	return r.ReadBlob(sha)
-}
-
 // CreateBlobs writes N blobs to the object store in a single
 // `git hash-object -w --stdin-paths` invocation. Each content is staged to a
 // temp file (so git's path-based hashing can read it) and the SHAs come back
@@ -953,17 +937,6 @@ func (r *runner) CreateBlobs(ctx context.Context, contents ...string) ([]string,
 		shas[i] = sha
 	}
 	return shas, nil
-}
-
-func (r *runner) ReadBlob(sha string) (string, error) {
-	content, found, err := r.objects.ReadObject(sha)
-	if err != nil {
-		return "", fmt.Errorf("failed to read blob %s: %w", sha, err)
-	}
-	if !found {
-		return "", fmt.Errorf("blob %s not found", sha)
-	}
-	return content, nil
 }
 
 func (r *runner) ListRefs(prefix string) (map[string]string, error) {
@@ -1164,4 +1137,37 @@ func (r *runner) HasUncommittedChanges(ctx context.Context) bool {
 		return false
 	}
 	return strings.TrimSpace(output) != ""
+}
+
+// RefGeneration changes after successful ref mutations through this runner.
+func (r *runner) RefGeneration(ref string) uint64 {
+	value, ok := r.refGenerations.Load(ref)
+	if !ok {
+		return 0
+	}
+	return value.(*atomic.Uint64).Load()
+}
+
+func (r *runner) markRefChanged(ref string) {
+	value, _ := r.refGenerations.LoadOrStore(ref, &atomic.Uint64{})
+	value.(*atomic.Uint64).Add(1)
+}
+
+// ReadObjects returns content and the ref version from the same cat-file read.
+// Missing refs are omitted; empty blobs remain present with their SHA.
+func (r *runner) ReadObjects(ctx context.Context, refs ...string) (map[string]BatchObject, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(refs) == 1 {
+		content, sha, found, err := r.objects.ReadObjectWithSHA(refs[0])
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, nil
+		}
+		return map[string]BatchObject{refs[0]: {Content: content, SHA: sha}}, nil
+	}
+	return r.objects.ReadObjectsBatch(refs)
 }

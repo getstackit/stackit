@@ -88,6 +88,53 @@ func (tx *MetadataTx) checkState() error {
 	return nil
 }
 
+// ReadMetadata prepares shared records and their exact versions for this
+// transaction. UpdateMeta and DeleteMeta subsequently perform no I/O.
+func (tx *MetadataTx) ReadMetadata(ctx context.Context, branches ...string) git.ReadResults[*git.Meta] {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	if err := tx.checkState(); err != nil {
+		return failedMetadataReads[*git.Meta](branches, err)
+	}
+	results := tx.eng.metadata.ReadMetadata(ctx, branches...)
+	for name, version := range results.Versions {
+		if prior, ok := tx.originalMeta[name]; ok && prior != version {
+			results.Errors[name] = fmt.Errorf("metadata version changed after preparing %s", name)
+			delete(results.Values, name)
+			continue
+		}
+		tx.originalMeta[name] = version
+	}
+	return results.ReadResults
+}
+
+// ReadLocalMetadata prepares local records and versions for this transaction.
+func (tx *MetadataTx) ReadLocalMetadata(ctx context.Context, branches ...string) git.ReadResults[*git.LocalMeta] {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	if err := tx.checkState(); err != nil {
+		return failedMetadataReads[*git.LocalMeta](branches, err)
+	}
+	results := tx.eng.metadata.ReadLocalMetadata(ctx, branches...)
+	for name, version := range results.Versions {
+		if prior, ok := tx.originalLocalMeta[name]; ok && prior != version {
+			results.Errors[name] = fmt.Errorf("metadata version changed after preparing %s", name)
+			delete(results.Values, name)
+			continue
+		}
+		tx.originalLocalMeta[name] = version
+	}
+	return results.ReadResults
+}
+
+func failedMetadataReads[T any](names []string, err error) git.ReadResults[T] {
+	result := git.ReadResults[T]{Errors: make(map[string]error, len(names))}
+	for _, name := range names {
+		result.Errors[name] = err
+	}
+	return result
+}
+
 // UpdateMeta stages a metadata update for atomic commit.
 // The update is not applied until Commit() is called.
 func (tx *MetadataTx) UpdateMeta(branch string, meta *git.Meta) error {
@@ -98,9 +145,9 @@ func (tx *MetadataTx) UpdateMeta(branch string, meta *git.Meta) error {
 		return err
 	}
 
-	// Capture original SHA on first access for CAS validation
+	// Require the version captured when this transaction read the record.
 	if _, exists := tx.originalMeta[branch]; !exists {
-		tx.originalMeta[branch] = tx.eng.git.GetMetadataRefSHA(branch)
+		return fmt.Errorf("metadata for %s must be read before staging", branch)
 	}
 
 	// Remove from deletes if previously staged (update takes precedence over delete)
@@ -118,9 +165,9 @@ func (tx *MetadataTx) UpdateLocalMeta(branch string, meta *git.LocalMeta) error 
 		return err
 	}
 
-	// Capture original SHA on first access
+	// Require the version captured when this transaction read the record.
 	if _, exists := tx.originalLocalMeta[branch]; !exists {
-		tx.originalLocalMeta[branch] = tx.eng.git.GetLocalMetadataRefSHA(branch)
+		return fmt.Errorf("metadata for %s must be read before staging", branch)
 	}
 
 	// Remove from deletes if previously staged (update takes precedence over delete)
@@ -139,9 +186,9 @@ func (tx *MetadataTx) DeleteMeta(branch string) error {
 		return err
 	}
 
-	// Capture original SHA on first access for CAS validation
+	// Require the version captured when this transaction read the record.
 	if _, exists := tx.originalMeta[branch]; !exists {
-		tx.originalMeta[branch] = tx.eng.git.GetMetadataRefSHA(branch)
+		return fmt.Errorf("metadata for %s must be read before staging", branch)
 	}
 
 	// Remove from updates if previously staged (delete takes precedence)
@@ -159,9 +206,9 @@ func (tx *MetadataTx) DeleteLocalMeta(branch string) error {
 		return err
 	}
 
-	// Capture original SHA on first access for CAS validation
+	// Require the version captured when this transaction read the record.
 	if _, exists := tx.originalLocalMeta[branch]; !exists {
-		tx.originalLocalMeta[branch] = tx.eng.git.GetLocalMetadataRefSHA(branch)
+		return fmt.Errorf("metadata for %s must be read before staging", branch)
 	}
 
 	// Remove from updates if previously staged (delete takes precedence)
@@ -198,47 +245,35 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	}
 	slices.Sort(metaBranches)
 
-	if len(metaBranches) > 0 {
-		metas := make([]*git.Meta, len(metaBranches))
-		for i, branch := range metaBranches {
-			metas[i] = tx.metaUpdates[branch]
-		}
-		shas, err := tx.eng.git.WriteMetadataBlobs(ctx, metas)
-		if err != nil {
-			return fmt.Errorf("write meta blobs: %w", err)
-		}
-		for i, branch := range metaBranches {
-			refUpdates = append(refUpdates, git.RefUpdate{
-				RefName: git.MetadataRefName(branch),
-				NewSHA:  shas[i],
-				OldSHA:  tx.originalMeta[branch], // CAS validation
-			})
-		}
-	}
-
-	// Sort local metadata branches for deterministic order
 	localBranches := make([]string, 0, len(tx.localUpdates))
 	for branch := range tx.localUpdates {
 		localBranches = append(localBranches, branch)
 	}
 	slices.Sort(localBranches)
 
-	if len(localBranches) > 0 {
-		metas := make([]*git.LocalMeta, len(localBranches))
-		for i, branch := range localBranches {
-			metas[i] = tx.localUpdates[branch]
-		}
-		shas, err := tx.eng.git.WriteLocalMetadataBlobs(ctx, metas)
-		if err != nil {
-			return fmt.Errorf("write local meta blobs: %w", err)
-		}
-		for i, branch := range localBranches {
-			refUpdates = append(refUpdates, git.RefUpdate{
-				RefName: git.LocalMetadataRefName(branch),
-				NewSHA:  shas[i],
-				OldSHA:  tx.originalLocalMeta[branch],
-			})
-		}
+	// Both metadata tiers share one blob-write invocation.
+	values := make([]any, 0, len(metaBranches)+len(localBranches))
+	for _, branch := range metaBranches {
+		values = append(values, tx.metaUpdates[branch])
+	}
+	for _, branch := range localBranches {
+		values = append(values, tx.localUpdates[branch])
+	}
+	shas, err := tx.eng.metadata.WriteBlobs(ctx, values...)
+	if err != nil {
+		return fmt.Errorf("write metadata blobs: %w", err)
+	}
+	for i, branch := range metaBranches {
+		old := tx.originalMeta[branch]
+		refUpdates = append(refUpdates, git.RefUpdate{
+			RefName: git.MetadataRefName(branch), NewSHA: shas[i], OldSHA: old, MustNotExist: old == "",
+		})
+	}
+	for i, branch := range localBranches {
+		old := tx.originalLocalMeta[branch]
+		refUpdates = append(refUpdates, git.RefUpdate{
+			RefName: git.LocalMetadataRefName(branch), NewSHA: shas[len(metaBranches)+i], OldSHA: old, MustNotExist: old == "",
+		})
 	}
 
 	// Add metadata deletions

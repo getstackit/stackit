@@ -31,7 +31,7 @@ func (e *engineImpl) MarkBranchesForPRBodyUpdate(ctx context.Context, branchName
 		orderedNames = append(orderedNames, name)
 	}
 
-	shas, err := e.git.WriteLocalMetadataBlobs(ctx, metas)
+	shas, err := e.metadata.WriteLocalMetadataBlobs(ctx, metas)
 	if err != nil {
 		return fmt.Errorf("failed to create local metadata blobs: %w", err)
 	}

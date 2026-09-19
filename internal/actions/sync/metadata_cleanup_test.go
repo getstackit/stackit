@@ -25,7 +25,7 @@ func TestMetadataCleanup(t *testing.T) {
 			TrackBranch("temp-branch", "main")
 
 		// Verify metadata exists
-		refs, err := s.Engine.Git().ListMetadata()
+		refs, err := s.Engine.Metadata().ListMetadata()
 		require.NoError(t, err)
 		require.Contains(t, refs, "temp-branch")
 
@@ -46,7 +46,7 @@ func TestMetadataCleanup(t *testing.T) {
 		require.NoError(t, err)
 
 		// 6. Verify metadata ref for deleted branch is gone
-		refs, err = s.Engine.Git().ListMetadata()
+		refs, err = s.Engine.Metadata().ListMetadata()
 		require.NoError(t, err)
 		require.NotContains(t, refs, "temp-branch", "metadata ref should have been cleaned up")
 	})

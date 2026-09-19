@@ -171,7 +171,7 @@ func TestAddAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Use AddAll
-		err = runner.AddAll(context.Background())
+		err = runner.StageAll(context.Background())
 		require.NoError(t, err)
 
 		// Verify changes are staged

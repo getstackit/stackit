@@ -1,6 +1,7 @@
 package navigation_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -96,4 +97,25 @@ func TestLogCommand(t *testing.T) {
 		require.NoError(t, err, "tree command failed: %s", output)
 		require.Contains(t, output, "worktree", "tree should show worktree indicator for branch with managed worktree")
 	})
+}
+
+func TestTreeShortJSONRespectsSteps(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithLinearStack3().WithInProcess(true)
+	s.Checkout("b")
+	for _, command := range [][]string{{"tree", "short"}, {"t"}} {
+		output, err := s.RunCliAndGetOutput(append(command, "--steps", "1", "--json")...)
+		require.NoError(t, err, output)
+		var result struct {
+			Branches []map[string]any `json:"branches"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(output), &result))
+		names := make([]string, 0, len(result.Branches))
+		for _, branch := range result.Branches {
+			names = append(names, branch["name"].(string))
+			require.NotContains(t, branch, "commits")
+			require.NotContains(t, branch, "pr")
+		}
+		require.ElementsMatch(t, []string{"a", "b", "c"}, names)
+	}
 }

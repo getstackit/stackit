@@ -137,12 +137,14 @@ func (e *engineImpl) GetMergeBase(ctx context.Context, rev1, rev2 string) (strin
 
 // IsDiffEmpty checks if the diff between base and head is empty
 func (e *engineImpl) IsDiffEmpty(ctx context.Context, base, head string) (bool, error) {
-	return e.git.IsDiffEmpty(ctx, head, base)
+	diff, err := e.git.ReadDiffs(ctx, git.DiffCheckOnly, git.RevRange{Base: base, Head: head}).One()
+	return diff.Empty, err
 }
 
 // GetChangedFiles returns the list of files changed between base and head
 func (e *engineImpl) GetChangedFiles(ctx context.Context, rr git.RevRange) ([]string, error) {
-	return e.git.GetChangedFiles(ctx, rr)
+	diff, err := e.git.ReadDiffs(ctx, git.DiffNames, rr).One()
+	return diff.Files, err
 }
 
 // ListWorktrees returns every working tree registered with the repo.

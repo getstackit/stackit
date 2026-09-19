@@ -91,11 +91,9 @@ type DiffOperations interface {
 	IsMerged(ctx context.Context, branchName, target string) (bool, error)
 	IsSquashMerged(ctx context.Context, branchName, target string, cache *SquashMergeCache) (bool, error)
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
-	IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error)
-	GetChangedFiles(ctx context.Context, rr RevRange) ([]string, error)
+	ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...RevRange) ReadResults[DiffSummary]
 	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
 	ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error)
-	GetDiffNumstat(rr RevRange) (string, error)
 	GetStagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary

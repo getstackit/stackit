@@ -190,10 +190,10 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Check if anything was staged
-	hasStaged, err := eng.HasStagedChanges(ctx)
+	hasStaged, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(ctx)
 	if err != nil {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
-			fmt.Errorf("failed to check staged changes: %w", err))
+			fmt.Errorf("failed to read working tree status: %w", err))
 	}
 	if !hasStaged {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
@@ -201,16 +201,7 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Check if there are remaining changes (to keep on branchToSplit)
-	hasUnstaged, err := eng.HasUnstagedChanges(ctx)
-	if err != nil {
-		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
-			fmt.Errorf("failed to check unstaged changes: %w", err))
-	}
-	hasUntracked, err := eng.HasUntrackedFiles(ctx)
-	if err != nil {
-		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
-			fmt.Errorf("failed to check untracked files: %w", err))
-	}
+
 	if !hasUnstaged && !hasUntracked {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("all changes were selected - nothing would remain on %s", branchToSplit.GetName()))
@@ -378,10 +369,10 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	}
 
 	// Check if anything was staged
-	hasStaged, err := eng.HasStagedChanges(ctx)
+	hasStaged, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(ctx)
 	if err != nil {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
-			fmt.Errorf("failed to check staged changes: %w", err))
+			fmt.Errorf("failed to read working tree status: %w", err))
 	}
 	if !hasStaged {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
@@ -389,16 +380,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	}
 
 	// Check if there are remaining changes (to keep on branchToSplit)
-	hasUnstaged, err := eng.HasUnstagedChanges(ctx)
-	if err != nil {
-		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
-			fmt.Errorf("failed to check unstaged changes: %w", err))
-	}
-	hasUntracked, err := eng.HasUntrackedFiles(ctx)
-	if err != nil {
-		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
-			fmt.Errorf("failed to check untracked files: %w", err))
-	}
+
 	if !hasUnstaged && !hasUntracked {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("all changes were selected - nothing would remain on %s", branchToSplit.GetName()))

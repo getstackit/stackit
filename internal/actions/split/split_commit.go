@@ -1,12 +1,14 @@
 package split
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/utils"
@@ -17,6 +19,7 @@ type splitByCommitEngine interface {
 	engine.BranchReader
 	engine.PRManager
 	engine.StackRewriter
+	ReadBranchCommits(ctx context.Context, mode git.CommitReadMode, branches engine.Branches) git.ReadResults[engine.BranchCommitRange]
 }
 
 // branchGroup represents a group of commits that will form a branch
@@ -36,15 +39,18 @@ type branchGroup struct {
 //  4. Auto-derive names for single-commit branches, prompt for multi-commit branches.
 //  5. Detach HEAD and return the branch names and points.
 func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngine, splog output.Output, pattern config.BranchPattern) (*Result, error) {
-	// Get commits in both readable and subject formats
+	// Read once so display, subjects, and the eventual detach share one snapshot.
 	branchToSplitObj := eng.GetBranch(branchToSplit)
-	readableCommits, err := branchToSplitObj.GetAllCommits(engine.CommitFormatReadable)
+	history, err := eng.ReadBranchCommits(ctx, git.CommitDetails, engine.BranchesOf(branchToSplitObj)).One()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commits: %w", err)
 	}
-	subjectCommits, err := branchToSplitObj.GetAllCommits(engine.CommitFormatSubject)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get commit subjects: %w", err)
+	readableCommits := make([]string, 0, len(history.Commits))
+	subjectCommits := make([]string, 0, len(history.Commits))
+	for _, commit := range history.Commits {
+		readableCommits = append(readableCommits, commit.ShortSHA+" "+commit.Subject)
+		// Keep empty subjects so both slices remain aligned with commit indices.
+		subjectCommits = append(subjectCommits, commit.Subject)
 	}
 
 	if len(readableCommits) == 0 {
@@ -111,11 +117,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 	}
 
 	// Detach HEAD to the branch revision
-	branchRevision, err := branchToSplitObj.GetRevision()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get branch revision: %w", err)
-	}
-	if err := eng.Detach(ctx, branchRevision); err != nil {
+	if err := eng.Detach(ctx, history.Range.Head); err != nil {
 		return nil, fmt.Errorf("failed to detach: %w", err)
 	}
 

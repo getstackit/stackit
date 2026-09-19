@@ -138,8 +138,10 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		}
 	}
 
-	commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
-	if err == nil {
+	history, commitErr := eng.ReadBranchCommits(ctx, git.CommitDetails, engine.BranchesOf(branch)).One()
+	commitData := history.Commits
+	commits, err := engine.FormatCommits(commitData, engine.CommitFormatReadable)
+	if commitErr == nil && err == nil {
 		result.CommitMessages = commits
 	}
 
@@ -158,19 +160,16 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 
 	effectiveDiff := opts.Diff || (opts.Stat && !opts.Patch)
 	effectivePatch := opts.Patch && !opts.Diff
+	// Reuse the commit read's actual endpoints, including its parent-tip
+	// fallback. A commit's first parent is not equivalent for merge histories.
+	baseRevision := history.Range.Base
 
-	if effectivePatch {
-		baseRevision := ""
+	if effectivePatch && (isTrunk || (commitErr == nil && len(commitData) > 0)) {
+		branchRevision := history.Range.Head
 		if isTrunk {
 			baseRevision = branchName + "~"
-		} else {
-			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
-			if err == nil && len(commits) > 0 {
-				oldestSHA := commits[0]
-				baseRevision, _ = eng.GetParentCommitSHA(oldestSHA)
-			}
+			branchRevision, err = branch.GetRevision()
 		}
-		branchRevision, err := branch.GetRevision()
 		if err == nil {
 			patchOutput, err := eng.ShowCommits(ctx, git.RevRange{Base: baseRevision, Head: branchRevision}, true, opts.Stat)
 			if err == nil {
@@ -191,18 +190,10 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 					}
 				}
 			}
-		} else {
-			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
-			if err == nil && len(commits) > 0 {
-				oldestSHA := commits[0]
-				parentSHA, _ := eng.GetParentCommitSHA(oldestSHA)
-				branchRevision, err := branch.GetRevision()
-				if err == nil {
-					diffOutput, err := eng.ShowDiff(ctx, parentSHA, branchRevision, opts.Stat)
-					if err == nil {
-						result.DiffOutput = diffOutput
-					}
-				}
+		} else if commitErr == nil && len(commitData) > 0 {
+			diffOutput, err := eng.ShowDiff(ctx, baseRevision, history.Range.Head, opts.Stat)
+			if err == nil {
+				result.DiffOutput = diffOutput
 			}
 		}
 	}

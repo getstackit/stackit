@@ -174,8 +174,20 @@ func (d *demoGitRunner) IsAncestor(_ context.Context, _, _ string) (bool, error)
 	return true, nil
 }
 
-func (d *demoGitRunner) GetCommitRange(_ context.Context, _, _, _ string) ([]string, error) {
-	return []string{"commit message"}, nil
+func (d *demoGitRunner) ReadAncestry(_ context.Context, ranges ...git.RevRange) git.ReadResults[bool] {
+	result := git.ReadResults[bool]{Values: make(map[string]bool)}
+	for _, rr := range ranges {
+		result.Values[rr.String()] = true
+	}
+	return result
+}
+
+func (d *demoGitRunner) ReadCommitCounts(_ context.Context, ranges ...git.RevRange) git.ReadResults[int] {
+	result := git.ReadResults[int]{Values: make(map[string]int)}
+	for _, rr := range ranges {
+		result.Values[rr.String()] = 1
+	}
+	return result
 }
 
 func (d *demoGitRunner) PullBranch(_ context.Context, _, _ string) (git.PullResult, error) {
@@ -281,14 +293,6 @@ func (d *demoGitRunner) ListStash(_ context.Context) (string, error) {
 
 func (d *demoGitRunner) GetReflog(_ context.Context, _ int, _ string) (string, error) {
 	return "", nil
-}
-
-func (d *demoGitRunner) GetCommitRangeSHAs(_ context.Context, _ git.RevRange) ([]string, error) {
-	return []string{"sha1", "sha2"}, nil
-}
-
-func (d *demoGitRunner) GetCommitHistorySHAs(_ context.Context, _ string) ([]string, error) {
-	return []string{"sha1", "sha2"}, nil
 }
 
 func (d *demoGitRunner) GetRebaseHead() (string, error) {
@@ -411,12 +415,22 @@ func (d *demoGitRunner) GetDiffBetween(_ context.Context, _ git.RevRange, _ ...s
 	return "", nil
 }
 
-func (d *demoGitRunner) GetCommitLog(_, _ string) (string, error) {
-	return "demo commit", nil
+func (d *demoGitRunner) ReadCommitRanges(_ context.Context, _ git.CommitReadMode, ranges ...git.RevRange) git.ReadResults[[]git.CommitMetadata] {
+	const message = "demo commit"
+	const sha = "sha1"
+	result := git.ReadResults[[]git.CommitMetadata]{Values: make(map[string][]git.CommitMetadata)}
+	for _, rr := range ranges {
+		result.Values[rr.String()] = []git.CommitMetadata{{SHA: sha, ShortSHA: sha, Subject: message, Message: message}}
+	}
+	return result
 }
 
-func (d *demoGitRunner) GetCommitRangeMetadata(context.Context, git.RevRange) ([]git.CommitMetadata, error) {
-	return nil, nil
+func (d *demoGitRunner) ReadCommits(_ context.Context, refs ...string) git.ReadResults[git.CommitMetadata] {
+	result := git.ReadResults[git.CommitMetadata]{Values: make(map[string]git.CommitMetadata)}
+	for _, ref := range refs {
+		result.Values[ref] = git.CommitMetadata{SHA: "sha1", Subject: "demo commit"}
+	}
+	return result
 }
 
 func (d *demoGitRunner) GetRecentCommits(_ context.Context, _ string, _ int) ([]git.RecentCommit, error) {
@@ -429,6 +443,10 @@ func (d *demoGitRunner) GetRecentCommitsInRange(_ context.Context, _ string) ([]
 
 func (d *demoGitRunner) GetStatusPorcelain(_ context.Context) (string, error) {
 	return "M  test.txt", nil
+}
+
+func (d *demoGitRunner) ReadWorktreeStatus(_ context.Context) (git.WorktreeStatus, error) {
+	return git.WorktreeStatus{}, nil
 }
 
 func (d *demoGitRunner) GetCommitTemplate(_ context.Context) (string, error) {

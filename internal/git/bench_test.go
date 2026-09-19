@@ -118,18 +118,18 @@ func BenchmarkCommitRangeMetadata(b *testing.B) {
 			rr := git.RevRange{Base: "main~20", Head: "main"}
 			for b.Loop() {
 				if batch {
-					if _, err := br.runner.GetCommitRangeMetadata(ctx, rr); err != nil {
+					if _, err := br.runner.ReadCommitRanges(ctx, git.CommitDetails, rr).One(); err != nil {
 						b.Fatal(err)
 					}
 					continue
 				}
-				commits, err := br.runner.GetCommitRangeSHAs(ctx, rr)
+				commits, err := br.runner.ReadCommitRanges(ctx, git.CommitIDs, rr).One()
 				if err != nil {
 					b.Fatal(err)
 				}
 				for _, sha := range commits {
 					for _, format := range []string{"%P", "%an", "%ae", "%aI", "%B"} {
-						if _, err := br.runner.GetCommitLog(sha, format); err != nil {
+						if _, err := br.runner.RunGitCommandWithContext(ctx, "log", "-1", "--format="+format, sha.SHA); err != nil {
 							b.Fatal(err)
 						}
 					}

@@ -19,7 +19,7 @@ type fastPathGit struct {
 
 	t *testing.T
 
-	// commits returned by GetCommitRangeMetadata (newest-first).
+	// commits returned by ReadCommitRanges (newest-first).
 	commits []string
 	// parent lists keyed by commit SHA, as returned by git log --format=%P.
 	parents map[string]string
@@ -34,7 +34,10 @@ type fastPathGit struct {
 	commitTreeN int
 }
 
-func (g *fastPathGit) GetCommitRangeMetadata(_ context.Context, rr git.RevRange) ([]git.CommitMetadata, error) {
+func (g *fastPathGit) ReadCommitRanges(_ context.Context, mode git.CommitReadMode, ranges ...git.RevRange) git.ReadResults[[]git.CommitMetadata] {
+	require.Equal(g.t, git.CommitDetails, mode)
+	require.Len(g.t, ranges, 1)
+	rr := ranges[0]
 	require.Equal(g.t, "old-base", rr.Base)
 	require.Equal(g.t, "feature", rr.Head)
 	commits := make([]git.CommitMetadata, 0, len(g.commits))
@@ -45,7 +48,7 @@ func (g *fastPathGit) GetCommitRangeMetadata(_ context.Context, rr git.RevRange)
 			AuthorDate: "2026-06-01T12:00:00-04:00", Message: "subject " + sha + "\n",
 		})
 	}
-	return commits, nil
+	return git.ReadResults[[]git.CommitMetadata]{Values: map[string][]git.CommitMetadata{rr.String(): commits}}
 }
 
 func (g *fastPathGit) ReadDiffs(_ context.Context, mode git.DiffReadMode, ranges ...git.RevRange) git.ReadResults[git.DiffSummary] {

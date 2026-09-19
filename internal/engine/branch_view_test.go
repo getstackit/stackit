@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -162,4 +163,28 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 
 	batched := s.Engine.BatchCommits(engine.BranchesOf(b), engine.CommitFormatReadable)["b"]
 	require.Equal(t, commits, batched, "batched commits must match the single-branch accessor")
+}
+
+func TestReadBranchCommitsRetainsErrorsAndEmptyBranches(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithLinearStack3()
+	s.CreateBranch("empty").TrackBranch("empty", "c")
+	meta, err := s.Engine.Metadata().ReadMetadata(t.Context(), "b").One()
+	require.NoError(t, err)
+	missing := "missing-base"
+	require.NoError(t, s.Engine.Metadata().WriteMetadata("b", meta.WithParentBranchRevision(&missing)))
+	branches := engine.BranchesFromNames(s.Engine, []string{"a", "b", "empty", "missing-branch"})
+	data := s.Engine.ReadBranchCommits(t.Context(), git.CommitIDs, branches)
+	valid, err := data.Get("a")
+	require.NoError(t, err)
+	require.NotEmpty(t, valid.Commits)
+	empty, err := data.Get("empty")
+	require.NoError(t, err)
+	require.Empty(t, empty.Commits)
+	require.Equal(t, empty.Range.Base, empty.Range.Head)
+	_, err = data.Get("b")
+	require.Error(t, err)
+	_, err = data.Get("missing-branch")
+	require.Error(t, err)
 }

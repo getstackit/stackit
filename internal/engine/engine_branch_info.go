@@ -2,7 +2,7 @@ package engine
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 	"strings"
 	"time"
 
@@ -85,11 +85,10 @@ func (e *engineImpl) commitCountBetween(rr git.RevRange) (int, error) {
 		return v.(int), nil
 	}
 
-	out, err := e.git.RunGitCommandWithContext(context.Background(), "rev-list", "--count", base+".."+head)
+	count, err := e.git.ReadCommitCounts(context.Background(), rr).One()
 	if err != nil {
 		return 0, err
 	}
-	count, _ := strconv.Atoi(strings.TrimSpace(out))
 	e.commitCountCache.Store(cacheKey, count)
 	return count, nil
 }
@@ -112,52 +111,45 @@ func (e *engineImpl) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit
 
 // GetAllCommits returns commits for a branch in various formats
 func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string, error) {
-	branchName := branch.GetName()
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	// Check if branch is trunk
-	if branchName == e.trunk {
-		// Trunk is the base, so it has no commits "on" it relative to a parent
-		return []string{}, nil
+	mode := git.CommitDetails
+	if format == CommitFormatSHA {
+		mode = git.CommitIDs
 	}
-
-	// Get metadata to find parent revision
-	meta, err := e.readMetadata(branchName)
+	history, err := e.ReadBranchCommits(context.Background(), mode, BranchesOf(branch)).One()
 	if err != nil {
 		return nil, err
 	}
-
-	// Get branch revision
-	branchRevision, err := e.git.ReadRevisions(context.Background(), branchName).One()
-	if err != nil {
-		return nil, err
-	}
-
-	// Base for the commit range: the stored divergence point, or the parent's
-	// current tip when none is recorded. Falling back to the parent tip — not an
-	// empty base, which lists the branch's entire history back to the repo root —
-	// keeps the result to the branch's own commits and consistent with the base
-	// the batched diff-stat / commit-count readers use (statBase).
-	var baseRevision string
-	if rev := meta.GetParentBranchRevision(); rev != nil && *rev != "" {
-		baseRevision = *rev
-	} else {
-		parent := e.trunk
-		if state := e.readState(branchName); state != nil {
-			parent = state.Parent
-		}
-		if parentRev, err := e.git.ReadRevisions(context.Background(), parent).One(); err == nil {
-			baseRevision = parentRev
-		}
-	}
-
-	return e.commitsBetween(git.RevRange{Base: baseRevision, Head: branchRevision}, format)
+	return FormatCommits(history.Commits, format)
 }
 
-// commitsBetween returns the formatted commits in (base, head]. It handles
-// formatting in-process via go-git, avoiding per-commit git process spawns, and
-// takes pre-resolved revisions so batched callers need not re-resolve the head.
-func (e *engineImpl) commitsBetween(rr git.RevRange, format CommitFormat) ([]string, error) {
-	return e.git.GetCommitRange(context.Background(), rr.Base, rr.Head, string(format))
+// FormatCommits formats already-read commit data without repository I/O.
+func FormatCommits(commits []git.CommitMetadata, format CommitFormat) ([]string, error) {
+	var result []string
+	for _, commit := range commits {
+		var line string
+		switch format {
+		case CommitFormatSHA:
+			line = commit.SHA
+		case CommitFormatSubject:
+			line = commit.Subject
+		case CommitFormatSHASubject:
+			line = commit.SHA + "\x00" + commit.Subject
+		case CommitFormatReadable:
+			line = commit.ShortSHA + " " + commit.Subject
+		case CommitFormatMessage:
+			line = commit.Message
+		case CommitFormatReadableWithDate:
+			date, err := time.Parse(time.RFC3339, commit.AuthorDate)
+			if err != nil {
+				return nil, err
+			}
+			line = commit.ShortSHA + "\t" + date.UTC().Format(time.RFC3339) + "\t" + commit.Subject
+		default:
+			return nil, fmt.Errorf("unknown commit format: %s", format)
+		}
+		if line = strings.TrimSpace(line); line != "" {
+			result = append(result, line)
+		}
+	}
+	return result, nil
 }

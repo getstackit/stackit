@@ -43,6 +43,20 @@ func singleBranchFilesChanged(t *testing.T, s *scenario.Scenario, name string) i
 }
 
 func TestQueryBranchInfo(t *testing.T) {
+	t.Run("multi-commit diff and patch include the whole branch", func(t *testing.T) {
+		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
+		s.CreateBranch("feature").CommitChange("first.txt", "first").CommitChange("second.txt", "second").TrackBranch("feature", "main")
+		for _, patch := range []bool{false, true} {
+			info, err := QueryBranchInfo(t.Context(), s.Engine, BranchInfoQueryOptions{
+				BranchName: "feature", Diff: !patch, Patch: patch,
+			}, nil)
+			require.NoError(t, err)
+			require.Len(t, info.CommitMessages, 2)
+			output := info.DiffOutput + info.PatchOutput
+			require.Contains(t, output, "first.txt")
+			require.Contains(t, output, "second.txt")
+		}
+	})
 	t.Run("returns structured branch info for a tracked branch", func(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
 

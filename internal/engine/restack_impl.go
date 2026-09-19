@@ -102,7 +102,7 @@ type restackSnapshot struct {
 	// revs is a read-through cache, not a source of truth. Read it via
 	// engineImpl.branchRev rather than indexing it: a miss yields "", and an
 	// empty SHA passed as a RefUpdate's OldSHA silently disables the
-	// compare-and-swap in UpdateRefsBatch, turning a lost-update guard into a
+	// compare-and-swap in UpdateRefs, turning a lost-update guard into a
 	// blind overwrite. Never use a cached revision as a RefUpdate's *NewSHA* —
 	// staleness there is not caught by the compare-and-swap and writes a wrong
 	// value rather than failing.
@@ -259,7 +259,7 @@ func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) string
 // live read when it isn't cached.
 //
 // This exists so the fallback can't be forgotten. Indexing snap.revs directly
-// yields "" for an absent branch, and an empty OldSHA makes UpdateRefsBatch skip
+// yields "" for an absent branch, and an empty OldSHA makes UpdateRefs skip
 // its compare-and-swap entirely — the lost-update hole #1487 closed. Routing
 // every cached revision read through here keeps that a single decision rather
 // than one repeated at each call site.
@@ -545,7 +545,7 @@ func (e *engineImpl) restackBranch(
 		_ = e.appendMergedDownstack(branchName, oldParent, snap.meta)
 
 		// SetParent + appendMergedDownstack bumped the metadata ref. Refresh
-		// the cached SHA so the later optimistic-locking UpdateRefsBatch
+		// the cached SHA so the later optimistic-locking UpdateRefs
 		// doesn't fail with "is at X but expected Y".
 		if sha, refErr := e.git.ReadRevisions(ctx, git.MetadataRefPrefix+branchName).One(); refErr == nil {
 			snap.metaRefSHAs[branchName] = sha

@@ -136,7 +136,7 @@ func (c *metadataCache) InvalidateForRefs(updates []RefUpdate) {
 }
 
 // InvalidateForRefNames clears cached metadata for any ref names that
-// are metadata refs. Used by DeleteRefsBatch which operates on raw ref names.
+// are metadata refs. Used by DeleteRefs which operates on raw ref names.
 func (c *metadataCache) InvalidateForRefNames(refNames []string) {
 	for _, refName := range refNames {
 		if branchName, ok := strings.CutPrefix(refName, MetadataRefPrefix); ok {

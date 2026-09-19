@@ -190,11 +190,7 @@ func (d *demoGitRunner) UpdateBranchFromRemote(_ context.Context, _, _ string) (
 	return git.PullDone, nil
 }
 
-func (d *demoGitRunner) PushBranch(_ context.Context, _, _ string, _ git.PushOptions) error {
-	return nil
-}
-
-func (d *demoGitRunner) PushBranches(_ context.Context, _ string, specs []git.PushSpec, _ git.PushOptions) map[string]error {
+func (d *demoGitRunner) PushBranches(_ context.Context, _ string, specs []git.PushSpec, _ git.PushOptions) git.PushResults {
 	results := make(map[string]error, len(specs))
 	for _, s := range specs {
 		results[s.BranchName] = nil

@@ -33,8 +33,7 @@ type RepositoryWriter interface {
 type RemoteOperations interface {
 	FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error)
 	FindRemoteBranch(ctx context.Context, remote string) (string, error)
-	PushBranch(ctx context.Context, branchName, remote string, opts PushOptions) error
-	PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) map[string]error
+	PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) PushResults
 	PullBranch(ctx context.Context, remote, branchName string) (PullResult, error)
 	UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error)
 	FetchRefs(ctx context.Context, remote string, refspecs ...string) error
@@ -260,10 +259,8 @@ type MetadataOperations interface {
 	ReadLocalMetadata(ctx context.Context, branchNames ...string) ReadResults[*LocalMeta]
 	WriteLocalMetadata(branchName string, meta *LocalMeta) error
 
-	// Transaction support methods. The batch forms marshal each entry and
-	// forward to CreateBlobsBatch — call them with len(metas) >= 1 from
-	// engine_writer.go and transaction.go's commit path. ctx is honored for
-	// the underlying git hash-object invocation.
+	// Transaction support: serialize metadata to blobs without updating refs.
+	// Callers write the returned SHAs atomically with UpdateRefs.
 	WriteMetadataBlobs(ctx context.Context, metas []*Meta) ([]string, error)
 	WriteLocalMetadataBlobs(ctx context.Context, metas []*LocalMeta) ([]string, error)
 	GetMetadataRefSHA(branchName string) string

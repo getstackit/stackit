@@ -226,6 +226,11 @@ func (r *runner) ReadLocalMetadata(ctx context.Context, branchNames ...string) R
 		}
 		return result
 	}
+	start := time.Now()
+	defer func() {
+		r.infoLog("metadata batch-load kind=local branches=%d errors=%d elapsed_ms=%d",
+			len(branchNames), len(result.Errors), time.Since(start).Milliseconds())
+	}()
 	refs := make([]string, len(branchNames))
 	for i, name := range branchNames {
 		refs[i] = LocalMetadataRefPrefix + name
@@ -413,7 +418,7 @@ func (r *runner) ListMetadata() (map[string]string, error) {
 }
 
 // WriteMetadataBlobs marshals each Meta to JSON and writes all the blobs
-// in one `git hash-object` invocation via CreateBlobsBatch. Returns SHAs in
+// in one `git hash-object` invocation via CreateBlobs. Returns SHAs in
 // input order. Does NOT update any refs — callers (transaction commit,
 // MarkBranchesForPRBodyUpdate) pair the SHAs with ref updates afterwards.
 func (r *runner) WriteMetadataBlobs(ctx context.Context, metas []*Meta) ([]string, error) {

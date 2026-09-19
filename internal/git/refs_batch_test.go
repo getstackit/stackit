@@ -10,7 +10,7 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 )
 
-func TestUpdateRefsBatch(t *testing.T) {
+func TestUpdateRefs(t *testing.T) {
 	t.Parallel()
 
 	t.Run("atomically updates multiple refs", func(t *testing.T) {
@@ -133,7 +133,7 @@ func TestUpdateRefsBatch(t *testing.T) {
 	})
 }
 
-func TestUpdateRefsBatchWithLog(t *testing.T) {
+func TestUpdateRefsWithLog(t *testing.T) {
 	t.Parallel()
 
 	t.Run("updates metadata refs with reflog message", func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestUpdateRefsBatchWithLog(t *testing.T) {
 	})
 }
 
-func TestDeleteRefsBatch(t *testing.T) {
+func TestDeleteRefs(t *testing.T) {
 	t.Parallel()
 
 	t.Run("atomically deletes multiple refs", func(t *testing.T) {

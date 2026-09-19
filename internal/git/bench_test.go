@@ -139,10 +139,10 @@ func BenchmarkCommitRangeMetadata(b *testing.B) {
 	}
 }
 
-// BenchmarkBatchGetRevisions measures bulk revision resolution, batching all
+// BenchmarkReadRevisions measures bulk revision resolution, batching all
 // branches into a single `git rev-parse` invocation rather than N parallel
 // subprocesses.
-func BenchmarkBatchGetRevisions(b *testing.B) {
+func BenchmarkReadRevisions(b *testing.B) {
 	const branches = 20
 	br := newBenchRepo(b, 5, branches)
 	names := make([]string, branches)
@@ -151,14 +151,14 @@ func BenchmarkBatchGetRevisions(b *testing.B) {
 	}
 	for b.Loop() {
 		if _, errs := br.runner.ReadRevisions(context.Background(), names...).ValuesAndErrors(); len(errs) > 0 {
-			b.Fatalf("BatchGetRevisions: %v", errs[0])
+			b.Fatalf("ReadRevisions: %v", errs[0])
 		}
 	}
 }
 
-// BenchmarkBatchGetRevisionsMissing compares the previous individual fallback
+// BenchmarkReadRevisionsMissing compares the previous individual fallback
 // with the batched fallback for a mix of valid and unpublished branch refs.
-func BenchmarkBatchGetRevisionsMissing(b *testing.B) {
+func BenchmarkReadRevisionsMissing(b *testing.B) {
 	for _, batch := range []bool{false, true} {
 		b.Run(fmt.Sprintf("batch=%t", batch), func(b *testing.B) {
 			br := newBenchRepo(b, 1, 0)
@@ -334,10 +334,10 @@ func BenchmarkCreateBlobs_Sequential(b *testing.B) {
 	}
 }
 
-// BenchmarkCreateBlobsBatch exercises the optimized batched path used by
+// BenchmarkCreateBlobs exercises the optimized batched path used by
 // MarkBranchesForPRBodyUpdate and transaction commits — temp-file staging
 // plus a single `git hash-object -w --stdin-paths` invocation.
-func BenchmarkCreateBlobsBatch(b *testing.B) {
+func BenchmarkCreateBlobs(b *testing.B) {
 	for _, n := range []int{1, 10, 50} {
 		b.Run(fmt.Sprintf("blobs=%d", n), func(b *testing.B) {
 			br := newBenchRepo(b, 1, 0)
@@ -348,7 +348,7 @@ func BenchmarkCreateBlobsBatch(b *testing.B) {
 					contents[j] = fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
 				}
 				if _, err := br.runner.CreateBlobs(context.Background(), contents...); err != nil {
-					b.Fatalf("CreateBlobsBatch: %v", err)
+					b.Fatalf("CreateBlobs: %v", err)
 				}
 				iter++
 			}

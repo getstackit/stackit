@@ -14,7 +14,7 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 )
 
-func TestBatchGetRevisionsMissingRefsStayBatched(t *testing.T) {
+func TestReadRevisionsMissingRefsStayBatched(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	logger := &traceCaptureLogger{}
@@ -37,7 +37,7 @@ func TestBatchGetRevisionsMissingRefsStayBatched(t *testing.T) {
 	require.Equal(t, 1, logger.calls, "one batch, regardless of missing-ref count")
 }
 
-func TestBatchGetRevisionsFallbackPreservesResolution(t *testing.T) {
+func TestReadRevisionsFallbackPreservesResolution(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
@@ -80,7 +80,7 @@ func TestBatchGetRevisionsFallbackPreservesResolution(t *testing.T) {
 	require.NotEqual(t, sha, tagSHA)
 }
 
-func TestBatchGetRevisionsNewlineExpressionFallback(t *testing.T) {
+func TestReadRevisionsNewlineExpressionFallback(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	require.NoError(t, os.WriteFile(filepath.Join(scene.Dir, "with\nnewline"), []byte("content"), 0o600))

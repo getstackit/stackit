@@ -114,7 +114,7 @@ func (e *engineImpl) InteractiveRebase(ctx context.Context, onto string) error {
 
 // PushBranch pushes a branch to the remote
 func (e *engineImpl) PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error {
-	return e.git.PushBranch(ctx, branch.GetName(), remote, opts)
+	return e.git.PushBranches(ctx, remote, []git.PushSpec{{BranchName: branch.GetName(), LeaseMode: git.PushLeaseNone}}, opts).One()
 }
 
 // PushBranches pushes multiple branches to the remote in a single git

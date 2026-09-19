@@ -7,16 +7,16 @@ import (
 	"time"
 )
 
+// stackitRefPrefix is the namespace holding stackit's metadata refs, which
+// point at blobs rather than commits.
+const stackitRefPrefix = "refs/stackit/"
+
 // resolveRefSHA resolves any ref form (branch, short SHA, full SHA, tag,
 // "HEAD~1") to a 40-char SHA using `git rev-parse --verify`. The verify flag
 // turns ambiguity into an error rather than a heuristic guess.
 //
 // On failure the returned error string contains "reference not found" so
 // downstream callers that match on that legacy phrase continue to work.
-// stackitRefPrefix is the namespace holding stackit's metadata refs, which
-// point at blobs rather than commits.
-const stackitRefPrefix = "refs/stackit/"
-
 func (r *runner) resolveRefSHA(ref string) (string, error) {
 	return r.resolveRefSHAContext(context.Background(), ref)
 }

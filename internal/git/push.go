@@ -7,50 +7,45 @@ import (
 	"strings"
 )
 
-// PushOptions contains options for pushing a branch
+// PushOptions applies to every branch in a push. Lease policies belong to PushSpec.
 type PushOptions struct {
-	Force                     bool
-	ForceWithLease            bool
-	ForceWithLeaseExpectedSHA string
-	NoVerify                  bool
+	Force    bool
+	NoVerify bool
 }
 
-// PushSpec describes a single branch to push as part of a batched PushBranches
-// call.
+// PushSpec describes a branch and its lease policy for PushBranches.
 type PushSpec struct {
 	BranchName string
+	LeaseMode  PushLeaseMode
 	// ExpectedRemoteSHA is the SHA the remote ref is expected to be at, used for
-	// force-with-lease. An empty value means the branch is not expected to exist
+	// PushLeaseExplicit. An empty value means the branch is not expected to exist
 	// on the remote yet (a create); the lease then asserts the ref is absent.
 	ExpectedRemoteSHA string
 }
 
-func (r *runner) PushBranch(ctx context.Context, branchName, remote string, opts PushOptions) error {
-	args := []string{gitCmdPush, "-u", remote}
+// PushLeaseMode selects how a branch is protected against remote changes.
+type PushLeaseMode uint8
 
-	switch {
-	case opts.Force:
-		args = append(args, "--force")
-	case opts.ForceWithLease && opts.ForceWithLeaseExpectedSHA != "":
-		args = append(args, fmt.Sprintf("--force-with-lease=refs/heads/%s:%s", branchName, opts.ForceWithLeaseExpectedSHA))
-	case opts.ForceWithLease:
-		args = append(args, "--force-with-lease")
+const (
+	// PushLeaseExplicit checks ExpectedRemoteSHA, including an absent remote ref.
+	PushLeaseExplicit PushLeaseMode = iota
+	// PushLeaseTracking checks the local remote-tracking ref.
+	PushLeaseTracking
+	// PushLeaseNone uses Git's normal fast-forward checks.
+	PushLeaseNone
+)
+
+// PushResults holds each requested branch's error, or nil on success.
+type PushResults map[string]error
+
+// One extracts a one-branch result without performing I/O.
+func (r PushResults) One() error {
+	if len(r) != 1 {
+		return fmt.Errorf("expected one push result, got %d", len(r))
 	}
-
-	if opts.NoVerify {
-		args = append(args, "--no-verify")
+	for _, err := range r {
+		return err
 	}
-
-	args = append(args, branchName)
-
-	_, err := r.RunGitCommandWithContext(ctx, args...)
-	if err != nil {
-		if strings.Contains(err.Error(), "stale info") || strings.Contains(err.Error(), "forced update") {
-			return fmt.Errorf("%w: force-with-lease push of %s failed due to external changes to the remote branch", ErrStaleRemoteInfo, branchName)
-		}
-		return fmt.Errorf("failed to push branch %s: %w", branchName, err)
-	}
-
 	return nil
 }
 
@@ -62,10 +57,9 @@ func (r *runner) PushBranch(ctx context.Context, branchName, remote string, opts
 // succeeded or failed independently.
 //
 // When opts.Force is set, every branch is pushed with --force and the per-branch
-// ExpectedRemoteSHA is ignored. Otherwise each branch is pushed with an explicit
-// --force-with-lease guarding its expected remote SHA.
-func (r *runner) PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) map[string]error {
-	results := make(map[string]error, len(specs))
+// lease policy is ignored. Otherwise each branch uses its own LeaseMode.
+func (r *runner) PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) PushResults {
+	results := make(PushResults, len(specs))
 	if len(specs) == 0 {
 		return results
 	}
@@ -75,7 +69,14 @@ func (r *runner) PushBranches(ctx context.Context, remote string, specs []PushSp
 		args = append(args, "--force")
 	} else {
 		for _, s := range specs {
-			args = append(args, fmt.Sprintf("--force-with-lease=refs/heads/%s:%s", s.BranchName, s.ExpectedRemoteSHA))
+			switch s.LeaseMode {
+			case PushLeaseExplicit:
+				args = append(args, fmt.Sprintf("--force-with-lease=refs/heads/%s:%s", s.BranchName, s.ExpectedRemoteSHA))
+			case PushLeaseTracking:
+				args = append(args, "--force-with-lease=refs/heads/"+s.BranchName)
+			case PushLeaseNone:
+				// Git rejects non-fast-forward updates without a force option.
+			}
 		}
 	}
 	if opts.NoVerify {

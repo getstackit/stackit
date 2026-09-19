@@ -56,7 +56,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 	})
 
 	// The guard is worthless if it only covers the read path almost nothing
-	// uses. Engine graph loads go through BatchReadMetadata, which warmed the
+	// uses. Engine graph loads go through ReadMetadata, which warmed the
 	// cache without a SHA — so every command that read a stack and then wrote
 	// to it had no expectation to compare against and fell back to a blind
 	// update-ref. This is the same scenario as "stale write is rejected",

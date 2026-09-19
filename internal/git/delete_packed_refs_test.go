@@ -71,7 +71,7 @@ func TestDeleteBranch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 	requireRefPresent(t, runner, "refs/heads/feature")
 }
 
-func TestDeleteRefsBatch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
+func TestDeleteRefs_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)

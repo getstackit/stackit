@@ -405,7 +405,7 @@ func newContextWithConfig(ctx context.Context, repoRoot string, opts GlobalOptio
 	}
 
 	// Create real engine with configured runner. LoadModeShared skips
-	// BatchReadLocalMetadata at bootstrap — local metadata (Frozen, etc.)
+	// ReadLocalMetadata at bootstrap — local metadata (Frozen, etc.)
 	// loads on first accessor call. For commands that never read local-only
 	// fields this cuts metadata I/O roughly in half on big repos.
 	eng, err := engine.NewEngine(engine.Options{

@@ -193,7 +193,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// (git.ListRefs). The previous code called GetRef per branch in three
 	// places (frozen path, anchor path, regular rebase) plus applyBranchAndMetadata
 	// — N branches meant N+ rev-parse subprocesses. Each branch only reads its
-	// own SHA for optimistic locking on the metadata ref UpdateRefsBatch, so a
+	// own SHA for optimistic locking on the metadata ref UpdateRefs, so a
 	// pre-loop snapshot is stable.
 	metaRefSHAs := make(map[string]string)
 	if refs, listErr := e.git.ListRefs(git.MetadataRefPrefix); listErr == nil {
@@ -233,7 +233,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 			// / applyBranchAndMetadata — using it here avoids a per-branch
 			// GetRevision subprocess. For RestackUnneeded we leave the map alone
 			// because the branch's SHA didn't change and allRevisions already
-			// holds the pre-restack value from BatchGetRevisions.
+			// holds the pre-restack value from ReadRevisions.
 			if snap.revs == nil {
 				snap.revs = make(RevisionMap)
 			}

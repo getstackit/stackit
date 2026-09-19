@@ -11,7 +11,7 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 )
 
-func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
+func TestDeleteRemoteMetadataRefs(t *testing.T) {
 	t.Run("deletes multiple remote metadata refs", func(t *testing.T) {
 		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 

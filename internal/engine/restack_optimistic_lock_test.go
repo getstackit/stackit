@@ -74,7 +74,7 @@ func (r *flakyRevisionRunner) ReadRevisions(ctx context.Context, names ...string
 // ("don't silently bypass optimistic locking on restack"). Before the fix,
 // restackBranch discarded the error from branch.GetRevision() when capturing
 // the branch's current SHA for the optimistic-locking ref update, so
-// oldBranchSHA silently became "" -- and UpdateRefsBatch treats an empty
+// oldBranchSHA silently became "" -- and UpdateRefs treats an empty
 // OldSHA as "skip verification" rather than "expect empty ref", disabling
 // the concurrent-modification check entirely. Post-fix, the error must
 // surface as RestackConflict and the metadata ref must stay untouched.

@@ -110,9 +110,9 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		Children:       []string{},
 	}
 
-	commitDate, err := branch.GetCommitDate()
-	if err == nil {
-		result.CommitDate = commitDate.Format(time.RFC3339)
+	info, ok := eng.BatchCommitInfo(engine.BranchesOf(branch))[branchName]
+	if ok {
+		result.CommitDate = info.Date.Format(time.RFC3339)
 	}
 
 	if parent := branch.GetParent(); parent != nil {

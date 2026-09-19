@@ -73,3 +73,7 @@ Check timing boundaries and error handling with:
 ```bash
 python3 -B scripts/test_benchmark.py
 ```
+
+The [typed read-model comparison](benchmarks-typed-reads.md) checks the subsequent
+complexity refactor against its parent and v0.27.1 at 5/50 branches and with
+multi-commit histories.

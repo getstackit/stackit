@@ -34,8 +34,7 @@ type fastPathGit struct {
 	commitTreeN int
 }
 
-func (g *fastPathGit) ReadCommitRanges(_ context.Context, mode git.CommitReadMode, ranges ...git.RevRange) git.ReadResults[[]git.CommitMetadata] {
-	require.Equal(g.t, git.CommitDetails, mode)
+func (g *fastPathGit) ReadCommitRanges(_ context.Context, ranges ...git.RevRange) git.ReadResults[[]git.CommitMetadata] {
 	require.Len(g.t, ranges, 1)
 	rr := ranges[0]
 	require.Equal(g.t, "old-base", rr.Base)
@@ -48,20 +47,22 @@ func (g *fastPathGit) ReadCommitRanges(_ context.Context, mode git.CommitReadMod
 			AuthorDate: "2026-06-01T12:00:00-04:00", Message: "subject " + sha + "\n",
 		})
 	}
-	return git.ReadResults[[]git.CommitMetadata]{Values: map[string][]git.CommitMetadata{rr.String(): commits}}
+	var result git.ReadResults[[]git.CommitMetadata]
+	result.Set(rr.String(), commits)
+	return result
 }
 
 func (g *fastPathGit) ReadDiffs(_ context.Context, mode git.DiffReadMode, ranges ...git.RevRange) git.ReadResults[git.DiffSummary] {
 	require.Equal(g.t, git.DiffNames, mode)
 	require.Len(g.t, ranges, 2, "parent and branch file sets must be read together")
-	result := git.ReadResults[git.DiffSummary]{Values: make(map[string]git.DiffSummary)}
+	result := git.ReadResults[git.DiffSummary]{}
 	for _, rr := range ranges {
 		require.Equal(g.t, "old-base", rr.Base)
 		files, ok := g.changedFiles[rr.Head]
 		if !ok {
 			g.t.Fatalf("unexpected changed-files head: %s", rr.Head)
 		}
-		result.Values[rr.String()] = git.DiffSummary{Files: files}
+		result.Set(rr.String(), git.DiffSummary{Files: files})
 	}
 	return result
 }

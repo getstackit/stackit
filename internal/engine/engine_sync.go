@@ -83,7 +83,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 		moves := make([]BranchParentMove, 0, len(branches))
 		for _, branch := range branches {
 			item, ok := plan.Items[branch.GetName()]
-			if ok && !item.Skip && item.Reparented {
+			if ok && item.Action != RestackPlanSkip && item.Reparented {
 				moves = append(moves, BranchParentMove{Branch: item.Branch, NewParent: item.NewParent})
 			}
 		}

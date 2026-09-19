@@ -766,7 +766,7 @@ func (e *engineImpl) restackBranchWithValidatedRebase(
 	if !ok {
 		return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("missing restack plan item for %s", branchName)
 	}
-	if item.Skip {
+	if item.Action == RestackPlanSkip {
 		return item.SkipResult, nil
 	}
 

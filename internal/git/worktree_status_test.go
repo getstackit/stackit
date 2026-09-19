@@ -51,3 +51,12 @@ func TestReadWorktreeStatus(t *testing.T) {
 	command("add", "-N", "intent-to-add")
 	check(git.WorktreeStatus{Unstaged: true})
 }
+
+func TestWorktreeStatusPredicates(t *testing.T) {
+	t.Parallel()
+	for flags := range 8 {
+		status := git.WorktreeStatus{Staged: flags&1 != 0, Unstaged: flags&2 != 0, Untracked: flags&4 != 0}
+		require.Equal(t, flags == 0, status.Clean())
+		require.Equal(t, flags&6 != 0, status.HasUnstagedChanges())
+	}
+}

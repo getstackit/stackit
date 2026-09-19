@@ -33,7 +33,7 @@ func (e *engineImpl) writeLocalMetadata(branch string, meta *git.LocalMeta) erro
 
 // batchReadLocalMetadata loads local metadata for many branches in one call.
 func (e *engineImpl) batchReadLocalMetadata(branches []string) git.LocalMetaMap {
-	return e.metadata.ReadLocalMetadata(context.Background(), branches...).Values
+	return e.metadata.ReadLocalMetadata(context.Background(), branches...).Values()
 }
 
 // withMetadataTx runs function logic inside a metadata transaction and commits once.

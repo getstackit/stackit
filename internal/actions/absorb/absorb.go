@@ -125,14 +125,14 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Get all commit SHAs from downstack branches (newest to oldest)
-	commitsByBranch := eng.ReadBranchCommits(ctx, git.CommitIDs, downstackBranches)
+	commitsByBranch := eng.ReadBranchCommitNodes(ctx, downstackBranches)
 	commitSHAs := []string{}
 	for _, branch := range downstackBranches {
 		history, err := commitsByBranch.Get(branch.GetName())
 		if err != nil {
 			return fmt.Errorf("failed to get commits for branch %s: %w", branch.GetName(), err)
 		}
-		for _, commit := range history.Commits {
+		for _, commit := range history {
 			commitSHAs = append(commitSHAs, commit.SHA)
 		}
 	}
@@ -273,11 +273,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Stash staged and unstaged changes separately to avoid reintroducing absorbed hunks.
-	_, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(ctx.Context)
+	status, err := eng.GetWorkingTreeStatus(ctx.Context)
 	if err != nil {
 		return fmt.Errorf("failed to read working tree status: %w", err)
 	}
-	hasUnstagedOrUntracked := hasUnstaged || hasUntracked
+	hasUnstagedOrUntracked := status.HasUnstagedChanges()
 
 	var (
 		stashedStaged   bool
@@ -319,7 +319,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		// placeholder that `git apply` cannot reapply, silently losing the edit
 		// (and, because git apply is atomic per invocation, poisoning any
 		// coexisting text edits too).
-		if hasUnstaged {
+		if status.Unstaged {
 			diff, diffErr := eng.GetUnstagedDiffBinary(ctx.Context)
 			if diffErr != nil {
 				return fmt.Errorf("failed to capture unstaged changes: %w", diffErr)

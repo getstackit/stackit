@@ -63,8 +63,7 @@ func (r *flakyRevisionRunner) ReadRevisions(ctx context.Context, names ...string
 	result := r.Runner.ReadRevisions(ctx, names...)
 	for _, name := range names {
 		if name == r.failFor {
-			delete(result.Values, name)
-			result.Errors[name] = errors.New("injected: transient revision read failure")
+			result.Fail(name, errors.New("injected: transient revision read failure"))
 		}
 	}
 	return result

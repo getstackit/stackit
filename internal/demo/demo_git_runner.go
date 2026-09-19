@@ -175,17 +175,17 @@ func (d *demoGitRunner) IsAncestor(_ context.Context, _, _ string) (bool, error)
 }
 
 func (d *demoGitRunner) ReadAncestry(_ context.Context, ranges ...git.RevRange) git.ReadResults[bool] {
-	result := git.ReadResults[bool]{Values: make(map[string]bool)}
+	result := git.ReadResults[bool]{}
 	for _, rr := range ranges {
-		result.Values[rr.String()] = true
+		result.Set(rr.String(), true)
 	}
 	return result
 }
 
 func (d *demoGitRunner) ReadCommitCounts(_ context.Context, ranges ...git.RevRange) git.ReadResults[int] {
-	result := git.ReadResults[int]{Values: make(map[string]int)}
+	result := git.ReadResults[int]{}
 	for _, rr := range ranges {
-		result.Values[rr.String()] = 1
+		result.Set(rr.String(), 1)
 	}
 	return result
 }
@@ -376,13 +376,13 @@ func (d *demoGitRunner) GetMergedBranches(_ context.Context, _ string) (map[stri
 }
 
 func (d *demoGitRunner) ReadDiffs(_ context.Context, mode git.DiffReadMode, ranges ...git.RevRange) git.ReadResults[git.DiffSummary] {
-	result := git.ReadResults[git.DiffSummary]{Values: make(map[string]git.DiffSummary)}
+	result := git.ReadResults[git.DiffSummary]{}
 	for _, rr := range ranges {
 		diff := git.DiffSummary{Files: []string{}}
 		if mode == git.DiffStats {
 			diff.Added, diff.Deleted = 1, 1
 		}
-		result.Values[rr.String()] = diff
+		result.Set(rr.String(), diff)
 	}
 	return result
 }
@@ -415,20 +415,32 @@ func (d *demoGitRunner) GetDiffBetween(_ context.Context, _ git.RevRange, _ ...s
 	return "", nil
 }
 
-func (d *demoGitRunner) ReadCommitRanges(_ context.Context, _ git.CommitReadMode, ranges ...git.RevRange) git.ReadResults[[]git.CommitMetadata] {
+func (d *demoGitRunner) ReadCommitRanges(_ context.Context, ranges ...git.RevRange) git.ReadResults[[]git.CommitMetadata] {
 	const message = "demo commit"
 	const sha = "sha1"
-	result := git.ReadResults[[]git.CommitMetadata]{Values: make(map[string][]git.CommitMetadata)}
+	result := git.ReadResults[[]git.CommitMetadata]{}
 	for _, rr := range ranges {
-		result.Values[rr.String()] = []git.CommitMetadata{{SHA: sha, ShortSHA: sha, Subject: message, Message: message}}
+		result.Set(rr.String(), []git.CommitMetadata{{SHA: sha, ShortSHA: sha, Subject: message, Message: message}})
+	}
+	return result
+}
+
+func (d *demoGitRunner) ReadCommitNodes(ctx context.Context, ranges ...git.RevRange) git.ReadResults[[]git.CommitNode] {
+	var result git.ReadResults[[]git.CommitNode]
+	for key, commits := range d.ReadCommitRanges(ctx, ranges...).Values() {
+		nodes := make([]git.CommitNode, len(commits))
+		for i, commit := range commits {
+			nodes[i] = git.CommitNode{SHA: commit.SHA, Parents: commit.Parents}
+		}
+		result.Set(key, nodes)
 	}
 	return result
 }
 
 func (d *demoGitRunner) ReadCommits(_ context.Context, refs ...string) git.ReadResults[git.CommitMetadata] {
-	result := git.ReadResults[git.CommitMetadata]{Values: make(map[string]git.CommitMetadata)}
+	result := git.ReadResults[git.CommitMetadata]{}
 	for _, ref := range refs {
-		result.Values[ref] = git.CommitMetadata{SHA: "sha1", Subject: "demo commit"}
+		result.Set(ref, git.CommitMetadata{SHA: "sha1", Subject: "demo commit"})
 	}
 	return result
 }
@@ -636,17 +648,17 @@ func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]stri
 }
 
 func (d *demoGitRunner) ReadRevisions(_ context.Context, refs ...string) git.ReadResults[string] {
-	result := git.ReadResults[string]{Values: make(map[string]string), Errors: make(map[string]error)}
+	result := git.ReadResults[string]{}
 	for _, ref := range refs {
-		result.Values[ref] = d.readRevision(ref)
+		result.Set(ref, d.readRevision(ref))
 	}
 	return result
 }
 
 func (d *demoGitRunner) ReadCommitInfo(_ context.Context, refs ...string) git.ReadResults[git.CommitInfo] {
-	result := git.ReadResults[git.CommitInfo]{Values: make(map[string]git.CommitInfo)}
+	result := git.ReadResults[git.CommitInfo]{}
 	for _, ref := range refs {
-		result.Values[ref] = git.CommitInfo{Date: time.Now(), Author: "Demo User"}
+		result.Set(ref, git.CommitInfo{Date: time.Now(), Author: "Demo User"})
 	}
 	return result
 }

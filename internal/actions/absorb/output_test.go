@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/testhelpers"
@@ -24,7 +23,7 @@ func TestPrintAbsorbPreviewMultipleCommitsSameBranch(t *testing.T) {
 	s.Scene.Repo.CreateChangeAndCommit("first commit", "file-a")
 	s.Scene.Repo.CreateChangeAndCommit("second commit", "file-b")
 
-	commits, err := s.Engine.GetBranch("branch-a").GetAllCommits(engine.CommitFormatSHA)
+	commits, err := s.Engine.GetBranch("branch-a").GetCommitIDs()
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(commits), 2)
 	// GetAllCommits returns newest-first; "first commit" was made before

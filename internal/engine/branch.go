@@ -97,10 +97,13 @@ func (b Branch) GetRevision() (string, error) {
 	return b.reader.GetRevision(b)
 }
 
-// GetAllCommits returns commits for this branch in various formats
-func (b Branch) GetAllCommits(format CommitFormat) ([]string, error) {
-	return b.reader.GetAllCommits(b, format)
+// GetAllCommits returns newest-first commit data for this branch.
+func (b Branch) GetAllCommits() (git.Commits, error) {
+	return b.reader.GetAllCommits(b)
 }
+
+// GetCommitIDs returns newest-first identities without loading commit messages.
+func (b Branch) GetCommitIDs() ([]string, error) { return b.reader.GetCommitIDs(b) }
 
 // GetParent returns the parent branch (nil if no parent)
 func (b Branch) GetParent() *Branch {
@@ -185,7 +188,8 @@ func (b Branch) EnsureCanModify() error {
 // DefaultPRTitle returns the default PR title for this branch.
 // Uses the oldest commit subject, falling back to the branch name.
 func (b Branch) DefaultPRTitle() string {
-	commits, err := b.GetAllCommits(CommitFormatSubject)
+	commitsData, err := b.GetAllCommits()
+	commits := commitsData.Subjects()
 	if err != nil || len(commits) == 0 {
 		return b.name
 	}
@@ -197,7 +201,8 @@ func (b Branch) DefaultPRTitle() string {
 // For single commit: uses the commit body (skips subject line).
 // For multiple commits: creates a bulleted list of subjects in chronological order.
 func (b Branch) DefaultPRBody() string {
-	messages, err := b.GetAllCommits(CommitFormatMessage)
+	messagesData, err := b.GetAllCommits()
+	messages := messagesData.Messages()
 	if err != nil || len(messages) == 0 {
 		return ""
 	}

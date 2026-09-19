@@ -94,7 +94,8 @@ type BranchInfo interface {
 	// batched pass instead of two `git log` processes per branch.
 	BatchCommitInfo(branches Branches) map[string]git.CommitInfo
 	GetRevision(branch Branch) (string, error)
-	GetAllCommits(branch Branch, format CommitFormat) ([]string, error)
+	GetAllCommits(branch Branch) (git.Commits, error)
+	GetCommitIDs(branch Branch) ([]string, error)
 	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetRevisionForName(branchName string) (string, error)
@@ -113,8 +114,9 @@ type BranchInfo interface {
 	// per-branch concern across the whole set in a single batched pass, returning
 	// a value map.
 	BatchDiffStats(branches Branches) map[string]DiffStat
-	BatchCommits(branches Branches, format CommitFormat) map[string][]string
-	ReadBranchCommits(ctx context.Context, mode git.CommitReadMode, branches Branches) git.ReadResults[BranchCommitRange]
+	BatchCommits(branches Branches) map[string]git.Commits
+	ReadBranchCommits(ctx context.Context, branches Branches) git.ReadResults[BranchCommitRange]
+	ReadBranchCommitNodes(ctx context.Context, branches Branches) git.ReadResults[[]git.CommitNode]
 	BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int
 	// BatchBranchStats resolves annotation stats (short SHA, commit count,
 	// additions/deletions) for every branch in one batched pass — a use-case
@@ -146,7 +148,7 @@ type WorkingTree interface {
 	GetUntrackedFiles(ctx context.Context) ([]string, error)
 	// GetWorkingTreeStatus returns all three working-tree flags in one git call.
 	// Prefer this over calling Has* individually when multiple flags are needed.
-	GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error)
+	GetWorkingTreeStatus(ctx context.Context) (git.WorktreeStatus, error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary
 	// content (`git diff --binary`) so the result can be reapplied with

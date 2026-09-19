@@ -594,7 +594,7 @@ func (e *engineImpl) tryConflictFreeReplay(
 	spec RebaseSpec,
 	resolvedParent string,
 ) (string, bool) {
-	commits, err := e.git.ReadCommitRanges(ctx, git.CommitDetails, git.RevRange{Base: spec.OldUpstream, Head: spec.Branch}).One()
+	commits, err := e.git.ReadCommitRanges(ctx, git.RevRange{Base: spec.OldUpstream, Head: spec.Branch}).One()
 	if err != nil || len(commits) == 0 {
 		return "", false
 	}

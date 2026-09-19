@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -31,9 +30,11 @@ func (e *engineImpl) BatchCommitInfo(branches Branches) map[string]git.CommitInf
 		names[i] = "refs/heads/" + b.GetName()
 	}
 	data := e.git.ReadCommitInfo(context.Background(), names...)
-	result := make(map[string]git.CommitInfo, len(data.Values))
-	for ref, info := range data.Values {
-		result[strings.TrimPrefix(ref, "refs/heads/")] = info
+	result := make(map[string]git.CommitInfo, len(branches))
+	for ref, info := range data.All() {
+		if info.Err == nil {
+			result[strings.TrimPrefix(ref, "refs/heads/")] = info.Value
+		}
 	}
 	return result
 }
@@ -58,9 +59,11 @@ func (e *engineImpl) GetRevisions(branchNames []string) (RevisionMap, []error) {
 // name, matching GetDivergencePoint (the stored parent revision when present,
 // else the parent's current tip) but resolving the whole set in one batched pass.
 func (e *engineImpl) BatchDivergencePoints(branches Branches) RevisionMap {
-	return RevisionMap(batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) string {
-		return statBase(parentRev, storedBase)
-	}))
+	result := make(RevisionMap, len(branches))
+	for name, rr := range e.branchDiffRanges(branches) {
+		result[name] = rr.Base
+	}
+	return result
 }
 
 // CommitCountBetween returns how many commits are in (base, head]. It is the
@@ -75,13 +78,11 @@ func (e *engineImpl) CommitCountBetween(base, head string) (int, error) {
 // (base, head)-keyed cache. It takes pre-resolved revisions so batched callers
 // need not re-resolve a branch's head.
 func (e *engineImpl) commitCountBetween(rr git.RevRange) (int, error) {
-	base, head := rr.Base, rr.Head
-	if head == base {
+	if rr.Head == rr.Base {
 		return 0, nil
 	}
 
-	cacheKey := base + ":" + head
-	if v, ok := e.commitCountCache.Load(cacheKey); ok {
+	if v, ok := e.commitCountCache.Load(rr); ok {
 		return v.(int), nil
 	}
 
@@ -89,7 +90,7 @@ func (e *engineImpl) commitCountBetween(rr git.RevRange) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	e.commitCountCache.Store(cacheKey, count)
+	e.commitCountCache.Store(rr, count)
 	return count, nil
 }
 
@@ -109,47 +110,18 @@ func (e *engineImpl) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit
 	return e.git.GetRecentCommitsInRange(context.Background(), rr.String())
 }
 
-// GetAllCommits returns commits for a branch in various formats
-func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string, error) {
-	mode := git.CommitDetails
-	if format == CommitFormatSHA {
-		mode = git.CommitIDs
-	}
-	history, err := e.ReadBranchCommits(context.Background(), mode, BranchesOf(branch)).One()
-	if err != nil {
-		return nil, err
-	}
-	return FormatCommits(history.Commits, format)
+// GetAllCommits returns newest-first typed display/replay data for a branch.
+func (e *engineImpl) GetAllCommits(branch Branch) (git.Commits, error) {
+	history, err := e.ReadBranchCommits(context.Background(), BranchesOf(branch)).One()
+	return history.Commits, err
 }
 
-// FormatCommits formats already-read commit data without repository I/O.
-func FormatCommits(commits []git.CommitMetadata, format CommitFormat) ([]string, error) {
-	var result []string
-	for _, commit := range commits {
-		var line string
-		switch format {
-		case CommitFormatSHA:
-			line = commit.SHA
-		case CommitFormatSubject:
-			line = commit.Subject
-		case CommitFormatSHASubject:
-			line = commit.SHA + "\x00" + commit.Subject
-		case CommitFormatReadable:
-			line = commit.ShortSHA + " " + commit.Subject
-		case CommitFormatMessage:
-			line = commit.Message
-		case CommitFormatReadableWithDate:
-			date, err := time.Parse(time.RFC3339, commit.AuthorDate)
-			if err != nil {
-				return nil, err
-			}
-			line = commit.ShortSHA + "\t" + date.UTC().Format(time.RFC3339) + "\t" + commit.Subject
-		default:
-			return nil, fmt.Errorf("unknown commit format: %s", format)
-		}
-		if line = strings.TrimSpace(line); line != "" {
-			result = append(result, line)
-		}
+// GetCommitIDs returns branch identities without loading display/replay fields.
+func (e *engineImpl) GetCommitIDs(branch Branch) ([]string, error) {
+	nodes, err := e.ReadBranchCommitNodes(context.Background(), BranchesOf(branch)).One()
+	ids := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		ids = append(ids, node.SHA)
 	}
-	return result, nil
+	return ids, err
 }

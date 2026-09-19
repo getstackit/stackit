@@ -80,7 +80,8 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	branchNames := []string{}
 
 	// Get default commit message
-	commitMessages, err := branchToSplit.GetAllCommits(engine.CommitFormatMessage)
+	commitMessagesData, err := branchToSplit.GetAllCommits()
+	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)
 	}
@@ -317,7 +318,8 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Get default commit message
-	commitMessages, err := branchToSplit.GetAllCommits(engine.CommitFormatMessage)
+	commitMessagesData, err := branchToSplit.GetAllCommits()
+	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)
 	}
@@ -376,16 +378,16 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Check if anything was staged
-	hasStaged, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(gitCtx)
+	status, err := eng.GetWorkingTreeStatus(gitCtx)
 	if err != nil {
 		return fmt.Errorf("failed to read working tree status: %w", err)
 	}
-	if !hasStaged {
+	if !status.Staged {
 		return fmt.Errorf("no changes staged from patch file %q", opts.patchFile)
 	}
 
 	// Check if there are unstaged changes or untracked files (to keep on branchToSplit)
-	if !hasUnstaged && !hasUntracked {
+	if !status.HasUnstagedChanges() {
 		return fmt.Errorf("all changes were staged from patch - nothing would remain on %s", branchToSplit.GetName())
 	}
 
@@ -520,7 +522,8 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	}()
 
 	// Get default commit message
-	commitMessages, err := branchToSplit.GetAllCommits(engine.CommitFormatMessage)
+	commitMessagesData, err := branchToSplit.GetAllCommits()
+	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return fmt.Errorf("failed to get commit messages: %w", err)
 	}
@@ -606,17 +609,17 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	}
 
 	// Check if anything was staged
-	hasStaged, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(gitCtx)
+	status, err := eng.GetWorkingTreeStatus(gitCtx)
 	if err != nil {
 		return fmt.Errorf("failed to read working tree status: %w", err)
 	}
-	if !hasStaged {
+	if !status.Staged {
 		return fmt.Errorf("no changes staged to extract")
 	}
 
 	// Check if there are unstaged changes or untracked files (to keep on current)
 
-	if !hasUnstaged && !hasUntracked {
+	if !status.HasUnstagedChanges() {
 		return fmt.Errorf("all changes were staged - nothing would remain on %s", branchToSplit.GetName())
 	}
 

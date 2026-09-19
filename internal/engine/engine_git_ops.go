@@ -85,9 +85,8 @@ func (e *engineImpl) GetUntrackedFiles(ctx context.Context) ([]string, error) {
 
 // GetWorkingTreeStatus returns staged, unstaged, and untracked status in a
 // single git status --porcelain call instead of three separate subprocesses.
-func (e *engineImpl) GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error) {
-	status, err := e.git.ReadWorktreeStatus(ctx)
-	return status.Staged, status.Unstaged, status.Untracked, err
+func (e *engineImpl) GetWorkingTreeStatus(ctx context.Context) (git.WorktreeStatus, error) {
+	return e.git.ReadWorktreeStatus(ctx)
 }
 
 // GetUntrackedFileHunks returns synthetic hunks for all untracked files.

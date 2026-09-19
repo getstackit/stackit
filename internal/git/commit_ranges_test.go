@@ -32,13 +32,14 @@ func TestReadCommitRangesBatch(t *testing.T) {
 		for i := width; i < len(tips); i += width {
 			ranges = append(ranges, git.RevRange{Base: tips[i-width], Head: tips[i]})
 		}
-		for _, mode := range []git.CommitReadMode{git.CommitIDs, git.CommitDetails} {
+		{
+			// Full metadata and topology use the same bounded traversal.
 			logger.calls = 0
-			data := runner.ReadCommitRanges(ctx, mode, ranges...)
-			require.Empty(t, data.Errors)
+			data := runner.ReadCommitRanges(ctx, ranges...)
+			require.Empty(t, data.Failures())
 			require.LessOrEqual(t, logger.calls, width+1, "processes scale with commits per branch, not branches")
 			for _, rr := range ranges {
-				want, err := runner.ReadCommitRanges(ctx, mode, rr).One()
+				want, err := runner.ReadCommitRanges(ctx, rr).One()
 				require.NoError(t, err)
 				got, err := data.Get(rr.String())
 				require.NoError(t, err)
@@ -46,8 +47,19 @@ func TestReadCommitRangesBatch(t *testing.T) {
 			}
 		}
 		logger.calls = 0
+		nodes := runner.ReadCommitNodes(ctx, ranges...)
+		require.Empty(t, nodes.Failures())
+		require.LessOrEqual(t, logger.calls, width+1)
+		for _, rr := range ranges {
+			want, err := runner.ReadCommitNodes(ctx, rr).One()
+			require.NoError(t, err)
+			got, err := nodes.Get(rr.String())
+			require.NoError(t, err)
+			require.Equal(t, want, got)
+		}
+		logger.calls = 0
 		counts := runner.ReadCommitCounts(ctx, ranges...)
-		require.Empty(t, counts.Errors)
+		require.Empty(t, counts.Failures())
 		require.LessOrEqual(t, logger.calls, width+1)
 		for _, rr := range ranges {
 			count, err := counts.Get(rr.String())
@@ -56,7 +68,7 @@ func TestReadCommitRangesBatch(t *testing.T) {
 		}
 		logger.calls = 0
 		ancestry := runner.ReadAncestry(ctx, ranges...)
-		require.Empty(t, ancestry.Errors)
+		require.Empty(t, ancestry.Failures())
 		require.LessOrEqual(t, logger.calls, width+1)
 		for _, rr := range ranges {
 			value, err := ancestry.Get(rr.String())
@@ -73,10 +85,10 @@ func TestReadCommitRangesBatch(t *testing.T) {
 		{Base: base, Head: "HEAD"}, {Base: "missing", Head: "HEAD"},
 		{Base: base, Head: "missing"},
 	}
-	data := runner.ReadCommitRanges(ctx, git.CommitDetails, ranges...)
+	data := runner.ReadCommitRanges(ctx, ranges...)
 	counts := runner.ReadCommitCounts(ctx, ranges...)
 	for _, rr := range ranges {
-		want, wantErr := runner.ReadCommitRanges(ctx, git.CommitDetails, rr).One()
+		want, wantErr := runner.ReadCommitRanges(ctx, rr).One()
 		got, err := data.Get(rr.String())
 		if wantErr != nil {
 			require.Error(t, err)
@@ -92,9 +104,8 @@ func TestReadCommitRangesBatch(t *testing.T) {
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	require.NotEmpty(t, runner.ReadCommitRanges(canceled, git.CommitDetails, ranges...).Errors)
-	require.Empty(t, runner.ReadCommitRanges(ctx, git.CommitDetails).Values)
-	require.NotEmpty(t, runner.ReadCommitRanges(ctx, git.CommitReadMode(42), ranges...).Errors)
+	require.NotEmpty(t, runner.ReadCommitRanges(canceled, ranges...).Failures())
+	require.Empty(t, runner.ReadCommitRanges(ctx).Values())
 }
 
 func TestCommitBatchMergeAndAliases(t *testing.T) {
@@ -120,10 +131,10 @@ func TestCommitBatchMergeAndAliases(t *testing.T) {
 		{Base: base, Head: "HEAD"}, {Base: "side", Head: "tip-tag"},
 		{Base: orphan, Head: "HEAD"}, {Base: "HEAD", Head: "side"},
 	}
-	data := runner.ReadCommitRanges(ctx, git.CommitDetails, ranges...)
+	data := runner.ReadCommitRanges(ctx, ranges...)
 	ancestry := runner.ReadAncestry(ctx, ranges...)
 	for _, rr := range ranges {
-		want, err := runner.ReadCommitRanges(ctx, git.CommitDetails, rr).One()
+		want, err := runner.ReadCommitRanges(ctx, rr).One()
 		require.NoError(t, err)
 		got, err := data.Get(rr.String())
 		require.NoError(t, err)
@@ -144,5 +155,5 @@ func TestCommitBatchMergeAndAliases(t *testing.T) {
 	side, err := refs.Get("side")
 	require.NoError(t, err)
 	require.Equal(t, "side wrapped subject", side.Subject)
-	require.Len(t, refs.Errors, 2)
+	require.Len(t, refs.Failures(), 2)
 }

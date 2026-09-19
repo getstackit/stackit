@@ -14,6 +14,12 @@ type WorktreeStatus struct {
 	Untracked bool
 }
 
+// Clean reports whether the index and worktree have no pending changes.
+func (s WorktreeStatus) Clean() bool { return !s.Staged && !s.HasUnstagedChanges() }
+
+// HasUnstagedChanges includes untracked files as well as tracked modifications.
+func (s WorktreeStatus) HasUnstagedChanges() bool { return s.Unstaged || s.Untracked }
+
 // ReadWorktreeStatus reads all three flags in one process. Explicit untracked
 // reporting keeps guards independent of status.showUntrackedFiles configuration.
 func (r *runner) ReadWorktreeStatus(ctx context.Context) (WorktreeStatus, error) {

@@ -32,7 +32,7 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 		require.NoError(t, err)
 	}
 	logger.calls = 0
-	commits, err := runner.ReadCommitRanges(ctx, git.CommitDetails, git.RevRange{Base: base, Head: "HEAD"}).One()
+	commits, err := runner.ReadCommitRanges(ctx, git.RevRange{Base: base, Head: "HEAD"}).One()
 	require.NoError(t, err)
 	require.Len(t, commits, 2)
 	require.Equal(t, 1, logger.calls, "metadata for the whole range uses one subprocess")
@@ -50,9 +50,9 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 	require.Equal(t, []string{base}, commits[1].Parents)
 	require.Empty(t, commits[1].Message)
 
-	empty, err := runner.ReadCommitRanges(ctx, git.CommitDetails, git.RevRange{Base: "HEAD", Head: "HEAD"}).One()
+	empty, err := runner.ReadCommitRanges(ctx, git.RevRange{Base: "HEAD", Head: "HEAD"}).One()
 	require.NoError(t, err)
 	require.Empty(t, empty)
-	_, err = runner.ReadCommitRanges(ctx, git.CommitDetails, git.RevRange{Head: "missing-branch"}).One()
+	_, err = runner.ReadCommitRanges(ctx, git.RevRange{Head: "missing-branch"}).One()
 	require.Error(t, err)
 }

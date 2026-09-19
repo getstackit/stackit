@@ -77,18 +77,16 @@ func (r MetadataReadResults[T]) Record(name string) (MetadataRecord[T], error) {
 func (r *MetadataStore) ReadMetadata(ctx context.Context, branchNames ...string) MetadataReadResults[*Meta] {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	results := make(map[string]*Meta, len(branchNames))
-	versions := make(map[string]string, len(branchNames))
-	errs := make(map[string]error)
+	result := MetadataReadResults[*Meta]{Versions: make(map[string]string, len(branchNames))}
 	if err := ctx.Err(); err != nil {
 		for _, name := range branchNames {
-			errs[name] = err
+			result.Fail(name, err)
 		}
-		return MetadataReadResults[*Meta]{ReadResults: ReadResults[*Meta]{Values: results, Errors: errs}, Versions: versions}
+		return result
 	}
 
 	if len(branchNames) == 0 {
-		return MetadataReadResults[*Meta]{ReadResults: ReadResults[*Meta]{Values: results, Errors: errs}, Versions: versions}
+		return result
 	}
 
 	start := time.Now()
@@ -101,8 +99,8 @@ func (r *MetadataStore) ReadMetadata(ctx context.Context, branchNames ...string)
 			r.metadataCache.entries.Delete(name)
 		}
 		if cached, ok := r.metadataCache.GetRecord(name); ok {
-			results[name] = cached.Value
-			versions[name] = cached.SHA
+			result.Set(name, cached.Value)
+			result.Versions[name] = cached.SHA
 		} else {
 			misses = append(misses, name)
 			r.generations[name] = generation
@@ -112,7 +110,7 @@ func (r *MetadataStore) ReadMetadata(ctx context.Context, branchNames ...string)
 	if len(misses) == 0 {
 		r.infoLog("metadata batch-load kind=shared branches=%d cache_misses=0 elapsed_ms=%d",
 			len(branchNames), time.Since(start).Milliseconds())
-		return MetadataReadResults[*Meta]{ReadResults: ReadResults[*Meta]{Values: results, Errors: errs}, Versions: versions}
+		return result
 	}
 
 	// Build ref names for all cache misses.
@@ -125,35 +123,35 @@ func (r *MetadataStore) ReadMetadata(ctx context.Context, branchNames ...string)
 	contents, err := r.git.ReadObjects(ctx, refs...)
 	if err != nil {
 		for _, name := range misses {
-			errs[name] = err
+			result.Fail(name, err)
 		}
-		return MetadataReadResults[*Meta]{ReadResults: ReadResults[*Meta]{Values: results, Errors: errs}, Versions: versions}
+		return result
 	}
 
 	for i, name := range misses {
 		obj := contents[refs[i]] // zero value when the ref is missing
-		versions[name] = obj.SHA
+		result.Versions[name] = obj.SHA
 		if obj.Content == "" {
 			empty := NewMeta()
 			r.metadataCache.PutWithSHA(name, empty, obj.SHA)
-			results[name] = empty
+			result.Set(name, empty)
 			continue
 		}
 		var meta Meta
 		if unmarshalErr := json.Unmarshal([]byte(obj.Content), &meta); unmarshalErr != nil {
-			errs[name] = fmt.Errorf("failed to unmarshal metadata for %s: %w", name, unmarshalErr)
+			result.Fail(name, fmt.Errorf("failed to unmarshal metadata for %s: %w", name, unmarshalErr))
 			continue
 		}
 		// Record the blob this came from, the same way ReadMetadata does, so a
 		// later WriteMetadata compares against it instead of overwriting blind.
 		r.metadataCache.PutWithSHA(name, &meta, obj.SHA)
-		results[name] = &meta
+		result.Set(name, &meta)
 	}
 
 	r.infoLog("metadata batch-load kind=shared branches=%d cache_misses=%d elapsed_ms=%d",
 		len(branchNames), len(misses), time.Since(start).Milliseconds())
 
-	return MetadataReadResults[*Meta]{ReadResults: ReadResults[*Meta]{Values: results, Errors: errs}, Versions: versions}
+	return result
 }
 
 // ReadLocalMetadata reads one or many local metadata records together. Missing
@@ -162,20 +160,20 @@ func (r *MetadataStore) ReadMetadata(ctx context.Context, branchNames ...string)
 func (r *MetadataStore) ReadLocalMetadata(ctx context.Context, branchNames ...string) MetadataReadResults[*LocalMeta] {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	result := MetadataReadResults[*LocalMeta]{ReadResults: ReadResults[*LocalMeta]{Values: make(map[string]*LocalMeta), Errors: make(map[string]error)}, Versions: make(map[string]string)}
+	result := MetadataReadResults[*LocalMeta]{Versions: make(map[string]string)}
 	if len(branchNames) == 0 {
 		return result
 	}
 	if err := ctx.Err(); err != nil {
 		for _, name := range branchNames {
-			result.Errors[name] = err
+			result.Fail(name, err)
 		}
 		return result
 	}
 	start := time.Now()
 	defer func() {
 		r.infoLog("metadata batch-load kind=local branches=%d errors=%d elapsed_ms=%d",
-			len(branchNames), len(result.Errors), time.Since(start).Milliseconds())
+			len(branchNames), len(result.Failures()), time.Since(start).Milliseconds())
 	}()
 	refs := make([]string, len(branchNames))
 	for i, name := range branchNames {
@@ -184,7 +182,7 @@ func (r *MetadataStore) ReadLocalMetadata(ctx context.Context, branchNames ...st
 	contents, err := r.git.ReadObjects(ctx, refs...)
 	if err != nil {
 		for _, name := range branchNames {
-			result.Errors[name] = err
+			result.Fail(name, err)
 		}
 		return result
 	}
@@ -193,16 +191,16 @@ func (r *MetadataStore) ReadLocalMetadata(ctx context.Context, branchNames ...st
 		result.Versions[name] = obj.SHA
 		r.metadataCache.PutLocalSHA(name, obj.SHA)
 		if obj.Content == "" {
-			result.Values[name] = &LocalMeta{}
+			result.Set(name, &LocalMeta{})
 			continue
 		}
 		r.metadataCache.PutLocalSHA(name, obj.SHA)
 		var meta LocalMeta
 		if err := json.Unmarshal([]byte(obj.Content), &meta); err != nil {
-			result.Errors[name] = fmt.Errorf("failed to unmarshal local metadata for %s: %w", name, err)
+			result.Fail(name, fmt.Errorf("failed to unmarshal local metadata for %s: %w", name, err))
 			continue
 		}
-		result.Values[name] = &meta
+		result.Set(name, &meta)
 	}
 	return result
 }

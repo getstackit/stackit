@@ -184,7 +184,7 @@ func TestValidateRebases(t *testing.T) {
 
 		// The rebased tip must sit directly on the advanced main and carry exactly
 		// the branch's three original commits.
-		replayed, err := s.Engine.Git().ReadCommitRanges(context.Background(), git.CommitDetails, git.RevRange{Base: mainRev, Head: newTip}).One()
+		replayed, err := s.Engine.Git().ReadCommitRanges(context.Background(), git.RevRange{Base: mainRev, Head: newTip}).One()
 		require.NoError(t, err)
 		require.Len(t, replayed, 3, "all three branch commits should be replayed onto new main")
 
@@ -235,10 +235,9 @@ func TestValidateRebases(t *testing.T) {
 		newTip := result.NewSHAs["feature"]
 		require.NotEmpty(t, newTip)
 
-		records, err := s.Engine.Git().ReadCommitRanges(context.Background(), git.CommitDetails, git.RevRange{Base: mainRev, Head: newTip}).One()
+		records, err := s.Engine.Git().ReadCommitRanges(context.Background(), git.RevRange{Base: mainRev, Head: newTip}).One()
 		require.NoError(t, err)
-		replayedSubjects, err := engine.FormatCommits(records, engine.CommitFormatSubject)
-		require.NoError(t, err)
+		replayedSubjects := git.Commits(records).Subjects()
 		require.ElementsMatch(t, []string{"feature change", "side change"}, replayedSubjects)
 		require.NotContains(t, replayedSubjects, "merge side")
 	})
@@ -692,7 +691,7 @@ func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t 
 	// A second restack should now find the record fully caught up.
 	plan2, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(child))
 	require.NoError(t, err)
-	require.True(t, plan2.Items["child"].Skip)
+	require.Equal(t, engine.RestackPlanSkip, plan2.Items["child"].Action)
 	require.Equal(t, engine.RestackUnneeded, plan2.PlannedResults["child"].Result)
 }
 

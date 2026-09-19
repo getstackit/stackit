@@ -71,27 +71,6 @@ type StackRange struct {
 	RecursiveChildren bool
 }
 
-// CommitFormat specifies the format for commit output
-type CommitFormat string
-
-const (
-	// CommitFormatSHA is the full commit SHA
-	CommitFormatSHA CommitFormat = "SHA" // Full SHA
-	// CommitFormatReadable is a readable one-line format
-	CommitFormatReadable CommitFormat = "READABLE" // Oneline format: "abc123 Commit message"
-	// CommitFormatReadableWithDate includes an ISO date: "abc123\t2024-01-15T10:30:00Z\tCommit message"
-	CommitFormatReadableWithDate CommitFormat = "READABLE_WITH_DATE"
-	// CommitFormatMessage is the full commit message
-	CommitFormatMessage CommitFormat = "MESSAGE" // Full commit message
-	// CommitFormatSubject is the first line of the commit message
-	CommitFormatSubject CommitFormat = "SUBJECT" // First line of commit message
-	// CommitFormatSHASubject pairs the full SHA and subject on one NUL-separated
-	// record per commit ("<full-sha>\x00<subject>"), so callers get both from a
-	// single walk without index-aligning two separate lists. The subject may be
-	// empty; the record is never blank because the SHA is always present.
-	CommitFormatSHASubject CommitFormat = "SHA_SUBJECT"
-)
-
 // Scope represents a branch scope that can be empty, a regular scope, or an inheritance breaker
 type Scope struct {
 	value string
@@ -406,6 +385,8 @@ const (
 	// already correctly based on its parent but the recorded revision has
 	// drifted.
 	RestackPlanApplyMetadataRefresh
+	// RestackPlanSkip reports a completed decision requiring no application.
+	RestackPlanSkip
 )
 
 // RestackPlanItem describes how a branch should be handled during restack.
@@ -416,7 +397,6 @@ type RestackPlanItem struct {
 	OldUpstream string
 	TargetRev   string
 	Action      RestackPlanAction
-	Skip        bool
 	SkipResult  RestackBranchResult
 	Reparented  bool
 	OldParent   string

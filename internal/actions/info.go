@@ -138,11 +138,10 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		}
 	}
 
-	history, commitErr := eng.ReadBranchCommits(ctx, git.CommitDetails, engine.BranchesOf(branch)).One()
+	history, commitErr := eng.ReadBranchCommits(ctx, engine.BranchesOf(branch)).One()
 	commitData := history.Commits
-	commits, err := engine.FormatCommits(commitData, engine.CommitFormatReadable)
-	if commitErr == nil && err == nil {
-		result.CommitMessages = commits
+	if commitErr == nil {
+		result.CommitMessages = commitData.Onelines()
 	}
 
 	// Diff stats — resolved via the batched reader over a single-branch set,

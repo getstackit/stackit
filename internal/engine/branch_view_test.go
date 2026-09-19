@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -82,7 +81,7 @@ func TestPerConcernBatchReaders(t *testing.T) {
 
 	branches := s.Engine.AllBranches()
 	diffs := s.Engine.BatchDiffStats(branches)
-	commits := s.Engine.BatchCommits(branches, engine.CommitFormatReadable)
+	commits := s.Engine.BatchCommits(branches)
 	divergence := s.Engine.BatchDivergencePoints(branches)
 
 	for _, b := range branches {
@@ -100,9 +99,10 @@ func TestPerConcernBatchReaders(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, engine.DiffStat{Added: wantAdded, Deleted: wantDeleted, FilesChanged: 1}, diffs[name], "diff for %s", name)
 
-		wantCommits, err := s.Engine.GetAllCommits(b, engine.CommitFormatReadable)
+		wantCommitsData, err := s.Engine.GetAllCommits(b)
+		wantCommits := wantCommitsData.Onelines()
 		require.NoError(t, err)
-		require.Equal(t, wantCommits, commits[name], "commits for %s", name)
+		require.Equal(t, wantCommits, commits[name].Onelines(), "commits for %s", name)
 	}
 }
 
@@ -150,7 +150,8 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 
 	b := s.Engine.GetBranch("b")
 
-	commits, err := s.Engine.GetAllCommits(b, engine.CommitFormatReadable)
+	commitsData, err := s.Engine.GetAllCommits(b)
+	commits := commitsData.Onelines()
 	require.NoError(t, err)
 
 	// Without the fallback, GetAllCommits walks b's whole history to the repo
@@ -161,8 +162,8 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 	require.Equal(t, count, len(commits),
 		"commit messages and count must use the same base when no divergence is stored")
 
-	batched := s.Engine.BatchCommits(engine.BranchesOf(b), engine.CommitFormatReadable)["b"]
-	require.Equal(t, commits, batched, "batched commits must match the single-branch accessor")
+	batched := s.Engine.BatchCommits(engine.BranchesOf(b))["b"]
+	require.Equal(t, commits, batched.Onelines(), "batched commits must match the single-branch accessor")
 }
 
 func TestReadBranchCommitsRetainsErrorsAndEmptyBranches(t *testing.T) {
@@ -175,7 +176,7 @@ func TestReadBranchCommitsRetainsErrorsAndEmptyBranches(t *testing.T) {
 	missing := "missing-base"
 	require.NoError(t, s.Engine.Metadata().WriteMetadata("b", meta.WithParentBranchRevision(&missing)))
 	branches := engine.BranchesFromNames(s.Engine, []string{"a", "b", "empty", "missing-branch"})
-	data := s.Engine.ReadBranchCommits(t.Context(), git.CommitIDs, branches)
+	data := s.Engine.ReadBranchCommits(t.Context(), branches)
 	valid, err := data.Get("a")
 	require.NoError(t, err)
 	require.NotEmpty(t, valid.Commits)
@@ -186,5 +187,34 @@ func TestReadBranchCommitsRetainsErrorsAndEmptyBranches(t *testing.T) {
 	_, err = data.Get("b")
 	require.Error(t, err)
 	_, err = data.Get("missing-branch")
+	require.Error(t, err)
+}
+
+func TestBranchSnapshotStoredBaseSurvivesMissingParent(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithLinearStack3()
+	branches := engine.BranchesOf(s.Engine.GetBranch("c"))
+	before, err := s.Engine.ReadBranchCommits(t.Context(), branches).One()
+	require.NoError(t, err)
+	require.NoError(t, s.Scene.Repo.RunGitCommand("branch", "-D", "b"))
+
+	after, err := s.Engine.ReadBranchCommits(t.Context(), branches).One()
+	require.NoError(t, err)
+	require.Equal(t, before, after, "a stored base needs no live parent ref")
+	nodes, err := s.Engine.ReadBranchCommitNodes(t.Context(), branches).One()
+	require.NoError(t, err)
+	require.Len(t, nodes, len(after.Commits))
+	for i, node := range nodes {
+		require.Equal(t, after.Commits[i].SHA, node.SHA)
+		require.Equal(t, after.Commits[i].Parents, node.Parents)
+	}
+
+	meta, err := s.Engine.Metadata().ReadMetadata(t.Context(), "c").One()
+	require.NoError(t, err)
+	require.NoError(t, s.Engine.Metadata().WriteMetadata("c", meta.WithParentBranchRevision(nil)))
+	_, err = s.Engine.ReadBranchCommits(t.Context(), branches).One()
+	require.Error(t, err, "without a stored base the missing parent must not become unbounded history")
+	_, err = s.Engine.ReadBranchCommitNodes(t.Context(), branches).One()
 	require.Error(t, err)
 }

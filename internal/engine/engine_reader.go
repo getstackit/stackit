@@ -179,7 +179,7 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 	}
 
 	// Get history of the branch we're tracking
-	history, err := e.git.ReadCommitRanges(ctx, git.CommitIDs, git.RevRange{Head: branchName}).One()
+	history, err := e.git.ReadCommitNodes(ctx, git.RevRange{Head: branchName}).One()
 	if err != nil {
 		return nil, err
 	}
@@ -217,9 +217,11 @@ func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) map[string]stri
 	copy(branches, e.state.branches)
 	e.mu.RUnlock()
 
-	commitsByBranch := e.BatchCommits(BranchesFromNames(e, branches), CommitFormatSHA)
+	commitsByBranch := e.ReadBranchCommitNodes(context.Background(), BranchesFromNames(e, branches))
 	for _, branchName := range branches {
-		for _, sha := range commitsByBranch[branchName] {
+		nodes, _ := commitsByBranch.Get(branchName)
+		for _, node := range nodes {
+			sha := node.SHA
 			if _, ok := want[sha]; !ok {
 				continue
 			}

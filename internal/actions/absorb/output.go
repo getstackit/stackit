@@ -47,7 +47,7 @@ func printAbsorbPreview(
 	commitSHAs := sortedCommitSHAs(hunksByCommit)
 	commitBranches := eng.FindBranchesForCommits(commitSHAs)
 	// Fetch each owning branch's commit log once instead of once per commit.
-	branchCommits := eng.BatchCommits(branchesFor(eng, commitBranches), engine.CommitFormatReadable)
+	branchCommits := eng.BatchCommits(branchesFor(eng, commitBranches))
 	for _, commitSHA := range commitSHAs {
 		hunks := sortedHunks(hunksByCommit[commitSHA])
 		branchName := commitBranches[commitSHA]
@@ -221,17 +221,11 @@ func branchesFor(eng engine.Engine, commitBranches map[string]string) engine.Bra
 
 // commitSubject finds the subject line for commitSHA within a branch's
 // already-fetched commit log.
-func commitSubject(commits []string, commitSHA string) string {
+func commitSubject(commits git.Commits, commitSHA string) string {
 	for _, commit := range commits {
-		fields := strings.Fields(commit)
-		if len(fields) == 0 {
-			continue
-		}
-		short := fields[0]
-		if strings.HasPrefix(commitSHA, short) || strings.HasPrefix(short, commitSHA) {
-			return strings.TrimSpace(strings.TrimPrefix(commit, short))
+		if commit.SHA == commitSHA {
+			return strings.TrimSpace(commit.Subject)
 		}
 	}
-
 	return ""
 }

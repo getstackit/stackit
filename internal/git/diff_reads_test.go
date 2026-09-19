@@ -61,7 +61,7 @@ func TestReadDiffs(t *testing.T) {
 			wantCalls = 1
 		}
 		require.Equal(t, wantCalls, logger.calls, "process count must not scale with ranges")
-		require.Len(t, got.Errors, 2)
+		require.Len(t, got.Failures(), 2)
 		for _, rr := range ranges[:4] {
 			diff, err := got.Get(rr.String())
 			require.NoError(t, err)
@@ -101,7 +101,7 @@ func TestReadDiffsEmptyInvalidAndCanceled(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	logger := &traceCaptureLogger{}
 	runner := git.NewRunnerWithPath(scene.Dir, logger)
-	require.Empty(t, runner.ReadDiffs(t.Context(), git.DiffStats).Values)
+	require.Empty(t, runner.ReadDiffs(t.Context(), git.DiffStats).Values())
 	require.Zero(t, logger.calls)
 	for _, mode := range []git.DiffReadMode{git.DiffCheckOnly, git.DiffNames, git.DiffStats, -1} {
 		_, err := runner.ReadDiffs(t.Context(), mode, git.RevRange{}).One()

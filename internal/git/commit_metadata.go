@@ -18,56 +18,63 @@ type CommitMetadata struct {
 	Message     string
 }
 
-// CommitReadMode selects identity/topology only or full display/replay data.
-type CommitReadMode int
+// CommitNode is identity/topology only; it cannot be mistaken for display data.
+type CommitNode struct {
+	SHA     string
+	Parents []string
+}
 
-const (
-	CommitIDs CommitReadMode = iota
-	CommitDetails
-)
+func (c CommitNode) node() CommitNode     { return c }
+func (c CommitMetadata) node() CommitNode { return CommitNode{SHA: c.SHA, Parents: c.Parents} }
 
-func commitReadFormat(mode CommitReadMode) string {
-	if mode == CommitIDs {
-		return "%H%x00%P"
-	}
-	return "%H%x00%P%x00%h%x00%s%x00%an%x00%ae%x00%aI%x00%B"
+type commitRecord interface{ node() CommitNode }
+
+// The codec keeps Git's wire format and decoder together. Callers choose the
+// result type, not a mode that could return partially populated metadata.
+type commitCodec[T commitRecord] struct {
+	format string
+	width  int
+	decode func([]string) T
+}
+
+var nodeCodec = commitCodec[CommitNode]{
+	format: "%H%x00%P", width: 2,
+	decode: func(f []string) CommitNode { return CommitNode{SHA: f[0], Parents: strings.Fields(f[1])} },
+}
+
+var metadataCodec = commitCodec[CommitMetadata]{
+	format: "%H%x00%P%x00%h%x00%s%x00%an%x00%ae%x00%aI%x00%B", width: 8,
+	decode: func(f []string) CommitMetadata {
+		return CommitMetadata{SHA: f[0], Parents: strings.Fields(f[1]), ShortSHA: f[2],
+			Subject: f[3], AuthorName: f[4], AuthorEmail: f[5], AuthorDate: f[6], Message: f[7]}
+	},
 }
 
 // readCommitRange preserves Git's ordering and range semantics, including merges.
-func (r *runner) readCommitRange(ctx context.Context, mode CommitReadMode, rr RevRange) ([]CommitMetadata, error) {
+func readCommitRange[T commitRecord](r *runner, ctx context.Context, codec commitCodec[T], rr RevRange) ([]T, error) {
 	rangeArg := rr.Head
 	if rr.Base != "" {
 		rangeArg = rr.String()
 	}
 	out, err := r.RunGitCommandRawWithContext(ctx, "log", "-z",
-		"--format="+commitReadFormat(mode), "--end-of-options", rangeArg, "--")
+		"--format="+codec.format, "--end-of-options", rangeArg, "--")
 	if err != nil {
 		return nil, err
 	}
-	return parseCommitRecords(out, mode)
+	return parseCommitRecords(out, codec)
 }
 
-func parseCommitRecords(out string, mode CommitReadMode) ([]CommitMetadata, error) {
+func parseCommitRecords[T commitRecord](out string, codec commitCodec[T]) ([]T, error) {
 	if out == "" {
 		return nil, nil
 	}
 	fields := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
-	width := 2
-	if mode == CommitDetails {
-		width = 8
-	}
-	if len(fields)%width != 0 {
+	if len(fields)%codec.width != 0 {
 		return nil, fmt.Errorf("malformed commit metadata: got %d fields", len(fields))
 	}
-	commits := make([]CommitMetadata, 0, len(fields)/width)
-	for i := 0; i < len(fields); i += width {
-		commit := CommitMetadata{SHA: fields[i], Parents: strings.Fields(fields[i+1])}
-		if mode == CommitDetails {
-			commit.ShortSHA, commit.Subject = fields[i+2], fields[i+3]
-			commit.AuthorName, commit.AuthorEmail = fields[i+4], fields[i+5]
-			commit.AuthorDate, commit.Message = fields[i+6], fields[i+7]
-		}
-		commits = append(commits, commit)
+	commits := make([]T, 0, len(fields)/codec.width)
+	for i := 0; i < len(fields); i += codec.width {
+		commits = append(commits, codec.decode(fields[i:i+codec.width]))
 	}
 	return commits, nil
 }

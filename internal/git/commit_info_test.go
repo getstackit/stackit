@@ -28,9 +28,9 @@ func TestReadCommitInfo(t *testing.T) {
 	refs := []string{"main", "HEAD", "refs/heads/branch1", "refs/tags/branch1", "missing"}
 	got := runner.ReadCommitInfo(t.Context(), refs...)
 	require.Equal(t, 1, logger.calls, "all commit fields and refs use one subprocess")
-	require.Len(t, got.Values, 4)
-	require.ErrorContains(t, got.Errors["missing"], "commit not found")
-	for ref, info := range got.Values {
+	require.Len(t, got.Values(), 4)
+	require.ErrorContains(t, got.Failures()["missing"], "commit not found")
+	for ref, info := range got.Values() {
 		wantDate, err := runner.RunGitCommandWithContext(t.Context(), "log", "-1", "--format=%aI", ref)
 		require.NoError(t, err)
 		wantAuthor, err := runner.RunGitCommandWithContext(t.Context(), "log", "-1", "--format=%an", ref)
@@ -38,14 +38,14 @@ func TestReadCommitInfo(t *testing.T) {
 		require.Equal(t, wantDate, info.Date.Format(time.RFC3339))
 		require.Equal(t, wantAuthor, info.Author)
 	}
-	require.Equal(t, got.Values["HEAD"], got.Values["refs/heads/branch1"])
-	require.Equal(t, got.Values["main"], got.Values["refs/tags/branch1"])
-	require.Empty(t, runner.ReadCommitInfo(t.Context()).Values)
+	require.Equal(t, got.Values()["HEAD"], got.Values()["refs/heads/branch1"])
+	require.Equal(t, got.Values()["main"], got.Values()["refs/tags/branch1"])
+	require.Empty(t, runner.ReadCommitInfo(t.Context()).Values())
 	blob, err := git.One(runner.CreateBlobs(context.Background(), "not a commit"))
 	require.NoError(t, err)
 	mixed := runner.ReadCommitInfo(t.Context(), blob, "HEAD")
-	require.Contains(t, mixed.Values, "HEAD")
-	require.Contains(t, mixed.Errors, blob)
+	require.Contains(t, mixed.Values(), "HEAD")
+	require.Contains(t, mixed.Failures(), blob)
 }
 
 func TestGetRemoteRevision_UsesConfiguredRemote(t *testing.T) {

@@ -74,7 +74,8 @@ type BranchWriter interface {
 type CommitReader interface {
 	ReadRevisions(ctx context.Context, refs ...string) ReadResults[string]
 	ReadCommitInfo(ctx context.Context, refs ...string) ReadResults[CommitInfo]
-	ReadCommitRanges(ctx context.Context, mode CommitReadMode, ranges ...RevRange) ReadResults[[]CommitMetadata]
+	ReadCommitRanges(ctx context.Context, ranges ...RevRange) ReadResults[[]CommitMetadata]
+	ReadCommitNodes(ctx context.Context, ranges ...RevRange) ReadResults[[]CommitNode]
 	ReadCommits(ctx context.Context, refs ...string) ReadResults[CommitMetadata]
 	ReadAncestry(ctx context.Context, ranges ...RevRange) ReadResults[bool]
 	ReadCommitCounts(ctx context.Context, ranges ...RevRange) ReadResults[int]

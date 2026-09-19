@@ -19,7 +19,7 @@ type splitByCommitEngine interface {
 	engine.BranchReader
 	engine.PRManager
 	engine.StackRewriter
-	ReadBranchCommits(ctx context.Context, mode git.CommitReadMode, branches engine.Branches) git.ReadResults[engine.BranchCommitRange]
+	ReadBranchCommits(ctx context.Context, branches engine.Branches) git.ReadResults[engine.BranchCommitRange]
 }
 
 // branchGroup represents a group of commits that will form a branch
@@ -41,7 +41,7 @@ type branchGroup struct {
 func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngine, splog output.Output, pattern config.BranchPattern) (*Result, error) {
 	// Read once so display, subjects, and the eventual detach share one snapshot.
 	branchToSplitObj := eng.GetBranch(branchToSplit)
-	history, err := eng.ReadBranchCommits(ctx, git.CommitDetails, engine.BranchesOf(branchToSplitObj)).One()
+	history, err := eng.ReadBranchCommits(ctx, engine.BranchesOf(branchToSplitObj)).One()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commits: %w", err)
 	}

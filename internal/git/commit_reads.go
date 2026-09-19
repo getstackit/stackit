@@ -13,7 +13,7 @@ import (
 // refs. Git resolves and peels the refs in one cat-file process. Results are
 // keyed by the requested ref, including aliases that point at the same commit.
 func (r *runner) ReadCommitInfo(ctx context.Context, refs ...string) ReadResults[CommitInfo] {
-	result := ReadResults[CommitInfo]{Values: make(map[string]CommitInfo), Errors: make(map[string]error)}
+	result := ReadResults[CommitInfo]{}
 	queries := make([]string, 0, len(refs))
 	names := make([]string, 0, len(refs))
 	seen := make(map[string]bool, len(refs))
@@ -26,7 +26,7 @@ func (r *runner) ReadCommitInfo(ctx context.Context, refs ...string) ReadResults
 		if strings.ContainsAny(query, "\n\x00") {
 			sha, err := r.ReadRevisions(ctx, query).One()
 			if err != nil {
-				result.Errors[name] = err
+				result.Fail(name, err)
 				continue
 			}
 			query = sha
@@ -40,7 +40,7 @@ func (r *runner) ReadCommitInfo(ctx context.Context, refs ...string) ReadResults
 	out, err := r.runGitInternal(ctx, strings.Join(queries, "\n")+"\n", nil, false, "cat-file", "--batch")
 	if err != nil {
 		for _, name := range names {
-			result.Errors[name] = err
+			result.Fail(name, err)
 		}
 		return result
 	}
@@ -54,11 +54,7 @@ func (r *runner) ReadCommitInfo(ctx context.Context, refs ...string) ReadResults
 		if err == nil {
 			info, err = parseCommitInfo(content)
 		}
-		if err != nil {
-			result.Errors[name] = err
-		} else {
-			result.Values[name] = info
-		}
+		result.Record(name, info, err)
 	}
 	return result
 }

@@ -99,8 +99,7 @@ func (tx *MetadataTx) ReadMetadata(ctx context.Context, branches ...string) git.
 	results := tx.eng.metadata.ReadMetadata(ctx, branches...)
 	for name, version := range results.Versions {
 		if prior, ok := tx.originalMeta[name]; ok && prior != version {
-			results.Errors[name] = fmt.Errorf("metadata version changed after preparing %s", name)
-			delete(results.Values, name)
+			results.Fail(name, fmt.Errorf("metadata version changed after preparing %s", name))
 			continue
 		}
 		tx.originalMeta[name] = version
@@ -118,8 +117,7 @@ func (tx *MetadataTx) ReadLocalMetadata(ctx context.Context, branches ...string)
 	results := tx.eng.metadata.ReadLocalMetadata(ctx, branches...)
 	for name, version := range results.Versions {
 		if prior, ok := tx.originalLocalMeta[name]; ok && prior != version {
-			results.Errors[name] = fmt.Errorf("metadata version changed after preparing %s", name)
-			delete(results.Values, name)
+			results.Fail(name, fmt.Errorf("metadata version changed after preparing %s", name))
 			continue
 		}
 		tx.originalLocalMeta[name] = version
@@ -128,9 +126,9 @@ func (tx *MetadataTx) ReadLocalMetadata(ctx context.Context, branches ...string)
 }
 
 func failedMetadataReads[T any](names []string, err error) git.ReadResults[T] {
-	result := git.ReadResults[T]{Errors: make(map[string]error, len(names))}
+	result := git.ReadResults[T]{}
 	for _, name := range names {
-		result.Errors[name] = err
+		result.Fail(name, err)
 	}
 	return result
 }

@@ -144,7 +144,8 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Get commit message
-	commitMessages, err := branchToSplit.GetAllCommits(engine.CommitFormatMessage)
+	commitMessagesData, err := branchToSplit.GetAllCommits()
+	commitMessages := commitMessagesData.Messages()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get commit messages: %w", err)
 	}
@@ -190,19 +191,19 @@ func splitByFile(ctx context.Context, branchToSplit engine.Branch, pathspecs []s
 	}
 
 	// Check if anything was staged
-	hasStaged, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(ctx)
+	status, err := eng.GetWorkingTreeStatus(ctx)
 	if err != nil {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("failed to read working tree status: %w", err))
 	}
-	if !hasStaged {
+	if !status.Staged {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("no changes staged for files: %s", strings.Join(pathspecs, ", ")))
 	}
 
 	// Check if there are remaining changes (to keep on branchToSplit)
 
-	if !hasUnstaged && !hasUntracked {
+	if !status.HasUnstagedChanges() {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("all changes were selected - nothing would remain on %s", branchToSplit.GetName()))
 	}
@@ -369,19 +370,19 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 	}
 
 	// Check if anything was staged
-	hasStaged, hasUnstaged, hasUntracked, err := eng.GetWorkingTreeStatus(ctx)
+	status, err := eng.GetWorkingTreeStatus(ctx)
 	if err != nil {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("failed to read working tree status: %w", err))
 	}
-	if !hasStaged {
+	if !status.Staged {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("no changes staged for extraction"))
 	}
 
 	// Check if there are remaining changes (to keep on branchToSplit)
 
-	if !hasUnstaged && !hasUntracked {
+	if !status.HasUnstagedChanges() {
 		return nil, recoverToOriginalBranch(ctx, eng, branchToSplit,
 			fmt.Errorf("all changes were selected - nothing would remain on %s", branchToSplit.GetName()))
 	}

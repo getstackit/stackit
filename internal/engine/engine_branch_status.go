@@ -278,7 +278,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 
 	// Each worker writes only its own index, so the slice is filled without
 	// synchronization and assembled into the result map serially afterward,
-	// mirroring batchByBranch in branch_view.go.
+	// sharing the branch readers’ batched-resolution approach.
 	type indexedBranch struct {
 		index  int
 		branch Branch

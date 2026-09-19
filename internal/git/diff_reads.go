@@ -34,7 +34,7 @@ type DiffSummary struct {
 // keyed by RevRange.String(). Empty bases are invalid: these are two-tree diffs,
 // not history walks. Single-input callers use One(), exactly like ReadRevisions.
 func (r *runner) ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...RevRange) ReadResults[DiffSummary] {
-	result := ReadResults[DiffSummary]{Values: make(map[string]DiffSummary), Errors: make(map[string]error)}
+	result := ReadResults[DiffSummary]{}
 	// A single file/stat request can let diff resolve its two revisions itself.
 	// Batching adds a tree-resolution process, worthwhile only for multiple pairs.
 	if len(ranges) == 1 && (mode == DiffNames || mode == DiffStats) && ranges[0].Base != "" && ranges[0].Head != "" {
@@ -46,23 +46,23 @@ func (r *runner) ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...Rev
 		out, err := r.RunGitCommandRawWithContext(ctx, "diff", "-z", "-M", "--no-ext-diff", "--no-textconv", format,
 			"--end-of-options", rr.Base, rr.Head, "--")
 		if err != nil {
-			result.Errors[rr.String()] = err
+			result.Fail(rr.String(), err)
 			return result
 		}
 		summaries, err := parseDiffSummaries("single\n"+out, []string{"single"}, mode)
 		if err != nil {
-			result.Errors[rr.String()] = err
+			result.Fail(rr.String(), err)
 		} else {
 			summary := summaries["single"]
 			summary.Empty = out == ""
-			result.Values[rr.String()] = summary
+			result.Set(rr.String(), summary)
 		}
 		return result
 	}
 	refs := make([]string, 0, len(ranges)*2)
 	for _, rr := range ranges {
 		if mode < DiffCheckOnly || mode > DiffStats || rr.Base == "" || rr.Head == "" {
-			result.Errors[rr.String()] = fmt.Errorf("invalid diff request: %s (mode %d)", rr, mode)
+			result.Fail(rr.String(), fmt.Errorf("invalid diff request: %s (mode %d)", rr, mode))
 			continue
 		}
 		refs = append(refs, rr.Base+"^{tree}", rr.Head+"^{tree}")
@@ -73,22 +73,22 @@ func (r *runner) ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...Rev
 	seen := make(map[string]bool)
 	for _, rr := range ranges {
 		key := rr.String()
-		if seen[key] || result.Errors[key] != nil {
+		if seen[key] || result.entries[key].Err != nil {
 			continue
 		}
 		seen[key] = true
 		base, err := trees.Get(rr.Base + "^{tree}")
 		if err != nil {
-			result.Errors[key] = err
+			result.Fail(key, err)
 			continue
 		}
 		head, err := trees.Get(rr.Head + "^{tree}")
 		if err != nil {
-			result.Errors[key] = err
+			result.Fail(key, err)
 			continue
 		}
 		if base == head || mode == DiffCheckOnly {
-			result.Values[key] = DiffSummary{Empty: base == head, Files: []string{}}
+			result.Set(key, DiffSummary{Empty: base == head, Files: []string{}})
 			continue
 		}
 		pair := base + " " + head
@@ -114,11 +114,7 @@ func (r *runner) ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...Rev
 	}
 	for pair, keys := range names {
 		for _, key := range keys {
-			if err != nil {
-				result.Errors[key] = err
-			} else {
-				result.Values[key] = summaries[pair]
-			}
+			result.Record(key, summaries[pair], err)
 		}
 	}
 	return result

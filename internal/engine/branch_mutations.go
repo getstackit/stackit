@@ -172,11 +172,11 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	// Delete the head ref and both metadata refs atomically in one git invocation.
 	// update-ref --stdin tolerates missing refs, so this is safe even if the
 	// branch or its metadata refs were already absent.
-	if err := e.git.DeleteRefsBatch(ctx, []string{
+	if err := e.git.DeleteRefs(ctx, []string{
 		"refs/heads/" + branchName,
 		git.MetadataRefPrefix + branchName,
 		git.LocalMetadataRefPrefix + branchName,
-	}); err != nil {
+	}...); err != nil {
 		return fmt.Errorf("failed to delete branch refs: %w", err)
 	}
 
@@ -315,7 +315,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 			git.LocalMetadataRefPrefix+name,
 		)
 	}
-	if err := e.git.DeleteRefsBatch(ctx, refsToDelete); err != nil {
+	if err := e.git.DeleteRefs(ctx, refsToDelete...); err != nil {
 		return nil, fmt.Errorf("failed to delete branch refs: %w", err)
 	}
 
@@ -422,8 +422,8 @@ func (e *engineImpl) RenameBranch(ctx context.Context, oldBranch, newBranch Bran
 	oldLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, oldName)
 	newLocalRef := fmt.Sprintf("%s%s", git.LocalMetadataRefPrefix, newName)
 	if sha, err := e.git.GetRef(oldLocalRef); err == nil {
-		if updateErr := e.git.UpdateRef(newLocalRef, sha); updateErr == nil {
-			_ = e.git.DeleteRef(ctx, oldLocalRef)
+		if updateErr := e.git.UpdateRefs(ctx, []git.RefUpdate{{RefName: newLocalRef, NewSHA: sha}}, ""); updateErr == nil {
+			_ = e.git.DeleteRefs(ctx, oldLocalRef)
 		}
 	}
 

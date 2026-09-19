@@ -280,7 +280,7 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	}
 
 	// Atomic batch update with reflog message
-	if err := tx.eng.git.UpdateRefsBatchWithLog(ctx, refUpdates, tx.message); err != nil {
+	if err := tx.eng.git.UpdateRefs(ctx, refUpdates, tx.message); err != nil {
 		return fmt.Errorf("atomic commit failed: %w", err)
 	}
 

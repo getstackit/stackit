@@ -303,7 +303,7 @@ func (e *engineImpl) DeleteMetadataRefsBatch(ctx context.Context, branchNames []
 	for i, branchName := range branchNames {
 		refNames[i] = git.MetadataRefPrefix + branchName
 	}
-	return e.git.DeleteRefsBatch(ctx, refNames)
+	return e.git.DeleteRefs(ctx, refNames...)
 }
 
 // IsInsideRepo checks if the current directory is inside a git repository

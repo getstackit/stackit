@@ -149,7 +149,7 @@ func (e *engineImpl) UntrackBranches(ctx context.Context, branchNames []string) 
 	for i, name := range branchNames {
 		refNames[i] = fmt.Sprintf("%s%s", git.MetadataRefPrefix, name)
 	}
-	if err := e.git.DeleteRefsBatch(ctx, refNames); err != nil {
+	if err := e.git.DeleteRefs(ctx, refNames...); err != nil {
 		return fmt.Errorf("failed to delete metadata refs: %w", err)
 	}
 	return e.rebuild()

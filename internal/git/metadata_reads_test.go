@@ -19,7 +19,7 @@ func TestMetadataReadsPreservePartialFailures(t *testing.T) {
 	corrupt, err := git.One(runner.CreateBlobs(context.Background(), "{bad JSON"))
 	require.NoError(t, err)
 	for _, prefix := range []string{git.MetadataRefPrefix, git.LocalMetadataRefPrefix} {
-		require.NoError(t, runner.UpdateRef(prefix+"corrupt", corrupt))
+		require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: prefix + "corrupt", NewSHA: corrupt}}, ""))
 	}
 	shared := runner.ReadMetadata(t.Context(), "valid", "missing", "corrupt")
 	require.Len(t, shared.Values, 2)

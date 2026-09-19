@@ -238,15 +238,11 @@ type StatusOperations interface {
 // RefOperations provides low-level reference operations.
 type RefOperations interface {
 	GetRef(name string) (string, error)
-	UpdateRef(name, sha string) error
-	UpdateRefWithLog(ctx context.Context, refName, sha, message string) error
 	GetUntrackedFilesIn(ctx context.Context, worktreePath string) ([]string, error)
 	TreeContainsAnyPath(ctx context.Context, rev string, paths []string) (collides, known bool)
-	UpdateRefsBatch(ctx context.Context, updates []RefUpdate) error
-	UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate, reflogMessage string) error
-	DeleteRefsBatch(ctx context.Context, refNames []string) error
+	UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMessage string) error
+	DeleteRefs(ctx context.Context, refNames ...string) error
 	VerifyRef(ctx context.Context, refName string) error
-	DeleteRef(ctx context.Context, name string) error
 	ListRefs(prefix string) (map[string]string, error)
 	// RefDecorations returns local branch and tag refs grouped by the commit SHA
 	// they point at, dereferencing annotated tags to the wrapped commit.

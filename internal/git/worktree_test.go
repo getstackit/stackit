@@ -276,7 +276,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		// Point the registration at a blob that is not valid metadata.
 		garbage, err := git.One(runner.CreateBlobs(context.Background(), "this is not json"))
 		require.NoError(t, err)
-		require.NoError(t, runner.UpdateRef("refs/stackit/worktrees/corrupt", garbage))
+		require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/worktrees/corrupt", NewSHA: garbage}}, ""))
 
 		_, readErr := runner.ReadWorktreeMeta("corrupt")
 		require.Error(t, readErr, "precondition: metadata must be unreadable")

@@ -82,7 +82,7 @@ func TestDeleteRefsBatch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 	_, err := runner.RunGitCommandWithContext(ctx, "worktree", "add", worktreePath, "feature")
 	require.NoError(t, err)
 
-	err = runner.DeleteRefsBatch(ctx, []string{"refs/heads/feature"})
+	err = runner.DeleteRefs(ctx, []string{"refs/heads/feature"}...)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "checked out in worktree")
 	requireRefPresent(t, runner, "refs/heads/feature")
@@ -95,13 +95,13 @@ func TestDeleteRef_RemovesPackedRef(t *testing.T) {
 
 	sha, err := git.One(runner.CreateBlobs(context.Background(), "payload"))
 	require.NoError(t, err)
-	require.NoError(t, runner.UpdateRef("refs/stackit/metadata/packed-feature", sha))
+	require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/packed-feature", NewSHA: sha}}, ""))
 	packAllRefs(t, scene.Dir)
 
 	requireLooseRefAbsent(t, scene.Dir, "refs/stackit/metadata/packed-feature")
 	requirePackedRefPresent(t, scene.Dir, "refs/stackit/metadata/packed-feature")
 
-	require.NoError(t, runner.DeleteRef(context.Background(), "refs/stackit/metadata/packed-feature"))
+	require.NoError(t, runner.DeleteRefs(context.Background(), "refs/stackit/metadata/packed-feature"))
 
 	requireRefAbsent(t, runner, "refs/stackit/metadata/packed-feature")
 	requirePackedRefAbsent(t, scene.Dir, "refs/stackit/metadata/packed-feature")
@@ -117,7 +117,7 @@ func TestDeleteMetadata_RemovesPackedRef(t *testing.T) {
 	// to be resurrected by the next sync as a phantom conflict.
 	sha, err := git.One(runner.CreateBlobs(context.Background(), `{"parentBranchName":"main"}`))
 	require.NoError(t, err)
-	require.NoError(t, runner.UpdateRef("refs/stackit/metadata/packed-feature", sha))
+	require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/packed-feature", NewSHA: sha}}, ""))
 	packAllRefs(t, scene.Dir)
 
 	require.NoError(t, runner.DeleteMetadata(context.Background(), "packed-feature"))

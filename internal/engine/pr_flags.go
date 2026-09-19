@@ -45,7 +45,7 @@ func (e *engineImpl) MarkBranchesForPRBodyUpdate(ctx context.Context, branchName
 	}
 
 	// Atomic batch update all refs
-	return e.git.UpdateRefsBatch(ctx, updates)
+	return e.git.UpdateRefs(ctx, updates, "")
 }
 
 // ClearNeedsPRBodyUpdate clears the PR body update flag for a branch

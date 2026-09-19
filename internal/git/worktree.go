@@ -364,7 +364,7 @@ func (r *runner) WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *
 		{RefName: fmt.Sprintf("%s%s", WorktreeRefPrefix, stackRoot), NewSHA: sha, OldSHA: zeroSHA},
 		{RefName: worktreePathRef(meta.Path), NewSHA: sha, OldSHA: zeroSHA},
 	}
-	if err := r.UpdateRefsBatch(ctx, updates); err != nil {
+	if err := r.UpdateRefs(ctx, updates, ""); err != nil {
 		return fmt.Errorf("failed to register worktree metadata refs: %w", err)
 	}
 
@@ -377,7 +377,7 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 	sha, err := r.GetRef(refName)
 	if err != nil {
 		// Preserve DeleteRef's idempotent behavior for absent legacy metadata.
-		return r.DeleteRef(ctx, refName)
+		return r.DeleteRefs(ctx, refName)
 	}
 
 	// A metadata blob we cannot read or parse tells us nothing about which
@@ -399,7 +399,7 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 			}
 		}
 	}
-	if err := r.UpdateRefsBatch(ctx, updates); err != nil {
+	if err := r.UpdateRefs(ctx, updates, ""); err != nil {
 		return fmt.Errorf("failed to unregister worktree metadata refs: %w", err)
 	}
 	return nil

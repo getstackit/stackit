@@ -46,11 +46,11 @@ func TestBatchGetRevisionsFallbackPreservesResolution(t *testing.T) {
 	require.NoError(t, err)
 	blob, err := git.One(runner.CreateBlobs(context.Background(), "metadata"))
 	require.NoError(t, err)
-	require.NoError(t, runner.UpdateRef("refs/stackit/metadata/main", blob))
+	require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/main", NewSHA: blob}}, ""))
 	require.NoError(t, scene.Repo.RunGitCommand("tag", "-a", "commit-tag", "-m", "commit tag"))
 	require.NoError(t, scene.Repo.RunGitCommand("tag", "-a", "blob-tag", blob, "-m", "blob tag"))
 	require.NoError(t, scene.Repo.RunGitCommand("branch", "origin/local", sha))
-	require.NoError(t, runner.UpdateRef("refs/remotes/upstream/main", sha))
+	require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/remotes/upstream/main", NewSHA: sha}}, ""))
 
 	names := []string{"HEAD", "HEAD~1", sha[:12], "commit-tag", "blob-tag",
 		"HEAD^{tree}", "refs/stackit/metadata/main", "origin/local", "upstream/main",

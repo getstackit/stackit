@@ -62,11 +62,6 @@ func traceCmd(base string, args []string) string {
 	return base + " " + strings.Join(args, " ")
 }
 
-func (r *runner) UpdateRefWithLog(ctx context.Context, refName, sha, message string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "update-ref", "-m", message, refName, sha)
-	return err
-}
-
 func (r *runner) VerifyRef(ctx context.Context, refName string) error {
 	_, err := r.GetRef(refName)
 	return err
@@ -80,38 +75,9 @@ type RefUpdate struct {
 	IsDelete bool   // If true, this is a deletion instead of an update
 }
 
-// UpdateRefsBatch performs atomic updates of multiple references using git update-ref --stdin.
-// All updates succeed or all fail. Supports both updates and deletions via the IsDelete flag.
-func (r *runner) UpdateRefsBatch(ctx context.Context, updates []RefUpdate) error {
-	if len(updates) == 0 {
-		return nil
-	}
-
-	var stdin strings.Builder
-	for _, update := range updates {
-		switch {
-		case update.IsDelete && update.OldSHA != "":
-			fmt.Fprintf(&stdin, "delete %s %s\n", update.RefName, update.OldSHA)
-		case update.IsDelete:
-			fmt.Fprintf(&stdin, "delete %s\n", update.RefName)
-		case update.OldSHA != "":
-			fmt.Fprintf(&stdin, "update %s %s %s\n", update.RefName, update.NewSHA, update.OldSHA)
-		default:
-			fmt.Fprintf(&stdin, "update %s %s\n", update.RefName, update.NewSHA)
-		}
-	}
-
-	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, "update-ref", "--stdin")
-	if err != nil {
-		return fmt.Errorf("atomic ref update failed: %w", err)
-	}
-	r.metadataCache.InvalidateForRefs(updates)
-	return nil
-}
-
-// UpdateRefsBatchWithLog performs atomic updates with a reflog message.
+// UpdateRefs atomically applies one or many updates, with an optional reflog message.
 // Supports both updates and deletions via the IsDelete flag.
-func (r *runner) UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate, reflogMessage string) error {
+func (r *runner) UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMessage string) error {
 	if len(updates) == 0 {
 		return nil
 	}
@@ -130,7 +96,11 @@ func (r *runner) UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate
 		}
 	}
 
-	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, "update-ref", "--stdin", "-m", reflogMessage)
+	args := []string{"update-ref", "--stdin"}
+	if reflogMessage != "" {
+		args = append(args, "-m", reflogMessage)
+	}
+	_, err := r.runGitInternal(ctx, stdin.String(), nil, true, args...)
 	if err != nil {
 		return fmt.Errorf("atomic ref update failed: %w", err)
 	}
@@ -138,8 +108,8 @@ func (r *runner) UpdateRefsBatchWithLog(ctx context.Context, updates []RefUpdate
 	return nil
 }
 
-// DeleteRefsBatch atomically deletes multiple references.
-func (r *runner) DeleteRefsBatch(ctx context.Context, refNames []string) error {
+// DeleteRefs atomically deletes multiple references.
+func (r *runner) DeleteRefs(ctx context.Context, refNames ...string) error {
 	if len(refNames) == 0 {
 		return nil
 	}
@@ -947,29 +917,6 @@ func (r *runner) GetRef(name string) (string, error) {
 	return r.resolveRefSHA(name)
 }
 
-func (r *runner) UpdateRef(name, sha string) error {
-	if _, err := r.RunGitCommandWithContext(context.Background(), "update-ref", name, sha); err != nil {
-		return fmt.Errorf("failed to update ref %s: %w", name, err)
-	}
-	r.metadataCache.InvalidateForRefNames([]string{name})
-	return nil
-}
-
-func (r *runner) DeleteRef(ctx context.Context, name string) error {
-	// `git update-ref -d` rewrites packed-refs correctly and is lenient when
-	// the ref doesn't exist.
-	if _, err := r.RunGitCommandWithContext(ctx, "update-ref", "-d", name); err != nil {
-		return fmt.Errorf("failed to delete ref %s: %w", name, err)
-	}
-
-	if err := r.verifyRefDeleted(ctx, name); err != nil {
-		return err
-	}
-
-	r.metadataCache.InvalidateForRefNames([]string{name})
-	return nil
-}
-
 func (r *runner) CatFile(sha string) (string, error) {
 	return r.ReadBlob(sha)
 }
@@ -1143,17 +1090,17 @@ func (r *runner) TestRemoteRefCompatibility(ctx context.Context) error {
 		return fmt.Errorf("failed to create test blob: %w", err)
 	}
 
-	if err := r.UpdateRef(testRef, sha); err != nil {
+	if err := r.UpdateRefs(ctx, []RefUpdate{{RefName: testRef, NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to update local test ref: %w", err)
 	}
 
 	if err := r.pushOriginRefSpecs(ctx, []string{"+" + testRef}); err != nil {
-		_ = r.DeleteRef(ctx, testRef)
+		_ = r.DeleteRefs(ctx, testRef)
 		return fmt.Errorf("remote rejected metadata ref push: %w", err)
 	}
 
 	_ = r.pushOriginRefSpecs(ctx, []string{":" + testRef})
-	_ = r.DeleteRef(ctx, testRef)
+	_ = r.DeleteRefs(ctx, testRef)
 
 	return nil
 }

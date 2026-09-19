@@ -289,7 +289,7 @@ func (r *runner) WriteMetadata(branchName string, meta *Meta) error {
 func (r *runner) updateMetadataRefCAS(refName, branchName, newSHA string) error {
 	expected := r.metadataCache.SHAFor(branchName)
 	if expected == "" {
-		if err := r.UpdateRef(refName, newSHA); err != nil {
+		if err := r.UpdateRefs(context.Background(), []RefUpdate{{RefName: refName, NewSHA: newSHA}}, ""); err != nil {
 			return fmt.Errorf("failed to write metadata ref: %w", err)
 		}
 		return nil
@@ -299,11 +299,11 @@ func (r *runner) updateMetadataRefCAS(refName, branchName, newSHA string) error 
 	// reported success for a ref another process may have moved in between —
 	// and the caller then cached metadata it never actually wrote. Let the
 	// compare-and-swap decide; it costs one update-ref.
-	err := r.UpdateRefsBatch(context.Background(), []RefUpdate{{
+	err := r.UpdateRefs(context.Background(), []RefUpdate{{
 		RefName: refName,
 		NewSHA:  newSHA,
 		OldSHA:  expected,
-	}})
+	}}, "")
 	if err != nil {
 		// The expectation is now known-stale. Dropping it forces the next read
 		// to come from disk: otherwise ReadMetadata answers from cache, recomputes
@@ -317,7 +317,7 @@ func (r *runner) updateMetadataRefCAS(refName, branchName, newSHA string) error 
 
 func (r *runner) DeleteMetadata(ctx context.Context, branchName string) error {
 	refName := fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
-	err := r.DeleteRef(ctx, refName)
+	err := r.DeleteRefs(ctx, refName)
 	r.metadataCache.Delete(branchName)
 	return err
 }
@@ -352,7 +352,7 @@ func (r *runner) RenameMetadata(oldName, newName string) error {
 	}
 
 	// Copy metadata to new ref (keep old ref for cleanup later)
-	if err := r.UpdateRef(newRefName, sha); err != nil {
+	if err := r.UpdateRefs(context.Background(), []RefUpdate{{RefName: newRefName, NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to create new metadata ref: %w", err)
 	}
 
@@ -377,11 +377,11 @@ func (r *runner) WriteLocalMetadata(branchName string, meta *LocalMeta) error {
 	// the new content matches it, because "matches what I read" is not the same
 	// as "matches what is on disk now".
 	if expected := r.metadataCache.LocalSHAFor(branchName); expected != "" {
-		err := r.UpdateRefsBatch(context.Background(), []RefUpdate{{
+		err := r.UpdateRefs(context.Background(), []RefUpdate{{
 			RefName: refName,
 			NewSHA:  sha,
 			OldSHA:  expected,
-		}})
+		}}, "")
 		if err != nil {
 			r.metadataCache.Delete(branchName)
 			return fmt.Errorf("failed to write local metadata ref for %s (another process changed it; re-run to pick up their change): %w", branchName, err)
@@ -389,7 +389,7 @@ func (r *runner) WriteLocalMetadata(branchName string, meta *LocalMeta) error {
 		r.metadataCache.PutLocalSHA(branchName, sha)
 		return nil
 	}
-	if err := r.UpdateRef(refName, sha); err != nil {
+	if err := r.UpdateRefs(context.Background(), []RefUpdate{{RefName: refName, NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to write local metadata ref: %w", err)
 	}
 	r.metadataCache.PutLocalSHA(branchName, sha)

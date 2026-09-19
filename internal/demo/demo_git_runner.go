@@ -511,10 +511,6 @@ func (d *demoGitRunner) WorktreeResetBlocker(_ context.Context, _, _ string) str
 	return ""
 }
 
-func (d *demoGitRunner) UpdateRefWithLog(_ context.Context, _, _, _ string) error {
-	return nil
-}
-
 func (d *demoGitRunner) VerifyRef(_ context.Context, _ string) error {
 	return nil
 }
@@ -573,26 +569,6 @@ func (d *demoGitRunner) RunGitCommandInteractive(_ ...string) error {
 
 func (d *demoGitRunner) GetRef(_ string) (string, error) {
 	return "ref-sha", nil
-}
-
-func (d *demoGitRunner) UpdateRef(_, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) DeleteRef(_ context.Context, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) UpdateRefsBatch(_ context.Context, _ []git.RefUpdate) error {
-	return nil
-}
-
-func (d *demoGitRunner) UpdateRefsBatchWithLog(_ context.Context, _ []git.RefUpdate, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) DeleteRefsBatch(_ context.Context, _ []string) error {
-	return nil
 }
 
 func (d *demoGitRunner) CatFile(_ string) (string, error) {
@@ -806,3 +782,6 @@ func (d *demoGitRunner) CreateBlobs(_ context.Context, contents ...string) ([]st
 	}
 	return shas, nil
 }
+
+func (d *demoGitRunner) UpdateRefs(_ context.Context, _ []git.RefUpdate, _ string) error { return nil }
+func (d *demoGitRunner) DeleteRefs(_ context.Context, _ ...string) error                 { return nil }

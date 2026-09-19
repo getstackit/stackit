@@ -89,7 +89,7 @@ func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
 		return fmt.Errorf("failed to create stack metadata blob: %w", err)
 	}
 
-	if err := r.UpdateRef(StackMetaRefName(stackID), sha); err != nil {
+	if err := r.UpdateRefs(context.Background(), []RefUpdate{{RefName: StackMetaRefName(stackID), NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to write stack metadata ref: %w", err)
 	}
 
@@ -98,7 +98,7 @@ func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
 
 // DeleteStackMeta deletes stack metadata for a given stack ID.
 func (r *runner) DeleteStackMeta(ctx context.Context, stackID string) error {
-	return r.DeleteRef(ctx, StackMetaRefName(stackID))
+	return r.DeleteRefs(ctx, StackMetaRefName(stackID))
 }
 
 // ListStackMetas returns a map of stack IDs to their ref SHAs.

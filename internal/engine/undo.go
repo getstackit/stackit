@@ -397,7 +397,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 
 	// Atomic restore of all refs
 	reflogMessage := fmt.Sprintf("stackit undo: restored to before '%s'", snapshot.Command)
-	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogMessage); err != nil {
+	if err := e.git.UpdateRefs(ctx, updates, reflogMessage); err != nil {
 		return fmt.Errorf("failed to restore snapshot atomically: %w", err)
 	}
 
@@ -411,7 +411,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 			}
 		}
 		if len(toDelete) > 0 {
-			_ = e.git.DeleteRefsBatch(ctx, toDelete)
+			_ = e.git.DeleteRefs(ctx, toDelete...)
 		}
 	}
 

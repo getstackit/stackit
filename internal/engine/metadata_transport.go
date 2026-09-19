@@ -109,7 +109,7 @@ func (e *engineImpl) DeleteStackMetadataBatch(ctx context.Context, stackIDs []st
 	for _, stackID := range stackIDs {
 		refs = append(refs, git.StackMetaRefName(stackID))
 	}
-	return e.git.DeleteRefsBatch(ctx, refs)
+	return e.git.DeleteRefs(ctx, refs...)
 }
 
 // DeleteRemoteStackMetadata pushes ref-deletions for the given stack IDs to

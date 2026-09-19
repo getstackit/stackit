@@ -198,6 +198,7 @@ func (p *planPrinter) printActiveLine(ev submit.BranchPlanEvent) {
 		line += " " + style.ColorDim("(empty)")
 	}
 	p.out.Info("%s", line)
+	p.printRegenerated(ev)
 }
 
 func (p *planPrinter) printSkippedName(ev submit.BranchPlanEvent) {
@@ -231,6 +232,7 @@ func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
 		line += " " + style.ColorDim("(empty)")
 	}
 	p.out.Info("%s", line)
+	p.printRegenerated(ev)
 }
 
 // soloBase is the display name of the branch's parent (its PR base), falling
@@ -748,4 +750,20 @@ func (h *InteractiveSubmitHandler) Confirm(message string, defaultYes bool) (boo
 // IsInteractive returns true - interactive handler supports prompts.
 func (h *InteractiveSubmitHandler) IsInteractive() bool {
 	return true
+}
+
+// printRegenerated shows editable replacement text, without generated footers.
+func (p *planPrinter) printRegenerated(ev submit.BranchPlanEvent) {
+	if ev.Regenerated == nil {
+		return
+	}
+	p.out.Info("    PR title: %s", ev.Regenerated.Title)
+	p.out.Info("    PR description:")
+	if ev.Regenerated.Body == "" {
+		p.out.Info("      (empty)")
+		return
+	}
+	for line := range strings.SplitSeq(ev.Regenerated.Body, "\n") {
+		p.out.Info("      %s", line)
+	}
 }

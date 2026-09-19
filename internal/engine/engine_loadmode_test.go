@@ -139,12 +139,14 @@ func TestLoadMode_SharedSkipsLocalBatch(t *testing.T) {
 
 	// Use a runner shared by the test so we can read cumulative stats.
 	gitRunner := git.NewRunnerWithPath(s.Scene.Dir, nil)
+	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
 	eng, err := engine.NewEngine(engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
+		Metadata: gitRunnerMetadata,
 		LoadMode: engine.LoadModeShared,
 	})
 	require.NoError(t, err)
@@ -156,7 +158,7 @@ func TestLoadMode_SharedSkipsLocalBatch(t *testing.T) {
 	_ = eng.IsTracked(branch)
 	_ = eng.GetScope(branch)
 
-	statsBefore := gitRunner.MetadataCacheStats()
+	statsBefore := gitRunnerMetadata.MetadataCacheStats()
 
 	// Triggering IsFrozen MUST promote local metadata exactly once for the
 	// whole branch set, not once per accessor call.
@@ -164,7 +166,7 @@ func TestLoadMode_SharedSkipsLocalBatch(t *testing.T) {
 	_ = eng.IsFrozen(eng.GetBranch("b"))
 	_ = eng.IsFrozen(eng.GetBranch("c"))
 
-	statsAfter := gitRunner.MetadataCacheStats()
+	statsAfter := gitRunnerMetadata.MetadataCacheStats()
 
 	// The metadata cache only tracks shared-metadata hits/misses, not local
 	// (local has its own ref path). So the assertion is "no spurious shared
@@ -186,12 +188,14 @@ func TestLoadMode_BranchesOnly_ReadsBranchListOnly(t *testing.T) {
 	// Fresh runner ⇒ metadataCache starts at zero hits/misses. We want to
 	// observe that constructing the engine in BranchesOnly mode adds nothing.
 	gitRunner := git.NewRunnerWithPath(s.Scene.Dir, nil)
+	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
 	eng, err := engine.NewEngine(engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
+		Metadata: gitRunnerMetadata,
 		LoadMode: engine.LoadModeBranchesOnly,
 	})
 	require.NoError(t, err)
@@ -201,7 +205,7 @@ func TestLoadMode_BranchesOnly_ReadsBranchListOnly(t *testing.T) {
 	branches := eng.AllBranches()
 	require.NotEmpty(t, branches, "branch list must be populated under BranchesOnly")
 
-	stats := gitRunner.MetadataCacheStats()
+	stats := gitRunnerMetadata.MetadataCacheStats()
 	require.Zero(t, stats.Hits, "BranchesOnly bootstrap must not populate the metadata cache")
 	require.Zero(t, stats.Misses, "BranchesOnly bootstrap must not read metadata refs")
 }
@@ -211,12 +215,14 @@ func TestLoadMode_BranchesOnly_LazilyLoadsBranchChain(t *testing.T) {
 	s := makeStackForLoadModeTest(t)
 
 	gitRunner := git.NewRunnerWithPath(s.Scene.Dir, nil)
+	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
 	eng, err := engine.NewEngine(engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
+		Metadata: gitRunnerMetadata,
 		LoadMode: engine.LoadModeBranchesOnly,
 	})
 	require.NoError(t, err)
@@ -225,7 +231,7 @@ func TestLoadMode_BranchesOnly_LazilyLoadsBranchChain(t *testing.T) {
 	require.Equal(t, "a", root)
 	require.True(t, eng.IsTracked(eng.GetBranch("c")))
 
-	stats := gitRunner.MetadataCacheStats()
+	stats := gitRunnerMetadata.MetadataCacheStats()
 	require.LessOrEqual(t, stats.Misses, uint64(3),
 		"lazy stack-root lookup should read only the target parent chain")
 }
@@ -236,12 +242,14 @@ func TestLoadMode_BranchesOnly_GetScopeLazilyLoadsParentChain(t *testing.T) {
 	require.NoError(t, s.Engine.SetScope(context.Background(), s.Engine.GetBranch("b"), engine.NewScope("topic")))
 
 	gitRunner := git.NewRunnerWithPath(s.Scene.Dir, nil)
+	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
 	eng, err := engine.NewEngine(engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
+		Metadata: gitRunnerMetadata,
 		LoadMode: engine.LoadModeBranchesOnly,
 	})
 	require.NoError(t, err)
@@ -249,7 +257,7 @@ func TestLoadMode_BranchesOnly_GetScopeLazilyLoadsParentChain(t *testing.T) {
 	scope := eng.GetScope(eng.GetBranch("c"))
 	require.Equal(t, "topic", scope.String())
 
-	stats := gitRunner.MetadataCacheStats()
+	stats := gitRunnerMetadata.MetadataCacheStats()
 	require.LessOrEqual(t, stats.Misses, uint64(2),
 		"lazy scope lookup should read only the target branch and scoped parent")
 }
@@ -264,12 +272,14 @@ func TestLoadMode_ConcurrentEnsureLoaded(t *testing.T) {
 	s := makeStackForLoadModeTest(t)
 
 	gitRunner := git.NewRunnerWithPath(s.Scene.Dir, nil)
+	gitRunnerMetadata := git.NewMetadataStore(gitRunner)
 	require.NoError(t, gitRunner.InitDefaultRepo())
 
 	eng, err := engine.NewEngine(engine.Options{
 		RepoRoot: s.Scene.Dir,
 		Trunk:    "main",
 		Git:      gitRunner,
+		Metadata: gitRunnerMetadata,
 		LoadMode: engine.LoadModeShared,
 	})
 	require.NoError(t, err)

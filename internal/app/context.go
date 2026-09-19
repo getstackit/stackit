@@ -324,6 +324,7 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 
 	// Enable git command debug logging on the engine's git runner
 	eng.Git().SetLogger(logger)
+	eng.Metadata().SetLogger(logger)
 
 	return &Context{
 		Context:     context.Background(),

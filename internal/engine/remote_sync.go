@@ -140,7 +140,7 @@ func (e *engineImpl) LoadRemoteMetadataCache() error {
 	var cacheMu sync.Mutex
 
 	utils.Run(refs, func(ref refInfo) {
-		content, err := e.git.ReadBlob(ref.sha)
+		content, err := git.ObjectContent(e.git.ReadObjects(context.Background(), ref.sha))
 		if err != nil {
 			return
 		}
@@ -504,9 +504,8 @@ func (e *engineImpl) CleanOrphanedMetadata(ctx context.Context, deleteRefs []str
 	}
 
 	return e.WithRetry(ctx, func() error {
-		metas, _ := e.batchReadMetadata(clearLocalHash)
-
 		tx := e.BeginTx(fmt.Sprintf("clean orphaned metadata: %d deleted, %d cleared", len(deleteRefs), len(clearLocalHash)))
+		metas, _ := tx.ReadMetadata(ctx, append(append([]string{}, deleteRefs...), clearLocalHash...)...).Split()
 		for _, name := range deleteRefs {
 			if err := tx.DeleteMeta(name); err != nil {
 				tx.Rollback()

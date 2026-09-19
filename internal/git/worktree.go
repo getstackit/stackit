@@ -325,7 +325,7 @@ func (r *runner) ReadWorktreeMeta(stackRoot string) (*WorktreeMeta, error) {
 		return nil, nil //nolint:nilerr
 	}
 
-	content, err := r.ReadBlob(sha)
+	content, err := ObjectContent(r.ReadObjects(context.Background(), sha))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read worktree metadata blob %s: %w", sha, err)
 	}
@@ -562,7 +562,7 @@ func (r *runner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
 	for refName, sha := range refs {
 		stackRoot := strings.TrimPrefix(refName, WorktreeRefPrefix)
 
-		content, err := r.ReadBlob(sha)
+		content, err := ObjectContent(r.ReadObjects(context.Background(), sha))
 		if err != nil {
 			continue // Skip unreadable entries
 		}

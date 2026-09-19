@@ -307,7 +307,7 @@ func (e *engineImpl) ReadBranchRemoteStatuses(ctx context.Context, branches Bran
 		case localSha == remoteSha:
 			status.CommonAncestor = localSha
 		default:
-			if commonAncestor, err := e.git.GetMergeBaseByRef(ctx, localSha, remoteSha); err == nil {
+			if commonAncestor, err := e.git.GetMergeBase(ctx, localSha, remoteSha); err == nil {
 				status.CommonAncestor = commonAncestor
 			}
 		}

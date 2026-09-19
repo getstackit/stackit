@@ -22,6 +22,7 @@ type engineImpl struct {
 	maxConcurrency    int
 	linearStacks      bool
 	git               git.Runner
+	metadata          *git.MetadataStore
 	mu                sync.RWMutex
 	worktreeMu        sync.Mutex // serializes worktree add/remove/prune to avoid git races on .git/worktrees/
 
@@ -146,6 +147,7 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 		maxConcurrency:    opts.Snapshot.MaxConcurrency,
 		linearStacks:      opts.Snapshot.LinearStacks,
 		git:               g,
+		metadata:          git.NewMetadataStore(g),
 	}
 
 	// Get current branch (1 cheap git call — needed for worktree's HEAD)
@@ -197,6 +199,11 @@ func NewEngine(opts Options) (Engine, error) {
 		maxConcurrency:    opts.MaxConcurrency,
 		linearStacks:      opts.LinearStacks,
 		git:               g,
+		metadata:          git.NewMetadataStore(g),
+	}
+
+	if opts.Metadata != nil {
+		e.metadata = opts.Metadata
 	}
 
 	currentBranch, err := g.GetCurrentBranch()
@@ -345,7 +352,7 @@ func (e *engineImpl) ensureLocalLoaded() {
 
 // Reset clears all branch metadata and rebuilds with new trunk
 func (e *engineImpl) Reset(newTrunkName string) error {
-	metadataRefs, err := e.git.ListMetadata()
+	metadataRefs, err := e.metadata.ListMetadata()
 	if err != nil {
 		return fmt.Errorf("failed to get metadata refs: %w", err)
 	}
@@ -418,7 +425,7 @@ func (e *engineImpl) RebuildBranches(branchNames []string) error {
 	// Invalidate the metadata cache so the re-reads below observe writes made by
 	// the operation that just ran (e.g. absorb's raw cherry-pick/reset), not a
 	// stale pre-operation snapshot.
-	e.git.ClearMetadataCache()
+	e.metadata.ClearMetadataCache()
 
 	allMeta, _ := e.batchReadMetadata(branchNames)
 	allLocalMeta := e.batchReadLocalMetadata(branchNames)
@@ -456,3 +463,5 @@ func (e *engineImpl) RebuildBranches(branchNames []string) error {
 
 	return nil
 }
+
+func (e *engineImpl) Metadata() *git.MetadataStore { return e.metadata }

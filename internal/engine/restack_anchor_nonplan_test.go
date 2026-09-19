@@ -107,9 +107,9 @@ func TestRestackBranchesMissingRecordedRevDoesNotReplayTrunk(t *testing.T) {
 	require.NoError(t, err)
 
 	// Legacy on-disk stack: no recorded parent revision.
-	meta, err := s.Engine.Git().ReadMetadata(context.Background(), "feature").One()
+	meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "feature").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Engine.Git().WriteMetadata("feature", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Metadata().WriteMetadata("feature", meta.WithParentBranchRevision(nil)))
 	require.NoError(t, s.Engine.Rebuild("main"))
 
 	s.Checkout("main").Commit("trunk two").Rebuild()

@@ -61,14 +61,16 @@ func (e *engineImpl) UpsertPrInfo(ctx context.Context, branch Branch, prInfo *Pr
 	branchName := branch.GetName()
 
 	return e.WithRetry(ctx, func() error {
-		meta, err := e.readMetadata(branchName)
+		tx := e.BeginTx(fmt.Sprintf("upsert PR info: %s", branchName))
+		meta, err := tx.ReadMetadata(ctx, branchName).One()
 		if err != nil {
 			meta = git.NewMeta()
 		}
 		meta = mergePrInfoIntoMeta(meta, prInfo)
-		return e.withMetadataTx(ctx, fmt.Sprintf("upsert PR info: %s", branchName), func(tx *MetadataTx) error {
-			return tx.UpdateMeta(branchName, meta)
-		})
+		if err := tx.UpdateMeta(branchName, meta); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
 	})
 }
 
@@ -87,9 +89,8 @@ func (e *engineImpl) BatchUpsertPrInfo(ctx context.Context, updates map[string]*
 	slices.Sort(branchNames)
 
 	return e.WithRetry(ctx, func() error {
-		metas, _ := e.batchReadMetadata(branchNames)
-
 		tx := e.BeginTx(fmt.Sprintf("batch upsert PR info: %d branches", len(updates)))
+		metas, _ := tx.ReadMetadata(ctx, branchNames...).Split()
 
 		for _, name := range branchNames {
 			meta, ok := metas[name]

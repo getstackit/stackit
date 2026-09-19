@@ -87,7 +87,6 @@ type CommitReader interface {
 // DiffOperations provides access to diff and comparison operations.
 type DiffOperations interface {
 	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
-	GetMergeBaseByRef(ctx context.Context, ref1, ref2 string) (string, error)
 	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
 	IsMerged(ctx context.Context, branchName, target string) (bool, error)
 	IsSquashMerged(ctx context.Context, branchName, target string, cache *SquashMergeCache) (bool, error)
@@ -113,7 +112,6 @@ type StagingOperations interface {
 	StageAll(ctx context.Context) error
 	StagePatch(ctx context.Context) error
 	StageTracked(ctx context.Context) error
-	AddAll(ctx context.Context) error
 	StageChanges(ctx context.Context, opts StagingOptions) error
 	HasStagedChanges(ctx context.Context) (bool, error)
 	HasUnstagedChanges(ctx context.Context) (bool, error)
@@ -235,6 +233,7 @@ type RefOperations interface {
 	UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMessage string) error
 	DeleteRefs(ctx context.Context, refNames ...string) error
 	VerifyRef(ctx context.Context, refName string) error
+	RefGeneration(ref string) uint64
 	ListRefs(prefix string) (map[string]string, error)
 	// RefDecorations returns local branch and tag refs grouped by the commit SHA
 	// they point at, dereferencing annotated tags to the wrapped commit.
@@ -245,44 +244,5 @@ type RefOperations interface {
 type ObjectOperations interface {
 	// CreateBlobs writes one or many blobs, returning SHAs in input order.
 	CreateBlobs(ctx context.Context, contents ...string) ([]string, error)
-	ReadBlob(sha string) (string, error)
-	CatFile(sha string) (string, error)
-}
-
-// MetadataOperations handles stackit metadata persistence.
-type MetadataOperations interface {
-	ReadMetadata(ctx context.Context, branchNames ...string) ReadResults[*Meta]
-	WriteMetadata(branchName string, meta *Meta) error
-	DeleteMetadata(ctx context.Context, branchName string) error
-	RenameMetadata(oldName, newName string) error
-	ListMetadata() (map[string]string, error)
-	ReadLocalMetadata(ctx context.Context, branchNames ...string) ReadResults[*LocalMeta]
-	WriteLocalMetadata(branchName string, meta *LocalMeta) error
-
-	// Transaction support: serialize metadata to blobs without updating refs.
-	// Callers write the returned SHAs atomically with UpdateRefs.
-	WriteMetadataBlobs(ctx context.Context, metas []*Meta) ([]string, error)
-	WriteLocalMetadataBlobs(ctx context.Context, metas []*LocalMeta) ([]string, error)
-	GetMetadataRefSHA(branchName string) string
-	GetLocalMetadataRefSHA(branchName string) string
-
-	// Cache management
-	ClearMetadataCache()
-
-	// MetadataCacheStats returns cumulative cache hit/miss counts since process start.
-	// Used by tests and instrumentation to verify lazy-load behavior.
-	MetadataCacheStats() MetadataCacheSummary
-}
-
-// StackMetadataOperations handles stack-level metadata persistence.
-// Stack metadata is stored separately from branch metadata and survives branch operations.
-type StackMetadataOperations interface {
-	ReadStackMeta(stackID string) (*StackMeta, error)
-	WriteStackMeta(stackID string, meta *StackMeta) error
-	DeleteStackMeta(ctx context.Context, stackID string) error
-	ListStackMetas() (map[string]string, error)
-
-	// Transaction support methods
-	WriteStackMetaBlob(meta *StackMeta) (string, error)
-	GetStackMetaRefSHA(stackID string) string
+	ReadObjects(ctx context.Context, refs ...string) (map[string]BatchObject, error)
 }

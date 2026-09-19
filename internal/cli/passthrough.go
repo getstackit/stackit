@@ -189,7 +189,7 @@ func readRefMetadata(runner git.Runner, refName string, dest any) bool {
 	if err != nil {
 		return false
 	}
-	content, err := runner.CatFile(sha)
+	content, err := git.ObjectContent(runner.ReadObjects(context.Background(), sha))
 	if err != nil {
 		return false
 	}

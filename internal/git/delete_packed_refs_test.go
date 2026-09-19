@@ -29,6 +29,7 @@ func TestDeleteBranch_RemovesPackedRef(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
+
 	ctx := context.Background()
 
 	require.NoError(t, scene.Repo.CreateBranch("packed-feature"))
@@ -58,6 +59,7 @@ func TestDeleteBranch_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
+
 	ctx := context.Background()
 
 	require.NoError(t, scene.Repo.CreateBranch("feature"))
@@ -75,6 +77,7 @@ func TestDeleteRefs_RefusesCheckedOutWorktreeBranch(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
+
 	ctx := context.Background()
 
 	require.NoError(t, scene.Repo.CreateBranch("feature"))
@@ -111,6 +114,7 @@ func TestDeleteMetadata_RemovesPackedRef(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	runnerMetadata := git.NewMetadataStore(runner)
 
 	// Covers the merge-ship symptom directly: cleanup deletes branch metadata
 	// via this entry point, which previously left packed metadata refs behind
@@ -120,7 +124,7 @@ func TestDeleteMetadata_RemovesPackedRef(t *testing.T) {
 	require.NoError(t, runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/packed-feature", NewSHA: sha}}, ""))
 	packAllRefs(t, scene.Dir)
 
-	require.NoError(t, runner.DeleteMetadata(context.Background(), "packed-feature"))
+	require.NoError(t, runnerMetadata.DeleteMetadata(context.Background(), "packed-feature"))
 
 	requireRefAbsent(t, runner, "refs/stackit/metadata/packed-feature")
 	requirePackedRefAbsent(t, scene.Dir, "refs/stackit/metadata/packed-feature")

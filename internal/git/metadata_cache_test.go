@@ -42,48 +42,6 @@ func TestMetadataCache_Delete(t *testing.T) {
 	c.Delete("nonexistent")
 }
 
-func TestMetadataCache_InvalidateForRefs(t *testing.T) {
-	t.Parallel()
-
-	var c metadataCache
-	c.Put("feature-a", NewMeta())
-	c.Put("feature-b", NewMeta())
-	c.Put("feature-c", NewMeta())
-
-	updates := []RefUpdate{
-		{RefName: MetadataRefPrefix + "feature-a", NewSHA: "abc"},
-		{RefName: "refs/heads/feature-b", NewSHA: "def"}, // Not a metadata ref
-		{RefName: MetadataRefPrefix + "feature-c", NewSHA: "ghi"},
-	}
-
-	c.InvalidateForRefs(updates)
-
-	// Metadata refs should be invalidated
-	require.Nil(t, c.Get("feature-a"))
-	require.Nil(t, c.Get("feature-c"))
-
-	// Non-metadata ref should not be invalidated
-	require.NotNil(t, c.Get("feature-b"))
-}
-
-func TestMetadataCache_InvalidateForRefNames(t *testing.T) {
-	t.Parallel()
-
-	var c metadataCache
-	c.Put("feature-x", NewMeta())
-	c.Put("feature-y", NewMeta())
-
-	refNames := []string{
-		MetadataRefPrefix + "feature-x",
-		"refs/heads/feature-y", // Not a metadata ref
-	}
-
-	c.InvalidateForRefNames(refNames)
-
-	require.Nil(t, c.Get("feature-x"))
-	require.NotNil(t, c.Get("feature-y"))
-}
-
 func TestMetadataCache_Clear(t *testing.T) {
 	t.Parallel()
 
@@ -115,9 +73,6 @@ func TestMetadataCache_Concurrent(t *testing.T) {
 			c.Put(key, NewMeta())
 			c.Get(key)
 			c.Delete(key)
-			c.InvalidateForRefs([]RefUpdate{
-				{RefName: MetadataRefPrefix + key, NewSHA: "abc"},
-			})
 		}()
 	}
 	wg.Wait()

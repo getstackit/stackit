@@ -19,7 +19,7 @@ import (
 // branch whose PR was merged on GitHub before its local state synced to MERGED.
 func markPrWithState(t *testing.T, sh *scenario.Scenario, branch string, prNumber int, state git.PRState, base string) {
 	t.Helper()
-	meta, err := sh.Engine.Git().ReadMetadata(context.Background(), branch).One()
+	meta, err := sh.Engine.Metadata().ReadMetadata(context.Background(), branch).One()
 	require.NoError(t, err)
 	num := prNumber
 	s := state
@@ -29,7 +29,7 @@ func markPrWithState(t *testing.T, sh *scenario.Scenario, branch string, prNumbe
 		State:  &s,
 		Base:   &b,
 	})
-	require.NoError(t, sh.Engine.Git().WriteMetadata(branch, meta))
+	require.NoError(t, sh.Engine.Metadata().WriteMetadata(branch, meta))
 }
 
 // TestSquashMergeMultiCommitParent reproduces the case where a parent branch

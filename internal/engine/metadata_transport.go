@@ -92,13 +92,13 @@ func (e *engineImpl) FetchStackMetadata(ctx context.Context) error {
 // ListStackMetadata returns a map of local stack IDs to their ref SHAs. Used
 // by stack-metadata GC during sync.
 func (e *engineImpl) ListStackMetadata() (map[string]string, error) {
-	return e.git.ListStackMetas()
+	return e.metadata.ListStackMetas()
 }
 
 // DeleteStackMetadata removes a single local stack-metadata ref. Used as the
 // per-ref fallback in the GC path when the batched ref-update fails.
 func (e *engineImpl) DeleteStackMetadata(ctx context.Context, stackID string) error {
-	return e.git.DeleteStackMeta(ctx, stackID)
+	return e.metadata.DeleteStackMeta(ctx, stackID)
 }
 
 // DeleteStackMetadataBatch removes the local stack-metadata refs for the given

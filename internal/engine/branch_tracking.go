@@ -106,13 +106,12 @@ func (e *engineImpl) TrackBranchPastLandedParent(ctx context.Context, branchName
 	}
 
 	if prior.Branch != "" && prior.Revision != "" && prior.Branch != branchName {
-		meta, err := e.readMetadata(branchName)
+		tx := e.BeginTx(fmt.Sprintf("record prior parent: %s -> %s", branchName, prior.Branch))
+		meta, err := tx.ReadMetadata(ctx, branchName).One()
 		if err != nil {
 			meta = git.NewMeta()
 		}
 		meta = meta.WithParentBranchName(&prior.Branch).WithParentBranchRevision(&prior.Revision)
-
-		tx := e.BeginTx(fmt.Sprintf("record prior parent: %s -> %s", branchName, prior.Branch))
 		if err := tx.UpdateMeta(branchName, meta); err != nil {
 			return fmt.Errorf("failed to record prior parent for %s: %w", branchName, err)
 		}
@@ -127,7 +126,7 @@ func (e *engineImpl) TrackBranchPastLandedParent(ctx context.Context, branchName
 // UntrackBranch stops tracking a branch by deleting its metadata
 func (e *engineImpl) UntrackBranch(ctx context.Context, branchName string) error {
 	// Delete metadata
-	if err := e.git.DeleteMetadata(ctx, branchName); err != nil {
+	if err := e.metadata.DeleteMetadata(ctx, branchName); err != nil {
 		return fmt.Errorf("failed to delete metadata ref: %w", err)
 	}
 
@@ -217,7 +216,8 @@ func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch 
 		}
 
 		// Read existing metadata
-		meta, err := e.readMetadata(branchName)
+		tx := e.BeginTx(fmt.Sprintf("set parent: %s -> %s", branchName, parentBranchName))
+		meta, err := tx.ReadMetadata(ctx, branchName).One()
 		if err != nil {
 			return fmt.Errorf("failed to read metadata: %w", err)
 		}
@@ -257,7 +257,6 @@ func (e *engineImpl) setParentRecomputingDivergence(ctx context.Context, branch 
 		}
 
 		// Use transaction for atomic update (Commit handles in-memory cache updates)
-		tx := e.BeginTx(fmt.Sprintf("set parent: %s -> %s", branchName, parentBranchName))
 		if err := tx.UpdateMeta(branchName, meta); err != nil {
 			return err
 		}
@@ -276,14 +275,13 @@ func (e *engineImpl) setParentName(ctx context.Context, branch Branch, parentBra
 	}
 
 	return e.WithRetry(ctx, func() error {
-		meta, err := e.readMetadata(branchName)
+		tx := e.BeginTx(fmt.Sprintf("set parent name: %s -> %s", branchName, parentBranchName))
+		meta, err := tx.ReadMetadata(ctx, branchName).One()
 		if err != nil {
 			return fmt.Errorf("failed to read metadata: %w", err)
 		}
 
 		meta = meta.WithParentBranchName(&parentBranchName)
-
-		tx := e.BeginTx(fmt.Sprintf("set parent name: %s -> %s", branchName, parentBranchName))
 		if err := tx.UpdateMeta(branchName, meta); err != nil {
 			return err
 		}
@@ -596,7 +594,8 @@ func (e *engineImpl) validateLinearSiblingSplit(parent, branchToSplit string, br
 func (e *engineImpl) updateParentRevision(ctx context.Context, branchName string, parentRev string) error {
 	return e.WithRetry(ctx, func() error {
 		// Read existing metadata (outside lock for performance)
-		meta, err := e.readMetadata(branchName)
+		tx := e.BeginTx(fmt.Sprintf("update parent revision: %s", branchName))
+		meta, err := tx.ReadMetadata(ctx, branchName).One()
 		if err != nil {
 			return fmt.Errorf("failed to read metadata: %w", err)
 		}
@@ -604,7 +603,6 @@ func (e *engineImpl) updateParentRevision(ctx context.Context, branchName string
 		meta = meta.WithParentBranchRevision(&parentRev)
 
 		// Use transaction for atomic update
-		tx := e.BeginTx(fmt.Sprintf("update parent revision: %s", branchName))
 		if err := tx.UpdateMeta(branchName, meta); err != nil {
 			return err
 		}
@@ -618,7 +616,8 @@ func (e *engineImpl) SetScope(ctx context.Context, branch Branch, scope Scope) e
 
 	return e.WithRetry(ctx, func() error {
 		// Read existing metadata (outside lock for performance)
-		meta, err := e.readMetadata(branchName)
+		tx := e.BeginTx(fmt.Sprintf("set scope: %s", branchName))
+		meta, err := tx.ReadMetadata(ctx, branchName).One()
 		if err != nil {
 			return fmt.Errorf("failed to read metadata: %w", err)
 		}
@@ -632,7 +631,6 @@ func (e *engineImpl) SetScope(ctx context.Context, branch Branch, scope Scope) e
 		}
 
 		// Use transaction for atomic update
-		tx := e.BeginTx(fmt.Sprintf("set scope: %s", branchName))
 		if err := tx.UpdateMeta(branchName, meta); err != nil {
 			return err
 		}
@@ -647,7 +645,8 @@ func (e *engineImpl) SetScopeAndMarkForUpdate(ctx context.Context, branch Branch
 	branchName := branch.GetName()
 
 	return e.WithRetry(ctx, func() error {
-		meta, err := e.readMetadata(branchName)
+		tx := e.BeginTx(fmt.Sprintf("set scope+mark: %s", branchName))
+		meta, err := tx.ReadMetadata(ctx, branchName).One()
 		if err != nil {
 			return fmt.Errorf("failed to read metadata: %w", err)
 		}
@@ -659,13 +658,11 @@ func (e *engineImpl) SetScopeAndMarkForUpdate(ctx context.Context, branch Branch
 			meta = meta.WithScope(&scopeStr)
 		}
 
-		localMeta, _ := e.readLocalMetadata(branchName)
+		localMeta, _ := tx.ReadLocalMetadata(ctx, branchName).One()
 		if localMeta == nil {
 			localMeta = &git.LocalMeta{}
 		}
 		localMeta.NeedsPRBodyUpdate = true
-
-		tx := e.BeginTx(fmt.Sprintf("set scope+mark: %s", branchName))
 		if err := tx.UpdateMeta(branchName, meta); err != nil {
 			return err
 		}
@@ -696,8 +693,9 @@ func (e *engineImpl) SetLocked(ctx context.Context, branches Branches, reason Lo
 		result.AffectedBranches = result.AffectedBranches[:0]
 		result.Errors = make(map[string]error)
 
-		// Batch read all metadata first (parallel, outside any lock)
-		metas, readErrs := e.batchReadMetadata(branchNames)
+		// Prepare all shared records and their versions together.
+		tx := e.BeginTx(fmt.Sprintf("lock: set %s on %d branches", reason, len(branchNames)))
+		metas, readErrs := tx.ReadMetadata(ctx, branchNames...).Split()
 
 		// Collect read errors
 		for name, readErr := range readErrs {
@@ -708,9 +706,6 @@ func (e *engineImpl) SetLocked(ctx context.Context, branches Branches, reason Lo
 		if len(metas) == 0 {
 			return fmt.Errorf("failed to read metadata for any branches")
 		}
-
-		// Create transaction for atomic update
-		tx := e.BeginTx(fmt.Sprintf("lock: set %s on %d branches", reason, len(metas)))
 
 		// Stage all updates - iterate over branchNames for deterministic order
 		for _, name := range branchNames {
@@ -779,11 +774,9 @@ func (e *engineImpl) SetFrozen(ctx context.Context, branches Branches, frozen bo
 		result.AffectedBranches = result.AffectedBranches[:0]
 		result.Errors = make(map[string]error)
 
-		// Batch read all local metadata first (parallel, outside any lock)
-		metas := e.batchReadLocalMetadata(branchNames)
-
-		// Create transaction for atomic update
+		// Prepare all local records and their versions together.
 		tx := e.BeginTx(fmt.Sprintf("freeze: set frozen=%t on %d branches", frozen, len(branches)))
+		metas := tx.ReadLocalMetadata(ctx, branchNames...).Values
 
 		// Stage all updates
 		for _, name := range branchNames {

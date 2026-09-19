@@ -356,16 +356,16 @@ func BenchmarkCreateBlobs(b *testing.B) {
 	}
 }
 
-// BenchmarkReadBlob measures blob reads. Phase 6 swaps in `git cat-file blob`.
-func BenchmarkReadBlob(b *testing.B) {
+// BenchmarkReadObjects measures blob reads. Phase 6 swaps in `git cat-file blob`.
+func BenchmarkReadObjects(b *testing.B) {
 	br := newBenchRepo(b, 1, 0)
 	sha, err := git.One(br.runner.CreateBlobs(context.Background(), "read-bench-content"))
 	if err != nil {
 		b.Fatalf("CreateBlob: %v", err)
 	}
 	for b.Loop() {
-		if _, err := br.runner.ReadBlob(sha); err != nil {
-			b.Fatalf("ReadBlob: %v", err)
+		if _, err := git.ObjectContent(br.runner.ReadObjects(context.Background(), sha)); err != nil {
+			b.Fatalf("ReadObjects: %v", err)
 		}
 	}
 }

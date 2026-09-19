@@ -142,9 +142,9 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 
 	// Clear b's stored divergence point but keep its parent (a), so the commit
 	// base must fall back to the parent tip rather than an empty base.
-	meta, err := s.Engine.Git().ReadMetadata(context.Background(), "b").One()
+	meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "b").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Engine.Git().WriteMetadata("b", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Engine.Metadata().WriteMetadata("b", meta.WithParentBranchRevision(nil)))
 	require.NoError(t, s.Engine.Rebuild("main"))
 
 	b := s.Engine.GetBranch("b")

@@ -14,7 +14,7 @@ import (
 
 // objectReader wraps a persistent `git cat-file --batch` process, providing
 // zero-subprocess-overhead reads for any git object (blob, commit, tag, tree).
-// A single instance is shared across all ReadBlob / ReadMetadata calls on a
+// A single instance is shared across all ReadObjects calls on a
 // runner; the mutex serializes stdin/stdout access.
 type objectReader struct {
 	mu     sync.Mutex
@@ -194,4 +194,19 @@ func (r *objectReader) Close() {
 		_ = r.cmd.Wait()
 		r.cmd = nil
 	}
+}
+
+// ObjectContent extracts the content of a single requested object. It only
+// inspects results returned by ReadObjects; it never performs Git I/O.
+func ObjectContent(objects map[string]BatchObject, err error) (string, error) {
+	if err != nil {
+		return "", err
+	}
+	if len(objects) != 1 {
+		return "", fmt.Errorf("expected one object, got %d", len(objects))
+	}
+	for _, object := range objects {
+		return object.Content, nil
+	}
+	return "", nil
 }

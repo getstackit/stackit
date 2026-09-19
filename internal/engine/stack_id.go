@@ -25,7 +25,7 @@ func (e *engineImpl) GetStackDescription(branch Branch) *git.StackDescription {
 		return nil
 	}
 
-	stackMeta, err := e.git.ReadStackMeta(stackID)
+	stackMeta, err := e.metadata.ReadStackMeta(stackID)
 	if err != nil || stackMeta == nil {
 		return nil
 	}
@@ -48,7 +48,7 @@ func (e *engineImpl) SetStackDescription(ctx context.Context, branch Branch, des
 	}
 
 	// Read existing stack meta or create new one
-	stackMeta, err := e.git.ReadStackMeta(stackID)
+	stackMeta, err := e.metadata.ReadStackMeta(stackID)
 	if err != nil {
 		return fmt.Errorf("failed to read stack metadata for %s: %w", stackID, err)
 	}
@@ -69,7 +69,7 @@ func (e *engineImpl) SetStackDescription(ctx context.Context, branch Branch, des
 		stackMeta.Description = ""
 	}
 
-	if err := e.git.WriteStackMeta(stackID, stackMeta); err != nil {
+	if err := e.metadata.WriteStackMeta(stackID, stackMeta); err != nil {
 		return fmt.Errorf("failed to write stack metadata for %s: %w", stackID, err)
 	}
 
@@ -222,9 +222,8 @@ func (e *engineImpl) batchSetStackID(ctx context.Context, branchNames []string, 
 	}
 
 	return e.WithRetry(ctx, func() error {
-		metas, _ := e.batchReadMetadata(branchNames)
-
 		tx := e.BeginTx(fmt.Sprintf("set stack ID: %d branches -> %s", len(branchNames), stackID))
+		metas, _ := tx.ReadMetadata(ctx, branchNames...).Split()
 		for _, name := range branchNames {
 			meta := metas[name]
 			if meta == nil {
@@ -252,7 +251,7 @@ func (e *engineImpl) writeNewStackMeta(ctx context.Context, stackID string) erro
 	if userName, err := e.git.GetUserName(ctx); err == nil {
 		stackMeta.CreatedBy = userName
 	}
-	return e.git.WriteStackMeta(stackID, stackMeta)
+	return e.metadata.WriteStackMeta(stackID, stackMeta)
 }
 
 // AssignBranchesToNewStack creates a new stack metadata ref and assigns its ID
@@ -291,12 +290,12 @@ func (e *engineImpl) CreateStackRef(stackID string, meta *git.StackMeta) error {
 			CreatedAt: timeNow(),
 		}
 	}
-	return e.git.WriteStackMeta(stackID, meta)
+	return e.metadata.WriteStackMeta(stackID, meta)
 }
 
 // GetStackMeta returns the stack metadata for a stack ID.
 func (e *engineImpl) GetStackMeta(stackID string) (*git.StackMeta, error) {
-	return e.git.ReadStackMeta(stackID)
+	return e.metadata.ReadStackMeta(stackID)
 }
 
 // syncStackIDFromParent updates a branch's stack ID to match its parent's and

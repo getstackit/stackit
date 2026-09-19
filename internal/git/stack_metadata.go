@@ -11,10 +11,6 @@ package git
 //   - refs/stackit/remote-stacks/ - Fetched remote stack metadata
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -52,95 +48,6 @@ const (
 	// RemoteStackMetaRefPrefix is the prefix for remote stack metadata refs (fetched from remote)
 	RemoteStackMetaRefPrefix = "refs/stackit/remote-stacks/"
 )
-
-// ReadStackMeta reads stack metadata for a given stack ID.
-// Returns nil with no error if the stack doesn't exist.
-func (r *runner) ReadStackMeta(stackID string) (*StackMeta, error) {
-	refName := StackMetaRefName(stackID)
-
-	// Resolve the ref and read its blob in a single cat-file --batch lookup
-	// (which accepts ref names) instead of a rev-parse followed by a blob read.
-	content, found, err := r.objects.ReadObject(refName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read stack metadata for %s: %w", stackID, err)
-	}
-	if !found || content == "" {
-		// Ref doesn't exist or is empty: no metadata, not an error.
-		return nil, nil
-	}
-
-	var meta StackMeta
-	if err := json.Unmarshal([]byte(content), &meta); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal stack metadata for %s: %w", stackID, err)
-	}
-
-	return &meta, nil
-}
-
-// WriteStackMeta writes stack metadata for a given stack ID.
-func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
-	jsonData, err := json.Marshal(meta)
-	if err != nil {
-		return fmt.Errorf("failed to marshal stack metadata: %w", err)
-	}
-
-	sha, err := One(r.CreateBlobs(context.Background(), string(jsonData)))
-	if err != nil {
-		return fmt.Errorf("failed to create stack metadata blob: %w", err)
-	}
-
-	if err := r.UpdateRefs(context.Background(), []RefUpdate{{RefName: StackMetaRefName(stackID), NewSHA: sha}}, ""); err != nil {
-		return fmt.Errorf("failed to write stack metadata ref: %w", err)
-	}
-
-	return nil
-}
-
-// DeleteStackMeta deletes stack metadata for a given stack ID.
-func (r *runner) DeleteStackMeta(ctx context.Context, stackID string) error {
-	return r.DeleteRefs(ctx, StackMetaRefName(stackID))
-}
-
-// ListStackMetas returns a map of stack IDs to their ref SHAs.
-func (r *runner) ListStackMetas() (map[string]string, error) {
-	refs, err := r.ListRefs(StackMetaRefPrefix)
-	if err != nil {
-		return nil, err
-	}
-
-	// Remove prefix from stack IDs
-	result := make(map[string]string)
-	for refName, sha := range refs {
-		stackID := strings.TrimPrefix(refName, StackMetaRefPrefix)
-		result[stackID] = sha
-	}
-	return result, nil
-}
-
-// WriteStackMetaBlob creates a blob containing the stack metadata JSON and returns its SHA.
-// This does NOT update any refs - use this for batched/transactional writes.
-func (r *runner) WriteStackMetaBlob(meta *StackMeta) (string, error) {
-	jsonData, err := json.Marshal(meta)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal stack metadata: %w", err)
-	}
-
-	sha, err := One(r.CreateBlobs(context.Background(), string(jsonData)))
-	if err != nil {
-		return "", fmt.Errorf("failed to create stack metadata blob: %w", err)
-	}
-
-	return sha, nil
-}
-
-// GetStackMetaRefSHA returns the current SHA of a stack metadata ref, or empty string if not found.
-func (r *runner) GetStackMetaRefSHA(stackID string) string {
-	sha, err := r.ReadRevisions(context.Background(), StackMetaRefName(stackID)).One()
-	if err != nil {
-		return ""
-	}
-	return sha
-}
 
 // StackMetaRefName returns the full ref name for a stack's metadata.
 // Use this helper instead of concatenating StackMetaRefPrefix directly

@@ -699,9 +699,9 @@ func TestRebuildBranches(t *testing.T) {
 		// Externally reparent b onto main (as a raw metadata write the engine
 		// did not observe through its own mutation path).
 		main := "main"
-		meta, err := s.Engine.Git().ReadMetadata(context.Background(), "b").One()
+		meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "b").One()
 		require.NoError(t, err)
-		require.NoError(t, s.Engine.Git().WriteMetadata("b", meta.WithParentBranchName(&main)))
+		require.NoError(t, s.Engine.Metadata().WriteMetadata("b", meta.WithParentBranchName(&main)))
 
 		// Engine still shows the pre-write graph until we refresh.
 		require.Equal(t, "a", s.Engine.GetBranch("b").GetParent().GetName())
@@ -728,7 +728,7 @@ func TestRebuildBranches(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithLinearStack("a", "b") // main -> a -> b
 
-		require.NoError(t, s.Engine.Git().DeleteMetadata(context.Background(), "b"))
+		require.NoError(t, s.Engine.Metadata().DeleteMetadata(context.Background(), "b"))
 
 		require.NoError(t, s.Engine.RebuildBranches([]string{"b"}))
 
@@ -745,7 +745,7 @@ func TestRebuildBranches(t *testing.T) {
 		// Untrack the middle branch. c's metadata still names b as its parent,
 		// so a full rebuild would keep the b -> c edge; a scoped rebuild must
 		// not diverge by erasing it.
-		require.NoError(t, s.Engine.Git().DeleteMetadata(context.Background(), "b"))
+		require.NoError(t, s.Engine.Metadata().DeleteMetadata(context.Background(), "b"))
 
 		require.NoError(t, s.Engine.RebuildBranches([]string{"b"}))
 
@@ -762,9 +762,9 @@ func TestRebuildBranches(t *testing.T) {
 		// Reparent a onto main->... actually change a's recorded parent revision
 		// externally, then rebuild only b. a must stay as the engine last saw it.
 		newRev := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-		metaA, err := s.Engine.Git().ReadMetadata(context.Background(), "a").One()
+		metaA, err := s.Engine.Metadata().ReadMetadata(context.Background(), "a").One()
 		require.NoError(t, err)
-		require.NoError(t, s.Engine.Git().WriteMetadata("a", metaA.WithParentBranchRevision(&newRev)))
+		require.NoError(t, s.Engine.Metadata().WriteMetadata("a", metaA.WithParentBranchRevision(&newRev)))
 
 		require.NoError(t, s.Engine.RebuildBranches([]string{"b"}))
 
@@ -1699,13 +1699,13 @@ func TestSetParentScenarios(t *testing.T) {
 		s.Checkout("main").
 			CommitChange("file1.txt", "v1\nv2\nv3")
 
-		meta, err := s.Engine.Git().ReadMetadata(context.Background(), "branch1").One()
+		meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "branch1").One()
 		require.NoError(t, err)
 		prNumber := 1
 		state := git.PRStateMerged
 		base := "main"
 		meta = meta.WithPrInfo(&git.PrInfoPersistence{Number: &prNumber, State: &state, Base: &base})
-		require.NoError(t, s.Engine.Git().WriteMetadata("branch1", meta))
+		require.NoError(t, s.Engine.Metadata().WriteMetadata("branch1", meta))
 		s.Rebuild()
 
 		// Reparent branch2 to main (what restack/sync do after the merge).
@@ -1714,7 +1714,7 @@ func TestSetParentScenarios(t *testing.T) {
 
 		// The divergence point must stay at branch1's pre-merge tip so a
 		// restack replays only branch2's own commits, not branch1's.
-		meta2, err := s.Engine.Git().ReadMetadata(context.Background(), "branch2").One()
+		meta2, err := s.Engine.Metadata().ReadMetadata(context.Background(), "branch2").One()
 		require.NoError(t, err)
 		require.Equal(t, branch1SHA, *meta2.GetParentBranchRevision(),
 			"divergence point should be preserved for a squash-merged parent")
@@ -1760,7 +1760,7 @@ func TestSetParentScenarios(t *testing.T) {
 
 		// VERIFY: ParentBranchRevision should still be branch1OriginalSHA
 		// because it's a valid ancestor and the old parent (branch1) was merged into main.
-		meta, _ := s.Engine.Git().ReadMetadata(context.Background(), "branch2").One()
+		meta, _ := s.Engine.Metadata().ReadMetadata(context.Background(), "branch2").One()
 		require.Equal(t, branch1OriginalSHA, *meta.GetParentBranchRevision(), "Divergence point should be preserved to avoid conflicts during restack")
 	})
 
@@ -1791,7 +1791,7 @@ func TestSetParentScenarios(t *testing.T) {
 		// If we kept the old divergence point (before branch1), a restack would
 		// try to re-apply branch1's changes which are already in branch2.
 		mainSHA, _ := s.Engine.Trunk().GetRevision()
-		meta, _ := s.Engine.Git().ReadMetadata(context.Background(), "branch2").One()
+		meta, _ := s.Engine.Metadata().ReadMetadata(context.Background(), "branch2").One()
 		require.Equal(t, mainSHA, *meta.GetParentBranchRevision(), "Divergence point should be updated to new parent when folding upward")
 	})
 
@@ -1804,7 +1804,7 @@ func TestSetParentScenarios(t *testing.T) {
 			CommitChange("file1.txt", "feat: branch1").
 			TrackBranch("branch1", "main")
 
-		originalMeta, _ := s.Engine.Git().ReadMetadata(context.Background(), "branch1").One()
+		originalMeta, _ := s.Engine.Metadata().ReadMetadata(context.Background(), "branch1").One()
 
 		// 1. Move main forward
 		s.Checkout("main").
@@ -1821,7 +1821,7 @@ func TestSetParentScenarios(t *testing.T) {
 
 		// VERIFY: ParentBranchRevision should be updated to mainNewSHA
 		// because the branch has moved forward relative to its parent.
-		meta, _ := s.Engine.Git().ReadMetadata(context.Background(), "branch1").One()
+		meta, _ := s.Engine.Metadata().ReadMetadata(context.Background(), "branch1").One()
 		require.Equal(t, mainNewSHA, *meta.GetParentBranchRevision())
 		require.NotEqual(t, *originalMeta.GetParentBranchRevision(), *meta.GetParentBranchRevision())
 	})
@@ -1838,17 +1838,17 @@ func TestSetParentScenarios(t *testing.T) {
 			TrackBranch("branch2", "branch1")
 
 		missingParent := "missing-parent"
-		meta, err := s.Engine.Git().ReadMetadata(context.Background(), "branch2").One()
+		meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "branch2").One()
 		require.NoError(t, err)
 		meta = meta.WithParentBranchName(&missingParent).WithParentBranchRevision(nil)
-		require.NoError(t, s.Engine.Git().WriteMetadata("branch2", meta))
+		require.NoError(t, s.Engine.Metadata().WriteMetadata("branch2", meta))
 		require.NoError(t, s.Engine.Rebuild("main"))
 
 		err = s.Engine.ReparentBranch(context.Background(), s.Engine.GetBranch("branch2"), s.Engine.GetBranch("main"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to determine divergence point for branch2")
 
-		meta, err = s.Engine.Git().ReadMetadata(context.Background(), "branch2").One()
+		meta, err = s.Engine.Metadata().ReadMetadata(context.Background(), "branch2").One()
 		require.NoError(t, err)
 		require.Equal(t, missingParent, *meta.GetParentBranchName())
 		require.Nil(t, meta.GetParentBranchRevision())

@@ -1,5 +1,8 @@
 # CLI benchmarks
 
+See [the batched diff comparison](benchmarks-diff-reads.md) for a recorded comparison
+against v0.27.1 at 5, 10, and 50 branches.
+
 `scripts/benchmark.py` measures common, local CLI workflows across Git refs.
 It intentionally avoids commands that contact GitHub: network latency and SSH connection
 reuse are important operational concerns, but do not produce a stable version-to-version

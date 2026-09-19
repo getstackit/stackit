@@ -53,3 +53,5 @@ apps/api/static/assets/
 dist/
 
 .env
+# Local benchmark measurements
+benchmark-results.json

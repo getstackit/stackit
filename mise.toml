@@ -58,6 +58,10 @@ golangci-lint = "2.13.1"
 description = "Check compilation only (~2s)"
 run = "go build ./..."
 
+[tasks.bench]
+description = "Benchmark common local CLI operations across released versions and main"
+run = "python3 scripts/benchmark.py"
+
 [tasks."db:up"]
 description = "Start the local Postgres for the API server repo store"
 run = "docker compose up -d postgres"

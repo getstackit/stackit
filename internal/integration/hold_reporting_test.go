@@ -76,7 +76,9 @@ func TestSyncProceedsWhenTrunkWorktreeHasHarmlessUntrackedFile(t *testing.T) {
 	sh.InWorktree(worktreeDir).WriteUnstaged("scratch-notes.txt", "notes")
 
 	sh.Run("sync").
-		OutputContains("fast-forwarded").
+		// The report names the branch and how far it moved rather than the
+		// verb; "+1" is the evidence trunk actually fast-forwarded.
+		OutputContains("main +1").
 		OutputNotContains("Held")
 }
 

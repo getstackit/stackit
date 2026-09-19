@@ -148,22 +148,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 	diff := eng.BatchDiffStats(engine.BranchesOf(branch))[branchName]
 	result.DiffStats.Additions = diff.Added
 	result.DiffStats.Deletions = diff.Deleted
-
-	// Files changed — measured against the branch's divergence point, the same
-	// base BatchDiffStats uses above, so the file count stays consistent with the
-	// additions/deletions when the parent has advanced since the branch diverged.
-	if !isTrunk {
-		base, err := eng.GetDivergencePoint(branchName)
-		if err == nil && base != "" {
-			branchRev, err := branch.GetRevision()
-			if err == nil {
-				files, err := eng.GetChangedFiles(ctx, git.RevRange{Base: base, Head: branchRev})
-				if err == nil {
-					result.DiffStats.FilesChanged = len(files)
-				}
-			}
-		}
-	}
+	result.DiffStats.FilesChanged = diff.FilesChanged
 
 	stackDesc := eng.GetStackDescription(branch)
 	if stackDesc != nil && !stackDesc.IsEmpty() {

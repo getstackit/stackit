@@ -602,20 +602,23 @@ func (e *engineImpl) tryConflictFreeReplay(
 		return "", false
 	}
 
-	// Get the files changed by the parent's new commits (what we're rebasing onto).
-	parentFiles, err := e.git.GetChangedFiles(ctx, git.RevRange{Base: spec.OldUpstream, Head: resolvedParent})
+	// Read both comparisons together: the old base is shared, and resolving
+	// trees and diffing the two pairs each costs one subprocess.
+	parentRange := git.RevRange{Base: spec.OldUpstream, Head: resolvedParent}
+	branchRange := git.RevRange{Base: spec.OldUpstream, Head: spec.Branch}
+	diffs := e.git.ReadDiffs(ctx, git.DiffNames, parentRange, branchRange)
+	parentDiff, err := diffs.Get(parentRange.String())
 	if err != nil {
 		return "", false
 	}
 
-	// Get the files changed by our branch.
-	branchFiles, err := e.git.GetChangedFiles(ctx, git.RevRange{Base: spec.OldUpstream, Head: spec.Branch})
+	branchDiff, err := diffs.Get(branchRange.String())
 	if err != nil {
 		return "", false
 	}
 
 	// If any file appears in both change sets, a conflict is possible.
-	if rebaseFileOverlap(parentFiles, branchFiles) {
+	if rebaseFileOverlap(parentDiff.Files, branchDiff.Files) {
 		return "", false
 	}
 

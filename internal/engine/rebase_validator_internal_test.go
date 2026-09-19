@@ -48,13 +48,19 @@ func (g *fastPathGit) GetCommitRangeMetadata(_ context.Context, rr git.RevRange)
 	return commits, nil
 }
 
-func (g *fastPathGit) GetChangedFiles(_ context.Context, rr git.RevRange) ([]string, error) {
-	require.Equal(g.t, "old-base", rr.Base)
-	files, ok := g.changedFiles[rr.Head]
-	if !ok {
-		g.t.Fatalf("unexpected changed-files head: %s", rr.Head)
+func (g *fastPathGit) ReadDiffs(_ context.Context, mode git.DiffReadMode, ranges ...git.RevRange) git.ReadResults[git.DiffSummary] {
+	require.Equal(g.t, git.DiffNames, mode)
+	require.Len(g.t, ranges, 2, "parent and branch file sets must be read together")
+	result := git.ReadResults[git.DiffSummary]{Values: make(map[string]git.DiffSummary)}
+	for _, rr := range ranges {
+		require.Equal(g.t, "old-base", rr.Base)
+		files, ok := g.changedFiles[rr.Head]
+		if !ok {
+			g.t.Fatalf("unexpected changed-files head: %s", rr.Head)
+		}
+		result.Values[rr.String()] = git.DiffSummary{Files: files}
 	}
-	return files, nil
+	return result
 }
 
 func (g *fastPathGit) RunGitCommandWithContext(_ context.Context, args ...string) (string, error) {

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,7 @@ type fastPathGit struct {
 
 	t *testing.T
 
-	// commits returned by GetCommitRangeSHAs (newest-first).
+	// commits returned by GetCommitRangeMetadata (newest-first).
 	commits []string
 	// parent lists keyed by commit SHA, as returned by git log --format=%P.
 	parents map[string]string
@@ -33,10 +34,18 @@ type fastPathGit struct {
 	commitTreeN int
 }
 
-func (g *fastPathGit) GetCommitRangeSHAs(_ context.Context, rr git.RevRange) ([]string, error) {
+func (g *fastPathGit) GetCommitRangeMetadata(_ context.Context, rr git.RevRange) ([]git.CommitMetadata, error) {
 	require.Equal(g.t, "old-base", rr.Base)
 	require.Equal(g.t, "feature", rr.Head)
-	return g.commits, nil
+	commits := make([]git.CommitMetadata, 0, len(g.commits))
+	for _, sha := range g.commits {
+		commits = append(commits, git.CommitMetadata{
+			SHA: sha, Parents: strings.Fields(g.parents[sha]),
+			AuthorName: "Author " + sha, AuthorEmail: sha + "@example.com",
+			AuthorDate: "2026-06-01T12:00:00-04:00", Message: "subject " + sha + "\n",
+		})
+	}
+	return commits, nil
 }
 
 func (g *fastPathGit) GetChangedFiles(_ context.Context, rr git.RevRange) ([]string, error) {
@@ -53,28 +62,6 @@ func (g *fastPathGit) RunGitCommandWithContext(_ context.Context, args ...string
 	// The tree SHA is derived from the commit being replayed (the last arg) so
 	// assertions can tie a tree back to its source commit.
 	return "tree-of-" + args[len(args)-1] + "\n", nil
-}
-
-func (g *fastPathGit) GetCommitLog(sha, format string) (string, error) {
-	switch format {
-	case "%P":
-		parent, ok := g.parents[sha]
-		if !ok {
-			g.t.Fatalf("unexpected parent lookup for commit: %s", sha)
-		}
-		return parent + "\n", nil
-	case "%an":
-		return "Author " + sha + "\n", nil
-	case "%ae":
-		return sha + "@example.com\n", nil
-	case "%aI":
-		return "2026-06-01T12:00:00-04:00\n", nil
-	case "%B":
-		return "subject " + sha + "\n", nil
-	default:
-		g.t.Fatalf("unexpected commit log format: %s", format)
-		return "", nil
-	}
 }
 
 func (g *fastPathGit) RunGitCommandWithEnv(_ context.Context, env []string, args ...string) (string, error) {

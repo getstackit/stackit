@@ -108,6 +108,37 @@ func BenchmarkGetRevision(b *testing.B) {
 	}
 }
 
+// BenchmarkCommitRangeMetadata compares the replay metadata reads with their
+// former per-field subprocess path over the same 20-commit range.
+func BenchmarkCommitRangeMetadata(b *testing.B) {
+	for _, batch := range []bool{false, true} {
+		b.Run(fmt.Sprintf("batch=%t", batch), func(b *testing.B) {
+			br := newBenchRepo(b, 21, 0)
+			ctx := context.Background()
+			rr := git.RevRange{Base: "main~20", Head: "main"}
+			for b.Loop() {
+				if batch {
+					if _, err := br.runner.GetCommitRangeMetadata(ctx, rr); err != nil {
+						b.Fatal(err)
+					}
+					continue
+				}
+				commits, err := br.runner.GetCommitRangeSHAs(ctx, rr)
+				if err != nil {
+					b.Fatal(err)
+				}
+				for _, sha := range commits {
+					for _, format := range []string{"%P", "%an", "%ae", "%aI", "%B"} {
+						if _, err := br.runner.GetCommitLog(sha, format); err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 // BenchmarkBatchGetRevisions measures bulk revision resolution, batching all
 // branches into a single `git rev-parse` invocation rather than N parallel
 // subprocesses.
@@ -122,6 +153,39 @@ func BenchmarkBatchGetRevisions(b *testing.B) {
 		if _, errs := br.runner.BatchGetRevisions(names); len(errs) > 0 {
 			b.Fatalf("BatchGetRevisions: %v", errs[0])
 		}
+	}
+}
+
+// BenchmarkBatchGetRevisionsMissing compares the previous individual fallback
+// with the batched fallback for a mix of valid and unpublished branch refs.
+func BenchmarkBatchGetRevisionsMissing(b *testing.B) {
+	for _, batch := range []bool{false, true} {
+		b.Run(fmt.Sprintf("batch=%t", batch), func(b *testing.B) {
+			br := newBenchRepo(b, 1, 0)
+			names := make([]string, 1, 31)
+			names[0] = "main"
+			for i := range 30 {
+				names = append(names, fmt.Sprintf("origin/unpublished-%d", i))
+			}
+			for b.Loop() {
+				if batch {
+					got, errs := br.runner.BatchGetRevisions(names)
+					if len(got) != 1 || len(errs) != 30 {
+						b.Fatalf("unexpected results: %v, %v", got, errs)
+					}
+					continue
+				}
+				if _, err := br.runner.RunGitCommandWithContext(context.Background(), append([]string{"rev-parse"}, names...)...); err == nil {
+					b.Fatal("expected missing refs")
+				}
+				for i, name := range names {
+					_, err := br.runner.GetRevision(name)
+					if (err != nil) != (i > 0) {
+						b.Fatalf("unexpected error for %s: %v", name, err)
+					}
+				}
+			}
+		})
 	}
 }
 

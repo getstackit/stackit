@@ -477,6 +477,10 @@ func (d *demoGitRunner) GetCommitLog(_, _ string) (string, error) {
 	return "demo commit", nil
 }
 
+func (d *demoGitRunner) GetCommitRangeMetadata(context.Context, git.RevRange) ([]git.CommitMetadata, error) {
+	return nil, nil
+}
+
 func (d *demoGitRunner) GetRecentCommits(_ context.Context, _ string, _ int) ([]git.RecentCommit, error) {
 	return nil, nil
 }

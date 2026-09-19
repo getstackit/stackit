@@ -495,7 +495,7 @@ func (e *engineImpl) validateSingleSpec(
 		}
 	}
 
-	// Fast path: skip worktree creation for single-commit branches where the
+	// Fast path: skip worktree creation for linear branches where the
 	// parent and branch changes touch disjoint file sets (conflict impossible).
 	if newSHA, ok := e.tryConflictFreeReplay(ctx, spec, resolvedParent); ok {
 		oldSHA, _ := e.git.GetRevision(spec.Branch)
@@ -594,11 +594,11 @@ func (e *engineImpl) tryConflictFreeReplay(
 	spec RebaseSpec,
 	resolvedParent string,
 ) (string, bool) {
-	commits, err := e.git.GetCommitRangeSHAs(ctx, git.RevRange{Base: spec.OldUpstream, Head: spec.Branch})
+	commits, err := e.git.GetCommitRangeMetadata(ctx, git.RevRange{Base: spec.OldUpstream, Head: spec.Branch})
 	if err != nil || len(commits) == 0 {
 		return "", false
 	}
-	if !e.commitRangeIsLinear(commits, spec.OldUpstream) {
+	if !commitRangeIsLinear(commits, spec.OldUpstream) {
 		return "", false
 	}
 
@@ -628,7 +628,7 @@ func (e *engineImpl) tryConflictFreeReplay(
 	for i := len(commits) - 1; i >= 0; i-- {
 		mergeBase := spec.OldUpstream
 		if i+1 < len(commits) {
-			mergeBase = commits[i+1]
+			mergeBase = commits[i+1].SHA
 		}
 		newSHA, ok := e.replayCommitConflictFree(ctx, commits[i], mergeBase, newBase)
 		if !ok {
@@ -643,20 +643,16 @@ func (e *engineImpl) tryConflictFreeReplay(
 // single-parent chain rooted at oldUpstream. The replay fast path relies on that
 // shape to preserve git rebase semantics; merge commits and side-branch commits
 // must fall back to the real worktree rebase.
-func (e *engineImpl) commitRangeIsLinear(commits []string, oldUpstream string) bool {
+func commitRangeIsLinear(commits []git.CommitMetadata, oldUpstream string) bool {
 	for i := len(commits) - 1; i >= 0; i-- {
-		parentRaw, err := e.git.GetCommitLog(commits[i], "%P")
-		if err != nil {
-			return false
-		}
-		parents := strings.Fields(parentRaw)
+		parents := commits[i].Parents
 		if len(parents) != 1 {
 			return false
 		}
 
 		expectedParent := oldUpstream
 		if i+1 < len(commits) {
-			expectedParent = commits[i+1]
+			expectedParent = commits[i+1].SHA
 		}
 		if parents[0] != expectedParent {
 			return false
@@ -673,14 +669,14 @@ func (e *engineImpl) commitRangeIsLinear(commits []string, oldUpstream string) b
 // Returns (newSHA, true) on success; returns ("", false) to signal fallback.
 func (e *engineImpl) replayCommitConflictFree(
 	ctx context.Context,
-	commitSHA, mergeBase, newBase string,
+	commit git.CommitMetadata, mergeBase, newBase string,
 ) (string, bool) {
 	// Compute the rebased tree via merge-tree.
 	// git merge-tree --write-tree --merge-base <base> <ours> <theirs>
 	// OURS  = newBase  (the rebased parent so far)
 	// THEIRS = commitSHA (this commit's snapshot on top of its original parent)
 	treeSHARaw, err := e.git.RunGitCommandWithContext(ctx,
-		"merge-tree", "--write-tree", "--merge-base", mergeBase, newBase, commitSHA)
+		"merge-tree", "--write-tree", "--merge-base", mergeBase, newBase, commit.SHA)
 	if err != nil {
 		return "", false
 	}
@@ -692,31 +688,14 @@ func (e *engineImpl) replayCommitConflictFree(
 	}
 
 	// Preserve the original commit's author identity and message.
-	authorName, err := e.git.GetCommitLog(commitSHA, "%an")
-	if err != nil {
-		return "", false
-	}
-	authorEmail, err := e.git.GetCommitLog(commitSHA, "%ae")
-	if err != nil {
-		return "", false
-	}
-	authorDate, err := e.git.GetCommitLog(commitSHA, "%aI")
-	if err != nil {
-		return "", false
-	}
-	msg, err := e.git.GetCommitLog(commitSHA, "%B")
-	if err != nil {
-		return "", false
-	}
-
 	env := []string{
-		"GIT_AUTHOR_NAME=" + strings.TrimSpace(authorName),
-		"GIT_AUTHOR_EMAIL=" + strings.TrimSpace(authorEmail),
-		"GIT_AUTHOR_DATE=" + strings.TrimSpace(authorDate),
+		"GIT_AUTHOR_NAME=" + strings.TrimSpace(commit.AuthorName),
+		"GIT_AUTHOR_EMAIL=" + strings.TrimSpace(commit.AuthorEmail),
+		"GIT_AUTHOR_DATE=" + strings.TrimSpace(commit.AuthorDate),
 	}
 
 	newSHARaw, err := e.git.RunGitCommandWithEnv(ctx, env,
-		"commit-tree", treeSHA, "-p", newBase, "-m", strings.TrimSpace(msg))
+		"commit-tree", treeSHA, "-p", newBase, "-m", strings.TrimSpace(commit.Message))
 	if err != nil {
 		return "", false
 	}

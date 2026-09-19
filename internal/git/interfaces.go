@@ -88,6 +88,7 @@ type CommitReader interface {
 	BatchCommitInfo(branchNames []string) map[string]CommitInfo
 	GetCommitRange(ctx context.Context, base, head, format string) ([]string, error)
 	GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error)
+	GetCommitRangeMetadata(ctx context.Context, rr RevRange) ([]CommitMetadata, error)
 	GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	GetCommitLog(sha, format string) (string, error)

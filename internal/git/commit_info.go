@@ -141,8 +141,20 @@ func (r *runner) batchGetRevisions(branchNames []string) (map[string]string, []e
 	args := append([]string{"rev-parse"}, branchNames...)
 	out, err := r.RunGitCommandWithContext(context.Background(), args...)
 	if err != nil {
-		// Fall back to per-ref resolution so we can attribute errors to
-		// specific branch names rather than a single bulk failure.
+		// Missing remote-tracking refs are normal for unpublished branches.
+		// Keep those lookups batched, with a result for every requested ref.
+		// Only unusual revision expressions containing protocol delimiters
+		// need the individual path (e.g. HEAD:path with a newline in path).
+		batchSafe := true
+		for _, name := range branchNames {
+			if strings.ContainsAny(name, "\n\x00") {
+				batchSafe = false
+				break
+			}
+		}
+		if batchSafe {
+			return r.batchResolveRevisions(branchNames)
+		}
 		for _, name := range branchNames {
 			sha, e := r.resolveRefSHA(name)
 			if e != nil {
@@ -166,6 +178,53 @@ func (r *runner) batchGetRevisions(branchNames []string) (map[string]string, []e
 			continue
 		}
 		results[name] = sha
+	}
+	return results, errs
+}
+
+// batchResolveRevisions preserves resolveRefSHA's commit peeling and raw-object
+// fallback in one cat-file process. Unlike rev-parse, a missing ref produces a
+// response without aborting the rest of the batch.
+func (r *runner) batchResolveRevisions(names []string) (map[string]string, []error) {
+	queries := make([]string, 0, len(names)*2)
+	offsets := make([]int, 0, len(names)+1)
+	for _, name := range names {
+		offsets = append(offsets, len(queries))
+		if !strings.HasPrefix(name, stackitRefPrefix) {
+			queries = append(queries, name+"^{commit}")
+		}
+		queries = append(queries, name)
+	}
+	offsets = append(offsets, len(queries))
+	out, err := r.runGitInternal(context.Background(), strings.Join(queries, "\n")+"\n",
+		nil, false, "cat-file", "--batch-check=%(objectname)")
+	results := make(map[string]string, len(names))
+	if err != nil {
+		return results, []error{fmt.Errorf("failed to resolve revisions in batch: %w", err)}
+	}
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != len(queries) {
+		return results, []error{fmt.Errorf("batch cat-file returned %d lines for %d queries", len(lines), len(queries))}
+	}
+	var errs []error
+	for i, name := range names {
+		for _, sha := range lines[offsets[i]:offsets[i+1]] {
+			if isHexSHA(sha) {
+				results[name] = sha
+				break
+			}
+		}
+		if _, ok := results[name]; !ok {
+			// rev-parse accepts a full object ID even when its object is absent.
+			// Preserve that uncommon case, including the repository's hash format.
+			if isHexSHA(strings.ToLower(name)) {
+				if sha, err := r.resolveRefSHA(name); err == nil {
+					results[name] = sha
+					continue
+				}
+			}
+			errs = append(errs, fmt.Errorf("failed to get revision for %s: reference not found", name))
+		}
 	}
 	return results, errs
 }

@@ -169,9 +169,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		snapshotArgs = append(snapshotArgs, opts.Pathspecs...)
 	}
 
-	if err := eng.TakeSnapshot(engine.SnapshotOptions{
+	if err := eng.TakeSnapshot(ctx.Context, engine.SnapshotOptions{
 		Command: "split",
-		Args:    snapshotArgs,
+		// split stages and commits whatever is in the working tree as it
+		// rebuilds the branch, so uncommitted changes are its input too.
+		CaptureWorktree: true,
+		Args:            snapshotArgs,
 	}); err != nil {
 		return fmt.Errorf("failed to take snapshot: %w", err)
 	}

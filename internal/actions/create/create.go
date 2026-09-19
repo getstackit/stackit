@@ -109,6 +109,10 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		actions.WithFlag(opts.Update, "--update"),
 		actions.WithFlag(opts.Worktree, "--worktree"),
 		actions.WithFlag(opts.AllowEmpty, "--allow-empty"),
+		// create commits the staged working tree onto a new branch, so a
+		// rollback must hand those changes back rather than delete them with
+		// the branch.
+		actions.WithWorktreeCapture(),
 	)
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 

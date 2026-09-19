@@ -140,10 +140,42 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 		h.OnStep("Aborted in-progress merge", handler.StatusCompleted)
 	}
 
+	// Undo hard-resets the working tree onto the restored refs and then applies
+	// whatever the snapshot captured. Both steps assume the tree holds nothing
+	// of the user's: the reset destroys tracked edits outright, and the stash
+	// apply would otherwise merge the capture into them.
+	//
+	// Checked here, after the aborts above rather than before them: a
+	// conflicted rebase leaves resolution edits in the tree, and refusing on
+	// those would make undo unusable for the one thing people reach for it
+	// during. `git rebase --abort` puts the tree back the way the rebase found
+	// it — clean, since rebase refuses to start otherwise — so by this point
+	// tracked changes really are the user's own.
+	//
+	// Untracked files are deliberately not counted: a reset cannot destroy
+	// them, and the untracked half of a capture never overwrites a file that
+	// already exists.
+	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx.Context, ctx.RepoRoot)
+	switch {
+	case dirtyErr != nil:
+		return fmt.Errorf("failed to check for uncommitted changes: %w", dirtyErr)
+	case dirty:
+		return fmt.Errorf("you have uncommitted changes; undo would overwrite them.\nCommit them, or run 'git stash' and 'git stash pop' around the undo")
+	}
+
 	// Perform the restoration
 	h.OnStep("Restoring repository state...", handler.StatusStarted)
 	if err := eng.RestoreSnapshot(ctx.Context, selectedSnapshotID); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
+	}
+	// "Before the command" includes the working tree the command consumed, so
+	// restoring only refs would drop the user's uncommitted changes on the
+	// floor. Best effort: the rollback itself has already succeeded, and the
+	// capture is named so the work stays reachable either way.
+	if restored, worktreeErr := eng.RestoreWorktree(ctx.Context, selectedSnapshotID); worktreeErr != nil {
+		ctx.Output.Warn("Could not restore the uncommitted changes from before '%s': %v", selectedSnapshot.Command, worktreeErr)
+	} else if restored {
+		ctx.Output.Info("Restored the uncommitted changes you had before '%s'.", selectedSnapshot.Command)
 	}
 	actions.WarnIfLinearStackRestored(ctx, "Undo")
 

@@ -321,6 +321,8 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		remoteStatuses = <-remoteStatusCh
 	}
 
+	handler.OnEvent(PreparingEvent{Completed: true})
+
 	// Branches with no commits still submit (an empty PR can be a placeholder),
 	// but the plan flags them and interactive runs confirm first.
 	emptyMap := eng.BatchIsBranchEmpty(branches)
@@ -420,7 +422,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// The push runs before the create/update loop so every ref exists on the
 	// remote before its PR is created; the per-branch result is consumed by
 	// submitBranch below.
-	pushResults := pushSubmittedBranches(ctx, opts, submissionInfos, remote, remoteStatuses)
+	pushResults := pushSubmittedBranches(ctx, opts, submissionInfos, remote, remoteStatuses, handler)
 
 	var submitErr error
 	var errMu sync.Mutex
@@ -804,7 +806,7 @@ func getGitHubClient(ctx *app.Context) (github.Client, error) {
 // from the map — callers treat a missing entry as success. remoteStatuses is the
 // batched snapshot read once in Action, so building the push specs hits no
 // network per branch.
-func pushSubmittedBranches(ctx *app.Context, opts Options, infos []Info, remote string, remoteStatuses engine.BranchRemoteStatuses) map[string]error {
+func pushSubmittedBranches(ctx *app.Context, opts Options, infos []Info, remote string, remoteStatuses engine.BranchRemoteStatuses, handler Handler) map[string]error {
 	nav := ctx.Navigator()
 	forceWithLease := !opts.Force
 
@@ -824,6 +826,9 @@ func pushSubmittedBranches(ctx *app.Context, opts Options, infos []Info, remote 
 	if len(specs) == 0 {
 		return map[string]error{}
 	}
+
+	handler.OnEvent(PushEvent{BranchCount: len(specs)})
+	defer handler.OnEvent(PushEvent{BranchCount: len(specs), Completed: true})
 
 	return ctx.PR().PushBranches(ctx.Context, remote, specs, git.PushOptions{
 		Force:    opts.Force,

@@ -376,6 +376,18 @@ type Event struct {
 	Parent              string            // Parent branch name (if applicable)
 	RerereResolvedCount int               // Number of rebase continuations handled by git rerere
 	Error               error             // If non-nil, this step had an error
+
+	// Reparented records that this branch's parent changed because the old
+	// parent landed or was deleted. This is the outcome of a sync a developer
+	// cannot infer from anything else — the shape of their stack changed — so it
+	// travels with the event rather than being logged out-of-band.
+	Reparented bool
+	OldParent  string
+	NewParent  string
+
+	// Commits is how many commits arrived, for phases where that is the
+	// interesting quantity (trunk).
+	Commits int
 }
 
 // IsLocked returns true if the event associated branch is locked
@@ -385,24 +397,26 @@ func (e Event) IsLocked() bool {
 
 // Summary holds aggregate results from a sync operation
 type Summary struct {
-	TrunkUpdated      bool     // Was trunk updated?
-	TrunkRevision     string   // New trunk revision (short hash)
-	BranchesSynced    int      // Number of branches synced from remote
-	BranchesRestacked int      // Number of branches restacked
-	BranchesDeleted   int      // Number of branches deleted
-	BranchesSkipped   int      // Number of branches skipped (due to conflicts)
-	ConflictBranches  []string // Names of branches that conflicted
-	BranchesBlocked   int      // Number of branches left untouched because their stack conflicted
-	UpToDate          bool     // Everything was already current
-	WorktreesCleaned  int      // Number of orphaned worktrees cleaned up
-	SkippedStacks     []string // Stacks skipped due to dirty worktrees
+	TrunkUpdated       bool     // Was trunk updated?
+	TrunkRevision      string   // New trunk revision (short hash)
+	TrunkCommits       int      // Commits that arrived on trunk
+	BranchesReparented int      // Branches whose parent changed because the old parent landed
+	BranchesSynced     int      // Number of branches synced from remote
+	BranchesRestacked  int      // Number of branches restacked
+	BranchesDeleted    int      // Number of branches deleted
+	BranchesSkipped    int      // Number of branches skipped (due to conflicts)
+	ConflictBranches   []string // Names of branches that conflicted
+	BranchesBlocked    int      // Number of branches left untouched because their stack conflicted
+	UpToDate           bool     // Everything was already current
+	WorktreesCleaned   int      // Number of orphaned worktrees cleaned up
+	SkippedStacks      []string // Stacks skipped due to dirty worktrees
 }
 
 // HasChanges returns true if any operations were performed
 func (s *Summary) HasChanges() bool {
 	return s.TrunkUpdated || s.BranchesSynced > 0 || s.BranchesRestacked > 0 ||
 		s.BranchesDeleted > 0 || s.BranchesSkipped > 0 || s.BranchesBlocked > 0 ||
-		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0
+		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0 || s.BranchesReparented > 0
 }
 
 // Handler abstracts TTY vs non-TTY output for sync operations
@@ -505,6 +519,11 @@ func FormatSummaryParts(summary Summary) []string {
 	}
 	if summary.BranchesRestacked > 0 {
 		parts = append(parts, fmt.Sprintf("restacked %d", summary.BranchesRestacked))
+	}
+	// Reparenting changed the shape of the user's stack, so it belongs in the
+	// one-line summary and not only in the detail rows above it.
+	if summary.BranchesReparented > 0 {
+		parts = append(parts, fmt.Sprintf("reparented %d", summary.BranchesReparented))
 	}
 	if summary.BranchesDeleted > 0 {
 		parts = append(parts, fmt.Sprintf("deleted %d", summary.BranchesDeleted))

@@ -9,6 +9,7 @@ import (
 )
 
 type traceCaptureLogger struct {
+	calls   int
 	op      string
 	cmd     string
 	success bool
@@ -18,6 +19,7 @@ func (l *traceCaptureLogger) Debug(string, ...any) {}
 func (l *traceCaptureLogger) Info(string, ...any)  {}
 
 func (l *traceCaptureLogger) Trace(op string, _ int64, success bool, _ error, attrs ...slog.Attr) {
+	l.calls++
 	l.op = op
 	l.success = success
 	for _, attr := range attrs {

@@ -108,6 +108,37 @@ func BenchmarkGetRevision(b *testing.B) {
 	}
 }
 
+// BenchmarkCommitRangeMetadata compares the replay metadata reads with their
+// former per-field subprocess path over the same 20-commit range.
+func BenchmarkCommitRangeMetadata(b *testing.B) {
+	for _, batch := range []bool{false, true} {
+		b.Run(fmt.Sprintf("batch=%t", batch), func(b *testing.B) {
+			br := newBenchRepo(b, 21, 0)
+			ctx := context.Background()
+			rr := git.RevRange{Base: "main~20", Head: "main"}
+			for b.Loop() {
+				if batch {
+					if _, err := br.runner.GetCommitRangeMetadata(ctx, rr); err != nil {
+						b.Fatal(err)
+					}
+					continue
+				}
+				commits, err := br.runner.GetCommitRangeSHAs(ctx, rr)
+				if err != nil {
+					b.Fatal(err)
+				}
+				for _, sha := range commits {
+					for _, format := range []string{"%P", "%an", "%ae", "%aI", "%B"} {
+						if _, err := br.runner.GetCommitLog(sha, format); err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 // BenchmarkBatchGetRevisions measures bulk revision resolution, batching all
 // branches into a single `git rev-parse` invocation rather than N parallel
 // subprocesses.

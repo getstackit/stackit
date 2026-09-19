@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import os
+import platform
 from pathlib import Path
 import shutil
 import statistics
@@ -20,7 +21,7 @@ import sys
 import tarfile
 import tempfile
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 
 DEFAULT_REFS = ["v0.25.0", "v0.26.1", "v0.27.1", "main"]
@@ -36,13 +37,16 @@ class Case:
 
 CASES = [
     Case("tree-short", ["tree", "short"]),
+    Case("tree", ["tree"]),
     Case("info", ["info"]),
     Case("parent", ["parent"]),
     Case("children", ["children"]),
-    Case("checkout-exact", ["co", "branch-05", "--quiet"], fresh_copy=True),
-    Case("create", ["create", "benchmark-new", "--allow-empty", "-m", "perf: benchmark"], fresh_copy=True),
+    Case("checkout-exact", ["co", "branch-01", "--quiet"], fresh_copy=True),
+    Case("create", ["create", "benchmark-new", "-m", "perf: benchmark"], fresh_copy=True),
     Case("modify", ["modify", "-m", "perf: benchmark"], fresh_copy=True),
+    Case("modify-midstack", ["modify", "-m", "perf: benchmark"], fresh_copy=True),
     Case("restack-noop", ["restack"], fresh_copy=True),
+    Case("restack-upstack", ["restack", "--upstack"], fresh_copy=True),
 ]
 
 
@@ -53,7 +57,7 @@ def run(command: list[str], *, cwd: Path | None = None, capture: bool = False) -
         check=True,
         text=True,
         stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
-        stderr=subprocess.PIPE if capture else subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
 
 
@@ -94,6 +98,9 @@ def create_fixture(binary: Path, directory: Path, branches: int) -> Path:
     git(fixture, "init", "--initial-branch=main")
     git(fixture, "config", "user.email", "benchmark@stackit.dev")
     git(fixture, "config", "user.name", "Stackit Benchmark")
+    git(fixture, "config", "commit.gpgSign", "false")
+    git(fixture, "config", "core.hooksPath", "/dev/null")
+    git(fixture, "config", "gc.auto", "0")
     (fixture / "README.md").write_text("# Stackit benchmark fixture\n")
     git(fixture, "add", "README.md")
     git(fixture, "commit", "-m", "chore: fixture root")
@@ -127,19 +134,26 @@ def measure_case(binary: Path, fixture: Path, case: Case, runs: int, warmup: int
         if case.fresh_copy:
             trial = work / f"{case.name}-{iteration}"
             shutil.copytree(fixture, trial)
-        start = time.perf_counter_ns()
         try:
+            if case.name in {"modify-midstack", "restack-upstack"}:
+                git(trial, "checkout", "branch-01")
+            if case.name in {"create", "modify", "modify-midstack", "restack-upstack"}:
+                (trial / "benchmark-change.txt").write_text("benchmark change\n")
+                git(trial, "add", "benchmark-change.txt")
+            if case.name == "restack-upstack":
+                git(trial, "commit", "--amend", "--no-edit")
+            start = time.perf_counter_ns()
             run(command, cwd=trial)
+            elapsed = (time.perf_counter_ns() - start) / 1_000_000
         except subprocess.CalledProcessError as error:
-            completed = subprocess.run(command, cwd=trial, text=True, capture_output=True)
             raise RuntimeError(
-                f"{case.name} failed: {completed.stderr.strip() or completed.stdout.strip()}"
+                f"{case.name} failed: {error.stderr or error}"
             ) from error
         finally:
             if case.fresh_copy:
                 shutil.rmtree(trial)
         if iteration >= warmup:
-            durations.append((time.perf_counter_ns() - start) / 1_000_000)
+            durations.append(elapsed)
 
     return {
         "name": case.name,
@@ -180,9 +194,15 @@ def main() -> int:
     # projects, so resolve the real compiler before changing into one.
     go_binary = run(["mise", "which", "go"], cwd=repo, capture=True).stdout.strip()
     result: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "platform": {"python": sys.version.split()[0], "git": run(["git", "--version"], capture=True).stdout.strip()},
+        "platform": {
+            "python": sys.version.split()[0],
+            "git": run(["git", "--version"], capture=True).stdout.strip(),
+            "go": run([go_binary, "version"], capture=True).stdout.strip(),
+            "system": platform.platform(),
+            "cpu_count": os.cpu_count(),
+        },
         "fixture": {"shape": "linear", "branches": args.branches},
         "runs": args.runs,
         "warmup": args.warmup,
@@ -191,13 +211,21 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="stackit-benchmark-") as temporary:
         root = Path(temporary)
+        # Keep user configuration, signing, hooks, and logging out of fixtures.
+        os.environ.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+                           "STACKIT_NO_LOGGING": "1", "GIT_TERMINAL_PROMPT": "0"})
+        for key in list(os.environ):
+            if key.startswith("GIT_CONFIG_KEY_") or key.startswith("GIT_CONFIG_VALUE_") or key in {
+                "GIT_CONFIG_COUNT", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+            }:
+                os.environ.pop(key)
         build_environment = os.environ | {
             "GOMODCACHE": str(cache_dir / "mod"),
             "GOCACHE": str(cache_dir / "build"),
         }
-        for ref in args.refs:
+        for index, ref in enumerate(args.refs):
             print(f"benchmarking {ref}", flush=True)
-            revision_dir = root / ref.replace("/", "_")
+            revision_dir = root / str(index)
             revision_dir.mkdir()
             binary, commit = build(repo, ref, revision_dir, go_binary, build_environment)
             fixture = create_fixture(binary, revision_dir, args.branches)
@@ -205,6 +233,7 @@ def main() -> int:
             work.mkdir()
             cases = [measure_case(binary, fixture, case, args.runs, args.warmup, work) for case in CASES]
             result["results"].append({"ref": ref, "commit": commit, "cases": cases})  # type: ignore[index]
+            output.write_text(json.dumps(result, indent=2) + "\n")
 
     output.write_text(json.dumps(result, indent=2) + "\n")
     print(f"wrote {output}")

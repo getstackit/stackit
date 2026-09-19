@@ -371,12 +371,16 @@ func (d *demoGitRunner) GetMergedBranches(_ context.Context, _ string) (map[stri
 	return make(map[string]bool), nil
 }
 
-func (d *demoGitRunner) IsDiffEmpty(_ context.Context, _, _ string) (bool, error) {
-	return false, nil
-}
-
-func (d *demoGitRunner) GetChangedFiles(_ context.Context, _ git.RevRange) ([]string, error) {
-	return []string{}, nil
+func (d *demoGitRunner) ReadDiffs(_ context.Context, mode git.DiffReadMode, ranges ...git.RevRange) git.ReadResults[git.DiffSummary] {
+	result := git.ReadResults[git.DiffSummary]{Values: make(map[string]git.DiffSummary)}
+	for _, rr := range ranges {
+		diff := git.DiffSummary{Files: []string{}}
+		if mode == git.DiffStats {
+			diff.Added, diff.Deleted = 1, 1
+		}
+		result.Values[rr.String()] = diff
+	}
+	return result
 }
 
 func (d *demoGitRunner) ShowDiff(_ context.Context, _, _ string, _ bool) (string, error) {
@@ -405,10 +409,6 @@ func (d *demoGitRunner) GetUnstagedDiffBinary(_ context.Context, _ ...string) (s
 
 func (d *demoGitRunner) GetDiffBetween(_ context.Context, _ git.RevRange, _ ...string) (string, error) {
 	return "", nil
-}
-
-func (d *demoGitRunner) GetDiffNumstat(_ git.RevRange) (string, error) {
-	return "1\t1\ttest.txt", nil
 }
 
 func (d *demoGitRunner) GetCommitLog(_, _ string) (string, error) {

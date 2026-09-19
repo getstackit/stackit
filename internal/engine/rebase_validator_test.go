@@ -199,9 +199,9 @@ func TestValidateRebases(t *testing.T) {
 
 		// The rebased tip's tree contains both the parent's change and all three
 		// branch changes (4 distinct files relative to the fork point).
-		filesFromBase, err := s.Engine.Git().GetChangedFiles(context.Background(), git.RevRange{Base: branch1OldBase, Head: newTip})
+		diffFromBase, err := s.Engine.Git().ReadDiffs(context.Background(), git.DiffNames, git.RevRange{Base: branch1OldBase, Head: newTip}).One()
 		require.NoError(t, err)
-		require.Len(t, filesFromBase, 4)
+		require.Len(t, diffFromBase.Files, 4)
 	})
 
 	t.Run("matches git rebase semantics for branch range containing merge commit", func(t *testing.T) {

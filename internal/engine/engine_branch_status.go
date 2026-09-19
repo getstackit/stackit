@@ -395,7 +395,7 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 		return false, err
 	}
 
-	return e.git.IsDiffEmpty(ctx, branchName, parentRev)
+	return e.IsDiffEmpty(ctx, parentRev, branchName)
 }
 
 // BatchIsBranchEmpty reports, for each branch, whether it has no changes against
@@ -611,7 +611,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	}
 
 	if parentRev, ok := e.planRev(revisions, parentName); ok && parentRev != "" {
-		if empty, err := e.git.IsDiffEmpty(ctx, branchName, parentRev); err == nil && empty {
+		if empty, err := e.IsDiffEmpty(ctx, parentRev, branchName); err == nil && empty {
 			return DeletionStatus{SafeToDelete: true, Reason: "empty", Kind: DeletionReasonEmptyWithPR}
 		}
 	}

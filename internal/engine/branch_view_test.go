@@ -97,7 +97,7 @@ func TestPerConcernBatchReaders(t *testing.T) {
 
 		wantAdded, wantDeleted, err := s.Scene.Repo.GetDiffStats(b.GetParent().GetName(), name)
 		require.NoError(t, err)
-		require.Equal(t, engine.DiffStat{Added: wantAdded, Deleted: wantDeleted}, diffs[name], "diff for %s", name)
+		require.Equal(t, engine.DiffStat{Added: wantAdded, Deleted: wantDeleted, FilesChanged: 1}, diffs[name], "diff for %s", name)
 
 		wantCommits, err := s.Engine.GetAllCommits(b, engine.CommitFormatReadable)
 		require.NoError(t, err)

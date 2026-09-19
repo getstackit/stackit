@@ -325,7 +325,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to marshal metadata for anchor %s: %w", branchName, err)
 	}
-	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to prepare metadata blob for anchor %s: %w", branchName, err)
 	}
@@ -474,7 +474,7 @@ func (e *engineImpl) restackBranch(
 			if err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to marshal metadata for frozen branch %s: %w", branchName, err)
 			}
-			metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+			metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 			if err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to prepare metadata blob for frozen branch %s: %w", branchName, err)
 			}
@@ -702,7 +702,7 @@ func (e *engineImpl) restackBranch(
 		e.resetWorktreeIfClean(ctx, worktreePath, snap)
 	}
 
-	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 	if err != nil {
 		return RestackBranchResult{
 			Result:            RestackConflict,
@@ -885,7 +885,7 @@ func (e *engineImpl) applyMetadataRefresh(
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to prepare metadata blob: %w", err)
 	}
@@ -952,7 +952,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to prepare metadata blob: %w", err)
 	}

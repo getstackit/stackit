@@ -260,7 +260,7 @@ func (r *runner) WriteMetadata(branchName string, meta *Meta) error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	sha, err := r.CreateBlob(string(jsonData))
+	sha, err := One(r.CreateBlobs(context.Background(), string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create metadata blob: %w", err)
 	}
@@ -367,7 +367,7 @@ func (r *runner) WriteLocalMetadata(branchName string, meta *LocalMeta) error {
 		return fmt.Errorf("failed to marshal local metadata: %w", err)
 	}
 
-	sha, err := r.CreateBlob(string(jsonData))
+	sha, err := One(r.CreateBlobs(context.Background(), string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create local metadata blob: %w", err)
 	}
@@ -412,11 +412,11 @@ func (r *runner) ListMetadata() (map[string]string, error) {
 	return result, nil
 }
 
-// WriteMetadataBlobsBatch marshals each Meta to JSON and writes all the blobs
+// WriteMetadataBlobs marshals each Meta to JSON and writes all the blobs
 // in one `git hash-object` invocation via CreateBlobsBatch. Returns SHAs in
 // input order. Does NOT update any refs — callers (transaction commit,
 // MarkBranchesForPRBodyUpdate) pair the SHAs with ref updates afterwards.
-func (r *runner) WriteMetadataBlobsBatch(ctx context.Context, metas []*Meta) ([]string, error) {
+func (r *runner) WriteMetadataBlobs(ctx context.Context, metas []*Meta) ([]string, error) {
 	if len(metas) == 0 {
 		return nil, nil
 	}
@@ -428,16 +428,16 @@ func (r *runner) WriteMetadataBlobsBatch(ctx context.Context, metas []*Meta) ([]
 		}
 		contents[i] = string(jsonData)
 	}
-	shas, err := r.CreateBlobsBatch(ctx, contents)
+	shas, err := r.CreateBlobs(ctx, contents...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metadata blobs: %w", err)
 	}
 	return shas, nil
 }
 
-// WriteLocalMetadataBlobsBatch is the LocalMeta counterpart to
-// WriteMetadataBlobsBatch.
-func (r *runner) WriteLocalMetadataBlobsBatch(ctx context.Context, metas []*LocalMeta) ([]string, error) {
+// WriteLocalMetadataBlobs is the LocalMeta counterpart to
+// WriteMetadataBlobs.
+func (r *runner) WriteLocalMetadataBlobs(ctx context.Context, metas []*LocalMeta) ([]string, error) {
 	if len(metas) == 0 {
 		return nil, nil
 	}
@@ -449,7 +449,7 @@ func (r *runner) WriteLocalMetadataBlobsBatch(ctx context.Context, metas []*Loca
 		}
 		contents[i] = string(jsonData)
 	}
-	shas, err := r.CreateBlobsBatch(ctx, contents)
+	shas, err := r.CreateBlobs(ctx, contents...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create local metadata blobs: %w", err)
 	}

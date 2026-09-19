@@ -84,7 +84,7 @@ func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
 		return fmt.Errorf("failed to marshal stack metadata: %w", err)
 	}
 
-	sha, err := r.CreateBlob(string(jsonData))
+	sha, err := One(r.CreateBlobs(context.Background(), string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create stack metadata blob: %w", err)
 	}
@@ -125,7 +125,7 @@ func (r *runner) WriteStackMetaBlob(meta *StackMeta) (string, error) {
 		return "", fmt.Errorf("failed to marshal stack metadata: %w", err)
 	}
 
-	sha, err := r.CreateBlob(string(jsonData))
+	sha, err := One(r.CreateBlobs(context.Background(), string(jsonData)))
 	if err != nil {
 		return "", fmt.Errorf("failed to create stack metadata blob: %w", err)
 	}

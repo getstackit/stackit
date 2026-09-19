@@ -974,28 +974,19 @@ func (r *runner) CatFile(sha string) (string, error) {
 	return r.ReadBlob(sha)
 }
 
-func (r *runner) CreateBlob(content string) (string, error) {
-	out, err := r.runGitInternal(context.Background(), content, nil, true, "hash-object", "-w", "--stdin")
-	if err != nil {
-		return "", fmt.Errorf("failed to create blob: %w", err)
-	}
-	return strings.TrimSpace(out), nil
-}
-
-// CreateBlobsBatch writes N blobs to the object store in a single
+// CreateBlobs writes N blobs to the object store in a single
 // `git hash-object -w --stdin-paths` invocation. Each content is staged to a
 // temp file (so git's path-based hashing can read it) and the SHAs come back
 // on stdout in input order.
 //
-// For very small N the overhead of staging temp files exceeds the savings
-// from collapsing subprocess calls; callers with N==1 should use CreateBlob
-// directly. We still handle N==0/1 here so the method's contract holds.
-func (r *runner) CreateBlobsBatch(ctx context.Context, contents []string) ([]string, error) {
+// Empty input does no work. One blob uses stdin directly; larger batches stage
+// temporary files. The implementation chooses the fast path for the input size.
+func (r *runner) CreateBlobs(ctx context.Context, contents ...string) ([]string, error) {
 	if len(contents) == 0 {
 		return nil, nil
 	}
 	if len(contents) == 1 {
-		sha, err := r.CreateBlob(contents[0])
+		sha, err := r.runGitInternal(ctx, contents[0], nil, true, "hash-object", "-w", "--stdin")
 		if err != nil {
 			return nil, err
 		}
@@ -1147,7 +1138,7 @@ func (r *runner) TestRemoteRefCompatibility(ctx context.Context) error {
 	testRef := "refs/stackit/metadata/stackit-compat-test"
 	testContent := fmt.Sprintf(`{"test":true,"timestamp":%d}`, time.Now().Unix())
 
-	sha, err := r.CreateBlob(testContent)
+	sha, err := One(r.CreateBlobs(ctx, testContent))
 	if err != nil {
 		return fmt.Errorf("failed to create test blob: %w", err)
 	}

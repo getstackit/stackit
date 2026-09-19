@@ -25,7 +25,7 @@ func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
 		for _, b := range branches {
 			refName := fmt.Sprintf("refs/stackit/metadata/%s", b)
 			// Create a blob for the ref
-			sha, err := runner.CreateBlob(fmt.Sprintf(`{"branch":"%s"}`, b))
+			sha, err := git.One(runner.CreateBlobs(context.Background(), fmt.Sprintf(`{"branch":"%s"}`, b)))
 			require.NoError(t, err)
 
 			err = scene.Repo.RunGitCommand("update-ref", refName, sha)
@@ -65,7 +65,7 @@ func TestBatchDeleteRemoteMetadataRefs(t *testing.T) {
 
 		refName := "refs/stackit/metadata/branch1"
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		sha, err := runner.CreateBlob(`{"branch":"branch1"}`)
+		sha, err := git.One(runner.CreateBlobs(context.Background(), `{"branch":"branch1"}`))
 		require.NoError(t, err)
 
 		err = scene.Repo.RunGitCommand("update-ref", refName, sha)
@@ -103,7 +103,7 @@ func TestFetchRefSpecsFetchesBranchAndMetadataFromCustomRemote(t *testing.T) {
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 	metadataRef := "refs/stackit/metadata/feature"
-	sha, err := runner.CreateBlob(`{"branch":"feature"}`)
+	sha, err := git.One(runner.CreateBlobs(context.Background(), `{"branch":"feature"}`))
 	require.NoError(t, err)
 	err = scene.Repo.RunGitCommand("update-ref", metadataRef, sha)
 	require.NoError(t, err)

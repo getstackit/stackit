@@ -349,7 +349,7 @@ func (r *runner) WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *
 		return fmt.Errorf("failed to marshal worktree metadata: %w", err)
 	}
 
-	sha, err := r.CreateBlob(string(jsonData))
+	sha, err := One(r.CreateBlobs(ctx, string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create worktree metadata blob: %w", err)
 	}

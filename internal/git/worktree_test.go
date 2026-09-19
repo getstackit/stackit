@@ -274,7 +274,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		}))
 
 		// Point the registration at a blob that is not valid metadata.
-		garbage, err := runner.CreateBlob("this is not json")
+		garbage, err := git.One(runner.CreateBlobs(context.Background(), "this is not json"))
 		require.NoError(t, err)
 		require.NoError(t, runner.UpdateRef("refs/stackit/worktrees/corrupt", garbage))
 

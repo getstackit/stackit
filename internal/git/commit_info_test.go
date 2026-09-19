@@ -41,7 +41,7 @@ func TestReadCommitInfo(t *testing.T) {
 	require.Equal(t, got.Values["HEAD"], got.Values["refs/heads/branch1"])
 	require.Equal(t, got.Values["main"], got.Values["refs/tags/branch1"])
 	require.Empty(t, runner.ReadCommitInfo(t.Context()).Values)
-	blob, err := runner.CreateBlob("not a commit")
+	blob, err := git.One(runner.CreateBlobs(context.Background(), "not a commit"))
 	require.NoError(t, err)
 	mixed := runner.ReadCommitInfo(t.Context(), blob, "HEAD")
 	require.Contains(t, mixed.Values, "HEAD")

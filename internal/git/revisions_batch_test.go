@@ -44,7 +44,7 @@ func TestBatchGetRevisionsFallbackPreservesResolution(t *testing.T) {
 	require.NoError(t, scene.Repo.CreateChangeAndCommit("second commit", "second"))
 	sha, err := runner.ReadRevisions(context.Background(), "HEAD").One()
 	require.NoError(t, err)
-	blob, err := runner.CreateBlob("metadata")
+	blob, err := git.One(runner.CreateBlobs(context.Background(), "metadata"))
 	require.NoError(t, err)
 	require.NoError(t, runner.UpdateRef("refs/stackit/metadata/main", blob))
 	require.NoError(t, scene.Repo.RunGitCommand("tag", "-a", "commit-tag", "-m", "commit tag"))

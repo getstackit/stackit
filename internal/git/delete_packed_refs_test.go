@@ -93,7 +93,7 @@ func TestDeleteRef_RemovesPackedRef(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-	sha, err := runner.CreateBlob("payload")
+	sha, err := git.One(runner.CreateBlobs(context.Background(), "payload"))
 	require.NoError(t, err)
 	require.NoError(t, runner.UpdateRef("refs/stackit/metadata/packed-feature", sha))
 	packAllRefs(t, scene.Dir)
@@ -115,7 +115,7 @@ func TestDeleteMetadata_RemovesPackedRef(t *testing.T) {
 	// Covers the merge-ship symptom directly: cleanup deletes branch metadata
 	// via this entry point, which previously left packed metadata refs behind
 	// to be resurrected by the next sync as a phantom conflict.
-	sha, err := runner.CreateBlob(`{"parentBranchName":"main"}`)
+	sha, err := git.One(runner.CreateBlobs(context.Background(), `{"parentBranchName":"main"}`))
 	require.NoError(t, err)
 	require.NoError(t, runner.UpdateRef("refs/stackit/metadata/packed-feature", sha))
 	packAllRefs(t, scene.Dir)

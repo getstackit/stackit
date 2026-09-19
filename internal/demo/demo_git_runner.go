@@ -602,18 +602,6 @@ func (d *demoGitRunner) CatFile(_ string) (string, error) {
 const demoBlobSHA = "blob-sha"
 const demoRefSHA = "demo-ref-sha"
 
-func (d *demoGitRunner) CreateBlob(_ string) (string, error) {
-	return demoBlobSHA, nil
-}
-
-func (d *demoGitRunner) CreateBlobsBatch(_ context.Context, contents []string) ([]string, error) {
-	shas := make([]string, len(contents))
-	for i := range shas {
-		shas[i] = demoBlobSHA
-	}
-	return shas, nil
-}
-
 func (d *demoGitRunner) ReadBlob(_ string) (string, error) {
 	return "{}", nil
 }
@@ -720,7 +708,7 @@ func (d *demoGitRunner) UnstageAll(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) WriteMetadataBlobsBatch(_ context.Context, metas []*git.Meta) ([]string, error) {
+func (d *demoGitRunner) WriteMetadataBlobs(_ context.Context, metas []*git.Meta) ([]string, error) {
 	shas := make([]string, len(metas))
 	for i := range shas {
 		shas[i] = demoBlobSHA
@@ -728,7 +716,7 @@ func (d *demoGitRunner) WriteMetadataBlobsBatch(_ context.Context, metas []*git.
 	return shas, nil
 }
 
-func (d *demoGitRunner) WriteLocalMetadataBlobsBatch(_ context.Context, metas []*git.LocalMeta) ([]string, error) {
+func (d *demoGitRunner) WriteLocalMetadataBlobs(_ context.Context, metas []*git.LocalMeta) ([]string, error) {
 	shas := make([]string, len(metas))
 	for i := range shas {
 		shas[i] = demoBlobSHA
@@ -809,4 +797,12 @@ func (d *demoGitRunner) ReadLocalMetadata(_ context.Context, names ...string) gi
 		result.Values[name] = &git.LocalMeta{}
 	}
 	return result
+}
+
+func (d *demoGitRunner) CreateBlobs(_ context.Context, contents ...string) ([]string, error) {
+	shas := make([]string, len(contents))
+	for i := range contents {
+		shas[i] = "blob-sha"
+	}
+	return shas, nil
 }

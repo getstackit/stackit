@@ -16,7 +16,7 @@ func TestMetadataReadsPreservePartialFailures(t *testing.T) {
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 	require.NoError(t, runner.WriteMetadata("valid", git.NewMeta()))
 	require.NoError(t, runner.WriteLocalMetadata("valid", &git.LocalMeta{Frozen: true}))
-	corrupt, err := runner.CreateBlob("{bad JSON")
+	corrupt, err := git.One(runner.CreateBlobs(context.Background(), "{bad JSON"))
 	require.NoError(t, err)
 	for _, prefix := range []string{git.MetadataRefPrefix, git.LocalMetadataRefPrefix} {
 		require.NoError(t, runner.UpdateRef(prefix+"corrupt", corrupt))

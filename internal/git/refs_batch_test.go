@@ -21,9 +21,9 @@ func TestUpdateRefsBatch(t *testing.T) {
 		ctx := context.Background()
 
 		// Create initial blobs for refs (using non-branch refs since they can be any object)
-		sha1, err := runner.CreateBlob("content1")
+		sha1, err := git.One(runner.CreateBlobs(context.Background(), "content1"))
 		require.NoError(t, err)
-		sha2, err := runner.CreateBlob("content2")
+		sha2, err := git.One(runner.CreateBlobs(context.Background(), "content2"))
 		require.NoError(t, err)
 
 		// Create initial refs
@@ -33,9 +33,9 @@ func TestUpdateRefsBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create new blobs
-		newSha1, err := runner.CreateBlob("new-content1")
+		newSha1, err := git.One(runner.CreateBlobs(context.Background(), "new-content1"))
 		require.NoError(t, err)
-		newSha2, err := runner.CreateBlob("new-content2")
+		newSha2, err := git.One(runner.CreateBlobs(context.Background(), "new-content2"))
 		require.NoError(t, err)
 
 		// Update both refs atomically
@@ -64,9 +64,9 @@ func TestUpdateRefsBatch(t *testing.T) {
 		ctx := context.Background()
 
 		// Create initial blobs and refs
-		sha1, err := runner.CreateBlob("content1")
+		sha1, err := git.One(runner.CreateBlobs(context.Background(), "content1"))
 		require.NoError(t, err)
-		sha2, err := runner.CreateBlob("content2")
+		sha2, err := git.One(runner.CreateBlobs(context.Background(), "content2"))
 		require.NoError(t, err)
 
 		err = runner.UpdateRef("refs/test/ref1", sha1)
@@ -75,9 +75,9 @@ func TestUpdateRefsBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create new blobs
-		newSha1, err := runner.CreateBlob("new-content1")
+		newSha1, err := git.One(runner.CreateBlobs(context.Background(), "new-content1"))
 		require.NoError(t, err)
-		newSha2, err := runner.CreateBlob("new-content2")
+		newSha2, err := git.One(runner.CreateBlobs(context.Background(), "new-content2"))
 		require.NoError(t, err)
 
 		// Try to update with wrong OldSHA - should fail atomically
@@ -117,7 +117,7 @@ func TestUpdateRefsBatch(t *testing.T) {
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
 
-		sha, err := runner.CreateBlob("content")
+		sha, err := git.One(runner.CreateBlobs(context.Background(), "content"))
 		require.NoError(t, err)
 
 		// Update without OldSHA - creates new ref
@@ -143,7 +143,7 @@ func TestUpdateRefsBatchWithLog(t *testing.T) {
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		ctx := context.Background()
 
-		sha, err := runner.CreateBlob(`{"parent":"main"}`)
+		sha, err := git.One(runner.CreateBlobs(context.Background(), `{"parent":"main"}`))
 		require.NoError(t, err)
 
 		// Use metadata ref (not branch ref) since blobs can be stored there
@@ -200,9 +200,9 @@ func TestDeleteRefsBatch(t *testing.T) {
 		ctx := context.Background()
 
 		// Create refs to delete
-		sha1, err := runner.CreateBlob("content1")
+		sha1, err := git.One(runner.CreateBlobs(context.Background(), "content1"))
 		require.NoError(t, err)
-		sha2, err := runner.CreateBlob("content2")
+		sha2, err := git.One(runner.CreateBlobs(context.Background(), "content2"))
 		require.NoError(t, err)
 
 		err = runner.UpdateRef("refs/stackit/metadata/branch1", sha1)
@@ -246,7 +246,7 @@ func TestDeleteRefsBatch(t *testing.T) {
 		ctx := context.Background()
 
 		// Create one ref
-		sha, err := runner.CreateBlob("content")
+		sha, err := git.One(runner.CreateBlobs(context.Background(), "content"))
 		require.NoError(t, err)
 		err = runner.UpdateRef("refs/test/exists", sha)
 		require.NoError(t, err)
@@ -290,13 +290,13 @@ func TestRefUpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create metadata ref
-		metaSha, err := runner.CreateBlob(`{"parent":"main"}`)
+		metaSha, err := git.One(runner.CreateBlobs(context.Background(), `{"parent":"main"}`))
 		require.NoError(t, err)
 		err = runner.UpdateRef("refs/stackit/metadata/feature", metaSha)
 		require.NoError(t, err)
 
 		// Prepare new metadata
-		newMetaSha, err := runner.CreateBlob(`{"parent":"main","parentRev":"abc123"}`)
+		newMetaSha, err := git.One(runner.CreateBlobs(context.Background(), `{"parent":"main","parentRev":"abc123"}`))
 		require.NoError(t, err)
 
 		// Simulate restack: atomically update branch ref (to rebased commit) and metadata ref
@@ -341,13 +341,13 @@ func TestRefUpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create current metadata refs
-		currentMeta, _ := runner.CreateBlob(`{"parent":"current"}`)
+		currentMeta, _ := git.One(runner.CreateBlobs(context.Background(), `{"parent":"current"}`))
 		_ = runner.UpdateRef("refs/stackit/metadata/branch1", currentMeta)
 		_ = runner.UpdateRef("refs/stackit/metadata/branch2", currentMeta)
 
 		// Snapshot state (what we want to restore to) - using commit1 for branches
-		snapshotMeta1, _ := runner.CreateBlob(`{"parent":"main"}`)
-		snapshotMeta2, _ := runner.CreateBlob(`{"parent":"branch1"}`)
+		snapshotMeta1, _ := git.One(runner.CreateBlobs(context.Background(), `{"parent":"main"}`))
+		snapshotMeta2, _ := git.One(runner.CreateBlobs(context.Background(), `{"parent":"branch1"}`))
 
 		// Restore all refs atomically
 		updates := []git.RefUpdate{

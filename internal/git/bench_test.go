@@ -305,7 +305,7 @@ func BenchmarkCreateBlob(b *testing.B) {
 			}
 			s := string(content)
 			for b.Loop() {
-				if _, err := br.runner.CreateBlob(s); err != nil {
+				if _, err := git.One(br.runner.CreateBlobs(context.Background(), s)); err != nil {
 					b.Fatalf("CreateBlob: %v", err)
 				}
 			}
@@ -324,7 +324,7 @@ func BenchmarkCreateBlobs_Sequential(b *testing.B) {
 			for b.Loop() {
 				for j := range n {
 					content := fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
-					if _, err := br.runner.CreateBlob(content); err != nil {
+					if _, err := git.One(br.runner.CreateBlobs(context.Background(), content)); err != nil {
 						b.Fatalf("CreateBlob: %v", err)
 					}
 				}
@@ -347,7 +347,7 @@ func BenchmarkCreateBlobsBatch(b *testing.B) {
 				for j := range n {
 					contents[j] = fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
 				}
-				if _, err := br.runner.CreateBlobsBatch(context.Background(), contents); err != nil {
+				if _, err := br.runner.CreateBlobs(context.Background(), contents...); err != nil {
 					b.Fatalf("CreateBlobsBatch: %v", err)
 				}
 				iter++
@@ -359,7 +359,7 @@ func BenchmarkCreateBlobsBatch(b *testing.B) {
 // BenchmarkReadBlob measures blob reads. Phase 6 swaps in `git cat-file blob`.
 func BenchmarkReadBlob(b *testing.B) {
 	br := newBenchRepo(b, 1, 0)
-	sha, err := br.runner.CreateBlob("read-bench-content")
+	sha, err := git.One(br.runner.CreateBlobs(context.Background(), "read-bench-content"))
 	if err != nil {
 		b.Fatalf("CreateBlob: %v", err)
 	}

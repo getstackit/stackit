@@ -519,7 +519,7 @@ func TestCleanBranches(t *testing.T) {
 
 		// Critical regression assertion: preserve old divergence at branch1 tip.
 		// If this regresses, restack can replay branch1 commits and cause avoidable conflicts.
-		meta2, err := s.Engine.Git().ReadMetadata("branch2")
+		meta2, err := s.Engine.Git().ReadMetadata(context.Background(), "branch2").One()
 		require.NoError(t, err)
 		require.NotNil(t, meta2.GetParentBranchRevision())
 		require.Equal(t, branch1Rev, *meta2.GetParentBranchRevision())

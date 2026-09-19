@@ -286,13 +286,13 @@ func (e *engineImpl) ListMetadataRefs() (map[string]string, error) {
 // ReadMetadataRaw reads a single branch's metadata directly from its ref,
 // bypassing the engine's tracked-branch cache.
 func (e *engineImpl) ReadMetadataRaw(branchName string) (*git.Meta, error) {
-	return e.git.ReadMetadata(branchName)
+	return e.git.ReadMetadata(context.Background(), branchName).One()
 }
 
 // BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 // returning per-branch errors so callers can detect corrupted refs.
 func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error) {
-	return e.git.BatchReadMetadata(branchNames)
+	return e.git.ReadMetadata(context.Background(), branchNames...).Split()
 }
 
 // DeleteMetadataRefsBatch deletes many branches' metadata refs in a single

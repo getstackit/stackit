@@ -626,10 +626,6 @@ func (d *demoGitRunner) RefDecorations() (map[string][]git.RefDecoration, error)
 	return make(map[string][]git.RefDecoration), nil
 }
 
-func (d *demoGitRunner) ReadMetadata(_ string) (*git.Meta, error) {
-	return git.NewMeta(), nil
-}
-
 func (d *demoGitRunner) WriteMetadata(_ string, _ *git.Meta) error {
 	return nil
 }
@@ -648,24 +644,12 @@ func (d *demoGitRunner) MetadataCacheStats() git.MetadataCacheSummary {
 	return git.MetadataCacheSummary{}
 }
 
-func (d *demoGitRunner) ReadLocalMetadata(_ string) (*git.LocalMeta, error) {
-	return &git.LocalMeta{}, nil
-}
-
 func (d *demoGitRunner) WriteLocalMetadata(_ string, _ *git.LocalMeta) error {
 	return nil
 }
 
 func (d *demoGitRunner) ListMetadata() (map[string]string, error) {
 	return make(map[string]string), nil
-}
-
-func (d *demoGitRunner) BatchReadMetadata(_ []string) (map[string]*git.Meta, map[string]error) {
-	return make(map[string]*git.Meta), make(map[string]error)
-}
-
-func (d *demoGitRunner) BatchReadLocalMetadata(_ []string) git.LocalMetaMap {
-	return make(git.LocalMetaMap)
 }
 
 func (d *demoGitRunner) GetParentCommitSHA(_ string) (string, error) {
@@ -808,6 +792,21 @@ func (d *demoGitRunner) ReadCommitInfo(_ context.Context, refs ...string) git.Re
 	result := git.ReadResults[git.CommitInfo]{Values: make(map[string]git.CommitInfo)}
 	for _, ref := range refs {
 		result.Values[ref] = git.CommitInfo{Date: time.Now(), Author: "Demo User"}
+	}
+	return result
+}
+
+func (d *demoGitRunner) ReadMetadata(_ context.Context, names ...string) git.ReadResults[*git.Meta] {
+	result := git.ReadResults[*git.Meta]{Values: make(map[string]*git.Meta)}
+	for _, name := range names {
+		result.Values[name] = git.NewMeta()
+	}
+	return result
+}
+func (d *demoGitRunner) ReadLocalMetadata(_ context.Context, names ...string) git.ReadResults[*git.LocalMeta] {
+	result := git.ReadResults[*git.LocalMeta]{Values: make(map[string]*git.LocalMeta)}
+	for _, name := range names {
+		result.Values[name] = &git.LocalMeta{}
 	}
 	return result
 }

@@ -183,7 +183,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	meta := metaMap[branchName]
 	if meta == nil {
 		var err error
-		meta, err = e.git.ReadMetadata(branchName)
+		meta, err = e.git.ReadMetadata(context.Background(), branchName).One()
 		if err != nil {
 			return item, false
 		}

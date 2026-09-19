@@ -156,8 +156,8 @@ func (e *engineImpl) GetRemoteURL(_ context.Context) (string, error) {
 }
 
 // GetCurrentRevision returns the current revision (HEAD)
-func (e *engineImpl) GetCurrentRevision(_ context.Context) (string, error) {
-	return e.git.GetRevision("HEAD")
+func (e *engineImpl) GetCurrentRevision(ctx context.Context) (string, error) {
+	return e.git.ReadRevisions(ctx, "HEAD").One()
 }
 
 // GetReflog returns the reflog
@@ -213,12 +213,12 @@ func (e *engineImpl) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 
 // GetParentCommitSHA returns the parent commit SHA of a commit
 func (e *engineImpl) GetParentCommitSHA(commitSHA string) (string, error) {
-	return e.git.GetParentCommitSHA(commitSHA)
+	return e.git.ReadRevisions(context.Background(), commitSHA+"^").One()
 }
 
 // GetCommitSHA returns the SHA at a relative position (0 = HEAD, 1 = HEAD~1)
 func (e *engineImpl) GetCommitSHA(branchName string, offset int) (string, error) {
-	return e.git.GetCommitSHA(branchName, offset)
+	return e.git.ReadRevisions(context.Background(), fmt.Sprintf("%s~%d", branchName, offset)).One()
 }
 
 // IsAncestor checks if one commit is an ancestor of another
@@ -286,13 +286,13 @@ func (e *engineImpl) ListMetadataRefs() (map[string]string, error) {
 // ReadMetadataRaw reads a single branch's metadata directly from its ref,
 // bypassing the engine's tracked-branch cache.
 func (e *engineImpl) ReadMetadataRaw(branchName string) (*git.Meta, error) {
-	return e.git.ReadMetadata(branchName)
+	return e.git.ReadMetadata(context.Background(), branchName).One()
 }
 
 // BatchReadMetadataRaw reads raw metadata for many branches in one pass,
 // returning per-branch errors so callers can detect corrupted refs.
 func (e *engineImpl) BatchReadMetadataRaw(branchNames []string) (MetaMap, map[string]error) {
-	return e.git.BatchReadMetadata(branchNames)
+	return e.git.ReadMetadata(context.Background(), branchNames...).Split()
 }
 
 // DeleteMetadataRefsBatch deletes many branches' metadata refs in a single
@@ -303,7 +303,7 @@ func (e *engineImpl) DeleteMetadataRefsBatch(ctx context.Context, branchNames []
 	for i, branchName := range branchNames {
 		refNames[i] = git.MetadataRefPrefix + branchName
 	}
-	return e.git.DeleteRefsBatch(ctx, refNames)
+	return e.git.DeleteRefs(ctx, refNames...)
 }
 
 // IsInsideRepo checks if the current directory is inside a git repository

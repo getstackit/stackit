@@ -355,7 +355,7 @@ func (e *engineImpl) Reset(newTrunkName string) error {
 		for branchName := range metadataRefs {
 			refNames = append(refNames, git.MetadataRefName(branchName))
 		}
-		if err := e.git.DeleteRefsBatch(context.Background(), refNames); err != nil {
+		if err := e.git.DeleteRefs(context.Background(), refNames...); err != nil {
 			return fmt.Errorf("failed to delete metadata refs: %w", err)
 		}
 	}

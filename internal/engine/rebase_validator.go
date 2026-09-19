@@ -113,7 +113,7 @@ func dryRunRebase(ctx context.Context, g git.Runner, branchName, upstream, oldUp
 		}
 	}
 
-	newSHA, err := g.GetCurrentRevision(ctx)
+	newSHA, err := g.ReadRevisions(ctx, "HEAD").One()
 	if err != nil {
 		return git.RebaseOutcome{Result: git.RebaseConflict, RerereResolvedCount: outcome.RerereResolvedCount}, "", nil, fmt.Errorf("failed to get revision after rebase: %w", err)
 	}
@@ -498,7 +498,7 @@ func (e *engineImpl) validateSingleSpec(
 	// Fast path: skip worktree creation for linear branches where the
 	// parent and branch changes touch disjoint file sets (conflict impossible).
 	if newSHA, ok := e.tryConflictFreeReplay(ctx, spec, resolvedParent); ok {
-		oldSHA, _ := e.git.GetRevision(spec.Branch)
+		oldSHA, _ := e.git.ReadRevisions(ctx, spec.Branch).One()
 		return validationResult{
 			spec:    spec,
 			success: true,
@@ -536,7 +536,7 @@ func (e *engineImpl) validateSingleSpec(
 	wtGit := git.NewRunnerWithPath(worktreePath, nil)
 
 	// Get the branch's current SHA before rebasing (to track old SHA -> new SHA mapping).
-	oldBranchSHA, err := wtGit.GetRevision(spec.Branch)
+	oldBranchSHA, err := wtGit.ReadRevisions(ctx, spec.Branch).One()
 	if err != nil {
 		// Branch may not exist — not fatal, just means we can't track the SHA mapping.
 		oldBranchSHA = ""

@@ -67,7 +67,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 	// Create each branch
 	for idx, branchName := range opts.BranchNames {
 		// Get commit SHA at the offset
-		branchRevision, err := e.git.GetCommitSHA(opts.BranchToSplit, reversedBranchPoints[idx])
+		branchRevision, err := e.git.ReadRevisions(ctx, fmt.Sprintf("%s~%d", opts.BranchToSplit, reversedBranchPoints[idx])).One()
 		if err != nil {
 			return fmt.Errorf("failed to get commit SHA at offset %d: %w", reversedBranchPoints[idx], err)
 		}

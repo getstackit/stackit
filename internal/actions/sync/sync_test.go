@@ -243,18 +243,11 @@ func (r *runtimeConflictRunner) Rebase(ctx context.Context, branchName, upstream
 	return r.Runner.Rebase(ctx, branchName, upstream, oldUpstream)
 }
 
-func (r *runtimeConflictRunner) UpdateRefsBatch(ctx context.Context, updates []git.RefUpdate) error {
+func (r *runtimeConflictRunner) UpdateRefs(ctx context.Context, updates []git.RefUpdate, reflogMessage string) error {
 	if r.injectRuntimeConflict() {
 		return nil
 	}
-	return r.Runner.UpdateRefsBatch(ctx, updates)
-}
-
-func (r *runtimeConflictRunner) UpdateRefsBatchWithLog(ctx context.Context, updates []git.RefUpdate, reflogMessage string) error {
-	if r.injectRuntimeConflict() {
-		return nil
-	}
-	return r.Runner.UpdateRefsBatchWithLog(ctx, updates, reflogMessage)
+	return r.Runner.UpdateRefs(ctx, updates, reflogMessage)
 }
 
 func (r *runtimeConflictRunner) injectRuntimeConflict() bool {

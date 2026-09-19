@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,9 +33,9 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		require.NoError(t, first.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
 
 		// Both read the same starting point.
-		fromFirst, err := first.ReadMetadata("feature")
+		fromFirst, err := first.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
-		fromSecond, err := second.ReadMetadata("feature")
+		fromSecond, err := second.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "main", *fromSecond.GetParentBranchName())
 
@@ -49,13 +50,13 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		require.Contains(t, err.Error(), "another process changed it")
 
 		// The first write survives.
-		latest, err := first.ReadMetadata("feature")
+		latest, err := first.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "first-parent", *latest.GetParentBranchName())
 	})
 
 	// The guard is worthless if it only covers the read path almost nothing
-	// uses. Engine graph loads go through BatchReadMetadata, which warmed the
+	// uses. Engine graph loads go through ReadMetadata, which warmed the
 	// cache without a SHA — so every command that read a stack and then wrote
 	// to it had no expectation to compare against and fell back to a blind
 	// update-ref. This is the same scenario as "stale write is rejected",
@@ -70,9 +71,9 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		main := "main"
 		require.NoError(t, first.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
 
-		firstBatch, errs := first.BatchReadMetadata([]string{"feature"})
+		firstBatch, errs := first.ReadMetadata(context.Background(), []string{"feature"}...).Split()
 		require.Empty(t, errs)
-		secondBatch, errs := second.BatchReadMetadata([]string{"feature"})
+		secondBatch, errs := second.ReadMetadata(context.Background(), []string{"feature"}...).Split()
 		require.Empty(t, errs)
 
 		firstParent := "first-parent"
@@ -83,7 +84,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		require.Error(t, err, "a write based on superseded state must not silently win")
 		require.Contains(t, err.Error(), "another process changed it")
 
-		latest, err := first.ReadMetadata("feature")
+		latest, err := first.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "first-parent", *latest.GetParentBranchName())
 	})
@@ -102,10 +103,10 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		main := "main"
 		require.NoError(t, first.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
 
-		fromSecond, err := second.ReadMetadata("feature")
+		fromSecond, err := second.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 
-		fromFirst, err := first.ReadMetadata("feature")
+		fromFirst, err := first.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		firstParent := "first-parent"
 		require.NoError(t, first.WriteMetadata("feature", fromFirst.WithParentBranchName(&firstParent)))
@@ -115,7 +116,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 
 		// Re-reading in the same process must see the winner, not the stale
 		// cached copy, and the retry must then be allowed through.
-		fresh, err := second.ReadMetadata("feature")
+		fresh, err := second.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "first-parent", *fresh.GetParentBranchName())
 		require.NoError(t, second.WriteMetadata("feature", fresh.WithParentBranchName(&secondParent)))
@@ -124,7 +125,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		// from before second's write, which is ordinary cache staleness and not
 		// what this case is about.
 		third := git.NewRunnerWithPath(scene.Repo.Dir, nil)
-		latest, err := third.ReadMetadata("feature")
+		latest, err := third.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "second-parent", *latest.GetParentBranchName())
 	})
@@ -138,20 +139,20 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		main := "main"
 		require.NoError(t, first.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
 
-		fromFirst, err := first.ReadMetadata("feature")
+		fromFirst, err := first.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		firstParent := "first-parent"
 		require.NoError(t, first.WriteMetadata("feature", fromFirst.WithParentBranchName(&firstParent)))
 
 		// Re-reading picks up the new blob, so the follow-up write is based on
 		// current state and is allowed.
-		fresh, err := second.ReadMetadata("feature")
+		fresh, err := second.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "first-parent", *fresh.GetParentBranchName())
 		secondParent := "second-parent"
 		require.NoError(t, second.WriteMetadata("feature", fresh.WithParentBranchName(&secondParent)))
 
-		latest, err := second.ReadMetadata("feature")
+		latest, err := second.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "second-parent", *latest.GetParentBranchName())
 	})
@@ -165,7 +166,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		main := "main"
 		require.NoError(t, runner.WriteMetadata("brand-new", git.NewMeta().WithParentBranchName(&main)))
 
-		stored, err := runner.ReadMetadata("brand-new")
+		stored, err := runner.ReadMetadata(context.Background(), "brand-new").One()
 		require.NoError(t, err)
 		require.Equal(t, "main", *stored.GetParentBranchName())
 	})

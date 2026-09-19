@@ -45,6 +45,11 @@ func (r ReadResults[T]) Split() (map[string]T, map[string]error) {
 	return r.Values, r.Errors
 }
 
+// ValuesAndErrors returns values alongside a deterministic error summary.
+func (r ReadResults[T]) ValuesAndErrors() (map[string]T, []error) {
+	return r.Values, r.Errs()
+}
+
 // Errs returns failures in input-name order for callers reporting a summary.
 func (r ReadResults[T]) Errs() []error {
 	names := make([]string, 0, len(r.Errors))

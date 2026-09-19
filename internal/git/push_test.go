@@ -12,7 +12,7 @@ import (
 	"github.com/getstackit/stackit/testhelpers"
 )
 
-func TestPushBranchWithExplicitForceWithLease(t *testing.T) {
+func TestPushBranchesWithExplicitForceWithLease(t *testing.T) {
 	t.Parallel()
 
 	remoteScene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
@@ -46,13 +46,14 @@ func TestPushBranchWithExplicitForceWithLease(t *testing.T) {
 	require.NoError(t, localRepo.RunGitCommand("add", "local.txt"))
 	require.NoError(t, localRepo.RunGitCommand("commit", "-m", "local rewrite"))
 
-	err = runner.PushBranch(context.Background(), "feature", "origin", git.PushOptions{ForceWithLease: true})
+	err = runner.PushBranches(t.Context(), "origin", []git.PushSpec{
+		{BranchName: "feature", LeaseMode: git.PushLeaseTracking},
+	}, git.PushOptions{}).One()
 	require.Error(t, err)
 
-	err = runner.PushBranch(context.Background(), "feature", "origin", git.PushOptions{
-		ForceWithLease:            true,
-		ForceWithLeaseExpectedSHA: observedRemoteSHA,
-	})
+	err = runner.PushBranches(t.Context(), "origin", []git.PushSpec{
+		{BranchName: "feature", ExpectedRemoteSHA: observedRemoteSHA},
+	}, git.PushOptions{}).One()
 	require.NoError(t, err)
 
 	localSHA, err := localRepo.RunGitCommandAndGetOutput("rev-parse", "feature")
@@ -75,7 +76,10 @@ func TestPushBranchesCreatesMultipleBranchesInOnePush(t *testing.T) {
 	require.NoError(t, scene.Repo.CreateAndCheckoutBranch("f2"))
 	require.NoError(t, scene.Repo.CreateChangeAndCommit("f2 v1", "f2"))
 
-	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	logger := &traceCaptureLogger{}
+	runner := git.NewRunnerWithPath(scene.Dir, logger)
+	require.Empty(t, runner.PushBranches(t.Context(), "origin", nil, git.PushOptions{}))
+	require.Zero(t, logger.calls)
 	// Empty ExpectedRemoteSHA means "expect absent" — the create case.
 	results := runner.PushBranches(context.Background(), "origin", []git.PushSpec{
 		{BranchName: "f1"},
@@ -84,6 +88,7 @@ func TestPushBranchesCreatesMultipleBranchesInOnePush(t *testing.T) {
 
 	require.NoError(t, results["f1"])
 	require.NoError(t, results["f2"])
+	require.Equal(t, 1, logger.calls)
 
 	remote, err := runner.FetchRemoteShas(context.Background(), "origin")
 	require.NoError(t, err)
@@ -140,4 +145,55 @@ func TestPushBranchesPartialSuccessOnStaleLease(t *testing.T) {
 	f2SHA, err := scene.Repo.RunGitCommandAndGetOutput("rev-parse", "f2")
 	require.NoError(t, err)
 	require.Equal(t, f2SHA, after["f2"])
+}
+
+func TestPushBranchesLeaseModes(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		opts    git.PushOptions
+		mode    git.PushLeaseMode
+		wantErr bool
+	}{
+		{name: "normal push", mode: git.PushLeaseNone, wantErr: true},
+		{name: "tracking lease", mode: git.PushLeaseTracking},
+		{name: "force overrides absent-ref lease", mode: git.PushLeaseExplicit, opts: git.PushOptions{Force: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+			_, err := scene.Repo.CreateBareRemote("origin")
+			require.NoError(t, err)
+			require.NoError(t, scene.Repo.CreateAndCheckoutBranch("feature"))
+			require.NoError(t, scene.Repo.CreateChangeAndCommit("old", "old"))
+			require.NoError(t, scene.Repo.PushBranch("origin", "feature"))
+			require.NoError(t, scene.Repo.RunGitCommand("reset", "--hard", "main"))
+			require.NoError(t, scene.Repo.CreateChangeAndCommit("rewrite", "rewrite"))
+			require.NoError(t, scene.Repo.RunGitCommand("branch", "new-branch"))
+
+			logger := &traceCaptureLogger{}
+			runner := git.NewRunnerWithPath(scene.Dir, logger)
+			results := runner.PushBranches(t.Context(), "origin", []git.PushSpec{
+				{BranchName: "feature", LeaseMode: tc.mode},
+				{BranchName: "new-branch"}, // Explicit absent-ref lease in the same push.
+			}, tc.opts)
+			require.Equal(t, 1, logger.calls)
+			require.NoError(t, results["new-branch"])
+			if tc.wantErr {
+				require.Error(t, results["feature"])
+			} else {
+				require.NoError(t, results["feature"])
+			}
+			remote, err := runner.FetchRemoteShas(t.Context(), "origin")
+			require.NoError(t, err)
+			local, err := runner.ReadRevisions(t.Context(), "feature").One()
+			require.NoError(t, err)
+			require.Equal(t, local, remote["new-branch"])
+			if tc.wantErr {
+				require.NotEqual(t, local, remote["feature"])
+			} else {
+				require.Equal(t, local, remote["feature"])
+			}
+		})
+	}
 }

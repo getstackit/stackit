@@ -118,7 +118,7 @@ func (e *engineImpl) TakeSnapshot(opts SnapshotOptions) error {
 	currentBranch := e.currentBranch
 
 	// Get all branch SHAs in one git rev-parse call; misses (deleted branches) are omitted.
-	branchSHAs, _ := e.git.BatchGetRevisions(e.state.branches)
+	branchSHAs, _ := e.git.ReadRevisions(context.Background(), e.state.branches...).ValuesAndErrors()
 	if branchSHAs == nil {
 		branchSHAs = make(map[string]string)
 	}
@@ -397,7 +397,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 
 	// Atomic restore of all refs
 	reflogMessage := fmt.Sprintf("stackit undo: restored to before '%s'", snapshot.Command)
-	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogMessage); err != nil {
+	if err := e.git.UpdateRefs(ctx, updates, reflogMessage); err != nil {
 		return fmt.Errorf("failed to restore snapshot atomically: %w", err)
 	}
 
@@ -411,7 +411,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 			}
 		}
 		if len(toDelete) > 0 {
-			_ = e.git.DeleteRefsBatch(ctx, toDelete)
+			_ = e.git.DeleteRefs(ctx, toDelete...)
 		}
 	}
 

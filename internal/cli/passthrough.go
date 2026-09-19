@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -184,7 +185,7 @@ func HandlePassthroughWithResult(args []string, exit bool, out, errWriter io.Wri
 // readRefMetadata reads the blob at refName and unmarshals it into dest,
 // returning false if the ref, blob, or JSON is missing or invalid.
 func readRefMetadata(runner git.Runner, refName string, dest any) bool {
-	sha, err := runner.GetRef(refName)
+	sha, err := runner.ReadRevisions(context.Background(), refName).One()
 	if err != nil {
 		return false
 	}

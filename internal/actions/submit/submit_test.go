@@ -27,7 +27,6 @@ type countingRunner struct {
 	git.Runner
 	fetchRemoteShas atomic.Int64
 	pushBranches    atomic.Int64
-	pushBranch      atomic.Int64
 }
 
 func (c *countingRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
@@ -35,14 +34,9 @@ func (c *countingRunner) FetchRemoteShas(ctx context.Context, remote string) (ma
 	return c.Runner.FetchRemoteShas(ctx, remote)
 }
 
-func (c *countingRunner) PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) map[string]error {
+func (c *countingRunner) PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) git.PushResults {
 	c.pushBranches.Add(1)
 	return c.Runner.PushBranches(ctx, remote, specs, opts)
-}
-
-func (c *countingRunner) PushBranch(ctx context.Context, branchName, remote string, opts git.PushOptions) error {
-	c.pushBranch.Add(1)
-	return c.Runner.PushBranch(ctx, branchName, remote, opts)
 }
 
 // noopHandler is a test handler that ignores all events
@@ -104,7 +98,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.Equal(t, "feature", *config.CreatedPRs[0].Head.Ref, "PR should be for feature branch")
 
 		// Verify that metadata was updated with LastModifiedBy after submit
-		meta, err := s.Engine.Git().ReadMetadata("feature")
+		meta, err := s.Engine.Git().ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err, "Should be able to read metadata ref after submit")
 		require.NotNil(t, meta.GetLastModifiedBy(), "LastModifiedBy should be set after submit")
 		require.NotEmpty(t, meta.GetLastModifiedBy().GitName, "LastModifiedBy.GitName should not be empty")
@@ -214,7 +208,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Verify that metadata was updated for all submitted branches
 		for _, branchName := range []string{"P", "C1", "C2"} {
-			meta, err := s.Engine.Git().ReadMetadata(branchName)
+			meta, err := s.Engine.Git().ReadMetadata(context.Background(), branchName).One()
 			require.NoError(t, err, "Should be able to read metadata for %s", branchName)
 			require.NotNil(t, meta.GetLastModifiedBy(), "LastModifiedBy should be set for %s", branchName)
 		}
@@ -604,7 +598,6 @@ func TestSubmitDryRunCreateOnlySkipsRemoteStatusRead(t *testing.T) {
 	require.Equal(t, int64(0), counting.fetchRemoteShas.Load(),
 		"create-only dry runs must not read remote status")
 	require.Equal(t, int64(0), counting.pushBranches.Load(), "dry runs must not push")
-	require.Equal(t, int64(0), counting.pushBranch.Load(), "dry runs must not push")
 }
 
 func TestSubmitPushesStackInSingleBatch(t *testing.T) {
@@ -654,8 +647,6 @@ func TestSubmitPushesStackInSingleBatch(t *testing.T) {
 
 	require.Equal(t, int64(1), counting.pushBranches.Load(),
 		"submit must push the whole stack in a single batched push")
-	require.Equal(t, int64(0), counting.pushBranch.Load(),
-		"submit must not fall back to per-branch pushes")
 
 	// Every branch landed on the remote.
 	for _, branch := range []string{"P", "C1", "C2"} {
@@ -708,14 +699,12 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 	// Second submit: nothing changed, so it should be a no-op.
 	counting.fetchRemoteShas.Store(0)
 	counting.pushBranches.Store(0)
-	counting.pushBranch.Store(0)
 	createdBefore := len(config.CreatedPRs)
 
 	require.NoError(t, submit.Action(ctx, firstOpts, &noopHandler{}))
 
 	require.Equal(t, createdBefore, len(config.CreatedPRs), "no-op submit must not create PRs")
 	require.Equal(t, int64(0), counting.pushBranches.Load(), "no-op submit must not push")
-	require.Equal(t, int64(0), counting.pushBranch.Load(), "no-op submit must not push")
 	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
 		"no-op submit must read the remote ref list exactly once")
 }
@@ -757,7 +746,7 @@ func TestSubmitPreservesLockStatus(t *testing.T) {
 	branch = s.Engine.GetBranch("feature")
 	require.True(t, branch.IsLocked(), "Branch should still be locked after submission")
 
-	meta, err := s.Engine.Git().ReadMetadata("feature")
+	meta, err := s.Engine.Git().ReadMetadata(context.Background(), "feature").One()
 	require.NoError(t, err)
 	require.Equal(t, git.LockReasonUser, meta.GetLockReason(), "Metadata LockReason field should be set")
 }

@@ -37,7 +37,7 @@ func TestSetLocked_SingleBranch(t *testing.T) {
 
 	// Verify the change persisted
 	impl := s.Engine.(interface{ Git() git.Runner })
-	readMeta, err := impl.Git().ReadMetadata("feature-1")
+	readMeta, err := impl.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Equal(t, git.LockReasonUser, readMeta.GetLockReason())
 
@@ -74,11 +74,11 @@ func TestSetLocked_UsesTransaction(t *testing.T) {
 
 	// Verify persistence
 	impl := s.Engine.(interface{ Git() git.Runner })
-	meta1, err := impl.Git().ReadMetadata("feature-1")
+	meta1, err := impl.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Equal(t, git.LockReasonUser, meta1.GetLockReason())
 
-	meta2, err := impl.Git().ReadMetadata("feature-2")
+	meta2, err := impl.Git().ReadMetadata(context.Background(), "feature-2").One()
 	require.NoError(t, err)
 	assert.Equal(t, git.LockReasonUser, meta2.GetLockReason())
 }
@@ -112,11 +112,11 @@ func TestSetFrozen_UsesTransaction(t *testing.T) {
 
 	// Verify persistence
 	impl := s.Engine.(interface{ Git() git.Runner })
-	localMeta1, err := impl.Git().ReadLocalMetadata("feature-1")
+	localMeta1, err := impl.Git().ReadLocalMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.True(t, localMeta1.Frozen)
 
-	localMeta2, err := impl.Git().ReadLocalMetadata("feature-2")
+	localMeta2, err := impl.Git().ReadLocalMetadata(context.Background(), "feature-2").One()
 	require.NoError(t, err)
 	assert.True(t, localMeta2.Frozen)
 }
@@ -161,7 +161,7 @@ func TestSetLocked_UnlockBranches(t *testing.T) {
 
 	// Verify locked
 	impl := s.Engine.(interface{ Git() git.Runner })
-	meta, err := impl.Git().ReadMetadata("feature-1")
+	meta, err := impl.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Equal(t, git.LockReasonUser, meta.GetLockReason())
 
@@ -170,7 +170,7 @@ func TestSetLocked_UnlockBranches(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify unlocked
-	meta, err = impl.Git().ReadMetadata("feature-1")
+	meta, err = impl.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Equal(t, git.LockReasonNone, meta.GetLockReason())
 }
@@ -193,7 +193,7 @@ func TestSetFrozen_UnfreezeBranches(t *testing.T) {
 
 	// Verify frozen
 	impl := s.Engine.(interface{ Git() git.Runner })
-	localMeta, err := impl.Git().ReadLocalMetadata("feature-1")
+	localMeta, err := impl.Git().ReadLocalMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.True(t, localMeta.Frozen)
 
@@ -202,7 +202,7 @@ func TestSetFrozen_UnfreezeBranches(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify unfrozen
-	localMeta, err = impl.Git().ReadLocalMetadata("feature-1")
+	localMeta, err = impl.Git().ReadLocalMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.False(t, localMeta.Frozen)
 }
@@ -319,7 +319,7 @@ func TestTransaction_RollbackOnCommitFailure(t *testing.T) {
 	})
 
 	// Get original metadata state
-	originalMeta, err := eng.Git().ReadMetadata("feature-1")
+	originalMeta, err := eng.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 
 	// Begin transaction and stage an update
@@ -334,7 +334,7 @@ func TestTransaction_RollbackOnCommitFailure(t *testing.T) {
 	tx.Rollback()
 
 	// Verify original metadata is unchanged (rollback is a no-op for uncommitted transactions)
-	currentMeta, err := eng.Git().ReadMetadata("feature-1")
+	currentMeta, err := eng.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Equal(t, originalMeta.GetLockReason(), currentMeta.GetLockReason())
 }
@@ -682,7 +682,7 @@ func TestSetLocked_LargeBatch(t *testing.T) {
 	// Verify all are locked
 	impl := s.Engine.(interface{ Git() git.Runner })
 	for _, name := range branchNames {
-		meta, err := impl.Git().ReadMetadata(name)
+		meta, err := impl.Git().ReadMetadata(context.Background(), name).One()
 		require.NoError(t, err)
 		assert.Equal(t, git.LockReasonUser, meta.GetLockReason(), "branch %s should be locked", name)
 	}
@@ -721,11 +721,11 @@ func TestTransaction_MixedMetaAndLocalMeta(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify both updates persisted
-	readMeta1, err := eng.Git().ReadMetadata("feature-1")
+	readMeta1, err := eng.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Equal(t, git.LockReasonUser, readMeta1.GetLockReason())
 
-	readLocalMeta2, err := eng.Git().ReadLocalMetadata("feature-2")
+	readLocalMeta2, err := eng.Git().ReadLocalMetadata(context.Background(), "feature-2").One()
 	require.NoError(t, err)
 	assert.True(t, readLocalMeta2.Frozen)
 }
@@ -744,7 +744,7 @@ func TestTransaction_DeleteMeta(t *testing.T) {
 	})
 
 	// Verify metadata exists
-	meta, err := eng.Git().ReadMetadata("feature-1")
+	meta, err := eng.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.NotNil(t, meta.GetParentBranchName())
 
@@ -754,7 +754,7 @@ func TestTransaction_DeleteMeta(t *testing.T) {
 	require.NoError(t, tx.Commit(context.Background()))
 
 	// Verify metadata is gone (ReadMetadata returns empty Meta for missing refs)
-	meta, err = eng.Git().ReadMetadata("feature-1")
+	meta, err = eng.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Nil(t, meta.GetParentBranchName()) // Empty meta has nil parent
 }
@@ -777,7 +777,7 @@ func TestTransaction_DeleteLocalMeta(t *testing.T) {
 	require.NoError(t, eng.Git().WriteLocalMetadata("feature-1", localMeta))
 
 	// Verify it exists
-	readMeta, err := eng.Git().ReadLocalMetadata("feature-1")
+	readMeta, err := eng.Git().ReadLocalMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.True(t, readMeta.Frozen)
 
@@ -787,7 +787,7 @@ func TestTransaction_DeleteLocalMeta(t *testing.T) {
 	require.NoError(t, tx.Commit(context.Background()))
 
 	// Verify local metadata is gone
-	readMeta, err = eng.Git().ReadLocalMetadata("feature-1")
+	readMeta, err = eng.Git().ReadLocalMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.False(t, readMeta.Frozen) // Empty LocalMeta has Frozen=false
 }
@@ -830,7 +830,7 @@ func TestTransaction_UpdateAfterDelete(t *testing.T) {
 	require.NoError(t, tx.Commit(context.Background()))
 
 	// Verify update won (not deleted)
-	meta, err := eng.Git().ReadMetadata("feature-1")
+	meta, err := eng.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Equal(t, git.LockReasonUser, meta.GetLockReason())
 }
@@ -856,7 +856,7 @@ func TestTransaction_DeleteAfterUpdate(t *testing.T) {
 	require.NoError(t, tx.Commit(context.Background()))
 
 	// Verify delete won (metadata gone)
-	meta, err := eng.Git().ReadMetadata("feature-1")
+	meta, err := eng.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Nil(t, meta.GetParentBranchName()) // Empty meta
 }
@@ -889,15 +889,15 @@ func TestTransaction_MixedUpdatesAndDeletes(t *testing.T) {
 	require.NoError(t, tx.Commit(context.Background()))
 
 	// Verify results
-	meta1, err := eng.Git().ReadMetadata("feature-1")
+	meta1, err := eng.Git().ReadMetadata(context.Background(), "feature-1").One()
 	require.NoError(t, err)
 	assert.Equal(t, git.LockReasonUser, meta1.GetLockReason())
 
-	meta2, err := eng.Git().ReadMetadata("feature-2")
+	meta2, err := eng.Git().ReadMetadata(context.Background(), "feature-2").One()
 	require.NoError(t, err)
 	assert.Nil(t, meta2.GetParentBranchName()) // Deleted
 
-	meta3, err := eng.Git().ReadMetadata("feature-3")
+	meta3, err := eng.Git().ReadMetadata(context.Background(), "feature-3").One()
 	require.NoError(t, err)
 	require.NotNil(t, meta3.GetScope())
 	assert.Equal(t, "test-scope", *meta3.GetScope())

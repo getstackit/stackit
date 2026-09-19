@@ -203,7 +203,7 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 		for i, branch := range metaBranches {
 			metas[i] = tx.metaUpdates[branch]
 		}
-		shas, err := tx.eng.git.WriteMetadataBlobsBatch(ctx, metas)
+		shas, err := tx.eng.git.WriteMetadataBlobs(ctx, metas)
 		if err != nil {
 			return fmt.Errorf("write meta blobs: %w", err)
 		}
@@ -228,7 +228,7 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 		for i, branch := range localBranches {
 			metas[i] = tx.localUpdates[branch]
 		}
-		shas, err := tx.eng.git.WriteLocalMetadataBlobsBatch(ctx, metas)
+		shas, err := tx.eng.git.WriteLocalMetadataBlobs(ctx, metas)
 		if err != nil {
 			return fmt.Errorf("write local meta blobs: %w", err)
 		}
@@ -280,7 +280,7 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	}
 
 	// Atomic batch update with reflog message
-	if err := tx.eng.git.UpdateRefsBatchWithLog(ctx, refUpdates, tx.message); err != nil {
+	if err := tx.eng.git.UpdateRefs(ctx, refUpdates, tx.message); err != nil {
 		return fmt.Errorf("atomic commit failed: %w", err)
 	}
 

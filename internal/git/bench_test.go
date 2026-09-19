@@ -102,7 +102,7 @@ func BenchmarkGetRecentCommits(b *testing.B) {
 func BenchmarkGetRevision(b *testing.B) {
 	br := newBenchRepo(b, 5, 1)
 	for b.Loop() {
-		if _, err := br.runner.GetRevision("branch-0"); err != nil {
+		if _, err := br.runner.ReadRevisions(context.Background(), "branch-0").One(); err != nil {
 			b.Fatalf("GetRevision: %v", err)
 		}
 	}
@@ -139,10 +139,10 @@ func BenchmarkCommitRangeMetadata(b *testing.B) {
 	}
 }
 
-// BenchmarkBatchGetRevisions measures bulk revision resolution, batching all
+// BenchmarkReadRevisions measures bulk revision resolution, batching all
 // branches into a single `git rev-parse` invocation rather than N parallel
 // subprocesses.
-func BenchmarkBatchGetRevisions(b *testing.B) {
+func BenchmarkReadRevisions(b *testing.B) {
 	const branches = 20
 	br := newBenchRepo(b, 5, branches)
 	names := make([]string, branches)
@@ -150,15 +150,15 @@ func BenchmarkBatchGetRevisions(b *testing.B) {
 		names[i] = fmt.Sprintf("branch-%d", i)
 	}
 	for b.Loop() {
-		if _, errs := br.runner.BatchGetRevisions(names); len(errs) > 0 {
-			b.Fatalf("BatchGetRevisions: %v", errs[0])
+		if _, errs := br.runner.ReadRevisions(context.Background(), names...).ValuesAndErrors(); len(errs) > 0 {
+			b.Fatalf("ReadRevisions: %v", errs[0])
 		}
 	}
 }
 
-// BenchmarkBatchGetRevisionsMissing compares the previous individual fallback
+// BenchmarkReadRevisionsMissing compares the previous individual fallback
 // with the batched fallback for a mix of valid and unpublished branch refs.
-func BenchmarkBatchGetRevisionsMissing(b *testing.B) {
+func BenchmarkReadRevisionsMissing(b *testing.B) {
 	for _, batch := range []bool{false, true} {
 		b.Run(fmt.Sprintf("batch=%t", batch), func(b *testing.B) {
 			br := newBenchRepo(b, 1, 0)
@@ -169,7 +169,7 @@ func BenchmarkBatchGetRevisionsMissing(b *testing.B) {
 			}
 			for b.Loop() {
 				if batch {
-					got, errs := br.runner.BatchGetRevisions(names)
+					got, errs := br.runner.ReadRevisions(context.Background(), names...).ValuesAndErrors()
 					if len(got) != 1 || len(errs) != 30 {
 						b.Fatalf("unexpected results: %v, %v", got, errs)
 					}
@@ -179,7 +179,7 @@ func BenchmarkBatchGetRevisionsMissing(b *testing.B) {
 					b.Fatal("expected missing refs")
 				}
 				for i, name := range names {
-					_, err := br.runner.GetRevision(name)
+					_, err := br.runner.ReadRevisions(context.Background(), name).One()
 					if (err != nil) != (i > 0) {
 						b.Fatalf("unexpected error for %s: %v", name, err)
 					}
@@ -305,7 +305,7 @@ func BenchmarkCreateBlob(b *testing.B) {
 			}
 			s := string(content)
 			for b.Loop() {
-				if _, err := br.runner.CreateBlob(s); err != nil {
+				if _, err := git.One(br.runner.CreateBlobs(context.Background(), s)); err != nil {
 					b.Fatalf("CreateBlob: %v", err)
 				}
 			}
@@ -324,7 +324,7 @@ func BenchmarkCreateBlobs_Sequential(b *testing.B) {
 			for b.Loop() {
 				for j := range n {
 					content := fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
-					if _, err := br.runner.CreateBlob(content); err != nil {
+					if _, err := git.One(br.runner.CreateBlobs(context.Background(), content)); err != nil {
 						b.Fatalf("CreateBlob: %v", err)
 					}
 				}
@@ -334,10 +334,10 @@ func BenchmarkCreateBlobs_Sequential(b *testing.B) {
 	}
 }
 
-// BenchmarkCreateBlobsBatch exercises the optimized batched path used by
+// BenchmarkCreateBlobs exercises the optimized batched path used by
 // MarkBranchesForPRBodyUpdate and transaction commits — temp-file staging
 // plus a single `git hash-object -w --stdin-paths` invocation.
-func BenchmarkCreateBlobsBatch(b *testing.B) {
+func BenchmarkCreateBlobs(b *testing.B) {
 	for _, n := range []int{1, 10, 50} {
 		b.Run(fmt.Sprintf("blobs=%d", n), func(b *testing.B) {
 			br := newBenchRepo(b, 1, 0)
@@ -347,8 +347,8 @@ func BenchmarkCreateBlobsBatch(b *testing.B) {
 				for j := range n {
 					contents[j] = fmt.Sprintf("blob-iter-%d-idx-%d", iter, j)
 				}
-				if _, err := br.runner.CreateBlobsBatch(context.Background(), contents); err != nil {
-					b.Fatalf("CreateBlobsBatch: %v", err)
+				if _, err := br.runner.CreateBlobs(context.Background(), contents...); err != nil {
+					b.Fatalf("CreateBlobs: %v", err)
 				}
 				iter++
 			}
@@ -359,7 +359,7 @@ func BenchmarkCreateBlobsBatch(b *testing.B) {
 // BenchmarkReadBlob measures blob reads. Phase 6 swaps in `git cat-file blob`.
 func BenchmarkReadBlob(b *testing.B) {
 	br := newBenchRepo(b, 1, 0)
-	sha, err := br.runner.CreateBlob("read-bench-content")
+	sha, err := git.One(br.runner.CreateBlobs(context.Background(), "read-bench-content"))
 	if err != nil {
 		b.Fatalf("CreateBlob: %v", err)
 	}
@@ -387,7 +387,7 @@ func BenchmarkParallelGetRevision(b *testing.B) {
 		for pb.Next() {
 			name := names[i%branches]
 			i++
-			if _, err := br.runner.GetRevision(name); err != nil {
+			if _, err := br.runner.ReadRevisions(context.Background(), name).One(); err != nil {
 				b.Fatalf("GetRevision: %v", err)
 			}
 		}

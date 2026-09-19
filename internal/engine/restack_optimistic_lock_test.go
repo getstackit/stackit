@@ -59,18 +59,22 @@ type flakyRevisionRunner struct {
 	failFor string
 }
 
-func (r *flakyRevisionRunner) GetRevision(branchName string) (string, error) {
-	if branchName == r.failFor {
-		return "", errors.New("injected: transient revision read failure")
+func (r *flakyRevisionRunner) ReadRevisions(ctx context.Context, names ...string) git.ReadResults[string] {
+	result := r.Runner.ReadRevisions(ctx, names...)
+	for _, name := range names {
+		if name == r.failFor {
+			delete(result.Values, name)
+			result.Errors[name] = errors.New("injected: transient revision read failure")
+		}
 	}
-	return r.Runner.GetRevision(branchName)
+	return result
 }
 
 // TestRestackBranchPropagatesRevisionReadFailure regression-tests #1487
 // ("don't silently bypass optimistic locking on restack"). Before the fix,
 // restackBranch discarded the error from branch.GetRevision() when capturing
 // the branch's current SHA for the optimistic-locking ref update, so
-// oldBranchSHA silently became "" -- and UpdateRefsBatch treats an empty
+// oldBranchSHA silently became "" -- and UpdateRefs treats an empty
 // OldSHA as "skip verification" rather than "expect empty ref", disabling
 // the concurrent-modification check entirely. Post-fix, the error must
 // surface as RestackConflict and the metadata ref must stay untouched.
@@ -90,9 +94,9 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
 	metaRef := git.MetadataRefPrefix + "feature"
-	realMetadataSHA, err := realGit.GetRef(metaRef)
+	realMetadataSHA, err := realGit.ReadRevisions(context.Background(), metaRef).One()
 	require.NoError(t, err)
-	realBranchSHA, err := realGit.GetRevision("feature")
+	realBranchSHA, err := realGit.ReadRevisions(context.Background(), "feature").One()
 	require.NoError(t, err)
 
 	flakyGit := &flakyRevisionRunner{Runner: realGit, failFor: "feature"}
@@ -106,7 +110,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	require.Error(t, err, "a failed branch-revision read must fail the restack, not silently bypass the optimistic lock")
 	require.Equal(t, RestackConflict, result.Result)
 
-	afterMetadataSHA, getErr := realGit.GetRef(metaRef)
+	afterMetadataSHA, getErr := realGit.ReadRevisions(context.Background(), metaRef).One()
 	require.NoError(t, getErr)
 	require.Equal(t, realMetadataSHA, afterMetadataSHA, "metadata ref must be untouched when the branch revision can't be verified")
 
@@ -115,7 +119,7 @@ func TestRestackBranchPropagatesRevisionReadFailure(t *testing.T) {
 	// branch ref unconditionally). What optimistic locking protects here is
 	// the metadata ref, not whether the rebase itself ran -- so the branch
 	// tip having moved on is expected, not a sign the lock was bypassed.
-	afterBranchSHA, getErr := realGit.GetRevision("feature")
+	afterBranchSHA, getErr := realGit.ReadRevisions(context.Background(), "feature").One()
 	require.NoError(t, getErr)
 	require.NotEqual(t, realBranchSHA, afterBranchSHA, "sanity check: the rebase itself should have run")
 }
@@ -138,11 +142,11 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	require.NoError(t, trackingImpl.TrackBranch(ctx, "feature", "main"))
 
 	metaRef := git.MetadataRefPrefix + "feature"
-	realMetadataSHA, err := realGit.GetRef(metaRef)
+	realMetadataSHA, err := realGit.ReadRevisions(context.Background(), metaRef).One()
 	require.NoError(t, err)
-	featureSHA, err := realGit.GetRevision("feature")
+	featureSHA, err := realGit.ReadRevisions(context.Background(), "feature").One()
 	require.NoError(t, err)
-	mainSHA, err := realGit.GetRevision("main")
+	mainSHA, err := realGit.ReadRevisions(context.Background(), "main").One()
 	require.NoError(t, err)
 
 	flakyGit := &flakyRevisionRunner{Runner: realGit, failFor: "feature"}
@@ -157,11 +161,11 @@ func TestApplyBranchAndMetadataPropagatesRevisionReadFailure(t *testing.T) {
 	require.Error(t, err, "a failed branch-revision read must fail the update, not silently bypass the optimistic lock")
 	require.Equal(t, RestackConflict, result.Result)
 
-	afterMetadataSHA, getErr := realGit.GetRef(metaRef)
+	afterMetadataSHA, getErr := realGit.ReadRevisions(context.Background(), metaRef).One()
 	require.NoError(t, getErr)
 	require.Equal(t, realMetadataSHA, afterMetadataSHA, "metadata ref must be untouched when the branch revision can't be verified")
 
-	afterBranchSHA, getErr := realGit.GetRevision("feature")
+	afterBranchSHA, getErr := realGit.ReadRevisions(context.Background(), "feature").One()
 	require.NoError(t, getErr)
 	require.Equal(t, featureSHA, afterBranchSHA, "branch ref must be untouched: applyBranchAndMetadata never rebases, it only applies the given SHAs")
 }

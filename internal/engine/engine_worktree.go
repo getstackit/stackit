@@ -117,7 +117,7 @@ func (e *engineImpl) PruneOrphanedWorktreePathRefs(ctx context.Context) (int, er
 	if len(orphaned) == 0 {
 		return 0, nil
 	}
-	if err := e.git.DeleteRefsBatch(ctx, orphaned); err != nil {
+	if err := e.git.DeleteRefs(ctx, orphaned...); err != nil {
 		return 0, fmt.Errorf("delete orphaned worktree path registrations: %w", err)
 	}
 	return len(orphaned), nil

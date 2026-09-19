@@ -104,7 +104,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	}
 
 	// Get new tip
-	newTip, err := e.git.GetCurrentRevision(ctx)
+	newTip, err := e.git.ReadRevisions(ctx, "HEAD").One()
 	if err != nil {
 		return fmt.Errorf("failed to get new tip: %w", err)
 	}
@@ -189,7 +189,7 @@ func (e *engineImpl) FindTargetCommitForHunk(hunk git.Hunk, commitSHAs []string)
 	// Iterate through commits from newest to oldest
 	for i, commitSHA := range commitSHAs {
 		// Get parent commit SHA
-		parentSHA, err := e.git.GetParentCommitSHA(commitSHA)
+		parentSHA, err := e.git.ReadRevisions(context.Background(), commitSHA+"^").One()
 		if err != nil {
 			// If we can't get parent, skip this commit
 			continue

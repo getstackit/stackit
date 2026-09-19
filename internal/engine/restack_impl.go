@@ -102,7 +102,7 @@ type restackSnapshot struct {
 	// revs is a read-through cache, not a source of truth. Read it via
 	// engineImpl.branchRev rather than indexing it: a miss yields "", and an
 	// empty SHA passed as a RefUpdate's OldSHA silently disables the
-	// compare-and-swap in UpdateRefsBatch, turning a lost-update guard into a
+	// compare-and-swap in UpdateRefs, turning a lost-update guard into a
 	// blind overwrite. Never use a cached revision as a RefUpdate's *NewSHA* —
 	// staleness there is not caught by the compare-and-swap and writes a wrong
 	// value rather than failing.
@@ -259,7 +259,7 @@ func (e *engineImpl) branchHeldBack(branch Branch, snap *restackSnapshot) string
 // live read when it isn't cached.
 //
 // This exists so the fallback can't be forgotten. Indexing snap.revs directly
-// yields "" for an absent branch, and an empty OldSHA makes UpdateRefsBatch skip
+// yields "" for an absent branch, and an empty OldSHA makes UpdateRefs skip
 // its compare-and-swap entirely — the lost-update hole #1487 closed. Routing
 // every cached revision read through here keeps that a single decision rather
 // than one repeated at each call site.
@@ -325,7 +325,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to marshal metadata for anchor %s: %w", branchName, err)
 	}
-	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to prepare metadata blob for anchor %s: %w", branchName, err)
 	}
@@ -335,7 +335,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: trunkRev, OldSHA: anchorRev},
 		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
-	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestackAnchor); err != nil {
+	if err := e.git.UpdateRefs(ctx, updates, reflogRestackAnchor); err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to update refs atomically for anchor %s: %w", branchName, err)
 	}
 
@@ -438,7 +438,7 @@ func (e *engineImpl) restackBranch(
 
 	if e.IsFrozen(branch) {
 		// For frozen branches, we update via hard reset to remote instead of rebase
-		remoteSha, err := e.git.GetRemoteRevision(branchName)
+		remoteSha, err := e.git.ReadRevisions(ctx, e.git.GetRemote()+"/"+branchName).One()
 		if err != nil {
 			// If remote branch is not found, just skip restack
 			return RestackBranchResult{Result: RestackUnneeded, Frozen: true}, nil //nolint:nilerr
@@ -474,7 +474,7 @@ func (e *engineImpl) restackBranch(
 			if err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to marshal metadata for frozen branch %s: %w", branchName, err)
 			}
-			metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+			metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 			if err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to prepare metadata blob for frozen branch %s: %w", branchName, err)
 			}
@@ -484,7 +484,7 @@ func (e *engineImpl) restackBranch(
 				{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: remoteSha, OldSHA: localSha},
 				{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 			}
-			if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestackFrozen); err != nil {
+			if err := e.git.UpdateRefs(ctx, updates, reflogRestackFrozen); err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for frozen branch %s: %w", branchName, err)
 			}
 
@@ -545,9 +545,9 @@ func (e *engineImpl) restackBranch(
 		_ = e.appendMergedDownstack(branchName, oldParent, snap.meta)
 
 		// SetParent + appendMergedDownstack bumped the metadata ref. Refresh
-		// the cached SHA so the later optimistic-locking UpdateRefsBatch
+		// the cached SHA so the later optimistic-locking UpdateRefs
 		// doesn't fail with "is at X but expected Y".
-		if sha, refErr := e.git.GetRef(git.MetadataRefPrefix + branchName); refErr == nil {
+		if sha, refErr := e.git.ReadRevisions(ctx, git.MetadataRefPrefix+branchName).One(); refErr == nil {
 			snap.metaRefSHAs[branchName] = sha
 		}
 	}
@@ -655,7 +655,7 @@ func (e *engineImpl) restackBranch(
 	}
 
 	// Get the new rebased SHA
-	newRev, err := e.git.GetCurrentRevision(ctx)
+	newRev, err := e.git.ReadRevisions(ctx, "HEAD").One()
 	if err != nil {
 		return RestackBranchResult{
 			Result:            RestackConflict,
@@ -702,7 +702,7 @@ func (e *engineImpl) restackBranch(
 		e.resetWorktreeIfClean(ctx, worktreePath, snap)
 	}
 
-	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 	if err != nil {
 		return RestackBranchResult{
 			Result:            RestackConflict,
@@ -718,7 +718,7 @@ func (e *engineImpl) restackBranch(
 		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
 		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
-	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestack); err != nil {
+	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
 		return RestackBranchResult{
 			Result:            RestackConflict,
 			RebasedBranchBase: parentRev,
@@ -885,7 +885,7 @@ func (e *engineImpl) applyMetadataRefresh(
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to prepare metadata blob: %w", err)
 	}
@@ -893,7 +893,7 @@ func (e *engineImpl) applyMetadataRefresh(
 	updates := []git.RefUpdate{
 		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
-	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestack); err != nil {
+	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update metadata ref: %w", err)
 	}
 
@@ -952,7 +952,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	metadataSHA, err := e.git.CreateBlob(string(metadataJSON))
+	metadataSHA, err := git.One(e.git.CreateBlobs(ctx, string(metadataJSON)))
 	if err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to prepare metadata blob: %w", err)
 	}
@@ -961,7 +961,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 		{RefName: fmt.Sprintf("refs/heads/%s", branchName), NewSHA: newRev, OldSHA: oldBranchSHA},
 		{RefName: fmt.Sprintf("%s%s", git.MetadataRefPrefix, branchName), NewSHA: metadataSHA, OldSHA: oldMetadataSHA},
 	}
-	if err := e.git.UpdateRefsBatchWithLog(ctx, updates, reflogRestack); err != nil {
+	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update refs atomically: %w", err)
 	}
 

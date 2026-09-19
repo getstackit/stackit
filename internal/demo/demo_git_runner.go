@@ -41,10 +41,6 @@ func (d *demoGitRunner) FetchRemoteShas(_ context.Context, _ string) (map[string
 	return make(map[string]string), nil
 }
 
-func (d *demoGitRunner) GetRemoteSha(_, _ string) (string, error) {
-	return "remote-sha", nil
-}
-
 func (d *demoGitRunner) GetConfig(_ string) (string, error) {
 	return "", nil
 }
@@ -161,29 +157,13 @@ func (d *demoGitRunner) UpdateBranchRefCAS(_ context.Context, _, _, _ string) er
 	return nil
 }
 
-func (d *demoGitRunner) GetRemoteRevision(_ string) (string, error) {
-	return "remote-rev", nil
-}
-
-func (d *demoGitRunner) GetCurrentRevision(_ context.Context) (string, error) {
-	return "head-sha", nil
-}
-
-func (d *demoGitRunner) GetRevision(branchName string) (string, error) {
+func (d *demoGitRunner) readRevision(branchName string) string {
 	for _, b := range d.branches {
 		if b.Name == branchName {
-			return b.SHA, nil
+			return b.SHA
 		}
 	}
-	return "rev-sha", nil
-}
-
-func (d *demoGitRunner) BatchGetRevisions(branchNames []string) (map[string]string, []error) {
-	results := make(map[string]string)
-	for _, name := range branchNames {
-		results[name], _ = d.GetRevision(name)
-	}
-	return results, nil
+	return "rev-sha"
 }
 
 func (d *demoGitRunner) GetMergeBase(_ context.Context, _, _ string) (string, error) {
@@ -198,30 +178,8 @@ func (d *demoGitRunner) IsAncestor(_ context.Context, _, _ string) (bool, error)
 	return true, nil
 }
 
-func (d *demoGitRunner) GetCommitDate(_ string) (time.Time, error) {
-	return time.Now(), nil
-}
-
-func (d *demoGitRunner) GetCommitAuthor(_ string) (string, error) {
-	return "Demo User", nil
-}
-
-func (d *demoGitRunner) BatchCommitInfo(branchNames []string) map[string]git.CommitInfo {
-	results := make(map[string]git.CommitInfo, len(branchNames))
-	for _, name := range branchNames {
-		date, _ := d.GetCommitDate(name)
-		author, _ := d.GetCommitAuthor(name)
-		results[name] = git.CommitInfo{Date: date, Author: author}
-	}
-	return results
-}
-
 func (d *demoGitRunner) GetCommitRange(_ context.Context, _, _, _ string) ([]string, error) {
 	return []string{"commit message"}, nil
-}
-
-func (d *demoGitRunner) GetCommitSHA(_ string, _ int) (string, error) {
-	return "commit-sha", nil
 }
 
 func (d *demoGitRunner) PullBranch(_ context.Context, _, _ string) (git.PullResult, error) {
@@ -232,11 +190,7 @@ func (d *demoGitRunner) UpdateBranchFromRemote(_ context.Context, _, _ string) (
 	return git.PullDone, nil
 }
 
-func (d *demoGitRunner) PushBranch(_ context.Context, _, _ string, _ git.PushOptions) error {
-	return nil
-}
-
-func (d *demoGitRunner) PushBranches(_ context.Context, _ string, specs []git.PushSpec, _ git.PushOptions) map[string]error {
+func (d *demoGitRunner) PushBranches(_ context.Context, _ string, specs []git.PushSpec, _ git.PushOptions) git.PushResults {
 	results := make(map[string]error, len(specs))
 	for _, s := range specs {
 		results[s.BranchName] = nil
@@ -292,11 +246,7 @@ func (d *demoGitRunner) StashPopRef(_ context.Context, _ string) error {
 	return nil
 }
 
-func (d *demoGitRunner) Fetch(_ context.Context, _, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) FetchRefSpecs(_ context.Context, _ string, _ []string) error {
+func (d *demoGitRunner) FetchRefs(_ context.Context, _ string, _ ...string) error {
 	return nil
 }
 
@@ -309,11 +259,7 @@ func (d *demoGitRunner) CreateBranchForce(_ context.Context, branchName, _ strin
 	return nil
 }
 
-func (d *demoGitRunner) Merge(_ context.Context, _ string, _ git.MergeOptions) error {
-	return nil
-}
-
-func (d *demoGitRunner) MergeMultiple(_ context.Context, _ []string, _ git.MergeOptions) error {
+func (d *demoGitRunner) MergeBranches(_ context.Context, _ []string, _ git.MergeOptions) error {
 	return nil
 }
 
@@ -545,10 +491,6 @@ func (d *demoGitRunner) WorktreeResetBlocker(_ context.Context, _, _ string) str
 	return ""
 }
 
-func (d *demoGitRunner) UpdateRefWithLog(_ context.Context, _, _, _ string) error {
-	return nil
-}
-
 func (d *demoGitRunner) VerifyRef(_ context.Context, _ string) error {
 	return nil
 }
@@ -605,48 +547,12 @@ func (d *demoGitRunner) RunGitCommandInteractive(_ ...string) error {
 	return nil
 }
 
-func (d *demoGitRunner) GetRef(_ string) (string, error) {
-	return "ref-sha", nil
-}
-
-func (d *demoGitRunner) UpdateRef(_, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) DeleteRef(_ context.Context, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) UpdateRefsBatch(_ context.Context, _ []git.RefUpdate) error {
-	return nil
-}
-
-func (d *demoGitRunner) UpdateRefsBatchWithLog(_ context.Context, _ []git.RefUpdate, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) DeleteRefsBatch(_ context.Context, _ []string) error {
-	return nil
-}
-
 func (d *demoGitRunner) CatFile(_ string) (string, error) {
 	return "{}", nil
 }
 
 const demoBlobSHA = "blob-sha"
 const demoRefSHA = "demo-ref-sha"
-
-func (d *demoGitRunner) CreateBlob(_ string) (string, error) {
-	return demoBlobSHA, nil
-}
-
-func (d *demoGitRunner) CreateBlobsBatch(_ context.Context, contents []string) ([]string, error) {
-	shas := make([]string, len(contents))
-	for i := range shas {
-		shas[i] = demoBlobSHA
-	}
-	return shas, nil
-}
 
 func (d *demoGitRunner) ReadBlob(_ string) (string, error) {
 	return "{}", nil
@@ -658,10 +564,6 @@ func (d *demoGitRunner) ListRefs(_ string) (map[string]string, error) {
 
 func (d *demoGitRunner) RefDecorations() (map[string][]git.RefDecoration, error) {
 	return make(map[string][]git.RefDecoration), nil
-}
-
-func (d *demoGitRunner) ReadMetadata(_ string) (*git.Meta, error) {
-	return git.NewMeta(), nil
 }
 
 func (d *demoGitRunner) WriteMetadata(_ string, _ *git.Meta) error {
@@ -682,28 +584,12 @@ func (d *demoGitRunner) MetadataCacheStats() git.MetadataCacheSummary {
 	return git.MetadataCacheSummary{}
 }
 
-func (d *demoGitRunner) ReadLocalMetadata(_ string) (*git.LocalMeta, error) {
-	return &git.LocalMeta{}, nil
-}
-
 func (d *demoGitRunner) WriteLocalMetadata(_ string, _ *git.LocalMeta) error {
 	return nil
 }
 
 func (d *demoGitRunner) ListMetadata() (map[string]string, error) {
 	return make(map[string]string), nil
-}
-
-func (d *demoGitRunner) BatchReadMetadata(_ []string) (map[string]*git.Meta, map[string]error) {
-	return make(map[string]*git.Meta), make(map[string]error)
-}
-
-func (d *demoGitRunner) BatchReadLocalMetadata(_ []string) git.LocalMetaMap {
-	return make(git.LocalMetaMap)
-}
-
-func (d *demoGitRunner) GetParentCommitSHA(_ string) (string, error) {
-	return "parent-sha", nil
 }
 
 func (d *demoGitRunner) CheckCommutation(_ git.Hunk, _, _ string) (bool, error) {
@@ -730,11 +616,7 @@ func (d *demoGitRunner) DeleteRemoteStackMetaRefs(_ context.Context, _ []string)
 	return nil
 }
 
-func (d *demoGitRunner) DeleteRemoteMetadataRef(_ context.Context, _ string) error {
-	return nil
-}
-
-func (d *demoGitRunner) BatchDeleteRemoteMetadataRefs(_ context.Context, _ []string) error {
+func (d *demoGitRunner) DeleteRemoteMetadataRefs(_ context.Context, _ ...string) error {
 	return nil
 }
 
@@ -770,7 +652,7 @@ func (d *demoGitRunner) UnstageAll(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) WriteMetadataBlobsBatch(_ context.Context, metas []*git.Meta) ([]string, error) {
+func (d *demoGitRunner) WriteMetadataBlobs(_ context.Context, metas []*git.Meta) ([]string, error) {
 	shas := make([]string, len(metas))
 	for i := range shas {
 		shas[i] = demoBlobSHA
@@ -778,7 +660,7 @@ func (d *demoGitRunner) WriteMetadataBlobsBatch(_ context.Context, metas []*git.
 	return shas, nil
 }
 
-func (d *demoGitRunner) WriteLocalMetadataBlobsBatch(_ context.Context, metas []*git.LocalMeta) ([]string, error) {
+func (d *demoGitRunner) WriteLocalMetadataBlobs(_ context.Context, metas []*git.LocalMeta) ([]string, error) {
 	shas := make([]string, len(metas))
 	for i := range shas {
 		shas[i] = demoBlobSHA
@@ -833,12 +715,41 @@ func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]stri
 func (d *demoGitRunner) ReadRevisions(_ context.Context, refs ...string) git.ReadResults[string] {
 	result := git.ReadResults[string]{Values: make(map[string]string), Errors: make(map[string]error)}
 	for _, ref := range refs {
-		sha, err := d.GetRevision(ref)
-		if err != nil {
-			result.Errors[ref] = err
-		} else {
-			result.Values[ref] = sha
-		}
+		result.Values[ref] = d.readRevision(ref)
 	}
 	return result
 }
+
+func (d *demoGitRunner) ReadCommitInfo(_ context.Context, refs ...string) git.ReadResults[git.CommitInfo] {
+	result := git.ReadResults[git.CommitInfo]{Values: make(map[string]git.CommitInfo)}
+	for _, ref := range refs {
+		result.Values[ref] = git.CommitInfo{Date: time.Now(), Author: "Demo User"}
+	}
+	return result
+}
+
+func (d *demoGitRunner) ReadMetadata(_ context.Context, names ...string) git.ReadResults[*git.Meta] {
+	result := git.ReadResults[*git.Meta]{Values: make(map[string]*git.Meta)}
+	for _, name := range names {
+		result.Values[name] = git.NewMeta()
+	}
+	return result
+}
+func (d *demoGitRunner) ReadLocalMetadata(_ context.Context, names ...string) git.ReadResults[*git.LocalMeta] {
+	result := git.ReadResults[*git.LocalMeta]{Values: make(map[string]*git.LocalMeta)}
+	for _, name := range names {
+		result.Values[name] = &git.LocalMeta{}
+	}
+	return result
+}
+
+func (d *demoGitRunner) CreateBlobs(_ context.Context, contents ...string) ([]string, error) {
+	shas := make([]string, len(contents))
+	for i := range contents {
+		shas[i] = "blob-sha"
+	}
+	return shas, nil
+}
+
+func (d *demoGitRunner) UpdateRefs(_ context.Context, _ []git.RefUpdate, _ string) error { return nil }
+func (d *demoGitRunner) DeleteRefs(_ context.Context, _ ...string) error                 { return nil }

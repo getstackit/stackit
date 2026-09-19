@@ -172,7 +172,7 @@ const (
 
 	// LoadModeShared reads shared metadata at construction but defers local
 	// metadata (Frozen, NeedsPRBodyUpdate, NavigationCommentID) until the
-	// first local-only accessor is called. Saves the BatchReadLocalMetadata
+	// first local-only accessor is called. Saves the ReadLocalMetadata
 	// pass for commands that never touch frozen/needs-PR-update state.
 	LoadModeShared
 

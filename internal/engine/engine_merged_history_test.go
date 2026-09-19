@@ -68,7 +68,7 @@ func TestRestackBranch_CapturesMergedHistory(t *testing.T) {
 		require.NoError(t, err)
 
 		// Simulate branch1 being merged (mark it in metadata)
-		meta, err := s.Engine.Git().ReadMetadata("branch1")
+		meta, err := s.Engine.Git().ReadMetadata(context.Background(), "branch1").One()
 		require.NoError(t, err)
 		mergedState := git.PRStateMerged
 		metaPrInfo := meta.GetPrInfo()
@@ -109,7 +109,7 @@ func TestRestackBranch_InheritsMergedHistory(t *testing.T) {
 			})
 
 		// First: merge branch1 and reparent branch2 to main
-		meta1, _ := s.Engine.Git().ReadMetadata("branch1")
+		meta1, _ := s.Engine.Git().ReadMetadata(context.Background(), "branch1").One()
 		mergedState := git.PRStateMerged
 		meta1 = meta1.WithPrInfo(&git.PrInfoPersistence{State: &mergedState})
 		_ = s.Engine.Git().WriteMetadata("branch1", meta1)
@@ -125,7 +125,7 @@ func TestRestackBranch_InheritsMergedHistory(t *testing.T) {
 		require.Equal(t, "branch1", history2[0].BranchName)
 
 		// Second: merge branch2 and reparent branch3 to main
-		meta2, _ := s.Engine.Git().ReadMetadata("branch2")
+		meta2, _ := s.Engine.Git().ReadMetadata(context.Background(), "branch2").One()
 		meta2 = meta2.WithPrInfo(&git.PrInfoPersistence{State: &mergedState})
 		_ = s.Engine.Git().WriteMetadata("branch2", meta2)
 
@@ -170,7 +170,7 @@ func TestRestackBranch_LimitsHistoryGrowth(t *testing.T) {
 			childBranch := branchNames[i+1]
 
 			// Mark branch as merged
-			meta, _ := s.Engine.Git().ReadMetadata(branchToMerge)
+			meta, _ := s.Engine.Git().ReadMetadata(context.Background(), branchToMerge).One()
 			meta = meta.WithPrInfo(&git.PrInfoPersistence{State: &mergedState})
 			_ = s.Engine.Git().WriteMetadata(branchToMerge, meta)
 
@@ -239,7 +239,7 @@ func TestRestackBranch_PreventsDuplicateHistory(t *testing.T) {
 			})
 
 		// Mark branch1 as merged
-		meta1, _ := s.Engine.Git().ReadMetadata("branch1")
+		meta1, _ := s.Engine.Git().ReadMetadata(context.Background(), "branch1").One()
 		mergedState := git.PRStateMerged
 		meta1 = meta1.WithPrInfo(&git.PrInfoPersistence{State: &mergedState})
 		_ = s.Engine.Git().WriteMetadata("branch1", meta1)

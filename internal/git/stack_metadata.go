@@ -84,12 +84,12 @@ func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
 		return fmt.Errorf("failed to marshal stack metadata: %w", err)
 	}
 
-	sha, err := r.CreateBlob(string(jsonData))
+	sha, err := One(r.CreateBlobs(context.Background(), string(jsonData)))
 	if err != nil {
 		return fmt.Errorf("failed to create stack metadata blob: %w", err)
 	}
 
-	if err := r.UpdateRef(StackMetaRefName(stackID), sha); err != nil {
+	if err := r.UpdateRefs(context.Background(), []RefUpdate{{RefName: StackMetaRefName(stackID), NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to write stack metadata ref: %w", err)
 	}
 
@@ -98,7 +98,7 @@ func (r *runner) WriteStackMeta(stackID string, meta *StackMeta) error {
 
 // DeleteStackMeta deletes stack metadata for a given stack ID.
 func (r *runner) DeleteStackMeta(ctx context.Context, stackID string) error {
-	return r.DeleteRef(ctx, StackMetaRefName(stackID))
+	return r.DeleteRefs(ctx, StackMetaRefName(stackID))
 }
 
 // ListStackMetas returns a map of stack IDs to their ref SHAs.
@@ -125,7 +125,7 @@ func (r *runner) WriteStackMetaBlob(meta *StackMeta) (string, error) {
 		return "", fmt.Errorf("failed to marshal stack metadata: %w", err)
 	}
 
-	sha, err := r.CreateBlob(string(jsonData))
+	sha, err := One(r.CreateBlobs(context.Background(), string(jsonData)))
 	if err != nil {
 		return "", fmt.Errorf("failed to create stack metadata blob: %w", err)
 	}
@@ -135,7 +135,7 @@ func (r *runner) WriteStackMetaBlob(meta *StackMeta) (string, error) {
 
 // GetStackMetaRefSHA returns the current SHA of a stack metadata ref, or empty string if not found.
 func (r *runner) GetStackMetaRefSHA(stackID string) string {
-	sha, err := r.GetRef(StackMetaRefName(stackID))
+	sha, err := r.ReadRevisions(context.Background(), StackMetaRefName(stackID)).One()
 	if err != nil {
 		return ""
 	}

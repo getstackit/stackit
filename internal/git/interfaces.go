@@ -78,6 +78,7 @@ type BranchWriter interface {
 
 // CommitReader provides read access to commit and revision information.
 type CommitReader interface {
+	ReadRevisions(ctx context.Context, refs ...string) ReadResults[string]
 	GetRevision(branchName string) (string, error)
 	GetCurrentRevision(ctx context.Context) (string, error)
 	BatchGetRevisions(branchNames []string) (map[string]string, []error)

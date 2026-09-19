@@ -829,3 +829,16 @@ func (d *demoGitRunner) TreeContainsAnyPath(_ context.Context, _ string, _ []str
 func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]string, error) {
 	return nil, nil
 }
+
+func (d *demoGitRunner) ReadRevisions(_ context.Context, refs ...string) git.ReadResults[string] {
+	result := git.ReadResults[string]{Values: make(map[string]string), Errors: make(map[string]error)}
+	for _, ref := range refs {
+		sha, err := d.GetRevision(ref)
+		if err != nil {
+			result.Errors[ref] = err
+		} else {
+			result.Values[ref] = sha
+		}
+	}
+	return result
+}

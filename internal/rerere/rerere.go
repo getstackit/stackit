@@ -1,7 +1,6 @@
 package rerere
 
 import (
-	"context"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/tui"
@@ -38,7 +37,7 @@ type Pauser interface {
 //
 // If pauser is non-nil, it is paused around the confirmation prompt so a
 // surrounding TUI does not contend for stdin/stdout.
-func EnsureEnabled(ctx context.Context, cfg GitConfigurer, interactive bool, pauser Pauser) (bool, error) {
+func EnsureEnabled(cfg GitConfigurer, interactive bool, pauser Pauser) (bool, error) {
 	return ensureEnabled(cfg, interactive, pauser, tui.PromptConfirm)
 }
 

@@ -278,7 +278,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	pauser, _ := handler.(rerere.Pauser)
-	if _, err := rerere.EnsureEnabled(gctx, ctx.Engine, ctx.Interactive && !ctx.Quiet && handler.IsInteractive(), pauser); err != nil {
+	if _, err := rerere.EnsureEnabled(ctx.Engine, ctx.Interactive && !ctx.Quiet && handler.IsInteractive(), pauser); err != nil {
 		out.Warn("Failed to enable git rerere: %v", err)
 	}
 

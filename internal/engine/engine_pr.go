@@ -165,11 +165,16 @@ func mergePrInfoIntoMeta(meta *git.Meta, prInfo *PrInfo) *git.Meta {
 // PR (creates return early without it), so an all-creates stack stays fully
 // offline. The context bounds that remote read.
 func (e *engineImpl) BatchGetPRSubmissionStatus(ctx context.Context, branches Branches, remoteStatuses BranchRemoteStatuses) (map[string]PRSubmissionStatus, error) {
+	metas, err := e.batchReadPrMetas(branches)
+	if err != nil {
+		return nil, err
+	}
+
 	if remoteStatuses == nil {
 		remoteStatuses = BranchRemoteStatuses{}
 		for _, branch := range branches {
-			prInfo, err := e.GetPrInfo(branch)
-			if err == nil && prInfo != nil && prInfo.Number() != nil {
+			prInfo := NewPrInfoFromMeta(metas[branch.GetName()])
+			if prInfo != nil && prInfo.Number() != nil {
 				remoteStatuses = e.ReadBranchRemoteStatuses(ctx, branches)
 				break
 			}
@@ -178,22 +183,34 @@ func (e *engineImpl) BatchGetPRSubmissionStatus(ctx context.Context, branches Br
 
 	results := make(map[string]PRSubmissionStatus, len(branches))
 	for _, branch := range branches {
-		status, err := e.prSubmissionStatus(branch, remoteStatuses.ForBranch(branch))
-		if err != nil {
-			return nil, err
-		}
-		results[branch.GetName()] = status
+		results[branch.GetName()] = e.prSubmissionStatus(branch, metas[branch.GetName()], remoteStatuses.ForBranch(branch))
 	}
 	return results, nil
 }
 
-// prSubmissionStatus computes a branch's submission status from a precomputed
-// remote status, so batched callers read the remote once.
-func (e *engineImpl) prSubmissionStatus(branch Branch, remoteStatus BranchRemoteStatus) (PRSubmissionStatus, error) {
-	prInfo, err := e.GetPrInfo(branch)
-	if err != nil {
-		return PRSubmissionStatus{}, err
+// batchReadPrMetas resolves every branch's metadata in one batched read, so
+// the per-branch status computation below never re-reads metadata it already
+// has in hand. A failed read is an error, not a missing PR: treating it as
+// "no PR" would plan a create for a branch that already has one.
+func (e *engineImpl) batchReadPrMetas(branches Branches) (MetaMap, error) {
+	branchNames := make([]string, len(branches))
+	for i, b := range branches {
+		branchNames[i] = b.GetName()
 	}
+	metas, errs := e.batchReadMetadata(branchNames)
+	for _, name := range branchNames {
+		if err := errs[name]; err != nil {
+			return nil, fmt.Errorf("read metadata for %s: %w", name, err)
+		}
+	}
+	return metas, nil
+}
+
+// prSubmissionStatus computes a branch's submission status from its
+// precomputed metadata and remote status, so batched callers read metadata
+// and the remote once each for the whole set rather than per branch.
+func (e *engineImpl) prSubmissionStatus(branch Branch, meta *git.Meta, remoteStatus BranchRemoteStatus) PRSubmissionStatus {
+	prInfo := NewPrInfoFromMeta(meta)
 
 	parentBranch := e.GetParent(branch)
 	parentBranchName := ""
@@ -208,7 +225,7 @@ func (e *engineImpl) prSubmissionStatus(branch Branch, remoteStatus BranchRemote
 			Action:      SubmitActionCreate,
 			NeedsUpdate: true,
 			PRInfo:      prInfo,
-		}, nil
+		}
 	}
 
 	// It's an update
@@ -218,34 +235,12 @@ func (e *engineImpl) prSubmissionStatus(branch Branch, remoteStatus BranchRemote
 	// Check if PR title needs update due to scope changes
 	titleNeedsUpdate := e.prTitleNeedsUpdate(branch, prInfo)
 
-	// Check if lock status changed
-	lockStatusChanged := false
-	meta, err := e.readMetadata(branch.GetName())
-	if err == nil {
-		if meta.GetLockReason() != prInfo.LockReason() {
-			lockStatusChanged = true
-		} else {
-			metaPrInfo := meta.GetPrInfo()
-			if metaPrInfo != nil && metaPrInfo.LockReason != nil && *metaPrInfo.LockReason != prInfo.LockReason() {
-				lockStatusChanged = true
-			}
-		}
-	}
+	// The lock on the branch (set by `lock`) differs from the lock last
+	// recorded with the PR, so the PR body's lock notice is stale. Merge-branch
+	// changes need no check here: consolidation syncs the PRs itself.
+	lockStatusChanged := meta.GetLockReason() != prInfo.LockReason()
 
-	// Check if merge branch changed
-	mergeBranchChanged := false
-	if err == nil {
-		metaPrInfo := meta.GetPrInfo()
-		if metaPrInfo != nil {
-			oldBranch := getStringValue(metaPrInfo.MergeBranch)
-			newBranch := prInfo.MergeBranch()
-			if oldBranch != newBranch {
-				mergeBranchChanged = true
-			}
-		}
-	}
-
-	needsUpdate := baseChanged || !branchMatches || titleNeedsUpdate || lockStatusChanged || mergeBranchChanged
+	needsUpdate := baseChanged || !branchMatches || titleNeedsUpdate || lockStatusChanged
 
 	reason := ""
 	if !needsUpdate {
@@ -258,7 +253,7 @@ func (e *engineImpl) prSubmissionStatus(branch Branch, remoteStatus BranchRemote
 		Reason:      reason,
 		PRNumber:    prInfo.Number(),
 		PRInfo:      prInfo,
-	}, nil
+	}
 }
 
 // prTitleNeedsUpdate checks if the PR title needs to be updated due to scope changes

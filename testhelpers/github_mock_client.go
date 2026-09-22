@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/google/go-github/v91/github"
+	"github.com/google/go-github/v92/github"
 
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/utils"

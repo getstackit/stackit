@@ -55,6 +55,7 @@ func Open(initialContent, filenamePattern string) (string, error) {
 
 	// Write initial content.
 	if _, err := tmpFile.WriteString(initialContent); err != nil {
+		_ = tmpFile.Close()
 		return "", fmt.Errorf("failed to write temp file: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {

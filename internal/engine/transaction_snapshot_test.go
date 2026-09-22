@@ -55,13 +55,13 @@ func TestMetadataTransactionBatchesBothTiers(t *testing.T) {
 			}).BeginTx("mixed metadata")
 			shared := tx.ReadMetadata(t.Context(), names...)
 			local := tx.ReadLocalMetadata(t.Context(), names...)
-			require.Empty(t, shared.Errors)
-			require.Empty(t, local.Errors)
+			require.Empty(t, shared.Failures())
+			require.Empty(t, local.Failures())
 			require.Equal(t, 2, r.reads)
 			for _, name := range names {
-				require.NoError(t, tx.UpdateMeta(name, shared.Values[name].WithLockReason(git.LockReasonUser)))
-				local.Values[name].Frozen = true
-				require.NoError(t, tx.UpdateLocalMeta(name, local.Values[name]))
+				require.NoError(t, tx.UpdateMeta(name, shared.Values()[name].WithLockReason(git.LockReasonUser)))
+				local.Values()[name].Frozen = true
+				require.NoError(t, tx.UpdateLocalMeta(name, local.Values()[name]))
 			}
 			require.Equal(t, 2, r.reads, "staging must not perform reads")
 			require.Zero(t, r.revisions, "staging must not reread ref SHAs")

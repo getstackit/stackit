@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import os
+import platform
 from pathlib import Path
 import shutil
 import statistics
@@ -20,7 +21,7 @@ import sys
 import tarfile
 import tempfile
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 
 DEFAULT_REFS = ["v0.25.0", "v0.26.1", "v0.27.1", "main"]
@@ -36,13 +37,18 @@ class Case:
 
 CASES = [
     Case("tree-short", ["tree", "short"]),
+    Case("tree", ["tree"]),
     Case("info", ["info"]),
+    Case("info-diff", ["info", "--diff"]),
+    Case("absorb-dry-run", ["absorb", "--dry-run"], fresh_copy=True),
     Case("parent", ["parent"]),
     Case("children", ["children"]),
-    Case("checkout-exact", ["co", "branch-05", "--quiet"], fresh_copy=True),
-    Case("create", ["create", "benchmark-new", "--allow-empty", "-m", "perf: benchmark"], fresh_copy=True),
+    Case("checkout-exact", ["co", "branch-01", "--quiet"], fresh_copy=True),
+    Case("create", ["create", "benchmark-new", "-m", "perf: benchmark"], fresh_copy=True),
     Case("modify", ["modify", "-m", "perf: benchmark"], fresh_copy=True),
+    Case("modify-midstack", ["modify", "-m", "perf: benchmark"], fresh_copy=True),
     Case("restack-noop", ["restack"], fresh_copy=True),
+    Case("restack-upstack", ["restack", "--upstack"], fresh_copy=True),
 ]
 
 
@@ -53,7 +59,7 @@ def run(command: list[str], *, cwd: Path | None = None, capture: bool = False) -
         check=True,
         text=True,
         stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
-        stderr=subprocess.PIPE if capture else subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
 
 
@@ -88,12 +94,15 @@ def build(repo: Path, ref: str, directory: Path, go_binary: str, environment: di
     return binary, commit
 
 
-def create_fixture(binary: Path, directory: Path, branches: int) -> Path:
+def create_fixture(binary: Path, directory: Path, branches: int, commits_per_branch: int = 1) -> Path:
     fixture = directory / "fixture"
     fixture.mkdir()
     git(fixture, "init", "--initial-branch=main")
     git(fixture, "config", "user.email", "benchmark@stackit.dev")
     git(fixture, "config", "user.name", "Stackit Benchmark")
+    git(fixture, "config", "commit.gpgSign", "false")
+    git(fixture, "config", "core.hooksPath", "/dev/null")
+    git(fixture, "config", "gc.auto", "0")
     (fixture / "README.md").write_text("# Stackit benchmark fixture\n")
     git(fixture, "add", "README.md")
     git(fixture, "commit", "-m", "chore: fixture root")
@@ -108,6 +117,11 @@ def create_fixture(binary: Path, directory: Path, branches: int) -> Path:
                 f"fixture creation failed for branch-{number:02}: "
                 f"{completed.stderr.strip() or completed.stdout.strip()}"
             )
+        for commit in range(2, commits_per_branch + 1):
+            with (fixture / f"branch-{number:02}.txt").open("a") as content:
+                content.write(f"additional commit {commit}\n")
+            git(fixture, "add", ".")
+            git(fixture, "commit", "-m", f"perf: branch {number} commit {commit}")
     return fixture
 
 
@@ -127,19 +141,30 @@ def measure_case(binary: Path, fixture: Path, case: Case, runs: int, warmup: int
         if case.fresh_copy:
             trial = work / f"{case.name}-{iteration}"
             shutil.copytree(fixture, trial)
-        start = time.perf_counter_ns()
         try:
+            if case.name == "absorb-dry-run":
+                target = trial / "branch-01.txt"
+                target.write_text(target.read_text().replace("fixture branch 1\n", "fixture branch 1 (absorbed)\n"))
+                git(trial, "add", "branch-01.txt")
+            if case.name in {"modify-midstack", "restack-upstack"}:
+                git(trial, "checkout", "branch-01")
+            if case.name in {"create", "modify", "modify-midstack", "restack-upstack"}:
+                (trial / "benchmark-change.txt").write_text("benchmark change\n")
+                git(trial, "add", "benchmark-change.txt")
+            if case.name == "restack-upstack":
+                git(trial, "commit", "--amend", "--no-edit")
+            start = time.perf_counter_ns()
             run(command, cwd=trial)
+            elapsed = (time.perf_counter_ns() - start) / 1_000_000
         except subprocess.CalledProcessError as error:
-            completed = subprocess.run(command, cwd=trial, text=True, capture_output=True)
             raise RuntimeError(
-                f"{case.name} failed: {completed.stderr.strip() or completed.stdout.strip()}"
+                f"{case.name} failed: {error.stderr or error}"
             ) from error
         finally:
             if case.fresh_copy:
                 shutil.rmtree(trial)
         if iteration >= warmup:
-            durations.append((time.perf_counter_ns() - start) / 1_000_000)
+            durations.append(elapsed)
 
     return {
         "name": case.name,
@@ -160,6 +185,8 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=10, help="Measured runs per case (default: 10)")
     parser.add_argument("--warmup", type=int, default=2, help="Warmup runs per case (default: 2)")
     parser.add_argument("--branches", type=int, default=10, help="Linear stack depth (default: 10)")
+    parser.add_argument("--commits-per-branch", type=int, default=1, help="Commits on each branch (default: 1)")
+    parser.add_argument("--cases", nargs="+", choices=[case.name for case in CASES], help="Run only these cases")
     parser.add_argument("--output", type=Path, default=Path("benchmark-results.json"), help="JSON result path")
     parser.add_argument(
         "--cache-dir",
@@ -168,8 +195,8 @@ def main() -> int:
         help="Writable Go build and module cache (default: /tmp/stackit-benchmark-go-cache)",
     )
     args = parser.parse_args()
-    if args.runs < 1 or args.warmup < 0 or args.branches < 2:
-        parser.error("--runs must be positive, --warmup non-negative, and --branches at least 2")
+    if args.runs < 1 or args.warmup < 0 or args.branches < 2 or args.commits_per_branch < 1:
+        parser.error("--runs and --commits-per-branch must be positive, --warmup non-negative, and --branches at least 2")
 
     repo = Path(__file__).resolve().parents[1]
     output = args.output.resolve()
@@ -180,10 +207,16 @@ def main() -> int:
     # projects, so resolve the real compiler before changing into one.
     go_binary = run(["mise", "which", "go"], cwd=repo, capture=True).stdout.strip()
     result: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 3,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "platform": {"python": sys.version.split()[0], "git": run(["git", "--version"], capture=True).stdout.strip()},
-        "fixture": {"shape": "linear", "branches": args.branches},
+        "platform": {
+            "python": sys.version.split()[0],
+            "git": run(["git", "--version"], capture=True).stdout.strip(),
+            "go": run([go_binary, "version"], capture=True).stdout.strip(),
+            "system": platform.platform(),
+            "cpu_count": os.cpu_count(),
+        },
+        "fixture": {"shape": "linear", "branches": args.branches, "commits_per_branch": args.commits_per_branch},
         "runs": args.runs,
         "warmup": args.warmup,
         "results": [],
@@ -191,20 +224,30 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="stackit-benchmark-") as temporary:
         root = Path(temporary)
+        # Keep user configuration, signing, hooks, and logging out of fixtures.
+        os.environ.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+                           "STACKIT_NO_LOGGING": "1", "GIT_TERMINAL_PROMPT": "0"})
+        for key in list(os.environ):
+            if key.startswith("GIT_CONFIG_KEY_") or key.startswith("GIT_CONFIG_VALUE_") or key in {
+                "GIT_CONFIG_COUNT", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+            }:
+                os.environ.pop(key)
         build_environment = os.environ | {
             "GOMODCACHE": str(cache_dir / "mod"),
             "GOCACHE": str(cache_dir / "build"),
         }
-        for ref in args.refs:
+        for index, ref in enumerate(args.refs):
             print(f"benchmarking {ref}", flush=True)
-            revision_dir = root / ref.replace("/", "_")
+            revision_dir = root / str(index)
             revision_dir.mkdir()
             binary, commit = build(repo, ref, revision_dir, go_binary, build_environment)
-            fixture = create_fixture(binary, revision_dir, args.branches)
+            fixture = create_fixture(binary, revision_dir, args.branches, args.commits_per_branch)
             work = revision_dir / "work"
             work.mkdir()
-            cases = [measure_case(binary, fixture, case, args.runs, args.warmup, work) for case in CASES]
+            cases = [measure_case(binary, fixture, case, args.runs, args.warmup, work)
+                     for case in CASES if args.cases is None or case.name in args.cases]
             result["results"].append({"ref": ref, "commit": commit, "cases": cases})  # type: ignore[index]
+            output.write_text(json.dumps(result, indent=2) + "\n")
 
     output.write_text(json.dumps(result, indent=2) + "\n")
     print(f"wrote {output}")

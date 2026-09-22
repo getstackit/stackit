@@ -18,72 +18,138 @@ func (e *engineImpl) PlanRestack(ctx context.Context, branches Branches) (*Resta
 		Items:          make(map[string]RestackPlanItem),
 	}
 	squashCache := git.NewSquashMergeCache()
+	// Planning never changes refs or PR metadata. Reuse landing decisions when
+	// a branch is visited first as work and later as another branch's ancestor.
+	// Application keeps using fresh checks across mutations.
+	landedResults := make(map[[2]string]bool)
+	landed := func(branch, target string) bool {
+		key := [2]string{branch, target}
+		if value, ok := landedResults[key]; ok {
+			return value
+		}
+		value := e.branchLanded(ctx, branch, target, squashCache)
+		landedResults[key] = value
+		return value
+	}
 
 	// Resolve metadata and revisions for the branches, their tracked ancestors,
 	// and trunk in two batched reads instead of per-branch git calls. Planning
 	// is read-only, so the snapshot stays valid for the whole loop.
 	metaMap, revMap := e.collectRestackData(branches.Names())
-
+	ancestryRanges := make([]git.RevRange, 0, len(branches))
+	remoteRefs := make([]string, 0)
 	for _, branch := range branches {
-		item, ok := e.planRestackBranch(ctx, branch, plan.BranchMap, squashCache, metaMap, revMap)
+		name := branch.GetName()
+		if branch.IsFrozen() {
+			remoteRefs = append(remoteRefs, e.git.GetRemote()+"/"+name)
+			continue
+		}
+		if branch.IsWorktreeAnchor() || branch.IsLocked() {
+			continue
+		}
+		meta := metaMap[name]
+		if meta != nil && meta.GetParentBranchRevision() != nil && revMap[name] != "" {
+			base := *meta.GetParentBranchRevision()
+			if base != "" {
+				ancestryRanges = append(ancestryRanges, git.RevRange{Base: base, Head: revMap[name]})
+			}
+		}
+	}
+	ancestry := e.git.ReadAncestry(ctx, ancestryRanges...)
+	remoteRevs := e.git.ReadRevisions(ctx, remoteRefs...)
+
+	planner := restackPlanner{
+		engine: e, ctx: ctx, plan: plan, metadata: metaMap, revisions: revMap,
+		ancestry: ancestry, remoteRevisions: remoteRevs, landed: landed,
+	}
+	for _, branch := range branches {
+		item, ok := planner.branch(branch)
 		if !ok {
 			continue
 		}
-		plan.Items[item.Branch] = item
-		if item.Skip {
-			plan.PlannedResults[item.Branch] = item.SkipResult
-			continue
-		}
-		plan.ApplyMap[item.Branch] = true
-		if item.Action == RestackPlanApplyAnchor || item.Action == RestackPlanApplyFrozen {
-			// A moved anchor or frozen branch has to invalidate its children
-			// exactly like any other moved parent. Without this they stay "up
-			// to date" against the parent's previous tip, so their recorded
-			// parent revision never catches up and every consumer reading it
-			// keeps drifting. For frozen this matters when the remote ref
-			// advanced: the branch hard-resets to the remote SHA, and its
-			// children must follow in the same pass.
-			plan.BranchMap[item.Branch] = true
-		}
-		if item.Action == RestackPlanApplyValidated {
-			specNewParent := item.NewParent
-			// Anchor and frozen parents move to a known TargetRev at apply
-			// time; validate their children against that revision, not the
-			// parent's current (stale) ref.
-			if parentItem, ok := plan.Items[item.NewParent]; ok && parentItem.TargetRev != "" {
-				specNewParent = parentItem.TargetRev
-			} else if e.IsWorktreeAnchor(e.GetBranch(item.NewParent)) && item.ParentRev != "" {
-				if parentRev, ok := e.planRev(revMap, item.NewParent); ok && parentRev != item.ParentRev {
-					specNewParent = item.ParentRev
-				}
-			}
-			plan.Specs = append(plan.Specs, RebaseSpec{
-				Branch:      item.Branch,
-				NewParent:   specNewParent,
-				OldUpstream: item.OldUpstream,
-			})
-			plan.BranchMap[item.Branch] = true
-		}
+		planner.add(item)
 	}
 
 	return plan, nil
 }
 
-// planRestackBranch builds the plan item for one branch. metaMap and revMap
-// are batch-resolved snapshots from collectRestackData; lookups fall back to
-// individual reads on a miss so the maps are an optimization, not a contract.
-func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plannedBranches BranchNameSet, squashCache *git.SquashMergeCache, metaMap MetaMap, revMap RevisionMap) (RestackPlanItem, bool) {
+// restackPlanner owns the read-only planning snapshot and all derived indexes.
+// It is discarded before application, which must recheck mutable repository state.
+type restackPlanner struct {
+	engine          *engineImpl
+	ctx             context.Context
+	plan            *RestackPlan
+	metadata        MetaMap
+	revisions       RevisionMap
+	ancestry        git.ReadResults[bool]
+	remoteRevisions git.ReadResults[string]
+	landed          func(string, string) bool
+}
+
+func (p *restackPlanner) add(item RestackPlanItem) {
+	p.plan.Items[item.Branch] = item
+	if item.Action == RestackPlanSkip {
+		p.plan.PlannedResults[item.Branch] = item.SkipResult
+		return
+	}
+	p.plan.ApplyMap[item.Branch] = true
+	if item.Action == RestackPlanApplyAnchor || item.Action == RestackPlanApplyFrozen {
+		// A moved anchor or frozen branch has to invalidate its children
+		// exactly like any other moved parent. Without this they stay "up
+		// to date" against the parent's previous tip, so their recorded
+		// parent revision never catches up and every consumer reading it
+		// keeps drifting. For frozen this matters when the remote ref
+		// advanced: the branch hard-resets to the remote SHA, and its
+		// children must follow in the same pass.
+		p.plan.BranchMap[item.Branch] = true
+	}
+	if item.Action == RestackPlanApplyValidated {
+		specNewParent := item.NewParent
+		// Anchor and frozen parents move to a known TargetRev at apply
+		// time; validate their children against that revision, not the
+		// parent's current (stale) ref.
+		if parentItem, ok := p.plan.Items[item.NewParent]; ok && parentItem.TargetRev != "" {
+			specNewParent = parentItem.TargetRev
+		} else if p.engine.IsWorktreeAnchor(p.engine.GetBranch(item.NewParent)) && item.ParentRev != "" {
+			if parentRev, ok := p.engine.planRev(p.revisions, item.NewParent); ok && parentRev != item.ParentRev {
+				specNewParent = item.ParentRev
+			}
+		}
+		p.plan.Specs = append(p.plan.Specs, RebaseSpec{
+			Branch:      item.Branch,
+			NewParent:   specNewParent,
+			OldUpstream: item.OldUpstream,
+		})
+		p.plan.BranchMap[item.Branch] = true
+	}
+}
+
+func skippedRestack(branch string, result RestackBranchResult) RestackPlanItem {
+	return RestackPlanItem{Branch: branch, Action: RestackPlanSkip, SkipResult: result}
+}
+
+func anchorRestack(branch, trunk, revision string) RestackPlanItem {
+	return RestackPlanItem{Branch: branch, Action: RestackPlanApplyAnchor,
+		NewParent: trunk, ParentRev: revision, TargetRev: revision}
+}
+
+func frozenRestack(branch, parent, parentRevision, remoteRevision string) RestackPlanItem {
+	return RestackPlanItem{Branch: branch, Action: RestackPlanApplyFrozen,
+		NewParent: parent, ParentRev: parentRevision, TargetRev: remoteRevision}
+}
+
+// branch derives one decision without mutating the plan's indexes.
+func (p *restackPlanner) branch(branch Branch) (RestackPlanItem, bool) {
+	e, ctx := p.engine, p.ctx
 	branchName := branch.GetName()
 	item := RestackPlanItem{Branch: branchName, Action: RestackPlanApplyValidated}
 
 	lockReason := e.GetLockReason(branch)
 	if lockReason.IsLocked() && lockReason != LockReasonDraining {
-		item.Skip = true
-		item.SkipResult = RestackBranchResult{
+		return skippedRestack(branchName, RestackBranchResult{
 			Result:     RestackUnneeded,
 			LockReason: lockReason,
-		}
-		return item, true
+		}), true
 	}
 
 	parent := branch.GetParent()
@@ -96,7 +162,7 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 	if parent != nil {
 		parentName = parent.GetName()
-		if _, ok := e.planRev(revMap, parentName); !ok {
+		if _, ok := e.planRev(p.revisions, parentName); !ok {
 			if ancestors, ancestorErr := e.FindMostRecentTrackedAncestors(ctx, branchName); ancestorErr == nil && len(ancestors) > 0 {
 				parentName = ancestors[0]
 			} else {
@@ -113,74 +179,58 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	// ranges, tree commit counts and diffs) drifts further from reality with
 	// each trunk advance.
 	if branch.IsWorktreeAnchor() {
-		trunkRev, ok := e.planRev(revMap, e.trunk)
+		trunkRev, ok := e.planRev(p.revisions, e.trunk)
 		if !ok {
 			return item, false
 		}
-		anchorRev, ok := e.planRev(revMap, branchName)
+		anchorRev, ok := e.planRev(p.revisions, branchName)
 		if !ok {
 			return item, false
 		}
 		if anchorRev == trunkRev {
-			item.Skip = true
-			item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
-			return item, true
+			return skippedRestack(branchName, RestackBranchResult{Result: RestackUnneeded}), true
 		}
-		item.Action = RestackPlanApplyAnchor
-		item.NewParent = e.trunk
-		item.ParentRev = trunkRev
-		item.TargetRev = trunkRev
-		return item, true
+		return anchorRestack(branchName, e.trunk, trunkRev), true
 	}
 
 	// If this branch has already landed, do not rebase it during restack. This
 	// covers merged PR metadata for all GitHub methods, plus Git-detected merge,
 	// rebase, and multi-commit squash histories on trunk even when the merged
 	// branch has no stackit PR metadata.
-	if e.branchLanded(ctx, branchName, parentName, squashCache) {
-		item.Skip = true
-		item.SkipResult = RestackBranchResult{Result: RestackUnneeded}
-		return item, true
+	if p.landed(branchName, parentName) {
+		return skippedRestack(branchName, RestackBranchResult{Result: RestackUnneeded}), true
 	}
 
 	if branch.IsFrozen() {
-		parentRev, ok := e.planRev(revMap, parentName)
+		parentRev, ok := e.planRev(p.revisions, parentName)
 		if !ok {
 			return item, false
 		}
-		remoteSha, err := e.git.ReadRevisions(ctx, e.git.GetRemote()+"/"+branchName).One()
+		remoteSha, err := p.remoteRevisions.Get(e.git.GetRemote() + "/" + branchName)
 		if err != nil || remoteSha == "" {
-			item.Skip = true
-			item.SkipResult = RestackBranchResult{Result: RestackUnneeded, Frozen: true}
-			return item, true
+			return skippedRestack(branchName, RestackBranchResult{Result: RestackUnneeded, Frozen: true}), true
 		}
-		localSha, ok := e.planRev(revMap, branchName)
+		localSha, ok := e.planRev(p.revisions, branchName)
 		if !ok {
 			return item, false
 		}
 		if localSha == remoteSha {
-			item.Skip = true
-			item.SkipResult = RestackBranchResult{Result: RestackUnneeded, Frozen: true}
-			return item, true
+			return skippedRestack(branchName, RestackBranchResult{Result: RestackUnneeded, Frozen: true}), true
 		}
-		item.Action = RestackPlanApplyFrozen
-		item.NewParent = parentName
-		item.ParentRev = parentRev
-		item.TargetRev = remoteSha
-		return item, true
+		return frozenRestack(branchName, parentName, parentRev, remoteSha), true
 	}
 
 	e.mu.RLock()
-	needsReparent := state != nil && e.shouldReparentBranch(ctx, state.Parent, nil, squashCache)
+	needsReparent := state != nil && e.shouldReparentBranchWithLanded(state.Parent, p.metadata, p.landed)
 	if needsReparent {
 		item.Reparented = true
 		item.OldParent = state.Parent
-		parentName = e.findNearestValidAncestor(ctx, branchName, nil, squashCache)
+		parentName = e.findNearestValidAncestorWithLanded(branchName, p.metadata, p.landed)
 	}
 	e.mu.RUnlock()
 	item.NewParent = parentName
 
-	meta := metaMap[branchName]
+	meta := p.metadata[branchName]
 	if meta == nil {
 		var err error
 		meta, err = e.metadata.ReadMetadata(ctx, branchName).One()
@@ -209,7 +259,11 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 
 	if oldParentRev != "" {
-		isAncestor, err := e.git.IsAncestor(ctx, oldParentRev, branchName)
+		key := (git.RevRange{Base: oldParentRev, Head: p.revisions[branchName]}).String()
+		isAncestor, err := p.ancestry.Get(key)
+		if err != nil {
+			isAncestor, err = e.git.IsAncestor(ctx, oldParentRev, branchName)
+		}
 		if err != nil {
 			isAncestor = false
 		}
@@ -229,12 +283,12 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 	}
 	item.OldUpstream = oldParentRev
 
-	parentRev, ok := e.planRev(revMap, parentName)
+	parentRev, ok := e.planRev(p.revisions, parentName)
 	if !ok {
 		return item, false
 	}
 	if e.IsWorktreeAnchor(e.GetBranch(parentName)) {
-		trunkRev, ok := e.planRev(revMap, e.trunk)
+		trunkRev, ok := e.planRev(p.revisions, e.trunk)
 		if !ok {
 			return item, false
 		}
@@ -266,18 +320,16 @@ func (e *engineImpl) planRestackBranch(ctx context.Context, branch Branch, plann
 		recordedRev = *rev
 	}
 	correctlyBased := parentRev == oldParentRev
-	skippable := !plannedBranches.Contains(parentName) && !item.Reparented
+	skippable := !p.plan.BranchMap.Contains(parentName) && !item.Reparented
 	switch {
 	case correctlyBased && oldParentRev == recordedRev && skippable:
-		item.Skip = true
-		item.SkipResult = RestackBranchResult{
+		return skippedRestack(branchName, RestackBranchResult{
 			Result:            RestackUnneeded,
 			RebasedBranchBase: parentRev,
-		}
+		}), true
 	case correctlyBased && skippable:
 		item.Action = RestackPlanApplyMetadataRefresh
 	}
-
 	return item, true
 }
 

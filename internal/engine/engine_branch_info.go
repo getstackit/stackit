@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"time"
 
@@ -31,9 +30,11 @@ func (e *engineImpl) BatchCommitInfo(branches Branches) map[string]git.CommitInf
 		names[i] = "refs/heads/" + b.GetName()
 	}
 	data := e.git.ReadCommitInfo(context.Background(), names...)
-	result := make(map[string]git.CommitInfo, len(data.Values))
-	for ref, info := range data.Values {
-		result[strings.TrimPrefix(ref, "refs/heads/")] = info
+	result := make(map[string]git.CommitInfo, len(branches))
+	for ref, info := range data.All() {
+		if info.Err == nil {
+			result[strings.TrimPrefix(ref, "refs/heads/")] = info.Value
+		}
 	}
 	return result
 }
@@ -58,9 +59,11 @@ func (e *engineImpl) GetRevisions(branchNames []string) (RevisionMap, []error) {
 // name, matching GetDivergencePoint (the stored parent revision when present,
 // else the parent's current tip) but resolving the whole set in one batched pass.
 func (e *engineImpl) BatchDivergencePoints(branches Branches) RevisionMap {
-	return RevisionMap(batchByBranch(e, branches, func(b Branch, head, parentRev, storedBase string) string {
-		return statBase(parentRev, storedBase)
-	}))
+	result := make(RevisionMap, len(branches))
+	for name, rr := range e.branchDiffRanges(branches) {
+		result[name] = rr.Base
+	}
+	return result
 }
 
 // CommitCountBetween returns how many commits are in (base, head]. It is the
@@ -75,61 +78,20 @@ func (e *engineImpl) CommitCountBetween(base, head string) (int, error) {
 // (base, head)-keyed cache. It takes pre-resolved revisions so batched callers
 // need not re-resolve a branch's head.
 func (e *engineImpl) commitCountBetween(rr git.RevRange) (int, error) {
-	base, head := rr.Base, rr.Head
-	if head == base {
+	if rr.Head == rr.Base {
 		return 0, nil
 	}
 
-	cacheKey := base + ":" + head
-	if v, ok := e.commitCountCache.Load(cacheKey); ok {
+	if v, ok := e.commitCountCache.Load(rr); ok {
 		return v.(int), nil
 	}
 
-	out, err := e.git.RunGitCommandWithContext(context.Background(), "rev-list", "--count", base+".."+head)
+	count, err := e.git.ReadCommitCounts(context.Background(), rr).One()
 	if err != nil {
 		return 0, err
 	}
-	count, _ := strconv.Atoi(strings.TrimSpace(out))
-	e.commitCountCache.Store(cacheKey, count)
+	e.commitCountCache.Store(rr, count)
 	return count, nil
-}
-
-// diffStatsBetween returns the additions/deletions between two revisions, using
-// the (base, head)-keyed cache. It takes pre-resolved revisions so batched
-// callers (the Batch* readers) need not re-resolve a branch's head.
-func (e *engineImpl) diffStatsBetween(rr git.RevRange) (int, int, error) {
-	base, head := rr.Base, rr.Head
-	if head == base {
-		return 0, 0, nil
-	}
-
-	cacheKey := base + ":" + head
-	if v, ok := e.diffStatsCache.Load(cacheKey); ok {
-		stats := v.([2]int)
-		return stats[0], stats[1], nil
-	}
-
-	output, err := e.git.GetDiffNumstat(rr)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	added, deleted := 0, 0
-	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) >= 2 {
-			a, _ := strconv.Atoi(fields[0])
-			d, _ := strconv.Atoi(fields[1])
-			added += a
-			deleted += d
-		}
-	}
-
-	e.diffStatsCache.Store(cacheKey, [2]int{added, deleted})
-	return added, deleted, nil
 }
 
 // GetRecentTrunkCommits returns the most recent commits on the trunk branch,
@@ -148,54 +110,18 @@ func (e *engineImpl) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit
 	return e.git.GetRecentCommitsInRange(context.Background(), rr.String())
 }
 
-// GetAllCommits returns commits for a branch in various formats
-func (e *engineImpl) GetAllCommits(branch Branch, format CommitFormat) ([]string, error) {
-	branchName := branch.GetName()
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	// Check if branch is trunk
-	if branchName == e.trunk {
-		// Trunk is the base, so it has no commits "on" it relative to a parent
-		return []string{}, nil
-	}
-
-	// Get metadata to find parent revision
-	meta, err := e.readMetadata(branchName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get branch revision
-	branchRevision, err := e.git.ReadRevisions(context.Background(), branchName).One()
-	if err != nil {
-		return nil, err
-	}
-
-	// Base for the commit range: the stored divergence point, or the parent's
-	// current tip when none is recorded. Falling back to the parent tip — not an
-	// empty base, which lists the branch's entire history back to the repo root —
-	// keeps the result to the branch's own commits and consistent with the base
-	// the batched diff-stat / commit-count readers use (statBase).
-	var baseRevision string
-	if rev := meta.GetParentBranchRevision(); rev != nil && *rev != "" {
-		baseRevision = *rev
-	} else {
-		parent := e.trunk
-		if state := e.readState(branchName); state != nil {
-			parent = state.Parent
-		}
-		if parentRev, err := e.git.ReadRevisions(context.Background(), parent).One(); err == nil {
-			baseRevision = parentRev
-		}
-	}
-
-	return e.commitsBetween(git.RevRange{Base: baseRevision, Head: branchRevision}, format)
+// GetAllCommits returns newest-first typed display/replay data for a branch.
+func (e *engineImpl) GetAllCommits(branch Branch) (git.Commits, error) {
+	history, err := e.ReadBranchCommits(context.Background(), BranchesOf(branch)).One()
+	return history.Commits, err
 }
 
-// commitsBetween returns the formatted commits in (base, head]. It handles
-// formatting in-process via go-git, avoiding per-commit git process spawns, and
-// takes pre-resolved revisions so batched callers need not re-resolve the head.
-func (e *engineImpl) commitsBetween(rr git.RevRange, format CommitFormat) ([]string, error) {
-	return e.git.GetCommitRange(context.Background(), rr.Base, rr.Head, string(format))
+// GetCommitIDs returns branch identities without loading display/replay fields.
+func (e *engineImpl) GetCommitIDs(branch Branch) ([]string, error) {
+	nodes, err := e.ReadBranchCommitNodes(context.Background(), BranchesOf(branch)).One()
+	ids := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		ids = append(ids, node.SHA)
+	}
+	return ids, err
 }

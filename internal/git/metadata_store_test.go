@@ -47,10 +47,10 @@ func TestMetadataStoreInvalidatesOnlyChangedRefs(t *testing.T) {
 	require.NoError(t, store.WriteMetadata("a", git.NewMeta()))
 	require.NoError(t, store.WriteMetadata("b", git.NewMeta()))
 	before := store.ReadMetadata(t.Context(), "a", "b")
-	require.Empty(t, before.Errors)
+	require.Empty(t, before.Failures())
 	require.NoError(t, r.DeleteRefs(t.Context(), git.MetadataRefName("b")))
 	after := store.ReadMetadata(t.Context(), "a", "b")
-	require.Empty(t, after.Errors)
+	require.Empty(t, after.Failures())
 	require.Equal(t, before.Versions["a"], after.Versions["a"])
 	require.Empty(t, after.Versions["b"])
 
@@ -58,5 +58,5 @@ func TestMetadataStoreInvalidatesOnlyChangedRefs(t *testing.T) {
 	other := git.NewMetadataStore(git.NewRunnerWithPath(scene.Dir, nil))
 	require.NoError(t, other.WriteMetadata("a", git.NewMeta().WithLockReason(git.LockReasonUser)))
 	require.NoError(t, store.WriteMetadata("b", git.NewMeta()))
-	require.Error(t, store.WriteMetadata("a", before.Values["a"]))
+	require.Error(t, store.WriteMetadata("a", before.Values()["a"]))
 }

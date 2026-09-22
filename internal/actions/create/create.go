@@ -113,11 +113,12 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 
 	// Handle staging first if we might need the message to name the branch
-	hasStaged, err := eng.HasStagedChanges(ctx.Context)
+	status, err := eng.GetWorkingTreeStatus(ctx.Context)
 	if err != nil {
-		return Result{}, fmt.Errorf("failed to check staged changes: %w", err)
+		return Result{}, fmt.Errorf("failed to read working tree status: %w", err)
 	}
 
+	hasStaged := status.Staged
 	// Stage changes based on flags or prompt
 	if opts.All || opts.Update || opts.Patch {
 		h.OnStep(StepStaging, handler.StatusStarted, "Staging changes")
@@ -133,12 +134,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		hasStaged = true
 		h.OnStep(StepStaging, handler.StatusCompleted, "Changes staged")
 	} else if !hasStaged && h.IsInteractive() {
-		hasUnstaged, err := eng.HasUnstagedChanges(ctx.Context)
-		if err != nil {
-			return Result{}, fmt.Errorf("failed to check unstaged changes: %w", err)
-		}
-
-		if hasUnstaged {
+		if status.Unstaged {
 			confirmed, err := h.PromptStageChanges()
 			if err == nil && confirmed {
 				h.OnStep(StepStaging, handler.StatusStarted, "Staging changes")
@@ -157,15 +153,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// silently produce an empty branch. A genuinely clean tree still allows an
 	// intentional empty scaffolding branch.
 	if !hasStaged && !opts.AllowEmpty && !h.IsInteractive() {
-		hasUnstaged, err := eng.HasUnstagedChanges(ctx.Context)
-		if err != nil {
-			return Result{}, fmt.Errorf("failed to check unstaged changes: %w", err)
-		}
-		hasUntracked, err := eng.HasUntrackedFiles(ctx.Context)
-		if err != nil {
-			return Result{}, fmt.Errorf("failed to check untracked files: %w", err)
-		}
-		if hasUnstaged || hasUntracked {
+		if status.HasUnstagedChanges() {
 			return Result{}, fmt.Errorf("nothing staged but the working tree has changes; stage them with 'git add' (or pass --all/-a), or pass --allow-empty to create an empty branch")
 		}
 	}

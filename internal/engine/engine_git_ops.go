@@ -85,30 +85,8 @@ func (e *engineImpl) GetUntrackedFiles(ctx context.Context) ([]string, error) {
 
 // GetWorkingTreeStatus returns staged, unstaged, and untracked status in a
 // single git status --porcelain call instead of three separate subprocesses.
-func (e *engineImpl) GetWorkingTreeStatus(ctx context.Context) (staged, unstaged, untracked bool, err error) {
-	output, err := e.git.GetStatusPorcelain(ctx)
-	if err != nil {
-		return false, false, false, err
-	}
-	for line := range strings.SplitSeq(strings.TrimSuffix(output, "\n"), "\n") {
-		if len(line) < 2 {
-			continue
-		}
-		x, y := line[0], line[1]
-		if x != ' ' && x != '?' {
-			staged = true
-		}
-		if y != ' ' && (x != '?' || y != '?') {
-			unstaged = true
-		}
-		if x == '?' && y == '?' {
-			untracked = true
-		}
-		if staged && unstaged && untracked {
-			break
-		}
-	}
-	return staged, unstaged, untracked, nil
+func (e *engineImpl) GetWorkingTreeStatus(ctx context.Context) (git.WorktreeStatus, error) {
+	return e.git.ReadWorktreeStatus(ctx)
 }
 
 // GetUntrackedFileHunks returns synthetic hunks for all untracked files.
@@ -137,12 +115,14 @@ func (e *engineImpl) GetMergeBase(ctx context.Context, rev1, rev2 string) (strin
 
 // IsDiffEmpty checks if the diff between base and head is empty
 func (e *engineImpl) IsDiffEmpty(ctx context.Context, base, head string) (bool, error) {
-	return e.git.IsDiffEmpty(ctx, head, base)
+	diff, err := e.git.ReadDiffs(ctx, git.DiffCheckOnly, git.RevRange{Base: base, Head: head}).One()
+	return diff.Empty, err
 }
 
 // GetChangedFiles returns the list of files changed between base and head
 func (e *engineImpl) GetChangedFiles(ctx context.Context, rr git.RevRange) ([]string, error) {
-	return e.git.GetChangedFiles(ctx, rr)
+	diff, err := e.git.ReadDiffs(ctx, git.DiffNames, rr).One()
+	return diff.Files, err
 }
 
 // ListWorktrees returns every working tree registered with the repo.

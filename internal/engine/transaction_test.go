@@ -340,7 +340,7 @@ func TestTransaction_RollbackOnCommitFailure(t *testing.T) {
 
 	// Begin transaction and stage an update
 	tx := eng.BeginTx("test transaction")
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	newMeta := git.NewMetaFrom(git.MetaFields{
 		LockReason: git.LockReasonUser,
 	})
@@ -375,7 +375,7 @@ func TestTransaction_DoubleCommitFails(t *testing.T) {
 
 	// Begin transaction and stage an update
 	tx := eng.BeginTx("test transaction")
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	meta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
 	err = tx.UpdateMeta("feature-1", meta)
 	require.NoError(t, err)
@@ -457,7 +457,7 @@ func TestTransaction_ConcurrentModification(t *testing.T) {
 
 	// Begin transaction and stage an update (this captures the original SHA)
 	tx := eng.BeginTx("test transaction")
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	meta1 := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
 	err = tx.UpdateMeta("feature-1", meta1)
 	require.NoError(t, err)
@@ -503,7 +503,7 @@ func TestTransaction_ConcurrentModificationLocalMeta(t *testing.T) {
 
 	// Begin transaction and stage a local metadata update (captures initial SHA)
 	tx := eng.BeginTx("test transaction")
-	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-1").Failures())
 	localMeta1 := &git.LocalMeta{Frozen: true}
 	err = tx.UpdateLocalMeta("feature-1", localMeta1)
 	require.NoError(t, err)
@@ -548,7 +548,7 @@ func TestWithRetry_RetriesOnConcurrentModification(t *testing.T) {
 			attemptCount++
 
 			tx := eng.BeginTx("retry test")
-			require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+			require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 			meta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
 			if stageErr := tx.UpdateMeta("feature-1", meta); stageErr != nil {
 				return stageErr
@@ -597,7 +597,7 @@ func TestWithRetry_ExhaustsRetries(t *testing.T) {
 			attemptCount++
 
 			tx := eng.BeginTx("exhaustion test")
-			require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+			require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 			meta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
 			if stageErr := tx.UpdateMeta("feature-1", meta); stageErr != nil {
 				return stageErr
@@ -653,8 +653,8 @@ func TestTransaction_UpdateAfterRollback(t *testing.T) {
 
 	// Begin transaction and roll it back
 	tx := eng.BeginTx("test transaction")
-	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "any-branch").Errors)
-	require.Empty(t, tx.ReadMetadata(t.Context(), "any-branch").Errors)
+	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "any-branch").Failures())
+	require.Empty(t, tx.ReadMetadata(t.Context(), "any-branch").Failures())
 	tx.Rollback()
 
 	// Trying to update after rollback should fail
@@ -740,8 +740,8 @@ func TestTransaction_MixedMetaAndLocalMeta(t *testing.T) {
 
 	// Create a transaction that updates both meta and local meta
 	tx := eng.BeginTx("mixed update")
-	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-2").Errors)
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-2").Failures())
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 
 	// Update meta for feature-1
 	meta1 := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
@@ -786,7 +786,7 @@ func TestTransaction_DeleteMeta(t *testing.T) {
 
 	// Delete metadata via transaction
 	tx := eng.BeginTx("delete metadata")
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteMeta("feature-1"))
 	require.NoError(t, tx.Commit(context.Background()))
 
@@ -821,7 +821,7 @@ func TestTransaction_DeleteLocalMeta(t *testing.T) {
 
 	// Delete via transaction
 	tx := eng.BeginTx("delete local metadata")
-	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteLocalMeta("feature-1"))
 	require.NoError(t, tx.Commit(context.Background()))
 
@@ -844,7 +844,7 @@ func TestTransaction_DeleteNonExistentMeta(t *testing.T) {
 
 	// Deleting non-existent metadata should succeed (no-op)
 	tx := eng.BeginTx("delete non-existent")
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteMeta("feature-1"))
 	require.NoError(t, tx.Commit(context.Background()))
 }
@@ -865,7 +865,7 @@ func TestTransaction_UpdateAfterDelete(t *testing.T) {
 
 	// Stage delete then update - update should take precedence
 	tx := eng.BeginTx("update after delete")
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteMeta("feature-1"))
 	newMeta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
 	require.NoError(t, tx.UpdateMeta("feature-1", newMeta))
@@ -893,7 +893,7 @@ func TestTransaction_DeleteAfterUpdate(t *testing.T) {
 
 	// Stage update then delete - delete should take precedence
 	tx := eng.BeginTx("delete after update")
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	newMeta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
 	require.NoError(t, tx.UpdateMeta("feature-1", newMeta))
 	require.NoError(t, tx.DeleteMeta("feature-1"))
@@ -927,7 +927,7 @@ func TestTransaction_MixedUpdatesAndDeletes(t *testing.T) {
 
 	// Mixed transaction: update feature-1, delete feature-2, update feature-3
 	tx := eng.BeginTx("mixed operations")
-	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1", "feature-2", "feature-3").Errors)
+	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1", "feature-2", "feature-3").Failures())
 	require.NoError(t, tx.UpdateMeta("feature-1", git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})))
 	require.NoError(t, tx.DeleteMeta("feature-2"))
 	scope := "test-scope"
@@ -971,7 +971,7 @@ func TestTransaction_DeleteLocalMetaClearsFrozenState(t *testing.T) {
 
 	// Delete local metadata via transaction
 	tx := eng.BeginTx("delete local metadata")
-	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-1").Errors)
+	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteLocalMeta("feature-1"))
 	require.NoError(t, tx.Commit(context.Background()))
 

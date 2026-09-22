@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -18,7 +19,7 @@ import (
 // request (ReadBranchRemoteStatuses, BatchBranchStats, BatchCommits,
 // BatchCommitInfo, ReadBranchStatuses), not per-branch calls — per-branch
 // reads spawn a git process per field per branch.
-func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus, remoteStatus engine.BranchRemoteStatus, stat engine.BranchStat, commits []string, commitInfo git.CommitInfo, needsRestack bool) BranchResponse {
+func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus, remoteStatus engine.BranchRemoteStatus, stat engine.BranchStat, commits git.Commits, commitInfo git.CommitInfo, needsRestack bool) BranchResponse {
 	resp := BranchResponse{
 		Name:         branch.GetName(),
 		Depth:        node.Depth,
@@ -53,7 +54,7 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 
 	// Map commits
 	if len(commits) > 0 {
-		resp.Commits = mapCommitsWithDate(commits)
+		resp.Commits = mapCommits(commits)
 	}
 
 	// Map PR info
@@ -135,7 +136,7 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 type BranchBatchData struct {
 	RemoteStatuses engine.BranchRemoteStatuses
 	Stats          map[string]engine.BranchStat
-	Commits        map[string][]string
+	Commits        map[string]git.Commits
 	CommitInfo     map[string]git.CommitInfo
 	Statuses       engine.BranchStatuses
 }
@@ -145,7 +146,7 @@ func FetchBranchBatchData(ctx context.Context, eng engine.BranchReader, branches
 	return BranchBatchData{
 		RemoteStatuses: eng.ReadBranchRemoteStatuses(ctx, branches),
 		Stats:          eng.BatchBranchStats(branches),
-		Commits:        eng.BatchCommits(branches, engine.CommitFormatReadableWithDate),
+		Commits:        eng.BatchCommits(branches),
 		CommitInfo:     eng.BatchCommitInfo(branches),
 		Statuses:       eng.ReadBranchStatuses(branches),
 	}
@@ -257,18 +258,15 @@ func mapCI(checks *github.CheckStatus) *CIResponse {
 	return ci
 }
 
-func mapCommitsWithDate(lines []string) []CommitResponse {
-	commits := make([]CommitResponse, 0, len(lines))
-	for _, line := range lines {
-		// Tab-separated format: "abc1234\t2024-01-15T10:30:00Z\tCommit message"
-		parts := strings.SplitN(line, "\t", 3)
-		if len(parts) < 3 {
+func mapCommits(records git.Commits) []CommitResponse {
+	commits := make([]CommitResponse, 0, len(records))
+	for _, commit := range records {
+		date, err := time.Parse(time.RFC3339, commit.AuthorDate)
+		if err != nil {
 			continue
 		}
 		commits = append(commits, CommitResponse{
-			SHA:     parts[0],
-			Message: parts[2],
-			Date:    parts[1],
+			SHA: commit.ShortSHA, Message: strings.TrimRightFunc(commit.Subject, unicode.IsSpace), Date: date.UTC().Format(time.RFC3339),
 		})
 	}
 	return commits

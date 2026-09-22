@@ -14,7 +14,9 @@ import (
 func TestReadResults(t *testing.T) {
 	t.Parallel()
 	failure := errors.New("read failed")
-	results := git.ReadResults[string]{Values: map[string]string{"ok": "sha"}, Errors: map[string]error{"bad": failure}}
+	var results git.ReadResults[string]
+	results.Set("ok", "sha")
+	results.Fail("bad", failure)
 	value, err := results.Get("ok")
 	require.NoError(t, err)
 	require.Equal(t, "sha", value)
@@ -38,13 +40,46 @@ func TestReadRevisionsConsistentForOneAndMany(t *testing.T) {
 	require.NoError(t, err)
 	logger.calls = 0
 	many := runner.ReadRevisions(t.Context(), "tag", "main", "missing", "tag")
-	require.Equal(t, one, many.Values["tag"])
-	require.Equal(t, one, many.Values["main"])
-	require.ErrorContains(t, many.Errors["missing"], "reference not found")
+	require.Equal(t, one, many.Values()["tag"])
+	require.Equal(t, one, many.Values()["main"])
+	require.ErrorContains(t, many.Failures()["missing"], "reference not found")
 	require.Equal(t, 1, logger.calls)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err = runner.ReadRevisions(ctx, "HEAD").One()
 	require.ErrorIs(t, err, context.Canceled)
-	require.Empty(t, runner.ReadRevisions(t.Context()).Values)
+	require.Empty(t, runner.ReadRevisions(t.Context()).Values())
+}
+
+func TestReadResultsReplaceAndIsolateOutcomes(t *testing.T) {
+	t.Parallel()
+	var results git.ReadResults[[]string]
+	results.Set("empty", nil)
+	value, err := results.One()
+	require.NoError(t, err)
+	require.Nil(t, value)
+	failure := errors.New("failed")
+	results.Record("empty", []string{"stale"}, failure)
+	value, err = results.One()
+	require.ErrorIs(t, err, failure)
+	require.Nil(t, value)
+	require.Empty(t, results.Values())
+	results.Set("empty", []string{"restored"})
+	require.Empty(t, results.Failures())
+	values, failures := results.Split()
+	delete(values, "empty")
+	failures["empty"] = failure
+	value, err = results.One()
+	require.NoError(t, err)
+	require.Equal(t, []string{"restored"}, value)
+	results.Fail("z", errors.New("last"))
+	results.Fail("a", errors.New("first"))
+	require.EqualError(t, results.Errs()[0], "first")
+	require.EqualError(t, results.Errs()[1], "last")
+	seen := 0
+	for range results.All() {
+		seen++
+		break
+	}
+	require.Equal(t, 1, seen)
 }

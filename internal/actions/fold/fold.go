@@ -29,7 +29,8 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 
 	// Show combined commit messages
 	out.Info("%s", output.Cyan("Proposed Commit History:"))
-	parentCommits, err := parent.GetAllCommits(engine.CommitFormatReadable)
+	parentCommitsData, err := parent.GetAllCommits()
+	parentCommits := parentCommitsData.Onelines()
 	if err != nil {
 		out.Debug("Failed to get parent commits for %s: %v", parent.GetName(), err)
 	}
@@ -37,7 +38,8 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 		out.Info("  %s", output.Dim(commit))
 	}
 
-	currentCommits, err := current.GetAllCommits(engine.CommitFormatReadable)
+	currentCommitsData, err := current.GetAllCommits()
+	currentCommits := currentCommitsData.Onelines()
 	if err != nil {
 		out.Debug("Failed to get current commits for %s: %v", current.GetName(), err)
 	}

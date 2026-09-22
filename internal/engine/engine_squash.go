@@ -44,7 +44,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 	}
 
 	// Get commit range SHAs from parent to current branch
-	commitSHAs, err := e.git.GetCommitRangeSHAs(ctx, git.RevRange{Base: parentBranchRevision, Head: branchRevision})
+	commitSHAs, err := e.git.ReadCommitNodes(ctx, git.RevRange{Base: parentBranchRevision, Head: branchRevision}).One()
 	if err != nil {
 		return fmt.Errorf("failed to get commit range: %w", err)
 	}
@@ -55,8 +55,8 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 	}
 
 	// Get the last (oldest) commit SHA from the range
-	// GetCommitRangeSHAs returns newest first (head...base)
-	oldestCommitSHA := commitSHAs[len(commitSHAs)-1]
+	// Commit ranges return newest first (head...base).
+	oldestCommitSHA := commitSHAs[len(commitSHAs)-1].SHA
 
 	// Soft reset to the oldest commit (keeps all changes staged)
 	// This moves HEAD to the oldest commit, staging all changes from newer commits

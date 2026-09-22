@@ -3,22 +3,22 @@ package stacklog
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/git"
+
 	"github.com/stretchr/testify/require"
 )
 
-// TestParseCommits proves the combined SHA+subject record is split correctly and
-// that a record with an empty subject still yields a Commit (it is not dropped) —
-// the failure mode of the previous index-paired two-list approach.
-func TestParseCommits(t *testing.T) {
+// TestMapCommits retains empty subjects without shifting their identities.
+func TestMapCommits(t *testing.T) {
 	t.Parallel()
 
-	records := []string{
-		"aaaa\x00feat: first",
-		"bbbb\x00", // empty subject: must still produce a Commit
-		"cccc\x00fix: third",
+	records := git.Commits{
+		{SHA: "aaaa", Subject: "feat: first"},
+		{SHA: "bbbb"}, // empty subject: must still produce a Commit
+		{SHA: "cccc", Subject: "fix: third"},
 	}
 
-	got := parseCommits(records)
+	got := mapCommits(records)
 	require.Equal(t, []Commit{
 		{SHA: "aaaa", Subject: "feat: first"},
 		{SHA: "bbbb", Subject: ""},

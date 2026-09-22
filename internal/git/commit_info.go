@@ -60,13 +60,13 @@ type CommitInfo struct {
 // tags are peeled, other objects are returned as-is, and missing refs have
 // individual errors. Metadata refs are always read without peeling.
 func (r *runner) ReadRevisions(ctx context.Context, names ...string) ReadResults[string] {
-	result := ReadResults[string]{Values: make(map[string]string), Errors: make(map[string]error)}
+	result := ReadResults[string]{}
 	if len(names) == 0 {
 		return result
 	}
 	if err := ctx.Err(); err != nil {
 		for _, name := range names {
-			result.Errors[name] = err
+			result.Fail(name, err)
 		}
 		return result
 	}
@@ -74,16 +74,12 @@ func (r *runner) ReadRevisions(ctx context.Context, names ...string) ReadResults
 		name := names[0]
 		if name == "HEAD" {
 			if sha, ok := r.readHeadRevision(); ok {
-				result.Values[name] = sha
+				result.Set(name, sha)
 				return result
 			}
 		}
 		sha, err := r.resolveRefSHAContext(ctx, name)
-		if err != nil {
-			result.Errors[name] = err
-		} else {
-			result.Values[name] = sha
-		}
+		result.Record(name, sha, err)
 		return result
 	}
 	queries := make([]string, 0, len(names)*2)
@@ -98,11 +94,7 @@ func (r *runner) ReadRevisions(ctx context.Context, names ...string) ReadResults
 		// The line protocol cannot encode newlines in revision expressions.
 		if strings.ContainsAny(name, "\n\x00") {
 			sha, err := r.resolveRefSHAContext(ctx, name)
-			if err != nil {
-				result.Errors[name] = err
-			} else {
-				result.Values[name] = sha
-			}
+			result.Record(name, sha, err)
 			continue
 		}
 		batchNames = append(batchNames, name)
@@ -124,26 +116,26 @@ func (r *runner) ReadRevisions(ctx context.Context, names ...string) ReadResults
 	}
 	if err != nil {
 		for _, name := range batchNames {
-			result.Errors[name] = err
+			result.Fail(name, err)
 		}
 		return result
 	}
 	for i, name := range batchNames {
 		for _, sha := range lines[offsets[i]:offsets[i+1]] {
 			if isHexSHA(sha) {
-				result.Values[name] = sha
+				result.Set(name, sha)
 				break
 			}
 		}
-		if _, ok := result.Values[name]; !ok {
+		if _, err := result.Get(name); err != nil {
 			// rev-parse accepts full IDs whose objects are absent.
 			if isHexSHA(strings.ToLower(name)) {
 				if sha, err := r.resolveRefSHAContext(ctx, name); err == nil {
-					result.Values[name] = sha
+					result.Set(name, sha)
 					continue
 				}
 			}
-			result.Errors[name] = fmt.Errorf("failed to get revision for %s: reference not found", name)
+			result.Fail(name, fmt.Errorf("failed to get revision for %s: reference not found", name))
 		}
 	}
 	return result

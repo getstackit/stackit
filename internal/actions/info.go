@@ -138,9 +138,10 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 		}
 	}
 
-	commits, err := branch.GetAllCommits(engine.CommitFormatReadable)
-	if err == nil {
-		result.CommitMessages = commits
+	history, commitErr := eng.ReadBranchCommits(ctx, engine.BranchesOf(branch)).One()
+	commitData := history.Commits
+	if commitErr == nil {
+		result.CommitMessages = commitData.Onelines()
 	}
 
 	// Diff stats — resolved via the batched reader over a single-branch set,
@@ -148,22 +149,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 	diff := eng.BatchDiffStats(engine.BranchesOf(branch))[branchName]
 	result.DiffStats.Additions = diff.Added
 	result.DiffStats.Deletions = diff.Deleted
-
-	// Files changed — measured against the branch's divergence point, the same
-	// base BatchDiffStats uses above, so the file count stays consistent with the
-	// additions/deletions when the parent has advanced since the branch diverged.
-	if !isTrunk {
-		base, err := eng.GetDivergencePoint(branchName)
-		if err == nil && base != "" {
-			branchRev, err := branch.GetRevision()
-			if err == nil {
-				files, err := eng.GetChangedFiles(ctx, git.RevRange{Base: base, Head: branchRev})
-				if err == nil {
-					result.DiffStats.FilesChanged = len(files)
-				}
-			}
-		}
-	}
+	result.DiffStats.FilesChanged = diff.FilesChanged
 
 	stackDesc := eng.GetStackDescription(branch)
 	if stackDesc != nil && !stackDesc.IsEmpty() {
@@ -173,19 +159,16 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 
 	effectiveDiff := opts.Diff || (opts.Stat && !opts.Patch)
 	effectivePatch := opts.Patch && !opts.Diff
+	// Reuse the commit read's actual endpoints, including its parent-tip
+	// fallback. A commit's first parent is not equivalent for merge histories.
+	baseRevision := history.Range.Base
 
-	if effectivePatch {
-		baseRevision := ""
+	if effectivePatch && (isTrunk || (commitErr == nil && len(commitData) > 0)) {
+		branchRevision := history.Range.Head
 		if isTrunk {
 			baseRevision = branchName + "~"
-		} else {
-			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
-			if err == nil && len(commits) > 0 {
-				oldestSHA := commits[0]
-				baseRevision, _ = eng.GetParentCommitSHA(oldestSHA)
-			}
+			branchRevision, err = branch.GetRevision()
 		}
-		branchRevision, err := branch.GetRevision()
 		if err == nil {
 			patchOutput, err := eng.ShowCommits(ctx, git.RevRange{Base: baseRevision, Head: branchRevision}, true, opts.Stat)
 			if err == nil {
@@ -206,18 +189,10 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 					}
 				}
 			}
-		} else {
-			commits, err := branch.GetAllCommits(engine.CommitFormatSHA)
-			if err == nil && len(commits) > 0 {
-				oldestSHA := commits[0]
-				parentSHA, _ := eng.GetParentCommitSHA(oldestSHA)
-				branchRevision, err := branch.GetRevision()
-				if err == nil {
-					diffOutput, err := eng.ShowDiff(ctx, parentSHA, branchRevision, opts.Stat)
-					if err == nil {
-						result.DiffOutput = diffOutput
-					}
-				}
+		} else if commitErr == nil && len(commitData) > 0 {
+			diffOutput, err := eng.ShowDiff(ctx, baseRevision, history.Range.Head, opts.Stat)
+			if err == nil {
+				result.DiffOutput = diffOutput
 			}
 		}
 	}

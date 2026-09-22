@@ -74,11 +74,11 @@ type BranchWriter interface {
 type CommitReader interface {
 	ReadRevisions(ctx context.Context, refs ...string) ReadResults[string]
 	ReadCommitInfo(ctx context.Context, refs ...string) ReadResults[CommitInfo]
-	GetCommitRange(ctx context.Context, base, head, format string) ([]string, error)
-	GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error)
-	GetCommitRangeMetadata(ctx context.Context, rr RevRange) ([]CommitMetadata, error)
-	GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error)
-	GetCommitLog(sha, format string) (string, error)
+	ReadCommitRanges(ctx context.Context, ranges ...RevRange) ReadResults[[]CommitMetadata]
+	ReadCommitNodes(ctx context.Context, ranges ...RevRange) ReadResults[[]CommitNode]
+	ReadCommits(ctx context.Context, refs ...string) ReadResults[CommitMetadata]
+	ReadAncestry(ctx context.Context, ranges ...RevRange) ReadResults[bool]
+	ReadCommitCounts(ctx context.Context, ranges ...RevRange) ReadResults[int]
 	GetRecentCommits(ctx context.Context, branchName string, count int) ([]RecentCommit, error)
 	GetRecentCommitsInRange(ctx context.Context, revRange string) ([]RecentCommit, error)
 	GetCommitTemplate(ctx context.Context) (string, error)
@@ -91,11 +91,9 @@ type DiffOperations interface {
 	IsMerged(ctx context.Context, branchName, target string) (bool, error)
 	IsSquashMerged(ctx context.Context, branchName, target string, cache *SquashMergeCache) (bool, error)
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
-	IsDiffEmpty(ctx context.Context, branchName, base string) (bool, error)
-	GetChangedFiles(ctx context.Context, rr RevRange) ([]string, error)
+	ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...RevRange) ReadResults[DiffSummary]
 	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
 	ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error)
-	GetDiffNumstat(rr RevRange) (string, error)
 	GetStagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary
@@ -221,6 +219,7 @@ type WorktreeRegistryOperations interface {
 
 // StatusOperations provides repository status information.
 type StatusOperations interface {
+	ReadWorktreeStatus(ctx context.Context) (WorktreeStatus, error)
 	GetStatusPorcelain(ctx context.Context) (string, error)
 	GetReflog(ctx context.Context, count int, format string) (string, error)
 	HasUncommittedChanges(ctx context.Context) bool

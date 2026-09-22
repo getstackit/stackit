@@ -22,9 +22,9 @@ func TestIsDiffEmpty(t *testing.T) {
 		require.NoError(t, err)
 
 		// Branch with no changes should be empty
-		empty, err := runner.IsDiffEmpty(context.Background(), "main", mainRev)
+		diff, err := runner.ReadDiffs(context.Background(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "main"}).One()
 		require.NoError(t, err)
-		require.True(t, empty)
+		require.True(t, diff.Empty)
 	})
 
 	t.Run("returns false when branch has changes", func(t *testing.T) {
@@ -44,9 +44,9 @@ func TestIsDiffEmpty(t *testing.T) {
 		require.NoError(t, err)
 
 		// Branch should not be empty
-		empty, err := runner.IsDiffEmpty(context.Background(), "branch1", mainRev)
+		diff, err := runner.ReadDiffs(context.Background(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "branch1"}).One()
 		require.NoError(t, err)
-		require.False(t, empty)
+		require.False(t, diff.Empty)
 	})
 
 	t.Run("returns true for branch with no commits", func(t *testing.T) {
@@ -66,9 +66,9 @@ func TestIsDiffEmpty(t *testing.T) {
 		require.NoError(t, err)
 
 		// Branch with no commits should be empty
-		empty, err := runner.IsDiffEmpty(context.Background(), "branch1", mainRev)
+		diff, err := runner.ReadDiffs(context.Background(), git.DiffCheckOnly, git.RevRange{Base: mainRev, Head: "branch1"}).One()
 		require.NoError(t, err)
-		require.True(t, empty)
+		require.True(t, diff.Empty)
 	})
 }
 

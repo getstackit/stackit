@@ -411,7 +411,7 @@ func (m *shippableModel) rebuildCache() {
 		}
 	}
 	stats := m.engine.BatchBranchStats(allBranches)
-	commits := m.engine.BatchCommits(allBranches, engine.CommitFormatReadable)
+	commits := m.engine.BatchCommits(allBranches)
 
 	for _, stack := range m.stacks {
 		rootBranch := stack.RootBranch()
@@ -440,7 +440,7 @@ func (m *shippableModel) rebuildCache() {
 			}
 			name := branch.GetName()
 			ann := tui.GetBranchAnnotation(m.engine, branch, stats[name], tui.AnnotationOptions{SkipCommitMessages: true})
-			if msgs := commits[name]; msgs != nil {
+			if msgs := commits[name].Onelines(); msgs != nil {
 				ann.CommitMessages = msgs
 				ann.CommitCount = len(msgs)
 			}

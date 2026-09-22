@@ -58,7 +58,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	}()
 
 	// Get all commits in the branch
-	commitSHAs, err := branch.GetAllCommits(CommitFormatSHA)
+	commitSHAs, err := branch.GetCommitIDs()
 	if err != nil {
 		return fmt.Errorf("failed to get commits for branch %s: %w", branchName, err)
 	}

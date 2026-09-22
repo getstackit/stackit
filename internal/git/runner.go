@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -701,93 +700,6 @@ func (r *runner) IsAncestor(ctx context.Context, ancestor, descendant string) (b
 	return r.isAncestor(ctx, ancestor, descendant)
 }
 
-func (r *runner) GetCommitRange(ctx context.Context, base, head, format string) ([]string, error) {
-	rangeArg := head
-	if base != "" {
-		rangeArg = base + ".." + head
-	}
-
-	switch format {
-	case "SHA":
-		return r.gitLogLines(ctx, rangeArg, "%H")
-	case "READABLE":
-		return r.gitLogLines(ctx, rangeArg, "%h %s")
-	case "SUBJECT":
-		return r.gitLogLines(ctx, rangeArg, "%s")
-	case "SHA_SUBJECT":
-		// NUL-separated full SHA and subject on one record per commit. The line
-		// is never blank (%H is always present) so gitLogLines won't drop a
-		// commit with an empty subject, and the literal NUL survives the split
-		// on "\n". Callers split each entry on "\x00" to recover SHA + subject.
-		return r.gitLogLines(ctx, rangeArg, "%H%x00%s")
-	case "READABLE_WITH_DATE":
-		// Tab-separated: short SHA, RFC3339 UTC date, subject. Use Unix
-		// epoch from git and convert in Go to preserve the prior behavior of
-		// normalizing to UTC regardless of the commit's recorded TZ.
-		lines, err := r.gitLogLines(ctx, rangeArg, "%h\t%at\t%s")
-		if err != nil {
-			return nil, err
-		}
-		out := make([]string, 0, len(lines))
-		for _, line := range lines {
-			sha, rest, ok := strings.Cut(line, "\t")
-			if !ok {
-				continue
-			}
-			epochStr, subject, ok := strings.Cut(rest, "\t")
-			if !ok {
-				continue
-			}
-			epoch, err := strconv.ParseInt(epochStr, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse commit epoch %q: %w", epochStr, err)
-			}
-			out = append(out, fmt.Sprintf("%s\t%s\t%s", sha, time.Unix(epoch, 0).UTC().Format(time.RFC3339), subject))
-		}
-		return out, nil
-	case "MESSAGE":
-		// Bodies can contain newlines; use NUL record separator.
-		out, err := r.RunGitCommandRawWithContext(ctx, "log", "-z", "--format=%B", rangeArg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to walk commits %s: %w", rangeArg, err)
-		}
-		records := splitNulTerminated(out)
-		result := make([]string, 0, len(records))
-		for _, rec := range records {
-			rec = strings.TrimSpace(rec)
-			if rec != "" {
-				result = append(result, rec)
-			}
-		}
-		return result, nil
-	default:
-		return nil, fmt.Errorf("unknown commit format: %s", format)
-	}
-}
-
-// gitLogLines runs `git log` over a range with a single-line format and
-// returns one element per commit, dropping blank lines. Suitable for any
-// format that does not include literal newlines.
-func (r *runner) gitLogLines(ctx context.Context, rangeArg, format string) ([]string, error) {
-	out, err := r.RunGitCommandWithContext(ctx, "log", "--format="+format, rangeArg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk commits %s: %w", rangeArg, err)
-	}
-	out = strings.TrimRight(out, "\n")
-	if out == "" {
-		return nil, nil
-	}
-	lines := strings.Split(out, "\n")
-	result := make([]string, 0, len(lines))
-	for _, l := range lines {
-		l = strings.TrimSpace(l)
-		if l != "" {
-			result = append(result, l)
-		}
-	}
-	return result, nil
-}
-
 // splitNulTerminated splits a NUL-terminated string (as produced by git -z)
 // into non-empty records. The trailing NUL appended by git is stripped first.
 func splitNulTerminated(s string) []string {
@@ -803,15 +715,6 @@ func splitNulTerminated(s string) []string {
 		}
 	}
 	return result
-}
-
-func (r *runner) GetCommitRangeSHAs(ctx context.Context, rr RevRange) ([]string, error) {
-	base, head := rr.Base, rr.Head
-	return r.GetCommitRange(ctx, base, head, "SHA")
-}
-
-func (r *runner) GetCommitHistorySHAs(ctx context.Context, branchName string) ([]string, error) {
-	return r.GetCommitRangeSHAs(ctx, RevRange{Head: branchName})
 }
 
 func (r *runner) CheckoutPaths(ctx context.Context, branch string, paths []string) error {
@@ -842,15 +745,6 @@ func (r *runner) GetReflog(ctx context.Context, count int, format string) (strin
 		args = append(args, fmt.Sprintf("--format=%s", format))
 	}
 	return r.RunGitCommandWithContext(ctx, args...)
-}
-
-func (r *runner) GetDiffNumstat(rr RevRange) (string, error) {
-	base, head := rr.Base, rr.Head
-	return r.runGitCommandInternal(gitCmdDiff, "--numstat", base, head)
-}
-
-func (r *runner) GetCommitLog(sha, format string) (string, error) {
-	return r.runGitCommandInternal("log", "-1", "--format="+format, sha)
 }
 
 func (r *runner) GetStatusPorcelain(ctx context.Context) (string, error) {

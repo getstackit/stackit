@@ -19,7 +19,7 @@ type fastPathGit struct {
 
 	t *testing.T
 
-	// commits returned by GetCommitRangeMetadata (newest-first).
+	// commits returned by ReadCommitRanges (newest-first).
 	commits []string
 	// parent lists keyed by commit SHA, as returned by git log --format=%P.
 	parents map[string]string
@@ -34,7 +34,9 @@ type fastPathGit struct {
 	commitTreeN int
 }
 
-func (g *fastPathGit) GetCommitRangeMetadata(_ context.Context, rr git.RevRange) ([]git.CommitMetadata, error) {
+func (g *fastPathGit) ReadCommitRanges(_ context.Context, ranges ...git.RevRange) git.ReadResults[[]git.CommitMetadata] {
+	require.Len(g.t, ranges, 1)
+	rr := ranges[0]
 	require.Equal(g.t, "old-base", rr.Base)
 	require.Equal(g.t, "feature", rr.Head)
 	commits := make([]git.CommitMetadata, 0, len(g.commits))
@@ -45,16 +47,24 @@ func (g *fastPathGit) GetCommitRangeMetadata(_ context.Context, rr git.RevRange)
 			AuthorDate: "2026-06-01T12:00:00-04:00", Message: "subject " + sha + "\n",
 		})
 	}
-	return commits, nil
+	var result git.ReadResults[[]git.CommitMetadata]
+	result.Set(rr.String(), commits)
+	return result
 }
 
-func (g *fastPathGit) GetChangedFiles(_ context.Context, rr git.RevRange) ([]string, error) {
-	require.Equal(g.t, "old-base", rr.Base)
-	files, ok := g.changedFiles[rr.Head]
-	if !ok {
-		g.t.Fatalf("unexpected changed-files head: %s", rr.Head)
+func (g *fastPathGit) ReadDiffs(_ context.Context, mode git.DiffReadMode, ranges ...git.RevRange) git.ReadResults[git.DiffSummary] {
+	require.Equal(g.t, git.DiffNames, mode)
+	require.Len(g.t, ranges, 2, "parent and branch file sets must be read together")
+	result := git.ReadResults[git.DiffSummary]{}
+	for _, rr := range ranges {
+		require.Equal(g.t, "old-base", rr.Base)
+		files, ok := g.changedFiles[rr.Head]
+		if !ok {
+			g.t.Fatalf("unexpected changed-files head: %s", rr.Head)
+		}
+		result.Set(rr.String(), git.DiffSummary{Files: files})
 	}
-	return files, nil
+	return result
 }
 
 func (g *fastPathGit) RunGitCommandWithContext(_ context.Context, args ...string) (string, error) {

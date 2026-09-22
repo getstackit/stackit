@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -31,7 +30,7 @@ func TestGeneratePlanJSON(t *testing.T) {
 		s.Scene.Repo.CreateChangeAndCommit("branch-b commit", "file-b")
 
 		// Get commit SHA for branch-a
-		commits, err := s.Engine.GetBranch("branch-a").GetAllCommits(engine.CommitFormatSHA)
+		commits, err := s.Engine.GetBranch("branch-a").GetCommitIDs()
 		require.NoError(t, err)
 		require.NotEmpty(t, commits)
 		commitSHA := commits[0]

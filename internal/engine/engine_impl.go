@@ -47,7 +47,7 @@ type engineImpl struct {
 
 	// Per-request caches for expensive git operations.
 	// Key: "base:head" (both are resolved SHAs); value type noted inline.
-	diffStatsCache   sync.Map // value: [2]int{added, deleted}
+	diffStatsCache   sync.Map // value: git.DiffSummary, keyed by immutable base/head revisions
 	commitCountCache sync.Map // value: int
 }
 

@@ -32,7 +32,7 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 		require.NoError(t, err)
 	}
 	logger.calls = 0
-	commits, err := runner.GetCommitRangeMetadata(ctx, git.RevRange{Base: base, Head: "HEAD"})
+	commits, err := runner.ReadCommitRanges(ctx, git.RevRange{Base: base, Head: "HEAD"}).One()
 	require.NoError(t, err)
 	require.Len(t, commits, 2)
 	require.Equal(t, 1, logger.calls, "metadata for the whole range uses one subprocess")
@@ -41,7 +41,7 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 			"%P": strings.Join(commit.Parents, " "), "%an": commit.AuthorName,
 			"%ae": commit.AuthorEmail, "%aI": commit.AuthorDate, "%B": commit.Message,
 		} {
-			want, err := runner.GetCommitLog(commit.SHA, format)
+			want, err := runner.RunGitCommandWithContext(ctx, "log", "-1", "--format="+format, commit.SHA)
 			require.NoError(t, err)
 			require.Equal(t, want, strings.TrimSpace(got), format)
 		}
@@ -50,9 +50,9 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 	require.Equal(t, []string{base}, commits[1].Parents)
 	require.Empty(t, commits[1].Message)
 
-	empty, err := runner.GetCommitRangeMetadata(ctx, git.RevRange{Base: "HEAD", Head: "HEAD"})
+	empty, err := runner.ReadCommitRanges(ctx, git.RevRange{Base: "HEAD", Head: "HEAD"}).One()
 	require.NoError(t, err)
 	require.Empty(t, empty)
-	_, err = runner.GetCommitRangeMetadata(ctx, git.RevRange{Head: "missing-branch"})
+	_, err = runner.ReadCommitRanges(ctx, git.RevRange{Head: "missing-branch"}).One()
 	require.Error(t, err)
 }

@@ -7,8 +7,6 @@
 package stacklog
 
 import (
-	"strings"
-
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -19,7 +17,7 @@ type Source interface {
 	CurrentBranch() *engine.Branch
 	Trunk() engine.Branch
 	Graph(strategy engine.SortStrategy) *engine.StackGraph
-	BatchCommits(branches engine.Branches, format engine.CommitFormat) map[string][]string
+	BatchCommits(branches engine.Branches) map[string]git.Commits
 	RefDecorations() (map[string][]git.RefDecoration, error)
 	GetRevisionForName(branchName string) (string, error)
 }
@@ -92,7 +90,7 @@ func Gather(src Source) (Result, error) {
 
 	// One combined walk per branch yields both SHA and subject on each record,
 	// so the two never desync (an empty subject can't shift the pairing).
-	commitsByBranch := src.BatchCommits(branches, engine.CommitFormatSHASubject)
+	commitsByBranch := src.BatchCommits(branches)
 
 	currentName := current.GetName()
 	for _, b := range branches {
@@ -100,20 +98,17 @@ func Gather(src Source) (Result, error) {
 		res.Branches = append(res.Branches, Branch{
 			Name:      name,
 			IsCurrent: name == currentName,
-			Commits:   parseCommits(commitsByBranch[name]),
+			Commits:   mapCommits(commitsByBranch[name]),
 		})
 	}
 	return res, nil
 }
 
-// parseCommits splits each CommitFormatSHASubject record ("<full-sha>\x00<subject>")
-// into a Commit. A record with a trailing empty subject still yields a Commit with
-// an empty Subject (it is not dropped).
-func parseCommits(records []string) []Commit {
+// mapCommits keeps subjects attached to their identities, including empty subjects.
+func mapCommits(records git.Commits) []Commit {
 	commits := make([]Commit, 0, len(records))
 	for _, rec := range records {
-		sha, subject, _ := strings.Cut(rec, "\x00")
-		commits = append(commits, Commit{SHA: sha, Subject: subject})
+		commits = append(commits, Commit{SHA: rec.SHA, Subject: rec.Subject})
 	}
 	return commits
 }

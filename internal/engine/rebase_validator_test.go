@@ -184,24 +184,20 @@ func TestValidateRebases(t *testing.T) {
 
 		// The rebased tip must sit directly on the advanced main and carry exactly
 		// the branch's three original commits.
-		replayed, err := s.Engine.Git().GetCommitRangeSHAs(context.Background(), git.RevRange{Base: mainRev, Head: newTip})
+		replayed, err := s.Engine.Git().ReadCommitRanges(context.Background(), git.RevRange{Base: mainRev, Head: newTip}).One()
 		require.NoError(t, err)
 		require.Len(t, replayed, 3, "all three branch commits should be replayed onto new main")
 
 		// Per-commit messages are preserved in order. replayed is newest-first, so
 		// replayed[0] is "commit c" and replayed[2] is "commit a".
-		msgC, err := s.Engine.Git().GetCommitLog(replayed[0], "%s")
-		require.NoError(t, err)
-		require.Equal(t, "commit c", msgC)
-		msgA, err := s.Engine.Git().GetCommitLog(replayed[2], "%s")
-		require.NoError(t, err)
-		require.Equal(t, "commit a", msgA)
+		require.Equal(t, "commit c", replayed[0].Subject)
+		require.Equal(t, "commit a", replayed[2].Subject)
 
 		// The rebased tip's tree contains both the parent's change and all three
 		// branch changes (4 distinct files relative to the fork point).
-		filesFromBase, err := s.Engine.Git().GetChangedFiles(context.Background(), git.RevRange{Base: branch1OldBase, Head: newTip})
+		diffFromBase, err := s.Engine.Git().ReadDiffs(context.Background(), git.DiffNames, git.RevRange{Base: branch1OldBase, Head: newTip}).One()
 		require.NoError(t, err)
-		require.Len(t, filesFromBase, 4)
+		require.Len(t, diffFromBase.Files, 4)
 	})
 
 	t.Run("matches git rebase semantics for branch range containing merge commit", func(t *testing.T) {
@@ -239,8 +235,9 @@ func TestValidateRebases(t *testing.T) {
 		newTip := result.NewSHAs["feature"]
 		require.NotEmpty(t, newTip)
 
-		replayedSubjects, err := s.Engine.Git().GetCommitRange(context.Background(), mainRev, newTip, "SUBJECT")
+		records, err := s.Engine.Git().ReadCommitRanges(context.Background(), git.RevRange{Base: mainRev, Head: newTip}).One()
 		require.NoError(t, err)
+		replayedSubjects := git.Commits(records).Subjects()
 		require.ElementsMatch(t, []string{"feature change", "side change"}, replayedSubjects)
 		require.NotContains(t, replayedSubjects, "merge side")
 	})
@@ -694,7 +691,7 @@ func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t 
 	// A second restack should now find the record fully caught up.
 	plan2, err := s.Engine.PlanRestack(context.Background(), engine.BranchesOf(child))
 	require.NoError(t, err)
-	require.True(t, plan2.Items["child"].Skip)
+	require.Equal(t, engine.RestackPlanSkip, plan2.Items["child"].Action)
 	require.Equal(t, engine.RestackUnneeded, plan2.PlannedResults["child"].Result)
 }
 

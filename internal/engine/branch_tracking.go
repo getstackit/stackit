@@ -776,7 +776,7 @@ func (e *engineImpl) SetFrozen(ctx context.Context, branches Branches, frozen bo
 
 		// Prepare all local records and their versions together.
 		tx := e.BeginTx(fmt.Sprintf("freeze: set frozen=%t on %d branches", frozen, len(branches)))
-		metas := tx.ReadLocalMetadata(ctx, branchNames...).Values
+		metas := tx.ReadLocalMetadata(ctx, branchNames...).Values()
 
 		// Stage all updates
 		for _, name := range branchNames {

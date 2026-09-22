@@ -125,22 +125,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Get all commit SHAs from downstack branches (newest to oldest)
-	commitsByBranch := eng.BatchCommits(downstackBranches, engine.CommitFormatSHA)
+	commitsByBranch := eng.ReadBranchCommitNodes(ctx, downstackBranches)
 	commitSHAs := []string{}
 	for _, branch := range downstackBranches {
-		// BatchCommits returns newest to oldest per branch, matching our search
-		// order. The batch reader swallows errors as nil; absorb must not route
-		// hunks against an incomplete commit list, so re-read any empty non-trunk
-		// branch individually to distinguish "legitimately empty" from "error".
-		commits := commitsByBranch[branch.GetName()]
-		if len(commits) == 0 && !branch.IsTrunk() {
-			var err error
-			commits, err = branch.GetAllCommits(engine.CommitFormatSHA)
-			if err != nil {
-				return fmt.Errorf("failed to get commits for branch %s: %w", branch.GetName(), err)
-			}
+		history, err := commitsByBranch.Get(branch.GetName())
+		if err != nil {
+			return fmt.Errorf("failed to get commits for branch %s: %w", branch.GetName(), err)
 		}
-		commitSHAs = append(commitSHAs, commits...)
+		for _, commit := range history {
+			commitSHAs = append(commitSHAs, commit.SHA)
+		}
 	}
 
 	// Find target commit for each hunk
@@ -279,15 +273,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Stash staged and unstaged changes separately to avoid reintroducing absorbed hunks.
-	hasUnstaged, err := eng.HasUnstagedChanges(ctx.Context)
+	status, err := eng.GetWorkingTreeStatus(ctx.Context)
 	if err != nil {
-		return fmt.Errorf("failed to check unstaged changes: %w", err)
+		return fmt.Errorf("failed to read working tree status: %w", err)
 	}
-	hasUntracked, err := eng.HasUntrackedFiles(ctx.Context)
-	if err != nil {
-		return fmt.Errorf("failed to check untracked files: %w", err)
-	}
-	hasUnstagedOrUntracked := hasUnstaged || hasUntracked
+	hasUnstagedOrUntracked := status.HasUnstagedChanges()
 
 	var (
 		stashedStaged   bool
@@ -329,7 +319,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		// placeholder that `git apply` cannot reapply, silently losing the edit
 		// (and, because git apply is atomic per invocation, poisoning any
 		// coexisting text edits too).
-		if hasUnstaged {
+		if status.Unstaged {
 			diff, diffErr := eng.GetUnstagedDiffBinary(ctx.Context)
 			if diffErr != nil {
 				return fmt.Errorf("failed to capture unstaged changes: %w", diffErr)

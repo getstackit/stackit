@@ -194,7 +194,6 @@ func (r *MetadataStore) ReadLocalMetadata(ctx context.Context, branchNames ...st
 			result.Set(name, &LocalMeta{})
 			continue
 		}
-		r.metadataCache.PutLocalSHA(name, obj.SHA)
 		var meta LocalMeta
 		if err := json.Unmarshal([]byte(obj.Content), &meta); err != nil {
 			result.Fail(name, fmt.Errorf("failed to unmarshal local metadata for %s: %w", name, err))

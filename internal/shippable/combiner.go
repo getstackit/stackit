@@ -295,16 +295,6 @@ func (c *Combiner) tryMergeStacks(
 // UpdateCompatibility updates the compatibility information for each stack
 // based on a combination result.
 func UpdateCompatibility(stacks []Stack, result *CombinationResult) {
-	workingRoots := make(map[string]bool)
-	for _, s := range result.WorkingStacks {
-		workingRoots[s.RootBranch()] = true
-	}
-
-	conflictingRoots := make(map[string]bool)
-	for _, es := range result.ConflictingStacks {
-		conflictingRoots[es.Stack.RootBranch()] = true
-	}
-
 	for i := range stacks {
 		root := stacks[i].RootBranch()
 

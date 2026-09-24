@@ -23,12 +23,12 @@ type engineImpl struct {
 	// conflict workflow can bind its rollback to that snapshot rather than to
 	// whatever happens to be newest on disk.
 	lastSnapshotID string
-	maxConcurrency    int
-	linearStacks      bool
-	git               git.Runner
-	metadata          *git.MetadataStore
-	mu                sync.RWMutex
-	worktreeMu        sync.Mutex // serializes worktree add/remove/prune to avoid git races on .git/worktrees/
+	maxConcurrency int
+	linearStacks   bool
+	git            git.Runner
+	metadata       *git.MetadataStore
+	mu             sync.RWMutex
+	worktreeMu     sync.Mutex // serializes worktree add/remove/prune to avoid git races on .git/worktrees/
 
 	// Lazy-load gates. sharedLoaded and localLoaded track whether the
 	// corresponding metadata batch has been populated into state. Both default

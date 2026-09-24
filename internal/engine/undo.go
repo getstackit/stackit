@@ -242,7 +242,7 @@ func (e *engineImpl) captureWorktree(ctx context.Context, snapshotID, command st
 	// The commit is unreachable until it is anchored. An un-anchored capture is
 	// still worth recording — gc is unlikely to run in the seconds before an
 	// abort — so a failed anchor does not discard it.
-	_ = e.git.UpdateRef(snapshotWorktreeRef(snapshotID), sha)
+	_ = e.git.UpdateRefs(ctx, []git.RefUpdate{{RefName: snapshotWorktreeRef(snapshotID), NewSHA: sha}}, "")
 	return sha
 }
 
@@ -253,7 +253,7 @@ func (e *engineImpl) captureUntracked(ctx context.Context, snapshotID, command s
 	if err != nil || sha == "" {
 		return ""
 	}
-	_ = e.git.UpdateRef(snapshotUntrackedRef(snapshotID), sha)
+	_ = e.git.UpdateRefs(ctx, []git.RefUpdate{{RefName: snapshotUntrackedRef(snapshotID), NewSHA: sha}}, "")
 	return sha
 }
 
@@ -404,7 +404,7 @@ func (e *engineImpl) enforceMaxStackDepth(ctx context.Context) error {
 	// The captures are only reachable through these refs, so they go when the
 	// snapshots that own them go. One batched write, not one per ref.
 	if len(captureRefs) > 0 {
-		_ = e.git.DeleteRefsBatch(ctx, captureRefs)
+		_ = e.git.DeleteRefs(ctx, captureRefs...)
 	}
 
 	return nil

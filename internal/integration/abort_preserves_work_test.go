@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/getstackit/stackit/internal/config"
 )
 
 // gitStatus returns the porcelain status of the test repo, which encodes the
@@ -279,4 +281,36 @@ func TestUndoWorksOutOfAConflictedRebase(t *testing.T) {
 	require.Equal(t, statusBefore, sh.gitStatus(),
 		"undo must land on the pre-command working tree, not the conflicted one")
 	require.Equal(t, "top\nA EDIT\n", sh.fileContent("shared.txt"))
+}
+
+// Continuing onto another branch must retain the original command's rollback
+// point even though each CLI invocation constructs a fresh engine.
+func TestAbortAfterRepeatedContinueRestoresOriginalSnapshot(t *testing.T) {
+	t.Parallel()
+	sh := NewTestShellInProcess(t)
+	original := make(map[string]string)
+	for _, branch := range []string{"a", "b", "c", "d"} {
+		sh.WriteFile("shared.txt", branch+"\n").Run("create " + branch + " -m 'branch change'")
+		original[branch] = sh.revParse(branch)
+	}
+	sh.Checkout("a").WriteUnstaged("shared.txt", "amended\n")
+	statusBefore := sh.gitStatus()
+	sh.RunExpectError("modify -a").OutputContains("Conflicted files")
+	state, err := config.GetContinuationState(sh.Dir())
+	require.NoError(t, err)
+	require.NotEmpty(t, state.SnapshotID)
+	snapshotID := state.SnapshotID
+	for _, resolution := range []string{"resolved b\n", "resolved c\n"} {
+		sh.WriteFile("shared.txt", resolution).RunExpectError("continue").OutputContains("Conflicted files")
+		state, err = config.GetContinuationState(sh.Dir())
+		require.NoError(t, err)
+		require.Equal(t, snapshotID, state.SnapshotID)
+	}
+	sh.Run("abort --force").OnBranch("a")
+	for branch, sha := range original {
+		require.Equal(t, sha, sh.revParse(branch), branch)
+	}
+	require.Equal(t, statusBefore, sh.gitStatus())
+	require.Equal(t, "amended\n", sh.fileContent("shared.txt"))
+	sh.ExpectStackStructure(map[string]string{"a": "main", "b": "a", "c": "b", "d": "c"})
 }

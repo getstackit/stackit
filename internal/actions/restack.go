@@ -228,7 +228,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 			handleRestackProgress(eng, handler, p, &restacked, &skipped, &conflicts, &blocked)
 		}
 
-		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode); err != nil {
+		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode, nil); err != nil {
 			return fmt.Errorf("restack failed: %w", err)
 		}
 	}

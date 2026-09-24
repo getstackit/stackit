@@ -102,7 +102,7 @@ func RestackBranches(ctx *app.Context, branches engine.Branches) error {
 // RestackBranchesWithHandler restacks branches with optional progress callback.
 // See ConflictMode for how mode controls conflict handling.
 func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, callback RestackProgressCallback, mode ConflictMode) error {
-	return restackBranchesWithPlan(ctx, branches, nil, callback, mode)
+	return restackBranchesWithPlan(ctx, branches, nil, callback, mode, nil)
 }
 
 // restackBranchesWithPlan is the implementation of RestackBranchesWithHandler
@@ -110,7 +110,7 @@ func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, call
 // engine.PlanRestack call is skipped — used by RestackAction when the CLI
 // already built the plan to gate TUI initialization, so we don't pay for
 // roughly 3 git operations per branch twice per invocation.
-func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan *engine.RestackPlan, callback RestackProgressCallback, mode ConflictMode) error {
+func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan *engine.RestackPlan, callback RestackProgressCallback, mode ConflictMode, continuation *config.ContinuationState) error {
 	if len(branches) == 0 {
 		return nil
 	}
@@ -191,7 +191,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 		}
 
 		// Enter conflict workflow for the first conflict
-		return EnterConflictWorkflow(ctx, firstConflict, branches)
+		return enterConflictWorkflow(ctx, firstConflict, branches, continuation)
 	}
 
 	// For sync mode (or standalone with no conflicts), restack all successful branches
@@ -485,12 +485,19 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 // per-stack atomicity on purpose) and then enters the conflict on top of them.
 // stackBranches must be the conflicted stack in topological order.
 func ResolveConflictWorkflow(ctx *app.Context, stackBranches engine.Branches) error {
-	return restackBranchesWithPlan(ctx, stackBranches, nil, nil, ConflictModeEnterWorkflow)
+	return restackBranchesWithPlan(ctx, stackBranches, nil, nil, ConflictModeEnterWorkflow, nil)
 }
 
 // EnterConflictWorkflow performs the rebase to enter conflict state and persists continuation state.
 // This helper is shared between RestackBranchesWithHandler (standalone mode) and sync.RunSync (sync mode).
 func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches engine.Branches) error {
+	return enterConflictWorkflow(ctx, firstConflict, allBranches, nil)
+}
+
+// previous carries the original command's rollback and return destination when
+// continue reaches another conflicted branch. Its empty snapshot ID is also
+// authoritative: a command without a rollback point must never inherit one.
+func enterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches engine.Branches, previous *config.ContinuationState) error {
 	// Detach HEAD before the real rebase. Validation already told us this rebase
 	// will conflict, so the worktree is about to be left in a long-lived rebase
 	// state. If the worktree is still "on a branch" (typically trunk, since
@@ -579,6 +586,11 @@ func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 		// the command took none, which abort reads as "no rollback point"
 		// rather than reaching for an unrelated command's snapshot.
 		SnapshotID: ctx.Engine.LastSnapshotID(),
+	}
+
+	if previous != nil {
+		continuation.SnapshotID = previous.SnapshotID
+		continuation.ReturnToBranch = previous.ReturnToBranch
 	}
 
 	if err := config.PersistContinuationState(ctx.RepoRoot, continuation); err != nil {

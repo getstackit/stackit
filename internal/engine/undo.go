@@ -539,6 +539,22 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	// A hard reset can overwrite untracked files that obstruct the restored
+	// tree. Inspect the snapshot's commit before changing any refs, while the
+	// index still correctly identifies the user's untracked work.
+	if target := snapshot.BranchSHAs[snapshot.CurrentBranch]; target != "" {
+		untracked, err := e.git.GetUntrackedFilesIn(ctx, e.repoRoot)
+		if err != nil {
+			return fmt.Errorf("failed to inspect untracked files before restoring snapshot: %w", err)
+		}
+		switch collides, known := e.git.TreeContainsAnyPath(ctx, target, untracked); {
+		case !known:
+			return fmt.Errorf("could not compare untracked files against the snapshot; repository state was not restored")
+		case collides:
+			return fmt.Errorf("restoring the snapshot would overwrite untracked files; move them aside or stash them with 'git stash -u' first")
+		}
+	}
+
 	// Get current branches
 	currentBranches, err := e.git.GetAllBranchNames(ctx)
 	if err != nil {

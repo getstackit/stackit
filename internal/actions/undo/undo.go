@@ -152,9 +152,8 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	// it — clean, since rebase refuses to start otherwise — so by this point
 	// tracked changes really are the user's own.
 	//
-	// Untracked files are deliberately not counted: a reset cannot destroy
-	// them, and the untracked half of a capture never overwrites a file that
-	// already exists.
+	// RestoreSnapshot separately checks untracked files against the target
+	// tree before changing refs. Unrelated untracked files can stay in place.
 	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx.Context, ctx.RepoRoot)
 	switch {
 	case dirtyErr != nil:

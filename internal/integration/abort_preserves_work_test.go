@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -164,8 +165,8 @@ func TestUndoRestoresWorkConsumedByModify(t *testing.T) {
 // of your own in the tree would destroy them — and then merge the snapshot's
 // capture into the wreckage. Refusing is the only outcome that keeps the work.
 //
-// Untracked files are deliberately not a refusal: a reset cannot destroy them,
-// and the untracked half of a capture never overwrites a file already on disk.
+// Unrelated untracked files must not block undo. Files that collide with the
+// snapshot are covered separately below.
 func TestUndoRefusesToOverwriteUncommittedWork(t *testing.T) {
 	t.Parallel()
 	sh := NewTestShellInProcess(t)
@@ -313,4 +314,33 @@ func TestAbortAfterRepeatedContinueRestoresOriginalSnapshot(t *testing.T) {
 	require.Equal(t, statusBefore, sh.gitStatus())
 	require.Equal(t, "amended\n", sh.fileContent("shared.txt"))
 	sh.ExpectStackStructure(map[string]string{"a": "main", "b": "a", "c": "b", "d": "c"})
+}
+
+func TestUndoRefusesUntrackedCollisionsBeforeRestoringRefs(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		tracked   string
+		untracked string
+	}{
+		{"same path", "victim", "victim"},
+		{"untracked directory", "victim", "victim/notes.txt"},
+		{"untracked file blocks directory", "victim/old.txt", "victim"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sh := NewTestShellInProcess(t)
+			require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(sh.Dir(), tc.tracked)), 0o750))
+			sh.WriteFile("keep.txt", "keep\n").WriteFile(tc.tracked, "original\n").Run("create a -m 'original'")
+			sh.Git("rm -r victim").Run("modify -m 'delete victim'")
+			before := sh.revParse("a")
+			require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(sh.Dir(), tc.untracked)), 0o750))
+			sh.WriteUnstaged(tc.untracked, "new uncommitted work\n")
+			statusBefore := sh.gitStatus()
+			sh.RunExpectError("undo -y").OutputContains("untracked")
+			require.Equal(t, before, sh.revParse("a"), "ref must not move when undo is refused")
+			require.Equal(t, statusBefore, sh.gitStatus())
+			require.Equal(t, "new uncommitted work\n", sh.fileContent(tc.untracked))
+		})
+	}
 }

@@ -444,11 +444,9 @@ func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath
 // `git status --porcelain --untracked-files=no` returning empty output.
 //
 // This is the right question when deciding whether a `git reset --hard` would
-// destroy something: reset never touches untracked files, so counting them as
-// "dirty" suppresses a reset that could not have harmed them. Use
-// WorktreeHasUncommittedChanges instead when deciding whether it is polite to
-// operate on someone's worktree at all, where a stray untracked file still
-// signals work in progress.
+// destroy tracked edits. Before resetting, also check untracked collisions
+// against the target tree with WorktreeResetBlocker. Use
+// WorktreeHasUncommittedChanges when any untracked file should count as dirty.
 func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error) {
 	out, err := r.RunGitCommandRawWithContext(ctx,
 		"-C", worktreePath,
@@ -602,8 +600,15 @@ func (r *runner) TreeContainsAnyPath(ctx context.Context, rev string, paths []st
 	// untracked files from becoming an "unknown" safety result solely because
 	// they exceed an argv cap.
 	wanted := make(map[string]struct{}, len(paths))
+	// An incoming file can replace an entire untracked directory, and an
+	// untracked file can obstruct a directory in the incoming tree.
+	directories := make(map[string]struct{})
 	for _, path := range paths {
 		wanted[path] = struct{}{}
+		for parent := path; strings.Contains(parent, "/"); {
+			parent = parent[:strings.LastIndexByte(parent, '/')]
+			directories[parent] = struct{}{}
+		}
 	}
 
 	out, err := r.RunGitCommandRawWithContext(ctx, "ls-tree", "-r", "-z", "--name-only", rev)
@@ -611,8 +616,18 @@ func (r *runner) TreeContainsAnyPath(ctx context.Context, rev string, paths []st
 		return false, false
 	}
 	for _, path := range splitNulTerminated(out) {
-		if _, ok := wanted[path]; ok {
+		if _, ok := directories[path]; ok {
 			return true, true
+		}
+		for {
+			if _, ok := wanted[path]; ok {
+				return true, true
+			}
+			slash := strings.LastIndexByte(path, '/')
+			if slash < 0 {
+				break
+			}
+			path = path[:slash]
 		}
 	}
 	return false, true

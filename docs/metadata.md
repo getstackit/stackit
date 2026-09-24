@@ -68,7 +68,8 @@ rolled-back tree: the tracked stash, then the untracked files. Restoring an
 untracked file never overwrites a file that currently exists on disk. The stash
 apply is an ordinary `git stash apply`, so it does merge into whatever the
 working tree holds — which is why `undo` refuses to run against a dirty tree it
-did not capture.
+did not capture. It also refuses before moving refs if untracked files would
+be overwritten by the restored tree, including file/directory collisions.
 
 ### Which snapshot abort rolls back to
 

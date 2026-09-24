@@ -50,7 +50,8 @@ func (r *runner) CaptureUntracked(ctx context.Context, message string) (string, 
 
 	env := []string{"GIT_INDEX_FILE=" + indexPath}
 	for chunk := range slices.Chunk(paths, restorePathBatchSize) {
-		addArgs := append([]string{"add", "--"}, chunk...)
+		// These are filenames from ls-files, never user-supplied pathspecs.
+		addArgs := append([]string{"--literal-pathspecs", "add", "--"}, chunk...)
 		if _, err := r.RunGitCommandWithEnv(ctx, env, addArgs...); err != nil {
 			return "", fmt.Errorf("failed to stage untracked files for capture: %w", err)
 		}
@@ -104,7 +105,7 @@ func (r *runner) RestoreUntracked(ctx context.Context, commitSHA string) (int, e
 	// Chunked: a capture can hold an unbounded number of paths, and one
 	// argv per file would eventually exceed the platform's argument limit.
 	for chunk := range slices.Chunk(missing, restorePathBatchSize) {
-		args := append([]string{"restore", "--source", commitSHA, "--worktree", "--"}, chunk...)
+		args := append([]string{"--literal-pathspecs", "restore", "--source", commitSHA, "--worktree", "--"}, chunk...)
 		if _, err := r.RunGitCommandWithContext(ctx, args...); err != nil {
 			return 0, fmt.Errorf("failed to restore captured files: %w", err)
 		}

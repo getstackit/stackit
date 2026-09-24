@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -122,4 +123,56 @@ func TestCaptureUntracked_SkipsIgnoredFiles(t *testing.T) {
 	require.Contains(t, captured, "keep.txt")
 	require.Contains(t, captured, ".gitignore", "an untracked .gitignore is itself work to preserve")
 	require.NotContains(t, captured, "build/artifact.bin", "ignored files must stay out of the capture")
+}
+
+func TestCaptureUntrackedUsesLiteralPathspecs(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	require.NoError(t, os.WriteFile(filepath.Join(scene.Dir, "tracked.txt"), []byte("tracked"), 0o600))
+	_, err := runner.RunGitCommandWithContext(t.Context(), "add", "tracked.txt")
+	require.NoError(t, err)
+	_, err = runner.RunGitCommandWithContext(t.Context(), "commit", "-m", "tracked file")
+	require.NoError(t, err)
+	files := []string{" :(glob)*.txt", ":(glob)*.txt", ":(exclude)keep.txt", "line\nbreak.txt", "[ab].txt"}
+	for _, name := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(scene.Dir, name), []byte(name), 0o600))
+	}
+	before, err := runner.RunGitCommandRawWithContext(t.Context(), "status", "--porcelain", "-z")
+	require.NoError(t, err)
+	sha, err := runner.CaptureUntracked(t.Context(), "literal capture")
+	require.NoError(t, err)
+	captured, err := runner.RunGitCommandRawWithContext(t.Context(), "ls-tree", "-r", "--name-only", "-z", sha)
+	require.NoError(t, err)
+	require.ElementsMatch(t, files, strings.Split(strings.TrimSuffix(captured, "\x00"), "\x00"),
+		"capture must include every literal untracked name and no tracked paths")
+	after, err := runner.RunGitCommandRawWithContext(t.Context(), "status", "--porcelain", "-z")
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+}
+
+func TestRestoreUntrackedUsesLiteralPathspecs(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	magic := filepath.Join(scene.Dir, ":(glob)*.txt")
+	existing := filepath.Join(scene.Dir, "keep.txt")
+	require.NoError(t, os.WriteFile(magic, []byte("captured magic"), 0o600))
+	require.NoError(t, os.WriteFile(existing, []byte("captured keep"), 0o600))
+	sha, err := runner.CaptureUntracked(t.Context(), "capture")
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(magic))
+	require.NoError(t, os.WriteFile(existing, []byte("new work"), 0o600))
+	count, err := runner.RestoreUntracked(t.Context(), sha)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+	content, err := os.ReadFile(existing)
+	require.NoError(t, err)
+	require.Equal(t, "new work", string(content), "a magic filename must not select an existing sibling")
+	content, err = os.ReadFile(magic)
+	require.NoError(t, err)
+	require.Equal(t, "captured magic", string(content))
+	staged, err := runner.RunGitCommandWithContext(t.Context(), "diff", "--cached", "--name-only")
+	require.NoError(t, err)
+	require.Empty(t, staged, "restoring must leave the real index alone")
 }

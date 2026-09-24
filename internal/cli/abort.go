@@ -8,6 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/cli/stack"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -28,8 +29,11 @@ the operation will be rolled back.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
-				// Check for absorb in progress first - it has its own abort logic
-				if absorb.IsAbsorbInProgress(ctx) {
+				// A pending conflict rollback owns abort even after Git's rebase
+				// has been unwound. Otherwise detached HEAD can be mistaken for
+				// a failed absorb, bypassing snapshot restoration on a retry.
+				_, continuationErr := config.GetContinuationState(ctx.RepoRoot)
+				if continuationErr != nil && absorb.IsAbsorbInProgress(ctx) {
 					return absorb.Abort(ctx)
 				}
 

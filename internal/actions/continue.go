@@ -133,7 +133,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// Continue with remaining branches to restack
 	if len(continuation.BranchesToRestack) > 0 {
 		branches := engine.BranchesFromNames(eng, continuation.BranchesToRestack)
-		if err := RestackBranches(ctx, branches); err != nil {
+		if err := restackBranchesWithPlan(ctx, branches, nil, nil, ConflictModeEnterWorkflow, continuation); err != nil {
 			return err
 		}
 	}

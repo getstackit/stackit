@@ -317,13 +317,13 @@ func buildRebaseSpecsForAll(eng engine.Engine, plan *flattenPlan, branches engin
 	// Resolve divergence points and parent revisions for every branch up front
 	// in batched reads, instead of one git process pair per branch below.
 	divergence := eng.BatchDivergencePoints(branches)
-	parentNames := make([]string, 0, len(branches))
+	parents := make(engine.Branches, 0, len(branches))
 	for _, b := range branches {
 		if parent := b.GetParent(); parent != nil {
-			parentNames = append(parentNames, parent.GetName())
+			parents = append(parents, *parent)
 		}
 	}
-	parentRevisions, _ := eng.GetRevisions(parentNames)
+	parentRevisions := eng.BatchRevisions(parents)
 
 	specs := make([]engine.RebaseSpec, 0, len(branches))
 
@@ -453,12 +453,7 @@ func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branc
 	// batched reads up front (passed-around values, no engine-global cache). The
 	// revision map doubles as the parent-revision lookup the planning loop used
 	// to accumulate one entry at a time.
-	revNames := make([]string, 0, len(branches)+1)
-	revNames = append(revNames, trunk.GetName())
-	for _, b := range branches {
-		revNames = append(revNames, b.GetName())
-	}
-	revisions, _ := eng.GetRevisions(revNames)
+	revisions := eng.BatchRevisions(engine.Branches{trunk}.Concat(branches))
 	divergence := eng.BatchDivergencePoints(branches)
 
 	if revisions[trunk.GetName()] == "" {

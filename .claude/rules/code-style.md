@@ -42,7 +42,7 @@ const (
 | `UpdateRef` in a loop | `UpdateRefsBatch(ctx, updates)` |
 | `DeleteRef` in a loop | `DeleteRefsBatch(ctx, refNames)` |
 | `PushBranch` in a loop | `PushMetadataRefs(ctx, branches)` |
-| `GetRevision` in a loop | `GetRevisions(branchNames)` |
+| `GetRevision` in a loop | `BatchRevisions(branches)` |
 | `GetDiffStats` / `GetCommitCount` in a loop | `BatchDiffStats(branches)` / `BatchBranchStats(branches)` |
 | `GetAllCommits` in a loop | `BatchCommits(branches, format)` |
 | `GetDivergencePoint` in a loop | `BatchDivergencePoints(branches)` |

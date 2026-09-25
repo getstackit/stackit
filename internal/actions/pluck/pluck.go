@@ -122,7 +122,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Get revisions needed for rebase specs in a single batched call instead
 	// of one git process per branch.
 	grandparentName := grandparentBranch.GetName()
-	revisions, _ := eng.GetRevisions([]string{onto, grandparentName, source})
+	revisions := eng.BatchRevisions(engine.BranchesOf(ontoBranch, grandparentBranch, sourceBranch))
 
 	ontoRev, ok := revisions.Rev(onto)
 	if !ok {

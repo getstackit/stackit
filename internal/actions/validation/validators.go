@@ -63,7 +63,6 @@ type GitStateReader interface {
 	IsRebaseInProgress(ctx context.Context) bool
 	HasUncommittedChanges(ctx context.Context) bool
 	HasStagedChanges(ctx context.Context) (bool, error)
-	GetRevisionForName(branchName string) (string, error)
 }
 
 // MustBeOnBranch validates that HEAD is on a branch (not detached).
@@ -104,18 +103,6 @@ func MustHaveStagedChanges(ctx context.Context, g GitStateReader) Validator {
 		}
 		if !hasStagedChanges {
 			return fmt.Errorf("no staged changes to commit; use 'git add' to stage changes")
-		}
-		return nil
-	})
-}
-
-// BranchMustExist validates that a branch exists in git.
-// Checks that the branch ref resolves to a revision.
-func BranchMustExist(g GitStateReader, branchName string) Validator {
-	return ValidatorFunc(func() error {
-		_, err := g.GetRevisionForName(branchName)
-		if err != nil {
-			return fmt.Errorf("branch %s does not exist", branchName)
 		}
 		return nil
 	})

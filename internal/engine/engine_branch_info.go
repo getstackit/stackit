@@ -45,14 +45,18 @@ func (e *engineImpl) GetRevision(branch Branch) (string, error) {
 	return e.git.ReadRevisions(context.Background(), branchName).One()
 }
 
-// GetRevisionForName returns the SHA of a branch by name
-func (e *engineImpl) GetRevisionForName(branchName string) (string, error) {
-	return e.git.ReadRevisions(context.Background(), branchName).One()
+// BatchRevisions returns each branch's tip SHA keyed by branch name, resolved
+// in one batched pass. Branches whose ref does not resolve are omitted.
+func (e *engineImpl) BatchRevisions(branches Branches) RevisionMap {
+	return e.readRevisions(branches.Names())
 }
 
-// GetRevisions returns the SHAs for multiple branches.
-func (e *engineImpl) GetRevisions(branchNames []string) (RevisionMap, []error) {
-	return e.git.ReadRevisions(context.Background(), branchNames...).ValuesAndErrors()
+// readRevisions resolves the SHAs for a set of ref names in one git call. It
+// backs the Branch-typed batch readers; callers outside the engine go through
+// BatchRevisions.
+func (e *engineImpl) readRevisions(names []string) RevisionMap {
+	revs, _ := e.git.ReadRevisions(context.Background(), names...).ValuesAndErrors()
+	return revs
 }
 
 // BatchDivergencePoints returns each branch's divergence point keyed by branch

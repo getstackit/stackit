@@ -21,11 +21,11 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 
 	// Resolve every branch and parent revision in one batched call so the head
 	// and base SHAs below are map lookups, not a git rev-parse per branch.
-	revNames := make([]string, 0, len(branches)*2)
+	revBranches := make(engine.Branches, 0, len(branches)*2)
 	for _, branch := range branches {
-		revNames = append(revNames, branch.GetName(), resolveSubmitParentName(nav, branch))
+		revBranches = append(revBranches, branch, resolveSubmitParent(nav, branch))
 	}
-	revisions, _ := ctx.Engine.GetRevisions(revNames)
+	revisions := ctx.Engine.BatchRevisions(revBranches)
 
 	// PR-info writes are collected here and persisted in one batched ref write
 	// after planning, instead of a git ref write per branch.
@@ -128,7 +128,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		prUpdates[branchName] = pendingPrInfo(branch, metadata)
 
 		// Get SHAs from the batched revisions resolved above.
-		parentBranchName := resolveSubmitParentName(nav, branch)
+		parentBranchName := resolveSubmitParent(nav, branch).GetName()
 		headSHA := revisions[branchName]
 		baseSHA := revisions[parentBranchName]
 

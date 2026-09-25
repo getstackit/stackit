@@ -136,7 +136,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 
 	branchNames := allBranches.Names()
 	allMeta, _ := eng.BatchReadMetadataRaw(branchNames)
-	revisions, _ := eng.GetRevisions(branchNames)
+	revisions := eng.BatchRevisions(allBranches)
 	statuses := eng.ReadBranchStatuses(allBranches)
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)

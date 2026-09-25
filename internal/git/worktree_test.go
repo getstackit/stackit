@@ -382,6 +382,32 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.Equal(t, git.WorktreePath("/path/to/worktree1"), metas["feature-1"].Path)
 		require.Equal(t, git.WorktreePath("/path/to/worktree2"), metas["feature-2"].Path)
 	})
+
+	t.Run("list entries reports unparseable registrations that list skips", func(t *testing.T) {
+		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+
+		require.NoError(t, runner.WriteWorktreeMeta(context.Background(), "good", &git.WorktreeMeta{
+			Path:         "/path/to/good",
+			AnchorBranch: "good",
+		}))
+		blobs, err := runner.CreateBlobs(context.Background(), "{not json")
+		require.NoError(t, err)
+		require.NoError(t, scene.Repo.RunGitCommand("update-ref", git.WorktreeRefPrefix+"broken", blobs[0]))
+
+		entries, err := runner.ListWorktreeRegistrations()
+		require.NoError(t, err)
+		require.Len(t, entries, 2)
+		require.NoError(t, entries["good"].Err)
+		require.Equal(t, git.WorktreePath("/path/to/good"), entries["good"].Meta.Path)
+		require.ErrorContains(t, entries["broken"].Err, "failed to unmarshal worktree metadata for broken")
+		require.Nil(t, entries["broken"].Meta)
+
+		metas, err := runner.ListWorktreeMetas()
+		require.NoError(t, err)
+		require.Len(t, metas, 1)
+		require.Contains(t, metas, "good")
+	})
 }
 
 // TestWorktreeListIsMain covers the guard that stops a cleanup path from asking

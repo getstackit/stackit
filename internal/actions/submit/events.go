@@ -43,7 +43,9 @@ type RestackEvent struct {
 func (RestackEvent) submitEvent() {}
 
 // PreparingEvent indicates the preparation/validation phase has started.
-type PreparingEvent struct{}
+type PreparingEvent struct {
+	Completed bool
+}
 
 func (PreparingEvent) submitEvent() {}
 
@@ -85,6 +87,14 @@ type SubmissionStartEvent struct {
 }
 
 func (SubmissionStartEvent) submitEvent() {}
+
+// PushEvent describes the batched branch push before PR creation or updates.
+type PushEvent struct {
+	BranchCount int
+	Completed   bool
+}
+
+func (PushEvent) submitEvent() {}
 
 // BranchProgressEvent indicates per-branch submission progress.
 type BranchProgressEvent struct {

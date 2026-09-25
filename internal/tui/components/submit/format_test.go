@@ -157,6 +157,17 @@ func TestCompactCompletionPreservesWarnings(t *testing.T) {
 	require.Contains(t, summary, "feat/web: could not apply reviewer @octo")
 }
 
+func TestSubmitSharedActivity(t *testing.T) {
+	m := NewModel([]Item{{BranchName: "feat/api", Action: ActionCreate, Status: StatusPending}})
+	m.Update(ActivityMsg{Message: "Pushing 1 branch..."})
+	require.Contains(t, m.View().Content, "Pushing 1 branch...")
+	require.Equal(t, StatusPending, m.Items[0].Status)
+	m.Update(ActivityMsg{})
+	m.Update(ProgressUpdateMsg{BranchName: "feat/api", Status: StatusSubmitting})
+	require.NotContains(t, m.View().Content, "Pushing")
+	require.Contains(t, m.View().Content, "creating")
+}
+
 func TestFormatCompactRowTruncatesLongErrors(t *testing.T) {
 	t.Parallel()
 

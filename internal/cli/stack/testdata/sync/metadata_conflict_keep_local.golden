@@ -1,10 +1,9 @@
-📥 Pulling from remote...
-  ✓ main fast-forwarded to a1b2c3d
 
 Metadata differs for branch 'feat-auth':
   scope: AUTH (local) → AUTHN (remote)
   Last modified by: Alex Rivera <alex@example.com>
 ? Accept remote metadata? [y/N]
 › user answers: no
+main +4
 
-✅ Summary: pulled trunk
+Pulled trunk

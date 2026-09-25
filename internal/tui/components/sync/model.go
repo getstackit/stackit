@@ -4,15 +4,14 @@ package sync
 import (
 	"fmt"
 	"strings"
+	"time"
 
-	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/getstackit/stackit/internal/tui/core"
 	"github.com/getstackit/stackit/internal/tui/style"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // Phase represents a sync phase
@@ -27,32 +26,6 @@ const (
 	PhaseRestack  Phase = "restack"
 )
 
-// DetailMark selects the status glyph shown on a detail row. Using a typed
-// constant (rather than a bare bool) keeps the three states distinct at the call
-// site and matches the streaming handler's markers.
-type DetailMark int
-
-const (
-	// MarkDone shows a green ✓ for a completed item.
-	MarkDone DetailMark = iota
-	// MarkWarn shows an orange ⚠ for a skipped/attention item.
-	MarkWarn
-	// MarkInProgress shows a dim → for an item still in flight.
-	MarkInProgress
-)
-
-// glyph returns the colored marker string for this status.
-func (d DetailMark) glyph() string {
-	switch d {
-	case MarkWarn:
-		return style.MarkWarning()
-	case MarkInProgress:
-		return style.MarkProgress()
-	default:
-		return style.MarkSuccess()
-	}
-}
-
 // Model is the bubbletea model for sync progress.
 // It embeds core.BaseModel for standard lifecycle handling.
 // Uses tea.Printf to print completed items above the active UI.
@@ -60,45 +33,31 @@ type Model struct {
 	core.BaseModel // Embedded for ReadySignaler interface
 	CurrentPhase   Phase
 	CurrentDetail  string // Current operation being performed
-	TotalOps       int
-	CompletedOps   int
-	Progress       progress.Model
 	spinner        spinner.Model
 	Summary        string
 
-	// Phase headers commit to scrollback lazily: only when a phase emits its
-	// first detail. Phases that do nothing (nothing to sync/clean/restack) never
-	// print an empty header. CurrentPhase still updates eagerly so the live
-	// spinner reflects what's happening during slow phases.
-	//
-	// phaseHeaders holds each phase's pending header text; headers tracks the
-	// commit decision (the same utils.LazyHeaders rule the streaming handler uses).
-	phaseHeaders map[Phase]string
-	headers      *utils.LazyHeaders[Phase]
+	// started is set on Init and drives the elapsed clock in View.
+	started time.Time
 }
 
-// PhaseStartMsg indicates a phase has started
+// PhaseStartMsg names the phase now in flight. It drives the live line only —
+// nothing is written to scrollback until the phase is over and its outcome is
+// known (see the sync handler's report).
 type PhaseStartMsg struct {
-	Phase   Phase
-	Message string // Phase header message (e.g., "📥 Pulling from remote...")
-}
-
-// PhaseCompleteMsg indicates a phase has completed
-type PhaseCompleteMsg struct {
 	Phase Phase
 }
 
-// PhaseDetailMsg adds a detail line to a phase (printed above TUI)
-type PhaseDetailMsg struct {
-	Phase   Phase
-	Message string
-	Mark    DetailMark // Status glyph for the row (defaults to MarkDone)
+// ActivityMsg names the specific work in flight, replacing the phase label on
+// the live line until the phase moves on. It is never written to scrollback: it
+// is superseded by whatever the phase reports at the end.
+type ActivityMsg struct {
+	Text string
 }
 
-// ProgressTickMsg updates the progress bar
-type ProgressTickMsg struct {
-	Completed int
-	Total     int
+// PrintMsg writes finished lines above the live UI. The handler has already
+// composed and styled them, so the model does not decide what a row looks like.
+type PrintMsg struct {
+	Lines []string
 }
 
 // CompleteMsg indicates sync is complete
@@ -107,25 +66,13 @@ type CompleteMsg struct {
 }
 
 // NewModel creates a new sync model
-func NewModel(totalOps int) *Model {
-	p := progress.New(
-		progress.WithDefaultBlend(),
-		progress.WithWidth(40),
-		progress.WithoutPercentage(),
-	)
-
+func NewModel() *Model {
 	commonStyles := style.DefaultCommonStyles()
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = commonStyles.Spinner
 
-	m := &Model{
-		TotalOps:     totalOps,
-		Progress:     p,
-		spinner:      s,
-		phaseHeaders: make(map[Phase]string),
-		headers:      utils.NewLazyHeaders[Phase](),
-	}
+	m := &Model{spinner: s}
 	m.Width = 80 // Set BaseModel's Width
 	return m
 }
@@ -134,6 +81,7 @@ func NewModel(totalOps int) *Model {
 func (m *Model) Init() tea.Cmd {
 	// Signal that the program is ready to receive messages via BaseModel
 	m.SignalReady()
+	m.started = time.Now()
 	return m.spinner.Tick
 }
 
@@ -153,58 +101,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		// BaseModel already set Width/Height, but we also need to update Progress.Width
-		m.Progress.SetWidth(min(msg.Width-10, 60))
-		return m, nil
-
-	case progress.FrameMsg:
-		var cmd tea.Cmd
-		m.Progress, cmd = m.Progress.Update(msg)
-		return m, cmd
-
 	case PhaseStartMsg:
-		// Mark the phase active (drives the live spinner) and remember its
-		// header, but don't commit it to scrollback yet — the header prints
-		// lazily when the phase emits its first detail, so empty phases stay
-		// silent.
 		m.CurrentPhase = msg.Phase
 		m.CurrentDetail = ""
-		m.phaseHeaders[msg.Phase] = msg.Message
-		m.headers.Start(msg.Phase)
 		return m, nil
 
-	case PhaseCompleteMsg:
-		// Phase completed - nothing to do, next phase will start
+	case ActivityMsg:
+		m.CurrentDetail = msg.Text
 		return m, nil
 
-	case PhaseDetailMsg:
-		// Print completed item above the TUI (package-manager pattern)
-		m.CurrentDetail = msg.Message
-		detail := tea.Printf("  %s %s", msg.Mark.glyph(), msg.Message)
-
-		// Commit the phase header the first time the phase produces a detail,
-		// separated from the previous phase group by a blank line. A detail for
-		// a phase that was never started (e.g. standalone restack) just prints
-		// without a header.
-		if emit, separate := m.headers.CommitOnItem(msg.Phase); emit {
-			var cmds []tea.Cmd
-			if separate {
-				cmds = append(cmds, tea.Printf(""))
-			}
-			cmds = append(cmds, tea.Printf("%s", m.phaseHeaders[msg.Phase]), detail)
-			return m, tea.Sequence(cmds...)
+	case PrintMsg:
+		// One phase's finished output, printed above the live UI in one burst.
+		cmds := make([]tea.Cmd, 0, len(msg.Lines))
+		for _, line := range msg.Lines {
+			cmds = append(cmds, tea.Printf("%s", line))
 		}
-		return m, detail
-
-	case ProgressTickMsg:
-		m.CompletedOps = msg.Completed
-		m.TotalOps = msg.Total
-		if m.TotalOps > 0 {
-			cmd := m.Progress.SetPercent(float64(m.CompletedOps) / float64(m.TotalOps))
-			return m, cmd
+		if len(cmds) == 0 {
+			return m, nil
 		}
-		return m, nil
+		return m, tea.Sequence(cmds...)
 
 	case CompleteMsg:
 		m.Done = true
@@ -229,49 +144,77 @@ func (m *Model) View() tea.View {
 
 	var b strings.Builder
 
-	// Progress bar with count (single line, like package-manager)
-	n := m.TotalOps
-	w := lipgloss.Width(fmt.Sprintf("%d", n))
-	pkgCount := fmt.Sprintf(" %*d/%*d", w, m.CompletedOps, w, n)
-
 	spin := m.spinner.View() + " "
-	prog := m.Progress.View()
+	elapsed := style.DefaultCommonStyles().Dim.Render(m.elapsedText())
 
 	// Calculate available space for status text
-	cellsAvail := max(0, m.Width-lipgloss.Width(spin+prog+pkgCount))
+	cellsAvail := max(0, m.Width-lipgloss.Width(spin+elapsed))
 
-	// Show current phase/operation
-	statusText := m.getStatusText()
-	info := lipgloss.NewStyle().MaxWidth(cellsAvail).Render(statusText)
+	// Show the phase step and what it's doing
+	info := lipgloss.NewStyle().MaxWidth(cellsAvail).Render(m.getStatusText())
 
 	// Fill remaining space
-	cellsRemaining := max(0, m.Width-lipgloss.Width(spin+info+prog+pkgCount))
+	cellsRemaining := max(0, m.Width-lipgloss.Width(spin+info+elapsed))
 	gap := strings.Repeat(" ", cellsRemaining)
 
-	b.WriteString(spin + info + gap + prog + pkgCount)
+	b.WriteString(spin + info + gap + elapsed)
 
 	return tea.NewView(b.String())
 }
 
-// getStatusText returns the current status text to display
-func (m *Model) getStatusText() string {
-	commonStyles := style.DefaultCommonStyles()
+// elapsedText renders how long the command has been running. Sync is the
+// command users actually wait on — network fetch, GitHub, then a rebase
+// validation pass that emits nothing until it finishes — so a moving clock is
+// the difference between "working" and "hung". Redraws come free from the
+// spinner tick.
+func (m *Model) elapsedText() string {
+	if m.started.IsZero() {
+		return ""
+	}
+	return fmt.Sprintf("%.1fs", time.Since(m.started).Seconds())
+}
 
-	switch m.CurrentPhase {
-	case PhaseTrunk:
-		return "Pulling from remote..."
-	case PhaseBranches:
-		return "Syncing branches..."
-	case PhaseGitHub:
-		return "Fetching PR info..."
-	case PhaseClean:
-		return "Cleaning branches..."
-	case PhaseRestack:
-		if m.CurrentDetail != "" {
-			return commonStyles.Dim.Render("Restacking...")
-		}
-		return "Restacking branches..."
-	default:
+// phaseOrder is the fixed pipeline sync walks, and the source of the step
+// numbers on the live line. Trunk and GitHub run concurrently but are still
+// numbered separately, so the step reflects position in the pipeline rather
+// than a claim about what is exclusively in flight.
+//
+// Progress is reported as a step in this pipeline rather than as a fraction of
+// items. Sync's item count is not knowable up front — it depends on the restack
+// plan, the deletion plan, and how many PR bodies are stale — and the previous
+// bar counted events against an estimate of the tracked branch count, two
+// different units, which is how it reached "11/10". The pipeline, by contrast,
+// is known before anything runs.
+var phaseOrder = []Phase{PhaseTrunk, PhaseGitHub, PhaseBranches, PhaseClean, PhaseRestack}
+
+// phaseLabels is what each phase is called on the live line.
+var phaseLabels = map[Phase]string{
+	PhaseTrunk:    "Pulling from remote...",
+	PhaseGitHub:   "Fetching PR info...",
+	PhaseBranches: "Syncing branches...",
+	PhaseClean:    "Cleaning branches...",
+	PhaseRestack:  "Restacking branches...",
+}
+
+// getStatusText returns the current status text: the pipeline position as pips
+// followed by what that phase is doing (e.g. "●●●●○ Restacking branches...").
+// A skipped phase simply never lights its pip; the pips are a position, not a
+// count of completed work, so they stay truthful when phases are skipped.
+//
+// When a phase reports in-flight work it names that instead of the phase, so
+// the line says what is happening now rather than which phase it belongs to.
+func (m *Model) getStatusText() string {
+	label, ok := phaseLabels[m.CurrentPhase]
+	if !ok {
 		return "Syncing..."
 	}
+	if m.CurrentDetail != "" {
+		label = m.CurrentDetail
+	}
+	for i, phase := range phaseOrder {
+		if phase == m.CurrentPhase {
+			return style.StepPips(i+1, len(phaseOrder)) + " " + label
+		}
+	}
+	return label
 }

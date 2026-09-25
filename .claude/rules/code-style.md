@@ -38,13 +38,13 @@ const (
 | Instead of | Use |
 |------------|-----|
 | per-branch PR-body-update marking in a loop | `MarkBranchesForPRBodyUpdate(ctx, branchNames)` |
-| `ReadLocalMetadata` in a loop | `BatchReadLocalMetadata(branchNames)` |
-| `UpdateRef` in a loop | `UpdateRefsBatch(ctx, updates)` |
-| `DeleteRef` in a loop | `DeleteRefsBatch(ctx, refNames)` |
+| `ReadLocalMetadata(ctx, name)` / `ReadMetadata(ctx, name)` called once per branch | one `ReadLocalMetadata(ctx, names...)` / `ReadMetadata(ctx, names...)` call |
+| `UpdateRefs` called once per ref | one `UpdateRefs(ctx, []RefUpdate{...}, msg)` call |
+| `DeleteRefs` called once per ref | one `DeleteRefs(ctx, refNames...)` call |
 | `PushBranch` in a loop | `PushMetadataRefs(ctx, branches)` |
 | `GetRevision` in a loop | `BatchRevisions(branches)` |
-| `GetDiffStats` / `GetCommitCount` in a loop | `BatchDiffStats(branches)` / `BatchBranchStats(branches)` |
-| `GetAllCommits` in a loop | `BatchCommits(branches, format)` |
+| per-branch diff-stat / commit-count reads in a loop | `BatchDiffStats(branches)` / `BatchBranchStats(branches)` |
+| `GetAllCommits` in a loop | `BatchCommits(branches)` |
 | `GetDivergencePoint` in a loop | `BatchDivergencePoints(branches)` |
 
 **Why:** Each git command spawns a process (~2-5ms overhead). Each GitHub API call takes ~200-500ms. For N branches, a loop costs O(N × overhead) while a batch costs O(1) or O(N) with parallelism.
@@ -60,7 +60,7 @@ for _, branch := range branches {
 divPoints := eng.BatchDivergencePoints(branches)
 ```
 
-When adding new operations that touch multiple branches or refs, prefer designing batch APIs from the start. Use `UpdateRefsBatch` for atomic multi-ref writes and `BatchReadLocalMetadata` / `BatchReadMetadata` for parallel reads.
+When adding new operations that touch multiple branches or refs, prefer designing batch APIs from the start. The git-layer ref and metadata APIs are plural or variadic: pass every ref to one `Runner.UpdateRefs(ctx, updates, msg)` for an atomic multi-ref write or one `Runner.DeleteRefs(ctx, refNames...)` call, and read many records with one `ReadMetadata(ctx, branches...)` / `ReadLocalMetadata(ctx, branches...)` call on the `MetadataStore` or `MetadataTx`.
 
 ### Branch-state reads return values, not a global cache
 

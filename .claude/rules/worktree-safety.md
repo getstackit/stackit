@@ -104,10 +104,11 @@ blob or SHA this process last read.**
 - Do not short-circuit a write of unchanged content as a no-op. The expectation
   is what this process last read, not what the ref holds now; short-circuiting
   reports success for a ref another process may have moved.
-- Record the expectation on **every** read path. `BatchReadMetadata` is the one
-  that matters — engine graph loads go through it, so recording only in
-  `ReadMetadata` silently degrades essentially every write to unconditional
-  without failing anything.
+- Record the expectation on **every** read path. The multi-branch call of the
+  variadic `ReadMetadata` (`internal/git/metadata_store.go`) is the one that
+  matters — engine graph loads go through it, so recording only for
+  single-branch or cache-hit reads silently degrades essentially every write to
+  unconditional without failing anything.
 - Drop the cache entry on a rejected write. Keeping it means a re-read answers
   from cache, recomputes the same stale expectation, and fails identically
   forever — harmless in the CLI, a wedge in the long-lived server.

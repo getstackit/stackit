@@ -94,6 +94,7 @@ type DiffOperations interface {
 	ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...RevRange) ReadResults[DiffSummary]
 	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
 	ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error)
+	BatchDiffNumstat(ctx context.Context, ranges []RevRange) (map[RevRange]string, error)
 	GetStagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary

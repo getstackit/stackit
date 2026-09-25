@@ -97,11 +97,11 @@ func snapshotOpts(command string, args ...string) engine.SnapshotOptions {
 	}
 }
 
-// capturingSnapshotOpts mirrors what a command that consumes the working tree
-// (modify, create, absorb, split) asks for.
+// capturingSnapshotOpts mirrors what a command that stages the whole working
+// tree (modify -a, create -a, split) asks for.
 func capturingSnapshotOpts() engine.SnapshotOptions {
 	opts := snapshotOpts("modify")
-	opts.CaptureWorktree = true
+	opts.Capture = engine.WorktreeCaptureUntracked
 	return opts
 }
 
@@ -679,7 +679,7 @@ func TestSnapshotWorktreeCapture(t *testing.T) {
 		require.NoError(t, err)
 		snapshot, err := s.Engine.LoadSnapshot(snapshots[0].ID)
 		require.NoError(t, err)
-		require.Empty(t, snapshot.WorktreeSHA, "a snapshot without CaptureWorktree must not stash")
+		require.Empty(t, snapshot.WorktreeSHA, "a snapshot without a capture level must not stash")
 		require.Empty(t, snapshot.UntrackedSHA)
 
 		restored, err := s.Engine.RestoreWorktree(t.Context(), snapshots[0].ID)

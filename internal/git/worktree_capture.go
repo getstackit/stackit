@@ -18,10 +18,14 @@ const restorePathBatchSize = 500
 // nothing untracked to capture.
 //
 // `git stash create` deliberately ignores untracked files, which is not enough
-// for a rollback: a command that stages everything (`modify -a`, or `create`
-// after `git add -A`) commits those files, and rolling that commit back deletes
+// for a rollback: a command that itself stages everything (`modify -a`,
+// `create -a`, split) commits those files, and rolling that commit back deletes
 // the only copy that exists anywhere — they were never in the index, so they
-// have no reflog and no blob to recover.
+// have no reflog and no blob to recover. Files the user staged before running
+// the command are already in the stash's index tree and need no capture here.
+//
+// This reads and hashes every untracked file, so callers should only ask for
+// it when the command is about to run `git add -A`.
 //
 // Nothing here touches the working tree or the repository index: the files are
 // staged into a throwaway index and written out as a detached commit.

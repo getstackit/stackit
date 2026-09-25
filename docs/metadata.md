@@ -40,20 +40,34 @@ Snapshots taken by those commands therefore also capture the uncommitted state:
 - a stash commit (`git stash create`) holding tracked modifications and the
   index, which preserves the staged/unstaged split on restore
 - a separate commit holding untracked, non-ignored files, which stashes exclude
-  but `git add -A` would have committed
+  but `git add -A` would have committed — taken only when the command is about
+  to run `git add -A` itself (see below)
 
 For intent-to-add files (`git add -N`), Git cannot create a stash directly.
 Capture retries with those paths staged in a temporary index and records their
 intent-to-add flags in the snapshot. Restore reapplies those flags after the
 stash, preserving file contents and the original staged/unstaged split.
 
-Capturing is opt-in per command (`SnapshotOptions.CaptureWorktree`, or
-`actions.WithWorktreeCapture()`), and only `modify`, `create`, `absorb`, and
-`split` set it — they are the commands that turn the working tree into a commit.
-Everything else pays nothing: `restack` and `sync` hold back a worktree with
-uncommitted changes instead of rebasing it, so they can neither consume such
-work nor destroy it on rollback, and a capture there would be ~35ms of wasted
-`git stash create` per invocation on a 30k-file repository.
+Capturing is opt-in per command, as a level (`SnapshotOptions.Capture`, or
+`actions.WithWorktreeCapture(level)`). Each level costs more than the last, so
+every invocation asks for the cheapest one that covers what it will stage:
+
+| Level | Records | Used by |
+|-------|---------|---------|
+| `WorktreeCaptureNone` | refs only | everything else, including `restack` and `sync` |
+| `WorktreeCaptureTracked` | the stash | `create` and `modify` committing what is staged, `--update`, `--patch`; every `absorb` |
+| `WorktreeCaptureUntracked` | the stash and untracked files | `create --all` (or accepting its interactive stage-all prompt), `modify --all`, `split` |
+
+- **Nothing for reconcilers.** `restack` and `sync` hold back a worktree with
+  uncommitted changes instead of rebasing it, so they can neither consume such
+  work nor destroy it on rollback. A capture there would be ~35ms of wasted
+  `git stash create` per invocation on a 30k-file repository.
+- **Tracked is enough for files the user staged.** A new file the user staged
+  before running the command is in the index, so the stash holds it.
+- **Untracked capture only for `git add -A`.** It reads and hashes every
+  untracked, non-ignored file in the tree, so it runs only when the command is
+  about to `git add -A` them into a commit. `absorb --all` stages with
+  `git add -u`, which never touches untracked files, so `absorb` never needs it.
 
 Both are unreachable commits, so each is anchored under `refs/stackit/undo/` —
 otherwise `git gc` is free to collect the user's work — and both are deleted

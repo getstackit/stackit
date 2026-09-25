@@ -711,14 +711,18 @@ func NewSnapshot(command string, options ...SnapshotOption) engine.SnapshotOptio
 	return opts
 }
 
-// WithWorktreeCapture records the uncommitted changes with the snapshot, so a
-// later abort or undo can hand them back. Use it on commands that turn the
-// working tree into a commit — modify, create, absorb, split — and nowhere
-// else: capturing costs a `git stash create` plus an untracked scan, which is
-// wasted on commands that cannot consume uncommitted work.
-func WithWorktreeCapture() SnapshotOption {
+// WithWorktreeCapture records uncommitted changes with the snapshot, so a later
+// abort or undo can hand them back. Use it on commands that turn the working
+// tree into a commit — modify, create, absorb, split — and nowhere else.
+//
+// Pick the cheapest level that covers what this invocation stages. Only
+// staging everything (`git add -A`) turns an untracked file into a commit;
+// `-u` and `-p` never touch untracked files, and anything the user staged
+// themselves is already in the tracked (stash) capture. The untracked level
+// hashes every untracked file, so it is wasted anywhere else.
+func WithWorktreeCapture(capture engine.WorktreeCapture) SnapshotOption {
 	return func(opts *engine.SnapshotOptions) {
-		opts.CaptureWorktree = true
+		opts.Capture = capture
 	}
 }
 

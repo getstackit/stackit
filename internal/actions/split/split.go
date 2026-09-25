@@ -172,9 +172,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if err := eng.TakeSnapshot(ctx.Context, engine.SnapshotOptions{
 		Command: "split",
 		// split stages and commits whatever is in the working tree as it
-		// rebuilds the branch, so uncommitted changes are its input too.
-		CaptureWorktree: true,
-		Args:            snapshotArgs,
+		// rebuilds the branch (git add -A), untracked files included, so
+		// uncommitted changes are its input too.
+		Capture: engine.WorktreeCaptureUntracked,
+		Args:    snapshotArgs,
 	}); err != nil {
 		return fmt.Errorf("failed to take snapshot: %w", err)
 	}

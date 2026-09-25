@@ -65,21 +65,44 @@ type SnapshotInfo struct {
 	DisplayName string    // Human-readable description
 }
 
+// WorktreeCapture selects how much uncommitted work a snapshot records.
+//
+// Each level costs more than the one below it, so a command asks for exactly
+// what it can consume and no more.
+type WorktreeCapture int
+
+const (
+	// WorktreeCaptureNone records refs only. Reconcilers (restack, sync) hold
+	// back a worktree with uncommitted changes rather than rebasing it, so they
+	// have nothing to consume and nothing to capture; paying `git stash create`
+	// on every one of them would be ~35ms of pure overhead per invocation on a
+	// 30k-file repository.
+	WorktreeCaptureNone WorktreeCapture = iota
+	// WorktreeCaptureTracked records a stash of the index and tracked
+	// modifications. That includes new files the user staged themselves: they
+	// are in the index, so the stash's index tree holds them. Use it for
+	// commands that commit what is staged, or that stage with `git add -u` or
+	// `git add -p` — neither ever picks up an untracked file.
+	WorktreeCaptureTracked
+	// WorktreeCaptureUntracked additionally records every untracked,
+	// non-ignored file. A stash cannot hold those, and a command that runs
+	// `git add -A` commits them, so a rollback would delete their only copy.
+	//
+	// This hashes the full content of every untracked file on every snapshot,
+	// so reserve it for invocations that will actually stage untracked files:
+	// `create --all`, `modify --all`, and split.
+	WorktreeCaptureUntracked
+)
+
 // SnapshotOptions contains options for taking a snapshot
 type SnapshotOptions struct {
 	Command string
 	Args    []string
-	// CaptureWorktree records the uncommitted changes alongside the branch
-	// SHAs. Set it for commands that turn the working tree into a commit
-	// (modify, create, absorb, split) — restoring their snapshot without the
-	// working tree destroys work the user never committed themselves.
-	//
-	// Left unset, a snapshot costs exactly what it always did. Reconcilers
-	// (restack, sync) hold back a worktree with uncommitted changes rather
-	// than rebasing it, so they have nothing to consume and nothing to
-	// capture; paying `git stash create` on every one of them would be ~35ms
-	// of pure overhead per invocation on a 30k-file repository.
-	CaptureWorktree bool
+	// Capture records uncommitted changes alongside the branch SHAs. Commands
+	// that turn the working tree into a commit (modify, create, absorb, split)
+	// must set it — restoring their snapshot without the working tree destroys
+	// work the user never committed themselves.
+	Capture WorktreeCapture
 }
 
 // getUndoDir returns the path to the undo directory
@@ -151,6 +174,23 @@ func parseSnapshotFilename(filename string) (time.Time, string, error) {
 // TakeSnapshot captures the current state of the repository, including the
 // uncommitted changes the command is about to consume.
 func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) error {
+	timestamp := time.Now()
+	filename := getSnapshotFilename(timestamp, opts.Command)
+	snapshotID := strings.TrimSuffix(filename, jsonExt)
+
+	// Capture before taking the lock: it only talks to git, and hashing a
+	// large working tree must not stall readers of a long-lived engine (the
+	// API server keeps one per repository). Both captures are best effort and
+	// cannot fail the snapshot.
+	var capture git.StashCapture
+	var untrackedSHA string
+	if opts.Capture >= WorktreeCaptureTracked {
+		capture = e.captureWorktree(ctx, snapshotID, opts.Command)
+	}
+	if opts.Capture >= WorktreeCaptureUntracked {
+		untrackedSHA = e.captureUntracked(ctx, snapshotID, opts.Command)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.lastSnapshotID = ""
@@ -179,18 +219,6 @@ func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) err
 	// Convert metadata refs to branch name -> SHA mapping
 	metadataSHAs := make(map[string]string)
 	maps.Copy(metadataSHAs, metadataRefs)
-
-	// Create snapshot
-	timestamp := time.Now()
-	filename := getSnapshotFilename(timestamp, opts.Command)
-	snapshotID := strings.TrimSuffix(filename, jsonExt)
-
-	var capture git.StashCapture
-	var untrackedSHA string
-	if opts.CaptureWorktree {
-		capture = e.captureWorktree(ctx, snapshotID, opts.Command)
-		untrackedSHA = e.captureUntracked(ctx, snapshotID, opts.Command)
-	}
 
 	snapshot := &Snapshot{
 		Timestamp:        timestamp,

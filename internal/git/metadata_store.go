@@ -142,8 +142,8 @@ func (r *MetadataStore) ReadMetadata(ctx context.Context, branchNames ...string)
 			result.Fail(name, fmt.Errorf("failed to unmarshal metadata for %s: %w", name, unmarshalErr))
 			continue
 		}
-		// Record the blob this came from, the same way ReadMetadata does, so a
-		// later WriteMetadata compares against it instead of overwriting blind.
+		// Record the blob this came from so a later WriteMetadata compares
+		// against it instead of overwriting blind.
 		r.metadataCache.PutWithSHA(name, &meta, obj.SHA)
 		result.Set(name, &meta)
 	}

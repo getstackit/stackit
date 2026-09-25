@@ -8,6 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
+	worktreeaction "github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -40,44 +41,78 @@ func (h *skipRecordingGetHandler) EmitEvent(e actions.GetEvent) {
 // is not looking at.
 func TestGetSkipsBranchHeldByAnotherWorktree(t *testing.T) {
 	t.Parallel()
-	sh := scenario.NewRemoteScenario(t)
 
-	// Build main -> a -> b and push metadata, so get can resolve b's ancestry
-	// and pull a into the same sync set.
-	sh.CreateBranch("a").CommitChange("a.txt", "a").TrackBranch("a", "main")
-	sh.CreateBranch("b").CommitChange("b.txt", "b").TrackBranch("b", "a")
+	for _, tc := range []struct {
+		name string
+		hold worktreeHolder
+	}{
+		{"plain git worktree", plainWorktreeHolder},
+		{"stackit-managed worktree", managedWorktreeHolder},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sh := scenario.NewRemoteScenario(t)
 
-	config := testhelpers.NewMockGitHubServerConfig()
-	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
-	sh.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
+			// Build main -> a -> b and push metadata, so get can resolve b's
+			// ancestry and pull a into the same sync set.
+			sh.CreateBranch("a").CommitChange("a.txt", "a").TrackBranch("a", "main")
+			sh.CreateBranch("b").CommitChange("b.txt", "b").TrackBranch("b", "a")
 
-	require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
-	require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+			config := testhelpers.NewMockGitHubServerConfig()
+			rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, config)
+			sh.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
 
-	// Park a in a plain git worktree. Both a and b already exist locally, so
-	// get takes the update path for each and needs them at HEAD in turn.
-	sh.Checkout("b")
+			require.NoError(t, submit.Action(sh.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{}))
+			require.NoError(t, syncaction.Action(sh.Context, syncaction.Options{}, nil))
+
+			// Park a in another worktree. Both a and b already exist locally,
+			// so get takes the update path for each and needs them at HEAD in
+			// turn.
+			sh.Checkout("b")
+			worktreeDir := tc.hold(t, sh)
+			sh.Rebuild()
+
+			aBefore, err := sh.Scene.Repo.GetRevision("a")
+			require.NoError(t, err)
+
+			handler := &skipRecordingGetHandler{}
+			require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: false}, handler),
+				"a branch held elsewhere must not fail the whole run")
+			sh.Rebuild()
+
+			require.Contains(t, handler.skipped, "a", "the held branch must be reported, not silently passed over")
+			require.Contains(t, handler.skipped["a"], worktreeDir,
+				"the report has to name the worktree holding it")
+
+			aAfter, err := sh.Scene.Repo.GetRevision("a")
+			require.NoError(t, err)
+			require.Equal(t, aBefore, aAfter, "a is left exactly as its worktree has it")
+
+			// The branch get was actually asked for still lands, and HEAD ends
+			// on it rather than wherever the loop happened to stop.
+			require.Equal(t, "b", sh.Engine.CurrentBranchName())
+		})
+	}
+}
+
+// worktreeHolder parks branch a in another worktree and returns that
+// worktree's path. worktree-safety.md requires both kinds: a checkout Stackit
+// manages and a plain `git worktree` it knows nothing about.
+type worktreeHolder func(t *testing.T, sh *scenario.Scenario) string
+
+func plainWorktreeHolder(t *testing.T, sh *scenario.Scenario) string {
+	t.Helper()
 	worktreeDir := t.TempDir()
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("worktree", "add", worktreeDir, "a"))
-	sh.Rebuild()
+	return worktreeDir
+}
 
-	aBefore, err := sh.Scene.Repo.GetRevision("a")
+// managedWorktreeHolder attaches a's stack through stackit's own worktree
+// command, which checks the stack root out in a worktree Stackit owns.
+func managedWorktreeHolder(t *testing.T, sh *scenario.Scenario) string {
+	t.Helper()
+	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "--local", "stackit.worktree.basePath", t.TempDir()))
+	result, err := worktreeaction.AttachAction(sh.Context, worktreeaction.AttachOptions{Branch: "a"})
 	require.NoError(t, err)
-
-	handler := &skipRecordingGetHandler{}
-	require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: false}, handler),
-		"a branch held elsewhere must not fail the whole run")
-	sh.Rebuild()
-
-	require.Contains(t, handler.skipped, "a", "the held branch must be reported, not silently passed over")
-	require.Contains(t, handler.skipped["a"], worktreeDir,
-		"the report has to name the worktree holding it")
-
-	aAfter, err := sh.Scene.Repo.GetRevision("a")
-	require.NoError(t, err)
-	require.Equal(t, aBefore, aAfter, "a is left exactly as its worktree has it")
-
-	// The branch get was actually asked for still lands, and HEAD ends on it
-	// rather than wherever the loop happened to stop.
-	require.Equal(t, "b", sh.Engine.CurrentBranchName())
+	return result.Path.String()
 }

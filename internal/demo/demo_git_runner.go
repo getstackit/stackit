@@ -453,6 +453,14 @@ func (d *demoGitRunner) ReadCommitRanges(_ context.Context, ranges ...git.RevRan
 	return result
 }
 
+func (d *demoGitRunner) BatchDiffNumstat(_ context.Context, ranges []git.RevRange) (map[git.RevRange]string, error) {
+	result := make(map[git.RevRange]string, len(ranges))
+	for _, rr := range ranges {
+		result[rr] = "1\t1\ttest.txt"
+	}
+	return result, nil
+}
+
 func (d *demoGitRunner) ReadCommitNodes(ctx context.Context, ranges ...git.RevRange) git.ReadResults[[]git.CommitNode] {
 	var result git.ReadResults[[]git.CommitNode]
 	for key, commits := range d.ReadCommitRanges(ctx, ranges...).Values() {

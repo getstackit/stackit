@@ -211,7 +211,9 @@ restack only builds on origin/main
 `engine.TrunkRemoteState` (`internal/engine/engine_branch_status.go`) resolves
 the state **locally, with no network**:
 
-- Reads `refs/remotes/<remote>/<trunk>` via `GetRemoteSha` (a local `rev-parse`).
+- Reads `refs/remotes/<remote>/<trunk>` and local trunk with the git runner's
+  `ReadRevisions` (a local `rev-parse`; it never lists or fetches the remote).
+  A missing remote-tracking ref returns `HasRemoteRef=false`.
 - Compares local trunk to that ref with `IsAncestor(localSha, remoteSha)`.
 - Local trunk is **ahead or diverged** when it is **not** an ancestor of the
   remote-tracking trunk. Equal and behind both report `ancestor=true` (a commit

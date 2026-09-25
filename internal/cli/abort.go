@@ -24,8 +24,17 @@ func newAbortCmd() *cobra.Command {
 		Long: `Aborts the current stackit command halted by a conflict.
 
 This command cancels any in-progress operation (such as restack, sync, merge,
-or absorb) that has been paused due to a conflict. Any changes made during
-the operation will be rolled back.`,
+or absorb) that has been paused due to a conflict. Branches and metadata roll
+back to the snapshot that halted command took, and uncommitted changes the
+command consumed (such as edits 'modify' amended or files staged before
+'create') return to your working tree.
+
+Abort only rolls back the halted command. If that command recorded no snapshot,
+it leaves your branches as they are; use 'stackit undo' to pick a state instead.
+
+Examples:
+  stackit abort       # Abort after confirming
+  stackit abort -f    # Abort without prompting`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {

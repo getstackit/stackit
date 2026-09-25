@@ -24,8 +24,18 @@ This command shows an interactive list of available undo points. Each undo point
 represents the state of the repository before a modifying Stackit command (like
 'move', 'create', 'restack', etc.) was executed.
 
+Undo restores branches, metadata, and the working tree, including uncommitted
+changes the undone command captured (for example, the edit 'modify' amended
+into a commit). Because it resets the working tree, undo refuses to run while
+you have tracked uncommitted changes of your own; commit or stash them first.
+
 If you specify a snapshot ID with --snapshot, it will restore to that specific
-state without prompting.`,
+state without prompting.
+
+Examples:
+  stackit undo                    # Pick an undo point interactively
+  stackit undo --yes              # Skip the confirmation prompt
+  stackit undo --snapshot <id>    # Restore a specific snapshot`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {

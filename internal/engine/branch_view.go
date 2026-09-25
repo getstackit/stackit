@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"sync"
 
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/utils"
@@ -67,42 +66,11 @@ func (e *engineImpl) readBranchRanges(ctx context.Context, branches Branches) gi
 // BatchDiffStats returns each non-trunk branch's additions/deletions against its
 // divergence point, keyed by branch name, resolved in one batched pass.
 func (e *engineImpl) BatchDiffStats(branches Branches) map[string]DiffStat {
-	ranges := e.branchDiffRanges(branches)
-	diffs := e.readBranchDiffs(context.Background(), ranges, git.DiffStats)
-	result := make(map[string]DiffStat, len(branches))
-	for _, branch := range branches {
-		diff := diffs[branch.GetName()]
-		result[branch.GetName()] = DiffStat{Added: diff.Added, Deleted: diff.Deleted, FilesChanged: len(diff.Files)}
-	}
-	return result
-}
-
-func (e *engineImpl) branchDiffRanges(branches Branches) map[string]git.RevRange {
-	return e.readBranchRanges(context.Background(), branches).Values()
-}
-
-// Read only uncached immutable ranges; no per-branch subprocesses are launched.
-func (e *engineImpl) readBranchDiffs(ctx context.Context, ranges map[string]git.RevRange, mode git.DiffReadMode) map[string]git.DiffSummary {
-	result := make(map[string]git.DiffSummary, len(ranges))
-	pending := make([]git.RevRange, 0, len(ranges))
+	ranges := e.branchStatRanges(branches)
+	stats := e.readDiffStats(context.Background(), ranges)
+	result := make(map[string]DiffStat, len(ranges))
 	for name, rr := range ranges {
-		if rr.Base == "" || rr.Head == "" || rr.Base == rr.Head {
-			continue
-		}
-		if cached, ok := e.diffStatsCache.Load(rr); ok {
-			result[name] = cached.(git.DiffSummary)
-			continue
-		}
-		pending = append(pending, rr)
-	}
-	diffs := e.git.ReadDiffs(ctx, mode, pending...)
-	for name, rr := range ranges {
-		if diff, err := diffs.Get(rr.String()); err == nil {
-			result[name] = diff
-			if mode == git.DiffStats {
-				e.diffStatsCache.Store(rr, diff)
-			}
-		}
+		result[name] = stats[rr].DiffStat
 	}
 	return result
 }
@@ -176,10 +144,11 @@ func readBranchHistory[C, T any](e *engineImpl, ctx context.Context, branches Br
 // keeps the file count consistent with the additions/deletions for a branch
 // whose parent has advanced since it diverged.
 func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branches) map[string]int {
-	diffs := e.readBranchDiffs(ctx, e.branchDiffRanges(branches), git.DiffNames)
-	result := make(map[string]int, len(branches))
-	for _, branch := range branches {
-		result[branch.GetName()] = len(diffs[branch.GetName()].Files)
+	ranges := e.branchStatRanges(branches)
+	stats := e.readDiffStats(ctx, ranges)
+	result := make(map[string]int, len(ranges))
+	for name, rr := range ranges {
+		result[name] = stats[rr].Files
 	}
 	return result
 }
@@ -189,39 +158,22 @@ func (e *engineImpl) BatchChangedFileCounts(ctx context.Context, branches Branch
 // name. Forge status (CI, reviews) is a separate concern joined at render time,
 // not part of this.
 func (e *engineImpl) BatchBranchStats(branches Branches) map[string]BranchStat {
-	ranges := e.branchDiffRanges(branches)
-	// Counts and the diff batch are independent. Overlap them so batching does
-	// not add a serial diff phase to the latency of a small stack.
-	var diffs map[string]git.DiffSummary
-	var diffRead sync.WaitGroup
-	diffRead.Go(func() {
-		diffs = e.readBranchDiffs(context.Background(), ranges, git.DiffStats)
-	})
-	pending := make([]git.RevRange, 0, len(ranges))
-	for _, rr := range ranges {
-		if rr.Base != "" && rr.Head != "" && rr.Base != rr.Head {
-			if _, cached := e.commitCountCache.Load(rr); !cached {
-				pending = append(pending, rr)
-			}
-		}
-	}
-	counts := e.git.ReadCommitCounts(context.Background(), pending...)
-	for _, rr := range pending {
-		if count, err := counts.Get(rr.String()); err == nil {
-			e.commitCountCache.Store(rr, count)
-		}
-	}
-	diffRead.Wait()
+	ranges := e.branchStatRanges(branches)
+	diffs := e.readDiffStats(context.Background(), ranges)
 	result := make(map[string]BranchStat, len(branches))
-	for _, branch := range branches {
-		rr := ranges[branch.GetName()]
-		stat := BranchStat{ShortSHA: utils.ShortRevision(rr.Head, 0)}
-		if count, ok := e.commitCountCache.Load(rr); ok {
-			stat.CommitCount = count.(int)
+	values := make(map[string]*BranchStat, len(branches))
+	for name, rr := range ranges {
+		values[name] = &BranchStat{
+			ShortSHA:   utils.ShortRevision(rr.Head, 0),
+			LinesAdded: diffs[rr].Added, LinesDeleted: diffs[rr].Deleted,
 		}
-		diff := diffs[branch.GetName()]
-		stat.LinesAdded, stat.LinesDeleted = diff.Added, diff.Deleted
-		result[branch.GetName()] = stat
+	}
+	utils.Run(branches, func(b Branch) {
+		name := b.GetName()
+		values[name].CommitCount, _ = e.commitCountBetween(ranges[name])
+	})
+	for name, stat := range values {
+		result[name] = *stat
 	}
 	return result
 }

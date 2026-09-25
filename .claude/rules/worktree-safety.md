@@ -111,9 +111,20 @@ blob or SHA this process last read.**
   unconditional without failing anything.
 - Drop the cache entry on a rejected write. Keeping it means a re-read answers
   from cache, recomputes the same stale expectation, and fails identically
-  forever — harmless in the CLI, a wedge in the long-lived server.
+  forever — harmless in the CLI, a wedge in the long-lived server. A rejected
+  `MetadataTx.Commit` drops the entries for every branch it staged, both tiers;
+  do not rely on `WithRetry`'s rebuild to clean up.
 - An unknown expectation falls back to an unconditional write. Newly tracked
   branches need this.
+- A path that rewrites metadata refs through `UpdateRefs`/`DeleteRefs` instead
+  of the store (transaction commit, batched flag write, restack) must call
+  `MetadataStore.RecordCommitted` with what it wrote, recording deletes as
+  known-absent. The next blind write then compares against this process's own
+  write and still rejects another process's change. Distrusting the old
+  expectation instead makes that write unconditional, which silently clobbers.
+- An expectation whose ref generation moved since it was recorded is unknown.
+  This is a safety net for paths that skip `RecordCommitted`, not a substitute
+  for it.
 
 ## Warm Starts Copy Only Ignored Files, Never Outside The Worktree
 

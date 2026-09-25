@@ -338,6 +338,7 @@ func (e *engineImpl) restackWorktreeAnchor(
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestackAnchor); err != nil {
 		return RestackBranchResult{Result: RestackConflict}, true, fmt.Errorf("failed to update refs atomically for anchor %s: %w", branchName, err)
 	}
+	e.recordRestackMetadata(branchName, metadataSHA, meta)
 
 	// If the anchor branch is currently checked out in this context, reset the working tree
 	current := e.CurrentBranch()
@@ -487,6 +488,7 @@ func (e *engineImpl) restackBranch(
 			if err := e.git.UpdateRefs(ctx, updates, reflogRestackFrozen); err != nil {
 				return RestackBranchResult{Result: RestackConflict}, fmt.Errorf("failed to update refs atomically for frozen branch %s: %w", branchName, err)
 			}
+			e.recordRestackMetadata(branchName, metadataSHA, meta)
 
 			// If the branch is currently checked out in this context, reset the working tree
 			current := e.CurrentBranch()
@@ -727,6 +729,7 @@ func (e *engineImpl) restackBranch(
 			NewParent:         parent,
 		}, fmt.Errorf("failed to update refs atomically: %w", err)
 	}
+	e.recordRestackMetadata(branchName, metadataSHA, meta)
 
 	// Update the cached metadata if we're using a metaMap, so subsequent branches in the batch
 	// see the updated ParentBranchRevision.
@@ -896,6 +899,7 @@ func (e *engineImpl) applyMetadataRefresh(
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update metadata ref: %w", err)
 	}
+	e.recordRestackMetadata(branchName, metadataSHA, updatedMeta)
 
 	if snap.meta != nil {
 		snap.meta[branchName] = updatedMeta
@@ -964,6 +968,7 @@ func (e *engineImpl) applyBranchAndMetadata(
 	if err := e.git.UpdateRefs(ctx, updates, reflogRestack); err != nil {
 		return RestackBranchResult{Result: RestackConflict, RebasedBranchBase: parentRev}, fmt.Errorf("failed to update refs atomically: %w", err)
 	}
+	e.recordRestackMetadata(branchName, metadataSHA, updatedMeta)
 
 	if worktreePath := snap.worktrees.PathForBranch(branchName); worktreePath != "" {
 		e.resetWorktreeIfClean(ctx, worktreePath, snap)

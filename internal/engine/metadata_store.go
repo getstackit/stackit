@@ -36,6 +36,13 @@ func (e *engineImpl) batchReadLocalMetadata(branches []string) git.LocalMetaMap 
 	return e.metadata.ReadLocalMetadata(context.Background(), branches...).Values()
 }
 
+// recordRestackMetadata tells the store about a metadata ref a restack just
+// moved in the same atomic update as the branch ref, so a later direct write
+// compares against that update instead of the pre-restack version.
+func (e *engineImpl) recordRestackMetadata(branch, sha string, meta *git.Meta) {
+	e.metadata.RecordCommitted(git.MetadataTierShared, git.CommittedMetadata{Branch: branch, SHA: sha, Meta: meta})
+}
+
 // withMetadataTx runs function logic inside a metadata transaction and commits once.
 // If fn returns an error, the transaction is rolled back.
 func (e *engineImpl) withMetadataTx(ctx context.Context, message string, fn func(tx *MetadataTx) error) error {

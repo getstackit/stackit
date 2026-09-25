@@ -37,15 +37,24 @@ func (e *engineImpl) MarkBranchesForPRBodyUpdate(ctx context.Context, branchName
 	}
 
 	updates := make([]git.RefUpdate, len(orderedNames))
+	committed := make([]git.CommittedMetadata, len(orderedNames))
 	for i, name := range orderedNames {
 		updates[i] = git.RefUpdate{
 			RefName: git.LocalMetadataRefName(name),
 			NewSHA:  shas[i],
 		}
+		committed[i] = git.CommittedMetadata{Branch: name, SHA: shas[i]}
 	}
 
 	// Atomic batch update all refs
-	return e.git.UpdateRefs(ctx, updates, "")
+	if err := e.git.UpdateRefs(ctx, updates, ""); err != nil {
+		return err
+	}
+	// The flags were written outside the store; record them so a following
+	// local-metadata write compares against this write rather than the
+	// pre-flag version.
+	e.metadata.RecordCommitted(git.MetadataTierLocal, committed...)
+	return nil
 }
 
 // ClearNeedsPRBodyUpdate clears the PR body update flag for a branch

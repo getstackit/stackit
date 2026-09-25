@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -314,8 +315,35 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 
 	// Atomic batch update with reflog message
 	if err := tx.eng.git.UpdateRefs(ctx, refUpdates, tx.message); err != nil {
+		// The versions this transaction carried are known-stale for at least one
+		// ref, and the store still caches them. Without dropping them, a fresh
+		// transaction re-reads from cache, captures the same versions, and fails
+		// identically — forever, in the long-lived server — unless a caller
+		// happens to rebuild. The update is atomic, so every staged branch is
+		// suspect, not just the one git named.
+		tx.eng.metadata.InvalidateMetadata(tx.stagedBranches()...)
 		return fmt.Errorf("atomic commit failed: %w", err)
 	}
+
+	// The commit bypassed the store, so hand it what was written. The next
+	// direct write then compares against this process's own commit, and still
+	// catches a change another process makes after it.
+	sharedCommitted := make([]git.CommittedMetadata, 0, len(metaBranches)+len(metaDeleteBranches))
+	for i, branch := range metaBranches {
+		sharedCommitted = append(sharedCommitted, git.CommittedMetadata{Branch: branch, SHA: shas[i], Meta: tx.metaUpdates[branch]})
+	}
+	for _, branch := range metaDeleteBranches {
+		sharedCommitted = append(sharedCommitted, git.CommittedMetadata{Branch: branch})
+	}
+	localCommitted := make([]git.CommittedMetadata, 0, len(localBranches)+len(localMetaDeleteBranches))
+	for i, branch := range localBranches {
+		localCommitted = append(localCommitted, git.CommittedMetadata{Branch: branch, SHA: shas[len(metaBranches)+i]})
+	}
+	for _, branch := range localMetaDeleteBranches {
+		localCommitted = append(localCommitted, git.CommittedMetadata{Branch: branch})
+	}
+	tx.eng.metadata.RecordCommitted(git.MetadataTierShared, sharedCommitted...)
+	tx.eng.metadata.RecordCommitted(git.MetadataTierLocal, localCommitted...)
 
 	// Update in-memory cache (using same sorted order for consistency)
 	tx.eng.mu.Lock()
@@ -339,6 +367,25 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 
 	tx.committed = true
 	return nil
+}
+
+// stagedBranches returns every branch with a staged update or deletion in
+// either metadata tier. Callers must hold tx.mu.
+func (tx *MetadataTx) stagedBranches() []string {
+	seen := make(map[string]struct{}, len(tx.metaUpdates)+len(tx.localUpdates)+len(tx.metaDeletes)+len(tx.localMetaDeletes))
+	for branch := range tx.metaUpdates {
+		seen[branch] = struct{}{}
+	}
+	for branch := range tx.localUpdates {
+		seen[branch] = struct{}{}
+	}
+	for branch := range tx.metaDeletes {
+		seen[branch] = struct{}{}
+	}
+	for branch := range tx.localMetaDeletes {
+		seen[branch] = struct{}{}
+	}
+	return slices.Sorted(maps.Keys(seen))
 }
 
 // Rollback discards all staged changes without applying them.

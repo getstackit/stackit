@@ -160,7 +160,8 @@ jq '.dependencies' package.json       # Parse JSON
 **All changes must pass tests and lint before committing:**
 
 ```bash
-mise run check         # Runs fmt, lint, and fast tests
+mise run check         # Formatting, lint, all Go tests, and web checks
+mise run check:go      # Formatting, lint, and all Go tests
 mise run test:fast     # Run fast unit tests (~30s)
 mise run test:integration  # Run integration tests (~90s)
 mise run test          # Run all tests
@@ -170,7 +171,7 @@ mise run web:test      # Run web app tests
 mise run check:web     # Run web tests + typecheck + build
 ```
 
-**Workflow:** Run `mise run check` during development for quick feedback. Run `mise run test` before submitting PRs to ensure all tests pass.
+**Workflow:** Run targeted tests during development. Use `mise run check:go` for Go changes and `mise run check` for Go and web changes. Run all Go tests before submitting PRs; both check commands include them.
 
 ## Validation Strategy
 
@@ -181,7 +182,7 @@ mise run check:web     # Run web tests + typecheck + build
 | Docs/comments only | `mise run compile` | ~2s |
 | Refactoring/style | `mise run lint` | ~5s |
 | Single package logic | `mise run test:pkg ./internal/foo` | ~10s |
-| Multi-package logic | `mise run check` | ~30s |
+| Multi-package Go logic | `mise run check:go` | ~2min |
 | Engine/integration | `mise run test` | ~2min |
 | Web component change | `mise run web:test` | ~10s |
 | Web + API change | `mise run check:web` | ~30s |
@@ -190,7 +191,8 @@ mise run check:web     # Run web tests + typecheck + build
 - `compile` - Quick "does it build?" check for trivial changes
 - `lint` - Catches style issues without running tests
 - `test:pkg` - Targeted testing for isolated changes
-- `check` - Standard development workflow
+- `check:go` - Formatting, lint, and all Go tests
+- `check` - Go checks plus web tests, typecheck, and build
 - `test` - Full suite before PRs or for engine changes
 
 See `.claude/rules/validation.md` for detailed guidance on when to use each level.

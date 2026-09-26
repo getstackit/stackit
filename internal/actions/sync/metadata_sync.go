@@ -121,9 +121,10 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) er
 		return nil
 	}
 
-	// Collect the auto-delete actions so they apply in one batched transaction;
-	// branches with local changes still prompt per-branch.
-	var deleteRefs, clearLocalHash []string
+	// Collect every action so it applies in one batched transaction; branches
+	// with local changes still prompt per-branch, but their decisions are
+	// batched into the same delete/clear/push calls as the auto-delete ones.
+	var deleteRefs, clearLocalHash, pushBranches []string
 	for _, info := range orphaned {
 		if info.Action == engine.OrphanedActionDelete {
 			// No local changes - silently remove sync state or delete ref if branch is gone
@@ -132,11 +133,18 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) er
 			} else {
 				clearLocalHash = append(clearLocalHash, info.BranchName)
 			}
+			continue
+		}
+
+		// Has local changes - prompt user via handler
+		pushLocal, err := resolveOrphanedMetadata(info, handler)
+		if err != nil {
+			return err
+		}
+		if pushLocal {
+			pushBranches = append(pushBranches, info.BranchName)
 		} else {
-			// Has local changes - prompt user via handler
-			if err := resolveOrphanedMetadata(ctx, info, handler); err != nil {
-				return err
-			}
+			clearLocalHash = append(clearLocalHash, info.BranchName)
 		}
 	}
 
@@ -144,41 +152,33 @@ func handleOrphanedMetadata(ctx *app.Context, opts *Options, handler Handler) er
 		out.Debug("Failed to clean orphaned metadata: %v", err)
 	}
 
+	if len(pushBranches) > 0 {
+		if err := actions.PushMetadataAndSyncPRs(ctx, pushBranches); err != nil {
+			out.Debug("Failed to push metadata: %v", err)
+		} else {
+			for _, name := range pushBranches {
+				out.Info("Pushed metadata for %s", output.BranchName(name))
+			}
+		}
+	}
+
 	return nil
 }
 
-// resolveOrphanedMetadata resolves orphaned metadata by prompting via handler
-func resolveOrphanedMetadata(ctx *app.Context, info engine.OrphanedMetadataInfo, handler Handler) error {
-	eng := ctx.Engine
-	out := ctx.Output
-
+// resolveOrphanedMetadata prompts the user for how to resolve orphaned
+// metadata on a branch with local changes. It returns whether they chose to
+// push local metadata to the remote (vs. accepting deletion).
+func resolveOrphanedMetadata(info engine.OrphanedMetadataInfo, handler Handler) (bool, error) {
 	pushLocal, err := handler.PromptOrphanedMetadata(info)
 	if err != nil {
 		// Handle user cancellation (Ctrl+C)
 		if errors.Is(err, errors.ErrCanceled) {
-			return err
+			return false, err
 		}
-		return fmt.Errorf("prompt failed: %w", err)
+		return false, fmt.Errorf("prompt failed: %w", err)
 	}
 
-	if pushLocal {
-		// Push local metadata to remote
-		if err := eng.BatchSetLastModifiedBy([]string{info.BranchName}); err != nil {
-			out.Debug("Failed to set last modified by: %v", err)
-		}
-		if err := actions.PushMetadataAndSyncPRs(ctx, []string{info.BranchName}); err != nil {
-			out.Debug("Failed to push metadata: %v", err)
-		} else {
-			out.Info("Pushed metadata for %s", output.BranchName(info.BranchName))
-		}
-	} else {
-		// Accept deletion - remove sync state
-		if err := eng.CleanOrphanedMetadata(ctx.Context, nil, []string{info.BranchName}); err != nil {
-			out.Debug("Failed to delete metadata hash: %v", err)
-		}
-	}
-
-	return nil
+	return pushLocal, nil
 }
 
 // printMetadataDiffs displays metadata differences in dry-run mode

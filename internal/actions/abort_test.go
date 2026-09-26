@@ -34,13 +34,23 @@ func (h *testAbortHandler) IsInteractive() bool { return h.isInteractive }
 // bindContinuationToLatestSnapshot writes the continuation state a conflict
 // workflow leaves behind: one that names the snapshot the halted command took.
 // Abort restores that snapshot and no other.
+//
+// These scenarios have no live rebase, so the continuation is marked as a
+// rollback abort already began (the state a retry sees). Without the mark, a
+// continuation with no rebase in progress is stale and abort discards it.
 func bindContinuationToLatestSnapshot(t *testing.T, s *scenario.Scenario) {
+	t.Helper()
+	bindContinuation(t, s, true)
+}
+
+func bindContinuation(t *testing.T, s *scenario.Scenario, rollbackPending bool) {
 	t.Helper()
 	snapshots, err := s.Engine.GetSnapshots()
 	require.NoError(t, err)
 	require.NotEmpty(t, snapshots, "test needs a snapshot to bind to")
 	require.NoError(t, config.PersistContinuationState(s.Scene.Dir, &config.ContinuationState{
-		SnapshotID: snapshots[0].ID,
+		SnapshotID:      snapshots[0].ID,
+		RollbackPending: rollbackPending,
 	}))
 }
 
@@ -120,7 +130,7 @@ func TestAbortAction(t *testing.T) {
 		// Continuation state naming no snapshot: the halted command left no
 		// rollback point.
 		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
-		require.NoError(t, os.WriteFile(continuationPath, []byte("{}"), 0600))
+		require.NoError(t, os.WriteFile(continuationPath, []byte(`{"rollbackPending":true}`), 0600))
 
 		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
 
@@ -130,6 +140,61 @@ func TestAbortAction(t *testing.T) {
 		require.Equal(t, haltedSHA, afterSHA,
 			"abort must leave branches as the halted command left them when it recorded no rollback point")
 		require.Contains(t, s.Output.String(), "no rollback point")
+	})
+
+	t.Run("discards a continuation left by a conflict finished outside stackit", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit().
+			CreateBranch("feature").
+			Commit("feature change").
+			TrackBranch("feature", "main")
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "restack"}))
+		// The conflict was resolved with plain `git rebase --continue`, so no
+		// rebase is in progress and abort never began a rollback.
+		bindContinuation(t, s, false)
+
+		s.Checkout("feature").Commit("work done since")
+		laterSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		require.NoError(t, err)
+
+		handler := &testAbortHandler{isInteractive: true, confirmResult: true}
+		require.NoError(t, abort.Action(s.Context, abort.Options{}, handler))
+		require.False(t, handler.promptConfirmCalled, "nothing to confirm when there is nothing to abort")
+
+		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		require.NoError(t, err)
+		require.Equal(t, laterSHA, afterSHA, "a stale continuation must not roll back later work")
+		_, err = config.GetContinuationState(s.Scene.Dir)
+		require.Error(t, err, "stale continuation state should be cleared")
+		require.Contains(t, s.Output.String(), "conflict finished outside stackit")
+	})
+
+	t.Run("reports a recorded snapshot that is no longer available", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		s.WithInitialCommit().
+			CreateBranch("feature").
+			Commit("feature change").
+			TrackBranch("feature", "main")
+		// An older snapshot abort must not fall back to.
+		require.NoError(t, s.Engine.TakeSnapshot(t.Context(), engine.SnapshotOptions{Command: "create"}))
+		s.Checkout("feature").Commit("work the halted command did")
+		haltedSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		require.NoError(t, err)
+		require.NoError(t, config.PersistContinuationState(s.Scene.Dir, &config.ContinuationState{
+			SnapshotID:      "aged-out-snapshot",
+			RollbackPending: true,
+		}))
+
+		require.NoError(t, abort.Action(s.Context, abort.Options{Force: true}, nil))
+
+		s.Engine.Rebuild(s.Engine.Trunk().GetName())
+		afterSHA, err := s.Engine.GetBranch("feature").GetRevision()
+		require.NoError(t, err)
+		require.Equal(t, haltedSHA, afterSHA, "abort must not guess at a different snapshot")
+		require.Contains(t, s.Output.String(), "no longer available")
 	})
 
 	t.Run("warns when linear mode restores a fork", func(t *testing.T) {
@@ -172,7 +237,7 @@ func TestAbortAction(t *testing.T) {
 
 		// Manually create continuation state
 		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
-		err := os.WriteFile(continuationPath, []byte("{}"), 0644)
+		err := os.WriteFile(continuationPath, []byte(`{"rollbackPending":true}`), 0644)
 		require.NoError(t, err)
 
 		// Use non-interactive handler that returns false
@@ -207,7 +272,7 @@ func TestAbortAction(t *testing.T) {
 
 		// Manually create continuation state
 		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
-		err = os.WriteFile(continuationPath, []byte("{}"), 0644)
+		err = os.WriteFile(continuationPath, []byte(`{"rollbackPending":true}`), 0644)
 		require.NoError(t, err)
 
 		// Use interactive handler that confirms
@@ -235,7 +300,7 @@ func TestAbortAction(t *testing.T) {
 
 		// Manually create continuation state
 		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
-		err := os.WriteFile(continuationPath, []byte("{}"), 0644)
+		err := os.WriteFile(continuationPath, []byte(`{"rollbackPending":true}`), 0644)
 		require.NoError(t, err)
 
 		// Use interactive handler that declines
@@ -270,7 +335,7 @@ func TestAbortAction(t *testing.T) {
 
 		// Manually create continuation state
 		continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
-		err = os.WriteFile(continuationPath, []byte("{}"), 0644)
+		err = os.WriteFile(continuationPath, []byte(`{"rollbackPending":true}`), 0644)
 		require.NoError(t, err)
 
 		// Use handler that would decline, but force bypasses it

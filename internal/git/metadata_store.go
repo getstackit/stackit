@@ -219,6 +219,13 @@ func (r *MetadataStore) WriteMetadata(branchName string, meta *Meta) error {
 
 	refName := fmt.Sprintf("%s%s", MetadataRefPrefix, branchName)
 	generation := r.git.RefGeneration(refName)
+	// This runner moved the ref (a transaction commit, restack, or undo) since
+	// the cached read, so the cached SHA is not what the ref holds. Comparing
+	// against it would report another process's change where there was none.
+	// Dropping it leaves the expectation unknown, as ReadMetadata does.
+	if r.generations[branchName] != generation {
+		r.metadataCache.entries.Delete(branchName)
+	}
 	if err := r.updateMetadataRefCAS(refName, branchName, sha); err != nil {
 		return err
 	}

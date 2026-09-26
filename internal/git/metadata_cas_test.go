@@ -181,3 +181,29 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		require.Equal(t, "main", *stored.GetParentBranchName())
 	})
 }
+
+// A write after this runner itself moved the ref (a transaction commit,
+// restack, or undo restore through UpdateRefs), with no read in between, must
+// not compare against the superseded cached SHA and blame another process.
+func TestMetadataWriteAfterInProcessRefUpdate(t *testing.T) {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+	ctx := context.Background()
+	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
+	store := git.NewMetadataStore(runner)
+
+	main := "main"
+	require.NoError(t, store.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
+	read, err := store.ReadMetadata(ctx, "feature").One()
+	require.NoError(t, err)
+
+	moved, err := git.One(runner.CreateBlobs(ctx, `{"parentBranchName":"moved"}`))
+	require.NoError(t, err)
+	require.NoError(t, runner.UpdateRefs(ctx, []git.RefUpdate{{RefName: git.MetadataRefName("feature"), NewSHA: moved}}, ""))
+
+	parent := "written"
+	require.NoError(t, store.WriteMetadata("feature", read.WithParentBranchName(&parent)))
+	latest, err := store.ReadMetadata(ctx, "feature").One()
+	require.NoError(t, err)
+	require.Equal(t, "written", *latest.GetParentBranchName())
+}

@@ -138,6 +138,13 @@ func (r *runner) DeleteRefs(ctx context.Context, refNames ...string) error {
 	return nil
 }
 
+// parsedOutputConfig overrides user config that injects extra text into output
+// stackit parses. With log.showSignature=true, `git log` prints signature
+// verification lines ahead of each record, so a -z parser reads them into the
+// SHA field. The streaming and interactive paths show output to the user and
+// keep the user's config.
+var parsedOutputConfig = []string{"-c", "log.showSignature=false"}
+
 func (r *runner) RunGitCommandWithEnv(ctx context.Context, env []string, args ...string) (string, error) {
 	return r.runGitInternal(ctx, "", env, true, args...)
 }
@@ -167,7 +174,7 @@ func (r *runner) runGitInternal(ctx context.Context, input string, env []string,
 
 	r.debugLog("git %s", strings.Join(args, " "))
 
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(ctx, "git", slices.Concat(parsedOutputConfig, args)...)
 	cmd.WaitDelay = CommandWaitDelay
 	if root := r.getRepoRoot(); root != "" {
 		cmd.Dir = root

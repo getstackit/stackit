@@ -165,11 +165,12 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 
 	if effectivePatch && (isTrunk || (commitErr == nil && len(commitData) > 0)) {
 		branchRevision := history.Range.Head
+		var revisionErr error
 		if isTrunk {
 			baseRevision = branchName + "~"
-			branchRevision, err = branch.GetRevision()
+			branchRevision, revisionErr = branch.GetRevision()
 		}
-		if err == nil {
+		if revisionErr == nil {
 			patchOutput, err := eng.ShowCommits(ctx, git.RevRange{Base: baseRevision, Head: branchRevision}, true, opts.Stat)
 			if err == nil {
 				result.PatchOutput = patchOutput

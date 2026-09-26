@@ -8,6 +8,9 @@ allowed-tools: Bash(stackit:*), Bash(git:*), Bash(gh:*), Read, Glob, Grep, Task
 
 Generate a comprehensive description for the current stack based on all changes.
 
+This sets the stack-wide description on its root branch, not individual PR
+titles or descriptions. Use `stackit submit` to edit individual PR metadata.
+
 ## Context
 - Current branch: !`git branch --show-current`
 - Stack info (branches, parents, commit messages, diff stats): !`stackit info --stack --json --no-interactive`

@@ -94,22 +94,31 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 
 	scope := nav.GetScope(branch)
 
-	// Handle Title
-	if shouldEditTitle || metadata.Title == "" {
-		title, err := GetPRTitle(branch, shouldEditTitle, metadata.Title, scope)
-		if err != nil {
-			return nil, err
-		}
-		metadata.Title = title
-	}
-
-	// Handle Body
-	if shouldEditBody || metadata.Body == "" {
-		body, err := GetPRBody(branch, shouldEditBody, metadata.Body)
-		if err != nil {
-			return nil, err
-		}
+	switch {
+	case metadata.Title == "" && metadata.Body == "" && !shouldEditTitle && !shouldEditBody:
+		// Neither field has a value yet and neither needs interactive editing,
+		// so derive both from a single commit read instead of one read per field.
+		title, body := branch.DefaultPRTitleAndBody()
+		metadata.Title = scope.ApplyToTitle(title)
 		metadata.Body = body
+	default:
+		// Handle Title
+		if shouldEditTitle || metadata.Title == "" {
+			title, err := GetPRTitle(branch, shouldEditTitle, metadata.Title, scope)
+			if err != nil {
+				return nil, err
+			}
+			metadata.Title = title
+		}
+
+		// Handle Body
+		if shouldEditBody || metadata.Body == "" {
+			body, err := GetPRBody(branch, shouldEditBody, metadata.Body)
+			if err != nil {
+				return nil, err
+			}
+			metadata.Body = body
+		}
 	}
 
 	switch {

@@ -2,6 +2,9 @@ package git_test
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -55,4 +58,48 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 	require.Empty(t, empty)
 	_, err = runner.ReadCommitRanges(ctx, git.RevRange{Head: "missing-branch"}).One()
 	require.Error(t, err)
+}
+
+// log.showSignature=true makes `git log` print verification lines ahead of each
+// signed commit's record; a -z parser reads them into the SHA field.
+func TestCommitReadsIgnoreShowSignature(t *testing.T) {
+	t.Parallel()
+	sshKeygen, err := exec.LookPath("ssh-keygen")
+	if err != nil {
+		t.Skip("ssh-keygen is required to sign a commit")
+	}
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	ctx := context.Background()
+	base, err := runner.ReadRevisions(ctx, "HEAD").One()
+	require.NoError(t, err)
+
+	keyPath := filepath.Join(t.TempDir(), "signing-key")
+	require.NoError(t, exec.Command(sshKeygen, "-q", "-t", "ed25519", "-N", "", "-f", keyPath).Run())
+	publicKey, err := os.ReadFile(keyPath + ".pub")
+	require.NoError(t, err)
+	allowedSigners := filepath.Join(t.TempDir(), "allowed_signers")
+	require.NoError(t, os.WriteFile(allowedSigners, []byte("signer@example.com "+string(publicKey)), 0o600))
+	for key, value := range map[string]string{
+		"gpg.format":                 "ssh",
+		"user.signingkey":            keyPath,
+		"gpg.ssh.allowedSignersFile": allowedSigners,
+		"log.showSignature":          "true",
+	} {
+		_, err := runner.RunGitCommandWithContext(ctx, "config", key, value)
+		require.NoError(t, err)
+	}
+	_, err = runner.RunGitCommandWithContext(ctx, "commit", "--allow-empty", "-S", "-m", "signed")
+	require.NoError(t, err)
+	head, err := runner.ReadRevisions(ctx, "HEAD").One()
+	require.NoError(t, err)
+
+	commits, err := runner.ReadCommitRanges(ctx, git.RevRange{Base: base, Head: "HEAD"}).One()
+	require.NoError(t, err)
+	require.Len(t, commits, 1)
+	require.Equal(t, head, commits[0].SHA)
+
+	tip, err := runner.ReadCommits(ctx, "HEAD").One()
+	require.NoError(t, err)
+	require.Equal(t, head, tip.SHA)
 }

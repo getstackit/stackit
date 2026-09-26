@@ -549,34 +549,60 @@ func (r *runner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath stri
 	return strings.TrimSpace(out), nil
 }
 
-// ListWorktreeMetas lists all registered worktree metadata
-func (r *runner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
+// WorktreeRegistration is one entry under WorktreeRefPrefix. Err is set when
+// the entry cannot be read or parsed; Meta is nil then.
+type WorktreeRegistration struct {
+	Meta *WorktreeMeta
+	Err  error
+}
+
+// ListWorktreeRegistrations lists every worktree registration keyed by stack
+// root, reporting unreadable entries instead of skipping them, so ownership
+// checks can refuse rather than treat a damaged registration as absent.
+func (r *runner) ListWorktreeRegistrations() (map[string]WorktreeRegistration, error) {
 	refs, err := r.ListRefs(WorktreeRefPrefix)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]*WorktreeMeta)
+	result := make(map[string]WorktreeRegistration, len(refs))
 	for refName, sha := range refs {
 		stackRoot := strings.TrimPrefix(refName, WorktreeRefPrefix)
 
 		content, err := ObjectContent(r.ReadObjects(context.Background(), sha))
 		if err != nil {
-			continue // Skip unreadable entries
+			result[stackRoot] = WorktreeRegistration{Err: fmt.Errorf("failed to read worktree metadata blob %s: %w", sha, err)}
+			continue
 		}
-
 		if content == "" {
 			continue
 		}
 
 		var meta WorktreeMeta
 		if err := json.Unmarshal([]byte(content), &meta); err != nil {
-			continue // Skip invalid entries
+			result[stackRoot] = WorktreeRegistration{Err: fmt.Errorf("failed to unmarshal worktree metadata for %s: %w", stackRoot, err)}
+			continue
 		}
-
-		result[stackRoot] = &meta
+		result[stackRoot] = WorktreeRegistration{Meta: &meta}
 	}
 
+	return result, nil
+}
+
+// ListWorktreeMetas lists all readable worktree metadata, skipping entries
+// that cannot be read. Use ListWorktreeRegistrations where a damaged entry
+// must not read as "no worktree".
+func (r *runner) ListWorktreeMetas() (map[string]*WorktreeMeta, error) {
+	registrations, err := r.ListWorktreeRegistrations()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]*WorktreeMeta, len(registrations))
+	for stackRoot, registration := range registrations {
+		if registration.Err == nil {
+			result[stackRoot] = registration.Meta
+		}
+	}
 	return result, nil
 }
 

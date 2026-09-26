@@ -220,6 +220,7 @@ type WorktreeRegistryOperations interface {
 	WriteWorktreeMeta(ctx context.Context, stackRoot string, meta *WorktreeMeta) error
 	DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 	ListWorktreeMetas() (map[string]*WorktreeMeta, error)
+	ListWorktreeRegistrations() (map[string]WorktreeRegistration, error)
 }
 
 // StatusOperations provides repository status information.

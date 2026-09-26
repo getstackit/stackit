@@ -322,6 +322,43 @@ func (e *engineImpl) OwningWorktree(branch Branch) (*WorktreeInfo, error) {
 	return worktree, nil
 }
 
+// WorktreeOwnership is the managed worktree registered for one stack root, or
+// the reason that registration cannot be trusted.
+type WorktreeOwnership struct {
+	Worktree *WorktreeInfo
+	Err      error
+}
+
+// WorktreeOwnershipByStackRoot is the batched form of OwningWorktree. An
+// unreadable registration, or one whose anchor differs from the stack root it
+// is registered under, carries an error instead of being dropped: dropping it
+// would read as "unowned" and let a guarded mutation through.
+func (e *engineImpl) WorktreeOwnershipByStackRoot() (map[string]WorktreeOwnership, error) {
+	registrations, err := e.git.ListWorktreeRegistrations()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]WorktreeOwnership, len(registrations))
+	for stackRoot, registration := range registrations {
+		switch {
+		case registration.Err != nil:
+			result[stackRoot] = WorktreeOwnership{Err: registration.Err}
+		case registration.Meta.AnchorBranch != stackRoot:
+			result[stackRoot] = WorktreeOwnership{Err: fmt.Errorf("invalid worktree registration for stack %s: metadata anchor is %s", stackRoot, registration.Meta.AnchorBranch)}
+		default:
+			meta := registration.Meta
+			result[stackRoot] = WorktreeOwnership{Worktree: &WorktreeInfo{
+				Name:         WorktreeName(meta.Name),
+				Path:         WorktreePath(meta.Path),
+				AnchorBranch: meta.AnchorBranch,
+				CreatedAt:    meta.CreatedAt,
+				MainRepoDir:  meta.MainRepoDir,
+			}}
+		}
+	}
+	return result, nil
+}
+
 // ListManagedWorktrees returns all stackit-managed worktrees, sorted by stack root name
 func (e *engineImpl) ListManagedWorktrees() ([]WorktreeInfo, error) {
 	metas, err := e.git.ListWorktreeMetas()

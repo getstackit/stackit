@@ -194,16 +194,23 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 // worktree. That full-stack deletion is delete's intentional cleanup workflow:
 // it removes the worktree registration after removing its stack.
 func managedCleanupAnchors(ctx *app.Context, toDelete engine.Branches) ([]string, error) {
-	// Resolve worktree ownership from a single ListManagedWorktrees call
+	// Resolve worktree ownership from a single registration listing
 	// instead of one OwningWorktree call (two git reads each) per branch
 	// examined below, including every branch in the repo while checking anchor
 	// completeness.
-	worktreeByStackRoot, err := actions.WorktreesByStackRoot(ctx.Engine)
+	owners, err := actions.LoadWorktreeOwners(ctx.Engine)
 	if err != nil {
 		return nil, fmt.Errorf("cannot list managed worktrees: %w", err)
 	}
+	// A malformed registration counts as no owner here: it exempts nothing
+	// from the guard below, where EnsureCanModifyHere refuses it, and it must
+	// not block cleanup of an unrelated worktree's stack.
 	owningWorktree := func(branch engine.Branch) *engine.WorktreeInfo {
-		return worktreeByStackRoot[ctx.Engine.GetStackRootForBranch(branch)]
+		owner, ownerErr := owners.Owner(branch)
+		if ownerErr != nil {
+			return nil
+		}
+		return owner
 	}
 
 	selected := make(map[string]bool, len(toDelete))

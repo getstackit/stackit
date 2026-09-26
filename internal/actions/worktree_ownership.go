@@ -17,9 +17,9 @@ import (
 // Branch has no command context, and the same branch can be valid in one
 // worktree and invalid in another.
 func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
-	// Resolve ownership for every branch from a single ListManagedWorktrees
-	// call instead of one OwningWorktree call (two git reads each) per branch.
-	worktreeByStackRoot, err := WorktreesByStackRoot(ctx.Engine)
+	// Resolve ownership for every branch from a single listing instead of one
+	// OwningWorktree call (two git reads each) per branch.
+	owners, err := LoadWorktreeOwners(ctx.Engine)
 	if err != nil {
 		return fmt.Errorf("cannot list managed worktrees: %w", err)
 	}
@@ -35,7 +35,10 @@ func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 		}
 		seen[branchName] = struct{}{}
 
-		owner := worktreeByStackRoot[ctx.Engine.GetStackRootForBranch(branch)]
+		owner, err := owners.Owner(branch)
+		if err != nil {
+			return fmt.Errorf("cannot determine worktree ownership for branch %s: %w", branchName, err)
+		}
 
 		if owner == nil {
 			if ctx.InManagedWorktree {
@@ -67,20 +70,31 @@ func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 	return nil
 }
 
-// WorktreesByStackRoot indexes every managed worktree by its stack root
-// (anchor branch) from a single ListManagedWorktrees call, so callers
-// resolving ownership for many branches can avoid one OwningWorktree call
-// (two git reads each) per branch.
-func WorktreesByStackRoot(eng engine.Engine) (map[string]*engine.WorktreeInfo, error) {
-	worktrees, err := eng.ListManagedWorktrees()
+// WorktreeOwners answers OwningWorktree for many branches from one listing of
+// worktree registrations.
+type WorktreeOwners struct {
+	eng         engine.Engine
+	byStackRoot map[string]engine.WorktreeOwnership
+}
+
+// LoadWorktreeOwners reads every worktree registration once.
+func LoadWorktreeOwners(eng engine.Engine) (WorktreeOwners, error) {
+	byStackRoot, err := eng.WorktreeOwnershipByStackRoot()
 	if err != nil {
-		return nil, err
+		return WorktreeOwners{}, err
 	}
-	byStackRoot := make(map[string]*engine.WorktreeInfo, len(worktrees))
-	for i := range worktrees {
-		byStackRoot[worktrees[i].AnchorBranch] = &worktrees[i]
+	return WorktreeOwners{eng: eng, byStackRoot: byStackRoot}, nil
+}
+
+// Owner returns the managed worktree that owns branch's stack, or nil for an
+// ordinary stack. A malformed registration is an error, never "unowned", so
+// guards fail closed.
+func (o WorktreeOwners) Owner(branch engine.Branch) (*engine.WorktreeInfo, error) {
+	ownership, ok := o.byStackRoot[o.eng.GetStackRootForBranch(branch)]
+	if !ok {
+		return nil, nil
 	}
-	return byStackRoot, nil
+	return ownership.Worktree, ownership.Err
 }
 
 // EnsureCanModifyNamesHere is the convenient form for operations that resolve

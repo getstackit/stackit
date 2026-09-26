@@ -32,6 +32,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	continuation, continuationErr := config.GetContinuationState(ctx.RepoRoot)
 	hasContinuation := continuationErr == nil
 
+	if hasContinuation && !ContinuationOwnsAbort(ctx, continuation) {
+		if err := config.ClearContinuationState(ctx.RepoRoot); err != nil {
+			out.Debug("Failed to clear stale continuation state: %v", err)
+		}
+		out.Info("No operation in progress to abort. Cleared leftover state from a conflict finished outside stackit.")
+		out.Info("Use %s to roll back to an earlier state.", output.Cyan("stackit undo"))
+		return nil
+	}
+
 	if !rebaseInProgress && !mergeInProgress && !hasContinuation {
 		out.Info("No operation in progress to abort.")
 		return nil
@@ -46,6 +55,15 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if !confirmed {
 			out.Info("Abort canceled.")
 			return nil
+		}
+	}
+
+	// Mark the rollback as begun before unwinding Git's operation, so a retry
+	// after a failed restore is still recognized as this abort.
+	if hasContinuation && !continuation.RollbackPending {
+		continuation.RollbackPending = true
+		if err := config.PersistContinuationState(ctx.RepoRoot, continuation); err != nil {
+			return fmt.Errorf("failed to record abort in progress: %w", err)
 		}
 	}
 
@@ -78,6 +96,29 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	return nil
+}
+
+// ContinuationOwnsAbort reports whether abort should unwind this continuation,
+// rather than treat it as stale or leave abort to another interrupted
+// operation such as a failed absorb.
+//
+// A live rebase or merge always belongs to it. Once Git's operation is gone,
+// the continuation still belongs to abort if an earlier abort began the
+// rollback, or if the rebased branch still sits at its pre-rebase tip: the
+// user unwound Git by hand (`git rebase --abort`) and the rollback is still
+// owed. A branch that has moved on means the conflict was finished outside
+// stackit (`git rebase --continue`); its snapshot predates whatever the user
+// has done since, and restoring it would roll that work back.
+func ContinuationOwnsAbort(ctx *app.Context, continuation *config.ContinuationState) bool {
+	eng := ctx.Engine
+	if eng.IsRebaseInProgress(ctx.Context) || eng.IsMergeInProgress(ctx.Context) || continuation.RollbackPending {
+		return true
+	}
+	if continuation.CurrentBranchOverride == "" || continuation.ExpectedBranchRevision == "" {
+		return false
+	}
+	revision, err := eng.GetBranch(continuation.CurrentBranchOverride).GetRevision()
+	return err == nil && revision == continuation.ExpectedBranchRevision
 }
 
 // restoreBoundSnapshot rolls back to the snapshot the halted command recorded,

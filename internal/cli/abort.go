@@ -39,10 +39,13 @@ Examples:
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
 				// A pending conflict rollback owns abort even after Git's rebase
-				// has been unwound. Otherwise detached HEAD can be mistaken for
-				// a failed absorb, bypassing snapshot restoration on a retry.
-				_, continuationErr := config.GetContinuationState(ctx.RepoRoot)
-				if continuationErr != nil && absorb.IsAbsorbInProgress(ctx) {
+				// has been unwound; otherwise detached HEAD on a retry is
+				// mistaken for a failed absorb. A stale continuation, from a
+				// conflict finished outside stackit, must not block absorb's
+				// own cleanup.
+				continuation, continuationErr := config.GetContinuationState(ctx.RepoRoot)
+				ownedByContinuation := continuationErr == nil && abort.ContinuationOwnsAbort(ctx, continuation)
+				if !ownedByContinuation && absorb.IsAbsorbInProgress(ctx) {
 					return absorb.Abort(ctx)
 				}
 

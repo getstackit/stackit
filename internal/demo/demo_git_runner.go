@@ -653,6 +653,10 @@ func (d *demoGitRunner) ListWorktreeMetas() (map[string]*git.WorktreeMeta, error
 	return make(map[string]*git.WorktreeMeta), nil
 }
 
+func (d *demoGitRunner) ListWorktreeRegistrations() (map[string]git.WorktreeRegistration, error) {
+	return make(map[string]git.WorktreeRegistration), nil
+}
+
 func (d *demoGitRunner) SetLogger(_ git.DebugLogger) {
 	// No-op for demo runner
 }

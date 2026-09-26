@@ -168,3 +168,33 @@ func TestCreateTemporaryWorktree_RetryAfterStaleEntry(t *testing.T) {
 	require.NotEmpty(t, worktreePath2)
 	cleanup2()
 }
+
+func TestWorktreeOwnershipByStackRoot_FailsClosedOnMalformedRegistrations(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit()
+	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature"}))
+
+	// A registration that is not JSON, and one whose anchor differs from the
+	// stack root it is registered under. Both used to read as "no worktree".
+	for stackRoot, content := range map[string]string{
+		"broken":     "not json",
+		"mismatched": `{"stackRoot":"elsewhere","path":"/tmp/elsewhere"}`,
+	} {
+		blobPath := filepath.Join(t.TempDir(), "meta")
+		require.NoError(t, os.WriteFile(blobPath, []byte(content), 0o600))
+		sha, err := s.Scene.Repo.RunGitCommandAndGetOutput("hash-object", "-w", blobPath)
+		require.NoError(t, err)
+		s.RunGit("update-ref", "refs/stackit/worktrees/"+stackRoot, sha)
+	}
+
+	ownership, err := s.Engine.WorktreeOwnershipByStackRoot()
+	require.NoError(t, err)
+	require.NoError(t, ownership["feature"].Err)
+	require.NotNil(t, ownership["feature"].Worktree)
+	assert.Equal(t, "/tmp/feature-worktree", ownership["feature"].Worktree.Path.String())
+	require.ErrorContains(t, ownership["broken"].Err, "unmarshal")
+	require.Nil(t, ownership["broken"].Worktree)
+	require.ErrorContains(t, ownership["mismatched"].Err, "metadata anchor is elsewhere")
+	require.Nil(t, ownership["mismatched"].Worktree)
+}

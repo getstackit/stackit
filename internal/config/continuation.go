@@ -37,6 +37,13 @@ type ContinuationState struct {
 	// means the halted command recorded no rollback point, and abort must
 	// restore nothing rather than guess.
 	SnapshotID string `json:"snapshotId,omitempty"`
+	// RollbackPending marks that abort has started unwinding this conflict, so
+	// a retry (for example after an untracked-file collision stopped the
+	// restore) still owns abort once Git's rebase is gone. Without it, abort
+	// can only tell a pending rollback from a conflict finished outside
+	// stackit by whether the rebased branch still sits at
+	// ExpectedBranchRevision.
+	RollbackPending bool `json:"rollbackPending,omitempty"`
 }
 
 // GetContinuationState reads the continuation state from disk

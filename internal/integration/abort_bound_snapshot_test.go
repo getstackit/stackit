@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -138,4 +139,43 @@ func TestAbortWithoutRollbackPointRestoresNothing(t *testing.T) {
 	require.Equal(t, aRewritten, sh.revParse("a"))
 	require.Equal(t, bBefore, sh.revParse("b"))
 	require.Equal(t, cBefore, sh.revParse("c"))
+}
+
+// TestAbortPrefersAbsorbCleanupOverStaleContinuation covers a continuation file
+// left behind by a conflict the user finished with plain `git rebase
+// --continue`. A later failed absorb must still get absorb's cleanup: that file
+// used to take over abort, skip restoring absorb's stashed changes, and roll
+// back to the finished command's snapshot, deleting c.
+func TestAbortPrefersAbsorbCleanupOverStaleContinuation(t *testing.T) {
+	t.Parallel()
+	sh := buildConflictingTrio(t)
+
+	undoDir := filepath.Join(sh.scene.Dir, ".git", "stackit", "undo")
+	snapshots, err := filepath.Glob(filepath.Join(undoDir, "*_create.json"))
+	require.NoError(t, err)
+	require.NotEmpty(t, snapshots)
+	createC := strings.TrimSuffix(filepath.Base(snapshots[len(snapshots)-1]), ".json")
+	// c has moved on from the tip the conflicted rebase started at: the user
+	// finished that rebase by hand.
+	sh.writeRepoFile(filepath.Join(".git", ".stackit_continue"),
+		`{"currentBranchOverride":"c","expectedBranchRevision":"`+sh.revParse("b")+`","snapshotId":"`+createC+`"}`)
+
+	// Absorb's failure mode: the user's uncommitted work stashed under its marker.
+	sh.WriteFile("notes.txt", "uncommitted work\n").
+		Git("stash push --include-untracked -m stackit-absorb-temp")
+	cBefore := sh.revParse("c")
+
+	sh.Run("abort --force").
+		OutputContains("Restored 1 absorb stash entries")
+
+	sh.HasBranches("a", "b", "c", "main")
+	require.Equal(t, cBefore, sh.revParse("c"))
+	notes, err := os.ReadFile(filepath.Join(sh.scene.Dir, "notes.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "uncommitted work\n", string(notes))
+
+	// The stale file no longer blocks anything: the next abort discards it.
+	sh.Run("abort --force").
+		OutputContains("conflict finished outside stackit")
+	sh.HasBranches("a", "b", "c", "main")
 }

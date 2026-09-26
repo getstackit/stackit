@@ -356,6 +356,6 @@ func (h *SimpleGetHandler) OnRestackComplete(summary handlers.RestackSummary) {
 
 	for _, conflict := range summary.Conflicts {
 		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
+			style.ColorCyan(fmt.Sprintf("st restack --branch %s", conflict)))
 	}
 }

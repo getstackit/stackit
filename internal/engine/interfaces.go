@@ -377,6 +377,10 @@ type WorktreeRegistry interface {
 	// A malformed registration is returned as an error rather than being treated
 	// as unowned, so callers can fail closed before mutating the stack.
 	OwningWorktree(branch Branch) (*WorktreeInfo, error)
+	// WorktreeOwnershipByStackRoot resolves OwningWorktree for every stack
+	// root from one listing, with the same fail-closed treatment of malformed
+	// registrations.
+	WorktreeOwnershipByStackRoot() (map[string]WorktreeOwnership, error)
 	// ListManagedWorktrees returns all stackit-managed worktrees
 	ListManagedWorktrees() ([]WorktreeInfo, error)
 	// GetStackRootForBranch returns the stack root for a given branch

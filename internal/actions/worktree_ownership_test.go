@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -71,4 +72,24 @@ func TestEnsureCanModifyHere(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "belongs to the main repository stack")
 	})
+}
+
+// A registration that cannot be trusted must refuse, not read as "no
+// worktree": the batched lookup once dropped such entries and let the
+// mutation through from the main repository.
+func TestEnsureCanModifyHereRefusesMalformedRegistration(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit()
+	s.CreateBranch("feature").Commit("feature change")
+	s.TrackBranch("feature", "main")
+	blobPath := filepath.Join(t.TempDir(), "meta")
+	require.NoError(t, os.WriteFile(blobPath, []byte(`{"stackRoot":"elsewhere","path":"/tmp/elsewhere"}`), 0o600))
+	sha, err := s.Scene.Repo.RunGitCommandAndGetOutput("hash-object", "-w", blobPath)
+	require.NoError(t, err)
+	s.RunGit("update-ref", "refs/stackit/worktrees/feature", sha)
+
+	err = EnsureCanModifyHere(s.Context, s.Engine.GetBranch("feature"))
+	require.ErrorContains(t, err, "cannot determine worktree ownership for branch feature")
+	require.ErrorContains(t, err, "metadata anchor is elsewhere")
 }

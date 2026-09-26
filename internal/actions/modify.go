@@ -77,6 +77,16 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	//
 	// Deliberately above the interactive-rebase branch: that path rewrites
 	// history too and needs the same safety net.
+	//
+	// modify amends the working tree into a commit before it restacks, so a
+	// rollback that dropped the working tree would delete the user's
+	// uncommitted work along with the commit. Only --all stages untracked
+	// files (git add -A); every other mode commits what is already in the
+	// index, which the tracked capture holds.
+	capture := engine.WorktreeCaptureTracked
+	if opts.All {
+		capture = engine.WorktreeCaptureUntracked
+	}
 	snapshotOpts := NewSnapshot("modify",
 		WithFlagValue("--into", opts.Into),
 		WithFlagValue("-m", opts.Message),
@@ -85,10 +95,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 		WithFlag(opts.Update, "--update"),
 		WithFlag(opts.Patch, "--patch"),
 		WithFlag(opts.InteractiveRebase, "--interactive-rebase"),
-		// modify amends the working tree into a commit before it restacks, so
-		// a rollback that dropped the working tree would delete the user's
-		// uncommitted work along with the commit.
-		WithWorktreeCapture(),
+		WithWorktreeCapture(capture),
 	)
 	TakeBestEffortSnapshot(ctx, snapshotOpts)
 

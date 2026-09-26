@@ -97,6 +97,26 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		}
 	}
 
+	// Read the working tree before the snapshot: it decides how much of the
+	// working tree the snapshot has to capture.
+	status, err := eng.GetWorkingTreeStatus(ctx.Context)
+	if err != nil {
+		return Result{}, fmt.Errorf("failed to read working tree status: %w", err)
+	}
+	stagingFlags := opts.All || opts.Update || opts.Patch
+	// Offered when nothing is staged but tracked files changed; accepting it
+	// runs `git add -A`, which sweeps in untracked files too.
+	offersStageAll := !stagingFlags && !status.Staged && status.Unstaged && h.IsInteractive()
+
+	// create commits the staged working tree onto a new branch, so a rollback
+	// must hand those changes back rather than delete them with the branch.
+	// Untracked files only become part of that commit when create itself runs
+	// `git add -A` — anything the user staged is already in the tracked capture.
+	capture := engine.WorktreeCaptureTracked
+	if opts.All || offersStageAll {
+		capture = engine.WorktreeCaptureUntracked
+	}
+
 	// Take snapshot before modifying the repository
 	snapshotOpts := actions.NewSnapshot("create",
 		actions.WithArg(opts.BranchName),
@@ -109,22 +129,14 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		actions.WithFlag(opts.Update, "--update"),
 		actions.WithFlag(opts.Worktree, "--worktree"),
 		actions.WithFlag(opts.AllowEmpty, "--allow-empty"),
-		// create commits the staged working tree onto a new branch, so a
-		// rollback must hand those changes back rather than delete them with
-		// the branch.
-		actions.WithWorktreeCapture(),
+		actions.WithWorktreeCapture(capture),
 	)
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 
 	// Handle staging first if we might need the message to name the branch
-	status, err := eng.GetWorkingTreeStatus(ctx.Context)
-	if err != nil {
-		return Result{}, fmt.Errorf("failed to read working tree status: %w", err)
-	}
-
 	hasStaged := status.Staged
 	// Stage changes based on flags or prompt
-	if opts.All || opts.Update || opts.Patch {
+	if stagingFlags {
 		h.OnStep(StepStaging, handler.StatusStarted, "Staging changes")
 		stagingOpts := git.StagingOptions{
 			All:    opts.All,
@@ -137,18 +149,16 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 		}
 		hasStaged = true
 		h.OnStep(StepStaging, handler.StatusCompleted, "Changes staged")
-	} else if !hasStaged && h.IsInteractive() {
-		if status.Unstaged {
-			confirmed, err := h.PromptStageChanges()
-			if err == nil && confirmed {
-				h.OnStep(StepStaging, handler.StatusStarted, "Staging changes")
-				if err := eng.StageAll(ctx.Context); err != nil {
-					h.OnStep(StepStaging, handler.StatusFailed, err.Error())
-					return Result{}, fmt.Errorf("failed to stage changes: %w", err)
-				}
-				hasStaged = true
-				h.OnStep(StepStaging, handler.StatusCompleted, "Changes staged")
+	} else if offersStageAll {
+		confirmed, err := h.PromptStageChanges()
+		if err == nil && confirmed {
+			h.OnStep(StepStaging, handler.StatusStarted, "Staging changes")
+			if err := eng.StageAll(ctx.Context); err != nil {
+				h.OnStep(StepStaging, handler.StatusFailed, err.Error())
+				return Result{}, fmt.Errorf("failed to stage changes: %w", err)
 			}
+			hasStaged = true
+			h.OnStep(StepStaging, handler.StatusCompleted, "Changes staged")
 		}
 	}
 

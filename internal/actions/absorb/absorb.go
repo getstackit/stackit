@@ -65,7 +65,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		actions.WithFlag(opts.Patch, "--patch"),
 		actions.WithFlagValue("--restack", string(opts.Restack)),
 		// absorb runs on a deliberately dirty tree: staged hunks are its input.
-		actions.WithWorktreeCapture(),
+		// It never stages untracked files, even with --all (git add -u), so
+		// the tracked capture covers everything it can consume.
+		actions.WithWorktreeCapture(engine.WorktreeCaptureTracked),
 	)
 	actions.TakeBestEffortSnapshot(ctx, snapshotOpts)
 

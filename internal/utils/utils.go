@@ -2,12 +2,14 @@
 package utils
 
 import (
+	"context"
 	"os"
 	"regexp"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/mattn/go-isatty"
 )
@@ -303,6 +305,18 @@ func ShortRevision(rev string, maxLen int) string {
 		return rev
 	}
 	return rev[:maxLen]
+}
+
+// SleepContext blocks for d or until ctx is done, whichever comes first. Use it
+// inside a polling loop in place of time.Sleep so cancellation is not delayed by
+// up to a full poll interval.
+func SleepContext(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
 }
 
 // RunWithWorkers runs the given worker function for each item in the slice in parallel with a specified number of workers.

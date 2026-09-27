@@ -1871,11 +1871,11 @@ func TestFrozenBranches(t *testing.T) {
 		branch := s.Engine.GetBranch("feature")
 		require.False(t, branch.IsFrozen())
 
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
 		require.NoError(t, err)
 		require.True(t, s.Engine.GetBranch("feature").IsFrozen())
 
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), false)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchThawed)
 		require.NoError(t, err)
 		require.False(t, s.Engine.GetBranch("feature").IsFrozen())
 	})
@@ -1895,12 +1895,12 @@ func TestFrozenBranches(t *testing.T) {
 		require.True(t, branch.CanModify())
 
 		// Test frozen
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
 		require.NoError(t, err)
 		require.False(t, s.Engine.GetBranch("feature").CanModify())
 
 		// Test locked
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), false)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchThawed)
 		require.NoError(t, err)
 		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
@@ -1925,7 +1925,7 @@ func TestFrozenBranches(t *testing.T) {
 		require.NoError(t, err)
 
 		// Freeze the branch
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		// Now EnsureCanModify should return an error
@@ -1993,7 +1993,7 @@ func TestFrozenBranches(t *testing.T) {
 		// Lock and freeze the branch
 		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		// Now EnsureCanModify should return an error
@@ -2024,7 +2024,7 @@ func TestFrozenBranches(t *testing.T) {
 		require.NoError(t, err)
 
 		branch := s.Engine.GetBranch("feature")
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
 		require.NoError(t, err)
 		require.True(t, s.Engine.GetBranch("feature").IsFrozen())
 

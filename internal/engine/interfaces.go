@@ -218,7 +218,7 @@ type BranchTracking interface {
 	SetScopeAndMarkForUpdate(ctx context.Context, branch Branch, scope Scope) error
 	SetBranchType(branch Branch, branchType git.BranchType) error
 	SetLocked(ctx context.Context, branches Branches, reason LockReason) (BatchLockResult, error)
-	SetFrozen(ctx context.Context, branches Branches, frozen bool) (BatchFreezeResult, error)
+	SetFrozen(ctx context.Context, branches Branches, state FreezeState) (BatchFreezeResult, error)
 
 	// MarkBranchesForPRBodyUpdate marks multiple branches as needing a PR body
 	// update in a single atomic operation.

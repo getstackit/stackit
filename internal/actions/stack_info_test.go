@@ -77,7 +77,7 @@ func TestQueryStackInfo(t *testing.T) {
 		branch1 := s.Engine.GetBranch("branch1")
 		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch1), engine.LockReasonUser)
 		require.NoError(t, err)
-		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch1), true)
+		_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch1), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		result, err := QueryStackInfo(context.Background(), s.Engine)

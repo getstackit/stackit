@@ -22,6 +22,16 @@ const (
 // LockReason is re-exported from git package
 type LockReason = git.LockReason
 
+// FreezeState specifies the target frozen status for SetFrozen.
+type FreezeState int
+
+const (
+	// BranchThawed marks branches as not frozen.
+	BranchThawed FreezeState = iota
+	// BranchFrozen marks branches as frozen.
+	BranchFrozen
+)
+
 // MetaMap is branch name -> metadata, as returned by the batch metadata readers.
 type MetaMap map[string]*git.Meta
 

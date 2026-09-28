@@ -141,15 +141,9 @@ func ParseDiffOutput(diffOutput string) (Hunks, error) {
 
 			// Parse hunk header
 			oldStart := parseInt(match[1])
-			oldCount := parseInt(match[2])
-			if oldCount == 0 {
-				oldCount = 1 // Default to 1 if not specified
-			}
+			oldCount := parseHunkCount(match[2])
 			newStart := parseInt(match[3])
-			newCount := parseInt(match[4])
-			if newCount == 0 {
-				newCount = 1 // Default to 1 if not specified
-			}
+			newCount := parseHunkCount(match[4])
 
 			currentHunk = &Hunk{
 				File:          currentFile,
@@ -185,6 +179,17 @@ func ParseDiffOutput(diffOutput string) (Hunks, error) {
 func parseInt(s string) int {
 	result, _ := strconv.Atoi(s)
 	return result
+}
+
+// parseHunkCount parses the optional count capture group from a hunk header
+// (e.g. the "3" in "@@ -1,3 +1,3 @@"). Unified diff omits the count only when
+// it is 1, so an empty capture means "1", not "0" - unlike an explicit "0"
+// (e.g. "@@ -0,0 +1,3 @@" for a new file), which must stay 0.
+func parseHunkCount(raw string) int {
+	if raw == "" {
+		return 1
+	}
+	return parseInt(raw)
 }
 
 // Patch constructs a unified diff patch from the selected hunks.

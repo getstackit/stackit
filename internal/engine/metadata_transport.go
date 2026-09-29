@@ -30,7 +30,7 @@ func (e *engineImpl) EnsureRemoteMetadata(ctx context.Context) error {
 	if err := e.ConfigureRemoteMetadataSync(ctx); err != nil {
 		return err
 	}
-	if err := e.LoadRemoteMetadataCache(); err != nil {
+	if err := e.LoadRemoteMetadataCache(ctx); err != nil {
 		return err
 	}
 	return nil

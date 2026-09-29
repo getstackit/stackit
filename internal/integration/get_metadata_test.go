@@ -89,7 +89,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 
 		// Precondition: the remote metadata carries the PR number, so get has no reason
 		// to call GitHub for display either.
-		require.NoError(t, sh.Engine.LoadRemoteMetadataCache())
+		require.NoError(t, sh.Engine.LoadRemoteMetadataCache(t.Context()))
 		cache := sh.Engine.GetRemoteMetadataCache()
 		require.NotNil(t, cache.Get("b"), "remote metadata for b should exist")
 		require.NotNil(t, cache.Get("b").GetParentBranchName(), "remote metadata for b should record its parent")

@@ -50,7 +50,7 @@ func processRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) err
 
 	// Load remote metadata into cache
 	loadCacheStart := time.Now()
-	if err := eng.LoadRemoteMetadataCache(); err != nil {
+	if err := eng.LoadRemoteMetadataCache(ctx.Context); err != nil {
 		out.Debug("Failed to load remote metadata cache: %v", err)
 	}
 	ctx.Logger.Info("load remote metadata cache completed durationMs=%d", time.Since(loadCacheStart).Milliseconds())

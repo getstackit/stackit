@@ -10,11 +10,9 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RemoteMetadataView provides read-only access to the remote metadata cache.
@@ -124,43 +122,34 @@ func (e *engineImpl) updateMetadataBatch(
 	})
 }
 
+// remoteMetadataRefPrefix is where fetched remote metadata refs live.
+const remoteMetadataRefPrefix = "refs/stackit/remote-metadata/"
+
 // LoadRemoteMetadataCache loads remote metadata refs into the engine's cache
-func (e *engineImpl) LoadRemoteMetadataCache() error {
-	remoteRefs, err := e.git.ListRefs("refs/stackit/remote-metadata/")
+// with one batched object read.
+func (e *engineImpl) LoadRemoteMetadataCache(ctx context.Context) error {
+	remoteRefs, err := e.git.ListRefs(remoteMetadataRefPrefix)
 	if err != nil {
 		return err
 	}
 
-	// Collect refs into a slice for parallel processing
-	type refInfo struct {
-		branch string
-		sha    string
-	}
-	refs := make([]refInfo, 0, len(remoteRefs))
-	for refName, sha := range remoteRefs {
-		branch := refName[len("refs/stackit/remote-metadata/"):]
-		refs = append(refs, refInfo{branch, sha})
-	}
-
-	// Parallel blob reads
-	cache := make(map[string]*git.Meta)
-	var cacheMu sync.Mutex
-
-	utils.Run(refs, func(ref refInfo) {
-		content, err := git.ObjectContent(e.git.ReadObjects(context.Background(), ref.sha))
+	cache := make(MetaMap, len(remoteRefs))
+	if len(remoteRefs) > 0 {
+		// Read by ref name: names are unique where blob SHAs may repeat, and a
+		// ref deleted since the listing is simply absent from the result.
+		objects, err := e.git.ReadObjects(ctx, slices.Collect(maps.Keys(remoteRefs))...)
 		if err != nil {
-			return
+			return fmt.Errorf("read remote metadata: %w", err)
 		}
-
-		var meta git.Meta
-		if err := json.Unmarshal([]byte(content), &meta); err != nil {
-			return
+		for refName, object := range objects {
+			var meta git.Meta
+			// An unparseable remote record is treated as absent.
+			if err := json.Unmarshal([]byte(object.Content), &meta); err != nil {
+				continue
+			}
+			cache[strings.TrimPrefix(refName, remoteMetadataRefPrefix)] = &meta
 		}
-
-		cacheMu.Lock()
-		cache[ref.branch] = &meta
-		cacheMu.Unlock()
-	})
+	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -192,7 +181,7 @@ func (e *engineImpl) ApplyRemoteMetadataForBranches(ctx context.Context, branchN
 	if err := e.ConfigureRemoteMetadataSync(ctx); err != nil {
 		return fmt.Errorf("configure metadata sync: %w", err)
 	}
-	if err := e.LoadRemoteMetadataCache(); err != nil {
+	if err := e.LoadRemoteMetadataCache(ctx); err != nil {
 		return fmt.Errorf("load remote metadata cache: %w", err)
 	}
 

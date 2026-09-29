@@ -213,7 +213,7 @@ func DebugAction(ctx *app.Context, opts DebugOptions) error {
 		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 		if err := eng.EnsureRemoteMetadata(remoteCtx); err != nil {
 			ctx.Output.Debug("Failed to fetch remote metadata: %v", err)
-			_ = eng.LoadRemoteMetadataCache()
+			_ = eng.LoadRemoteMetadataCache(ctx.Context)
 		}
 		cancelRemote()
 		remoteCache := eng.GetRemoteMetadataCache()

@@ -111,7 +111,7 @@ func TestScopeSubmitSyncFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// 6. Verify the scope is now in the remote metadata cache
-	err = eng.LoadRemoteMetadataCache()
+	err = eng.LoadRemoteMetadataCache(t.Context())
 	require.NoError(t, err)
 
 	cache := eng.GetRemoteMetadataCache()

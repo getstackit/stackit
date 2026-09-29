@@ -82,7 +82,7 @@ type RemoteMetadataManager interface {
 	IsRemoteSyncEnabled() bool
 	SetRemoteSyncEnabled(enabled bool)
 	BatchSetLastModifiedBy(ctx context.Context, branchNames []string) error
-	LoadRemoteMetadataCache() error
+	LoadRemoteMetadataCache(ctx context.Context) error
 	ApplyRemoteMetadataIfExists(ctx context.Context, branchName string) error
 	ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
 	GetRemoteMetadataCache() RemoteMetadataView

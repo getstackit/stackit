@@ -46,7 +46,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		})
 		createRemoteMetadataRef(t, sh, "feature-a", remoteMeta)
 
-		err = eng.LoadRemoteMetadataCache()
+		err = eng.LoadRemoteMetadataCache(t.Context())
 		require.NoError(t, err)
 
 		diff, err := eng.ComputeMetadataDiff("feature-a")
@@ -90,7 +90,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		})
 		createRemoteMetadataRef(t, sh, "feature-b", remoteMeta)
 
-		err = eng.LoadRemoteMetadataCache()
+		err = eng.LoadRemoteMetadataCache(t.Context())
 		require.NoError(t, err)
 
 		diff, err := eng.ComputeMetadataDiff("feature-b")
@@ -117,7 +117,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		err = eng.BatchSetLastModifiedBy(t.Context(), []string{"feature-c"})
 		require.NoError(t, err)
 
-		err = eng.LoadRemoteMetadataCache()
+		err = eng.LoadRemoteMetadataCache(t.Context())
 		require.NoError(t, err)
 
 		orphaned, err := eng.FindOrphanedLocalMetadata()
@@ -161,7 +161,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		})
 		createRemoteMetadataRef(t, sh, "non-existent-branch", remoteMeta)
 
-		err := eng.LoadRemoteMetadataCache()
+		err := eng.LoadRemoteMetadataCache(t.Context())
 		require.NoError(t, err)
 
 		diffs, err := eng.ComputeAllMetadataDiffs()
@@ -275,4 +275,31 @@ func TestBatchSetLastModifiedBy_RefusesCorruptMetadata(t *testing.T) {
 	// metadata, and the batch commits atomically or not at all.
 	require.Equal(t, corruptBefore, revParse("refs/stackit/metadata/corrupt"))
 	require.Equal(t, featureBefore, revParse("refs/stackit/metadata/feature"))
+}
+
+func TestLoadRemoteMetadataCache_LoadsEveryRefAndSkipsCorrupt(t *testing.T) {
+	t.Parallel()
+	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+
+	// Identical records share one blob, so the cache must be keyed by ref
+	// rather than by the object read.
+	shared := git.NewMetaFrom(git.MetaFields{Scope: new("shared")})
+	createRemoteMetadataRef(t, sh, "feature-a", shared)
+	createRemoteMetadataRef(t, sh, "feature-b", shared)
+
+	blobPath := filepath.Join(t.TempDir(), "meta")
+	require.NoError(t, os.WriteFile(blobPath, []byte("not json"), 0o600))
+	blobSha, err := sh.Scene.Repo.RunGitCommandAndGetOutput("hash-object", "-w", blobPath)
+	require.NoError(t, err)
+	sh.RunGit("update-ref", "refs/stackit/remote-metadata/broken", strings.TrimSpace(blobSha))
+
+	require.NoError(t, sh.Engine.LoadRemoteMetadataCache(t.Context()))
+
+	cache := sh.Engine.GetRemoteMetadataCache()
+	require.Equal(t, 2, cache.Len())
+	for _, branch := range []string{"feature-a", "feature-b"} {
+		require.True(t, cache.Has(branch), branch)
+		require.Equal(t, "shared", *cache.Get(branch).GetScope(), branch)
+	}
+	require.False(t, cache.Has("broken"))
 }

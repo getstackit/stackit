@@ -342,7 +342,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// crawl only when the target has no stackit metadata (e.g. a branch never submitted
 	// via stackit, or when the metadata cache fails to load).
 	usedMetadata := false
-	if err := eng.LoadRemoteMetadataCache(); err != nil {
+	if err := eng.LoadRemoteMetadataCache(ctx.Context); err != nil {
 		out.Debug("failed to load remote metadata cache: %v", err)
 	} else {
 		usedMetadata = targets.crawlAncestorsViaMetadata(eng, targetBranch)

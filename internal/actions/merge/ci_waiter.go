@@ -7,6 +7,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // CIWaiter handles waiting for CI checks to pass on GitHub PRs.
@@ -86,7 +87,9 @@ func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumbe
 	if w.output != nil {
 		w.output.Info("   Waiting for CI checks to register...")
 	}
-	time.Sleep(CIRegistrationDelay)
+	if err := utils.SleepContext(ctx, CIRegistrationDelay); err != nil {
+		return nil, err
+	}
 
 	if w.output != nil {
 		w.output.Info("   Waiting for CI checks (timeout: %v)...", w.timeout)
@@ -152,10 +155,8 @@ func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumbe
 			}
 		}
 
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(w.pollInterval):
+		if err := utils.SleepContext(ctx, w.pollInterval); err != nil {
+			return nil, err
 		}
 	}
 }

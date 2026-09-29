@@ -12,6 +12,7 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 const (
@@ -239,7 +240,9 @@ func getMergeableStateWithRetry(ctx context.Context, runner git.Runner, prNodeID
 			return state, nil
 		}
 		if attempt < maxAttempts-1 {
-			time.Sleep(retryDelay)
+			if err := utils.SleepContext(ctx, retryDelay); err != nil {
+				return nil, err
+			}
 		}
 	}
 

@@ -3,6 +3,7 @@ package github
 
 import (
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/utils"
 
 	"bytes"
 	"context"
@@ -833,7 +834,9 @@ func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID strin
 			return fmt.Errorf("auto-merge was disabled. This may indicate a problem with the PR")
 		}
 
-		time.Sleep(pollInterval)
+		if err := utils.SleepContext(ctx, pollInterval); err != nil {
+			return err
+		}
 	}
 
 	return fmt.Errorf("timed out waiting for PR to be merged after %v", timeout)
@@ -873,7 +876,9 @@ func WaitForMergeable(ctx context.Context, runner GitCommandRunner, prNodeID str
 		}
 
 		// BLOCKED, BEHIND, UNKNOWN, or empty — keep polling
-		time.Sleep(pollInterval)
+		if err := utils.SleepContext(ctx, pollInterval); err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, fmt.Errorf("timed out waiting for PR to become mergeable after %v", timeout)

@@ -416,6 +416,48 @@ index abc123..def456 100644
 			},
 		},
 		{
+			name: "new file explicit zero old count",
+			diff: `diff --git a/file.go b/file.go
+new file mode 100644
+index 0000000..abc123
+--- /dev/null
++++ b/file.go
+@@ -0,0 +1,3 @@
++line1
++line2
++line3`,
+			expectedCount: 1,
+			validateHunks: func(t *testing.T, hunks []Hunk) {
+				if hunks[0].OldCount != 0 {
+					t.Errorf("Expected OldCount 0 for new file, got %d", hunks[0].OldCount)
+				}
+				if hunks[0].NewCount != 3 {
+					t.Errorf("Expected NewCount 3, got %d", hunks[0].NewCount)
+				}
+			},
+		},
+		{
+			name: "deleted file explicit zero new count",
+			diff: `diff --git a/file.go b/file.go
+deleted file mode 100644
+index abc123..0000000
+--- a/file.go
++++ /dev/null
+@@ -1,3 +0,0 @@
+-line1
+-line2
+-line3`,
+			expectedCount: 1,
+			validateHunks: func(t *testing.T, hunks []Hunk) {
+				if hunks[0].OldCount != 3 {
+					t.Errorf("Expected OldCount 3, got %d", hunks[0].OldCount)
+				}
+				if hunks[0].NewCount != 0 {
+					t.Errorf("Expected NewCount 0 for deleted file, got %d", hunks[0].NewCount)
+				}
+			},
+		},
+		{
 			name: "binary file",
 			diff: `diff --git a/image.png b/image.png
 index abc123..def456 100644

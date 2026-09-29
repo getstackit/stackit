@@ -73,15 +73,9 @@ func parseDiffHunks(diffOutput, targetFile string) []Hunk {
 			}
 
 			oldStart := parseInt(match[1])
-			oldCount := parseInt(match[2])
-			if oldCount == 0 {
-				oldCount = 1
-			}
+			oldCount := parseHunkCount(match[2])
 			newStart := parseInt(match[3])
-			newCount := parseInt(match[4])
-			if newCount == 0 {
-				newCount = 1
-			}
+			newCount := parseHunkCount(match[4])
 
 			currentHunk = &Hunk{
 				File:     currentFile,

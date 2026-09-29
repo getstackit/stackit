@@ -5,13 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/utils"
 )
 
 // RemoteMetadataView provides read-only access to the remote metadata cache.
@@ -62,9 +63,10 @@ func (e *engineImpl) SetRemoteSyncEnabled(enabled bool) {
 	_ = e.git.SetConfig("stackit.metadata-sync-enabled", val)
 }
 
-// BatchSetLastModifiedBy updates metadata for multiple branches in parallel
-// with a single git config lookup
-func (e *engineImpl) BatchSetLastModifiedBy(branchNames []string) error {
+// BatchSetLastModifiedBy stamps the current git user onto metadata for
+// multiple branches with a single git config lookup and a single atomic
+// metadata commit.
+func (e *engineImpl) BatchSetLastModifiedBy(ctx context.Context, branchNames []string) error {
 	if len(branchNames) == 0 {
 		return nil
 	}
@@ -80,80 +82,74 @@ func (e *engineImpl) BatchSetLastModifiedBy(branchNames []string) error {
 		GitName:  name,
 		GitEmail: email,
 	}
-
-	// Parallel metadata updates
-	var firstErr error
-	var errMu sync.Mutex
-
-	utils.Run(branchNames, func(branchName string) {
-		if err := e.setLastModifiedByInternal(branchName, modifiedBy); err != nil {
-			errMu.Lock()
-			if firstErr == nil {
-				firstErr = err
-			}
-			errMu.Unlock()
-		}
-	})
-
-	return firstErr
-}
-
-// setLastModifiedByInternal updates metadata for a single branch with pre-fetched user info
-func (e *engineImpl) setLastModifiedByInternal(branchName string, modifiedBy *git.ModifiedBy) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	meta, err := e.readMetadata(branchName)
-	if err != nil {
-		meta = git.NewMeta()
-	}
 	now := time.Now()
-	meta = meta.WithLastModifiedBy(modifiedBy).WithLastModifiedAt(&now)
 
-	// Update localOnlyHash for change detection
-	hash := e.computeMetadataHash(meta)
-	meta = meta.WithLocalOnlyHash(&hash)
-
-	return e.writeMetadata(branchName, meta)
+	message := fmt.Sprintf("set last modified by for %d branches", len(branchNames))
+	return e.updateMetadataBatch(ctx, message, branchNames, func(_ string, meta *git.Meta) *git.Meta {
+		return meta.WithLastModifiedBy(modifiedBy).WithLastModifiedAt(&now)
+	})
 }
+
+// updateMetadataBatch rewrites each branch's metadata with apply and commits
+// the results in one retried transaction. The localOnlyHash is refreshed so
+// change detection treats the write as the new synced state.
+//
+// A branch whose metadata cannot be read fails the batch rather than being
+// overwritten: a missing ref reads as empty metadata, so a read failure means
+// a corrupt record whose parent would be lost.
+func (e *engineImpl) updateMetadataBatch(
+	ctx context.Context,
+	message string,
+	branchNames []string,
+	apply func(branch string, meta *git.Meta) *git.Meta,
+) error {
+	return e.WithRetry(ctx, func() error {
+		tx := e.BeginTx(message)
+		metas, readErrs := tx.ReadMetadata(ctx, branchNames...).ValuesAndErrors()
+		if len(readErrs) > 0 {
+			tx.Rollback()
+			return fmt.Errorf("read metadata: %w", errors.Join(readErrs...))
+		}
+		for _, branchName := range branchNames {
+			meta := apply(branchName, metas[branchName])
+			hash := e.computeMetadataHash(meta)
+			if err := tx.UpdateMeta(branchName, meta.WithLocalOnlyHash(&hash)); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		return tx.Commit(ctx)
+	})
+}
+
+// remoteMetadataRefPrefix is where fetched remote metadata refs live.
+const remoteMetadataRefPrefix = "refs/stackit/remote-metadata/"
 
 // LoadRemoteMetadataCache loads remote metadata refs into the engine's cache
-func (e *engineImpl) LoadRemoteMetadataCache() error {
-	remoteRefs, err := e.git.ListRefs("refs/stackit/remote-metadata/")
+// with one batched object read.
+func (e *engineImpl) LoadRemoteMetadataCache(ctx context.Context) error {
+	remoteRefs, err := e.git.ListRefs(remoteMetadataRefPrefix)
 	if err != nil {
 		return err
 	}
 
-	// Collect refs into a slice for parallel processing
-	type refInfo struct {
-		branch string
-		sha    string
-	}
-	refs := make([]refInfo, 0, len(remoteRefs))
-	for refName, sha := range remoteRefs {
-		branch := refName[len("refs/stackit/remote-metadata/"):]
-		refs = append(refs, refInfo{branch, sha})
-	}
-
-	// Parallel blob reads
-	cache := make(map[string]*git.Meta)
-	var cacheMu sync.Mutex
-
-	utils.Run(refs, func(ref refInfo) {
-		content, err := git.ObjectContent(e.git.ReadObjects(context.Background(), ref.sha))
+	cache := make(MetaMap, len(remoteRefs))
+	if len(remoteRefs) > 0 {
+		// Read by ref name: names are unique where blob SHAs may repeat, and a
+		// ref deleted since the listing is simply absent from the result.
+		objects, err := e.git.ReadObjects(ctx, slices.Collect(maps.Keys(remoteRefs))...)
 		if err != nil {
-			return
+			return fmt.Errorf("read remote metadata: %w", err)
 		}
-
-		var meta git.Meta
-		if err := json.Unmarshal([]byte(content), &meta); err != nil {
-			return
+		for refName, object := range objects {
+			var meta git.Meta
+			// An unparseable remote record is treated as absent.
+			if err := json.Unmarshal([]byte(object.Content), &meta); err != nil {
+				continue
+			}
+			cache[strings.TrimPrefix(refName, remoteMetadataRefPrefix)] = &meta
 		}
-
-		cacheMu.Lock()
-		cache[ref.branch] = &meta
-		cacheMu.Unlock()
-	})
+	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -162,48 +158,21 @@ func (e *engineImpl) LoadRemoteMetadataCache() error {
 }
 
 // ApplyRemoteMetadataIfExists applies remote metadata to a local branch if it exists in the cache
-func (e *engineImpl) ApplyRemoteMetadataIfExists(branchName string) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
+func (e *engineImpl) ApplyRemoteMetadataIfExists(ctx context.Context, branchName string) error {
+	e.mu.RLock()
 	remote, ok := e.remoteMetaCache[branchName]
+	e.mu.RUnlock()
 	if !ok {
 		return nil
 	}
-
-	// Update local branch state
-	if state := e.readState(branchName); state != nil {
-		state.LockReason = remote.GetLockReason()
-		if remote.GetScope() != nil {
-			state.Scope = NewScope(*remote.GetScope())
-		}
-	}
-
-	// Read existing local metadata to preserve fields not in remote (like PrInfo)
-	local, err := e.readMetadata(branchName)
-	if err != nil {
-		local = git.NewMeta()
-	}
-
-	// Update local with remote values
-	local = local.
-		WithLockReason(remote.GetLockReason()).
-		WithScope(remote.GetScope()).
-		WithBranchType(remote.GetBranchType()).
-		WithLastModifiedBy(remote.GetLastModifiedBy()).
-		WithLastModifiedAt(remote.GetLastModifiedAt())
-
-	// Store localOnlyHash for change detection
-	hash := e.computeMetadataHash(local)
-	local = local.WithLocalOnlyHash(&hash)
-
-	return e.writeMetadata(branchName, local)
+	return e.applyRemoteMetadata(ctx, MetaMap{branchName: remote})
 }
 
 // ApplyRemoteMetadataForBranches applies the latest fetched remote metadata to
-// the requested local branches. It owns the cache/refspec setup so callers
-// don't need to sequence ConfigureRemoteMetadataSync, LoadRemoteMetadataCache,
-// and per-branch application themselves.
+// the requested local branches in a single atomic metadata commit. It owns
+// the cache/refspec setup so callers don't need to sequence
+// ConfigureRemoteMetadataSync, LoadRemoteMetadataCache, and per-branch
+// application themselves.
 func (e *engineImpl) ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error {
 	if len(branchNames) == 0 {
 		return nil
@@ -212,26 +181,51 @@ func (e *engineImpl) ApplyRemoteMetadataForBranches(ctx context.Context, branchN
 	if err := e.ConfigureRemoteMetadataSync(ctx); err != nil {
 		return fmt.Errorf("configure metadata sync: %w", err)
 	}
-	if err := e.LoadRemoteMetadataCache(); err != nil {
+	if err := e.LoadRemoteMetadataCache(ctx); err != nil {
 		return fmt.Errorf("load remote metadata cache: %w", err)
 	}
 
-	var firstErr error
-	seen := make(map[string]struct{}, len(branchNames))
 	trunkName := e.Trunk().GetName()
+	remotes := make(MetaMap, len(branchNames))
+
+	e.mu.RLock()
 	for _, branchName := range branchNames {
 		if branchName == "" || branchName == trunkName {
 			continue
 		}
-		if _, ok := seen[branchName]; ok {
-			continue
-		}
-		seen[branchName] = struct{}{}
-		if err := e.ApplyRemoteMetadataIfExists(branchName); err != nil && firstErr == nil {
-			firstErr = err
+		if remote, ok := e.remoteMetaCache[branchName]; ok {
+			remotes[branchName] = remote
 		}
 	}
-	return firstErr
+	e.mu.RUnlock()
+
+	return e.applyRemoteMetadata(ctx, remotes)
+}
+
+// applyRemoteMetadata overlays each branch's remote metadata onto its local
+// metadata in one commit. The commit refreshes in-memory branch state, so lock
+// and scope changes are visible without a rebuild.
+func (e *engineImpl) applyRemoteMetadata(ctx context.Context, remotes MetaMap) error {
+	if len(remotes) == 0 {
+		return nil
+	}
+	branchNames := slices.Sorted(maps.Keys(remotes))
+	message := fmt.Sprintf("apply remote metadata for %d branches", len(branchNames))
+	return e.updateMetadataBatch(ctx, message, branchNames, func(branch string, local *git.Meta) *git.Meta {
+		return mergeRemoteMetadata(local, remotes[branch])
+	})
+}
+
+// mergeRemoteMetadata returns local metadata with remote's syncable fields
+// applied on top, preserving local-only fields (like PrInfo) that remote
+// metadata does not carry.
+func mergeRemoteMetadata(local, remote *git.Meta) *git.Meta {
+	return local.
+		WithLockReason(remote.GetLockReason()).
+		WithScope(remote.GetScope()).
+		WithBranchType(remote.GetBranchType()).
+		WithLastModifiedBy(remote.GetLastModifiedBy()).
+		WithLastModifiedAt(remote.GetLastModifiedAt())
 }
 
 // GetRemoteMetadataCache returns a read-only view of the remote metadata cache.
@@ -339,8 +333,8 @@ func (e *engineImpl) ComputeAllMetadataDiffs() ([]*MetadataDiff, error) {
 }
 
 // AcceptRemoteMetadata overwrites local metadata with remote values
-func (e *engineImpl) AcceptRemoteMetadata(branch string) error {
-	return e.ApplyRemoteMetadataIfExists(branch)
+func (e *engineImpl) AcceptRemoteMetadata(ctx context.Context, branch string) error {
+	return e.ApplyRemoteMetadataIfExists(ctx, branch)
 }
 
 // RejectRemoteMetadata marks a branch as having local modifications to keep

@@ -8,7 +8,7 @@ import (
 
 // MetadataPushEngine defines the engine capabilities needed for pushing metadata.
 type MetadataPushEngine interface {
-	BatchSetLastModifiedBy(branchNames []string) error
+	BatchSetLastModifiedBy(ctx context.Context, branchNames []string) error
 	PrepareRemoteMetadataPush(ctx context.Context) error
 	PushMetadataForBranches(ctx context.Context, branchNames []string) error
 }
@@ -18,8 +18,8 @@ type MetadataPushEngine interface {
 func PushMetadataOnly(ctx *app.Context, eng MetadataPushEngine, branchNames []string) error {
 	out := ctx.Output
 
-	// Update LastModifiedBy for all branches (parallel with config caching)
-	if err := eng.BatchSetLastModifiedBy(branchNames); err != nil {
+	// Update LastModifiedBy for all branches in one metadata commit
+	if err := eng.BatchSetLastModifiedBy(ctx.Context, branchNames); err != nil {
 		out.Debug("Failed to update metadata: %v", err)
 	}
 

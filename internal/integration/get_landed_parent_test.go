@@ -61,14 +61,22 @@ func squashLanding(t *testing.T, sh *scenario.Scenario) {
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("commit", "-m", "Squash a (#1)"))
 }
 
-// rebaseLanding replays a's commits onto trunk with fresh SHAs.
+// rebaseLanding replays a's commits onto trunk with fresh SHAs. -x matters:
+// trunk still sits at a's base here, so a plain cherry-pick within the same
+// second reproduces a's commits byte for byte and the "rebase" degenerates into
+// a fast-forward that ancestry alone detects. The appended trailer changes each
+// SHA while leaving the patch-id intact, as GitHub's rebase merge does.
 func rebaseLanding(t *testing.T, sh *scenario.Scenario) {
 	t.Helper()
 	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-list", "--reverse", "main..a")
 	require.NoError(t, err)
 	for _, commit := range strings.Fields(out) {
-		require.NoError(t, sh.Scene.Repo.RunGitCommand("cherry-pick", commit))
+		require.NoError(t, sh.Scene.Repo.RunGitCommand("cherry-pick", "-x", commit))
 	}
+	landed, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-list", "main..a")
+	require.NoError(t, err)
+	require.NotEmpty(t, strings.TrimSpace(landed),
+		"a rebase merge must leave a's original commits unreachable from trunk")
 }
 
 // forgottenMetadata names the remote stackit metadata refs a scenario deletes
@@ -351,23 +359,43 @@ func TestGetPastLandedParentWithNoMetadataAtAll(t *testing.T) {
 // dropping them, which is the data-loss shape re-anchoring exists to avoid.
 func TestGetPastLandedParentUnfrozenLeavesUnanchoredAlone(t *testing.T) {
 	t.Parallel()
-	sh := stackWithLandedParent(t, squashLanding, forgetAllMetadata)
 
-	handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
-	require.NoError(t, actions.GetAction(sh.Context, "b",
-		actions.GetOptions{Restack: true, Unfrozen: true}, handler))
-	sh.Rebuild()
+	for _, tc := range []struct {
+		name string
+		land mergeMethod
+	}{
+		{"merge commit", mergeCommitLanding},
+		{"multi-commit squash", squashLanding},
+		{"rebase merge", rebaseLanding},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sh := stackWithLandedParent(t, tc.land, forgetAllMetadata)
 
-	require.Len(t, handler.reports, 1)
-	require.Equal(t, []string{"b"}, handler.reports[0].Unanchored(),
-		"nothing recorded a's tip, so b has no safe replay range")
+			handler := &landedParentHandler{decision: actions.UnfreezeAndRestack}
+			require.NoError(t, actions.GetAction(sh.Context, "b",
+				actions.GetOptions{Restack: true, Unfrozen: true}, handler))
+			sh.Rebuild()
 
-	sh.ExpectStackStructure(map[string]string{"b": "main"})
-	require.False(t, sh.Engine.GetBranch("b").IsFrozen(),
-		"--unfrozen still leaves the branch unfrozen; the anchor is what protects it")
-	require.Equal(t, 3, commitsInB(t, sh),
-		"b keeps its own commits instead of replaying the landed parent's")
-	requireCleanWorkingTree(t, sh)
+			require.Len(t, handler.reports, 1)
+			require.Equal(t, []string{"b"}, handler.reports[0].Unanchored(),
+				"nothing recorded a's tip, so b has no safe replay range")
+
+			sh.ExpectStackStructure(map[string]string{"b": "main"})
+			require.False(t, sh.Engine.GetBranch("b").IsFrozen(),
+				"--unfrozen still leaves the branch unfrozen; the anchor is what protects it")
+			// Compare against the pushed tip rather than counting main..b: a
+			// merge commit makes a's commits reachable from main, so a count
+			// cannot tell "left alone" from "rebased" for every method.
+			remoteB, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "origin/b")
+			require.NoError(t, err)
+			localB, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "b")
+			require.NoError(t, err)
+			require.Equal(t, strings.TrimSpace(remoteB), strings.TrimSpace(localB),
+				"b keeps mirroring the remote instead of being rebased with no safe replay range")
+			requireCleanWorkingTree(t, sh)
+		})
+	}
 }
 
 // --restack=false leaves nothing for an unfreeze to feed, so get must not act

@@ -27,12 +27,22 @@ type MetadataStore struct {
 	git           MetadataBackend
 	metadataCache metadataCache
 	mu            sync.Mutex
-	generations   map[string]uint64
-	logger        DebugLogger
+	// generations and localGenerations record the backend's ref generation at
+	// the moment each cached expectation was captured. A generation that has
+	// moved since means this process rewrote the ref through a path that does
+	// not go through the store (a transaction commit, a batched flag write), so
+	// the recorded SHA no longer describes anything this process has seen.
+	generations      map[string]uint64
+	localGenerations map[string]uint64
+	logger           DebugLogger
 }
 
 func NewMetadataStore(backend MetadataBackend) *MetadataStore {
-	return &MetadataStore{git: backend, generations: make(map[string]uint64)}
+	return &MetadataStore{
+		git:              backend,
+		generations:      make(map[string]uint64),
+		localGenerations: make(map[string]uint64),
+	}
 }
 
 func (r *MetadataStore) SetLogger(logger DebugLogger) {
@@ -96,7 +106,7 @@ func (r *MetadataStore) ReadMetadata(ctx context.Context, branchNames ...string)
 	for _, name := range branchNames {
 		generation := r.git.RefGeneration(MetadataRefName(name))
 		if r.generations[name] != generation {
-			r.metadataCache.entries.Delete(name)
+			r.metadataCache.DeleteShared(name)
 		}
 		if cached, ok := r.metadataCache.GetRecord(name); ok {
 			result.Set(name, cached.Value)
@@ -178,6 +188,10 @@ func (r *MetadataStore) ReadLocalMetadata(ctx context.Context, branchNames ...st
 	refs := make([]string, len(branchNames))
 	for i, name := range branchNames {
 		refs[i] = LocalMetadataRefPrefix + name
+		// Captured before the read: an in-process write racing it bumps the
+		// generation past this value, so the expectation is distrusted rather
+		// than wrongly trusted.
+		r.localGenerations[name] = r.git.RefGeneration(refs[i])
 	}
 	contents, err := r.git.ReadObjects(ctx, refs...)
 	if err != nil {
@@ -248,8 +262,8 @@ func (r *MetadataStore) WriteMetadata(branchName string, meta *Meta) error {
 // falls back to an unconditional write, which is what creating metadata for a
 // newly tracked branch needs.
 func (r *MetadataStore) updateMetadataRefCAS(refName, branchName, newSHA string) error {
-	expected := r.metadataCache.SHAFor(branchName)
-	if expected == "" {
+	expected := r.sharedExpectation(branchName)
+	if !expected.known() {
 		if err := r.git.UpdateRefs(context.Background(), []RefUpdate{{RefName: refName, NewSHA: newSHA}}, ""); err != nil {
 			return fmt.Errorf("failed to write metadata ref: %w", err)
 		}
@@ -260,11 +274,7 @@ func (r *MetadataStore) updateMetadataRefCAS(refName, branchName, newSHA string)
 	// reported success for a ref another process may have moved in between —
 	// and the caller then cached metadata it never actually wrote. Let the
 	// compare-and-swap decide; it costs one update-ref.
-	err := r.git.UpdateRefs(context.Background(), []RefUpdate{{
-		RefName: refName,
-		NewSHA:  newSHA,
-		OldSHA:  expected,
-	}}, "")
+	err := r.git.UpdateRefs(context.Background(), []RefUpdate{expected.update(refName, newSHA)}, "")
 	if err != nil {
 		// The expectation is now known-stale. Dropping it forces the next read
 		// to come from disk: otherwise ReadMetadata answers from cache, recomputes
@@ -293,6 +303,124 @@ func (r *MetadataStore) ClearMetadataCache() {
 	defer r.mu.Unlock()
 	r.metadataCache.Clear()
 	clear(r.generations)
+	clear(r.localGenerations)
+}
+
+// InvalidateMetadata drops the cached records and write expectations, shared
+// and local, for the given branches. Callers use it after a ref write the
+// store did not perform was rejected: the expectation that write carried is
+// known-stale, and keeping it would make the next read answer from cache and
+// fail the same way again.
+func (r *MetadataStore) InvalidateMetadata(branchNames ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, name := range branchNames {
+		r.metadataCache.Delete(name)
+		delete(r.generations, name)
+		delete(r.localGenerations, name)
+	}
+}
+
+// MetadataTier selects the shared or the local metadata namespace.
+type MetadataTier int
+
+const (
+	MetadataTierShared MetadataTier = iota
+	MetadataTierLocal
+)
+
+// CommittedMetadata describes one metadata ref this process just wrote
+// through the backend directly, bypassing the store.
+type CommittedMetadata struct {
+	Branch string
+	// SHA is the blob the ref now holds, or "" when the write deleted it.
+	SHA string
+	// Meta is the value written; used for the shared tier's value cache and
+	// ignored for the local tier (whose values are never cached).
+	Meta *Meta
+}
+
+// RecordCommitted adopts refs this process itself just wrote outside the store
+// — a transaction commit, a batched flag write, a restack's atomic branch and
+// metadata update — as the expectations for the next write. Without it the
+// store's recorded SHA predates this process's own write, so a following
+// direct write either failed spuriously ("another process changed it") or,
+// under the generation safety net alone, had to fall back to an unconditional
+// write that would silently discard a change another process made in between.
+//
+// Call it only after the ref update succeeded. The generation is read now,
+// after the write; if another in-process write slipped in first, the recorded
+// SHA is simply wrong and the next write fails its compare-and-swap, which is
+// safe. A deleted ref is recorded as known-absent so the next write requires
+// it to still be missing.
+func (r *MetadataStore) RecordCommitted(tier MetadataTier, records ...CommittedMetadata) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, record := range records {
+		if tier == MetadataTierLocal {
+			if record.SHA == "" {
+				r.metadataCache.PutLocalAbsent(record.Branch)
+			} else {
+				r.metadataCache.PutLocalSHA(record.Branch, record.SHA)
+			}
+			r.localGenerations[record.Branch] = r.git.RefGeneration(LocalMetadataRefName(record.Branch))
+			continue
+		}
+		switch {
+		case record.SHA == "":
+			r.metadataCache.PutAbsent(record.Branch)
+		case record.Meta == nil:
+			// No value to cache: keep nothing rather than pair a SHA with a
+			// stale value. The next read goes to disk.
+			r.metadataCache.DeleteShared(record.Branch)
+		default:
+			r.metadataCache.PutWithSHA(record.Branch, record.Meta, record.SHA)
+		}
+		r.generations[record.Branch] = r.git.RefGeneration(MetadataRefName(record.Branch))
+	}
+}
+
+// refExpectation is what a standalone write requires the ref to hold.
+type refExpectation struct {
+	SHA    string
+	Absent bool
+}
+
+// known reports whether there is anything to compare against. An unknown
+// expectation means an unconditional write.
+func (e refExpectation) known() bool { return e.SHA != "" || e.Absent }
+
+func (e refExpectation) update(refName, newSHA string) RefUpdate {
+	return RefUpdate{RefName: refName, NewSHA: newSHA, OldSHA: e.SHA, MustNotExist: e.Absent}
+}
+
+// sharedExpectation returns what a shared-metadata write must find. Callers
+// must hold r.mu.
+//
+// The generation check is a safety net for in-process ref writes that did not
+// call RecordCommitted. A generation that moved since the SHA was recorded
+// means this process rewrote the ref behind the store's back, so the recorded
+// SHA predates its own write and comparing against it would reject the write
+// as "another process changed it". The expectation is then dropped and treated
+// as unknown (an unconditional write). Re-reading the ref would not help: the
+// SHA it returned would be adopted without the caller having seen the content
+// behind it, which is an unconditional write in all but name.
+func (r *MetadataStore) sharedExpectation(branchName string) refExpectation {
+	if r.generations[branchName] != r.git.RefGeneration(MetadataRefName(branchName)) {
+		r.metadataCache.DeleteShared(branchName)
+		return refExpectation{}
+	}
+	return refExpectation{SHA: r.metadataCache.SHAFor(branchName), Absent: r.metadataCache.IsAbsent(branchName)}
+}
+
+// localExpectation is sharedExpectation for local-metadata refs. Callers must
+// hold r.mu.
+func (r *MetadataStore) localExpectation(branchName string) refExpectation {
+	if r.localGenerations[branchName] != r.git.RefGeneration(LocalMetadataRefName(branchName)) {
+		r.metadataCache.PutLocalSHA(branchName, "")
+		return refExpectation{}
+	}
+	return refExpectation{SHA: r.metadataCache.LocalSHAFor(branchName), Absent: r.metadataCache.IsLocalAbsent(branchName)}
 }
 
 // MetadataCacheStats returns cumulative hit/miss counts for the metadata cache
@@ -343,26 +471,25 @@ func (r *MetadataStore) WriteLocalMetadata(branchName string, meta *LocalMeta) e
 	}
 
 	refName := fmt.Sprintf("%s%s", LocalMetadataRefPrefix, branchName)
+	generation := r.git.RefGeneration(refName)
 	// Mirrors updateMetadataRefCAS: an expectation we hold is compared even when
 	// the new content matches it, because "matches what I read" is not the same
 	// as "matches what is on disk now".
-	if expected := r.metadataCache.LocalSHAFor(branchName); expected != "" {
-		err := r.git.UpdateRefs(context.Background(), []RefUpdate{{
-			RefName: refName,
-			NewSHA:  sha,
-			OldSHA:  expected,
-		}}, "")
+	if expected := r.localExpectation(branchName); expected.known() {
+		err := r.git.UpdateRefs(context.Background(), []RefUpdate{expected.update(refName, sha)}, "")
 		if err != nil {
 			r.metadataCache.Delete(branchName)
 			return fmt.Errorf("failed to write local metadata ref for %s (another process changed it; re-run to pick up their change): %w", branchName, err)
 		}
 		r.metadataCache.PutLocalSHA(branchName, sha)
+		r.localGenerations[branchName] = generation + 1
 		return nil
 	}
 	if err := r.git.UpdateRefs(context.Background(), []RefUpdate{{RefName: refName, NewSHA: sha}}, ""); err != nil {
 		return fmt.Errorf("failed to write local metadata ref: %w", err)
 	}
 	r.metadataCache.PutLocalSHA(branchName, sha)
+	r.localGenerations[branchName] = generation + 1
 
 	return nil
 }

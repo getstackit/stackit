@@ -522,6 +522,44 @@ func TestTransaction_ConcurrentModificationLocalMeta(t *testing.T) {
 		"expected concurrent modification error, got: %v", err)
 }
 
+// A restack moves the branch ref and its metadata ref in one UpdateRefs call,
+// outside the store. Afterwards a blind write must succeed on its own and
+// still lose to another process that wrote in between. RestackBranches ends
+// with a rebuild that reloads every expectation from disk, so this is an
+// end-to-end guard rather than a pin on the per-step recordRestackMetadata
+// calls — those only matter between a restack's write and that rebuild.
+func TestRestackKeepsMetadataWritesCompareAndSwap(t *testing.T) {
+	t.Parallel()
+	for _, otherProcessWrites := range []bool{false, true} {
+		t.Run(fmt.Sprintf("otherProcessWrites=%t", otherProcessWrites), func(t *testing.T) {
+			t.Parallel()
+			s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+			s.CreateBranch("feature").Commit("feature change")
+			require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+			s.Checkout("main").Commit("trunk moves on").Rebuild()
+
+			_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")))
+			require.NoError(t, err)
+			// Inspect through a separate store: a read through the engine's
+			// store would refresh its expectation and hide what is under test.
+			other := git.NewMetadataStore(git.NewRunnerWithPath(s.Scene.Dir, nil))
+			restacked, err := other.ReadMetadata(context.Background(), "feature").One()
+			require.NoError(t, err)
+			require.NotNil(t, restacked.GetParentBranchRevision(), "restack must record the new parent revision")
+
+			scope := "blind"
+			blind := restacked.WithScope(&scope)
+			if !otherProcessWrites {
+				require.NoError(t, s.Engine.Metadata().WriteMetadata("feature", blind))
+				return
+			}
+			theirs := "theirs"
+			require.NoError(t, other.WriteMetadata("feature", restacked.WithScope(&theirs)))
+			require.ErrorContains(t, s.Engine.Metadata().WriteMetadata("feature", blind), "another process changed it")
+		})
+	}
+}
+
 func TestWithRetry_RetriesOnConcurrentModification(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

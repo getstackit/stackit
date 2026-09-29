@@ -442,10 +442,41 @@ Details that matter when working on this code:
 - **Every read records the SHA.** `ReadMetadata` populates it for one or many
   branches via `ReadObjectsBatch`. Engine graph loads use this same path, so
   their subsequent writes retain the optimistic-locking expectation.
+- **In-process writes outside the store record what they wrote.** A
+  `MetadataTx` commit, `MarkBranchesForPRBodyUpdate`, and the restack steps
+  that move a branch ref and its metadata ref together all write through
+  `UpdateRefs` directly. On success each calls
+  `MetadataStore.RecordCommitted(tier, ...)` with the new blob SHA (and, for
+  shared metadata, the value). A deleted ref is recorded as **known-absent**.
+  The next standalone write then compares against this process's own write, or
+  requires the ref to still be missing, so a change another process made in
+  between is still rejected rather than overwritten. Without the recording the
+  store's SHA would predate this process's own write, and the write would fail
+  as "another process changed it".
+- **The ref generation is the safety net.** The runner bumps a per-ref
+  generation on every ref mutation it performs, and the store records the
+  generation with each expectation (shared and local). If the generation has
+  moved when a write happens, some in-process path rewrote the ref without
+  calling `RecordCommitted`. The write then treats the expectation as unknown
+  (unconditional) rather than comparing against a SHA that predates its own
+  process's write. This keeps such paths from failing spuriously, at the cost
+  of the CAS guarantee for that one write, so new paths that rewrite metadata
+  refs should call `RecordCommitted`. Paths that rely on the net today: undo's
+  snapshot restore, `RenameBranch`'s local-ref copy, and the direct
+  `DeleteRefs` calls in `UntrackBranches`, `DeleteBranch`/`DeleteBranches`,
+  `DeleteMetadataRefsBatch` and `Reset`. Undo also rebuilds, and that reloads
+  every expectation anyway. The write does
+  not re-read the ref to get a fresh expectation: that would adopt a SHA whose
+  content the caller never saw, which is an unconditional write in all but
+  name.
 - **A rejected write drops the cache entry.** The expectation is known-stale at
   that point; keeping it meant a re-read answered from cache, recomputed the same
   expectation, and failed identically forever — harmless in the short-lived CLI,
-  a wedge in the long-lived server.
+  a wedge in the long-lived server. This covers transactions too: when
+  `MetadataTx.Commit`'s atomic update is rejected, the store forgets the shared
+  and local entries for **every** branch the transaction staged
+  (`MetadataStore.InvalidateMetadata`), so the next read goes to disk without
+  relying on `WithRetry`'s rebuild.
 
 Branch refs rewritten by a rebase are also moved compare-and-swap
 (`internal/git/rebase.go`), so a concurrent update in another worktree is

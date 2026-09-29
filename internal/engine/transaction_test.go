@@ -109,7 +109,7 @@ func TestSetFrozen_UsesTransaction(t *testing.T) {
 	result, err := s.Engine.SetFrozen(context.Background(), []engine.Branch{
 		s.Engine.GetBranch("feature-1"),
 		s.Engine.GetBranch("feature-2"),
-	}, true)
+	}, engine.BranchFrozen)
 	require.NoError(t, err)
 
 	// Both should be affected
@@ -146,7 +146,7 @@ func TestSetFrozen_EmptyBranchList(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Empty branch list should succeed
-	result, err := s.Engine.SetFrozen(context.Background(), engine.Branches{}, true)
+	result, err := s.Engine.SetFrozen(context.Background(), engine.Branches{}, engine.BranchFrozen)
 	require.NoError(t, err)
 	assert.Empty(t, result.AffectedBranches)
 	assert.Empty(t, result.Errors)
@@ -200,7 +200,7 @@ func TestSetFrozen_UnfreezeBranches(t *testing.T) {
 	branch := s.Engine.GetBranch("feature-1")
 
 	// Freeze the branch
-	_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
+	_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
 	require.NoError(t, err)
 
 	// Verify frozen
@@ -213,7 +213,7 @@ func TestSetFrozen_UnfreezeBranches(t *testing.T) {
 	assert.True(t, localMeta.Frozen)
 
 	// Unfreeze the branch
-	_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), false)
+	_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchThawed)
 	require.NoError(t, err)
 
 	// Verify unfrozen
@@ -959,7 +959,7 @@ func TestTransaction_DeleteLocalMetaClearsFrozenState(t *testing.T) {
 
 	// Freeze the branch
 	branch := s.Engine.GetBranch("feature-1")
-	_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), true)
+	_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
 	require.NoError(t, err)
 
 	// Verify frozen in cache

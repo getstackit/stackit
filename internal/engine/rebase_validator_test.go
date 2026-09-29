@@ -589,7 +589,7 @@ func TestRestackBranchesWithValidatedPlanAppliesFrozenBranch(t *testing.T) {
 	require.NoError(t, s.Engine.TrackBranch(context.Background(), "child", "parent"))
 
 	child := s.Engine.GetBranch("child")
-	_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(child), true)
+	_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(child), engine.BranchFrozen)
 	require.NoError(t, err)
 
 	s.CreateBranch("remote-child").

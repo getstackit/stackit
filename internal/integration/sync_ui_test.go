@@ -28,7 +28,7 @@ func TestSyncUIReporting(t *testing.T) {
 		require.NoError(t, err)
 
 		// Freeze feature-c
-		_, err = sh.Engine.SetFrozen(context.Background(), engine.BranchesOf(sh.Engine.GetBranch("feature-c")), true)
+		_, err = sh.Engine.SetFrozen(context.Background(), engine.BranchesOf(sh.Engine.GetBranch("feature-c")), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		// Make feature-a need restacking by amending its parent (main)

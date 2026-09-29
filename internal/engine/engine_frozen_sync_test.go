@@ -27,7 +27,7 @@ func TestRestackFrozenBranch(t *testing.T) {
 
 		// 3. Freeze the child
 		childBranch := s.Engine.GetBranch("child")
-		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(childBranch), true)
+		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(childBranch), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		// 4. Simulate remote state: child has a different SHA on remote
@@ -66,7 +66,7 @@ func TestRestackFrozenBranch(t *testing.T) {
 		require.NoError(t, s.Engine.TrackBranch(context.Background(), "child", "parent"))
 
 		childBranch := s.Engine.GetBranch("child")
-		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(childBranch), true)
+		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(childBranch), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		localSha, _ := childBranch.GetRevision()

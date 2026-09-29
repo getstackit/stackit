@@ -598,7 +598,7 @@ func TestFoldAction(t *testing.T) {
 
 		s.Checkout("branch2")
 		branch2 := s.Engine.GetBranch("branch2")
-		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch2), true)
+		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch2), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		err = Action(s.Context, Options{Keep: false}, nil)

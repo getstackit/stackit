@@ -615,7 +615,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	}
 
 	if len(freezeSet) > 0 {
-		if _, err := eng.SetFrozen(ctx, freezeSet, true); err != nil {
+		if _, err := eng.SetFrozen(ctx, freezeSet, engine.BranchFrozen); err != nil {
 			out.Debug("Failed to freeze new branches: %v", err)
 		}
 	}
@@ -934,7 +934,7 @@ func unfreezeForRestack(ctx *app.Context, names []string, pendingFreeze engine.B
 		}
 	}
 	if thawSet := thaw.Build(); len(thawSet) > 0 {
-		if _, err := eng.SetFrozen(ctx, thawSet, false); err != nil {
+		if _, err := eng.SetFrozen(ctx, thawSet, engine.BranchThawed); err != nil {
 			ctx.Output.Debug("Failed to unfreeze branches re-anchored past landed work: %v", err)
 		}
 	}

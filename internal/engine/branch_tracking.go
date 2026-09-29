@@ -756,7 +756,7 @@ func (e *engineImpl) SetLocked(ctx context.Context, branches Branches, reason Lo
 
 // SetFrozen updates multiple branches' frozen status atomically using transactions.
 // It retries on concurrent modification errors with exponential backoff.
-func (e *engineImpl) SetFrozen(ctx context.Context, branches Branches, frozen bool) (BatchFreezeResult, error) {
+func (e *engineImpl) SetFrozen(ctx context.Context, branches Branches, state FreezeState) (BatchFreezeResult, error) {
 	result := BatchFreezeResult{
 		AffectedBranches: make([]string, 0, len(branches)),
 		Errors:           make(map[string]error),
@@ -768,6 +768,7 @@ func (e *engineImpl) SetFrozen(ctx context.Context, branches Branches, frozen bo
 
 	// Extract branch names for batch read (preserves order for deterministic results)
 	branchNames := branches.Names()
+	frozen := state == BranchFrozen
 
 	err := e.WithRetry(ctx, func() error {
 		// Reset result for retry

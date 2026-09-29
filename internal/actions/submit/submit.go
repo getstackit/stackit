@@ -1101,7 +1101,7 @@ func pushMetadataRefs(ctx *app.Context, branches engine.Branches) error {
 
 	branchNames := branches.Names()
 
-	if err := rm.BatchSetLastModifiedBy(branchNames); err != nil {
+	if err := rm.BatchSetLastModifiedBy(ctx.Context, branchNames); err != nil {
 		return fmt.Errorf("failed to update metadata: %w", err)
 	}
 

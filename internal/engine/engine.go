@@ -81,14 +81,14 @@ type StackRewriter interface {
 type RemoteMetadataManager interface {
 	IsRemoteSyncEnabled() bool
 	SetRemoteSyncEnabled(enabled bool)
-	BatchSetLastModifiedBy(branchNames []string) error
+	BatchSetLastModifiedBy(ctx context.Context, branchNames []string) error
 	LoadRemoteMetadataCache() error
-	ApplyRemoteMetadataIfExists(branchName string) error
+	ApplyRemoteMetadataIfExists(ctx context.Context, branchName string) error
 	ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
 	GetRemoteMetadataCache() RemoteMetadataView
 	ComputeMetadataDiff(branch string) (*MetadataDiff, error)
 	ComputeAllMetadataDiffs() ([]*MetadataDiff, error)
-	AcceptRemoteMetadata(branch string) error
+	AcceptRemoteMetadata(ctx context.Context, branch string) error
 	RejectRemoteMetadata(branch string)
 	HasLocalModifications(branch string) bool
 	FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)

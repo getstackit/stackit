@@ -264,8 +264,8 @@ func PushMetadataAndSyncPRs(ctx *app.Context, branchNames []string) error {
 	eng := ctx.Engine
 	out := ctx.Output
 
-	// Update LastModifiedBy for all branches (parallel with config caching)
-	if err := eng.BatchSetLastModifiedBy(branchNames); err != nil {
+	// Update LastModifiedBy for all branches in one metadata commit
+	if err := eng.BatchSetLastModifiedBy(ctx.Context, branchNames); err != nil {
 		out.Debug("Failed to update metadata: %v", err)
 	}
 

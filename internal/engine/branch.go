@@ -189,20 +189,35 @@ func (b Branch) EnsureCanModify() error {
 // Uses the oldest commit subject, falling back to the branch name.
 func (b Branch) DefaultPRTitle() string {
 	commitsData, err := b.GetAllCommits()
-	commits := commitsData.Subjects()
-	if err != nil || len(commits) == 0 {
-		return b.name
-	}
-	// GetAllCommits returns newest to oldest, so oldest is last
-	return commits[len(commits)-1]
+	return defaultPRTitle(b.name, commitsData, err)
 }
 
 // DefaultPRBody returns the default PR body for this branch.
 // For single commit: uses the commit body (skips subject line).
 // For multiple commits: creates a bulleted list of subjects in chronological order.
 func (b Branch) DefaultPRBody() string {
-	messagesData, err := b.GetAllCommits()
-	messages := messagesData.Messages()
+	commitsData, err := b.GetAllCommits()
+	return defaultPRBody(commitsData, err)
+}
+
+// DefaultPRTitleAndBody returns the default PR title and body for this
+// branch, reading commits once instead of once per field.
+func (b Branch) DefaultPRTitleAndBody() (string, string) {
+	commitsData, err := b.GetAllCommits()
+	return defaultPRTitle(b.name, commitsData, err), defaultPRBody(commitsData, err)
+}
+
+func defaultPRTitle(name string, commitsData git.Commits, err error) string {
+	commits := commitsData.Subjects()
+	if err != nil || len(commits) == 0 {
+		return name
+	}
+	// GetAllCommits returns newest to oldest, so oldest is last
+	return commits[len(commits)-1]
+}
+
+func defaultPRBody(commitsData git.Commits, err error) string {
+	messages := commitsData.Messages()
 	if err != nil || len(messages) == 0 {
 		return ""
 	}

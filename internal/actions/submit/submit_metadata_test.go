@@ -258,6 +258,28 @@ func TestPreparePRMetadata_NoEdit(t *testing.T) {
 	})
 }
 
+func TestPreparePRMetadata_DefaultsFromCommits(t *testing.T) {
+	t.Parallel()
+	t.Run("derives title and body together from commits when both are empty", func(t *testing.T) {
+		t.Parallel()
+		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		branchName := featureBranch
+
+		s.CreateBranch(branchName).
+			CommitChange("change1", "feat: commit 1").
+			CommitChange("change2", "feat: commit 2")
+
+		err := s.Engine.TrackBranch(context.Background(), branchName, "main")
+		require.NoError(t, err)
+
+		branch := s.Engine.GetBranch(branchName)
+		metadata, err := submit.PreparePRMetadata(branch, submit.MetadataOptions{}, s.Context)
+		require.NoError(t, err)
+		require.Equal(t, "feat: commit 1", metadata.Title, "title should use the oldest commit subject")
+		require.Equal(t, "- feat: commit 1\n- feat: commit 2", metadata.Body, "body should list all commit subjects")
+	})
+}
+
 func TestGetPRBody_MultipleCommits(t *testing.T) {
 	t.Parallel()
 	t.Run("returns a bulleted list of subjects for multiple commits", func(t *testing.T) {

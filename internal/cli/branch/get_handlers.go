@@ -7,6 +7,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
@@ -28,7 +29,7 @@ type SimpleGetHandler struct {
 	common.BaseHandler
 	currentPhase actions.GetPhase
 	targetBranch string
-	prNumber     *int
+	prNumber     *git.PRNumber
 }
 
 // NewSimpleGetHandler creates a new SimpleGetHandler
@@ -39,7 +40,7 @@ func NewSimpleGetHandler(out output.Output) *SimpleGetHandler {
 }
 
 // Start is called at the beginning of get
-func (h *SimpleGetHandler) Start(targetBranch string, prNumber *int) {
+func (h *SimpleGetHandler) Start(targetBranch string, prNumber *git.PRNumber) {
 	h.Lock()
 	defer h.Unlock()
 	h.targetBranch = targetBranch

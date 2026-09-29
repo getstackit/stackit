@@ -478,27 +478,9 @@ func (m *shippableModel) executeSquash() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		quietCtx := m.quietCtx()
 
-		// Save current branch to restore after squash
-		currentBranch := m.engine.CurrentBranch()
-
-		// Checkout the target branch
-		targetBranch := m.engine.GetBranch(branchName)
-		if err := m.engine.CheckoutBranch(quietCtx.Context, targetBranch); err != nil {
-			return squashCompleteMsg{branch: branchName, err: fmt.Errorf("checkout %s: %w", branchName, err)}
-		}
-
-		// Run squash
-		if err := actions.SquashAction(quietCtx, actions.SquashOptions{NoEdit: true}); err != nil {
-			// Restore original branch on error
-			if currentBranch != nil {
-				_ = m.engine.CheckoutBranch(quietCtx.Context, *currentBranch)
-			}
+		// The action checks out the target and restores the current branch.
+		if err := actions.SquashAction(quietCtx, actions.SquashOptions{Branch: branchName, NoEdit: true}); err != nil {
 			return squashCompleteMsg{branch: branchName, err: err}
-		}
-
-		// Restore original branch
-		if currentBranch != nil {
-			_ = m.engine.CheckoutBranch(quietCtx.Context, *currentBranch)
 		}
 
 		return squashCompleteMsg{branch: branchName}

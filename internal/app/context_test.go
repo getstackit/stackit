@@ -85,68 +85,8 @@ func TestRemoteOperationContextPreservesExistingDeadline(t *testing.T) {
 	require.Equal(t, parentDeadline, deadline)
 }
 
-type fakeGitHubClient struct{}
-
-func (f *fakeGitHubClient) CreatePullRequest(_ context.Context, _ github.CreatePROptions) (*github.PullRequestInfo, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) UpdatePullRequest(_ context.Context, _ int, _ github.UpdatePROptions) ([]string, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) GetPullRequestByBranch(_ context.Context, _ string) (*github.PullRequestInfo, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) GetPullRequest(_ context.Context, _ int) (*github.PullRequestInfo, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) MergePullRequest(_ context.Context, _ string, _ github.MergePROptions) error {
-	return nil
-}
-
-func (f *fakeGitHubClient) GetAllowedMergeMethods(_ context.Context) (*github.MergeMethodSettings, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) GetPRChecksStatus(_ context.Context, _ string) (*github.CheckStatus, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) BatchGetPRChecksStatus(_ context.Context, _ []string) (github.ChecksByBranch, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) BatchGetPRTitles(_ context.Context, _ []int) (map[int]string, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) Repo() github.Repo {
-	return github.Repo{}
-}
-
-func (f *fakeGitHubClient) ClosePullRequest(_ context.Context, _ int) error {
-	return nil
-}
-
-func (f *fakeGitHubClient) CreatePRComment(_ context.Context, _ int, _ string) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeGitHubClient) UpdatePRComment(_ context.Context, _ int64, _ string) error {
-	return nil
-}
-
-func (f *fakeGitHubClient) DeletePRComment(_ context.Context, _ int64) error {
-	return nil
-}
-
-func (f *fakeGitHubClient) ListPRComments(_ context.Context, _ int) ([]github.PRComment, error) {
-	return nil, nil
-}
-
-func (f *fakeGitHubClient) GetCurrentUser(_ context.Context) (string, error) {
-	return "", nil
+// fakeGitHubClient is only compared by identity; no methods are called, so the
+// nil embedded interface panics if that ever changes.
+type fakeGitHubClient struct {
+	github.Client
 }

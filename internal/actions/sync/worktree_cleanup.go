@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	worktreeutil "github.com/getstackit/stackit/internal/worktree"
@@ -15,7 +14,7 @@ import (
 
 // WorktreeInspector is the narrow dependency SkipReasonForWorktree needs.
 type WorktreeInspector interface {
-	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
+	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath engine.WorktreePath) (bool, error)
 }
 
 // SkipReasonForWorktree returns why a managed worktree's stack must be left
@@ -30,8 +29,8 @@ type WorktreeInspector interface {
 // A missing directory is the one exception: there is no working tree left to
 // protect, and treating it as unsafe would block the orphan cleanup that exists
 // to retire its registration.
-func SkipReasonForWorktree(ctx context.Context, eng WorktreeInspector, worktreePath string) string {
-	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+func SkipReasonForWorktree(ctx context.Context, eng WorktreeInspector, worktreePath engine.WorktreePath) string {
+	if _, err := os.Stat(worktreePath.String()); os.IsNotExist(err) {
 		return ""
 	}
 	hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx, worktreePath)
@@ -62,17 +61,14 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 		Errors:           []string{},
 	}
 
-	// Check if auto-clean is enabled
-	configStart := time.Now()
-	cfg, err := config.LoadConfig(ctx.RepoRoot)
-	ctx.Logger.Info("load config for worktree cleanup completed durationMs=%d", time.Since(configStart).Milliseconds())
-	if err != nil {
-		// If config can't be loaded, skip cleanup but don't fail
-		ctx.Output.Debug("Failed to load config for worktree cleanup: %v", err)
+	// Check if auto-clean is enabled, using the config resolved at bootstrap.
+	// Without a loaded config, skip cleanup rather than fail sync.
+	if ctx.Config == nil {
+		ctx.Output.Debug("No repository config loaded; skipping worktree cleanup")
 		return result
 	}
 
-	if !cfg.WorktreeAutoClean() {
+	if !ctx.Config.WorktreeAutoClean() {
 		ctx.Output.Debug("Worktree auto-clean is disabled")
 		return result
 	}
@@ -97,7 +93,7 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 		// The main worktree is never disposable, even if an invalid
 		// registration makes it look like an empty managed worktree. Skipping
 		// this candidate lets cleanup continue for the rest of the batch.
-		if git.IsMainWorktree(wt.Path.String(), wt.MainRepoDir) {
+		if git.IsMainWorktree(wt.Path, wt.MainRepoDir) {
 			ctx.Output.Debug("Skipping cleanup for main worktree %s", wt.Path)
 			continue
 		}
@@ -124,7 +120,7 @@ func cleanOrphanedWorktrees(ctx *app.Context, dirtyAnchors dirtyAnchorSet) *Work
 
 		ctx.Output.Info("Removing empty worktree %s", wt.AnchorBranch)
 
-		_, removeErr := worktreeutil.RemovePath(ctx.Context, ctx.Engine, wt.Path.String(), worktreeutil.RemovalRespectChanges)
+		_, removeErr := worktreeutil.RemovePath(ctx.Context, ctx.Engine, wt.Path, worktreeutil.RemovalRespectChanges)
 		if removeErr != nil {
 			result.Errors = append(result.Errors,
 				"failed to remove worktree at "+wt.Path.String()+": "+removeErr.Error())

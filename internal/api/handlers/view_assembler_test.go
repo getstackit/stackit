@@ -14,11 +14,11 @@ import (
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-// fakeGitHub implements only the github.Client methods buildRepo touches.
+// fakeGitHub implements only the ViewGitHub methods buildRepo touches.
 // The embedded interface is nil, so any other call panics — which keeps the
 // fake honest about what the code under test actually depends on.
 type fakeGitHub struct {
-	github.Client
+	ViewGitHub
 	owner       string
 	repo        string
 	currentUser string
@@ -92,7 +92,7 @@ type countingFetchRunner struct {
 	fetchRemoteShas atomic.Int64
 }
 
-func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
+func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string) (git.RemoteBranchSHAs, error) {
 	c.fetchRemoteShas.Add(1)
 	return c.Runner.FetchRemoteShas(ctx, remote)
 }

@@ -393,7 +393,7 @@ stack stays expressible on both sides.
 ### What it blocks
 
 Enforcement sits on the engine's parent-assignment primitives (`SetParent`,
-`ReparentBranch`, `ReparentBranchesToParents`, `ReparentBranchesRecompute`,
+`ReparentBranch`, `ReparentBranchesToParents`, `ApplyParentUpdatesAfterRemovals`,
 `ApplySplitToCommits`, and the restack plan), so every command routed through
 them is covered rather than each having to remember the rule — `create`
 including `--onto`, `move`, `track`, `split --as-sibling`, and restack-time
@@ -622,6 +622,33 @@ case keyMyNewSetting:
 source := getStringSource(config.KeyMyNewSetting, projectCfg != nil && projectCfg.HasMyNewSetting())
 formatLine("my.newSetting", cfg.MyNewSetting(), source)
 ```
+
+### Using a Config Value in an Action
+
+Actions (`internal/actions/*`) never load config from disk — a `forbidigo`
+rule in `.golangci.yml` rejects `config.Load*` calls there. Config is loaded
+once at bootstrap (`internal/app`, stored on `app.Context.Config` as a
+`config.Configurer`) or by the adapter (`internal/cli`, `internal/api`), and
+reaches the action in one of these forms, in order of preference:
+
+1. **A resolved value on the request/options struct.** The adapter reads
+   `ctx.Config.MyNewSetting()` and sets `Options.MyNewSetting`. Examples:
+   `merge.WizardOptions.UndoStackDepth` / `LinearStacks`,
+   `split.WizardOptions.BranchPattern`.
+2. **A narrow interface defined next to the action**, when the action writes
+   config back or needs a handful of related values. The adapter passes the
+   loaded config, which satisfies it. Examples: `merge.MergeMethodConfig`
+   (reads and persists `merge.method`), `init.Config` (writes the trunk),
+   `worktree.RepoConfig` (the main repository's config, resolved by the CLI
+   from the main repo directory when invoked inside a managed worktree).
+3. **`ctx.Config` directly**, for settings read deep inside long-running flows
+   that already take `*app.Context` (e.g. `worktree.autoClean` during sync,
+   `ci.command` for multi-stack merge). Always nil-check it: demo mode and some
+   tests build a context without config.
+
+If an action needs a method `config.Configurer` does not expose, add it to the
+interface (`internal/config/interface.go`) rather than type-asserting to
+`*config.GitConfig`.
 
 ## Submit Command Config Flow
 

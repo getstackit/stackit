@@ -143,31 +143,19 @@ func runMergeNext(ctx *app.Context, opts mergeNextOptions, postMergeHandler Post
 		return err
 	}
 
-	// Get the PR's NodeID for merge operations
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, bottomPR.PRNumber)
-	cancelRemote()
-	if err != nil {
-		return fmt.Errorf("failed to get PR info: %w", err)
-	}
-	if prInfo.NodeID == "" {
-		return fmt.Errorf("PR #%d does not have a Node ID", bottomPR.PRNumber)
-	}
-
-	// Orchestrate the merge (direct merge → automerge → poll fallback)
-	outcome, err := orchestrateMerge(ctx, orchestrateMergeOptions{
-		branchName:  bottomPR.BranchName,
-		prNumber:    bottomPR.PRNumber,
-		prNodeID:    prInfo.NodeID,
-		mergeMethod: mergeMethod,
-		wait:        opts.wait,
-	})
+	// Merge the PR (direct merge → automerge → poll fallback)
+	outcome, err := mergeAction.MergePR(ctx, mergeAction.MergePROptions{
+		BranchName:  bottomPR.BranchName,
+		PRNumber:    bottomPR.PRNumber,
+		MergeMethod: mergeMethod,
+		Wait:        opts.wait,
+	}, newProgressRenderer(out))
 	if err != nil {
 		return err
 	}
 
 	switch outcome {
-	case OutcomeMerged:
+	case mergeAction.MergePRMerged:
 		// Perform post-merge cleanup
 		out.Newline()
 		out.Info("Performing post-merge cleanup...")
@@ -175,7 +163,7 @@ func runMergeNext(ctx *app.Context, opts mergeNextOptions, postMergeHandler Post
 			return postMergeHandler(ctx, mergeAction.PostMergeSyncTrunk)
 		}
 		return nil
-	case OutcomeAutomergeEnabled:
+	case mergeAction.MergePRAutomergeEnabled:
 		out.Info("PR will be merged automatically when CI passes and requirements are met.")
 		out.Tip("Run 'stackit sync --restack' after the PR is merged to update your stack.")
 		return nil

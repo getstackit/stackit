@@ -394,6 +394,10 @@ internal/actions/merge/
 ├── consolidate.go         # Single-stack consolidation (octopus merge)
 ├── execute.go             # Merge execution orchestration
 ├── execute_steps.go       # Individual step execution (CI wait, PR base update, consolidation)
+├── merge_pr.go            # Single-PR merge (MergePR: direct → automerge → poll), node ID lookup, automerge enabling
+├── drain.go               # Drain loop: lock, merge bottom PR, post-merge sync, publish restacked branches
+├── post_merge_sync.go     # PostMergeSync: checkout trunk + sync, never entering the conflict workflow
+├── progress.go            # ProgressEvent/ProgressHandler for MergePR and Drain (rendered by the CLI)
 ├── handler.go             # Event handler interfaces for progress reporting
 ├── helpers.go             # Merge method resolution, CI estimation, error classification
 ├── interactive.go         # Interactive prompt interfaces for TUI
@@ -405,9 +409,13 @@ internal/actions/merge/
 ├── multistack.go          # Multi-stack consolidation orchestration
 ├── multistack_worktree.go # Worktree-based merge testing for multi-stack
 ├── multistack_ci.go       # Local CI for multi-stack validation
-├── multistack_discover.go # Stack discovery for multi-stack shipping
+├── multistack_discover.go # Wrappers over stackview.DiscoverStacks (discovery lives in internal/actions/stackview)
 ├── multistack_pr.go       # PR creation for multi-stack consolidation
 └── multistack_types.go    # Types for multi-stack operations
+
+internal/cli/stack/merge/
+├── next.go / drain.go / ship.go  # Flag parsing, plan rendering, confirmation prompts
+└── progress.go                   # progressRenderer: renders merge ProgressEvents to the terminal
 ```
 
 ### Key Types
@@ -431,6 +439,20 @@ type Plan struct {
     Infos           []string
 }
 
+// Single-PR merge result (internal/actions/merge/merge_pr.go)
+type MergePROutcome int
+const (
+    MergePRMerged           MergePROutcome = iota // merged directly or after waiting
+    MergePRAutomergeEnabled                       // fire-and-forget
+)
+
+// Progress reporting for MergePR and Drain (internal/actions/merge/progress.go).
+// Adapters implement ProgressHandler and render the typed events
+// (PRMergedEvent, PRAutomergeEnabledEvent, DrainPRStartedEvent, ...).
+type ProgressHandler interface {
+    OnProgress(event ProgressEvent)
+}
+
 // Shippability status (internal/shippable/types.go)
 type Status string
 const (
@@ -447,16 +469,29 @@ const (
 merge next
   → CreateMergePlan(StrategyBottomUp)
   → Select bottom-most PR from plan
-  → orchestrateMerge() (direct merge → automerge → poll fallback)
-  → Return immediately (or wait if --wait)
+  → MergePR() (GetPRNodeID → orchestrateMerge: direct merge → automerge → poll fallback)
+  → Return immediately (or wait if --wait, then PostMergeSync())
 
 [GitHub merges PR when CI passes]
 
 merge next (again)
   → CreateMergePlan(StrategyBottomUp)
   → Find next unmerged PR
-  → orchestrateMerge()
+  → MergePR()
   → ...
+```
+
+### Flow: Drain
+
+```
+merge drain (CLI: plan, render, confirm, resolve merge method)
+  → Drain()
+    → SetLocked(LockReasonDraining) (unlocked on return)
+    → loop until drained or --count reached:
+      → CreateMergePlan(StrategyBottomUp) (re-plan each iteration)
+      → MergePR(Wait: true)
+      → PostMergeSync(RestackScope: remaining) (conflict → hard error)
+      → pushDrainedBranches() (submit UpdateOnly/NoEdit)
 ```
 
 ### Flow: Consolidation
@@ -472,7 +507,7 @@ merge ship
         → createMergeBranch() (octopus merge)
         → createConsolidationPR()
         → waitForConsolidationMerge() (if --wait)
-        → lockAndNotifyIndividualPRs()
+        → lockAndNotifyIndividualPRs() → lockAndMarkConsolidating()
 ```
 
 ### Flow: Multi-Stack Consolidation
@@ -486,7 +521,7 @@ merge ship --stacks a,b,c
     → If fails: binary search for working subset
     → Run local CI (unless --skip-local-ci)
     → Create consolidation PR
-    → lockAndNotifyMultiStackPRs()
+    → lockAndNotifyMultiStackPRs() → lockAndMarkConsolidating()
 ```
 
 ## Why This Matters

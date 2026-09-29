@@ -70,34 +70,6 @@ func (e *engineImpl) BatchDivergencePoints(branches Branches) RevisionMap {
 	return result
 }
 
-// CommitCountBetween returns how many commits are in (base, head]. It is the
-// exported entry point to the cached counter for callers that have two plain
-// revisions rather than a branch set — e.g. reporting how far trunk moved
-// during a sync.
-func (e *engineImpl) CommitCountBetween(base, head string) (int, error) {
-	return e.commitCountBetween(git.RevRange{Base: base, Head: head})
-}
-
-// commitCountBetween returns the commit count in (base, head], using the
-// (base, head)-keyed cache. It takes pre-resolved revisions so batched callers
-// need not re-resolve a branch's head.
-func (e *engineImpl) commitCountBetween(rr git.RevRange) (int, error) {
-	if rr.Head == rr.Base {
-		return 0, nil
-	}
-
-	if v, ok := e.commitCountCache.Load(rr); ok {
-		return v.(int), nil
-	}
-
-	count, err := e.git.ReadCommitCounts(context.Background(), rr).One()
-	if err != nil {
-		return 0, err
-	}
-	e.commitCountCache.Store(rr, count)
-	return count, nil
-}
-
 // GetRecentTrunkCommits returns the most recent commits on the trunk branch,
 // including any stack trailer metadata embedded in consolidation merge commits.
 func (e *engineImpl) GetRecentTrunkCommits(count int) ([]git.RecentCommit, error) {

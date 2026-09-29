@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -93,7 +92,7 @@ Examples:
 
 			// If --list flag is set, or terminal is not interactive, show list
 			if listFlag || !tui.IsTTY() {
-				return actions.ConfigListAction(repoRoot, cmd.OutOrStdout())
+				return printConfigList(repoRoot, cmd.OutOrStdout())
 			}
 
 			// Otherwise, show interactive TUI

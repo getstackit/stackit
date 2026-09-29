@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"encoding/json"
 	"os/exec"
 	"strings"
 	"testing"
@@ -158,65 +157,5 @@ func (s *TestShell) ExpectStackMetaRefNotExists(stackID string) *TestShell {
 	cmd.Dir = s.scene.Dir
 	output, err := cmd.CombinedOutput()
 	require.Error(s.t, err, "expected stack ref %s to NOT exist, but got: %s", stackID, strings.TrimSpace(string(output)))
-	return s
-}
-
-// SimulateBranchMerged marks a branch as merged in its metadata.
-// This simulates what happens when a PR is merged on GitHub.
-func (s *TestShell) SimulateBranchMerged(branch string) *TestShell {
-	s.t.Helper()
-
-	// Read existing metadata
-	refName := "refs/stackit/metadata/" + branch
-	cmd := exec.Command("git", "show-ref", "-s", refName)
-	cmd.Dir = s.scene.Dir
-	shaOutput, err := cmd.Output()
-	require.NoError(s.t, err, "failed to get metadata ref for %s", branch)
-
-	sha := strings.TrimSpace(string(shaOutput))
-	cmd = exec.Command("git", "cat-file", "-p", sha)
-	cmd.Dir = s.scene.Dir
-	blobOutput, err := cmd.Output()
-	require.NoError(s.t, err, "failed to read metadata blob for %s", branch)
-
-	// Parse and modify metadata
-	var meta map[string]any
-	err = json.Unmarshal(blobOutput, &meta)
-	require.NoError(s.t, err, "failed to parse metadata for %s", branch)
-
-	// Set PR info to merged state
-	prInfo := map[string]any{
-		"number": 1,
-		"state":  "MERGED",
-		"base":   "main",
-	}
-	meta["prInfo"] = prInfo
-
-	// Write updated metadata
-	updatedMeta, err := json.Marshal(meta)
-	require.NoError(s.t, err, "failed to marshal updated metadata")
-
-	cmd = exec.Command("git", "hash-object", "-w", "--stdin")
-	cmd.Dir = s.scene.Dir
-	cmd.Stdin = strings.NewReader(string(updatedMeta))
-	newShaOutput, err := cmd.Output()
-	require.NoError(s.t, err, "failed to create metadata blob")
-
-	newSha := strings.TrimSpace(string(newShaOutput))
-	cmd = exec.Command("git", "update-ref", refName, newSha)
-	cmd.Dir = s.scene.Dir
-	err = cmd.Run()
-	require.NoError(s.t, err, "failed to update metadata ref")
-
-	return s
-}
-
-// ExpectBranchNotExists asserts that a branch does not exist.
-func (s *TestShell) ExpectBranchNotExists(branch string) *TestShell {
-	s.t.Helper()
-	cmd := exec.Command("git", "rev-parse", "--verify", "refs/heads/"+branch)
-	cmd.Dir = s.scene.Dir
-	err := cmd.Run()
-	require.Error(s.t, err, "expected branch %s to NOT exist, but it does", branch)
 	return s
 }

@@ -9,7 +9,7 @@ import (
 // PrInfo represents PR information for a branch
 // PrInfo is immutable - use With* methods to create modified copies
 type PrInfo struct {
-	number      *int
+	number      *git.PRNumber
 	title       string
 	body        string
 	isDraft     bool
@@ -21,21 +21,34 @@ type PrInfo struct {
 	mergeBranch string     // Name of the merge branch this PR is part of
 }
 
+// PrInfoFields is the input to NewPrInfo. Fields left unset take their zero
+// values; lock reason, merge branch, and base SHA are set via the With*
+// methods.
+type PrInfoFields struct {
+	Number  *git.PRNumber
+	Title   string
+	Body    string
+	State   git.PRState
+	Base    string // Base branch name
+	URL     string // PR URL
+	IsDraft bool
+}
+
 // NewPrInfo creates a new PrInfo instance
-func NewPrInfo(number *int, title, body string, state git.PRState, base, url string, isDraft bool) *PrInfo {
+func NewPrInfo(f PrInfoFields) *PrInfo {
 	return &PrInfo{
-		number:  number,
-		title:   title,
-		body:    body,
-		isDraft: isDraft,
-		state:   state,
-		base:    base,
-		url:     url,
+		number:  f.Number,
+		title:   f.Title,
+		body:    f.Body,
+		isDraft: f.IsDraft,
+		state:   f.State,
+		base:    f.Base,
+		url:     f.URL,
 	}
 }
 
 // Number returns the PR number
-func (p *PrInfo) Number() *int {
+func (p *PrInfo) Number() *git.PRNumber {
 	return p.number
 }
 
@@ -94,15 +107,15 @@ func (p *PrInfo) MergeBranch() string {
 // MarshalJSON implements json.Marshaler for PrInfo
 func (p *PrInfo) MarshalJSON() ([]byte, error) {
 	type Alias struct {
-		Number      *int        `json:"number,omitempty"`
-		Base        string      `json:"base,omitempty"`
-		URL         string      `json:"url,omitempty"`
-		Title       string      `json:"title,omitempty"`
-		Body        string      `json:"body,omitempty"`
-		State       git.PRState `json:"state,omitempty"`
-		IsDraft     bool        `json:"is_draft"`
-		LockReason  string      `json:"lock_reason,omitempty"`
-		MergeBranch string      `json:"merge_branch,omitempty"`
+		Number      *git.PRNumber `json:"number,omitempty"`
+		Base        string        `json:"base,omitempty"`
+		URL         string        `json:"url,omitempty"`
+		Title       string        `json:"title,omitempty"`
+		Body        string        `json:"body,omitempty"`
+		State       git.PRState   `json:"state,omitempty"`
+		IsDraft     bool          `json:"is_draft"`
+		LockReason  string        `json:"lock_reason,omitempty"`
+		MergeBranch string        `json:"merge_branch,omitempty"`
 	}
 	return json.Marshal(&Alias{
 		Number:      p.number,
@@ -118,7 +131,7 @@ func (p *PrInfo) MarshalJSON() ([]byte, error) {
 }
 
 // WithNumber returns a new PrInfo with the number field updated
-func (p *PrInfo) WithNumber(number *int) *PrInfo {
+func (p *PrInfo) WithNumber(number *git.PRNumber) *PrInfo {
 	copy := p.copy()
 	copy.number = number
 	return copy

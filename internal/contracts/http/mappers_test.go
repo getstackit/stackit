@@ -22,7 +22,7 @@ func TestMapTrunkCommits(t *testing.T) {
 			PRNumber:       123,
 			Kind:           git.RecentCommitKindStackMerge,
 			StackSize:      2,
-			StackPRNumbers: []int{45, 46},
+			StackPRNumbers: []git.PRNumber{45, 46},
 			StackScope:     "PROJ-1",
 		},
 		{
@@ -66,7 +66,7 @@ func TestMapTrunkCommits_FiltersCoveredPRs(t *testing.T) {
 			PRNumber:       99,
 			Kind:           git.RecentCommitKindStackMerge,
 			StackSize:      3,
-			StackPRNumbers: []int{45, 46, 47},
+			StackPRNumbers: []git.PRNumber{45, 46, 47},
 		},
 		{
 			SHA:      "bbbb000000000000",
@@ -135,11 +135,11 @@ func TestMapTrunkCommits_WithPRTitles(t *testing.T) {
 			PRNumber:       99,
 			Kind:           git.RecentCommitKindStackMerge,
 			StackSize:      3,
-			StackPRNumbers: []int{45, 46, 47},
+			StackPRNumbers: []git.PRNumber{45, 46, 47},
 		},
 	}
 
-	titles := map[int]string{
+	titles := map[git.PRNumber]string{
 		99: "Consolidate auth stack",
 		45: "feat: add auth",
 		46: "feat: add middleware",
@@ -168,7 +168,7 @@ func TestMapTrunkCommits_NilTitlesNoStackPRTitles(t *testing.T) {
 			Date:           now,
 			Kind:           git.RecentCommitKindStackMerge,
 			StackSize:      2,
-			StackPRNumbers: []int{45, 46},
+			StackPRNumbers: []git.PRNumber{45, 46},
 		},
 	}
 

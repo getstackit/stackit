@@ -197,7 +197,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 		NoVerify:    !ctx.Verify,
 	}
 
-	if err := eng.CommitWithOptions(gctx, commitOpts); err != nil {
+	if err := eng.Commit(gctx, commitOpts); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 
@@ -266,7 +266,7 @@ func validateModifyIntoTarget(eng engine.Engine, currentBranchName, targetName s
 	}
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	downstack := graph.Downstack(eng.GetBranch(currentBranchName), false)
+	downstack := graph.Downstack(eng.GetBranch(currentBranchName), engine.ExcludeCurrentBranch)
 	if !downstack.Contains(targetName) {
 		return fmt.Errorf("branch %s is not a downstack ancestor of %s", targetName, currentBranchName)
 	}

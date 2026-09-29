@@ -199,7 +199,7 @@ func TestSyncAction(t *testing.T) {
 
 		// Recreate the engine with a wrapper that injects a runtime rebase conflict.
 		wrappedGit := &runtimeConflictRunner{
-			Runner:         s.Engine.Git(),
+			Runner:         s.Git,
 			conflictBranch: "branch1",
 		}
 
@@ -233,14 +233,15 @@ type runtimeConflictRunner struct {
 	injected         bool
 }
 
-func (r *runtimeConflictRunner) Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (git.RebaseOutcome, error) {
+func (r *runtimeConflictRunner) Rebase(ctx context.Context, spec git.RebaseSpec) (git.RebaseOutcome, error) {
+	branchName := spec.Branch
 	if branchName == r.conflictBranch && !r.injected {
 		r.injected = true
 		r.rebaseInProgress = true
 		_ = r.CheckoutDetached(ctx, branchName)
 		return git.RebaseOutcome{Result: git.RebaseConflict}, nil
 	}
-	return r.Runner.Rebase(ctx, branchName, upstream, oldUpstream)
+	return r.Runner.Rebase(ctx, spec)
 }
 
 func (r *runtimeConflictRunner) UpdateRefs(ctx context.Context, updates []git.RefUpdate, reflogMessage string) error {

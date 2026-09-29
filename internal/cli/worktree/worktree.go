@@ -17,11 +17,27 @@ import (
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
 const generatedRunWorktreeFallbackName = "agent"
+
+// mainRepoConfig resolves the main repository's config for worktree lifecycle
+// actions. They always operate on the main repository, so from inside a
+// managed worktree its config is loaded from the main repository directory;
+// otherwise the config loaded at bootstrap is used.
+func mainRepoConfig(ctx *app.Context) (worktree.RepoConfig, error) {
+	if !ctx.InManagedWorktree || ctx.WorktreeInfo == nil {
+		return ctx.Config, nil
+	}
+	cfg, err := config.LoadConfig(ctx.WorktreeInfo.MainRepoDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config from main repo: %w", err)
+	}
+	return cfg, nil
+}
 
 // NewWorktreeCmd creates the worktree command group
 func NewWorktreeCmd() *cobra.Command {
@@ -77,9 +93,14 @@ Examples:
 			}
 
 			return common.Run(cmd, func(ctx *app.Context) error {
+				cfg, err := mainRepoConfig(ctx)
+				if err != nil {
+					return err
+				}
 				result, err := worktree.CreateAction(ctx, worktree.CreateOptions{
-					Name:  worktreeName,
-					Scope: scope,
+					Name:   worktreeName,
+					Scope:  scope,
+					Config: cfg,
 				})
 				if err != nil {
 					return err
@@ -170,9 +191,14 @@ Use --no-open to skip the automatic directory change.`,
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.Run(cmd, func(ctx *app.Context) error {
+				cfg, err := mainRepoConfig(ctx)
+				if err != nil {
+					return err
+				}
 				result, err := worktree.CreateAction(ctx, worktree.CreateOptions{
-					Name:  args[0],
-					Scope: scope,
+					Name:   args[0],
+					Scope:  scope,
+					Config: cfg,
 				})
 				if err != nil {
 					return err
@@ -573,7 +599,14 @@ worktree anchors. Stale registrations with missing directories are removed.`,
 					target = args[0]
 				}
 
-				result, err := worktree.RepairAction(ctx, worktree.RepairOptions{Selector: worktree.WorktreeSelector(target)})
+				cfg, err := mainRepoConfig(ctx)
+				if err != nil {
+					return err
+				}
+				result, err := worktree.RepairAction(ctx, worktree.RepairOptions{
+					Selector: worktree.WorktreeSelector(target),
+					Config:   cfg,
+				})
 				if err != nil {
 					return err
 				}

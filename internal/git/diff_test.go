@@ -117,7 +117,7 @@ func TestGetUnmergedFiles(t *testing.T) {
 
 		// Start rebase (will conflict)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		_, err = runner.Rebase(context.Background(), "branch1", "main", forkPoint)
+		_, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 
 		// Should have unmerged files

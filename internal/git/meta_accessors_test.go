@@ -108,7 +108,7 @@ func TestMetaGetters(t *testing.T) {
 
 	t.Run("complex getters return copies", func(t *testing.T) {
 		t.Parallel()
-		num := 42
+		num := git.PRNumber(42)
 		m := git.NewMetaFrom(git.MetaFields{
 			PrInfo:          &git.PrInfoPersistence{Number: &num},
 			LastModifiedBy:  &git.ModifiedBy{GitName: "original"},
@@ -117,7 +117,7 @@ func TestMetaGetters(t *testing.T) {
 
 		// Mutating returned PrInfo should not affect the original
 		prInfo := m.GetPrInfo()
-		newNum := 99
+		newNum := git.PRNumber(99)
 		prInfo.Number = &newNum
 		require.Equal(t, &num, m.GetPrInfo().Number)
 
@@ -242,7 +242,7 @@ func TestMetaJSONRoundTrip(t *testing.T) {
 		hash := "hash"
 		stackID := testStackID1
 		now := time.Now().UTC().Truncate(time.Second)
-		num := 42
+		num := git.PRNumber(42)
 		url := "https://github.com/test/pr/42"
 		ghUser := "testuser"
 

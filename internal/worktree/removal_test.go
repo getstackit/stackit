@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -23,7 +24,7 @@ func TestRemovePath_MissingPathDoesNotFail(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
-	removed, err := RemovePath(context.Background(), s.Engine, filepath.Join(t.TempDir(), "missing"), RemovalRespectChanges)
+	removed, err := RemovePath(context.Background(), s.Engine, engine.WorktreePath(filepath.Join(t.TempDir(), "missing")), RemovalRespectChanges)
 	require.NoError(t, err)
 	require.False(t, removed)
 }

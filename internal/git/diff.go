@@ -19,22 +19,46 @@ func (r RevRange) String() string {
 	return r.Base + ".." + r.Head
 }
 
-func (r *runner) ShowDiff(ctx context.Context, left, right string, stat bool) (string, error) {
+// DiffFormat selects how ShowDiff renders the difference between two trees.
+type DiffFormat int
+
+const (
+	// DiffFormatPatch renders the full patch.
+	DiffFormatPatch DiffFormat = iota
+	// DiffFormatStat renders a per-file --stat summary.
+	DiffFormatStat
+)
+
+// CommitLogFormat selects how ShowCommits renders each commit in a range.
+type CommitLogFormat int
+
+const (
+	// CommitLogOneline renders "<short sha> - <subject>" per commit.
+	CommitLogOneline CommitLogFormat = iota
+	// CommitLogPatch renders each commit with its full patch (-p).
+	CommitLogPatch
+	// CommitLogStat renders each commit with a per-file --stat summary.
+	CommitLogStat
+)
+
+// ShowDiff diffs the trees at rr.Base and rr.Head (two-endpoint form, not
+// the merge-base "..." form).
+func (r *runner) ShowDiff(ctx context.Context, rr RevRange, format DiffFormat) (string, error) {
 	args := []string{"-c", "color.ui=always", "--no-pager", gitCmdDiff, "--no-ext-diff"}
-	if stat {
+	if format == DiffFormatStat {
 		args = append(args, "--stat")
 	}
-	args = append(args, left, right, "--")
+	args = append(args, rr.Base, rr.Head, "--")
 	return r.RunGitCommandWithContext(ctx, args...)
 }
 
-func (r *runner) ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error) {
+func (r *runner) ShowCommits(ctx context.Context, rr RevRange, format CommitLogFormat) (string, error) {
 	base, head := rr.Base, rr.Head
 	args := []string{"-c", "color.ui=always", "--no-pager", "log"}
-	switch {
-	case patch && stat:
+	switch format {
+	case CommitLogStat:
 		args = append(args, "--stat")
-	case patch:
+	case CommitLogPatch:
 		args = append(args, "-p")
 	default:
 		args = append(args, "--pretty=format:%h - %s")

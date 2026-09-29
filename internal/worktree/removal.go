@@ -21,11 +21,17 @@ func (p RemovalPolicy) DiscardsChanges() bool {
 	return p == RemovalDiscardChanges
 }
 
+// WorktreeRemover removes linked worktrees.
+type WorktreeRemover interface {
+	RemoveWorktree(ctx context.Context, path engine.WorktreePath) error
+	ForceRemoveWorktree(ctx context.Context, path engine.WorktreePath) error
+}
+
 // RemovePath removes a linked worktree when its directory exists. A missing
 // directory is not an error: callers can prune Git's stale administrative
 // entry according to their own lifecycle policy.
-func RemovePath(ctx context.Context, eng engine.Engine, path string, policy RemovalPolicy) (removed bool, err error) {
-	if _, err := os.Stat(path); err != nil {
+func RemovePath(ctx context.Context, eng WorktreeRemover, path engine.WorktreePath, policy RemovalPolicy) (removed bool, err error) {
+	if _, err := os.Stat(path.String()); err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
 		}

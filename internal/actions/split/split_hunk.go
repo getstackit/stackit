@@ -52,7 +52,7 @@ type splitByHunkEngine interface {
 //
 // When opts.useGitAddP is true, uses git add -p instead of the TUI hunk selector.
 // When opts.patchFile is set, uses the patch file instead of interactive selection.
-func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, direction Direction, opts hunkOptions) error {
+func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, direction Direction, opts hunkOptions) (err error) {
 	if direction == DirectionAbove {
 		return splitByHunkAbove(ctx, branchToSplit, eng, splog, handler, opts)
 	}
@@ -65,17 +65,12 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 	gitCtx := ctx.Context
 
 	// Detach and reset branch changes
-	if err := eng.DetachAndResetBranchChanges(gitCtx, branchToSplit.GetName()); err != nil {
-		return fmt.Errorf("failed to detach and reset: %w", err)
+	guard, err := actions.DetachForRewrite(gitCtx, eng, branchToSplit)
+	if err != nil {
+		return err
 	}
-
 	// On any error, restore the original branch to avoid leaving the user in detached HEAD.
-	success := false
-	defer func() {
-		if !success {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-		}
-	}()
+	defer guard.RestoreUnlessReleased(gitCtx, &err)
 
 	branchNames := []string{}
 
@@ -212,7 +207,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		handler.OnStep(StepCommitMessage, handlerBase.StatusCompleted, "Commit message set")
 
 		// Create commit (after all validation passed)
-		if err := eng.CommitWithOptions(gitCtx, git.CommitOptions{
+		if err := eng.Commit(gitCtx, git.CommitOptions{
 			Message:  commitMessage,
 			NoVerify: true, // Split hunk commits are internal, hooks usually shouldn't run
 		}); err != nil {
@@ -267,7 +262,7 @@ func splitByHunkWithHandler(ctx *app.Context, branchToSplit engine.Branch, eng s
 		Style:          StyleHunk,
 	})
 
-	success = true
+	guard.Release()
 	return nil
 }
 
@@ -308,7 +303,7 @@ func generateDefaultBranchName(originalName string, existingNames []string) stri
 //  10. Track new parent branch with grandparent as its parent
 //  11. Update branchToSplit to have new parent as its parent
 //  12. Restack branchToSplit onto new parent
-func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, opts hunkOptions) error {
+func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, opts hunkOptions) (err error) {
 	gitCtx := ctx.Context
 
 	// Get the original parent before we modify anything
@@ -345,17 +340,12 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 	}
 
 	// Detach and reset branch changes (all changes become unstaged)
-	if err := eng.DetachAndResetBranchChanges(gitCtx, branchToSplit.GetName()); err != nil {
-		return fmt.Errorf("failed to detach and reset: %w", err)
+	guard, err := actions.DetachForRewrite(gitCtx, eng, branchToSplit)
+	if err != nil {
+		return err
 	}
-
 	// On any error, restore the original branch to avoid leaving the user in detached HEAD.
-	success := false
-	defer func() {
-		if !success {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-		}
-	}()
+	defer guard.RestoreUnlessReleased(gitCtx, &err)
 
 	// Read and parse patch file
 	patchContent, err := readPatchFile(opts.patchFile)
@@ -417,7 +407,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 		return fmt.Errorf("failed to stage remaining changes: %w", err)
 	}
 
-	if err := eng.CommitWithOptions(gitCtx, git.CommitOptions{
+	if err := eng.Commit(gitCtx, git.CommitOptions{
 		Message:  defaultCommitMessage,
 		NoVerify: true,
 	}); err != nil {
@@ -448,7 +438,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 		return fmt.Errorf("failed to stage parent branch changes: %w", err)
 	}
 
-	if err := eng.CommitWithOptions(gitCtx, git.CommitOptions{
+	if err := eng.Commit(gitCtx, git.CommitOptions{
 		Message:  newParentMessage,
 		NoVerify: true,
 	}); err != nil {
@@ -483,7 +473,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 
 	splog.Info("Created branch %s as parent of %s", output.CurrentBranch(newParentName), output.CurrentBranch(branchToSplit.GetName()))
 
-	success = true
+	guard.Release()
 	return nil
 }
 
@@ -501,7 +491,7 @@ func splitByHunkBelowWithPatch(ctx *app.Context, branchToSplit engine.Branch, en
 //
 // When opts.useGitAddP is true, uses git add -p instead of the TUI hunk selector.
 // When opts.patchFile is set, uses the patch file instead of interactive selection.
-func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, opts hunkOptions) error {
+func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitByHunkEngine, splog output.Output, handler InteractiveHandler, opts hunkOptions) (err error) {
 	gitCtx := ctx.Context
 
 	// Get existing children before we modify anything
@@ -509,17 +499,12 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	existingChildren := graph.Children(branchToSplit)
 
 	// Detach and reset branch changes (all changes become unstaged)
-	if err := eng.DetachAndResetBranchChanges(gitCtx, branchToSplit.GetName()); err != nil {
-		return fmt.Errorf("failed to detach and reset: %w", err)
+	guard, err := actions.DetachForRewrite(gitCtx, eng, branchToSplit)
+	if err != nil {
+		return err
 	}
-
 	// On any error, restore the original branch to avoid leaving the user in detached HEAD.
-	success := false
-	defer func() {
-		if !success {
-			_ = eng.ForceCheckoutBranch(gitCtx, branchToSplit)
-		}
-	}()
+	defer guard.RestoreUnlessReleased(gitCtx, &err)
 
 	// Get default commit message
 	commitMessagesData, err := branchToSplit.GetAllCommits()
@@ -706,7 +691,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		return fmt.Errorf("failed to stage remaining changes: %w", err)
 	}
 
-	if err := eng.CommitWithOptions(gitCtx, git.CommitOptions{
+	if err := eng.Commit(gitCtx, git.CommitOptions{
 		Message:  defaultCommitMessage,
 		NoVerify: true,
 	}); err != nil {
@@ -755,7 +740,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		return fmt.Errorf("failed to stage extracted changes: %w. Recovery: run 'git add -A && git commit' to complete", err)
 	}
 
-	if err := eng.CommitWithOptions(gitCtx, git.CommitOptions{
+	if err := eng.Commit(gitCtx, git.CommitOptions{
 		Message:  childCommitMessage,
 		NoVerify: true,
 	}); err != nil {
@@ -775,7 +760,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 
 	// Re-parent existing children to the new child branch, preserving divergence
 	// points so children don't carry the split-out changes.
-	if err := eng.ReparentBranches(gitCtx, existingChildren, childBranch); err != nil {
+	if err := eng.ReparentBranchesToParents(gitCtx, engine.MovesTo(existingChildren, childBranch.GetName()), engine.ReparentOpts{}); err != nil {
 		return fmt.Errorf("failed to reparent children: %w", err)
 	}
 
@@ -798,7 +783,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		splog.Info("Created branch %s as child of %s", output.CurrentBranch(childBranchName), output.CurrentBranch(branchToSplit.GetName()))
 	}
 
-	success = true
+	guard.Release()
 	return nil
 }
 

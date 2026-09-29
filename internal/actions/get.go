@@ -41,14 +41,14 @@ const (
 
 // GetEvent represents a progress update during get
 type GetEvent struct {
-	Phase       GetPhase     // Current phase
-	Type        GetEventType // Event type
-	Branch      string       // Branch name (if applicable)
-	PRNumber    *int         // PR number (if applicable)
-	Message     string       // Human-readable description
-	NewRevision string       // For position changes
-	IsNew       bool         // Is this a new branch?
-	Error       error        // If non-nil, this step had an error
+	Phase       GetPhase      // Current phase
+	Type        GetEventType  // Event type
+	Branch      string        // Branch name (if applicable)
+	PRNumber    *git.PRNumber // PR number (if applicable)
+	Message     string        // Human-readable description
+	NewRevision string        // For position changes
+	IsNew       bool          // Is this a new branch?
+	Error       error         // If non-nil, this step had an error
 }
 
 // GetSummary holds aggregate results from a get operation
@@ -71,7 +71,7 @@ type Reanchored struct {
 	// LandedParent is the parent recorded on the remote, now gone from it.
 	LandedParent string
 	// LandedPR is the landed parent's PR number, when metadata recorded one.
-	LandedPR *int
+	LandedPR *git.PRNumber
 	// NewParent is the nearest surviving ancestor, often trunk.
 	NewParent string
 	// Anchor is the landed parent's tip at the time this branch was pushed, as
@@ -151,7 +151,7 @@ const (
 // It embeds RestackHandler to provide consistent output for restack phase
 type GetHandler interface {
 	// Start is called at the beginning of get with target info
-	Start(targetBranch string, prNumber *int)
+	Start(targetBranch string, prNumber *git.PRNumber)
 
 	// EmitEvent is called for each progress update
 	EmitEvent(event GetEvent)
@@ -176,7 +176,7 @@ type GetNullHandler struct {
 }
 
 // Start implements GetHandler.
-func (h *GetNullHandler) Start(_ string, _ *int) {}
+func (h *GetNullHandler) Start(_ string, _ *git.PRNumber) {}
 
 // EmitEvent implements GetHandler.
 func (h *GetNullHandler) EmitEvent(_ GetEvent) {}
@@ -208,9 +208,9 @@ type syncTargets struct {
 	// branches is every branch to sync, trunk-first.
 	branches []string
 	// parentByBranch is the parent to record for each branch.
-	parentByBranch map[string]string
+	parentByBranch engine.ParentMap
 	// prByBranch is each branch's PR number, where one is known.
-	prByBranch map[string]*int
+	prByBranch map[string]*git.PRNumber
 	// anchorByBranch is the parent tip each branch was pushed on top of, read
 	// from its remote metadata's ParentBranchRevision. It is the divergence
 	// anchor when a parent has to be substituted, and it stays reachable from
@@ -225,8 +225,8 @@ type syncTargets struct {
 func newSyncTargets(targetBranch string) *syncTargets {
 	return &syncTargets{
 		branches:       []string{targetBranch},
-		parentByBranch: make(map[string]string),
-		prByBranch:     make(map[string]*int),
+		parentByBranch: make(engine.ParentMap),
+		prByBranch:     make(map[string]*git.PRNumber),
 		anchorByBranch: make(map[string]string),
 		prInfoByBranch: make(map[string]*engine.PrInfo),
 	}
@@ -287,7 +287,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	defer cancelRemote()
 
 	targetBranch := ""
-	var targetPRNumber *int
+	var targetPRNumber *git.PRNumber
 	if branchOrPR == "" {
 		current := eng.CurrentBranch()
 		if current == nil {
@@ -296,7 +296,8 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		targetBranch = current.GetName()
 	} else {
 		// Check if it's a PR number
-		if prNum, err := strconv.Atoi(branchOrPR); err == nil {
+		if n, err := strconv.Atoi(branchOrPR); err == nil {
+			prNum := git.PRNumber(n)
 			if _, err := ctx.RequireGitHub(); err != nil {
 				return fmt.Errorf("cannot resolve PR #%d: %w", prNum, err)
 			}
@@ -348,7 +349,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 		usedMetadata = targets.crawlAncestorsViaMetadata(eng, targetBranch)
 	}
 	if !usedMetadata {
-		targets.crawlAncestorsViaGitHub(remoteCtx, ctx.GitHub(), eng, targetBranch)
+		targets.crawlAncestorsViaGitHub(remoteCtx, ctx.GitHub(), eng.Trunk().GetName(), targetBranch)
 	}
 	// Either crawl can leave a branch without its divergence anchor: the GitHub
 	// one never reads them, and the metadata one abandons a partial chain. Fill
@@ -463,7 +464,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 				// for this round trip, and without it the branch lands with no
 				// PR metadata at all, so `tree full` renders no GitHub state
 				// until the next sync repeats the same fetch.
-				info := engine.NewPrInfo(&prNum, pr.Title, pr.Body, pr.State, pr.Base, pr.HTMLURL, pr.Draft)
+				info := engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: pr.Title, Body: pr.Body, State: pr.State, Base: pr.Base, URL: pr.HTMLURL, IsDraft: pr.Draft})
 				mu.Lock()
 				targets.prByBranch[branchName] = &prNum
 				targets.prInfoByBranch[branchName] = info
@@ -746,14 +747,14 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 //
 // A worktree listing that cannot be read holds nothing back — get then behaves
 // as it did before, failing on the checkout if a branch really is held.
-func branchesHeldByOtherWorktrees(ctx context.Context, eng engine.Engine) (map[string]string, error) {
+func branchesHeldByOtherWorktrees(ctx context.Context, eng engine.Engine) (map[string]engine.WorktreePath, error) {
 	worktrees, err := eng.ListWorktrees(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
 	current := eng.CurrentBranchName()
-	held := make(map[string]string, len(worktrees))
+	held := make(map[string]engine.WorktreePath, len(worktrees))
 	for _, wt := range worktrees {
 		// A detached worktree reports no branch, and so holds none.
 		if wt.Branch == "" || wt.Branch == current {
@@ -958,8 +959,8 @@ func (targets *syncTargets) crawlAncestorsViaMetadata(eng engine.Engine, targetB
 	}
 
 	discoveredBranches := slices.Clone(targets.branches)
-	discoveredParents := make(map[string]string)
-	discoveredPRs := make(map[string]*int)
+	discoveredParents := make(engine.ParentMap)
+	discoveredPRs := make(map[string]*git.PRNumber)
 	discoveredAnchors := make(map[string]string)
 
 	current := targetBranch
@@ -1003,9 +1004,9 @@ func (targets *syncTargets) crawlAncestorsViaMetadata(eng engine.Engine, targetB
 // records each branch's parent and PR number on targets. It is a no-op when no GitHub
 // client is configured. PR bases carry no revisions, so the anchors it leaves behind
 // come from harvestAnchors instead. The context bounds the GitHub reads; it takes the
-// narrow github.Client/engine.Engine it needs rather than the full app context, so the
-// unbounded command context is not reachable here by mistake.
-func (targets *syncTargets) crawlAncestorsViaGitHub(ctx context.Context, gh github.Client, eng engine.Engine, targetBranch string) {
+// narrow github.PRReader and trunk name it needs rather than the full app context, so
+// the unbounded command context is not reachable here by mistake.
+func (targets *syncTargets) crawlAncestorsViaGitHub(ctx context.Context, gh github.PRReader, trunk, targetBranch string) {
 	if gh == nil {
 		return
 	}
@@ -1017,11 +1018,11 @@ func (targets *syncTargets) crawlAncestorsViaGitHub(ctx context.Context, gh gith
 		}
 		prNum := pr.Number
 		targets.prByBranch[current] = &prNum
-		targets.prInfoByBranch[current] = engine.NewPrInfo(&prNum, pr.Title, pr.Body, pr.State, pr.Base, pr.HTMLURL, pr.Draft)
+		targets.prInfoByBranch[current] = engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: pr.Title, Body: pr.Body, State: pr.State, Base: pr.Base, URL: pr.HTMLURL, IsDraft: pr.Draft})
 
 		base := pr.Base
-		if base == "" || base == eng.Trunk().GetName() {
-			targets.parentByBranch[current] = eng.Trunk().GetName()
+		if base == "" || base == trunk {
+			targets.parentByBranch[current] = trunk
 			break
 		}
 

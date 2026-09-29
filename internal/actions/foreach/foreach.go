@@ -13,7 +13,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -33,13 +32,23 @@ type Options struct {
 	Jobs             int
 }
 
+// foreachEngine lists exactly the engine methods foreach calls: the stack
+// read surface plus checkout (sequential runs) and temporary worktrees
+// (parallel and find-first-failure runs).
+type foreachEngine interface {
+	engine.StackView
+	CheckoutBranch(ctx context.Context, branch engine.Branch) error
+	PruneWorktrees(ctx context.Context) error
+	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string, prune engine.WorktreePruneMode) (path engine.WorktreePath, cleanup func(), err error)
+}
+
 // HasForeachWork reports whether Action would have at least one non-trunk
 // branch to execute the command on. Use this from the CLI to gate TUI
 // initialization — when the answer is no, starting the bubbletea runner
 // only flashes startup/teardown escape codes and races with the deferred
 // Cleanup before the "no branches to process" CompletionEvent can render.
 func HasForeachWork(ctx *app.Context, opts Options) (bool, error) {
-	eng := ctx.Engine
+	var eng foreachEngine = ctx.Engine
 	multiStack := opts.AllStacks || len(opts.StackRoots) > 0
 
 	currentBranch := eng.CurrentBranch()
@@ -78,7 +87,7 @@ func HasForeachWork(ctx *app.Context, opts Options) (bool, error) {
 
 // Action executes a command on each branch in the stack with event handling
 func Action(ctx *app.Context, opts Options, handler Handler) error {
-	eng := ctx.Engine
+	var eng foreachEngine = ctx.Engine
 
 	multiStack := opts.AllStacks || len(opts.StackRoots) > 0
 
@@ -123,17 +132,26 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return nil
 	}
 
-	// Build tree structure for display
+	// Describe the stack for display
 	currentBranchName := ""
 	if currentBranch != nil {
 		currentBranchName = currentBranch.GetName()
 	}
-	stackTree := tree.NewStackTree(nonTrunkBranches.All(), currentBranchName, eng.Trunk().GetName())
+	stack := StackSnapshot{
+		Branches:      make([]string, len(nonTrunkBranches)),
+		CurrentBranch: currentBranchName,
+		TrunkBranch:   eng.Trunk().GetName(),
+		ParentMap:     make(map[string]string, len(nonTrunkBranches)),
+	}
+	for i, branch := range nonTrunkBranches {
+		stack.Branches[i] = branch.GetName()
+		stack.ParentMap[branch.GetName()] = branch.GetParentOrTrunk()
+	}
 
 	// Display the stack
 	fullCommand := strings.Join(append([]string{opts.Command}, opts.Args...), " ")
 	handler.OnEvent(StackDisplayEvent{
-		Stack:   stackTree,
+		Stack:   stack,
 		Command: fullCommand,
 	})
 
@@ -156,7 +174,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 }
 
 func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches, handler Handler) error {
-	eng := ctx.Engine
+	var eng foreachEngine = ctx.Engine
 	out := ctx.Output
 
 	currentBranch := eng.CurrentBranch()
@@ -327,7 +345,8 @@ func prepareWorktreeRun(ctx *app.Context, opts Options) (string, []string, int) 
 	// Prune stale worktree entries ONCE before starting parallel execution.
 	// This prevents "failed to read commondir" errors caused by incomplete cleanup
 	// from previous operations, without interfering with parallel worktree creation.
-	_ = ctx.Engine.PruneWorktrees(ctx.Context)
+	var eng foreachEngine = ctx.Engine
+	_ = eng.PruneWorktrees(ctx.Context)
 
 	// Resolve post-worktree-create hooks once on the main thread (may prompt user).
 	// The resolved list is then executed in each worktree without prompting.
@@ -499,7 +518,8 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 
 	// Create a temporary directory for the worktree.
 	// Use SkipPrune variant since worktree execution pruned once before parallel execution.
-	worktreePath, cleanup, err := appCtx.Engine.CreateTemporaryWorktreeSkipPrune(ctx, branch.GetName(), "stackit-foreach-*")
+	var eng foreachEngine = appCtx.Engine
+	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx, branch.GetName(), "stackit-foreach-*", engine.WorktreePruneSkip)
 	if err != nil {
 		res.exitCode = -1
 		res.err = err
@@ -514,7 +534,7 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", fullCommand)
 	cmd.Stdout = &output
 	cmd.Stderr = &output
-	cmd.Dir = worktreePath
+	cmd.Dir = worktreePath.String()
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, "STACKIT_BRANCH="+branch.GetName())
 
@@ -528,7 +548,7 @@ func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch eng
 
 // collectMultiStackBranches expands --all-stacks / --stacks into a flat branch list,
 // preserving independent-stack ordering and excluding trunk and untracked branches.
-func collectMultiStackBranches(eng engine.BranchReader, opts Options) (engine.Branches, error) {
+func collectMultiStackBranches(eng engine.StackView, opts Options) (engine.Branches, error) {
 	stacks := engine.DiscoverIndependentStacks(eng)
 	if len(opts.StackRoots) > 0 {
 		stackByRoot := make(map[string]engine.IndependentStack, len(stacks))

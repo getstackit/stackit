@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/shippable"
 )
 
 type statusJSONBlocking struct {
 	Branch   string                   `json:"branch"`
-	PRNumber int                      `json:"pr_number,omitempty"`
+	PRNumber git.PRNumber             `json:"pr_number,omitempty"`
 	Reason   shippable.BlockingReason `json:"reason"`
 }
 

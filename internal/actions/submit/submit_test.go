@@ -29,7 +29,7 @@ type countingRunner struct {
 	pushBranches    atomic.Int64
 }
 
-func (c *countingRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
+func (c *countingRunner) FetchRemoteShas(ctx context.Context, remote string) (git.RemoteBranchSHAs, error) {
 	c.fetchRemoteShas.Add(1)
 	return c.Runner.FetchRemoteShas(ctx, remote)
 }
@@ -98,7 +98,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.Equal(t, "feature", *config.CreatedPRs[0].Head.Ref, "PR should be for feature branch")
 
 		// Verify that metadata was updated with LastModifiedBy after submit
-		meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "feature").One()
+		meta, err := s.Metadata.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err, "Should be able to read metadata ref after submit")
 		require.NotNil(t, meta.GetLastModifiedBy(), "LastModifiedBy should be set after submit")
 		require.NotEmpty(t, meta.GetLastModifiedBy().GitName, "LastModifiedBy.GitName should not be empty")
@@ -126,15 +126,15 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Pre-create a PR in the mock
 		branchName := "feature"
-		prNumber := 123
+		prNumber := git.PRNumber(123)
 		prData := testhelpers.DefaultPRData()
 		prData.Head = branchName
-		prData.Number = prNumber
+		prData.Number = int(prNumber)
 		pr := testhelpers.NewSamplePullRequest(prData)
 		config.PRs[branchName] = pr
 		config.CreatedPRs = append(config.CreatedPRs, pr)
 		// Also add to UpdatedPRs so Get works
-		config.UpdatedPRs[prNumber] = pr
+		config.UpdatedPRs[int(prNumber)] = pr
 
 		// Store PR info in engine
 		branch := s.Engine.GetBranch(branchName)
@@ -156,7 +156,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Verify that PR was updated in the mock
 		require.Greater(t, len(config.UpdatedPRs), 0, "Should have updated at least one PR")
-		updatedPR, exists := config.UpdatedPRs[prNumber]
+		updatedPR, exists := config.UpdatedPRs[int(prNumber)]
 		require.True(t, exists, "PR %d should be in UpdatedPRs", prNumber)
 		require.NotNil(t, updatedPR, "Updated PR should not be nil")
 	})
@@ -208,7 +208,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Verify that metadata was updated for all submitted branches
 		for _, branchName := range []string{"P", "C1", "C2"} {
-			meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), branchName).One()
+			meta, err := s.Metadata.ReadMetadata(context.Background(), branchName).One()
 			require.NoError(t, err, "Should be able to read metadata for %s", branchName)
 			require.NotNil(t, meta.GetLastModifiedBy(), "LastModifiedBy should be set for %s", branchName)
 		}
@@ -245,15 +245,15 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, config)
 
 		// Create a PR for B with A as the base (but B and A point to same commit)
-		prNumberB := 101
+		prNumberB := git.PRNumber(101)
 		prDataB := testhelpers.DefaultPRData()
 		prDataB.Head = "B"
-		prDataB.Number = prNumberB
+		prDataB.Number = int(prNumberB)
 		prDataB.Base = "main" // Original base
 		prB := testhelpers.NewSamplePullRequest(prDataB)
 		config.PRs["B"] = prB
 		config.CreatedPRs = append(config.CreatedPRs, prB)
-		config.UpdatedPRs[prNumberB] = prB
+		config.UpdatedPRs[int(prNumberB)] = prB
 
 		// Store PR info in engine with A as the base (simulating after reorder)
 		branchB := s.Engine.GetBranch("B")
@@ -285,7 +285,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.NoError(t, err, "Submit should succeed even when base update is skipped due to no commits")
 
 		// Verify that the PR was updated (other fields should be updated)
-		updatedPR, exists := config.UpdatedPRs[prNumberB]
+		updatedPR, exists := config.UpdatedPRs[int(prNumberB)]
 		require.True(t, exists, "PR %d should be in UpdatedPRs", prNumberB)
 		require.NotNil(t, updatedPR, "Updated PR should not be nil")
 	})
@@ -349,7 +349,7 @@ func TestSubmitCreatesNativeGitHubStackWhenRequested(t *testing.T) {
 	require.NoError(t, err)
 	apiPR, err := s.Engine.GetBranch("api").GetPrInfo()
 	require.NoError(t, err)
-	require.Equal(t, []int{*basePR.Number(), *apiPR.Number()}, mockConfig.CreatedStacks[0])
+	require.Equal(t, []git.PRNumber{*basePR.Number(), *apiPR.Number()}, mockConfig.CreatedStacks[0])
 
 	// A repeated submit must leave the existing native Stack intact rather than
 	// trying to create a second resource for the same pull requests.
@@ -539,6 +539,7 @@ func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
 
 	ctx := app.NewContext(eng,
 		app.WithRepoRoot(s.Scene.Dir),
+		app.WithGitHubRunner(counting),
 		app.WithWriter(&bytes.Buffer{}),
 		app.WithGlobalOptions(app.GlobalOptions{Verify: true}),
 	)
@@ -584,6 +585,7 @@ func TestSubmitDryRunCreateOnlySkipsRemoteStatusRead(t *testing.T) {
 
 	ctx := app.NewContext(eng,
 		app.WithRepoRoot(s.Scene.Dir),
+		app.WithGitHubRunner(counting),
 		app.WithWriter(&bytes.Buffer{}),
 		app.WithGlobalOptions(app.GlobalOptions{Verify: true}),
 	)
@@ -630,6 +632,7 @@ func TestSubmitPushesStackInSingleBatch(t *testing.T) {
 
 	ctx := app.NewContext(eng,
 		app.WithRepoRoot(s.Scene.Dir),
+		app.WithGitHubRunner(counting),
 		app.WithWriter(&bytes.Buffer{}),
 		app.WithGlobalOptions(app.GlobalOptions{Verify: true}),
 	)
@@ -685,6 +688,7 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 
 	ctx := app.NewContext(eng,
 		app.WithRepoRoot(s.Scene.Dir),
+		app.WithGitHubRunner(counting),
 		app.WithWriter(&bytes.Buffer{}),
 		app.WithGlobalOptions(app.GlobalOptions{Verify: true}),
 	)
@@ -746,7 +750,7 @@ func TestSubmitPreservesLockStatus(t *testing.T) {
 	branch = s.Engine.GetBranch("feature")
 	require.True(t, branch.IsLocked(), "Branch should still be locked after submission")
 
-	meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "feature").One()
+	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature").One()
 	require.NoError(t, err)
 	require.Equal(t, git.LockReasonUser, meta.GetLockReason(), "Metadata LockReason field should be set")
 }
@@ -978,7 +982,7 @@ func TestSubmitGitHubStackSyncsDisjointChainsFromTrunk(t *testing.T) {
 	require.NoError(t, err)
 	twoTopPR, err := s.Engine.GetBranch("two-top").GetPrInfo()
 	require.NoError(t, err)
-	require.Equal(t, [][]int{
+	require.Equal(t, [][]git.PRNumber{
 		{*oneBottomPR.Number(), *oneTopPR.Number()},
 		{*twoBottomPR.Number(), *twoTopPR.Number()},
 	}, mockConfig.CreatedStacks)
@@ -1136,7 +1140,7 @@ func TestSubmitRetargetsBaseWhenStackKeepsMergedPullRequest(t *testing.T) {
 
 	// The bottom pull request merges. GitHub keeps it in the Stack and will not
 	// unstack it, so the Stack can never be emptied from here on.
-	mockConfig.MergedStackPRs = []int{mockConfig.CreatedStacks[0][0]}
+	mockConfig.MergedStackPRs = []git.PRNumber{mockConfig.CreatedStacks[0][0]}
 
 	s.TrackBranch("api", "main").Checkout("api")
 	err = submit.Action(s.Context, submit.Options{NoEdit: true, Draft: true}, &noopHandler{})

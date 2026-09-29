@@ -28,7 +28,7 @@ const (
 // sync with its ref rather than discarding the user's work. That state is still
 // a footgun — `git status` shows the new commit's files as deleted — so callers
 // should avoid moving the ref at all in that case; see skipDirtyWorktreeStacks.
-func (e *engineImpl) resetWorktreeIfClean(ctx context.Context, worktreePath string, snap *restackSnapshot) {
+func (e *engineImpl) resetWorktreeIfClean(ctx context.Context, worktreePath WorktreePath, snap *restackSnapshot) {
 	if snap.dirtyWorktrees[worktreePath] {
 		return
 	}
@@ -88,8 +88,8 @@ func (e *engineImpl) branchWorktreeResetTarget(ctx context.Context, branchName s
 // worktree that is safe to reset once the ref moves, or one that was left
 // diverged and why. Both are empty when no worktree holds the branch.
 type worktreeResetDecision struct {
-	ResetPath  string
-	HeldPath   string
+	ResetPath  WorktreePath
+	HeldPath   WorktreePath
 	HeldReason string
 }
 
@@ -108,15 +108,15 @@ type restackSnapshot struct {
 	// value rather than failing.
 	revs        RevisionMap
 	worktrees   git.WorktreeList
-	metaRefSHAs map[string]string
+	metaRefSHAs MetadataSHAMap
 	// dirtyWorktrees records, per worktree path, whether it had changes to
 	// local changes before this restack pass began. This cannot be checked
 	// lazily; see resetWorktreeIfClean for why.
-	dirtyWorktrees map[string]bool
+	dirtyWorktrees map[WorktreePath]bool
 	// untrackedByWorktree holds the untracked (non-ignored) paths found in
 	// worktrees that had no tracked changes. Whether those hold their branch
 	// depends on the incoming tree, which is only known per branch.
-	untrackedByWorktree map[string][]string
+	untrackedByWorktree map[WorktreePath][]string
 	// heldReasons maps every branch whose checked-out worktree was dirty or
 	// could not be inspected before this pass to the reason, phrased for the
 	// user and naming the worktree. A held branch reports RestackUnneeded —
@@ -633,7 +633,7 @@ func (e *engineImpl) restackBranch(
 	}
 
 	// Perform rebase
-	gitResult, err := e.git.Rebase(ctx, branchName, rebaseOnto, oldParentRev)
+	gitResult, err := e.git.Rebase(ctx, git.RebaseSpec{Branch: branchName, Onto: rebaseOnto, OldBase: oldParentRev})
 	if err != nil {
 		return RestackBranchResult{
 			Result:              RestackConflict,

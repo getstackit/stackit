@@ -96,13 +96,6 @@ func (r *MessageRecorder) HasMessage(predicate func(tea.Msg) bool) bool {
 	return slices.ContainsFunc(r.messages, predicate)
 }
 
-// Messages returns a copy of all recorded messages.
-func (r *MessageRecorder) Messages() []tea.Msg {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]tea.Msg{}, r.messages...)
-}
-
 // Reset clears all recorded messages.
 func (r *MessageRecorder) Reset() {
 	r.mu.Lock()

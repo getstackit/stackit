@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -113,12 +111,7 @@ func ExecuteMultiStack(ctx *app.Context, opts MultiStackOptions) (*MultiStackRes
 	// 5. Run CI validation if not skipped
 	if !opts.SkipLocalCI {
 		out.Debug("multistack: running CI validation")
-		cfg, err := config.LoadConfig(ctx.RepoRoot)
-		if err != nil {
-			out.Debug("multistack: failed to load config: %v", err)
-			return nil, fmt.Errorf("failed to load config: %w", err)
-		}
-		validator := NewLocalCIValidator(cfg, out)
+		validator := NewLocalCIValidator(ctx.Config, out)
 		if !validator.IsConfigured() {
 			out.Debug("multistack: CI not configured, skipping")
 			out.Warn("CI validation skipped (no ci.command configured)")
@@ -297,59 +290,12 @@ func validateBranchesMatchRemote(ctx context.Context, eng engine.Engine, stacks 
 	return nil
 }
 
-// lockAndNotifyMultiStackPRs locks individual PRs and updates them with consolidation info.
-// This mirrors the behavior in consolidate.go's lockAndNotifyIndividualPRs.
+// lockAndNotifyMultiStackPRs locks every branch of the included stacks and
+// marks them as shipping through the consolidation branch.
 func lockAndNotifyMultiStackPRs(ctx *app.Context, eng engine.Engine, includedStacks []MultiStackInfo, consolidationBranch string) error {
-	out := ctx.Output
-	out.Info("🔒 Locking individual PRs and updating status...")
-
-	branchesToLock := engine.Branches{}
-	branchNames := []string{}
-
+	var branchNames []string
 	for _, stack := range includedStacks {
-		for _, branchName := range stack.AllBranches {
-			branch := eng.GetBranch(branchName)
-			if !branch.IsLocked() {
-				branchesToLock = branchesToLock.Append(branch)
-			}
-			branchNames = append(branchNames, branchName)
-		}
+		branchNames = append(branchNames, stack.AllBranches...)
 	}
-
-	if len(branchesToLock) > 0 {
-		if _, err := eng.SetLocked(ctx, branchesToLock, engine.LockReasonConsolidating); err != nil {
-			return fmt.Errorf("failed to lock branches: %w", err)
-		}
-	}
-
-	// Update PR info with consolidation branch
-	lockNames := make([]string, len(branchesToLock))
-	for i, b := range branchesToLock {
-		lockNames[i] = b.GetName()
-	}
-	allMeta, metaErrs := eng.BatchReadMetadataRaw(lockNames)
-
-	prUpdates := make(map[string]*engine.PrInfo, len(branchesToLock))
-	for _, b := range branchesToLock {
-		name := b.GetName()
-		if err, hasErr := metaErrs[name]; hasErr {
-			out.Debug("Failed to read PR info for %s: %v", name, err)
-			continue
-		}
-		if prInfo := engine.NewPrInfoFromMeta(allMeta[name]); prInfo != nil {
-			prUpdates[name] = prInfo.WithMergeBranch(consolidationBranch)
-		}
-	}
-	if len(prUpdates) > 0 {
-		if err := eng.BatchUpsertPrInfo(ctx.Context, prUpdates); err != nil {
-			out.Debug("Failed to batch upsert PR info: %v", err)
-		}
-	}
-
-	// Sync PRs with updated metadata
-	if err := actions.PushMetadataAndSyncPRs(ctx, branchNames); err != nil {
-		out.Warn("Failed to sync individual PRs: %v", err)
-	}
-
-	return nil
+	return lockAndMarkConsolidating(ctx, eng, branchNames, consolidationBranch)
 }

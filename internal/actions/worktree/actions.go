@@ -60,7 +60,7 @@ func (m *worktreeMutation) rollback(ctx *app.Context, cause error, childMode Chi
 			if childMode != RestoreChildren || !m.reparented || len(m.snapshot.ChildNames) == 0 {
 				return nil
 			}
-			return ctx.Engine.ReparentBranches(ctx.Context, m.snapshot.ChildNames, ctx.Engine.GetBranch(m.snapshot.Info.AnchorBranch))
+			return ctx.Engine.ReparentBranchesToParents(ctx.Context, engine.MovesTo(m.snapshot.ChildNames, m.snapshot.Info.AnchorBranch), engine.ReparentOpts{})
 		},
 		func() error {
 			if !m.unregistered {
@@ -147,7 +147,7 @@ func restoreWorktreePath(ctx *app.Context, snapshot *worktreeSnapshot) error {
 	if snapshot.CheckoutBranch == "" {
 		return nil
 	}
-	return ctx.Engine.AddWorktree(ctx.Context, snapshot.Info.Path.String(), snapshot.CheckoutBranch, git.WorktreeAttached)
+	return ctx.Engine.AddWorktree(ctx.Context, snapshot.Info.Path, snapshot.CheckoutBranch, git.WorktreeAttached)
 }
 
 func restoreAnchorBranch(ctx *app.Context, snapshot *worktreeSnapshot) error {
@@ -193,7 +193,7 @@ func rollbackWorktree(cause error, restorations ...func() error) error {
 // deleted directory still needs its Git administrative entry pruned, but a
 // prune failure is non-fatal: the lifecycle operation can safely continue and
 // a later creation will retry the prune.
-func removeWorktreeOrPruneMissing(ctx *app.Context, path string, policy RemovalPolicy) (bool, error) {
+func removeWorktreeOrPruneMissing(ctx *app.Context, path WorktreePath, policy RemovalPolicy) (bool, error) {
 	removed, err := worktreeutil.RemovePath(ctx.Context, ctx.Engine, path, policy)
 	if err != nil {
 		return false, err
@@ -228,7 +228,7 @@ func RemoveAction(ctx *app.Context, opts RemoveOptions) error {
 
 	mutation := worktreeMutation{snapshot: snapshot}
 	var removeErr error
-	mutation.pathRemoved, removeErr = removeWorktreeOrPruneMissing(ctx, snapshot.Info.Path.String(), opts.Policy)
+	mutation.pathRemoved, removeErr = removeWorktreeOrPruneMissing(ctx, snapshot.Info.Path, opts.Policy)
 	if removeErr != nil {
 		if opts.Policy.DiscardsChanges() {
 			return fmt.Errorf("failed to force remove worktree at %s: %w", snapshot.Info.Path, removeErr)
@@ -284,6 +284,33 @@ func OpenAction(ctx *app.Context, opts OpenOptions) (WorktreePath, error) {
 type CreateOptions struct {
 	Name  string // User-provided name for the worktree
 	Scope string // Optional scope to set on the anchor branch
+	// Config is the main repository's resolved configuration. Worktrees are
+	// always created from the main repository, so when the command runs inside
+	// a managed worktree the caller resolves the main repository's config.
+	// Nil falls back to the context's config.
+	Config RepoConfig
+}
+
+// RepoConfig is the resolved repository configuration worktree lifecycle
+// actions read. The loaded repository config satisfies it; actions never load
+// config from disk themselves.
+type RepoConfig interface {
+	Trunk() string
+	UndoStackDepth() int
+	LinearStacks() bool
+	WorktreeBasePath() string
+	BranchNamePattern() string
+}
+
+// resolveRepoConfig returns cfg, or the context's config when cfg is nil.
+func resolveRepoConfig(ctx *app.Context, cfg RepoConfig) (RepoConfig, error) {
+	if cfg != nil {
+		return cfg, nil
+	}
+	if ctx.Config != nil {
+		return ctx.Config, nil
+	}
+	return nil, errors.New("repository config not loaded")
 }
 
 // WorktreeResult describes a created or attached managed worktree.
@@ -299,6 +326,11 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*WorktreeResult, error)
 	out := ctx.Output
 	repoRoot := ctx.RepoRoot
 
+	cfg, err := resolveRepoConfig(ctx, opts.Config)
+	if err != nil {
+		return nil, err
+	}
+
 	// If we're in a managed worktree, we need to create the new worktree from the main repo
 	if ctx.InManagedWorktree && ctx.WorktreeInfo != nil {
 		out.Info("Creating worktree from main repository (currently in worktree: %s)", ctx.WorktreeInfo.Name)
@@ -307,17 +339,12 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*WorktreeResult, error)
 		mainRepoRoot := ctx.WorktreeInfo.MainRepoDir
 		mainGit := git.NewRunnerWithPath(mainRepoRoot, ctx.Logger)
 
-		// Load config from main repo for trunk and undo settings
-		mainCfg, err := config.LoadConfig(mainRepoRoot)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load config from main repo: %w", err)
-		}
-
+		// Trunk and undo settings come from the main repo's config (opts.Config).
 		mainEng, err := engine.NewEngine(engine.Options{
 			RepoRoot:          mainRepoRoot,
-			Trunk:             mainCfg.Trunk(),
-			MaxUndoStackDepth: mainCfg.UndoStackDepth(),
-			LinearStacks:      mainCfg.StackShape() == config.StackShapeLinear,
+			Trunk:             cfg.Trunk(),
+			MaxUndoStackDepth: cfg.UndoStackDepth(),
+			LinearStacks:      cfg.LinearStacks(),
 			Git:               mainGit,
 		})
 		if err != nil {
@@ -351,6 +378,7 @@ func CreateAction(ctx *app.Context, opts CreateOptions) (*WorktreeResult, error)
 		Name:         opts.Name,
 		Scope:        opts.Scope,
 		AnchorParent: trunk.GetName(),
+		Config:       cfg,
 	})
 	if err != nil {
 		return nil, err
@@ -368,6 +396,7 @@ type anchoredWorktreeOptions struct {
 	AnchorParent   string
 	RootBranch     string
 	OriginalParent string
+	Config         RepoConfig
 }
 
 func reportCreatedWorktree(ctx *app.Context, created *WorktreeResult, scope string) {
@@ -377,7 +406,7 @@ func reportCreatedWorktree(ctx *app.Context, created *WorktreeResult, scope stri
 		ctx.Output.Info("  Scope: %s", output.Dim(scope))
 	}
 	ctx.Output.Newline()
-	if err := RunPostCreateHooks(ctx, created.Path.String()); err != nil {
+	if err := RunPostCreateHooks(ctx, created.Path); err != nil {
 		ctx.Output.Warn("Post-create hooks failed: %v", err)
 	}
 }
@@ -387,7 +416,7 @@ type worktreeTarget struct {
 	AnchorName string
 }
 
-func resolveWorktreeTarget(ctx *app.Context, eng engine.Engine, repoRoot, name, scope string) (worktreeTarget, error) {
+func resolveWorktreeTarget(ctx *app.Context, eng engine.Engine, cfg RepoConfig, repoRoot, name, scope string) (worktreeTarget, error) {
 	if name == "" {
 		return worktreeTarget{}, fmt.Errorf("worktree name is required")
 	}
@@ -405,11 +434,7 @@ func resolveWorktreeTarget(ctx *app.Context, eng engine.Engine, repoRoot, name, 
 		}
 	}
 
-	cfg, err := config.LoadConfig(repoRoot)
-	if err != nil {
-		return worktreeTarget{}, fmt.Errorf("load worktree configuration: %w", err)
-	}
-	path := WorktreePath(worktreePathForName(cfg.WorktreeBasePath(), repoRoot, name))
+	path := worktreePathForName(cfg.WorktreeBasePath(), repoRoot, name)
 	if _, err := os.Stat(path.String()); err == nil {
 		return worktreeTarget{}, fmt.Errorf("worktree path %s already exists; remove it first or choose a different name", path)
 	} else if !os.IsNotExist(err) {
@@ -475,12 +500,17 @@ func CreateAnchoredWorktreeForBranch(ctx *app.Context, branchName string, name s
 		}
 	}
 
+	cfg, err := resolveRepoConfig(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
 	created, err := createAnchoredWorktree(ctx, ctx.Engine, ctx.RepoRoot, anchoredWorktreeOptions{
 		Name:           name,
 		Scope:          scope,
 		AnchorParent:   parent,
 		RootBranch:     branchName,
 		OriginalParent: parent,
+		Config:         cfg,
 	})
 	if err != nil {
 		return nil, err
@@ -496,11 +526,11 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 	if opts.OriginalParent == "" {
 		opts.OriginalParent = opts.AnchorParent
 	}
-	target, err := resolveWorktreeTarget(ctx, eng, repoRoot, opts.Name, opts.Scope)
+	target, err := resolveWorktreeTarget(ctx, eng, opts.Config, repoRoot, opts.Name, opts.Scope)
 	if err != nil {
 		return nil, err
 	}
-	worktreePath := target.Path.String()
+	worktreePath := target.Path
 	anchorBranchName := target.AnchorName
 	anchorBranch, cleanupAnchor, err := createWorktreeAnchor(ctx, eng, anchorBranchName, opts.AnchorParent, opts.Scope)
 	if err != nil {
@@ -545,7 +575,7 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 	}
 	worktreeCreated = true
 
-	warmStart, err := warmStartWorktree(ctx.Context, eng, repoRoot, worktreePath)
+	warmStart, err := warmStartWorktree(ctx.Context, eng, WorktreePath(repoRoot), worktreePath)
 	if err != nil {
 		cleanup()
 		return nil, fmt.Errorf("failed to warm-start worktree: %w", err)
@@ -559,7 +589,7 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 
 	if err := eng.RegisterWorktree(ctx.Context, engine.WorktreeRegistration{
 		AnchorBranch: anchorBranchName,
-		Path:         WorktreePath(worktreePath),
+		Path:         worktreePath,
 		Name:         engine.WorktreeName(opts.Name),
 	}); err != nil {
 		cleanup()
@@ -570,7 +600,7 @@ func createAnchoredWorktree(ctx *app.Context, eng engine.Engine, repoRoot string
 	return &WorktreeResult{
 		Name:         opts.Name,
 		AnchorBranch: anchorBranchName,
-		Path:         WorktreePath(worktreePath),
+		Path:         worktreePath,
 	}, nil
 }
 
@@ -587,7 +617,7 @@ func generateAnchorBranchName(ctx *app.Context, patternStr, name, scope string) 
 	return anchorBranchName, nil
 }
 
-func worktreePathForName(basePath, repoRoot, name string) string {
+func worktreePathForName(basePath, repoRoot, name string) WorktreePath {
 	// Default: sibling directory named {repo}-stacks
 	if basePath == "" {
 		repoName := filepath.Base(repoRoot)
@@ -598,7 +628,7 @@ func worktreePathForName(basePath, repoRoot, name string) string {
 		basePath = filepath.Join(repoRoot, basePath)
 	}
 
-	return filepath.Join(basePath, name)
+	return WorktreePath(filepath.Join(basePath, name))
 }
 
 // cleanupAnchorBranch cleans up an anchor branch on failure and logs any cleanup errors

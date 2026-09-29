@@ -18,6 +18,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/testhelpers"
 )
@@ -34,9 +35,6 @@ var (
 
 // flagNoInteractive is the CLI flag used to suppress interactive prompts in tests.
 const flagNoInteractive = "--no-interactive"
-
-// branchParent is the default parent branch name used in diamond stack fixtures.
-const branchParent = "parent"
 
 // defaultTrunk is the trunk branch name used by the test scenarios.
 const defaultTrunk = "main"
@@ -69,9 +67,15 @@ var GlobalInProcessRunner = &struct {
 // Scenario represents a high-level test scenario that combines a Scene,
 // an Engine, and a runtime Context to provide a terse API for integration tests.
 type Scenario struct {
-	T          *testing.T
-	Scene      *testhelpers.Scene
-	Engine     engine.Engine
+	T      *testing.T
+	Scene  *testhelpers.Scene
+	Engine engine.Engine
+	// Git is the runner the engine was built on, for tests that need to
+	// observe or stage raw repository state below the engine abstraction.
+	Git git.Runner
+	// Metadata is the engine's metadata store, for tests that seed or inspect
+	// raw metadata refs.
+	Metadata   *git.MetadataStore
 	Context    *app.Context
 	BinaryPath string
 	InProcess  bool
@@ -98,7 +102,7 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 	// Force non-interactive mode for tests in the current process
 	tui.SetInteractive(false)
 
-	cfg, _ := config.LoadConfig(scene.Dir)
+	cfg, cfgErr := config.LoadConfig(scene.Dir)
 	trunk := cfg.Trunk()
 	if trunk == "" {
 		trunk = defaultTrunk
@@ -107,10 +111,14 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 	if maxUndoDepth <= 0 {
 		maxUndoDepth = engine.DefaultMaxUndoStackDepth
 	}
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	metadata := git.NewMetadataStore(runner)
 	eng, err := engine.NewEngine(engine.Options{
 		RepoRoot:          scene.Dir,
 		Trunk:             trunk,
 		MaxUndoStackDepth: maxUndoDepth,
+		Git:               runner,
+		Metadata:          metadata,
 	})
 	require.NoError(t, err)
 
@@ -118,6 +126,7 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 	ctx := app.NewContext(eng,
 		app.WithRepoRoot(scene.Dir),
 		app.WithWriter(buf),
+		app.WithGitHubRunner(runner),
 		app.WithGlobalOptions(app.GlobalOptions{
 			Interactive: false,
 			Verify:      true,
@@ -126,12 +135,20 @@ func newScenarioWithScene(t *testing.T, scene *testhelpers.Scene) *Scenario {
 		}),
 	)
 
+	// Mirror bootstrap: actions read resolved config from the context rather
+	// than loading it from disk themselves.
+	if cfgErr == nil {
+		ctx.Config = cfg
+	}
+
 	return &Scenario{
-		T:       t,
-		Scene:   scene,
-		Engine:  eng,
-		Context: ctx,
-		Output:  buf,
+		T:        t,
+		Scene:    scene,
+		Engine:   eng,
+		Git:      runner,
+		Metadata: metadata,
+		Context:  ctx,
+		Output:   buf,
 	}
 }
 
@@ -145,6 +162,20 @@ func NewScenarioParallel(t *testing.T, setup testhelpers.SceneSetup) *Scenario {
 		T:     t,
 		Scene: scene,
 	}
+}
+
+// EnsureStackID returns the stack ID for branch, creating stack metadata if
+// the stack has none yet. EnsureStackID is an engine implementation detail kept
+// off the Engine interface, so tests reach it through the concrete engine.
+func (s *Scenario) EnsureStackID(branch string) string {
+	s.T.Helper()
+	impl, ok := s.Engine.(interface {
+		EnsureStackID(ctx context.Context, branch engine.Branch) (string, error)
+	})
+	require.True(s.T, ok, "engine does not implement EnsureStackID")
+	id, err := impl.EnsureStackID(context.Background(), s.Engine.GetBranch(branch))
+	require.NoError(s.T, err)
+	return id
 }
 
 // WithInitialCommit creates an initial commit on the main branch.
@@ -428,57 +459,6 @@ func (s *Scenario) RunCliAndGetOutput(args ...string) (string, error) {
 	return ansi.Strip(string(output)), err
 }
 
-// RunExpectError executes a stackit CLI command and expects it to fail.
-func (s *Scenario) RunExpectError(args ...string) *Scenario {
-	s.T.Helper()
-
-	if s.InProcess {
-		runner := GetGlobalInProcessRunner()
-		if runner == nil {
-			s.T.Fatal("GlobalInProcessRunner not set")
-		}
-		_, err := runner(s.Scene.Dir, args...)
-		require.Error(s.T, err, "expected CLI command to fail: stackit %v", args)
-
-		if s.Engine != nil {
-			return s.Rebuild()
-		}
-		return s
-	}
-
-	if s.BinaryPath == "" {
-		s.T.Fatal("BinaryPath not set")
-	}
-	// Add --no-interactive to all CLI commands in tests
-	fullArgs := append([]string{flagNoInteractive}, args...)
-	cmd := exec.Command(s.BinaryPath, fullArgs...)
-	cmd.Dir = s.Scene.Dir
-	cmd.Env = os.Environ()
-	_, err := cmd.CombinedOutput()
-	require.Error(s.T, err, "expected CLI command to fail: stackit %v", fullArgs)
-	if s.Engine != nil {
-		return s.Rebuild()
-	}
-	return s
-}
-
-// Log logs a message using the testing.T object.
-func (s *Scenario) Log(args ...any) {
-	s.T.Helper()
-	s.T.Log(args...)
-}
-
-// Logf logs a formatted message using the testing.T object.
-func (s *Scenario) Logf(format string, args ...any) {
-	s.T.Helper()
-	s.T.Logf(format, args...)
-}
-
-// Run is an alias for RunCli for backward compatibility in some tests.
-func (s *Scenario) Run(args ...string) *Scenario {
-	return s.RunCli(args...)
-}
-
 // ExpectBranch asserts that the current branch is as expected.
 func (s *Scenario) ExpectBranch(expected string) *Scenario {
 	s.T.Helper()
@@ -523,15 +503,4 @@ func (s *Scenario) WithLinearStack(names ...string) *Scenario {
 	}
 
 	return s.WithStack(structure)
-}
-
-// WithDiamondStack creates a diamond-shaped stack: main -> parent -> [child1, child2]
-// This is useful for testing operations with parallel branches.
-func (s *Scenario) WithDiamondStack() *Scenario {
-	s.T.Helper()
-	return s.WithStack(map[string]string{
-		branchParent: s.Engine.Trunk().GetName(),
-		"child1":     branchParent,
-		"child2":     branchParent,
-	})
 }

@@ -598,11 +598,6 @@ func (r *MetadataStore) WriteStackMeta(stackID string, meta *StackMeta) error {
 	return nil
 }
 
-// DeleteStackMeta deletes stack metadata for a given stack ID.
-func (r *MetadataStore) DeleteStackMeta(ctx context.Context, stackID string) error {
-	return r.git.DeleteRefs(ctx, StackMetaRefName(stackID))
-}
-
 // ListStackMetas returns a map of stack IDs to their ref SHAs.
 func (r *MetadataStore) ListStackMetas() (map[string]string, error) {
 	refs, err := r.git.ListRefs(StackMetaRefPrefix)

@@ -57,8 +57,7 @@ type BranchValidationEngine interface {
 
 // GitStateReader is the minimal git-state contract the git-aware validators
 // need. engine.Engine satisfies it, so callers pass the engine instead of the
-// raw git runner — keeping validation in the domain layer rather than reaching
-// through Engine.Git().
+// raw git runner — keeping validation in the domain layer.
 type GitStateReader interface {
 	IsRebaseInProgress(ctx context.Context) bool
 	HasUncommittedChanges(ctx context.Context) bool
@@ -89,20 +88,6 @@ func MustNotHaveUncommittedChanges(ctx context.Context, g GitStateReader) Valida
 	return ValidatorFunc(func() error {
 		if g.HasUncommittedChanges(ctx) {
 			return fmt.Errorf("cannot perform operation with uncommitted changes; please commit or stash them first")
-		}
-		return nil
-	})
-}
-
-// MustHaveStagedChanges validates that there are staged changes ready to commit.
-func MustHaveStagedChanges(ctx context.Context, g GitStateReader) Validator {
-	return ValidatorFunc(func() error {
-		hasStagedChanges, err := g.HasStagedChanges(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to check for staged changes: %w", err)
-		}
-		if !hasStagedChanges {
-			return fmt.Errorf("no staged changes to commit; use 'git add' to stage changes")
 		}
 		return nil
 	})
@@ -178,19 +163,6 @@ func CurrentBranchMustBeTracked(eng BranchValidationEngine) Validator {
 	})
 }
 
-// SourceBranchMustBeValid validates that a source branch can be used for operations
-// like move, pluck, or delete. It checks:
-//   - Branch is not trunk
-//   - Branch is tracked by stackit
-//   - Branch is not a worktree anchor
-//
-// The operation parameter is used in error messages (e.g., "move", "pluck", "delete").
-func SourceBranchMustBeValid(eng BranchValidationEngine, branchName, operation string) Validator {
-	return ValidatorFunc(func() error {
-		return ValidateSourceBranch(eng, branchName, operation)
-	})
-}
-
 // ValidateSourceBranch validates that a source branch can be used for operations
 // like move, pluck, or delete. Returns nil if valid, error otherwise.
 //
@@ -216,20 +188,6 @@ func ValidateSourceBranch(eng BranchValidationEngine, branchName, operation stri
 	}
 
 	return nil
-}
-
-// TargetBranchMustBeValid validates that a target branch can be used for reparenting
-// operations like move or pluck. It checks:
-//   - Target is provided (not empty)
-//   - Target exists (as trunk, tracked, or untracked git branch)
-//   - Target is not a worktree anchor
-//   - Target is not the same as source
-//
-// The operation parameter is used in error messages (e.g., "move", "pluck").
-func TargetBranchMustBeValid(eng BranchValidationEngine, sourceName, targetName, operation string) Validator {
-	return ValidatorFunc(func() error {
-		return ValidateTargetBranch(eng, sourceName, targetName, operation)
-	})
 }
 
 // ValidateTargetBranch validates that a target branch can be used for reparenting

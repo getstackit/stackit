@@ -160,7 +160,7 @@ func ColorMagenta(text string) string {
 }
 
 // ColorPRNumber colors a PR number (yellow)
-func ColorPRNumber(prNumber int) string {
+func ColorPRNumber(prNumber git.PRNumber) string {
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("3")).
 		Render(fmt.Sprintf("PR #%d", prNumber))
@@ -225,7 +225,7 @@ func IconLocked() string {
 }
 
 // ColorPRNumberByState colors PR number based on state
-func ColorPRNumberByState(prNumber int, state git.PRState, isDraft bool) string {
+func ColorPRNumberByState(prNumber git.PRNumber, state git.PRState, isDraft bool) string {
 	prefix := fmt.Sprintf("#%d", prNumber)
 	if isDraft {
 		return ColorDim(prefix)

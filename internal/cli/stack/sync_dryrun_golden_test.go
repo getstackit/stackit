@@ -5,81 +5,59 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
+	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/testhelpers/golden"
 )
 
-// TestDryRunPlanToResult locks the JSON contract: the rich preview plan must
-// project to a names-only DryRunResult, dropping the display detail (target
-// revision, deletion reason, restack parent) that only the text preview uses.
-func TestDryRunPlanToResult(t *testing.T) {
-	t.Parallel()
-	plan := dryRunPlan{
-		pullBranch:    "main",
-		pullRev:       "abc1234",
-		clean:         []dryRunCleanItem{{branch: "feat-old", reason: "merged into main"}},
-		restack:       []dryRunRestackItem{{branch: "feat-api", parent: "main"}},
-		restackStacks: []string{"feat-api"},
-		skipped:       []string{"feat-wip"},
-	}
-	result := plan.toResult()
-	require.Equal(t, "main", result.WouldPull)
-	require.Equal(t, []string{"feat-old"}, result.WouldClean)
-	require.Equal(t, []string{"feat-api"}, result.WouldRestack)
-	require.Equal(t, []string{"feat-api"}, result.WouldRestackStacks)
-	require.Equal(t, []string{"feat-wip"}, result.SkippedStacks)
-}
-
 // Golden coverage for the human-readable `sync --dry-run` preview. The dry-run
-// is a read-only query, so its renderer takes a plain dryRunPlan — no engine, no
-// repository. See sync.go:computeSyncDryRun for where the plan is built.
+// is a read-only query, so its renderer takes a plain sync.DryRunPlan — no engine, no
+// repository. See internal/actions/sync/plan.go:PlanDryRun for where the plan is built.
 
 type syncDryRunGoldenCase struct {
 	name string
-	plan dryRunPlan
+	plan sync.DryRunPlan
 }
 
 func syncDryRunGoldenCases() []syncDryRunGoldenCase {
 	return []syncDryRunGoldenCase{
 		{
 			name: "nothing_to_do",
-			plan: dryRunPlan{},
+			plan: sync.DryRunPlan{},
 		},
 		{
 			name: "pull_and_clean",
-			plan: dryRunPlan{
-				pullBranch: "main",
-				pullRev:    "abc1234",
-				clean: []dryRunCleanItem{
-					{branch: "feat-login", reason: "merged into main"},
-					{branch: "feat-old", reason: "closed on GitHub"},
+			plan: sync.DryRunPlan{
+				PullBranch:   "main",
+				PullRevision: "abc1234",
+				Clean: []sync.DryRunCleanItem{
+					{Branch: "feat-login", Reason: "merged into main"},
+					{Branch: "feat-old", Reason: "closed on GitHub"},
 				},
 			},
 		},
 		{
 			name: "restack_requested",
-			plan: dryRunPlan{
-				restacked: true,
-				restack: []dryRunRestackItem{
-					{branch: "feat-api", parent: "main"},
-					{branch: "feat-ui", parent: "feat-api"},
+			plan: sync.DryRunPlan{
+				RestackRequested: true,
+				Restack: []sync.DryRunRestackItem{
+					{Branch: "feat-api", Parent: "main"},
+					{Branch: "feat-ui", Parent: "feat-api"},
 				},
 			},
 		},
 		{
 			name: "full",
-			plan: dryRunPlan{
-				restacked:  true,
-				pullBranch: "main",
-				pullRev:    "abc1234",
-				clean:      []dryRunCleanItem{{branch: "feat-old", reason: "merged into main"}},
-				restack: []dryRunRestackItem{
-					{branch: "feat-api", parent: "main"},
-					{branch: "feat-ui", parent: "feat-api"},
+			plan: sync.DryRunPlan{
+				RestackRequested: true,
+				PullBranch:       "main",
+				PullRevision:     "abc1234",
+				Clean:            []sync.DryRunCleanItem{{Branch: "feat-old", Reason: "merged into main"}},
+				Restack: []sync.DryRunRestackItem{
+					{Branch: "feat-api", Parent: "main"},
+					{Branch: "feat-ui", Parent: "feat-api"},
 				},
-				skipped: []string{"feat-wip"},
+				SkippedStacks: []string{"feat-wip"},
 			},
 		},
 	}

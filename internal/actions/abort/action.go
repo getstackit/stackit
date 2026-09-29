@@ -1,17 +1,26 @@
 package abort
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 // Options contains options for the abort command
 type Options struct {
 	Force bool
+}
+
+// abortEngine lists exactly the engine methods abort calls.
+type abortEngine interface {
+	actions.RecoveryEngine
+	engine.BranchLookup
+	LoadSnapshot(snapshotID string) (*engine.Snapshot, error)
 }
 
 // Action cancels an in-progress operation
@@ -21,7 +30,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	eng := ctx.Engine
+	var eng abortEngine = ctx.Engine
 	out := ctx.Output
 
 	rebaseInProgress := eng.IsRebaseInProgress(ctx.Context)
@@ -32,7 +41,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	continuation, continuationErr := config.GetContinuationState(ctx.RepoRoot)
 	hasContinuation := continuationErr == nil
 
-	if hasContinuation && !ContinuationOwnsAbort(ctx, continuation) {
+	if hasContinuation && !continuationOwnsAbort(ctx, eng, continuation) {
 		if err := config.ClearContinuationState(ctx.RepoRoot); err != nil {
 			out.Debug("Failed to clear stale continuation state: %v", err)
 		}
@@ -84,7 +93,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Keep the rollback binding until restoration succeeds. In particular,
 	// an untracked-file collision can be resolved and the abort retried even
 	// though Git's rebase has already been unwound.
-	if err := restoreBoundSnapshot(ctx, continuation); err != nil {
+	if err := restoreBoundSnapshot(ctx, eng, continuation); err != nil {
 		return err
 	}
 
@@ -110,8 +119,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 // stackit (`git rebase --continue`); its snapshot predates whatever the user
 // has done since, and restoring it would roll that work back.
 func ContinuationOwnsAbort(ctx *app.Context, continuation *config.ContinuationState) bool {
-	eng := ctx.Engine
-	if eng.IsRebaseInProgress(ctx.Context) || eng.IsMergeInProgress(ctx.Context) || continuation.RollbackPending {
+	return continuationOwnsAbort(ctx, ctx.Engine, continuation)
+}
+
+func continuationOwnsAbort(ctx context.Context, eng abortEngine, continuation *config.ContinuationState) bool {
+	if eng.IsRebaseInProgress(ctx) || eng.IsMergeInProgress(ctx) || continuation.RollbackPending {
 		return true
 	}
 	if continuation.CurrentBranchOverride == "" || continuation.ExpectedBranchRevision == "" {
@@ -131,8 +143,7 @@ func ContinuationOwnsAbort(ctx *app.Context, continuation *config.ContinuationSt
 // reorder would roll the repository back past a `create` and delete the branch
 // that create had made. Restoring nothing is the only safe answer when the
 // halted command left no rollback point.
-func restoreBoundSnapshot(ctx *app.Context, continuation *config.ContinuationState) error {
-	eng := ctx.Engine
+func restoreBoundSnapshot(ctx *app.Context, eng abortEngine, continuation *config.ContinuationState) error {
 	out := ctx.Output
 
 	if continuation == nil || continuation.SnapshotID == "" {
@@ -155,7 +166,7 @@ func restoreBoundSnapshot(ctx *app.Context, continuation *config.ContinuationSta
 	if err := eng.RestoreSnapshot(ctx.Context, continuation.SnapshotID); err != nil {
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
-	restoreUncommittedWork(ctx, continuation.SnapshotID, snapshot.Command)
+	restoreUncommittedWork(ctx.Context, eng, ctx.Output, continuation.SnapshotID, snapshot.Command)
 	actions.WarnIfLinearStackRestored(ctx, "Abort")
 	out.Info("Successfully aborted and restored repository state.")
 
@@ -172,10 +183,8 @@ func restoreBoundSnapshot(ctx *app.Context, continuation *config.ContinuationSta
 // failing the whole abort over the working tree would strand the user mid-
 // conflict; the failure names the ref the capture is anchored under instead, so
 // the work is still reachable.
-func restoreUncommittedWork(ctx *app.Context, snapshotID, command string) {
-	out := ctx.Output
-
-	restored, err := ctx.Engine.RestoreWorktree(ctx.Context, snapshotID)
+func restoreUncommittedWork(ctx context.Context, eng actions.RecoveryEngine, out output.Output, snapshotID, command string) {
+	restored, err := eng.RestoreWorktree(ctx, snapshotID)
 	if err != nil {
 		out.Warn("Could not restore the uncommitted changes from before '%s': %v", command, err)
 		return

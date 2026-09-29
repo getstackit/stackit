@@ -1,17 +1,26 @@
 package doctor
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
 
+// repositoryEngine lists the engine methods the repository checks call.
+type repositoryEngine interface {
+	engine.BranchLookup
+	IsInsideRepo() bool
+	GetRemoteURL(ctx context.Context) (string, error)
+	GetRevision(branch engine.Branch) (string, error)
+}
+
 // checkRepository performs repository-related checks
-func checkRepository(ctx *app.Context, handler Handler, warnings int, errors int, trunk string) (int, int) {
+func checkRepository(ctx context.Context, eng repositoryEngine, repoRoot string, handler Handler, warnings int, errors int, trunk string) (int, int) {
 	// Check if we're in a git repository
-	if ctx.RepoRoot == "" {
-		if !ctx.Engine.IsInsideRepo() {
+	if repoRoot == "" {
+		if !eng.IsInsideRepo() {
 			errors++
 			handler.OnCheck("git_repo", CheckError, "not in a git repository")
 			return warnings, errors
@@ -20,7 +29,7 @@ func checkRepository(ctx *app.Context, handler Handler, warnings int, errors int
 	handler.OnCheck("git_repo", CheckPassed, "Current directory is a git repository")
 
 	// Check remote configuration
-	remoteURL, err := ctx.Engine.GetRemoteURL(ctx.Context)
+	remoteURL, err := eng.GetRemoteURL(ctx)
 	if err != nil {
 		warnings++
 		handler.OnCheck("remote", CheckWarning, "remote 'origin' is not configured")
@@ -41,7 +50,7 @@ func checkRepository(ctx *app.Context, handler Handler, warnings int, errors int
 		handler.OnCheck("trunk", CheckError, "trunk branch not configured")
 	} else {
 		// Check if trunk branch exists
-		_, err := ctx.Engine.GetRevision(ctx.Engine.GetBranch(trunk))
+		_, err := eng.GetRevision(eng.GetBranch(trunk))
 		if err != nil {
 			errors++
 			handler.OnCheck("trunk", CheckError, fmt.Sprintf("trunk branch '%s' does not exist", trunk))
@@ -60,7 +69,7 @@ func checkRepository(ctx *app.Context, handler Handler, warnings int, errors int
 
 	// Local, read-only scan for stale git lock files (a hung operation can leave
 	// one behind and block every later git command — see issue #1330).
-	warnings = checkGitLocks(ctx.RepoRoot, handler, warnings)
+	warnings = checkGitLocks(repoRoot, handler, warnings)
 
 	return warnings, errors
 }

@@ -1,25 +1,64 @@
 package httpcontract
 
 import (
-	"context"
 	"slices"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-// MapBranch converts an engine Branch and its StackNode into an API BranchResponse.
-// remoteStatus, stat, commits, commitInfo, and needsRestack should each come
-// from a single batch call covering all branches being mapped in the current
-// request (ReadBranchRemoteStatuses, BatchBranchStats, BatchCommits,
+// MapperReader is the engine surface the mappers read beyond their batched
+// inputs.
+type MapperReader interface {
+	CurrentBranchName() string
+	GetScope(branch engine.Branch) engine.Scope
+	GetStackDescription(branch engine.Branch) *git.StackDescription
+}
+
+// BranchInput is everything MapBranch needs about one branch. RemoteStatus,
+// Stat, Commits, CommitInfo, and NeedsRestack should each come from a single
+// batch call covering all branches being mapped in the current request
+// (ReadBranchRemoteStatuses, BatchBranchStats, BatchCommits,
 // BatchCommitInfo, ReadBranchStatuses), not per-branch calls — per-branch
 // reads spawn a git process per field per branch.
-func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.StackNode, checks *github.CheckStatus, remoteStatus engine.BranchRemoteStatus, stat engine.BranchStat, commits git.Commits, commitInfo git.CommitInfo, needsRestack bool) BranchResponse {
+type BranchInput struct {
+	Branch       engine.Branch
+	Node         *engine.StackNode
+	Checks       *github.CheckStatus
+	RemoteStatus engine.BranchRemoteStatus
+	Stat         engine.BranchStat
+	Commits      git.Commits
+	CommitInfo   git.CommitInfo
+	NeedsRestack bool
+}
+
+// NewBranchInput assembles a BranchInput from the batched data resolved by
+// stackview.FetchBranchData.
+func NewBranchInput(node *engine.StackNode, checks *github.CheckStatus, data stackview.BranchData) BranchInput {
+	branch := node.Branch
+	name := branch.GetName()
+	return BranchInput{
+		Branch:       branch,
+		Node:         node,
+		Checks:       checks,
+		RemoteStatus: data.RemoteStatuses.ForBranch(branch),
+		Stat:         data.Stats[name],
+		Commits:      data.Commits[name],
+		CommitInfo:   data.CommitInfo[name],
+		NeedsRestack: !data.Statuses.IsUpToDate(branch),
+	}
+}
+
+// MapBranch converts an engine Branch and its StackNode into an API BranchResponse.
+func MapBranch(eng MapperReader, in BranchInput) BranchResponse {
+	branch, node, checks := in.Branch, in.Node, in.Checks
+	remoteStatus, stat, commits, commitInfo, needsRestack := in.RemoteStatus, in.Stat, in.Commits, in.CommitInfo, in.NeedsRestack
 	resp := BranchResponse{
 		Name:         branch.GetName(),
 		Depth:        node.Depth,
@@ -78,11 +117,24 @@ func MapBranch(eng engine.BranchReader, branch engine.Branch, node *engine.Stack
 	return resp
 }
 
-// MapStackSummary creates a StackSummary from stack discovery info. statuses
-// should come from a single ReadBranchStatuses batch call covering every
-// stack being summarized in the current request, not one call per stack —
-// see BranchBatchData.
-func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, owner string, statuses engine.BranchStatuses) StackSummary {
+// StackInput identifies one discovered stack to map.
+type StackInput struct {
+	// RootBranch is the stack's root (a direct child of trunk).
+	RootBranch string
+	// AllBranches is every branch in the stack, root to tip.
+	AllBranches []string
+	// PRCount is the number of PRs in the stack.
+	PRCount int
+	// Scope is the stack's scope, if any.
+	Scope engine.Scope
+}
+
+// MapStackSummary creates a StackSummary from stack discovery info. owner is
+// the stack root's PR author, or "" when unknown. statuses should come from a
+// single ReadBranchStatuses batch call covering every stack being summarized
+// in the current request, not one call per stack — see stackview.BranchData.
+func MapStackSummary(eng MapperReader, graph *engine.StackGraph, stack StackInput, owner string, statuses engine.BranchStatuses) StackSummary {
+	rootBranch, allBranches, prCount := stack.RootBranch, stack.AllBranches, stack.PRCount
 	currentBranch := eng.CurrentBranchName()
 	isCurrent := slices.Contains(allBranches, currentBranch)
 
@@ -100,7 +152,7 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 		}
 	}
 
-	status := computeStackStatus(graph, displayBranches, statuses)
+	status := string(stackview.LocalStatus(graph, displayBranches, statuses))
 
 	// Title and description come exclusively from explicit stack descriptions
 	// set via `stackit describe`. No fallback to PR titles or branch names.
@@ -116,7 +168,7 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 		RootBranch:  rootBranch,
 		Title:       title,
 		Status:      status,
-		Scope:       scope,
+		Scope:       stack.Scope.String(),
 		BranchCount: len(displayBranches),
 		PRCount:     prCount,
 		IsCurrent:   isCurrent,
@@ -126,48 +178,11 @@ func MapStackSummary(eng engine.BranchReader, graph *engine.StackGraph, rootBran
 	}
 }
 
-// BranchBatchData holds per-branch data fetched via batch calls, keyed by
-// branch name. Compute it once via FetchBranchBatchData over the union of
-// branches across every stack being mapped in a request, not once per
-// stack — RemoteStatuses in particular backs a network round trip
-// (`git ls-remote`), whose cost does not depend on how many branches it
-// covers, so paying it once for the whole repo instead of once per stack
-// is a straight win.
-type BranchBatchData struct {
-	RemoteStatuses engine.BranchRemoteStatuses
-	Stats          map[string]engine.BranchStat
-	Commits        map[string]git.Commits
-	CommitInfo     map[string]git.CommitInfo
-	Statuses       engine.BranchStatuses
-}
-
-// FetchBranchBatchData runs the batch reads backing BranchBatchData.
-func FetchBranchBatchData(ctx context.Context, eng engine.BranchReader, branches engine.Branches) BranchBatchData {
-	return BranchBatchData{
-		RemoteStatuses: eng.ReadBranchRemoteStatuses(ctx, branches),
-		Stats:          eng.BatchBranchStats(branches),
-		Commits:        eng.BatchCommits(branches),
-		CommitInfo:     eng.BatchCommitInfo(branches),
-		Statuses:       eng.ReadBranchStatuses(branches),
-	}
-}
-
-// BranchesFromNames resolves branch names to their graph Branch objects,
-// skipping any name not present in the graph.
-func BranchesFromNames(graph *engine.StackGraph, names []string) engine.Branches {
-	branches := make(engine.Branches, 0, len(names))
-	for _, name := range names {
-		if node := graph.GetNode(name); node != nil {
-			branches = append(branches, node.Branch)
-		}
-	}
-	return branches
-}
-
 // MapStackDetail creates a full StackDetail with all branch info. data
-// should come from FetchBranchBatchData covering every stack being mapped
-// in the current request — see BranchBatchData.
-func MapStackDetail(eng engine.BranchReader, graph *engine.StackGraph, rootBranch string, allBranches []string, prCount int, scope string, checksMap github.ChecksByBranch, data BranchBatchData) StackDetail {
+// should come from stackview.FetchBranchData covering every stack being
+// mapped in the current request — see stackview.BranchData.
+func MapStackDetail(eng MapperReader, graph *engine.StackGraph, stack StackInput, checksMap github.ChecksByBranch, data stackview.BranchData) StackDetail {
+	rootBranch, allBranches := stack.RootBranch, stack.AllBranches
 	// Derive owner from root branch's PR author
 	var owner string
 	if checksMap != nil {
@@ -176,7 +191,7 @@ func MapStackDetail(eng engine.BranchReader, graph *engine.StackGraph, rootBranc
 		}
 	}
 
-	summary := MapStackSummary(eng, graph, rootBranch, allBranches, prCount, scope, owner, data.Statuses)
+	summary := MapStackSummary(eng, graph, stack, owner, data.Statuses)
 
 	// Check if root is a worktree anchor to filter it from branches
 	isAnchor := summary.HasWorktree
@@ -196,9 +211,7 @@ func MapStackDetail(eng engine.BranchReader, graph *engine.StackGraph, rootBranc
 
 	branches := make([]BranchResponse, 0, len(nodes))
 	for _, node := range nodes {
-		name := node.Branch.GetName()
-		checks := checksMap.Get(name)
-		br := MapBranch(eng, node.Branch, node, checks, data.RemoteStatuses.ForBranch(node.Branch), data.Stats[name], data.Commits[name], data.CommitInfo[name], !data.Statuses.IsUpToDate(node.Branch))
+		br := MapBranch(eng, NewBranchInput(node, checksMap.Get(node.Branch.GetName()), data))
 		if isAnchor {
 			// Anchor's direct children become display roots
 			if br.Parent == anchorName {
@@ -225,7 +238,7 @@ func mapPR(prInfo *engine.PrInfo) *PRResponse {
 		Base:    prInfo.Base(),
 	}
 	if prInfo.Number() != nil {
-		pr.Number = *prInfo.Number()
+		pr.Number = int(*prInfo.Number())
 	}
 	return pr
 }
@@ -272,51 +285,11 @@ func mapCommits(records git.Commits) []CommitResponse {
 	return commits
 }
 
-// computeStackStatus determines the overall status of a stack. statuses
-// should come from a single ReadBranchStatuses batch call covering
-// branchNames, not per-branch NeedsRestack() calls.
-func computeStackStatus(graph *engine.StackGraph, branchNames []string, statuses engine.BranchStatuses) string {
-	allHavePR := true
-	anyNeedsRestack := false
-	anyLocked := false
-
-	for _, name := range branchNames {
-		node := graph.GetNode(name)
-		if node == nil {
-			continue
-		}
-		branch := node.Branch
-
-		if !statuses.IsUpToDate(branch) {
-			anyNeedsRestack = true
-		}
-		if branch.IsLocked() {
-			anyLocked = true
-		}
-
-		prInfo, err := branch.GetPrInfo()
-		if err != nil || prInfo == nil || prInfo.Number() == nil {
-			allHavePR = false
-		}
-	}
-
-	switch {
-	case anyLocked:
-		return "blocked"
-	case anyNeedsRestack:
-		return "pending"
-	case !allHavePR:
-		return "incomplete"
-	default:
-		return "shippable"
-	}
-}
-
 // MapTrunkCommits converts git RecentCommit values to API TrunkCommitResponse values.
 // Commits whose PR number is already represented by a stack-merge's StackPRs are
 // filtered out so that consolidated stacks don't show duplicate entries.
 // prTitles is an optional map of PR number to title; pass nil if unavailable.
-func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []TrunkCommitResponse {
+func MapTrunkCommits(commits []git.RecentCommit, prTitles map[git.PRNumber]string) []TrunkCommitResponse {
 	// Drop constituent-PR commits already represented by a stack-merge. The
 	// collapse logic is shared with the `stackit log` command via internal/git.
 	collapsed := git.RecentCommits(commits).Collapse()
@@ -330,12 +303,12 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []Trun
 			Message:       c.DisplayMessage(prTitles),
 			Author:        c.Author,
 			Date:          c.Date.Format(time.RFC3339),
-			PRNumber:      c.PRNumber,
+			PRNumber:      int(c.PRNumber),
 			Kind:          string(c.Kind),
 			StackSize:     c.StackSize,
-			StackPRs:      append([]int(nil), c.StackPRNumbers...),
+			StackPRs:      prNumbersToInts(c.StackPRNumbers),
 			StackScope:    c.StackScope,
-			StackPRTitles: c.ConstituentPRTitles(prTitles),
+			StackPRTitles: prTitlesToInts(c.ConstituentPRTitles(prTitles)),
 		}
 
 		if resp.Kind == "" {
@@ -348,4 +321,30 @@ func MapTrunkCommits(commits []git.RecentCommit, prTitles map[int]string) []Trun
 		result = append(result, resp)
 	}
 	return result
+}
+
+// prNumbersToInts converts typed PR numbers to the plain ints the API contract
+// carries, returning nil for an empty list (as append onto a nil slice did).
+func prNumbersToInts(numbers []git.PRNumber) []int {
+	if len(numbers) == 0 {
+		return nil
+	}
+	ints := make([]int, len(numbers))
+	for i, n := range numbers {
+		ints[i] = int(n)
+	}
+	return ints
+}
+
+// prTitlesToInts re-keys a PR-number → title map by plain int for the API
+// contract, preserving nil.
+func prTitlesToInts(titles map[git.PRNumber]string) map[int]string {
+	if titles == nil {
+		return nil
+	}
+	out := make(map[int]string, len(titles))
+	for n, title := range titles {
+		out[int(n)] = title
+	}
+	return out
 }

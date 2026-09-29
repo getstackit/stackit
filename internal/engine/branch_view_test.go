@@ -125,7 +125,7 @@ func TestBatchCommitInfo(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, wantDate.Equal(got.Date), "CommitDate for %s", name)
 
-		wantAuthor, err := s.Engine.GetCommitAuthor(b)
+		wantAuthor, err := engine.Impl(s.Engine).GetCommitAuthor(b)
 		require.NoError(t, err)
 		require.Equal(t, wantAuthor, got.Author, "CommitAuthor for %s", name)
 	}
@@ -143,9 +143,9 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 
 	// Clear b's stored divergence point but keep its parent (a), so the commit
 	// base must fall back to the parent tip rather than an empty base.
-	meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "b").One()
+	meta, err := s.Metadata.ReadMetadata(context.Background(), "b").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Engine.Metadata().WriteMetadata("b", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Metadata.WriteMetadata("b", meta.WithParentBranchRevision(nil)))
 	require.NoError(t, s.Engine.Rebuild("main"))
 
 	b := s.Engine.GetBranch("b")
@@ -171,10 +171,10 @@ func TestReadBranchCommitsRetainsErrorsAndEmptyBranches(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithLinearStack3()
 	s.CreateBranch("empty").TrackBranch("empty", "c")
-	meta, err := s.Engine.Metadata().ReadMetadata(t.Context(), "b").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "b").One()
 	require.NoError(t, err)
 	missing := "missing-base"
-	require.NoError(t, s.Engine.Metadata().WriteMetadata("b", meta.WithParentBranchRevision(&missing)))
+	require.NoError(t, s.Metadata.WriteMetadata("b", meta.WithParentBranchRevision(&missing)))
 	branches := engine.BranchesFromNames(s.Engine, []string{"a", "b", "empty", "missing-branch"})
 	data := s.Engine.ReadBranchCommits(t.Context(), branches)
 	valid, err := data.Get("a")
@@ -210,9 +210,9 @@ func TestBranchSnapshotStoredBaseSurvivesMissingParent(t *testing.T) {
 		require.Equal(t, after.Commits[i].Parents, node.Parents)
 	}
 
-	meta, err := s.Engine.Metadata().ReadMetadata(t.Context(), "c").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "c").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Engine.Metadata().WriteMetadata("c", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Metadata.WriteMetadata("c", meta.WithParentBranchRevision(nil)))
 	_, err = s.Engine.ReadBranchCommits(t.Context(), branches).One()
 	require.Error(t, err, "without a stored base the missing parent must not become unbounded history")
 	_, err = s.Engine.ReadBranchCommitNodes(t.Context(), branches).One()

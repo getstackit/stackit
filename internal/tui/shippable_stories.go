@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui/core"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
@@ -41,7 +42,7 @@ const (
 // storyBlockingPR describes a blocking PR.
 type storyBlockingPR struct {
 	branch   string
-	prNumber int
+	prNumber git.PRNumber
 	reason   storyBlockingReason
 }
 

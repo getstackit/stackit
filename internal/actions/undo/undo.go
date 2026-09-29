@@ -2,6 +2,7 @@
 package undo
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -17,9 +18,16 @@ type Options struct {
 	Force      bool   // Optional: skip confirmation prompt
 }
 
+// undoEngine lists exactly the engine methods undo calls.
+type undoEngine interface {
+	actions.RecoveryEngine
+	GetSnapshots() ([]engine.SnapshotInfo, error)
+	WorktreeHasTrackedChanges(ctx context.Context, worktreePath engine.WorktreePath) (bool, error)
+}
+
 // Action performs the undo operation
 func Action(ctx *app.Context, opts Options, h Handler) error {
-	eng := ctx.Engine
+	var eng undoEngine = ctx.Engine
 
 	// Use null handler if none provided
 	if h == nil {
@@ -154,7 +162,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	//
 	// RestoreSnapshot separately checks untracked files against the target
 	// tree before changing refs. Unrelated untracked files can stay in place.
-	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx.Context, ctx.RepoRoot)
+	dirty, dirtyErr := eng.WorktreeHasTrackedChanges(ctx.Context, engine.WorktreePath(ctx.RepoRoot))
 	switch {
 	case dirtyErr != nil:
 		return fmt.Errorf("failed to check for uncommitted changes: %w", dirtyErr)

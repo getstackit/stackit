@@ -222,6 +222,11 @@ func (c *GitConfig) StackShape() string {
 	return StackShapeTree
 }
 
+// LinearStacks reports whether the configured stack shape is linear.
+func (c *GitConfig) LinearStacks() bool {
+	return c.StackShape() == StackShapeLinear
+}
+
 // SetStackShape sets the allowed stack topology.
 func (c *GitConfig) SetStackShape(shape string) error {
 	if !slices.Contains(ValidStackShapes, shape) {

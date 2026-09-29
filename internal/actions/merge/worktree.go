@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // ExecuteInWorktree executes the merge plan in a temporary worktree
@@ -15,7 +15,7 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	// Create temporary worktree via engine
 	// We use detached HEAD at the current revision to avoid "already used by worktree" errors
 	// and to ensure we don't accidentally move any main workspace branch refs.
-	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, "HEAD", "stackit-merge-*")
+	worktreePath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, "HEAD", "stackit-merge-*", engine.WorktreePruneAuto)
 	if err != nil {
 		return err
 	}
@@ -40,16 +40,13 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	// We need to know the trunk name for the new engine.
 	// Since we are currently in the main engine, we can get it from there.
 	trunk := eng.Trunk()
-	worktreeConfig, err := config.LoadConfig(worktreePath)
-	if err != nil {
-		return fmt.Errorf("failed to load worktree config: %w", err)
-	}
-
+	worktreeGit := git.NewRunnerWithPath(worktreePath.String(), nil)
 	worktreeEng, err := engine.NewEngine(engine.Options{
-		RepoRoot:          worktreePath,
+		RepoRoot:          worktreePath.String(),
+		Git:               worktreeGit,
 		Trunk:             trunk.GetName(),
 		MaxUndoStackDepth: maxUndoDepth,
-		LinearStacks:      worktreeConfig.StackShape() == config.StackShapeLinear,
+		LinearStacks:      opts.LinearStacks,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize engine in worktree: %w", err)
@@ -58,7 +55,8 @@ func ExecuteInWorktree(ctx *app.Context, eng mergeExecuteEngine, opts ExecuteOpt
 	// Create a sub-context for the worktree.
 	worktreeCtx := *ctx //nolint:govet // Copying Context by value is intentional when overriding engine/repo output fields.
 	worktreeCtx.Engine = worktreeEng
-	worktreeCtx.RepoRoot = worktreePath
+	worktreeCtx.RepoRoot = worktreePath.String()
+	worktreeCtx.GHRunner = worktreeGit
 
 	// 4. Pre-flight operations in the worktree
 	// Pull trunk in the worktree to ensure we have latest changes

@@ -206,7 +206,7 @@ func shortSHA(commitSHA string) string {
 
 // branchesFor returns the distinct, resolved owning branches from a
 // commit-SHA-to-branch-name map, suitable for a single BatchCommits call.
-func branchesFor(eng engine.Engine, commitBranches map[string]string) engine.Branches {
+func branchesFor(eng engine.Engine, commitBranches engine.CommitBranchMap) engine.Branches {
 	seen := make(map[string]bool, len(commitBranches))
 	branches := make(engine.Branches, 0, len(commitBranches))
 	for _, branchName := range commitBranches {

@@ -69,6 +69,9 @@ type EntryConfig struct {
 	RepoRef
 	Engine engine.Engine
 	GitHub github.Client
+	// GHRunner is the git surface the GitHub integration uses (config reads
+	// and gh CLI execution) for actions run against this repo.
+	GHRunner github.GitCommandRunner
 }
 
 // RepoEntry is the per-repository state required to serve API requests for
@@ -91,6 +94,9 @@ type RepoEntry struct {
 	RepoRef
 	Engine engine.Engine
 	GitHub github.Client
+	// GHRunner is the git surface the GitHub integration uses (config reads
+	// and gh CLI execution) for actions run against this repo.
+	GHRunner github.GitCommandRunner
 
 	Broadcaster *Broadcaster
 	Watcher     *watcher.RefWatcher
@@ -119,6 +125,7 @@ func NewEntry(cfg EntryConfig) *RepoEntry {
 		Managed:     cfg.Managed,
 		RepoRef:     cfg.RepoRef,
 		Engine:      cfg.Engine,
+		GHRunner:    cfg.GHRunner,
 		GitHub:      cfg.GitHub,
 		Broadcaster: NewBroadcaster(),
 	}

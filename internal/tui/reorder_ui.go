@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -210,6 +211,9 @@ func NewReorderModel(branches []string, trunk string) tea.Model {
 	return newReorderModel(branches, trunk)
 }
 
+// ErrReorderCanceled is returned by RunReorderTUI when the user cancels.
+var ErrReorderCanceled = errors.New("reorder canceled")
+
 // RunReorderTUI runs the reorder TUI and returns the new order
 // trunk is displayed at the bottom but is not selectable or reorderable
 func RunReorderTUI(branches []string, trunk string) ([]string, error) {
@@ -226,7 +230,7 @@ func RunReorderTUI(branches []string, trunk string) ([]string, error) {
 
 	res := finalModel.(reorderModel)
 	if res.canceled {
-		return nil, fmt.Errorf("reorder canceled")
+		return nil, ErrReorderCanceled
 	}
 
 	return res.branches, nil

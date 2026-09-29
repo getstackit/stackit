@@ -363,8 +363,8 @@ func (e *engineImpl) TrunkRemoteState(ctx context.Context) TrunkRemoteState {
 	return state
 }
 
-// GetMergedBranches returns the set of branches merged into the target branch
-func (e *engineImpl) GetMergedBranches(ctx context.Context, target string) (BranchNameSet, error) {
+// getMergedBranches returns the set of branches merged into the target branch
+func (e *engineImpl) getMergedBranches(ctx context.Context, target string) (BranchNameSet, error) {
 	merged, err := e.git.GetMergedBranches(ctx, target)
 	return BranchNameSet(merged), err
 }
@@ -395,7 +395,7 @@ func (e *engineImpl) IsBranchEmpty(ctx context.Context, branchName string) (bool
 		return false, err
 	}
 
-	return e.IsDiffEmpty(ctx, parentRev, branchName)
+	return e.isDiffEmpty(ctx, parentRev, branchName)
 }
 
 // BatchIsBranchEmpty reports, for each branch, whether it has no changes against
@@ -411,7 +411,7 @@ func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
 
 	e.mu.RLock()
 	trunk := e.trunk
-	parents := make(map[string]string, len(branchNames))
+	parents := make(ParentMap, len(branchNames))
 	for _, name := range branchNames {
 		parent := trunk
 		if state := e.readState(name); state != nil {
@@ -434,14 +434,14 @@ func (e *engineImpl) BatchIsBranchEmpty(branchNames []string) BranchNameSet {
 	}
 	for _, name := range branchNames {
 		addRef(name)
-		addRef(parents[name])
+		addRef(parents.Parent(name))
 	}
 
 	trees, _ := e.git.ReadRevisions(context.Background(), treeRefs...).ValuesAndErrors()
 
 	for _, name := range branchNames {
 		branchTree, ok1 := trees[name+"^{tree}"]
-		parentTree, ok2 := trees[parents[name]+"^{tree}"]
+		parentTree, ok2 := trees[parents.Parent(name)+"^{tree}"]
 		if !ok1 || !ok2 {
 			continue
 		}
@@ -494,7 +494,7 @@ func (e *engineImpl) loadDeletionStatusInputs(ctx context.Context, branchNames [
 	// Batch fetch all data
 	metadataMap, _ := e.batchReadMetadata(branchNames)
 	revisions, _ := e.git.ReadRevisions(ctx, refsToFetch...).ValuesAndErrors()
-	mergedBranches, err := e.GetMergedBranches(ctx, trunkName)
+	mergedBranches, err := e.getMergedBranches(ctx, trunkName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check merged branches: %w", err)
 	}
@@ -611,7 +611,7 @@ func (e *engineImpl) evaluateDeletionStatus(ctx context.Context, branchName stri
 	}
 
 	if parentRev, ok := e.planRev(revisions, parentName); ok && parentRev != "" {
-		if empty, err := e.IsDiffEmpty(ctx, parentRev, branchName); err == nil && empty {
+		if empty, err := e.isDiffEmpty(ctx, parentRev, branchName); err == nil && empty {
 			return DeletionStatus{SafeToDelete: true, Reason: "empty", Kind: DeletionReasonEmptyWithPR}
 		}
 	}

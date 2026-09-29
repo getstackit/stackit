@@ -125,7 +125,7 @@ func executeUpdatePRBase(ctx *app.Context, eng mergeExecuteEngine, step PlanStep
 	}
 
 	ctx.Output.Debug("Rebasing %s onto trunk %s (old base %s)", step.BranchName, trunkName, oldParentRev)
-	gitResult, err := eng.Rebase(ctx.Context, step.BranchName, trunkName, oldParentRev)
+	gitResult, err := eng.Rebase(ctx.Context, git.RebaseSpec{Branch: step.BranchName, Onto: trunkName, OldBase: oldParentRev})
 
 	// Restore original branch state
 	if currentBranch != "" {

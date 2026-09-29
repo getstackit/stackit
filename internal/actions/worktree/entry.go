@@ -201,7 +201,7 @@ func (e Entry) detachRefusal(policy RemovalPolicy) string {
 	return ""
 }
 
-func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engine.StackGraph, currentAnchor string, branchesByPath map[string]string) Entry {
+func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engine.StackGraph, currentAnchor string, branchesByPath map[WorktreePath]string) Entry {
 	entry := Entry{
 		Name:         wt.Name,
 		AnchorBranch: wt.AnchorBranch,
@@ -226,12 +226,12 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 	}
 
 	if entry.Lifecycle.Exists() {
-		canonicalPath, err := git.CanonicalWorktreePath(wt.Path.String())
+		canonicalPath, err := git.CanonicalWorktreePath(wt.Path)
 		if err == nil {
 			entry.CurrentBranch = branchesByPath[canonicalPath]
 		}
 
-		isDirty, err := ctx.Engine.WorktreeHasUncommittedChanges(ctx.Context, wt.Path.String())
+		isDirty, err := ctx.Engine.WorktreeHasUncommittedChanges(ctx.Context, wt.Path)
 		if err == nil {
 			if isDirty {
 				entry.Lifecycle.Changes = WorktreeChangesDirty
@@ -345,7 +345,7 @@ func listEntries(ctx *app.Context, opts ListOptions) (*ListResult, error) {
 
 	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
 	gitWorktrees, gitErr := ctx.Engine.ListWorktrees(ctx.Context)
-	branchesByPath := make(map[string]string, len(gitWorktrees))
+	branchesByPath := make(map[WorktreePath]string, len(gitWorktrees))
 	if gitErr == nil {
 		for _, worktree := range gitWorktrees {
 			canonicalPath, err := git.CanonicalWorktreePath(worktree.Path)
@@ -422,7 +422,7 @@ func ownershipWarnings(ctx *app.Context, gitWorktrees git.WorktreeList) []string
 			continue
 		}
 
-		expectedPath, expectedPathErr := git.CanonicalWorktreePath(owner.Path.String())
+		expectedPath, expectedPathErr := git.CanonicalWorktreePath(owner.Path)
 		if expectedPathErr != nil {
 			warnings = append(warnings, fmt.Sprintf("could not canonicalize registered path %s for branch %s: %v", owner.Path, gitWorktree.Branch, expectedPathErr))
 			continue

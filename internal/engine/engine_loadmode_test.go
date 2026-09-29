@@ -64,7 +64,7 @@ func TestNewEngineDoesNotFetchRemoteMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	const metadataRefspec = "+refs/stackit/metadata/*:refs/stackit/remote-metadata/*"
-	refspecs, err := eng.Git().GetConfigAll("remote.origin.fetch")
+	refspecs, err := s.Git.GetConfigAll("remote.origin.fetch")
 	require.NoError(t, err)
 	require.NotContains(t, refspecs, metadataRefspec)
 
@@ -75,7 +75,7 @@ func TestNewEngineDoesNotFetchRemoteMetadata(t *testing.T) {
 	defer cancel()
 	require.NoError(t, eng.EnsureRemoteMetadata(deadlineCtx))
 
-	refspecs, err = eng.Git().GetConfigAll("remote.origin.fetch")
+	refspecs, err = s.Git.GetConfigAll("remote.origin.fetch")
 	require.NoError(t, err)
 	require.Contains(t, refspecs, metadataRefspec)
 

@@ -1,6 +1,9 @@
 package delete
 
-import "github.com/getstackit/stackit/internal/actions/handler"
+import (
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/git"
+)
 
 // Result contains the result of the delete action.
 type Result struct {
@@ -23,7 +26,7 @@ type Handler interface {
 	Start(branchCount int)
 
 	// OnBranch is called for each branch being deleted
-	OnBranch(name string, status Status, prNumber *int)
+	OnBranch(name string, status Status, prNumber *git.PRNumber)
 
 	// OnRestack is called when restacking children
 	OnRestack(childCount int)
@@ -51,7 +54,7 @@ type NullHandler struct {
 func (h *NullHandler) Start(int) {}
 
 // OnBranch implements Handler.
-func (h *NullHandler) OnBranch(string, Status, *int) {}
+func (h *NullHandler) OnBranch(string, Status, *git.PRNumber) {}
 
 // OnRestack implements Handler.
 func (h *NullHandler) OnRestack(int) {}

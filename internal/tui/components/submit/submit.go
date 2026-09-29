@@ -5,6 +5,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
@@ -12,7 +13,7 @@ import (
 type Item struct {
 	BranchName string
 	Action     engine.SubmitAction
-	PRNumber   *int
+	PRNumber   *git.PRNumber
 	Status     Status
 	IsSkipped  bool
 	SkipReason string

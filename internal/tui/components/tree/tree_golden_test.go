@@ -157,8 +157,8 @@ func buildGoldenTests() []goldenTest {
 			name: "with_pr_numbers",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: new(123)},
-				"feature-2": {PRNumber: new(456)},
+				"feature-1": {PRNumber: new(git.PRNumber(123))},
+				"feature-2": {PRNumber: new(git.PRNumber(456))},
 			},
 			opts: RenderOptions{Mode: RenderModeCompact},
 		},
@@ -176,7 +176,7 @@ func buildGoldenTests() []goldenTest {
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
 				"feature-1": {
-					PRNumber:     new(123),
+					PRNumber:     new(git.PRNumber(123)),
 					CheckStatus:  CheckStatusPassing,
 					ReviewStatus: "Approved",
 					CommitCount:  3,
@@ -184,7 +184,7 @@ func buildGoldenTests() []goldenTest {
 					LinesDeleted: 10,
 				},
 				"feature-2": {
-					PRNumber:     new(456),
+					PRNumber:     new(git.PRNumber(456)),
 					CheckStatus:  CheckStatusPending,
 					IsDraft:      true,
 					CommitCount:  1,
@@ -221,7 +221,7 @@ func buildGoldenTests() []goldenTest {
 			name: "merged_pr",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: new(123), PRState: git.PRStateMerged},
+				"feature-1": {PRNumber: new(git.PRNumber(123)), PRState: git.PRStateMerged},
 			},
 			opts: RenderOptions{Mode: RenderModeFull},
 		},
@@ -229,7 +229,7 @@ func buildGoldenTests() []goldenTest {
 			name: "closed_pr",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: new(123), PRState: git.PRStateClosed},
+				"feature-1": {PRNumber: new(git.PRNumber(123)), PRState: git.PRStateClosed},
 			},
 			opts: RenderOptions{Mode: RenderModeFull},
 		},
@@ -317,8 +317,8 @@ func buildGoldenTests() []goldenTest {
 			name: "hide_summary",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: new(123), CommitCount: 5},
-				"feature-2": {PRNumber: new(456), CommitCount: 3},
+				"feature-1": {PRNumber: new(git.PRNumber(123)), CommitCount: 5},
+				"feature-2": {PRNumber: new(git.PRNumber(456)), CommitCount: 3},
 			},
 			opts: RenderOptions{Mode: RenderModeFull, HideSummary: true},
 		},
@@ -343,8 +343,8 @@ func buildGoldenTests() []goldenTest {
 			name: "mode_compact_with_annotations",
 			mock: NewMockTreeData(),
 			annotations: map[string]BranchAnnotation{
-				"feature-1": {PRNumber: new(123), CheckStatus: CheckStatusPassing},
-				"feature-2": {PRNumber: new(456), CheckStatus: CheckStatusFailing},
+				"feature-1": {PRNumber: new(git.PRNumber(123)), CheckStatus: CheckStatusPassing},
+				"feature-2": {PRNumber: new(git.PRNumber(456)), CheckStatus: CheckStatusFailing},
 			},
 			opts: RenderOptions{Mode: RenderModeCompact},
 		},
@@ -540,7 +540,7 @@ func TestStackTreeRenderer_GoldenWithColors(t *testing.T) {
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 
-	prNum := 123
+	prNum := git.PRNumber(123)
 	renderer.SetAnnotation("feature-1", BranchAnnotation{
 		PRNumber:    &prNum,
 		CheckStatus: CheckStatusPassing,

@@ -120,7 +120,7 @@ func TestGetAvailableScopes(t *testing.T) {
 		branchB := s.Engine.GetBranch("b")
 		branchC := s.Engine.GetBranch("c")
 		require.NoError(t, s.Engine.SetScope(ctx, branchA, engine.NewScope("PROJ-100")))
-		require.NoError(t, s.Engine.SetScope(ctx, branchB, engine.None()))
+		require.NoError(t, s.Engine.SetScope(ctx, branchB, engine.NewScope("none")))
 		require.NoError(t, s.Engine.SetScope(ctx, branchC, engine.NewScope("PROJ-200")))
 
 		scopes := GetAvailableScopes(s.Engine)

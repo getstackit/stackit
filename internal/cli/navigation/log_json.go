@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/actions/trunklog"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/utils"
 )
@@ -15,16 +16,16 @@ import (
 // field renames/removals are breaking. Field names mirror the web DTO for
 // recognizability.
 type logCommitJSON struct {
-	SHA           string         `json:"sha"`
-	Message       string         `json:"message"`
-	Author        string         `json:"author"`
-	Date          string         `json:"date"` // RFC3339
-	Kind          string         `json:"kind"` // "regular" | "stack-merge"
-	PRNumber      int            `json:"prNumber,omitempty"`
-	StackSize     int            `json:"stackSize,omitempty"`
-	StackPRs      []int          `json:"stackPRs,omitempty"`
-	StackPRTitles map[int]string `json:"stackPRTitles,omitempty"`
-	StackScope    string         `json:"stackScope,omitempty"`
+	SHA           string                  `json:"sha"`
+	Message       string                  `json:"message"`
+	Author        string                  `json:"author"`
+	Date          string                  `json:"date"` // RFC3339
+	Kind          string                  `json:"kind"` // "regular" | "stack-merge"
+	PRNumber      git.PRNumber            `json:"prNumber,omitempty"`
+	StackSize     int                     `json:"stackSize,omitempty"`
+	StackPRs      []git.PRNumber          `json:"stackPRs,omitempty"`
+	StackPRTitles map[git.PRNumber]string `json:"stackPRTitles,omitempty"`
+	StackScope    string                  `json:"stackScope,omitempty"`
 }
 
 // logJSON is the top-level `stackit log --json` payload.

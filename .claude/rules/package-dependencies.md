@@ -33,6 +33,13 @@ internal/actions/*
     CAN import: engine, git, small domain/support packages
     CANNOT import: cli, api, tui, output, app/bootstrap packages
 
+internal/actions/stackview
+    Read-only view models of the stack (stack discovery, worktree index,
+    branch annotations, batched branch data, local stack status)
+    CAN import: engine, git, github data types
+    Adapters (cli, tui, api) may import it; it never renders. tui converts its
+    values into render types (e.g. tui.TreeAnnotation → tree.BranchAnnotation)
+
 internal/tui
     Adapter layer for Bubble Tea models and interactive views
     CAN import: actions handler interfaces, engine, git, tui/components/*, tui/style
@@ -94,6 +101,8 @@ If an action needs config values, resolve them in bootstrap or the adapter layer
 4. **Action loading config or constructing GitHub clients**: Resolve configuration and integrations before calling the action.
 
 5. **Circular handler dependencies**: Prompt/progress interfaces may live next to the action, but implementations belong in `internal/cli/*` or `internal/tui/*`.
+
+6. **Action calling `tui.Prompt*` directly**: Use the narrow prompt interfaces in `internal/actions/handler` (via `ctx.Prompts()` or an injected dependency). Enforced by the `actions-no-tui` depguard rule.
 
 ## Example: Avoiding Cycles
 

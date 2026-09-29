@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 type stubInspector struct {
@@ -14,7 +16,7 @@ type stubInspector struct {
 	err        error
 }
 
-func (s stubInspector) WorktreeHasUncommittedChanges(context.Context, string) (bool, error) {
+func (s stubInspector) WorktreeHasUncommittedChanges(context.Context, engine.WorktreePath) (bool, error) {
 	return s.hasChanges, s.err
 }
 
@@ -28,7 +30,7 @@ func (s stubInspector) WorktreeHasUncommittedChanges(context.Context, string) (b
 func TestSkipReasonForWorktree(t *testing.T) {
 	t.Parallel()
 
-	existing := t.TempDir()
+	existing := engine.WorktreePath(t.TempDir())
 
 	t.Run("clean worktree is safe", func(t *testing.T) {
 		t.Parallel()
@@ -54,7 +56,7 @@ func TestSkipReasonForWorktree(t *testing.T) {
 		// Nothing left to protect, and skipping would block the orphan cleanup
 		// whose whole job is retiring this registration. The probe would fail
 		// here, so this must not be lumped in with uninspectable worktrees.
-		missing := filepath.Join(t.TempDir(), "gone")
+		missing := engine.WorktreePath(filepath.Join(t.TempDir(), "gone"))
 		reason := SkipReasonForWorktree(context.Background(),
 			stubInspector{err: errors.New("no such file or directory")}, missing)
 		require.Empty(t, reason)

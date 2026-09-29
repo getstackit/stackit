@@ -66,7 +66,11 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	}
 
 	// Continue the rebase
-	result, err := eng.ContinueRebase(ctx.Context, continuation.CurrentBranchOverride, continuation.RebasedBranchBase, continuation.ExpectedBranchRevision)
+	result, err := eng.ContinueRebase(ctx.Context, engine.ContinueRebaseSpec{
+		Branch:                 continuation.CurrentBranchOverride,
+		RebasedBranchBase:      continuation.RebasedBranchBase,
+		ExpectedBranchRevision: continuation.ExpectedBranchRevision,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to continue rebase: %w", err)
 	}
@@ -108,7 +112,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	// where `git rebase` left HEAD and how commits get orphaned.
 	attached := true
 	if err := eng.CheckoutBranch(ctx.Context, eng.GetBranch(result.BranchName)); err != nil {
-		otherWorktree := ""
+		var otherWorktree engine.WorktreePath
 		if worktrees, listErr := eng.ListWorktrees(ctx.Context); listErr == nil {
 			otherWorktree = worktrees.PathForBranch(result.BranchName)
 		}

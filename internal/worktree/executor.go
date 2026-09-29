@@ -25,14 +25,22 @@ func (s *Session) Close() {
 	}
 }
 
+// SessionSource is the engine surface an Executor needs to create sessions:
+// the trunk name, a temporary worktree, and a snapshot to seed its engine.
+type SessionSource interface {
+	Trunk() engine.Branch
+	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string, prune engine.WorktreePruneMode) (path engine.WorktreePath, cleanup func(), err error)
+	SnapshotForWorktree() engine.WorktreeSnapshot
+}
+
 // Executor creates and manages temporary worktrees for executing operations.
 type Executor struct {
-	eng    engine.Engine
+	eng    SessionSource
 	output output.Output
 }
 
 // NewExecutor creates a new worktree executor.
-func NewExecutor(eng engine.Engine, out output.Output) *Executor {
+func NewExecutor(eng SessionSource, out output.Output) *Executor {
 	return &Executor{
 		eng:    eng,
 		output: out,
@@ -68,7 +76,7 @@ func (e *Executor) CreateSession(ctx context.Context, opts CreateSessionOptions)
 	}
 
 	// Create temporary worktree
-	worktreePath, cleanup, err := e.eng.CreateTemporaryWorktree(ctx, ref, pattern)
+	worktreePath, cleanup, err := e.eng.CreateTemporaryWorktree(ctx, ref, pattern, engine.WorktreePruneAuto)
 	if err != nil {
 		return nil, errors.FailedTo("create", "worktree", err)
 	}
@@ -86,7 +94,7 @@ func (e *Executor) CreateSession(ctx context.Context, opts CreateSessionOptions)
 	}
 
 	session := &Session{
-		Path:    engine.WorktreePath(worktreePath),
+		Path:    worktreePath,
 		Engine:  worktreeEng,
 		cleanup: cleanup,
 		output:  e.output,

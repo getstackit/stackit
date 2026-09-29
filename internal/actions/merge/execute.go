@@ -5,23 +5,29 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
+// MergeMethodConfig reads and persists the repository's merge.method setting.
+// Callers pass the already-loaded repository config (app.Context.Config); the
+// action never loads config from disk itself.
+type MergeMethodConfig interface {
+	MergeMethod() github.MergeMethod
+	SetMergeMethod(method github.MergeMethod) error
+}
+
 // GetMergeMethod returns the merge method to use for PR merges.
 // If not configured, it prompts the user to select one and saves it to config.
-func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeMethod, error) {
-	// Load config
-	cfg, err := config.LoadConfig(ctx.RepoRoot)
-	if err != nil {
-		return "", fmt.Errorf("failed to load config: %w", err)
+func GetMergeMethod(ctx *app.Context, cfg MergeMethodConfig, githubClient github.Client) (github.MergeMethod, error) {
+	if cfg == nil {
+		return "", errors.New("repository config not loaded")
 	}
 
 	// Check if already configured
@@ -36,21 +42,21 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 	}
 
 	// Build list of allowed methods
-	var options []tui.SelectOption
+	var options []handler.SelectOption
 	if settings.AllowSquashMerge {
-		options = append(options, tui.SelectOption{
+		options = append(options, handler.SelectOption{
 			Label: "squash (Squash and merge)",
 			Value: "squash",
 		})
 	}
 	if settings.AllowMergeCommit {
-		options = append(options, tui.SelectOption{
+		options = append(options, handler.SelectOption{
 			Label: "merge (Create a merge commit)",
 			Value: "merge",
 		})
 	}
 	if settings.AllowRebaseMerge {
-		options = append(options, tui.SelectOption{
+		options = append(options, handler.SelectOption{
 			Label: "rebase (Rebase and merge)",
 			Value: "rebase",
 		})
@@ -67,7 +73,7 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 	}
 
 	// Check if interactive mode is available
-	if err := tui.CheckInteractiveAllowed(); err != nil {
+	if err := utils.CheckInteractiveAllowed(); err != nil {
 		// Non-interactive mode: use the first allowed option
 		method := github.MergeMethod(options[0].Value)
 		return persistMergeMethod(ctx, cfg, method, "Using merge method: %s (auto-selected in non-interactive mode)")
@@ -75,7 +81,7 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 
 	// Prompt user to select
 	ctx.Output.Info("Select a merge method for this repository:")
-	selected, err := tui.PromptSelect("Select merge method:", options, 0)
+	selected, err := ctx.Prompts().Select("Select merge method:", options, 0)
 	if err != nil {
 		return "", fmt.Errorf("failed to select merge method: %w", err)
 	}
@@ -85,28 +91,54 @@ func GetMergeMethod(ctx *app.Context, githubClient github.Client) (github.MergeM
 	return persistMergeMethod(ctx, cfg, method, "Saved merge.method = %s to config")
 }
 
-func persistMergeMethod(ctx *app.Context, cfg *config.GitConfig, method github.MergeMethod, message string) (github.MergeMethod, error) {
+func persistMergeMethod(ctx *app.Context, cfg MergeMethodConfig, method github.MergeMethod, message string) (github.MergeMethod, error) {
 	if err := cfg.SetMergeMethod(method); err != nil {
 		return "", fmt.Errorf("failed to save merge method: %w", err)
-	}
-	if err := cfg.Save(); err != nil {
-		return "", fmt.Errorf("failed to save config: %w", err)
 	}
 
 	ctx.Output.Info(message, method)
 	return method, nil
 }
 
-// mergeExecuteEngine is a minimal interface needed for executing a merge plan
+// mergeExecuteEngine lists exactly the engine methods merge execution calls
+// (including the consolidation executor, PR cleanup, and PR content
+// generation it drives). Keep it explicit so the merge package's real
+// dependency on the engine stays visible and fakes stay small.
 type mergeExecuteEngine interface {
-	engine.PRManager
-	engine.BranchReader
-	engine.BranchWriter
-	engine.SyncManager
-	engine.StackRewriter
-	engine.RemoteMetadataManager
+	// Branch graph reads
+	Trunk() engine.Branch
+	CurrentBranch() *engine.Branch
+	GetBranch(branchName string) engine.Branch
+	GetScope(branch engine.Branch) engine.Scope
+	GetStackDescription(branch engine.Branch) *git.StackDescription
+	GetRemote() string
+	GetCurrentRevision(ctx context.Context) (string, error)
 	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
-	Git() git.Runner
+
+	// Branch and metadata writes
+	CreateBranch(ctx context.Context, branchName string, startPoint string) error
+	CheckoutBranch(ctx context.Context, branch engine.Branch) error
+	DeleteBranch(ctx context.Context, branch engine.Branch) error
+	SetParent(ctx context.Context, branch engine.Branch, parentBranch engine.Branch, mode engine.DivergenceMode) error
+	SetBranchType(branch engine.Branch, branchType git.BranchType) error
+	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
+	BatchUpsertPrInfo(ctx context.Context, updates map[string]*engine.PrInfo) error
+
+	// History rewriting
+	MergeMultiple(ctx context.Context, branches []string, opts engine.MergeOptions) error
+	Rebase(ctx context.Context, spec git.RebaseSpec) (engine.RestackResult, error)
+	RestackBranches(ctx context.Context, branches engine.Branches, opts engine.RestackOpts) (engine.RestackBatchResult, error)
+	Detach(ctx context.Context, revision string) error
+
+	// Remote sync
+	PullTrunk(ctx context.Context) (engine.PullResult, error)
+	PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) git.PushResults
+	DeleteRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
+
+	// Worktrees
+	ListWorktrees(ctx context.Context) (git.WorktreeList, error)
+	RemoveWorktree(ctx context.Context, path engine.WorktreePath) error
+	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string, prune engine.WorktreePruneMode) (path engine.WorktreePath, cleanup func(), err error)
 }
 
 // NullEventHandler is a no-op EventHandler for testing or when output is not needed
@@ -132,6 +164,7 @@ type ExecuteOptions struct {
 	Wait                    bool                       // Whether to wait for CI/merge (applies to consolidate)
 	Handler                 EventHandler               // Optional progress handler
 	UndoStackDepth          int                        // Maximum undo stack depth (from config)
+	LinearStacks            bool                       // stack.shape == linear (from config)
 	ConsolidationResultFunc func(*ConsolidationResult) // Callback for consolidation results
 	MergeMethod             github.MergeMethod         // Optional: override merge method (empty = auto-detect/prompt)
 }
@@ -312,7 +345,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		if err != nil {
 			return fmt.Errorf("failed to get branch revision before restack: %w", err)
 		}
-		batchResult, err := eng.RestackBranches(ctx.Context, engine.BranchesOf(branch))
+		batchResult, err := eng.RestackBranches(ctx.Context, engine.BranchesOf(branch), engine.RestackOpts{})
 		result := batchResult.Results[step.BranchName]
 		if err != nil {
 			out.Debug("StepRestack for branch %s failed: %v", step.BranchName, err)
@@ -331,10 +364,10 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		case engine.RestackDone:
 			// Success - now push the rebased branch and update PR base
 			// Force push is required since we rebased
-			if err := eng.PushBranch(ctx.Context, eng.GetBranch(step.BranchName), eng.GetRemote(), git.PushOptions{
+			if err := eng.PushBranches(ctx.Context, eng.GetRemote(), []git.PushSpec{{BranchName: step.BranchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 				Force:    true,
 				NoVerify: true, // Internal restack usually shouldn't run hooks
-			}); err != nil {
+			}).One(); err != nil {
 				return fmt.Errorf("failed to push rebased branch %s: %w", step.BranchName, err)
 			}
 			out.Debug("Pushed rebased branch %s to remote", step.BranchName)
@@ -364,10 +397,10 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		case engine.RestackUnneeded:
 			// Already up to date, but still need to ensure PR base is correct
 			// Push in case local is ahead of remote
-			if err := eng.PushBranch(ctx.Context, eng.GetBranch(step.BranchName), eng.GetRemote(), git.PushOptions{
+			if err := eng.PushBranches(ctx.Context, eng.GetRemote(), []git.PushSpec{{BranchName: step.BranchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 				Force:    true,
 				NoVerify: true,
-			}); err != nil {
+			}).One(); err != nil {
 				out.Debug("Failed to push branch %s (may already be up to date): %v", step.BranchName, err)
 			}
 			// Update PR base to the actual parent (not always trunk)

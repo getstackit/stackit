@@ -237,7 +237,11 @@ func (s *Server) buildHandler() (http.Handler, error) {
 	// authRequired tells the client whether reads need a login. Read-only
 	// mode and auth-disabled both serve reads anonymously.
 	authRequired := s.config.Auth != nil && !s.config.ReadOnly
-	configHandler := handlers.NewConfigHandler(s.config.ReadOnly, authRequired, s.config.SingleRepo)
+	configHandler := handlers.NewConfigHandler(handlers.ConfigHandlerOptions{
+		ReadOnly:     s.config.ReadOnly,
+		AuthRequired: authRequired,
+		SingleRepo:   s.config.SingleRepo,
+	})
 
 	// The submit route is the server's only mutating endpoint. In
 	// read-only mode it is replaced with a handler that refuses every

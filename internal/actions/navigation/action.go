@@ -8,6 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/output"
 )
 
 // Direction represents the traversal direction
@@ -20,6 +21,13 @@ const (
 	DirectionTop Direction = "TOP"
 )
 
+// navigationEngine lists exactly the engine methods navigation calls.
+type navigationEngine interface {
+	engine.BranchLookup
+	CurrentBranch() *engine.Branch
+	Graph(strategy engine.SortStrategy) *engine.StackGraph
+}
+
 // SwitchBranchAction switches to a branch based on the given direction
 func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) (actions.CheckoutResult, error) {
 	if handler == nil {
@@ -27,7 +35,8 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 	}
 	defer handler.Cleanup()
 
-	currentBranch := ctx.Engine.CurrentBranch()
+	var eng navigationEngine = ctx.Engine
+	currentBranch := eng.CurrentBranch()
 	if currentBranch == nil {
 		return actions.CheckoutResult{}, errors.ErrNotOnBranch
 	}
@@ -39,12 +48,12 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 	case DirectionBottom:
 		// Walks the parent chain only — no full graph needed, so the command can
 		// run under LoadModeBranchesOnly and lazily promote just the chain.
-		targetBranch = traverseDownward(currentBranch.GetName(), ctx)
+		targetBranch = traverseDownward(currentBranch.GetName(), eng, ctx.Output)
 	case DirectionTop:
 		// Walking toward the tips needs child relationships, which requires the
 		// full stack graph.
-		graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
-		targetBranch, err = traverseUpward(currentBranch.GetName(), ctx, graph, handler)
+		graph := eng.Graph(engine.SortStrategyAlphabetical)
+		targetBranch, err = traverseUpward(currentBranch.GetName(), eng, ctx.Output, graph, handler)
 		if err != nil {
 			return actions.CheckoutResult{}, err
 		}
@@ -72,8 +81,8 @@ func SwitchBranchAction(direction Direction, ctx *app.Context, handler Handler) 
 
 // traverseDownward walks down the parent chain to find the first branch from trunk.
 // It skips worktree anchor branches transparently.
-func traverseDownward(currentBranch string, ctx *app.Context) string {
-	currentBranchObj := ctx.Engine.GetBranch(currentBranch)
+func traverseDownward(currentBranch string, eng engine.BranchLookup, out output.Output) string {
+	currentBranchObj := eng.GetBranch(currentBranch)
 	if currentBranchObj.IsTrunk() {
 		return currentBranch
 	}
@@ -93,14 +102,14 @@ func traverseDownward(currentBranch string, ctx *app.Context) string {
 		return currentBranch
 	}
 
-	ctx.Output.Info("⮑  %s", parent.GetName())
-	return traverseDownward(parent.GetName(), ctx)
+	out.Info("⮑  %s", parent.GetName())
+	return traverseDownward(parent.GetName(), eng, out)
 }
 
 // traverseUpward walks up the children chain to find the tip branch.
 // It skips worktree anchor branches transparently.
-func traverseUpward(currentBranch string, ctx *app.Context, graph *engine.StackGraph, handler Handler) (string, error) {
-	children := graph.ChildBranches(ctx.Engine.GetBranch(currentBranch))
+func traverseUpward(currentBranch string, eng engine.BranchLookup, out output.Output, graph *engine.StackGraph, handler Handler) (string, error) {
+	children := graph.ChildBranches(eng.GetBranch(currentBranch))
 
 	// Filter out worktree anchors, but include their children
 	children = FlattenThroughAnchors(children, graph)
@@ -124,8 +133,8 @@ func traverseUpward(currentBranch string, ctx *app.Context, graph *engine.StackG
 		}
 	}
 
-	ctx.Output.Info("⮑  %s", nextBranch)
-	return traverseUpward(nextBranch, ctx, graph, handler)
+	out.Info("⮑  %s", nextBranch)
+	return traverseUpward(nextBranch, eng, out, graph, handler)
 }
 
 // FlattenThroughAnchors replaces worktree anchor branches with their non-anchor children.

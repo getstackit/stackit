@@ -4,13 +4,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/stretchr/testify/require"
 )
 
 func TestJSONHandlerCollectsPlanAndResults(t *testing.T) {
 	t.Parallel()
 
-	pr := 934
+	pr := git.PRNumber(934)
 	h := NewJSONHandler()
 
 	h.OnEvent(BranchPlanEvent{BranchName: "update-me", Action: "update", PRNumber: &pr})
@@ -35,13 +36,13 @@ func TestJSONHandlerCollectsPlanAndResults(t *testing.T) {
 	require.Equal(t, "update-me", updated.Branch)
 	require.Equal(t, "update", updated.Action)
 	require.Equal(t, string(StatusError), updated.Status)
-	require.Equal(t, 934, *updated.PR)
+	require.Equal(t, git.PRNumber(934), *updated.PR)
 	require.Equal(t, "remote rejected", updated.Error)
 
 	created := h.Result.Branches[1]
 	require.Equal(t, string(StatusDone), created.Status)
 	require.Equal(t, "https://github.com/getstackit/stackit/pull/935", created.URL)
-	require.Equal(t, 935, *created.PR, "PR number derives from the URL when the plan had none")
+	require.Equal(t, git.PRNumber(935), *created.PR, "PR number derives from the URL when the plan had none")
 	require.Equal(t, []string{"failed to add labels"}, created.Warnings)
 
 	skipped := h.Result.Branches[2]
@@ -63,18 +64,18 @@ func TestJSONHandlerCollectsEveryGitHubStackEvent(t *testing.T) {
 	t.Parallel()
 
 	h := NewJSONHandler()
-	h.OnEvent(GitHubStackSyncedEvent{Number: 1, PullRequests: []int{10, 11}, Action: "created"})
+	h.OnEvent(GitHubStackSyncedEvent{Number: 1, PullRequests: []git.PRNumber{10, 11}, Action: "created"})
 	h.OnEvent(GitHubStackSkippedEvent{Reason: "first skipped component"})
 
 	require.NotNil(t, h.Result.GitHubStack, "the legacy field remains available for one Stack")
 	require.Equal(t, "first skipped component", h.Result.GitHubStackSkipped)
 
-	h.OnEvent(GitHubStackSyncedEvent{Number: 2, PullRequests: []int{12, 13}, Action: "extended"})
+	h.OnEvent(GitHubStackSyncedEvent{Number: 2, PullRequests: []git.PRNumber{12, 13}, Action: "extended"})
 	h.OnEvent(GitHubStackSkippedEvent{Reason: "second skipped component"})
 
 	require.Equal(t, []JSONGitHubStackResult{
-		{Number: 1, PullRequests: []int{10, 11}, Action: "created"},
-		{Number: 2, PullRequests: []int{12, 13}, Action: "extended"},
+		{Number: 1, PullRequests: []git.PRNumber{10, 11}, Action: "created"},
+		{Number: 2, PullRequests: []git.PRNumber{12, 13}, Action: "extended"},
 	}, h.Result.GitHubStacks)
 	require.Equal(t, []string{"first skipped component", "second skipped component"}, h.Result.GitHubStackSkips)
 	require.Nil(t, h.Result.GitHubStack, "the legacy field must not silently discard all but the final Stack")

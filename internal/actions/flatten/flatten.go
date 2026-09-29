@@ -2,6 +2,7 @@
 package flatten
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -17,6 +18,19 @@ type Options struct {
 	SkipConfirm bool   // Skip confirmation prompt (--yes flag)
 }
 
+// flattenEngine lists exactly the engine methods flatten calls.
+type flattenEngine interface {
+	engine.BranchLookup
+	CurrentBranch() *engine.Branch
+	Trunk() engine.Branch
+	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(branches engine.Branches) engine.Branches
+	BatchRevisions(branches engine.Branches) engine.RevisionMap
+	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
+	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
+	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
+}
+
 // HasFlattenWork reports whether Action has at least one feature branch in
 // the requested stack that's a candidate for flattening. Use this from the
 // CLI to gate TUI initialization — if there's no candidate, starting the
@@ -27,7 +41,7 @@ type Options struct {
 // still end up unmoved after validation, in which case Action falls back to
 // the handler.Complete summary path.
 func HasFlattenWork(ctx *app.Context, opts Options) (bool, error) {
-	eng := ctx.Engine
+	var eng flattenEngine = ctx.Engine
 	branchName, err := actions.ResolveBranchName(eng, opts.BranchName)
 	if err != nil {
 		return false, err
@@ -52,7 +66,7 @@ func HasFlattenWork(ctx *app.Context, opts Options) (bool, error) {
 // Flatten analyzes the stack and moves branches as close to trunk as possible
 // while respecting dependencies (branches that would conflict stay in place).
 func Action(ctx *app.Context, opts Options, handler Handler) error {
-	eng := ctx.Engine
+	var eng flattenEngine = ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
 
@@ -221,7 +235,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	for i, move := range filteredPlan.Moves {
 		moves[i] = engine.BranchParentMove{Branch: move.Branch, NewParent: move.NewParent}
 	}
-	if err := eng.ReparentBranchesToParents(gctx, moves); err != nil {
+	if err := eng.ReparentBranchesToParents(gctx, moves, engine.ReparentOpts{}); err != nil {
 		handler.OnStep(StepFlattening, basehandler.StatusFailed, err.Error())
 		return fmt.Errorf("failed to update flattened parent relationships: %w", err)
 	}
@@ -281,7 +295,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 // collectAllBranchesToRestack collects all branches that will be affected by the moves,
 // including the moved branches and all their descendants.
-func collectAllBranchesToRestack(eng engine.Engine, graph *engine.StackGraph, moves []basehandler.Reparent) []string {
+func collectAllBranchesToRestack(eng engine.BranchLookup, graph *engine.StackGraph, moves []basehandler.Reparent) []string {
 	seen := make(map[string]bool)
 	var result []string
 
@@ -307,7 +321,7 @@ func collectAllBranchesToRestack(eng engine.Engine, graph *engine.StackGraph, mo
 
 // buildRebaseSpecsForAll builds rebase specs for all branches that will be affected,
 // accounting for cascading parent changes when ancestors are moved.
-func buildRebaseSpecsForAll(eng engine.Engine, plan *flattenPlan, branches engine.Branches) []engine.RebaseSpec {
+func buildRebaseSpecsForAll(eng flattenEngine, plan *flattenPlan, branches engine.Branches) []engine.RebaseSpec {
 	// Build a map of existing rebase specs from the plan
 	existingSpecs := make(map[string]engine.RebaseSpec)
 	for _, spec := range plan.RebaseSpecs {
@@ -367,7 +381,7 @@ func buildRebaseSpecsForAll(eng engine.Engine, plan *flattenPlan, branches engin
 
 // filterPlanExcludingConflicts filters out moves where the moved branch or any of its
 // descendants have code dependencies. Returns the filtered plan and a list of branches kept in place.
-func filterPlanExcludingConflicts(plan *flattenPlan, conflicts map[string]string, graph *engine.StackGraph, eng engine.Engine) (*flattenPlan, []ExcludedBranch) {
+func filterPlanExcludingConflicts(plan *flattenPlan, conflicts map[string]string, graph *engine.StackGraph, eng engine.BranchLookup) (*flattenPlan, []ExcludedBranch) {
 	if len(conflicts) == 0 {
 		return plan, nil
 	}
@@ -443,7 +457,7 @@ type AnalysisProgressFunc func(current, total int, branchName string)
 // buildFlattenPlan calculates which branches can be moved closer to trunk.
 // For each branch (in topological order), it tests if the branch can rebase
 // onto trunk or any intermediate branch that's closer to trunk.
-func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branches, trunk engine.Branch, onProgress AnalysisProgressFunc) (*flattenPlan, error) {
+func buildFlattenPlan(ctx *app.Context, eng flattenEngine, branches engine.Branches, trunk engine.Branch, onProgress AnalysisProgressFunc) (*flattenPlan, error) {
 	plan := &flattenPlan{
 		Moves:       make([]basehandler.Reparent, 0),
 		RebaseSpecs: make([]engine.RebaseSpec, 0),
@@ -511,7 +525,7 @@ func buildFlattenPlan(ctx *app.Context, eng engine.Engine, branches engine.Branc
 
 // findBestParent finds the closest-to-trunk parent that the branch can cleanly rebase onto.
 // Returns empty string if the branch should stay with its current parent.
-func findBestParent(ctx *app.Context, eng engine.Engine, branchName, oldUpstream string, potentialParents []string, parentRevisions map[string]string) string {
+func findBestParent(ctx *app.Context, eng flattenEngine, branchName, oldUpstream string, potentialParents []string, parentRevisions map[string]string) string {
 	// Try each potential parent starting from trunk (index 0)
 	// and working up through branches that have been processed
 	for _, candidateParent := range potentialParents {
@@ -538,7 +552,7 @@ func findBestParent(ctx *app.Context, eng engine.Engine, branchName, oldUpstream
 
 // canRebaseOnto tests if a branch can cleanly rebase onto a target.
 // Uses ValidateRebases with a single spec to test in a temporary worktree.
-func canRebaseOnto(ctx *app.Context, eng engine.Engine, branchName, targetRev, oldUpstream string) bool {
+func canRebaseOnto(ctx *app.Context, eng flattenEngine, branchName, targetRev, oldUpstream string) bool {
 	specs := []engine.RebaseSpec{{
 		Branch:      branchName,
 		NewParent:   targetRev,

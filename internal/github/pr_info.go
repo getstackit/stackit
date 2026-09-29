@@ -25,11 +25,11 @@ func SyncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 // a PR and chooses to delete its branch, but the PR itself remains available by
 // number. Looking it up preserves the normal closed-PR cleanup path without
 // treating a missing remote branch alone as permission to delete local work.
-func SyncPrInfoWithKnownPRNumbers(ctx context.Context, runner GitCommandRunner, branchNames []string, repo Repo, knownPRNumbers map[string]int, onUpdate func(string, *PullRequestInfo)) error {
+func SyncPrInfoWithKnownPRNumbers(ctx context.Context, runner GitCommandRunner, branchNames []string, repo Repo, knownPRNumbers map[string]git.PRNumber, onUpdate func(string, *PullRequestInfo)) error {
 	return syncPrInfo(ctx, runner, branchNames, repo, knownPRNumbers, onUpdate)
 }
 
-func syncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []string, repo Repo, knownPRNumbers map[string]int, onUpdate func(string, *PullRequestInfo)) error {
+func syncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []string, repo Repo, knownPRNumbers map[string]git.PRNumber, onUpdate func(string, *PullRequestInfo)) error {
 	if len(branchNames) == 0 {
 		return nil
 	}

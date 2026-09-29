@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -17,12 +16,12 @@ import (
 type MultiStackPRCreator struct {
 	ctx          *app.Context
 	worktreeEng  engine.Engine
-	worktreePath string
+	worktreePath engine.WorktreePath
 	prGenerator  *PRContentGenerator
 }
 
 // NewMultiStackPRCreator creates a new PR creator for multi-stack merge
-func NewMultiStackPRCreator(ctx *app.Context, worktreeEng engine.Engine, worktreePath string) *MultiStackPRCreator {
+func NewMultiStackPRCreator(ctx *app.Context, worktreeEng engine.Engine, worktreePath engine.WorktreePath) *MultiStackPRCreator {
 	return &MultiStackPRCreator{
 		ctx:          ctx,
 		worktreeEng:  worktreeEng,
@@ -56,10 +55,10 @@ func (p *MultiStackPRCreator) CreateAndPushBranch(ctx context.Context, branchNam
 
 	// Push to remote
 	remote := p.worktreeEng.GetRemote()
-	if err := p.worktreeEng.PushBranch(ctx, branch, remote, git.PushOptions{
+	if err := p.worktreeEng.PushBranches(ctx, remote, []git.PushSpec{{BranchName: branch.GetName(), LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 		Force:    false,
 		NoVerify: true,
-	}); err != nil {
+	}).One(); err != nil {
 		return fmt.Errorf("failed to push branch %s: %w", branchName, err)
 	}
 
@@ -96,10 +95,7 @@ func (p *MultiStackPRCreator) WaitAndMerge(ctx context.Context, branchName strin
 		return err
 	}
 
-	mergeMethod, err := p.resolveMergeMethod()
-	if err != nil {
-		return fmt.Errorf("failed to get merge method: %w", err)
-	}
+	mergeMethod := p.resolveMergeMethod()
 
 	waiter := NewCIWaiter(CIWaiterOptions{
 		Client: p.ctx.GitHub(),
@@ -121,12 +117,9 @@ func (p *MultiStackPRCreator) EnableAutoMerge(ctx context.Context, pr *github.Pu
 		return fmt.Errorf("missing pull request node id")
 	}
 
-	mergeMethod, err := p.resolveMergeMethod()
-	if err != nil {
-		return fmt.Errorf("failed to get merge method: %w", err)
-	}
+	mergeMethod := p.resolveMergeMethod()
 
-	return github.EnableAutoMerge(ctx, p.ctx.Git(), pr.NodeID, github.EnableAutoMergeOptions{ //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	return github.EnableAutoMerge(ctx, p.ctx.GHRunner, pr.NodeID, github.EnableAutoMergeOptions{
 		MergeMethod: mergeMethod,
 		CommitBody:  commitBody,
 	})
@@ -139,14 +132,13 @@ func (p *MultiStackPRCreator) BuildStackMetadata(included []MultiStackInfo) pr.S
 	return pr.BuildStackMetadata(branches, pr.ResolveUnifiedScope(scopes))
 }
 
-func (p *MultiStackPRCreator) resolveMergeMethod() (github.MergeMethod, error) {
-	cfg, err := config.LoadConfig(p.ctx.RepoRoot)
-	if err != nil {
-		return "", fmt.Errorf("failed to load config: %w", err)
+// resolveMergeMethod returns the configured merge method from the already-loaded
+// repository config, defaulting to squash when unset or unavailable.
+func (p *MultiStackPRCreator) resolveMergeMethod() github.MergeMethod {
+	if p.ctx.Config != nil {
+		if method := p.ctx.Config.MergeMethod(); method.Valid() {
+			return method
+		}
 	}
-
-	if method := cfg.MergeMethod(); method.Valid() {
-		return method, nil
-	}
-	return github.MergeMethodSquash, nil // default
+	return github.MergeMethodSquash
 }

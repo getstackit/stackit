@@ -132,7 +132,7 @@ func (e *engineImpl) ResetTrunkToRemote(ctx context.Context) error {
 	// Never check out the shared trunk in an analysis worktree. Move the ref
 	// with a CAS, then synchronize its clean holder; if this engine is itself
 	// detached, advance only its detached HEAD to the same remote revision.
-	if err := e.git.UpdateBranchRefCAS(ctx, trunk, remoteSha, oldTrunk); err != nil {
+	if err := e.git.UpdateBranchRefCAS(ctx, git.BranchRefUpdate{Branch: trunk, NewRevision: remoteSha, ExpectedOld: oldTrunk}); err != nil {
 		return fmt.Errorf("failed to reset trunk ref: %w", err)
 	}
 	if currentBranch == trunk {

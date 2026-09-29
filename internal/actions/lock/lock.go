@@ -2,6 +2,7 @@
 package lock
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -11,6 +12,14 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 )
 
+// lockEngine lists exactly the engine methods lock and unlock call.
+type lockEngine interface {
+	engine.BranchLookup
+	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
+	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
+}
+
 // Action locks the specified branch and all branches downstack of it
 func Action(ctx *app.Context, branchName string, handler Handler) error {
 	if handler == nil {
@@ -18,7 +27,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	eng := ctx.Engine
+	var eng lockEngine = ctx.Engine
 	out := ctx.Output
 
 	branch := eng.GetBranch(branchName)
@@ -62,7 +71,7 @@ func Action(ctx *app.Context, branchName string, handler Handler) error {
 		if err == nil && confirm {
 			submitOpts := submit.Options{
 				Branch:     branchName,
-				StackRange: engine.StackRangeDownstack(true),
+				StackRange: engine.StackRangeDownstack(engine.IncludeCurrentBranch),
 				Confirm:    false,
 			}
 			submitHandler := handler.GetSubmitHandler()
@@ -117,7 +126,7 @@ func Unlock(ctx *app.Context, branchName string, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	eng := ctx.Engine
+	var eng lockEngine = ctx.Engine
 	out := ctx.Output
 
 	branch := eng.GetBranch(branchName)

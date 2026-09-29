@@ -262,7 +262,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// Commit if there are staged changes
 	if hasStaged {
 		h.OnStep(StepCommit, handler.StatusStarted, "Committing changes")
-		if err := eng.Commit(ctx.Context, commitMessage, opts.Verbose, !ctx.Verify); err != nil {
+		if err := eng.Commit(ctx.Context, git.CommitOptions{Message: commitMessage, Verbose: opts.Verbose, NoVerify: !ctx.Verify}); err != nil {
 			// Restore the original branch before deleting the new one so that
 			// DeleteBranch doesn't fall back to trunk when cleaning up the
 			// currently-checked-out branch (e.g. a git pre-commit hook failure).
@@ -302,7 +302,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	ctx.Logger.Info("branch created name=%v parent=%v hasCommit=%v", branchName, parentBranch, hasStaged)
 
 	// Create worktree if requested
-	var worktreePath string
+	var worktreePath engine.WorktreePath
 	if opts.Worktree {
 		h.OnStep(StepWorktree, handler.StatusStarted, "Creating worktree")
 		// Checkout back to trunk first so we can create the worktree for the branch
@@ -316,7 +316,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 				h.OnStep(StepWorktree, handler.StatusFailed, err.Error())
 				out.Warn("Created %s, but could not create its worktree: %v", output.BranchName(branchName), err)
 			} else {
-				worktreePath = created.Path.String()
+				worktreePath = created.Path
 				h.OnStep(StepWorktree, handler.StatusCompleted, fmt.Sprintf("Created worktree at %s", worktreePath))
 				out.Info("Created worktree at %s", worktreePath)
 

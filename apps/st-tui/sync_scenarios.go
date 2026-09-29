@@ -4,9 +4,10 @@ import (
 	"time"
 
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/git"
 )
 
-func intPointer(n int) *int { return &n }
+func prNumberPointer(n git.PRNumber) *git.PRNumber { return &n }
 
 // SyncScenario is a deterministic replay of the action events emitted by sync.
 // It drives the production Handler, not the Bubble Tea model directly, so its
@@ -46,9 +47,9 @@ var SyncScenarios = []SyncScenario{
 			{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted},
 			{Phase: syncAction.PhaseBranches, Type: syncAction.EventCompleted, Branch: "feat/api"},
 			{Phase: syncAction.PhaseClean, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "fix/merged", PRNumber: new(39), Message: "after merge"},
+			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "fix/merged", PRNumber: new(git.PRNumber(39)), Message: "after merge"},
 			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/web", PRNumber: new(43), Parent: "feat/api", NewRevision: "d4e5f6a"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/web", PRNumber: new(git.PRNumber(43)), Parent: "feat/api", NewRevision: "d4e5f6a"},
 		},
 		Summary: syncAction.Summary{
 			TrunkUpdated:      true,
@@ -70,13 +71,13 @@ var SyncScenarios = []SyncScenario{
 			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "stack-merge-stack-1784862381", Message: "merged into main"},
 			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "jonnii/20260724022739/make-restack-output-terse-and-outcome-focused", Message: "merged into main"},
 			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "info-query-cli-rendering", PRNumber: intPointer(936), Parent: "main", NewRevision: "9e49378"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260529015605/add-user-menu-to-header-and-extend-it-to-repo", PRNumber: intPointer(1070), Parent: "main", NewRevision: "15d7955"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", PRNumber: intPointer(1164), Parent: "main", NewRevision: "b0d42a4"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", PRNumber: intPointer(1242), Parent: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", NewRevision: "e1d9f30"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605033020/route-insert-s-child-select-prompt-through-the", PRNumber: intPointer(1241), Parent: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", NewRevision: "4cb45e0"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "info-query-cli-rendering", PRNumber: prNumberPointer(936), Parent: "main", NewRevision: "9e49378"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260529015605/add-user-menu-to-header-and-extend-it-to-repo", PRNumber: prNumberPointer(1070), Parent: "main", NewRevision: "15d7955"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", PRNumber: prNumberPointer(1164), Parent: "main", NewRevision: "b0d42a4"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", PRNumber: prNumberPointer(1242), Parent: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", NewRevision: "e1d9f30"},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605033020/route-insert-s-child-select-prompt-through-the", PRNumber: prNumberPointer(1241), Parent: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", NewRevision: "4cb45e0"},
 			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260219034124/prompt-notes-wt"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits", PRNumber: intPointer(754), Conflict: true},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits", PRNumber: prNumberPointer(754), Conflict: true},
 		},
 		Summary: syncAction.Summary{
 			BranchesDeleted:   2,
@@ -96,7 +97,7 @@ var SyncScenarios = []SyncScenario{
 			{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted},
 			{Phase: syncAction.PhaseBranches, Type: syncAction.EventSkipped, Branch: "feat/api", Conflict: true},
 			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "feat/web", PRNumber: new(43), Conflict: true},
+			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "feat/web", PRNumber: new(git.PRNumber(43)), Conflict: true},
 		},
 		Summary: syncAction.Summary{
 			BranchesSkipped:  2,

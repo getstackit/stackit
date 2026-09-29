@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	sterrors "github.com/getstackit/stackit/internal/errors"
 )
@@ -19,6 +18,10 @@ type WizardOptions struct {
 	TargetBranch string   // Pre-selected target branch (empty = current branch)
 	Strategy     Strategy // Pre-selected strategy (empty = prompt)
 	Wait         bool     // Pre-selected wait option (for consolidate)
+
+	// Resolved configuration, supplied by the caller.
+	UndoStackDepth int  // Maximum undo stack depth (undo.depth)
+	LinearStacks   bool // stack.shape == linear
 }
 
 // RunWizard executes the interactive merge wizard.
@@ -251,10 +254,6 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		out.Debug("merge wizard: user confirmed, proceeding with merge")
 	}
 
-	// Get config values
-	cfg, _ := config.LoadConfig(ctx.RepoRoot)
-	undoStackDepth := cfg.UndoStackDepth()
-
 	// Execute the merge
 	mergeOpts := Options{
 		DryRun:         opts.DryRun,
@@ -265,7 +264,8 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		Scope:          scope,
 		TargetBranch:   targetBranch,
 		Plan:           plan,
-		UndoStackDepth: undoStackDepth,
+		UndoStackDepth: opts.UndoStackDepth,
+		LinearStacks:   opts.LinearStacks,
 		Handler:        handler,
 	}
 

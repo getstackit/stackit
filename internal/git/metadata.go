@@ -81,11 +81,16 @@ const (
 	PRStateClosed PRState = "CLOSED"
 )
 
+// PRNumber is a GitHub pull request number. It is a distinct type so PR
+// numbers cannot be confused with other integers (stack numbers, comment IDs,
+// counts) at call sites; it marshals to JSON exactly like a plain int.
+type PRNumber int
+
 // MergedParent represents a historical parent that was merged or deleted
 type MergedParent struct {
-	BranchName string   `json:"branchName"`
-	PRNumber   *int     `json:"prNumber,omitempty"`
-	PRState    *PRState `json:"prState,omitempty"` // MERGED or CLOSED
+	BranchName string    `json:"branchName"`
+	PRNumber   *PRNumber `json:"prNumber,omitempty"`
+	PRState    *PRState  `json:"prState,omitempty"` // MERGED or CLOSED
 }
 
 // LocalMeta represents branch metadata that is strictly local and never pushed
@@ -114,7 +119,7 @@ type ModifiedBy struct {
 
 // PrInfoPersistence represents PR information for persistence
 type PrInfoPersistence struct {
-	Number      *int        `json:"number,omitempty"`
+	Number      *PRNumber   `json:"number,omitempty"`
 	Base        *string     `json:"base,omitempty"`
 	BaseSHA     *string     `json:"baseSHA,omitempty"`
 	URL         *string     `json:"url,omitempty"`

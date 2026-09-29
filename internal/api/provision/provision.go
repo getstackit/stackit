@@ -79,6 +79,7 @@ func BuildEntry(ctx context.Context, p EntryParams) (*registry.RepoEntry, error)
 		RepoRef:     repo,
 		Engine:      runtimeCtx.Engine,
 		GitHub:      gh,
+		GHRunner:    runtimeCtx.GHRunner,
 	})
 	if runtimeCtx.Logger != nil {
 		entry.AddCloser(runtimeCtx.Logger.Close)

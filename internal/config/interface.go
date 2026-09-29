@@ -17,6 +17,7 @@ type Configurer interface {
 	BranchNamePattern() string
 	GetBranchPattern() BranchPattern
 	StackShape() string
+	LinearStacks() bool
 
 	// Submit settings
 	SubmitFooter() bool
@@ -34,6 +35,7 @@ type Configurer interface {
 
 	// Merge settings
 	MergeMethod() github.MergeMethod
+	SetMergeMethod(method github.MergeMethod) error
 
 	// CI settings
 	CICommand() string

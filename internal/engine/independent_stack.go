@@ -10,13 +10,13 @@ type IndependentStack struct {
 //
 // Each stack includes its root branch first, followed by descendants in the graph's
 // depth-first order. Branches from separate stacks are independent of each other.
-func DiscoverIndependentStacks(eng BranchReader) []IndependentStack {
+func DiscoverIndependentStacks(eng StackView) []IndependentStack {
 	return DiscoverIndependentStacksWithSort(eng, SortStrategyAlphabetical)
 }
 
 // DiscoverIndependentStacksWithSort is like DiscoverIndependentStacks, but allows
 // callers to choose how sibling branches are ordered.
-func DiscoverIndependentStacksWithSort(eng BranchReader, strategy SortStrategy) []IndependentStack {
+func DiscoverIndependentStacksWithSort(eng StackView, strategy SortStrategy) []IndependentStack {
 	graph := eng.Graph(strategy)
 	trunkNode := graph.GetNode(eng.Trunk().GetName())
 	if trunkNode == nil {

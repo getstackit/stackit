@@ -3,7 +3,6 @@ package inprocess
 
 import (
 	"bytes"
-	"strings"
 
 	"github.com/getstackit/stackit/internal/cli"
 )
@@ -36,7 +35,7 @@ func (c *CLI) Run(workDir string, args ...string) Result {
 	var buf bytes.Buffer
 
 	// Check for passthrough commands
-	if handled, err := cli.HandlePassthroughWithResult(fullArgs, false, &buf, &buf); handled {
+	if handled, err := cli.HandlePassthroughWithResult(fullArgs, cli.PassthroughReturnError, &buf, &buf); handled {
 		output := buf.String()
 		if err != nil && output == "" {
 			output = err.Error()
@@ -64,44 +63,4 @@ func (c *CLI) Run(workDir string, args ...string) Result {
 		Output: buf.String(),
 		Err:    err,
 	}
-}
-
-// RunString executes a stackit command from a single string (like "create feature -m 'test'").
-func (c *CLI) RunString(workDir string, cmdStr string) Result {
-	args := splitInProcessArgs(cmdStr)
-	return c.Run(workDir, args...)
-}
-
-// splitInProcessArgs splits a command string into args, respecting quotes.
-func splitInProcessArgs(s string) []string {
-	var args []string
-	var current strings.Builder
-	inQuote := false
-	quoteChar := rune(0)
-
-	for _, r := range s {
-		switch {
-		case r == '"' || r == '\'':
-			switch {
-			case inQuote && r == quoteChar:
-				inQuote = false
-			case !inQuote:
-				inQuote = true
-				quoteChar = r
-			default:
-				current.WriteRune(r)
-			}
-		case r == ' ' && !inQuote:
-			if current.Len() > 0 {
-				args = append(args, current.String())
-				current.Reset()
-			}
-		default:
-			current.WriteRune(r)
-		}
-	}
-	if current.Len() > 0 {
-		args = append(args, current.String())
-	}
-	return args
 }

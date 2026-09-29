@@ -72,7 +72,7 @@ func TestStackMetaOperations(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete
-		err = runnerMetadata.DeleteStackMeta(context.Background(), stackID)
+		err = runner.DeleteRefs(context.Background(), git.StackMetaRefName(stackID))
 		require.NoError(t, err)
 
 		// Verify deleted

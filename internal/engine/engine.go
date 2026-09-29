@@ -27,9 +27,9 @@ type PRManager interface {
 	// replacing N serial git ref writes with one transaction. The updates map is
 	// keyed by branch name.
 	BatchUpsertPrInfo(ctx context.Context, updates map[string]*PrInfo) error
-	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
-	PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error
-	PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) map[string]error
+	// PushBranches pushes branches in one git invocation; the result maps each
+	// branch to its push error (nil on success). Use .One() for a single spec.
+	PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) git.PushResults
 	// Navigation comment ID caching (stored in local metadata)
 	GetNavigationCommentID(branch Branch) (int64, error)
 	SetNavigationCommentID(branch Branch, commentID int64) error
@@ -46,16 +46,12 @@ type SyncManager interface {
 	UpdateBranchFromRemote(ctx context.Context, remote, branchName string) (PullResult, error)
 	ResetTrunkToRemote(ctx context.Context) error
 	PlanRestack(ctx context.Context, branches Branches) (*RestackPlan, error)
-	RestackBranches(ctx context.Context, branches Branches) (RestackBatchResult, error)
-	RestackBranchesWithProgress(ctx context.Context, branches Branches, progress RestackBranchProgressFunc) (RestackBatchResult, error)
-	RestackBranchesWithValidatedRebases(ctx context.Context, branches Branches, validation *RebaseValidation, progress RestackBranchProgressFunc) (RestackBatchResult, error)
-	RestackBranchesWithValidatedPlan(ctx context.Context, branches Branches, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error)
-	ContinueRebase(ctx context.Context, branchName string, rebasedBranchBase string, expectedBranchRevision string) (ContinueRebaseResult, error)
-	Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RestackResult, error)
+	RestackBranches(ctx context.Context, branches Branches, opts RestackOpts) (RestackBatchResult, error)
+	ContinueRebase(ctx context.Context, spec ContinueRebaseSpec) (ContinueRebaseResult, error)
+	Rebase(ctx context.Context, spec git.RebaseSpec) (RestackResult, error)
 
 	// Validation
 	ValidateRebases(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error)
-	ValidateRebasesParallel(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error)
 }
 
 // StackRewriter provides operations for modifying commit history and branch structure
@@ -80,17 +76,13 @@ type StackRewriter interface {
 // RemoteMetadataManager provides operations for syncing branch metadata with remote
 type RemoteMetadataManager interface {
 	IsRemoteSyncEnabled() bool
-	SetRemoteSyncEnabled(enabled bool)
 	BatchSetLastModifiedBy(ctx context.Context, branchNames []string) error
 	LoadRemoteMetadataCache(ctx context.Context) error
-	ApplyRemoteMetadataIfExists(ctx context.Context, branchName string) error
 	ApplyRemoteMetadataForBranches(ctx context.Context, branchNames []string) error
 	GetRemoteMetadataCache() RemoteMetadataView
-	ComputeMetadataDiff(branch string) (*MetadataDiff, error)
 	ComputeAllMetadataDiffs() ([]*MetadataDiff, error)
 	AcceptRemoteMetadata(ctx context.Context, branch string) error
 	RejectRemoteMetadata(branch string)
-	HasLocalModifications(branch string) bool
 	FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)
 	// CleanOrphanedMetadata deletes metadata refs for branches whose local
 	// branch is gone (deleteRefs) and clears the local-only hash for branches
@@ -98,10 +90,6 @@ type RemoteMetadataManager interface {
 	CleanOrphanedMetadata(ctx context.Context, deleteRefs []string, clearLocalHash []string) error
 	FetchRemoteMetadata(ctx context.Context) error
 	ConfigureRemoteMetadataSync(ctx context.Context) error
-	// TestRemoteMetadataCompatibility probes the configured remote to verify it
-	// accepts the metadata-ref namespace. Adapter code should call this instead
-	// of reaching to the git runner directly.
-	TestRemoteMetadataCompatibility(ctx context.Context) error
 	// PrepareRemoteMetadataPush verifies remote metadata refs are supported and
 	// enables local metadata sync state before pushing metadata refs.
 	PrepareRemoteMetadataPush(ctx context.Context) error
@@ -116,15 +104,11 @@ type RemoteMetadataManager interface {
 	PushStackMetadata(ctx context.Context, stackIDs []string) error
 	// ConfigureStackMetadataSync adds the stack-metadata refspec to the configured remote.
 	ConfigureStackMetadataSync(ctx context.Context) error
-	// FetchStackMetadata fetches stack-metadata refs from the configured remote.
-	FetchStackMetadata(ctx context.Context) error
 	// ListStackMetadata returns a map of local stack IDs to their ref SHAs.
 	ListStackMetadata() (map[string]string, error)
-	// DeleteStackMetadata removes a single local stack-metadata ref.
-	DeleteStackMetadata(ctx context.Context, stackID string) error
-	// DeleteStackMetadataBatch removes the local stack-metadata refs for the
-	// given stack IDs in a single batched ref update.
-	DeleteStackMetadataBatch(ctx context.Context, stackIDs []string) error
+	// DeleteStackMetadata removes the local stack-metadata refs for the given
+	// stack IDs in a single batched ref update.
+	DeleteStackMetadata(ctx context.Context, stackIDs []string) error
 	// DeleteRemoteStackMetadata pushes ref-deletions for the given stack IDs.
 	DeleteRemoteStackMetadata(ctx context.Context, stackIDs []string) error
 	// GetStackIDsForBranches returns the unique stack IDs for the given branches.
@@ -206,6 +190,11 @@ type Options struct {
 	// Metadata optionally injects the store used by this engine.
 	Metadata *git.MetadataStore
 
+	// Logger, when set, receives debug logging from the engine's git runner and
+	// metadata store. It is applied at construction so callers never need to
+	// reach through the engine to the runner.
+	Logger git.DebugLogger
+
 	// LoadMode controls how much metadata is read at construction time.
 	// Zero value (LoadModeFull) matches the pre-lite behavior — readers see
 	// all metadata populated synchronously after NewEngine returns.
@@ -245,8 +234,6 @@ type Engine interface {
 	WorktreeRegistry
 	MetadataInspector
 	GitConfig
-	Git() git.Runner
-	Metadata() *git.MetadataStore
 
 	// SnapshotForWorktree creates a deep copy of engine state for initializing
 	// worktree engines without the cost of rebuildInternal.

@@ -31,7 +31,7 @@ func TestGetRecentCommits_DuplicateTrailers(t *testing.T) {
 	require.Len(t, commits, 1)
 
 	require.Equal(t, 2, commits[0].StackSize)
-	require.Equal(t, []int{1, 2}, commits[0].StackPRNumbers)
+	require.Equal(t, []git.PRNumber{1, 2}, commits[0].StackPRNumbers)
 	require.Equal(t, "PROJ-123", commits[0].StackScope)
 	require.Equal(t, git.RecentCommitKindStackMerge, commits[0].Kind)
 }
@@ -91,7 +91,7 @@ func TestGetRecentCommits_MultipleCommits(t *testing.T) {
 	// Most recent first (commit with trailers)
 	require.Equal(t, "Consolidate stack", commits[0].Subject)
 	require.Equal(t, 3, commits[0].StackSize)
-	require.Equal(t, []int{10, 20, 30}, commits[0].StackPRNumbers)
+	require.Equal(t, []git.PRNumber{10, 20, 30}, commits[0].StackPRNumbers)
 	require.Equal(t, "FEAT-1", commits[0].StackScope)
 	require.Equal(t, git.RecentCommitKindStackMerge, commits[0].Kind)
 
@@ -120,7 +120,7 @@ func TestGetRecentCommits_ParsesPRNumberSuffix(t *testing.T) {
 	commits, err := runner.GetRecentCommits(context.Background(), "main", 1)
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
-	require.Equal(t, 123, commits[0].PRNumber)
+	require.Equal(t, git.PRNumber(123), commits[0].PRNumber)
 	require.Equal(t, git.RecentCommitKindRegular, commits[0].Kind)
 }
 
@@ -149,7 +149,7 @@ func TestGetRecentCommits_MergeCommitSkipsTrailerSubject(t *testing.T) {
 
 	// Should fall back to original merge subject, not "Stackit-Stack-Size: 11"
 	require.Equal(t, "Merge pull request #786 from org/stack-merge-stack-123", commits[0].Subject)
-	require.Equal(t, 786, commits[0].PRNumber)
+	require.Equal(t, git.PRNumber(786), commits[0].PRNumber)
 	require.Equal(t, 11, commits[0].StackSize)
 }
 
@@ -176,7 +176,7 @@ func TestGetRecentCommits_MergeCommitWithTitleBeforeTrailers(t *testing.T) {
 
 	// Should use the descriptive line, not the trailer
 	require.Equal(t, "Consolidate auth stack", commits[0].Subject)
-	require.Equal(t, 786, commits[0].PRNumber)
+	require.Equal(t, git.PRNumber(786), commits[0].PRNumber)
 }
 
 func TestGetRecentCommitsInRange(t *testing.T) {
@@ -206,7 +206,7 @@ func TestGetRecentCommitsInRange(t *testing.T) {
 	require.Len(t, commits, 2)
 	require.Equal(t, "Consolidate stack", commits[0].Subject)
 	require.Equal(t, 2, commits[0].StackSize)
-	require.Equal(t, []int{7, 8}, commits[0].StackPRNumbers)
+	require.Equal(t, []git.PRNumber{7, 8}, commits[0].StackPRNumbers)
 	require.Equal(t, git.RecentCommitKindStackMerge, commits[0].Kind)
 	require.Equal(t, "First past baseline", commits[1].Subject)
 }
@@ -234,7 +234,7 @@ func TestGetRecentCommitsInRange_FirstParentOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, commits, 1)
 	require.Equal(t, "Feature title (#42)", commits[0].Subject)
-	require.Equal(t, 42, commits[0].PRNumber)
+	require.Equal(t, git.PRNumber(42), commits[0].PRNumber)
 }
 
 func TestGetRecentCommitsInRange_Empty(t *testing.T) {

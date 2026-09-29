@@ -90,7 +90,7 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		submitFooter := cfg.SubmitFooter()
 
 		// Run submit action
-		stackRange := engine.StackRangeDownstack(true)
+		stackRange := engine.StackRangeDownstack(engine.IncludeCurrentBranch)
 		if f.stack {
 			stackRange = engine.StackRangeFull()
 		}

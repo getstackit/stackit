@@ -7,6 +7,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // DefaultShareMarker is appended to the current branch's line in shared output.
@@ -95,7 +96,7 @@ func shareStackBase(eng engine.Engine, branchName string) string {
 // shareLeaf renders a single branch as a Slack mrkdwn bullet, indented by depth.
 func shareLeaf(branch engine.Branch, depth int, currentName, marker string) string {
 	var (
-		prNumber       *int
+		prNumber       *git.PRNumber
 		prTitle, prURL string
 	)
 	if prInfo, err := branch.GetPrInfo(); err == nil && prInfo != nil {
@@ -116,7 +117,7 @@ func shareLeaf(branch engine.Branch, depth int, currentName, marker string) stri
 // PR becomes a clickable link (<url|#123 title>), falling back to bare text when
 // the URL is unknown; a branch without a PR falls back to its name so the stack
 // is still complete before submit.
-func shareLabel(name string, prNumber *int, prTitle, prURL string) string {
+func shareLabel(name string, prNumber *git.PRNumber, prTitle, prURL string) string {
 	if prNumber == nil {
 		return fmt.Sprintf("`%s` _(no PR)_", name)
 	}

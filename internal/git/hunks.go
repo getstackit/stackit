@@ -327,7 +327,7 @@ func GenerateNewFileHunk(filePath string, content []byte) Hunk {
 	}
 }
 
-// CountHunkLines returns the number of added and removed lines in a hunk
+// LineCounts returns the number of added and removed lines in a hunk
 func (h Hunk) LineCounts() (added, removed int) {
 	lines := strings.SplitSeq(h.Content, "\n")
 	for line := range lines {
@@ -339,9 +339,3 @@ func (h Hunk) LineCounts() (added, removed int) {
 	}
 	return added, removed
 }
-
-// BuildPatchFromHunks is retained for callers that have not migrated to Hunks.Patch.
-func BuildPatchFromHunks(hunks []Hunk) string { return Hunks(hunks).Patch() }
-
-// CountHunkLines is retained for callers that have not migrated to Hunk.LineCounts.
-func CountHunkLines(h Hunk) (added, removed int) { return h.LineCounts() }

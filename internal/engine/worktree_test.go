@@ -106,7 +106,8 @@ func TestCreateTemporaryWorktree(t *testing.T) {
 		Checkout("main")
 
 	ctx := context.Background()
-	worktreePath, cleanup, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*")
+	typedWorktreePath, cleanup, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*", engine.WorktreePruneAuto)
+	worktreePath := typedWorktreePath.String()
 	require.NoError(t, err)
 	require.NotEmpty(t, worktreePath)
 	require.NotNil(t, cleanup)
@@ -143,12 +144,13 @@ func TestCreateTemporaryWorktree_FastCleanup_AllowsNextCreate(t *testing.T) {
 		Checkout("main")
 
 	ctx := context.Background()
-	worktreePath, cleanup, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*")
+	typedWorktreePath, cleanup, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*", engine.WorktreePruneAuto)
+	worktreePath := typedWorktreePath.String()
 	require.NoError(t, err)
 	require.NotEmpty(t, worktreePath)
 	cleanup()
 
-	worktreePath2, cleanup2, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*")
+	worktreePath2, cleanup2, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*", engine.WorktreePruneAuto)
 	require.NoError(t, err)
 	require.NotEmpty(t, worktreePath2)
 	cleanup2()
@@ -162,15 +164,15 @@ func TestCreateTemporaryWorktree_RetryAfterStaleEntry(t *testing.T) {
 		Checkout("main")
 
 	ctx := context.Background()
-	worktreePath, _, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*")
+	worktreePath, _, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*", engine.WorktreePruneAuto)
 	require.NoError(t, err)
 	require.NotEmpty(t, worktreePath)
 
 	// Simulate an abrupt deletion without cleanup to leave a stale git worktree entry.
-	tmpDir := filepath.Dir(worktreePath)
+	tmpDir := filepath.Dir(worktreePath.String())
 	require.NoError(t, os.RemoveAll(tmpDir))
 
-	worktreePath2, cleanup2, err := s.Engine.CreateTemporaryWorktreeSkipPrune(ctx, "feature", "stackit-test-*")
+	worktreePath2, cleanup2, err := s.Engine.CreateTemporaryWorktree(ctx, "feature", "stackit-test-*", engine.WorktreePruneSkip)
 	require.NoError(t, err)
 	require.NotEmpty(t, worktreePath2)
 	cleanup2()

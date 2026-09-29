@@ -105,9 +105,9 @@ func (r *runner) listUntrackedFiles(ctx context.Context) ([]string, error) {
 // GetUntrackedFilesIn returns untracked, non-ignored files in an arbitrary
 // worktree, as repository-relative paths. Ignored files are excluded, so
 // gitignored build output never counts as work to protect.
-func (r *runner) GetUntrackedFilesIn(ctx context.Context, worktreePath string) ([]string, error) {
+func (r *runner) GetUntrackedFilesIn(ctx context.Context, worktreePath WorktreePath) ([]string, error) {
 	out, err := r.RunGitCommandRawWithContext(ctx,
-		"-C", worktreePath,
+		"-C", worktreePath.String(),
 		"ls-files", "--others", "--exclude-standard", "-z",
 	)
 	if err != nil {
@@ -308,9 +308,6 @@ func (h Hunk) NewFileContent() string {
 	}
 	return result
 }
-
-// extractContentFromHunk is retained for callers that have not migrated to Hunk.NewFileContent.
-func extractContentFromHunk(h Hunk) string { return h.NewFileContent() }
 
 // ApplyPatchToWorktree applies a patch to the working tree only (not the
 // index) by piping it to `git apply` via stdin. Unlike a stash pop, git apply

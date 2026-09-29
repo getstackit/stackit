@@ -15,10 +15,10 @@ import (
 // a destructive call was never attempted.
 type recordingRemoveEngine struct {
 	mergeExecuteEngine
-	removed []string
+	removed []git.WorktreePath
 }
 
-func (e *recordingRemoveEngine) RemoveWorktree(_ context.Context, path string) error {
+func (e *recordingRemoveEngine) RemoveWorktree(_ context.Context, path git.WorktreePath) error {
 	e.removed = append(e.removed, path)
 	return nil
 }
@@ -35,8 +35,8 @@ func (e *recordingRemoveEngine) RemoveWorktree(_ context.Context, path string) e
 func TestRemoveWorktreeForBranch(t *testing.T) {
 	t.Parallel()
 
-	mainRepo := t.TempDir()
-	linked := t.TempDir()
+	mainRepo := git.WorktreePath(t.TempDir())
+	linked := git.WorktreePath(t.TempDir())
 	worktrees := git.WorktreeList{
 		{Path: mainRepo, Branch: "landed"},
 		{Path: linked, Branch: "feature"},
@@ -59,7 +59,7 @@ func TestRemoveWorktreeForBranch(t *testing.T) {
 		eng := &recordingRemoveEngine{}
 
 		require.NoError(t, removeWorktreeForBranch(context.Background(), "feature", worktrees, eng, out))
-		require.Equal(t, []string{linked}, eng.removed)
+		require.Equal(t, []git.WorktreePath{linked}, eng.removed)
 	})
 
 	t.Run("branch in no worktree needs nothing removed", func(t *testing.T) {

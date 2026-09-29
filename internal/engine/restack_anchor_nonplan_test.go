@@ -48,7 +48,7 @@ func TestRestackBranchesFastForwardsWorktreeAnchor(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, oldSHA, trunkSHA)
 
-	_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("anchor")))
+	_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("anchor")), engine.RestackOpts{})
 	require.NoError(t, err)
 
 	anchorSHA, err := s.Scene.Repo.GetBranchSHA("anchor")
@@ -78,7 +78,7 @@ func TestRestackBranchesDoesNotReplayTrunkOntoAnchorChild(t *testing.T) {
 	for round, msg := range []string{"trunk one", "trunk two"} {
 		s.Checkout("main").Commit(msg).Rebuild()
 
-		_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")))
+		_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
 		require.NoError(t, err)
 
 		require.Equal(t, 1, s.BranchCommitCount("feature"),
@@ -106,17 +106,17 @@ func TestRestackBranchesMissingRecordedRevDoesNotReplayTrunk(t *testing.T) {
 
 	// Trunk advances and feature is restacked onto it, leaving the anchor stale.
 	s.Checkout("main").Commit("trunk one").Rebuild()
-	_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")))
+	_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
 	require.NoError(t, err)
 
 	// Legacy on-disk stack: no recorded parent revision.
-	meta, err := s.Engine.Metadata().ReadMetadata(context.Background(), "feature").One()
+	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature").One()
 	require.NoError(t, err)
-	require.NoError(t, s.Engine.Metadata().WriteMetadata("feature", meta.WithParentBranchRevision(nil)))
+	require.NoError(t, s.Metadata.WriteMetadata("feature", meta.WithParentBranchRevision(nil)))
 	require.NoError(t, s.Engine.Rebuild("main"))
 
 	s.Checkout("main").Commit("trunk two").Rebuild()
-	_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")))
+	_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
 	require.NoError(t, err)
 
 	require.Equal(t, 1, s.BranchCommitCount("feature"),

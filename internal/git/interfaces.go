@@ -31,7 +31,7 @@ type RepositoryWriter interface {
 
 // RemoteOperations handles interaction with remote repositories.
 type RemoteOperations interface {
-	FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error)
+	FetchRemoteShas(ctx context.Context, remote string) (RemoteBranchSHAs, error)
 	FindRemoteBranch(ctx context.Context, remote string) (string, error)
 	PushBranches(ctx context.Context, remote string, specs []PushSpec, opts PushOptions) PushResults
 	PullBranch(ctx context.Context, remote, branchName string) (PullResult, error)
@@ -64,10 +64,11 @@ type BranchWriter interface {
 	DeleteBranch(ctx context.Context, branchName string) error
 	RenameBranch(ctx context.Context, oldName, newName string) error
 	UpdateBranchRef(ctx context.Context, branchName, revision string) error
-	// UpdateBranchRefCAS moves a branch only if it still names expectedOld.
-	// Callers that prepared commits from a detached snapshot use this to avoid
-	// overwriting concurrent work from another worktree.
-	UpdateBranchRefCAS(ctx context.Context, branchName, revision, expectedOld string) error
+	// UpdateBranchRefCAS moves a branch only if it still names
+	// update.ExpectedOld. Callers that prepared commits from a detached
+	// snapshot use this to avoid overwriting concurrent work from another
+	// worktree.
+	UpdateBranchRefCAS(ctx context.Context, update BranchRefUpdate) error
 }
 
 // CommitReader provides read access to commit and revision information.
@@ -92,8 +93,8 @@ type DiffOperations interface {
 	IsSquashMerged(ctx context.Context, branchName, target string, cache *SquashMergeCache) (bool, error)
 	GetMergedBranches(ctx context.Context, target string) (map[string]bool, error)
 	ReadDiffs(ctx context.Context, mode DiffReadMode, ranges ...RevRange) ReadResults[DiffSummary]
-	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
-	ShowCommits(ctx context.Context, rr RevRange, patch, stat bool) (string, error)
+	ShowDiff(ctx context.Context, rr RevRange, format DiffFormat) (string, error)
+	ShowCommits(ctx context.Context, rr RevRange, format CommitLogFormat) (string, error)
 	GetStagedDiff(ctx context.Context, files ...string) (string, error)
 	GetUnstagedDiff(ctx context.Context, files ...string) (string, error)
 	// GetUnstagedDiffBinary is like GetUnstagedDiff but includes full binary
@@ -129,7 +130,7 @@ type CommitWriter interface {
 
 // RebaseOperations handles rebase operations.
 type RebaseOperations interface {
-	Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RebaseOutcome, error)
+	Rebase(ctx context.Context, spec RebaseSpec) (RebaseOutcome, error)
 	RebaseContinue(ctx context.Context) (RebaseOutcome, error)
 	RebaseContinueNoEdit(ctx context.Context) (RebaseOutcome, error)
 	RebaseAbort(ctx context.Context) error
@@ -185,7 +186,7 @@ type PathOperations interface {
 
 // PatchOperations handles patch operations.
 type PatchOperations interface {
-	ApplyPatch(ctx context.Context, patchFile string, threeWay bool) error
+	ApplyPatch(ctx context.Context, patchFile string, mode PatchApplyMode) error
 	// ApplyPatchToWorktree applies a patch (read from stdin) to the working
 	// tree only, never the index. It applies atomically or fails leaving the
 	// working tree untouched, so it can never write conflict markers.
@@ -195,23 +196,23 @@ type PatchOperations interface {
 
 // WorktreeOperations handles worktree management.
 type WorktreeOperations interface {
-	AddWorktree(ctx context.Context, path string, branch string, detach WorktreeDetachMode) error
-	AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach WorktreeDetachMode, noCheckout bool) error
-	RemoveWorktree(ctx context.Context, path string) error
-	ForceRemoveWorktree(ctx context.Context, path string) error
+	AddWorktree(ctx context.Context, path WorktreePath, branch string, detach WorktreeDetachMode) error
+	AddWorktreeWithOptions(ctx context.Context, path WorktreePath, branch string, detach WorktreeDetachMode, checkout WorktreeCheckoutMode) error
+	RemoveWorktree(ctx context.Context, path WorktreePath) error
+	ForceRemoveWorktree(ctx context.Context, path WorktreePath) error
 	ListWorktrees(ctx context.Context) (WorktreeList, error)
 	PruneWorktrees(ctx context.Context) error
-	GetWorktreePathForBranch(ctx context.Context, branchName string) (string, error)
-	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
-	ResetWorktreeWorkingDir(ctx context.Context, worktreePath string) error
-	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
-	WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error)
+	GetWorktreePathForBranch(ctx context.Context, branchName string) (WorktreePath, error)
+	GetWorktreeCurrentBranch(ctx context.Context, worktreePath WorktreePath) (string, error)
+	ResetWorktreeWorkingDir(ctx context.Context, worktreePath WorktreePath) error
+	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error)
+	WorktreeHasTrackedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error)
 	// WorktreeResetBlocker reports why resetting worktreePath to incomingRev
 	// would destroy work, or "" when it is safe.
-	WorktreeResetBlocker(ctx context.Context, worktreePath, incomingRev string) string
+	WorktreeResetBlocker(ctx context.Context, worktreePath WorktreePath, incomingRev string) string
 	// ListIgnoredFiles returns repository-relative paths that Git currently
 	// classifies as ignored in the requested worktree.
-	ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error)
+	ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath) ([]string, error)
 }
 
 // WorktreeRegistryOperations handles stackit-managed worktree tracking (local-only refs).
@@ -233,7 +234,7 @@ type StatusOperations interface {
 
 // RefOperations provides low-level reference operations.
 type RefOperations interface {
-	GetUntrackedFilesIn(ctx context.Context, worktreePath string) ([]string, error)
+	GetUntrackedFilesIn(ctx context.Context, worktreePath WorktreePath) ([]string, error)
 	TreeContainsAnyPath(ctx context.Context, rev string, paths []string) (collides, known bool)
 	UpdateRefs(ctx context.Context, updates []RefUpdate, reflogMessage string) error
 	DeleteRefs(ctx context.Context, refNames ...string) error

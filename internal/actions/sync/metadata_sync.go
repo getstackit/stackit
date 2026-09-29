@@ -11,26 +11,6 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 )
 
-// syncRemoteMetadata fetches and processes remote metadata.
-//
-// Deprecated: Use FetchRemoteMetadata in parallel + processRemoteMetadata
-func syncRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) error {
-	eng := ctx.RemoteMetadata()
-	out := ctx.Output
-
-	// Fetch remote metadata refs
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-	defer cancelRemote()
-	fetchStart := time.Now()
-	if err := eng.FetchRemoteMetadata(remoteCtx); err != nil {
-		// Non-fatal: remote may not have metadata yet
-		out.Debug("No remote metadata to fetch: %v", err)
-	}
-	ctx.Logger.Info("fetch remote metadata completed durationMs=%d", time.Since(fetchStart).Milliseconds())
-
-	return processRemoteMetadata(ctx, opts, handler)
-}
-
 // processRemoteMetadata processes remote metadata after fetch completes
 // This is designed to run after the network fetch operation completes in parallel
 func processRemoteMetadata(ctx *app.Context, opts *Options, handler Handler) error {

@@ -26,7 +26,19 @@ type RebaseOutcome struct {
 	RerereResolvedCount int
 }
 
-func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RebaseOutcome, error) {
+// RebaseSpec names the three refs of a `git rebase --onto` invocation: the
+// commits in OldBase..Branch are replayed onto Onto.
+type RebaseSpec struct {
+	// Branch is the branch whose commits are replayed.
+	Branch string
+	// Onto is the new base the commits land on.
+	Onto string
+	// OldBase is the exclusive lower bound of the replayed range.
+	OldBase string
+}
+
+func (r *runner) Rebase(ctx context.Context, spec RebaseSpec) (RebaseOutcome, error) {
+	branchName := spec.Branch
 	outcome := RebaseOutcome{Result: RebaseDone}
 	oldRev, err := r.ReadRevisions(ctx, branchName).One()
 	if err != nil {
@@ -35,7 +47,7 @@ func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream s
 
 	// Use detached HEAD to avoid "already used by worktree" errors
 	// We use branchName~0 to force a detached checkout of the branch tip
-	_, err = r.RunGitCommandWithContext(ctx, "rebase", "--onto", upstream, oldUpstream, branchName+"~0")
+	_, err = r.RunGitCommandWithContext(ctx, "rebase", "--onto", spec.Onto, spec.OldBase, branchName+"~0")
 	if err != nil {
 		if r.IsRebaseInProgress(ctx) {
 			autoOutcome, autoErr := r.continueRerereResolvedRebase(ctx, err)
@@ -57,7 +69,7 @@ func (r *runner) Rebase(ctx context.Context, branchName, upstream, oldUpstream s
 		return RebaseOutcome{Result: RebaseConflict, RerereResolvedCount: outcome.RerereResolvedCount}, fmt.Errorf("failed to get revision after rebase: %w", err)
 	}
 
-	if err := r.UpdateBranchRefCAS(ctx, branchName, newRev, oldRev); err != nil {
+	if err := r.UpdateBranchRefCAS(ctx, BranchRefUpdate{Branch: branchName, NewRevision: newRev, ExpectedOld: oldRev}); err != nil {
 		return RebaseOutcome{Result: RebaseConflict, RerereResolvedCount: outcome.RerereResolvedCount}, fmt.Errorf("failed to update branch ref %s: %w", branchName, err)
 	}
 

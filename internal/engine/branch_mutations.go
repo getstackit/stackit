@@ -25,11 +25,6 @@ func (e *engineImpl) ResetHard(ctx context.Context, revision string) error {
 	return e.git.HardReset(ctx, revision)
 }
 
-// ResetMerge performs a merge reset to the given revision
-func (e *engineImpl) ResetMerge(ctx context.Context, revision string) error {
-	return e.git.ResetMerge(ctx, revision)
-}
-
 // SoftReset moves HEAD to the given revision, keeping the index and working
 // tree intact (git reset --soft).
 func (e *engineImpl) SoftReset(ctx context.Context, revision string) error {
@@ -62,14 +57,6 @@ func (e *engineImpl) MergeMultiple(ctx context.Context, branches []string, opts 
 		NoEdit:  opts.NoEdit,
 		NoFF:    opts.NoFF,
 		Message: opts.Message,
-	})
-}
-
-// Fetch fetches from a remote
-func (e *engineImpl) Fetch(ctx context.Context, remote string, branch string) error {
-	return e.FetchRemote(ctx, RemoteFetchRequest{
-		Remote:   remote,
-		Branches: []string{branch},
 	})
 }
 
@@ -112,14 +99,9 @@ func (e *engineImpl) InteractiveRebase(ctx context.Context, onto string) error {
 	return e.git.InteractiveRebase(ctx, onto)
 }
 
-// PushBranch pushes a branch to the remote
-func (e *engineImpl) PushBranch(ctx context.Context, branch Branch, remote string, opts git.PushOptions) error {
-	return e.git.PushBranches(ctx, remote, []git.PushSpec{{BranchName: branch.GetName(), LeaseMode: git.PushLeaseNone}}, opts).One()
-}
-
 // PushBranches pushes multiple branches to the remote in a single git
 // invocation, returning a per-branch result map (nil entry = success).
-func (e *engineImpl) PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) map[string]error {
+func (e *engineImpl) PushBranches(ctx context.Context, remote string, specs []git.PushSpec, opts git.PushOptions) git.PushResults {
 	return e.git.PushBranches(ctx, remote, specs, opts)
 }
 
@@ -192,7 +174,7 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	// Reparent children to grandparent, preserving divergence points so
 	// children don't carry the deleted branch's commits after restacking.
 	parentBranch := e.GetBranch(parent)
-	reparentErr := e.ReparentBranches(ctx, children, parentBranch)
+	reparentErr := e.ReparentBranchesToParents(ctx, MovesTo(children, parentBranch.GetName()), ReparentOpts{})
 
 	// Rebuild engine state from disk so callers don't need to track when to call
 	// eng.Rebuild() themselves. After this returns, GetBranch/GetParent/children
@@ -223,13 +205,13 @@ func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 // whole deletion. GetStackRootForBranch and branchHeldBack guard their walks
 // the same way. When a cycle leaves no surviving ancestor reachable, the child
 // falls back to trunk rather than to a branch about to vanish.
-func nearestSurvivingParent(start string, parentOf map[string]string, toDelete map[string]bool, trunk string) string {
+func nearestSurvivingParent(start string, parentOf ParentMap, toDelete map[string]bool, trunk string) string {
 	parent := start
 	for range len(toDelete) + 1 {
 		if !toDelete[parent] {
 			return parent
 		}
-		parent = parentOf[parent]
+		parent = parentOf.Parent(parent)
 	}
 	return trunk
 }
@@ -248,7 +230,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 	// for each branch, and whether the current branch is being deleted.
 	toDeleteSet := make(map[string]bool, len(branches))
 	childrenByBranch := make(map[string][]string, len(branches))
-	parentByBranch := make(map[string]string, len(branches))
+	parentByBranch := make(ParentMap, len(branches))
 	var needCheckoutTrunk bool
 
 	// Keep e.currentBranch aligned with the real repository before deciding
@@ -283,7 +265,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 			if toDeleteSet[child] {
 				continue
 			}
-			newParent := nearestSurvivingParent(parentByBranch[name], parentByBranch, toDeleteSet, trunkName)
+			newParent := nearestSurvivingParent(parentByBranch.Parent(name), parentByBranch, toDeleteSet, trunkName)
 			moves = append(moves, BranchParentMove{Branch: child, NewParent: newParent})
 			allSurvivingChildren[child] = true
 		}
@@ -332,7 +314,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 
 	var reparentErr error
 	if len(moves) > 0 {
-		if err := e.ReparentBranchesToParents(ctx, moves); err != nil {
+		if err := e.ReparentBranchesToParents(ctx, moves, ReparentOpts{}); err != nil {
 			reparentErr = fmt.Errorf("failed to reparent surviving children: %w", err)
 		}
 	}

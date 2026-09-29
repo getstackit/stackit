@@ -3,18 +3,19 @@ package actions
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/stretchr/testify/require"
 )
 
 func TestShareLabel(t *testing.T) {
 	t.Parallel()
 
-	ptr := func(n int) *int { return &n }
+	ptr := func(n git.PRNumber) *git.PRNumber { return &n }
 
 	tests := []struct {
 		name     string
 		branch   string
-		prNumber *int
+		prNumber *git.PRNumber
 		prTitle  string
 		prURL    string
 		want     string

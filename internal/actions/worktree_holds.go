@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 )
 
 const (
@@ -30,7 +31,7 @@ type RestackWorktreeHold struct {
 	Scope        RestackWorktreeHoldScope
 	Branch       string
 	StackRoot    string
-	WorktreePath string
+	WorktreePath engine.WorktreePath
 	Reason       string
 }
 
@@ -41,18 +42,11 @@ type RestackWorktreeHoldReport struct {
 	Warnings []string
 }
 
-// RestackWorktreeHolds reports the exact worktree conditions that would make
-// restack hold back work. It shares the calculation used by PlanRestack, so
-// read-only consumers cannot drift from the safety decision.
-func RestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
-	return collectRestackWorktreeHolds(ctx)
-}
-
 func collectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 	eng := ctx.Engine
 	report := RestackWorktreeHoldReport{}
 
-	addAnchorHold := func(anchor, path, reason string) {
+	addAnchorHold := func(anchor string, path engine.WorktreePath, reason string) {
 		report.Holds = append(report.Holds, RestackWorktreeHold{
 			Scope:        RestackWorktreeHoldStack,
 			Branch:       anchor,
@@ -63,7 +57,7 @@ func collectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 	}
 	if managed, err := eng.ListManagedWorktrees(); err == nil {
 		for _, wt := range managed {
-			path := wt.Path.String()
+			path := wt.Path
 			if reason := managedWorktreeHoldReason(ctx, path); reason != "" {
 				addAnchorHold(wt.AnchorBranch, path, reason)
 			}
@@ -72,7 +66,7 @@ func collectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 		report.Warnings = append(report.Warnings, fmt.Sprintf("Could not inspect managed worktrees; holding no known stacks: %v", err))
 	}
 
-	addBranchHold := func(branch, path, reason string) {
+	addBranchHold := func(branch string, path engine.WorktreePath, reason string) {
 		report.Holds = append(report.Holds, RestackWorktreeHold{
 			Scope:        RestackWorktreeHoldBranch,
 			Branch:       branch,
@@ -145,7 +139,7 @@ func (h RestackWorktreeHold) warning() string {
 	}
 }
 
-func managedWorktreeHoldReason(ctx *app.Context, path string) string {
+func managedWorktreeHoldReason(ctx *app.Context, path engine.WorktreePath) string {
 	eng := ctx.Engine
 	if eng.WorktreeRebaseInProgress(ctx.Context, path) {
 		return restackWorktreeHoldReasonRebase
@@ -160,7 +154,7 @@ func managedWorktreeHoldReason(ctx *app.Context, path string) string {
 	return ""
 }
 
-func branchWorktreeHoldReason(ctx *app.Context, branch, path string) string {
+func branchWorktreeHoldReason(ctx *app.Context, branch string, path engine.WorktreePath) string {
 	eng := ctx.Engine
 	if eng.WorktreeRebaseInProgress(ctx.Context, path) {
 		return restackWorktreeHoldReasonRebase

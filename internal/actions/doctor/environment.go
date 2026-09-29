@@ -10,8 +10,14 @@ import (
 	"github.com/getstackit/stackit/internal/github"
 )
 
-// checkEnvironment performs environment-related checks
-func checkEnvironment(runner git.Runner, handler Handler, warnings int, errors int) (int, int) {
+// gitVersioner reports the installed Git's version.
+type gitVersioner interface {
+	GitVersion(ctx context.Context) (git.Version, error)
+}
+
+// checkEnvironment performs environment-related checks. versioner supplies the
+// installed Git version; ghRunner runs the gh CLI probes.
+func checkEnvironment(versioner gitVersioner, ghRunner github.GitCommandRunner, handler Handler, warnings int, errors int) (int, int) {
 	// Check git version. The floor is not cosmetic: below it ListWorktrees
 	// fails, and every ref-moving command inspects worktrees first — so a git
 	// that is merely present but too old leaves the user with a tool that
@@ -24,7 +30,7 @@ func checkEnvironment(runner git.Runner, handler Handler, warnings int, errors i
 		handler.OnCheck("git", CheckError, "git is not installed or not in PATH")
 	default:
 		version := strings.TrimSpace(string(gitVersion))
-		installed, versionErr := runner.GitVersion(context.Background())
+		installed, versionErr := versioner.GitVersion(context.Background())
 		switch {
 		case versionErr != nil:
 			warnings++
@@ -60,7 +66,7 @@ func checkEnvironment(runner git.Runner, handler Handler, warnings int, errors i
 	// reported quickly rather than hanging this diagnostic.
 	ghCtx, cancel := context.WithTimeout(context.Background(), remoteCheckTimeout)
 	defer cancel()
-	token, err := getGitHubToken(ghCtx, runner)
+	token, err := getGitHubToken(ghCtx, ghRunner)
 	if err != nil {
 		warnings++
 		handler.OnCheck("github_auth", CheckWarning, "GitHub authentication not configured")
@@ -70,7 +76,7 @@ func checkEnvironment(runner git.Runner, handler Handler, warnings int, errors i
 			handler.OnCheck("github_auth", CheckWarning, "GitHub token is empty")
 		} else {
 			// Try to create a GitHub client to verify connectivity
-			client, err := github.NewGitHubClient(ghCtx, runner)
+			client, err := github.NewGitHubClient(ghCtx, ghRunner)
 			if err != nil {
 				warnings++
 				handler.OnCheck("github_auth", CheckWarning, fmt.Sprintf("GitHub authentication failed: %v", err))

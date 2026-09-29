@@ -4,15 +4,19 @@ Step-by-step file lists for cross-cutting changes that touch multiple layers.
 
 ## Add a New GitHub Client Method
 
-Adding a method to the GitHub client interface requires updating 5 files:
+Adding a method to the GitHub client interface requires updating 4 files:
 
 | # | File | What to do |
 |---|------|------------|
-| 1 | `internal/github/client.go` | Add method to `Client` interface |
+| 1 | `internal/github/client.go` | Add method to the matching role interface (`PRReader`, `PRWriter`, `PRMerger`, `ChecksReader`, `PRCommenter`, `Identity`); `Client` is their union |
 | 2 | `internal/github/client_real.go` | Implement on `StackitGitHubClient` |
 | 3 | `testhelpers/github_mock_client.go` | Implement on `MockGitHubClient` (synthetic data) |
 | 4 | `internal/demo/demo_github_client.go` | Implement on `GitHubClient` (fake data + `simulateDelay`) |
-| 5 | `internal/app/context_test.go` | Add stub to `fakeGitHubClient` |
+
+Consumers that call only a few methods should depend on the narrow role
+interface (or a small consumer-local composition such as
+`merge.CIWaiterClient` or `handlers.ViewGitHub`) rather than the full `Client`,
+so their test fakes only need the methods they use.
 
 The client is bound to one repository at construction — methods must NOT take
 `owner, repo` parameters; implementations use the stored `c.owner, c.repo`.

@@ -123,7 +123,7 @@ api/openapi/       API contract source of truth
 |------|-------|
 | Add a new config option | See "Adding New Configuration" in `docs/config.md` |
 | Add submit command config | See "Submit Command Config Flow" in `docs/config.md` |
-| Add a new GitHub client method | See `docs/recipes.md` (5 files to update) |
+| Add a new GitHub client method | See `docs/recipes.md` (4 files to update) |
 | Add a new API response field | See `docs/recipes.md` (7 files backend-to-frontend) |
 | Add a new CLI command | See `docs/recipes.md` |
 | Add TUI component | See `docs/tui.md` |

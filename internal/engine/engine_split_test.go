@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 )
 
@@ -142,7 +143,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		c2SHA, _ := repo.GetCurrentSHA()
 
 		// Update feature ref to point to the new tip (the fix!)
-		err = eng.Git().UpdateBranchRef(context.Background(), "feature", c2SHA)
+		err = git.NewRunnerWithPath(scene.Dir, nil).UpdateBranchRef(context.Background(), "feature", c2SHA)
 		require.NoError(t, err)
 
 		// Apply split

@@ -280,7 +280,20 @@ func (r *runner) UpdateBranchRef(ctx context.Context, branchName, revision strin
 	return nil
 }
 
-func (r *runner) UpdateBranchRefCAS(ctx context.Context, branchName, revision, expectedOld string) error {
+// BranchRefUpdate is a compare-and-swap move of one local branch. Unlike
+// RefUpdate it names a branch rather than a full ref, accepts any revision
+// for the new tip, and always requires the expected old SHA.
+type BranchRefUpdate struct {
+	// Branch is the short branch name (without refs/heads/).
+	Branch string
+	// NewRevision is resolved to the SHA the branch moves to.
+	NewRevision string
+	// ExpectedOld is the SHA the branch must still name; required.
+	ExpectedOld string
+}
+
+func (r *runner) UpdateBranchRefCAS(ctx context.Context, update BranchRefUpdate) error {
+	branchName, revision, expectedOld := update.Branch, update.NewRevision, update.ExpectedOld
 	sha, err := r.resolveRefSHA(revision)
 	if err != nil {
 		return fmt.Errorf("failed to resolve revision %s: %w", revision, err)

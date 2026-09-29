@@ -5,6 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/foreach"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	foreachComponent "github.com/getstackit/stackit/internal/tui/components/foreach"
@@ -62,7 +63,7 @@ func (h *SimpleForeachHandler) OnEvent(e foreach.Event) {
 	switch ev := e.(type) {
 	case foreach.StackDisplayEvent:
 		// Store current branch for styling
-		h.currentBranch = ev.Stack.CurrentBranch()
+		h.currentBranch = ev.Stack.CurrentBranch
 		// Don't display stack in simple mode - we'll show progress per branch
 
 	case foreach.ExecutionStartEvent:
@@ -214,11 +215,11 @@ func (h *InteractiveForeachHandler) findRootBranch() string {
 func (h *InteractiveForeachHandler) OnEvent(e foreach.Event) {
 	switch ev := e.(type) {
 	case foreach.StackDisplayEvent:
-		h.stack = ev.Stack
+		h.stack = foreachStackTree(ev.Stack)
 		h.command = ev.Command
 
 		// Update model with tree renderer
-		h.model.Renderer = ev.Stack.ToRenderer()
+		h.model.Renderer = h.stack.ToRenderer()
 		h.model.RootBranch = h.findRootBranch()
 		h.model.Command = h.command
 
@@ -290,5 +291,26 @@ func (h *InteractiveForeachHandler) printSummary(results []foreach.BranchResult)
 		h.out.Info("Completed: %d succeeded, %d failed", successCount, failCount)
 	} else {
 		h.out.Info("All branches completed successfully (%d total)", successCount)
+	}
+}
+
+// foreachStackTree converts the action's stack snapshot into the tree
+// structure the foreach TUI renders.
+func foreachStackTree(snapshot foreach.StackSnapshot) *tree.StackTree {
+	parentMap := make(engine.ParentMap, len(snapshot.ParentMap))
+	childrenMap := make(map[string][]string)
+	for _, branchName := range snapshot.Branches {
+		parentName := snapshot.ParentMap[branchName]
+		parentMap[branchName] = parentName
+		if parentName != "" {
+			childrenMap[parentName] = append(childrenMap[parentName], branchName)
+		}
+	}
+	return &tree.StackTree{
+		Branches:       snapshot.Branches,
+		CurrentBranchV: snapshot.CurrentBranch,
+		TrunkBranch:    snapshot.TrunkBranch,
+		ParentMap:      parentMap,
+		ChildrenMap:    childrenMap,
 	}
 }

@@ -10,20 +10,14 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 )
 
-func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBranch engine.Branch, eng engine.Engine, splog output.Output, _ Options) error {
+func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBranch engine.Branch, eng foldEngine, splog output.Output, _ Options) error {
 	// Checkout parent branch (engine updates its currentBranch internally).
 	if err := eng.CheckoutBranch(gctx, parentBranch); err != nil {
 		return fmt.Errorf("failed to checkout parent branch: %w", err)
 	}
 
-	// Try fast-forward merge first, fallback to regular merge
-	err := eng.Merge(gctx, currentBranch.GetName(), engine.MergeOptions{FFOnly: true})
-	if err != nil {
-		// Fast-forward failed, try regular merge
-		err = eng.Merge(gctx, currentBranch.GetName(), engine.MergeOptions{NoEdit: true})
-		if err != nil {
-			return fmt.Errorf("failed to merge %s into %s due to conflicts. Please resolve the conflicts and run 'git commit', or abort with 'git merge --abort'", currentBranch.GetName(), parentBranch.GetName())
-		}
+	if err := fastForwardOrMerge(gctx, eng, currentBranch, parentBranch); err != nil {
+		return err
 	}
 
 	// Build StackGraph for traversals
@@ -63,5 +57,17 @@ func foldNormal(gctx context.Context, ctx *app.Context, currentBranch, parentBra
 		}
 	}
 
+	return nil
+}
+
+// fastForwardOrMerge merges source into the checked-out target branch,
+// fast-forwarding when possible and falling back to a merge commit.
+func fastForwardOrMerge(gctx context.Context, eng foldEngine, source, target engine.Branch) error {
+	if err := eng.Merge(gctx, source.GetName(), engine.MergeOptions{FFOnly: true}); err == nil {
+		return nil
+	}
+	if err := eng.Merge(gctx, source.GetName(), engine.MergeOptions{NoEdit: true}); err != nil {
+		return fmt.Errorf("failed to merge %s into %s due to conflicts. Please resolve the conflicts and run 'git commit', or abort with 'git merge --abort'", source.GetName(), target.GetName())
+	}
 	return nil
 }

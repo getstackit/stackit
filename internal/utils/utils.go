@@ -159,40 +159,6 @@ func GenerateBranchNameFromMessage(message string) string {
 	return SanitizeBranchName(subject)
 }
 
-// ProcessBranchNamePattern processes a branch name pattern by replacing placeholders
-// Supported placeholders:
-//   - {username}: The sanitized Git username
-//   - {date}: Current date and time in yyyyMMddHHmmss format in UTC
-//   - {message}: The sanitized commit message subject (required)
-//
-// The pattern must contain {message} placeholder. The pattern is processed and then
-// sanitized to ensure it's a valid branch name.
-func ProcessBranchNamePattern(pattern string, username, date, message string) string {
-	if pattern == "" {
-		// If pattern is empty, just use the message (backward compatibility)
-		return GenerateBranchNameFromMessage(message)
-	}
-
-	// Validate that pattern contains {message} placeholder
-	if !strings.Contains(pattern, "{message}") {
-		// Fallback to just the message if pattern doesn't contain {message}
-		// This should not happen if validation in SetBranchNamePattern works correctly
-		return GenerateBranchNameFromMessage(message)
-	}
-
-	// Extract message subject for {message} placeholder
-	messageSubject := GenerateBranchNameFromMessage(message)
-
-	// Replace placeholders
-	result := pattern
-	result = strings.ReplaceAll(result, "{username}", SanitizeBranchName(username))
-	result = strings.ReplaceAll(result, "{date}", date)
-	result = strings.ReplaceAll(result, "{message}", messageSubject)
-
-	// Sanitize the final result
-	return SanitizeBranchName(result)
-}
-
 // CleanCommitMessage removes comments and trailing whitespace from a commit message
 func CleanCommitMessage(message string) string {
 	lines := strings.Split(message, "\n")

@@ -37,12 +37,12 @@ const (
 
 // Snapshot represents a saved state of the repository
 type Snapshot struct {
-	Timestamp     time.Time         `json:"timestamp"`
-	Command       string            `json:"command"`
-	Args          []string          `json:"args"`
-	CurrentBranch string            `json:"current_branch"`
-	BranchSHAs    map[string]string `json:"branch_shas"`   // branch name -> SHA
-	MetadataSHAs  map[string]string `json:"metadata_shas"` // branch name -> metadata ref SHA
+	Timestamp     time.Time      `json:"timestamp"`
+	Command       string         `json:"command"`
+	Args          []string       `json:"args"`
+	CurrentBranch string         `json:"current_branch"`
+	BranchSHAs    RevisionMap    `json:"branch_shas"`   // branch name -> SHA
+	MetadataSHAs  MetadataSHAMap `json:"metadata_shas"` // branch name -> metadata ref SHA
 	// WorktreeSHA is a stash commit holding the uncommitted changes the
 	// command was about to consume. Empty when the working tree was clean, or
 	// when it could not be captured.
@@ -217,7 +217,7 @@ func (e *engineImpl) TakeSnapshot(ctx context.Context, opts SnapshotOptions) err
 	}
 
 	// Convert metadata refs to branch name -> SHA mapping
-	metadataSHAs := make(map[string]string)
+	metadataSHAs := make(MetadataSHAMap)
 	maps.Copy(metadataSHAs, metadataRefs)
 
 	snapshot := &Snapshot{
@@ -346,7 +346,7 @@ func (e *engineImpl) restoreStash(ctx context.Context, stashSHA string) error {
 	// and litters the tree with conflict markers. Callers arrive here with a
 	// clean tree — refs restored, working tree reset — so a tree that is still
 	// clean is proof the failed attempt wrote nothing and a retry is safe.
-	dirty, dirtyErr := e.git.WorktreeHasTrackedChanges(ctx, e.repoRoot)
+	dirty, dirtyErr := e.git.WorktreeHasTrackedChanges(ctx, e.worktreeRoot())
 	if dirtyErr != nil || dirty {
 		return fmt.Errorf("failed to restore uncommitted changes: %w", indexErr)
 	}
@@ -586,7 +586,7 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 	// tree. Inspect the snapshot's commit before changing any refs, while the
 	// index still correctly identifies the user's untracked work.
 	if target := snapshot.BranchSHAs[snapshot.CurrentBranch]; target != "" {
-		untracked, err := e.git.GetUntrackedFilesIn(ctx, e.repoRoot)
+		untracked, err := e.git.GetUntrackedFilesIn(ctx, e.worktreeRoot())
 		if err != nil {
 			return fmt.Errorf("failed to inspect untracked files before restoring snapshot: %w", err)
 		}

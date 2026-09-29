@@ -146,18 +146,27 @@ func TestMetadataTransactionRequiresPreparation(t *testing.T) {
 	require.ErrorContains(t, tx.DeleteLocalMeta("unknown"), "must be read")
 }
 
-// txEngine is the slice of the engine implementation these tests drive.
-type txEngine interface {
+// txEngineImpl is the slice of the engine implementation these tests drive.
+type txEngineImpl interface {
 	engine.Engine
 	BeginTx(string) *engine.MetadataTx
-	Metadata() *git.MetadataStore
 }
+
+// txEngine pairs the engine with the metadata store it was built on, so tests
+// can seed raw metadata below the engine abstraction.
+type txEngine struct {
+	txEngineImpl
+	metadata *git.MetadataStore
+}
+
+func (e txEngine) Metadata() *git.MetadataStore { return e.metadata }
 
 func newTxEngine(t *testing.T, r git.Runner, dir string) txEngine {
 	t.Helper()
-	e, err := engine.NewEngine(engine.Options{RepoRoot: dir, Trunk: "main", Git: r})
+	store := git.NewMetadataStore(r)
+	e, err := engine.NewEngine(engine.Options{RepoRoot: dir, Trunk: "main", Git: r, Metadata: store})
 	require.NoError(t, err)
-	return e.(txEngine)
+	return txEngine{txEngineImpl: e.(txEngineImpl), metadata: store}
 }
 
 // metadataTier selects which metadata namespace a table case exercises.

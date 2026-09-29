@@ -1,6 +1,9 @@
 package create
 
-import "github.com/getstackit/stackit/internal/actions/handler"
+import (
+	"github.com/getstackit/stackit/internal/actions/handler"
+	"github.com/getstackit/stackit/internal/engine"
+)
 
 // Step represents a step in the create process
 type Step string
@@ -22,7 +25,7 @@ type Result struct {
 	BranchName   string
 	ParentBranch string
 	HasCommit    bool
-	WorktreePath string
+	WorktreePath engine.WorktreePath
 }
 
 // Handler receives events from create action

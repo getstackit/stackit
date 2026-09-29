@@ -34,7 +34,7 @@ type PRCleanupConfig struct {
 	Source PRCleanupSource
 
 	// ConsolidationPRNumber is the PR number of the consolidation PR
-	ConsolidationPRNumber int
+	ConsolidationPRNumber git.PRNumber
 
 	// UserName is the username to include in the footer (optional)
 	UserName string
@@ -42,9 +42,9 @@ type PRCleanupConfig struct {
 
 // PRCleanupResult contains the results of PR cleanup
 type PRCleanupResult struct {
-	ClosedPRs  []int // PR numbers that were closed
-	FailedPRs  []int // PR numbers that failed to close
-	SkippedPRs []int // PR numbers that were already closed
+	ClosedPRs  []git.PRNumber // PR numbers that were closed
+	FailedPRs  []git.PRNumber // PR numbers that failed to close
+	SkippedPRs []git.PRNumber // PR numbers that were already closed
 }
 
 // ClosedCount returns the number of PRs that were closed
@@ -52,9 +52,6 @@ func (r PRCleanupResult) ClosedCount() int { return len(r.ClosedPRs) }
 
 // FailedCount returns the number of PRs that failed to close
 func (r PRCleanupResult) FailedCount() int { return len(r.FailedPRs) }
-
-// SkippedCount returns the number of PRs that were skipped (already closed)
-func (r PRCleanupResult) SkippedCount() int { return len(r.SkippedPRs) }
 
 // PRCleaner handles post-merge cleanup of individual PRs
 type PRCleaner struct {
@@ -99,7 +96,7 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		prInfo *engine.PrInfo
 	}
 	branchPRs := make([]branchWithPR, 0, len(branchNames))
-	prNumbers := make([]int, 0, len(branchNames))
+	prNumbers := make([]git.PRNumber, 0, len(branchNames))
 	for _, branchName := range branchNames {
 		branch := c.engine.GetBranch(branchName)
 		prInfo, err := branch.GetPrInfo()
@@ -109,10 +106,10 @@ func (c *PRCleaner) CleanupBranches(ctx context.Context, branchNames []string) P
 		branchPRs = append(branchPRs, branchWithPR{branch: branch, prInfo: prInfo})
 		prNumbers = append(prNumbers, *prInfo.Number())
 	}
-	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.Git(), repo, prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	prDetails, err := github.BatchGetPRStateBodyGraphQL(ctx, c.ctx.GHRunner, repo, prNumbers)
 	if err != nil {
 		out.Debug("Failed to batch fetch PR details: %v", err)
-		prDetails = map[int]github.PRStateBody{}
+		prDetails = map[git.PRNumber]github.PRStateBody{}
 	}
 
 	prInfoUpdates := make(map[string]*engine.PrInfo, len(branchPRs))

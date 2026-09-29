@@ -22,7 +22,7 @@ type StackNavigator interface {
 	Graph(strategy SortStrategy) *StackGraph
 	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
 	SortBranchesTopologically(branches Branches) Branches
-	FindBranchesForCommits(commitSHAs []string) map[string]string
+	FindBranchesForCommits(commitSHAs []string) CommitBranchMap
 	// RefDecorations returns local branch and tag refs grouped by the commit SHA
 	// they point at (annotated tags dereferenced), for git-log-style annotations.
 	RefDecorations() (map[string][]git.RefDecoration, error)
@@ -35,29 +35,29 @@ type StackNavigator interface {
 	// back to trunk if every ancestor up the chain is excluded.
 	FindNearestNonExcludedAncestor(startParent string, isExcluded func(name string) bool) string
 	ValidateOnBranch() (string, error)
-	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	GetScope(branch Branch) Scope
 	GetRemote() string
 	GetRepoInfo(ctx context.Context) (git.RemoteRepository, error)
 	GetRepoRoot() string
 	GetUserName(ctx context.Context) (string, error)
+	// GitVersion reports the installed Git's version, for diagnostics.
+	GitVersion(ctx context.Context) (git.Version, error)
 	IsInsideRepo() bool
 }
 
 // BranchStatus provides branch state information
 type BranchStatus interface {
-	GetBranch(branchName string) Branch
 	IsTrunk(branch Branch) bool
 	IsTracked(branch Branch) bool
 	IsUpToDate(branch Branch) bool
 	ReadBranchStatuses(branches Branches) BranchStatuses
-	IsMergedIntoTrunk(ctx context.Context, branchName string) (bool, error)
 	IsBranchEmpty(ctx context.Context, branchName string) (bool, error)
 	// BatchIsBranchEmpty reports emptiness for many branches, resolving all tree
 	// SHAs in one batched rev-parse instead of a diff per branch.
 	BatchIsBranchEmpty(branchNames []string) BranchNameSet
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (DeletionStatuses, error)
-	GetScope(branch Branch) Scope
+	// GetStackDescription returns the stack description for a branch's stack.
+	// It first checks the stack ref, then falls back to legacy branch metadata.
 	GetStackDescription(branch Branch) *git.StackDescription
 	IsLocked(branch Branch) bool
 	GetLockReason(branch Branch) LockReason
@@ -65,16 +65,13 @@ type BranchStatus interface {
 	IsWorktreeAnchor(branch Branch) bool
 	GetBranchType(branch Branch) git.BranchType
 	GetPrInfo(branch Branch) (*PrInfo, error)
-	// BatchGetPRSubmissionStatus returns submission status for many branches,
-	// reading remote status once for the whole set instead of per branch. The
-	// context bounds the remote read (a `git ls-remote`); pass a deadline-bearing
-	// context so a stalled remote can't outlive the caller's intent.
-	BatchGetPRSubmissionStatus(ctx context.Context, branches Branches) (map[string]PRSubmissionStatus, error)
-	// BatchGetPRSubmissionStatusWithRemote is BatchGetPRSubmissionStatus with a
-	// caller-supplied remote-status snapshot, so the remote read can be shared.
-	BatchGetPRSubmissionStatusWithRemote(branches Branches, remoteStatuses BranchRemoteStatuses) (map[string]PRSubmissionStatus, error)
+	// BatchGetPRSubmissionStatus returns submission status for many branches.
+	// Pass a remote-status snapshot to share an earlier remote read, or nil to
+	// read remote status at most once for the whole set. The context bounds
+	// that read (a `git ls-remote`); pass a deadline-bearing context so a
+	// stalled remote can't outlive the caller's intent.
+	BatchGetPRSubmissionStatus(ctx context.Context, branches Branches, remoteStatuses BranchRemoteStatuses) (map[string]PRSubmissionStatus, error)
 	FindMostRecentTrackedAncestors(ctx context.Context, branchName string) ([]string, error)
-	GetRemote() string
 	GetRemoteURL(ctx context.Context) (string, error)
 	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
 	// MissingRemoteBranches returns the subset of the given branches that no
@@ -83,20 +80,17 @@ type BranchStatus interface {
 	// TrunkRemoteState reports how the local trunk relates to its
 	// remote-tracking branch using only local refs (no network).
 	TrunkRemoteState(ctx context.Context) TrunkRemoteState
-	GetMergedBranches(ctx context.Context, target string) (BranchNameSet, error)
 }
 
 // BranchInfo provides commit and diff metadata
 type BranchInfo interface {
 	GetCommitDate(branch Branch) (time.Time, error)
-	GetCommitAuthor(branch Branch) (string, error)
 	// BatchCommitInfo resolves each branch's tip commit date and author in one
 	// batched pass instead of two `git log` processes per branch.
 	BatchCommitInfo(branches Branches) map[string]git.CommitInfo
 	GetRevision(branch Branch) (string, error)
 	GetAllCommits(branch Branch) (git.Commits, error)
 	GetCommitIDs(branch Branch) ([]string, error)
-	GetParentCommitSHA(commitSHA string) (string, error)
 	GetCommitSHA(branchName string, offset int) (string, error)
 	// BatchRevisions resolves every branch's tip SHA in one batched pass,
 	// keyed by branch name.
@@ -123,19 +117,14 @@ type BranchInfo interface {
 	// additions/deletions) for every branch in one batched pass — a use-case
 	// bundle over the per-concern readers, for annotation builders.
 	BatchBranchStats(branches Branches) map[string]BranchStat
-	// CommitCountBetween returns how many commits are in (base, head]. Backed by
-	// the same content-keyed cache as the batched readers, so repeated calls for
-	// the same pair are free.
-	CommitCountBetween(base, head string) (int, error)
 }
 
 // GitDiffer handles diff and merge operations
 type GitDiffer interface {
 	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
 	GetChangedFiles(ctx context.Context, rr git.RevRange) ([]string, error)
-	IsDiffEmpty(ctx context.Context, base, head string) (bool, error)
-	ShowDiff(ctx context.Context, left, right string, stat bool) (string, error)
-	ShowCommits(ctx context.Context, rr git.RevRange, patch, stat bool) (string, error)
+	ShowDiff(ctx context.Context, rr git.RevRange, format git.DiffFormat) (string, error)
+	ShowCommits(ctx context.Context, rr git.RevRange, format git.CommitLogFormat) (string, error)
 	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
 	// GetDiffBetween returns raw diff between two refs, suitable for parsing into hunks.
 	GetDiffBetween(ctx context.Context, rr git.RevRange, files ...string) (string, error)
@@ -145,7 +134,6 @@ type GitDiffer interface {
 type WorkingTree interface {
 	HasStagedChanges(ctx context.Context) (bool, error)
 	HasUnstagedChanges(ctx context.Context) (bool, error)
-	HasUntrackedFiles(ctx context.Context) (bool, error)
 	GetUntrackedFiles(ctx context.Context) ([]string, error)
 	// GetWorkingTreeStatus returns all three working-tree flags in one git call.
 	// Prefer this over calling Has* individually when multiple flags are needed.
@@ -156,7 +144,6 @@ type WorkingTree interface {
 	// `git apply`.
 	GetUnstagedDiffBinary(ctx context.Context, files ...string) (string, error)
 	GetUntrackedFileHunks(ctx context.Context) ([]git.Hunk, error)
-	GetPendingChanges(ctx context.Context) ([]PendingChange, error)
 	GetCommitTemplate(ctx context.Context) (string, error)
 	GetUnmergedFiles(ctx context.Context) ([]string, error)
 	ParseStagedHunks(ctx context.Context) ([]git.Hunk, error)
@@ -166,8 +153,30 @@ type WorkingTree interface {
 	GetRebaseHead() (string, error)
 	HasUncommittedChanges(ctx context.Context) bool
 	CheckoutPaths(ctx context.Context, branch string, pathspecs []string) error
-	RemovePaths(ctx context.Context, pathspecs []string) error
 	StashList(ctx context.Context) (string, error)
+}
+
+// StackView is the narrow read surface for consumers that display or analyze
+// stack structure (tree renderers, API view assembly, shippability analysis):
+// branch lookup, the stack graph, scopes, and batched restack/remote status.
+// Prefer it (or a narrower local interface) over BranchReader for read-only
+// adapters.
+type StackView interface {
+	Trunk() Branch
+	CurrentBranch() *Branch
+	CurrentBranchName() string
+	GetBranch(branchName string) Branch
+	AllBranches() Branches
+	Graph(strategy SortStrategy) *StackGraph
+	BranchesDepthFirst(startBranch Branch) iter.Seq2[Branch, int]
+	GetScope(branch Branch) Scope
+	ReadBranchStatuses(branches Branches) BranchStatuses
+	ReadBranchRemoteStatuses(ctx context.Context, branches Branches) BranchRemoteStatuses
+}
+
+// BranchLookup resolves branches by name.
+type BranchLookup interface {
+	GetBranch(branchName string) Branch
 }
 
 // BranchReader is a composite interface for backward compatibility
@@ -195,23 +204,16 @@ type BranchTracking interface {
 	// ReparentBranch changes a branch's parent while automatically preserving
 	// its divergence point. Preferred over SetParent for existing branches.
 	ReparentBranch(ctx context.Context, branch Branch, newParent Branch) error
-	// ReparentBranches changes multiple branches to the same new parent while
-	// preserving divergence points. All divergence points are captured before
-	// any reparenting begins.
-	ReparentBranches(ctx context.Context, branchNames []string, newParent Branch) error
 	// ReparentBranchesToParents reparents each branch onto its own designated
-	// parent (per-branch, unlike ReparentBranches) while preserving divergence
-	// points, all captured before any mutation begins.
-	ReparentBranchesToParents(ctx context.Context, moves []BranchParentMove) error
+	// parent (MovesTo builds moves onto one shared parent). opts.Divergence
+	// selects preserving each divergence point (captured before any mutation)
+	// or recomputing it against the new parent.
+	ReparentBranchesToParents(ctx context.Context, moves []BranchParentMove, opts ReparentOpts) error
 	// ApplyParentUpdatesAfterRemovals applies parent updates while evaluating
 	// linear-stack validation after removed branches have disappeared. Cleanup
 	// actions use this before deleting merged parents, so a chain collapse is
 	// not mistaken for a temporary fork.
 	ApplyParentUpdatesAfterRemovals(ctx context.Context, updates []BranchParentUpdate, removed []string) error
-	// ReparentBranchesRecompute reparents multiple branches onto the same new
-	// parent and recomputes each divergence point against it (fresh merge-base).
-	// Use when moving branches under a newly created parent.
-	ReparentBranchesRecompute(ctx context.Context, branchNames []string, newParent Branch) error
 	SetScope(ctx context.Context, branch Branch, scope Scope) error
 	// SetScopeAndMarkForUpdate sets the scope and marks the branch as needing a
 	// PR body update in one atomic transaction instead of two separate ref writes.
@@ -228,34 +230,21 @@ type BranchTracking interface {
 	// GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates
 	GetBranchesNeedingPRBodyUpdate() []string
 
-	// GetStackDescription returns the stack description for a branch's stack.
-	// It first checks the stack ref, then falls back to legacy branch metadata.
-	GetStackDescription(branch Branch) *git.StackDescription
 	// SetStackDescription sets the stack description in the stack ref for a branch.
 	// Returns an error if the branch is not part of a tracked stack.
 	SetStackDescription(ctx context.Context, branch Branch, desc *git.StackDescription) error
 	// ClearStackDescription removes the stack description from the stack ref.
 	ClearStackDescription(ctx context.Context, branch Branch) error
 
-	// GenerateStackID creates a new stack ID for a new stack.
-	// Format: {timestamp-nanos}-{sanitized-root-branch}
-	GenerateStackID(rootBranch string) string
 	// GetStackID returns the stack ID for a branch.
 	// Returns empty string for untracked branches or trunk.
 	// For legacy branches without StackID, derives it from the stack root.
 	GetStackID(branch Branch) string
-	// EnsureStackID returns the stack ID for a branch, creating one if it doesn't exist.
-	// This is used for lazy creation of stack metadata when setting descriptions or scopes.
-	EnsureStackID(ctx context.Context, branch Branch) (string, error)
 	// SetStackID sets the stack ID on multiple branches atomically in a single transaction.
 	SetStackID(ctx context.Context, branches Branches, stackID string) error
 	// AssignBranchesToNewStack creates a new stack metadata ref and assigns its
 	// ID to the provided branches atomically.
 	AssignBranchesToNewStack(ctx context.Context, root Branch, branches Branches) (string, error)
-	// CreateStackRef creates a new stack ref with the given metadata.
-	CreateStackRef(stackID string, meta *git.StackMeta) error
-	// GetStackMeta returns the stack metadata for a stack ID.
-	GetStackMeta(stackID string) (*git.StackMeta, error)
 }
 
 // BranchMutations handles branch lifecycle operations
@@ -268,11 +257,9 @@ type BranchMutations interface {
 	UpdateBranchRef(ctx context.Context, branchName, revision string) error
 	CreateBranch(ctx context.Context, branchName string, startPoint string) error
 	ResetHard(ctx context.Context, revision string) error
-	ResetMerge(ctx context.Context, revision string) error
 	SoftReset(ctx context.Context, revision string) error
 	Merge(ctx context.Context, revision string, opts MergeOptions) error
 	MergeMultiple(ctx context.Context, branches []string, opts MergeOptions) error
-	Fetch(ctx context.Context, remote string, branch string) error
 	InteractiveRebase(ctx context.Context, onto string) error
 	RebaseAbort(ctx context.Context) error
 	MergeAbort(ctx context.Context) error
@@ -280,8 +267,7 @@ type BranchMutations interface {
 
 // CommitOperations handles staging and committing
 type CommitOperations interface {
-	Commit(ctx context.Context, message string, verbose int, noVerify bool) error
-	CommitWithOptions(ctx context.Context, opts git.CommitOptions) error
+	Commit(ctx context.Context, opts git.CommitOptions) error
 	StageAll(ctx context.Context) error
 	StagePatch(ctx context.Context) error
 	StageHunks(ctx context.Context, hunks []git.Hunk) error
@@ -292,41 +278,38 @@ type CommitOperations interface {
 	StashPush(ctx context.Context, message string) (string, error)
 	StashPushStaged(ctx context.Context, message string) (string, error)
 	StashDrop(ctx context.Context, ref string) error
-	StashPop(ctx context.Context) error
 	StashPopRef(ctx context.Context, ref string) error
 }
 
 // WorktreeOperations handles worktree management
 type WorktreeOperations interface {
-	AddWorktree(ctx context.Context, path string, branch string, detach git.WorktreeDetachMode) error
-	RemoveWorktree(ctx context.Context, path string) error
-	ForceRemoveWorktree(ctx context.Context, path string) error
-	GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error)
-	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error)
-	WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error)
-	UntrackedCollision(ctx context.Context, branchName, worktreePath string) (collides, known bool)
+	AddWorktree(ctx context.Context, path WorktreePath, branch string, detach git.WorktreeDetachMode) error
+	RemoveWorktree(ctx context.Context, path WorktreePath) error
+	ForceRemoveWorktree(ctx context.Context, path WorktreePath) error
+	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error)
+	WorktreeHasTrackedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error)
+	UntrackedCollision(ctx context.Context, branchName string, worktreePath WorktreePath) (collides, known bool)
 	// WorktreeRebaseInProgress reports whether a rebase is active in worktreePath.
-	WorktreeRebaseInProgress(ctx context.Context, worktreePath string) bool
-	ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error)
-	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string) (path string, cleanup func(), err error)
-	// CreateTemporaryWorktreeSkipPrune is like CreateTemporaryWorktree but skips the automatic
-	// PruneWorktrees() call. Use this when creating multiple worktrees in parallel after
-	// manually calling PruneWorktrees() once, to avoid race conditions.
-	CreateTemporaryWorktreeSkipPrune(ctx context.Context, branch string, prefix string) (path string, cleanup func(), err error)
+	WorktreeRebaseInProgress(ctx context.Context, worktreePath WorktreePath) bool
+	ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath) ([]string, error)
+	// CreateTemporaryWorktree creates a detached temporary worktree. Pass
+	// WorktreePruneSkip when creating several in parallel after calling
+	// PruneWorktrees once, to avoid racing on the prune.
+	CreateTemporaryWorktree(ctx context.Context, branch string, prefix string, prune WorktreePruneMode) (path WorktreePath, cleanup func(), err error)
 	PruneWorktrees(ctx context.Context) error
 	// PruneOrphanedWorktreePathRefs removes stale reverse registration refs.
 	PruneOrphanedWorktreePathRefs(ctx context.Context) (int, error)
 }
 
-// WorktreeName identifies a Stackit-managed worktree's user-facing name.
-type WorktreeName string
+// WorktreeName identifies a Stackit-managed worktree's user-facing name. It
+// aliases the git-layer type so names flow from stored metadata to actions
+// without conversion.
+type WorktreeName = git.WorktreeName
 
-func (n WorktreeName) String() string { return string(n) }
-
-// WorktreePath identifies a Stackit-managed worktree checkout.
-type WorktreePath string
-
-func (p WorktreePath) String() string { return string(p) }
+// WorktreePath identifies a physical worktree checkout. It aliases the
+// git-layer type so paths flow from `git worktree list` and stored metadata
+// through the engine and actions without conversion.
+type WorktreePath = git.WorktreePath
 
 // WorktreeRegistration identifies the metadata needed to register a managed
 // worktree. Keeping these fields together prevents anchor, path, and display

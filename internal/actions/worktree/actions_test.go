@@ -260,7 +260,7 @@ func TestCreateAction(t *testing.T) {
 		require.True(t, parent.IsTrunk())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path.String())
+		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -307,7 +307,7 @@ func TestCreateAction(t *testing.T) {
 		require.Contains(t, err.Error(), "already exists")
 
 		// Clean up
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path.String())
+		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -339,7 +339,7 @@ func TestCreateAction(t *testing.T) {
 		require.True(t, parent.IsTrunk())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path.String())
+		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 
@@ -361,7 +361,7 @@ func TestCreateAction(t *testing.T) {
 		require.Equal(t, "backend", scope.String())
 
 		// Clean up worktree
-		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path.String())
+		_ = s.Engine.RemoveWorktree(s.Context.Context, result.Path)
 		_ = s.Engine.UnregisterWorktree(s.Context, result.AnchorBranch)
 	})
 }

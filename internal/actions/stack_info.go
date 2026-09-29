@@ -5,6 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // StackInfoBranch is structured info for one non-trunk branch in a stack.
@@ -14,7 +15,7 @@ type StackInfoBranch struct {
 	IsLocked       bool
 	IsFrozen       bool
 	Scope          string
-	PRNumber       *int
+	PRNumber       *git.PRNumber
 	PRURL          string
 	CommitMessages []string
 	DiffStats      BranchDiffStats
@@ -55,7 +56,7 @@ func QueryStackInfo(ctx context.Context, eng engine.Engine) (StackInfoResult, er
 	commits := eng.BatchCommits(stackBranches)
 	diffs := eng.BatchDiffStats(stackBranches)
 	fileCounts := eng.BatchChangedFileCounts(ctx, stackBranches)
-	prStatuses, _ := eng.BatchGetPRSubmissionStatus(ctx, stackBranches)
+	prStatuses, _ := eng.BatchGetPRSubmissionStatus(ctx, stackBranches, nil)
 	statuses := eng.ReadBranchStatuses(stackBranches)
 
 	trunk := eng.Trunk().GetName()

@@ -2,14 +2,13 @@ package actions
 
 import (
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 )
 
 // WarnIfLinearStackRestored reports when snapshot restoration brings back a
 // topology that linear mode would not allow newly-created operations to make.
 func WarnIfLinearStackRestored(ctx *app.Context, operation string) {
-	if ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear || !hasNonLinearStack(ctx.Engine) {
+	if ctx.Config == nil || !ctx.Config.LinearStacks() || !hasNonLinearStack(ctx.Engine) {
 		return
 	}
 

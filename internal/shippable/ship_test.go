@@ -3,19 +3,19 @@ package shippable
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/actions/stackview"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/getstackit/stackit/internal/actions/merge"
 )
 
 func TestShipResult_Fields(t *testing.T) {
 	result := &ShipResult{
 		IncludedStacks: []Stack{
-			{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-			{Stack: merge.MultiStackInfo{RootBranch: "b"}},
+			{Stack: stackview.StackInfo{RootBranch: "a"}},
+			{Stack: stackview.StackInfo{RootBranch: "b"}},
 		},
 		ExcludedStacks: []ExcludedStack{
-			{Stack: Stack{Stack: merge.MultiStackInfo{RootBranch: "c"}}, Reason: ReasonMergeConflict},
+			{Stack: Stack{Stack: stackview.StackInfo{RootBranch: "c"}}, Reason: ReasonMergeConflict},
 		},
 		PRNumber:   123,
 		PRURL:      "https://github.com/org/repo/pull/123",
@@ -24,7 +24,7 @@ func TestShipResult_Fields(t *testing.T) {
 
 	assert.Equal(t, 2, len(result.IncludedStacks))
 	assert.Equal(t, 1, len(result.ExcludedStacks))
-	assert.Equal(t, 123, result.PRNumber)
+	assert.Equal(t, git.PRNumber(123), result.PRNumber)
 	assert.Equal(t, "https://github.com/org/repo/pull/123", result.PRURL)
 	assert.Equal(t, "consolidation-123", result.BranchName)
 }

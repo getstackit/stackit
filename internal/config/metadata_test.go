@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -94,77 +93,13 @@ func TestOptionsHaveYAMLPaths(t *testing.T) {
 	}
 }
 
-// TestGetOptionByGitKey tests lookup by git key.
-func TestGetOptionByGitKey(t *testing.T) {
+// TestOptionsHaveUniqueGitKeys ensures no two Options share a git key.
+func TestOptionsHaveUniqueGitKeys(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		gitKey       string
-		expectedPath string
-		shouldExist  bool
-	}{
-		{KeyTrunk, "trunk", true},
-		{KeySubmitFooter, "submit.footer", true},
-		{KeyBranchPattern, "branch.pattern", true},
-		{"stackit.nonexistent", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.gitKey, func(t *testing.T) {
-			t.Parallel()
-
-			opt := GetOptionByGitKey(tt.gitKey)
-			if tt.shouldExist {
-				require.NotNil(t, opt, "Expected to find Option for %q", tt.gitKey)
-				assert.Equal(t, tt.expectedPath, opt.YAMLPath)
-			} else {
-				assert.Nil(t, opt)
-			}
-		})
-	}
-}
-
-// TestGetOptionByYAMLPath tests lookup by YAML path.
-func TestGetOptionByYAMLPath(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		yamlPath    string
-		expectedKey string
-		shouldExist bool
-	}{
-		{"trunk", KeyTrunk, true},
-		{"submit.footer", KeySubmitFooter, true},
-		{"branch.pattern", KeyBranchPattern, true},
-		{"nonexistent", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.yamlPath, func(t *testing.T) {
-			t.Parallel()
-
-			opt := GetOptionByYAMLPath(tt.yamlPath)
-			if tt.shouldExist {
-				require.NotNil(t, opt, "Expected to find Option for %q", tt.yamlPath)
-				assert.Equal(t, tt.expectedKey, opt.GitKey)
-			} else {
-				assert.Nil(t, opt)
-			}
-		})
-	}
-}
-
-// TestAllGitKeys ensures AllGitKeys returns the expected number of keys.
-func TestAllGitKeys(t *testing.T) {
-	t.Parallel()
-
-	keys := AllGitKeys()
-	require.Equal(t, len(Options), len(keys))
-
-	// Verify all keys are unique
 	seen := make(map[string]bool)
-	for _, key := range keys {
-		require.False(t, seen[key], "Duplicate git key: %s", key)
-		seen[key] = true
+	for _, opt := range Options {
+		require.False(t, seen[opt.GitKey], "Duplicate git key: %s", opt.GitKey)
+		seen[opt.GitKey] = true
 	}
 }

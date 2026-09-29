@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // remoteCheckTimeout bounds doctor's GitHub connectivity probes. Doctor is a
@@ -17,7 +17,7 @@ const remoteCheckTimeout = 10 * time.Second
 
 // getGitHubToken gets the GitHub token (similar to internal/github/pr_info.go).
 // The context bounds the `gh auth token` probe.
-func getGitHubToken(ctx context.Context, runner git.Runner) (string, error) {
+func getGitHubToken(ctx context.Context, runner github.GitCommandRunner) (string, error) {
 	// Try environment variable first
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		// Trim whitespace to handle cases where secrets might have leading/trailing spaces

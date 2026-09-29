@@ -13,37 +13,9 @@ type StackTree struct {
 	Branches       []string            // branches in the stack, in order
 	CurrentBranchV string              // the currently checked out branch
 	TrunkBranch    string              // the trunk/main branch name
-	ParentMap      map[string]string   // branch -> parent mapping
+	ParentMap      engine.ParentMap    // branch -> parent mapping
 	ChildrenMap    map[string][]string // branch -> children mapping
 	FixedMap       map[string]bool     // branch -> whether it's fixed (optional)
-}
-
-// NewStackTree creates a StackTree from a list of branches.
-// It builds the parent/child relationship maps from the branch metadata.
-func NewStackTree(branches []engine.Branch, currentBranch, trunkBranch string) *StackTree {
-	parentMap := make(map[string]string)
-	childrenMap := make(map[string][]string)
-	branchNames := make([]string, len(branches))
-
-	for i, branch := range branches {
-		branchName := branch.GetName()
-		branchNames[i] = branchName
-		parentName := branch.GetParentOrTrunk()
-		parentMap[branchName] = parentName
-
-		// Build children map (inverse of parent map)
-		if parentName != "" {
-			childrenMap[parentName] = append(childrenMap[parentName], branchName)
-		}
-	}
-
-	return &StackTree{
-		Branches:       branchNames,
-		CurrentBranchV: currentBranch,
-		TrunkBranch:    trunkBranch,
-		ParentMap:      parentMap,
-		ChildrenMap:    childrenMap,
-	}
 }
 
 // Data interface implementation
@@ -65,7 +37,7 @@ func (t *StackTree) Children(branchName string) []string {
 
 // Parent returns the parent branch of the given branch.
 func (t *StackTree) Parent(branchName string) string {
-	return t.ParentMap[branchName]
+	return t.ParentMap.Parent(branchName)
 }
 
 // IsTrunk returns whether the given branch is the trunk branch.

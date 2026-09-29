@@ -21,6 +21,7 @@ type branchReader interface {
 	// methods that operate on branch names with versions that take a Branch
 	// value, used by Branch's own getters. Engine is the only implementor.
 	GetParent(branch Branch) *Branch
+	GetCommitAuthor(branch Branch) (string, error)
 	GetMergedDownstack(branch Branch) []git.MergedParent
 	GetExplicitScope(branch Branch) Scope
 }

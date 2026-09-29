@@ -129,7 +129,7 @@ If you must checkout a branch in a worktree (e.g., for pushing), create a NEW br
 // Create a new branch at current HEAD (safe - new ref)
 session.Engine.CreateBranch(ctx, "my-temp-branch", "HEAD")
 session.Engine.CheckoutBranch(ctx, tempBranch)
-session.Engine.PushBranch(ctx, tempBranch, remote, opts)
+session.Engine.PushBranches(ctx, remote, []git.PushSpec{{BranchName: tempBranch}}, opts).One()
 ```
 
 ### What Can Go Wrong

@@ -70,7 +70,7 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	if len(sortedBranches) > 0 {
 		restackStart := time.Now()
 		if err := actions.RestackBranchesWithHandler(ctx, sortedBranches, func(p actions.RestackProgress) {
-			prNumber := actions.PRNumberForBranch(ctx.Status(), p.Branch)
+			prNumber := actions.PRNumberForBranch(ctx.Engine, p.Branch)
 
 			parentName := ""
 			br := nav.GetBranch(p.Branch)

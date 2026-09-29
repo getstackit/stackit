@@ -9,6 +9,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/rerere"
 	"github.com/getstackit/stackit/internal/utils"
@@ -372,7 +373,7 @@ func restackGroupsParallel(
 	utils.RunWithWorkers(groups, numJobs, func(group restackPlannedGroup) {
 		// Create a temporary worktree for this group. PruneSkip because we
 		// pruned once above and don't want N workers racing on prune.
-		wtPath, cleanup, err := eng.CreateTemporaryWorktreeSkipPrune(ctx.Context, eng.Trunk().GetName(), "stackit-restack-*")
+		wtPath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, eng.Trunk().GetName(), "stackit-restack-*", engine.WorktreePruneSkip)
 		if err != nil {
 			wrappedErr := fmt.Errorf("stack %s: create worktree: %w", group.rootBranch, err)
 			ctx.Logger.Warn("failed to create worktree for parallel restack: %v", wrappedErr)
@@ -396,7 +397,7 @@ func restackGroupsParallel(
 		// Shallow-copy the app context, swapping in the worktree engine.
 		wtCtx := *ctx
 		wtCtx.Engine = wtEngine
-		wtCtx.RepoRoot = wtPath
+		wtCtx.RepoRoot = wtPath.String()
 
 		groupRoot := group.rootBranch
 		progress := func(p RestackProgress) {
@@ -605,7 +606,7 @@ func handleRestackProgress(
 	}
 
 	// PR number is not always available without extra fetching, but we can try
-	var prNumber *int
+	var prNumber *git.PRNumber
 	if br.GetName() != "" {
 		if pr, err := eng.GetPrInfo(br); err == nil && pr != nil {
 			num := pr.Number()

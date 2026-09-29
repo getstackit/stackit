@@ -5,15 +5,23 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
+// CIWaiterClient is the GitHub surface CIWaiter needs: polling checks and
+// merging once they pass.
+type CIWaiterClient interface {
+	github.ChecksReader
+	github.PRMerger
+}
+
 // CIWaiter handles waiting for CI checks to pass on GitHub PRs.
 // It extracts the common CI polling logic used by both consolidation and step execution.
 type CIWaiter struct {
-	client       github.Client
+	client       CIWaiterClient
 	output       output.Output
 	timeout      time.Duration
 	pollInterval time.Duration
@@ -25,7 +33,7 @@ type CIWaiter struct {
 
 // CIWaiterOptions configures a CIWaiter
 type CIWaiterOptions struct {
-	Client       github.Client
+	Client       CIWaiterClient
 	Output       output.Output
 	Timeout      time.Duration // Default: 10 minutes
 	PollInterval time.Duration // Default: 15 seconds
@@ -65,7 +73,7 @@ type WaitResult struct {
 
 // WaitForChecks waits for CI checks to pass on a branch.
 // Returns an error if checks fail, timeout, or context is canceled.
-func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumber int, expectChecks bool) (*WaitResult, error) {
+func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumber git.PRNumber, expectChecks bool) (*WaitResult, error) {
 	if w.client == nil {
 		return nil, fmt.Errorf("GitHub client not available")
 	}

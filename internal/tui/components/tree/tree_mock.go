@@ -1,5 +1,7 @@
 package tree
 
+import "github.com/getstackit/stackit/internal/engine"
+
 // MockTreeData provides test data for tree rendering.
 // It implements the TreeData interface and is exported to be used
 // in both tests and the TUI storyboard.
@@ -11,7 +13,7 @@ type MockTreeData struct {
 	// ChildrenMap maps branch name to child branch names
 	ChildrenMap map[string][]string
 	// ParentsMap maps branch name to parent branch name
-	ParentsMap map[string]string
+	ParentsMap engine.ParentMap
 	// FixedMap maps branch name to whether it's fixed (up-to-date)
 	FixedMap map[string]bool
 }
@@ -26,7 +28,7 @@ func NewMockTreeData() *MockTreeData {
 			"feature-1": {"feature-2"},
 			"feature-2": {},
 		},
-		ParentsMap: map[string]string{
+		ParentsMap: engine.ParentMap{
 			"feature-1": "main",
 			"feature-2": "feature-1",
 		},
@@ -57,7 +59,7 @@ func (m *MockTreeData) Children(branchName string) []string {
 
 // Parent implements TreeData.Parent
 func (m *MockTreeData) Parent(branchName string) string {
-	return m.ParentsMap[branchName]
+	return m.ParentsMap.Parent(branchName)
 }
 
 // IsTrunk implements TreeData.IsTrunk

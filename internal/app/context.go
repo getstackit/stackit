@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -51,6 +52,17 @@ type Context struct {
 	RepoRoot     string
 	GitHubClient github.Client
 	Config       config.Configurer // Cached config to avoid repeated loading
+
+	// GHRunner is the narrow git surface the GitHub integration needs (git
+	// config reads and gh CLI execution). It is set at construction so actions
+	// never reach through the engine to the raw git runner.
+	GHRunner github.GitCommandRunner
+
+	// Prompter is the adapter-supplied implementation of the generic
+	// interactive prompts (confirm, select, text input, multi-select).
+	// Actions read it through Prompts(), which falls back to a prompter that
+	// reports interactivity as disabled when no adapter set one.
+	Prompter handler.Prompter
 
 	// Lazy GitHub client initialization (pointer so Context is safe to copy)
 	githubLazy *githubLazy
@@ -93,15 +105,6 @@ type githubLazy struct {
 	initFunc func() (github.Client, error)
 	client   github.Client
 	initErr  error
-}
-
-// Git returns the git runner from the engine.
-// Panics if the Engine is nil, which indicates a programming error.
-func (c *Context) Git() git.Runner {
-	if c.Engine == nil {
-		panic("Context.Git() called with nil Engine - this is a programming error")
-	}
-	return c.Engine.Git()
 }
 
 // GetUserName returns the configured git user name. Forwards to the engine so
@@ -155,6 +158,15 @@ func (c *Context) RequireGitHub() (github.Client, error) {
 		return nil, fmt.Errorf("GitHub client not available: %w", err)
 	}
 	return nil, fmt.Errorf("GitHub client not available — check your GITHUB_TOKEN or run 'gh auth login'")
+}
+
+// Prompts returns the adapter-supplied prompter, or a non-interactive one
+// whose prompts fail with utils.ErrInteractiveDisabled when none was set.
+func (c *Context) Prompts() handler.Prompter {
+	if c.Prompter == nil {
+		return handler.NonInteractivePrompter{}
+	}
+	return c.Prompter
 }
 
 // Navigator returns the stack navigator from the engine.
@@ -223,6 +235,15 @@ type contextOptions struct {
 	global   GlobalOptions
 	writer   io.Writer
 	logger   output.Logger
+	ghRunner github.GitCommandRunner
+}
+
+// WithGitHubRunner sets the runner the GitHub integration uses to read git
+// config and execute gh commands.
+func WithGitHubRunner(runner github.GitCommandRunner) ContextOption {
+	return func(o *contextOptions) {
+		o.ghRunner = runner
+	}
 }
 
 // WithRepoRoot sets the repository root path
@@ -257,27 +278,6 @@ func WithLogger(logger output.Logger) ContextOption {
 func WithInteractive(interactive bool) ContextOption {
 	return func(o *contextOptions) {
 		o.global.Interactive = interactive
-	}
-}
-
-// WithVerify sets the verify mode
-func WithVerify(verify bool) ContextOption {
-	return func(o *contextOptions) {
-		o.global.Verify = verify
-	}
-}
-
-// WithDebug sets the debug mode
-func WithDebug(debug bool) ContextOption {
-	return func(o *contextOptions) {
-		o.global.Debug = debug
-	}
-}
-
-// WithQuiet sets the quiet mode
-func WithQuiet(quiet bool) ContextOption {
-	return func(o *contextOptions) {
-		o.global.Quiet = quiet
 	}
 }
 
@@ -322,16 +322,13 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 		}
 	}
 
-	// Enable git command debug logging on the engine's git runner
-	eng.Git().SetLogger(logger)
-	eng.Metadata().SetLogger(logger)
-
 	return &Context{
 		Context:     context.Background(),
 		Engine:      eng,
 		Output:      consoleOutput,
 		Logger:      logger,
 		RepoRoot:    options.repoRoot,
+		GHRunner:    options.ghRunner,
 		Interactive: options.global.Interactive,
 		Verify:      options.global.Verify,
 		Debug:       options.global.Debug,
@@ -339,26 +336,20 @@ func NewContext(eng engine.Engine, opts ...ContextOption) *Context {
 	}
 }
 
-// DemoEngineFactory is a function that creates a demo engine.
+// DemoEngineFactory is a function that creates a demo engine and the runner
+// the GitHub integration should use alongside it.
 // This is set by the demo package to avoid circular imports.
-var DemoEngineFactory func() engine.Engine
+var DemoEngineFactory func() (engine.Engine, github.GitCommandRunner)
 
 // DemoGitHubClientFactory is a function that creates a demo GitHub client.
 // This is set by the demo package to avoid circular imports.
 var DemoGitHubClientFactory func() github.Client
 
-// NewContextAuto creates a context automatically based on the environment.
-// In demo mode, it creates a demo engine. Otherwise, it creates a real engine
-// using the provided repoRoot.
-func NewContextAuto(ctx context.Context, repoRoot string, opts GlobalOptions) (*Context, error) {
-	return NewContextAutoWithWriter(ctx, repoRoot, opts, os.Stdout)
-}
-
 // NewContextAutoWithWriter is like NewContextAuto but allows specifying the output writer.
 func NewContextAutoWithWriter(ctx context.Context, repoRoot string, opts GlobalOptions, writer io.Writer) (*Context, error) {
 	if utils.IsDemoMode() && DemoEngineFactory != nil {
-		eng := DemoEngineFactory()
-		runtimeCtx := NewContext(eng, WithRepoRoot(repoRoot), WithGlobalOptions(opts), WithWriter(writer))
+		eng, ghRunner := DemoEngineFactory()
+		runtimeCtx := NewContext(eng, WithRepoRoot(repoRoot), WithGlobalOptions(opts), WithWriter(writer), WithGitHubRunner(ghRunner))
 		runtimeCtx.Context = ctx
 		if DemoGitHubClientFactory != nil {
 			runtimeCtx.GitHubClient = DemoGitHubClientFactory()
@@ -415,14 +406,15 @@ func newContextWithConfig(ctx context.Context, repoRoot string, opts GlobalOptio
 		MaxUndoStackDepth: maxUndoDepth,
 		MaxConcurrency:    maxConcurrency,
 		Git:               gitRunner,
+		Logger:            logger,
 		LoadMode:          loadMode,
-		LinearStacks:      cfg.StackShape() == config.StackShapeLinear,
+		LinearStacks:      cfg.LinearStacks(),
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	runtimeCtx := NewContext(eng, WithRepoRoot(repoRoot), WithGlobalOptions(opts), WithWriter(writer), WithLogger(logger))
+	runtimeCtx := NewContext(eng, WithRepoRoot(repoRoot), WithGlobalOptions(opts), WithWriter(writer), WithLogger(logger), WithGitHubRunner(gitRunner))
 	runtimeCtx.Context = ctx
 	runtimeCtx.Config = cfg // Store config for reuse
 

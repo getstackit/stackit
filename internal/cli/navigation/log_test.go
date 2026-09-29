@@ -62,8 +62,8 @@ func TestRenderLogUsesColorAndPlainStructure(t *testing.T) {
 			PRNumber:      99,
 			StackSize:     2,
 			StackScope:    "CLI",
-			StackPRs:      []int{10, 11},
-			StackPRTitles: map[int]string{10: "first", 11: "second"},
+			StackPRs:      []git.PRNumber{10, 11},
+			StackPRTitles: map[git.PRNumber]string{10: "first", 11: "second"},
 		},
 	}}, nil, "", "")
 

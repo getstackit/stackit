@@ -23,12 +23,6 @@
 ### Performance Anti-Patterns
 
 ```go
-// BAD - spawns new process for each command
-sh := NewTestShell(t, binaryPath)
-
-// GOOD - runs CLI in-process
-sh := NewTestShellInProcess(t)
-
 // BAD - sets up remote when not needed
 sh := NewTestShellInProcess(t, WithRemote())
 sh.Run("create feature -m 'test'")  // No push/pull, didn't need remote
@@ -286,18 +280,14 @@ func TestWithResource(t *testing.T) {
 
 ## In-Process vs Binary Execution
 
-**Always use in-process execution** (`NewTestShellInProcess`) unless you have a specific reason not to.
+**Integration tests run the CLI in-process** (`NewTestShellInProcess`). There
+is no binary-spawning test shell; add one only if a test genuinely needs process
+isolation, signal handling, environment inheritance, or real exit codes.
 
-The ~8ms savings per command adds up fast:
+The ~8ms saved per command adds up fast:
 - A test with 10 commands saves 80ms
 - 100 such tests save 8 seconds
 - This compounds across the entire suite
-
-Use binary execution (`NewTestShell(t, binaryPath)`) only when specifically testing:
-- Process isolation behavior
-- Signal handling
-- Environment variable inheritance
-- Exit codes from the actual binary
 
 ## Test Naming
 
@@ -341,9 +331,8 @@ The test directory path is printed and won't be cleaned up, allowing inspection.
 ## Common Pitfalls
 
 1. **Forgetting `t.Parallel()`** - Tests run serially without it, wasting time and CPU cores
-2. **Using `NewTestShell` instead of `NewTestShellInProcess`** - Process spawning adds ~8ms per command
-3. **Using `WithRemote()` unnecessarily** - Remote setup adds overhead; only use for push/pull/sync tests
-4. **Using `NewScene` instead of `NewSceneParallel`** - `NewScene` uses `os.Chdir()` which breaks parallel tests
-5. **Using `assert` instead of `require`** - Tests continue past failures, causing confusing cascading errors
-6. **Not using `WithRemote()` when needed** - Sync/push/pull tests fail without a remote
-7. **Using raw git commands** - Prefer stackit commands via `sh.Run()` to test actual behavior
+2. **Using `WithRemote()` unnecessarily** - Remote setup adds overhead; only use for push/pull/sync tests
+3. **Using `NewScene` instead of `NewSceneParallel`** - `NewScene` uses `os.Chdir()` which breaks parallel tests
+4. **Using `assert` instead of `require`** - Tests continue past failures, causing confusing cascading errors
+5. **Not using `WithRemote()` when needed** - Sync/push/pull tests fail without a remote
+6. **Using raw git commands** - Prefer stackit commands via `sh.Run()` to test actual behavior

@@ -267,35 +267,6 @@ var Options = []Option{
 	},
 }
 
-// GetOptionByGitKey returns the Option for a given git key, or nil if not found.
-func GetOptionByGitKey(gitKey string) *Option {
-	for i := range Options {
-		if Options[i].GitKey == gitKey {
-			return &Options[i]
-		}
-	}
-	return nil
-}
-
-// GetOptionByYAMLPath returns the Option for a given YAML path, or nil if not found.
-func GetOptionByYAMLPath(yamlPath string) *Option {
-	for i := range Options {
-		if Options[i].YAMLPath == yamlPath {
-			return &Options[i]
-		}
-	}
-	return nil
-}
-
-// AllGitKeys returns all git config keys from the registry.
-func AllGitKeys() []string {
-	keys := make([]string, len(Options))
-	for i, opt := range Options {
-		keys[i] = opt.GitKey
-	}
-	return keys
-}
-
 // GetOptionsForSection returns all options belonging to the given section.
 func GetOptionsForSection(section string) []Option {
 	var opts []Option
@@ -305,14 +276,4 @@ func GetOptionsForSection(section string) []Option {
 		}
 	}
 	return opts
-}
-
-// GetSectionByName returns the Section with the given name, or nil if not found.
-func GetSectionByName(name string) *Section {
-	for i := range Sections {
-		if Sections[i].Name == name {
-			return &Sections[i]
-		}
-	}
-	return nil
 }

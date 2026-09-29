@@ -140,8 +140,8 @@ func TestShouldShowNavigation(t *testing.T) {
 
 		// Mock a PR for the branch
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always"}
@@ -157,8 +157,8 @@ func TestShouldShowNavigation(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "never"}
@@ -174,8 +174,8 @@ func TestShouldShowNavigation(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "multiple"}
@@ -195,13 +195,13 @@ func TestShouldShowNavigation(t *testing.T) {
 
 		// Add PRs to both branches
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title A", "Body A", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title A", Body: "Body A", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		branch2 := s.Engine.GetBranch("feature-b")
-		prNum2 := 2
-		err = s.Engine.UpsertPrInfo(context.Background(), branch2, engine.NewPrInfo(&prNum2, "Title B", "Body B", "OPEN", "feature-a", "http://pr/2", false))
+		prNum2 := git.PRNumber(2)
+		err = s.Engine.UpsertPrInfo(context.Background(), branch2, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum2, Title: "Title B", Body: "Body B", State: "OPEN", Base: "feature-a", URL: "http://pr/2"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "multiple"}
@@ -221,8 +221,8 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Set stack description
@@ -250,8 +250,8 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "<--"}
@@ -282,8 +282,8 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Set stack description
@@ -311,8 +311,8 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "👈"}
@@ -399,8 +399,8 @@ func TestCreateNavigationComment(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Set stack description
@@ -427,8 +427,8 @@ func TestCreateNavigationComment(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "👈"}
@@ -447,8 +447,8 @@ func TestCreateNavigationComment(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "<--"}
@@ -478,8 +478,8 @@ func TestCreateNavigationComment(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Set stack description
@@ -506,8 +506,8 @@ func TestCreateNavigationComment(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Lock the branch
@@ -530,8 +530,8 @@ func TestCreateNavigationComment(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "👈"}
@@ -699,8 +699,8 @@ func TestLockSectionIndependentFromNavigation(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		branch := s.Engine.GetBranch("feature-a")
-		prNum := 1
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(&prNum, "Title", "Body", "OPEN", "main", "http://pr/1", false))
+		prNum := git.PRNumber(1)
+		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Lock the branch

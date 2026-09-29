@@ -32,27 +32,3 @@ func TestResolveBranchName(t *testing.T) {
 		require.Equal(t, "b", name)
 	})
 }
-
-func TestResolveBranch(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns branch for provided name", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithLinearStack3()
-
-		branch, err := actions.ResolveBranch(s.Engine, "b")
-		require.NoError(t, err)
-		require.Equal(t, "b", branch.GetName())
-	})
-
-	t.Run("returns current branch when empty", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithLinearStack3().Checkout("c")
-
-		branch, err := actions.ResolveBranch(s.Engine, "")
-		require.NoError(t, err)
-		require.Equal(t, "c", branch.GetName())
-	})
-}

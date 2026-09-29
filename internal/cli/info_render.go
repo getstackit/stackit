@@ -42,11 +42,11 @@ type singleBranchInfoJSON struct {
 }
 
 type singleBranchPRJSON struct {
-	Number  int    `json:"number"`
-	Title   string `json:"title"`
-	State   string `json:"state"`
-	IsDraft bool   `json:"is_draft"`
-	URL     string `json:"url"`
+	Number  git.PRNumber `json:"number"`
+	Title   string       `json:"title"`
+	State   string       `json:"state"`
+	IsDraft bool         `json:"is_draft"`
+	URL     string       `json:"url"`
 }
 
 type branchInfoRenderOptions struct {
@@ -207,7 +207,7 @@ type stackBranchJSON struct {
 	IsLocked       bool          `json:"is_locked"`
 	IsFrozen       bool          `json:"is_frozen"`
 	Scope          string        `json:"scope"`
-	PRNumber       *int          `json:"pr_number,omitempty"`
+	PRNumber       *git.PRNumber `json:"pr_number,omitempty"`
 	PRURL          string        `json:"pr_url,omitempty"`
 	CommitMessages []string      `json:"commit_messages"`
 	DiffStats      diffStatsJSON `json:"diff_stats"`
@@ -279,7 +279,7 @@ func renderStackInfoText(result actions.StackInfoResult) string {
 }
 
 // childrenFromParents builds the inverse of a branch->parent map, preserving the
-// order branches appear in, matching tree.NewStackTree's own construction.
+// order branches appear in so the rendered tree keeps branch order.
 func childrenFromParents(order []string, parents map[string]string) map[string][]string {
 	children := make(map[string][]string)
 	for _, name := range order {

@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
 )
 
@@ -75,7 +76,7 @@ func registerLargeTreeStories() {
 					continue
 				}
 
-				prNum := 200 + i
+				prNum := git.PRNumber(200 + i)
 				scope := scopes[i%len(scopes)]
 				ann := tree.BranchAnnotation{
 					PRNumber:      &prNum,

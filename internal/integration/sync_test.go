@@ -43,7 +43,7 @@ func TestSync(t *testing.T) {
 		// 2. Simulate GitHub PR metadata for feature-b pointing to main instead of feature-a
 		// This simulates someone manually changing the PR base on GitHub
 		t.Log("Simulating changed PR base on GitHub...")
-		meta, err := eng.Metadata().ReadMetadata(context.Background(), "feature-b").One()
+		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature-b").One()
 		require.NoError(t, err)
 
 		prInfo := meta.GetPrInfo()
@@ -54,7 +54,7 @@ func TestSync(t *testing.T) {
 		prInfo.Base = &newBase
 		meta = meta.WithPrInfo(prInfo)
 
-		err = eng.Metadata().WriteMetadata("feature-b", meta)
+		err = sh.Metadata.WriteMetadata("feature-b", meta)
 		require.NoError(t, err)
 
 		// 3. Run sync
@@ -87,7 +87,7 @@ func TestSync(t *testing.T) {
 		mainBranchName := eng.Trunk().GetName()
 
 		// Batch read metadata for all individual branches at once
-		metas, readErrs := eng.Metadata().ReadMetadata(context.Background(), branchNames...).Split()
+		metas, readErrs := sh.Metadata.ReadMetadata(context.Background(), branchNames...).Split()
 		for branch, readErr := range readErrs {
 			require.NoError(t, readErr, "failed to read metadata for %s", branch)
 		}
@@ -102,14 +102,14 @@ func TestSync(t *testing.T) {
 			if prInfo == nil {
 				prInfo = &git.PrInfoPersistence{}
 			}
-			prNum := i + 1
+			prNum := git.PRNumber(i + 1)
 			state := prStateMerged
 			base := mainBranchName
 			prInfo.Number = &prNum
 			prInfo.State = &state
 			prInfo.Base = &base
 			meta = meta.WithPrInfo(prInfo)
-			err := eng.Metadata().WriteMetadata(branch, meta)
+			err := sh.Metadata.WriteMetadata(branch, meta)
 			require.NoError(t, err)
 		}
 
@@ -121,9 +121,9 @@ func TestSync(t *testing.T) {
 			CommitChange("merge-file", "merged content")
 
 		// Mark merge branch as merged
-		meta, err := eng.Metadata().ReadMetadata(context.Background(), mergeBranch).One()
+		meta, err := sh.Metadata.ReadMetadata(context.Background(), mergeBranch).One()
 		require.NoError(t, err)
-		prNum := 100
+		prNum := git.PRNumber(100)
 		state := git.PRStateMerged
 		base := mainBranchName
 		meta = meta.WithPrInfo(&git.PrInfoPersistence{
@@ -131,7 +131,7 @@ func TestSync(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = eng.Metadata().WriteMetadata(mergeBranch, meta)
+		err = sh.Metadata.WriteMetadata(mergeBranch, meta)
 		require.NoError(t, err)
 
 		// 3. Run sync (which should call clean_branches)
@@ -162,8 +162,8 @@ func TestSync(t *testing.T) {
 		mainBranchName := eng.Trunk().GetName()
 
 		// a: MERGED into main
-		metaA, _ := eng.Metadata().ReadMetadata(context.Background(), "a").One()
-		prNumA := 1
+		metaA, _ := sh.Metadata.ReadMetadata(context.Background(), "a").One()
+		prNumA := git.PRNumber(1)
 		stateA := prStateMerged
 		baseA := mainBranchName
 		metaA = metaA.WithPrInfo(&git.PrInfoPersistence{
@@ -171,11 +171,11 @@ func TestSync(t *testing.T) {
 			State:  &stateA,
 			Base:   &baseA,
 		})
-		_ = eng.Metadata().WriteMetadata("a", metaA)
+		_ = sh.Metadata.WriteMetadata("a", metaA)
 
 		// b: OPEN pointing to main
-		metaB, _ := eng.Metadata().ReadMetadata(context.Background(), "b").One()
-		prNumB := 2
+		metaB, _ := sh.Metadata.ReadMetadata(context.Background(), "b").One()
+		prNumB := git.PRNumber(2)
 		stateB := git.PRStateOpen
 		baseB := mainBranchName
 		metaB = metaB.WithPrInfo(&git.PrInfoPersistence{
@@ -183,7 +183,7 @@ func TestSync(t *testing.T) {
 			State:  &stateB,
 			Base:   &baseB,
 		})
-		_ = eng.Metadata().WriteMetadata("b", metaB)
+		_ = sh.Metadata.WriteMetadata("b", metaB)
 
 		// 1. Run sync
 		err := sync.Action(sh.Context, sync.Options{}, nil)
@@ -215,10 +215,10 @@ func TestSyncDraftPRs(t *testing.T) {
 
 	// 1. Simulate GitHub PR metadata for branch-a being a DRAFT
 	t.Log("Simulating DRAFT PR on GitHub...")
-	meta, err := eng.Metadata().ReadMetadata(context.Background(), "branch-a").One()
+	meta, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
 	require.NoError(t, err)
 
-	prNum := 1
+	prNum := git.PRNumber(1)
 	state := git.PRStateOpen
 	base := mainBranchName
 	isDraft := true
@@ -229,7 +229,7 @@ func TestSyncDraftPRs(t *testing.T) {
 		IsDraft: &isDraft,
 	})
 
-	err = eng.Metadata().WriteMetadata("branch-a", meta)
+	err = sh.Metadata.WriteMetadata("branch-a", meta)
 	require.NoError(t, err)
 
 	// 2. Verify it's a draft locally
@@ -261,8 +261,8 @@ func TestSyncCleanupDiamond(t *testing.T) {
 	mainBranchName := eng.Trunk().GetName()
 
 	// Mark 'a' as merged
-	metaA, _ := eng.Metadata().ReadMetadata(context.Background(), "a").One()
-	prNum := 1
+	metaA, _ := sh.Metadata.ReadMetadata(context.Background(), "a").One()
+	prNum := git.PRNumber(1)
 	state := prStateMerged
 	base := mainBranchName
 	metaA = metaA.WithPrInfo(&git.PrInfoPersistence{
@@ -270,11 +270,11 @@ func TestSyncCleanupDiamond(t *testing.T) {
 		State:  &state,
 		Base:   &base,
 	})
-	_ = eng.Metadata().WriteMetadata("a", metaA)
+	_ = sh.Metadata.WriteMetadata("a", metaA)
 
 	// Mark 'b' as merged
-	metaB, _ := eng.Metadata().ReadMetadata(context.Background(), "b").One()
-	prNumB := 2
+	metaB, _ := sh.Metadata.ReadMetadata(context.Background(), "b").One()
+	prNumB := git.PRNumber(2)
 	stateB := git.PRStateMerged
 	baseB := mainBranchName
 	metaB = metaB.WithPrInfo(&git.PrInfoPersistence{
@@ -282,7 +282,7 @@ func TestSyncCleanupDiamond(t *testing.T) {
 		State:  &stateB,
 		Base:   &baseB,
 	})
-	_ = eng.Metadata().WriteMetadata("b", metaB)
+	_ = sh.Metadata.WriteMetadata("b", metaB)
 
 	// Run sync
 	err := sync.Action(sh.Context, sync.Options{}, nil)
@@ -317,8 +317,8 @@ func TestSyncStaleDraftCleanup(t *testing.T) {
 	mainBranchName := eng.Trunk().GetName()
 
 	// Mark 'a' as merged in metadata
-	metaA, _ := eng.Metadata().ReadMetadata(context.Background(), "a").One()
-	prNum := 1
+	metaA, _ := sh.Metadata.ReadMetadata(context.Background(), "a").One()
+	prNum := git.PRNumber(1)
 	state := prStateMerged
 	base := mainBranchName
 	metaA = metaA.WithPrInfo(&git.PrInfoPersistence{
@@ -326,7 +326,7 @@ func TestSyncStaleDraftCleanup(t *testing.T) {
 		State:  &state,
 		Base:   &base,
 	})
-	_ = eng.Metadata().WriteMetadata("a", metaA)
+	_ = sh.Metadata.WriteMetadata("a", metaA)
 
 	// 'a' is now empty relative to main
 	isEmpty, _ := eng.IsBranchEmpty(sh.Context.Context, "a")
@@ -370,9 +370,9 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	sh.CommitChange("shared.txt", "a-v2")
 
 	// Mark branch-a PR as merged so sync cleanup deletes it.
-	metaA, err := eng.Metadata().ReadMetadata(context.Background(), "branch-a").One()
+	metaA, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
 	require.NoError(t, err)
-	prNum := 1
+	prNum := git.PRNumber(1)
 	state := prStateMerged
 	base := mainBranchName
 	metaA = metaA.WithPrInfo(&git.PrInfoPersistence{
@@ -380,7 +380,7 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 		State:  &state,
 		Base:   &base,
 	})
-	err = eng.Metadata().WriteMetadata("branch-a", metaA)
+	err = sh.Metadata.WriteMetadata("branch-a", metaA)
 	require.NoError(t, err)
 
 	// Run sync+restack from main.
@@ -432,9 +432,9 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			CommitChange("file-a", "content-a")
 
 		// 3. Mark branch-a as merged
-		metaA, err := eng.Metadata().ReadMetadata(context.Background(), "branch-a").One()
+		metaA, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
 		require.NoError(t, err)
-		prNum := 1
+		prNum := git.PRNumber(1)
 		state := prStateMerged
 		base := mainBranchName
 		metaA = metaA.WithPrInfo(&git.PrInfoPersistence{
@@ -442,7 +442,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = eng.Metadata().WriteMetadata("branch-a", metaA)
+		err = sh.Metadata.WriteMetadata("branch-a", metaA)
 		require.NoError(t, err)
 
 		// 4. Stay on main (user's exact scenario)
@@ -480,9 +480,9 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		mainBranchName := eng.Trunk().GetName()
 
 		// Mark feature as merged
-		meta, err := eng.Metadata().ReadMetadata(context.Background(), "feature").One()
+		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
-		prNum := 1
+		prNum := git.PRNumber(1)
 		state := prStateMerged
 		base := mainBranchName
 		meta = meta.WithPrInfo(&git.PrInfoPersistence{
@@ -490,7 +490,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = eng.Metadata().WriteMetadata("feature", meta)
+		err = sh.Metadata.WriteMetadata("feature", meta)
 		require.NoError(t, err)
 
 		// Detach HEAD at main
@@ -533,9 +533,9 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		// Also simulate main having the feature's content
 		sh.CommitChange("feature.txt", "feature v1")
 
-		metaF, err := eng.Metadata().ReadMetadata(context.Background(), "feature").One()
+		metaF, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
-		prNum := 1
+		prNum := git.PRNumber(1)
 		state := prStateMerged
 		base := mainBranchName
 		metaF = metaF.WithPrInfo(&git.PrInfoPersistence{
@@ -543,7 +543,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = eng.Metadata().WriteMetadata("feature", metaF)
+		err = sh.Metadata.WriteMetadata("feature", metaF)
 		require.NoError(t, err)
 
 		// 4. Stay on main and run sync
@@ -589,9 +589,9 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		sh.CommitChange("extra.txt", "unpushed work")
 
 		// Mark feature as merged via PR metadata
-		meta, err := eng.Metadata().ReadMetadata(context.Background(), "feature").One()
+		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
 		require.NoError(t, err)
-		prNum := 1
+		prNum := git.PRNumber(1)
 		state := prStateMerged
 		base := mainBranchName
 		meta = meta.WithPrInfo(&git.PrInfoPersistence{
@@ -599,7 +599,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 			State:  &state,
 			Base:   &base,
 		})
-		err = eng.Metadata().WriteMetadata("feature", meta)
+		err = sh.Metadata.WriteMetadata("feature", meta)
 		require.NoError(t, err)
 
 		// Go back to main for sync
@@ -659,9 +659,9 @@ func requireCleanWorkingTree(t *testing.T, sh *scenario.Scenario) {
 
 // markPrMerged sets the PR metadata for branch to MERGED with the given base.
 // Mirrors the inline pattern used elsewhere in sync_test.go.
-func markPrMerged(t *testing.T, sh *scenario.Scenario, branch string, prNumber int, base string) {
+func markPrMerged(t *testing.T, sh *scenario.Scenario, branch string, prNumber git.PRNumber, base string) {
 	t.Helper()
-	meta, err := sh.Engine.Metadata().ReadMetadata(context.Background(), branch).One()
+	meta, err := sh.Metadata.ReadMetadata(context.Background(), branch).One()
 	require.NoError(t, err)
 	num := prNumber
 	state := prStateMerged
@@ -671,7 +671,7 @@ func markPrMerged(t *testing.T, sh *scenario.Scenario, branch string, prNumber i
 		State:  &state,
 		Base:   &b,
 	})
-	require.NoError(t, sh.Engine.Metadata().WriteMetadata(branch, meta))
+	require.NoError(t, sh.Metadata.WriteMetadata(branch, meta))
 }
 
 // TestSquashMergeMiddleOfStack covers the case where a middle PR (B) is
@@ -1011,7 +1011,7 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 
 	// Stale metadata for the ghost should be cleaned up too — otherwise
 	// the next sync would re-detect it and churn pointlessly.
-	meta, err := sh.Engine.Metadata().ReadMetadata(context.Background(), "branch-a").One()
+	meta, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
 	require.NoError(t, err)
 	require.True(t, meta == nil || meta.GetParentBranchName() == nil,
 		"A's stale metadata should be cleared after sync")

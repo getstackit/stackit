@@ -116,19 +116,19 @@ func githubMessage(msg string) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: msg})
 }
 
-func deleted(branch string, pr *int, reason string) step {
+func deleted(branch string, pr *git.PRNumber, reason string) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: branch, PRNumber: pr, Message: reason})
 }
 
-func restacked(branch string, pr *int, parent, rev string) step {
+func restacked(branch string, pr *git.PRNumber, parent, rev string) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: branch, PRNumber: pr, Parent: parent, NewRevision: rev})
 }
 
-func restackUpToDate(branch string, pr *int) step {
+func restackUpToDate(branch string, pr *git.PRNumber) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: branch, PRNumber: pr})
 }
 
-func restackConflict(branch string, pr *int) step {
+func restackConflict(branch string, pr *git.PRNumber) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: branch, PRNumber: pr, Conflict: true})
 }
 
@@ -232,7 +232,7 @@ func syncGoldenCases() []syncGoldenCase {
 					[]string{"feat-wip"},   // unpushed — not pre-selected
 					[]string{"feat-login"}, // user selects only the merged one
 				),
-				deleted("feat-login", new(123), "merged"),
+				deleted("feat-login", new(git.PRNumber(123)), "merged"),
 			},
 			summary: syncAction.Summary{TrunkUpdated: true, BranchesDeleted: 1},
 		},
@@ -242,8 +242,8 @@ func syncGoldenCases() []syncGoldenCase {
 				phaseStarted(syncAction.PhaseTrunk),
 				trunkFF("a1b2c3d"),
 				phaseStarted(syncAction.PhaseRestack),
-				restacked("feat-api", new(201), "main", "b2c3d4e"),
-				restacked("feat-ui", new(202), "feat-api", "c3d4e5f"),
+				restacked("feat-api", new(git.PRNumber(201)), "main", "b2c3d4e"),
+				restacked("feat-ui", new(git.PRNumber(202)), "feat-api", "c3d4e5f"),
 				restackUpToDate("feat-docs", nil),
 			},
 			summary: syncAction.Summary{TrunkUpdated: true, BranchesRestacked: 2},
@@ -252,8 +252,8 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "restack_conflict_declined",
 			steps: []step{
 				phaseStarted(syncAction.PhaseRestack),
-				restacked("feat-api", new(201), "main", "b2c3d4e"),
-				restackConflict("feat-ui", new(202)),
+				restacked("feat-api", new(git.PRNumber(201)), "main", "b2c3d4e"),
+				restackConflict("feat-ui", new(git.PRNumber(202))),
 				promptResolveConflicts([]string{"feat-ui"}, false),
 			},
 			summary: syncAction.Summary{
@@ -318,10 +318,10 @@ func syncGoldenCases() []syncGoldenCase {
 					nil,
 					[]string{"feat-old"},
 				),
-				deleted("feat-old", new(99), "merged"),
+				deleted("feat-old", new(git.PRNumber(99)), "merged"),
 				phaseStarted(syncAction.PhaseRestack),
-				restacked("feat-ui", new(202), "feat-api", "c3d4e5f"),
-				restackConflict("feat-report", new(203)),
+				restacked("feat-ui", new(git.PRNumber(202)), "feat-api", "c3d4e5f"),
+				restackConflict("feat-report", new(git.PRNumber(203))),
 				promptResolveConflicts([]string{"feat-report"}, false),
 			},
 			summary: syncAction.Summary{

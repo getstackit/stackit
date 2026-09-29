@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui/components/submit"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
 )
@@ -61,7 +62,7 @@ func registerTreeStories() {
 			}
 			renderer := tree.NewRenderer(mock)
 
-			pr1 := 101
+			pr1 := git.PRNumber(101)
 			renderer.SetAnnotation("feature-1", tree.BranchAnnotation{
 				PRNumber:      &pr1,
 				Scope:         "API",
@@ -73,7 +74,7 @@ func registerTreeStories() {
 				ReviewStatus:  "Approved",
 			})
 
-			pr2 := 102
+			pr2 := git.PRNumber(102)
 			renderer.SetAnnotation("feature-2", tree.BranchAnnotation{
 				PRNumber:      &pr2,
 				Scope:         "UI",
@@ -120,7 +121,7 @@ func registerTreeStories() {
 			renderer := tree.NewRenderer(mock)
 
 			// Merged PR - should be dimmed and collapsed
-			pr1 := 90
+			pr1 := git.PRNumber(90)
 			renderer.SetAnnotation("feature-merged", tree.BranchAnnotation{
 				PRNumber:      &pr1,
 				Scope:         "CORE",
@@ -131,7 +132,7 @@ func registerTreeStories() {
 			})
 
 			// Draft PR
-			pr2 := 95
+			pr2 := git.PRNumber(95)
 			renderer.SetAnnotation("feature-draft", tree.BranchAnnotation{
 				PRNumber:    &pr2,
 				Scope:       "CORE",
@@ -141,7 +142,7 @@ func registerTreeStories() {
 			})
 
 			// Active PR with approval
-			pr3 := 100
+			pr3 := git.PRNumber(100)
 			renderer.SetAnnotation("feature-active", tree.BranchAnnotation{
 				PRNumber:      &pr3,
 				Scope:         "API",
@@ -154,7 +155,7 @@ func registerTreeStories() {
 			})
 
 			// Failing CI with changes requested
-			pr4 := 105
+			pr4 := git.PRNumber(105)
 			renderer.SetAnnotation("feature-failing", tree.BranchAnnotation{
 				PRNumber:     &pr4,
 				Scope:        "API",
@@ -211,7 +212,7 @@ func registerTreeStories() {
 				LinesAdded:    15,
 			})
 
-			pr3 := 103
+			pr3 := git.PRNumber(103)
 			renderer.SetAnnotation("api-v2", tree.BranchAnnotation{
 				PRNumber:     &pr3,
 				Scope:        "API",
@@ -236,7 +237,7 @@ func registerTreeStories() {
 				LinesAdded:    10,
 			})
 
-			pr4 := 104
+			pr4 := git.PRNumber(104)
 			renderer.SetAnnotation("auth-fix", tree.BranchAnnotation{
 				PRNumber:     &pr4,
 				Scope:        "AUTH",
@@ -336,7 +337,7 @@ func registerTreeStories() {
 			}
 			renderer := tree.NewRenderer(mock)
 
-			pr1 := 101
+			pr1 := git.PRNumber(101)
 			renderer.SetAnnotation("feature-1", tree.BranchAnnotation{
 				PRNumber:      &pr1,
 				PRAction:      "skip",
@@ -346,7 +347,7 @@ func registerTreeStories() {
 				CommitCount:   0,
 			})
 
-			pr2 := 102
+			pr2 := git.PRNumber(102)
 			renderer.SetAnnotation("feature-2", tree.BranchAnnotation{
 				PRNumber:      &pr2,
 				PRAction:      "update",

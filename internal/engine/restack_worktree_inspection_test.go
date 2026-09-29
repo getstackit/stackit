@@ -46,7 +46,7 @@ func TestRestackFailsLoudlyWhenWorktreesCannotBeInspected(t *testing.T) {
 	eng, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: blindGit})
 	require.NoError(t, err)
 
-	_, err = eng.RestackBranches(ctx, BranchesFromNames(eng, []string{"feature"}))
+	_, err = eng.RestackBranches(ctx, BranchesFromNames(eng, []string{"feature"}), RestackOpts{})
 	require.Error(t, err, "an uninspectable worktree list must not be reported as nothing to do")
 	require.Contains(t, err.Error(), "inspecting Git worktrees")
 }

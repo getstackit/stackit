@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"slices"
 
+	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -72,7 +72,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 	splog.Info("")
 
 	// Step 1: Select commits to keep in current branch
-	splitPoint, err := selectSplitPoint(readableCommits, branchToSplit)
+	splitPoint, err := selectSplitPoint(ctx.Prompts(), readableCommits, branchToSplit)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 // selectSplitPoint prompts the user to select which commits to keep in the current branch.
 // Returns the index of the first commit to split off (commits 0..index-1 stay in current branch).
 // Returns len(commits) if user wants to keep all commits (no split).
-func selectSplitPoint(readableCommits []string, branchToSplit string) (int, error) {
+func selectSplitPoint(prompter handlerBase.Selector, readableCommits []string, branchToSplit string) (int, error) {
 	if !utils.IsInteractive() {
 		return 0, fmt.Errorf("split point must be specified in non-interactive mode")
 	}
@@ -161,12 +161,12 @@ func selectSplitPoint(readableCommits []string, branchToSplit string) (int, erro
 		}
 	}
 
-	// Build options for tui.PromptSelect
-	var options []tui.SelectOption
+	// Build options for the select prompt
+	var options []handlerBase.SelectOption
 	for i, choice := range choices {
 		if splitPoint, ok := splitLineIndices[i]; ok {
 			// This is a split line - selectable
-			options = append(options, tui.SelectOption{
+			options = append(options, handlerBase.SelectOption{
 				Label: choice,
 				Value: fmt.Sprintf("%d", splitPoint),
 			})
@@ -175,7 +175,7 @@ func selectSplitPoint(readableCommits []string, branchToSplit string) (int, erro
 	}
 
 	title := fmt.Sprintf("Select where to split %s (commits above the line stay):", output.CurrentBranch(branchToSplit))
-	selected, err := tui.PromptSelect(title, options, 0)
+	selected, err := prompter.Select(title, options, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -233,7 +233,7 @@ func groupRemainingCommits(
 			offset++
 		} else {
 			// Multiple commits - ask user to group or split further
-			groupSize, err := selectGroupSize(remaining)
+			groupSize, err := selectGroupSize(ctx.Prompts(), remaining)
 			if err != nil {
 				return nil, err
 			}
@@ -255,7 +255,7 @@ func groupRemainingCommits(
 					splog.Info("  %s", c)
 				}
 				splog.Info("")
-				name, err = promptBranchName(existingNames, originalBranch, len(groups)+1, eng)
+				name, err = promptBranchName(ctx.Prompts(), existingNames, originalBranch, len(groups)+1, eng)
 				if err != nil {
 					return nil, err
 				}
@@ -282,7 +282,7 @@ func groupRemainingCommits(
 
 // selectGroupSize prompts user to select how many commits to include in the next branch.
 // Returns the number of commits (1 to len(commits)).
-func selectGroupSize(readableCommits []string) (int, error) {
+func selectGroupSize(prompter handlerBase.Selector, readableCommits []string) (int, error) {
 	if !utils.IsInteractive() {
 		return len(readableCommits), nil // In non-interactive mode, group all remaining
 	}
@@ -306,12 +306,12 @@ func selectGroupSize(readableCommits []string) (int, error) {
 		}
 	}
 
-	// Build options for tui.PromptSelect
-	var options []tui.SelectOption
+	// Build options for the select prompt
+	var options []handlerBase.SelectOption
 	for i, choice := range choices {
 		if size, ok := sizeByIndex[i]; ok {
 			// This is a split line - selectable
-			options = append(options, tui.SelectOption{
+			options = append(options, handlerBase.SelectOption{
 				Label: choice,
 				Value: fmt.Sprintf("%d", size),
 			})
@@ -319,7 +319,7 @@ func selectGroupSize(readableCommits []string) (int, error) {
 		// Skip commit lines - they're not selectable options
 	}
 
-	selected, err := tui.PromptSelect("Select commits for the next new branch:", options, 0)
+	selected, err := prompter.Select("Select commits for the next new branch:", options, 0)
 	if err != nil {
 		return 0, err
 	}

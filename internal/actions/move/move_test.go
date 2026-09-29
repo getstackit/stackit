@@ -12,6 +12,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -397,8 +398,8 @@ func TestMoveAction(t *testing.T) {
 
 		// Add PR info to branch2
 		branch2 := s.Engine.GetBranch("branch2")
-		prNumber := 123
-		prInfo := engine.NewPrInfo(&prNumber, "Test PR", "Test Body", "OPEN", "branch1", "https://github.com/owner/repo/pull/123", false)
+		prNumber := git.PRNumber(123)
+		prInfo := engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "Test PR", Body: "Test Body", State: "OPEN", Base: "branch1", URL: "https://github.com/owner/repo/pull/123"})
 		err := s.Engine.UpsertPrInfo(context.Background(), branch2, prInfo)
 		require.NoError(t, err)
 
@@ -414,7 +415,7 @@ func TestMoveAction(t *testing.T) {
 		newPrInfo, err := movedBranch2.GetPrInfo()
 		require.NoError(t, err)
 		require.NotNil(t, newPrInfo)
-		require.Equal(t, 123, *newPrInfo.Number())
+		require.Equal(t, git.PRNumber(123), *newPrInfo.Number())
 		require.Equal(t, "Test PR", newPrInfo.Title())
 	})
 
@@ -512,7 +513,7 @@ func TestMoveAction(t *testing.T) {
 
 		// CRITICAL: Verify branchA is NOT merged into main
 		// This is the bug we're testing - moving B to main should NOT cause A to appear merged
-		mergedIntoMain, err := s.Engine.Git().IsMerged(s.Context.Context, "branchA", "main")
+		mergedIntoMain, err := s.Git.IsMerged(s.Context.Context, "branchA", "main")
 		require.NoError(t, err)
 		require.False(t, mergedIntoMain, "branchA should NOT be merged into main after moving branchB")
 
@@ -598,7 +599,7 @@ func TestMoveAction(t *testing.T) {
 		require.True(t, h.preview.HasConflicts, "preview should report a conflict")
 
 		// Rebase must be in progress so the user can resolve.
-		require.True(t, s.Engine.Git().IsRebaseInProgress(s.Context.Context),
+		require.True(t, s.Git.IsRebaseInProgress(s.Context.Context),
 			"rebase should be in progress after entering conflict workflow")
 
 		// Continuation state should be persisted for `stackit continue` to pick up.
@@ -617,7 +618,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.MarkMergeConflictsAsResolved())
 
 		require.NoError(t, actions.ContinueAction(s.Context, actions.ContinueOptions{}))
-		require.False(t, s.Engine.Git().IsRebaseInProgress(s.Context.Context),
+		require.False(t, s.Git.IsRebaseInProgress(s.Context.Context),
 			"rebase should be complete after stackit continue")
 	})
 }
@@ -627,7 +628,7 @@ func TestMoveMarksBranchesForPRBodyUpdate(t *testing.T) {
 
 	needsPRUpdate := func(t *testing.T, s *scenario.Scenario, branch string) bool {
 		t.Helper()
-		meta, err := s.Engine.Metadata().ReadLocalMetadata(context.Background(), branch).One()
+		meta, err := s.Metadata.ReadLocalMetadata(context.Background(), branch).One()
 		require.NoError(t, err)
 		return meta != nil && meta.NeedsPRBodyUpdate
 	}

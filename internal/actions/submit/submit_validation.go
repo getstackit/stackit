@@ -35,7 +35,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 		var mu sync.Mutex
 		updates := make(map[string]*engine.PrInfo)
-		if err := github.SyncPrInfo(remoteCtx, ctx.Git(), branches, github.Repo{Owner: repo.Owner, Name: repo.Name}, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+		if err := github.SyncPrInfo(remoteCtx, ctx.GHRunner, branches, github.Repo{Owner: repo.Owner, Name: repo.Name}, func(name string, prInfo *github.PullRequestInfo) {
 			branch := nav.GetBranch(name)
 
 			lockReason := engine.LockReasonNone
@@ -44,15 +44,15 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 			}
 
 			mu.Lock()
-			updates[name] = engine.NewPrInfo(
-				&prInfo.Number,
-				prInfo.Title,
-				prInfo.Body,
-				prInfo.State,
-				prInfo.Base,
-				prInfo.HTMLURL,
-				prInfo.Draft,
-			).WithLockReason(lockReason)
+			updates[name] = engine.NewPrInfo(engine.PrInfoFields{
+				Number:  &prInfo.Number,
+				Title:   prInfo.Title,
+				Body:    prInfo.Body,
+				State:   prInfo.State,
+				Base:    prInfo.Base,
+				URL:     prInfo.HTMLURL,
+				IsDraft: prInfo.Draft,
+			}).WithLockReason(lockReason)
 			mu.Unlock()
 		}); err != nil {
 			// Non-fatal, continue
@@ -65,13 +65,13 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 	}
 
 	// Validate base revisions, pruning unsubmittable subtrees
-	submittable, err := validateBaseRevisions(branches, ctx.Status(), ctx)
+	submittable, err := validateBaseRevisions(branches, ctx.Engine, ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Warn about merged/closed branches
-	warnMergedOrClosedBranches(submittable, ctx.Status(), ctx)
+	warnMergedOrClosedBranches(submittable, ctx.Engine, ctx)
 
 	return submittable, nil
 }
@@ -85,7 +85,7 @@ func ValidateBranchesToSubmit(ctx *app.Context, branches []string) ([]string, er
 // descendants (a child cannot be submitted against a parent state that isn't
 // being pushed), so the rest of the stack still submits. Returns the
 // submittable subset in the original order; errors only when it is empty.
-func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.Context) ([]string, error) {
+func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.Context) ([]string, error) {
 	validatedBranches := make(map[string]bool)
 	prunedBranches := make(map[string]bool)
 	nav := ctx.Navigator()
@@ -174,7 +174,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchStatus, ctx *app.
 }
 
 // warnMergedOrClosedBranches checks for merged/closed PRs and warns about them
-func warnMergedOrClosedBranches(branches []string, eng engine.BranchStatus, ctx *app.Context) {
+func warnMergedOrClosedBranches(branches []string, eng engine.BranchReader, ctx *app.Context) {
 	mergedOrClosedBranches := []string{}
 	for _, branchName := range branches {
 		branch := eng.GetBranch(branchName)

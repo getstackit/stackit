@@ -13,9 +13,17 @@ type Options struct {
 	Trunk string // Trunk branch name from config
 }
 
+// doctorEngine lists exactly the engine methods the doctor checks call,
+// grouped by the check category that needs them.
+type doctorEngine interface {
+	gitVersioner
+	repositoryEngine
+	stackStateEngine
+}
+
 // Action runs diagnostic checks on the stackit environment and repository
 func Action(ctx *app.Context, opts Options, handler Handler) error {
-	eng := ctx.Engine
+	var eng doctorEngine = ctx.Engine
 
 	// Use null handler if none provided
 	if handler == nil {
@@ -29,11 +37,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Environment checks
 	handler.OnCategory(CategoryEnvironment)
-	warningCount, errorCount = checkEnvironment(ctx.Git(), handler, warningCount, errorCount) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	warningCount, errorCount = checkEnvironment(eng, ctx.GHRunner, handler, warningCount, errorCount)
 
 	// Repository checks
 	handler.OnCategory(CategoryRepository)
-	warningCount, errorCount = checkRepository(ctx, handler, warningCount, errorCount, opts.Trunk)
+	warningCount, errorCount = checkRepository(ctx.Context, eng, ctx.RepoRoot, handler, warningCount, errorCount, opts.Trunk)
 
 	// Stack state checks
 	handler.OnCategory(CategoryStackState)

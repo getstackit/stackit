@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	submitAction "github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
 )
@@ -211,8 +212,8 @@ func TestInteractiveSubmitHandlerPrintsEveryBufferedNativeStackEvent(t *testing.
 	out := output.NewTestOutput()
 	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitVerbose)
 	handler.githubStacks = []submitAction.GitHubStackSyncedEvent{
-		{Number: 1, PullRequests: []int{10, 11}, Action: "created"},
-		{Number: 2, PullRequests: []int{12, 13}, Action: "extended"},
+		{Number: 1, PullRequests: []git.PRNumber{10, 11}, Action: "created"},
+		{Number: 2, PullRequests: []git.PRNumber{12, 13}, Action: "extended"},
 	}
 	handler.githubStackSkips = []string{"first skipped component", "second skipped component"}
 
@@ -230,7 +231,7 @@ func TestPlanPrinterShowsPRNumbersAndEmptyAnnotation(t *testing.T) {
 
 	out := output.NewTestOutput()
 	handler := NewSimpleSubmitHandler(out, SubmitVerbose)
-	prNumber := 1189
+	prNumber := git.PRNumber(1189)
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
 		Branches:    []string{"update-me", "empty-one"},
@@ -368,7 +369,7 @@ func TestSimpleSubmitHandlerCompactReportsOutcomeNotPerBranchRows(t *testing.T) 
 	handler := NewSimpleSubmitHandler(out, SubmitCompact)
 	updated := "jonnii/20260511011552/update-me"
 	created := "jonnii/20260511011552/add-feature"
-	prNumber := 42
+	prNumber := git.PRNumber(42)
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
 		Branches:    []string{updated, created},

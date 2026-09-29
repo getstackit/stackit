@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // RestackResult represents the outcome of a restack operation for a single branch
@@ -44,7 +45,7 @@ type RestackBranchEvent struct {
 	Branch              string
 	Result              RestackResult
 	NewRevision         string
-	PRNumber            *int
+	PRNumber            *git.PRNumber
 	LockReason          engine.LockReason
 	Frozen              bool
 	HeldBy              string // why a worktree held this branch back (empty if it was not held)
@@ -104,12 +105,12 @@ type RestackJSONResult struct {
 
 // RestackBranchInfo represents info about a restacked branch
 type RestackBranchInfo struct {
-	Name                string `json:"name"`
-	Parent              string `json:"parent"`
-	StackRoot           string `json:"stack_root,omitempty"` // Independent stack root this branch belongs to
-	NewRev              string `json:"new_rev,omitempty"`
-	PRNumber            *int   `json:"pr_number,omitempty"`
-	RerereResolvedCount int    `json:"rerere_resolved_count,omitempty"`
+	Name                string        `json:"name"`
+	Parent              string        `json:"parent"`
+	StackRoot           string        `json:"stack_root,omitempty"` // Independent stack root this branch belongs to
+	NewRev              string        `json:"new_rev,omitempty"`
+	PRNumber            *git.PRNumber `json:"pr_number,omitempty"`
+	RerereResolvedCount int           `json:"rerere_resolved_count,omitempty"`
 }
 
 // RestackHeldInfo represents a branch a worktree held back during restack.

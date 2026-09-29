@@ -3,9 +3,8 @@ package shippable
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/getstackit/stackit/internal/actions/merge"
 )
 
 func TestStatus_Constants(t *testing.T) {
@@ -126,7 +125,7 @@ func TestStack_BranchCount(t *testing.T) {
 	t.Parallel()
 
 	s := &Stack{
-		Stack: merge.MultiStackInfo{
+		Stack: stackview.StackInfo{
 			AllBranches: []string{"branch1", "branch2", "branch3"},
 		},
 	}
@@ -137,7 +136,7 @@ func TestStack_RootBranch(t *testing.T) {
 	t.Parallel()
 
 	s := &Stack{
-		Stack: merge.MultiStackInfo{
+		Stack: stackview.StackInfo{
 			RootBranch: "feature/my-stack",
 		},
 	}
@@ -150,7 +149,7 @@ func TestStack_DisplayTitle(t *testing.T) {
 	t.Run("returns PR title when available", func(t *testing.T) {
 		t.Parallel()
 		s := &Stack{
-			Stack: merge.MultiStackInfo{
+			Stack: stackview.StackInfo{
 				RootBranch: "jonnii/20260131/feature",
 			},
 			PRTitle: "feat: add user authentication",
@@ -161,7 +160,7 @@ func TestStack_DisplayTitle(t *testing.T) {
 	t.Run("falls back to branch name when no PR title", func(t *testing.T) {
 		t.Parallel()
 		s := &Stack{
-			Stack: merge.MultiStackInfo{
+			Stack: stackview.StackInfo{
 				RootBranch: "jonnii/20260131/feature",
 			},
 			PRTitle: "",
@@ -175,10 +174,10 @@ func TestAnalysisResult_GetShippable(t *testing.T) {
 
 	result := &AnalysisResult{
 		Stacks: []Stack{
-			{Stack: merge.MultiStackInfo{RootBranch: "a"}, Status: StatusShippable},
-			{Stack: merge.MultiStackInfo{RootBranch: "b"}, Status: StatusPending},
-			{Stack: merge.MultiStackInfo{RootBranch: "c"}, Status: StatusShippable},
-			{Stack: merge.MultiStackInfo{RootBranch: "d"}, Status: StatusBlocked},
+			{Stack: stackview.StackInfo{RootBranch: "a"}, Status: StatusShippable},
+			{Stack: stackview.StackInfo{RootBranch: "b"}, Status: StatusPending},
+			{Stack: stackview.StackInfo{RootBranch: "c"}, Status: StatusShippable},
+			{Stack: stackview.StackInfo{RootBranch: "d"}, Status: StatusBlocked},
 		},
 	}
 
@@ -193,9 +192,9 @@ func TestAnalysisResult_GetPending(t *testing.T) {
 
 	result := &AnalysisResult{
 		Stacks: []Stack{
-			{Stack: merge.MultiStackInfo{RootBranch: "a"}, Status: StatusShippable},
-			{Stack: merge.MultiStackInfo{RootBranch: "b"}, Status: StatusPending},
-			{Stack: merge.MultiStackInfo{RootBranch: "c"}, Status: StatusPending},
+			{Stack: stackview.StackInfo{RootBranch: "a"}, Status: StatusShippable},
+			{Stack: stackview.StackInfo{RootBranch: "b"}, Status: StatusPending},
+			{Stack: stackview.StackInfo{RootBranch: "c"}, Status: StatusPending},
 		},
 	}
 
@@ -210,8 +209,8 @@ func TestAnalysisResult_GetBlocked(t *testing.T) {
 
 	result := &AnalysisResult{
 		Stacks: []Stack{
-			{Stack: merge.MultiStackInfo{RootBranch: "a"}, Status: StatusBlocked},
-			{Stack: merge.MultiStackInfo{RootBranch: "b"}, Status: StatusShippable},
+			{Stack: stackview.StackInfo{RootBranch: "a"}, Status: StatusBlocked},
+			{Stack: stackview.StackInfo{RootBranch: "b"}, Status: StatusShippable},
 		},
 	}
 
@@ -225,8 +224,8 @@ func TestAnalysisResult_GetIncomplete(t *testing.T) {
 
 	result := &AnalysisResult{
 		Stacks: []Stack{
-			{Stack: merge.MultiStackInfo{RootBranch: "a"}, Status: StatusIncomplete},
-			{Stack: merge.MultiStackInfo{RootBranch: "b"}, Status: StatusShippable},
+			{Stack: stackview.StackInfo{RootBranch: "a"}, Status: StatusIncomplete},
+			{Stack: stackview.StackInfo{RootBranch: "b"}, Status: StatusShippable},
 		},
 	}
 
@@ -256,9 +255,9 @@ func TestAnalysisResult_TotalStacks(t *testing.T) {
 
 	result := &AnalysisResult{
 		Stacks: []Stack{
-			{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-			{Stack: merge.MultiStackInfo{RootBranch: "b"}},
-			{Stack: merge.MultiStackInfo{RootBranch: "c"}},
+			{Stack: stackview.StackInfo{RootBranch: "a"}},
+			{Stack: stackview.StackInfo{RootBranch: "b"}},
+			{Stack: stackview.StackInfo{RootBranch: "c"}},
 		},
 	}
 	assert.Equal(t, 3, result.TotalStacks())

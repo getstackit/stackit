@@ -22,7 +22,7 @@ type CommitSource interface {
 // resolver when no GitHub client is available (offline) and PR titles are simply
 // omitted rather than treated as an error.
 type TitleResolver interface {
-	BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error)
+	BatchGetPRTitles(ctx context.Context, prNumbers []git.PRNumber) (map[git.PRNumber]string, error)
 }
 
 // Request selects which trunk commits to gather.
@@ -39,10 +39,10 @@ type Commit struct {
 	Author        string
 	Date          time.Time
 	Kind          git.RecentCommitKind
-	PRNumber      int
+	PRNumber      git.PRNumber
 	StackSize     int
-	StackPRs      []int
-	StackPRTitles map[int]string
+	StackPRs      []git.PRNumber
+	StackPRTitles map[git.PRNumber]string
 	StackScope    string
 }
 
@@ -87,7 +87,7 @@ func Gather(ctx context.Context, src CommitSource, titles TitleResolver, req Req
 
 // resolveTitles returns PR-number → title for every PR referenced by the commits,
 // or nil when titles cannot be resolved (no resolver, no PRs, or a forge error).
-func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.RecentCommit) map[int]string {
+func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.RecentCommit) map[git.PRNumber]string {
 	if titles == nil {
 		return nil
 	}
@@ -106,7 +106,7 @@ func resolveTitles(ctx context.Context, titles TitleResolver, commits []git.Rece
 // consolidation PR's title for the raw merge subject and attaching constituent
 // PR titles when available. The message/title enrichment is shared with the HTTP
 // mapper via the git helpers.
-func toCommit(c git.RecentCommit, prTitles map[int]string) Commit {
+func toCommit(c git.RecentCommit, prTitles map[git.PRNumber]string) Commit {
 	return Commit{
 		SHA:           c.SHA,
 		Message:       c.DisplayMessage(prTitles),
@@ -115,7 +115,7 @@ func toCommit(c git.RecentCommit, prTitles map[int]string) Commit {
 		Kind:          c.Kind,
 		PRNumber:      c.PRNumber,
 		StackSize:     c.StackSize,
-		StackPRs:      append([]int(nil), c.StackPRNumbers...),
+		StackPRs:      append([]git.PRNumber(nil), c.StackPRNumbers...),
 		StackScope:    c.StackScope,
 		StackPRTitles: c.ConstituentPRTitles(prTitles),
 	}

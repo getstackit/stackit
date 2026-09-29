@@ -48,9 +48,13 @@ func (r *runner) remoteConfigured(ctx context.Context, remote string) bool {
 	return err == nil
 }
 
+// RemoteBranchSHAs is remote branch name (without refs/heads/) -> tip SHA, as
+// listed by `git ls-remote --heads`.
+type RemoteBranchSHAs map[string]string
+
 // fetchRemoteShas lists the branch refs on a remote without modifying any
 // local refs. `git ls-remote --heads` returns only refs/heads/*.
-func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
+func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (RemoteBranchSHAs, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -67,12 +71,12 @@ func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (map[string
 		// surface unchanged.
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
-			return map[string]string{}, nil
+			return RemoteBranchSHAs{}, nil
 		}
 		return nil, fmt.Errorf("failed to list remote refs for %s: %w", remote, err)
 	}
 
-	result := make(map[string]string)
+	result := make(RemoteBranchSHAs)
 	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
 		if line == "" {
 			continue

@@ -351,7 +351,7 @@ func TestCreateAction_Worktree(t *testing.T) {
 		require.Equal(t, stackRoot, eng.GetBranch("feature-branch").GetParent().GetName())
 
 		// Clean up worktree
-		_ = eng.RemoveWorktree(s.Context.Context, worktreeInfo.Path.String())
+		_ = eng.RemoveWorktree(s.Context.Context, worktreeInfo.Path)
 		_ = eng.UnregisterWorktree(s.Context.Context, stackRoot)
 	})
 

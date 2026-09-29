@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
@@ -37,7 +38,7 @@ func TestStackTreeRenderer_RenderStack_WithAnnotations(t *testing.T) {
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 
-	prNum := 123
+	prNum := git.PRNumber(123)
 	renderer.SetAnnotation("feature-1", BranchAnnotation{
 		PRNumber: &prNum,
 		PRAction: "update",
@@ -119,7 +120,7 @@ func TestStackTreeRenderer_RenderBranchList(t *testing.T) {
 	mock := NewMockTreeData()
 	renderer := NewRenderer(mock)
 
-	prNum := 42
+	prNum := git.PRNumber(42)
 	renderer.SetAnnotation("feature-1", BranchAnnotation{
 		PRNumber: &prNum,
 	})
@@ -789,7 +790,7 @@ func TestStackTreeRenderer_MergedDownstackDisplay(t *testing.T) {
 	}
 	renderer := NewRenderer(mock)
 
-	prNum := 123
+	prNum := git.PRNumber(123)
 	renderer.SetAnnotation("branch2", BranchAnnotation{
 		MergedDownstack: []MergedParentDisplay{
 			{BranchName: "branch1", PRNumber: &prNum, PRState: "MERGED"},

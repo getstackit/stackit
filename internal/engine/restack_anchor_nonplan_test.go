@@ -36,6 +36,7 @@ func withWorktreeAnchor(t *testing.T, s *scenario.Scenario, name string) {
 // moves, and every consumer measuring a child against it drifts with each
 // trunk advance.
 func TestRestackBranchesFastForwardsWorktreeAnchor(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	withWorktreeAnchor(t, s, "anchor")
 
@@ -65,6 +66,7 @@ func TestRestackBranchesFastForwardsWorktreeAnchor(t *testing.T) {
 // Two rounds: one restack alone is fine, because the recorded revision really
 // is where the branch is based. The second is where a stale anchor bites.
 func TestRestackBranchesDoesNotReplayTrunkOntoAnchorChild(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	withWorktreeAnchor(t, s, "anchor")
 
@@ -93,6 +95,7 @@ func TestRestackBranchesDoesNotReplayTrunkOntoAnchorChild(t *testing.T) {
 // anchor's stale tip while the rebase target is trunk, so every trunk commit
 // between the two falls inside the replay range.
 func TestRestackBranchesMissingRecordedRevDoesNotReplayTrunk(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	withWorktreeAnchor(t, s, "anchor")
 

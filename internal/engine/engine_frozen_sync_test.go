@@ -12,7 +12,9 @@ import (
 )
 
 func TestRestackFrozenBranch(t *testing.T) {
+	t.Parallel()
 	t.Run("hard resets frozen branch to remote instead of rebase", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		// 1. Create a parent branch and a child branch
@@ -55,6 +57,7 @@ func TestRestackFrozenBranch(t *testing.T) {
 	})
 
 	t.Run("skips restack if frozen branch matches remote", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 		s.CreateBranch("parent").

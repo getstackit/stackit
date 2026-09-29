@@ -11,11 +11,13 @@ import (
 )
 
 func TestIsDiffEmpty(t *testing.T) {
+	t.Parallel()
 	t.Run("returns true when branch equals base", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize git repo
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		// Get main revision
 		mainRev, err := scene.Repo.GetRef("main")
@@ -28,10 +30,11 @@ func TestIsDiffEmpty(t *testing.T) {
 	})
 
 	t.Run("returns false when branch has changes", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize git repo
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		// Get main revision
 		mainRev, err := scene.Repo.GetRef("main")
@@ -50,10 +53,11 @@ func TestIsDiffEmpty(t *testing.T) {
 	})
 
 	t.Run("returns true for branch with no commits", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Initialize git repo
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		// Get main revision
 		mainRev, err := scene.Repo.GetRef("main")
@@ -73,17 +77,20 @@ func TestIsDiffEmpty(t *testing.T) {
 }
 
 func TestGetUnmergedFiles(t *testing.T) {
+	t.Parallel()
 	t.Run("returns empty list when no conflicts", func(t *testing.T) {
-		_ = testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		files, err := runner.GetUnmergedFiles(context.Background())
 		require.NoError(t, err)
 		require.Empty(t, files)
 	})
 
 	t.Run("returns unmerged files during conflict", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial file that will be modified to create conflict
 			return s.Repo.CreateChangeAndCommit("initial content", "conflict")
 		})
@@ -109,7 +116,7 @@ func TestGetUnmergedFiles(t *testing.T) {
 		require.NoError(t, err)
 
 		// Start rebase (will conflict)
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		_, err = runner.Rebase(context.Background(), "branch1", "main", forkPoint)
 		require.NoError(t, err)
 

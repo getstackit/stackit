@@ -15,6 +15,7 @@ import (
 )
 
 func TestIsInManagedWorktree_MainRepo(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
@@ -26,6 +27,7 @@ func TestIsInManagedWorktree_MainRepo(t *testing.T) {
 }
 
 func TestWorktreeRegistry_StackRootForBranch(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
@@ -54,6 +56,7 @@ func TestWorktreeRegistry_StackRootForBranch(t *testing.T) {
 }
 
 func TestWorktreeRegistry_OwningWorktree(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
@@ -77,6 +80,7 @@ func TestWorktreeRegistry_OwningWorktree(t *testing.T) {
 }
 
 func TestWorktreeRegistry_RejectsDuplicatePathAndAnchor(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 
@@ -93,6 +97,7 @@ func TestWorktreeRegistry_RejectsDuplicatePathAndAnchor(t *testing.T) {
 }
 
 func TestCreateTemporaryWorktree(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Create a branch to use for the worktree
@@ -131,6 +136,7 @@ func TestCreateTemporaryWorktree(t *testing.T) {
 }
 
 func TestCreateTemporaryWorktree_FastCleanup_AllowsNextCreate(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.CreateBranch("feature").
 		Commit("feature change").
@@ -149,6 +155,7 @@ func TestCreateTemporaryWorktree_FastCleanup_AllowsNextCreate(t *testing.T) {
 }
 
 func TestCreateTemporaryWorktree_RetryAfterStaleEntry(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.CreateBranch("feature").
 		Commit("feature change").

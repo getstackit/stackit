@@ -11,6 +11,7 @@ import (
 )
 
 func TestMetaSerialization(t *testing.T) {
+	t.Parallel()
 	parent := "main"
 	scope := "feat/xyz"
 	now := time.Now().UTC().Truncate(time.Second) // JSON unmarshaling might lose sub-second precision
@@ -46,6 +47,7 @@ func TestMetaSerialization(t *testing.T) {
 }
 
 func TestLocalMetaSerialization(t *testing.T) {
+	t.Parallel()
 	meta := &git.LocalMeta{
 		Frozen: true,
 	}
@@ -63,6 +65,7 @@ func TestLocalMetaSerialization(t *testing.T) {
 }
 
 func TestMetaBackwardCompatibility(t *testing.T) {
+	t.Parallel()
 	// Old metadata format (no new fields)
 	jsonData := `{"parentBranchName":"main","lockReason":"locked"}`
 

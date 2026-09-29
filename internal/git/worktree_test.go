@@ -16,7 +16,7 @@ import (
 func TestTreeContainsAnyPathLargePathSet(t *testing.T) {
 	t.Parallel()
 
-	scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 		return s.Repo.CreateChangeAndCommit("tracked", "tracked")
 	})
 	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
@@ -87,8 +87,10 @@ func TestWorktreeResetBlocker(t *testing.T) {
 }
 
 func TestWorktree(t *testing.T) {
+	t.Parallel()
 	t.Run("lists ignored files", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		require.NoError(t, os.WriteFile(filepath.Join(scene.Repo.Dir, ".gitignore"), []byte(".env\ncache/\n"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(scene.Repo.Dir, ".env"), []byte("secret"), 0o600))
@@ -102,7 +104,8 @@ func TestWorktree(t *testing.T) {
 	})
 
 	t.Run("add and remove worktree", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Create a branch to checkout in the worktree
@@ -141,6 +144,7 @@ func TestWorktree(t *testing.T) {
 	})
 
 	t.Run("omits worktrees whose directory is gone", func(t *testing.T) {
+		t.Parallel()
 		// A temp worktree deleted without `git worktree remove` — what a
 		// crashed or interrupted merge leaves behind. Git keeps the
 		// registration and marks it prunable.
@@ -149,7 +153,7 @@ func TestWorktree(t *testing.T) {
 		// missing directory and treats "unknown" as "hold". That pinned the
 		// branch and its descendants out of every restack, permanently, over a
 		// worktree with nothing in it to protect.
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		require.NoError(t, scene.Repo.CreateAndCheckoutBranch("stale-branch"))
@@ -176,7 +180,8 @@ func TestWorktree(t *testing.T) {
 	})
 
 	t.Run("add detached worktree", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Create a temporary directory for the worktree
@@ -234,8 +239,10 @@ func TestIsMainWorktree(t *testing.T) {
 }
 
 func TestWorktreeRegistry(t *testing.T) {
+	t.Parallel()
 	t.Run("removes reverse path registration after symlinked worktree is gone", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		targetBase := t.TempDir()
@@ -265,7 +272,8 @@ func TestWorktreeRegistry(t *testing.T) {
 	// orphan cleanup — leaving a manual `git update-ref -d` as the only exit
 	// from a state the repair work in this area exists to recover from.
 	t.Run("deletes a registration whose metadata cannot be parsed", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		require.NoError(t, runner.WriteWorktreeMeta(context.Background(), "corrupt", &git.WorktreeMeta{
@@ -289,7 +297,8 @@ func TestWorktreeRegistry(t *testing.T) {
 	})
 
 	t.Run("write and read worktree metadata", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Write worktree metadata
@@ -311,7 +320,8 @@ func TestWorktreeRegistry(t *testing.T) {
 	})
 
 	t.Run("read non-existent worktree metadata returns nil", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Read non-existent metadata
@@ -321,7 +331,8 @@ func TestWorktreeRegistry(t *testing.T) {
 	})
 
 	t.Run("delete worktree metadata", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Write worktree metadata
@@ -343,7 +354,8 @@ func TestWorktreeRegistry(t *testing.T) {
 	})
 
 	t.Run("list worktree metadata", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		// Write multiple worktree metadata

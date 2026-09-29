@@ -12,8 +12,10 @@ import (
 )
 
 func TestDeleteRemoteMetadataRefs(t *testing.T) {
+	t.Parallel()
 	t.Run("deletes multiple remote metadata refs", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a bare remote
 		_, err := scene.Repo.CreateBareRemote("origin")
@@ -58,7 +60,8 @@ func TestDeleteRemoteMetadataRefs(t *testing.T) {
 	})
 
 	t.Run("handles single ref deletion", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		_, err := scene.Repo.CreateBareRemote("origin")
 		require.NoError(t, err)
@@ -82,6 +85,7 @@ func TestDeleteRemoteMetadataRefs(t *testing.T) {
 	})
 
 	t.Run("handles empty slice gracefully", func(t *testing.T) {
+		t.Parallel()
 		runner := git.NewRunner(nil)
 		err := runner.DeleteRemoteMetadataRefs(context.Background(), []string{}...)
 		require.NoError(t, err)
@@ -89,7 +93,8 @@ func TestDeleteRemoteMetadataRefs(t *testing.T) {
 }
 
 func TestFetchRefSpecsFetchesBranchAndMetadataFromCustomRemote(t *testing.T) {
-	scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 	_, err := scene.Repo.CreateBareRemote("upstream")
 	require.NoError(t, err)

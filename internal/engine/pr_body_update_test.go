@@ -11,7 +11,9 @@ import (
 )
 
 func TestPRBodyUpdateTracking(t *testing.T) {
+	t.Parallel()
 	t.Run("marks branch as needing PR body update", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -34,6 +36,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 	})
 
 	t.Run("clears PR body update flag", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -55,6 +58,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 	})
 
 	t.Run("clear is idempotent for non-marked branches", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -69,6 +73,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 	})
 
 	t.Run("persists across engine rebuild", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature").
@@ -91,6 +96,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 	})
 
 	t.Run("tracks multiple branches independently", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -129,6 +135,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 	})
 
 	t.Run("batch marks multiple branches atomically", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("feature-a").
@@ -151,6 +158,7 @@ func TestPRBodyUpdateTracking(t *testing.T) {
 	})
 
 	t.Run("batch with empty list is no-op", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 

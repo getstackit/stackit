@@ -447,6 +447,7 @@ func TestValidateRebases(t *testing.T) {
 }
 
 func TestValidateRebasesUsesRerereResolvedConflicts(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	g := s.Engine.Git()
 	require.NoError(t, g.SetConfig("rerere.enabled", "true"))
@@ -492,6 +493,7 @@ func TestValidateRebasesUsesRerereResolvedConflicts(t *testing.T) {
 }
 
 func TestRestackBranchesPropagatesRerereResolvedCount(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	g := s.Engine.Git()
 	require.NoError(t, g.SetConfig("rerere.enabled", "true"))
@@ -535,6 +537,7 @@ func TestRestackBranchesPropagatesRerereResolvedCount(t *testing.T) {
 }
 
 func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"branch1": "main",
@@ -578,6 +581,7 @@ func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {
 }
 
 func TestRestackBranchesWithValidatedPlanAppliesFrozenBranch(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	s.CreateBranch("parent").
@@ -614,6 +618,7 @@ func TestRestackBranchesWithValidatedPlanAppliesFrozenBranch(t *testing.T) {
 }
 
 func TestRestackBranchesWithValidatedPlanAppliesAnchorBranch(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"anchor": "main",
@@ -651,6 +656,7 @@ func TestRestackBranchesWithValidatedPlanAppliesAnchorBranch(t *testing.T) {
 // behavior existed, the strengthened up-to-date check planned a full rebase
 // purely to fix the record, minting a new SHA for no content change.
 func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"parent": "main",
@@ -701,6 +707,7 @@ func TestPlanRestackRefreshesMetadataWithoutRebaseWhenRecordedRevisionMissing(t 
 // recorded parent revision in metadata still points at the parent's pre-amend
 // SHA, which is no longer an ancestor of the branch.
 func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"a": "main",
@@ -750,6 +757,7 @@ func TestPlanRestackRefreshesMetadataAfterManualRebaseOutsideStackit(t *testing.
 }
 
 func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"branch1": "main",
@@ -790,6 +798,7 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 }
 
 func TestRestackBranchesWithValidatedPlanRejectsForkInLinearMode(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 		WithStack(map[string]string{
 			"base":   "main",

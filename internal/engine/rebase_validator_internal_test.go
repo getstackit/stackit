@@ -82,6 +82,7 @@ func (g *fastPathGit) RunGitCommandWithEnv(_ context.Context, env []string, args
 }
 
 func TestTryConflictFreeReplaySingleCommitUsesMergeTreeWithExplicitMergeBase(t *testing.T) {
+	t.Parallel()
 	fakeGit := &fastPathGit{
 		t:       t,
 		commits: []string{"feature-commit"},
@@ -120,6 +121,7 @@ func TestTryConflictFreeReplaySingleCommitUsesMergeTreeWithExplicitMergeBase(t *
 }
 
 func TestTryConflictFreeReplayUsesFastPathWhenParentChangedNoFiles(t *testing.T) {
+	t.Parallel()
 	// Parent advanced without touching any files (same tree as old-base). An empty
 	// parent file set cannot overlap branch changes, so the fast path should still
 	// replay instead of falling back to a worktree dry-run.
@@ -148,6 +150,7 @@ func TestTryConflictFreeReplayUsesFastPathWhenParentChangedNoFiles(t *testing.T)
 }
 
 func TestTryConflictFreeReplayMultiCommitChainsEachCommit(t *testing.T) {
+	t.Parallel()
 	// Branch has three commits (newest-first): c3 -> c2 -> c1 -> old-base.
 	fakeGit := &fastPathGit{
 		t:       t,

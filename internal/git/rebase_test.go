@@ -13,8 +13,10 @@ import (
 )
 
 func TestRebase(t *testing.T) {
+	t.Parallel()
 	t.Run("rebases branch onto parent", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create branch1
 		err := scene.Repo.CreateAndCheckoutBranch("branch1")
@@ -39,7 +41,7 @@ func TestRebase(t *testing.T) {
 		require.NoError(t, err)
 
 		// Rebase branch1 onto new main
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		result, err := runner.Rebase(context.Background(), "branch1", "main", branch1Rev)
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, result.Result)
@@ -54,7 +56,8 @@ func TestRebase(t *testing.T) {
 	})
 
 	t.Run("handles rebase conflict", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial file that will be modified to create conflict
 			return s.Repo.CreateChangeAndCommit("initial content", "conflict")
 		})
@@ -80,7 +83,7 @@ func TestRebase(t *testing.T) {
 		require.NoError(t, err)
 
 		// Rebase should result in conflict (using fork point, not branch tip)
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		result, err := runner.Rebase(context.Background(), "branch1", "main", forkPoint)
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, result.Result)
@@ -90,10 +93,11 @@ func TestRebase(t *testing.T) {
 	})
 
 	t.Run("auto-continues when rerere resolved conflict", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			return s.Repo.CreateChangeAndCommit("initial content", "conflict")
 		})
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		require.NoError(t, runner.SetConfig("rerere.enabled", "true"))
 		require.NoError(t, runner.SetConfig("rerere.autoupdate", "true"))
 
@@ -137,10 +141,11 @@ func TestRebase(t *testing.T) {
 	// file as unmerged and auto-continue must bail out. rerere.EnsureEnabled
 	// is responsible for ensuring autoupdate is set whenever rerere is on.
 	t.Run("does not auto-continue when autoupdate is disabled", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			return s.Repo.CreateChangeAndCommit("initial content", "conflict")
 		})
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		require.NoError(t, runner.SetConfig("rerere.enabled", "true"))
 		require.NoError(t, runner.SetConfig("rerere.autoupdate", "false"))
 
@@ -180,12 +185,13 @@ func TestRebase(t *testing.T) {
 	})
 
 	t.Run("reports next conflict after rerere auto-continues", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			require.NoError(t, s.Repo.CreateChange("a0", "fileA", false))
 			require.NoError(t, s.Repo.CreateChange("b0", "fileB", false))
 			return s.Repo.RunGitCommand("commit", "-m", "initial")
 		})
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		require.NoError(t, runner.SetConfig("rerere.enabled", "true"))
 		require.NoError(t, runner.SetConfig("rerere.autoupdate", "true"))
 
@@ -223,12 +229,13 @@ func TestRebase(t *testing.T) {
 	})
 
 	t.Run("continues after rebase continue advances into rerere-staged conflict", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			require.NoError(t, s.Repo.CreateChange("a0", "fileA", false))
 			require.NoError(t, s.Repo.CreateChange("b0", "fileB", false))
 			return s.Repo.RunGitCommand("commit", "-m", "initial")
 		})
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		require.NoError(t, runner.SetConfig("rerere.enabled", "true"))
 		require.NoError(t, runner.SetConfig("rerere.autoupdate", "true"))
 
@@ -275,11 +282,15 @@ func TestRebase(t *testing.T) {
 	})
 }
 
+// TestIsRebaseInProgress stays serial on purpose: it is the one test that
+// builds a Runner with no path, which resolves the repo and its git dir from the
+// working directory. Only a NewScene (os.Chdir) scene reaches that fallback.
 func TestIsRebaseInProgress(t *testing.T) {
 	t.Run("returns false when no rebase", func(t *testing.T) {
 		_ = testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunner(nil)
+		require.True(t, runner.IsInsideRepo(), "a pathless runner must resolve the repo from the working directory")
 		require.False(t, runner.IsRebaseInProgress(context.Background()))
 	})
 
@@ -319,8 +330,10 @@ func TestIsRebaseInProgress(t *testing.T) {
 }
 
 func TestRebaseContinue(t *testing.T) {
+	t.Parallel()
 	t.Run("continues rebase after resolving conflict", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial file that will be modified to create conflict
 			return s.Repo.CreateChangeAndCommit("initial content", "conflict")
 		})
@@ -345,7 +358,7 @@ func TestRebaseContinue(t *testing.T) {
 		require.NoError(t, err)
 
 		// Start rebase (will conflict)
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		_, err = runner.Rebase(context.Background(), "branch1", "main", forkPoint)
 		require.NoError(t, err)
 		require.True(t, runner.IsRebaseInProgress(context.Background()))
@@ -374,10 +387,11 @@ func TestRebaseContinue(t *testing.T) {
 // relies on RebaseContinue to drive the rebase to completion through the
 // rerere-resolved second commit.
 func TestRebaseContinueAutoContinuesThroughRerereResolvedCommit(t *testing.T) {
-	scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+	t.Parallel()
+	scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 		return s.Repo.CreateChangeAndCommit("v0", "fileA.txt")
 	})
-	runner := git.NewRunner(nil)
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
 	require.NoError(t, runner.SetConfig("rerere.enabled", "true"))
 	require.NoError(t, runner.SetConfig("rerere.autoupdate", "true"))
 
@@ -432,8 +446,10 @@ func TestRebaseContinueAutoContinuesThroughRerereResolvedCommit(t *testing.T) {
 }
 
 func TestGetRebaseHead(t *testing.T) {
+	t.Parallel()
 	t.Run("returns rebase head when rebase in progress", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, func(s *testhelpers.Scene) error {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial file that will be modified to create conflict
 			return s.Repo.CreateChangeAndCommit("initial content", "conflict")
 		})
@@ -458,7 +474,7 @@ func TestGetRebaseHead(t *testing.T) {
 		require.NoError(t, err)
 
 		// Start rebase (will conflict)
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 		_, err = runner.Rebase(context.Background(), "branch1", "main", forkPoint)
 		require.NoError(t, err)
 

@@ -7,7 +7,9 @@ import (
 )
 
 func TestRenameMetadataRef(t *testing.T) {
+	t.Parallel()
 	t.Run("copies metadata to new branch and keeps old ref", func(t *testing.T) {
+		t.Parallel()
 		// This test would require a full git repository setup
 		// For now, we'll verify the spec is implemented by checking the function exists
 		// and the comments in engine_persistence.go indicate the correct behavior

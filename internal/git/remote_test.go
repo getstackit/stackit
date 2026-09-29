@@ -11,8 +11,10 @@ import (
 )
 
 func TestFetchRemoteShas(t *testing.T) {
+	t.Parallel()
 	t.Run("fetches SHAs from remote", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a bare remote
 		_, err := scene.Repo.CreateBareRemote("origin")
@@ -31,7 +33,7 @@ func TestFetchRemoteShas(t *testing.T) {
 		require.NoError(t, err)
 
 		// Fetch remote SHAs (FetchRemoteShas runs git command in current dir which is scene.Dir)
-		runner := git.NewRunner(nil)
+		runner := git.NewRunnerWithPath(scene.Dir, nil)
 
 		remoteShas, err := runner.FetchRemoteShas(context.Background(), "origin")
 		require.NoError(t, err)
@@ -49,7 +51,8 @@ func TestFetchRemoteShas(t *testing.T) {
 	})
 
 	t.Run("returns empty map for empty remote", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a bare remote but don't push anything
 		_, err := scene.Repo.CreateBareRemote("origin")
@@ -64,7 +67,8 @@ func TestFetchRemoteShas(t *testing.T) {
 	})
 
 	t.Run("handles branches with slashes in names", func(t *testing.T) {
-		scene := testhelpers.NewScene(t, testhelpers.InitialCommitSceneSetup)
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		// Create a bare remote
 		_, err := scene.Repo.CreateBareRemote("origin")

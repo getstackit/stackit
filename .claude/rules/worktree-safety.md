@@ -38,6 +38,13 @@ disappear from a branch they were not touching.
   guards both the current branch and its `--onto` target.
 - The refusal must say where to go. When the owning worktree's directory no
   longer exists, `cd` is useless advice: point at `worktree detach` instead.
+- Fail closed on a registration that cannot be trusted. An unreadable or
+  unparseable `refs/stackit/worktrees/<root>` blob, or one whose anchor is
+  empty or differs from `<root>`, refuses mutations for that stack. It must
+  never read as "unowned". Resolve ownership in one pass with
+  `Engine.WorktreeOwnershipByStackRoot`, not with `ListManagedWorktrees`, which
+  skips bad entries for display. Scope the refusal to that stack: trunk and
+  other stacks keep working.
 - Ownership checks do **not** belong on `engine.Branch`. `Branch` has no command
   context, and the same branch is valid to mutate in one worktree and invalid in
   another.

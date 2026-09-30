@@ -433,6 +433,8 @@ func (e *engineImpl) FindOrphanedLocalMetadata() ([]OrphanedMetadataInfo, error)
 	for refName := range localRefs {
 		branchNames = append(branchNames, refName[len("refs/stackit/metadata/"):])
 	}
+	// Sorted so sync prompts in a stable order rather than map order.
+	slices.Sort(branchNames)
 	metas, metaErrs := e.batchReadMetadata(branchNames)
 
 	orphaned := make([]OrphanedMetadataInfo, 0, len(localRefs))

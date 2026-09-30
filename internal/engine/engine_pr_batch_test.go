@@ -2,6 +2,9 @@ package engine_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -154,4 +157,33 @@ func TestBatchGetPRSubmissionStatusSkipsRemoteForCreates(t *testing.T) {
 	for name, st := range statuses {
 		require.Equal(t, engine.SubmitActionCreate, st.Action, "branch %s should be a create", name)
 	}
+}
+
+// A metadata read failure must surface as an error. Swallowing it reads as "no
+// PR", which would plan a create for a branch that already has one.
+func TestBatchGetPRSubmissionStatusFailsOnUnreadableMetadata(t *testing.T) {
+	t.Parallel()
+
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{"P": "main", "C1": "P"})
+	for i, name := range []string{"P", "C1"} {
+		require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name),
+			testhelpers.NewTestPrInfoWithTitle(git.PRNumber(100+i), "title")))
+	}
+
+	corrupt := filepath.Join(s.Scene.Dir, ".git", "tmp-corrupt-meta")
+	require.NoError(t, os.WriteFile(corrupt, []byte("{not json"), 0600))
+	blobSha, err := s.Scene.Repo.RunGitCommandAndGetOutput("hash-object", "-w", corrupt)
+	require.NoError(t, err)
+	require.NoError(t, s.Scene.Repo.RunGitCommand("update-ref", git.MetadataRefName("C1"), strings.TrimSpace(blobSha)))
+
+	// A fresh engine so the corrupt blob is read from Git, not the cache.
+	eng, _ := newCountingEngine(t, s.Scene.Dir)
+	branches := engine.BranchesOf(eng.GetBranch("P"), eng.GetBranch("C1"))
+
+	_, err = eng.BatchGetPRSubmissionStatus(context.Background(), branches, nil)
+	require.ErrorContains(t, err, "C1")
+
+	_, err = eng.BatchGetPRSubmissionStatus(context.Background(), branches, engine.BranchRemoteStatuses{})
+	require.ErrorContains(t, err, "C1")
 }

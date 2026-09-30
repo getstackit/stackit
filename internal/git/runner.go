@@ -279,12 +279,8 @@ func (r *runner) RunGHCommandWithContext(ctx context.Context, args ...string) (s
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.WaitDelay = CommandWaitDelay
 	// Use repoRoot for gh commands to ensure they are scoped to the correct repo
-	if root := r.getRepoRoot(); root != "" {
-		cmd.Dir = root
-	} else {
-		wd, _ := os.Getwd()
-		cmd.Dir = wd
-	}
+	// Without a repo root, an empty Dir runs in the current working directory.
+	cmd.Dir = r.getRepoRoot()
 
 	// Prevent gh from prompting via TTY (important when TUI has terminal in raw mode)
 	// GH_PROMPT_DISABLED=1 prevents gh from trying to prompt for authentication

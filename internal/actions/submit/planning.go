@@ -1,13 +1,13 @@
 package submit
 
 import (
-	"github.com/getstackit/stackit/internal/git"
-
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // prepareBranchesForSubmit prepares submission info for each branch, emitting
@@ -46,60 +46,42 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		return nil, err
 	}
 
+	// Fetch missing content only for branches that will actually be prepared.
+	// Batch misses (including a failed query) retain the single-PR fallback.
+	missingContent := make([]string, 0, len(branches))
+	for _, branch := range branches {
+		status := statuses[branch.GetName()]
+		action, _ := effectiveSubmitAction(status)
+		if _, skip := submissionSkipReason(status, action, opts); skip {
+			continue
+		}
+		info, _ := branch.GetPrInfo()
+		if info != nil && info.Number() != nil && (info.Title() == "" || info.Body() == "") {
+			missingContent = append(missingContent, branch.GetName())
+		}
+	}
+	var current map[git.PRNumber]github.PRContent
+	if len(missingContent) > 0 && ctx.GitHub() != nil {
+		current = actions.FetchPRContentForBranches(ctx, missingContent)
+	}
+
 	for _, branch := range branches {
 		branchName := branch.GetName()
 		status := statuses[branchName]
 
-		action := status.Action
-		prNumber := status.PRNumber
-		prInfo := status.PRInfo
-
-		// If PR is closed or merged, treat as a new PR creation
-		// This allows recovery when a PR was closed (e.g., due to deleted base branch)
-		if prInfo != nil && (prInfo.State() == git.PRStateClosed || prInfo.State() == git.PRStateMerged) {
-			action = engine.SubmitActionCreate
-			prNumber = nil
-		}
-
+		action, prNumber := effectiveSubmitAction(status)
 		isCurrent := branchName == currentBranch
 
-		// Check if we should skip
-		if opts.UpdateOnly && action == engine.SubmitActionCreate {
+		if reason, skip := submissionSkipReason(status, action, opts); skip {
 			handler.OnEvent(BranchPlanEvent{
 				BranchName: branchName,
 				Action:     action,
+				PRNumber:   prNumber,
 				IsCurrent:  isCurrent,
 				Skipped:    true,
-				SkipReason: "no existing PR",
+				SkipReason: reason,
 			})
 			continue
-		}
-
-		needsUpdate := status.NeedsUpdate
-		if action == engine.SubmitActionUpdate {
-			// Check if draft status needs to change
-			draftStatusNeedsChange := false
-			if prInfo != nil {
-				if opts.Draft && !prInfo.IsDraft() {
-					draftStatusNeedsChange = true
-				} else if opts.Publish && prInfo.IsDraft() {
-					draftStatusNeedsChange = true
-				}
-			}
-
-			needsUpdate = needsUpdate || opts.Edit || opts.Always || draftStatusNeedsChange
-
-			if !needsUpdate && !opts.Draft && !opts.Publish {
-				handler.OnEvent(BranchPlanEvent{
-					BranchName: branchName,
-					Action:     action,
-					PRNumber:   prNumber,
-					IsCurrent:  isCurrent,
-					Skipped:    true,
-					SkipReason: status.Reason,
-				})
-				continue
-			}
 		}
 
 		// Prepare metadata
@@ -121,7 +103,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 			ConfigAssignees: opts.ConfigAssignees,
 		}
 
-		metadata, err := PreparePRMetadata(branch, metadataOpts, ctx)
+		metadata, err := PreparePRMetadata(branch, metadataOpts, ctx, current)
 		if err != nil {
 			return nil, fmt.Errorf("failed to prepare metadata for %s: %w", branchName, err)
 		}
@@ -165,6 +147,27 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	}
 
 	return submissionInfos, nil
+}
+
+// effectiveSubmitAction treats a closed or merged PR as a new PR creation. This
+// allows recovery when a PR was closed (e.g., due to deleted base branch).
+func effectiveSubmitAction(status engine.PRSubmissionStatus) (engine.SubmitAction, *git.PRNumber) {
+	if info := status.PRInfo; info != nil && (info.State() == git.PRStateClosed || info.State() == git.PRStateMerged) {
+		return engine.SubmitActionCreate, nil
+	}
+	return status.Action, status.PRNumber
+}
+
+// submissionSkipReason is shared by metadata prefetch and plan emission so
+// skipped branches never cause extra network reads.
+func submissionSkipReason(status engine.PRSubmissionStatus, action engine.SubmitAction, opts Options) (string, bool) {
+	if opts.UpdateOnly && action == engine.SubmitActionCreate {
+		return "no existing PR", true
+	}
+	if action == engine.SubmitActionUpdate && !status.NeedsUpdate && !opts.Edit && !opts.Always && !opts.Draft && !opts.Publish {
+		return status.Reason, true
+	}
+	return "", false
 }
 
 // confirmPrompt describes what --confirm is about to do in concrete terms.

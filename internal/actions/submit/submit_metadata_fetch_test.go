@@ -50,7 +50,7 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 			Edit: false,
 		}
 
-		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context)
+		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
 		require.NoError(t, err)
 
 		// 4. Verify body was fetched from GitHub

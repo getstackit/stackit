@@ -8,36 +8,34 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 )
 
+// RestackOpts tunes RestackBranches. The zero value performs a plain restack.
+type RestackOpts struct {
+	// Progress, when set, is called after each branch is processed.
+	Progress RestackBranchProgressFunc
+	// Validation carries successful dry-run rebase results. Their commits are
+	// applied directly to branch refs: validation worktrees share the
+	// repository's object database, so the rebased commits can be reused
+	// instead of replaying the same rebase a second time.
+	Validation *RebaseValidation
+	// Plan is the restack plan Validation was computed from. When Validation
+	// is set and Plan is nil, the plan is computed from branches.
+	Plan *RestackPlan
+}
+
 // RestackBranches implements a hybrid batch approach for performance:
 // 1. Collect all data required for the restack (in bulk)
 // 2. Process branches using individual restackBranch calls with deferred rebuilds
 // 3. Final cache rebuild
-func (e *engineImpl) RestackBranches(ctx context.Context, branches Branches) (RestackBatchResult, error) {
-	return e.restackBranches(ctx, branches, nil, nil, nil)
-}
-
-// RestackBranchesWithProgress mirrors RestackBranches but reports progress
-// after each branch is processed.
-func (e *engineImpl) RestackBranchesWithProgress(ctx context.Context, branches Branches, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
-	return e.restackBranches(ctx, branches, nil, nil, progress)
-}
-
-// RestackBranchesWithValidatedRebases applies successful dry-run validation
-// commits directly to branch refs. Validation worktrees share the repository's
-// object database, so the rebased commits can be reused instead of replaying
-// the same rebase a second time.
-func (e *engineImpl) RestackBranchesWithValidatedRebases(ctx context.Context, branches Branches, validation *RebaseValidation, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
-	plan, err := e.PlanRestack(ctx, branches)
-	if err != nil {
-		return RestackBatchResult{}, err
+func (e *engineImpl) RestackBranches(ctx context.Context, branches Branches, opts RestackOpts) (RestackBatchResult, error) {
+	plan := opts.Plan
+	if opts.Validation != nil && plan == nil {
+		var err error
+		plan, err = e.PlanRestack(ctx, branches)
+		if err != nil {
+			return RestackBatchResult{}, err
+		}
 	}
-	return e.restackBranches(ctx, branches, validation, plan, progress)
-}
-
-// RestackBranchesWithValidatedPlan applies successful dry-run validation
-// commits using the caller's restack plan.
-func (e *engineImpl) RestackBranchesWithValidatedPlan(ctx context.Context, branches Branches, validation *RebaseValidation, plan *RestackPlan, progress RestackBranchProgressFunc) (RestackBatchResult, error) {
-	return e.restackBranches(ctx, branches, validation, plan, progress)
+	return e.restackBranches(ctx, branches, opts.Validation, plan, opts.Progress)
 }
 
 // collectRestackData resolves the metadata and revisions restack planning and
@@ -143,8 +141,8 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// on any untracked file at all stops a restack for the ordinary state of
 	// having written a new file and not staged it yet. The collision is checked
 	// per branch once its incoming tree is known; see untrackedCollisionHold.
-	dirtyWorktrees := make(map[string]bool, len(worktrees))
-	untrackedByWorktree := make(map[string][]string)
+	dirtyWorktrees := make(map[WorktreePath]bool, len(worktrees))
+	untrackedByWorktree := make(map[WorktreePath][]string)
 	heldReasons := make(map[string]string)
 
 	e.mu.RLock()
@@ -195,7 +193,7 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 	// — N branches meant N+ rev-parse subprocesses. Each branch only reads its
 	// own SHA for optimistic locking on the metadata ref UpdateRefs, so a
 	// pre-loop snapshot is stable.
-	metaRefSHAs := make(map[string]string)
+	metaRefSHAs := make(MetadataSHAMap)
 	if refs, listErr := e.git.ListRefs(git.MetadataRefPrefix); listErr == nil {
 		for refName, sha := range refs {
 			metaRefSHAs[strings.TrimPrefix(refName, git.MetadataRefPrefix)] = sha
@@ -311,7 +309,10 @@ func (e *engineImpl) restackBranches(ctx context.Context, branches Branches, val
 }
 
 // ContinueRebase continues an in-progress rebase
-func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, rebasedBranchBase string, expectedBranchRevision string) (ContinueRebaseResult, error) {
+func (e *engineImpl) ContinueRebase(ctx context.Context, spec ContinueRebaseSpec) (ContinueRebaseResult, error) {
+	branchName := spec.Branch
+	rebasedBranchBase := spec.RebasedBranchBase
+	expectedBranchRevision := spec.ExpectedBranchRevision
 	// Call git rebase --continue
 	result, err := e.git.RebaseContinue(ctx)
 	if err != nil {
@@ -345,7 +346,7 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, reba
 	// Resolved before the ref moves; see branchWorktreeResetTarget for why.
 	reset := e.branchWorktreeResetTarget(ctx, branchName)
 
-	err = e.git.UpdateBranchRefCAS(ctx, branchName, newRev, expectedBranchRevision)
+	err = e.git.UpdateBranchRefCAS(ctx, git.BranchRefUpdate{Branch: branchName, NewRevision: newRev, ExpectedOld: expectedBranchRevision})
 	if err != nil {
 		return ContinueRebaseResult{BranchName: branchName}, fmt.Errorf("failed to update branch reference %s: %w", branchName, err)
 	}
@@ -376,8 +377,8 @@ func (e *engineImpl) ContinueRebase(ctx context.Context, branchName string, reba
 }
 
 // Rebase rebases a branch onto another branch
-func (e *engineImpl) Rebase(ctx context.Context, branchName, upstream, oldUpstream string) (RestackResult, error) {
-	gitResult, err := e.git.Rebase(ctx, branchName, upstream, oldUpstream)
+func (e *engineImpl) Rebase(ctx context.Context, spec git.RebaseSpec) (RestackResult, error) {
+	gitResult, err := e.git.Rebase(ctx, spec)
 	if err != nil {
 		return RestackConflict, err
 	}

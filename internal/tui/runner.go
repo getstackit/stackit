@@ -43,20 +43,6 @@ func NewRunner(model tea.Model, out output.Output, logger output.Logger) *Runner
 	}
 }
 
-// NewRunnerWithContext creates a new TUI runner with context support.
-// The context will be canceled when Cleanup is called, allowing
-// background operations to be properly terminated.
-func NewRunnerWithContext(ctx context.Context, model tea.Model, out output.Output, logger output.Logger) *Runner {
-	ctx, cancel := context.WithCancel(ctx)
-	return &Runner{
-		model:  model,
-		output: out,
-		logger: logger,
-		ctx:    ctx,
-		cancel: cancel,
-	}
-}
-
 // Context returns the runner's context for use in background operations.
 // If the runner was created without a context (using NewRunner), this returns
 // context.Background().
@@ -310,32 +296,6 @@ type PanicError struct {
 
 func (p PanicError) Error() string {
 	return fmt.Sprintf("%s panicked: %v", p.Source, p.Err)
-}
-
-// SafeCmd wraps a tea.Cmd with panic recovery.
-// If the command panics, it logs the error and returns a PanicError message.
-// This is useful for commands that perform IO or call external APIs.
-func SafeCmd(name string, logger output.Logger, cmd tea.Cmd) tea.Cmd {
-	if cmd == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		defer func() {
-			if p := recover(); p != nil {
-				stack := string(debug.Stack())
-				err := fmt.Errorf("%v", p)
-				// Log to dedicated panic file for easy debugging
-				output.LogPanic(p, stack)
-				if logger != nil {
-					logger.Error("%s panicked: %v\n%s", name, p, stack)
-				}
-				// We can't return from inside defer, so we re-panic with a wrapped error
-				// that will be caught by the outer recovery
-				panic(PanicError{Source: name, Err: err, Stack: stack})
-			}
-		}()
-		return cmd()
-	}
 }
 
 // SafeCmdFunc wraps a function that returns tea.Msg with panic recovery.

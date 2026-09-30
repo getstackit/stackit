@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -36,7 +37,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
 
 		// Add PR info to engine
-		prA := 101
+		prA := git.PRNumber(101)
 		branchA := s.Engine.GetBranch("branch-a")
 		err := s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfo(prA).
 			WithBase("main").
@@ -110,7 +111,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
 
 		// Add PR info to engine
-		prA := 101
+		prA := git.PRNumber(101)
 		branchA := s.Engine.GetBranch("branch-a")
 		err := s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfo(prA).
 			WithBase("main").
@@ -143,10 +144,10 @@ func TestExecuteInWorktree(t *testing.T) {
 
 		// Verify the worktree was created with branch-a
 		// Note: resolve symlinks because on macOS /var -> /private/var
-		worktreeForBranch, err := s.Engine.Git().GetWorktreePathForBranch(s.Context.Context, "branch-a")
+		worktreeForBranch, err := s.Git.GetWorktreePathForBranch(s.Context.Context, "branch-a")
 		require.NoError(t, err)
 		resolvedWorktreePath, _ := filepath.EvalSymlinks(worktreePath)
-		resolvedWorktreeForBranch, _ := filepath.EvalSymlinks(worktreeForBranch)
+		resolvedWorktreeForBranch, _ := filepath.EvalSymlinks(worktreeForBranch.String())
 		require.Equal(t, resolvedWorktreePath, resolvedWorktreeForBranch, "branch-a should be checked out in the worktree")
 
 		// Execute the merge plan - this should delete branch-a even though it's in a worktree
@@ -163,7 +164,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		require.NotContains(t, s.Engine.AllBranches().Names(), "branch-a", "branch-a should be deleted after merge")
 
 		// Verify the worktree was removed (branch-a is no longer in any worktree)
-		worktreeForBranch, err = s.Engine.Git().GetWorktreePathForBranch(s.Context.Context, "branch-a")
+		worktreeForBranch, err = s.Git.GetWorktreePathForBranch(s.Context.Context, "branch-a")
 		require.NoError(t, err)
 		require.Empty(t, worktreeForBranch, "worktree for branch-a should be removed")
 	})

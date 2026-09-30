@@ -1,6 +1,7 @@
 package scope
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -18,6 +19,17 @@ type Options struct {
 	Show  bool
 }
 
+// scopeEngine lists exactly the engine methods scope calls.
+type scopeEngine interface {
+	actions.MetadataPushEngine
+	engine.BranchLookup
+	CurrentBranch() *engine.Branch
+	Trunk() engine.Branch
+	GetScope(branch engine.Branch) engine.Scope
+	SetScopeAndMarkForUpdate(ctx context.Context, branch engine.Branch, scope engine.Scope) error
+	RenameBranch(ctx context.Context, oldBranch, newBranch engine.Branch) error
+}
+
 // Action implements the stackit scope command
 func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if handler == nil {
@@ -25,7 +37,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	eng := ctx.Engine
+	var eng scopeEngine = ctx.Engine
 	out := ctx.Output
 
 	// Get current branch

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 )
 
@@ -17,13 +18,13 @@ type Event interface {
 // the stack being submitted. This is action-layer data; adapters decide how to
 // visualize it.
 type StackSnapshot struct {
-	Branches      []string          // branches in the stack, in order
-	CurrentBranch string            // currently checked out branch
-	TrunkBranch   string            // trunk/main branch name
-	ParentMap     map[string]string // branch -> parent
-	FixedMap      map[string]bool   // branch -> is fixed (doesn't need restack)
-	ScopeMap      map[string]string // branch -> scope
-	WorktreeMap   map[string]string // branch -> worktree path (for stack roots with managed worktrees)
+	Branches      []string                       // branches in the stack, in order
+	CurrentBranch string                         // currently checked out branch
+	TrunkBranch   string                         // trunk/main branch name
+	ParentMap     map[string]string              // branch -> parent
+	FixedMap      map[string]bool                // branch -> is fixed (doesn't need restack)
+	ScopeMap      map[string]string              // branch -> scope
+	WorktreeMap   map[string]engine.WorktreePath // branch -> worktree path (for stack roots with managed worktrees)
 }
 
 // StackDisplayEvent indicates the initial stack visualization phase.
@@ -51,7 +52,7 @@ func (PreparingEvent) submitEvent() {}
 type BranchPlanEvent struct {
 	BranchName string
 	Action     engine.SubmitAction
-	PRNumber   *int // existing PR number for updates, nil for creates
+	PRNumber   *git.PRNumber // existing PR number for updates, nil for creates
 	IsCurrent  bool
 	Empty      bool // branch has no commits relative to its parent
 	Skipped    bool
@@ -99,8 +100,8 @@ func (BranchProgressEvent) submitEvent() {}
 // GitHubStackSyncedEvent reports that submit reconciled GitHub's native Stack
 // metadata after every PR in the selected chain was submitted.
 type GitHubStackSyncedEvent struct {
-	Number       int
-	PullRequests []int
+	Number       github.StackNumber
+	PullRequests []git.PRNumber
 	Action       github.StackSyncAction
 }
 
@@ -162,5 +163,5 @@ const (
 type BranchInfo struct {
 	Name     string
 	Action   engine.SubmitAction
-	PRNumber *int
+	PRNumber *git.PRNumber
 }

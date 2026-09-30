@@ -5,6 +5,8 @@ import (
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // Delay constants for simulating real operations
@@ -24,20 +26,17 @@ func simulateDelay(base time.Duration) {
 
 func init() {
 	// Register the demo engine factory with runtime package
-	app.DemoEngineFactory = func() engine.Engine {
-		eng, _ := NewDemoEngine()
-		return eng
+	app.DemoEngineFactory = func() (engine.Engine, github.GitCommandRunner) {
+		runner := NewDemoGitRunner()
+		eng, _ := newDemoEngineWithRunner(runner)
+		return eng, runner
 	}
 }
 
-// NewDemoEngine creates a new demo engine using the standard engine implementation
-// but with a simulated Git runner.
-func NewDemoEngine() (engine.Engine, error) {
-	opts := engine.Options{
+func newDemoEngineWithRunner(runner git.Runner) (engine.Engine, error) {
+	return engine.NewEngine(engine.Options{
 		RepoRoot: "/demo",
 		Trunk:    GetDemoTrunk(),
-		Git:      NewDemoGitRunner(),
-	}
-
-	return engine.NewEngine(opts)
+		Git:      runner,
+	})
 }

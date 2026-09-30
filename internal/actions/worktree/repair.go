@@ -4,13 +4,15 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
 
 type RepairOptions struct {
 	Selector WorktreeSelector
+	// Config is the main repository's resolved configuration, used to name
+	// anchors for legacy registrations. Nil falls back to the context's config.
+	Config RepoConfig
 }
 
 type RepairEntry struct {
@@ -30,7 +32,11 @@ func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
 	} else if count > 0 {
 		ctx.Output.Info("Removed %d orphaned worktree path registration(s)", count)
 	}
-	listResult, err := listEntries(ctx, ListOptions(opts))
+	cfg, err := resolveRepoConfig(ctx, opts.Config)
+	if err != nil {
+		return nil, err
+	}
+	listResult, err := listEntries(ctx, ListOptions{Selector: opts.Selector})
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +58,7 @@ func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
 			continue
 		}
 
-		repaired, err := repairRegistration(ctx, entry, entry.registration)
+		repaired, err := repairRegistration(ctx, cfg, entry, entry.registration)
 		if err != nil {
 			result.Skipped = append(result.Skipped, SkippedEntry{
 				Name:   entry.displayName(),
@@ -66,10 +72,10 @@ func RepairAction(ctx *app.Context, opts RepairOptions) (*RepairResult, error) {
 	return result, nil
 }
 
-func repairRegistration(ctx *app.Context, entry Entry, wtInfo engine.WorktreeInfo) (RepairEntry, error) {
+func repairRegistration(ctx *app.Context, cfg RepoConfig, entry Entry, wtInfo engine.WorktreeInfo) (RepairEntry, error) {
 	switch entry.Lifecycle.Registration {
 	case RegistrationStateLegacy:
-		anchorName, err := convertLegacyRegistration(ctx, wtInfo, entry.AnchorBranch)
+		anchorName, err := convertLegacyRegistration(ctx, cfg, wtInfo, entry.AnchorBranch)
 		if err != nil {
 			return RepairEntry{}, err
 		}
@@ -136,7 +142,7 @@ func repairRegistration(ctx *app.Context, entry Entry, wtInfo engine.WorktreeInf
 			}, nil
 		}
 
-		anchorName, err := convertLegacyRegistration(ctx, wtInfo, stackRootName)
+		anchorName, err := convertLegacyRegistration(ctx, cfg, wtInfo, stackRootName)
 		if err != nil {
 			return RepairEntry{}, err
 		}
@@ -183,7 +189,7 @@ func moveRegistration(ctx *app.Context, from engine.WorktreeInfo, toAnchor strin
 	return err
 }
 
-func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, rootBranchName string) (string, error) {
+func convertLegacyRegistration(ctx *app.Context, cfg RepoConfig, wtInfo engine.WorktreeInfo, rootBranchName string) (string, error) {
 	rootBranch := ctx.Engine.GetBranch(rootBranchName)
 	if !rootBranch.IsTracked() {
 		return "", fmt.Errorf("branch %s is not tracked by stackit", output.BranchName(rootBranchName))
@@ -199,10 +205,6 @@ func convertLegacyRegistration(ctx *app.Context, wtInfo engine.WorktreeInfo, roo
 		name = engine.WorktreeName(rootBranchName)
 	}
 
-	cfg, err := config.LoadConfig(wtInfo.MainRepoDir)
-	if err != nil {
-		return "", fmt.Errorf("load worktree configuration: %w", err)
-	}
 	anchorBranchName, err := generateAnchorBranchName(ctx, cfg.BranchNamePattern(), name.String(), scope)
 	if err != nil {
 		return "", err

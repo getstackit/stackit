@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 func TestJSONRestackHandler(t *testing.T) {
@@ -19,7 +20,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.OnRestackStart(3)
 
 		// Simulate branch restacking
-		prNum := 123
+		prNum := git.PRNumber(123)
 		branchA := restackEvent("branch-a", RestackDone, "abc123", &prNum, "main")
 		branchA.RerereResolvedCount = 2
 		handler.OnRestackBranch(branchA)
@@ -32,7 +33,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		require.Equal(t, "branch-a", handler.Result.Restacked[0].Name)
 		require.Equal(t, "main", handler.Result.Restacked[0].Parent)
 		require.Equal(t, "abc123", handler.Result.Restacked[0].NewRev)
-		require.Equal(t, 123, *handler.Result.Restacked[0].PRNumber)
+		require.Equal(t, git.PRNumber(123), *handler.Result.Restacked[0].PRNumber)
 		require.Equal(t, 2, handler.Result.Restacked[0].RerereResolvedCount)
 		require.Equal(t, 3, handler.Result.TotalCount)
 		require.Equal(t, 2, handler.Result.RestackCount)
@@ -150,7 +151,7 @@ func TestJSONRestackHandler(t *testing.T) {
 	})
 }
 
-func restackEvent(branch string, result RestackResult, revision string, prNumber *int, parent string) RestackBranchEvent {
+func restackEvent(branch string, result RestackResult, revision string, prNumber *git.PRNumber, parent string) RestackBranchEvent {
 	return RestackBranchEvent{
 		Branch:      branch,
 		Result:      result,

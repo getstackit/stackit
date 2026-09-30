@@ -92,13 +92,18 @@ Examples:
 					return fmt.Errorf("failed to initialize interactive handler")
 				}
 
-				err := mergeAction.RunWizard(ctx, interactiveHandler, mergeAction.WizardOptions{
+				wizardOpts := mergeAction.WizardOptions{
 					DryRun:       dryRun,
 					Force:        force,
 					Wait:         wait,
 					Scope:        scope,
 					TargetBranch: branch,
-				})
+				}
+				if ctx.Config != nil {
+					wizardOpts.UndoStackDepth = ctx.Config.UndoStackDepth()
+					wizardOpts.LinearStacks = ctx.Config.LinearStacks()
+				}
+				err := mergeAction.RunWizard(ctx, interactiveHandler, wizardOpts)
 
 				// Handle post-merge follow-up action
 				var postMerge *mergeAction.PostMergeActionRequired

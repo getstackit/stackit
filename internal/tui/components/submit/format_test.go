@@ -9,6 +9,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,7 +32,7 @@ func TestFormatCompactRowOmitsInlineURL(t *testing.T) {
 func TestFormatSoloRowOmitsBranchName(t *testing.T) {
 	t.Parallel()
 
-	pr := 1270
+	pr := git.PRNumber(1270)
 	row := stripANSIEscape(FormatSoloRow(Item{
 		BranchName: "jonnii/20260511011552/tighten-submit-output",
 		Action:     ActionCreate,
@@ -47,7 +48,7 @@ func TestFormatSoloRowOmitsBranchName(t *testing.T) {
 func TestFormatSoloSummaryShowsRefAndURL(t *testing.T) {
 	t.Parallel()
 
-	pr := 1270
+	pr := git.PRNumber(1270)
 	summary := FormatSoloSummary([]Item{{
 		BranchName: "jonnii/20260511011552/tighten-submit-output",
 		Action:     ActionCreate,
@@ -63,7 +64,7 @@ func TestFormatSoloSummaryShowsRefAndURL(t *testing.T) {
 func TestModelSoloDropsHeaderAndName(t *testing.T) {
 	t.Parallel()
 
-	pr := 1270
+	pr := git.PRNumber(1270)
 	m := NewModel([]Item{{
 		BranchName: "jonnii/20260511011552/tighten-submit-output",
 		Action:     ActionCreate,

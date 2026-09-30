@@ -10,6 +10,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/rerere"
 
@@ -64,19 +65,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Rather than failing on dirty worktrees, we skip their entire stack to allow
 	// parallel work in other worktrees while preserving consistency.
 	var dirtyAnchors dirtyAnchorSet
-	managedWorktrees, err := eng.ListManagedWorktrees()
-	if err == nil {
-		for _, wt := range managedWorktrees {
-			reason := SkipReasonForWorktree(gctx, eng, wt.Path.String())
-			if reason == "" {
-				continue
-			}
-			if dirtyAnchors == nil {
-				dirtyAnchors = make(dirtyAnchorSet)
-			}
-			dirtyAnchors[wt.AnchorBranch] = true
-			out.Warn("Skipping stack rooted at %s (%s)", wt.AnchorBranch, reason)
+	for _, stack := range dirtyWorktreeStacks(gctx, eng) {
+		if dirtyAnchors == nil {
+			dirtyAnchors = make(dirtyAnchorSet)
 		}
+		dirtyAnchors[stack.anchor] = true
+		out.Warn("Skipping stack rooted at %s (%s)", stack.anchor, stack.reason)
 	}
 
 	// Report branches checked out somewhere other than the worktree owning
@@ -376,7 +370,7 @@ type Event struct {
 	Phase               Phase             // Current phase
 	Type                EventType         // Event type
 	Branch              string            // Branch name (if applicable)
-	PRNumber            *int              // PR number (if applicable)
+	PRNumber            *git.PRNumber     // PR number (if applicable)
 	Message             string            // Human-readable description
 	OldRevision         string            // For position changes
 	NewRevision         string            // For position changes

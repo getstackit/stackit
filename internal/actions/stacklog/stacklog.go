@@ -82,7 +82,7 @@ func Gather(src Source) (Result, error) {
 
 	// Downstack returns the ancestor path trunk-ward→current (trunk excluded).
 	// Reverse it so the branch we're standing on renders at the top.
-	branches := src.Graph(engine.SortStrategyAlphabetical).Downstack(*current, true).Reverse()
+	branches := src.Graph(engine.SortStrategyAlphabetical).Downstack(*current, engine.IncludeCurrentBranch).Reverse()
 	if len(branches) == 0 {
 		// Current branch is untracked / not in the graph: no stack band to show.
 		return res, nil

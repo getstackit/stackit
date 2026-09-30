@@ -21,7 +21,20 @@ const WorktreeRefPrefix = "refs/stackit/worktrees/"
 // invariant.
 const WorktreePathRefPrefix = "refs/stackit/worktree-paths/"
 
-func worktreePathRef(path string) string {
+// WorktreePath is the root directory of a physical Git checkout: the main
+// working tree or a linked worktree. Keeping it distinct from plain strings
+// stops a worktree location from being confused with a branch name, a
+// repository-relative file path, or an arbitrary directory at call sites.
+type WorktreePath string
+
+func (p WorktreePath) String() string { return string(p) }
+
+// WorktreeName identifies a Stackit-managed worktree's user-facing name.
+type WorktreeName string
+
+func (n WorktreeName) String() string { return string(n) }
+
+func worktreePathRef(path WorktreePath) string {
 	if canonicalPath, err := CanonicalWorktreePath(path); err == nil {
 		path = canonicalPath
 	}
@@ -35,8 +48,8 @@ func worktreePathRef(path string) string {
 // happens after creation but unregistering often happens after removal. Using
 // the same canonical spelling in both cases keeps the reverse registration
 // ref addressable through symlinked bases such as /tmp on macOS.
-func CanonicalWorktreePath(path string) (string, error) {
-	absPath, err := filepath.Abs(path)
+func CanonicalWorktreePath(path WorktreePath) (WorktreePath, error) {
+	absPath, err := filepath.Abs(path.String())
 	if err != nil {
 		return "", err
 	}
@@ -48,7 +61,7 @@ func CanonicalWorktreePath(path string) (string, error) {
 			if relErr != nil {
 				return "", relErr
 			}
-			return filepath.Clean(filepath.Join(resolvedPath, remainder)), nil
+			return WorktreePath(filepath.Clean(filepath.Join(resolvedPath, remainder))), nil
 		}
 		if !os.IsNotExist(evalErr) {
 			return "", evalErr
@@ -61,7 +74,7 @@ func CanonicalWorktreePath(path string) (string, error) {
 
 // Worktree represents a single entry from `git worktree list`.
 type Worktree struct {
-	Path   string
+	Path   WorktreePath
 	Branch string // empty when the worktree is at detached HEAD
 }
 
@@ -79,8 +92,8 @@ type WorktreeList []Worktree
 // root, which makes this answer "no" for the user's actual main checkout —
 // prefer WorktreeList.IsMain, which reads the answer from git instead of
 // trusting the caller's idea of where the repo lives.
-func IsMainWorktree(worktreePath, repoRoot string) bool {
-	equal, known := samePath(worktreePath, repoRoot)
+func IsMainWorktree(worktreePath WorktreePath, repoRoot string) bool {
+	equal, known := samePath(worktreePath.String(), repoRoot)
 	return known && equal
 }
 
@@ -104,7 +117,7 @@ func samePath(a, b string) (equal, known bool) {
 // MainPath returns the main working tree's path. `git worktree list` always
 // reports the main worktree first and linked worktrees after it, so the first
 // entry is authoritative regardless of which worktree the command ran from.
-func (l WorktreeList) MainPath() string {
+func (l WorktreeList) MainPath() WorktreePath {
 	if len(l) == 0 {
 		return ""
 	}
@@ -122,12 +135,12 @@ func (l WorktreeList) MainPath() string {
 //
 // Uncertainty resolves to true: with no list to compare against, or paths that
 // cannot be resolved, the caller must not proceed to remove.
-func (l WorktreeList) IsMain(path string) bool {
+func (l WorktreeList) IsMain(path WorktreePath) bool {
 	main := l.MainPath()
 	if main == "" {
 		return true
 	}
-	equal, known := samePath(path, main)
+	equal, known := samePath(path.String(), main.String())
 	if !known {
 		return true
 	}
@@ -136,7 +149,7 @@ func (l WorktreeList) IsMain(path string) bool {
 
 // PathForBranch returns the worktree path where branchName is checked out,
 // or "" if no worktree currently has it.
-func (l WorktreeList) PathForBranch(branchName string) string {
+func (l WorktreeList) PathForBranch(branchName string) WorktreePath {
 	for _, w := range l {
 		if w.Branch == branchName {
 			return w.Path
@@ -146,8 +159,8 @@ func (l WorktreeList) PathForBranch(branchName string) string {
 }
 
 // Paths returns just the worktree paths.
-func (l WorktreeList) Paths() []string {
-	out := make([]string, len(l))
+func (l WorktreeList) Paths() []WorktreePath {
+	out := make([]WorktreePath, len(l))
 	for i, w := range l {
 		out[i] = w.Path
 	}
@@ -185,11 +198,11 @@ func (r *runner) ensureBranchesNotCheckedOut(ctx context.Context, branchNames []
 
 // WorktreeMeta represents worktree tracking metadata stored in local Git refs
 type WorktreeMeta struct {
-	Name         string    `json:"name,omitempty"` // User-provided name for display (new worktrees only)
-	Path         string    `json:"path"`           // Absolute path to worktree
-	AnchorBranch string    `json:"stackRoot"`      // Anchor branch for worktree (JSON: stackRoot for backwards compat)
-	CreatedAt    time.Time `json:"createdAt"`      // When worktree was created
-	MainRepoDir  string    `json:"mainRepoDir"`    // Path to main repo (for detection)
+	Name         WorktreeName `json:"name,omitempty"` // User-provided name for display (new worktrees only)
+	Path         WorktreePath `json:"path"`           // Absolute path to worktree
+	AnchorBranch string       `json:"stackRoot"`      // Anchor branch for worktree (JSON: stackRoot for backwards compat)
+	CreatedAt    time.Time    `json:"createdAt"`      // When worktree was created
+	MainRepoDir  string       `json:"mainRepoDir"`    // Path to main repo (for detection)
 }
 
 // WorktreeDetachMode controls whether a new worktree checks out its branch
@@ -203,20 +216,31 @@ const (
 	WorktreeDetached
 )
 
-func (r *runner) AddWorktree(ctx context.Context, path string, branch string, detach WorktreeDetachMode) error {
-	return r.AddWorktreeWithOptions(ctx, path, branch, detach, false)
+// WorktreeCheckoutMode controls whether a new worktree populates its working
+// directory (`git worktree add --no-checkout`).
+type WorktreeCheckoutMode int
+
+const (
+	// WorktreeCheckoutFiles checks out the working tree files.
+	WorktreeCheckoutFiles WorktreeCheckoutMode = iota
+	// WorktreeNoCheckout creates the worktree without populating files.
+	WorktreeNoCheckout
+)
+
+func (r *runner) AddWorktree(ctx context.Context, path WorktreePath, branch string, detach WorktreeDetachMode) error {
+	return r.AddWorktreeWithOptions(ctx, path, branch, detach, WorktreeCheckoutFiles)
 }
 
 // AddWorktreeWithOptions adds a worktree with additional options
-func (r *runner) AddWorktreeWithOptions(ctx context.Context, path string, branch string, detach WorktreeDetachMode, noCheckout bool) error {
+func (r *runner) AddWorktreeWithOptions(ctx context.Context, path WorktreePath, branch string, detach WorktreeDetachMode, checkout WorktreeCheckoutMode) error {
 	args := []string{"worktree", gitCmdAdd}
 	if detach == WorktreeDetached {
 		args = append(args, "--detach")
 	}
-	if noCheckout {
+	if checkout == WorktreeNoCheckout {
 		args = append(args, "--no-checkout")
 	}
-	args = append(args, path)
+	args = append(args, path.String())
 	if branch != "" {
 		args = append(args, branch)
 	}
@@ -228,18 +252,18 @@ func (r *runner) AddWorktreeWithOptions(ctx context.Context, path string, branch
 	return nil
 }
 
-func (r *runner) RemoveWorktree(ctx context.Context, path string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", path)
+func (r *runner) RemoveWorktree(ctx context.Context, path WorktreePath) error {
+	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", path.String())
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}
 	return nil
 }
 
-func (r *runner) ForceRemoveWorktree(ctx context.Context, path string) error {
+func (r *runner) ForceRemoveWorktree(ctx context.Context, path WorktreePath) error {
 	// Git requires --force twice when the worktree is locked, in addition to
 	// using it to discard local changes.
-	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", "--force", path)
+	_, err := r.RunGitCommandWithContext(ctx, "worktree", "remove", "--force", "--force", path.String())
 	if err != nil {
 		return fmt.Errorf("failed to remove worktree at %s: %w", path, err)
 	}
@@ -291,7 +315,7 @@ func (r *runner) ListWorktrees(ctx context.Context) (WorktreeList, error) {
 			flush()
 		case strings.HasPrefix(line, "worktree "):
 			flush()
-			current.Path = strings.TrimPrefix(line, "worktree ")
+			current.Path = WorktreePath(strings.TrimPrefix(line, "worktree "))
 		case strings.HasPrefix(line, "branch "):
 			current.Branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
 		case line == "prunable" || strings.HasPrefix(line, "prunable "):
@@ -407,7 +431,7 @@ func (r *runner) DeleteWorktreeMeta(ctx context.Context, stackRoot string) error
 
 // GetWorktreePathForBranch returns the worktree path where a branch is checked out.
 // Returns empty string if the branch is not checked out in any worktree.
-func (r *runner) GetWorktreePathForBranch(ctx context.Context, branchName string) (string, error) {
+func (r *runner) GetWorktreePathForBranch(ctx context.Context, branchName string) (WorktreePath, error) {
 	worktrees, err := r.ListWorktrees(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to list worktrees: %w", err)
@@ -417,8 +441,8 @@ func (r *runner) GetWorktreePathForBranch(ctx context.Context, branchName string
 
 // ResetWorktreeWorkingDir resets a worktree's working directory to match HEAD.
 // This is used after updating a branch ref to sync the worktree's working directory.
-func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath string) error {
-	_, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath, "reset", "--hard", "HEAD")
+func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath WorktreePath) error {
+	_, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath.String(), "reset", "--hard", "HEAD")
 	if err != nil {
 		return fmt.Errorf("failed to reset worktree at %s: %w", worktreePath, err)
 	}
@@ -428,9 +452,9 @@ func (r *runner) ResetWorktreeWorkingDir(ctx context.Context, worktreePath strin
 // WorktreeHasUncommittedChanges checks if a worktree has uncommitted changes.
 // "Clean" means: no staged, unstaged, or untracked entries — equivalent to
 // `git status --porcelain --untracked-files=normal` returning empty output.
-func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error) {
+func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error) {
 	out, err := r.RunGitCommandRawWithContext(ctx,
-		"-C", worktreePath,
+		"-C", worktreePath.String(),
 		"status", "--porcelain", "--untracked-files=normal",
 	)
 	if err != nil {
@@ -447,9 +471,9 @@ func (r *runner) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath
 // destroy tracked edits. Before resetting, also check untracked collisions
 // against the target tree with WorktreeResetBlocker. Use
 // WorktreeHasUncommittedChanges when any untracked file should count as dirty.
-func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error) {
+func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error) {
 	out, err := r.RunGitCommandRawWithContext(ctx,
-		"-C", worktreePath,
+		"-C", worktreePath.String(),
 		"status", "--porcelain", "--untracked-files=no",
 	)
 	if err != nil {
@@ -467,7 +491,7 @@ func (r *runner) WorktreeHasTrackedChanges(ctx context.Context, worktreePath str
 // Trunk Never, Report Holds Always" in .claude/rules/worktree-safety.md.
 type WorktreeHeldError struct {
 	Branch       string
-	WorktreePath string
+	WorktreePath WorktreePath
 	Reason       string
 }
 
@@ -492,7 +516,7 @@ func (e *WorktreeHeldError) Error() string {
 // case `git reset --hard` destroys them; that file was never in git, so there is
 // no reflog or stash to recover it from. An inspection failure blocks too:
 // unknown must never read as safe.
-func (r *runner) WorktreeResetBlocker(ctx context.Context, worktreePath, incomingRev string) string {
+func (r *runner) WorktreeResetBlocker(ctx context.Context, worktreePath WorktreePath, incomingRev string) string {
 	tracked, err := r.WorktreeHasTrackedChanges(ctx, worktreePath)
 	switch {
 	case err != nil:
@@ -518,9 +542,9 @@ func (r *runner) WorktreeResetBlocker(ctx context.Context, worktreePath, incomin
 // repository-relative path. --exclude-standard ensures this has Git's actual
 // ignore semantics, rather than treating a warm-start include file as another
 // source of ignored paths.
-func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error) {
+func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath) ([]string, error) {
 	out, err := r.RunGitCommandRawWithContext(ctx,
-		"-C", worktreePath,
+		"-C", worktreePath.String(),
 		"ls-files", "--others", "--ignored", "--exclude-standard", "-z",
 	)
 	if err != nil {
@@ -538,8 +562,8 @@ func (r *runner) ListIgnoredFiles(ctx context.Context, worktreePath string) ([]s
 // (worktree missing, repo corruption, context cancellation) are surfaced — git
 // uses exit code 1 specifically for "not a symbolic ref" when `-q` is passed,
 // reserving 128 (and others) for genuine errors.
-func (r *runner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error) {
-	out, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath, "symbolic-ref", "-q", "--short", "HEAD")
+func (r *runner) GetWorktreeCurrentBranch(ctx context.Context, worktreePath WorktreePath) (string, error) {
+	out, err := r.RunGitCommandWithContext(ctx, "-C", worktreePath.String(), "symbolic-ref", "-q", "--short", "HEAD")
 	if err != nil {
 		if isExitCode(err, 1) {
 			return "", nil

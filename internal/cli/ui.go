@@ -33,6 +33,7 @@ consolidated PRs with a single action.`,
 			if err != nil {
 				return err
 			}
+			ctx.Prompter = common.TUIPrompter{}
 
 			return dashboard.RunShippable(ctx, dashboard.ShippableOptions{
 				RunLocalCI: runLocalCI,

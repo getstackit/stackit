@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/utils"
 )
@@ -54,7 +55,7 @@ func (c *GitHubClient) Repo() github.Repo {
 func (c *GitHubClient) CreatePullRequest(_ context.Context, opts github.CreatePROptions) (*github.PullRequestInfo, error) {
 	simulateDelay(delayMedium)
 
-	prNum := int(atomic.AddInt32(&prCounter, 1))
+	prNum := git.PRNumber(atomic.AddInt32(&prCounter, 1))
 	pr := &github.PullRequestInfo{
 		Number:  prNum,
 		NodeID:  fmt.Sprintf("PR_%d", prNum),
@@ -72,7 +73,7 @@ func (c *GitHubClient) CreatePullRequest(_ context.Context, opts github.CreatePR
 }
 
 // UpdatePullRequest simulates updating a pull request
-func (c *GitHubClient) UpdatePullRequest(_ context.Context, prNumber int, opts github.UpdatePROptions) ([]string, error) {
+func (c *GitHubClient) UpdatePullRequest(_ context.Context, prNumber git.PRNumber, opts github.UpdatePROptions) ([]string, error) {
 	simulateDelay(delayShort)
 
 	// Find the PR by number
@@ -108,7 +109,7 @@ func (c *GitHubClient) GetPullRequestByBranch(_ context.Context, branchName stri
 }
 
 // GetPullRequest returns a simulated PR by number
-func (c *GitHubClient) GetPullRequest(_ context.Context, prNumber int) (*github.PullRequestInfo, error) {
+func (c *GitHubClient) GetPullRequest(_ context.Context, prNumber git.PRNumber) (*github.PullRequestInfo, error) {
 	simulateDelay(delayShort)
 
 	for _, pr := range c.prs {
@@ -184,7 +185,7 @@ func (c *GitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNames [
 }
 
 // BatchGetPRTitles returns plausible fake titles for demo mode
-func (c *GitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []int) (map[int]string, error) {
+func (c *GitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []git.PRNumber) (map[git.PRNumber]string, error) {
 	simulateDelay(delayShort)
 
 	titles := []string{
@@ -198,7 +199,7 @@ func (c *GitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []int) (map
 		"feat: add CSV export support",
 	}
 
-	results := make(map[int]string, len(prNumbers))
+	results := make(map[git.PRNumber]string, len(prNumbers))
 	for i, num := range prNumbers {
 		results[num] = titles[i%len(titles)]
 	}
@@ -206,7 +207,7 @@ func (c *GitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []int) (map
 }
 
 // ClosePullRequest simulates closing a pull request
-func (c *GitHubClient) ClosePullRequest(_ context.Context, prNumber int) error {
+func (c *GitHubClient) ClosePullRequest(_ context.Context, prNumber git.PRNumber) error {
 	simulateDelay(delayShort)
 
 	// Find the PR by number and close it
@@ -221,7 +222,7 @@ func (c *GitHubClient) ClosePullRequest(_ context.Context, prNumber int) error {
 }
 
 // CreatePRComment simulates creating a PR comment
-func (c *GitHubClient) CreatePRComment(_ context.Context, _ int, _ string) (int64, error) {
+func (c *GitHubClient) CreatePRComment(_ context.Context, _ git.PRNumber, _ string) (int64, error) {
 	simulateDelay(delayShort)
 	// In demo mode, return a simulated comment ID
 	return 12345, nil
@@ -240,7 +241,7 @@ func (c *GitHubClient) DeletePRComment(_ context.Context, _ int64) error {
 }
 
 // ListPRComments simulates listing PR comments
-func (c *GitHubClient) ListPRComments(_ context.Context, _ int) ([]github.PRComment, error) {
+func (c *GitHubClient) ListPRComments(_ context.Context, _ git.PRNumber) ([]github.PRComment, error) {
 	simulateDelay(delayShort)
 	// In demo mode, return empty list
 	return []github.PRComment{}, nil

@@ -46,7 +46,7 @@ func TestMultiStackWorktreeExecutor_ConflictingStackResetsState(t *testing.T) {
 	assert.Equal(t, "stack2", result.ConflictStacks[0].Stack.RootBranch)
 
 	// Verify the worktree does not contain partial changes from the conflicting stack
-	content, readErr := os.ReadFile(filepath.Join(result.WorktreePath, "test.txt"))
+	content, readErr := os.ReadFile(filepath.Join(result.WorktreePath.String(), "test.txt"))
 	require.NoError(t, readErr)
 	assert.Equal(t, "stack1", string(content))
 }
@@ -76,7 +76,7 @@ func TestMultiStackWorktreeExecutor_PullsTrunkBeforeMerge(t *testing.T) {
 	require.NoError(t, err)
 	defer result.Cleanup()
 
-	worktreeRepo := testhelpers.NewGitRepoFromExisting(t, result.WorktreePath)
+	worktreeRepo := testhelpers.NewGitRepoFromExisting(t, result.WorktreePath.String())
 	worktreeHead, err := worktreeRepo.GetRevision("HEAD")
 	require.NoError(t, err)
 
@@ -124,7 +124,7 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 	assert.Equal(t, "branch1", result.MergedStacks[0].RootBranch)
 
 	// Verify we have a merge commit (Git optimizes stacked branches to 2 parents: trunk + top branch)
-	worktreeRepo := testhelpers.NewGitRepoFromExisting(t, result.WorktreePath)
+	worktreeRepo := testhelpers.NewGitRepoFromExisting(t, result.WorktreePath.String())
 
 	// Get the commit object to count parents
 	parentOutput, err := worktreeRepo.RunGitCommandAndGetOutput("cat-file", "-p", "HEAD")
@@ -155,11 +155,11 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 
 	// Verify all files are present in the working tree
 	// CreateChangeAndCommit creates files as "{prefix}_test.txt"
-	_, err = os.Stat(filepath.Join(result.WorktreePath, "file1_test.txt"))
+	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "file1_test.txt"))
 	assert.NoError(t, err, "file1_test.txt should exist")
-	_, err = os.Stat(filepath.Join(result.WorktreePath, "file2_test.txt"))
+	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "file2_test.txt"))
 	assert.NoError(t, err, "file2_test.txt should exist")
-	_, err = os.Stat(filepath.Join(result.WorktreePath, "file3_test.txt"))
+	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "file3_test.txt"))
 	assert.NoError(t, err, "file3_test.txt should exist")
 }
 
@@ -212,7 +212,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 	require.Len(t, result.MergedStacks, 2)
 	assert.Empty(t, result.ConflictStacks)
 
-	worktreeRepo := testhelpers.NewGitRepoFromExisting(t, result.WorktreePath)
+	worktreeRepo := testhelpers.NewGitRepoFromExisting(t, result.WorktreePath.String())
 
 	// Verify we have exactly ONE merge commit (global octopus) by counting first-parent commits
 	// First-parent traversal shows just the merge commits on the mainline
@@ -245,13 +245,13 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 	assert.True(t, isAncestor(stack2Branch2SHA), "stack2-branch2 should be ancestor of HEAD")
 
 	// Verify all files are present
-	_, err = os.Stat(filepath.Join(result.WorktreePath, "s1file1_test.txt"))
+	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s1file1_test.txt"))
 	assert.NoError(t, err, "s1file1_test.txt should exist")
-	_, err = os.Stat(filepath.Join(result.WorktreePath, "s1file2_test.txt"))
+	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s1file2_test.txt"))
 	assert.NoError(t, err, "s1file2_test.txt should exist")
-	_, err = os.Stat(filepath.Join(result.WorktreePath, "s2file1_test.txt"))
+	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s2file1_test.txt"))
 	assert.NoError(t, err, "s2file1_test.txt should exist")
-	_, err = os.Stat(filepath.Join(result.WorktreePath, "s2file2_test.txt"))
+	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s2file2_test.txt"))
 	assert.NoError(t, err, "s2file2_test.txt should exist")
 }
 

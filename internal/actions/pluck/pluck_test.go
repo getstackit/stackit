@@ -8,9 +8,22 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+func TestInvalidOntoTargets(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"a": "main",
+			"b": "a",
+			"c": "b",
+		})
+
+	require.Equal(t, map[string]bool{"b": true, "c": true}, InvalidOntoTargets(s.Engine, "b"))
+}
 
 func TestPluckStackID(t *testing.T) {
 	t.Parallel()
@@ -27,7 +40,6 @@ func TestPluckStackID(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
-				ctx := context.Background()
 				s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 					WithStack(map[string]string{
 						"a": "main",
@@ -36,16 +48,14 @@ func TestPluckStackID(t *testing.T) {
 					})
 
 				// Seed a stack ID on the stack.
-				originalID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch("a"))
-				require.NoError(t, err)
+				originalID := s.EnsureStackID("a")
 				require.NotEmpty(t, originalID)
 
 				s.Checkout(tt.pluck)
 				require.NoError(t, Action(s.Context, Options{Source: tt.pluck, Onto: "main"}, nil))
 
 				// After plucking to trunk the plucked branch gets a fresh ID.
-				newID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch(tt.pluck))
-				require.NoError(t, err)
+				newID := s.EnsureStackID(tt.pluck)
 				require.NotEmpty(t, newID)
 				require.NotEqual(t, originalID, newID, "plucked branch should have a new stack ID")
 
@@ -57,7 +67,6 @@ func TestPluckStackID(t *testing.T) {
 
 	t.Run("plucking to different stack inherits that stack ID", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.Background()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"a": "main",
@@ -66,10 +75,8 @@ func TestPluckStackID(t *testing.T) {
 				"x": "main",
 			})
 
-		firstID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch("a"))
-		require.NoError(t, err)
-		secondID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch("x"))
-		require.NoError(t, err)
+		firstID := s.EnsureStackID("a")
+		secondID := s.EnsureStackID("x")
 		require.NotEqual(t, firstID, secondID)
 
 		// Pluck b onto x (from first stack to second stack); c stays in first stack.
@@ -82,7 +89,6 @@ func TestPluckStackID(t *testing.T) {
 
 	t.Run("plucking within same stack does not change stack ID", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.Background()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
 				"a": "main",
@@ -91,8 +97,7 @@ func TestPluckStackID(t *testing.T) {
 				"d": "c",
 			})
 
-		originalID, err := s.Engine.EnsureStackID(ctx, s.Engine.GetBranch("a"))
-		require.NoError(t, err)
+		originalID := s.EnsureStackID("a")
 
 		// Pluck c onto a (within same stack); d is reparented to b.
 		require.NoError(t, Action(s.Context, Options{Source: "c", Onto: "a"}, nil))
@@ -411,8 +416,8 @@ func TestPluckAction(t *testing.T) {
 
 		// Add PR info to branch2
 		branch2 := s.Engine.GetBranch("branch2")
-		prNumber := 456
-		prInfo := engine.NewPrInfo(&prNumber, "Test Pluck PR", "Test Body", "OPEN", "branch1", "https://github.com/owner/repo/pull/456", false)
+		prNumber := git.PRNumber(456)
+		prInfo := engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "Test Pluck PR", Body: "Test Body", State: "OPEN", Base: "branch1", URL: "https://github.com/owner/repo/pull/456"})
 		err := s.Engine.UpsertPrInfo(context.Background(), branch2, prInfo)
 		require.NoError(t, err)
 
@@ -428,7 +433,7 @@ func TestPluckAction(t *testing.T) {
 		newPrInfo, err := pluckedBranch2.GetPrInfo()
 		require.NoError(t, err)
 		require.NotNil(t, newPrInfo)
-		require.Equal(t, 456, *newPrInfo.Number())
+		require.Equal(t, git.PRNumber(456), *newPrInfo.Number())
 		require.Equal(t, "Test Pluck PR", newPrInfo.Title())
 	})
 

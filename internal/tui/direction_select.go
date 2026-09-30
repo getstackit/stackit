@@ -210,7 +210,7 @@ type DirectionSelectModel struct {
 }
 
 // NewDirectionSelectModel creates a model for selecting split direction
-func NewDirectionSelectModel(eng engine.BranchReader, currentBranch, parentBranch string, children []string) *DirectionSelectModel {
+func NewDirectionSelectModel(eng engine.StackView, currentBranch, parentBranch string, children []string) *DirectionSelectModel {
 	// Build the path from trunk to current branch
 	graph := eng.Graph(engine.SortStrategySmart)
 
@@ -407,7 +407,7 @@ func (m *DirectionSelectModel) Back() bool {
 }
 
 // PromptDirectionSelect shows an interactive direction selector and returns the chosen direction
-func PromptDirectionSelect(eng engine.BranchReader, currentBranch, parentBranch string, children []string) (Direction, error) {
+func PromptDirectionSelect(eng engine.StackView, currentBranch, parentBranch string, children []string) (Direction, error) {
 	if err := CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}

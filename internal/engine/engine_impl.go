@@ -120,7 +120,7 @@ func (e *engineImpl) SnapshotForWorktree() WorktreeSnapshot {
 // WorktreeEngineOptions configures NewEngineForWorktree.
 type WorktreeEngineOptions struct {
 	// WorktreePath is the root directory of the worktree.
-	WorktreePath string
+	WorktreePath WorktreePath
 
 	// Snapshot is the parent engine's state snapshot.
 	Snapshot WorktreeSnapshot
@@ -130,7 +130,7 @@ type WorktreeEngineOptions struct {
 // from the parent engine. This skips rebuildInternal since worktrees share .git
 // with the parent and the metadata is identical.
 func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
-	g := git.NewRunnerWithPath(opts.WorktreePath, nil)
+	g := git.NewRunnerWithPath(opts.WorktreePath.String(), nil)
 
 	if err := g.InitDefaultRepo(); err != nil {
 		return nil, fmt.Errorf("failed to initialize worktree git repository: %w", err)
@@ -143,7 +143,7 @@ func NewEngineForWorktree(opts WorktreeEngineOptions) (Engine, error) {
 	}
 
 	e := &engineImpl{
-		repoRoot:          opts.WorktreePath,
+		repoRoot:          opts.WorktreePath.String(),
 		trunk:             opts.Snapshot.Trunk,
 		state:             newStateCoreFromSnapshot(opts.Snapshot.Branches, opts.Snapshot.BranchState, opts.Snapshot.ChildrenMap),
 		remoteMetaCache:   opts.Snapshot.RemoteMetaCache,
@@ -208,6 +208,10 @@ func NewEngine(opts Options) (Engine, error) {
 
 	if opts.Metadata != nil {
 		e.metadata = opts.Metadata
+	}
+	if opts.Logger != nil {
+		g.SetLogger(opts.Logger)
+		e.metadata.SetLogger(opts.Logger)
 	}
 
 	currentBranch, err := g.GetCurrentBranch()
@@ -378,10 +382,6 @@ func (e *engineImpl) Reset(newTrunkName string) error {
 	return e.rebuild()
 }
 
-func (e *engineImpl) Git() git.Runner {
-	return e.git
-}
-
 // readState returns the cached BranchState for a branch by name, or nil if
 // the branch is unknown to the engine. This is the single chokepoint for
 // branch-state reads inside the engine — every accessor that needs to inspect
@@ -467,5 +467,3 @@ func (e *engineImpl) RebuildBranches(branchNames []string) error {
 
 	return nil
 }
-
-func (e *engineImpl) Metadata() *git.MetadataStore { return e.metadata }

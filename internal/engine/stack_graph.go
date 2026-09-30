@@ -33,7 +33,7 @@ type DepthGroup struct {
 
 // BuildStackGraph constructs a StackGraph using the provided engine reader and sorting strategy.
 // The optional filter is applied to branches; filtered-out branches are omitted along with their subtrees.
-func BuildStackGraph(eng BranchReader, strategy SortStrategy, filter func(Branch) bool) *StackGraph {
+func BuildStackGraph(eng StackView, strategy SortStrategy, filter func(Branch) bool) *StackGraph {
 	branches := eng.AllBranches()
 
 	trunk := eng.Trunk().GetName()
@@ -358,7 +358,7 @@ func (g *StackGraph) Range(branch Branch, rng StackRange) Branches {
 //
 // Note: Returns true if the branch is not in the graph (nil node). Callers that need
 // fail-safe behavior (treating unknown branches as non-leaves) should check GetNode()
-// first, as AllBranchesAreLeaves does.
+// first, as merge.MergeBranches.AllAreLeaves does.
 func (g *StackGraph) IsLeaf(branch Branch) bool {
 	node := g.nodes[branch.GetName()]
 	return node == nil || len(node.Children) == 0
@@ -421,16 +421,35 @@ func (g *StackGraph) isAncestorOf(ancestor, descendant string) bool {
 }
 
 // Upstack returns children of the branch (upstack).
-func (g *StackGraph) Upstack(branch Branch, includeCurrent bool) Branches {
-	return g.Range(branch, StackRangeUpstack(includeCurrent))
+func (g *StackGraph) Upstack(branch Branch, current CurrentBranchMode) Branches {
+	return g.Range(branch, StackRangeUpstack(current))
 }
 
 // Downstack returns parents of the branch (downstack).
-func (g *StackGraph) Downstack(branch Branch, includeCurrent bool) Branches {
-	return g.Range(branch, StackRangeDownstack(includeCurrent))
+func (g *StackGraph) Downstack(branch Branch, current CurrentBranchMode) Branches {
+	return g.Range(branch, StackRangeDownstack(current))
 }
 
 // FullStack returns the entire stack (parents + current + children).
 func (g *StackGraph) FullStack(branch Branch) Branches {
 	return g.Range(branch, StackRangeFull())
+}
+
+// OwningTrunk walks up the parent chain from branch and returns the first
+// branch named in trunks (including branch itself). It falls back to the
+// graph's primary trunk when no configured trunk is found on the chain.
+func (g *StackGraph) OwningTrunk(branch Branch, trunks []string) string {
+	visited := make(map[string]bool)
+	for name := branch.GetName(); name != "" && !visited[name]; {
+		visited[name] = true
+		if slices.Contains(trunks, name) {
+			return name
+		}
+		node := g.nodes[name]
+		if node == nil {
+			break
+		}
+		name = node.Parent
+	}
+	return g.trunk
 }

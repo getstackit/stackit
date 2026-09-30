@@ -94,7 +94,7 @@ Examples:
 				}
 
 				if result.WorktreePath != "" {
-					ctx.Output.DirectiveCD(result.WorktreePath)
+					ctx.Output.DirectiveCD(result.WorktreePath.String())
 				}
 
 				return nil

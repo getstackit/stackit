@@ -66,13 +66,6 @@ type TestShell struct {
 	inProcessCLI *inprocess.CLI // if set, use in-process execution
 }
 
-// NewTestShell creates a shell-like test environment with an initialized repo.
-func NewTestShell(t *testing.T, binaryPath string) *TestShell {
-	t.Helper()
-	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-	return &TestShell{t: t, scene: scene, binaryPath: binaryPath}
-}
-
 // NewTestShellInProcess creates a shell-like test environment that uses in-process
 // CLI execution for faster tests. This avoids the overhead of spawning a new process
 // for each command (~8ms per command savings).
@@ -112,13 +105,6 @@ func NewTestShellInProcess(t *testing.T, opts ...TestShellOption) *TestShell {
 	// of spawning binary with --no-interactive
 	utils.SetInteractive(false)
 	return sh
-}
-
-// NewTestShellWithRemote creates a shell-like test environment with a local bare repo as "origin".
-// This is useful for testing sync workflows that require a remote.
-func NewTestShellWithRemote(t *testing.T, binaryPath string) *TestShell {
-	t.Helper()
-	return newTestShellWithRemote(t, binaryPath, nil)
 }
 
 // newTestShellWithRemote is the shared implementation for creating shells with remotes.
@@ -370,16 +356,6 @@ func (s *TestShell) Modify(filename, content string) *TestShell {
 	require.NoError(s.t, err, "failed to write %s", filename)
 	// Use stackit modify to amend with auto-restack
 	return s.Run("modify -n")
-}
-
-// ModifyWithMessage creates a file change and uses stackit modify with a new message
-func (s *TestShell) ModifyWithMessage(filename, content, message string) *TestShell {
-	s.t.Helper()
-	// Create the change (staged)
-	err := s.scene.Repo.CreateChange(content, filename, false)
-	require.NoError(s.t, err, "failed to write %s", filename)
-	// Use stackit modify to amend with message
-	return s.Run("modify -m '" + message + "'")
 }
 
 // Commit creates a file change and commits it
@@ -1069,14 +1045,6 @@ func (s *TestShell) ExpectStackID(branch, expectedStackID string) *TestShell {
 	actualStackID := s.GetStackID(branch)
 	require.Equal(s.t, expectedStackID, actualStackID,
 		"branch %s expected stack ID %q, got %q", branch, expectedStackID, actualStackID)
-	return s
-}
-
-// ExpectStackIDNotEmpty asserts a branch has a non-empty stack ID.
-func (s *TestShell) ExpectStackIDNotEmpty(branch string) *TestShell {
-	s.t.Helper()
-	actualStackID := s.GetStackID(branch)
-	require.NotEmpty(s.t, actualStackID, "branch %s expected to have a stack ID, but got empty", branch)
 	return s
 }
 

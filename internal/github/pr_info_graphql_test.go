@@ -29,7 +29,7 @@ func TestBuildPRInfoByBranchQuery(t *testing.T) {
 func TestBuildPRInfoByNumberQuery(t *testing.T) {
 	t.Parallel()
 
-	query := buildPRNumberQuery([]int{42, 99}, pullRequestInfoFields)
+	query := buildPRNumberQuery([]git.PRNumber{42, 99}, pullRequestInfoFields)
 
 	require.Contains(t, query, "pr_42: pullRequest(number: 42) { number title body state url isDraft baseRefName headRefName }")
 	require.Contains(t, query, "pr_99: pullRequest(number: 99) { number title body state url isDraft baseRefName headRefName }")
@@ -65,7 +65,7 @@ func TestParsePRInfoByBranchResponse(t *testing.T) {
 
 	feature := infos["feature"]
 	require.NotNil(t, feature)
-	require.Equal(t, 42, feature.Number)
+	require.Equal(t, git.PRNumber(42), feature.Number)
 	require.Equal(t, "feat: auth", feature.Title)
 	require.Equal(t, "do auth", feature.Body)
 	require.Equal(t, git.PRStateOpen, feature.State)
@@ -106,21 +106,21 @@ func TestParsePRInfoByNumberResponseAndSupplementMissingBranch(t *testing.T) {
 		}
 	}`)
 
-	byNumber, err := parsePRInfoByNumberResponse(body, []int{42})
+	byNumber, err := parsePRInfoByNumberResponse(body, []git.PRNumber{42})
 	require.NoError(t, err)
 	require.Equal(t, git.PRStateClosed, byNumber[42].State)
 
 	infos := map[string]*PullRequestInfo{
 		"active-branch": {Number: 7, State: git.PRStateOpen},
 	}
-	addPRInfoForKnownBranches(infos, map[string]int{
+	addPRInfoForKnownBranches(infos, map[string]git.PRNumber{
 		"deleted-branch": 42,
 		"active-branch":  42,
 	}, byNumber)
 
 	require.Equal(t, git.PRStateClosed, infos["deleted-branch"].State)
 	// An existing ref-based result remains authoritative for active branches.
-	require.Equal(t, 7, infos["active-branch"].Number)
+	require.Equal(t, git.PRNumber(7), infos["active-branch"].Number)
 }
 
 func TestParsePRInfoByBranchResponse_MissingRepository(t *testing.T) {
@@ -156,7 +156,7 @@ func TestParsePRInfoByBranchResponse_PrefersLivePR(t *testing.T) {
 
 	infos, err := parsePRInfoByBranchResponse(body, []string{"feature"})
 	require.NoError(t, err)
-	require.Equal(t, 1680, infos["feature"].Number)
+	require.Equal(t, git.PRNumber(1680), infos["feature"].Number)
 	require.Equal(t, git.PRStateOpen, infos["feature"].State)
 	require.Equal(t, "new-base", infos["feature"].Base)
 }
@@ -173,7 +173,7 @@ func TestSelectPullRequestInfo(t *testing.T) {
 	tests := []struct {
 		name  string
 		infos []*PullRequestInfo
-		want  int
+		want  git.PRNumber
 	}{
 		{"open beats closed regardless of number", []*PullRequestInfo{closedNew, open1}, 10},
 		{"open beats merged regardless of number", []*PullRequestInfo{merged, open1}, 10},

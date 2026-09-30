@@ -40,15 +40,33 @@ linters:
     - copyloopvar
     - tparallel
     - forbidigo
+    - depguard
   settings:
+    depguard:
+      rules:
+        # Actions are reusable business operations; interaction goes through
+        # prompt/handler interfaces implemented by the CLI/TUI adapters.
+        actions-no-tui:
+          files:
+            - "**/internal/actions/**"
+          deny:
+            - pkg: github.com/getstackit/stackit/internal/tui
+              desc: >-
+                actions must not import the TUI adapter; define a prompt or
+                handler interface next to the action and implement it in
+                internal/cli (see docs/architecture.md).
     forbidigo:
       forbid:
         - pattern: '\.Git\(\)'
           msg: >-
-            Do not reach through Engine.Git()/Context.Git() to the raw git
-            runner. Add or use an engine method for domain operations. The only
-            allowed uses are passing the runner to integration helpers (github,
-            etc.), which must be annotated with //nolint:forbidigo and a reason.
+            Engine and app.Context do not expose the raw git runner. Add or use
+            an engine method for domain operations; the GitHub integration gets
+            its narrow runner from app.Context.GHRunner.
+        - pattern: '^config\.Load\w*$'
+          msg: >-
+            Actions must not load config from disk. Resolve it in bootstrap
+            (internal/app) or the adapter (internal/cli, internal/api) and pass
+            the values in the request/options.
     misspell:
       locale: US
     gosec:
@@ -81,14 +99,19 @@ linters:
       - path: _test\.go
         linters:
           - lll
-      # Tests use Engine.Git() freely for setup/assertions.
+      # Tests may reach raw git (scenario.Git) for setup/assertions.
       - path: _test\.go
         linters:
           - forbidigo
       # Bootstrap and core own the git runner: app/config wire it, engine
-      # implements and returns it. The escape-hatch guard targets the
-      # action/adapter/business layers.
+      # wraps it. The guard targets the action/adapter/business layers.
       - path: internal/(app|config|engine)/
+        linters:
+          - forbidigo
+      # Config loading is only forbidden in the action layer; bootstrap and
+      # adapters are where it belongs.
+      - path-except: ^internal/actions/
+        text: Actions must not load config
         linters:
           - forbidigo
       # TUI storyboard files contain fixture data with repeated string literals

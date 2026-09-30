@@ -26,7 +26,7 @@ func TestTraverseUpwardSkipsWorktreeAnchors(t *testing.T) {
 	require.NoError(t, err)
 
 	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-	target, err := traverseUpward("main", s.Context, graph, &NullHandler{})
+	target, err := traverseUpward("main", s.Context.Engine, s.Context.Output, graph, &NullHandler{})
 	require.NoError(t, err)
 	require.Equal(t, "feature", target)
 }
@@ -49,7 +49,7 @@ func TestTraverseUpwardSkipsNestedWorktreeAnchors(t *testing.T) {
 	require.NoError(t, err)
 
 	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-	target, err := traverseUpward("main", s.Context, graph, &NullHandler{})
+	target, err := traverseUpward("main", s.Context.Engine, s.Context.Output, graph, &NullHandler{})
 	require.NoError(t, err)
 	require.Equal(t, "feature", target)
 }
@@ -68,7 +68,7 @@ func TestTraverseUpwardReturnsCurrentWhenOnlyChildIsAnchorWithNoDescendants(t *t
 	require.NoError(t, err)
 
 	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-	target, err := traverseUpward("main", s.Context, graph, &NullHandler{})
+	target, err := traverseUpward("main", s.Context.Engine, s.Context.Output, graph, &NullHandler{})
 	require.NoError(t, err)
 	require.Equal(t, "main", target)
 }
@@ -89,7 +89,7 @@ func TestTraverseDownwardSkipsWorktreeAnchorParent(t *testing.T) {
 	require.NoError(t, err)
 
 	s.Checkout("child")
-	target := traverseDownward("child", s.Context)
+	target := traverseDownward("child", s.Context.Engine, s.Context.Output)
 	require.Equal(t, "parent", target)
 }
 
@@ -111,7 +111,7 @@ func TestTraverseDownwardSkipsNestedAnchorsToBottom(t *testing.T) {
 	require.NoError(t, err)
 
 	s.Checkout("feature")
-	target := traverseDownward("feature", s.Context)
+	target := traverseDownward("feature", s.Context.Engine, s.Context.Output)
 	// feature's parent chain is anchor2 -> anchor1 -> main (all anchors skip to trunk)
 	// So feature IS the bottom-most non-anchor branch
 	require.Equal(t, "feature", target)

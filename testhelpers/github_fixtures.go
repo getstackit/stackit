@@ -4,9 +4,6 @@ import (
 	"github.com/google/go-github/v92/github"
 )
 
-// prStateClosed is the GitHub API state for closed PRs
-const prStateClosed = "closed"
-
 // SamplePRData provides common PR data for testing
 type SamplePRData struct {
 	Number        int
@@ -67,34 +64,4 @@ func DefaultPRData() SamplePRData {
 		Draft:   false,
 		State:   "open",
 	}
-}
-
-// DraftPRData returns PR data for a draft PR
-func DraftPRData() SamplePRData {
-	data := DefaultPRData()
-	data.Draft = true
-	data.Title = "Draft: Test Pull Request"
-	return data
-}
-
-// PRWithReviewersData returns PR data with reviewers
-func PRWithReviewersData(reviewers []string, teamReviewers []string) SamplePRData {
-	data := DefaultPRData()
-	data.Reviewers = reviewers
-	data.TeamReviewers = teamReviewers
-	return data
-}
-
-// MergedPRData returns PR data for a merged PR
-func MergedPRData() SamplePRData {
-	data := DefaultPRData()
-	data.State = prStateClosed
-	return data
-}
-
-// ClosedPRData returns PR data for a closed PR
-func ClosedPRData() SamplePRData {
-	data := DefaultPRData()
-	data.State = prStateClosed
-	return data
 }

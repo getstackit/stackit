@@ -103,21 +103,6 @@ func (p *deletionPlan) removeBlocker(branchName, blockerName string) {
 	}
 }
 
-// CleanBranches finds and deletes merged/closed branches.
-// It follows a multi-phase approach:
-// 1. Identify which branches SHOULD be deleted (parallel pre-calculation).
-// 2. Build a deletion plan by traversing the stack (DFS).
-// 3. Reparent branches that are NOT being deleted but whose parents ARE.
-// 4. Execute the deletions in batches (greedy iterative approach).
-func CleanBranches(ctx *app.Context, opts CleanBranchesOptions) (*CleanBranchesResult, error) {
-	plan, err := PlanBranchDeletions(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return ExecuteBranchDeletions(ctx, plan, nil)
-}
-
 // PlanBranchDeletions identifies branches that should be deleted and builds a deletion plan.
 // This does NOT execute any deletions - use ExecuteBranchDeletions to apply the plan.
 func PlanBranchDeletions(ctx *app.Context, opts CleanBranchesOptions) (*BranchDeletionPlan, error) {
@@ -646,7 +631,7 @@ func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove, removed [
 // Error handling strategy:
 //   - Errors when *removing* a worktree are returned because they indicate a real problem
 //     that would prevent the branch from being deleted cleanly.
-func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktrees git.WorktreeList, eng engine.Engine, out output.Output) (string, error) {
+func removeWorktreeIfCheckedOut(ctx context.Context, branchName string, worktrees git.WorktreeList, eng engine.Engine, out output.Output) (engine.WorktreePath, error) {
 	worktreePath := worktrees.PathForBranch(branchName)
 	if worktreePath == "" {
 		return "", nil // Branch not in any worktree

@@ -2,24 +2,40 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 )
 
+// ViewGitHub is the GitHub surface the /view payload reads: CI checks, PR
+// titles, and the repo/user identity.
+type ViewGitHub interface {
+	github.ChecksReader
+	github.Identity
+	BatchGetPRTitles(ctx context.Context, prNumbers []git.PRNumber) (map[git.PRNumber]string, error)
+}
+
+// ViewEngine is the engine surface the /view payload reads: stack structure,
+// the batched per-branch data, mapper lookups, and recent trunk commits.
+type ViewEngine interface {
+	engine.StackView
+	stackview.BranchDataReader
+	httpcontract.MapperReader
+	GetRecentTrunkCommits(count int) ([]git.RecentCommit, error)
+}
+
 // ViewAssembler builds the combined /view payload.
 type ViewAssembler struct {
-	eng        engine.BranchReader
-	gh         github.Client
+	eng        ViewEngine
+	gh         ViewGitHub
 	remote     string
 	visibility Visibility
 }
 
-func NewViewAssembler(eng engine.BranchReader, gh github.Client, remote string, visibility Visibility) *ViewAssembler {
+func NewViewAssembler(eng ViewEngine, gh ViewGitHub, remote string, visibility Visibility) *ViewAssembler {
 	return &ViewAssembler{
 		eng:        eng,
 		gh:         gh,
@@ -29,10 +45,7 @@ func NewViewAssembler(eng engine.BranchReader, gh github.Client, remote string, 
 }
 
 func (a *ViewAssembler) Build(ctx context.Context) (httpcontract.ViewResponse, error) {
-	stacks, err := merge.DiscoverStacksWithSort(a.eng, engine.SortStrategySmart)
-	if err != nil {
-		return httpcontract.ViewResponse{}, fmt.Errorf("failed to discover stacks: %w", err)
-	}
+	stacks := stackview.DiscoverStacksWithSort(a.eng, engine.SortStrategySmart)
 
 	graph := a.eng.Graph(engine.SortStrategySmart)
 	checksMap := a.fetchChecks(ctx, stacks)
@@ -72,12 +85,12 @@ func (a *ViewAssembler) buildRepo(ctx context.Context) httpcontract.RepoResponse
 	}
 }
 
-func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks []merge.MultiStackInfo) github.ChecksByBranch {
+func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks stackview.Stacks) github.ChecksByBranch {
 	if a.gh == nil {
 		return nil
 	}
 
-	allBranches := allStackBranches(stacks)
+	allBranches := stacks.AllBranchNames()
 	if len(allBranches) == 0 {
 		return nil
 	}
@@ -89,28 +102,30 @@ func (a *ViewAssembler) fetchChecks(ctx context.Context, stacks []merge.MultiSta
 func (a *ViewAssembler) mapStackDetails(
 	ctx context.Context,
 	graph *engine.StackGraph,
-	stacks []merge.MultiStackInfo,
+	stacks stackview.Stacks,
 	checksMap github.ChecksByBranch,
 ) []httpcontract.StackDetail {
 	// One batch pass over every branch in every stack, not one per stack —
-	// see httpcontract.BranchBatchData.
-	branches := httpcontract.BranchesFromNames(graph, allStackBranches(stacks))
-	data := httpcontract.FetchBranchBatchData(ctx, a.eng, branches)
+	// see stackview.BranchData.
+	branches := stackview.BranchesFromGraph(graph, stacks.AllBranchNames())
+	data := stackview.FetchBranchData(ctx, a.eng, branches)
 
 	details := make([]httpcontract.StackDetail, 0, len(stacks))
 	for _, stack := range stacks {
-		detail := httpcontract.MapStackDetail(a.eng, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, checksMap, data)
+		detail := httpcontract.MapStackDetail(a.eng, graph, stackInput(stack), checksMap, data)
 		details = append(details, detail)
 	}
 	return details
 }
 
-func allStackBranches(stacks []merge.MultiStackInfo) []string {
-	var allBranches []string
-	for _, stack := range stacks {
-		allBranches = append(allBranches, stack.AllBranches...)
+// stackInput converts a discovered stack into the mapper's input shape.
+func stackInput(stack stackview.StackInfo) httpcontract.StackInput {
+	return httpcontract.StackInput{
+		RootBranch:  stack.RootBranch,
+		AllBranches: stack.AllBranches,
+		PRCount:     stack.PRCount,
+		Scope:       engine.NewScope(stack.Scope),
 	}
-	return allBranches
 }
 
 func (a *ViewAssembler) fetchRecentlyMerged(ctx context.Context) []httpcontract.TrunkCommitResponse {
@@ -125,7 +140,7 @@ func (a *ViewAssembler) fetchRecentlyMerged(ctx context.Context) []httpcontract.
 
 // fetchPRTitles collects all unique PR numbers from stack-merge commits and
 // batch-fetches their titles from GitHub. Returns nil on error or if no GitHub client.
-func (a *ViewAssembler) fetchPRTitles(ctx context.Context, commits []git.RecentCommit) map[int]string {
+func (a *ViewAssembler) fetchPRTitles(ctx context.Context, commits []git.RecentCommit) map[git.PRNumber]string {
 	if a.gh == nil {
 		return nil
 	}

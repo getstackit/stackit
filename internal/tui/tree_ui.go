@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/github"
@@ -38,10 +39,20 @@ const (
 	TreeModeSelect
 )
 
+// TreeEngine is the engine surface the interactive tree reads: stack
+// structure, the managed worktree index, annotation lookups, and batched
+// branch stats.
+type TreeEngine interface {
+	engine.StackView
+	stackview.WorktreeSource
+	stackview.AnnotationReader
+	BatchBranchStats(branches engine.Branches) map[string]engine.BranchStat
+}
+
 // TreeModel is the bubbletea model for the interactive log
 type TreeModel struct {
 	context      context.Context
-	engine       engine.Engine
+	engine       TreeEngine
 	githubClient github.Client
 	renderer     *tree.StackTreeRenderer
 	allBranches  []engine.Branch
@@ -93,7 +104,7 @@ type TreeModel struct {
 }
 
 // NewTreeModel creates a new TreeModel
-func NewTreeModel(ctx context.Context, eng engine.Engine, ghClient github.Client, opts TreeOptions) *TreeModel {
+func NewTreeModel(ctx context.Context, eng TreeEngine, ghClient github.Client, opts TreeOptions) *TreeModel {
 	logger := opts.Logger
 	treeDebug := func(msg string, args ...any) {
 		if logger != nil {
@@ -114,15 +125,9 @@ func NewTreeModel(ctx context.Context, eng engine.Engine, ghClient github.Client
 
 	// Detect worktrees (builds both empty and stack-root maps in one call)
 	start := time.Now()
-	wtData := GetWorktreeData(eng)
-	var emptyWorktreeNames map[string]bool
-	if len(wtData.EmptyWorktrees) > 0 {
-		emptyWorktreeNames = make(map[string]bool)
-		for name := range wtData.EmptyWorktrees {
-			emptyWorktreeNames[name] = true
-		}
-	}
-	treeDebug("GetWorktreeData completed in %v, found %d empty worktrees", time.Since(start), len(wtData.EmptyWorktrees))
+	worktrees := stackview.BuildWorktreeIndex(eng)
+	emptyWorktreeNames := worktrees.EmptyAnchorNames()
+	treeDebug("BuildWorktreeIndex completed in %v, found %d empty worktrees", time.Since(start), len(worktrees.Empty))
 
 	// Create renderer synchronously for instant display
 	start = time.Now()
@@ -134,7 +139,7 @@ func NewTreeModel(ctx context.Context, eng engine.Engine, ghClient github.Client
 	allBranches := eng.AllBranches()
 	annotations := make(map[string]tree.BranchAnnotation)
 	for _, b := range allBranches {
-		annotations[b.GetName()] = GetMinimalAnnotationWithWorktreeAndEmpty(eng, b, wtData)
+		annotations[b.GetName()] = TreeAnnotation(stackview.MinimalAnnotation(eng, b, worktrees))
 	}
 	// Apply annotation overrides (e.g., custom labels for move operation)
 	if opts.AnnotationOverrides != nil {
@@ -196,7 +201,7 @@ func NewTreeModel(ctx context.Context, eng engine.Engine, ghClient github.Client
 }
 
 // newTreeSelectModel creates a new TreeModel in selection mode
-func newTreeSelectModel(ctx context.Context, eng engine.Engine, ghClient github.Client, opts TreeOptions) *TreeModel {
+func newTreeSelectModel(ctx context.Context, eng TreeEngine, ghClient github.Client, opts TreeOptions) *TreeModel {
 	m := NewTreeModel(ctx, eng, ghClient, opts)
 	m.mode = TreeModeSelect
 	return m
@@ -305,7 +310,7 @@ func (m *TreeModel) enrichData() tea.Cmd {
 		ciStatuses := ciRes.statuses
 
 		// Detect worktrees (builds both empty and stack-root maps in one call)
-		wtData := GetWorktreeData(eng)
+		worktrees := stackview.BuildWorktreeIndex(eng)
 
 		// Resolve the git-computed annotation stats (short SHA, commit count, diff
 		// stats) for all branches as one batched value, instead of warming the
@@ -315,18 +320,17 @@ func (m *TreeModel) enrichData() tea.Cmd {
 
 		// Collect full annotations
 		start := time.Now()
-		enrichment := &AnnotationEnrichment{
-			CIStatuses:          ciStatuses,
-			EmptyWorktrees:      wtData.EmptyWorktrees,
-			WorktreeByStackRoot: wtData.WorktreeByStackRoot,
+		enrichment := &stackview.Enrichment{
+			CIStatuses: ciStatuses,
+			Worktrees:  worktrees,
 		}
 		// Build into a positional slice so concurrent workers don't race on a
 		// shared map, then assemble the map serially.
 		built := make([]tree.BranchAnnotation, len(allBranches))
 		utils.Run(indexedBranches(allBranches), func(item indexedBranch) {
-			built[item.index] = BuildFullAnnotation(eng, item.branch, stats[item.branch.GetName()], enrichment, AnnotationOptions{
+			built[item.index] = TreeAnnotation(stackview.FullAnnotation(eng, item.branch, stats[item.branch.GetName()], enrichment, stackview.AnnotationOptions{
 				SkipCommitMessages: true,
-			})
+			}))
 		})
 		annotations := make(map[string]tree.BranchAnnotation, len(allBranches))
 		for i, b := range allBranches {
@@ -792,7 +796,7 @@ func (m *TreeModel) renderValidationFooter() string {
 }
 
 // PromptTreeSelect runs the interactive log in selection mode and returns the selected branch name
-func PromptTreeSelect(ctx context.Context, eng engine.Engine, ghClient github.Client, opts TreeOptions) (string, error) {
+func PromptTreeSelect(ctx context.Context, eng TreeEngine, ghClient github.Client, opts TreeOptions) (string, error) {
 	if err := CheckInteractiveAllowed(); err != nil {
 		return "", err
 	}

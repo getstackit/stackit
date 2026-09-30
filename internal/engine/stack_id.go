@@ -300,7 +300,7 @@ func (e *engineImpl) GetStackMeta(stackID string) (*git.StackMeta, error) {
 
 // syncStackIDFromParent updates a branch's stack ID to match its parent's and
 // propagates that stack ID to all descendants. Called automatically at the end
-// of ReparentBranch/ReparentBranches so callers don't need to remember; not
+// of ReparentBranch/ReparentBranchesToParents so callers don't need to remember; not
 // exported because external callers should reparent via ReparentBranch instead
 // of poking the stack ID directly.
 //

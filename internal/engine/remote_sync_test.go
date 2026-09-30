@@ -27,12 +27,12 @@ func TestConfigureRemoteMetadataSyncResolvesNonOriginRemote(t *testing.T) {
 
 	require.NoError(t, sh.Engine.ConfigureRemoteMetadataSync(context.Background()))
 
-	upstreamRefspecs, _ := sh.Engine.Git().GetConfigAll("remote.upstream.fetch")
+	upstreamRefspecs, _ := sh.Git.GetConfigAll("remote.upstream.fetch")
 	require.Contains(t, upstreamRefspecs, metadataFetchRefspec,
 		"metadata refspec must be configured on the resolved (non-origin) remote")
 
 	// origin never existed, so it must not have been polluted with a refspec.
-	originRefspecs, _ := sh.Engine.Git().GetConfigAll("remote.origin.fetch")
+	originRefspecs, _ := sh.Git.GetConfigAll("remote.origin.fetch")
 	require.NotContains(t, originRefspecs, metadataFetchRefspec)
 }
 
@@ -44,6 +44,6 @@ func TestConfigureRemoteMetadataSyncSkipsRemoteless(t *testing.T) {
 
 	require.NoError(t, sh.Engine.ConfigureRemoteMetadataSync(context.Background()))
 
-	refspecs, _ := sh.Engine.Git().GetConfigAll("remote.origin.fetch")
+	refspecs, _ := sh.Git.GetConfigAll("remote.origin.fetch")
 	require.NotContains(t, refspecs, metadataFetchRefspec)
 }

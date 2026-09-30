@@ -75,8 +75,8 @@ type MergeBodyParams struct {
 // MergeBranch represents a branch being merged.
 type MergeBranch struct {
 	Name     string
-	PRNumber int    // 0 if no PR exists
-	PRTitle  string // Empty if no PR exists
+	PRNumber git.PRNumber // 0 if no PR exists
+	PRTitle  string       // Empty if no PR exists
 }
 
 // ExcludedBranch represents a branch or stack excluded from the merge.
@@ -150,8 +150,8 @@ type StackTreeParams struct {
 // StackTreeBranch represents a branch in the stack tree.
 type StackTreeBranch struct {
 	Name     string
-	Depth    int // 0 for branches directly off trunk
-	PRNumber int // 0 if no PR
+	Depth    int          // 0 for branches directly off trunk
+	PRNumber git.PRNumber // 0 if no PR
 }
 
 // FormatStackTree creates an ASCII tree representation of the stack.

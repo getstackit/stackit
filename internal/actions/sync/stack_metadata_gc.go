@@ -55,15 +55,15 @@ func gcOrphanedStackMetadata(ctx *app.Context) *StackMetadataGCResult {
 	ctx.Logger.Info("found orphaned stack metadata refs count=%v", len(orphaned))
 
 	// 4. Delete local refs in a single update-ref --stdin batch. The previous
-	// per-orphan DeleteStackMeta loop spawned 2 git subprocesses per ref
+	// per-orphan delete loop spawned 2 git subprocesses per ref
 	// (update-ref -d + show-ref --verify) — same N+1 pattern fixed for branch
 	// deletion. If the atomic batch fails, fall back to per-ref so partial
 	// progress is still reported. The engine owns the stack-ref name format, so
 	// we pass stack IDs rather than building ref names here.
-	if err := ctx.Engine.DeleteStackMetadataBatch(ctx.Context, orphaned); err != nil {
+	if err := ctx.Engine.DeleteStackMetadata(ctx.Context, orphaned); err != nil {
 		ctx.Logger.Debug("batch delete of local stack refs failed, falling back per-ref error=%v", err)
 		for _, stackID := range orphaned {
-			if perRefErr := ctx.Engine.DeleteStackMetadata(ctx.Context, stackID); perRefErr != nil {
+			if perRefErr := ctx.Engine.DeleteStackMetadata(ctx.Context, []string{stackID}); perRefErr != nil {
 				result.Errors = append(result.Errors, "failed to delete local stack ref "+stackID+": "+perRefErr.Error())
 				ctx.Logger.Debug("failed to delete local stack ref stackID=%v error=%v", stackID, perRefErr)
 			} else {

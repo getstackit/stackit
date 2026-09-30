@@ -1,20 +1,26 @@
 package foreach
 
-import (
-	"github.com/getstackit/stackit/internal/tui/components/tree"
-)
-
 // Event represents a feedback event from the foreach action.
 // Implementations should use type switches to handle specific event types.
 type Event interface {
 	foreachEvent() // marker method for type safety
 }
 
+// StackSnapshot contains the branch relationships needed to render the
+// branches foreach will process. This is action-layer data; adapters decide
+// how to visualize it.
+type StackSnapshot struct {
+	Branches      []string          // branches to process, in order (trunk excluded)
+	CurrentBranch string            // currently checked out branch
+	TrunkBranch   string            // trunk/main branch name
+	ParentMap     map[string]string // branch -> parent (trunk for trunk-rooted branches)
+}
+
 // StackDisplayEvent indicates the initial stack visualization phase.
 // Handlers can use this to display the branches that will be processed.
 type StackDisplayEvent struct {
-	Stack   *tree.StackTree // tree structure for rendering the stack
-	Command string          // command being executed
+	Stack   StackSnapshot // branch relationships for rendering the stack
+	Command string        // command being executed
 }
 
 func (StackDisplayEvent) foreachEvent() {}

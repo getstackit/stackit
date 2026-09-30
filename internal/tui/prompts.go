@@ -12,9 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/tui/style"
 	"github.com/getstackit/stackit/internal/utils"
 )
@@ -730,103 +728,4 @@ func PromptBranchSelection(message string, choices []BranchChoice, initialIndex 
 	}
 
 	return "", fmt.Errorf("unexpected model type")
-}
-
-// PromptBranchCheckout shows an interactive branch selector for checkout.
-// It takes a list of branches and the engine context, formats them using tree rendering,
-// and presents them for selection.
-func PromptBranchCheckout(branches []engine.Branch, eng engine.BranchReader) (string, error) {
-	if len(branches) == 0 {
-		return "", fmt.Errorf("no branches available to checkout")
-	}
-
-	// Create tree renderer
-	currentBranch := eng.CurrentBranch()
-	trunk := eng.Trunk()
-	renderer := NewStackTreeRenderer(eng)
-
-	// Add annotations for all branches, reading their git-computed stats from a
-	// single batch rather than per branch.
-	stats := eng.BatchBranchStats(engine.Branches(branches))
-	annotations := make(map[string]tree.BranchAnnotation)
-	for _, branch := range branches {
-		annotations[branch.GetName()] = GetBranchAnnotation(eng, branch, stats[branch.GetName()], AnnotationOptions{SkipCommitMessages: true})
-	}
-	renderer.SetAnnotations(annotations)
-
-	// Resolve restack status for all branches in one batched parent-revision
-	// read instead of a per-branch IsUpToDate() call in the loop below.
-	statuses := eng.ReadBranchStatuses(engine.Branches(branches))
-
-	// Build StackGraph for efficient traversals
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
-
-	// Calculate depth for each branch to create proper tree indentation
-	branchDepth := make(map[string]int)
-	branchDepth[trunk.GetName()] = 0
-
-	// Build depth map by traversing from trunk
-	var calculateDepth func(branch engine.Branch, depth int)
-	calculateDepth = func(branch engine.Branch, depth int) {
-		children := graph.Children(branch)
-		for _, childName := range children {
-			branchDepth[childName] = depth + 1
-			calculateDepth(eng.GetBranch(childName), depth+1)
-		}
-	}
-	calculateDepth(trunk, 0)
-
-	choices := make([]BranchChoice, 0, len(branches))
-	initialIndex := -1
-
-	for i, branch := range branches {
-		isCurrent := currentBranch != nil && branch.GetName() == currentBranch.GetName()
-		if isCurrent {
-			initialIndex = i
-		}
-
-		// Get depth for indentation
-		depth := branchDepth[branch.GetName()]
-
-		// Create tree line with proper indentation
-		indent := strings.Repeat("  ", depth)
-		var symbol string
-		if isCurrent {
-			symbol = tree.CurrentBranchSymbol
-		} else {
-			symbol = tree.BranchSymbol
-		}
-
-		// Get colored branch name
-		coloredBranchName := style.ColorBranchNameWithTrunk(branch.GetName(), style.BranchStyleOpts{IsCurrent: isCurrent, IsTrunk: branch.IsTrunk()})
-
-		// Add annotation
-		annotation := annotations[branch.GetName()]
-		coloredBranchName += renderer.FormatAnnotationColored(annotation)
-
-		// Add restack indicator if needed
-		if !statuses.IsUpToDate(branch) {
-			coloredBranchName += " " + style.ColorNeedsRestack(tree.RestackSuggestedLabel)
-		}
-
-		display := indent + symbol + " " + coloredBranchName
-
-		choices = append(choices, BranchChoice{
-			Display: display,
-			Value:   branch.GetName(),
-		})
-	}
-
-	// Set initial index if not found
-	if initialIndex < 0 {
-		initialIndex = len(choices) - 1
-	}
-
-	// Show interactive selector
-	selected, err := PromptBranchSelection("Checkout a branch (arrow keys to navigate, type to filter)", choices, initialIndex)
-	if err != nil {
-		return "", err
-	}
-
-	return selected, nil
 }

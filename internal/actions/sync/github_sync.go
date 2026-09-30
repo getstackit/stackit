@@ -9,6 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/utils"
@@ -54,7 +55,7 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 	// Keep the recorded PR numbers so a branch deleted on GitHub can still be
 	// resolved to its closed PR. A missing remote ref by itself is not enough to
 	// delete local work; this only supplies GitHub's PR state to normal cleanup.
-	knownPRNumbers := make(map[string]int)
+	knownPRNumbers := make(map[string]git.PRNumber)
 	for _, branch := range allBranches {
 		prInfo, err := branch.GetPrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil || *prInfo.Number() <= 0 {
@@ -65,7 +66,7 @@ func syncGitHubPRInfo(remoteCtx context.Context, ctx *app.Context) (*GitHubSyncR
 
 	// Sync PR info from GitHub (this is already parallelized internally)
 	syncPrStart := time.Now()
-	if err := github.SyncPrInfoWithKnownPRNumbers(remoteCtx, ctx.Git(), branchNames, github.Repo{Owner: repo.Owner, Name: repo.Name}, knownPRNumbers, func(name string, prInfo *github.PullRequestInfo) { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	if err := github.SyncPrInfoWithKnownPRNumbers(remoteCtx, ctx.GHRunner, branchNames, github.Repo{Owner: repo.Owner, Name: repo.Name}, knownPRNumbers, func(name string, prInfo *github.PullRequestInfo) {
 		result.mu.Lock()
 		result.PRInfos[name] = prInfo
 		result.mu.Unlock()
@@ -97,15 +98,15 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 			lockReason = existing.LockReason()
 		}
 
-		updates[name] = engine.NewPrInfo(
-			&prInfo.Number,
-			prInfo.Title,
-			prInfo.Body,
-			prInfo.State,
-			prInfo.Base,
-			prInfo.HTMLURL,
-			prInfo.Draft,
-		).WithLockReason(lockReason)
+		updates[name] = engine.NewPrInfo(engine.PrInfoFields{
+			Number:  &prInfo.Number,
+			Title:   prInfo.Title,
+			Body:    prInfo.Body,
+			State:   prInfo.State,
+			Base:    prInfo.Base,
+			URL:     prInfo.HTMLURL,
+			IsDraft: prInfo.Draft,
+		}).WithLockReason(lockReason)
 	}
 
 	if err := eng.BatchUpsertPrInfo(ctx.Context, updates); err != nil {
@@ -181,7 +182,7 @@ func PushParentsToGitHub(ctx *app.Context, result *GitHubSyncResult, dirtyAnchor
 
 	type baseUpdate struct {
 		branchName      string
-		prNumber        int
+		prNumber        git.PRNumber
 		oldBase         string
 		localParentName string
 	}

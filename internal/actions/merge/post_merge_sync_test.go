@@ -1,11 +1,11 @@
-package stack
+package merge
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	syncAction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/actions/sync"
 )
 
 // conflictResolvingHandler is a fake sync handler that simulates an interactive
@@ -14,11 +14,11 @@ import (
 //
 // Without the postMergeSyncHandler wrapper, sync.Action would call
 // PromptResolveConflicts on this handler, get true, and invoke
-// EnterConflictWorkflow — which detaches HEAD. The merge next post-merge flow
+// EnterConflictWorkflow — which detaches HEAD. The post-merge flow
 // must never reach that path, so the wrapper has to override the prompt
 // regardless of what the underlying handler would have answered.
 type conflictResolvingHandler struct {
-	syncAction.NullHandler
+	sync.NullHandler
 }
 
 func (h *conflictResolvingHandler) IsInteractive() bool { return true }
@@ -51,4 +51,14 @@ func TestPostMergeSyncHandler_DelegatesIsInteractive(t *testing.T) {
 	// so the wrapper must not flip it to false to "fix" the detached HEAD.
 	wrapped := &postMergeSyncHandler{Handler: &conflictResolvingHandler{}}
 	require.True(t, wrapped.IsInteractive(), "wrapper must delegate IsInteractive to the underlying handler")
+}
+
+func TestPostMergeSyncHandler_CapturesSummary(t *testing.T) {
+	t.Parallel()
+
+	// PostMergeSync returns the summary so drain can fail on restack
+	// conflicts; the wrapper must record it while still forwarding it.
+	wrapped := &postMergeSyncHandler{Handler: &conflictResolvingHandler{}}
+	wrapped.Complete(sync.Summary{ConflictBranches: []string{"branch-a"}})
+	require.Equal(t, []string{"branch-a"}, wrapped.summary.ConflictBranches)
 }

@@ -63,28 +63,8 @@ type RebaseValidation struct {
 	ConflictingFiles []string            // Files that have conflicts (if ErrorType is ValidationErrorConflict)
 	Failed           []FailedRebase      // Every spec that failed validation, across all levels
 	Blocked          []string            // Specs never attempted because a tracked ancestor's spec failed
-	NewSHAs          map[string]string   // Branch -> resulting SHA after rebase (if successful)
+	NewSHAs          RevisionMap         // Branch -> resulting SHA after rebase (if successful)
 	RerereResolved   map[string]int      // Branch -> number of conflicts auto-resolved by rerere during validation
-}
-
-// ValidateRebases tests if a sequence of rebases will succeed by performing them
-// in isolated temporary worktrees. This allows checking for conflicts before
-// modifying any state in the main repository.
-//
-// IMPORTANT: This uses dry-run rebases that do NOT update branch refs, keeping
-// the main repository completely unmodified.
-//
-// Returns a RebaseValidation carrying every failure (Failed), the specs never
-// attempted because an ancestor failed (Blocked), and the new SHAs of every
-// spec that validated cleanly — a failure in one stack does not stop
-// validation of branches in unrelated stacks. Worktrees are cleaned up
-// automatically regardless of outcome.
-//
-// Uses parallel validation for improved performance on wide stacks. Branches at
-// the same depth are validated concurrently, providing 2-3x speedup for stacks
-// with many sibling branches.
-func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error) {
-	return e.ValidateRebasesParallel(ctx, specs)
 }
 
 // dryRunRebase performs a rebase without updating branch refs.
@@ -186,15 +166,28 @@ type validationResult struct {
 	rerereResolved int
 }
 
-// ValidateRebasesParallel validates rebases in parallel where possible.
-// Branches at the same depth in the stack (independent siblings) are validated concurrently.
-// This can provide significant speedup for wide stacks with many branches at the same level.
+// ValidateRebases tests if a sequence of rebases will succeed by performing them
+// in isolated temporary worktrees. This allows checking for conflicts before
+// modifying any state in the main repository.
+//
+// IMPORTANT: This uses dry-run rebases that do NOT update branch refs, keeping
+// the main repository completely unmodified.
+//
+// Returns a RebaseValidation carrying every failure (Failed), the specs never
+// attempted because an ancestor failed (Blocked), and the new SHAs of every
+// spec that validated cleanly — a failure in one stack does not stop
+// validation of branches in unrelated stacks. Worktrees are cleaned up
+// automatically regardless of outcome.
+//
+// Uses parallel validation for improved performance on wide stacks. Branches at
+// the same depth are validated concurrently, providing 2-3x speedup for stacks
+// with many sibling branches.
 //
 // The function respects a maximum concurrency limit to avoid creating too many worktrees.
 // Results are tracked thread-safely across parallel validations.
-func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error) {
+func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error) {
 	if len(specs) == 0 {
-		return &RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}, nil
+		return &RebaseValidation{Success: true, NewSHAs: RevisionMap{}, RerereResolved: map[string]int{}}, nil
 	}
 
 	// Prune stale worktree entries ONCE before starting parallel validation.
@@ -219,7 +212,7 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 
 	result := &RebaseValidation{
 		Success:        true,
-		NewSHAs:        make(map[string]string),
+		NewSHAs:        make(RevisionMap),
 		RerereResolved: make(map[string]int),
 	}
 
@@ -236,8 +229,8 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 	// creates no worktrees at all. Concurrent acquires are bounded by the
 	// per-level semaphore, so the pool never grows past maxConcurrency.
 	pool := &validationWorktreePool{
-		cleanups: map[string]func(){},
-		create: func() (string, func(), error) {
+		cleanups: map[WorktreePath]func(){},
+		create: func() (WorktreePath, func(), error) {
 			return e.CreateTemporaryWorktreeWithOptions(ctx, "HEAD", "stackit-validate-*", WorktreeCheckoutFull, WorktreePruneSkip)
 		},
 	}
@@ -278,13 +271,13 @@ func (e *engineImpl) ValidateRebasesParallel(ctx context.Context, specs []Rebase
 // maxConcurrency worktrees ever exist.
 type validationWorktreePool struct {
 	mu       sync.Mutex
-	idle     []string
-	cleanups map[string]func()
-	create   func() (string, func(), error)
+	idle     []WorktreePath
+	cleanups map[WorktreePath]func()
+	create   func() (WorktreePath, func(), error)
 }
 
 // acquire returns an idle worktree or creates a new one.
-func (p *validationWorktreePool) acquire() (string, error) {
+func (p *validationWorktreePool) acquire() (WorktreePath, error) {
 	p.mu.Lock()
 	if n := len(p.idle); n > 0 {
 		path := p.idle[n-1]
@@ -308,7 +301,7 @@ func (p *validationWorktreePool) acquire() (string, error) {
 
 // release returns a clean worktree to the pool for reuse. Only worktrees with
 // no rebase in progress may be released; callers abort first.
-func (p *validationWorktreePool) release(path string) {
+func (p *validationWorktreePool) release(path WorktreePath) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.idle = append(p.idle, path)
@@ -316,7 +309,7 @@ func (p *validationWorktreePool) release(path string) {
 
 // destroy removes a worktree whose state is no longer trustworthy (e.g. a
 // panic mid-rebase) instead of returning it to the pool.
-func (p *validationWorktreePool) destroy(path string) {
+func (p *validationWorktreePool) destroy(path WorktreePath) {
 	p.mu.Lock()
 	cleanup := p.cleanups[path]
 	delete(p.cleanups, path)
@@ -333,7 +326,7 @@ func (p *validationWorktreePool) drain() {
 	for _, cleanup := range p.cleanups {
 		cleanups = append(cleanups, cleanup)
 	}
-	p.cleanups = map[string]func(){}
+	p.cleanups = map[WorktreePath]func(){}
 	p.idle = nil
 	p.mu.Unlock()
 	for _, cleanup := range cleanups {
@@ -533,7 +526,7 @@ func (e *engineImpl) validateSingleSpec(
 		}
 	}()
 
-	wtGit := git.NewRunnerWithPath(worktreePath, nil)
+	wtGit := git.NewRunnerWithPath(worktreePath.String(), nil)
 
 	// Get the branch's current SHA before rebasing (to track old SHA -> new SHA mapping).
 	oldBranchSHA, err := wtGit.ReadRevisions(ctx, spec.Branch).One()

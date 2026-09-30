@@ -5,23 +5,23 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/pr"
-	"github.com/getstackit/stackit/internal/tui"
 )
 
 // GetPRTitle gets the PR title, prompting if needed
-func GetPRTitle(branch engine.Branch, editInline bool, existingTitle string, scope engine.Scope) (string, error) {
+func GetPRTitle(prompter handler.TextInputPrompter, branch engine.Branch, editInline bool, existingTitle string, scope engine.Scope) (string, error) {
 	title := pr.GenerateTitle(branch, existingTitle, scope)
 
 	if !editInline {
 		return title, nil
 	}
 
-	result, err := tui.PromptTextInput("Title:", title)
+	result, err := prompter.TextInput("Title:", title)
 	if err != nil {
 		return "", fmt.Errorf("failed to get PR title: %w", err)
 	}
@@ -51,9 +51,9 @@ func GetReviewers(reviewersFlag string) ([]string, []string, error) {
 }
 
 // GetReviewersWithPrompt gets reviewers, prompting if flag is empty
-func GetReviewersWithPrompt(reviewersFlag string) ([]string, []string, error) {
+func GetReviewersWithPrompt(prompter handler.TextInputPrompter, reviewersFlag string) ([]string, []string, error) {
 	if reviewersFlag == "" {
-		result, err := tui.PromptTextInput("Reviewers (comma-separated GitHub usernames):", "")
+		result, err := prompter.TextInput("Reviewers (comma-separated GitHub usernames):", "")
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get reviewers: %w", err)
 		}
@@ -104,7 +104,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 	default:
 		// Handle Title
 		if shouldEditTitle || metadata.Title == "" {
-			title, err := GetPRTitle(branch, shouldEditTitle, metadata.Title, scope)
+			title, err := GetPRTitle(ctx.Prompts(), branch, shouldEditTitle, metadata.Title, scope)
 			if err != nil {
 				return nil, err
 			}
@@ -134,7 +134,7 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 	}
 
 	if opts.ReviewersPrompt {
-		reviewers, teamReviewers, err := GetReviewersWithPrompt(opts.Reviewers)
+		reviewers, teamReviewers, err := GetReviewersWithPrompt(ctx.Prompts(), opts.Reviewers)
 		if err != nil {
 			return nil, err
 		}
@@ -171,15 +171,11 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 // pendingPrInfo builds the PR info to persist for a branch from its prepared
 // metadata, matching what was previously written inline by PreparePRMetadata.
 func pendingPrInfo(branch engine.Branch, metadata *PRMetadata) *engine.PrInfo {
-	return engine.NewPrInfo(
-		nil,
-		metadata.Title,
-		metadata.Body,
-		"",
-		"",
-		"",
-		metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason())
+	return engine.NewPrInfo(engine.PrInfoFields{
+		Title:   metadata.Title,
+		Body:    metadata.Body,
+		IsDraft: metadata.IsDraft,
+	}).WithLockReason(branch.GetLockReason())
 }
 
 // MetadataOptions contains options for PR metadata collection

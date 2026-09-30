@@ -23,16 +23,6 @@ func Branch(name string, isCurrent bool) string {
 	return style.ColorBranchNameIf(name, isCurrent)
 }
 
-// BranchNameWithTrunk renders a non-current branch name, with trunk in a distinct color.
-func BranchNameWithTrunk(name string, isTrunk bool) string {
-	return style.ColorBranchNameWithTrunk(name, style.BranchStyleOpts{IsTrunk: isTrunk})
-}
-
-// BranchWithTrunk is like Branch but renders the trunk branch in a distinct color.
-func BranchWithTrunk(name string, isCurrent, isTrunk bool) string {
-	return style.ColorBranchNameWithTrunk(name, style.BranchStyleOpts{IsCurrent: isCurrent, IsTrunk: isTrunk})
-}
-
 // Dim renders text in a dim/gray style.
 func Dim(text string) string { return style.ColorDim(text) }
 
@@ -47,24 +37,3 @@ func Yellow(text string) string { return style.ColorYellow(text) }
 
 // Green renders text in green.
 func Green(text string) string { return style.ColorGreen(text) }
-
-// Magenta renders text in magenta.
-func Magenta(text string) string { return style.ColorMagenta(text) }
-
-// Scope renders a scope label.
-func Scope(scope string) string { return style.ColorScope(scope) }
-
-// NeedsRestack renders a "needs restack" hint.
-func NeedsRestack(text string) string { return style.ColorNeedsRestack(text) }
-
-// PRNumber renders a pull-request number.
-func PRNumber(prNumber int) string { return style.ColorPRNumber(prNumber) }
-
-// RenderMarkdown renders markdown content for the terminal.
-func RenderMarkdown(content string) string { return style.RenderMarkdown(content) }
-
-// IconLocked returns the lock status icon.
-func IconLocked() string { return style.IconLocked() }
-
-// IconFrozen returns the freeze status icon.
-func IconFrozen() string { return style.IconFrozen() }

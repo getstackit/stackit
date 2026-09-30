@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
@@ -46,8 +47,8 @@ func (c *Combiner) CheckCombination(ctx context.Context, stacks []Stack, opts Ch
 		}, nil
 	}
 
-	// Convert shippable.Stack to merge.MultiStackInfo for the worktree executor
-	multiStacks := make([]merge.MultiStackInfo, len(stacks))
+	// Convert shippable.Stack to stackview.StackInfo for the worktree executor
+	multiStacks := make([]stackview.StackInfo, len(stacks))
 	for i, s := range stacks {
 		multiStacks[i] = s.Stack
 	}
@@ -116,8 +117,8 @@ func (c *Combiner) FindLargestCompatible(ctx context.Context, stacks []Stack, op
 		}, nil
 	}
 
-	// Convert shippable.Stack to merge.MultiStackInfo
-	multiStacks := make([]merge.MultiStackInfo, len(stacks))
+	// Convert shippable.Stack to stackview.StackInfo
+	multiStacks := make([]stackview.StackInfo, len(stacks))
 	stackMap := make(map[string]Stack) // Map root branch to Stack
 	for i, s := range stacks {
 		multiStacks[i] = s.Stack
@@ -149,7 +150,7 @@ func (c *Combiner) FindLargestCompatible(ctx context.Context, stacks []Stack, op
 		}
 
 		if opts.RunLocalCI && c.validator.IsConfigured() {
-			ciErr := c.validator.Validate(ctx, session.Path.String())
+			ciErr := c.validator.Validate(ctx, session.Path)
 			passed := ciErr == nil
 			result.LocalCIPassed = &passed
 			if ciErr != nil {
@@ -167,7 +168,7 @@ func (c *Combiner) FindLargestCompatible(ctx context.Context, stacks []Stack, op
 	// Greedy search: try adding stacks one by one
 	c.output.Info("Finding largest compatible subset...")
 
-	var working []merge.MultiStackInfo
+	var working []stackview.StackInfo
 	var excluded []ExcludedStack
 
 	for _, stack := range multiStacks {
@@ -177,7 +178,7 @@ func (c *Combiner) FindLargestCompatible(ctx context.Context, stacks []Stack, op
 		}
 
 		// Try merging all working stacks plus this candidate
-		testSet := make([]merge.MultiStackInfo, len(working)+1)
+		testSet := make([]stackview.StackInfo, len(working)+1)
 		copy(testSet, working)
 		testSet[len(working)] = stack
 
@@ -198,7 +199,7 @@ func (c *Combiner) FindLargestCompatible(ctx context.Context, stacks []Stack, op
 
 		// Optionally run CI
 		if opts.RunLocalCI && c.validator.IsConfigured() {
-			if ciErr := c.validator.Validate(ctx, session.Path.String()); ciErr != nil {
+			if ciErr := c.validator.Validate(ctx, session.Path); ciErr != nil {
 				excluded = append(excluded, ExcludedStack{
 					Stack:  stackMap[stack.RootBranch],
 					Reason: ReasonLocalCIFailed,
@@ -239,7 +240,7 @@ func (c *Combiner) FindLargestCompatible(ctx context.Context, stacks []Stack, op
 func (c *Combiner) tryMergeStacks(
 	ctx context.Context,
 	session *worktree.Session,
-	stacks []merge.MultiStackInfo,
+	stacks []stackview.StackInfo,
 ) (*merge.MultiStackWorktreeResult, error) {
 	// Reset to trunk first
 	if err := session.ResetToTrunk(ctx); err != nil {
@@ -248,9 +249,9 @@ func (c *Combiner) tryMergeStacks(
 
 	// Create a new result to track this attempt
 	result := &merge.MultiStackWorktreeResult{
-		MergedStacks:   make([]merge.MultiStackInfo, 0),
+		MergedStacks:   make([]stackview.StackInfo, 0),
 		ConflictStacks: make([]merge.MultiStackExcluded, 0),
-		WorktreePath:   session.Path.String(),
+		WorktreePath:   session.Path,
 		WorktreeEngine: session.Engine,
 	}
 
@@ -290,30 +291,4 @@ func (c *Combiner) tryMergeStacks(
 	}
 
 	return result, nil
-}
-
-// UpdateCompatibility updates the compatibility information for each stack
-// based on a combination result.
-func UpdateCompatibility(stacks []Stack, result *CombinationResult) {
-	for i := range stacks {
-		root := stacks[i].RootBranch()
-
-		// Clear existing compatibility info
-		stacks[i].CompatibleWith = nil
-		stacks[i].ConflictsWith = nil
-
-		// Add compatible stacks (other working stacks)
-		for _, ws := range result.WorkingStacks {
-			if ws.RootBranch() != root {
-				stacks[i].CompatibleWith = append(stacks[i].CompatibleWith, ws.RootBranch())
-			}
-		}
-
-		// Add conflicting stacks
-		for _, es := range result.ConflictingStacks {
-			if es.Stack.RootBranch() != root {
-				stacks[i].ConflictsWith = append(stacks[i].ConflictsWith, es.Stack.RootBranch())
-			}
-		}
-	}
 }

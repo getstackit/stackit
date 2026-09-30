@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,11 +12,29 @@ import (
 	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui"
 )
 
+// ErrReorderCanceled is returned by an OrderEditor when the user cancels.
+var ErrReorderCanceled = errors.New("reorder canceled")
+
+// OrderEditor lets the user interactively choose a new branch order.
+// Implementations live in adapters (e.g. the CLI's Bubble Tea reorder view).
+type OrderEditor interface {
+	// EditOrder receives branches tip-first (trunk is passed only for
+	// display) and returns the new tip-first order. It returns
+	// ErrReorderCanceled when the user cancels.
+	EditOrder(branchesTipFirst []string, trunk string) ([]string, error)
+}
+
+// ReorderOptions configures ReorderAction.
+type ReorderOptions struct {
+	// Editor is the interactive order editor. When nil, the order is edited
+	// as text in $EDITOR instead.
+	Editor OrderEditor
+}
+
 // ReorderAction performs the reorder operation
-func ReorderAction(ctx *app.Context) error {
+func ReorderAction(ctx *app.Context, opts ReorderOptions) error {
 	eng := ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
@@ -45,7 +64,7 @@ func ReorderAction(ctx *app.Context) error {
 
 	// Collect branches: get ancestors from trunk to current branch
 	out.Debug("reorder: collecting branches from trunk to current branch")
-	stack := graph.Downstack(eng.GetBranch(currentBranch), true)
+	stack := graph.Downstack(eng.GetBranch(currentBranch), engine.IncludeCurrentBranch)
 	out.Debug("reorder: found %d branches in stack (including trunk)", len(stack))
 	for i, b := range stack {
 		out.Debug("reorder: stack[%d]: name=%s, isTrunk=%v, isTracked=%v",
@@ -92,16 +111,14 @@ func ReorderAction(ctx *app.Context) error {
 	slices.Reverse(displayBranches)
 	out.Debug("reorder: display order (tip-first): %v", displayBranches)
 
-	// Open TUI or Editor to get new order
+	// Open the interactive editor or $EDITOR to get new order
 	var newOrder []string
-	isTTY := tui.IsTTY()
-	out.Debug("reorder: isTTY=%v", isTTY)
-	if isTTY {
-		out.Debug("reorder: opening TUI for reordering")
+	if opts.Editor != nil {
+		out.Debug("reorder: opening interactive editor for reordering")
 		var err error
-		newOrder, err = tui.RunReorderTUI(displayBranches, trunkName)
+		newOrder, err = opts.Editor.EditOrder(displayBranches, trunkName)
 		if err != nil {
-			if err.Error() == "reorder canceled" {
+			if errors.Is(err, ErrReorderCanceled) {
 				out.Debug("reorder: user canceled reorder via TUI")
 				out.Info("Reorder canceled.")
 				return nil
@@ -114,7 +131,7 @@ func ReorderAction(ctx *app.Context) error {
 		slices.Reverse(newOrder)
 		out.Debug("reorder: converted to trunk-to-tip order: %v", newOrder)
 	} else {
-		out.Debug("reorder: opening editor for reordering (non-TTY mode)")
+		out.Debug("reorder: opening $EDITOR for reordering (no interactive editor)")
 		// Create editor content with instructions
 		editorContent := buildEditorContent(branches)
 		out.Debug("reorder: editor content prepared (%d bytes)", len(editorContent))
@@ -278,7 +295,7 @@ func updateParentRelationships(ctx context.Context, eng reorderUpdateEngine, new
 		moves[i] = engine.BranchParentMove{Branch: branchName, NewParent: parentName}
 	}
 
-	if err := eng.ReparentBranchesToParents(ctx, moves); err != nil {
+	if err := eng.ReparentBranchesToParents(ctx, moves, engine.ReparentOpts{}); err != nil {
 		return fmt.Errorf("failed to update reordered parent relationships: %w", err)
 	}
 

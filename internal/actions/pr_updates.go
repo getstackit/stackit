@@ -3,6 +3,7 @@ package actions
 import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/pr"
 	"github.com/getstackit/stackit/internal/utils"
@@ -27,8 +28,8 @@ func UpdateStackPRMetadata(ctx *app.Context, branches []string) {
 // the given branches in a single GraphQL query, keyed by PR number. Branches
 // without a known PR number are skipped. On failure it returns an empty map; the
 // per-branch update then falls back to a direct GetPullRequest.
-func FetchPRContentForBranches(ctx *app.Context, branches []string) map[int]github.PRContent {
-	prNumbers := make([]int, 0, len(branches))
+func FetchPRContentForBranches(ctx *app.Context, branches []string) map[git.PRNumber]github.PRContent {
+	prNumbers := make([]git.PRNumber, 0, len(branches))
 	for _, name := range branches {
 		prInfo, err := ctx.Engine.GetBranch(name).GetPrInfo()
 		if err != nil || prInfo == nil || prInfo.Number() == nil {
@@ -37,13 +38,13 @@ func FetchPRContentForBranches(ctx *app.Context, branches []string) map[int]gith
 		prNumbers = append(prNumbers, *prInfo.Number())
 	}
 	if len(prNumbers) == 0 {
-		return map[int]github.PRContent{}
+		return map[git.PRNumber]github.PRContent{}
 	}
 
-	content, err := github.BatchGetPRContentGraphQL(ctx.Context, ctx.Git(), ctx.GitHub().Repo(), prNumbers) //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+	content, err := github.BatchGetPRContentGraphQL(ctx.Context, ctx.GHRunner, ctx.GitHub().Repo(), prNumbers)
 	if err != nil {
 		ctx.Output.Debug("Failed to batch-fetch PR content: %v", err)
-		return map[int]github.PRContent{}
+		return map[git.PRNumber]github.PRContent{}
 	}
 	return content
 }
@@ -52,7 +53,7 @@ func FetchPRContentForBranches(ctx *app.Context, branches []string) map[int]gith
 // branch, using PR content pre-fetched in bulk by FetchPRContentForBranches. If
 // the branch's PR is not present in current (a batch miss or fetch failure), it
 // falls back to a direct GetPullRequest so the freshness guarantee is preserved.
-func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current map[int]github.PRContent) {
+func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current map[git.PRNumber]github.PRContent) {
 	branch := ctx.Engine.GetBranch(name)
 	prInfo, err := branch.GetPrInfo()
 	if err != nil || prInfo == nil || prInfo.Number() == nil {
@@ -160,7 +161,7 @@ func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current ma
 
 // deleteNavigationComment removes any existing navigation comment from a PR.
 // Uses cached comment ID when available to avoid API search.
-func deleteNavigationComment(ctx *app.Context, branchName string, prNumber int) {
+func deleteNavigationComment(ctx *app.Context, branchName string, prNumber git.PRNumber) {
 	branch := ctx.Engine.GetBranch(branchName)
 
 	// Try cached comment ID first
@@ -199,7 +200,7 @@ func deleteNavigationComment(ctx *app.Context, branchName string, prNumber int) 
 // updateNavigationComment manages the navigation comment on a PR.
 // Creates, updates, or deletes the comment as needed based on navigation options.
 // Uses cached comment ID when available to avoid API search.
-func updateNavigationComment(ctx *app.Context, branchName string, prNumber int, navOpts pr.NavigationOptions) {
+func updateNavigationComment(ctx *app.Context, branchName string, prNumber git.PRNumber, navOpts pr.NavigationOptions) {
 	commentBody := pr.CreateNavigationComment(branchName, ctx.Engine, navOpts)
 	branch := ctx.Engine.GetBranch(branchName)
 

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	stackitgithub "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -119,9 +120,9 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 			RepoOwner:   testOwner,
 			RepoName:    testRepo,
 			PRInfos: map[string]*stackitgithub.PullRequestInfo{
-				"branch-a": {Number: prNumber1, Base: "main", State: "open"},
-				"branch-b": {Number: prNumber2, Base: "branch-a", State: "open"},
-				"branch-c": {Number: prNumber3, Base: "main", State: "open"}, // STALE
+				"branch-a": {Number: git.PRNumber(prNumber1), Base: "main", State: "open"},
+				"branch-b": {Number: git.PRNumber(prNumber2), Base: "branch-a", State: "open"},
+				"branch-c": {Number: git.PRNumber(prNumber3), Base: "main", State: "open"}, // STALE
 			},
 		}
 
@@ -199,9 +200,9 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		// Manually restack children (simulating what modify would do)
 		branchB := s.Engine.GetBranch("branch-b")
 		branchC := s.Engine.GetBranch("branch-c")
-		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branchB))
+		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branchB), engine.RestackOpts{})
 		require.NoError(t, err)
-		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branchC))
+		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branchC), engine.RestackOpts{})
 		require.NoError(t, err)
 
 		// Now setup mock GitHub with potentially stale info
@@ -347,7 +348,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 }
 
 // storeLocalPRInfo stores PR info in branch metadata
-func storeLocalPRInfo(t *testing.T, eng engine.Engine, branchName string, prNumber int, baseBranch string) {
+func storeLocalPRInfo(t *testing.T, eng engine.Engine, branchName string, prNumber git.PRNumber, baseBranch string) {
 	t.Helper()
 	branch := eng.GetBranch(branchName)
 	err := eng.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, branchName+" PR").

@@ -22,7 +22,7 @@ func getMergeMethodWithPause(ctx *app.Context, githubClient github.Client, handl
 			defer pr.Resume()
 		}
 	}
-	return GetMergeMethod(ctx, githubClient)
+	return GetMergeMethod(ctx, ctx.Config, githubClient)
 }
 
 // calculateBaselineEstimate tries to find a branch with successful CI and use its timing as a baseline

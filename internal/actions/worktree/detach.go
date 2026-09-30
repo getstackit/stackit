@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 	worktreeutil "github.com/getstackit/stackit/internal/worktree"
 )
@@ -31,7 +32,7 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 	}
 	if entry.Lifecycle.NeedsRepair() {
 		if entry.Lifecycle.Exists() {
-			if _, err := worktreeutil.RemovePath(ctx.Context, ctx.Engine, entry.Path.String(), opts.Policy); err != nil {
+			if _, err := worktreeutil.RemovePath(ctx.Context, ctx.Engine, entry.Path, opts.Policy); err != nil {
 				return fmt.Errorf("failed to remove worktree at %s: %w", entry.Path, err)
 			}
 		} else if err := ctx.Engine.PruneWorktrees(ctx.Context); err != nil {
@@ -45,7 +46,7 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 	}
 
 	mutation := worktreeMutation{snapshot: snapshot}
-	mutation.pathRemoved, err = removeWorktreeOrPruneMissing(ctx, snapshot.Info.Path.String(), opts.Policy)
+	mutation.pathRemoved, err = removeWorktreeOrPruneMissing(ctx, snapshot.Info.Path, opts.Policy)
 	if err != nil {
 		if opts.Policy.DiscardsChanges() {
 			return fmt.Errorf("failed to force remove worktree at %s: %w", snapshot.Info.Path, err)
@@ -53,7 +54,7 @@ func DetachAction(ctx *app.Context, opts DetachOptions) error {
 		return fmt.Errorf("failed to remove worktree at %s: %w (use --force to discard uncommitted changes)", snapshot.Info.Path, err)
 	}
 	if snapshot.AnchorExists && len(snapshot.ChildNames) > 0 {
-		if err := ctx.Engine.ReparentBranches(ctx.Context, snapshot.ChildNames, ctx.Engine.GetBranch(snapshot.AnchorParent)); err != nil {
+		if err := ctx.Engine.ReparentBranchesToParents(ctx.Context, engine.MovesTo(snapshot.ChildNames, snapshot.AnchorParent), engine.ReparentOpts{}); err != nil {
 			return mutation.rollback(ctx, fmt.Errorf("failed to reparent children to %s: %w", snapshot.AnchorParent, err), RestoreChildren)
 		}
 		mutation.reparented = true

@@ -79,56 +79,6 @@ func ExpectBranchesString(t *testing.T, repo *GitRepo, expected string) {
 	require.Equal(t, expected, actual, "Branches do not match")
 }
 
-// ExpectCommits asserts that the repository has the expected commit messages
-// on the current branch.
-func ExpectCommits(t *testing.T, repo *GitRepo, branch string, expected []string) {
-	t.Helper()
-
-	cmd := exec.Command("git", "-C", repo.Dir,
-		"log", "--oneline", "--format=%s", branch)
-	output, err := cmd.Output()
-	require.NoError(t, err, "Failed to list commits")
-
-	commits := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-	// Filter out empty strings
-	filtered := []string{}
-	for _, c := range commits {
-		c = strings.TrimSpace(c)
-		if c != "" {
-			filtered = append(filtered, c)
-		}
-	}
-
-	// Compare only the first N commits where N is the length of expected
-	if len(filtered) < len(expected) {
-		require.Fail(t, "Not enough commits", "Expected %d commits, got %d", len(expected), len(filtered))
-		return
-	}
-
-	actual := filtered[:len(expected)]
-	require.Equal(t, expected, actual, "Commits do not match")
-}
-
-// ExpectCommitsString asserts that the repository has the expected commit messages
-// as a comma-separated string (matching TypeScript API).
-func ExpectCommitsString(t *testing.T, repo *GitRepo, expected string) {
-	t.Helper()
-
-	messages, err := repo.ListCurrentBranchCommitMessages()
-	require.NoError(t, err, "Failed to list commit messages")
-
-	// Take only the first N commits where N is the number in expected
-	expectedCount := len(strings.Split(expected, ","))
-	if len(messages) < expectedCount {
-		require.Fail(t, "Not enough commits", "Expected %d commits, got %d", expectedCount, len(messages))
-		return
-	}
-
-	actual := strings.Join(messages[:expectedCount], ", ")
-	require.Equal(t, expected, actual, "Commits do not match")
-}
-
 // NormalizeOutput removes variable parts of output and extra whitespace for comparison.
 // It strips ANSI escape codes (lipgloss v2 always generates them) and removes
 // empty lines to make test output comparisons more stable.

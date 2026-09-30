@@ -16,9 +16,16 @@ type ConfigHandler struct {
 	singleRepo   bool
 }
 
+// ConfigHandlerOptions are the server capabilities ConfigHandler reports.
+type ConfigHandlerOptions struct {
+	ReadOnly     bool
+	AuthRequired bool
+	SingleRepo   bool
+}
+
 // NewConfigHandler creates a handler that reports the given capabilities.
-func NewConfigHandler(readOnly, authRequired, singleRepo bool) *ConfigHandler {
-	return &ConfigHandler{readOnly: readOnly, authRequired: authRequired, singleRepo: singleRepo}
+func NewConfigHandler(opts ConfigHandlerOptions) *ConfigHandler {
+	return &ConfigHandler{readOnly: opts.ReadOnly, authRequired: opts.AuthRequired, singleRepo: opts.SingleRepo}
 }
 
 // ServeHTTP returns the capability payload.

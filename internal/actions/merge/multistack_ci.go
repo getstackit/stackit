@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/output"
 )
@@ -18,9 +17,21 @@ type LocalCIValidator struct {
 	output  output.Output
 }
 
+// CIConfig is the resolved ci.* configuration the validator needs. The loaded
+// repository config satisfies it; callers pass it in rather than the action
+// loading config from disk.
+type CIConfig interface {
+	CICommand() string
+	CITimeout() int
+}
+
 // NewLocalCIValidator creates a new local CI validator from config.
 // Uses the unified ci.command config, with fallback to combine.ciCommand for backwards compatibility.
-func NewLocalCIValidator(cfg config.Configurer, out output.Output) *LocalCIValidator {
+// A nil config yields an unconfigured validator.
+func NewLocalCIValidator(cfg CIConfig, out output.Output) *LocalCIValidator {
+	if cfg == nil {
+		return &LocalCIValidator{output: out}
+	}
 	return &LocalCIValidator{
 		Command: cfg.CICommand(),
 		Timeout: time.Duration(cfg.CITimeout()) * time.Second,
@@ -34,7 +45,7 @@ func (v *LocalCIValidator) IsConfigured() bool {
 }
 
 // Validate runs the CI command in the specified directory
-func (v *LocalCIValidator) Validate(ctx context.Context, workdir string) error {
+func (v *LocalCIValidator) Validate(ctx context.Context, workdir engine.WorktreePath) error {
 	if !v.IsConfigured() {
 		return fmt.Errorf("CI command not configured. Set it with: stackit config set ci.command \"your-command\"")
 	}
@@ -46,7 +57,7 @@ func (v *LocalCIValidator) Validate(ctx context.Context, workdir string) error {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", v.Command)
-	cmd.Dir = workdir
+	cmd.Dir = workdir.String()
 
 	cmdOutput, err := cmd.CombinedOutput()
 	if ctx.Err() == context.DeadlineExceeded {
@@ -74,7 +85,7 @@ func FindLargestWorkingSet(
 	validator *LocalCIValidator,
 	executor *MultiStackWorktreeExecutor,
 	worktreeEng engine.Engine,
-	worktreePath string,
+	worktreePath engine.WorktreePath,
 	stacks []MultiStackInfo,
 ) (*LocalCISearchResult, error) {
 	trunk := executor.eng.Trunk()

@@ -178,7 +178,7 @@ func TestSplitHunk(t *testing.T) {
 	}
 }
 
-func TestCountHunkLines(t *testing.T) {
+func TestHunkLineCounts(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -233,12 +233,12 @@ func TestCountHunkLines(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			hunk := Hunk{Content: tt.content}
-			added, removed := CountHunkLines(hunk)
+			added, removed := hunk.LineCounts()
 			if added != tt.expectedAdded {
-				t.Errorf("CountHunkLines() added = %d, expected %d", added, tt.expectedAdded)
+				t.Errorf("LineCounts() added = %d, expected %d", added, tt.expectedAdded)
 			}
 			if removed != tt.expectedRemoved {
-				t.Errorf("CountHunkLines() removed = %d, expected %d", removed, tt.expectedRemoved)
+				t.Errorf("LineCounts() removed = %d, expected %d", removed, tt.expectedRemoved)
 			}
 		})
 	}
@@ -324,7 +324,7 @@ func TestGetHunkHeader(t *testing.T) {
 	}
 }
 
-func TestBuildPatchFromHunks(t *testing.T) {
+func TestHunksPatch(t *testing.T) {
 	t.Parallel()
 
 	hunks := []Hunk{
@@ -343,7 +343,7 @@ func TestBuildPatchFromHunks(t *testing.T) {
 		},
 	}
 
-	patch := BuildPatchFromHunks(hunks)
+	patch := Hunks(hunks).Patch()
 
 	// Should contain both file headers
 	if !strings.Contains(patch, "diff --git a/file1.go b/file1.go") {
@@ -370,11 +370,11 @@ func TestBuildPatchFromHunks(t *testing.T) {
 	}
 
 	// Empty hunks should return empty string
-	if BuildPatchFromHunks(nil) != "" {
-		t.Error("BuildPatchFromHunks(nil) should return empty string")
+	if Hunks(nil).Patch() != "" {
+		t.Error("Hunks(nil).Patch() should return empty string")
 	}
-	if BuildPatchFromHunks([]Hunk{}) != "" {
-		t.Error("BuildPatchFromHunks([]) should return empty string")
+	if Hunks([]Hunk{}).Patch() != "" {
+		t.Error("Hunks([]).Patch() should return empty string")
 	}
 }
 
@@ -544,7 +544,7 @@ diff --git a/code.go b/code.go
 	}
 }
 
-func TestBuildPatchFromHunks_Binary(t *testing.T) {
+func TestHunksPatch_Binary(t *testing.T) {
 	t.Parallel()
 
 	// Test that binary files produce correct patch format
@@ -557,7 +557,7 @@ func TestBuildPatchFromHunks_Binary(t *testing.T) {
 		},
 	}
 
-	patch := BuildPatchFromHunks(hunks)
+	patch := Hunks(hunks).Patch()
 
 	// Binary patches should have diff header but no ---/+++ lines
 	if !strings.Contains(patch, "diff --git a/image.png b/image.png") {
@@ -577,7 +577,7 @@ func TestBuildPatchFromHunks_Binary(t *testing.T) {
 	}
 }
 
-func TestBuildPatchFromHunks_MixedBinaryAndText(t *testing.T) {
+func TestHunksPatch_MixedBinaryAndText(t *testing.T) {
 	t.Parallel()
 
 	hunks := []Hunk{
@@ -595,7 +595,7 @@ func TestBuildPatchFromHunks_MixedBinaryAndText(t *testing.T) {
 		},
 	}
 
-	patch := BuildPatchFromHunks(hunks)
+	patch := Hunks(hunks).Patch()
 
 	// Binary file should not have ---/+++ lines
 	if strings.Contains(patch, "--- a/image.png") {
@@ -787,7 +787,7 @@ index abc123..def456 100644
 	}
 }
 
-func TestBuildPatchFromHunks_NewFile(t *testing.T) {
+func TestHunksPatch_NewFile(t *testing.T) {
 	t.Parallel()
 
 	t.Run("new file patch has correct format", func(t *testing.T) {
@@ -802,7 +802,7 @@ func TestBuildPatchFromHunks_NewFile(t *testing.T) {
 			},
 		}
 
-		patch := BuildPatchFromHunks(hunks)
+		patch := Hunks(hunks).Patch()
 
 		// Should contain diff header
 		if !strings.Contains(patch, "diff --git a/newfile.go b/newfile.go") {
@@ -839,7 +839,7 @@ func TestBuildPatchFromHunks_NewFile(t *testing.T) {
 			},
 		}
 
-		patch := BuildPatchFromHunks(hunks)
+		patch := Hunks(hunks).Patch()
 
 		if !strings.Contains(patch, "new file mode 100755") {
 			t.Error("Patch should contain 'new file mode 100755'")
@@ -857,7 +857,7 @@ func TestBuildPatchFromHunks_NewFile(t *testing.T) {
 			},
 		}
 
-		patch := BuildPatchFromHunks(hunks)
+		patch := Hunks(hunks).Patch()
 
 		if !strings.Contains(patch, "new file mode 100644") {
 			t.Error("Patch should default to 'new file mode 100644'")
@@ -880,7 +880,7 @@ func TestBuildPatchFromHunks_NewFile(t *testing.T) {
 			},
 		}
 
-		patch := BuildPatchFromHunks(hunks)
+		patch := Hunks(hunks).Patch()
 
 		// New file should have /dev/null
 		if !strings.Contains(patch, "--- /dev/null") {
@@ -894,7 +894,7 @@ func TestBuildPatchFromHunks_NewFile(t *testing.T) {
 	})
 }
 
-func TestExtractContentFromHunk(t *testing.T) {
+func TestHunkNewFileContent(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -949,9 +949,9 @@ func TestExtractContentFromHunk(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := extractContentFromHunk(tt.hunk)
+			result := tt.hunk.NewFileContent()
 			if result != tt.expected {
-				t.Errorf("extractContentFromHunk() = %q, expected %q", result, tt.expected)
+				t.Errorf("NewFileContent() = %q, expected %q", result, tt.expected)
 			}
 		})
 	}
@@ -1174,7 +1174,7 @@ index abc123..def456 100644
 	}
 }
 
-func TestBuildPatchFromHunks_DeletedFile(t *testing.T) {
+func TestHunksPatch_DeletedFile(t *testing.T) {
 	t.Parallel()
 
 	t.Run("deleted file patch has correct format", func(t *testing.T) {
@@ -1189,7 +1189,7 @@ func TestBuildPatchFromHunks_DeletedFile(t *testing.T) {
 			},
 		}
 
-		patch := BuildPatchFromHunks(hunks)
+		patch := Hunks(hunks).Patch()
 
 		// Should contain diff header
 		if !strings.Contains(patch, "diff --git a/deleted.go b/deleted.go") {
@@ -1226,7 +1226,7 @@ func TestBuildPatchFromHunks_DeletedFile(t *testing.T) {
 			},
 		}
 
-		patch := BuildPatchFromHunks(hunks)
+		patch := Hunks(hunks).Patch()
 
 		if !strings.Contains(patch, "deleted file mode 100755") {
 			t.Error("Patch should contain 'deleted file mode 100755'")
@@ -1244,7 +1244,7 @@ func TestBuildPatchFromHunks_DeletedFile(t *testing.T) {
 			},
 		}
 
-		patch := BuildPatchFromHunks(hunks)
+		patch := Hunks(hunks).Patch()
 
 		if !strings.Contains(patch, "deleted file mode 100644") {
 			t.Error("Patch should default to 'deleted file mode 100644'")
@@ -1272,7 +1272,7 @@ func TestBuildPatchFromHunks_DeletedFile(t *testing.T) {
 			},
 		}
 
-		patch := BuildPatchFromHunks(hunks)
+		patch := Hunks(hunks).Patch()
 
 		// New file should have /dev/null as old
 		if !strings.Contains(patch, "--- /dev/null") {

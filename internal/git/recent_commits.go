@@ -32,10 +32,10 @@ type RecentCommit struct {
 	Subject        string
 	Author         string
 	Date           time.Time
-	PRNumber       int              // parsed from subject suffix "(#123)" if present
+	PRNumber       PRNumber         // parsed from subject suffix "(#123)" if present
 	Kind           RecentCommitKind // derived from trailer metadata
 	StackSize      int              // from Stackit-Stack-Size trailer (0 if absent)
-	StackPRNumbers []int            // from Stackit-PRs trailer
+	StackPRNumbers []PRNumber       // from Stackit-PRs trailer
 	StackScope     string           // from Stackit-Scope trailer (empty if absent)
 }
 
@@ -172,7 +172,7 @@ func resolveSubject(subject, body string) string {
 }
 
 // parseMergePRNumber extracts the PR number from a "Merge pull request #N from ..." subject.
-func parseMergePRNumber(subject string) int {
+func parseMergePRNumber(subject string) PRNumber {
 	matches := mergeSubjectRe.FindStringSubmatch(subject)
 	if len(matches) < 2 {
 		return 0
@@ -181,7 +181,7 @@ func parseMergePRNumber(subject string) int {
 	if err != nil {
 		return 0
 	}
-	return n
+	return PRNumber(n)
 }
 
 func firstNonEmptyLine(s string) string {
@@ -212,8 +212,8 @@ func parseStackSizeTrailer(raw string) int {
 	return 0
 }
 
-func parseStackPRsTrailer(raw string) []int {
-	var prNumbers []int
+func parseStackPRsTrailer(raw string) []PRNumber {
+	var prNumbers []PRNumber
 	for value := range strings.SplitSeq(raw, trailerValueSeparator) {
 		for part := range strings.SplitSeq(value, ",") {
 			part = strings.TrimSpace(part)
@@ -221,10 +221,10 @@ func parseStackPRsTrailer(raw string) []int {
 				continue
 			}
 			n, err := strconv.Atoi(part)
-			if err != nil || slices.Contains(prNumbers, n) {
+			if err != nil || slices.Contains(prNumbers, PRNumber(n)) {
 				continue
 			}
-			prNumbers = append(prNumbers, n)
+			prNumbers = append(prNumbers, PRNumber(n))
 		}
 	}
 	return prNumbers
@@ -240,7 +240,7 @@ func parseStackScopeTrailer(raw string) string {
 	return ""
 }
 
-func parsePRNumberFromSubject(subject string) int {
+func parsePRNumberFromSubject(subject string) PRNumber {
 	matches := prNumberSuffixRe.FindStringSubmatch(subject)
 	if len(matches) < 2 {
 		return 0
@@ -249,7 +249,7 @@ func parsePRNumberFromSubject(subject string) int {
 	if err != nil {
 		return 0
 	}
-	return n
+	return PRNumber(n)
 }
 
 func deriveRecentCommitKind(commit RecentCommit) RecentCommitKind {

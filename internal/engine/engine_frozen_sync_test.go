@@ -43,7 +43,7 @@ func TestRestackFrozenBranch(t *testing.T) {
 		s.RunGit("update-ref", "refs/heads/origin/child", remoteSha)
 
 		// 5. Restack the branch
-		batchRes, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(childBranch))
+		batchRes, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(childBranch), engine.RestackOpts{})
 		require.NoError(t, err)
 		require.Equal(t, engine.RestackDone, batchRes.Results["child"].Result)
 
@@ -75,7 +75,7 @@ func TestRestackFrozenBranch(t *testing.T) {
 		localSha, _ := childBranch.GetRevision()
 		s.RunGit("update-ref", "refs/remotes/origin/child", localSha)
 
-		batchRes, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(childBranch))
+		batchRes, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(childBranch), engine.RestackOpts{})
 		require.NoError(t, err)
 		require.Equal(t, engine.RestackUnneeded, batchRes.Results["child"].Result)
 	})

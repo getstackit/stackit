@@ -8,15 +8,6 @@ type ProgressMsg struct {
 	Total     int // Total number of operations
 }
 
-// Percent returns the completion percentage (0.0 to 1.0).
-// Returns 0 if Total is 0.
-func (m ProgressMsg) Percent() float64 {
-	if m.Total == 0 {
-		return 0
-	}
-	return float64(m.Completed) / float64(m.Total)
-}
-
 // PhaseMsg indicates a phase state change.
 // Use this to communicate phase transitions to TUI models.
 type PhaseMsg struct {

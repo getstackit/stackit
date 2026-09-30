@@ -11,7 +11,7 @@ package git
 // ConstituentPRTitles below.
 func (commits RecentCommits) Collapse() RecentCommits {
 	// Collect all PR numbers covered by stack-merge consolidation commits.
-	coveredPRs := make(map[int]struct{})
+	coveredPRs := make(map[PRNumber]struct{})
 	for _, c := range commits {
 		if c.StackSize > 0 {
 			for _, pr := range c.StackPRNumbers {
@@ -39,10 +39,10 @@ func (commits RecentCommits) Collapse() RecentCommits {
 // title is never displayed — so callers don't over-fetch. Order is first-seen
 // stable. Safe to call on either the raw or the collapsed slice: collapse only
 // drops covered regular commits, never stack-merges, so both yield the same set.
-func (commits RecentCommits) PRTitleNumbers() []int {
-	seen := make(map[int]struct{})
-	var nums []int
-	add := func(n int) {
+func (commits RecentCommits) PRTitleNumbers() []PRNumber {
+	seen := make(map[PRNumber]struct{})
+	var nums []PRNumber
+	add := func(n PRNumber) {
 		if n == 0 {
 			return
 		}
@@ -68,7 +68,7 @@ func (commits RecentCommits) PRTitleNumbers() []int {
 // its consolidation PR's title when available, replacing the raw
 // "Merge pull request #N from ..." subject; everything else falls back to the
 // commit subject.
-func (c RecentCommit) DisplayMessage(prTitles map[int]string) string {
+func (c RecentCommit) DisplayMessage(prTitles map[PRNumber]string) string {
 	if c.StackSize > 0 && c.PRNumber != 0 && len(prTitles) > 0 {
 		if title, ok := prTitles[c.PRNumber]; ok {
 			return title
@@ -80,11 +80,11 @@ func (c RecentCommit) DisplayMessage(prTitles map[int]string) string {
 // ConstituentPRTitles returns the subset of prTitles keyed by a stack-merge's
 // constituent PR numbers, or nil when the commit is not a stack-merge or no
 // titles apply.
-func (c RecentCommit) ConstituentPRTitles(prTitles map[int]string) map[int]string {
+func (c RecentCommit) ConstituentPRTitles(prTitles map[PRNumber]string) map[PRNumber]string {
 	if c.StackSize == 0 || len(prTitles) == 0 {
 		return nil
 	}
-	titles := make(map[int]string)
+	titles := make(map[PRNumber]string)
 	for _, pr := range c.StackPRNumbers {
 		if title, ok := prTitles[pr]; ok {
 			titles[pr] = title
@@ -94,22 +94,4 @@ func (c RecentCommit) ConstituentPRTitles(prTitles map[int]string) map[int]strin
 		return nil
 	}
 	return titles
-}
-
-// CollapseStackMerges is retained for callers that have not migrated to RecentCommits.Collapse.
-func CollapseStackMerges(commits []RecentCommit) RecentCommits {
-	return RecentCommits(commits).Collapse()
-}
-
-// PRTitleNumbers is retained for callers that have not migrated to RecentCommits.PRTitleNumbers.
-func PRTitleNumbers(commits []RecentCommit) []int { return RecentCommits(commits).PRTitleNumbers() }
-
-// CollapsedMessage is retained for callers that have not migrated to RecentCommit.DisplayMessage.
-func CollapsedMessage(c RecentCommit, prTitles map[int]string) string {
-	return c.DisplayMessage(prTitles)
-}
-
-// ConstituentPRTitles is retained for callers that have not migrated to RecentCommit.ConstituentPRTitles.
-func ConstituentPRTitles(c RecentCommit, prTitles map[int]string) map[int]string {
-	return c.ConstituentPRTitles(prTitles)
 }

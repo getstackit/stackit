@@ -5,6 +5,9 @@ import (
 	"path"
 	"strconv"
 	"sync"
+
+	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/github"
 )
 
 // JSONResult is the machine-readable summary of a submit run.
@@ -28,21 +31,21 @@ type JSONResult struct {
 
 // JSONGitHubStackResult identifies native GitHub Stack metadata reconciled by submit.
 type JSONGitHubStackResult struct {
-	Number       int    `json:"number"`
-	PullRequests []int  `json:"pull_requests"`
-	Action       string `json:"action"`
+	Number       github.StackNumber `json:"number"`
+	PullRequests []git.PRNumber     `json:"pull_requests"`
+	Action       string             `json:"action"`
 }
 
 // JSONBranchResult is one branch's plan and result in submit JSON output.
 type JSONBranchResult struct {
-	Branch     string   `json:"branch"`
-	Action     string   `json:"action,omitempty"` // "create" or "update"
-	Status     string   `json:"status"`           // pending, done, error, skipped
-	PR         *int     `json:"pr,omitempty"`
-	URL        string   `json:"url,omitempty"`
-	SkipReason string   `json:"skip_reason,omitempty"`
-	Error      string   `json:"error,omitempty"`
-	Warnings   []string `json:"warnings,omitempty"`
+	Branch     string        `json:"branch"`
+	Action     string        `json:"action,omitempty"` // "create" or "update"
+	Status     string        `json:"status"`           // pending, done, error, skipped
+	PR         *git.PRNumber `json:"pr,omitempty"`
+	URL        string        `json:"url,omitempty"`
+	SkipReason string        `json:"skip_reason,omitempty"`
+	Error      string        `json:"error,omitempty"`
+	Warnings   []string      `json:"warnings,omitempty"`
 }
 
 // JSONHandler collects submit events into a JSONResult.
@@ -143,7 +146,7 @@ func (h *JSONHandler) branch(name string) *JSONBranchResult {
 }
 
 // prNumberFromPullURL extracts the PR number from a GitHub pull URL.
-func prNumberFromPullURL(raw string) *int {
+func prNumberFromPullURL(raw string) *git.PRNumber {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return nil
@@ -152,7 +155,8 @@ func prNumberFromPullURL(raw string) *int {
 	if err != nil {
 		return nil
 	}
-	return &n
+	prNumber := git.PRNumber(n)
+	return &prNumber
 }
 
 // Confirm auto-confirms with the default value — JSON output is non-interactive.

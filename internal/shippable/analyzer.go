@@ -3,19 +3,19 @@ package shippable
 import (
 	"context"
 
-	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
 )
 
 // Analyzer analyzes stacks for shippability.
 type Analyzer struct {
-	eng    engine.BranchReader
-	client github.Client
+	eng    engine.StackView
+	client github.ChecksReader
 }
 
 // NewAnalyzer creates a new shippability analyzer.
-func NewAnalyzer(eng engine.BranchReader, client github.Client) *Analyzer {
+func NewAnalyzer(eng engine.StackView, client github.ChecksReader) *Analyzer {
 	return &Analyzer{
 		eng:    eng,
 		client: client,
@@ -25,25 +25,16 @@ func NewAnalyzer(eng engine.BranchReader, client github.Client) *Analyzer {
 // AnalyzeAll discovers and analyzes all stacks for shippability.
 func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 	// Discover all stacks
-	stacks, err := merge.DiscoverStacks(a.eng)
-	if err != nil {
-		return nil, err
-	}
-
+	stacks := stackview.DiscoverStacks(a.eng)
 	if len(stacks) == 0 {
 		return &AnalysisResult{Stacks: []Stack{}}, nil
-	}
-
-	// Collect all branches for batch status fetch
-	var allBranches []string
-	for _, stack := range stacks {
-		allBranches = append(allBranches, stack.AllBranches...)
 	}
 
 	// Batch fetch PR/CI status from GitHub
 	var statusMap github.ChecksByBranch
 	if a.client != nil {
-		statusMap, err = a.client.BatchGetPRChecksStatus(ctx, allBranches)
+		var err error
+		statusMap, err = a.client.BatchGetPRChecksStatus(ctx, stacks.AllBranchNames())
 		if err != nil {
 			// Non-fatal: continue with analysis but without GitHub status
 			statusMap = make(github.ChecksByBranch)
@@ -82,7 +73,7 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 
 // AnalyzeStack analyzes a single stack for shippability.
 // This can be used when you already have a stack and status information.
-func (a *Analyzer) AnalyzeStack(ctx context.Context, stack merge.MultiStackInfo) (*Stack, error) {
+func (a *Analyzer) AnalyzeStack(ctx context.Context, stack stackview.StackInfo) (*Stack, error) {
 	// Fetch PR/CI status for this stack's branches
 	var statusMap github.ChecksByBranch
 	var err error
@@ -96,7 +87,7 @@ func (a *Analyzer) AnalyzeStack(ctx context.Context, stack merge.MultiStackInfo)
 		statusMap = make(github.ChecksByBranch)
 	}
 
-	remoteStatuses := a.remoteStatusProviderFor(ctx, []merge.MultiStackInfo{stack})
+	remoteStatuses := a.remoteStatusProviderFor(ctx, []stackview.StackInfo{stack})
 	analyzed := a.analyzeStack(stack, statusMap, remoteStatuses)
 	return &analyzed, nil
 }
@@ -106,7 +97,7 @@ func (a *Analyzer) AnalyzeStack(ctx context.Context, stack merge.MultiStackInfo)
 // instead of once per stack. Only branches with updateable PRs need remote
 // status; missing and draft PRs return before the not-pushed check, so
 // incomplete stacks stay offline.
-func (a *Analyzer) remoteStatusProviderFor(ctx context.Context, stacks []merge.MultiStackInfo) *branchRemoteStatusProvider {
+func (a *Analyzer) remoteStatusProviderFor(ctx context.Context, stacks []stackview.StackInfo) *branchRemoteStatusProvider {
 	var remoteStatusBranches engine.Branches
 	for _, stack := range stacks {
 		for _, branchName := range stack.AllBranches {
@@ -125,7 +116,7 @@ func (a *Analyzer) remoteStatusProviderFor(ctx context.Context, stacks []merge.M
 }
 
 // analyzeStack performs the actual analysis of a single stack.
-func (a *Analyzer) analyzeStack(stack merge.MultiStackInfo, statusMap github.ChecksByBranch, remoteStatuses *branchRemoteStatusProvider) Stack {
+func (a *Analyzer) analyzeStack(stack stackview.StackInfo, statusMap github.ChecksByBranch, remoteStatuses *branchRemoteStatusProvider) Stack {
 	result := Stack{
 		Stack:       stack,
 		ApprovalOK:  true,
@@ -270,7 +261,7 @@ func (a *Analyzer) analyzeBranch(branchName string, statusMap github.ChecksByBra
 
 type branchRemoteStatusProvider struct {
 	ctx      context.Context
-	eng      engine.BranchReader
+	eng      engine.StackView
 	branches engine.Branches
 
 	loaded   bool
@@ -292,6 +283,9 @@ func (p *branchRemoteStatusProvider) ForBranch(branch engine.Branch) engine.Bran
 }
 
 // determineStatus determines the overall Status based on analysis results.
+// It classifies from forge state (CI, review, draft, pushed); the API's stack
+// summaries use the local-only stackview.LocalStatus instead, which shares
+// the status strings but not the rules.
 func determineStatus(result Stack) Status {
 	// Check for incomplete state (missing PR or draft)
 	for _, blocking := range result.BlockingPRs {
@@ -321,42 +315,4 @@ func determineStatus(result Stack) Status {
 
 	// Default to pending if we can't determine status
 	return StatusPending
-}
-
-// GetStatusDescription returns a human-readable description of a Status.
-func GetStatusDescription(status Status) string {
-	switch status {
-	case StatusShippable:
-		return "Ready to ship"
-	case StatusPending:
-		return "Waiting on CI or review"
-	case StatusBlocked:
-		return "CI failed or changes requested"
-	case StatusIncomplete:
-		return "Missing PRs or has drafts"
-	default:
-		return "Unknown status"
-	}
-}
-
-// GetBlockingReasonDescription returns a human-readable description of a BlockingReason.
-func GetBlockingReasonDescription(reason BlockingReason) string {
-	switch reason {
-	case ReasonChangesRequested:
-		return "Changes requested"
-	case ReasonCIFailing:
-		return "CI failing"
-	case ReasonCIPending:
-		return "CI pending"
-	case ReasonDraft:
-		return "Draft PR"
-	case ReasonNoPR:
-		return "No PR"
-	case ReasonReviewRequired:
-		return "Review required"
-	case ReasonNotPushed:
-		return "Not pushed"
-	default:
-		return "Unknown"
-	}
 }

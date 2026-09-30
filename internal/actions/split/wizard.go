@@ -21,6 +21,9 @@ type WizardOptions struct {
 	BranchName string
 	// HunkSelector specifies which hunk selection method to use
 	HunkSelector HunkSelector
+	// BranchPattern is the resolved branch.pattern used to suggest a default
+	// branch name (empty = fall back to "<current>_split").
+	BranchPattern config.BranchPattern
 }
 
 // RunWizard executes the interactive split wizard.
@@ -164,7 +167,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 
 	case StyleFile:
 		// Prompt for files to extract
-		pathspecs, err := promptForFiles(ctx.Context, *currentBranch, eng, out, false, direction)
+		pathspecs, err := promptForFiles(ctx.Context, ctx.Prompts(), *currentBranch, eng, out, false, direction)
 		if err != nil {
 			return err
 		}
@@ -197,14 +200,11 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		handler.OnStep(StepCommitMessage, handlerBase.StatusCompleted, "Commit message set")
 
 		// Generate default branch name from commit message using the branch pattern
-		cfg, _ := config.LoadConfig(ctx.RepoRoot)
-		branchPatternStr := cfg.BranchNamePattern()
-		branchPattern, patternErr := config.NewBranchPattern(branchPatternStr)
 		var defaultBranchName string
-		if patternErr == nil {
-			defaultBranchName, err = branchPattern.GetBranchName(ctx, commitMessage, "")
+		if opts.BranchPattern != "" {
+			defaultBranchName, err = opts.BranchPattern.GetBranchName(ctx, commitMessage, "")
 		}
-		if patternErr != nil || err != nil {
+		if opts.BranchPattern == "" || err != nil {
 			// Fallback to simpler default if pattern fails
 			defaultBranchName = currentBranch.GetName() + splitSuffix
 		}

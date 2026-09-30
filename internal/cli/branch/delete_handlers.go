@@ -3,6 +3,7 @@ package branch
 import (
 	"github.com/getstackit/stackit/internal/actions/delete"
 	"github.com/getstackit/stackit/internal/cli/common"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/style"
@@ -41,7 +42,7 @@ func (h *SimpleDeleteHandler) Start(_ int) {
 }
 
 // OnBranch is called for each branch being deleted
-func (h *SimpleDeleteHandler) OnBranch(name string, status delete.Status, _ *int) {
+func (h *SimpleDeleteHandler) OnBranch(name string, status delete.Status, _ *git.PRNumber) {
 	h.Lock()
 	defer h.Unlock()
 

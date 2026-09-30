@@ -201,8 +201,8 @@ func (e *engineImpl) FindMostRecentTrackedAncestors(ctx context.Context, branchN
 // resolves every branch's commits in one batched, cache-backed pass
 // (BatchCommits) rather than scanning branches one at a time. Commits not
 // owned by any branch are simply absent from the returned map.
-func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) map[string]string {
-	result := make(map[string]string, len(commitSHAs))
+func (e *engineImpl) FindBranchesForCommits(commitSHAs []string) CommitBranchMap {
+	result := make(CommitBranchMap, len(commitSHAs))
 	if len(commitSHAs) == 0 {
 		return result
 	}

@@ -1,6 +1,7 @@
 package track
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -17,6 +18,24 @@ type Options struct {
 	Parent     string
 }
 
+// trackEngine lists exactly the engine methods track calls. The interactive
+// parent picker (Handler.PromptSelectParent) still receives the full engine
+// because the adapter hands it to the TUI.
+type trackEngine interface {
+	engine.BranchLookup
+	CurrentBranch() *engine.Branch
+	Trunk() engine.Branch
+	AllBranches() engine.Branches
+	BranchNames() *engine.BranchSet
+	GetRevision(branch engine.Branch) (string, error)
+	BatchRevisions(branches engine.Branches) engine.RevisionMap
+	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
+	IsAncestor(ctx context.Context, ancestor, descendant string) (bool, error)
+	FindMostRecentTrackedAncestors(ctx context.Context, branchName string) ([]string, error)
+	TrackBranch(ctx context.Context, branchName string, parentBranchName string) error
+	ConfigureRemoteMetadataSync(ctx context.Context) error
+}
+
 // Action performs the track operation
 func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if handler == nil {
@@ -24,7 +43,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	eng := ctx.Engine
+	var eng trackEngine = ctx.Engine
 	branchName := opts.BranchName
 	if branchName == "" {
 		currentBranch := eng.CurrentBranch()
@@ -124,7 +143,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 // trackBranchRecursively interactively tracks a branch and its descendants
 func trackBranchRecursively(ctx *app.Context, branchName string, handler Handler) error {
-	eng := ctx.Engine
+	var eng trackEngine = ctx.Engine
 
 	// Check if branch is already tracked
 	branch := eng.GetBranch(branchName)

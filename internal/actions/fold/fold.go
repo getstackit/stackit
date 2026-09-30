@@ -2,12 +2,14 @@
 package fold
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
 
@@ -18,8 +20,24 @@ type Options struct {
 	DryRun     bool // If true, only shows what would happen
 }
 
-func showDryRun(ctx *app.Context, current, parent engine.Branch) {
-	eng := ctx.Engine
+// foldEngine lists exactly the engine methods fold calls: the git-operation
+// precondition checks, the merge/delete/reparent mutations, and the reads the
+// dry-run preview needs.
+type foldEngine interface {
+	validation.GitOperationEngine
+	Trunk() engine.Branch
+	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	GetRevision(branch engine.Branch) (string, error)
+	GetMergeBase(ctx context.Context, rev1, rev2 string) (string, error)
+	ShowDiff(ctx context.Context, rr git.RevRange, format git.DiffFormat) (string, error)
+	CheckoutBranch(ctx context.Context, branch engine.Branch) error
+	Merge(ctx context.Context, revision string, opts engine.MergeOptions) error
+	DeleteBranch(ctx context.Context, branch engine.Branch) error
+	SetParent(ctx context.Context, branch engine.Branch, parentBranch engine.Branch, mode engine.DivergenceMode) error
+	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
+}
+
+func showDryRun(ctx *app.Context, eng foldEngine, current, parent engine.Branch) {
 	out := ctx.Output
 
 	out.Info("%s", output.Yellow("Dry Run: Folding plan"))
@@ -67,7 +85,7 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 		out.Debug("Failed to get revision for current branch %s: %v", current.GetName(), err)
 	}
 
-	diffStat, err := eng.ShowDiff(ctx.Context, baseRev, headRev, true)
+	diffStat, err := eng.ShowDiff(ctx.Context, git.RevRange{Base: baseRev, Head: headRev}, git.DiffFormatStat)
 	if err == nil && diffStat != "" {
 		out.Info("%s", diffStat)
 	} else {
@@ -83,7 +101,7 @@ func showDryRun(ctx *app.Context, current, parent engine.Branch) {
 
 // Action performs the fold operation
 func Action(ctx *app.Context, opts Options, handler Handler) error {
-	eng := ctx.Engine
+	var eng foldEngine = ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
 
@@ -135,7 +153,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.Start(currentBranch, parentName, opts.DryRun)
 
 	if opts.DryRun {
-		showDryRun(ctx, currentBranchObj, parentBranch)
+		showDryRun(ctx, eng, currentBranchObj, parentBranch)
 		return nil
 	}
 

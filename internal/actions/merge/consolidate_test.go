@@ -8,6 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/merge"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -23,8 +24,8 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 			})
 
 		// Add PR info
-		pr1 := 101
-		pr2 := 102
+		pr1 := git.PRNumber(101)
+		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfo(pr1))
@@ -67,8 +68,8 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		s.RunGit("commit", "--allow-empty", "-m", "branch2 commit").Rebuild()
 
 		// Add PR info
-		pr1 := 101
-		pr2 := 102
+		pr1 := git.PRNumber(101)
+		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfoWithTitle(pr1, "Feature 1"))
@@ -99,8 +100,8 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 			})
 
 		// Add PR info
-		pr1 := 101
-		pr2 := 102
+		pr1 := git.PRNumber(101)
+		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfoWithTitle(pr1, "Add user authentication"))
@@ -138,8 +139,8 @@ func TestConsolidateMergeExecutor(t *testing.T) {
 		require.NoError(t, err)
 
 		// Add PR info
-		pr1 := 101
-		pr2 := 102
+		pr1 := git.PRNumber(101)
+		pr2 := git.PRNumber(102)
 		branchA := s.Engine.GetBranch("batch/feature-a")
 		branchB := s.Engine.GetBranch("batch/feature-b")
 		err = s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfoWithTitle(pr1, "Feature A"))
@@ -194,8 +195,8 @@ func TestConsolidationStepExecution(t *testing.T) {
 			})
 
 		// Add PR info
-		pr1 := 101
-		pr2 := 102
+		pr1 := git.PRNumber(101)
+		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfo(pr1))
@@ -230,8 +231,8 @@ func TestConsolidationErrorHandling(t *testing.T) {
 			})
 
 		// Add PR info with one closed PR
-		pr1 := 101
-		pr2 := 102
+		pr1 := git.PRNumber(101)
+		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfoClosed(pr1))
@@ -261,8 +262,8 @@ func TestConsolidationErrorHandling(t *testing.T) {
 			})
 
 		// Add PR info with draft PR
-		pr1 := 101
-		pr2 := 102
+		pr1 := git.PRNumber(101)
+		pr2 := git.PRNumber(102)
 		branch1 := s.Engine.GetBranch("branch1")
 		branch2 := s.Engine.GetBranch("branch2")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfoDraft(pr1))
@@ -305,7 +306,7 @@ func TestConsolidationErrorHandling(t *testing.T) {
 		s.RunGit("commit", "--allow-empty", "-m", "branch1 commit").Rebuild()
 
 		// Add PR info
-		pr1 := 101
+		pr1 := git.PRNumber(101)
 		branch1 := s.Engine.GetBranch("branch1")
 		err := s.Engine.UpsertPrInfo(context.Background(), branch1, testhelpers.NewTestPrInfo(pr1))
 		require.NoError(t, err)
@@ -336,6 +337,6 @@ func TestConsolidationErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotEmpty(t, result.BranchName)
-		require.Equal(t, 1, result.PRNumber) // testhelpers.MockGitHubClient returns PR #1 for CreatePullRequest
+		require.Equal(t, git.PRNumber(1), result.PRNumber) // testhelpers.MockGitHubClient returns PR #1 for CreatePullRequest
 	})
 }

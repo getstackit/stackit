@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/api/registry"
 	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
 	"github.com/getstackit/stackit/internal/engine"
@@ -42,21 +42,17 @@ func (h *StacksHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *StacksHandler) listStacks(w http.ResponseWriter, entry *registry.RepoEntry) {
-	stacks, err := merge.DiscoverStacksWithSort(entry.Engine, engine.SortStrategySmart)
-	if err != nil {
-		http.Error(w, "failed to discover stacks: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	stacks := stackview.DiscoverStacksWithSort(entry.Engine, engine.SortStrategySmart)
 
 	graph := entry.Engine.Graph(engine.SortStrategySmart)
 
 	// One restack-status pass over every branch in every stack, not one per
-	// stack — see httpcontract.BranchBatchData.
-	statuses := entry.Engine.ReadBranchStatuses(httpcontract.BranchesFromNames(graph, allStackBranches(stacks)))
+	// stack — see stackview.BranchData.
+	statuses := entry.Engine.ReadBranchStatuses(stackview.BranchesFromGraph(graph, stacks.AllBranchNames()))
 
 	summaries := make([]httpcontract.StackSummary, 0, len(stacks))
 	for _, stack := range stacks {
-		summary := httpcontract.MapStackSummary(entry.Engine, graph, stack.RootBranch, stack.AllBranches, stack.PRCount, stack.Scope, "", statuses)
+		summary := httpcontract.MapStackSummary(entry.Engine, graph, stackInput(stack), "", statuses)
 		summaries = append(summaries, summary)
 	}
 
@@ -64,13 +60,9 @@ func (h *StacksHandler) listStacks(w http.ResponseWriter, entry *registry.RepoEn
 }
 
 func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry, rootBranch string) {
-	stacks, err := merge.DiscoverStacksWithSort(entry.Engine, engine.SortStrategySmart)
-	if err != nil {
-		http.Error(w, "failed to discover stacks: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	stacks := stackview.DiscoverStacksWithSort(entry.Engine, engine.SortStrategySmart)
 
-	var found *merge.MultiStackInfo
+	var found *stackview.StackInfo
 	for i := range stacks {
 		if stacks[i].RootBranch == rootBranch {
 			found = &stacks[i]
@@ -89,8 +81,8 @@ func (h *StacksHandler) getStack(w http.ResponseWriter, r *http.Request, entry *
 		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), found.AllBranches)
 	}
 
-	branches := httpcontract.BranchesFromNames(graph, found.AllBranches)
-	data := httpcontract.FetchBranchBatchData(r.Context(), entry.Engine, branches)
-	detail := httpcontract.MapStackDetail(entry.Engine, graph, found.RootBranch, found.AllBranches, found.PRCount, found.Scope, checksMap, data)
+	branches := stackview.BranchesFromGraph(graph, found.AllBranches)
+	data := stackview.FetchBranchData(r.Context(), entry.Engine, branches)
+	detail := httpcontract.MapStackDetail(entry.Engine, graph, stackInput(*found), checksMap, data)
 	writeJSON(w, detail)
 }

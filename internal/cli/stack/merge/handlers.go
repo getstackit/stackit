@@ -9,6 +9,7 @@ import (
 
 	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
 	sterrors "github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/shippable"
 	"github.com/getstackit/stackit/internal/tui"
@@ -671,7 +672,7 @@ func formatBranchChain(s shippable.Stack) string {
 	}
 
 	// Build a map from branch name to PR number for quick lookup
-	prMap := make(map[string]int, len(s.BlockingPRs))
+	prMap := make(map[string]git.PRNumber, len(s.BlockingPRs))
 	for _, bp := range s.BlockingPRs {
 		if bp.PRNumber > 0 {
 			prMap[bp.Branch] = bp.PRNumber

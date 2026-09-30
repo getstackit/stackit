@@ -36,9 +36,9 @@ func (e *engineImpl) EnsureRemoteMetadata(ctx context.Context) error {
 	return nil
 }
 
-// TestRemoteMetadataCompatibility probes the configured remote to verify that
+// testRemoteMetadataCompatibility probes the configured remote to verify that
 // it accepts the metadata-ref namespace. Returns nil on success.
-func (e *engineImpl) TestRemoteMetadataCompatibility(ctx context.Context) error {
+func (e *engineImpl) testRemoteMetadataCompatibility(ctx context.Context) error {
 	return e.git.TestRemoteRefCompatibility(ctx)
 }
 
@@ -50,10 +50,10 @@ func (e *engineImpl) PrepareRemoteMetadataPush(ctx context.Context) error {
 	if e.IsRemoteSyncEnabled() {
 		return nil
 	}
-	if err := e.TestRemoteMetadataCompatibility(ctx); err != nil {
+	if err := e.testRemoteMetadataCompatibility(ctx); err != nil {
 		return err
 	}
-	e.SetRemoteSyncEnabled(true)
+	e.setRemoteSyncEnabled(true)
 	_ = e.ConfigureRemoteMetadataSync(ctx)
 	return nil
 }
@@ -83,28 +83,16 @@ func (e *engineImpl) ConfigureStackMetadataSync(_ context.Context) error {
 	return e.git.EnsureStackMetaRefspecConfigured()
 }
 
-// FetchStackMetadata fetches stack-metadata refs into the
-// remote-stacks namespace.
-func (e *engineImpl) FetchStackMetadata(ctx context.Context) error {
-	return e.FetchRemote(ctx, RemoteFetchRequest{IncludeStackMetadata: true})
-}
-
 // ListStackMetadata returns a map of local stack IDs to their ref SHAs. Used
 // by stack-metadata GC during sync.
 func (e *engineImpl) ListStackMetadata() (map[string]string, error) {
 	return e.metadata.ListStackMetas()
 }
 
-// DeleteStackMetadata removes a single local stack-metadata ref. Used as the
-// per-ref fallback in the GC path when the batched ref-update fails.
-func (e *engineImpl) DeleteStackMetadata(ctx context.Context, stackID string) error {
-	return e.metadata.DeleteStackMeta(ctx, stackID)
-}
-
-// DeleteStackMetadataBatch removes the local stack-metadata refs for the given
+// DeleteStackMetadata removes the local stack-metadata refs for the given
 // stack IDs in a single update-ref --stdin batch. The engine owns the
 // stack-ref name format, so callers pass stack IDs rather than raw ref names.
-func (e *engineImpl) DeleteStackMetadataBatch(ctx context.Context, stackIDs []string) error {
+func (e *engineImpl) DeleteStackMetadata(ctx context.Context, stackIDs []string) error {
 	refs := make([]string, 0, len(stackIDs))
 	for _, stackID := range stackIDs {
 		refs = append(refs, git.StackMetaRefName(stackID))

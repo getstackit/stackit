@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/submit"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -18,7 +19,7 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		branchName := featureBranch
-		prNumber := 123
+		prNumber := git.PRNumber(123)
 		githubBody := "This body exists only on GitHub"
 
 		// 1. Setup branch with PR info but EMPTY body in local metadata
@@ -32,13 +33,13 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 		// 2. Setup Mock GitHub Client
 		config := testhelpers.NewMockGitHubServerConfig()
 		config.PRs[branchName] = &gh.PullRequest{
-			Number: new(prNumber),
+			Number: new(int(prNumber)),
 			Title:  new("Existing Title"),
 			Body:   new(githubBody),
 			Head:   &gh.PullRequestBranch{Ref: new(branchName)},
 			Base:   &gh.PullRequestBranch{Ref: new("main")},
 		}
-		config.UpdatedPRs[prNumber] = config.PRs[branchName]
+		config.UpdatedPRs[int(prNumber)] = config.PRs[branchName]
 
 		ghClient, _, _ := testhelpers.NewMockGitHubClient(t, config)
 		mockClient := testhelpers.NewMockGitHubClientInterface(ghClient, config.Owner, config.Repo, config)

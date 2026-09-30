@@ -7,11 +7,21 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions"
+	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
+
+// cleanBranches plans and executes branch deletions in one step.
+func cleanBranches(ctx *app.Context, opts actions.CleanBranchesOptions) (*actions.CleanBranchesResult, error) {
+	plan, err := actions.PlanBranchDeletions(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return actions.ExecuteBranchDeletions(ctx, plan, nil)
+}
 
 type countingDeletionEngine struct {
 	engine.Engine
@@ -70,7 +80,7 @@ func TestCleanBranches(t *testing.T) {
 		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
 		require.NoError(t, err)
 
-		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -109,7 +119,7 @@ func TestCleanBranches(t *testing.T) {
 		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
 		require.NoError(t, err)
 
-		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -148,7 +158,7 @@ func TestCleanBranches(t *testing.T) {
 		require.NoError(t, s.Engine.Rebuild("main"))
 
 		for i, name := range []string{"branch1", "branch2"} {
-			prInfo := testhelpers.NewTestPrInfoMerged(i+1, "main")
+			prInfo := testhelpers.NewTestPrInfoMerged(git.PRNumber(i+1), "main")
 			require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name), prInfo))
 		}
 
@@ -157,12 +167,12 @@ func TestCleanBranches(t *testing.T) {
 		s.Context.Engine = &fixedWorktreeEngine{
 			Engine: s.Engine,
 			list: git.WorktreeList{
-				{Path: t.TempDir(), Branch: "branch1"},
-				{Path: s.Scene.Repo.Dir, Branch: "main"},
+				{Path: git.WorktreePath(t.TempDir()), Branch: "branch1"},
+				{Path: git.WorktreePath(s.Scene.Repo.Dir), Branch: "main"},
 			},
 		}
 
-		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -185,7 +195,7 @@ func TestCleanBranches(t *testing.T) {
 		countingEngine := &countingDeletionEngine{Engine: s.Engine}
 		s.Context.Engine = countingEngine
 
-		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: false,
 		})
 		require.NoError(t, err)
@@ -225,7 +235,7 @@ func TestCleanBranches(t *testing.T) {
 		require.NoError(t, err)
 
 		// Clean should delete the locked branch
-		_, err = actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+		_, err = cleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -254,7 +264,7 @@ func TestCleanBranches(t *testing.T) {
 		err = s.Engine.UpsertPrInfo(context.Background(), branch, prInfo)
 		require.NoError(t, err)
 
-		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -282,7 +292,7 @@ func TestCleanBranches(t *testing.T) {
 		err := s.Engine.UpsertPrInfo(context.Background(), branch2, prInfo)
 		require.NoError(t, err)
 
-		_, err = actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+		_, err = cleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -302,13 +312,13 @@ func TestCleanBranches(t *testing.T) {
 			})
 
 		for number, name := range []string{"branch1", "branch2", "branch3"} {
-			err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name), testhelpers.NewTestPrInfoMerged(number+1, "main"))
+			err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch(name), testhelpers.NewTestPrInfoMerged(git.PRNumber(number+1), "main"))
 			require.NoError(t, err)
 		}
 		countingEngine := &countingDeletionEngine{Engine: s.Engine}
 		s.Context.Engine = countingEngine
 
-		result, err := actions.CleanBranches(s.Context, actions.CleanBranchesOptions{Force: true})
+		result, err := cleanBranches(s.Context, actions.CleanBranchesOptions{Force: true})
 		require.NoError(t, err)
 		require.Len(t, result.DeletedBranches, 3)
 		require.Equal(t, 1, countingEngine.listWorktreesCalls)
@@ -506,7 +516,7 @@ func TestCleanBranches(t *testing.T) {
 		err = s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), prInfo)
 		require.NoError(t, err)
 
-		_, err = actions.CleanBranches(s.Context, actions.CleanBranchesOptions{
+		_, err = cleanBranches(s.Context, actions.CleanBranchesOptions{
 			Force: true,
 		})
 		require.NoError(t, err)
@@ -519,7 +529,7 @@ func TestCleanBranches(t *testing.T) {
 
 		// Critical regression assertion: preserve old divergence at branch1 tip.
 		// If this regresses, restack can replay branch1 commits and cause avoidable conflicts.
-		meta2, err := s.Engine.Metadata().ReadMetadata(context.Background(), "branch2").One()
+		meta2, err := s.Metadata.ReadMetadata(context.Background(), "branch2").One()
 		require.NoError(t, err)
 		require.NotNil(t, meta2.GetParentBranchRevision())
 		require.Equal(t, branch1Rev, *meta2.GetParentBranchRevision())

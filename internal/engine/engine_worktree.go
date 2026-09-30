@@ -32,30 +32,32 @@ const (
 	WorktreePruneSkip
 )
 
+// worktreeRoot is the checkout this engine operates in. repoRoot stays a plain
+// string because it also serves as the repository root for non-worktree
+// concerns (config, hooks, file paths); this is the one place it is read as a
+// worktree.
+func (e *engineImpl) worktreeRoot() WorktreePath {
+	return WorktreePath(e.repoRoot)
+}
+
 // AddWorktree adds a new worktree
-func (e *engineImpl) AddWorktree(ctx context.Context, path string, branch string, detach git.WorktreeDetachMode) error {
+func (e *engineImpl) AddWorktree(ctx context.Context, path WorktreePath, branch string, detach git.WorktreeDetachMode) error {
 	return e.git.AddWorktree(ctx, path, branch, detach)
 }
 
 // RemoveWorktree removes a worktree
-func (e *engineImpl) RemoveWorktree(ctx context.Context, path string) error {
+func (e *engineImpl) RemoveWorktree(ctx context.Context, path WorktreePath) error {
 	return e.git.RemoveWorktree(ctx, path)
 }
 
 // ForceRemoveWorktree removes a worktree even if it contains uncommitted changes.
-func (e *engineImpl) ForceRemoveWorktree(ctx context.Context, path string) error {
+func (e *engineImpl) ForceRemoveWorktree(ctx context.Context, path WorktreePath) error {
 	return e.git.ForceRemoveWorktree(ctx, path)
-}
-
-// GetWorktreeCurrentBranch returns the branch currently checked out in the
-// worktree at worktreePath.
-func (e *engineImpl) GetWorktreeCurrentBranch(ctx context.Context, worktreePath string) (string, error) {
-	return e.git.GetWorktreeCurrentBranch(ctx, worktreePath)
 }
 
 // WorktreeHasUncommittedChanges reports whether the worktree at worktreePath has
 // staged, unstaged, or untracked changes.
-func (e *engineImpl) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath string) (bool, error) {
+func (e *engineImpl) WorktreeHasUncommittedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error) {
 	return e.git.WorktreeHasUncommittedChanges(ctx, worktreePath)
 }
 
@@ -63,17 +65,17 @@ func (e *engineImpl) WorktreeHasUncommittedChanges(ctx context.Context, worktree
 // staged or unstaged changes to tracked files, ignoring untracked ones. Use this
 // when the question is "would a hard reset destroy something", which untracked
 // files never answer yes to.
-func (e *engineImpl) WorktreeHasTrackedChanges(ctx context.Context, worktreePath string) (bool, error) {
+func (e *engineImpl) WorktreeHasTrackedChanges(ctx context.Context, worktreePath WorktreePath) (bool, error) {
 	return e.git.WorktreeHasTrackedChanges(ctx, worktreePath)
 }
 
 // WorktreeRebaseInProgress checks the target worktree's own git directory.
-func (e *engineImpl) WorktreeRebaseInProgress(ctx context.Context, worktreePath string) bool {
-	return git.NewRunnerWithPath(worktreePath, nil).IsRebaseInProgress(ctx)
+func (e *engineImpl) WorktreeRebaseInProgress(ctx context.Context, worktreePath WorktreePath) bool {
+	return git.NewRunnerWithPath(worktreePath.String(), nil).IsRebaseInProgress(ctx)
 }
 
 // ListIgnoredFiles returns every ignored, untracked file in a worktree.
-func (e *engineImpl) ListIgnoredFiles(ctx context.Context, worktreePath string) ([]string, error) {
+func (e *engineImpl) ListIgnoredFiles(ctx context.Context, worktreePath WorktreePath) ([]string, error) {
 	return e.git.ListIgnoredFiles(ctx, worktreePath)
 }
 
@@ -123,16 +125,12 @@ func (e *engineImpl) PruneOrphanedWorktreePathRefs(ctx context.Context) (int, er
 	return len(orphaned), nil
 }
 
-// CreateTemporaryWorktree creates a temporary directory and adds a detached worktree
-func (e *engineImpl) CreateTemporaryWorktree(ctx context.Context, branch string, prefix string) (string, func(), error) {
-	return e.CreateTemporaryWorktreeWithOptions(ctx, branch, prefix, WorktreeCheckoutFull, WorktreePruneAuto)
-}
-
-// CreateTemporaryWorktreeSkipPrune is like CreateTemporaryWorktree but skips the automatic
-// PruneWorktrees() call. Use this when creating multiple worktrees in parallel after
-// manually calling PruneWorktrees() once, to avoid race conditions.
-func (e *engineImpl) CreateTemporaryWorktreeSkipPrune(ctx context.Context, branch string, prefix string) (string, func(), error) {
-	return e.CreateTemporaryWorktreeWithOptions(ctx, branch, prefix, WorktreeCheckoutFull, WorktreePruneSkip)
+// CreateTemporaryWorktree creates a temporary directory and adds a detached,
+// fully checked-out worktree. prune selects whether stale worktrees are pruned
+// first; pass WorktreePruneSkip when creating several worktrees in parallel
+// after calling PruneWorktrees once, to avoid racing on the prune.
+func (e *engineImpl) CreateTemporaryWorktree(ctx context.Context, branch string, prefix string, prune WorktreePruneMode) (WorktreePath, func(), error) {
+	return e.CreateTemporaryWorktreeWithOptions(ctx, branch, prefix, WorktreeCheckoutFull, prune)
 }
 
 // CreateTemporaryWorktreeWithOptions creates a temporary directory and adds a detached worktree with options.
@@ -145,9 +143,9 @@ func (e *engineImpl) CreateTemporaryWorktreeSkipPrune(ctx context.Context, branc
 //   - WorktreePruneAuto: prunes stale worktrees first (default behavior)
 //   - WorktreePruneSkip: skips pruning (use when caller has already pruned for parallel creation)
 //
-// Note: Callers that create multiple worktrees in parallel (like ValidateRebasesParallel) should call
+// Note: Callers that create multiple worktrees in parallel (like ValidateRebases) should call
 // PruneWorktrees() once before starting parallel worktree creation and pass WorktreePruneSkip to avoid race conditions.
-func (e *engineImpl) CreateTemporaryWorktreeWithOptions(ctx context.Context, branch string, prefix string, checkout WorktreeCheckoutMode, prune WorktreePruneMode) (string, func(), error) {
+func (e *engineImpl) CreateTemporaryWorktreeWithOptions(ctx context.Context, branch string, prefix string, checkout WorktreeCheckoutMode, prune WorktreePruneMode) (WorktreePath, func(), error) {
 	tmpDir, err := os.MkdirTemp("", prefix)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create temporary directory: %w", err)
@@ -156,7 +154,7 @@ func (e *engineImpl) CreateTemporaryWorktreeWithOptions(ctx context.Context, bra
 	// Use the unique temp directory basename as the worktree name to avoid collisions
 	// in Git's .git/worktrees/ registry. Previously using a fixed "worktree" name caused
 	// intermittent failures when stale entries remained after incomplete cleanup.
-	worktreePath := filepath.Join(tmpDir, filepath.Base(tmpDir))
+	worktreePath := WorktreePath(filepath.Join(tmpDir, filepath.Base(tmpDir)))
 
 	// Serialize worktree operations to prevent races on .git/worktrees/ directory.
 	// Git's `worktree add` command is not concurrency-safe - when multiple goroutines
@@ -170,7 +168,11 @@ func (e *engineImpl) CreateTemporaryWorktreeWithOptions(ctx context.Context, bra
 	// 3. Only the brief `git worktree` commands are serialized
 	e.worktreeMu.Lock()
 	e.maybePruneTempWorktreesLocked(ctx, prune)
-	err = e.addWorktreeWithRetryLocked(ctx, worktreePath, branch, git.WorktreeDetached, checkout == WorktreeCheckoutShallow)
+	gitCheckout := git.WorktreeCheckoutFiles
+	if checkout == WorktreeCheckoutShallow {
+		gitCheckout = git.WorktreeNoCheckout
+	}
+	err = e.addWorktreeWithRetryLocked(ctx, worktreePath, branch, git.WorktreeDetached, gitCheckout)
 	e.worktreeMu.Unlock()
 
 	if err != nil {
@@ -184,7 +186,7 @@ func (e *engineImpl) CreateTemporaryWorktreeWithOptions(ctx context.Context, bra
 		e.tempWorktreeNeedsPrune = true
 		e.worktreeMu.Unlock()
 
-		_ = os.RemoveAll(worktreePath)
+		_ = os.RemoveAll(worktreePath.String())
 		_ = os.RemoveAll(tmpDir)
 	}
 
@@ -212,8 +214,8 @@ func (e *engineImpl) maybePruneTempWorktreesLocked(ctx context.Context, prune Wo
 
 // addWorktreeWithRetryLocked attempts to add a worktree, pruning and retrying once on failure.
 // Caller must hold worktreeMu.
-func (e *engineImpl) addWorktreeWithRetryLocked(ctx context.Context, path string, branch string, detach git.WorktreeDetachMode, noCheckout bool) error {
-	if err := e.git.AddWorktreeWithOptions(ctx, path, branch, detach, noCheckout); err == nil {
+func (e *engineImpl) addWorktreeWithRetryLocked(ctx context.Context, path WorktreePath, branch string, detach git.WorktreeDetachMode, checkout git.WorktreeCheckoutMode) error {
+	if err := e.git.AddWorktreeWithOptions(ctx, path, branch, detach, checkout); err == nil {
 		return nil
 	}
 
@@ -225,7 +227,7 @@ func (e *engineImpl) addWorktreeWithRetryLocked(ctx context.Context, path string
 		e.tempWorktreeNeedsPrune = true
 	}
 
-	retryErr := e.git.AddWorktreeWithOptions(ctx, path, branch, detach, noCheckout)
+	retryErr := e.git.AddWorktreeWithOptions(ctx, path, branch, detach, checkout)
 	if retryErr == nil {
 		return nil
 	}
@@ -238,10 +240,11 @@ func (e *engineImpl) addWorktreeWithRetryLocked(ctx context.Context, path string
 
 // RegisterWorktree registers a managed worktree in local Git refs.
 func (e *engineImpl) RegisterWorktree(ctx context.Context, registration WorktreeRegistration) error {
-	absPath, err := filepath.Abs(registration.Path.String())
+	abs, err := filepath.Abs(registration.Path.String())
 	if err != nil {
 		return fmt.Errorf("failed to get absolute worktree path: %w", err)
 	}
+	absPath := WorktreePath(abs)
 	canonicalPath, err := git.CanonicalWorktreePath(absPath)
 	if err != nil {
 		return fmt.Errorf("failed to canonicalize worktree path: %w", err)
@@ -258,7 +261,7 @@ func (e *engineImpl) RegisterWorktree(ctx context.Context, registration Worktree
 		return fmt.Errorf("failed to list worktree registrations: %w", err)
 	}
 	for _, worktree := range worktrees {
-		worktreePath, pathErr := git.CanonicalWorktreePath(worktree.Path.String())
+		worktreePath, pathErr := git.CanonicalWorktreePath(worktree.Path)
 		if pathErr != nil {
 			return fmt.Errorf("failed to canonicalize registered worktree path %s: %w", worktree.Path, pathErr)
 		}
@@ -268,7 +271,7 @@ func (e *engineImpl) RegisterWorktree(ctx context.Context, registration Worktree
 	}
 
 	meta := &git.WorktreeMeta{
-		Name:         registration.Name.String(),
+		Name:         registration.Name,
 		Path:         absPath,
 		AnchorBranch: registration.AnchorBranch,
 		CreatedAt:    timeNow(),
@@ -294,8 +297,8 @@ func (e *engineImpl) GetWorktreeForStack(stackRoot string) (*WorktreeInfo, error
 	}
 
 	return &WorktreeInfo{
-		Name:         WorktreeName(meta.Name),
-		Path:         WorktreePath(meta.Path),
+		Name:         meta.Name,
+		Path:         meta.Path,
 		AnchorBranch: meta.AnchorBranch,
 		CreatedAt:    meta.CreatedAt,
 		MainRepoDir:  meta.MainRepoDir,
@@ -348,8 +351,8 @@ func (e *engineImpl) WorktreeOwnershipByStackRoot() (map[string]WorktreeOwnershi
 		default:
 			meta := registration.Meta
 			result[stackRoot] = WorktreeOwnership{Worktree: &WorktreeInfo{
-				Name:         WorktreeName(meta.Name),
-				Path:         WorktreePath(meta.Path),
+				Name:         meta.Name,
+				Path:         meta.Path,
 				AnchorBranch: meta.AnchorBranch,
 				CreatedAt:    meta.CreatedAt,
 				MainRepoDir:  meta.MainRepoDir,
@@ -377,8 +380,8 @@ func (e *engineImpl) ListManagedWorktrees() ([]WorktreeInfo, error) {
 	for _, k := range keys {
 		meta := metas[k]
 		result = append(result, WorktreeInfo{
-			Name:         WorktreeName(meta.Name),
-			Path:         WorktreePath(meta.Path),
+			Name:         meta.Name,
+			Path:         meta.Path,
 			AnchorBranch: meta.AnchorBranch,
 			CreatedAt:    meta.CreatedAt,
 			MainRepoDir:  meta.MainRepoDir,
@@ -463,7 +466,7 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 		return false, nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
-	canonicalCurrentPath, err := git.CanonicalWorktreePath(currentPath)
+	canonicalCurrentPath, err := git.CanonicalWorktreePath(WorktreePath(currentPath))
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to canonicalize current worktree path: %w", err)
 	}
@@ -475,7 +478,7 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 	}
 
 	for _, wt := range worktrees {
-		wtPath, err := git.CanonicalWorktreePath(wt.Path.String())
+		wtPath, err := git.CanonicalWorktreePath(wt.Path)
 		if err != nil {
 			continue
 		}
@@ -506,7 +509,7 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 //
 // known is false when the question could not be answered, which callers must
 // treat as unsafe rather than as "no collision".
-func (e *engineImpl) UntrackedCollision(ctx context.Context, branchName, worktreePath string) (collides, known bool) {
+func (e *engineImpl) UntrackedCollision(ctx context.Context, branchName string, worktreePath WorktreePath) (collides, known bool) {
 	if worktreePath == "" {
 		return false, true
 	}

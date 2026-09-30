@@ -8,7 +8,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui"
 )
 
 // ResolveApprovedHooks reads the post-worktree-create hook list from the
@@ -27,7 +26,9 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 		Phase:    config.PhasePostWorktreeCreate,
 		Commands: projectCfg.Hooks.For(config.PhasePostWorktreeCreate),
 		Config:   ctx.Config,
-		Prompter: worktreePrompter{},
+		// Default-no so an accidental Enter doesn't approve arbitrary
+		// post-worktree-create commands.
+		Prompter: handler.ConfirmPromptHandler{Confirmer: ctx.Prompts(), DefaultYes: false},
 		Output:   ctx.Output,
 	})
 }
@@ -40,7 +41,7 @@ func ResolveApprovedHooks(ctx *app.Context) ([]string, error) {
 // An empty worktreePath is refused rather than passed through: os/exec treats
 // an empty Dir as the current directory, which for these hooks is the user's
 // main checkout — the one place they must never run.
-func RunResolvedHooks(ctx context.Context, hookCmds []string, worktreePath string, out output.Output) {
+func RunResolvedHooks(ctx context.Context, hookCmds []string, worktreePath WorktreePath, out output.Output) {
 	if worktreePath == "" {
 		if len(hookCmds) > 0 {
 			out.Warn("Skipped post-worktree-create hooks: no worktree directory to run them in")
@@ -48,7 +49,7 @@ func RunResolvedHooks(ctx context.Context, hookCmds []string, worktreePath strin
 		return
 	}
 	_ = hooks.Run(ctx, hookCmds, hooks.RunOptions{
-		Dir:      worktreePath,
+		Dir:      worktreePath.String(),
 		Blocking: false,
 		Output:   out,
 	})
@@ -57,7 +58,7 @@ func RunResolvedHooks(ctx context.Context, hookCmds []string, worktreePath strin
 // RunPostCreateHooks runs any configured post-worktree-create hooks. It reads
 // the project config from ctx, resolves approvals, and executes approved
 // hooks in the worktree directory.
-func RunPostCreateHooks(ctx *app.Context, worktreePath string) error {
+func RunPostCreateHooks(ctx *app.Context, worktreePath WorktreePath) error {
 	approved, err := ResolveApprovedHooks(ctx)
 	if err != nil {
 		return err
@@ -65,13 +66,3 @@ func RunPostCreateHooks(ctx *app.Context, worktreePath string) error {
 	RunResolvedHooks(ctx.Context, approved, worktreePath, ctx.Output)
 	return nil
 }
-
-// worktreePrompter wraps tui.PromptConfirm with a default-no answer so
-// accidental Enter doesn't approve arbitrary post-worktree-create commands.
-type worktreePrompter struct{}
-
-func (worktreePrompter) PromptConfirm(message string) (bool, error) {
-	return tui.PromptConfirm(message, false)
-}
-
-var _ handler.PromptHandler = worktreePrompter{}

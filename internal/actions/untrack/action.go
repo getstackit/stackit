@@ -1,6 +1,7 @@
 package untrack
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -14,6 +15,13 @@ type Options struct {
 	Force      bool
 }
 
+// untrackEngine lists exactly the engine methods untrack calls.
+type untrackEngine interface {
+	engine.BranchLookup
+	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	UntrackBranches(ctx context.Context, branchNames []string) error
+}
+
 // Action performs the untrack operation
 func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if handler == nil {
@@ -21,7 +29,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	eng := ctx.Engine
+	var eng untrackEngine = ctx.Engine
 	branchName := opts.BranchName
 
 	// Check if branch is tracked

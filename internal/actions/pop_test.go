@@ -35,12 +35,12 @@ func TestPopAction(t *testing.T) {
 		require.Equal(t, "main", currentBranch)
 
 		// Verify branch1 is deleted
-		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 
 		// Verify changes are staged
-		hasStaged, err := s.Engine.Git().HasStagedChanges(s.Context.Context)
+		hasStaged, err := s.Git.HasStagedChanges(s.Context.Context)
 		require.NoError(t, err)
 		require.True(t, hasStaged, "Changes should be staged after pop")
 	})
@@ -67,7 +67,7 @@ func TestPopAction(t *testing.T) {
 		require.Equal(t, "main", parent.GetName())
 
 		// Verify branch1 is deleted
-		branches, err := s.Engine.Git().GetAllBranchNames(context.Background())
+		branches, err := s.Git.GetAllBranchNames(context.Background())
 		require.NoError(t, err)
 		require.NotContains(t, branches, "branch1")
 	})

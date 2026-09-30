@@ -185,9 +185,10 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 		// Restack successfully up to the conflict
 		if len(successBranches) > 0 {
 			currentBranchName := getCurrentBranchName(ctx.Engine)
-			if _, err := ctx.Engine.RestackBranchesWithValidatedPlan(ctx.Context, successBranches, validation, plan, func(branch engine.Branch, result engine.RestackBranchResult) {
+			progress := func(branch engine.Branch, result engine.RestackBranchResult) {
 				reportRestackResult(ctx, branch, result, currentBranchName, callback)
-			}); err != nil {
+			}
+			if _, err := ctx.Engine.RestackBranches(ctx.Context, successBranches, engine.RestackOpts{Validation: validation, Plan: plan, Progress: progress}); err != nil {
 				return fmt.Errorf("failed to restack branches before conflict: %w", err)
 			}
 		}
@@ -207,9 +208,10 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 		}
 
 		currentBranchName := getCurrentBranchName(ctx.Engine)
-		batchResult, err := ctx.Engine.RestackBranchesWithValidatedPlan(ctx.Context, successBranches, validation, plan, func(branch engine.Branch, result engine.RestackBranchResult) {
+		progress := func(branch engine.Branch, result engine.RestackBranchResult) {
 			reportRestackResult(ctx, branch, result, currentBranchName, callback)
-		})
+		}
+		batchResult, err := ctx.Engine.RestackBranches(ctx.Context, successBranches, engine.RestackOpts{Validation: validation, Plan: plan, Progress: progress})
 		if err != nil {
 			return fmt.Errorf("batch restack failed: %w", err)
 		}
@@ -490,12 +492,6 @@ func ResolveConflictWorkflow(ctx *app.Context, stackBranches engine.Branches) er
 	return restackBranchesWithPlan(ctx, stackBranches, nil, nil, ConflictModeEnterWorkflow, nil)
 }
 
-// EnterConflictWorkflow performs the rebase to enter conflict state and persists continuation state.
-// This helper is shared between RestackBranchesWithHandler (standalone mode) and sync.RunSync (sync mode).
-func EnterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches engine.Branches) error {
-	return enterConflictWorkflow(ctx, firstConflict, allBranches, nil)
-}
-
 // previous carries the original command's rollback and return destination when
 // continue reaches another conflicted branch. Its empty snapshot ID is also
 // authoritative: a command without a rollback point must never inherit one.
@@ -539,7 +535,7 @@ func enterConflictWorkflow(ctx *app.Context, firstConflict string, allBranches e
 		reattach()
 		return fmt.Errorf("failed to get branch revision before conflict workflow: %w", err)
 	}
-	batchResult, err := ctx.Engine.RestackBranches(ctx.Context, engine.BranchesOf(conflictBranch))
+	batchResult, err := ctx.Engine.RestackBranches(ctx.Context, engine.BranchesOf(conflictBranch), engine.RestackOpts{})
 	if err != nil {
 		reattach()
 		return fmt.Errorf("failed to enter conflict state for %s: %w", firstConflict, err)

@@ -75,6 +75,7 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		app.WithInteractive(false),
 		app.WithWriter(io.Discard),
 		app.WithLogger(output.NewNullLogger()),
+		app.WithGitHubRunner(entry.GHRunner),
 	)
 	ctx.Context = r.Context()
 	ctx.GitHubClient = entry.GitHub
@@ -88,7 +89,7 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	opts := submit.Options{
 		Branch:     rootBranch,
 		Restack:    true,
-		StackRange: engine.StackRangeUpstack(true),
+		StackRange: engine.StackRangeUpstack(engine.IncludeCurrentBranch),
 	}
 
 	handler := submit.NewChannelHandler(64)

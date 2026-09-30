@@ -9,6 +9,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/merge"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -118,8 +119,8 @@ func TestCreateMergePlan(t *testing.T) {
 		s.Checkout("C1")
 
 		// Add PR info for P and C1
-		prP := 101
-		prC1 := 102
+		prP := git.PRNumber(101)
+		prC1 := git.PRNumber(102)
 		branchP := s.Engine.GetBranch("P")
 		branchC1 := s.Engine.GetBranch("C1")
 		err := s.Engine.UpsertPrInfo(context.Background(), branchP, testhelpers.NewTestPrInfo(prP))
@@ -174,9 +175,9 @@ func TestCreateMergePlan(t *testing.T) {
 		// other branch has no scope
 
 		// Add PR info for scoped branches
-		prA := 101
-		prB := 102
-		prC := 103
+		prA := git.PRNumber(101)
+		prB := git.PRNumber(102)
+		prC := git.PRNumber(103)
 		branchA := s.Engine.GetBranch("feature-a")
 		branchB := s.Engine.GetBranch("feature-b")
 		branchC := s.Engine.GetBranch("feature-c")
@@ -205,9 +206,9 @@ func TestCreateMergePlan(t *testing.T) {
 		require.Equal(t, "feature-a", plan.BranchesToMerge[0].BranchName)
 		require.Equal(t, "feature-b", plan.BranchesToMerge[1].BranchName)
 		require.Equal(t, "feature-c", plan.BranchesToMerge[2].BranchName)
-		require.Equal(t, 101, plan.BranchesToMerge[0].PRNumber)
-		require.Equal(t, 102, plan.BranchesToMerge[1].PRNumber)
-		require.Equal(t, 103, plan.BranchesToMerge[2].PRNumber)
+		require.Equal(t, git.PRNumber(101), plan.BranchesToMerge[0].PRNumber)
+		require.Equal(t, git.PRNumber(102), plan.BranchesToMerge[1].PRNumber)
+		require.Equal(t, git.PRNumber(103), plan.BranchesToMerge[2].PRNumber)
 	})
 
 	t.Run("scope-based merge excludes branches without matching scope", func(t *testing.T) {
@@ -227,9 +228,9 @@ func TestCreateMergePlan(t *testing.T) {
 		// unscoped-c has no scope
 
 		// Add PR info for all branches
-		prA := 201
-		prB := 202
-		prC := 203
+		prA := git.PRNumber(201)
+		prB := git.PRNumber(202)
+		prC := git.PRNumber(203)
 		branchA := s.Engine.GetBranch("scoped-a")
 		branchB := s.Engine.GetBranch("scoped-b")
 		branchC := s.Engine.GetBranch("unscoped-c")
@@ -295,9 +296,9 @@ func TestCreateMergePlan(t *testing.T) {
 		// child and grandchild should inherit PROJ-999
 
 		// Add PR info for all branches
-		prParent := 301
-		prChild := 302
-		prGrandchild := 303
+		prParent := git.PRNumber(301)
+		prChild := git.PRNumber(302)
+		prGrandchild := git.PRNumber(303)
 		branchParent := s.Engine.GetBranch("parent")
 		branchChild := s.Engine.GetBranch("child")
 		branchGrandchild := s.Engine.GetBranch("grandchild")
@@ -367,7 +368,7 @@ func TestCreateMergePlan(t *testing.T) {
 	})
 }
 
-func TestAllBranchesAreLeaves(t *testing.T) {
+func TestMergeBranchesAllAreLeaves(t *testing.T) {
 	t.Parallel()
 
 	t.Run("returns true when all branches are leaves", func(t *testing.T) {
@@ -386,7 +387,7 @@ func TestAllBranchesAreLeaves(t *testing.T) {
 			{BranchName: "leaf2", PRNumber: 2},
 		}
 
-		result := merge.AllBranchesAreLeaves(graph, branches)
+		result := merge.MergeBranches(branches).AllAreLeaves(graph)
 		require.True(t, result)
 	})
 
@@ -405,7 +406,7 @@ func TestAllBranchesAreLeaves(t *testing.T) {
 			{BranchName: "parent", PRNumber: 1},
 		}
 
-		result := merge.AllBranchesAreLeaves(graph, branches)
+		result := merge.MergeBranches(branches).AllAreLeaves(graph)
 		require.False(t, result)
 	})
 
@@ -423,7 +424,7 @@ func TestAllBranchesAreLeaves(t *testing.T) {
 			{BranchName: "only-branch", PRNumber: 1},
 		}
 
-		result := merge.AllBranchesAreLeaves(graph, branches)
+		result := merge.MergeBranches(branches).AllAreLeaves(graph)
 		require.True(t, result)
 	})
 
@@ -436,7 +437,7 @@ func TestAllBranchesAreLeaves(t *testing.T) {
 
 		branches := []merge.BranchMergeInfo{}
 
-		result := merge.AllBranchesAreLeaves(graph, branches)
+		result := merge.MergeBranches(branches).AllAreLeaves(graph)
 		require.True(t, result)
 	})
 
@@ -457,7 +458,7 @@ func TestAllBranchesAreLeaves(t *testing.T) {
 			{BranchName: "parent", PRNumber: 2},
 		}
 
-		result := merge.AllBranchesAreLeaves(graph, branches)
+		result := merge.MergeBranches(branches).AllAreLeaves(graph)
 		require.False(t, result)
 	})
 
@@ -478,7 +479,7 @@ func TestAllBranchesAreLeaves(t *testing.T) {
 		}
 
 		// Should return false as a fail-safe when branch isn't in graph
-		result := merge.AllBranchesAreLeaves(graph, branches)
+		result := merge.MergeBranches(branches).AllAreLeaves(graph)
 		require.False(t, result)
 	})
 }

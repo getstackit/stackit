@@ -11,7 +11,7 @@ import (
 
 // Selection contains precomputed data for validating potential move targets.
 type Selection struct {
-	eng          engine.Engine
+	eng          moveEngine
 	out          output.Output
 	source       string
 	sourceBranch engine.Branch
@@ -26,7 +26,7 @@ func PrepareSelection(ctx *app.Context, source string) (*Selection, error) {
 		return nil, fmt.Errorf("source branch is required")
 	}
 
-	eng := ctx.Engine
+	var eng moveEngine = ctx.Engine
 	sourceBranch := eng.GetBranch(source)
 
 	graph := eng.Graph(engine.SortStrategyAlphabetical)

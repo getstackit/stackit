@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/google/go-github/v92/github"
 )
 
@@ -57,7 +58,7 @@ func (c *StackitGitHubClient) CreatePullRequest(ctx context.Context, opts Create
 }
 
 // UpdatePullRequest updates an existing pull request
-func (c *StackitGitHubClient) UpdatePullRequest(ctx context.Context, prNumber int, opts UpdatePROptions) ([]string, error) {
+func (c *StackitGitHubClient) UpdatePullRequest(ctx context.Context, prNumber git.PRNumber, opts UpdatePROptions) ([]string, error) {
 	return UpdatePullRequest(ctx, c.client, c.runner, c.repo, prNumber, opts)
 }
 
@@ -82,8 +83,8 @@ func (c *StackitGitHubClient) GetPullRequestByBranch(ctx context.Context, branch
 }
 
 // GetPullRequest gets a pull request by number
-func (c *StackitGitHubClient) GetPullRequest(ctx context.Context, prNumber int) (*PullRequestInfo, error) {
-	pr, _, err := c.client.PullRequests.Get(ctx, c.repo.Owner, c.repo.Name, prNumber)
+func (c *StackitGitHubClient) GetPullRequest(ctx context.Context, prNumber git.PRNumber) (*PullRequestInfo, error) {
+	pr, _, err := c.client.PullRequests.Get(ctx, c.repo.Owner, c.repo.Name, int(prNumber))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pull request %d: %w", prNumber, err)
 	}
@@ -126,14 +127,14 @@ func (c *StackitGitHubClient) BatchGetPRChecksStatus(ctx context.Context, branch
 }
 
 // BatchGetPRTitles returns titles for multiple PRs by number
-func (c *StackitGitHubClient) BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error) {
+func (c *StackitGitHubClient) BatchGetPRTitles(ctx context.Context, prNumbers []git.PRNumber) (map[git.PRNumber]string, error) {
 	return BatchGetPRTitlesGraphQL(ctx, c.runner, c.repo, prNumbers)
 }
 
 // ClosePullRequest closes a pull request
-func (c *StackitGitHubClient) ClosePullRequest(ctx context.Context, prNumber int) error {
+func (c *StackitGitHubClient) ClosePullRequest(ctx context.Context, prNumber git.PRNumber) error {
 	state := "closed"
-	_, _, err := c.client.PullRequests.Edit(ctx, c.repo.Owner, c.repo.Name, prNumber, &github.PullRequest{State: &state})
+	_, _, err := c.client.PullRequests.Edit(ctx, c.repo.Owner, c.repo.Name, int(prNumber), &github.PullRequest{State: &state})
 	if err != nil {
 		return fmt.Errorf("failed to close PR #%d: %w", prNumber, err)
 	}
@@ -141,8 +142,8 @@ func (c *StackitGitHubClient) ClosePullRequest(ctx context.Context, prNumber int
 }
 
 // CreatePRComment creates a new comment on a pull request
-func (c *StackitGitHubClient) CreatePRComment(ctx context.Context, prNumber int, body string) (int64, error) {
-	comment, _, err := c.client.Issues.CreateComment(ctx, c.repo.Owner, c.repo.Name, prNumber, github.IssueCommentRequest{
+func (c *StackitGitHubClient) CreatePRComment(ctx context.Context, prNumber git.PRNumber, body string) (int64, error) {
+	comment, _, err := c.client.Issues.CreateComment(ctx, c.repo.Owner, c.repo.Name, int(prNumber), github.IssueCommentRequest{
 		Body: body,
 	})
 	if err != nil {
@@ -172,7 +173,7 @@ func (c *StackitGitHubClient) DeletePRComment(ctx context.Context, commentID int
 }
 
 // ListPRComments lists all comments on a pull request with pagination
-func (c *StackitGitHubClient) ListPRComments(ctx context.Context, prNumber int) ([]PRComment, error) {
+func (c *StackitGitHubClient) ListPRComments(ctx context.Context, prNumber git.PRNumber) ([]PRComment, error) {
 	var allComments []PRComment
 	opts := &github.IssueListCommentsOptions{
 		ListOptions: github.ListOptions{
@@ -181,7 +182,7 @@ func (c *StackitGitHubClient) ListPRComments(ctx context.Context, prNumber int) 
 	}
 
 	for {
-		comments, resp, err := c.client.Issues.ListComments(ctx, c.repo.Owner, c.repo.Name, prNumber, opts)
+		comments, resp, err := c.client.Issues.ListComments(ctx, c.repo.Owner, c.repo.Name, int(prNumber), opts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list comments on PR #%d: %w", prNumber, err)
 		}

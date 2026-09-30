@@ -44,8 +44,8 @@ type WarmStartSkip struct {
 // return does — the caller tears the whole worktree down.
 var errWarmStartSkip = errors.New("warm-start path cannot be used")
 
-func warmStartWorktree(ctx context.Context, eng engine.Engine, sourceRoot, destinationRoot string) (WarmStartResult, error) {
-	if _, err := os.Stat(filepath.Join(sourceRoot, WorktreeIncludeFile)); os.IsNotExist(err) {
+func warmStartWorktree(ctx context.Context, eng engine.Engine, sourceRoot, destinationRoot WorktreePath) (WarmStartResult, error) {
+	if _, err := os.Stat(filepath.Join(sourceRoot.String(), WorktreeIncludeFile)); os.IsNotExist(err) {
 		return WarmStartResult{}, nil
 	} else if err != nil {
 		return WarmStartResult{}, fmt.Errorf("inspect %s: %w", WorktreeIncludeFile, err)
@@ -55,7 +55,7 @@ func warmStartWorktree(ctx context.Context, eng engine.Engine, sourceRoot, desti
 	if err != nil {
 		return WarmStartResult{}, err
 	}
-	return CopyIncludedIgnoredFiles(sourceRoot, destinationRoot, ignoredPaths)
+	return CopyIncludedIgnoredFiles(sourceRoot.String(), destinationRoot.String(), ignoredPaths)
 }
 
 // CopyIncludedIgnoredFiles copies selected ignored regular files from sourceRoot

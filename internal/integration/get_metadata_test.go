@@ -11,6 +11,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/git"
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -32,7 +33,7 @@ func (c *countingGitHubClient) GetPullRequestByBranch(ctx context.Context, branc
 // only called from sequential phases (sync loop, restack callback), so no locking.
 type recordingGetHandler struct {
 	actions.GetNullHandler
-	prByBranch map[string]int
+	prByBranch map[string]git.PRNumber
 }
 
 func (h *recordingGetHandler) EmitEvent(e actions.GetEvent) {
@@ -40,7 +41,7 @@ func (h *recordingGetHandler) EmitEvent(e actions.GetEvent) {
 		return
 	}
 	if h.prByBranch == nil {
-		h.prByBranch = map[string]int{}
+		h.prByBranch = map[string]git.PRNumber{}
 	}
 	h.prByBranch[e.Branch] = *e.PRNumber
 }
@@ -179,7 +180,7 @@ func TestGetMetadataDiscovery(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, prInfo, "get should record the PR it fetched")
 		require.NotNil(t, prInfo.Number())
-		require.Equal(t, 77, *prInfo.Number())
+		require.Equal(t, git.PRNumber(77), *prInfo.Number())
 	})
 
 	t.Run("falls back to GitHub when ancestor metadata is missing", func(t *testing.T) {

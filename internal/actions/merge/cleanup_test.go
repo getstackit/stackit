@@ -3,6 +3,7 @@ package merge
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,14 +14,14 @@ func TestPRCleanupResult(t *testing.T) {
 		t.Parallel()
 
 		result := PRCleanupResult{
-			ClosedPRs:  []int{1, 2, 3},
-			FailedPRs:  []int{4, 5},
-			SkippedPRs: []int{6},
+			ClosedPRs:  []git.PRNumber{1, 2, 3},
+			FailedPRs:  []git.PRNumber{4, 5},
+			SkippedPRs: []git.PRNumber{6},
 		}
 
 		require.Equal(t, 3, result.ClosedCount())
 		require.Equal(t, 2, result.FailedCount())
-		require.Equal(t, 1, result.SkippedCount())
+		require.Equal(t, 1, len(result.SkippedPRs))
 	})
 
 	t.Run("empty result has zero counts", func(t *testing.T) {
@@ -30,7 +31,7 @@ func TestPRCleanupResult(t *testing.T) {
 
 		require.Equal(t, 0, result.ClosedCount())
 		require.Equal(t, 0, result.FailedCount())
-		require.Equal(t, 0, result.SkippedCount())
+		require.Equal(t, 0, len(result.SkippedPRs))
 	})
 }
 
@@ -100,6 +101,6 @@ func TestPRCleanerWithNilGitHubClient(t *testing.T) {
 		// but we can verify the cleaner is created correctly
 		require.NotNil(t, cleaner)
 		require.Equal(t, CleanupSourceConsolidate, cleaner.config.Source)
-		require.Equal(t, 123, cleaner.config.ConsolidationPRNumber)
+		require.Equal(t, git.PRNumber(123), cleaner.config.ConsolidationPRNumber)
 	})
 }

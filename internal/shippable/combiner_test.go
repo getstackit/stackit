@@ -3,16 +3,15 @@ package shippable
 import (
 	"testing"
 
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/getstackit/stackit/internal/actions/merge"
 )
 
 func TestCombinationResult_IncludedCount(t *testing.T) {
 	result := &CombinationResult{
 		WorkingStacks: []Stack{
-			{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-			{Stack: merge.MultiStackInfo{RootBranch: "b"}},
+			{Stack: stackview.StackInfo{RootBranch: "a"}},
+			{Stack: stackview.StackInfo{RootBranch: "b"}},
 		},
 	}
 	assert.Equal(t, 2, result.IncludedCount())
@@ -21,7 +20,7 @@ func TestCombinationResult_IncludedCount(t *testing.T) {
 func TestCombinationResult_ExcludedCount(t *testing.T) {
 	result := &CombinationResult{
 		ConflictingStacks: []ExcludedStack{
-			{Stack: Stack{Stack: merge.MultiStackInfo{RootBranch: "c"}}},
+			{Stack: Stack{Stack: stackview.StackInfo{RootBranch: "c"}}},
 		},
 	}
 	assert.Equal(t, 1, result.ExcludedCount())
@@ -36,7 +35,7 @@ func TestCombinationResult_AllCombined(t *testing.T) {
 		{
 			name: "all combined",
 			result: &CombinationResult{
-				WorkingStacks:     []Stack{{Stack: merge.MultiStackInfo{RootBranch: "a"}}},
+				WorkingStacks:     []Stack{{Stack: stackview.StackInfo{RootBranch: "a"}}},
 				ConflictingStacks: nil,
 			},
 			expected: true,
@@ -44,9 +43,9 @@ func TestCombinationResult_AllCombined(t *testing.T) {
 		{
 			name: "some excluded",
 			result: &CombinationResult{
-				WorkingStacks: []Stack{{Stack: merge.MultiStackInfo{RootBranch: "a"}}},
+				WorkingStacks: []Stack{{Stack: stackview.StackInfo{RootBranch: "a"}}},
 				ConflictingStacks: []ExcludedStack{
-					{Stack: Stack{Stack: merge.MultiStackInfo{RootBranch: "b"}}},
+					{Stack: Stack{Stack: stackview.StackInfo{RootBranch: "b"}}},
 				},
 			},
 			expected: false,
@@ -71,8 +70,8 @@ func TestCombinationResult_AllCombined(t *testing.T) {
 func TestCombinationResult_GetWorkingRoots(t *testing.T) {
 	result := &CombinationResult{
 		WorkingStacks: []Stack{
-			{Stack: merge.MultiStackInfo{RootBranch: "stack-a"}},
-			{Stack: merge.MultiStackInfo{RootBranch: "stack-b"}},
+			{Stack: stackview.StackInfo{RootBranch: "stack-a"}},
+			{Stack: stackview.StackInfo{RootBranch: "stack-b"}},
 		},
 	}
 
@@ -83,8 +82,8 @@ func TestCombinationResult_GetWorkingRoots(t *testing.T) {
 func TestCombinationResult_GetConflictingRoots(t *testing.T) {
 	result := &CombinationResult{
 		ConflictingStacks: []ExcludedStack{
-			{Stack: Stack{Stack: merge.MultiStackInfo{RootBranch: "stack-c"}}},
-			{Stack: Stack{Stack: merge.MultiStackInfo{RootBranch: "stack-d"}}},
+			{Stack: Stack{Stack: stackview.StackInfo{RootBranch: "stack-c"}}},
+			{Stack: Stack{Stack: stackview.StackInfo{RootBranch: "stack-d"}}},
 		},
 	}
 
@@ -96,86 +95,6 @@ func TestExclusionReason_Constants(t *testing.T) {
 	// Verify exclusion reason constants are defined correctly
 	assert.Equal(t, ExclusionReason("merge_conflict"), ReasonMergeConflict)
 	assert.Equal(t, ExclusionReason("local_ci_failed"), ReasonLocalCIFailed)
-}
-
-func TestUpdateCompatibility(t *testing.T) {
-	tests := []struct {
-		name                string
-		stacks              []Stack
-		result              *CombinationResult
-		expectedCompatibleA []string
-		expectedConflictsA  []string
-	}{
-		{
-			name: "all stacks compatible",
-			stacks: []Stack{
-				{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-				{Stack: merge.MultiStackInfo{RootBranch: "b"}},
-				{Stack: merge.MultiStackInfo{RootBranch: "c"}},
-			},
-			result: &CombinationResult{
-				WorkingStacks: []Stack{
-					{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-					{Stack: merge.MultiStackInfo{RootBranch: "b"}},
-					{Stack: merge.MultiStackInfo{RootBranch: "c"}},
-				},
-				ConflictingStacks: nil,
-			},
-			expectedCompatibleA: []string{"b", "c"},
-			expectedConflictsA:  nil,
-		},
-		{
-			name: "one stack conflicts",
-			stacks: []Stack{
-				{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-				{Stack: merge.MultiStackInfo{RootBranch: "b"}},
-				{Stack: merge.MultiStackInfo{RootBranch: "c"}},
-			},
-			result: &CombinationResult{
-				WorkingStacks: []Stack{
-					{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-					{Stack: merge.MultiStackInfo{RootBranch: "b"}},
-				},
-				ConflictingStacks: []ExcludedStack{
-					{Stack: Stack{Stack: merge.MultiStackInfo{RootBranch: "c"}}},
-				},
-			},
-			expectedCompatibleA: []string{"b"},
-			expectedConflictsA:  []string{"c"},
-		},
-		{
-			name: "single stack",
-			stacks: []Stack{
-				{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-			},
-			result: &CombinationResult{
-				WorkingStacks: []Stack{
-					{Stack: merge.MultiStackInfo{RootBranch: "a"}},
-				},
-			},
-			expectedCompatibleA: nil,
-			expectedConflictsA:  nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create a copy of stacks to avoid mutating test data
-			stacks := make([]Stack, len(tt.stacks))
-			copy(stacks, tt.stacks)
-
-			UpdateCompatibility(stacks, tt.result)
-
-			// Find stack "a" and check its compatibility
-			for _, s := range stacks {
-				if s.RootBranch() == "a" {
-					assert.Equal(t, tt.expectedCompatibleA, s.CompatibleWith)
-					assert.Equal(t, tt.expectedConflictsA, s.ConflictsWith)
-					break
-				}
-			}
-		})
-	}
 }
 
 func TestCombinationResult_EmptyStacks(t *testing.T) {

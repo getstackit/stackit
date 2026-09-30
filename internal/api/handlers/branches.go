@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/api/registry"
 	httpcontract "github.com/getstackit/stackit/internal/contracts/http"
 	"github.com/getstackit/stackit/internal/engine"
@@ -45,33 +46,15 @@ func (h *BranchesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, entry *registry.RepoEntry) {
 	graph := entry.Engine.Graph(engine.SortStrategyAlphabetical)
-	allBranches := entry.Engine.AllBranches()
-
-	branches := make([]engine.Branch, 0, len(allBranches))
-	for _, b := range allBranches {
-		if b.IsTracked() {
-			branches = append(branches, b)
-		}
-	}
+	branches := entry.Engine.AllBranches().Filter(engine.Branch.IsTracked)
 
 	var checksMap github.ChecksByBranch
 	if entry.GitHub != nil {
-		names := make([]string, len(branches))
-		for i, b := range branches {
-			names[i] = b.GetName()
-		}
-		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), names)
+		checksMap, _ = entry.GitHub.BatchGetPRChecksStatus(r.Context(), branches.Names())
 	}
 
-	// One remote listing, one stats pass, one commits pass, one commit-info
-	// pass, and one restack-status pass for all branches instead of one of
-	// each per branch.
-	branchSet := engine.BranchesOf(branches...)
-	remoteStatuses := entry.Engine.ReadBranchRemoteStatuses(r.Context(), branchSet)
-	stats := entry.Engine.BatchBranchStats(branchSet)
-	commitsByBranch := entry.Engine.BatchCommits(branchSet)
-	commitInfoByBranch := entry.Engine.BatchCommitInfo(branchSet)
-	statuses := entry.Engine.ReadBranchStatuses(branchSet)
+	// One batch pass over every branch instead of one of each read per branch.
+	data := stackview.FetchBranchData(r.Context(), entry.Engine, branches)
 
 	responses := make([]httpcontract.BranchResponse, 0, len(branches))
 	for _, branch := range branches {
@@ -79,9 +62,7 @@ func (h *BranchesHandler) listBranches(w http.ResponseWriter, r *http.Request, e
 		if node == nil {
 			continue
 		}
-		checks := checksMap.Get(branch.GetName())
-		name := branch.GetName()
-		responses = append(responses, httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatuses.ForBranch(branch), stats[name], commitsByBranch[name], commitInfoByBranch[name], !statuses.IsUpToDate(branch)))
+		responses = append(responses, httpcontract.MapBranch(entry.Engine, httpcontract.NewBranchInput(node, checksMap.Get(branch.GetName()), data)))
 	}
 
 	writeJSON(w, responses)
@@ -107,12 +88,6 @@ func (h *BranchesHandler) getBranch(w http.ResponseWriter, r *http.Request, entr
 		checks = checksMap.Get(branchName)
 	}
 
-	branchSet := engine.BranchesOf(branch)
-	remoteStatus := entry.Engine.ReadBranchRemoteStatuses(r.Context(), branchSet).ForBranch(branch)
-	stat := entry.Engine.BatchBranchStats(branchSet)[branchName]
-	commits := entry.Engine.BatchCommits(branchSet)[branchName]
-	commitInfo := entry.Engine.BatchCommitInfo(branchSet)[branchName]
-	needsRestack := !entry.Engine.ReadBranchStatuses(branchSet).IsUpToDate(branch)
-	resp := httpcontract.MapBranch(entry.Engine, branch, node, checks, remoteStatus, stat, commits, commitInfo, needsRestack)
-	writeJSON(w, resp)
+	data := stackview.FetchBranchData(r.Context(), entry.Engine, engine.BranchesOf(branch))
+	writeJSON(w, httpcontract.MapBranch(entry.Engine, httpcontract.NewBranchInput(node, checks, data)))
 }

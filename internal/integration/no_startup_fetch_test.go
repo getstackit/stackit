@@ -16,6 +16,7 @@ import (
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/actions/track"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/cli/navigation"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -35,7 +36,7 @@ func (c *countingFetchRunner) FetchRefs(ctx context.Context, remote string, refs
 	return c.Runner.FetchRefs(ctx, remote, refspecs...)
 }
 
-func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
+func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string) (git.RemoteBranchSHAs, error) {
 	c.fetchRemoteShas.Add(1)
 	return c.Runner.FetchRemoteShas(ctx, remote)
 }
@@ -71,7 +72,7 @@ func countingContext(t *testing.T, s *scenario.Scenario) (*app.Context, *countin
 	counting := &countingFetchRunner{Runner: git.NewRunnerWithPath(s.Scene.Dir, nil)}
 	eng, err := engine.NewEngine(engine.Options{RepoRoot: s.Scene.Dir, Trunk: "main", Git: counting})
 	require.NoError(t, err)
-	ctx := app.NewContext(eng, app.WithRepoRoot(s.Scene.Dir), app.WithWriter(&bytes.Buffer{}))
+	ctx := app.NewContext(eng, app.WithRepoRoot(s.Scene.Dir), app.WithWriter(&bytes.Buffer{}), app.WithGitHubRunner(counting))
 	return ctx, counting
 }
 
@@ -104,7 +105,7 @@ func TestTreeDoesNotFetchAtStartup(t *testing.T) {
 	s := remoteMetadataScenario(t)
 
 	ctx, counting := countingContext(t, s)
-	require.NoError(t, actions.TreeAction(ctx, actions.TreeOptions{Style: actions.TreeStyleNormal}))
+	require.NoError(t, navigation.RunTree(ctx, actions.TreeOptions{Style: actions.TreeStyleNormal}))
 
 	require.Zero(t, counting.totalFetches(), "tree (read-only nav) must not fetch remote metadata")
 }

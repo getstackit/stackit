@@ -15,7 +15,7 @@ func TestStackRangeUpstack(t *testing.T) {
 
 	t.Run("include current", func(t *testing.T) {
 		t.Parallel()
-		rng := engine.StackRangeUpstack(true)
+		rng := engine.StackRangeUpstack(engine.IncludeCurrentBranch)
 		require.True(t, rng.RecursiveChildren)
 		require.True(t, rng.IncludeCurrent)
 		require.False(t, rng.RecursiveParents)
@@ -23,7 +23,7 @@ func TestStackRangeUpstack(t *testing.T) {
 
 	t.Run("exclude current", func(t *testing.T) {
 		t.Parallel()
-		rng := engine.StackRangeUpstack(false)
+		rng := engine.StackRangeUpstack(engine.ExcludeCurrentBranch)
 		require.True(t, rng.RecursiveChildren)
 		require.False(t, rng.IncludeCurrent)
 		require.False(t, rng.RecursiveParents)
@@ -35,7 +35,7 @@ func TestStackRangeDownstack(t *testing.T) {
 
 	t.Run("include current", func(t *testing.T) {
 		t.Parallel()
-		rng := engine.StackRangeDownstack(true)
+		rng := engine.StackRangeDownstack(engine.IncludeCurrentBranch)
 		require.True(t, rng.RecursiveParents)
 		require.True(t, rng.IncludeCurrent)
 		require.False(t, rng.RecursiveChildren)
@@ -43,7 +43,7 @@ func TestStackRangeDownstack(t *testing.T) {
 
 	t.Run("exclude current", func(t *testing.T) {
 		t.Parallel()
-		rng := engine.StackRangeDownstack(false)
+		rng := engine.StackRangeDownstack(engine.ExcludeCurrentBranch)
 		require.True(t, rng.RecursiveParents)
 		require.False(t, rng.IncludeCurrent)
 		require.False(t, rng.RecursiveChildren)
@@ -68,7 +68,7 @@ func TestStackGraphUpstack(t *testing.T) {
 		s.WithLinearStack3()
 
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.Upstack(s.Engine.GetBranch("a"), true)
+		branches := graph.Upstack(s.Engine.GetBranch("a"), engine.IncludeCurrentBranch)
 
 		names := branches.Names()
 		require.Contains(t, names, "a")
@@ -82,7 +82,7 @@ func TestStackGraphUpstack(t *testing.T) {
 		s.WithLinearStack3()
 
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.Upstack(s.Engine.GetBranch("a"), false)
+		branches := graph.Upstack(s.Engine.GetBranch("a"), engine.ExcludeCurrentBranch)
 
 		names := branches.Names()
 		require.NotContains(t, names, "a")
@@ -100,7 +100,7 @@ func TestStackGraphDownstack(t *testing.T) {
 		s.WithLinearStack3()
 
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.Downstack(s.Engine.GetBranch("c"), true)
+		branches := graph.Downstack(s.Engine.GetBranch("c"), engine.IncludeCurrentBranch)
 
 		names := branches.Names()
 		require.Contains(t, names, "a")
@@ -116,7 +116,7 @@ func TestStackGraphDownstack(t *testing.T) {
 		s.WithLinearStack3()
 
 		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.Downstack(s.Engine.GetBranch("c"), false)
+		branches := graph.Downstack(s.Engine.GetBranch("c"), engine.ExcludeCurrentBranch)
 
 		names := branches.Names()
 		require.Contains(t, names, "a")

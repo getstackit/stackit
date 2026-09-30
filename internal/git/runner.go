@@ -564,7 +564,7 @@ func (r *runner) GetRemote() string {
 	return r.getRemote()
 }
 
-func (r *runner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
+func (r *runner) FetchRemoteShas(ctx context.Context, remote string) (RemoteBranchSHAs, error) {
 	return r.fetchRemoteShas(ctx, remote)
 }
 
@@ -1022,9 +1022,20 @@ func (r *runner) CheckCommutation(hunk Hunk, commitSHA, parentSHA string) (bool,
 	return true, nil
 }
 
-func (r *runner) ApplyPatch(ctx context.Context, patchFile string, threeWay bool) error {
+// PatchApplyMode selects how ApplyPatch handles hunks that do not apply
+// cleanly.
+type PatchApplyMode int
+
+const (
+	// PatchApplyStrict fails on any hunk that does not apply cleanly.
+	PatchApplyStrict PatchApplyMode = iota
+	// PatchApplyThreeWay falls back to a three-way merge (--3way).
+	PatchApplyThreeWay
+)
+
+func (r *runner) ApplyPatch(ctx context.Context, patchFile string, mode PatchApplyMode) error {
 	args := []string{"apply"}
-	if threeWay {
+	if mode == PatchApplyThreeWay {
 		args = append(args, "--3way")
 	}
 	args = append(args, patchFile)

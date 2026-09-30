@@ -91,9 +91,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if opts.UseWizard {
 		if interactiveHandler, ok := handler.(InteractiveHandler); ok && interactiveHandler.IsInteractive() {
 			return RunWizard(ctx, interactiveHandler, WizardOptions{
-				Style:        opts.Style,
-				Direction:    opts.Direction,
-				HunkSelector: opts.HunkSelector,
+				Style:         opts.Style,
+				Direction:     opts.Direction,
+				HunkSelector:  opts.HunkSelector,
+				BranchPattern: opts.BranchPattern,
 			})
 		}
 		// Fall back to standard flow if handler doesn't support interactive
@@ -215,7 +216,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		pathspecs := opts.Pathspecs
 		// If no pathspecs provided, prompt interactively
 		if len(pathspecs) == 0 {
-			pathspecs, err = promptForFiles(context, *currentBranch, eng, out, opts.AsSibling, opts.Direction)
+			pathspecs, err = promptForFiles(context, ctx.Prompts(), *currentBranch, eng, out, opts.AsSibling, opts.Direction)
 			if err != nil {
 				return err
 			}
@@ -308,8 +309,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		AsSibling:     opts.AsSibling,
 	}); err != nil {
 		// Restore to original branch to avoid leaving user in detached HEAD
-		_ = eng.ForceCheckoutBranch(context, *currentBranch)
-		return fmt.Errorf("failed to apply split: %w", err)
+		return actions.NewRewriteGuard(eng, *currentBranch).Restore(context, fmt.Errorf("failed to apply split: %w", err))
 	}
 
 	// Restack upstack branches

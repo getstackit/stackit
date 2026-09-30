@@ -8,6 +8,7 @@ import (
 
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
@@ -144,7 +145,7 @@ func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 	mockRunner.Reset() // Clear setup messages
 
 	// Simulate restacking a branch
-	prNumber := 42
+	prNumber := git.PRNumber(42)
 	handler.OnRestackBranch(handlers.RestackBranchEvent{
 		Branch:      "feature-branch",
 		Result:      syncAction.RestackDone,

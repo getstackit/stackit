@@ -100,9 +100,8 @@ type InteractiveHandler interface {
 func GetAvailableScopes(eng engine.Engine) []string {
 	scopes := make(map[string]bool)
 	for _, b := range eng.AllBranches() {
-		s := eng.GetScope(b).String()
-		if s != "" && s != "none" && s != "clear" {
-			scopes[s] = true
+		if scope := eng.GetScope(b); scope.IsDefined() {
+			scopes[scope.String()] = true
 		}
 	}
 

@@ -125,7 +125,7 @@ func TestQueryBranchInfo(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.RunGitCommand("commit", "-m", "feature change"))
 		s.Rebuild()
 		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
-		require.NoError(t, s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature"), engine.None()))
+		require.NoError(t, s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature"), engine.NewScope("none")))
 
 		info, err := QueryBranchInfo(context.Background(), s.Engine, BranchInfoQueryOptions{
 			BranchName: "feature",

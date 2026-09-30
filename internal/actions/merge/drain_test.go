@@ -32,19 +32,19 @@ type drainFakeMergeAPI struct {
 	merged []string
 }
 
-func (f *drainFakeMergeAPI) getMergeableState(_ context.Context, _ git.Runner, _ string) (*github.PRMergeableState, error) {
+func (f *drainFakeMergeAPI) getMergeableState(_ context.Context, _ github.GitCommandRunner, _ string) (*github.PRMergeableState, error) {
 	return &github.PRMergeableState{State: git.PRStateOpen, Mergeable: true, MergeStateText: "CLEAN"}, nil
 }
 
-func (f *drainFakeMergeAPI) enableAutoMerge(_ context.Context, _ git.Runner, _ string, _ github.MergeMethod) error {
+func (f *drainFakeMergeAPI) enableAutoMerge(_ context.Context, _ github.GitCommandRunner, _ string, _ github.MergeMethod) error {
 	return nil
 }
 
-func (f *drainFakeMergeAPI) waitForPRMerge(_ context.Context, _ git.Runner, _ string, _, _ time.Duration) error {
+func (f *drainFakeMergeAPI) waitForPRMerge(_ context.Context, _ github.GitCommandRunner, _ string, _, _ time.Duration) error {
 	return nil
 }
 
-func (f *drainFakeMergeAPI) waitForMergeable(_ context.Context, _ git.Runner, _ string, _, _ time.Duration) (*github.PRMergeableState, error) {
+func (f *drainFakeMergeAPI) waitForMergeable(_ context.Context, _ github.GitCommandRunner, _ string, _, _ time.Duration) (*github.PRMergeableState, error) {
 	return &github.PRMergeableState{State: git.PRStateOpen, Mergeable: true, MergeStateText: "CLEAN"}, nil
 }
 
@@ -113,7 +113,8 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 	require.NoError(t, err)
 	remoteDir = strings.TrimSpace(remoteDir)
 
-	eng, err := engine.NewEngine(engine.Options{RepoRoot: scene.Dir, Trunk: "main", Git: git.NewRunnerWithPath(scene.Dir, nil)})
+	runner := git.NewRunnerWithPath(scene.Dir, nil)
+	eng, err := engine.NewEngine(engine.Options{RepoRoot: scene.Dir, Trunk: "main", Git: runner})
 	require.NoError(t, err)
 
 	// main -> a -> b, both with open PRs and both pushed.
@@ -141,6 +142,7 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 	ctx := app.NewContext(eng,
 		app.WithRepoRoot(scene.Dir),
 		app.WithWriter(&bytes.Buffer{}),
+		app.WithGitHubRunner(runner),
 	)
 	mockCfg := testhelpers.NewMockGitHubServerConfig()
 	seedMockPR(mockCfg, "a", "main", 101)
@@ -149,8 +151,16 @@ func TestDrainPushesRestackedBranchesToRemote(t *testing.T) {
 	ctx.GitHubClient = testhelpers.NewMockGitHubClientInterface(mockClient, owner, mockRepo, mockCfg)
 
 	require.NoError(t, repo.CheckoutBranch("b"))
-	err = runMergeDrain(ctx, mergeDrainOptions{yes: true, count: 1})
+	plan, _, err := CreateMergePlan(ctx.Context, eng, ctx.Output, ctx.GitHub(), CreatePlanOptions{Strategy: StrategyBottomUp})
 	require.NoError(t, err)
+	result, err := Drain(ctx, DrainOptions{
+		Plan:         plan,
+		TargetBranch: plan.CurrentBranch,
+		Limit:        1,
+		MergeMethod:  github.MergeMethodSquash,
+	}, NullProgressHandler{})
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Merged)
 
 	require.Equal(t, []string{"a"}, fake.merged, "drain should have merged only the bottom PR")
 

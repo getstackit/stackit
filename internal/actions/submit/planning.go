@@ -38,9 +38,9 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 	if remoteStatuses == nil {
 		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
 		defer cancelRemote()
-		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(remoteCtx, branches)
+		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(remoteCtx, branches, nil)
 	} else {
-		statuses, err = ctx.Engine.BatchGetPRSubmissionStatusWithRemote(branches, remoteStatuses)
+		statuses, err = ctx.Engine.BatchGetPRSubmissionStatus(ctx.Context, branches, remoteStatuses)
 	}
 	if err != nil {
 		return nil, err
@@ -207,7 +207,7 @@ func getBranchesToSubmit(ctx *app.Context, opts Options) ([]string, error) {
 	stackRange := opts.StackRange
 	// Default to downstack if StackRange is zero value (all fields false)
 	if !stackRange.RecursiveParents && !stackRange.IncludeCurrent && !stackRange.RecursiveChildren {
-		stackRange = engine.StackRangeDownstack(true)
+		stackRange = engine.StackRangeDownstack(engine.IncludeCurrentBranch)
 	}
 	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
 	stackBranches := graph.Range(nav.GetBranch(branchName), stackRange)

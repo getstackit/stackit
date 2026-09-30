@@ -2,6 +2,8 @@ package tree
 
 import (
 	"testing"
+
+	"github.com/getstackit/stackit/internal/git"
 )
 
 const benchTrunk = "main"
@@ -149,7 +151,7 @@ func BenchmarkRenderStack_WithAnnotations(b *testing.B) {
 	renderer := NewRenderer(mock)
 
 	// Add annotations to all branches
-	prNum := 1
+	prNum := git.PRNumber(1)
 	for branch := range mock.ChildrenMap {
 		renderer.SetAnnotation(branch, BranchAnnotation{
 			PRNumber:     &prNum,
@@ -240,7 +242,7 @@ func BenchmarkFullRender_vs_CachedSelection(b *testing.B) {
 	renderer := NewRenderer(mock)
 
 	// Add annotations to make rendering more realistic
-	prNum := 1
+	prNum := git.PRNumber(1)
 	for branch := range mock.ChildrenMap {
 		renderer.SetAnnotation(branch, BranchAnnotation{
 			PRNumber:     &prNum,
@@ -280,7 +282,7 @@ func BenchmarkNavigationSimulation(b *testing.B) {
 	renderer := NewRenderer(mock)
 
 	// Add annotations
-	prNum := 1
+	prNum := git.PRNumber(1)
 	for branch := range mock.ChildrenMap {
 		renderer.SetAnnotation(branch, BranchAnnotation{
 			PRNumber:    &prNum,

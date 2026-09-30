@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/getstackit/stackit/internal/git"
 )
 
-func uniquePRNumbers(prNumbers []int) []int {
-	seen := make(map[int]struct{}, len(prNumbers))
-	unique := make([]int, 0, len(prNumbers))
+func uniquePRNumbers(prNumbers []git.PRNumber) []git.PRNumber {
+	seen := make(map[git.PRNumber]struct{}, len(prNumbers))
+	unique := make([]git.PRNumber, 0, len(prNumbers))
 	for _, n := range prNumbers {
 		if _, ok := seen[n]; ok {
 			continue
@@ -19,7 +21,7 @@ func uniquePRNumbers(prNumbers []int) []int {
 	return unique
 }
 
-func buildPRNumberQuery(prNumbers []int, fields string) string {
+func buildPRNumberQuery(prNumbers []git.PRNumber, fields string) string {
 	var b strings.Builder
 	b.WriteString("query($owner: String!, $repo: String!) {\n")
 	b.WriteString("  repository(owner: $owner, name: $repo) {\n")
@@ -31,7 +33,7 @@ func buildPRNumberQuery(prNumbers []int, fields string) string {
 	return b.String()
 }
 
-func parsePRNumberQueryResponse[T any](body []byte, prNumbers []int, decode func(map[string]any) (T, bool)) (map[int]T, error) {
+func parsePRNumberQueryResponse[T any](body []byte, prNumbers []git.PRNumber, decode func(map[string]any) (T, bool)) (map[git.PRNumber]T, error) {
 	var resp struct {
 		Data   map[string]any `json:"data"`
 		Errors []struct {
@@ -50,7 +52,7 @@ func parsePRNumberQueryResponse[T any](body []byte, prNumbers []int, decode func
 		return nil, fmt.Errorf("invalid GraphQL response format: missing repository")
 	}
 
-	results := make(map[int]T, len(prNumbers))
+	results := make(map[git.PRNumber]T, len(prNumbers))
 	for _, n := range prNumbers {
 		alias := fmt.Sprintf("pr_%d", n)
 		data, ok := repository[alias]

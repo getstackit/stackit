@@ -127,34 +127,7 @@ func handleShowTrunk(ctx *app.Context) error {
 		return nil
 	}
 
-	// Find the trunk by walking up the parent chain
-	trunk := findTrunkForBranch(eng, currentBranch.GetName(), ctx.Config.AllTrunks())
+	trunk := eng.Graph(engine.SortStrategyAlphabetical).OwningTrunk(*currentBranch, ctx.Config.AllTrunks())
 	ctx.Output.Info("%s", trunk)
 	return nil
-}
-
-// findTrunkForBranch walks up the parent chain to find the trunk
-func findTrunkForBranch(eng engine.Engine, branchName string, trunks []string) string {
-	// Walk up the parent chain
-	currentBranch := eng.GetBranch(branchName)
-	visited := make(map[string]bool)
-
-	for currentBranch.GetName() != "" && !visited[currentBranch.GetName()] {
-		visited[currentBranch.GetName()] = true
-
-		// Check if current is a trunk
-		if slices.Contains(trunks, currentBranch.GetName()) {
-			return currentBranch.GetName()
-		}
-
-		// Get parent
-		parent := currentBranch.GetParent()
-		if parent == nil {
-			break
-		}
-		currentBranch = *parent
-	}
-
-	// Default to primary trunk
-	return eng.Trunk().GetName()
 }

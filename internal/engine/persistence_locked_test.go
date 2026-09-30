@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -29,8 +30,8 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	require.Equal(t, string(engine.LockReasonUser), string(branch.GetLockReason()))
 
 	// 2. Upsert PR info with lockReason="user"
-	prNumber := 123
-	prInfo := engine.NewPrInfo(&prNumber, "Title", "Body", "OPEN", "main", "http://url", false).WithLockReason(engine.LockReasonUser)
+	prNumber := git.PRNumber(123)
+	prInfo := engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://url"}).WithLockReason(engine.LockReasonUser)
 	err = eng.UpsertPrInfo(context.Background(), branch, prInfo)
 	require.NoError(t, err)
 
@@ -57,7 +58,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	require.True(t, gotPrInfo.IsLocked(), "Locked status should be persisted in PR info")
 
 	// 5. Check submission status - should NOT need update if nothing changed
-	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), engine.BranchesOf(branch))
+	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), engine.BranchesOf(branch), nil)
 	require.NoError(t, err)
 	status := statuses[branch.GetName()]
 	if status.NeedsUpdate {

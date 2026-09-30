@@ -9,6 +9,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
@@ -70,7 +71,7 @@ type planPrinter struct {
 	out       output.Output
 	verbose   bool
 	scopes    map[string]string
-	worktrees map[string]string
+	worktrees map[string]engine.WorktreePath
 	parents   map[string]string
 	trunk     string
 	solo      bool // exactly one submittable branch — drop the stack framing
@@ -350,7 +351,7 @@ type SimpleSubmitHandler struct {
 type branchItem struct {
 	name         string
 	action       engine.SubmitAction
-	prNumber     *int
+	prNumber     *git.PRNumber
 	url          string
 	status       submitComponent.Status
 	err          error
@@ -726,7 +727,7 @@ func (h *InteractiveSubmitHandler) printNativeStackEvents() {
 	}
 }
 
-func formatGitHubStackPRs(pullRequests []int) string {
+func formatGitHubStackPRs(pullRequests []git.PRNumber) string {
 	formatted := make([]string, len(pullRequests))
 	for i, number := range pullRequests {
 		formatted[i] = fmt.Sprintf("#%d", number)

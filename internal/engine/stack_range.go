@@ -1,18 +1,29 @@
 package engine
 
+// CurrentBranchMode selects whether a directional stack traversal includes
+// the branch it starts from.
+type CurrentBranchMode int
+
+const (
+	// ExcludeCurrentBranch returns only the branches above or below the start.
+	ExcludeCurrentBranch CurrentBranchMode = iota
+	// IncludeCurrentBranch also returns the starting branch.
+	IncludeCurrentBranch
+)
+
 // StackRangeUpstack returns a range for children (upstack) traversal.
-func StackRangeUpstack(includeCurrent bool) StackRange {
+func StackRangeUpstack(current CurrentBranchMode) StackRange {
 	return StackRange{
 		RecursiveChildren: true,
-		IncludeCurrent:    includeCurrent,
+		IncludeCurrent:    current == IncludeCurrentBranch,
 	}
 }
 
 // StackRangeDownstack returns a range for parents (downstack) traversal.
-func StackRangeDownstack(includeCurrent bool) StackRange {
+func StackRangeDownstack(current CurrentBranchMode) StackRange {
 	return StackRange{
 		RecursiveParents: true,
-		IncludeCurrent:   includeCurrent,
+		IncludeCurrent:   current == IncludeCurrentBranch,
 	}
 }
 

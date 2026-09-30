@@ -8,8 +8,22 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 )
 
+// stackStateEngine lists the engine methods the stack-state checks call,
+// including the raw metadata-ref reads that let doctor see orphaned and
+// corrupted refs the tracked-branch view hides.
+type stackStateEngine interface {
+	engine.BranchLookup
+	Trunk() engine.Branch
+	AllBranches() engine.Branches
+	GetAllBranchNames(ctx context.Context) ([]string, error)
+	BatchIsBranchEmpty(branchNames []string) engine.BranchNameSet
+	ListMetadataRefs() (map[string]string, error)
+	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	DeleteMetadataRefsBatch(ctx context.Context, branchNames []string) error
+}
+
 // checkStackState performs stack state and metadata integrity checks
-func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, warnings int, errors int, fix bool) (int, int) {
+func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler, warnings int, errors int, fix bool) (int, int) {
 	// Get all branches
 	allBranches, err := eng.GetAllBranchNames(ctx)
 	if err != nil {
@@ -135,7 +149,7 @@ func checkStackState(ctx context.Context, eng engine.Engine, handler Handler, wa
 }
 
 // checkEmptyBranches finds branches that have no commits compared to their parent
-func checkEmptyBranches(eng engine.Engine) []string {
+func checkEmptyBranches(eng stackStateEngine) []string {
 	trunk := eng.Trunk()
 	trunkName := trunk.GetName()
 
@@ -160,7 +174,7 @@ func checkEmptyBranches(eng engine.Engine) []string {
 }
 
 // detectCycles detects cycles in the branch parent graph using DFS
-func detectCycles(eng engine.Engine) [][]string {
+func detectCycles(eng stackStateEngine) [][]string {
 	var cycles [][]string
 	allBranches := eng.AllBranches()
 	branchNames := allBranches.Names()
@@ -227,7 +241,7 @@ func detectCycles(eng engine.Engine) [][]string {
 }
 
 // checkMissingParents checks for branches whose parent branches don't exist
-func checkMissingParents(eng engine.Engine, allBranches []string) []string {
+func checkMissingParents(eng stackStateEngine, allBranches []string) []string {
 	var missing []string
 	branchSet := make(map[string]bool)
 	trunk := eng.Trunk()

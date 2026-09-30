@@ -7,15 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/getstackit/stackit/internal/actions"
 	mergeAction "github.com/getstackit/stackit/internal/actions/merge"
-	"github.com/getstackit/stackit/internal/actions/submit"
-	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 )
 
@@ -175,190 +170,21 @@ func runMergeDrain(ctx *app.Context, opts mergeDrainOptions) error {
 		return err
 	}
 
-	// Lock all drain branches to prevent external modification
-	branchesToLock := make([]engine.Branch, len(plan.BranchesToMerge))
-	for i, b := range plan.BranchesToMerge {
-		branchesToLock[i] = eng.GetBranch(b.BranchName)
-	}
-	if _, err := eng.SetLocked(ctx.Context, branchesToLock, engine.LockReasonDraining); err != nil {
-		return fmt.Errorf("failed to lock drain branches: %w", err)
-	}
-	defer unlockDrainBranches(ctx, plan.BranchesToMerge)
-
-	// Drain loop: merge one PR at a time, bottom-up
-	merged := 0
-	for drainTarget == 0 || merged < drainTarget {
-		// Re-read state each iteration (branches change after merges + sync)
-		plan, _, err = mergeAction.CreateMergePlan(ctx.Context, eng, out, ctx.GitHub(), mergeAction.CreatePlanOptions{
-			Strategy:     mergeAction.StrategyBottomUp,
-			Force:        opts.force,
-			TargetBranch: targetBranch,
-			Scope:        opts.scope,
-		})
-		if err != nil {
-			// After merging some PRs, "not on a branch" or "on trunk" can happen
-			// if post-merge sync moved us. This is expected when stack is fully drained.
-			if merged > 0 {
-				out.Debug("Stopping drain after %d merges: %v", merged, err)
-				break
-			}
-			return err
-		}
-
-		if len(plan.BranchesToMerge) == 0 {
-			break
-		}
-
-		bottomPR := plan.BranchesToMerge[0]
-
-		out.Newline()
-		displayTotal := totalPRs
-		if drainTarget > 0 {
-			displayTotal = drainTarget
-		}
-		out.Info("Merging PR #%d (%s) [%d/%d]...", bottomPR.PRNumber, bottomPR.BranchName, merged+1, displayTotal)
-
-		// Get the PR's NodeID for merge operations
-		remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-		prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, bottomPR.PRNumber)
-		cancelRemote()
-		if err != nil {
-			return fmt.Errorf("failed to get PR #%d info: %w", bottomPR.PRNumber, err)
-		}
-		if prInfo.NodeID == "" {
-			return fmt.Errorf("PR #%d does not have a Node ID", bottomPR.PRNumber)
-		}
-
-		// Orchestrate the merge (direct merge → automerge → poll fallback)
-		// Drain always waits for each PR to merge before proceeding.
-		_, err = orchestrateMerge(ctx, orchestrateMergeOptions{
-			branchName:  bottomPR.BranchName,
-			prNumber:    bottomPR.PRNumber,
-			prNodeID:    prInfo.NodeID,
-			mergeMethod: mergeMethod,
-			wait:        true,
-		})
-		if err != nil {
-			return err
-		}
-
-		merged++
-
-		// Post-merge cleanup: checkout trunk, then scoped sync + restack
-		out.Info("Syncing trunk and restacking...")
-
-		// Checkout trunk
-		if _, checkoutErr := actions.CheckoutAction(ctx, actions.CheckoutOptions{
-			CheckoutTrunk: true,
-		}, nil); checkoutErr != nil {
-			return fmt.Errorf("post-merge checkout trunk failed after PR #%d: %w", bottomPR.PRNumber, checkoutErr)
-		}
-
-		// Compute remaining branches to restack (everything after the one we just merged)
-		restackScope := remainingBranchNames(plan.BranchesToMerge[1:])
-
-		// Run sync with scoped restack and no interactive prompts
-		drainHandler := &drainSyncHandler{}
-		if syncErr := sync.Action(ctx, sync.Options{
-			Restack:      true,
-			RestackScope: restackScope,
-		}, drainHandler); syncErr != nil {
-			return fmt.Errorf("post-merge sync failed after PR #%d: %w", bottomPR.PRNumber, syncErr)
-		}
-
-		// Check for conflicts in drain branches — hard error
-		if len(drainHandler.summary.ConflictBranches) > 0 {
-			return fmt.Errorf("restack conflict in %s — resolve before continuing drain", drainHandler.summary.ConflictBranches[0])
-		}
-
-		// Publish what the restack just changed. The restack rewrote each
-		// remaining branch onto the new trunk and reparented the next one off
-		// the branch that just merged, and both of those live only locally
-		// until pushed. Leaving them behind strands the drain:
-		//
-		//   - The metadata ref still names the merged (now deleted) parent, so a
-		//     stack-order CI check reads a stale parent and reports the next PR
-		//     as "not at the bottom of the stack". That leaves the PR in an
-		//     unstable state and automerge refuses it, so the drain stalls on
-		//     its second PR and every one after.
-		//   - The remote branch still points at the pre-restack commits, so the
-		//     PR shows a diff against the old base — including the changes that
-		//     just merged.
-		//
-		// GitHub retargets the PR base itself when the base branch is deleted,
-		// which makes the PR *look* correct while both of the above are still
-		// wrong.
-		if len(restackScope) > 0 {
-			if pushErr := pushDrainedBranches(ctx, restackScope); pushErr != nil {
-				return fmt.Errorf("post-merge push failed after PR #%d: %w", bottomPR.PRNumber, pushErr)
-			}
-		}
+	result, err := mergeAction.Drain(ctx, mergeAction.DrainOptions{
+		Plan:         plan,
+		TargetBranch: targetBranch,
+		Scope:        opts.scope,
+		Force:        opts.force,
+		Limit:        drainTarget,
+		MergeMethod:  mergeMethod,
+	}, newProgressRenderer(out))
+	if err != nil {
+		return err
 	}
 
 	out.Newline()
-	out.Success("Drained %d PRs from the stack", merged)
+	out.Success("Drained %d PRs from the stack", result.Merged)
 	return nil
-}
-
-// drainSyncHandler is a non-interactive sync handler that captures the summary.
-// It embeds sync.NullHandler so all prompts return non-interactive defaults.
-type drainSyncHandler struct {
-	sync.NullHandler
-	summary sync.Summary
-}
-
-// Complete captures the sync summary for conflict detection.
-func (h *drainSyncHandler) Complete(s sync.Summary) { h.summary = s }
-
-// pushDrainedBranches publishes the branches the post-merge restack rewrote, so
-// the remote matches what drain just did locally.
-//
-// Goes through submit rather than pushing refs directly: submit already pushes
-// branch heads with the right force-with-lease, pushes metadata refs, and
-// retargets each PR's base. UpdateOnly keeps it to branches that already have a
-// PR — a drain must never open one — and NoEdit keeps it silent about
-// titles and descriptions, which are not drain's business to change.
-func pushDrainedBranches(ctx *app.Context, branchNames []string) error {
-	return submit.Action(ctx, submit.Options{
-		// branchNames[0] is the next PR to merge and needs pushing itself, so
-		// the range has to include it as well as its descendants.
-		Branch:     branchNames[0],
-		StackRange: engine.StackRangeUpstack(true),
-		UpdateOnly: true,
-		NoEdit:     true,
-	}, &drainSubmitHandler{out: ctx.Output})
-}
-
-// drainSubmitHandler reports per-branch results of drain's nested submit without
-// prompting, mirroring lock's nested-submit handler.
-type drainSubmitHandler struct {
-	out output.Output
-}
-
-func (h *drainSubmitHandler) OnEvent(e submit.Event) {
-	if ev, ok := e.(submit.BranchProgressEvent); ok {
-		switch ev.Status {
-		case submit.StatusDone:
-			h.out.Info("  ✓ %s updated → %s", ev.BranchName, ev.URL)
-		case submit.StatusError:
-			h.out.Warn("  ✗ %s failed to update: %v", ev.BranchName, ev.Error)
-		}
-	}
-}
-
-func (h *drainSubmitHandler) Confirm(_ string, defaultYes bool) (bool, error) {
-	return defaultYes, nil
-}
-
-func (h *drainSubmitHandler) IsInteractive() bool { return false }
-
-// remainingBranchNames extracts branch names from a slice of MergeBranch.
-func remainingBranchNames(branches []mergeAction.BranchMergeInfo) []string {
-	names := make([]string, len(branches))
-	for i, b := range branches {
-		names[i] = b.BranchName
-	}
-	return names
 }
 
 func resolveDrainTargetBranch(opts mergeDrainOptions, plan *mergeAction.Plan) string {
@@ -371,20 +197,6 @@ func resolveDrainTargetBranch(opts mergeDrainOptions, plan *mergeAction.Plan) st
 	return ""
 }
 
-// unlockDrainBranches unlocks any remaining drain-locked branches that still exist.
-func unlockDrainBranches(ctx *app.Context, branches []mergeAction.BranchMergeInfo) {
-	var toUnlock []engine.Branch
-	for _, b := range branches {
-		branch := ctx.Engine.GetBranch(b.BranchName)
-		if branch.IsTracked() && branch.GetLockReason() == engine.LockReasonDraining {
-			toUnlock = append(toUnlock, branch)
-		}
-	}
-	if len(toUnlock) > 0 {
-		_, _ = ctx.Engine.SetLocked(ctx.Context, toUnlock, engine.LockReasonNone)
-	}
-}
-
 func resolveMergeMethod(ctx *app.Context, methodFlag string) (github.MergeMethod, error) {
 	if methodFlag != "" {
 		switch method := github.MergeMethod(methodFlag); method {
@@ -394,7 +206,7 @@ func resolveMergeMethod(ctx *app.Context, methodFlag string) (github.MergeMethod
 			return "", fmt.Errorf("invalid merge method: %s (must be squash, merge, or rebase)", methodFlag)
 		}
 	}
-	return mergeAction.GetMergeMethod(ctx, ctx.GitHub())
+	return mergeAction.GetMergeMethod(ctx, ctx.Config, ctx.GitHub())
 }
 
 func formatMergeDrainPlan(plan *mergeAction.Plan, validation *mergeAction.PlanValidation) string {

@@ -12,7 +12,7 @@ import (
 )
 
 type mockGitHubClient struct {
-	github.Client
+	CIWaiterClient
 	checkStatus *github.CheckStatus
 }
 

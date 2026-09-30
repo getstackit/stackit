@@ -4,15 +4,16 @@ import (
 	"testing"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBaseSHAIsStale(t *testing.T) {
 	t.Parallel()
 
-	prNumber := 42
+	prNumber := git.PRNumber(42)
 	makePrInfo := func(base, baseSHA string) *engine.PrInfo {
-		return engine.NewPrInfo(&prNumber, "title", "body", "OPEN", base, "https://example.com/pr/42", false).
+		return engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "title", Body: "body", State: "OPEN", Base: base, URL: "https://example.com/pr/42"}).
 			WithBaseSHA(baseSHA)
 	}
 

@@ -66,23 +66,23 @@ func TestWorktreeResetBlocker(t *testing.T) {
 
 	// Each phase mutates the shared worktree, so they run in order rather than
 	// as parallel subtests.
-	require.Empty(t, runner.WorktreeResetBlocker(ctx, repo.Dir, incomingRev),
+	require.Empty(t, runner.WorktreeResetBlocker(ctx, git.WorktreePath(repo.Dir), incomingRev),
 		"a clean worktree must not block")
 
 	require.NoError(t, os.WriteFile(scratch, []byte("notes"), 0o600))
-	require.Empty(t, runner.WorktreeResetBlocker(ctx, repo.Dir, incomingRev),
+	require.Empty(t, runner.WorktreeResetBlocker(ctx, git.WorktreePath(repo.Dir), incomingRev),
 		"an untracked file the incoming commit does not write must not block")
 	require.NoError(t, os.Remove(scratch))
 
 	require.NoError(t, os.WriteFile(collider, []byte("mine"), 0o600))
 	require.Equal(t, "an untracked file there would be overwritten",
-		runner.WorktreeResetBlocker(ctx, repo.Dir, incomingRev),
+		runner.WorktreeResetBlocker(ctx, git.WorktreePath(repo.Dir), incomingRev),
 		"an untracked file the incoming commit writes is the one case reset destroys")
 	require.NoError(t, os.Remove(collider))
 
 	require.NoError(t, os.WriteFile(filepath.Join(repo.Dir, "base_test.txt"), []byte("edited"), 0o600))
 	require.Equal(t, "has uncommitted changes",
-		runner.WorktreeResetBlocker(ctx, repo.Dir, incomingRev),
+		runner.WorktreeResetBlocker(ctx, git.WorktreePath(repo.Dir), incomingRev),
 		"a tracked change must block unconditionally")
 }
 
@@ -98,7 +98,7 @@ func TestWorktree(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(scene.Repo.Dir, "cache", "data"), []byte("cached"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(scene.Repo.Dir, "tracked.txt"), []byte("tracked"), 0o600))
 
-		ignored, err := runner.ListIgnoredFiles(context.Background(), scene.Repo.Dir)
+		ignored, err := runner.ListIgnoredFiles(context.Background(), git.WorktreePath(scene.Repo.Dir))
 		require.NoError(t, err)
 		require.Equal(t, []string{".env", "cache/data"}, ignored)
 	})
@@ -121,7 +121,7 @@ func TestWorktree(t *testing.T) {
 		worktreePath = filepath.Join(worktreePath, "worktree")
 
 		// Add worktree
-		err = runner.AddWorktree(context.Background(), worktreePath, "test-branch", git.WorktreeAttached)
+		err = runner.AddWorktree(context.Background(), git.WorktreePath(worktreePath), "test-branch", git.WorktreeAttached)
 		require.NoError(t, err)
 
 		// Verify worktree exists
@@ -131,16 +131,16 @@ func TestWorktree(t *testing.T) {
 		// List worktrees
 		worktrees, err := runner.ListWorktrees(context.Background())
 		require.NoError(t, err)
-		require.Contains(t, worktrees.Paths(), worktreePath)
+		require.Contains(t, worktrees.Paths(), git.WorktreePath(worktreePath))
 
 		// Remove worktree
-		err = runner.RemoveWorktree(context.Background(), worktreePath)
+		err = runner.RemoveWorktree(context.Background(), git.WorktreePath(worktreePath))
 		require.NoError(t, err)
 
 		// Verify worktree is gone from list
 		worktrees, err = runner.ListWorktrees(context.Background())
 		require.NoError(t, err)
-		require.NotContains(t, worktrees.Paths(), worktreePath)
+		require.NotContains(t, worktrees.Paths(), git.WorktreePath(worktreePath))
 	})
 
 	t.Run("omits worktrees whose directory is gone", func(t *testing.T) {
@@ -162,18 +162,18 @@ func TestWorktree(t *testing.T) {
 		tmpDir, err := filepath.EvalSymlinks(t.TempDir())
 		require.NoError(t, err)
 		worktreePath := filepath.Join(tmpDir, "doomed")
-		require.NoError(t, runner.AddWorktree(context.Background(), worktreePath, "stale-branch", git.WorktreeAttached))
+		require.NoError(t, runner.AddWorktree(context.Background(), git.WorktreePath(worktreePath), "stale-branch", git.WorktreeAttached))
 
 		worktrees, err := runner.ListWorktrees(context.Background())
 		require.NoError(t, err)
-		require.Contains(t, worktrees.Paths(), worktreePath)
+		require.Contains(t, worktrees.Paths(), git.WorktreePath(worktreePath))
 
 		// Delete the directory behind git's back.
 		require.NoError(t, os.RemoveAll(worktreePath))
 
 		worktrees, err = runner.ListWorktrees(context.Background())
 		require.NoError(t, err)
-		require.NotContains(t, worktrees.Paths(), worktreePath,
+		require.NotContains(t, worktrees.Paths(), git.WorktreePath(worktreePath),
 			"a worktree whose directory is gone must not be reported as a checkout")
 		require.Empty(t, worktrees.PathForBranch("stale-branch"),
 			"no worktree should be reported as holding the branch")
@@ -190,7 +190,7 @@ func TestWorktree(t *testing.T) {
 		worktreePath := filepath.Join(tmpDir, "worktree-detached")
 
 		// Add detached worktree
-		err := runner.AddWorktree(context.Background(), worktreePath, "", git.WorktreeDetached)
+		err := runner.AddWorktree(context.Background(), git.WorktreePath(worktreePath), "", git.WorktreeDetached)
 		require.NoError(t, err)
 
 		// Verify worktree exists
@@ -198,7 +198,7 @@ func TestWorktree(t *testing.T) {
 		require.NoError(t, err)
 
 		// Clean up
-		err = runner.RemoveWorktree(context.Background(), worktreePath)
+		err = runner.RemoveWorktree(context.Background(), git.WorktreePath(worktreePath))
 		require.NoError(t, err)
 	})
 }
@@ -233,7 +233,7 @@ func TestIsMainWorktree(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			require.Equal(t, tt.expected, git.IsMainWorktree(tt.worktreePath, tt.repoRoot))
+			require.Equal(t, tt.expected, git.IsMainWorktree(git.WorktreePath(tt.worktreePath), tt.repoRoot))
 		})
 	}
 }
@@ -251,7 +251,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		worktreePath := filepath.Join(linkBase, "worktree")
 
 		require.NoError(t, runner.WriteWorktreeMeta(context.Background(), "first", &git.WorktreeMeta{
-			Path:         worktreePath,
+			Path:         git.WorktreePath(worktreePath),
 			AnchorBranch: "first",
 		}))
 		// Match real cleanup ordering: by this point the worktree directory is
@@ -261,7 +261,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		// Re-registration at the same path must not collide with an orphaned
 		// reverse path ref hashed with a different spelling.
 		require.NoError(t, runner.WriteWorktreeMeta(context.Background(), "second", &git.WorktreeMeta{
-			Path:         worktreePath,
+			Path:         git.WorktreePath(worktreePath),
 			AnchorBranch: "second",
 		}))
 	})
@@ -277,7 +277,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 
 		require.NoError(t, runner.WriteWorktreeMeta(context.Background(), "corrupt", &git.WorktreeMeta{
-			Path:         filepath.Join(t.TempDir(), "worktree"),
+			Path:         git.WorktreePath(filepath.Join(t.TempDir(), "worktree")),
 			AnchorBranch: "corrupt",
 		}))
 
@@ -314,7 +314,7 @@ func TestWorktreeRegistry(t *testing.T) {
 		readMeta, err := runner.ReadWorktreeMeta("feature-branch")
 		require.NoError(t, err)
 		require.NotNil(t, readMeta)
-		require.Equal(t, "/path/to/worktree", readMeta.Path)
+		require.Equal(t, git.WorktreePath("/path/to/worktree"), readMeta.Path)
 		require.Equal(t, "feature-branch", readMeta.AnchorBranch)
 		require.Equal(t, scene.Repo.Dir, readMeta.MainRepoDir)
 	})
@@ -379,8 +379,8 @@ func TestWorktreeRegistry(t *testing.T) {
 		require.Len(t, metas, 2)
 		require.Contains(t, metas, "feature-1")
 		require.Contains(t, metas, "feature-2")
-		require.Equal(t, "/path/to/worktree1", metas["feature-1"].Path)
-		require.Equal(t, "/path/to/worktree2", metas["feature-2"].Path)
+		require.Equal(t, git.WorktreePath("/path/to/worktree1"), metas["feature-1"].Path)
+		require.Equal(t, git.WorktreePath("/path/to/worktree2"), metas["feature-2"].Path)
 	})
 }
 
@@ -395,8 +395,8 @@ func TestWorktreeRegistry(t *testing.T) {
 func TestWorktreeListIsMain(t *testing.T) {
 	t.Parallel()
 
-	mainDir := t.TempDir()
-	linkedDir := t.TempDir()
+	mainDir := git.WorktreePath(t.TempDir())
+	linkedDir := git.WorktreePath(t.TempDir())
 	list := git.WorktreeList{
 		{Path: mainDir, Branch: "main"},
 		{Path: linkedDir, Branch: "feature"},
@@ -419,7 +419,7 @@ func TestWorktreeListIsMain(t *testing.T) {
 
 	t.Run("unresolvable paths are treated as main", func(t *testing.T) {
 		t.Parallel()
-		missing := filepath.Join(t.TempDir(), "gone")
+		missing := git.WorktreePath(filepath.Join(t.TempDir(), "gone"))
 		// Cannot prove it is not the main worktree, so removal must not proceed.
 		require.True(t, list.IsMain(missing))
 		require.True(t, git.WorktreeList{}.IsMain(mainDir))
@@ -430,7 +430,7 @@ func TestWorktreeListIsMain(t *testing.T) {
 		// Both EvalSymlinks calls used to be discarded, so "" == "" reported a
 		// false positive match between any two nonexistent paths.
 		require.False(t, git.IsMainWorktree(
-			filepath.Join(t.TempDir(), "gone-a"),
+			git.WorktreePath(filepath.Join(t.TempDir(), "gone-a")),
 			filepath.Join(t.TempDir(), "gone-b"),
 		))
 	})

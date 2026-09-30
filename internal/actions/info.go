@@ -11,7 +11,7 @@ import (
 
 // BranchInfoPR represents pull request information for a branch.
 type BranchInfoPR struct {
-	Number  *int
+	Number  *git.PRNumber
 	Title   string
 	State   git.PRState
 	IsDraft bool
@@ -158,6 +158,12 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 	}
 
 	effectiveDiff := opts.Diff || (opts.Stat && !opts.Patch)
+	diffFormat := git.DiffFormatPatch
+	commitLogFormat := git.CommitLogPatch
+	if opts.Stat {
+		diffFormat = git.DiffFormatStat
+		commitLogFormat = git.CommitLogStat
+	}
 	effectivePatch := opts.Patch && !opts.Diff
 	// Reuse the commit read's actual endpoints, including its parent-tip
 	// fallback. A commit's first parent is not equivalent for merge histories.
@@ -171,7 +177,7 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 			branchRevision, revisionErr = branch.GetRevision()
 		}
 		if revisionErr == nil {
-			patchOutput, err := eng.ShowCommits(ctx, git.RevRange{Base: baseRevision, Head: branchRevision}, true, opts.Stat)
+			patchOutput, err := eng.ShowCommits(ctx, git.RevRange{Base: baseRevision, Head: branchRevision}, commitLogFormat)
 			if err == nil {
 				result.PatchOutput = patchOutput
 			}
@@ -184,14 +190,14 @@ func buildBranchInfoResult(ctx context.Context, eng engine.Engine, branchName st
 			if err == nil {
 				parentSHA, err := eng.GetCommitSHA(branchName, 1)
 				if err == nil {
-					diffOutput, err := eng.ShowDiff(ctx, parentSHA, headRevision, opts.Stat)
+					diffOutput, err := eng.ShowDiff(ctx, git.RevRange{Base: parentSHA, Head: headRevision}, diffFormat)
 					if err == nil {
 						result.DiffOutput = diffOutput
 					}
 				}
 			}
 		} else if commitErr == nil && len(commitData) > 0 {
-			diffOutput, err := eng.ShowDiff(ctx, baseRevision, history.Range.Head, opts.Stat)
+			diffOutput, err := eng.ShowDiff(ctx, git.RevRange{Base: baseRevision, Head: history.Range.Head}, diffFormat)
 			if err == nil {
 				result.DiffOutput = diffOutput
 			}

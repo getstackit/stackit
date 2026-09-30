@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/google/go-github/v92/github"
 )
 
@@ -22,13 +23,13 @@ type MockGitHubServerConfig struct {
 	// UpdatedPRs stores PRs that were updated (for testing)
 	UpdatedPRs map[int]*github.PullRequest
 	// CreatedStacks records the PR numbers submitted as native GitHub Stacks.
-	CreatedStacks [][]int
+	CreatedStacks [][]git.PRNumber
 	// StackError, when set, is returned by every native GitHub Stacks API call.
 	// Repos without access to the experimental API fail this way.
 	StackError error
 	// MergedStackPRs lists PR numbers GitHub refuses to unstack because they
 	// are merged, merging, or queued to merge. Such a stack cannot be rebuilt.
-	MergedStackPRs []int
+	MergedStackPRs []git.PRNumber
 	// ErrorResponses maps endpoint+method to error responses
 	ErrorResponses map[string]error
 	// Owner and Repo for the mock server
@@ -44,7 +45,7 @@ func NewMockGitHubServerConfig() *MockGitHubServerConfig {
 		PRs:            make(map[string]*github.PullRequest),
 		CreatedPRs:     make([]*github.PullRequest, 0),
 		UpdatedPRs:     make(map[int]*github.PullRequest),
-		CreatedStacks:  make([][]int, 0),
+		CreatedStacks:  make([][]git.PRNumber, 0),
 		ErrorResponses: make(map[string]error),
 		Owner:          "owner",
 		Repo:           "repo",

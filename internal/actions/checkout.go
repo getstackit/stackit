@@ -194,8 +194,8 @@ func printBranchInfo(ctx *app.Context, branch engine.Branch) {
 // switched to, warning when it cannot. Both switch directions check this: a
 // registration whose directory is gone must not be offered as a destination
 // from the main repo or from another worktree.
-func worktreePathUsable(ctx *app.Context, stackRoot, path string) bool {
-	_, err := os.Stat(path)
+func worktreePathUsable(ctx *app.Context, stackRoot string, path engine.WorktreePath) bool {
+	_, err := os.Stat(path.String())
 	switch {
 	case err == nil:
 		return true
@@ -229,7 +229,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 			// Target is in a different stack - check if that stack has a worktree
 			targetWorktree, err := ctx.Engine.GetWorktreeForStack(targetStackRoot)
 			switch {
-			case err == nil && targetWorktree != nil && worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path.String()):
+			case err == nil && targetWorktree != nil && worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path):
 				switchTarget = targetWorktree.Path.String()
 				targetStack = targetStackRoot
 			default:
@@ -260,7 +260,7 @@ func getWorktreeSwitchInfo(ctx *app.Context, branch engine.Branch, branchName st
 		return "", nil, nil
 	}
 
-	if !worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path.String()) {
+	if !worktreePathUsable(ctx, targetStackRoot, targetWorktree.Path) {
 		return "", nil, nil
 	}
 

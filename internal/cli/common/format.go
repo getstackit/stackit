@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
@@ -18,7 +19,7 @@ const (
 
 // FormatPRInfo formats a PR number for display.
 // Returns empty string if prNumber is nil.
-func FormatPRInfo(prNumber *int) string {
+func FormatPRInfo(prNumber *git.PRNumber) string {
 	if prNumber == nil {
 		return ""
 	}

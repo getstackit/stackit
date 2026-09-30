@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
@@ -401,7 +402,7 @@ func (m *shippableModel) rebuildCache() {
 	// shippable stacks. This runs on every refresh and on the auto-refresh
 	// timer, so the savings compound. The view renders with
 	// ShowCommitMessages, so resolve commit messages once via BatchCommits and
-	// skip the per-branch GetAllCommits inside GetBranchAnnotation.
+	// skip the per-branch GetAllCommits inside stackview.BaseAnnotation.
 	allBranches := engine.Branches{}
 	for _, stack := range m.stacks {
 		for _, branchName := range stack.Stack.AllBranches {
@@ -439,7 +440,7 @@ func (m *shippableModel) rebuildCache() {
 				continue
 			}
 			name := branch.GetName()
-			ann := tui.GetBranchAnnotation(m.engine, branch, stats[name], tui.AnnotationOptions{SkipCommitMessages: true})
+			ann := tui.TreeAnnotation(stackview.BaseAnnotation(m.engine, branch, stats[name], stackview.AnnotationOptions{SkipCommitMessages: true}))
 			if msgs := commits[name].Onelines(); msgs != nil {
 				ann.CommitMessages = msgs
 				ann.CommitCount = len(msgs)

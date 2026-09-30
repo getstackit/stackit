@@ -68,7 +68,7 @@ func BranchesOf(branches ...Branch) Branches {
 }
 
 // BranchesFromNames resolves branch names into an ordered branch set.
-func BranchesFromNames(nav StackNavigator, branchNames []string) Branches {
+func BranchesFromNames(nav BranchLookup, branchNames []string) Branches {
 	builder := NewBranchesBuilder(len(branchNames))
 	for _, branchName := range branchNames {
 		builder.Add(nav.GetBranch(branchName))

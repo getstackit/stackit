@@ -6,6 +6,7 @@ import (
 
 	submitAction "github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // SubmitScenario is a deterministic replay of submit action events. It drives
@@ -40,11 +41,11 @@ var SubmitScenarios = []SubmitScenario{
 				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
 				ScopeMap:      map[string]string{"feat/api": "API", "feat/web": "WEB"},
 			}},
-			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(42)},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(42))},
 			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
 			submitAction.PlanningCompleteEvent{},
 			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
-				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(42)},
+				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(42))},
 				{Name: "feat/web", Action: engine.SubmitActionCreate},
 			}},
 			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusSubmitting},
@@ -139,11 +140,11 @@ var SubmitScenarios = []SubmitScenario{
 				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
 				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
 			}},
-			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))},
 			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
 			submitAction.PlanningCompleteEvent{},
 			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
-				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)},
+				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))},
 				{Name: "feat/web", Action: engine.SubmitActionCreate},
 			}},
 			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusSubmitting},
@@ -181,10 +182,10 @@ var SubmitScenarios = []SubmitScenario{
 				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
 				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
 			}},
-			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))},
 			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true, Skipped: true, SkipReason: "no existing PR"},
 			submitAction.PlanningCompleteEvent{},
-			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)}}},
+			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))}}},
 			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusSubmitting},
 			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/50"},
 			submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete, Duration: time.Second},
@@ -219,11 +220,11 @@ var SubmitScenarios = []SubmitScenario{
 			}},
 			submitAction.RestackEvent{Started: true},
 			submitAction.RestackEvent{Completed: true},
-			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))},
 			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
 			submitAction.PlanningCompleteEvent{},
 			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
-				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)},
+				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))},
 				{Name: "feat/web", Action: engine.SubmitActionCreate},
 			}},
 			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/50"},
@@ -242,7 +243,7 @@ var SubmitScenarios = []SubmitScenario{
 				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
 				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
 			}},
-			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))},
 			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
 			submitAction.PlanningCompleteEvent{},
 			submitAction.CompletionEvent{Outcome: submitAction.OutcomeDryRun, Message: "Dry run complete"},
@@ -259,11 +260,11 @@ var SubmitScenarios = []SubmitScenario{
 				ParentMap:     map[string]string{"feat/api": "main", "feat/web": "feat/api"},
 				FixedMap:      map[string]bool{"feat/api": true, "feat/web": true},
 			}},
-			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)},
+			submitAction.BranchPlanEvent{BranchName: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))},
 			submitAction.BranchPlanEvent{BranchName: "feat/web", Action: engine.SubmitActionCreate, IsCurrent: true},
 			submitAction.PlanningCompleteEvent{},
 			submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
-				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(50)},
+				{Name: "feat/api", Action: engine.SubmitActionUpdate, PRNumber: new(git.PRNumber(50))},
 				{Name: "feat/web", Action: engine.SubmitActionCreate},
 			}},
 			submitAction.BranchProgressEvent{BranchName: "feat/api", Status: submitAction.StatusDone, URL: "https://github.com/getstackit/stackit/pull/50"},

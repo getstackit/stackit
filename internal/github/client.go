@@ -20,7 +20,7 @@ const (
 // PullRequestInfo contains information about a pull request
 // This is a simplified struct to avoid coupling to go-github library
 type PullRequestInfo struct {
-	Number  int
+	Number  git.PRNumber
 	NodeID  string
 	HTMLURL string
 	Title   string
@@ -119,45 +119,54 @@ func (r Repo) String() string {
 	return r.Owner + "/" + r.Name
 }
 
-// Client is an interface for GitHub API interactions
-type Client interface {
+// PRReader reads pull request data.
+type PRReader interface {
+	// GetPullRequestByBranch gets a pull request for a branch
+	GetPullRequestByBranch(ctx context.Context, branchName string) (*PullRequestInfo, error)
+
+	// GetPullRequest gets a pull request by number
+	GetPullRequest(ctx context.Context, prNumber git.PRNumber) (*PullRequestInfo, error)
+
+	// BatchGetPRTitles returns titles for multiple PRs by number
+	BatchGetPRTitles(ctx context.Context, prNumbers []git.PRNumber) (map[git.PRNumber]string, error)
+}
+
+// PRWriter creates, updates, and closes pull requests.
+type PRWriter interface {
 	// CreatePullRequest creates a new pull request
 	CreatePullRequest(ctx context.Context, opts CreatePROptions) (*PullRequestInfo, error)
 
 	// UpdatePullRequest updates an existing pull request
 	// Returns warnings (non-fatal issues like failed label/assignee additions) and error
-	UpdatePullRequest(ctx context.Context, prNumber int, opts UpdatePROptions) (warnings []string, err error)
+	UpdatePullRequest(ctx context.Context, prNumber git.PRNumber, opts UpdatePROptions) (warnings []string, err error)
 
-	// GetPullRequestByBranch gets a pull request for a branch
-	GetPullRequestByBranch(ctx context.Context, branchName string) (*PullRequestInfo, error)
+	// ClosePullRequest closes a pull request
+	ClosePullRequest(ctx context.Context, prNumber git.PRNumber) error
+}
 
-	// GetPullRequest gets a pull request by number
-	GetPullRequest(ctx context.Context, prNumber int) (*PullRequestInfo, error)
-
+// PRMerger merges pull requests and reports which merge methods are allowed.
+type PRMerger interface {
 	// MergePullRequest merges a pull request using the specified merge method
 	MergePullRequest(ctx context.Context, branchName string, opts MergePROptions) error
 
 	// GetAllowedMergeMethods returns the allowed merge methods for the repository
 	GetAllowedMergeMethods(ctx context.Context) (*MergeMethodSettings, error)
+}
 
+// ChecksReader reads CI check status for pull requests.
+type ChecksReader interface {
 	// GetPRChecksStatus returns the check status for a single branch
 	GetPRChecksStatus(ctx context.Context, branchName string) (*CheckStatus, error)
 
 	// BatchGetPRChecksStatus returns the check status for multiple branches
 	BatchGetPRChecksStatus(ctx context.Context, branchNames []string) (ChecksByBranch, error)
+}
 
-	// BatchGetPRTitles returns titles for multiple PRs by number
-	BatchGetPRTitles(ctx context.Context, prNumbers []int) (map[int]string, error)
-
-	// Repo returns the repository the client is bound to
-	Repo() Repo
-
-	// ClosePullRequest closes a pull request
-	ClosePullRequest(ctx context.Context, prNumber int) error
-
-	// Comment methods for navigation location support
+// PRCommenter manages pull request comments (used for navigation location
+// support).
+type PRCommenter interface {
 	// CreatePRComment creates a new comment on a pull request
-	CreatePRComment(ctx context.Context, prNumber int, body string) (int64, error)
+	CreatePRComment(ctx context.Context, prNumber git.PRNumber, body string) (int64, error)
 
 	// UpdatePRComment updates an existing pull request comment
 	UpdatePRComment(ctx context.Context, commentID int64, body string) error
@@ -166,10 +175,29 @@ type Client interface {
 	DeletePRComment(ctx context.Context, commentID int64) error
 
 	// ListPRComments lists all comments on a pull request
-	ListPRComments(ctx context.Context, prNumber int) ([]PRComment, error)
+	ListPRComments(ctx context.Context, prNumber git.PRNumber) ([]PRComment, error)
+}
+
+// Identity reports which repository the client is bound to and who it is
+// authenticated as.
+type Identity interface {
+	// Repo returns the repository the client is bound to
+	Repo() Repo
 
 	// GetCurrentUser returns the authenticated GitHub username
 	GetCurrentUser(ctx context.Context) (string, error)
+}
+
+// Client is the full GitHub API surface: the union of the role interfaces.
+// Consumers that use only a few methods should depend on the narrow role
+// interface (or a consumer-local composition of them) instead.
+type Client interface {
+	PRReader
+	PRWriter
+	PRMerger
+	ChecksReader
+	PRCommenter
+	Identity
 }
 
 // PRComment represents a comment on a pull request
@@ -187,7 +215,7 @@ func ToPullRequestInfo(pr *github.PullRequest) *PullRequestInfo {
 	info := &PullRequestInfo{}
 
 	if pr.Number != nil {
-		info.Number = *pr.Number
+		info.Number = git.PRNumber(*pr.Number)
 	}
 	if pr.NodeID != nil {
 		info.NodeID = *pr.NodeID

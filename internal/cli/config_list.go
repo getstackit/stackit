@@ -1,4 +1,4 @@
-package actions
+package cli
 
 import (
 	"fmt"
@@ -9,10 +9,8 @@ import (
 	"github.com/getstackit/stackit/internal/output"
 )
 
-const valueNotSet = "(not set)"
-
-// ConfigListAction prints all configuration values in a formatted way
-func ConfigListAction(repoRoot string, writer io.Writer) error {
+// printConfigList prints all configuration values in a formatted way
+func printConfigList(repoRoot string, writer io.Writer) error {
 	out := output.NewConsoleOutput(writer, false)
 
 	cfg, err := config.LoadConfig(repoRoot)

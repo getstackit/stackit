@@ -142,7 +142,7 @@ func (e *engineImpl) ApplySplitToCommits(ctx context.Context, opts ApplySplitOpt
 	// branch, which is typically the original branch name if it was preserved).
 	if lastBranchName != opts.BranchToSplit {
 		lastBranch := e.GetBranch(lastBranchName)
-		if err := e.ReparentBranches(ctx, children, lastBranch); err != nil {
+		if err := e.ReparentBranchesToParents(ctx, MovesTo(children, lastBranch.GetName()), ReparentOpts{}); err != nil {
 			return fmt.Errorf("failed to reparent children to %s: %w", lastBranchName, err)
 		}
 	}

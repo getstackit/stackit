@@ -54,6 +54,22 @@ func (r RevisionMap) Rev(name string) (string, bool) {
 	return rev, ok
 }
 
+// MetadataSHAMap is branch name -> object SHA of that branch's metadata ref.
+type MetadataSHAMap map[string]string
+
+// ParentMap is branch name -> parent branch name.
+type ParentMap map[string]string
+
+// Parent returns the recorded parent of a branch, or "" when none is
+// recorded. Safe to call on a nil map.
+func (p ParentMap) Parent(name string) string {
+	return p[name]
+}
+
+// CommitBranchMap is commit SHA -> name of the tracked branch whose
+// parent..tip range contains that commit.
+type CommitBranchMap map[string]string
+
 // BranchNameSet is a set of branch names.
 type BranchNameSet map[string]bool
 
@@ -94,11 +110,6 @@ func NewScope(value string) Scope {
 // Empty returns an empty scope
 func Empty() Scope {
 	return Scope{value: ""}
-}
-
-// None returns a scope that breaks inheritance
-func None() Scope {
-	return Scope{value: "none"}
 }
 
 // String returns the string representation of the scope
@@ -214,13 +225,6 @@ const (
 	// gets cleaned up and surviving children get reparented past the gap.
 	DeletionReasonGhost DeletionReasonKind = "ghost"
 )
-
-// PendingChange represents a changed file in the working directory
-type PendingChange struct {
-	Path   string
-	Status string // "A", "M", "D", "??", etc.
-	Staged bool
-}
 
 // BranchRemoteStatus represents the relationship between a local branch and its remote counterpart
 type BranchRemoteStatus struct {
@@ -422,6 +426,19 @@ type RestackPlan struct {
 	Items          map[string]RestackPlanItem
 }
 
+// ContinueRebaseSpec identifies the branch an in-progress rebase is replaying
+// and the state to record once `git rebase --continue` finishes.
+type ContinueRebaseSpec struct {
+	// Branch is the branch being rebased.
+	Branch string
+	// RebasedBranchBase is the parent revision recorded in metadata after the
+	// rebase completes; empty skips the metadata update.
+	RebasedBranchBase string
+	// ExpectedBranchRevision is the compare-and-swap expectation for the
+	// branch ref; empty reads the current ref.
+	ExpectedBranchRevision string
+}
+
 // ContinueRebaseResult represents the result of continuing a rebase
 type ContinueRebaseResult struct {
 	Result              int    // git.RebaseResult value (0 = RebaseDone, 1 = RebaseConflict)
@@ -433,7 +450,7 @@ type ContinueRebaseResult struct {
 	// moved anyway — refusing that would throw away the conflict resolution the
 	// user just performed — so the divergence is real and only the user can
 	// clear it. Empty when nothing was held.
-	UnresetWorktree string
+	UnresetWorktree WorktreePath
 	UnresetReason   string
 }
 
@@ -451,7 +468,7 @@ type PRSubmissionStatus struct {
 	Action      SubmitAction
 	NeedsUpdate bool   // True if the branch has changes or metadata needs update
 	Reason      string // Reason for the status
-	PRNumber    *int
+	PRNumber    *git.PRNumber
 	PRInfo      *PrInfo
 }
 

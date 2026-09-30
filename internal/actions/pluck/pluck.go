@@ -2,6 +2,7 @@
 package pluck
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -9,8 +10,24 @@ import (
 	"github.com/getstackit/stackit/internal/actions/validation"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 )
+
+// pluckEngine lists exactly the engine methods pluck calls.
+type pluckEngine interface {
+	validation.BranchValidationEngine
+	Trunk() engine.Branch
+	IsTrunk(branch engine.Branch) bool
+	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	GetAllCommits(branch engine.Branch) (git.Commits, error)
+	BatchRevisions(branches engine.Branches) engine.RevisionMap
+	GetDivergencePoint(branchName string) (string, error)
+	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
+	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
+	ReparentBranchesToParents(ctx context.Context, moves []engine.BranchParentMove, opts engine.ReparentOpts) error
+	AssignBranchesToNewStack(ctx context.Context, root engine.Branch, branches engine.Branches) (string, error)
+}
 
 // Options contains options for the pluck command
 type Options struct {
@@ -24,7 +41,7 @@ type Options struct {
 // Unlike move, pluck does NOT bring descendants along - they are reparented to the
 // grandparent (the plucked branch's former parent).
 func Action(ctx *app.Context, opts Options, handler Handler) error {
-	eng := ctx.Engine
+	var eng pluckEngine = ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
 
@@ -208,7 +225,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	handler.OnStep(StepMovingSource, basehandler.StatusStarted, "Moving source branch...")
 
-	if err := eng.ReparentBranchesToParents(gctx, moves); err != nil {
+	if err := eng.ReparentBranchesToParents(gctx, moves, engine.ReparentOpts{}); err != nil {
 		if len(children) > 0 {
 			handler.OnStep(StepReparentingChild, basehandler.StatusFailed, err.Error())
 		}
@@ -282,4 +299,19 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	})
 
 	return nil
+}
+
+// InvalidOntoTargets returns the branches source cannot be plucked onto:
+// source itself and all of its descendants.
+func InvalidOntoTargets(eng engine.StackView, source string) map[string]bool {
+	graph := eng.Graph(engine.SortStrategyAlphabetical)
+	descendants := graph.Range(eng.GetBranch(source), engine.StackRange{
+		RecursiveChildren: true,
+		IncludeCurrent:    true,
+	})
+	excluded := make(map[string]bool, len(descendants))
+	for _, d := range descendants {
+		excluded[d.GetName()] = true
+	}
+	return excluded
 }

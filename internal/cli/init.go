@@ -54,7 +54,8 @@ func (h *cliInitHandler) SelectTrunk(_ context.Context, branchNames []string, in
 	return selected, nil
 }
 
-func (h *cliInitHandler) OnSuccess(trunkName string, wasInitialized bool, isReset bool) {
+func (h *cliInitHandler) OnSuccess(result initaction.Result) {
+	trunkName, wasInitialized, isReset := result.Trunk, result.WasInitialized, result.Reset
 	splog := output.NewConsoleOutput(h.writer, false)
 
 	if wasInitialized {
@@ -155,31 +156,6 @@ func (h *cliInitHandler) offerIntegrations(splog output.Output) {
 	}
 }
 
-// EnsureInitialized initializes stackit if not already initialized.
-// Returns the repo root path. This is used by commands that need stackit
-// to be initialized but want to auto-initialize for convenience.
-func EnsureInitialized(ctx context.Context, writer io.Writer) (string, error) {
-	runner := git.NewRunner(nil)
-	repoRoot, err := runner.DiscoverRepoRoot()
-	if err != nil {
-		return "", fmt.Errorf("not a git repository: %w", err)
-	}
-
-	cfg, _ := config.LoadConfig(repoRoot)
-	if !cfg.IsInitialized() {
-		splog := output.NewConsoleOutput(writer, false)
-		splog.Info("Stackit has not been initialized, attempting to setup now...")
-
-		handler := &cliInitHandler{noInteractive: true, writer: writer}
-		err := initaction.Action(ctx, repoRoot, initaction.Options{}, handler)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	return repoRoot, nil
-}
-
 // newInitCmd creates the init command
 func newInitCmd(version string) *cobra.Command {
 	var (
@@ -217,7 +193,12 @@ func newInitCmd(version string) *cobra.Command {
 				Reset: reset,
 			}
 
-			return initaction.Action(cmd.Context(), repoRoot, opts, handler)
+			cfg, err := config.LoadConfig(repoRoot)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			return initaction.Action(cmd.Context(), repoRoot, cfg, opts, handler)
 		},
 	}
 

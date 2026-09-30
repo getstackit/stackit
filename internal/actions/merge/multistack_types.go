@@ -1,6 +1,9 @@
 package merge
 
-import "fmt"
+import (
+	"github.com/getstackit/stackit/internal/actions/stackview"
+	"github.com/getstackit/stackit/internal/git"
+)
 
 // ExcludeReason says why a stack was left out of a multi-stack merge.
 type ExcludeReason string
@@ -10,52 +13,19 @@ const (
 	excludeReasonCIFailure ExcludeReason = "ci_failure"
 )
 
-// MultiStackInfo represents a stack that can be merged in multi-stack mode
-type MultiStackInfo struct {
-	RootBranch  string   // Stack root branch name (direct child of trunk)
-	AllBranches []string // All branches in the stack (root to tip, in order)
-	PRCount     int      // Number of PRs in this stack
-	Scope       string   // Stack scope if any
-}
+// MultiStackInfo represents a stack that can be merged in multi-stack mode.
+// Stack discovery and its types live in stackview; these aliases keep the
+// merge package's names.
+type MultiStackInfo = stackview.StackInfo
 
 // MultiStacks is an ordered collection of independent stacks.
-type MultiStacks []MultiStackInfo
-
-// Label returns the display label for a stack.
-func (s MultiStackInfo) Label() string {
-	label := fmt.Sprintf("%s (%d branches", s.RootBranch, len(s.AllBranches))
-	if s.PRCount > 0 {
-		label += fmt.Sprintf(", %d PRs", s.PRCount)
-	}
-	if s.Scope != "" {
-		label += fmt.Sprintf(", scope: %s", s.Scope)
-	}
-	return label + ")"
-}
-
-// FilterByRoots returns stacks selected by root name, preserving selection order.
-func (stacks MultiStacks) FilterByRoots(selectedRoots []string) MultiStacks {
-	if len(selectedRoots) == 0 {
-		return stacks
-	}
-	byRoot := make(map[string]MultiStackInfo, len(stacks))
-	for _, stack := range stacks {
-		byRoot[stack.RootBranch] = stack
-	}
-	filtered := make(MultiStacks, 0, len(selectedRoots))
-	for _, root := range selectedRoots {
-		if stack, ok := byRoot[root]; ok {
-			filtered = append(filtered, stack)
-		}
-	}
-	return filtered
-}
+type MultiStacks = stackview.Stacks
 
 // MultiStackResult contains the result of a multi-stack merge operation
 type MultiStackResult struct {
 	IncludedStacks MultiStacks          // Stacks that were successfully included
 	ExcludedStacks []MultiStackExcluded // Stacks that were excluded with reasons
-	PRNumber       int                  // Created PR number
+	PRNumber       git.PRNumber         // Created PR number
 	PRURL          string               // Created PR URL
 	BranchName     string               // Consolidation branch name
 }

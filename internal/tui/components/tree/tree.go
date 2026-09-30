@@ -34,6 +34,8 @@ const (
 	ReviewStatusApproved = "Approved"
 	// ReviewStatusChangesRequested is the review status string for PRs with requested changes.
 	ReviewStatusChangesRequested = "Changes Requested"
+	// ReviewStatusAwaitingReview is the review status string for PRs awaiting a required review.
+	ReviewStatusAwaitingReview = "Awaiting Review"
 )
 
 // CheckStatus is the aggregate CI state shown for a branch in tree views.
@@ -42,13 +44,13 @@ type CheckStatus string
 // MergedParentDisplay represents a historical merged parent for display purposes
 type MergedParentDisplay struct {
 	BranchName string
-	PRNumber   *int
+	PRNumber   *git.PRNumber
 	PRState    git.PRState
 }
 
 // BranchAnnotation holds per-branch display metadata
 type BranchAnnotation struct {
-	PRNumber      *int
+	PRNumber      *git.PRNumber
 	PRAction      string // "create", "update", "skip", ""
 	CheckStatus   CheckStatus
 	ReviewStatus  string // "Approved", "In Review", "Changes Requested", "Commented", ""
@@ -1384,7 +1386,7 @@ func (r *StackTreeRenderer) checksIcon(status CheckStatus) string {
 	}
 }
 
-func formatPRNumberPlain(prNumber int) string {
+func formatPRNumberPlain(prNumber git.PRNumber) string {
 	return "#" + strings.TrimPrefix(style.ColorPRNumber(prNumber), "PR ")
 }
 

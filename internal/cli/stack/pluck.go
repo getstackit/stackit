@@ -8,7 +8,6 @@ import (
 	"github.com/getstackit/stackit/internal/actions/pluck"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/tui"
 )
 
@@ -91,19 +90,8 @@ would occur, the pluck will abort without making any changes.`,
 
 // interactivePluckOntoSelection shows an interactive branch selector for choosing the "onto" branch
 func interactivePluckOntoSelection(ctx *app.Context, sourceBranch string) (string, error) {
-	eng := ctx.Engine
-
-	// Get descendants of source to exclude them (can't pluck onto descendant)
-	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	descendants := graph.Range(eng.GetBranch(sourceBranch), engine.StackRange{
-		RecursiveChildren: true,
-		IncludeCurrent:    true,
-		RecursiveParents:  false,
-	})
-	excludedBranches := make(map[string]bool)
-	for _, d := range descendants {
-		excludedBranches[d.GetName()] = true
-	}
+	// Can't pluck onto the source itself or one of its descendants.
+	excludedBranches := pluck.InvalidOntoTargets(ctx.Engine, sourceBranch)
 
 	// Show interactive selector
 	header := fmt.Sprintf("Select new parent for '%s' (children will be reparented to grandparent)", sourceBranch)

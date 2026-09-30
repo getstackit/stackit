@@ -11,7 +11,6 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -70,7 +69,7 @@ type Info struct {
 	HeadSHA    string
 	BaseSHA    string
 	Action     engine.SubmitAction
-	PRNumber   *int
+	PRNumber   *git.PRNumber
 	Metadata   *PRMetadata
 }
 
@@ -211,16 +210,16 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	fixedMap := make(map[string]bool)
 	scopeMap := make(map[string]string)
-	worktreeMap := make(map[string]string)
+	worktreeMap := make(map[string]engine.WorktreePath)
 
 	// Look up managed worktrees once and index by stack root, rather than
 	// calling GetWorktreeForStack per branch (each call reads a git ref plus
 	// a blob). Branches sharing a stack root would otherwise repeat the same
 	// lookup.
-	worktreeByStackRoot := make(map[string]string)
+	worktreeByStackRoot := make(map[string]engine.WorktreePath)
 	if worktrees, err := ctx.Worktree().ListManagedWorktrees(); err == nil {
 		for _, wt := range worktrees {
-			worktreeByStackRoot[wt.AnchorBranch] = wt.Path.String()
+			worktreeByStackRoot[wt.AnchorBranch] = wt.Path
 		}
 	}
 
@@ -538,7 +537,7 @@ func publishGitHubStackMetadata(ctx *app.Context, chains []nativeStackChain, han
 // component. Singleton chains are intentionally ignored: GitHub requires at
 // least two pull requests for a native Stack.
 func planNativeStackSync(ctx *app.Context, eng engine.Engine, branches engine.Branches) (nativeStackSyncPlan, error) {
-	if ctx.Config == nil || ctx.Config.StackShape() != config.StackShapeLinear {
+	if ctx.Config == nil || !ctx.Config.LinearStacks() {
 		return nativeStackSyncPlan{}, fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
 	}
 
@@ -620,12 +619,12 @@ func validateGitHubStackChain(eng engine.Engine, branches engine.Branches) error
 
 // createGitHubStackMetadata reconciles GitHub's native Stack resource after the
 // normal submit flow has created or updated every PR in the selected chain.
-func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*github.StackInfo, []int, github.StackSyncAction, error) {
+func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*github.StackInfo, []git.PRNumber, github.StackSyncAction, error) {
 	if err := github.ValidateStackPullRequestCount(len(branches)); err != nil {
 		return nil, nil, "", err
 	}
 
-	pullRequests := make([]int, 0, len(branches))
+	pullRequests := make([]git.PRNumber, 0, len(branches))
 	for _, branch := range branches {
 		pr, err := branch.GetPrInfo()
 		if err != nil || pr == nil || pr.Number() == nil {
@@ -655,7 +654,7 @@ func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*git
 // dissolveGitHubStack removes the native GitHub Stack containing pullRequest.
 // GitHub's Stacks API has no endpoint that drops a single pull request, so
 // unstacking the whole resource is the only way to free a PR's base branch.
-func dissolveGitHubStack(ctx *app.Context, pullRequest int) error {
+func dissolveGitHubStack(ctx *app.Context, pullRequest git.PRNumber) error {
 	client, err := getGitHubClient(ctx)
 	if err != nil {
 		return err
@@ -707,7 +706,7 @@ func buildStackSnapshot(
 	trunkBranchName string,
 	fixedMap map[string]bool,
 	scopeMap map[string]string,
-	worktreeMap map[string]string,
+	worktreeMap map[string]engine.WorktreePath,
 ) StackSnapshot {
 	parentMap := make(map[string]string, len(branches))
 	branchNames := make([]string, len(branches))
@@ -884,15 +883,15 @@ func createPullRequestQuiet(ctx *app.Context, submissionInfo Info, handler Handl
 	branch := nav.GetBranch(submissionInfo.BranchName)
 	// Use bodyToCreate (the body that was actually sent) instead of submissionInfo.Metadata.Body
 	// This ensures local state matches what's on GitHub
-	if err := pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
-		&prNumber,
-		submissionInfo.Metadata.Title,
-		bodyToCreate,
-		git.PRStateOpen,
-		submissionInfo.Base,
-		prURL,
-		submissionInfo.Metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason()).WithBaseSHA(submissionInfo.BaseSHA)); err != nil {
+	if err := pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(engine.PrInfoFields{
+		Number:  &prNumber,
+		Title:   submissionInfo.Metadata.Title,
+		Body:    bodyToCreate,
+		State:   git.PRStateOpen,
+		Base:    submissionInfo.Base,
+		URL:     prURL,
+		IsDraft: submissionInfo.Metadata.IsDraft,
+	}).WithLockReason(branch.GetLockReason()).WithBaseSHA(submissionInfo.BaseSHA)); err != nil {
 		ctx.Output.Debug("Failed to store local PR info for %s: %v", submissionInfo.BranchName, err)
 	}
 
@@ -1049,15 +1048,15 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 		}
 	}
 
-	if err := pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(
-		submissionInfo.PRNumber,
-		submissionInfo.Metadata.Title,
-		submissionInfo.Metadata.Body,
-		git.PRStateOpen,
-		baseToStore,
-		prURL,
-		submissionInfo.Metadata.IsDraft,
-	).WithLockReason(branch.GetLockReason()).WithBaseSHA(baseSHAToStore)); err != nil {
+	if err := pr.UpsertPrInfo(ctx.Context, branch, engine.NewPrInfo(engine.PrInfoFields{
+		Number:  submissionInfo.PRNumber,
+		Title:   submissionInfo.Metadata.Title,
+		Body:    submissionInfo.Metadata.Body,
+		State:   git.PRStateOpen,
+		Base:    baseToStore,
+		URL:     prURL,
+		IsDraft: submissionInfo.Metadata.IsDraft,
+	}).WithLockReason(branch.GetLockReason()).WithBaseSHA(baseSHAToStore)); err != nil {
 		ctx.Output.Debug("Failed to store local PR info for %s: %v", submissionInfo.BranchName, err)
 	}
 

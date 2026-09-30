@@ -2,20 +2,12 @@ package actions
 
 import (
 	"cmp"
-	"encoding/json"
-	"fmt"
 	"slices"
-	"strings"
-
-	tea "charm.land/bubbletea/v2"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/output"
-	"github.com/getstackit/stackit/internal/tui"
-	"github.com/getstackit/stackit/internal/tui/components/tree"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -81,7 +73,7 @@ const (
 
 // TreePRInfo represents PR information in JSON output
 type TreePRInfo struct {
-	Number       int          `json:"number"`
+	Number       git.PRNumber `json:"number"`
 	URL          string       `json:"url,omitempty"`
 	Title        string       `json:"title,omitempty"`
 	State        git.PRState  `json:"state"`
@@ -95,217 +87,6 @@ type TreeSummary struct {
 	TotalBranches int `json:"total_branches"`
 	ApprovedCount int `json:"approved_count"`
 	InReviewCount int `json:"in_review_count"`
-}
-
-// TreeAction displays the branch tree
-func TreeAction(ctx *app.Context, opts TreeOptions) error {
-	// JSON output mode
-	if opts.JSON {
-		return treeActionJSON(ctx, opts)
-	}
-
-	// If interactive mode is requested or auto-detected
-	if opts.Interactive || (utils.IsInteractive() && opts.Steps == nil) {
-		// Run interactive TUI
-		m := tui.NewTreeModel(ctx.Context, ctx.Engine, ctx.GitHub(), tui.TreeOptions{
-			Style:         string(opts.Style),
-			ShowUntracked: opts.ShowUntracked,
-			Logger:        ctx.Logger,
-		})
-		m.SetAltScreen(true)
-		p := tea.NewProgram(m)
-		_, err := p.Run()
-		return err
-	}
-
-	// Detect worktrees (builds both empty and stack-root maps in one call)
-	wtData := tui.GetWorktreeData(ctx.Engine)
-
-	// Create tree renderer - use empty worktrees-aware version if we have any
-	var renderer *tree.StackTreeRenderer
-	if len(wtData.EmptyWorktrees) > 0 {
-		emptyWorktreeNames := make(map[string]bool)
-		for name := range wtData.EmptyWorktrees {
-			emptyWorktreeNames[name] = true
-		}
-		renderer = tui.NewStackTreeRendererWithEmptyWorktrees(ctx.Engine, emptyWorktreeNames)
-	} else {
-		renderer = tui.NewStackTreeRenderer(ctx.Engine)
-	}
-
-	allBranches := ctx.Engine.AllBranches()
-	renderOpts := tree.RenderOptions{
-		Mode:        tree.RenderModeFull, // We want the full tree characters with stats
-		Steps:       opts.Steps,
-		ShowSHAs:    opts.ShowSHAs,
-		HideSummary: opts.Style == TreeStyleShort,
-	}
-	visibleBranches := visibleTreeBranches(renderer, opts.BranchName, renderOpts, allBranches)
-
-	// Resolve the git-computed annotation stats (short SHA, commit count, diff
-	// stats) for just the visible branches as one batched value. Scoped to the
-	// visible set, so bounded views stay cheap; the short style needs none.
-	var stats map[string]engine.BranchStat
-	if opts.Style != TreeStyleShort {
-		stats = ctx.Engine.BatchBranchStats(visibleBranches)
-	}
-
-	// The short style skips BatchBranchStats above, so with --shas it needs its
-	// own batched revision lookup instead of resolving each branch's SHA
-	// individually in the per-branch loop below.
-	var revisions engine.RevisionMap
-	if opts.Style == TreeStyleShort && opts.ShowSHAs {
-		revisions = ctx.Engine.BatchRevisions(visibleBranches)
-	}
-
-	// Collect annotations only for branches that will be rendered.
-	annotations := make(map[string]tree.BranchAnnotation, len(visibleBranches))
-
-	// Prefetch CI status in batch if in FULL style
-	var ciStatuses github.ChecksByBranch
-	if opts.Style == TreeStyleFull && ctx.GitHub() != nil {
-		branchNames := visibleBranches.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
-		if len(branchNames) > 0 {
-			ciStatuses, _ = ctx.GitHub().BatchGetPRChecksStatus(ctx.Context, branchNames)
-		}
-	}
-
-	enrichment := &tui.AnnotationEnrichment{
-		CIStatuses:          ciStatuses,
-		EmptyWorktrees:      wtData.EmptyWorktrees,
-		WorktreeByStackRoot: wtData.WorktreeByStackRoot,
-	}
-
-	type result struct {
-		branchName string
-		annotation tree.BranchAnnotation
-	}
-	results := make(chan result, len(visibleBranches))
-
-	if len(visibleBranches) > 0 {
-		utils.Run(visibleBranches.All(), func(branchObj engine.Branch) {
-			annotation := buildTreeAnnotation(ctx.Engine, branchObj, stats[branchObj.GetName()], revisions[branchObj.GetName()], opts, wtData, enrichment)
-			results <- result{branchObj.GetName(), annotation}
-		})
-	}
-	close(results)
-
-	for res := range results {
-		annotations[res.branchName] = res.annotation
-	}
-
-	renderer.SetAnnotations(annotations)
-
-	stackLines := renderer.RenderStack(opts.BranchName, renderOpts)
-
-	// Add summary footer
-	branchCount := 0
-	approvedCount := 0
-	inReviewCount := 0
-	for name, ann := range annotations {
-		branch := ctx.Engine.GetBranch(name)
-		if branch.IsTrunk() || branch.IsWorktreeAnchor() {
-			continue
-		}
-		branchCount++
-		switch ann.ReviewStatus {
-		case "Approved":
-			approvedCount++
-		case "In Review":
-			inReviewCount++
-		}
-	}
-
-	if branchCount > 0 {
-		summaryParts := []string{fmt.Sprintf("%d branches", branchCount)}
-		if approvedCount > 0 {
-			summaryParts = append(summaryParts, fmt.Sprintf("%d approved", approvedCount))
-		}
-		if inReviewCount > 0 {
-			summaryParts = append(summaryParts, fmt.Sprintf("%d in review", inReviewCount))
-		}
-		stackLines = append(stackLines, "")
-		stackLines = append(stackLines, output.Dim(strings.Join(summaryParts, " · ")))
-	}
-
-	// Add untracked branches if requested
-	if opts.ShowUntracked {
-		untracked := getUntrackedBranchNames(ctx)
-		if len(untracked) > 0 {
-			stackLines = append(stackLines, "")
-			stackLines = append(stackLines, "Untracked branches:")
-			stackLines = append(stackLines, untracked...)
-		}
-	}
-
-	// Output the result
-	ctx.Output.Print(strings.Join(stackLines, "\n"))
-	ctx.Output.Newline()
-
-	return nil
-}
-
-func visibleTreeBranches(renderer *tree.StackTreeRenderer, branchName string, opts tree.RenderOptions, branches engine.Branches) engine.Branches {
-	branchByName := make(map[string]engine.Branch, len(branches))
-	for _, b := range branches {
-		branchByName[b.GetName()] = b
-	}
-
-	rendered := renderer.RenderStackDetailed(branchName, opts)
-	visible := engine.NewBranchesBuilder(len(rendered))
-	seen := make(map[string]struct{}, len(rendered))
-	for _, renderedBranch := range rendered {
-		if _, ok := seen[renderedBranch.Name]; ok {
-			continue
-		}
-		seen[renderedBranch.Name] = struct{}{}
-		if branch, ok := branchByName[renderedBranch.Name]; ok {
-			visible.Add(branch)
-		}
-	}
-	return visible.Build()
-}
-
-func buildTreeAnnotation(
-	eng engine.Engine,
-	branch engine.Branch,
-	stat engine.BranchStat,
-	revision string,
-	opts TreeOptions,
-	wtData *tui.WorktreeData,
-	enrichment *tui.AnnotationEnrichment,
-) tree.BranchAnnotation {
-	if opts.Style != TreeStyleShort {
-		return tui.BuildFullAnnotation(eng, branch, stat, enrichment, tui.AnnotationOptions{
-			SkipCommitMessages: true,
-		})
-	}
-
-	// The short style has no stats; its SHA comes from the batched revisions.
-	annotation := tui.GetMinimalAnnotationWithWorktreeAndEmpty(eng, branch, wtData)
-	if opts.ShowSHAs && revision != "" {
-		annotation.LocalSHA = utils.ShortRevision(revision, 0)
-	}
-	return annotation
-}
-
-func getUntrackedBranchNames(ctx *app.Context) []string {
-	untracked := engine.FilterBranches(ctx.Engine, func(b engine.Branch) bool {
-		return !b.IsTrunk() && !b.IsTracked()
-	})
-	return untracked.Names()
-}
-
-// treeActionJSON generates JSON output for the tree command.
-func treeActionJSON(ctx *app.Context, opts TreeOptions) error {
-	result := BuildTreeJSON(ctx, opts)
-
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-	ctx.Output.Info("%s", string(data))
-	return nil
 }
 
 // BuildTreeJSON builds the structured tree result (branch tree, PR/CI status, and

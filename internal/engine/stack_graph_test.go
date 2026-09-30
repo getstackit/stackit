@@ -10,6 +10,24 @@ import (
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
+func TestStackGraphOwningTrunk(t *testing.T) {
+	t.Parallel()
+
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"branch1": "main",
+			"branch2": "branch1",
+		})
+
+	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
+	branch2 := s.Engine.GetBranch("branch2")
+
+	require.Equal(t, "main", graph.OwningTrunk(branch2, []string{"main"}))
+	require.Equal(t, "branch1", graph.OwningTrunk(branch2, []string{"main", "branch1"}))
+	require.Equal(t, "branch2", graph.OwningTrunk(branch2, []string{"branch2"}))
+	require.Equal(t, "main", graph.OwningTrunk(branch2, []string{"unrelated"}))
+}
+
 func TestStackGraphRangeAncestorsExcludeTrunk(t *testing.T) {
 	t.Parallel()
 

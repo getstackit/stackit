@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -101,7 +102,7 @@ func TestAction(t *testing.T) {
 			})
 
 		// Add PR info
-		prNumber := 123
+		prNumber := git.PRNumber(123)
 		prInfo := testhelpers.NewTestPrInfo(prNumber).
 			WithURL("https://github.com/owner/repo/pull/123")
 		branch1 := s.Engine.GetBranch("branch1")
@@ -165,7 +166,7 @@ func TestAction(t *testing.T) {
 		githubClient := testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
 
 		// Add PR info to engine
-		prA := 101
+		prA := git.PRNumber(101)
 		branchA := s.Engine.GetBranch("branch-a")
 		branchB := s.Engine.GetBranch("branch-b")
 		branchC := s.Engine.GetBranch("branch-c")
@@ -174,13 +175,13 @@ func TestAction(t *testing.T) {
 			WithURL("https://github.com/owner/repo/pull/101"))
 		require.NoError(t, err)
 
-		prB := 102
+		prB := git.PRNumber(102)
 		err = s.Engine.UpsertPrInfo(context.Background(), branchB, testhelpers.NewTestPrInfo(prB).
 			WithBase("branch-a").
 			WithURL("https://github.com/owner/repo/pull/102"))
 		require.NoError(t, err)
 
-		prC := 103
+		prC := git.PRNumber(103)
 		err = s.Engine.UpsertPrInfo(context.Background(), branchC, testhelpers.NewTestPrInfo(prC).
 			WithBase("branch-b").
 			WithURL("https://github.com/owner/repo/pull/103"))

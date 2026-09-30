@@ -42,6 +42,7 @@ func RunWithOptions(cmd *cobra.Command, opts app.GlobalOptions, fn func(ctx *app
 	if err != nil {
 		return err
 	}
+	ctx.Prompter = TUIPrompter{}
 
 	// Populate worktree context
 	if ctx.Engine != nil && !opts.SkipManagedWorktreeCheck {

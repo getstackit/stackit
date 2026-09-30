@@ -17,6 +17,7 @@ type Options struct {
 	TargetBranch   string
 	Plan           *Plan // Optional pre-calculated plan
 	UndoStackDepth int   // Maximum undo stack depth (from config)
+	LinearStacks   bool  // stack.shape == linear (from config)
 	Handler        EventHandler
 	MergeMethod    github.MergeMethod // Optional: override merge method (empty = auto-detect/prompt)
 }
@@ -62,6 +63,7 @@ func Action(ctx *app.Context, opts Options) error {
 		Force:          opts.Force,
 		Wait:           opts.Wait,
 		UndoStackDepth: opts.UndoStackDepth,
+		LinearStacks:   opts.LinearStacks,
 		Handler:        opts.Handler,
 		MergeMethod:    opts.MergeMethod,
 	}

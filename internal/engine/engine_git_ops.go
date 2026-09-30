@@ -5,52 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/getstackit/stackit/internal/git"
 )
-
-// GetPendingChanges returns the status of pending changes in the working directory
-func (e *engineImpl) GetPendingChanges(ctx context.Context) ([]PendingChange, error) {
-	output, err := e.git.GetStatusPorcelain(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var changes []PendingChange
-	lines := strings.SplitSeq(strings.TrimSuffix(output, "\n"), "\n")
-	for line := range lines {
-		if len(line) < 4 {
-			continue
-		}
-		// Porcelain format: XY path
-		// X is staged status, Y is unstaged status
-		x := line[0]
-		y := line[1]
-		path := strings.TrimSpace(line[3:])
-
-		if x != ' ' && x != '?' {
-			changes = append(changes, PendingChange{
-				Path:   path,
-				Status: string(x),
-				Staged: true,
-			})
-		}
-		if y != ' ' {
-			status := string(y)
-			if x == '?' && y == '?' {
-				status = "??"
-			}
-			changes = append(changes, PendingChange{
-				Path:   path,
-				Status: status,
-				Staged: false,
-			})
-		}
-	}
-
-	return changes, nil
-}
 
 // GetUnstagedDiff returns the unstaged diff
 func (e *engineImpl) GetUnstagedDiff(ctx context.Context, files ...string) (string, error) {
@@ -71,11 +28,6 @@ func (e *engineImpl) HasStagedChanges(ctx context.Context) (bool, error) {
 // HasUnstagedChanges checks if there are unstaged changes in the repository
 func (e *engineImpl) HasUnstagedChanges(ctx context.Context) (bool, error) {
 	return e.git.HasUnstagedChanges(ctx)
-}
-
-// HasUntrackedFiles checks if there are untracked files in the repository
-func (e *engineImpl) HasUntrackedFiles(ctx context.Context) (bool, error) {
-	return e.git.HasUntrackedFiles(ctx)
 }
 
 // GetUntrackedFiles returns the paths of untracked files in the working tree.
@@ -113,8 +65,8 @@ func (e *engineImpl) GetMergeBase(ctx context.Context, rev1, rev2 string) (strin
 	return e.git.GetMergeBase(ctx, rev1, rev2)
 }
 
-// IsDiffEmpty checks if the diff between base and head is empty
-func (e *engineImpl) IsDiffEmpty(ctx context.Context, base, head string) (bool, error) {
+// isDiffEmpty checks if the diff between base and head is empty
+func (e *engineImpl) isDiffEmpty(ctx context.Context, base, head string) (bool, error) {
 	diff, err := e.git.ReadDiffs(ctx, git.DiffCheckOnly, git.RevRange{Base: base, Head: head}).One()
 	return diff.Empty, err
 }
@@ -150,11 +102,6 @@ func (e *engineImpl) CheckoutPaths(ctx context.Context, branch string, pathspecs
 	return e.git.CheckoutPaths(ctx, branch, pathspecs)
 }
 
-// RemovePaths removes specific paths from the working tree
-func (e *engineImpl) RemovePaths(ctx context.Context, pathspecs []string) error {
-	return e.git.RemovePaths(ctx, pathspecs)
-}
-
 // StashList returns the stash list
 func (e *engineImpl) StashList(ctx context.Context) (string, error) {
 	return e.git.ListStash(ctx)
@@ -166,8 +113,8 @@ func (e *engineImpl) ParseStagedHunks(ctx context.Context) ([]git.Hunk, error) {
 }
 
 // ShowDiff returns the diff between two refs with optional stat mode
-func (e *engineImpl) ShowDiff(ctx context.Context, left, right string, stat bool) (string, error) {
-	return e.git.ShowDiff(ctx, left, right, stat)
+func (e *engineImpl) ShowDiff(ctx context.Context, rr git.RevRange, format git.DiffFormat) (string, error) {
+	return e.git.ShowDiff(ctx, rr, format)
 }
 
 // GetDiffBetween returns the raw diff between two refs, suitable for parsing.
@@ -177,8 +124,8 @@ func (e *engineImpl) GetDiffBetween(ctx context.Context, rr git.RevRange, files 
 }
 
 // ShowCommits returns commit log with optional patches/stat
-func (e *engineImpl) ShowCommits(ctx context.Context, rr git.RevRange, patch, stat bool) (string, error) {
-	return e.git.ShowCommits(ctx, rr, patch, stat)
+func (e *engineImpl) ShowCommits(ctx context.Context, rr git.RevRange, format git.CommitLogFormat) (string, error) {
+	return e.git.ShowCommits(ctx, rr, format)
 }
 
 // GetCommitTemplate returns the commit template
@@ -189,11 +136,6 @@ func (e *engineImpl) GetCommitTemplate(ctx context.Context) (string, error) {
 // GetUnmergedFiles returns list of files with merge conflicts
 func (e *engineImpl) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 	return e.git.GetUnmergedFiles(ctx)
-}
-
-// GetParentCommitSHA returns the parent commit SHA of a commit
-func (e *engineImpl) GetParentCommitSHA(commitSHA string) (string, error) {
-	return e.git.ReadRevisions(context.Background(), commitSHA+"^").One()
 }
 
 // GetCommitSHA returns the SHA at a relative position (0 = HEAD, 1 = HEAD~1)
@@ -239,6 +181,11 @@ func (e *engineImpl) GetRepoRoot() string {
 // GetUserName returns the configured git user.name.
 func (e *engineImpl) GetUserName(ctx context.Context) (string, error) {
 	return e.git.GetUserName(ctx)
+}
+
+// GitVersion reports the installed Git's version.
+func (e *engineImpl) GitVersion(ctx context.Context) (git.Version, error) {
+	return e.git.GitVersion(ctx)
 }
 
 // GetConfig reads a git configuration value.

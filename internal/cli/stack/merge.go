@@ -2,6 +2,8 @@
 package stack
 
 import (
+	"errors"
+
 	"github.com/spf13/cobra"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -10,6 +12,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	mergeCmd "github.com/getstackit/stackit/internal/cli/stack/merge"
+	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/style"
 )
 
@@ -24,12 +27,32 @@ func handlePostMergeAction(ctx *app.Context, action mergeAction.PostMergeAction)
 
 	switch action {
 	case mergeAction.PostMergeSyncTrunk:
-		result, err := actions.CheckoutAction(ctx, actions.CheckoutOptions{
-			CheckoutTrunk: true,
-		}, nil)
-		if err != nil {
+		// The sync UI starts only once trunk is checked out. runner.Cleanup is
+		// nil-safe, so the deferred call is fine when it never started.
+		var runner *tui.Runner
+		defer func() { runner.Cleanup() }()
+
+		// PostMergeSync never enters the conflict resolution workflow:
+		// EnterConflictWorkflow detaches HEAD, which violates the safety
+		// invariant that merge next must never leave the user in detached HEAD
+		// state. Conflicts are reported in the sync summary with instructions
+		// to run 'stackit restack' manually.
+		_, err := mergeAction.PostMergeSync(ctx, mergeAction.PostMergeSyncOptions{
+			OnTrunkCheckedOut: func(result actions.CheckoutResult) {
+				if result.WorktreeSwitchPath != "" {
+					common.HandleCheckoutResult(ctx.Output, result)
+				}
+			},
+		}, func() sync.Handler {
+			var handler sync.Handler
+			runner, handler = NewSyncUI(ctx.Output, ctx.Logger)
+			return handler
+		})
+
+		var checkoutErr *mergeAction.PostMergeCheckoutError
+		if errors.As(err, &checkoutErr) {
 			out.Newline()
-			out.Error("%v", err)
+			out.Error("%v", checkoutErr.Err)
 			out.Newline()
 			out.Info("%s", style.ColorYellow("To fix and continue:"))
 			out.Info("  (1) Handle your local changes (e.g., %s or %s)", style.ColorCyan("git stash"), style.ColorCyan("git commit"))
@@ -37,41 +60,11 @@ func handlePostMergeAction(ctx *app.Context, action mergeAction.PostMergeAction)
 			out.Info("  (3) Sync your workspace: %s", style.ColorCyan("stackit sync --restack"))
 			return nil
 		}
-
-		if result.WorktreeSwitchPath != "" {
-			common.HandleCheckoutResult(ctx.Output, result)
-		}
-
-		// runner.Cleanup is nil-safe so no extra guard is needed.
-		runner, handler := NewSyncUI(ctx.Output, ctx.Logger)
-		defer runner.Cleanup()
-
-		// Wrap the handler to prevent entering the conflict resolution workflow.
-		// EnterConflictWorkflow detaches HEAD, which violates the safety invariant
-		// that merge next must never leave the user in detached HEAD state.
-		// Conflicts are reported in the sync summary with instructions to run
-		// 'stackit restack' manually.
-		return sync.Action(ctx, sync.Options{
-			Restack: true,
-		}, &postMergeSyncHandler{Handler: handler})
+		return err
 
 	case mergeAction.PostMergeDone:
 		return nil
 	}
 
 	return nil
-}
-
-// postMergeSyncHandler wraps a sync handler to prevent entering the conflict
-// resolution workflow after merge next. EnterConflictWorkflow detaches HEAD,
-// which would leave the user in an unexpected state after a merge operation.
-type postMergeSyncHandler struct {
-	sync.Handler
-}
-
-// PromptResolveConflicts always returns false to skip entering the conflict
-// workflow. Conflicts are shown in the summary with instructions to run
-// 'stackit restack' manually.
-func (h *postMergeSyncHandler) PromptResolveConflicts(_ []string) (bool, error) {
-	return false, nil
 }

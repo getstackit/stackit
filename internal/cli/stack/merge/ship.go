@@ -202,6 +202,7 @@ func runMergeShip(ctx *app.Context, opts mergeShipOptions, postMergeHandler Post
 		TargetBranch:   opts.branch,
 		Plan:           plan,
 		UndoStackDepth: undoStackDepth,
+		LinearStacks:   cfg.LinearStacks(),
 		Handler:        eventHandler,
 		MergeMethod:    mergeMethod,
 	}
@@ -361,23 +362,11 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 
 	// Fire-and-forget (default): enable automerge and return immediately
 	if !opts.wait {
-		prNodeID, err := getPRNodeID(ctx, result.PRNumber)
-		if err != nil {
+		if err := mergeAction.EnableAutoMergeForPR(ctx, result.PRNumber); err != nil {
 			out.Warn("Could not enable automerge: %v", err)
 			out.Tip("Enable automerge manually on the PR: %s", result.PRURL)
 		} else {
-			mergeMethod, methodErr := mergeAction.GetMergeMethod(ctx, ctx.GitHub())
-			if methodErr != nil {
-				out.Warn("Could not determine merge method: %v", methodErr)
-				out.Tip("Enable automerge manually on the PR: %s", result.PRURL)
-			} else {
-				if err := github.EnableAutoMerge(ctx.Context, ctx.Engine.Git(), prNodeID, github.EnableAutoMergeOptions{MergeMethod: mergeMethod}); err != nil { //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
-					out.Warn("Could not enable automerge: %v", err)
-					out.Tip("Enable automerge manually on the PR: %s", result.PRURL)
-				} else {
-					out.Success("Automerge enabled - PR will merge when CI passes")
-				}
-			}
+			out.Success("Automerge enabled - PR will merge when CI passes")
 		}
 		out.Newline()
 		out.Tip("Run 'stackit sync --restack' after the PR is merged to update your stack.")
@@ -385,18 +374,4 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 	// When Wait=true (opt-in), ExecuteMultiStack already waited for CI and merged the PR
 
 	return nil
-}
-
-// getPRNodeID fetches the NodeID for a PR by number
-func getPRNodeID(ctx *app.Context, prNumber int) (string, error) {
-	remoteCtx, cancelRemote := ctx.RemoteOperationContext()
-	prInfo, err := ctx.GitHub().GetPullRequest(remoteCtx, prNumber)
-	cancelRemote()
-	if err != nil {
-		return "", err
-	}
-	if prInfo.NodeID == "" {
-		return "", fmt.Errorf("PR #%d does not have a Node ID", prNumber)
-	}
-	return prInfo.NodeID, nil
 }

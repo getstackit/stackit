@@ -11,6 +11,10 @@ import (
 
 // SquashOptions contains options for the squash command
 type SquashOptions struct {
+	// Branch is the branch to squash. Empty means the current branch. When it
+	// names another branch, the action checks it out for the squash and
+	// restores the original branch afterwards, on success or failure.
+	Branch  string
 	Message string
 	NoEdit  bool
 }
@@ -21,8 +25,12 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 	out := ctx.Output
 	context := ctx.Context
 
-	// Get current branch
-	currentBranch := ctx.Navigator().CurrentBranch()
+	originalBranch := ctx.Navigator().CurrentBranch()
+	currentBranch := originalBranch
+	if opts.Branch != "" && (originalBranch == nil || originalBranch.GetName() != opts.Branch) {
+		target := ctx.Navigator().GetBranch(opts.Branch)
+		currentBranch = &target
+	}
 	if currentBranch == nil {
 		return errors.ErrNotOnBranch
 	}
@@ -32,6 +40,19 @@ func SquashAction(ctx *app.Context, opts SquashOptions) error {
 	}
 	if err := EnsureCanModifyHere(ctx, *currentBranch); err != nil {
 		return err
+	}
+
+	if currentBranch != originalBranch {
+		if err := ctx.Engine.CheckoutBranch(context, *currentBranch); err != nil {
+			return fmt.Errorf("checkout %s: %w", currentBranch.GetName(), err)
+		}
+		if originalBranch != nil {
+			defer func() {
+				if err := ctx.Engine.CheckoutBranch(context, *originalBranch); err != nil {
+					ctx.Logger.Info("squash failed to restore branch=%v err=%v", originalBranch.GetName(), err)
+				}
+			}()
+		}
 	}
 
 	// Log entry point for diagnostics

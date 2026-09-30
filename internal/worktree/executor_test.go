@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
@@ -104,10 +105,10 @@ func TestSession_ResetToTrunk(t *testing.T) {
 	require.NoError(t, err)
 
 	// Stage and commit using the worktree engine's git
-	git := session.Engine.Git()
-	_, err = git.RunGitCommandWithContext(context.Background(), "add", ".")
+	runner := git.NewRunnerWithPath(session.Path.String(), nil)
+	_, err = runner.RunGitCommandWithContext(context.Background(), "add", ".")
 	require.NoError(t, err)
-	_, err = git.RunGitCommandWithContext(context.Background(), "commit", "-m", "test commit")
+	_, err = runner.RunGitCommandWithContext(context.Background(), "commit", "-m", "test commit")
 	require.NoError(t, err)
 
 	// Verify we're at a different revision
@@ -206,7 +207,7 @@ func TestSession_PullTrunk_StaysDetached(t *testing.T) {
 
 	// Verify the worktree is at detached HEAD, not on a branch
 	// Get current branch in worktree
-	worktreeGit := session.Engine.Git()
+	worktreeGit := git.NewRunnerWithPath(session.Path.String(), nil)
 	currentBranch, err := worktreeGit.RunGitCommandWithContext(context.Background(), "symbolic-ref", "--short", "HEAD")
 	if err == nil {
 		// If symbolic-ref succeeds, we're on a branch (which is the bug!)

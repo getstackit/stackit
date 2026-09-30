@@ -4,7 +4,8 @@
 package shippable
 
 import (
-	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/stackview"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // Status represents the overall shippability state of a stack.
@@ -44,16 +45,16 @@ const (
 // BlockingPR describes a PR that is blocking a stack from being shippable.
 type BlockingPR struct {
 	Branch   string         // Branch name
-	PRNumber int            // PR number (0 if no PR)
+	PRNumber git.PRNumber   // PR number (0 if no PR)
 	Reason   BlockingReason // Why this PR is blocking
 }
 
 // Stack represents a stack with its shippability analysis.
 type Stack struct {
-	Stack   merge.MultiStackInfo // The underlying stack
-	Status  Status               // Overall shippability status
-	Author  string               // GitHub username of stack author (from first PR)
-	PRTitle string               // PR title of the root branch (for display)
+	Stack   stackview.StackInfo // The underlying stack
+	Status  Status              // Overall shippability status
+	Author  string              // GitHub username of stack author (from first PR)
+	PRTitle string              // PR title of the root branch (for display)
 
 	// Breakdown of shippability components
 	ApprovalOK bool  // All PRs have been approved
@@ -62,10 +63,6 @@ type Stack struct {
 
 	// Blocking details
 	BlockingPRs []BlockingPR // PRs blocking shippability
-
-	// Compatibility (populated during combination analysis)
-	CompatibleWith []string // Root branches this can ship with
-	ConflictsWith  []string // Root branches this conflicts with
 }
 
 // IsShippable returns true if the stack is ready to ship.

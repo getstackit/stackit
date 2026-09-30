@@ -96,7 +96,7 @@ be overwritten by the restored tree, including file/directory collisions.
 ### Which snapshot abort rolls back to
 
 `abort` restores the snapshot named by `SnapshotID` in the continuation state
-(`.git/.stackit_continue`), written by `EnterConflictWorkflow` from
+(`.git/.stackit_continue`), written by `enterConflictWorkflow` (`internal/actions/common.go`) from
 `Engine.LastSnapshotID()` — the snapshot the halted command itself recorded.
 
 It restores that snapshot or nothing. When the field is empty, or the snapshot

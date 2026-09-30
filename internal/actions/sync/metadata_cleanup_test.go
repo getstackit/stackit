@@ -25,7 +25,7 @@ func TestMetadataCleanup(t *testing.T) {
 			TrackBranch("temp-branch", "main")
 
 		// Verify metadata exists
-		refs, err := s.Engine.Metadata().ListMetadata()
+		refs, err := s.Metadata.ListMetadata()
 		require.NoError(t, err)
 		require.Contains(t, refs, "temp-branch")
 
@@ -41,12 +41,12 @@ func TestMetadataCleanup(t *testing.T) {
 		// 4. Rebuild engine so it knows the branch is gone
 		s.Rebuild()
 
-		// 5. Run sync remote metadata
-		err = syncRemoteMetadata(s.Context, &Options{}, &NullHandler{})
+		// 5. Process remote metadata
+		err = processRemoteMetadata(s.Context, &Options{}, &NullHandler{})
 		require.NoError(t, err)
 
 		// 6. Verify metadata ref for deleted branch is gone
-		refs, err = s.Engine.Metadata().ListMetadata()
+		refs, err = s.Metadata.ListMetadata()
 		require.NoError(t, err)
 		require.NotContains(t, refs, "temp-branch", "metadata ref should have been cleaned up")
 	})
@@ -84,9 +84,9 @@ func TestMetadataCleanup(t *testing.T) {
 		err = s.Scene.Repo.RunGitCommand("update-ref", "refs/stackit/remote-metadata/remote-only-branch", blobSha)
 		require.NoError(t, err)
 
-		// 2. Run syncRemoteMetadata
+		// 2. Run processRemoteMetadata
 		// This should NOT prompt (NullHandler returns defaults without prompting)
-		err = syncRemoteMetadata(s.Context, &Options{}, &NullHandler{})
+		err = processRemoteMetadata(s.Context, &Options{}, &NullHandler{})
 		require.NoError(t, err)
 	})
 }

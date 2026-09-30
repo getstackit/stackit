@@ -40,7 +40,7 @@ func TestRunResolvedHooksRunsInWorktree(t *testing.T) {
 
 	dir := t.TempDir()
 	out := output.NewTestOutput()
-	RunResolvedHooks(context.Background(), []string{"touch ran.txt"}, dir, out)
+	RunResolvedHooks(context.Background(), []string{"touch ran.txt"}, WorktreePath(dir), out)
 
 	require.FileExists(t, filepath.Join(dir, "ran.txt"))
 }

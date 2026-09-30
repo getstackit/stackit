@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"golang.org/x/oauth2"
 	githuboauth "golang.org/x/oauth2/github"
@@ -352,10 +351,4 @@ func joinURL(base, suffix string) (string, error) {
 	}
 	u.Path = strings.TrimRight(u.Path, "/") + suffix
 	return u.String(), nil
-}
-
-// LoginExpiryProbe is the time after which a session would be considered
-// stale. Exposed for tests / health-check style code.
-func LoginExpiryProbe(now time.Time) time.Time {
-	return now.Add(SessionTTL)
 }

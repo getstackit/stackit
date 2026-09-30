@@ -5,6 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/merge"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/git"
 )
 
 // ShipOptions configures the ship operation.
@@ -22,7 +23,7 @@ type ShipResult struct {
 	// ExcludedStacks are stacks that were excluded due to conflicts.
 	ExcludedStacks []ExcludedStack
 	// PRNumber is the created PR number.
-	PRNumber int
+	PRNumber git.PRNumber
 	// PRURL is the created PR URL.
 	PRURL string
 	// BranchName is the consolidation branch name.

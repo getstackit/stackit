@@ -35,16 +35,6 @@ func InstallPrecommit(runner git.Runner, out io.Writer) error {
 	return integrations.PrecommitInstallActionWithOutput(repoRoot, out)
 }
 
-// InstallPrepush installs the pre-push hook.
-// This is a convenience wrapper for use during init.
-func InstallPrepush(runner git.Runner, out io.Writer) error {
-	repoRoot, err := runner.DiscoverRepoRoot()
-	if err != nil {
-		return err
-	}
-	return integrations.PrepushInstallActionWithOutput(repoRoot, out)
-}
-
 // InstallAgents installs AI agent integration files.
 // This is a convenience wrapper for use during init.
 // It auto-detects formats from existing directories to avoid a nested prompt.
@@ -115,22 +105,6 @@ func IsPrecommitInstalled(runner git.Runner) bool {
 	}
 
 	return strings.Contains(string(content), "stackit precommit verify")
-}
-
-// IsPrepushInstalled checks if the pre-push hook is already installed.
-func IsPrepushInstalled(runner git.Runner) bool {
-	repoRoot, err := runner.DiscoverRepoRoot()
-	if err != nil {
-		return false
-	}
-
-	hookPath := filepath.Join(repoRoot, ".git", "hooks", "pre-push")
-	content, err := os.ReadFile(hookPath)
-	if err != nil {
-		return false
-	}
-
-	return strings.Contains(string(content), "stackit prepush verify")
 }
 
 // IsAgentsInstalled checks if agent integration files are already installed.

@@ -43,9 +43,21 @@ Actions should not:
 - write directly to terminal output
 - import Cobra, Bubble Tea models, or terminal styling packages
 
-If an action needs configuration, the caller should resolve it first and pass the final values in the request.
+If an action needs configuration, the caller should resolve it first and pass the final values in the request. When the action must also write config (e.g. persisting a chosen merge method), accept a narrow interface defined next to the action and let the caller pass the loaded config. `.golangci.yml` enforces this with a `forbidigo` rule that rejects `config.Load*` calls under `internal/actions/`. See "Using a Config Value in an Action" in `docs/config.md`.
 
 If an action needs prompts or progress reporting, define an interface next to the action and let adapters implement it.
+
+For generic prompts (confirm, single select, text input, multi-select), depend
+on the narrow interfaces in `internal/actions/handler` (`Confirmer`,
+`Selector`, `TextInputPrompter`, `MultiSelector`). Actions that take
+`*app.Context` reach the adapter's implementation through `ctx.Prompts()`,
+which falls back to a non-interactive prompter (every prompt returns
+`utils.ErrInteractiveDisabled`) when no adapter set `ctx.Prompter`; the CLI
+sets `common.TUIPrompter`. Whole-screen interactive flows (e.g. the move
+target picker, the reorder editor) live in the adapter and hand the action
+its result or implement an action-defined interface such as
+`actions.OrderEditor`. The `depguard` rule `actions-no-tui` in
+`.golangci.yml` rejects `internal/tui` imports from `internal/actions`.
 
 ### Adapters
 
@@ -83,7 +95,14 @@ Bootstrap is responsible for:
 - loading layered config
 - constructing the engine
 - constructing concrete GitHub clients
-- wiring loggers, output sinks, and runtime flags
+- wiring loggers, output sinks, and runtime flags (the engine's git runner and
+  metadata store receive their logger through `engine.Options.Logger`)
+
+The engine never hands out its raw git runner or metadata store. Code outside
+the engine that genuinely needs git below the engine abstraction receives a
+narrow dependency from bootstrap instead: the GitHub integration gets
+`app.Context.GHRunner` (`github.GitCommandRunner`), set when the context is
+built. Tests reach raw state through `scenario.Scenario.Git` / `.Metadata`.
 
 Bootstrap should call into actions or adapters. It should not become the place where business logic accumulates.
 
@@ -111,6 +130,22 @@ When adding or refactoring an operation:
 3. Pass dependencies explicitly instead of passing `*app.Context`.
 4. Return structured results and typed events instead of writing output directly.
 5. Keep terminal rendering, JSON mapping, and interactive prompts in adapters.
+6. Read-only consumers take `engine.StackView` (or a narrower local interface
+   composed from it) instead of `engine.Engine` / `engine.BranchReader`, and get
+   shared view data (stack discovery, annotations, batched branch reads) from
+   `internal/actions/stackview`.
+7. Actions that still receive `*app.Context` declare an unexported
+   consumer-side interface listing exactly the engine methods the package
+   calls (e.g. `lockEngine`, `foldEngine`, `deleteEngine`) and bind it at the
+   entry point with `var eng fooEngine = ctx.Engine`. Helpers that only need
+   the engine take that narrow type rather than `*app.Context` or
+   `engine.Engine`. Compose shared pieces instead of repeating them:
+   `engine.StackView` / `engine.BranchLookup` for reads,
+   `validation.BranchValidationEngine` / `GitOperationEngine` when the package
+   runs those validators, `actions.MetadataPushEngine` for `PushMetadataOnly`,
+   and `actions.RecoveryEngine` for abort/undo-style rollback. Test fakes then
+   implement only the narrow interface, so a missing method is a compile error
+   rather than a nil-embedded panic.
 
 ## Transitional Guidance
 
@@ -120,7 +155,7 @@ When extending or adding actions:
 
 - prefer explicit deps over `*app.Context`
 - keep new logic free of direct output/styling
-- move config loading to callers
+- keep config loading in callers (already enforced by lint)
 - define interfaces for prompts and progress
 - keep concrete GitHub wiring outside the action
 

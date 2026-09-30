@@ -54,8 +54,8 @@ func (e *engineImpl) IsRemoteSyncEnabled() bool {
 	return err == nil && val == "true"
 }
 
-// SetRemoteSyncEnabled marks metadata compatibility as verified and enables/disables sync
-func (e *engineImpl) SetRemoteSyncEnabled(enabled bool) {
+// setRemoteSyncEnabled marks metadata compatibility as verified and enables/disables sync
+func (e *engineImpl) setRemoteSyncEnabled(enabled bool) {
 	val := "false"
 	if enabled {
 		val = "true"
@@ -157,8 +157,8 @@ func (e *engineImpl) LoadRemoteMetadataCache(ctx context.Context) error {
 	return nil
 }
 
-// ApplyRemoteMetadataIfExists applies remote metadata to a local branch if it exists in the cache
-func (e *engineImpl) ApplyRemoteMetadataIfExists(ctx context.Context, branchName string) error {
+// applyRemoteMetadataIfExists applies remote metadata to a local branch if it exists in the cache
+func (e *engineImpl) applyRemoteMetadataIfExists(ctx context.Context, branchName string) error {
 	e.mu.RLock()
 	remote, ok := e.remoteMetaCache[branchName]
 	e.mu.RUnlock()
@@ -334,7 +334,7 @@ func (e *engineImpl) ComputeAllMetadataDiffs() ([]*MetadataDiff, error) {
 
 // AcceptRemoteMetadata overwrites local metadata with remote values
 func (e *engineImpl) AcceptRemoteMetadata(ctx context.Context, branch string) error {
-	return e.ApplyRemoteMetadataIfExists(ctx, branch)
+	return e.applyRemoteMetadataIfExists(ctx, branch)
 }
 
 // RejectRemoteMetadata marks a branch as having local modifications to keep

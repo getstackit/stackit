@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/google/go-github/v92/github"
 )
 
@@ -24,17 +25,21 @@ const (
 // Stackit command. It is deliberately separate from Client while the feature
 // is being evaluated, so normal PR operations do not depend on the API.
 type StackClient interface {
-	CreateStack(ctx context.Context, pullRequests []int) (*StackInfo, error)
-	FindStackByPullRequest(ctx context.Context, pullRequest int) (*StackInfo, error)
-	AddPullRequestsToStack(ctx context.Context, stackNumber int, pullRequests []int) (*StackInfo, error)
-	UnstackStack(ctx context.Context, stackNumber int) (bool, error)
+	CreateStack(ctx context.Context, pullRequests []git.PRNumber) (*StackInfo, error)
+	FindStackByPullRequest(ctx context.Context, pullRequest git.PRNumber) (*StackInfo, error)
+	AddPullRequestsToStack(ctx context.Context, stackNumber StackNumber, pullRequests []git.PRNumber) (*StackInfo, error)
+	UnstackStack(ctx context.Context, stackNumber StackNumber) (bool, error)
 }
+
+// StackNumber is the number GitHub assigns a native Stack. It is distinct from
+// git.PRNumber: stacks and pull requests are numbered independently.
+type StackNumber int
 
 // StackInfo is GitHub's server-side representation of a linear stack of pull
 // requests. PullRequests are ordered from the bottom of the stack to the top.
 type StackInfo struct {
 	ID           int           `json:"id"`
-	Number       int           `json:"number"`
+	Number       StackNumber   `json:"number"`
 	URL          string        `json:"url"`
 	Base         StackBase     `json:"base"`
 	PullRequests []StackPRInfo `json:"pull_requests"`
@@ -48,7 +53,7 @@ type StackBase struct {
 // StackPRInfo is the minimal pull request representation returned by GitHub's
 // Stacks API.
 type StackPRInfo struct {
-	Number int `json:"number"`
+	Number git.PRNumber `json:"number"`
 	Head   struct {
 		Ref string `json:"ref"`
 		SHA string `json:"sha"`
@@ -56,7 +61,7 @@ type StackPRInfo struct {
 }
 
 type createStackRequest struct {
-	PullRequests []int `json:"pull_requests"`
+	PullRequests []git.PRNumber `json:"pull_requests"`
 }
 
 // StackSyncAction describes how EnsureStack reconciled native Stack metadata.
@@ -72,7 +77,7 @@ const (
 // EnsureStack creates, extends, or leaves unchanged the native GitHub Stack
 // containing the supplied bottom-to-top PR chain. Existing stacks may only be
 // extended at the top; a divergent chain needs explicit user resolution.
-func EnsureStack(ctx context.Context, client StackClient, pullRequests []int) (*StackInfo, StackSyncAction, error) {
+func EnsureStack(ctx context.Context, client StackClient, pullRequests []git.PRNumber) (*StackInfo, StackSyncAction, error) {
 	if err := ValidateStackPullRequestCount(len(pullRequests)); err != nil {
 		return nil, "", err
 	}
@@ -113,7 +118,7 @@ func EnsureStack(ctx context.Context, client StackClient, pullRequests []int) (*
 // the API reports a merged PR's state as "closed", indistinguishable from a
 // closed one — attempt the unstack and let GitHub answer: the stack dissolves
 // only when nothing was pinned in place.
-func rebuildStack(ctx context.Context, client StackClient, existing *StackInfo, existingPRs, pullRequests []int) (*StackInfo, StackSyncAction, error) {
+func rebuildStack(ctx context.Context, client StackClient, existing *StackInfo, existingPRs, pullRequests []git.PRNumber) (*StackInfo, StackSyncAction, error) {
 	dissolved, err := client.UnstackStack(ctx, existing.Number)
 	if err != nil {
 		return nil, "", fmt.Errorf("GitHub Stack #%d has PRs %v, which do not match the submitted chain %v, and it could not be dissolved to rebuild: %w", existing.Number, existingPRs, pullRequests, err)
@@ -132,7 +137,7 @@ func rebuildStack(ctx context.Context, client StackClient, existing *StackInfo, 
 // UnstackStack removes every pull request GitHub permits from a native Stack.
 // Reports whether the stack was dissolved outright; false means merged or
 // queued pull requests remain in it.
-func (c *StackitGitHubClient) UnstackStack(ctx context.Context, stackNumber int) (bool, error) {
+func (c *StackitGitHubClient) UnstackStack(ctx context.Context, stackNumber StackNumber) (bool, error) {
 	path := fmt.Sprintf("repos/%s/%s/stacks/%d/unstack", c.repo.Owner, c.repo.Name, stackNumber)
 	req, err := c.client.NewRequest(ctx, http.MethodPost, path, nil)
 	if err != nil {
@@ -181,7 +186,7 @@ func ValidateStackPullRequestCount(count int) error {
 // CreateStack creates a native GitHub Stack from the supplied pull request
 // numbers, ordered from bottom to top. GitHub validates that their base refs
 // form a contiguous linear chain.
-func (c *StackitGitHubClient) CreateStack(ctx context.Context, pullRequests []int) (*StackInfo, error) {
+func (c *StackitGitHubClient) CreateStack(ctx context.Context, pullRequests []git.PRNumber) (*StackInfo, error) {
 	if err := ValidateStackPullRequestCount(len(pullRequests)); err != nil {
 		return nil, err
 	}
@@ -201,7 +206,7 @@ func (c *StackitGitHubClient) CreateStack(ctx context.Context, pullRequests []in
 
 // FindStackByPullRequest returns the native Stack containing pullRequest, if
 // it belongs to one.
-func (c *StackitGitHubClient) FindStackByPullRequest(ctx context.Context, pullRequest int) (*StackInfo, error) {
+func (c *StackitGitHubClient) FindStackByPullRequest(ctx context.Context, pullRequest git.PRNumber) (*StackInfo, error) {
 	path := fmt.Sprintf("repos/%s/%s/stacks?pull_request=%d", c.repo.Owner, c.repo.Name, pullRequest)
 	req, err := c.client.NewRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -220,7 +225,7 @@ func (c *StackitGitHubClient) FindStackByPullRequest(ctx context.Context, pullRe
 
 // AddPullRequestsToStack appends pull requests to the top of an existing
 // native Stack. The PRs must be ordered from the current top upward.
-func (c *StackitGitHubClient) AddPullRequestsToStack(ctx context.Context, stackNumber int, pullRequests []int) (*StackInfo, error) {
+func (c *StackitGitHubClient) AddPullRequestsToStack(ctx context.Context, stackNumber StackNumber, pullRequests []git.PRNumber) (*StackInfo, error) {
 	if len(pullRequests) == 0 {
 		return nil, fmt.Errorf("at least one pull request is required to extend a GitHub Stack")
 	}
@@ -238,15 +243,15 @@ func (c *StackitGitHubClient) AddPullRequestsToStack(ctx context.Context, stackN
 	return &stack, nil
 }
 
-func stackPullRequestNumbers(stack *StackInfo) []int {
-	numbers := make([]int, len(stack.PullRequests))
+func stackPullRequestNumbers(stack *StackInfo) []git.PRNumber {
+	numbers := make([]git.PRNumber, len(stack.PullRequests))
 	for i, pullRequest := range stack.PullRequests {
 		numbers[i] = pullRequest.Number
 	}
 	return numbers
 }
 
-func hasPrefix(values, prefix []int) bool {
+func hasPrefix(values, prefix []git.PRNumber) bool {
 	return len(values) >= len(prefix) && slices.Equal(values[:len(prefix)], prefix)
 }
 

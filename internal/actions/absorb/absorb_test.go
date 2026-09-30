@@ -907,7 +907,7 @@ func TestAbsorbRestackConflictKeepsCleanWorktree(t *testing.T) {
 	// The repo is clean: no rebase in progress, nothing staged (the absorbed
 	// hunk must NOT have been re-staged by the restore path), and no leftover
 	// absorb stashes.
-	require.False(t, s.Engine.Git().IsRebaseInProgress(context.Background()))
+	require.False(t, s.Git.IsRebaseInProgress(context.Background()))
 	staged, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached")
 	require.NoError(t, err)
 	require.Empty(t, strings.TrimSpace(staged))

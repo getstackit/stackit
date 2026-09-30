@@ -72,7 +72,7 @@ const (
 // BranchMergeInfo contains info about a branch to be merged
 type BranchMergeInfo struct {
 	BranchName    string
-	PRNumber      int
+	PRNumber      git.PRNumber
 	PRURL         string
 	IsDraft       bool
 	ChecksStatus  ChecksStatus
@@ -86,7 +86,7 @@ type MergeBranches []BranchMergeInfo
 type PlanStep struct {
 	StepType     StepType
 	BranchName   string
-	PRNumber     int
+	PRNumber     git.PRNumber
 	Description  string        // Human-readable description for display
 	WaitTimeout  time.Duration // Timeout for waiting steps (e.g., CI checks)
 	ExpectChecks bool          // Whether we expect CI checks to be present
@@ -116,7 +116,11 @@ func (branches MergeBranches) Names() []string {
 	return names
 }
 
-// AllAreLeaves reports whether every branch is a leaf in graph.
+// AllAreLeaves reports whether every branch is a leaf in graph. Only leaves can
+// be merged individually without orphaning or restacking children.
+//
+// Branches missing from the graph count as non-leaves: if we can't verify a
+// branch's structure, we don't allow individual merging.
 func (branches MergeBranches) AllAreLeaves(graph *engine.StackGraph) bool {
 	for _, branchInfo := range branches {
 		node := graph.GetNode(branchInfo.BranchName)
@@ -174,12 +178,17 @@ type CollectedBranches struct {
 	Validation      *PlanValidation
 }
 
-// mergePlanEngine is a minimal interface needed for creating a merge plan
+// mergePlanEngine lists exactly the engine methods merge planning calls.
 type mergePlanEngine interface {
-	engine.BranchReader
-	engine.PRManager
-	engine.SyncManager
-	engine.MetadataInspector
+	Trunk() engine.Branch
+	CurrentBranch() *engine.Branch
+	GetBranch(branchName string) engine.Branch
+	AllBranches() engine.Branches
+	GetScope(branch engine.Branch) engine.Scope
+	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	SortBranchesTopologically(branches engine.Branches) engine.Branches
+	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
 }
 
 // CreateMergePlan analyzes the current state and builds a merge plan.
@@ -740,92 +749,4 @@ func IsSingleBranchLeafMerge(plan *Plan, graph *engine.StackGraph) bool {
 		return false
 	}
 	return plan.BranchesToMerge.AllAreLeaves(graph)
-}
-
-// AllBranchesAreLeaves checks if all branches in the plan have no children in the stack graph.
-//
-// Why this matters: Only leaf branches (those with no children) can be merged individually
-// without affecting other branches. Merging a non-leaf would orphan its children or require
-// restacking them, making individual merge inappropriate. This check enables offering the
-// "merge individually" option when all selected branches are independent leaves.
-//
-// Note: Branches not found in the graph (nil node) are treated as non-leaves and cause
-// the function to return false. This is a fail-safe behavior - if we can't verify a
-// branch's structure, we don't allow individual merging.
-func AllBranchesAreLeaves(graph *engine.StackGraph, branches []BranchMergeInfo) bool {
-	return MergeBranches(branches).AllAreLeaves(graph)
-}
-
-// IndividualMergeStatus contains the result of checking if individual merge is possible
-type IndividualMergeStatus struct {
-	CanMerge       bool            // True if all PRs can be merged individually
-	MergeableState map[string]bool // Per-branch mergeable state (true = mergeable)
-	BlockingReason string          // Reason why individual merge is blocked (if any)
-}
-
-// CanMergeIndividually checks if all PRs can be merged individually by verifying:
-// 1. All branches are leaf branches (no children)
-// 2. All PRs have GitHub mergeable state = MERGEABLE (no conflicts with trunk)
-//
-// Returns the status including per-branch mergeable states for display purposes.
-// Returns error if GitHub API call fails; check CanMerge field and BlockingReason for results.
-func CanMergeIndividually(ctx context.Context, gitRunner git.Runner, githubClient github.Client, graph *engine.StackGraph, branches []BranchMergeInfo) (*IndividualMergeStatus, error) {
-	status := &IndividualMergeStatus{
-		MergeableState: make(map[string]bool),
-	}
-
-	// Check 1: All branches must be leaves
-	if !MergeBranches(branches).AllAreLeaves(graph) {
-		status.BlockingReason = "some branches have children"
-		return status, nil
-	}
-
-	// Check 2: All PRs must have MERGEABLE state
-	// Resolve all PR node IDs in a single GraphQL query instead of one REST call per PR.
-	prNumbers := make([]int, 0, len(branches))
-	for _, branchInfo := range branches {
-		prNumbers = append(prNumbers, branchInfo.PRNumber)
-	}
-	nodeIDByNumber, err := github.BatchGetPRNodeIDsGraphQL(ctx, gitRunner, githubClient.Repo(), prNumbers)
-	if err != nil {
-		return nil, fmt.Errorf("failed to batch get PR node IDs: %w", err)
-	}
-
-	nodeIDToBranch := make(map[string]string, len(branches))
-	nodeIDs := make([]string, 0, len(branches))
-	for _, branchInfo := range branches {
-		nodeID := nodeIDByNumber[branchInfo.PRNumber]
-		if nodeID == "" {
-			status.BlockingReason = fmt.Sprintf("branch %s has no PR node ID", branchInfo.BranchName)
-			return status, nil
-		}
-		nodeIDToBranch[nodeID] = branchInfo.BranchName
-		nodeIDs = append(nodeIDs, nodeID)
-	}
-
-	// Batch fetch all mergeable states in a single GraphQL query
-	mergeStates, err := github.BatchGetPRMergeableStates(ctx, gitRunner, nodeIDs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to batch get mergeable states: %w", err)
-	}
-
-	// Process results and check for any non-mergeable PRs
-	for nodeID, branchName := range nodeIDToBranch {
-		mergeState, ok := mergeStates[nodeID]
-		if !ok {
-			status.BlockingReason = fmt.Sprintf("could not get mergeable state for %s", branchName)
-			status.CanMerge = false
-			return status, nil
-		}
-
-		status.MergeableState[branchName] = mergeState.Mergeable
-
-		if !mergeState.Mergeable {
-			status.BlockingReason = fmt.Sprintf("PR for %s has conflicts with trunk", branchName)
-		}
-	}
-
-	// All checks passed if no blocking reason was set
-	status.CanMerge = status.BlockingReason == ""
-	return status, nil
 }

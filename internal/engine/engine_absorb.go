@@ -111,7 +111,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	newTip = strings.TrimSpace(newTip)
 
 	// Update branch to point to new tip
-	if err := e.git.UpdateBranchRefCAS(ctx, branchName, newTip, oldTip); err != nil {
+	if err := e.git.UpdateBranchRefCAS(ctx, git.BranchRefUpdate{Branch: branchName, NewRevision: newTip, ExpectedOld: oldTip}); err != nil {
 		return fmt.Errorf("failed to update branch %s: %w", branchName, err)
 	}
 	if worktreePath != "" {
@@ -161,7 +161,7 @@ func (e *engineImpl) applyHunksForCommit(ctx context.Context, commitSHA string, 
 
 	// Apply hunks to the worktree and index using --3way for better conflict handling
 	// --3way allows git to fall back to three-way merge when the patch context doesn't match exactly
-	if err := e.git.ApplyPatch(ctx, patchFile, true); err != nil {
+	if err := e.git.ApplyPatch(ctx, patchFile, git.PatchApplyThreeWay); err != nil {
 		return fmt.Errorf("failed to apply hunks for commit %s: %w", commitSHA[:8], err)
 	}
 

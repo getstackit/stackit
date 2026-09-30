@@ -1,6 +1,7 @@
 package describe
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -22,6 +23,20 @@ type Options struct {
 	Show        bool   // Display the current description
 }
 
+// describeEngine lists exactly the engine methods describe calls.
+type describeEngine interface {
+	actions.MetadataPushEngine
+	engine.BranchLookup
+	CurrentBranch() *engine.Branch
+	IsTrunk(branch engine.Branch) bool
+	Graph(strategy engine.SortStrategy) *engine.StackGraph
+	GetStackRootForBranch(branch engine.Branch) string
+	GetStackDescription(branch engine.Branch) *git.StackDescription
+	SetStackDescription(ctx context.Context, branch engine.Branch, desc *git.StackDescription) error
+	ClearStackDescription(ctx context.Context, branch engine.Branch) error
+	MarkBranchesForPRBodyUpdate(ctx context.Context, branchNames []string) error
+}
+
 // Action implements the stackit describe command
 func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if handler == nil {
@@ -29,7 +44,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	defer handler.Cleanup()
 
-	eng := ctx.Engine
+	var eng describeEngine = ctx.Engine
 	out := ctx.Output
 
 	// Get current branch
@@ -56,7 +71,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Handle --show
 	if opts.Show {
-		return showDescription(ctx, *currentBranch, stackRoot)
+		return showDescription(eng, out, *currentBranch, stackRoot)
 	}
 
 	// Handle --clear
@@ -79,7 +94,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			Title:       opts.Title,
 			Description: opts.Description,
 		}
-		return applyStackDescription(ctx, *currentBranch, stackRoot, desc, opts.Description)
+		return applyStackDescription(ctx, eng, *currentBranch, stackRoot, desc, opts.Description)
 	}
 
 	// Try reading from stdin when not interactive
@@ -87,7 +102,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		stdinContent, err := utils.ReadFromStdin()
 		if err == nil && stdinContent != "" {
 			if desc := ParseEditorContent(stdinContent); desc != nil {
-				return applyStackDescription(ctx, *currentBranch, stackRoot, desc, TruncateDescription(desc.Description, 60))
+				return applyStackDescription(ctx, eng, *currentBranch, stackRoot, desc, TruncateDescription(desc.Description, 60))
 			}
 		}
 		return fmt.Errorf("nothing to set: pass --title/-m, --message-file/-F, pipe a description via stdin, or run in interactive mode")
@@ -104,14 +119,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return nil
 	}
 
-	return applyStackDescription(ctx, *currentBranch, stackRoot, newDesc, TruncateDescription(newDesc.Description, 60))
+	return applyStackDescription(ctx, eng, *currentBranch, stackRoot, newDesc, TruncateDescription(newDesc.Description, 60))
 }
 
 // applyStackDescription sets the description on the stack root, prints a
 // confirmation, and pushes metadata. displayDesc is the (possibly truncated)
 // description text shown in the confirmation; pass "" to omit that line.
-func applyStackDescription(ctx *app.Context, branch engine.Branch, stackRoot string, desc *git.StackDescription, displayDesc string) error {
-	eng := ctx.Engine
+func applyStackDescription(ctx *app.Context, eng describeEngine, branch engine.Branch, stackRoot string, desc *git.StackDescription, displayDesc string) error {
 	out := ctx.Output
 
 	if err := eng.SetStackDescription(ctx.Context, branch, desc); err != nil {
@@ -132,7 +146,7 @@ func applyStackDescription(ctx *app.Context, branch engine.Branch, stackRoot str
 
 // markStackAndPushMetadata marks all stack branches for PR update and pushes metadata refs.
 // Unlike PushMetadataAndSyncPRs, this does NOT immediately update GitHub PRs.
-func markStackAndPushMetadata(ctx *app.Context, eng engine.Engine, stackRoot string) error {
+func markStackAndPushMetadata(ctx *app.Context, eng describeEngine, stackRoot string) error {
 	out := ctx.Output
 
 	// Mark all branches in the stack for PR body update
@@ -148,9 +162,8 @@ func markStackAndPushMetadata(ctx *app.Context, eng engine.Engine, stackRoot str
 	return actions.PushMetadataOnly(ctx, eng, []string{stackRoot})
 }
 
-func showDescription(ctx *app.Context, branch engine.Branch, stackRoot string) error { //nolint:unparam // error return for API consistency
-	out := ctx.Output
-	desc := ctx.Engine.GetStackDescription(branch)
+func showDescription(eng describeEngine, out output.Output, branch engine.Branch, stackRoot string) error { //nolint:unparam // error return for API consistency
+	desc := eng.GetStackDescription(branch)
 
 	if desc == nil || desc.IsEmpty() {
 		out.Info("Stack rooted at %s has no description set.", output.BranchName(stackRoot))

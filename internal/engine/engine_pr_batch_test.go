@@ -21,7 +21,7 @@ type countingFetchRunner struct {
 	fetchRemoteShas atomic.Int64
 }
 
-func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
+func (c *countingFetchRunner) FetchRemoteShas(ctx context.Context, remote string) (git.RemoteBranchSHAs, error) {
 	c.fetchRemoteShas.Add(1)
 	return c.Runner.FetchRemoteShas(ctx, remote)
 }
@@ -54,14 +54,14 @@ func TestBatchGetPRSubmissionStatusReadsRemoteOnceForUpdates(t *testing.T) {
 	// Give each branch an existing PR so it is an update, not a create.
 	for i, name := range []string{"P", "C1", "C2"} {
 		require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch(name),
-			testhelpers.NewTestPrInfoWithTitle(100+i, "title")))
+			testhelpers.NewTestPrInfoWithTitle(git.PRNumber(100+i), "title")))
 	}
 
 	branches := engine.BranchesOf(eng.GetBranch("P"), eng.GetBranch("C1"), eng.GetBranch("C2"))
 
 	// Measure only the batched call, isolating it from any setup reads.
 	counting.fetchRemoteShas.Store(0)
-	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), branches)
+	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), branches, nil)
 	require.NoError(t, err)
 	require.Len(t, statuses, 3)
 
@@ -145,7 +145,7 @@ func TestBatchGetPRSubmissionStatusSkipsRemoteForCreates(t *testing.T) {
 	branches := engine.BranchesOf(eng.GetBranch("P"), eng.GetBranch("C1"), eng.GetBranch("C2"))
 
 	counting.fetchRemoteShas.Store(0)
-	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), branches)
+	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), branches, nil)
 	require.NoError(t, err)
 	require.Len(t, statuses, 3)
 

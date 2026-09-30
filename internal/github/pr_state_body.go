@@ -16,9 +16,9 @@ type PRStateBody struct {
 // BatchGetPRStateBodyGraphQL fetches the state and body for multiple PR numbers
 // in a single GraphQL query, replacing one REST GetPullRequest call per number.
 // Numbers with no matching PR are absent from the returned map.
-func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, prNumbers []int) (map[int]PRStateBody, error) {
+func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, prNumbers []git.PRNumber) (map[git.PRNumber]PRStateBody, error) {
 	if len(prNumbers) == 0 {
-		return make(map[int]PRStateBody), nil
+		return make(map[git.PRNumber]PRStateBody), nil
 	}
 
 	unique := uniquePRNumbers(prNumbers)
@@ -38,12 +38,12 @@ func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, re
 }
 
 // buildPRStateBodyQuery builds a GraphQL query to fetch state and body for multiple PRs by number.
-func buildPRStateBodyQuery(prNumbers []int) string {
+func buildPRStateBodyQuery(prNumbers []git.PRNumber) string {
 	return buildPRNumberQuery(prNumbers, "state body")
 }
 
 // parsePRStateBodyResponse parses the GraphQL response for PR state/body queries.
-func parsePRStateBodyResponse(body []byte, prNumbers []int) (map[int]PRStateBody, error) {
+func parsePRStateBodyResponse(body []byte, prNumbers []git.PRNumber) (map[git.PRNumber]PRStateBody, error) {
 	return parsePRNumberQueryResponse(body, prNumbers, func(prData map[string]any) (PRStateBody, bool) {
 		var entry PRStateBody
 		if state, ok := prData["state"].(string); ok {

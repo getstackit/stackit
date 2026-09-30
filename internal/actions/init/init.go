@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -17,23 +16,38 @@ type Options struct {
 	Reset bool
 }
 
+// Config is the repository configuration init reads and writes. The caller
+// loads it (bootstrap/adapter) and passes it in; the action never loads config
+// from disk itself.
+type Config interface {
+	IsInitialized() bool
+	SetTrunk(trunk string) error
+	UndoStackDepth() int
+	LinearStacks() bool
+}
+
 // Handler abstracts interaction for the init action
 type Handler interface {
 	// SelectTrunk prompts the user to select the trunk branch
 	SelectTrunk(ctx context.Context, branchNames []string, inferredTrunk string) (string, error)
 
 	// OnSuccess is called when initialization finishes
-	OnSuccess(trunkName string, wasInitialized bool, isReset bool)
+	OnSuccess(result Result)
+}
+
+// Result describes a completed initialization.
+type Result struct {
+	// Trunk is the configured trunk branch.
+	Trunk string
+	// WasInitialized reports whether stackit was already initialized.
+	WasInitialized bool
+	// Reset reports whether all branches were untracked.
+	Reset bool
 }
 
 // Action performs the initialization of Stackit in a repository
-func Action(ctx context.Context, repoRoot string, opts Options, handler Handler) error {
+func Action(ctx context.Context, repoRoot string, cfg Config, opts Options, handler Handler) error {
 	runner := git.NewRunnerWithPath(repoRoot, nil)
-
-	cfg, err := config.LoadConfig(repoRoot)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
 
 	branchNames, err := runner.GetAllBranchNames(ctx)
 	if err != nil {
@@ -71,7 +85,7 @@ func Action(ctx context.Context, repoRoot string, opts Options, handler Handler)
 		RepoRoot:          repoRoot,
 		Trunk:             trunkName,
 		MaxUndoStackDepth: maxUndoDepth,
-		LinearStacks:      cfg.StackShape() == config.StackShapeLinear,
+		LinearStacks:      cfg.LinearStacks(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create engine: %w", err)
@@ -87,7 +101,7 @@ func Action(ctx context.Context, repoRoot string, opts Options, handler Handler)
 		}
 	}
 
-	handler.OnSuccess(trunkName, wasInitialized, opts.Reset)
+	handler.OnSuccess(Result{Trunk: trunkName, WasInitialized: wasInitialized, Reset: opts.Reset})
 
 	return nil
 }

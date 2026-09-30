@@ -17,7 +17,7 @@ import (
 // ConsolidationResult contains information about a completed consolidation
 type ConsolidationResult struct {
 	BranchName string
-	PRNumber   int
+	PRNumber   git.PRNumber
 	PRURL      string
 }
 
@@ -110,7 +110,7 @@ func (c *ConsolidateMergeExecutor) Execute(ctx context.Context, opts ExecuteOpti
 			return nil, fmt.Errorf("failed to get merge method: %w", err)
 		}
 		metadata := c.buildStackMetadata()
-		if err := github.EnableAutoMerge(ctx, c.engine.Git(), pr.NodeID, github.EnableAutoMergeOptions{ //nolint:forbidigo // GitHub integration needs the git runner to run gh; not a domain bypass
+		if err := github.EnableAutoMerge(ctx, c.ctx.GHRunner, pr.NodeID, github.EnableAutoMergeOptions{
 			MergeMethod: mergeMethod,
 			CommitBody:  metadata.ToTrailers(),
 		}); err != nil {
@@ -210,10 +210,10 @@ func (c *ConsolidateMergeExecutor) createMergeBranch(ctx context.Context) (strin
 		return "", fmt.Errorf("failed to merge branches: %w", err)
 	}
 
-	if err := c.engine.PushBranch(ctx, c.engine.GetBranch(branchName), c.engine.GetRemote(), git.PushOptions{
+	if err := c.engine.PushBranches(ctx, c.engine.GetRemote(), []git.PushSpec{{BranchName: branchName, LeaseMode: git.PushLeaseNone}}, git.PushOptions{
 		Force:    false,
 		NoVerify: true,
-	}); err != nil {
+	}).One(); err != nil {
 		return "", fmt.Errorf("failed to push consolidation branch %s: %w", branchName, err)
 	}
 
@@ -289,20 +289,36 @@ func (c *ConsolidateMergeExecutor) updateIndividualPRs() {
 }
 
 func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(consolidationBranch string) error {
-	splog := c.ctx.Output
-	splog.Info("🔒 Locking individual PRs and updating status...")
+	return lockAndMarkConsolidating(c.ctx, c.engine, c.plan.BranchNames(), consolidationBranch)
+}
+
+// consolidatingLockEngine is the engine surface needed to lock branches that
+// are being shipped through a consolidation PR.
+type consolidatingLockEngine interface {
+	GetBranch(branchName string) engine.Branch
+	SetLocked(ctx context.Context, branches engine.Branches, reason engine.LockReason) (engine.BatchLockResult, error)
+	BatchReadMetadataRaw(branchNames []string) (engine.MetaMap, map[string]error)
+	BatchUpsertPrInfo(ctx context.Context, updates map[string]*engine.PrInfo) error
+}
+
+// lockAndMarkConsolidating locks the individual branches shipped through a
+// consolidation PR, records the consolidation branch on their PR info, and
+// pushes metadata so the individual PRs reflect the consolidating state.
+// Shared by single-stack and multi-stack consolidation.
+func lockAndMarkConsolidating(ctx *app.Context, eng consolidatingLockEngine, branchNames []string, consolidationBranch string) error {
+	out := ctx.Output
+	out.Info("🔒 Locking individual PRs and updating status...")
 
 	branchesToLock := engine.Branches{}
-	for _, b := range c.plan.BranchesToMerge {
-		branch := c.engine.GetBranch(b.BranchName)
+	for _, name := range branchNames {
+		branch := eng.GetBranch(name)
 		if !branch.IsLocked() {
 			branchesToLock = branchesToLock.Append(branch)
 		}
 	}
-	branchNames := c.plan.BranchNames()
 
 	if len(branchesToLock) > 0 {
-		if _, err := c.engine.SetLocked(c.ctx, branchesToLock, engine.LockReasonConsolidating); err != nil {
+		if _, err := eng.SetLocked(ctx, branchesToLock, engine.LockReasonConsolidating); err != nil {
 			return fmt.Errorf("failed to lock branches: %w", err)
 		}
 	}
@@ -311,13 +327,12 @@ func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(consolidationBranc
 	for i, b := range branchesToLock {
 		lockNames[i] = b.GetName()
 	}
-	allMeta, metaErrs := c.engine.BatchReadMetadataRaw(lockNames)
+	allMeta, metaErrs := eng.BatchReadMetadataRaw(lockNames)
 
 	prUpdates := make(map[string]*engine.PrInfo, len(branchesToLock))
-	for _, b := range branchesToLock {
-		name := b.GetName()
+	for _, name := range lockNames {
 		if err, hasErr := metaErrs[name]; hasErr {
-			splog.Debug("Failed to read PR info for %s: %v", name, err)
+			out.Debug("Failed to read PR info for %s: %v", name, err)
 			continue
 		}
 		if prInfo := engine.NewPrInfoFromMeta(allMeta[name]); prInfo != nil {
@@ -325,13 +340,13 @@ func (c *ConsolidateMergeExecutor) lockAndNotifyIndividualPRs(consolidationBranc
 		}
 	}
 	if len(prUpdates) > 0 {
-		if err := c.engine.BatchUpsertPrInfo(c.ctx.Context, prUpdates); err != nil {
-			splog.Debug("Failed to batch upsert PR info: %v", err)
+		if err := eng.BatchUpsertPrInfo(ctx.Context, prUpdates); err != nil {
+			out.Debug("Failed to batch upsert PR info: %v", err)
 		}
 	}
 
-	if err := actions.PushMetadataAndSyncPRs(c.ctx, branchNames); err != nil {
-		splog.Warn("Failed to sync individual PRs: %v", err)
+	if err := actions.PushMetadataAndSyncPRs(ctx, branchNames); err != nil {
+		out.Warn("Failed to sync individual PRs: %v", err)
 	}
 
 	return nil
@@ -354,7 +369,7 @@ func (c *ConsolidateMergeExecutor) getStackScopeOrDefault() string {
 // buildStackMetadata builds stack metadata for consolidation merge commits.
 func (c *ConsolidateMergeExecutor) buildStackMetadata() pr.StackMetadata {
 	scope := c.getTrailerScope()
-	prNumbers := make([]int, 0, len(c.plan.BranchesToMerge))
+	prNumbers := make([]git.PRNumber, 0, len(c.plan.BranchesToMerge))
 	for _, b := range c.plan.BranchesToMerge {
 		if b.PRNumber > 0 {
 			prNumbers = append(prNumbers, b.PRNumber)

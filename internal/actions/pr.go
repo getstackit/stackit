@@ -7,6 +7,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/errors"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -87,7 +88,7 @@ func resolvePRBranch(eng engine.Engine, target string) (string, error) {
 		return target, nil
 	}
 
-	branchName, found := findBranchByPRNumber(eng, number)
+	branchName, found := findBranchByPRNumber(eng, git.PRNumber(number))
 	if !found {
 		return "", fmt.Errorf("no tracked branch found for pull request #%d", number)
 	}
@@ -97,7 +98,7 @@ func resolvePRBranch(eng engine.Engine, target string) (string, error) {
 // findBranchByPRNumber searches tracked branches for the one whose recorded PR
 // number matches number, reading all metadata in a single batched pass rather
 // than once per branch.
-func findBranchByPRNumber(eng engine.Engine, number int) (string, bool) {
+func findBranchByPRNumber(eng engine.Engine, number git.PRNumber) (string, bool) {
 	branchNames := eng.AllBranches().Names()
 	metas, _ := eng.BatchReadMetadataRaw(branchNames)
 	for _, name := range branchNames {

@@ -49,7 +49,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		err = eng.LoadRemoteMetadataCache(t.Context())
 		require.NoError(t, err)
 
-		diff, err := eng.ComputeMetadataDiff("feature-a")
+		diff, err := engine.Impl(eng).ComputeMetadataDiff("feature-a")
 		require.NoError(t, err)
 		require.NotNil(t, diff, "expected diff to be non-nil")
 		require.True(t, diff.HasConflict, "expected conflict to be detected")
@@ -93,7 +93,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		err = eng.LoadRemoteMetadataCache(t.Context())
 		require.NoError(t, err)
 
-		diff, err := eng.ComputeMetadataDiff("feature-b")
+		diff, err := engine.Impl(eng).ComputeMetadataDiff("feature-b")
 		require.NoError(t, err)
 		require.NotNil(t, diff)
 		require.False(t, diff.HasConflict, "expected no conflict when local equals remote")
@@ -137,17 +137,17 @@ func TestRemoteMetadataSync(t *testing.T) {
 		eng := sh.Engine
 		branch := eng.GetBranch("feature-d")
 
-		require.False(t, eng.HasLocalModifications("feature-d"))
+		require.False(t, engine.Impl(eng).HasLocalModifications("feature-d"))
 
 		err := eng.BatchSetLastModifiedBy(t.Context(), []string{"feature-d"})
 		require.NoError(t, err)
 
-		require.False(t, eng.HasLocalModifications("feature-d"))
+		require.False(t, engine.Impl(eng).HasLocalModifications("feature-d"))
 
 		_, err = eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
-		require.True(t, eng.HasLocalModifications("feature-d"))
+		require.True(t, engine.Impl(eng).HasLocalModifications("feature-d"))
 	})
 
 	t.Run("ignores remote metadata for non-existent local branches", func(t *testing.T) {

@@ -122,7 +122,7 @@ func executeTree(cmd *cobra.Command, f *treeFlags, style actions.TreeStyle) erro
 			opts.Steps = &f.steps
 		}
 
-		// Execute tree action
-		return actions.TreeAction(ctx, opts)
+		// Render the tree
+		return RunTree(ctx, opts)
 	})
 }

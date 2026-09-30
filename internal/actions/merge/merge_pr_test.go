@@ -8,9 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/output"
 )
 
 // mockPRMergeAPI is a test double for prMergeAPI that records calls and returns configured responses.
@@ -34,21 +32,21 @@ type mockPRMergeAPI struct {
 	waitForMergeableCalled bool
 }
 
-func (m *mockPRMergeAPI) getMergeableState(_ context.Context, _ git.Runner, _ string) (*github.PRMergeableState, error) {
+func (m *mockPRMergeAPI) getMergeableState(_ context.Context, _ github.GitCommandRunner, _ string) (*github.PRMergeableState, error) {
 	return m.mergeableState, m.mergeableStateErr
 }
 
-func (m *mockPRMergeAPI) enableAutoMerge(_ context.Context, _ git.Runner, _ string, _ github.MergeMethod) error {
+func (m *mockPRMergeAPI) enableAutoMerge(_ context.Context, _ github.GitCommandRunner, _ string, _ github.MergeMethod) error {
 	m.enableAutoMergeCalled = true
 	return m.enableAutoMergeErr
 }
 
-func (m *mockPRMergeAPI) waitForPRMerge(_ context.Context, _ git.Runner, _ string, _, _ time.Duration) error {
+func (m *mockPRMergeAPI) waitForPRMerge(_ context.Context, _ github.GitCommandRunner, _ string, _, _ time.Duration) error {
 	m.waitForPRMergeCalled = true
 	return m.waitForPRMergeErr
 }
 
-func (m *mockPRMergeAPI) waitForMergeable(_ context.Context, _ git.Runner, _ string, _, _ time.Duration) (*github.PRMergeableState, error) {
+func (m *mockPRMergeAPI) waitForMergeable(_ context.Context, _ github.GitCommandRunner, _ string, _, _ time.Duration) (*github.PRMergeableState, error) {
 	m.waitForMergeableCalled = true
 	return m.waitForMergeableState, m.waitForMergeableErr
 }
@@ -58,15 +56,24 @@ func (m *mockPRMergeAPI) mergePR(_ context.Context, _ string, _ github.MergeMeth
 	return m.mergePRErr
 }
 
-func TestDoOrchestrateMerge(t *testing.T) {
+// recordingProgress collects progress events for assertions.
+type recordingProgress struct {
+	events []ProgressEvent
+}
+
+func (r *recordingProgress) OnProgress(event ProgressEvent) {
+	r.events = append(r.events, event)
+}
+
+func TestOrchestrateMerge(t *testing.T) {
 	t.Parallel()
 
-	baseOpts := orchestrateMergeOptions{
-		branchName:  "feature-branch",
-		prNumber:    42,
-		prNodeID:    "PR_node123",
-		mergeMethod: github.MergeMethodSquash,
-		wait:        false,
+	const prNodeID = "PR_node123"
+	baseOpts := MergePROptions{
+		BranchName:  "feature-branch",
+		PRNumber:    42,
+		MergeMethod: github.MergeMethodSquash,
+		Wait:        false,
 	}
 
 	t.Run("already merged PR returns success", func(t *testing.T) {
@@ -74,13 +81,13 @@ func TestDoOrchestrateMerge(t *testing.T) {
 		api := &mockPRMergeAPI{
 			mergeableState: &github.PRMergeableState{State: "MERGED"},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		outcome, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
-		require.Equal(t, OutcomeMerged, outcome)
-		require.Contains(t, out.String(), "already merged")
+		require.Equal(t, MergePRMerged, outcome)
+		require.Contains(t, events.events, ProgressEvent(PRAlreadyMergedEvent{PRNumber: 42}))
 		require.False(t, api.mergePRCalled)
 	})
 
@@ -89,9 +96,9 @@ func TestDoOrchestrateMerge(t *testing.T) {
 		api := &mockPRMergeAPI{
 			mergeableState: &github.PRMergeableState{State: "CLOSED"},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		_, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "CLOSED")
@@ -107,9 +114,9 @@ func TestDoOrchestrateMerge(t *testing.T) {
 				MergeStateText: "UNKNOWN",
 			},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		_, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "still being calculated")
@@ -124,9 +131,9 @@ func TestDoOrchestrateMerge(t *testing.T) {
 				MergeStateText: "DIRTY",
 			},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		_, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not mergeable")
@@ -142,15 +149,15 @@ func TestDoOrchestrateMerge(t *testing.T) {
 				MergeStateText: "CLEAN",
 			},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		outcome, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
-		require.Equal(t, OutcomeMerged, outcome)
+		require.Equal(t, MergePRMerged, outcome)
 		require.True(t, api.mergePRCalled)
 		require.False(t, api.enableAutoMergeCalled)
-		require.Contains(t, out.String(), "merged successfully")
+		require.Contains(t, events.events, ProgressEvent(PRMergedEvent{PRNumber: 42}))
 	})
 
 	t.Run("HAS_HOOKS PR merges directly", func(t *testing.T) {
@@ -162,12 +169,12 @@ func TestDoOrchestrateMerge(t *testing.T) {
 				MergeStateText: "HAS_HOOKS",
 			},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		outcome, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
-		require.Equal(t, OutcomeMerged, outcome)
+		require.Equal(t, MergePRMerged, outcome)
 		require.True(t, api.mergePRCalled)
 	})
 
@@ -180,17 +187,17 @@ func TestDoOrchestrateMerge(t *testing.T) {
 				MergeStateText: "BLOCKED",
 			},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 		opts := baseOpts
-		opts.wait = true
+		opts.Wait = true
 
-		outcome, err := doOrchestrateMerge(context.Background(), out, nil, api, opts)
+		outcome, err := orchestrateMerge(context.Background(), events, nil, api, opts, prNodeID)
 
 		require.NoError(t, err)
-		require.Equal(t, OutcomeMerged, outcome)
+		require.Equal(t, MergePRMerged, outcome)
 		require.True(t, api.enableAutoMergeCalled)
 		require.True(t, api.waitForPRMergeCalled)
-		require.Contains(t, out.String(), "Automerge enabled")
+		require.Contains(t, events.events, ProgressEvent(PRAutomergeEnabledEvent{PRNumber: 42}))
 	})
 
 	t.Run("automerge enabled fire-and-forget", func(t *testing.T) {
@@ -202,12 +209,12 @@ func TestDoOrchestrateMerge(t *testing.T) {
 				MergeStateText: "BLOCKED",
 			},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		outcome, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
-		require.Equal(t, OutcomeAutomergeEnabled, outcome)
+		require.Equal(t, MergePRAutomergeEnabled, outcome)
 		require.True(t, api.enableAutoMergeCalled)
 		require.False(t, api.waitForPRMergeCalled)
 	})
@@ -222,14 +229,14 @@ func TestDoOrchestrateMerge(t *testing.T) {
 			},
 			enableAutoMergeErr: github.ErrPRCleanStatus,
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		outcome, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		outcome, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.NoError(t, err)
-		require.Equal(t, OutcomeMerged, outcome)
+		require.Equal(t, MergePRMerged, outcome)
 		require.True(t, api.mergePRCalled)
-		require.Contains(t, out.String(), "merged successfully")
+		require.Contains(t, events.events, ProgressEvent(PRMergedEvent{PRNumber: 42}))
 	})
 
 	t.Run("automerge not enabled with wait polls then merges", func(t *testing.T) {
@@ -247,17 +254,17 @@ func TestDoOrchestrateMerge(t *testing.T) {
 				MergeStateText: "CLEAN",
 			},
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 		opts := baseOpts
-		opts.wait = true
+		opts.Wait = true
 
-		outcome, err := doOrchestrateMerge(context.Background(), out, nil, api, opts)
+		outcome, err := orchestrateMerge(context.Background(), events, nil, api, opts, prNodeID)
 
 		require.NoError(t, err)
-		require.Equal(t, OutcomeMerged, outcome)
+		require.Equal(t, MergePRMerged, outcome)
 		require.True(t, api.waitForMergeableCalled)
 		require.True(t, api.mergePRCalled)
-		require.Contains(t, out.String(), "merged successfully")
+		require.Contains(t, events.events, ProgressEvent(PRMergedEvent{PRNumber: 42}))
 	})
 
 	t.Run("automerge not enabled without wait returns error", func(t *testing.T) {
@@ -270,9 +277,9 @@ func TestDoOrchestrateMerge(t *testing.T) {
 			},
 			enableAutoMergeErr: github.ErrAutoMergeNotEnabled,
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		_, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "auto-merge is not enabled")
@@ -291,15 +298,15 @@ func TestDoOrchestrateMerge(t *testing.T) {
 			enableAutoMergeErr:  github.ErrAutoMergeNotEnabled,
 			waitForMergeableErr: github.ErrPRAlreadyMerged,
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 		opts := baseOpts
-		opts.wait = true
+		opts.Wait = true
 
-		outcome, err := doOrchestrateMerge(context.Background(), out, nil, api, opts)
+		outcome, err := orchestrateMerge(context.Background(), events, nil, api, opts, prNodeID)
 
 		require.NoError(t, err)
-		require.Equal(t, OutcomeMerged, outcome)
-		require.Contains(t, out.String(), "merged externally")
+		require.Equal(t, MergePRMerged, outcome)
+		require.Contains(t, events.events, ProgressEvent(PRMergedEvent{PRNumber: 42, External: true}))
 		require.False(t, api.mergePRCalled)
 	})
 
@@ -313,9 +320,9 @@ func TestDoOrchestrateMerge(t *testing.T) {
 			},
 			enableAutoMergeErr: fmt.Errorf("unexpected GraphQL error"),
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		_, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to enable automerge")
@@ -332,9 +339,9 @@ func TestDoOrchestrateMerge(t *testing.T) {
 			},
 			mergePRErr: fmt.Errorf("merge conflict detected"),
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		_, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to merge PR #42")
@@ -346,9 +353,9 @@ func TestDoOrchestrateMerge(t *testing.T) {
 		api := &mockPRMergeAPI{
 			mergeableStateErr: fmt.Errorf("network timeout"),
 		}
-		out := output.NewTestOutput()
+		events := &recordingProgress{}
 
-		_, err := doOrchestrateMerge(context.Background(), out, nil, api, baseOpts)
+		_, err := orchestrateMerge(context.Background(), events, nil, api, baseOpts, prNodeID)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to check PR mergeable state")

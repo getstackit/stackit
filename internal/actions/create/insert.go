@@ -56,7 +56,7 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 
 	// Reparent every moving child onto the new branch in one batch, recomputing
 	// each child's divergence against it.
-	if err := runtimeCtx.Engine.ReparentBranchesRecompute(ctx, toMove, runtimeCtx.Engine.GetBranch(newBranch)); err != nil {
+	if err := runtimeCtx.Engine.ReparentBranchesToParents(ctx, engine.MovesTo(toMove, newBranch), engine.ReparentOpts{Divergence: engine.DivergenceRecompute}); err != nil {
 		return fmt.Errorf("failed to update parents onto %s: %w", newBranch, err)
 	}
 
@@ -74,7 +74,7 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 
 	// Restack children onto the new branch to physically insert it
 	if len(branchesToRestack) > 0 {
-		batchRes, err := runtimeCtx.Engine.RestackBranches(ctx, branchesToRestack)
+		batchRes, err := runtimeCtx.Engine.RestackBranches(ctx, branchesToRestack, engine.RestackOpts{})
 		if err != nil {
 			runtimeCtx.Output.Info("Warning: failed to restack branches onto %s: %v", newBranch, err)
 		}

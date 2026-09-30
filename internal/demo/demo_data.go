@@ -3,7 +3,6 @@
 package demo
 
 import (
-	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
 
@@ -21,7 +20,7 @@ type Branch struct {
 	Name     string
 	Parent   string
 	SHA      string
-	PRNumber int
+	PRNumber git.PRNumber
 	PRState  git.PRState
 	PRTitle  string
 	IsDraft  bool
@@ -145,50 +144,9 @@ var demoBranches = []Branch{
 	},
 }
 
-// Current branch is a leaf node (no children) to avoid warnings
-var demoCurrentBranch = "feature/auth-login"
 var demoTrunk = demoTrunkBranch
-
-// GetDemoBranches returns the demo branch data
-func GetDemoBranches() []Branch {
-	return demoBranches
-}
-
-// GetDemoCurrentBranch returns the simulated current branch
-func GetDemoCurrentBranch() string {
-	return demoCurrentBranch
-}
 
 // GetDemoTrunk returns the simulated trunk branch
 func GetDemoTrunk() string {
 	return demoTrunk
-}
-
-// GetDemoPrInfo returns simulated PR info for a branch
-func GetDemoPrInfo(branchName string) *engine.PrInfo {
-	for _, b := range demoBranches {
-		if b.Name == branchName {
-			num := b.PRNumber
-			return engine.NewPrInfo(
-				&num,
-				b.PRTitle,
-				"Demo PR body for "+branchName,
-				b.PRState,
-				b.Parent,
-				"https://github.com/example/repo/pull/"+string(rune('0'+num%10)),
-				b.IsDraft,
-			)
-		}
-	}
-	return nil
-}
-
-// GetDemoChecksStatus returns the simulated checks status for a branch
-func GetDemoChecksStatus(branchName string) string {
-	for _, b := range demoBranches {
-		if b.Name == branchName {
-			return b.Checks
-		}
-	}
-	return "NONE"
 }

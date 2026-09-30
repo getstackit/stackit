@@ -33,21 +33,21 @@ func (f *fakeSource) GetTrunkCommitsInRange(rr git.RevRange) ([]git.RecentCommit
 }
 
 type fakeTitles struct {
-	titles map[int]string
-	gotPRs []int
+	titles map[git.PRNumber]string
+	gotPRs []git.PRNumber
 	err    error
 }
 
-func (f *fakeTitles) BatchGetPRTitles(_ context.Context, prNumbers []int) (map[int]string, error) {
+func (f *fakeTitles) BatchGetPRTitles(_ context.Context, prNumbers []git.PRNumber) (map[git.PRNumber]string, error) {
 	f.gotPRs = prNumbers
 	return f.titles, f.err
 }
 
-func reg(sha string, pr int, subject string) git.RecentCommit {
+func reg(sha string, pr git.PRNumber, subject string) git.RecentCommit {
 	return git.RecentCommit{SHA: sha, Subject: subject, PRNumber: pr, Kind: git.RecentCommitKindRegular}
 }
 
-func merge(sha string, pr int, scope string, prs ...int) git.RecentCommit {
+func merge(sha string, pr git.PRNumber, scope string, prs ...git.PRNumber) git.RecentCommit {
 	return git.RecentCommit{
 		SHA: sha, Subject: "Merge pull request #x", PRNumber: pr,
 		Kind: git.RecentCommitKindStackMerge, StackSize: len(prs),
@@ -88,7 +88,7 @@ func TestGather_CollapsesAndEnriches(t *testing.T) {
 		reg("c2", 2, "feat: two (#2)"),
 		reg("c1", 1, "feat: one (#1)"),
 	}}
-	titles := &fakeTitles{titles: map[int]string{100: "Consolidate", 1: "One", 2: "Two"}}
+	titles := &fakeTitles{titles: map[git.PRNumber]string{100: "Consolidate", 1: "One", 2: "Two"}}
 
 	res, err := trunklog.Gather(context.Background(), src, titles, trunklog.Request{Count: 5})
 	require.NoError(t, err)
@@ -98,11 +98,11 @@ func TestGather_CollapsesAndEnriches(t *testing.T) {
 	got := res.Commits[0]
 	require.Equal(t, "Consolidate", got.Message) // merge subject replaced by PR title
 	require.Equal(t, "FEAT-1", got.StackScope)
-	require.Equal(t, []int{1, 2}, got.StackPRs)
-	require.Equal(t, map[int]string{1: "One", 2: "Two"}, got.StackPRTitles)
+	require.Equal(t, []git.PRNumber{1, 2}, got.StackPRs)
+	require.Equal(t, map[git.PRNumber]string{1: "One", 2: "Two"}, got.StackPRTitles)
 
 	// PR numbers requested = consolidation PR + constituents, deduped.
-	require.ElementsMatch(t, []int{100, 1, 2}, titles.gotPRs)
+	require.ElementsMatch(t, []git.PRNumber{100, 1, 2}, titles.gotPRs)
 }
 
 func TestGather_OfflineNoTitles(t *testing.T) {

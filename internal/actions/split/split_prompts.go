@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"slices"
 
+	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-func promptBranchName(existingNames []string, originalBranchName string, branchNum int, eng engine.BranchReader) (string, error) {
+func promptBranchName(prompter handlerBase.TextInputPrompter, existingNames []string, originalBranchName string, branchNum int, eng engine.BranchReader) (string, error) {
 	if !utils.IsInteractive() {
 		return "", fmt.Errorf("branch name must be specified in non-interactive mode")
 	}
@@ -21,7 +21,7 @@ func promptBranchName(existingNames []string, originalBranchName string, branchN
 		}
 	}
 
-	branchName, err := tui.PromptTextInput(
+	branchName, err := prompter.TextInput(
 		fmt.Sprintf("Choose a name for branch %d:", branchNum),
 		defaultName,
 	)

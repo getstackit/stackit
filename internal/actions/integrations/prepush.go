@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/getstackit/stackit/internal/app"
-	"github.com/getstackit/stackit/internal/output"
 )
 
 const (
@@ -26,13 +25,6 @@ stackit prepush verify
 // PrepushInstallAction installs the pre-push hook
 func PrepushInstallAction(ctx *app.Context) error {
 	return installHook(ctx.RepoRoot, prepushHookName, prepushMarker, prepushHookTemplate, prepushDisplayName, ctx.Output)
-}
-
-// PrepushInstallActionWithOutput installs the pre-push hook with a custom writer.
-// This is a convenience function for use during init where we don't have an app.Context.
-func PrepushInstallActionWithOutput(repoRoot string, writer io.Writer) error {
-	out := output.NewConsoleOutput(writer, false)
-	return installHook(repoRoot, prepushHookName, prepushMarker, prepushHookTemplate, prepushDisplayName, out)
 }
 
 // PrepushVerifyAction verifies that branches being pushed are not locked.

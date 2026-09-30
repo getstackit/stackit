@@ -114,7 +114,7 @@ func TestUpdatePullRequest(t *testing.T) {
 			Body:  &newBody,
 		}
 
-		_, err = githubpkg.UpdatePullRequest(context.Background(), client, git.NewRunner(nil), githubpkg.Repo{Owner: owner, Name: repo}, *createdPR.Number, updateOpts)
+		_, err = githubpkg.UpdatePullRequest(context.Background(), client, git.NewRunner(nil), githubpkg.Repo{Owner: owner, Name: repo}, git.PRNumber(*createdPR.Number), updateOpts)
 		require.NoError(t, err)
 
 		// Verify the update
@@ -143,7 +143,7 @@ func TestUpdatePullRequest(t *testing.T) {
 			Base: &newBase,
 		}
 
-		_, err = githubpkg.UpdatePullRequest(context.Background(), client, git.NewRunner(nil), githubpkg.Repo{Owner: owner, Name: repo}, *createdPR.Number, updateOpts)
+		_, err = githubpkg.UpdatePullRequest(context.Background(), client, git.NewRunner(nil), githubpkg.Repo{Owner: owner, Name: repo}, git.PRNumber(*createdPR.Number), updateOpts)
 		require.NoError(t, err)
 
 		// Verify the update
@@ -175,7 +175,7 @@ func TestUpdatePullRequest(t *testing.T) {
 			Reviewers: []string{"reviewer1"},
 		}
 
-		_, err = githubpkg.UpdatePullRequest(context.Background(), client, git.NewRunner(nil), githubpkg.Repo{Owner: owner, Name: repo}, *createdPR.Number, updateOpts)
+		_, err = githubpkg.UpdatePullRequest(context.Background(), client, git.NewRunner(nil), githubpkg.Repo{Owner: owner, Name: repo}, git.PRNumber(*createdPR.Number), updateOpts)
 		require.NoError(t, err)
 	})
 }

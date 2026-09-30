@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-github/v92/github"
 
+	"github.com/getstackit/stackit/internal/git"
 	githubpkg "github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/utils"
 )
@@ -37,20 +38,20 @@ func (c *MockGitHubClient) Repo() githubpkg.Repo {
 }
 
 // CreateStack records native GitHub Stack creation for submit integration tests.
-func (c *MockGitHubClient) CreateStack(_ context.Context, pullRequests []int) (*githubpkg.StackInfo, error) {
+func (c *MockGitHubClient) CreateStack(_ context.Context, pullRequests []git.PRNumber) (*githubpkg.StackInfo, error) {
 	c.config.mu.Lock()
 	defer c.config.mu.Unlock()
 
 	if c.config.StackError != nil {
 		return nil, c.config.StackError
 	}
-	created := append([]int(nil), pullRequests...)
+	created := append([]git.PRNumber(nil), pullRequests...)
 	c.config.CreatedStacks = append(c.config.CreatedStacks, created)
-	return mockStackInfo(len(c.config.CreatedStacks), created), nil
+	return mockStackInfo(githubpkg.StackNumber(len(c.config.CreatedStacks)), created), nil
 }
 
 // FindStackByPullRequest returns the mock native Stack containing pullRequest.
-func (c *MockGitHubClient) FindStackByPullRequest(_ context.Context, pullRequest int) (*githubpkg.StackInfo, error) {
+func (c *MockGitHubClient) FindStackByPullRequest(_ context.Context, pullRequest git.PRNumber) (*githubpkg.StackInfo, error) {
 	c.config.mu.Lock()
 	defer c.config.mu.Unlock()
 
@@ -58,19 +59,19 @@ func (c *MockGitHubClient) FindStackByPullRequest(_ context.Context, pullRequest
 		return nil, c.config.StackError
 	}
 	for i, stack := range c.config.CreatedStacks {
-		if containsInt(stack, pullRequest) {
-			return mockStackInfo(i+1, stack), nil
+		if containsPR(stack, pullRequest) {
+			return mockStackInfo(githubpkg.StackNumber(i+1), stack), nil
 		}
 	}
 	return nil, nil
 }
 
 // AddPullRequestsToStack extends a mock native Stack in place.
-func (c *MockGitHubClient) AddPullRequestsToStack(_ context.Context, stackNumber int, pullRequests []int) (*githubpkg.StackInfo, error) {
+func (c *MockGitHubClient) AddPullRequestsToStack(_ context.Context, stackNumber githubpkg.StackNumber, pullRequests []git.PRNumber) (*githubpkg.StackInfo, error) {
 	c.config.mu.Lock()
 	defer c.config.mu.Unlock()
 
-	if stackNumber < 1 || stackNumber > len(c.config.CreatedStacks) {
+	if stackNumber < 1 || int(stackNumber) > len(c.config.CreatedStacks) {
 		return nil, fmt.Errorf("GitHub Stack #%d does not exist", stackNumber)
 	}
 	c.config.CreatedStacks[stackNumber-1] = append(c.config.CreatedStacks[stackNumber-1], pullRequests...)
@@ -80,17 +81,17 @@ func (c *MockGitHubClient) AddPullRequestsToStack(_ context.Context, stackNumber
 // UnstackStack empties a mock native Stack, mirroring GitHub dissolving one
 // whose pull requests can all be unstacked. MergedStackPRs, if set, models the
 // pull requests GitHub refuses to remove.
-func (c *MockGitHubClient) UnstackStack(_ context.Context, stackNumber int) (bool, error) {
+func (c *MockGitHubClient) UnstackStack(_ context.Context, stackNumber githubpkg.StackNumber) (bool, error) {
 	c.config.mu.Lock()
 	defer c.config.mu.Unlock()
 
-	if stackNumber < 1 || stackNumber > len(c.config.CreatedStacks) {
+	if stackNumber < 1 || int(stackNumber) > len(c.config.CreatedStacks) {
 		return false, fmt.Errorf("GitHub Stack #%d does not exist", stackNumber)
 	}
 
-	var pinned []int
+	var pinned []git.PRNumber
 	for _, pullRequest := range c.config.CreatedStacks[stackNumber-1] {
-		if containsInt(c.config.MergedStackPRs, pullRequest) {
+		if containsPR(c.config.MergedStackPRs, pullRequest) {
 			pinned = append(pinned, pullRequest)
 		}
 	}
@@ -98,7 +99,7 @@ func (c *MockGitHubClient) UnstackStack(_ context.Context, stackNumber int) (boo
 	return len(pinned) == 0, nil
 }
 
-func mockStackInfo(number int, pullRequests []int) *githubpkg.StackInfo {
+func mockStackInfo(number githubpkg.StackNumber, pullRequests []git.PRNumber) *githubpkg.StackInfo {
 	stack := &githubpkg.StackInfo{Number: number, PullRequests: make([]githubpkg.StackPRInfo, len(pullRequests))}
 	for i, pullRequest := range pullRequests {
 		stack.PullRequests[i].Number = pullRequest
@@ -106,7 +107,7 @@ func mockStackInfo(number int, pullRequests []int) *githubpkg.StackInfo {
 	return stack
 }
 
-func containsInt(values []int, target int) bool {
+func containsPR(values []git.PRNumber, target git.PRNumber) bool {
 	for _, value := range values {
 		if value == target {
 			return true
@@ -138,7 +139,7 @@ func (c *MockGitHubClient) CreatePullRequest(ctx context.Context, opts githubpkg
 
 // UpdatePullRequest updates an existing pull request. A base change is rejected
 // while the pull request sits in a native Stack, mirroring GitHub.
-func (c *MockGitHubClient) UpdatePullRequest(ctx context.Context, prNumber int, opts githubpkg.UpdatePROptions) ([]string, error) {
+func (c *MockGitHubClient) UpdatePullRequest(ctx context.Context, prNumber git.PRNumber, opts githubpkg.UpdatePROptions) ([]string, error) {
 	if opts.Base != nil && c.isStacked(prNumber) {
 		return nil, fmt.Errorf("failed to update pull request: %w", &github.ErrorResponse{
 			Response: &http.Response{StatusCode: http.StatusUnprocessableEntity},
@@ -166,17 +167,17 @@ func (c *MockGitHubClient) UpdatePullRequest(ctx context.Context, prNumber int, 
 		}
 	}
 
-	_, _, err := c.client.PullRequests.Edit(ctx, c.owner, c.repo, prNumber, update)
+	_, _, err := c.client.PullRequests.Edit(ctx, c.owner, c.repo, int(prNumber), update)
 	return nil, err
 }
 
 // isStacked reports whether prNumber currently belongs to a mock native Stack.
-func (c *MockGitHubClient) isStacked(prNumber int) bool {
+func (c *MockGitHubClient) isStacked(prNumber git.PRNumber) bool {
 	c.config.mu.Lock()
 	defer c.config.mu.Unlock()
 
 	for _, stack := range c.config.CreatedStacks {
-		if containsInt(stack, prNumber) {
+		if containsPR(stack, prNumber) {
 			return true
 		}
 	}
@@ -204,8 +205,8 @@ func (c *MockGitHubClient) GetPullRequestByBranch(ctx context.Context, branchNam
 }
 
 // GetPullRequest gets a pull request by number
-func (c *MockGitHubClient) GetPullRequest(ctx context.Context, prNumber int) (*githubpkg.PullRequestInfo, error) {
-	pr, _, err := c.client.PullRequests.Get(ctx, c.owner, c.repo, prNumber)
+func (c *MockGitHubClient) GetPullRequest(ctx context.Context, prNumber git.PRNumber) (*githubpkg.PullRequestInfo, error) {
+	pr, _, err := c.client.PullRequests.Get(ctx, c.owner, c.repo, int(prNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -266,8 +267,8 @@ func (c *MockGitHubClient) BatchGetPRChecksStatus(ctx context.Context, branchNam
 }
 
 // BatchGetPRTitles returns synthetic titles for testing
-func (c *MockGitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []int) (map[int]string, error) {
-	results := make(map[int]string, len(prNumbers))
+func (c *MockGitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []git.PRNumber) (map[git.PRNumber]string, error) {
+	results := make(map[git.PRNumber]string, len(prNumbers))
 	for _, num := range prNumbers {
 		results[num] = fmt.Sprintf("PR #%d title", num)
 	}
@@ -275,15 +276,15 @@ func (c *MockGitHubClient) BatchGetPRTitles(_ context.Context, prNumbers []int) 
 }
 
 // ClosePullRequest closes a pull request
-func (c *MockGitHubClient) ClosePullRequest(ctx context.Context, prNumber int) error {
+func (c *MockGitHubClient) ClosePullRequest(ctx context.Context, prNumber git.PRNumber) error {
 	state := "closed"
-	_, _, err := c.client.PullRequests.Edit(ctx, c.owner, c.repo, prNumber, &github.PullRequest{State: &state})
+	_, _, err := c.client.PullRequests.Edit(ctx, c.owner, c.repo, int(prNumber), &github.PullRequest{State: &state})
 	return err
 }
 
 // CreatePRComment creates a new comment on a pull request
-func (c *MockGitHubClient) CreatePRComment(ctx context.Context, prNumber int, body string) (int64, error) {
-	comment, _, err := c.client.Issues.CreateComment(ctx, c.owner, c.repo, prNumber, github.IssueCommentRequest{
+func (c *MockGitHubClient) CreatePRComment(ctx context.Context, prNumber git.PRNumber, body string) (int64, error) {
+	comment, _, err := c.client.Issues.CreateComment(ctx, c.owner, c.repo, int(prNumber), github.IssueCommentRequest{
 		Body: body,
 	})
 	if err != nil {
@@ -307,8 +308,8 @@ func (c *MockGitHubClient) DeletePRComment(ctx context.Context, commentID int64)
 }
 
 // ListPRComments lists all comments on a pull request
-func (c *MockGitHubClient) ListPRComments(ctx context.Context, prNumber int) ([]githubpkg.PRComment, error) {
-	comments, _, err := c.client.Issues.ListComments(ctx, c.owner, c.repo, prNumber, &github.IssueListCommentsOptions{
+func (c *MockGitHubClient) ListPRComments(ctx context.Context, prNumber git.PRNumber) ([]githubpkg.PRComment, error) {
+	comments, _, err := c.client.Issues.ListComments(ctx, c.owner, c.repo, int(prNumber), &github.IssueListCommentsOptions{
 		ListOptions: github.ListOptions{
 			PerPage: 100,
 		},

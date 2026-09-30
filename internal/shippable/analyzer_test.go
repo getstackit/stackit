@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/getstackit/stackit/internal/actions/merge"
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
@@ -19,7 +19,7 @@ type countingRemoteRunner struct {
 	fetchRemoteShas atomic.Int64
 }
 
-func (c *countingRemoteRunner) FetchRemoteShas(ctx context.Context, remote string) (map[string]string, error) {
+func (c *countingRemoteRunner) FetchRemoteShas(ctx context.Context, remote string) (git.RemoteBranchSHAs, error) {
 	c.fetchRemoteShas.Add(1)
 	return c.Runner.FetchRemoteShas(ctx, remote)
 }
@@ -48,7 +48,7 @@ func TestAnalyzerSkipsRemoteStatusForIncompleteStacks(t *testing.T) {
 			WithStack(map[string]string{"P": "main", "C": "P"})
 		analyzer, _, counting := newCountingAnalyzer(t, s.Scene.Dir)
 
-		stack, err := analyzer.AnalyzeStack(context.Background(), merge.MultiStackInfo{
+		stack, err := analyzer.AnalyzeStack(context.Background(), stackview.StackInfo{
 			RootBranch:  "P",
 			AllBranches: []string{"P", "C"},
 		})
@@ -68,7 +68,7 @@ func TestAnalyzerSkipsRemoteStatusForIncompleteStacks(t *testing.T) {
 		require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P"), testhelpers.NewTestPrInfoDraft(101)))
 		require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("C"), testhelpers.NewTestPrInfoDraft(102)))
 
-		stack, err := analyzer.AnalyzeStack(context.Background(), merge.MultiStackInfo{
+		stack, err := analyzer.AnalyzeStack(context.Background(), stackview.StackInfo{
 			RootBranch:  "P",
 			AllBranches: []string{"P", "C"},
 		})
@@ -89,7 +89,7 @@ func TestAnalyzerReadsRemoteStatusOnceForUpdateStack(t *testing.T) {
 	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("P"), testhelpers.NewTestPrInfo(101)))
 	require.NoError(t, eng.UpsertPrInfo(context.Background(), eng.GetBranch("C"), testhelpers.NewTestPrInfo(102)))
 
-	stack, err := analyzer.AnalyzeStack(context.Background(), merge.MultiStackInfo{
+	stack, err := analyzer.AnalyzeStack(context.Background(), stackview.StackInfo{
 		RootBranch:  "P",
 		AllBranches: []string{"P", "C"},
 	})

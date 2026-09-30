@@ -37,8 +37,8 @@ func (d *demoGitRunner) GitVersion(_ context.Context) (git.Version, error) {
 	return git.MinimumGitVersion, nil
 }
 
-func (d *demoGitRunner) FetchRemoteShas(_ context.Context, _ string) (map[string]string, error) {
-	return make(map[string]string), nil
+func (d *demoGitRunner) FetchRemoteShas(_ context.Context, _ string) (git.RemoteBranchSHAs, error) {
+	return make(git.RemoteBranchSHAs), nil
 }
 
 func (d *demoGitRunner) GetConfig(_ string) (string, error) {
@@ -77,7 +77,7 @@ func (d *demoGitRunner) GetGitCommonDir() (string, error) {
 	return "/demo/repo/.git", nil
 }
 
-func (d *demoGitRunner) ListIgnoredFiles(_ context.Context, _ string) ([]string, error) {
+func (d *demoGitRunner) ListIgnoredFiles(_ context.Context, _ git.WorktreePath) ([]string, error) {
 	return nil, nil
 }
 
@@ -153,7 +153,7 @@ func (d *demoGitRunner) UpdateBranchRef(_ context.Context, _, _ string) error {
 	return nil
 }
 
-func (d *demoGitRunner) UpdateBranchRefCAS(_ context.Context, _, _, _ string) error {
+func (d *demoGitRunner) UpdateBranchRefCAS(_ context.Context, _ git.BranchRefUpdate) error {
 	return nil
 }
 
@@ -206,7 +206,7 @@ func (d *demoGitRunner) PushBranches(_ context.Context, _ string, specs []git.Pu
 	return results
 }
 
-func (d *demoGitRunner) Rebase(_ context.Context, _, _, _ string) (git.RebaseOutcome, error) {
+func (d *demoGitRunner) Rebase(_ context.Context, _ git.RebaseSpec) (git.RebaseOutcome, error) {
 	return git.RebaseOutcome{Result: git.RebaseDone}, nil
 }
 
@@ -415,11 +415,11 @@ func (d *demoGitRunner) ReadDiffs(_ context.Context, mode git.DiffReadMode, rang
 	return result
 }
 
-func (d *demoGitRunner) ShowDiff(_ context.Context, _, _ string, _ bool) (string, error) {
+func (d *demoGitRunner) ShowDiff(_ context.Context, _ git.RevRange, _ git.DiffFormat) (string, error) {
 	return "diff", nil
 }
 
-func (d *demoGitRunner) ShowCommits(_ context.Context, _ git.RevRange, _, _ bool) (string, error) {
+func (d *demoGitRunner) ShowCommits(_ context.Context, _ git.RevRange, _ git.CommitLogFormat) (string, error) {
 	return "commits", nil
 }
 
@@ -493,19 +493,19 @@ func (d *demoGitRunner) GetCommitTemplate(_ context.Context) (string, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) AddWorktree(_ context.Context, _, _ string, _ git.WorktreeDetachMode) error {
+func (d *demoGitRunner) AddWorktree(_ context.Context, _ git.WorktreePath, _ string, _ git.WorktreeDetachMode) error {
 	return nil
 }
 
-func (d *demoGitRunner) AddWorktreeWithOptions(_ context.Context, _, _ string, _ git.WorktreeDetachMode, _ bool) error {
+func (d *demoGitRunner) AddWorktreeWithOptions(_ context.Context, _ git.WorktreePath, _ string, _ git.WorktreeDetachMode, _ git.WorktreeCheckoutMode) error {
 	return nil
 }
 
-func (d *demoGitRunner) RemoveWorktree(_ context.Context, _ string) error {
+func (d *demoGitRunner) RemoveWorktree(_ context.Context, _ git.WorktreePath) error {
 	return nil
 }
 
-func (d *demoGitRunner) ForceRemoveWorktree(_ context.Context, _ string) error {
+func (d *demoGitRunner) ForceRemoveWorktree(_ context.Context, _ git.WorktreePath) error {
 	return nil
 }
 
@@ -517,27 +517,27 @@ func (d *demoGitRunner) PruneWorktrees(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) GetWorktreePathForBranch(_ context.Context, _ string) (string, error) {
+func (d *demoGitRunner) GetWorktreePathForBranch(_ context.Context, _ string) (git.WorktreePath, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) GetWorktreeCurrentBranch(_ context.Context, _ string) (string, error) {
+func (d *demoGitRunner) GetWorktreeCurrentBranch(_ context.Context, _ git.WorktreePath) (string, error) {
 	return "", nil
 }
 
-func (d *demoGitRunner) ResetWorktreeWorkingDir(_ context.Context, _ string) error {
+func (d *demoGitRunner) ResetWorktreeWorkingDir(_ context.Context, _ git.WorktreePath) error {
 	return nil
 }
 
-func (d *demoGitRunner) WorktreeHasUncommittedChanges(_ context.Context, _ string) (bool, error) {
+func (d *demoGitRunner) WorktreeHasUncommittedChanges(_ context.Context, _ git.WorktreePath) (bool, error) {
 	return false, nil
 }
 
-func (d *demoGitRunner) WorktreeHasTrackedChanges(_ context.Context, _ string) (bool, error) {
+func (d *demoGitRunner) WorktreeHasTrackedChanges(_ context.Context, _ git.WorktreePath) (bool, error) {
 	return false, nil
 }
 
-func (d *demoGitRunner) WorktreeResetBlocker(_ context.Context, _, _ string) string {
+func (d *demoGitRunner) WorktreeResetBlocker(_ context.Context, _ git.WorktreePath, _ string) string {
 	return ""
 }
 
@@ -557,7 +557,7 @@ func (d *demoGitRunner) CherryPickAbort(_ context.Context) error {
 	return nil
 }
 
-func (d *demoGitRunner) ApplyPatch(_ context.Context, _ string, _ bool) error {
+func (d *demoGitRunner) ApplyPatch(_ context.Context, _ string, _ git.PatchApplyMode) error {
 	return nil
 }
 
@@ -675,7 +675,7 @@ func (d *demoGitRunner) TreeContainsAnyPath(_ context.Context, _ string, _ []str
 	return false, true
 }
 
-func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ string) ([]string, error) {
+func (d *demoGitRunner) GetUntrackedFilesIn(_ context.Context, _ git.WorktreePath) ([]string, error) {
 	return nil, nil
 }
 

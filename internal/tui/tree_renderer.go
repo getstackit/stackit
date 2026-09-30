@@ -1,34 +1,34 @@
 package tui
 
 import (
+	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/github"
 	"github.com/getstackit/stackit/internal/tui/components/tree"
 )
 
 // NewStackTreeRenderer creates a tree renderer configured for the current engine state
 // using the SMART sorting strategy (active path hoisting + newest first).
-func NewStackTreeRenderer(eng engine.BranchReader) *tree.StackTreeRenderer {
+func NewStackTreeRenderer(eng engine.StackView) *tree.StackTreeRenderer {
 	return NewStackTreeRendererWithStrategy(eng, engine.SortStrategySmart, nil)
 }
 
 // NewStackTreeRendererWithFilter creates a tree renderer with a filter function
-func NewStackTreeRendererWithFilter(eng engine.BranchReader, filter func(string) bool) *tree.StackTreeRenderer {
+func NewStackTreeRendererWithFilter(eng engine.StackView, filter func(string) bool) *tree.StackTreeRenderer {
 	return NewStackTreeRendererWithStrategy(eng, engine.SortStrategySmart, filter)
 }
 
 // NewStackTreeRendererWithStrategy creates a tree renderer with a specific sorting strategy and optional filter
-func NewStackTreeRendererWithStrategy(eng engine.BranchReader, strategy engine.SortStrategy, filter func(string) bool) *tree.StackTreeRenderer {
+func NewStackTreeRendererWithStrategy(eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool) *tree.StackTreeRenderer {
 	return newStackTreeRendererInternal(eng, strategy, filter, nil)
 }
 
 // NewStackTreeRendererWithEmptyWorktrees creates a tree renderer that shows empty worktree anchors
-func NewStackTreeRendererWithEmptyWorktrees(eng engine.BranchReader, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
+func NewStackTreeRendererWithEmptyWorktrees(eng engine.StackView, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
 	return newStackTreeRendererInternal(eng, engine.SortStrategySmart, nil, emptyWorktrees)
 }
 
 // NewStackTreeRendererWithOptions creates a tree renderer with all options
-func NewStackTreeRendererWithOptions(eng engine.BranchReader, strategy engine.SortStrategy, filter func(string) bool, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
+func NewStackTreeRendererWithOptions(eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
 	return newStackTreeRendererInternal(eng, strategy, filter, emptyWorktrees)
 }
 
@@ -150,7 +150,7 @@ func (d *graphData) flattenHiddenAnchors(branchName string) []string {
 }
 
 // newStackTreeRendererInternal is the internal implementation that handles all renderer options
-func newStackTreeRendererInternal(eng engine.BranchReader, strategy engine.SortStrategy, filter func(string) bool, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
+func newStackTreeRendererInternal(eng engine.StackView, strategy engine.SortStrategy, filter func(string) bool, emptyWorktrees map[string]bool) *tree.StackTreeRenderer {
 	branchFilter := func(b engine.Branch) bool {
 		if b.IsWorktreeAnchor() {
 			// Keep anchors in the graph so children remain connected even when
@@ -182,212 +182,65 @@ func newStackTreeRendererInternal(eng engine.BranchReader, strategy engine.SortS
 	return tree.NewRenderer(data)
 }
 
-// WorktreeData holds pre-computed worktree information from a single ListManagedWorktrees call.
-type WorktreeData struct {
-	EmptyWorktrees      map[string]*engine.WorktreeInfo // Anchor branches with no children
-	WorktreeByStackRoot map[string]*engine.WorktreeInfo // Stack root -> worktree info
-}
-
-// GetWorktreeData builds both empty worktree and stack-root worktree maps from a single
-// ListManagedWorktrees call, avoiding redundant lookups.
-func GetWorktreeData(eng engine.Engine) *WorktreeData {
-	data := &WorktreeData{
-		EmptyWorktrees:      make(map[string]*engine.WorktreeInfo),
-		WorktreeByStackRoot: make(map[string]*engine.WorktreeInfo),
-	}
-
-	worktrees, err := eng.ListManagedWorktrees()
-	if err != nil {
-		return data
-	}
-
-	for i := range worktrees {
-		wt := &worktrees[i]
-		anchor := eng.GetBranch(wt.AnchorBranch)
-
-		// Build stack-root map for all worktrees (used by addWorktreeInfo)
-		data.WorktreeByStackRoot[wt.AnchorBranch] = wt
-
-		if !anchor.IsTracked() || !anchor.IsWorktreeAnchor() {
-			continue
-		}
-
-		// Check if anchor has any children
-		hasChildren := false
-		for _, depth := range eng.BranchesDepthFirst(anchor) {
-			if depth > 0 {
-				hasChildren = true
-				break
-			}
-		}
-
-		if !hasChildren {
-			data.EmptyWorktrees[wt.AnchorBranch] = wt
-		}
-	}
-
-	return data
-}
-
-// GetEmptyWorktrees returns a map of worktree anchor branch names to their WorktreeInfo
-// for worktrees that have no child branches (empty worktrees).
-func GetEmptyWorktrees(eng engine.Engine) map[string]*engine.WorktreeInfo {
-	return GetWorktreeData(eng).EmptyWorktrees
-}
-
-// GetMinimalAnnotationWithWorktreeAndEmpty returns minimal annotations plus worktree info,
-// with support for marking empty worktrees.
-// This is used for fast initial rendering before full data is loaded.
-// Only includes cached/instant fields - no git or network calls.
-func GetMinimalAnnotationWithWorktreeAndEmpty(eng engine.Engine, branch engine.Branch, wtData *WorktreeData) tree.BranchAnnotation {
+// TreeAnnotation converts a stackview annotation into the tree component's
+// render type. Annotation data is built in stackview; tui only renders it.
+func TreeAnnotation(a stackview.BranchAnnotation) tree.BranchAnnotation {
 	ann := tree.BranchAnnotation{
-		IsLocked:      branch.IsLocked(),
-		IsFrozen:      branch.IsFrozen(),
-		Scope:         eng.GetScope(branch).String(),
-		ExplicitScope: branch.GetExplicitScope().String(),
+		PRNumber:        a.PRNumber,
+		CheckStatus:     treeCheckStatus(a.Check),
+		ReviewStatus:    treeReviewStatus(a.Review),
+		IsDraft:         a.IsDraft,
+		IsLocked:        a.IsLocked,
+		IsFrozen:        a.IsFrozen,
+		Scope:           a.Scope,
+		ExplicitScope:   a.ExplicitScope,
+		CommitCount:     a.CommitCount,
+		LinesAdded:      a.LinesAdded,
+		LinesDeleted:    a.LinesDeleted,
+		PRState:         a.PRState,
+		WorktreePath:    a.WorktreePath.String(),
+		IsEmptyWorktree: a.IsEmptyWorktree,
+		LocalSHA:        a.LocalSHA,
+		CommitMessages:  a.CommitMessages,
+		PRURL:           a.PRURL,
 	}
-
-	addWorktreeInfo(eng, branch, &ann, wtData)
-
+	if len(a.MergedDownstack) > 0 {
+		ann.MergedDownstack = make([]tree.MergedParentDisplay, len(a.MergedDownstack))
+		for i, mp := range a.MergedDownstack {
+			ann.MergedDownstack[i] = tree.MergedParentDisplay{
+				BranchName: mp.BranchName,
+				PRNumber:   mp.PRNumber,
+			}
+			if mp.PRState != nil {
+				ann.MergedDownstack[i].PRState = *mp.PRState
+			}
+		}
+	}
 	return ann
 }
 
-// addWorktreeInfo populates worktree-related fields on a BranchAnnotation.
-// If the branch is an empty worktree anchor, it sets IsEmptyWorktree and WorktreePath.
-// Otherwise, if the branch belongs to a stack that has a managed worktree,
-// it sets WorktreePath so stack ownership is visible on every branch.
-// When wtData is provided, uses O(1) map lookups instead of calling GetWorktreeForStack.
-func addWorktreeInfo(eng engine.Engine, branch engine.Branch, ann *tree.BranchAnnotation, wtData *WorktreeData) {
-	if wtData != nil {
-		if wtInfo, ok := wtData.EmptyWorktrees[branch.GetName()]; ok {
-			ann.IsEmptyWorktree = true
-			ann.WorktreePath = wtInfo.Path.String()
-			return
-		}
-	}
-
-	stackRoot := eng.GetStackRootForBranch(branch)
-	// Use pre-built map if available, otherwise fall back to engine call.
-	if wtData != nil {
-		if wtInfo, ok := wtData.WorktreeByStackRoot[stackRoot]; ok {
-			ann.WorktreePath = wtInfo.Path.String()
-		}
-	} else if wtInfo, err := eng.GetWorktreeForStack(stackRoot); err == nil && wtInfo != nil {
-		ann.WorktreePath = wtInfo.Path.String()
+func treeCheckStatus(state stackview.CheckState) tree.CheckStatus {
+	switch state {
+	case stackview.CheckPassing:
+		return tree.CheckStatusPassing
+	case stackview.CheckFailing:
+		return tree.CheckStatusFailing
+	case stackview.CheckPending:
+		return tree.CheckStatusPending
+	default:
+		return ""
 	}
 }
 
-// AnnotationEnrichment holds pre-fetched data for enriching branch annotations.
-// This allows CI statuses and worktree info to be computed once and shared
-// across all branches, avoiding redundant lookups.
-type AnnotationEnrichment struct {
-	CIStatuses          github.ChecksByBranch
-	EmptyWorktrees      map[string]*engine.WorktreeInfo
-	WorktreeByStackRoot map[string]*engine.WorktreeInfo
-}
-
-// AnnotationOptions controls which expensive git-derived fields are skipped.
-// The zero value populates every field — opt out of work, never into it, so
-// callers that forget the struct still get a complete annotation.
-type AnnotationOptions struct {
-	SkipCommitMessages bool
-	SkipDiffStats      bool
-}
-
-// BuildFullAnnotation returns a fully populated BranchAnnotation including
-// git operations (SHA, commits, diff stats), CI status, review status, and worktree info.
-// Pass nil for enrichment to get just the base annotation without CI/worktree enrichment.
-// Pass AnnotationOptions{} for the full annotation, or set Skip* flags to skip work.
-func BuildFullAnnotation(eng engine.Engine, branch engine.Branch, stat engine.BranchStat, enrichment *AnnotationEnrichment, opts AnnotationOptions) tree.BranchAnnotation {
-	ann := GetBranchAnnotation(eng, branch, stat, opts)
-
-	if enrichment == nil {
-		return ann
+func treeReviewStatus(state stackview.ReviewState) string {
+	switch state {
+	case stackview.ReviewApproved:
+		return tree.ReviewStatusApproved
+	case stackview.ReviewChangesRequested:
+		return tree.ReviewStatusChangesRequested
+	case stackview.ReviewAwaiting:
+		return tree.ReviewStatusAwaitingReview
+	default:
+		return ""
 	}
-
-	// Apply CI status and review status
-	if !branch.IsTrunk() {
-		if status := enrichment.CIStatuses.Get(branch.GetName()); status != nil {
-			ann.CheckStatus = tree.CheckStatusPassing
-			if status.Pending {
-				ann.CheckStatus = tree.CheckStatusPending
-			} else if !status.Passing {
-				ann.CheckStatus = tree.CheckStatusFailing
-			}
-
-			switch status.ReviewDecision {
-			case github.ReviewDecisionApproved:
-				ann.ReviewStatus = tree.ReviewStatusApproved
-			case github.ReviewDecisionChangesRequested:
-				ann.ReviewStatus = tree.ReviewStatusChangesRequested
-			case github.ReviewDecisionReviewRequired:
-				ann.ReviewStatus = "Awaiting Review"
-			}
-		}
-	}
-
-	// Apply worktree info
-	addWorktreeInfo(eng, branch, &ann, &WorktreeData{
-		EmptyWorktrees:      enrichment.EmptyWorktrees,
-		WorktreeByStackRoot: enrichment.WorktreeByStackRoot,
-	})
-
-	return ann
-}
-
-// GetBranchAnnotation returns a tree.BranchAnnotation for a branch. The
-// git-computed fields (short SHA, commit count, diff stats) come from stat, a
-// batched value the caller resolves with BatchBranchStats — code annotating a
-// set of branches must build that batch rather than reading per branch. Pass
-// AnnotationOptions{} for the full annotation, or set Skip* flags to skip work.
-func GetBranchAnnotation(eng engine.BranchReader, branch engine.Branch, stat engine.BranchStat, opts AnnotationOptions) tree.BranchAnnotation {
-	ann := tree.BranchAnnotation{
-		IsLocked:      branch.IsLocked(),
-		IsFrozen:      branch.IsFrozen(),
-		Scope:         eng.GetScope(branch).String(),
-		ExplicitScope: branch.GetExplicitScope().String(),
-		LocalSHA:      stat.ShortSHA,
-	}
-
-	if !branch.IsTrunk() {
-		// PR info (local metadata)
-		if prInfo, _ := branch.GetPrInfo(); prInfo != nil {
-			ann.PRNumber = prInfo.Number()
-			ann.PRState = prInfo.State()
-			ann.IsDraft = prInfo.IsDraft()
-			ann.PRURL = prInfo.URL()
-		}
-
-		// Commit messages for the detailed view; otherwise the batched count.
-		if !opts.SkipCommitMessages {
-			if commits, err := branch.GetAllCommits(); err == nil {
-				ann.CommitMessages = commits.Onelines()
-				ann.CommitCount = len(commits)
-			}
-		} else {
-			ann.CommitCount = stat.CommitCount
-		}
-
-		// Merged downstack history
-		if mergedHistory := branch.GetMergedDownstack(); len(mergedHistory) > 0 {
-			ann.MergedDownstack = make([]tree.MergedParentDisplay, len(mergedHistory))
-			for i, mp := range mergedHistory {
-				ann.MergedDownstack[i] = tree.MergedParentDisplay{
-					BranchName: mp.BranchName,
-					PRNumber:   mp.PRNumber,
-				}
-				if mp.PRState != nil {
-					ann.MergedDownstack[i].PRState = *mp.PRState
-				}
-			}
-		}
-
-		// Local stats
-		if !opts.SkipDiffStats {
-			ann.LinesAdded = stat.LinesAdded
-			ann.LinesDeleted = stat.LinesDeleted
-		}
-	}
-
-	return ann
 }

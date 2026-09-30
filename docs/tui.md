@@ -24,7 +24,7 @@
 - `internal/tui/style/colors.go` - Color constants, theme detection
 - `internal/tui/style/theme.go` - Style structures (HeaderStyles, LayoutStyles, etc.)
 - `internal/tui/components/tree/tree.go` - Stack tree renderer
-- `internal/tui/runner.go` - Runner, SafeCmd, Send utilities
+- `internal/tui/runner.go` - Runner, SafeCmdFunc, Send utilities
 
 ## Elm Architecture Foundation
 
@@ -258,6 +258,11 @@ lines := renderer.RenderStack(trunk, tree.RenderOptions{
 
 For virtual trees (e.g., showing where a branch will be inserted), implement `tree.Data` interface. See `virtualDirectionTree` in `direction_select.go`.
 
+Branch annotation *data* (PR/CI/review status, commit stats, worktree
+ownership) is built in `internal/actions/stackview` (`BuildWorktreeIndex`,
+`MinimalAnnotation`, `FullAnnotation`, `BaseAnnotation`); tui only renders it.
+Convert with `tui.TreeAnnotation(...)` before `SetAnnotations`.
+
 ## Terminal Management
 
 ### Pause/Resume for Prompts
@@ -276,7 +281,7 @@ func (h *InteractiveHandler) PromptConfirm(preview Preview) (bool, error) {
 
 ```go
 // Panic recovery for IO operations
-cmd := tui.SafeCmd("fetch-data", logger, func() tea.Msg {
+cmd := tui.SafeCmdFunc("fetch-data", logger, func() tea.Msg {
     return doFetch()
 })
 
@@ -454,10 +459,10 @@ func TestModel(t *testing.T) {
 
 Panics in commands don't properly reset terminal state, leaving the terminal in raw mode. If this happens, run `reset` in the terminal to restore normal operation.
 
-Use `tui.SafeCmd` for panic recovery in commands:
+Use `tui.SafeCmdFunc` for panic recovery in commands:
 
 ```go
-cmd := tui.SafeCmd("operation-name", logger, func() tea.Msg {
+cmd := tui.SafeCmdFunc("operation-name", logger, func() tea.Msg {
     return riskyOperation()  // Panic is caught and logged
 })
 ```

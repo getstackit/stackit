@@ -20,6 +20,10 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 	if ctx.InManagedWorktree {
 		return nil, fmt.Errorf("cannot attach from inside a managed worktree")
 	}
+	cfg, err := resolveRepoConfig(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	branch := eng.GetBranch(opts.Branch)
 	if !branch.IsTracked() {
@@ -61,6 +65,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 	}
 
 	created, err := createAnchoredWorktree(ctx, eng, ctx.RepoRoot, anchoredWorktreeOptions{
+		Config:         cfg,
 		Name:           name,
 		AnchorParent:   originalParent,
 		RootBranch:     stackRootName,

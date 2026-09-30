@@ -280,7 +280,7 @@ func TestMergeNextUsesCreateMergePlan(t *testing.T) {
 		// Should find branch-a as the bottom PR
 		require.NotEmpty(t, plan.BranchesToMerge)
 		require.Equal(t, "branch-a", plan.BranchesToMerge[0].BranchName)
-		require.Equal(t, 101, plan.BranchesToMerge[0].PRNumber)
+		require.Equal(t, git.PRNumber(101), plan.BranchesToMerge[0].PRNumber)
 	})
 }
 

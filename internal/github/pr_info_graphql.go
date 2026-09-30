@@ -78,12 +78,12 @@ func buildPRInfoByBranchQuery(repo Repo, branches []string) (string, map[string]
 // supplementPRInfoByNumberGraphQL resolves PRs for branches whose head refs
 // are no longer present. A missing ref is not itself a deletion signal: only a
 // previously recorded PR number is eligible for this supplemental lookup.
-func supplementPRInfoByNumberGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, infos map[string]*PullRequestInfo, knownPRNumbers map[string]int) error {
+func supplementPRInfoByNumberGraphQL(ctx context.Context, runner GitCommandRunner, repo Repo, infos map[string]*PullRequestInfo, knownPRNumbers map[string]git.PRNumber) error {
 	if len(knownPRNumbers) == 0 {
 		return nil
 	}
 
-	prNumbers := make([]int, 0, len(knownPRNumbers))
+	prNumbers := make([]git.PRNumber, 0, len(knownPRNumbers))
 	for branchName, number := range knownPRNumbers {
 		if number > 0 && infos[branchName] == nil {
 			prNumbers = append(prNumbers, number)
@@ -111,13 +111,13 @@ func supplementPRInfoByNumberGraphQL(ctx context.Context, runner GitCommandRunne
 	return nil
 }
 
-func parsePRInfoByNumberResponse(body []byte, prNumbers []int) (map[int]*PullRequestInfo, error) {
+func parsePRInfoByNumberResponse(body []byte, prNumbers []git.PRNumber) (map[git.PRNumber]*PullRequestInfo, error) {
 	return parsePRNumberQueryResponse(body, prNumbers, func(prData map[string]any) (*PullRequestInfo, bool) {
 		return pullRequestInfoFromGraphQLNode(prData), true
 	})
 }
 
-func addPRInfoForKnownBranches(infos map[string]*PullRequestInfo, knownPRNumbers map[string]int, byNumber map[int]*PullRequestInfo) {
+func addPRInfoForKnownBranches(infos map[string]*PullRequestInfo, knownPRNumbers map[string]git.PRNumber, byNumber map[git.PRNumber]*PullRequestInfo) {
 	for branchName, number := range knownPRNumbers {
 		if infos[branchName] != nil {
 			continue
@@ -236,7 +236,7 @@ func selectPullRequestInfo(infos []*PullRequestInfo) *PullRequestInfo {
 func pullRequestInfoFromGraphQLNode(node map[string]any) *PullRequestInfo {
 	info := &PullRequestInfo{}
 	if v, ok := node["number"].(float64); ok {
-		info.Number = int(v)
+		info.Number = git.PRNumber(v)
 	}
 	if v, ok := node["title"].(string); ok {
 		info.Title = v

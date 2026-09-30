@@ -14,7 +14,7 @@ import (
 type MultiStackWorktreeResult struct {
 	MergedStacks   MultiStacks          // Stacks that were successfully merged
 	ConflictStacks []MultiStackExcluded // Stacks that conflicted
-	WorktreePath   string               // Path to the worktree
+	WorktreePath   engine.WorktreePath  // Path to the worktree
 	WorktreeEngine engine.Engine        // Engine for the worktree
 	Cleanup        func()               // Function to clean up the worktree
 }
@@ -52,7 +52,7 @@ func (w *MultiStackWorktreeExecutor) ExecuteInWorktree(ctx context.Context, stac
 	result := &MultiStackWorktreeResult{
 		MergedStacks:   make(MultiStacks, 0),
 		ConflictStacks: make([]MultiStackExcluded, 0),
-		WorktreePath:   session.Path.String(),
+		WorktreePath:   session.Path,
 		WorktreeEngine: session.Engine,
 		Cleanup:        session.Close,
 	}
@@ -162,11 +162,4 @@ func (w *MultiStackWorktreeExecutor) tryMergeStack(ctx context.Context, eng engi
 		return fmt.Errorf("conflict in stack %s: %w", stack.RootBranch, err)
 	}
 	return nil
-}
-
-// ResetToTrunk resets the worktree to trunk, discarding all merges.
-// This is used by binary search to try different combinations.
-func (w *MultiStackWorktreeExecutor) ResetToTrunk(ctx context.Context, eng engine.Engine) error {
-	trunk := w.eng.Trunk()
-	return eng.ResetHard(ctx, trunk.GetName())
 }

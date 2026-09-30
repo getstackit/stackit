@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -503,24 +504,14 @@ func TestStackGraphRange(t *testing.T) {
 		require.Contains(t, stackNames, "stackB-child")
 
 		// Verify topological order: parents must come before their children
-		stackAIdx := indexOf(stackNames, "stackA")
-		stackAChildIdx := indexOf(stackNames, "stackA-child")
-		stackBIdx := indexOf(stackNames, "stackB")
-		stackBChildIdx := indexOf(stackNames, "stackB-child")
+		stackAIdx := slices.Index(stackNames, "stackA")
+		stackAChildIdx := slices.Index(stackNames, "stackA-child")
+		stackBIdx := slices.Index(stackNames, "stackB")
+		stackBChildIdx := slices.Index(stackNames, "stackB-child")
 
 		require.Less(t, stackAIdx, stackAChildIdx, "stackA should come before stackA-child")
 		require.Less(t, stackBIdx, stackBChildIdx, "stackB should come before stackB-child")
 	})
-}
-
-// indexOf returns the index of item in slice, or -1 if not found
-func indexOf(slice []string, item string) int {
-	for i, s := range slice {
-		if s == item {
-			return i
-		}
-	}
-	return -1
 }
 
 func TestNewEngine_Scoping(t *testing.T) {

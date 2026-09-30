@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 
 	"github.com/google/go-github/v92/github"
@@ -59,7 +60,7 @@ func (c *MockGitHubClient) FindStackByPullRequest(_ context.Context, pullRequest
 		return nil, c.config.StackError
 	}
 	for i, stack := range c.config.CreatedStacks {
-		if containsPR(stack, pullRequest) {
+		if slices.Contains(stack, pullRequest) {
 			return mockStackInfo(githubpkg.StackNumber(i+1), stack), nil
 		}
 	}
@@ -91,7 +92,7 @@ func (c *MockGitHubClient) UnstackStack(_ context.Context, stackNumber githubpkg
 
 	var pinned []git.PRNumber
 	for _, pullRequest := range c.config.CreatedStacks[stackNumber-1] {
-		if containsPR(c.config.MergedStackPRs, pullRequest) {
+		if slices.Contains(c.config.MergedStackPRs, pullRequest) {
 			pinned = append(pinned, pullRequest)
 		}
 	}
@@ -105,15 +106,6 @@ func mockStackInfo(number githubpkg.StackNumber, pullRequests []git.PRNumber) *g
 		stack.PullRequests[i].Number = pullRequest
 	}
 	return stack
-}
-
-func containsPR(values []git.PRNumber, target git.PRNumber) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }
 
 // CreatePullRequest creates a new pull request
@@ -177,7 +169,7 @@ func (c *MockGitHubClient) isStacked(prNumber git.PRNumber) bool {
 	defer c.config.mu.Unlock()
 
 	for _, stack := range c.config.CreatedStacks {
-		if containsPR(stack, prNumber) {
+		if slices.Contains(stack, prNumber) {
 			return true
 		}
 	}

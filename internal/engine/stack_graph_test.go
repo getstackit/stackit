@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -68,10 +69,10 @@ func TestStackGraphRangeDescendantsOrderParentsFirst(t *testing.T) {
 	require.Contains(t, names, "stackB")
 	require.Contains(t, names, "stackB-child")
 
-	stackAIdx := indexOfName(names, "stackA")
-	stackAChildIdx := indexOfName(names, "stackA-child")
-	stackBIdx := indexOfName(names, "stackB")
-	stackBChildIdx := indexOfName(names, "stackB-child")
+	stackAIdx := slices.Index(names, "stackA")
+	stackAChildIdx := slices.Index(names, "stackA-child")
+	stackBIdx := slices.Index(names, "stackB")
+	stackBChildIdx := slices.Index(names, "stackB-child")
 
 	require.Less(t, stackAIdx, stackAChildIdx, "stackA should come before stackA-child")
 	require.Less(t, stackBIdx, stackBChildIdx, "stackB should come before stackB-child")
@@ -102,16 +103,6 @@ func TestStackGraphFilterPrunesSubtrees(t *testing.T) {
 	require.Contains(t, names, "a1")
 	require.NotContains(t, names, "b")
 	require.NotContains(t, names, "b1")
-}
-
-// indexOfName returns the index of item in slice, or -1 if not found
-func indexOfName(slice []string, item string) int {
-	for i, s := range slice {
-		if s == item {
-			return i
-		}
-	}
-	return -1
 }
 
 func TestStackGraphIsLeaf(t *testing.T) {

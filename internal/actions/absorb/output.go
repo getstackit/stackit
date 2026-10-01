@@ -1,6 +1,8 @@
 package absorb
 
 import (
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -155,11 +157,7 @@ func reasonSortIndex(reason UnabsorbableReason) int {
 }
 
 func sortedCommitSHAs(hunksByCommit map[string][]git.Hunk) []string {
-	commitSHAs := make([]string, 0, len(hunksByCommit))
-	for commitSHA := range hunksByCommit {
-		commitSHAs = append(commitSHAs, commitSHA)
-	}
-	sort.Strings(commitSHAs)
+	commitSHAs := slices.Sorted(maps.Keys(hunksByCommit))
 	return commitSHAs
 }
 

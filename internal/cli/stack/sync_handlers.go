@@ -2,7 +2,8 @@ package stack
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 	stdsync "sync"
 
@@ -879,11 +880,7 @@ func (h *InteractiveSyncHandler) PromptResolveConflicts(conflictBranches []strin
 // branches are not pre-selected). Shared by the interactive handler and the
 // golden transcript harness so both render identical option labels.
 func buildDeletionOptions(branches map[string]string, unpushedBranches map[string]bool) (names, options []string, preSelected []bool) {
-	names = make([]string, 0, len(branches))
-	for name := range branches {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names = slices.Sorted(maps.Keys(branches))
 
 	options = make([]string, len(names))
 	preSelected = make([]bool, len(names))

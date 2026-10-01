@@ -1,10 +1,13 @@
 ---
-description: Use when the user wants stack or PR descriptions generated or refreshed from commit history. Trigger phrases include "describe the stack", "generate PR descriptions", and "update the stack description".
+description: Use when the user wants the stack description generated or refreshed from commit history. Trigger phrases include "describe the stack", and "update the stack description".
 ---
 
 # Stack Describe
 
-Generate or refresh stack and PR descriptions from the current branch history.
+Generate or refresh the stack description from the current branch history.
+
+This sets the title and description on the stack root. It does not replace
+individual PR titles or descriptions; those are managed by `stackit submit`.
 
 ## Workflow
 

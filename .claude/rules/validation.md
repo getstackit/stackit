@@ -9,10 +9,15 @@ Use the lightest validation that covers your change. Running full test suites fo
 | Compile | `mise run compile` | ~2s | Docs, comments, type changes |
 | Lint | `mise run lint` | ~5s | Refactoring, style changes |
 | Package tests | `mise run test:pkg ./internal/foo` | ~10s | Single package logic changes |
-| Fast tests | `mise run check` | ~30s | Multi-package logic changes |
+| Fast tests | `mise run test:fast` | ~30s | Fast Go unit tests |
+| Go checks | `mise run check:go` | ~2min | Formatting, lint, all Go tests |
+| Full checks | `mise run check` | varies | Go checks plus web tests, typecheck, build |
 | Full suite | `mise run test` | ~2min | Engine/integration changes |
 | Web tests | `mise run web:test` | ~10s | Web component changes |
 | Web full | `mise run check:web` | ~30s | Web + API contract changes |
+
+Run a newly added regression test directly before the full suite. Reuse passing
+validation after history-only regrouping when the tested file contents are unchanged.
 
 ## Decision Guide
 
@@ -39,7 +44,7 @@ Use the lightest validation that covers your change. Running full test suites fo
 - Added a new function to an existing package
 - Modified internal implementation details
 
-### Use Fast Tests (`mise run check`)
+### Use Go Checks (`mise run check:go`)
 
 - Changes spanning multiple packages
 - Modified public interfaces
@@ -66,7 +71,7 @@ mise run lint
 mise run test:pkg ./internal/engine
 
 # Changed how submit processes branches
-mise run check
+mise run check:go
 
 # Modified branch relationship logic
 mise run test

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -544,11 +545,7 @@ func (e *engineImpl) validateLinearParentMovesAfterRemovals(moves []BranchParent
 		if parent == e.trunk || len(childSet) <= 1 {
 			continue
 		}
-		childNames := make([]string, 0, len(childSet))
-		for child := range childSet {
-			childNames = append(childNames, child)
-		}
-		slices.Sort(childNames)
+		childNames := slices.Sorted(maps.Keys(childSet))
 		return fmt.Errorf("linear stacks are enabled: %s would have multiple children (%s); set stack.shape to tree to allow forks", parent, strings.Join(childNames, ", "))
 	}
 
@@ -581,11 +578,7 @@ func (e *engineImpl) validateLinearSiblingSplit(parent, branchToSplit string, br
 	if len(children) <= 1 {
 		return nil
 	}
-	childNames := make([]string, 0, len(children))
-	for child := range children {
-		childNames = append(childNames, child)
-	}
-	slices.Sort(childNames)
+	childNames := slices.Sorted(maps.Keys(children))
 	return fmt.Errorf("linear stacks are enabled: %s would have multiple children (%s); set stack.shape to tree to allow forks", parent, strings.Join(childNames, ", "))
 }
 

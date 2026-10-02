@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -82,11 +83,7 @@ func (e *engineImpl) BatchUpsertPrInfo(ctx context.Context, updates map[string]*
 		return nil
 	}
 
-	branchNames := make([]string, 0, len(updates))
-	for name := range updates {
-		branchNames = append(branchNames, name)
-	}
-	slices.Sort(branchNames)
+	branchNames := slices.Sorted(maps.Keys(updates))
 
 	return e.WithRetry(ctx, func() error {
 		tx := e.BeginTx(fmt.Sprintf("batch upsert PR info: %d branches", len(updates)))

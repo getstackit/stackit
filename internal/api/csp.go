@@ -6,8 +6,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/fs"
+	"maps"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -87,10 +88,6 @@ func inlineScriptHashes(staticFS fs.FS) ([]string, error) {
 		return nil, err
 	}
 
-	out := make([]string, 0, len(seen))
-	for h := range seen {
-		out = append(out, h)
-	}
-	sort.Strings(out)
+	out := slices.Sorted(maps.Keys(seen))
 	return out, nil
 }

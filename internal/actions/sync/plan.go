@@ -2,7 +2,8 @@ package sync
 
 import (
 	"context"
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/utils"
@@ -137,11 +138,7 @@ func PlanDryRun(ctx context.Context, eng PlanEngine, req PlanRequest) DryRunPlan
 	// running sync before using these roots for a follow-up `restack --stacks`, since
 	// cleanup and reparenting can change which roots need work.
 	if len(restackRootSet) > 0 {
-		roots := make([]string, 0, len(restackRootSet))
-		for root := range restackRootSet {
-			roots = append(roots, root)
-		}
-		sort.Strings(roots)
+		roots := slices.Sorted(maps.Keys(restackRootSet))
 		plan.RestackStacks = roots
 	}
 

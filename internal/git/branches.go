@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -157,11 +158,7 @@ func (r *runner) GetAllBranchNames(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, 0, len(branches))
-	for name := range branches {
-		names = append(names, name)
-	}
-	slices.Sort(names)
+	names := slices.Sorted(maps.Keys(branches))
 	return names, nil
 }
 

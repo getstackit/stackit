@@ -3,9 +3,10 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -370,11 +371,7 @@ func (e *engineImpl) ListManagedWorktrees() ([]WorktreeInfo, error) {
 	}
 
 	// Sort keys for deterministic output
-	keys := make([]string, 0, len(metas))
-	for k := range metas {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(metas))
 
 	result := make([]WorktreeInfo, 0, len(metas))
 	for _, k := range keys {

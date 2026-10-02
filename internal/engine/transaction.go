@@ -238,17 +238,9 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	refUpdates := make([]git.RefUpdate, 0, totalOps)
 
 	// Sort branch names for deterministic order (makes debugging easier)
-	metaBranches := make([]string, 0, len(tx.metaUpdates))
-	for branch := range tx.metaUpdates {
-		metaBranches = append(metaBranches, branch)
-	}
-	slices.Sort(metaBranches)
+	metaBranches := slices.Sorted(maps.Keys(tx.metaUpdates))
 
-	localBranches := make([]string, 0, len(tx.localUpdates))
-	for branch := range tx.localUpdates {
-		localBranches = append(localBranches, branch)
-	}
-	slices.Sort(localBranches)
+	localBranches := slices.Sorted(maps.Keys(tx.localUpdates))
 
 	// Both metadata tiers share one blob-write invocation.
 	values := make([]any, 0, len(metaBranches)+len(localBranches))
@@ -276,11 +268,7 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	}
 
 	// Add metadata deletions
-	metaDeleteBranches := make([]string, 0, len(tx.metaDeletes))
-	for branch := range tx.metaDeletes {
-		metaDeleteBranches = append(metaDeleteBranches, branch)
-	}
-	slices.Sort(metaDeleteBranches)
+	metaDeleteBranches := slices.Sorted(maps.Keys(tx.metaDeletes))
 
 	for _, branch := range metaDeleteBranches {
 		// Skip deletion if ref doesn't exist (empty OldSHA means no ref to delete)
@@ -295,11 +283,7 @@ func (tx *MetadataTx) Commit(ctx context.Context) error {
 	}
 
 	// Add local metadata deletions
-	localMetaDeleteBranches := make([]string, 0, len(tx.localMetaDeletes))
-	for branch := range tx.localMetaDeletes {
-		localMetaDeleteBranches = append(localMetaDeleteBranches, branch)
-	}
-	slices.Sort(localMetaDeleteBranches)
+	localMetaDeleteBranches := slices.Sorted(maps.Keys(tx.localMetaDeletes))
 
 	for _, branch := range localMetaDeleteBranches {
 		// Skip deletion if ref doesn't exist (empty OldSHA means no ref to delete)

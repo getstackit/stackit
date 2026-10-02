@@ -3,7 +3,6 @@ package sync
 import (
 	"maps"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -58,11 +57,7 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 	// Log each branch and its deletion reason
 	if len(plan.BranchesToDelete) > 0 {
 		// Sort branch names for consistent logging
-		names := make([]string, 0, len(plan.BranchesToDelete))
-		for name := range plan.BranchesToDelete {
-			names = append(names, name)
-		}
-		sort.Strings(names)
+		names := slices.Sorted(maps.Keys(plan.BranchesToDelete))
 
 		// Build detailed log message
 		var logDetails []string

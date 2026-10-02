@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -226,11 +227,7 @@ func (e *engineImpl) ReadBranchStatuses(branches Branches) BranchStatuses {
 		return newBranchStatuses(results)
 	}
 
-	parents := make([]string, 0, len(parentSet))
-	for parent := range parentSet {
-		parents = append(parents, parent)
-	}
-	slices.Sort(parents)
+	parents := slices.Sorted(maps.Keys(parentSet))
 
 	parentRevs, _ := e.git.ReadRevisions(context.Background(), parents...).ValuesAndErrors()
 	for name, check := range pending {

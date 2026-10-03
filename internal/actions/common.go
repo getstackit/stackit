@@ -98,21 +98,56 @@ const (
 
 // RestackBranches restacks a list of branches using the engine's batch restack method
 func RestackBranches(ctx *app.Context, branches engine.Branches) error {
-	return RestackBranchesWithHandler(ctx, branches, nil, ConflictModeEnterWorkflow)
+	return RestackBranchesWithHandler(ctx, branches, nil, ConflictModeEnterWorkflow, RestackBranchesOpts{})
+}
+
+// RestackBranchesOpts tunes RestackBranchesWithHandler. The zero value
+// restacks without live validation activity.
+type RestackBranchesOpts struct {
+	// Activity, when non-nil, receives live rebase-validation events with
+	// Parent mapped to the planned parent branch name. See
+	// engine.RebaseProgressFunc for its concurrency contract.
+	Activity engine.RebaseProgressFunc
 }
 
 // RestackBranchesWithHandler restacks branches with optional progress callback.
 // See ConflictMode for how mode controls conflict handling.
-func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, callback RestackProgressCallback, mode ConflictMode) error {
-	return restackBranchesWithPlan(ctx, branches, nil, callback, mode, nil)
+func RestackBranchesWithHandler(ctx *app.Context, branches engine.Branches, callback RestackProgressCallback, mode ConflictMode, opts RestackBranchesOpts) error {
+	return restackBranchesWithPlan(ctx, branches, callback, mode, restackPlanOpts{activity: opts.Activity})
 }
 
-// restackBranchesWithPlan is the implementation of RestackBranchesWithHandler
-// with an optional pre-computed engine plan. When prePlan is non-nil, the
-// engine.PlanRestack call is skipped — used by RestackAction when the CLI
-// already built the plan to gate TUI initialization, so we don't pay for
-// roughly 3 git operations per branch twice per invocation.
-func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan *engine.RestackPlan, callback RestackProgressCallback, mode ConflictMode, continuation *config.ContinuationState) error {
+// restackPlanOpts carries the optional inputs of restackBranchesWithPlan.
+type restackPlanOpts struct {
+	// prePlan, when non-nil, skips the engine.PlanRestack call — used by
+	// RestackAction when the CLI already built the plan to gate TUI
+	// initialization, so we don't pay for roughly 3 git operations per branch
+	// twice per invocation.
+	prePlan *engine.RestackPlan
+	// continuation is the interrupted command's state when resuming via
+	// continue; a new conflict inherits its snapshot and return branch.
+	continuation *config.ContinuationState
+	// activity receives live rebase-validation events (see RestackBranchesOpts).
+	activity engine.RebaseProgressFunc
+}
+
+// planParentActivity adapts an activity callback for display: specs name the
+// rebase target by revision, so Parent is replaced with the planned parent
+// branch name. Returns nil when there is no callback so validation skips
+// reporting entirely.
+func planParentActivity(plan *engine.RestackPlan, activity engine.RebaseProgressFunc) engine.RebaseProgressFunc {
+	if activity == nil {
+		return nil
+	}
+	return func(event engine.RebaseProgress) {
+		if item, ok := plan.Items[event.Branch]; ok {
+			event.Parent = item.NewParent
+		}
+		activity(event)
+	}
+}
+
+// restackBranchesWithPlan is the implementation of RestackBranchesWithHandler.
+func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, callback RestackProgressCallback, mode ConflictMode, opts restackPlanOpts) error {
 	if len(branches) == 0 {
 		return nil
 	}
@@ -126,7 +161,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 	}
 
 	// Build rebase specs for validation (or reuse the caller's plan).
-	plan := prePlan
+	plan := opts.prePlan
 	var err error
 	if plan == nil {
 		plan, err = ctx.Engine.PlanRestack(ctx.Context, branches)
@@ -144,7 +179,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 	// Validate all rebases in a temporary worktree (clean, no side effects)
 	validation := &engine.RebaseValidation{Success: true, NewSHAs: map[string]string{}, RerereResolved: map[string]int{}}
 	if len(specs) > 0 {
-		validation, err = ctx.Engine.ValidateRebases(ctx.Context, specs)
+		validation, err = ctx.Engine.ValidateRebases(ctx.Context, specs, engine.ValidateRebasesOpts{Progress: planParentActivity(plan, opts.activity)})
 		if err != nil {
 			return fmt.Errorf("failed to validate rebases: %w", err)
 		}
@@ -194,7 +229,7 @@ func restackBranchesWithPlan(ctx *app.Context, branches engine.Branches, prePlan
 		}
 
 		// Enter conflict workflow for the first conflict
-		return enterConflictWorkflow(ctx, firstConflict, branches, continuation)
+		return enterConflictWorkflow(ctx, firstConflict, branches, opts.continuation)
 	}
 
 	// For sync mode (or standalone with no conflicts), restack all successful branches
@@ -489,7 +524,7 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 // per-stack atomicity on purpose) and then enters the conflict on top of them.
 // stackBranches must be the conflicted stack in topological order.
 func ResolveConflictWorkflow(ctx *app.Context, stackBranches engine.Branches) error {
-	return restackBranchesWithPlan(ctx, stackBranches, nil, nil, ConflictModeEnterWorkflow, nil)
+	return restackBranchesWithPlan(ctx, stackBranches, nil, ConflictModeEnterWorkflow, restackPlanOpts{})
 }
 
 // previous carries the original command's rollback and return destination when

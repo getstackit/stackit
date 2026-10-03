@@ -39,7 +39,7 @@ type moveEngine interface {
 	GetDivergencePoint(branchName string) (string, error)
 	BatchRevisions(branches engine.Branches) engine.RevisionMap
 	BatchDivergencePoints(branches engine.Branches) engine.RevisionMap
-	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec) (*engine.RebaseValidation, error)
+	ValidateRebases(ctx context.Context, specs []engine.RebaseSpec, opts engine.ValidateRebasesOpts) (*engine.RebaseValidation, error)
 	ReparentBranch(ctx context.Context, branch engine.Branch, newParent engine.Branch) error
 	AssignBranchesToNewStack(ctx context.Context, root engine.Branch, branches engine.Branches) (string, error)
 	RenameBranch(ctx context.Context, oldBranch, newBranch engine.Branch) error
@@ -228,7 +228,7 @@ func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, erro
 	var eng moveEngine = ctx.Engine
 	out := ctx.Output
 
-	validation, validationErr := eng.ValidateRebases(ctx.Context, plan.rebaseSpecs)
+	validation, validationErr := eng.ValidateRebases(ctx.Context, plan.rebaseSpecs, engine.ValidateRebasesOpts{})
 	commitsData, _ := eng.GetAllCommits(plan.sourceBranch)
 	commits := commitsData.Subjects()
 
@@ -257,7 +257,7 @@ func confirmInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, erro
 func validateNonInteractive(ctx *app.Context, h Handler, plan *movePlan) (bool, error) {
 	h.OnStep(StepValidating, handler.StatusStarted, "Validating rebases...")
 	var eng moveEngine = ctx.Engine
-	validation, err := eng.ValidateRebases(ctx.Context, plan.rebaseSpecs)
+	validation, err := eng.ValidateRebases(ctx.Context, plan.rebaseSpecs, engine.ValidateRebasesOpts{})
 	if err != nil {
 		h.OnStep(StepValidating, handler.StatusFailed, err.Error())
 		return false, fmt.Errorf("failed to validate rebases: %w", err)
@@ -386,7 +386,7 @@ func dryRun(ctx *app.Context, source, oldParentName, onto string, sourceBranch e
 	gctx := ctx.Context
 
 	// Run validation
-	validation, validationErr := eng.ValidateRebases(gctx, rebaseSpecs)
+	validation, validationErr := eng.ValidateRebases(gctx, rebaseSpecs, engine.ValidateRebasesOpts{})
 
 	// Get commits that will be moved
 	commitsData, _ := eng.GetAllCommits(sourceBranch)

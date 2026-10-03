@@ -474,6 +474,11 @@ func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	if event.Type == syncAction.EventStarted && event.Total > 0 {
+		h.totalOps = event.Total
+		h.completedOps = 0
+		h.runner.Send(syncComponent.ProgressTickMsg{Total: event.Total})
+	}
 	// Handle phase transitions
 	if event.Type == syncAction.EventStarted && event.Phase != h.currentPhase {
 		h.currentPhase = event.Phase
@@ -493,6 +498,10 @@ func (h *InteractiveSyncHandler) EmitEvent(event syncAction.Event) {
 			Message: detail,
 			Mark:    mark,
 		})
+	}
+	if event.Phase == syncAction.PhaseRestack && h.totalOps > 0 && (event.Type == syncAction.EventCompleted || event.Type == syncAction.EventSkipped) {
+		h.completedOps++
+		h.runner.Send(syncComponent.ProgressTickMsg{Completed: h.completedOps, Total: h.totalOps})
 	}
 }
 
@@ -617,6 +626,18 @@ func formatSyncSummary(summary syncAction.Summary) string {
 		prefix = "⚠ Sync incomplete: "
 	}
 	return common.WithConflictAdvice(prefix+strings.Join(parts, ", "), summary.ConflictBranches)
+}
+
+// OnRestackActivity reports checks before the engine applies validated results.
+// It is called concurrently from validation goroutines and deliberately does
+// not take h.mu: it reads no handler state, and runner.Send is safe for
+// concurrent use. Taking the lock would serialize validation behind EmitEvent.
+func (h *InteractiveSyncHandler) OnRestackActivity(event engine.RebaseProgress) {
+	h.runner.Send(syncComponent.ActivityMsg{
+		Branch:   event.Branch,
+		Parent:   event.Parent,
+		Finished: event.Finished,
+	})
 }
 
 // OnRestackStart implements RestackHandler for standalone restack operations

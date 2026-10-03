@@ -147,6 +147,29 @@ func TestModelCompletionSummaryIncludesFailuresAndWarnings(t *testing.T) {
 	require.Contains(t, summary, "⚠️  add-feature: failed to add labels")
 }
 
+func TestCompactCompletionPreservesWarnings(t *testing.T) {
+	t.Parallel()
+	m := NewModel([]Item{{BranchName: "feat/web", Action: ActionCreate, Status: StatusDone}})
+	m.Verbose = false
+	m.Update(WarningMsg{BranchName: "feat/web", Warning: "could not apply reviewer @octo"})
+
+	summary := m.finalSummary(ProgressCompleteMsg{Elapsed: time.Second})
+	require.Contains(t, summary, "Opened 1 PR")
+	require.Contains(t, summary, "feat/web: could not apply reviewer @octo")
+}
+
+func TestSubmitSharedActivity(t *testing.T) {
+	t.Parallel()
+	m := NewModel([]Item{{BranchName: "feat/api", Action: ActionCreate, Status: StatusPending}})
+	m.Update(ActivityMsg{Message: "Pushing 1 branch..."})
+	require.Contains(t, m.View().Content, "Pushing 1 branch...")
+	require.Equal(t, StatusPending, m.Items[0].Status)
+	m.Update(ActivityMsg{})
+	m.Update(ProgressUpdateMsg{BranchName: "feat/api", Status: StatusSubmitting})
+	require.NotContains(t, m.View().Content, "Pushing")
+	require.Contains(t, m.View().Content, "creating")
+}
+
 func TestFormatCompactRowTruncatesLongErrors(t *testing.T) {
 	t.Parallel()
 
@@ -287,3 +310,13 @@ func stripANSIEscape(s string) string {
 }
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func TestCompactCompletionWarningsOnlyHasNoLeadingBlank(t *testing.T) {
+	t.Parallel()
+	m := NewModel(nil)
+	m.Verbose = false
+	m.Warnings = []string{"⚠️  could not apply reviewer @octo"}
+
+	summary := m.finalSummary(ProgressCompleteMsg{Elapsed: time.Second})
+	require.Equal(t, "⚠️  could not apply reviewer @octo", summary)
+}

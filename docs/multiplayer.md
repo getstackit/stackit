@@ -319,6 +319,12 @@ rather than printing "up to date":
 - `sync` renders the same reason on its restack row, in both the streaming and
   interactive handlers, and excludes held branches from the "already current"
   count (`isPlainUpToDate`).
+- `sync` and `restack` summaries count every hold and never claim success:
+  the final line reads `⚠ Sync incomplete: held N (worktree), …` or
+  `⚠ Restack incomplete: held N (worktree), …`, and `get` reports
+  `⚠ Get incomplete: …`. The count comes from the action's summary
+  (`sync.Summary.HeldBranches`, `handlers.RestackSummary.Held`), not from
+  handler bookkeeping, so the streaming, interactive, and JSON outputs agree.
 - `restack --json` lists them under `held` as `{branch, reason}`. They also stay
   in `skipped`, so an empty `conflicts` list must not be read as "the whole
   stack moved".
@@ -326,8 +332,11 @@ rather than printing "up to date":
 A branch held because an *ancestor* is held reports the ancestor's reason
 prefixed with which ancestor it is, since the remedy lives there.
 
-`stackit restack` additionally reports the stack-level holds from its own gate
-(`skipDirtyWorktreeStacks`); `sync` reports those through
+`stackit restack` additionally reports the holds from its own planning gate
+(`skipDirtyWorktreeStacks`). It warns as it prunes them and carries each pruned
+branch on the plan into `RestackSummary.Held`, so a plan-time hold still makes
+the outcome incomplete (and appears in `restack --json`'s `held`) even though
+the engine never sees the branch. `sync` reports stack-level holds through
 `SkipReasonForWorktree`. Rebase-in-progress detection is still missing from the
 engine snapshot and from sync's gate — see "What holds a branch" above.
 

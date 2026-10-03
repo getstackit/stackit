@@ -134,16 +134,20 @@ func processGitHubSyncResult(ctx *app.Context, result *GitHubSyncResult, dirtyAn
 		flaggedBranches := ctx.Engine.GetBranchesNeedingPRBodyUpdate()
 		if len(flaggedBranches) > 0 {
 			updateMetaStart := time.Now()
-			// Emit progress events for each branch being updated
-			for _, branchName := range flaggedBranches {
-				handler.EmitEvent(Event{
-					Phase:   PhaseGitHub,
-					Type:    EventProgress,
-					Branch:  branchName,
-					Message: fmt.Sprintf("Updating PR metadata for %s", branchName),
-				})
-			}
+			// The update is one batch, so report it as one: a per-branch
+			// progress event would leave the live line naming whichever branch
+			// was announced last while the whole batch is still running.
+			handler.EmitEvent(Event{
+				Phase:   PhaseGitHub,
+				Type:    EventProgress,
+				Message: fmt.Sprintf("Updating PR metadata for %d branch%s...", len(flaggedBranches), pluralES(len(flaggedBranches))),
+			})
 			actions.UpdateStackPRMetadata(ctx, flaggedBranches)
+			handler.EmitEvent(Event{
+				Phase:   PhaseGitHub,
+				Type:    EventCompleted,
+				Message: fmt.Sprintf("Updated PR metadata for %d branch%s", len(flaggedBranches), pluralES(len(flaggedBranches))),
+			})
 			ctx.Logger.Info("update stack pr metadata completed durationMs=%d branchCount=%d",
 				time.Since(updateMetaStart).Milliseconds(), len(flaggedBranches))
 		}

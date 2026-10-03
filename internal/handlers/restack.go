@@ -38,6 +38,26 @@ type RestackHandler interface {
 	OnRestackComplete(summary RestackSummary)
 }
 
+// RestackActivityHandler optionally receives live rebase validation activity.
+// Result-only handlers (including JSON) need not implement it.
+//
+// OnRestackActivity is called concurrently, one goroutine per branch being
+// validated, and outside the ordering of the other RestackHandler methods.
+// Implementations must be safe for concurrent use and return quickly without
+// blocking; they should not take a lock that result events also hold.
+type RestackActivityHandler interface {
+	OnRestackActivity(engine.RebaseProgress)
+}
+
+// RestackActivity returns the handler's activity callback, or nil when it does
+// not implement RestackActivityHandler, so validation skips reporting.
+func RestackActivity(handler RestackHandler) engine.RebaseProgressFunc {
+	if h, ok := handler.(RestackActivityHandler); ok {
+		return h.OnRestackActivity
+	}
+	return nil
+}
+
 // RestackBranchEvent describes the outcome of restacking one branch.
 // Keeping these facts together makes the shared presentation contract safe to
 // extend without relying on positional arguments.
@@ -64,6 +84,11 @@ type RestackSummary struct {
 	Skipped   int
 	Conflicts []string
 	Blocked   []string
+	// Held lists every branch a worktree held back, whether restack pruned it
+	// while planning or the engine held it mid-run. A held branch is reported
+	// as unneeded per branch, so this is the only place an adapter can tell
+	// "protected your work" from "nothing to do".
+	Held []RestackHeldInfo
 }
 
 // NullRestackHandler is a no-op handler for testing or when output is not needed
@@ -169,9 +194,6 @@ func (h *JSONRestackHandler) OnRestackBranch(event RestackBranchEvent) {
 		})
 	case RestackUnneeded:
 		h.Result.Skipped = append(h.Result.Skipped, event.Branch)
-		if event.HeldBy != "" {
-			h.Result.Held = append(h.Result.Held, RestackHeldInfo{Branch: event.Branch, Reason: event.HeldBy})
-		}
 	case RestackConflict:
 		h.Result.Conflicts = append(h.Result.Conflicts, RestackConflictInfo{
 			Branch:    event.Branch,
@@ -194,6 +216,14 @@ func (h *JSONRestackHandler) OnRestackComplete(summary RestackSummary) {
 	h.Result.RestackCount = summary.Restacked
 	h.Result.ConflictCount = len(h.Result.Conflicts)
 	h.Result.BlockedCount = len(h.Result.Blocked)
+	// Holds come from the summary so branches pruned while planning (which
+	// never produce a per-branch event) are reported alongside mid-run holds.
+	h.Result.Held = summary.Held
+	for _, held := range summary.Held {
+		if !slices.Contains(h.Result.Skipped, held.Branch) {
+			h.Result.Skipped = append(h.Result.Skipped, held.Branch)
+		}
+	}
 
 	if h.Result.ConflictCount > 0 {
 		h.Result.Status = RestackJSONStatusConflict

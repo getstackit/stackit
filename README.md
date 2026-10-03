@@ -538,7 +538,9 @@ along with that branch's descendants. Held branches are reported with the
 worktree and the reason, and picked up on the next restack once the worktree is
 clean. In JSON they appear under `held` as `{branch, reason}` — and also in
 `skipped`, so an empty `conflicts` list alone does not mean the whole stack
-moved.
+moved. This includes branches restack drops while planning, before any rebase
+starts. A hold does not change `.status` (it stays `"success"`), so check
+`.held` too.
 
 **`stackit sync --dry-run --json` reports `trunk_state_unknown`.** The preview
 resolves the remote trunk SHA from a listing without fetching its objects, so

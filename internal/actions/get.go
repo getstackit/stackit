@@ -58,7 +58,9 @@ type GetSummary struct {
 	BranchesUpdated int    // Number of branches updated
 	Restacked       int    // Number of branches restacked
 	IsFrozen        bool   // Was the target branch frozen?
-	UpToDate        bool   // Everything was already current
+	UpToDate        bool   // Everything was already current (nothing held back)
+	// Held lists branches a worktree held back during the restack phase.
+	Held []handlers.RestackHeldInfo
 }
 
 // Reanchored records a branch whose recorded parent has landed and been deleted
@@ -644,6 +646,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	// Restack if requested
 	var restacked, skipped int
 	var conflicts, blocked []string
+	var held []handlers.RestackHeldInfo
 	if opts.Restack {
 		uniqueBranches := engine.NewBranchesBuilder(len(targets.branches))
 		seen := make(map[string]bool)
@@ -704,6 +707,9 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 					event.Result = handlers.RestackDone
 				case engine.RestackUnneeded:
 					event.Result = handlers.RestackUnneeded
+					if p.HeldBy != "" {
+						held = append(held, handlers.RestackHeldInfo{Branch: p.Branch, Reason: p.HeldBy})
+					}
 				case engine.RestackConflict:
 					skipped++
 					conflicts = append(conflicts, p.Branch)
@@ -713,24 +719,25 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 					event.Result = handlers.RestackBlocked
 				}
 				handler.OnRestackBranch(event)
-			}, ConflictModeEnterWorkflow); err != nil {
-				handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked})
+			}, ConflictModeEnterWorkflow, RestackBranchesOpts{}); err != nil {
+				handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked, Held: held})
 				return fmt.Errorf("restack failed: %w", err)
 			}
 
-			handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked})
+			handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked, Held: held})
 		}
 	}
 
 	// Complete with summary
 	targetBranchObj = eng.GetBranch(targetBranch)
 	isFrozenFinal := targetBranchObj.IsFrozen()
-	upToDate := branchesCreated == 0 && branchesUpdated == 0 && restacked == 0
+	upToDate := branchesCreated == 0 && branchesUpdated == 0 && restacked == 0 && len(held) == 0
 	handler.Complete(GetSummary{
 		TargetBranch:    targetBranch,
 		BranchesCreated: branchesCreated,
 		BranchesUpdated: branchesUpdated,
 		Restacked:       restacked,
+		Held:            held,
 		IsFrozen:        isFrozenFinal,
 		UpToDate:        upToDate,
 	})

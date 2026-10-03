@@ -3,6 +3,7 @@ package sync
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -82,16 +83,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		out.Warn("%s", warning)
 	}
 
-	// Calculate total operations for progress (rough estimate)
-	totalOps := 1 // trunk sync
-	if !opts.NoRestack {
-		// Estimate based on tracked branches
-		progressCountStart := time.Now()
-		branchCount := len(ctx.Navigator().AllBranches())
-		ctx.Logger.Info("count branches for progress completed durationMs=%v branchCount=%v", time.Since(progressCountStart).Milliseconds(), branchCount)
-		totalOps += branchCount
-	}
-	handler.Start(totalOps)
+	handler.Start()
 
 	// Phase 1: Parallel network operations
 	// Fetch trunk and metadata refs, and sync GitHub PR info concurrently.
@@ -186,6 +178,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Merge trunk summary
 	summary.TrunkUpdated = trunkSummary.TrunkUpdated
 	summary.TrunkRevision = trunkSummary.TrunkRevision
+	summary.HeldBranches = append(summary.HeldBranches, trunkSummary.HeldBranches...)
 
 	// GitHub failure aborts sync (per spec)
 	if githubErr != nil {
@@ -372,6 +365,7 @@ type Event struct {
 	Branch              string            // Branch name (if applicable)
 	PRNumber            *git.PRNumber     // PR number (if applicable)
 	Message             string            // Human-readable description
+	Total               int               // Branches handed to restack, set on the restack phase's EventStarted (an upper bound; see restackBranches)
 	OldRevision         string            // For position changes
 	NewRevision         string            // For position changes
 	Conflict            bool              // Is this a conflict?
@@ -402,20 +396,29 @@ type Summary struct {
 	UpToDate          bool     // Everything was already current
 	WorktreesCleaned  int      // Number of orphaned worktrees cleaned up
 	SkippedStacks     []string // Stacks skipped due to dirty worktrees
+	HeldBranches      []string // Branches (trunk included) a worktree held back
 }
 
-// HasChanges returns true if any operations were performed
+// HasChanges returns true if any operations were performed or anything was
+// held back. A hold is not "up to date": the work is still outstanding.
 func (s *Summary) HasChanges() bool {
 	return s.TrunkUpdated || s.BranchesSynced > 0 || s.BranchesRestacked > 0 ||
 		s.BranchesDeleted > 0 || s.BranchesSkipped > 0 || s.BranchesBlocked > 0 ||
-		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0
+		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0 || len(s.HeldBranches) > 0
+}
+
+// recordHold notes a branch a worktree held back, once per branch.
+func (s *Summary) recordHold(branch string) {
+	if !slices.Contains(s.HeldBranches, branch) {
+		s.HeldBranches = append(s.HeldBranches, branch)
+	}
 }
 
 // Handler abstracts TTY vs non-TTY output for sync operations
 // It embeds RestackHandler to provide a unified interface for operations that include restacking
 type Handler interface {
-	// Start is called at the beginning of sync with the total operation count
-	Start(totalOps int)
+	// Start is called at the beginning of sync
+	Start()
 
 	// EmitEvent is called for each progress update
 	EmitEvent(event Event)
@@ -466,7 +469,7 @@ type NullHandler struct {
 }
 
 // Start implements Handler.
-func (h *NullHandler) Start(int) {}
+func (h *NullHandler) Start() {}
 
 // EmitEvent implements Handler.
 func (h *NullHandler) EmitEvent(Event) {}
@@ -502,6 +505,12 @@ func (h *NullHandler) PromptBranchDeletions(branches map[string]string, unpushed
 // This is shared between SimpleSyncHandler and InteractiveSyncHandler
 func FormatSummaryParts(summary Summary) []string {
 	parts := []string{}
+
+	// Holds lead: the remedy lives in another worktree the user is not
+	// looking at, so it must not be buried behind routine counts.
+	if len(summary.HeldBranches) > 0 {
+		parts = append(parts, fmt.Sprintf("held %d (worktree)", len(summary.HeldBranches)))
+	}
 
 	if summary.TrunkUpdated {
 		parts = append(parts, "pulled trunk")

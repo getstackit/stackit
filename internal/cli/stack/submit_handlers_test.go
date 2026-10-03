@@ -5,14 +5,124 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
 	submitAction "github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
 )
+
+// newTestInteractiveSubmitHandler builds an interactive handler over a mock
+// runner with the given preparation-notice delay.
+func newTestInteractiveSubmitHandler(out output.Output, runner *tui.MockRunner, delay time.Duration) *InteractiveSubmitHandler {
+	h := NewInteractiveSubmitHandler(runner, submitComponent.NewModel(nil), out, SubmitCompact)
+	h.preparingDelay = delay
+	return h
+}
+
+func preparationNoticePending(h *InteractiveSubmitHandler) bool {
+	h.preparingMu.Lock()
+	defer h.preparingMu.Unlock()
+	return h.preparingTimer != nil
+}
+
+func TestPreparationNoticeLifecycle(t *testing.T) {
+	t.Parallel()
+	const notice = "Checking remote branches and PR status"
+
+	t.Run("quick preparation stays silent", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Hour)
+		h.OnEvent(submitAction.PreparingEvent{})
+		require.True(t, preparationNoticePending(h))
+		h.OnEvent(submitAction.PreparingEvent{Completed: true})
+		require.False(t, preparationNoticePending(h))
+		require.Empty(t, out.String())
+	})
+
+	t.Run("slow preparation explains the wait once", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Millisecond)
+		h.OnEvent(submitAction.PreparingEvent{})
+		require.Eventually(t, func() bool {
+			h.preparingMu.Lock()
+			defer h.preparingMu.Unlock()
+			return strings.Contains(out.String(), notice)
+		}, time.Second, time.Millisecond)
+		h.OnEvent(submitAction.PreparingEvent{Completed: true})
+		require.Equal(t, 1, strings.Count(out.String(), notice))
+	})
+
+	t.Run("completion cancels a pending notice", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Hour)
+		h.OnEvent(submitAction.PreparingEvent{})
+		h.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "All PRs up to date"})
+		require.False(t, preparationNoticePending(h))
+		require.NotContains(t, out.String(), notice)
+	})
+
+	t.Run("confirm stops the notice before prompting", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Hour)
+		pendingAtPrompt := true
+		h.promptConfirm = func(string, bool) (bool, error) {
+			pendingAtPrompt = preparationNoticePending(h)
+			return true, nil
+		}
+		h.OnEvent(submitAction.PreparingEvent{})
+		confirmed, err := h.Confirm("Submit?", true)
+		require.NoError(t, err)
+		require.True(t, confirmed)
+		require.False(t, pendingAtPrompt)
+		require.NotContains(t, out.String(), notice)
+	})
+
+	t.Run("stopping is idempotent", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Hour)
+		h.OnEvent(submitAction.PreparingEvent{})
+		h.StopPreparationNotice()
+		h.StopPreparationNotice() // idempotent
+		require.False(t, preparationNoticePending(h))
+	})
+}
+
+func TestInteractiveSubmitHandlerPushActivity(t *testing.T) {
+	t.Parallel()
+	runner := tui.NewMockRunner()
+	h := newTestInteractiveSubmitHandler(output.NewTestOutput(), runner, time.Hour)
+
+	h.OnEvent(submitAction.PushEvent{BranchCount: 2})
+	h.OnEvent(submitAction.PushEvent{BranchCount: 2, Completed: true})
+
+	require.Equal(t, []tea.Msg{
+		submitComponent.ActivityMsg{Message: "Pushing 2 branches..."},
+		submitComponent.ActivityMsg{},
+	}, runner.Messages())
+}
+
+func TestSimpleSubmitHandlerReportsPush(t *testing.T) {
+	t.Parallel()
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+
+	h.OnEvent(submitAction.PushEvent{BranchCount: 1})
+	h.OnEvent(submitAction.PushEvent{BranchCount: 1, Completed: true})
+
+	got := out.String()
+	require.Equal(t, 1, strings.Count(got, "Pushing 1 branch..."))
+	require.Equal(t, got, ansi.Strip(got), "non-TTY output must be plain text")
+}
 
 func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 	t.Parallel()
@@ -179,9 +289,9 @@ func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	// A nil runner stands in for a TUI that was never started; every runner
-	// method is nil-safe. Plan output must not depend on the TUI running.
-	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitVerbose)
+	// A never-started mock runner stands in for a TUI that was never started.
+	// Plan output must not depend on the TUI running.
+	handler := NewInteractiveSubmitHandler(tui.NewMockRunner(), submitComponent.NewModel(nil), out, SubmitVerbose)
 	branch := "jonnii/20260511011552/up-to-date-branch"
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
@@ -210,7 +320,7 @@ func TestInteractiveSubmitHandlerPrintsEveryBufferedNativeStackEvent(t *testing.
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitVerbose)
+	handler := NewInteractiveSubmitHandler(tui.NewMockRunner(), submitComponent.NewModel(nil), out, SubmitVerbose)
 	handler.githubStacks = []submitAction.GitHubStackSyncedEvent{
 		{Number: 1, PullRequests: []git.PRNumber{10, 11}, Action: "created"},
 		{Number: 2, PullRequests: []git.PRNumber{12, 13}, Action: "extended"},

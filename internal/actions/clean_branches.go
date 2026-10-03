@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -469,7 +469,7 @@ func selectBranchesForDeletion(plan *deletionPlan, canDelete func(string) bool, 
 		if len(candidates) == 0 {
 			return selected
 		}
-		sort.Strings(candidates)
+		slices.Sort(candidates)
 
 		selectedInLayer := make([]string, 0, len(candidates))
 		for _, name := range candidates {

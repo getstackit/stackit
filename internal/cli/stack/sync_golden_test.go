@@ -3,7 +3,7 @@ package stack
 import (
 	"bytes"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -381,7 +381,7 @@ func toSet(xs []string) map[string]bool {
 
 func sortedCopy(xs []string) []string {
 	c := append([]string(nil), xs...)
-	sort.Strings(c)
+	slices.Sort(c)
 	return c
 }
 

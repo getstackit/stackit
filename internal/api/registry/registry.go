@@ -6,12 +6,13 @@
 package registry
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -310,7 +311,7 @@ func (r *Registry) List() []*RepoEntry {
 	for _, e := range r.entries {
 		out = append(out, e)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	slices.SortFunc(out, func(a, b *RepoEntry) int { return cmp.Compare(a.ID, b.ID) })
 	return out
 }
 

@@ -78,11 +78,15 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 		IsDraft: false,
 	}
 
+	if opts.Regenerate {
+		metadata.Title, metadata.Body = "", ""
+	}
+
 	shouldEditTitle := opts.EditTitle || (opts.Edit && !opts.NoEditTitle)
 	shouldEditBody := opts.EditDescription || (opts.Edit && !opts.NoEditDescription)
 
 	// If PR exists and local metadata is missing title or body, fetch from GitHub
-	if prInfo != nil && prInfo.Number() != nil && (metadata.Title == "" || metadata.Body == "") && ctx.GitHub() != nil {
+	if !opts.Regenerate && prInfo != nil && prInfo.Number() != nil && (metadata.Title == "" || metadata.Body == "") && ctx.GitHub() != nil {
 		content, ok := current[*prInfo.Number()]
 		if !ok {
 			currentPR, err := ctx.GitHub().GetPullRequest(ctx.Context, *prInfo.Number())
@@ -128,6 +132,13 @@ func PreparePRMetadata(branch engine.Branch, opts MetadataOptions, ctx *app.Cont
 			}
 			metadata.Body = body
 		}
+	}
+
+	// Regenerated text replaces the whole body, including the lock banner the
+	// footer pass would otherwise preserve. Restore it here so a locked PR never
+	// loses its visible lock, even with footers disabled or if that pass fails.
+	if opts.Regenerate {
+		metadata.Body = pr.UpdatePRBodyLockSection(metadata.Body, pr.CreateLockSection(branch.GetName(), ctx.Engine))
 	}
 
 	switch {
@@ -189,6 +200,7 @@ func pendingPrInfo(branch engine.Branch, metadata *PRMetadata) *engine.PrInfo {
 
 // MetadataOptions contains options for PR metadata collection
 type MetadataOptions struct {
+	Regenerate        bool
 	Edit              bool
 	EditTitle         bool
 	EditDescription   bool

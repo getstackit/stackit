@@ -13,6 +13,7 @@ import (
 	"github.com/getstackit/stackit/internal/config"
 	_ "github.com/getstackit/stackit/internal/demo" // Register demo engine factory
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 type submitFlags struct {
@@ -23,6 +24,7 @@ type submitFlags struct {
 	confirm              bool
 	updateOnly           bool
 	always               bool
+	regenerate           bool
 	restack              bool
 	draft                bool
 	publish              bool
@@ -57,6 +59,7 @@ func addSubmitFlags(cmd *cobra.Command, f *submitFlags) {
 	cmd.Flags().BoolVarP(&f.confirm, "confirm", "c", false, "Reports the PRs that would be submitted and asks for confirmation before pushing branches and opening/updating PRs.")
 	cmd.Flags().BoolVarP(&f.updateOnly, "update-only", "u", false, "Only push branches and update PRs for branches that already have PRs open.")
 	cmd.Flags().BoolVar(&f.always, "always", false, "Always push updates, even if the branch has not changed.")
+	cmd.Flags().BoolVar(&f.regenerate, "regenerate", false, "Regenerate PR titles and descriptions from commits, overwriting existing text. Asks first when run in a terminal.")
 	cmd.Flags().BoolVar(&f.restack, "restack", false, "Restack branches before submitting.")
 	cmd.Flags().BoolVarP(&f.draft, "draft", "d", false, "If set, all new PRs will be created in draft mode.")
 	cmd.Flags().BoolVarP(&f.publish, "publish", "p", false, "If set, publishes all PRs being submitted.")
@@ -109,9 +112,10 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			StackRange:           stackRange,
 			Force:                f.force,
 			DryRun:               f.dryRun,
-			Confirm:              f.confirm,
+			Confirm:              f.confirm || regenerateNeedsConfirm(f, utils.IsInteractive()),
 			UpdateOnly:           f.updateOnly,
 			Always:               f.always,
+			Regenerate:           f.regenerate,
 			Restack:              f.restack,
 			Draft:                f.draft,
 			Publish:              f.publish,
@@ -161,15 +165,24 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		// Action is the single source of truth for what to submit. The runner
 		// starts lazily (when the submission phase begins), so calling Action
 		// unconditionally no longer flashes the TUI when there's nothing to do.
-		// A dry run's whole output IS the plan, so it always prints verbose.
 		verbosity := SubmitCompact
-		if f.verbose || f.dryRun {
+		// A dry run's plan is its whole output, and a regeneration being
+		// confirmed must show the replacement text it asks about.
+		if f.verbose || f.dryRun || (opts.Regenerate && opts.Confirm) {
 			verbosity = SubmitVerbose
 		}
 		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger, verbosity)
 		defer runner.Cleanup()
 		return submit.Action(ctx, opts, handler)
 	})
+}
+
+// regenerateNeedsConfirm reports whether --regenerate should ask before
+// writing. It overwrites PR text people may have written by hand, so in a
+// terminal the replacement is shown and confirmed first. Dry runs and JSON
+// write nothing or cannot prompt; --no-interactive opts out.
+func regenerateNeedsConfirm(f *submitFlags, interactive bool) bool {
+	return f.regenerate && interactive && !f.dryRun && !f.jsonOutput
 }
 
 // NewSubmitCmd creates the submit command
@@ -182,7 +195,13 @@ func NewSubmitCmd() *cobra.Command {
 		Long: `Idempotently force push all branches in the current stack from trunk to the current branch to GitHub,
 creating or updating distinct pull requests for each. Validates that branches are properly restacked before submitting,
 and fails if there are conflicts. Blocks force pushes to branches that overwrite branches that have changed since
-you last submitted or got them. Opens an interactive prompt that allows you to input pull request metadata.`,
+you last submitted or got them. Opens an interactive prompt that allows you to input pull request metadata.
+
+Examples:
+  stackit submit                          # Submit the current branch and its ancestors
+  stackit submit --stack                  # Also submit the branches above it
+  stackit submit --regenerate --dry-run   # Preview PR text rebuilt from current commits
+  stackit submit --regenerate             # Replace PR titles and descriptions (asks first in a terminal)`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return executeSubmit(cmd, f)

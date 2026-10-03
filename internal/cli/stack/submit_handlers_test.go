@@ -439,3 +439,26 @@ func TestSimpleSubmitHandlerCompactStaysSilentWhenNothingToSubmit(t *testing.T) 
 	require.NotContains(t, got, "●")
 	require.Contains(t, got, "Nothing to submit")
 }
+
+func TestRegenerateNeedsConfirm(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		flags       submitFlags
+		interactive bool
+		want        bool
+	}{
+		{name: "interactive regenerate confirms", flags: submitFlags{regenerate: true}, interactive: true, want: true},
+		{name: "non-interactive regenerate does not prompt", flags: submitFlags{regenerate: true}, interactive: false, want: false},
+		{name: "dry run writes nothing", flags: submitFlags{regenerate: true, dryRun: true}, interactive: true, want: false},
+		{name: "json cannot prompt", flags: submitFlags{regenerate: true, jsonOutput: true}, interactive: true, want: false},
+		{name: "plain submit is unchanged", flags: submitFlags{}, interactive: true, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, regenerateNeedsConfirm(&tt.flags, tt.interactive))
+		})
+	}
+}

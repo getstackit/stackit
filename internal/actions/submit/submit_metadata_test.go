@@ -246,9 +246,7 @@ func TestPreparePRMetadata_NoEdit(t *testing.T) {
 		err := s.Engine.TrackBranch(context.Background(), branchName, "main")
 		require.NoError(t, err)
 
-		opts := submit.MetadataOptions{
-			NoEdit: true,
-		}
+		opts := submit.MetadataOptions{}
 
 		branch := s.Engine.GetBranch(branchName)
 		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)

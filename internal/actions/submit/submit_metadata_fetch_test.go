@@ -46,9 +46,7 @@ func TestPreparePRMetadata_FetchFromGitHub(t *testing.T) {
 		s.Context.GitHubClient = mockClient
 
 		// 3. Prepare metadata without editing
-		opts := submit.MetadataOptions{
-			Edit: false,
-		}
+		opts := submit.MetadataOptions{}
 
 		metadata, err := submit.PreparePRMetadata(branch, opts, s.Context, nil)
 		require.NoError(t, err)

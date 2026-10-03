@@ -49,6 +49,19 @@ func FetchPRContentForBranches(ctx *app.Context, branches []string) map[git.PRNu
 	return content
 }
 
+// PRNavigationOptions resolves the stack navigation settings from config,
+// falling back to defaults when no config is loaded.
+func PRNavigationOptions(ctx *app.Context) pr.NavigationOptions {
+	navOpts := pr.DefaultNavigationOptions()
+	if ctx.Config != nil {
+		navOpts.When = ctx.Config.NavigationWhen()
+		navOpts.Marker = ctx.Config.NavigationMarker()
+		navOpts.Location = ctx.Config.NavigationLocation()
+		navOpts.ShowMerged = ctx.Config.NavigationShowMerged()
+	}
+	return navOpts
+}
+
 // UpdateBranchPRMetadataWithContent updates PR title and body footer for a single
 // branch, using PR content pre-fetched in bulk by FetchPRContentForBranches. If
 // the branch's PR is not present in current (a batch miss or fetch failure), it
@@ -81,31 +94,9 @@ func UpdateBranchPRMetadataWithContent(ctx *app.Context, name string, current ma
 
 	updatedTitle := scope.ApplyToTitle(currentTitle)
 
-	// Build navigation options from config
-	navOpts := pr.DefaultNavigationOptions()
-	if ctx.Config != nil {
-		navOpts.When = ctx.Config.NavigationWhen()
-		navOpts.Marker = ctx.Config.NavigationMarker()
-		navOpts.Location = ctx.Config.NavigationLocation()
-		navOpts.ShowMerged = ctx.Config.NavigationShowMerged()
-	}
+	navOpts := PRNavigationOptions(ctx)
+	updatedBody := pr.ComposeBody(currentBody, name, ctx.Engine, navOpts)
 
-	// 1. Always handle lock section independently of navigation settings
-	// This ensures lock status is shown even when navigation is hidden (single-branch stack with when=multiple)
-	lockSection := pr.CreateLockSection(name, ctx.Engine)
-	updatedBody := pr.UpdatePRBodyLockSection(currentBody, lockSection)
-
-	// 2. Handle navigation footer based on settings
-	// The footer now includes both the description and navigation tree in a combined section
-	if navOpts.Location == config.NavigationLocationBody {
-		footer := pr.CreatePRBodyFooterWithOptions(name, ctx.Engine, navOpts)
-		updatedBody = pr.UpdatePRBodyFooter(updatedBody, footer)
-	} else {
-		// For comment/none location, strip any existing footer from body
-		updatedBody = pr.StripFooter(updatedBody)
-	}
-
-	// 3. Apply updates if needed (Option 2)
 	// Don't update body if:
 	// - It would become empty when adding navigation (preserve existing body instead)
 	// - But DO allow empty when stripping footer (switching to comment/none location)

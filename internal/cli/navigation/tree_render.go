@@ -42,12 +42,18 @@ func RunTree(ctx *app.Context, opts actions.TreeOptions) error {
 }
 
 func printTreeJSON(ctx *app.Context, opts actions.TreeOptions) error {
+	req := actions.TreeJSONRequest{Style: opts.Style}
 	if opts.BranchName != ctx.Engine.Trunk().GetName() || opts.Steps != nil {
 		// Scope the JSON to exactly what the text view would draw, before any
 		// expensive enrichment runs.
-		_, _, opts.VisibleBranches = resolveVisibleTree(ctx.Engine, opts)
+		_, _, req.Branches = resolveVisibleTree(ctx.Engine, opts)
 	}
-	result := actions.BuildTreeJSON(ctx, opts)
+	// Short views are local and structural: never initialize the GitHub client.
+	var gh github.Client
+	if opts.Style != actions.TreeStyleShort {
+		gh = ctx.GitHub()
+	}
+	result := actions.BuildTreeJSON(ctx.Context, ctx.Engine, gh, req)
 
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {

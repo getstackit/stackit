@@ -61,7 +61,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		}
 	}
 	var current map[git.PRNumber]github.PRContent
-	if !opts.Regenerate && len(missingContent) > 0 && ctx.GitHub() != nil {
+	if !opts.regenerate() && len(missingContent) > 0 && ctx.GitHub() != nil {
 		current = actions.FetchPRContentForBranches(ctx, missingContent)
 	}
 
@@ -86,17 +86,13 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 
 		// Prepare metadata
 		metadataOpts := MetadataOptions{
-			Regenerate:        opts.Regenerate,
-			Edit:              opts.Edit && !opts.NoEdit,
-			EditTitle:         opts.EditTitle && !opts.NoEditTitle,
-			EditDescription:   opts.EditDescription && !opts.NoEditDescription,
-			NoEdit:            opts.NoEdit,
-			NoEditTitle:       opts.NoEditTitle,
-			NoEditDescription: opts.NoEditDescription,
-			Draft:             opts.Draft,
-			Publish:           opts.Publish,
-			Reviewers:         opts.Reviewers,
-			ReviewersPrompt:   opts.Reviewers == "" && opts.Edit,
+			Text:            opts.Text,
+			EditTitle:       opts.editTitle(),
+			EditBody:        opts.editBody(),
+			Draft:           opts.Draft,
+			Publish:         opts.Publish,
+			Reviewers:       opts.Reviewers,
+			ReviewersPrompt: opts.Reviewers == "" && opts.Edit,
 			// Config-driven options
 			ConfigDraft:     opts.ConfigDraft,
 			ConfigReviewers: opts.ConfigReviewers,
@@ -129,7 +125,7 @@ func prepareBranchesForSubmit(ctx *app.Context, branches engine.Branches, opts O
 		var regenerated *PRContentPreview
 		// Show replacement text wherever the user reviews the plan before
 		// anything is written: a dry run, or the --confirm prompt.
-		if opts.Regenerate && (opts.DryRun || opts.Confirm) {
+		if opts.regenerate() && (opts.DryRun || opts.Confirm) {
 			regenerated = &PRContentPreview{Title: metadata.Title, Body: metadata.Body}
 		}
 		handler.OnEvent(BranchPlanEvent{
@@ -172,7 +168,7 @@ func submissionSkipReason(status engine.PRSubmissionStatus, action engine.Submit
 	if opts.UpdateOnly && action == engine.SubmitActionCreate {
 		return "no existing PR", true
 	}
-	if action == engine.SubmitActionUpdate && !status.NeedsUpdate && !opts.Edit && !opts.Always && !opts.Regenerate && !opts.Draft && !opts.Publish {
+	if action == engine.SubmitActionUpdate && !status.NeedsUpdate && !opts.Edit && !opts.Always && !opts.regenerate() && !opts.Draft && !opts.Publish {
 		return status.Reason, true
 	}
 	return "", false

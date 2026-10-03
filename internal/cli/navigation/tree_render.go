@@ -42,6 +42,11 @@ func RunTree(ctx *app.Context, opts actions.TreeOptions) error {
 }
 
 func printTreeJSON(ctx *app.Context, opts actions.TreeOptions) error {
+	if opts.BranchName != ctx.Engine.Trunk().GetName() || opts.Steps != nil {
+		// Scope the JSON to exactly what the text view would draw, before any
+		// expensive enrichment runs.
+		_, _, opts.VisibleBranches = resolveVisibleTree(ctx.Engine, opts)
+	}
 	result := actions.BuildTreeJSON(ctx, opts)
 
 	data, err := json.MarshalIndent(result, "", "  ")
@@ -54,25 +59,13 @@ func printTreeJSON(ctx *app.Context, opts actions.TreeOptions) error {
 
 func printTree(ctx *app.Context, opts actions.TreeOptions) error {
 	eng := ctx.Engine
-
-	// One managed-worktree listing backs both the renderer (which empty
-	// anchors stay visible) and the per-branch worktree annotations.
-	worktrees := stackview.BuildWorktreeIndex(eng)
-
-	var renderer *tree.StackTreeRenderer
-	if emptyAnchors := worktrees.EmptyAnchorNames(); emptyAnchors != nil {
-		renderer = tui.NewStackTreeRendererWithEmptyWorktrees(eng, emptyAnchors)
-	} else {
-		renderer = tui.NewStackTreeRenderer(eng)
-	}
-
+	renderer, worktrees, visibleBranches := resolveVisibleTree(eng, opts)
 	renderOpts := tree.RenderOptions{
 		Mode:        tree.RenderModeFull, // We want the full tree characters with stats
 		Steps:       opts.Steps,
 		ShowSHAs:    opts.ShowSHAs,
 		HideSummary: opts.Style == actions.TreeStyleShort,
 	}
-	visibleBranches := visibleTreeBranches(renderer, opts.BranchName, renderOpts, eng.AllBranches())
 
 	annotations := buildTreeAnnotations(ctx, opts, visibleBranches, worktrees)
 	renderer.SetAnnotations(annotations)
@@ -93,6 +86,28 @@ func printTree(ctx *app.Context, opts actions.TreeOptions) error {
 	ctx.Output.Print(strings.Join(stackLines, "\n"))
 	ctx.Output.Newline()
 	return nil
+}
+
+// resolveVisibleTree builds the renderer and the set of branches it draws for
+// opts. Text and JSON views both resolve through it, so --stack and --steps
+// select the same branches in each. One managed-worktree listing backs both the
+// renderer (which empty anchors stay visible) and later worktree annotations.
+func resolveVisibleTree(eng engine.Engine, opts actions.TreeOptions) (*tree.StackTreeRenderer, *stackview.WorktreeIndex, engine.Branches) {
+	worktrees := stackview.BuildWorktreeIndex(eng)
+	renderer := newTreeRenderer(eng, worktrees)
+	visible := visibleTreeBranches(renderer, opts.BranchName, tree.RenderOptions{
+		Mode:  tree.RenderModeFull,
+		Steps: opts.Steps,
+	}, eng.AllBranches())
+	return renderer, worktrees, visible
+}
+
+// newTreeRenderer picks the renderer variant for the current worktrees.
+func newTreeRenderer(eng engine.StackView, worktrees *stackview.WorktreeIndex) *tree.StackTreeRenderer {
+	if emptyAnchors := worktrees.EmptyAnchorNames(); emptyAnchors != nil {
+		return tui.NewStackTreeRendererWithEmptyWorktrees(eng, emptyAnchors)
+	}
+	return tui.NewStackTreeRenderer(eng)
 }
 
 // buildTreeAnnotations resolves annotations for just the branches that will

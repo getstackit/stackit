@@ -29,13 +29,18 @@ type TreeOptions struct {
 	Interactive   bool
 	ShowSHAs      bool // Show commit SHAs next to branch names
 	JSON          bool // Output in JSON format
+	// VisibleBranches, when non-nil, bounds JSON output to exactly these
+	// branches. Adapters resolve it with the text renderer's visibility rules
+	// (--stack scope, --steps depth, anchor flattening) so JSON matches the
+	// text view and enrichment only runs for branches the view would draw.
+	VisibleBranches engine.Branches
 }
 
 // TreeJSONResult represents the JSON output for the tree command
 type TreeJSONResult struct {
 	Branches        []TreeBranchInfo `json:"branches"`
 	Summary         TreeSummary      `json:"summary"`
-	GitHubAvailable bool             `json:"github_available"`
+	GitHubAvailable *bool            `json:"github_available,omitempty"`
 }
 
 // TreeBranchInfo represents a single branch in JSON output
@@ -53,7 +58,7 @@ type TreeBranchInfo struct {
 	IsLocked     bool        `json:"is_locked"`
 	IsFrozen     bool        `json:"is_frozen"`
 	NeedsRestack bool        `json:"needs_restack"`
-	Commits      int         `json:"commits"`
+	Commits      *int        `json:"commits,omitempty"`
 	Additions    int         `json:"additions,omitempty"`
 	Deletions    int         `json:"deletions,omitempty"`
 	PR           *TreePRInfo `json:"pr,omitempty"`
@@ -84,15 +89,15 @@ type TreePRInfo struct {
 
 // TreeSummary represents summary statistics in JSON output
 type TreeSummary struct {
-	TotalBranches int `json:"total_branches"`
-	ApprovedCount int `json:"approved_count"`
-	InReviewCount int `json:"in_review_count"`
+	TotalBranches int  `json:"total_branches"`
+	ApprovedCount *int `json:"approved_count,omitempty"`
+	InReviewCount *int `json:"in_review_count,omitempty"`
 }
 
 // BuildTreeJSON builds the structured tree result (branch tree, PR/CI status, and
 // per-branch health) without printing it, so other commands — e.g. `status` —
-// can embed the same stack snapshot. The CI status prefetch always runs to
-// provide complete data.
+// can embed the same stack snapshot. Short views omit statistics and PR data;
+// normal/full JSON retain the complete historical contract, including CI.
 func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 	eng := ctx.Engine
 	currentBranch := eng.CurrentBranch()
@@ -104,23 +109,22 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 	// Build stack graph
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
 
-	// Get all branches in stack order
-	var branchesToInclude engine.Branches
-	if opts.BranchName != "" && opts.BranchName != eng.Trunk().GetName() {
-		targetBranch := eng.GetBranch(opts.BranchName)
-		stackRange := engine.StackRange{
-			RecursiveParents:  true,
-			IncludeCurrent:    true,
-			RecursiveChildren: true,
-		}
-		branchesToInclude = graph.Range(targetBranch, stackRange)
-	} else {
-		// Get all tracked branches
+	// Scoped views (--stack, --steps) arrive with the branch set already
+	// resolved by the adapter; everything else reports every tracked branch.
+	branchesToInclude := opts.VisibleBranches
+	if branchesToInclude == nil {
 		branchesToInclude = eng.AllBranches()
 	}
+	included := make(map[string]bool, len(branchesToInclude))
+	for _, b := range branchesToInclude {
+		included[b.GetName()] = true
+	}
 
-	// Prefetch CI status for JSON output (always fetched to provide complete data)
-	ghClient := ctx.GitHub()
+	// Short views are local and structural: never initialize the GitHub client.
+	var ghClient github.Client
+	if opts.Style != TreeStyleShort {
+		ghClient = ctx.GitHub()
+	}
 	var ciStatuses github.ChecksByBranch
 	if ghClient != nil {
 		branchNames := branchesToInclude.Select(engine.BranchFilter{ExcludeTrunk: true, RequirePR: true}).Names()
@@ -131,9 +135,13 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 
 	// Build result
 	result := TreeJSONResult{
-		Branches:        []TreeBranchInfo{},
-		Summary:         TreeSummary{},
-		GitHubAvailable: ghClient != nil,
+		Branches: []TreeBranchInfo{},
+		Summary:  TreeSummary{},
+	}
+	if opts.Style != TreeStyleShort {
+		result.GitHubAvailable = new(ghClient != nil)
+		result.Summary.ApprovedCount = new(0)
+		result.Summary.InReviewCount = new(0)
 	}
 
 	// Collect branch info in parallel using worker pool (each branch requires
@@ -156,7 +164,10 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 	// processable branches as batched values, read in the loop below, instead
 	// of a per-branch IsBranchUpToDate() inside each worker (each of which
 	// would shell a separate `git rev-parse` for the parent).
-	stats := eng.BatchBranchStats(processableBranches)
+	var stats map[string]engine.BranchStat
+	if opts.Style != TreeStyleShort {
+		stats = eng.BatchBranchStats(processableBranches)
+	}
 	statuses := eng.ReadBranchStatuses(processableBranches)
 
 	if len(processableBranches) > 0 {
@@ -184,21 +195,28 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 				info.Scope = scope.String()
 			}
 
-			// Children
+			// Children, limited to the result so a bounded view never names a
+			// branch the consumer cannot look up.
 			for _, child := range visibleTreeChildren(graph, branch) {
-				info.Children = append(info.Children, child.GetName())
+				if included[child.GetName()] {
+					info.Children = append(info.Children, child.GetName())
+				}
 			}
 
 			// Commits and diff stats from the batched stats resolved above.
-			if !branch.IsTrunk() {
+			switch {
+			case opts.Style == TreeStyleShort:
+			case branch.IsTrunk():
+				info.Commits = new(0)
+			default:
 				stat := stats[branchName]
-				info.Commits = stat.CommitCount
+				info.Commits = new(stat.CommitCount)
 				info.Additions = stat.LinesAdded
 				info.Deletions = stat.LinesDeleted
 			}
 
 			// PR info
-			if !branch.IsTrunk() {
+			if opts.Style != TreeStyleShort && !branch.IsTrunk() {
 				prInfo, _ := branch.GetPrInfo()
 				if prInfo != nil && prInfo.Number() != nil {
 					info.PR = &TreePRInfo{
@@ -246,9 +264,9 @@ func BuildTreeJSON(ctx *app.Context, opts TreeOptions) TreeJSONResult {
 		if !info.IsTrunk {
 			result.Summary.TotalBranches++
 			if info.PR != nil && info.PR.ReviewStatus == ReviewApproved {
-				result.Summary.ApprovedCount++
+				(*result.Summary.ApprovedCount)++
 			} else if info.PR != nil && info.PR.ReviewStatus == ReviewRequired {
-				result.Summary.InReviewCount++
+				(*result.Summary.InReviewCount)++
 			}
 		}
 	}

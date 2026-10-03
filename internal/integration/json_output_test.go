@@ -61,7 +61,8 @@ func TestJSONOutput(t *testing.T) {
 		require.Equal(t, 2, result.Summary.TotalBranches, "should have 2 tracked branches")
 
 		// GitHub is never available in tests.
-		require.False(t, result.GitHubAvailable)
+		require.NotNil(t, result.GitHubAvailable)
+		require.False(t, *result.GitHubAvailable)
 	})
 
 	t.Run("tree --json outputs valid JSON with recommendations", func(t *testing.T) {

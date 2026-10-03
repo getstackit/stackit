@@ -11,9 +11,11 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
+	"github.com/getstackit/stackit/internal/pr"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -21,6 +23,16 @@ import (
 const msgSubmitFailed = "Submit failed"
 
 // Options contains options for the submit command
+// PRTextSource says where submit takes PR titles and descriptions from.
+type PRTextSource int
+
+const (
+	// PRTextExisting keeps each PR's existing text, generating only what is missing.
+	PRTextExisting PRTextSource = iota
+	// PRTextRegenerate rebuilds text from current commits, replacing what exists.
+	PRTextRegenerate
+)
+
 type Options struct {
 	Branch               string
 	StackRange           engine.StackRange
@@ -29,7 +41,7 @@ type Options struct {
 	Confirm              bool
 	UpdateOnly           bool
 	Always               bool
-	Regenerate           bool // Replace PR titles/bodies with current commit-derived defaults
+	Text                 PRTextSource
 	Restack              bool
 	Draft                bool
 	Publish              bool
@@ -403,6 +415,10 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		}
 	}
 
+	if opts.regenerate() {
+		composeRegeneratedBodies(ctx, opts, submissionInfos)
+	}
+
 	// Build branch info for submission start event. Track whether every action
 	// is a create — new stacks submit sequentially so PRs get sequential numbers.
 	branchInfos := make([]BranchInfo, len(submissionInfos))
@@ -473,7 +489,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// apply each footer/title update in parallel.
 	if opts.SubmitFooter {
 		prContent := actions.FetchPRContentForBranches(ctx, branches)
-		if opts.Regenerate {
+		if opts.regenerate() {
 			overlaySentContent(prContent, submissionInfos)
 		}
 		utils.Run(branches, func(name string) {
@@ -938,7 +954,7 @@ func updatePullRequestQuiet(ctx *app.Context, submissionInfo Info, opts Options,
 
 	// An explicitly regenerated empty body clears old text; ordinary submits
 	// preserve the existing body when there is no replacement.
-	if submissionInfo.Metadata.Body != "" || opts.Regenerate {
+	if submissionInfo.Metadata.Body != "" || opts.regenerate() {
 		updateOpts.Body = &submissionInfo.Metadata.Body
 	}
 
@@ -1158,5 +1174,38 @@ func overlaySentContent(current map[git.PRNumber]github.PRContent, infos []Info)
 			continue
 		}
 		current[*info.PRNumber] = github.PRContent{Title: info.Metadata.Title, Body: info.Metadata.Body}
+	}
+}
+
+// regenerate reports whether this submit replaces PR text from commits.
+func (o Options) regenerate() bool { return o.Text == PRTextRegenerate }
+
+// editTitle and editBody fold the --edit/--no-edit flag family into the one
+// per-field decision PreparePRMetadata needs: a field is prompted for when it
+// is asked for specifically or by --edit (unless --no-edit), and never when
+// its own --no-edit-* flag is set.
+func (o Options) editTitle() bool { return !o.NoEditTitle && (o.EditTitle || o.editAll()) }
+func (o Options) editBody() bool  { return !o.NoEditDescription && (o.EditDescription || o.editAll()) }
+func (o Options) editAll() bool   { return o.Edit && !o.NoEdit }
+
+// composeRegeneratedBodies turns each regenerated update's editable text into
+// the full body to send, generated sections included. Regeneration replaces
+// the whole body, so without this a locked PR would lose its lock banner
+// whenever the footer pass does not run (submit.footer=false, or a failed
+// update), and every regenerated PR would need a second write for its footer.
+// With footers off, the body gets only the lock banner: the stack section is
+// that pass's to maintain.
+//
+// Creates are left alone: their stack footer needs PR numbers that do not
+// exist until the create, so the footer pass adds it afterwards.
+func composeRegeneratedBodies(ctx *app.Context, opts Options, infos []Info) {
+	navOpts := pr.NavigationOptions{Location: config.NavigationLocationNone}
+	if opts.SubmitFooter {
+		navOpts = actions.PRNavigationOptions(ctx)
+	}
+	for _, info := range infos {
+		if info.Action == engine.SubmitActionUpdate && info.Metadata != nil {
+			info.Metadata.Body = pr.ComposeBody(info.Metadata.Body, info.BranchName, ctx.Engine, navOpts)
+		}
 	}
 }

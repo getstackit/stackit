@@ -22,7 +22,7 @@ func TestBuildTreeJSONHidesAnchorParents(t *testing.T) {
 	s.CreateBranch("feature").Commit("feature")
 	s.TrackBranch("feature", "anchor")
 
-	result := BuildTreeJSON(s.Context, TreeOptions{})
+	result := BuildTreeJSON(context.Background(), s.Engine, nil, TreeJSONRequest{})
 	info := make(map[string]TreeBranchInfo, len(result.Branches))
 	for _, branch := range result.Branches {
 		info[branch.Name] = branch
@@ -65,11 +65,9 @@ func TestTreeShortJSONSkipsEnrichment(t *testing.T) {
 		testhelpers.NewTestPrInfoEmpty().WithNumber(new(git.PRNumber(42)))))
 	eng := &treeStatsEngine{Engine: s.Engine}
 	client := &treeChecksClient{}
-	s.Context.Engine = eng
-	s.Context.GitHubClient = client
 
 	for _, style := range []TreeStyle{TreeStyleShort, TreeStyleNormal, TreeStyleFull} {
-		result := BuildTreeJSON(s.Context, TreeOptions{Style: style})
+		result := BuildTreeJSON(context.Background(), eng, client, TreeJSONRequest{Style: style})
 		data, err := json.Marshal(result)
 		require.NoError(t, err)
 		var decoded map[string]any
@@ -110,9 +108,7 @@ func TestTreeJSONBoundsEnrichment(t *testing.T) {
 	}
 	eng := &treeStatsEngine{Engine: s.Engine}
 	client := &treeChecksClient{}
-	s.Context.Engine = eng
-	s.Context.GitHubClient = client
-	result := BuildTreeJSON(s.Context, TreeOptions{BranchName: "b", VisibleBranches: engine.BranchesFromNames(s.Engine, []string{"a", "b", "c"})})
+	result := BuildTreeJSON(context.Background(), eng, client, TreeJSONRequest{Branches: engine.BranchesFromNames(s.Engine, []string{"a", "b", "c"})})
 	names := make([]string, 0, len(result.Branches))
 	for _, branch := range result.Branches {
 		names = append(names, branch.Name)

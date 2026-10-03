@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/testhelpers"
@@ -716,4 +717,27 @@ func TestLockSectionIndependentFromNavigation(t *testing.T) {
 		assert.NotEmpty(t, lockSection)
 		assert.Contains(t, lockSection, "🔒 This PR has been locked")
 	})
+}
+
+func TestComposeBody(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit().
+		CreateBranch("feature-a").
+		Commit("a1").
+		TrackBranch("feature-a", "main")
+	_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
+	require.NoError(t, err)
+	inBody := NavigationOptions{When: "always", Marker: "👈", Location: config.NavigationLocationBody}
+
+	composed := ComposeBody("Description", "feature-a", s.Engine, inBody)
+	require.True(t, strings.HasPrefix(composed, LockSectionStart), "lock banner leads: %q", composed)
+	require.Contains(t, composed, "Description")
+	require.Contains(t, composed, SectionStart, "body location adds the stack footer")
+	// The footer pass recomposes whatever it reads back; a body that is already
+	// composed must come back unchanged, or every submit writes twice.
+	require.Equal(t, composed, ComposeBody(composed, "feature-a", s.Engine, inBody))
+
+	comment := NavigationOptions{When: "always", Marker: "👈", Location: config.NavigationLocationComment}
+	require.NotContains(t, ComposeBody(composed, "feature-a", s.Engine, comment), SectionStart, "comment location strips the body footer")
 }

@@ -63,6 +63,20 @@ func DefaultNavigationOptions() NavigationOptions {
 	}
 }
 
+// ComposeBody returns body with Stackit's generated sections in place: the
+// lock banner at the top (or none when the branch is unlocked), and the stack
+// footer at the bottom when navigation lives in the body. For any other
+// location the footer is stripped, since it is posted as a comment or not at
+// all. Every writer of a PR body goes through here, so a body is never sent
+// with a stale or missing generated section.
+func ComposeBody(body, branch string, eng engine.BranchReader, opts NavigationOptions) string {
+	composed := UpdatePRBodyLockSection(body, CreateLockSection(branch, eng))
+	if opts.Location == config.NavigationLocationBody {
+		return UpdatePRBodyFooter(composed, CreatePRBodyFooterWithOptions(branch, eng, opts))
+	}
+	return StripFooter(composed)
+}
+
 // countStackBranches counts the number of non-trunk branches in the stack.
 func countStackBranches(branch string, eng engine.BranchReader) int {
 	terminalParentName := findTerminalParent(branch, eng)

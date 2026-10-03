@@ -115,7 +115,7 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 			Confirm:              f.confirm || regenerateNeedsConfirm(f, utils.IsInteractive()),
 			UpdateOnly:           f.updateOnly,
 			Always:               f.always,
-			Regenerate:           f.regenerate,
+			Text:                 prTextSource(f.regenerate),
 			Restack:              f.restack,
 			Draft:                f.draft,
 			Publish:              f.publish,
@@ -168,13 +168,21 @@ func executeSubmit(cmd *cobra.Command, f *submitFlags) error {
 		verbosity := SubmitCompact
 		// A dry run's plan is its whole output, and a regeneration being
 		// confirmed must show the replacement text it asks about.
-		if f.verbose || f.dryRun || (opts.Regenerate && opts.Confirm) {
+		if f.verbose || f.dryRun || (f.regenerate && opts.Confirm) {
 			verbosity = SubmitVerbose
 		}
 		runner, handler := NewSubmitUI(ctx.Output, ctx.Logger, verbosity)
 		defer runner.Cleanup()
 		return submit.Action(ctx, opts, handler)
 	})
+}
+
+// prTextSource maps --regenerate onto where submit takes PR text from.
+func prTextSource(regenerate bool) submit.PRTextSource {
+	if regenerate {
+		return submit.PRTextRegenerate
+	}
+	return submit.PRTextExisting
 }
 
 // regenerateNeedsConfirm reports whether --regenerate should ask before

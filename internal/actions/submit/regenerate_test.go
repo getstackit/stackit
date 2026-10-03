@@ -68,7 +68,7 @@ func TestRegeneratePlanningAndEmptyBody(t *testing.T) {
 	require.Empty(t, ordinary, "unchanged PRs are normally skipped")
 
 	handler := NewJSONHandler()
-	preview, err := prepareBranchesForSubmit(s.Context, branches, Options{Regenerate: true, NoEdit: true, DryRun: true}, "feature", nil, nil, handler)
+	preview, err := prepareBranchesForSubmit(s.Context, branches, Options{Text: PRTextRegenerate, NoEdit: true, DryRun: true}, "feature", nil, nil, handler)
 	require.NoError(t, err)
 	require.Len(t, preview, 1, "regeneration must include unchanged PRs")
 	require.Equal(t, "feat: replacement", preview[0].Metadata.Title)
@@ -82,15 +82,15 @@ func TestRegeneratePlanningAndEmptyBody(t *testing.T) {
 	require.Equal(t, &PRContentPreview{Title: "feat: replacement", Body: ""}, handler.Result.Branches[0].Regenerated)
 
 	confirmHandler := NewJSONHandler()
-	_, err = prepareBranchesForSubmit(s.Context, branches, Options{Regenerate: true, NoEdit: true, Confirm: true}, "feature", nil, nil, confirmHandler)
+	_, err = prepareBranchesForSubmit(s.Context, branches, Options{Text: PRTextRegenerate, NoEdit: true, Confirm: true}, "feature", nil, nil, confirmHandler)
 	require.NoError(t, err)
 	require.NotNil(t, confirmHandler.Result.Branches[0].Regenerated, "--confirm must show the replacement text it asks about")
 
-	planned, err := prepareBranchesForSubmit(s.Context, branches, Options{Regenerate: true, NoEdit: true}, "feature", nil, nil, NewJSONHandler())
+	planned, err := prepareBranchesForSubmit(s.Context, branches, Options{Text: PRTextRegenerate, NoEdit: true}, "feature", nil, nil, NewJSONHandler())
 	require.NoError(t, err)
 	require.Len(t, planned, 1)
 	require.Equal(t, 2, eng.writes, "both non-dry-run plans save the prepared text")
-	_, err = updatePullRequestQuiet(s.Context, planned[0], Options{Regenerate: true}, NewJSONHandler())
+	_, err = updatePullRequestQuiet(s.Context, planned[0], Options{Text: PRTextRegenerate}, NewJSONHandler())
 	require.NoError(t, err)
 	require.NotNil(t, client.update.Body, "an empty regenerated body must clear the old description")
 	require.Empty(t, *client.update.Body)
@@ -122,7 +122,7 @@ func TestRegenerateUsesCurrentCommitMessages(t *testing.T) {
 			require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), branch, old))
 			// Any attempted GitHub read would panic: existing remote content is irrelevant.
 			s.Context.GitHubClient = &regenerationClient{}
-			metadata, err := PreparePRMetadata(branch, MetadataOptions{Regenerate: true, NoEdit: true}, s.Context, nil)
+			metadata, err := PreparePRMetadata(branch, MetadataOptions{Text: PRTextRegenerate}, s.Context, nil)
 			require.NoError(t, err)
 			require.Equal(t, engine.NewScope("PROJ-1").ApplyToTitle("feat: first"), metadata.Title)
 			if multiple {
@@ -130,7 +130,7 @@ func TestRegenerateUsesCurrentCommitMessages(t *testing.T) {
 			} else {
 				require.Equal(t, "First body", strings.TrimSpace(metadata.Body))
 			}
-			preserved, err := PreparePRMetadata(branch, MetadataOptions{NoEdit: true}, s.Context, nil)
+			preserved, err := PreparePRMetadata(branch, MetadataOptions{}, s.Context, nil)
 			require.NoError(t, err)
 			require.Equal(t, old.Title(), preserved.Title)
 			require.Equal(t, old.Body(), preserved.Body)
@@ -158,7 +158,7 @@ func TestRegenerateEditTitlePrefillsRegeneratedText(t *testing.T) {
 	prompter := &recordingPrompter{}
 	s.Context.GitHubClient, s.Context.Prompter = &regenerationClient{}, prompter
 
-	metadata, err := PreparePRMetadata(branch, MetadataOptions{Regenerate: true, EditTitle: true}, s.Context, nil)
+	metadata, err := PreparePRMetadata(branch, MetadataOptions{Text: PRTextRegenerate, EditTitle: true}, s.Context, nil)
 	require.NoError(t, err)
 	require.Equal(t, "feat: replacement", prompter.defaultTitle, "the title prompt must start from regenerated text, not the old title")
 	require.Equal(t, "edited title", metadata.Title)
@@ -170,18 +170,19 @@ func TestRegenerateKeepsLockBanner(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.CreateBranch("feature").CommitChange("file", "feat: replacement\n\nNew body").TrackBranch("feature", "main")
 	branch := s.Engine.GetBranch("feature")
-	old := testhelpers.NewTestPrInfoEmpty().WithNumber(new(git.PRNumber(42))).WithTitle("Old title").WithBody("Old body")
-	require.NoError(t, s.Engine.UpsertPrInfo(context.Background(), branch, old))
 	_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
-	s.Context.GitHubClient = &regenerationClient{}
 
-	// The footer pass may not run (submit.footer=false), so the regenerated body
-	// itself must carry the lock banner.
-	metadata, err := PreparePRMetadata(s.Engine.GetBranch("feature"), MetadataOptions{Regenerate: true, NoEdit: true}, s.Context, nil)
-	require.NoError(t, err)
-	require.True(t, strings.HasPrefix(metadata.Body, pr.LockSectionStart), "lock banner leads the body: %q", metadata.Body)
-	require.Contains(t, metadata.Body, "New body")
+	for _, footer := range []bool{false, true} {
+		metadata := &PRMetadata{Title: "feat: replacement", Body: "New body"}
+		composeRegeneratedBodies(s.Context, Options{Text: PRTextRegenerate, SubmitFooter: footer}, []Info{
+			{BranchName: "feature", Action: engine.SubmitActionUpdate, Metadata: metadata},
+		})
+		// The footer pass may not run (submit.footer=false), so the body sent
+		// must itself carry the lock banner.
+		require.True(t, strings.HasPrefix(metadata.Body, pr.LockSectionStart), "footer=%v: lock banner leads the body: %q", footer, metadata.Body)
+		require.Contains(t, metadata.Body, "New body")
+	}
 }
 
 func TestOverlaySentContentPrefersWrittenText(t *testing.T) {
@@ -197,4 +198,29 @@ func TestOverlaySentContentPrefersWrittenText(t *testing.T) {
 	})
 	require.Equal(t, github.PRContent{Title: "New title", Body: "New body"}, current[updated])
 	require.Equal(t, "Created title", current[created].Title, "creates already read back what they wrote")
+}
+
+func TestOptionsResolveEditFlags(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name                string
+		opts                Options
+		wantTitle, wantBody bool
+	}{
+		{name: "no flags edits nothing", opts: Options{}},
+		{name: "--edit edits both", opts: Options{Edit: true}, wantTitle: true, wantBody: true},
+		{name: "--edit --no-edit edits nothing", opts: Options{Edit: true, NoEdit: true}},
+		{name: "--edit --no-edit-title edits only the body", opts: Options{Edit: true, NoEditTitle: true}, wantBody: true},
+		{name: "--edit --no-edit-description edits only the title", opts: Options{Edit: true, NoEditDescription: true}, wantTitle: true},
+		{name: "--edit-title alone", opts: Options{EditTitle: true}, wantTitle: true},
+		{name: "--no-edit does not cancel a specific --edit-title", opts: Options{NoEdit: true, EditTitle: true}, wantTitle: true},
+		{name: "--edit-description --no-edit-description cancels", opts: Options{EditDescription: true, NoEditDescription: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.wantTitle, tt.opts.editTitle(), "title")
+			require.Equal(t, tt.wantBody, tt.opts.editBody(), "body")
+		})
+	}
 }

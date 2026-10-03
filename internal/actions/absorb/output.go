@@ -1,9 +1,9 @@
 package absorb
 
 import (
+	"cmp"
 	"maps"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -106,13 +106,11 @@ func groupUnabsorbedByReason(unabsorbed []Unabsorbable) []unabsorbedGroup {
 	for reason := range byReason {
 		reasons = append(reasons, reason)
 	}
-	sort.Slice(reasons, func(i, j int) bool {
-		left := reasonSortIndex(reasons[i])
-		right := reasonSortIndex(reasons[j])
-		if left == right {
-			return reasons[i] < reasons[j]
-		}
-		return left < right
+	slices.SortFunc(reasons, func(a, b UnabsorbableReason) int {
+		return cmp.Or(
+			cmp.Compare(reasonSortIndex(a), reasonSortIndex(b)),
+			cmp.Compare(a, b),
+		)
 	})
 
 	groups := make([]unabsorbedGroup, 0, len(reasons))
@@ -163,17 +161,13 @@ func sortedCommitSHAs(hunksByCommit map[string][]git.Hunk) []string {
 func sortedHunks(hunks []git.Hunk) []git.Hunk {
 	sorted := make([]git.Hunk, len(hunks))
 	copy(sorted, hunks)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].File != sorted[j].File {
-			return sorted[i].File < sorted[j].File
-		}
-		if sorted[i].NewStart != sorted[j].NewStart {
-			return sorted[i].NewStart < sorted[j].NewStart
-		}
-		if sorted[i].OldStart != sorted[j].OldStart {
-			return sorted[i].OldStart < sorted[j].OldStart
-		}
-		return sorted[i].Content < sorted[j].Content
+	slices.SortFunc(sorted, func(a, b git.Hunk) int {
+		return cmp.Or(
+			cmp.Compare(a.File, b.File),
+			cmp.Compare(a.NewStart, b.NewStart),
+			cmp.Compare(a.OldStart, b.OldStart),
+			cmp.Compare(a.Content, b.Content),
+		)
 	})
 	return sorted
 }

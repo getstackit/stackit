@@ -2,7 +2,7 @@ package merge
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -124,7 +124,7 @@ func TestGetAvailableScopes(t *testing.T) {
 		require.NoError(t, s.Engine.SetScope(ctx, branchC, engine.NewScope("PROJ-200")))
 
 		scopes := GetAvailableScopes(s.Engine)
-		sort.Strings(scopes)
+		slices.Sort(scopes)
 
 		require.Len(t, scopes, 2)
 		require.Equal(t, []string{"PROJ-100", "PROJ-200"}, scopes)

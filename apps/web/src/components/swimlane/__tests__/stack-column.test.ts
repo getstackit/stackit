@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hasBranching } from "../stack-column";
+import { hasBranching, orderBranches } from "../stack-column";
 import { shortenBranchName } from "@/lib/branch-utils";
 import type { BranchResponse } from "@/lib/api";
 
@@ -88,5 +88,48 @@ describe("shortenBranchName", () => {
 
   it("handles description with slashes", () => {
     expect(shortenBranchName("user/20260301202047/feat/nested")).toBe("feat/nested");
+  });
+});
+
+describe("orderBranches", () => {
+  const names = (branches: BranchResponse[]) => orderBranches(branches).map((b) => b.name);
+
+  it("orders a linear stack root to leaf regardless of input order", () => {
+    const branches = [
+      makeBranch({ name: "c", parent: "b" }),
+      makeBranch({ name: "a", parent: "main" }),
+      makeBranch({ name: "b", parent: "a" }),
+    ];
+    expect(names(branches)).toEqual(["a", "b", "c"]);
+  });
+
+  it("finishes each subtree before the next sibling, keeping sibling order", () => {
+    const branches = [
+      makeBranch({ name: "root" }),
+      makeBranch({ name: "right", parent: "root" }),
+      makeBranch({ name: "left", parent: "root" }),
+      makeBranch({ name: "right-child", parent: "right" }),
+      makeBranch({ name: "left-child", parent: "left" }),
+    ];
+    expect(names(branches)).toEqual(["root", "right", "right-child", "left", "left-child"]);
+  });
+
+  it("treats a branch whose parent is not listed as a root", () => {
+    const branches = [
+      makeBranch({ name: "orphan", parent: "landed" }),
+      makeBranch({ name: "orphan-child", parent: "orphan" }),
+      makeBranch({ name: "other" }),
+    ];
+    expect(names(branches)).toEqual(["orphan", "orphan-child", "other"]);
+  });
+
+  it("includes every branch exactly once", () => {
+    const branches = Array.from({ length: 200 }, (_, i) =>
+      makeBranch({ name: `b${i}`, parent: i === 0 ? undefined : `b${Math.floor((i - 1) / 3)}` }),
+    ).reverse();
+    const ordered = names(branches);
+    expect(ordered).toHaveLength(200);
+    expect(new Set(ordered).size).toBe(200);
+    expect(ordered[0]).toBe("b0");
   });
 });

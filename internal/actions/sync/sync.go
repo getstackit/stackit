@@ -83,16 +83,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		out.Warn("%s", warning)
 	}
 
-	// Calculate total operations for progress (rough estimate)
-	totalOps := 1 // trunk sync
-	if !opts.NoRestack {
-		// Estimate based on tracked branches
-		progressCountStart := time.Now()
-		branchCount := len(ctx.Navigator().AllBranches())
-		ctx.Logger.Info("count branches for progress completed durationMs=%v branchCount=%v", time.Since(progressCountStart).Milliseconds(), branchCount)
-		totalOps += branchCount
-	}
-	handler.Start(totalOps)
+	handler.Start()
 
 	// Phase 1: Parallel network operations
 	// Fetch trunk and metadata refs, and sync GitHub PR info concurrently.
@@ -425,8 +416,8 @@ func (s *Summary) recordHold(branch string) {
 // Handler abstracts TTY vs non-TTY output for sync operations
 // It embeds RestackHandler to provide a unified interface for operations that include restacking
 type Handler interface {
-	// Start is called at the beginning of sync with the total operation count
-	Start(totalOps int)
+	// Start is called at the beginning of sync
+	Start()
 
 	// EmitEvent is called for each progress update
 	EmitEvent(event Event)
@@ -477,7 +468,7 @@ type NullHandler struct {
 }
 
 // Start implements Handler.
-func (h *NullHandler) Start(int) {}
+func (h *NullHandler) Start() {}
 
 // EmitEvent implements Handler.
 func (h *NullHandler) EmitEvent(Event) {}

@@ -45,6 +45,7 @@ type WarningMsg struct {
 
 // ProgressCompleteMsg is sent when all submissions are finished.
 type ProgressCompleteMsg struct {
+	Failed  bool          // the overall operation can fail after PR creation succeeds
 	Skipped int           // branches skipped in the plan, shown as "unchanged"
 	Elapsed time.Duration // total run time; zero when unknown
 }
@@ -164,7 +165,30 @@ func (m *Model) finalSummary(msg ProgressCompleteMsg) string {
 			summary += strings.Join(m.Warnings, "\n")
 		}
 	}
+	if msg.Failed {
+		summary = markSubmitFailed(summary)
+	}
 	return summary
+}
+
+// markSubmitFailed folds the operation failure into the outcome count line so
+// the failure marker appears once: "✓ Opened 1 PR" becomes "✗ Submit failed:
+// opened 1 PR". With no count line, the failure leads as its own line.
+func markSubmitFailed(summary string) string {
+	const failed = "✗ Submit failed"
+	lines := strings.Split(summary, "\n")
+	for i, line := range lines {
+		rest, ok := strings.CutPrefix(line, "✓ ")
+		if !ok {
+			rest, ok = strings.CutPrefix(line, "✗ ")
+		}
+		if !ok || rest == "" {
+			continue
+		}
+		lines[i] = failed + ": " + strings.ToLower(rest[:1]) + rest[1:]
+		return strings.Join(lines, "\n")
+	}
+	return strings.TrimSpace(failed + "\n" + summary)
 }
 
 // View renders the model as a string.

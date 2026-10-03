@@ -14,7 +14,7 @@ import (
 func FormatRestackOutcome(summary handlers.RestackSummary, upToDate int) string {
 	held := len(summary.Held)
 	incomplete := RestackIncomplete(summary)
-	if summary.Restacked == 0 && !incomplete {
+	if summary.Restacked == 0 && !incomplete && !summary.Failed {
 		return "✨ Everything is up to date!"
 	}
 	line := FormatRestackSummaryLine(summary.Restacked, summary.Skipped, len(summary.Blocked), upToDate)
@@ -25,7 +25,10 @@ func FormatRestackOutcome(summary handlers.RestackSummary, upToDate int) string 
 	if incomplete {
 		prefix = "⚠ Restack incomplete: "
 	}
-	return WithConflictAdvice(prefix+line, summary.Conflicts)
+	if summary.Failed {
+		prefix = "✗ Restack failed: "
+	}
+	return WithConflictAdvice(strings.TrimSuffix(prefix+line, ": "), summary.Conflicts)
 }
 
 // RestackIncomplete reports whether a restack left any branch behind.

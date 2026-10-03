@@ -2,6 +2,7 @@
 package sync
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/worktree"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	stackErrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/rerere"
@@ -39,7 +41,7 @@ type Options struct {
 }
 
 // Action performs the sync operation
-func Action(ctx *app.Context, opts Options, handler Handler) error {
+func Action(ctx *app.Context, opts Options, handler Handler) (err error) {
 	eng := ctx.Engine
 	out := ctx.Output
 	gctx := ctx.Context
@@ -84,6 +86,24 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	handler.Start()
+
+	// Every outcome after Start reports exactly once. A sync can pull trunk and
+	// delete branches before a later phase fails, so an error return still
+	// completes with what happened — marked failed — unless the conflict
+	// workflow took over the terminal (its guidance must be the last thing the
+	// user sees) or the user canceled a prompt.
+	var completed, handedOff bool
+	complete := func() {
+		completed = true
+		handler.Complete(*summary)
+	}
+	defer func() {
+		if err == nil || completed || handedOff || errors.Is(err, stackErrors.ErrCanceled) {
+			return
+		}
+		summary.Failed = true
+		complete()
+	}()
 
 	// Phase 1: Parallel network operations
 	// Fetch trunk and metadata refs, and sync GitHub PR info concurrently.
@@ -261,7 +281,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if !summary.HasChanges() {
 			summary.UpToDate = true
 		}
-		handler.Complete(*summary)
+		complete()
 		return nil
 	}
 
@@ -272,7 +292,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		if !summary.HasChanges() {
 			summary.UpToDate = true
 		}
-		handler.Complete(*summary)
+		complete()
 		return nil
 	}
 
@@ -284,30 +304,42 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	handler.EmitEvent(Event{Phase: PhaseRestack, Type: EventStarted})
 
 	if err := restackBranches(ctx, branchesToRestack, opts.RestackScope, expandScope, dirtyAnchors, handler, summary); err != nil {
-		// Even on error, complete with summary
-		handler.Complete(*summary)
 		return err
 	}
 
 	// Check for conflicts and prompt user if interactive
 	if len(summary.ConflictBranches) > 0 && handler.IsInteractive() {
 		resolve, err := handler.PromptResolveConflicts(summary.ConflictBranches)
-		if err != nil {
-			handler.Complete(*summary)
+		switch {
+		case errors.Is(err, stackErrors.ErrCanceled):
+			// Canceling the prompt is a decline: report the conflicts as
+			// incomplete work, not as a failed sync.
+		case err != nil:
 			return fmt.Errorf("failed to prompt for conflict resolution: %w", err)
-		}
-
-		if resolve {
+		case resolve:
 			// User wants to resolve conflicts. The restack above ran in
 			// ConflictModeContinue, which held back the whole conflicted stack
 			// — ancestors included — so re-run that stack in EnterWorkflow
 			// mode (applies ancestors, then enters the conflict) rather than
 			// jumping straight to the conflict branch; see
 			// actions.ResolveConflictWorkflow.
-			firstConflict := summary.ConflictBranches[0]
-			return actions.ResolveConflictWorkflow(ctx, conflictStackBranches(ctx, firstConflict))
+			stack := conflictStackBranches(ctx, summary.ConflictBranches[0])
+			workflowErr := actions.ResolveConflictWorkflow(ctx, stack)
+			if errors.Is(workflowErr, stackErrors.ErrConflictWorkflow) {
+				handedOff = true
+				return workflowErr
+			}
+			// The workflow finished without stopping (e.g. rerere resolved
+			// every conflict) or failed outright. The handler already released
+			// the terminal, so it reports this outcome as plain output.
+			if workflowErr == nil {
+				summary.resolveStack(stack.Names())
+			} else if !errors.Is(workflowErr, stackErrors.ErrCanceled) {
+				summary.Failed = true
+			}
+			complete()
+			return workflowErr
 		}
-		// User chose to skip conflicts - continue with summary
 	}
 
 	// Check if everything was up to date
@@ -317,7 +349,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	ctx.Logger.Info("sync completed trunkUpdated=%v branchesRestacked=%v branchesDeleted=%v branchesSkipped=%v", summary.TrunkUpdated, summary.BranchesRestacked, summary.BranchesDeleted, summary.BranchesSkipped)
 
-	handler.Complete(*summary)
+	complete()
 	return nil
 }
 
@@ -385,6 +417,7 @@ func (e Event) IsLocked() bool {
 
 // Summary holds aggregate results from a sync operation
 type Summary struct {
+	Failed            bool     // unexpected error after sync started
 	TrunkUpdated      bool     // Was trunk updated?
 	TrunkRevision     string   // New trunk revision (short hash)
 	BranchesSynced    int      // Number of branches synced from remote
@@ -397,6 +430,8 @@ type Summary struct {
 	WorktreesCleaned  int      // Number of orphaned worktrees cleaned up
 	SkippedStacks     []string // Stacks skipped due to dirty worktrees
 	HeldBranches      []string // Branches (trunk included) a worktree held back
+
+	blockedBranches []string // names behind BranchesBlocked, for resolveStack
 }
 
 // HasChanges returns true if any operations were performed or anything was
@@ -405,6 +440,21 @@ func (s *Summary) HasChanges() bool {
 	return s.TrunkUpdated || s.BranchesSynced > 0 || s.BranchesRestacked > 0 ||
 		s.BranchesDeleted > 0 || s.BranchesSkipped > 0 || s.BranchesBlocked > 0 ||
 		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0 || len(s.HeldBranches) > 0
+}
+
+// resolveStack records that the conflict workflow finished a stack without
+// stopping (e.g. rerere resolved every conflict): its conflicted and blocked
+// branches were restacked after all, so they no longer count as left behind.
+func (s *Summary) resolveStack(stack []string) {
+	inStack := func(name string) bool { return slices.Contains(stack, name) }
+	conflicts := slices.DeleteFunc(slices.Clone(s.ConflictBranches), inStack)
+	blocked := slices.DeleteFunc(slices.Clone(s.blockedBranches), inStack)
+	resolved := len(s.ConflictBranches) - len(conflicts)
+	unblocked := len(s.blockedBranches) - len(blocked)
+	s.ConflictBranches, s.blockedBranches = conflicts, blocked
+	s.BranchesSkipped -= resolved
+	s.BranchesBlocked -= unblocked
+	s.BranchesRestacked += resolved + unblocked
 }
 
 // recordHold notes a branch a worktree held back, once per branch.

@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
@@ -10,6 +11,7 @@ import (
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
+	stackErrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/output"
@@ -504,5 +506,71 @@ func TestInteractiveReparentNamesFollowVerbosity(t *testing.T) {
 			want = "Reparented " + event.OldParent + " → main."
 		}
 		require.Contains(t, detailMessages(runner)[0], want)
+	}
+}
+
+func TestPartialFailuresCannotReportSuccess(t *testing.T) {
+	t.Parallel()
+	summary := formatSyncSummary(syncAction.Summary{TrunkUpdated: true, Failed: true})
+	require.Contains(t, summary, "✗ Sync failed")
+	require.Contains(t, summary, "pulled trunk")
+	require.NotContains(t, summary, "✅")
+	require.Equal(t, "✗ Restack failed", common.FormatRestackOutcome(handlers.RestackSummary{Failed: true}, 0))
+	// A failure before any work still reports instead of printing nothing.
+	require.Equal(t, "✗ Sync failed", formatSyncSummary(syncAction.Summary{Failed: true}))
+	require.Equal(t, "✗ Sync failed", formatSyncSummary(syncAction.Summary{Failed: true, UpToDate: true}))
+}
+
+func TestOutcomeAfterConflictHandoffPrintsPlain(t *testing.T) {
+	t.Parallel()
+	runner := &conflictPromptRunner{MockRunner: tui.NewMockRunner()}
+	out := output.NewTestOutput()
+	h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), out, output.NewNullLogger())
+	_, err := h.promptResolveConflicts([]string{"feat/web"}, func(string, bool) (bool, error) { return true, nil })
+	require.NoError(t, err)
+	sentBefore := runner.MessageCount()
+
+	h.Complete(syncAction.Summary{TrunkUpdated: true, BranchesRestacked: 2})
+	h.OnRestackComplete(handlers.RestackSummary{Failed: true, Restacked: 1})
+
+	// The runner is gone, so neither outcome may route through it.
+	require.Equal(t, sentBefore, runner.MessageCount())
+	text := ansi.Strip(out.String())
+	require.Contains(t, text, "✅ Summary: pulled trunk")
+	require.Contains(t, text, "✗ Restack failed")
+}
+
+type conflictPromptRunner struct {
+	*tui.MockRunner
+	resumed bool
+	cleaned bool
+}
+
+func (r *conflictPromptRunner) Resume()  { r.resumed = true }
+func (r *conflictPromptRunner) Cleanup() { r.cleaned = true }
+
+func TestConflictPromptTerminalHandoff(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name    string
+		resolve bool
+		err     error
+		cleanup bool
+	}{
+		{name: "resolve", resolve: true, cleanup: true},
+		{name: "decline"},
+		{name: "prompt error", err: errors.New("interrupted")},
+		{name: "prompt canceled", err: stackErrors.ErrCanceled},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			runner := &conflictPromptRunner{MockRunner: tui.NewMockRunner()}
+			h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(), output.NewNullOutput(), output.NewNullLogger())
+			resolve, err := h.promptResolveConflicts([]string{"feat/web"}, func(string, bool) (bool, error) { return test.resolve, test.err })
+			require.Equal(t, test.resolve, resolve)
+			require.Equal(t, test.err, err)
+			require.Equal(t, test.cleanup, runner.cleaned)
+			require.Equal(t, !test.cleanup, runner.resumed)
+		})
 	}
 }

@@ -172,8 +172,12 @@ func (h *SimpleGetHandler) Complete(summary actions.GetSummary) {
 		return
 	}
 
-	// Print summary parts
+	// Print summary parts. Holds lead, as in sync and restack: the remedy is
+	// in another worktree.
 	parts := []string{}
+	if len(summary.Held) > 0 {
+		parts = append(parts, fmt.Sprintf("held %d (worktree)", len(summary.Held)))
+	}
 	if summary.BranchesCreated > 0 {
 		parts = append(parts, fmt.Sprintf("synced %d new", summary.BranchesCreated))
 	}
@@ -184,7 +188,10 @@ func (h *SimpleGetHandler) Complete(summary actions.GetSummary) {
 		parts = append(parts, fmt.Sprintf("restacked %d", summary.Restacked))
 	}
 
-	if len(parts) > 0 {
+	switch {
+	case len(summary.Held) > 0:
+		h.Output.Info("⚠ Get incomplete: %s", strings.Join(parts, ", "))
+	case len(parts) > 0:
 		h.Output.Info("✅ Summary: %s", strings.Join(parts, ", "))
 	}
 
@@ -336,27 +343,13 @@ func (h *SimpleGetHandler) OnRestackComplete(summary handlers.RestackSummary) {
 	h.Lock()
 	defer h.Unlock()
 
-	if summary.Restacked == 0 && summary.Skipped == 0 && len(summary.Blocked) == 0 {
-		return // No restack summary needed if nothing happened
+	// A conflict ends get here (Complete never runs), so an incomplete
+	// restack uses the shared outcome line: it must never read as success.
+	if common.RestackIncomplete(summary) {
+		h.Output.Info("%s", common.FormatRestackOutcome(summary, 0))
+		return
 	}
-
-	parts := []string{}
 	if summary.Restacked > 0 {
-		parts = append(parts, fmt.Sprintf("restacked %d", summary.Restacked))
-	}
-	if summary.Skipped > 0 {
-		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", summary.Skipped))
-	}
-	if len(summary.Blocked) > 0 {
-		parts = append(parts, fmt.Sprintf("blocked %d", len(summary.Blocked)))
-	}
-
-	if len(parts) > 0 {
-		h.Output.Info("  %s", strings.Join(parts, ", "))
-	}
-
-	for _, conflict := range summary.Conflicts {
-		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
+		h.Output.Info("  %s", common.FormatRestackSummaryLine(summary.Restacked, 0, 0, 0))
 	}
 }

@@ -132,6 +132,12 @@ func restackConflict(branch string, pr *git.PRNumber) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: branch, PRNumber: pr, Conflict: true})
 }
 
+// restackBlocked mirrors ConflictModeContinue: a conflict anywhere in a stack
+// leaves the rest of that stack untouched, ancestors included.
+func restackBlocked(branch string, pr *git.PRNumber) step {
+	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: branch, PRNumber: pr, Message: reasonBlockedByConflict})
+}
+
 // promptDeletions renders the branch-deletion multi-select with the user's
 // scripted selection. unpushed lists branches with local commits not yet pushed
 // (not pre-selected by default); selects lists what the user finally chooses.
@@ -252,13 +258,18 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "restack_conflict_declined",
 			steps: []step{
 				phaseStarted(syncAction.PhaseRestack),
-				restacked("feat-api", new(git.PRNumber(201)), "main", "b2c3d4e"),
+				// feat-api -> feat-ui conflicts on the child, so the whole
+				// stack is left untouched; the independent feat-docs stack
+				// still restacks.
+				restackBlocked("feat-api", new(git.PRNumber(201))),
 				restackConflict("feat-ui", new(git.PRNumber(202))),
+				restacked("feat-docs", new(git.PRNumber(203)), "main", "d4e5f6a"),
 				promptResolveConflicts([]string{"feat-ui"}, false),
 			},
 			summary: syncAction.Summary{
 				BranchesRestacked: 1,
 				BranchesSkipped:   1,
+				BranchesBlocked:   1,
 				ConflictBranches:  []string{"feat-ui"},
 			},
 		},

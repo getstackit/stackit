@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
+	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/handlers"
@@ -201,4 +202,115 @@ func TestInteractiveSyncHandler_IsInteractive(t *testing.T) {
 func TestSimpleSyncHandler_IsNotInteractive(t *testing.T) {
 	handler := NewSimpleSyncHandler(output.NewNullOutput())
 	assert.False(t, handler.IsInteractive())
+}
+
+func TestInteractiveSyncPreservesHeldBranches(t *testing.T) {
+	t.Parallel()
+	for _, phase := range []syncAction.Phase{syncAction.PhaseTrunk, syncAction.PhaseRestack} {
+		t.Run(string(phase), func(t *testing.T) {
+			t.Parallel()
+			runner := tui.NewMockRunner()
+			h := NewInteractiveSyncHandler(runner, syncComponent.NewModel(0), output.NewNullOutput(), output.NewNullLogger())
+			h.EmitEvent(syncAction.Event{Phase: phase, Type: syncAction.EventCompleted, Branch: "feat/api", HeldBy: "worktree /tmp/api has uncommitted changes"})
+			detail := runner.Messages()[0].(syncComponent.PhaseDetailMsg)
+			assert.Equal(t, syncComponent.MarkWarn, detail.Mark)
+			assert.Contains(t, detail.Message, "/tmp/api")
+			summary := h.formatSummary(syncAction.Summary{HeldBranches: []string{"feat/api"}})
+			assert.Contains(t, summary, "Sync incomplete")
+			assert.Contains(t, summary, "held 1")
+			assert.NotContains(t, summary, "Everything is up to date")
+		})
+	}
+}
+
+func TestRestackHeldOutcome(t *testing.T) {
+	t.Parallel()
+	held := []handlers.RestackHeldInfo{{Branch: "feat/api", Reason: "worktree /tmp/api has uncommitted changes"}}
+	tests := []struct {
+		name   string
+		events []handlers.RestackBranchEvent
+	}{
+		{
+			// The engine held the branch mid-run and reported a per-branch event.
+			name:   "held during restack",
+			events: []handlers.RestackBranchEvent{{Branch: "feat/api", Result: handlers.RestackUnneeded, HeldBy: held[0].Reason}},
+		},
+		{
+			// Planning pruned the branch, so only the summary knows about it
+			// while its already-current child still reports a plain row.
+			name:   "held while planning",
+			events: []handlers.RestackBranchEvent{{Branch: "feat/ui", Result: handlers.RestackUnneeded}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			runner := tui.NewMockRunner()
+			out := output.NewTestOutput()
+			interactive := NewInteractiveSyncHandler(runner, syncComponent.NewModel(0), output.NewNullOutput(), output.NewNullLogger())
+			simple := NewSimpleSyncHandler(out)
+			for _, h := range []handlers.RestackHandler{interactive, simple} {
+				h.OnRestackStart(len(tt.events))
+				for _, event := range tt.events {
+					h.OnRestackBranch(event)
+				}
+				h.OnRestackComplete(handlers.RestackSummary{Held: held})
+			}
+			messages := runner.Messages()
+			summary := messages[len(messages)-1].(syncComponent.CompleteMsg).Summary
+			assert.Contains(t, summary, "⚠ Restack incomplete: held 1 (worktree)")
+			assert.Contains(t, out.String(), summary)
+			assert.NotContains(t, out.String(), "Everything is up to date")
+			assert.NotContains(t, out.String(), "Summary:")
+		})
+	}
+}
+
+func TestSimpleSyncCompleteReportsHolds(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		summary syncAction.Summary
+		want    string
+	}{
+		{
+			name:    "held restack branches",
+			summary: syncAction.Summary{HeldBranches: []string{"y", "z"}},
+			want:    "⚠ Sync incomplete: held 2 (worktree)",
+		},
+		{
+			name:    "held trunk alongside cleanup",
+			summary: syncAction.Summary{HeldBranches: []string{"main"}, BranchesDeleted: 1},
+			want:    "⚠ Sync incomplete: held 1 (worktree), deleted 1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			out := output.NewTestOutput()
+			NewSimpleSyncHandler(out).Complete(tt.summary)
+			assert.Contains(t, out.String(), tt.want)
+			assert.NotContains(t, out.String(), "Everything is up to date")
+		})
+	}
+}
+
+func TestConflictRecoveryTargetsReportedBranch(t *testing.T) {
+	t.Parallel()
+	summary := common.FormatRestackOutcome(handlers.RestackSummary{Skipped: 1, Conflicts: []string{"feat/web"}, Blocked: []string{"feat/api"}}, 0)
+	assert.Contains(t, summary, "⚠ Restack incomplete")
+	assert.Contains(t, summary, "st restack --branch feat/web")
+	assert.Contains(t, summary, "blocked 1")
+
+	cmd := NewRestackCmd()
+	require.NoError(t, cmd.ParseFlags([]string{"--branch", "feat/web"}))
+	branch, err := cmd.Flags().GetString("branch")
+	require.NoError(t, err)
+	assert.Equal(t, "feat/web", branch)
+}
+
+func TestSyncSummaryOmitsEmptySummaryLine(t *testing.T) {
+	t.Parallel()
+	require.Empty(t, formatSyncSummary(syncAction.Summary{}))
+	require.Contains(t, formatSyncSummary(syncAction.Summary{SkippedStacks: []string{"feat/api"}}), "Sync incomplete")
 }

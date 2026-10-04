@@ -3,6 +3,7 @@ package merge
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -99,12 +100,7 @@ func (b BranchMergeInfo) HasChecks() bool {
 
 // AnyHasChecks returns true if any branch has CI checks configured.
 func (branches MergeBranches) AnyHasChecks() bool {
-	for _, b := range branches {
-		if b.HasChecks() {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(branches, func(b BranchMergeInfo) bool { return b.HasChecks() })
 }
 
 // Names returns the branch names in merge order.

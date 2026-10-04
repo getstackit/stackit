@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	stdruntime "runtime"
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
@@ -495,12 +496,7 @@ func runBranchesInWorktrees(ctx *app.Context, opts Options, branches engine.Bran
 }
 
 func hasFailedResult(results []BranchResult) bool {
-	for _, result := range results {
-		if result.Status == StatusError {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(results, func(result BranchResult) bool { return result.Status == StatusError })
 }
 
 func executeCommandOnBranch(ctx context.Context, appCtx *app.Context, branch engine.Branch, fullCommand string, hooks []string) struct {

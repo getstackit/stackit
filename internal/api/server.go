@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -461,12 +462,9 @@ func displayHost(bind string) string {
 }
 
 func isAPIPath(path string, prefixes []string) bool {
-	for _, prefix := range prefixes {
-		if path == prefix || strings.HasPrefix(path, prefix+"/") {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(prefixes, func(prefix string) bool {
+		return path == prefix || strings.HasPrefix(path, prefix+"/")
+	})
 }
 
 // isPublicAPIPath reports whether path is one of the unauthenticated API

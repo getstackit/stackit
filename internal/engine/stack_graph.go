@@ -225,12 +225,9 @@ func (g *StackGraph) IsDescendant(branch Branch, potentialDescendant Branch) boo
 		RecursiveChildren: true,
 		IncludeCurrent:    false,
 	})
-	for _, d := range descendants {
-		if d.GetName() == potentialDescendant.GetName() {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(descendants, func(d Branch) bool {
+		return d.GetName() == potentialDescendant.GetName()
+	})
 }
 
 // DepthGroups returns the graph's branches grouped by depth in traversal order.

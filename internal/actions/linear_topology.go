@@ -1,6 +1,8 @@
 package actions
 
 import (
+	"slices"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 )
@@ -17,10 +19,7 @@ func WarnIfLinearStackRestored(ctx *app.Context, operation string) {
 
 func hasNonLinearStack(eng engine.Engine) bool {
 	graph := eng.Graph(engine.SortStrategyAlphabetical)
-	for _, branch := range eng.AllBranches() {
-		if !eng.IsTrunk(branch) && len(graph.Children(branch)) > 1 {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(eng.AllBranches(), func(branch engine.Branch) bool {
+		return !eng.IsTrunk(branch) && len(graph.Children(branch)) > 1
+	})
 }

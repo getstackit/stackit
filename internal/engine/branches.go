@@ -1,6 +1,9 @@
 package engine
 
-import "maps"
+import (
+	"maps"
+	"slices"
+)
 
 // Branches is an ordered set of branches.
 type Branches []Branch
@@ -176,12 +179,9 @@ func (b Branches) Names() []string {
 
 // Contains returns true if the branch set contains name.
 func (b Branches) Contains(name string) bool {
-	for _, branch := range b {
-		if branch.GetName() == name {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(b, func(branch Branch) bool {
+		return branch.GetName() == name
+	})
 }
 
 // Len returns the number of branches in the set.

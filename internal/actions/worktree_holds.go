@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
@@ -105,12 +106,9 @@ func (r RestackWorktreeHoldReport) blocks(branch, stackRoot string) bool {
 }
 
 func (r RestackWorktreeHoldReport) blocksStack(stackRoot string) bool {
-	for _, hold := range r.Holds {
-		if hold.Scope == RestackWorktreeHoldStack && hold.StackRoot == stackRoot {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(r.Holds, func(hold RestackWorktreeHold) bool {
+		return hold.Scope == RestackWorktreeHoldStack && hold.StackRoot == stackRoot
+	})
 }
 
 func (h RestackWorktreeHold) warning() string {

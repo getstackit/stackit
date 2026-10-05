@@ -1,9 +1,10 @@
 package actions
 
 import (
+	"slices"
+
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"slices"
 )
 
 // WarnIfLinearStackRestored reports when snapshot restoration brings back a

@@ -427,7 +427,7 @@ func (m *TreeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.branches) > 0 {
 				newIndex := m.selectedIndex
 				// Try to find the next selectable branch going up
-				for attempts := 0; attempts < len(m.branches); attempts++ {
+				for range len(m.branches) {
 					if newIndex > 0 {
 						newIndex--
 					} else {
@@ -451,7 +451,7 @@ func (m *TreeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.branches) > 0 {
 				newIndex := m.selectedIndex
 				// Try to find the next selectable branch going down
-				for attempts := 0; attempts < len(m.branches); attempts++ {
+				for range len(m.branches) {
 					if newIndex < len(m.branches)-1 {
 						newIndex++
 					} else {

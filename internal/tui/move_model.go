@@ -365,7 +365,7 @@ func (m *MoveModel) moveCursor(delta int) {
 	}
 
 	newCursor := m.cursor
-	for attempts := 0; attempts < len(m.branches); attempts++ {
+	for range len(m.branches) {
 		newCursor += delta
 		if newCursor < 0 {
 			newCursor = len(m.branches) - 1

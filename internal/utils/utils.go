@@ -133,8 +133,8 @@ func GenerateBranchNameFromMessage(message string) string {
 	}
 
 	// Take first line of message (subject line)
-	lines := strings.Split(message, "\n")
-	subject := strings.TrimSpace(lines[0])
+	firstLine, _, _ := strings.Cut(message, "\n")
+	subject := strings.TrimSpace(firstLine)
 
 	// Remove common prefixes like "feat:", "fix:", etc. if present (with optional scope)
 	subject = conventionalCommitPrefixRegex.ReplaceAllString(subject, "")

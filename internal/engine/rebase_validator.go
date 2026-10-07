@@ -678,7 +678,8 @@ func (e *engineImpl) replayCommitConflictFree(
 	}
 	// merge-tree --write-tree may emit additional lines (conflict markers) after
 	// the tree SHA on a conflict; a non-zero exit covers that, but trim just in case.
-	treeSHA := strings.TrimSpace(strings.SplitN(treeSHARaw, "\n", 2)[0])
+	firstLine, _, _ := strings.Cut(treeSHARaw, "\n")
+	treeSHA := strings.TrimSpace(firstLine)
 	if treeSHA == "" {
 		return "", false
 	}

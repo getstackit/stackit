@@ -56,7 +56,7 @@ the --to flag is used to specify a target branch to navigate towards.`,
 
 				// Traverse up the specified number of steps
 				targetBranch := currentBranch.GetName()
-				for i := 0; i < steps; i++ {
+				for i := range steps {
 					children := navigation.FlattenThroughAnchors(graph.ChildBranches(ctx.Engine.GetBranch(targetBranch)), graph)
 					if len(children) == 0 {
 						if i == 0 {

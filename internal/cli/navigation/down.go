@@ -60,7 +60,7 @@ as an argument to move multiple levels at once.`,
 
 				// Traverse down the specified number of steps
 				targetBranch := *currentBranch
-				for i := 0; i < steps; i++ {
+				for i := range steps {
 					parent := targetBranch.GetParent()
 					// Skip worktree anchors transparently
 					for parent != nil && parent.IsWorktreeAnchor() {

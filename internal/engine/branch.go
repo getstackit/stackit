@@ -225,11 +225,8 @@ func defaultPRBody(commitsData git.Commits, err error) string {
 
 	if len(messages) == 1 {
 		// Use body (skip first line which is subject)
-		lines := strings.Split(messages[0], "\n")
-		if len(lines) > 1 {
-			return strings.Join(lines[1:], "\n")
-		}
-		return ""
+		_, body, _ := strings.Cut(messages[0], "\n")
+		return body
 	}
 
 	// Format as a bulleted list of subjects in chronological order
@@ -237,7 +234,8 @@ func defaultPRBody(commitsData git.Commits, err error) string {
 	// GetAllCommits returns newest to oldest, so iterate in reverse
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
-		subject := strings.TrimSpace(strings.SplitN(msg, "\n", 2)[0])
+		firstLine, _, _ := strings.Cut(msg, "\n")
+		subject := strings.TrimSpace(firstLine)
 		if subject != "" {
 			sb.WriteString("- " + subject + "\n")
 		}

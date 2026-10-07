@@ -354,12 +354,7 @@ func parseCommitMessage(msg string) (title, body string) {
 	}
 
 	// Split on first newline
-	parts := strings.SplitN(msg, "\n", 2)
-	title = strings.TrimSpace(parts[0])
+	title, body, _ = strings.Cut(msg, "\n")
 
-	if len(parts) > 1 {
-		body = strings.TrimSpace(parts[1])
-	}
-
-	return title, body
+	return strings.TrimSpace(title), strings.TrimSpace(body)
 }

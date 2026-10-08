@@ -1098,10 +1098,8 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 		for _, msg := range annotation.CommitMessages {
 			// Color the SHA (first word), rest dimmed
 			var formattedMsg string
-			if spaceIdx := strings.Index(msg, " "); spaceIdx > 0 {
-				sha := msg[:spaceIdx]
-				rest := msg[spaceIdx:]
-				formattedMsg = style.ColorSHA(sha) + style.ColorDim(rest)
+			if sha, rest, found := strings.Cut(msg, " "); found && sha != "" {
+				formattedMsg = style.ColorSHA(sha) + style.ColorDim(" "+rest)
 			} else {
 				formattedMsg = style.ColorDim(msg)
 			}

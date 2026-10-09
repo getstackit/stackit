@@ -154,10 +154,7 @@ func errorText(err error) string {
 // fit a progress row. The full text still persists via FormatFailureSummary
 // when the TUI exits, so nothing is lost.
 func compactErrorText(err error) string {
-	detail := errorText(err)
-	if i := strings.IndexByte(detail, '\n'); i >= 0 {
-		detail = detail[:i]
-	}
+	detail, _, _ := strings.Cut(errorText(err), "\n")
 	detail = strings.TrimSpace(detail)
 	if detail == "" {
 		detail = errorText(nil)

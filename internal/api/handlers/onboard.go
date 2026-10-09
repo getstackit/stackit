@@ -268,8 +268,8 @@ func resolveCoords(req httpcontract.OnboardRepoRequest) (owner, name string, ok 
 // or "owner/name" and returns the two segments.
 func parseRepoURL(raw string) (owner, name string, ok bool) {
 	s := strings.TrimSuffix(strings.TrimSpace(raw), ".git")
-	if i := strings.Index(s, "github.com/"); i >= 0 {
-		s = s[i+len("github.com/"):]
+	if _, after, found := strings.Cut(s, "github.com/"); found {
+		s = after
 	}
 	parts := strings.Split(strings.Trim(s, "/"), "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {

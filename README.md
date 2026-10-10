@@ -320,7 +320,7 @@ stack-submit --stack         # Creates/updates all PRs in the stack
 | `stackit info` | Show detailed info about the current branch |
 | `stackit track` / `untrack` | Manually start/stop tracking a branch with stackit |
 | `stackit config` | Manage stackit configuration |
-| `stackit ui` | Open the shippable work dashboard in the local web UI |
+| `stackit ui` | Open the live stack companion panel; `s` opens the shipping dashboard (`--stack` for the current stack only) |
 | `stackit debug` | Dump debugging information about recent commands and stack state |
 | `stackit continue` / `abort` | Continue or abort an interrupted operation (like a rebase) |
 

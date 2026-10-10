@@ -12,10 +12,19 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/shippable"
+	"github.com/getstackit/stackit/internal/tui/core"
 )
 
 // Update handles all messages and updates the model.
 func (m *shippableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Keep the companion panel live underneath: its tick, reloads, and ref
+	// changes would otherwise be dropped here and never re-armed.
+	if m.companion != nil {
+		if cmd, handled := m.companion.handleBackgroundMsg(msg); handled {
+			return m, cmd
+		}
+	}
+
 	// Handle window size messages
 	if wsMsg, ok := msg.(tea.WindowSizeMsg); ok {
 		m.Width = wsMsg.Width
@@ -170,6 +179,13 @@ func (m *shippableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg handles keyboard input.
 func (m *shippableModel) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// Escape returns to the companion panel, except while a confirmation is
+	// open, where it cancels the confirmation instead.
+	if m.companion != nil && m.state != stateConfirming && msg.String() == core.KeyEsc {
+		// The panel missed resizes while hidden, so ask for the size again.
+		return m.companion, tea.Batch(m.companion.requestReload(), tea.RequestWindowSize)
+	}
+
 	// If showing confirmation, handle confirm/cancel
 	if m.state == stateConfirming {
 		return m.handleConfirmationKey(msg)

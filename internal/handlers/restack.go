@@ -64,6 +64,11 @@ type RestackSummary struct {
 	Skipped   int
 	Conflicts []string
 	Blocked   []string
+	// Held lists every branch a worktree held back, whether restack pruned it
+	// while planning or the engine held it mid-run. A held branch is reported
+	// as unneeded per branch, so this is the only place an adapter can tell
+	// "protected your work" from "nothing to do".
+	Held []RestackHeldInfo
 }
 
 // NullRestackHandler is a no-op handler for testing or when output is not needed
@@ -169,9 +174,6 @@ func (h *JSONRestackHandler) OnRestackBranch(event RestackBranchEvent) {
 		})
 	case RestackUnneeded:
 		h.Result.Skipped = append(h.Result.Skipped, event.Branch)
-		if event.HeldBy != "" {
-			h.Result.Held = append(h.Result.Held, RestackHeldInfo{Branch: event.Branch, Reason: event.HeldBy})
-		}
 	case RestackConflict:
 		h.Result.Conflicts = append(h.Result.Conflicts, RestackConflictInfo{
 			Branch:    event.Branch,
@@ -194,6 +196,14 @@ func (h *JSONRestackHandler) OnRestackComplete(summary RestackSummary) {
 	h.Result.RestackCount = summary.Restacked
 	h.Result.ConflictCount = len(h.Result.Conflicts)
 	h.Result.BlockedCount = len(h.Result.Blocked)
+	// Holds come from the summary so branches pruned while planning (which
+	// never produce a per-branch event) are reported alongside mid-run holds.
+	h.Result.Held = summary.Held
+	for _, held := range summary.Held {
+		if !slices.Contains(h.Result.Skipped, held.Branch) {
+			h.Result.Skipped = append(h.Result.Skipped, held.Branch)
+		}
+	}
 
 	if h.Result.ConflictCount > 0 {
 		h.Result.Status = RestackJSONStatusConflict

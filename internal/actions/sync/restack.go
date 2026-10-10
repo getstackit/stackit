@@ -98,6 +98,9 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 					RerereResolvedCount: p.RerereResolvedCount,
 				})
 			case engine.RestackUnneeded:
+				if p.HeldBy != "" {
+					summary.recordHold(p.Branch)
+				}
 				handler.EmitEvent(Event{
 					Phase:      PhaseRestack,
 					Type:       EventCompleted,

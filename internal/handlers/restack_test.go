@@ -151,6 +151,26 @@ func TestJSONRestackHandler(t *testing.T) {
 	})
 }
 
+func TestJSONRestackHandlerReportsHoldsFromSummary(t *testing.T) {
+	t.Parallel()
+
+	handler := NewJSONRestackHandler()
+	handler.OnRestackStart(2)
+	// A mid-run hold arrives as an unneeded event; a plan-time hold never
+	// produces an event and is known only to the summary.
+	runtime := restackEvent("child", RestackUnneeded, "", nil, "mid")
+	runtime.HeldBy = "ancestor mid is held"
+	handler.OnRestackBranch(runtime)
+	held := []RestackHeldInfo{
+		{Branch: "mid", Reason: "worktree /tmp/mid has uncommitted changes"},
+		{Branch: "child", Reason: "ancestor mid is held"},
+	}
+	handler.OnRestackComplete(RestackSummary{Held: held})
+
+	require.Equal(t, held, handler.Result.Held)
+	require.ElementsMatch(t, []string{"child", "mid"}, handler.Result.Skipped)
+}
+
 func restackEvent(branch string, result RestackResult, revision string, prNumber *git.PRNumber, parent string) RestackBranchEvent {
 	return RestackBranchEvent{
 		Branch:      branch,

@@ -54,11 +54,10 @@ func PrepushVerifyFromReader(ctx *app.Context, reader io.Reader) error {
 		localRef := parts[0]
 
 		// Extract branch name from refs/heads/branch-name
-		if !strings.HasPrefix(localRef, "refs/heads/") {
+		branchName, ok := strings.CutPrefix(localRef, "refs/heads/")
+		if !ok {
 			continue // Not a branch ref, skip (could be tags, etc.)
 		}
-
-		branchName := strings.TrimPrefix(localRef, "refs/heads/")
 
 		// Check if this branch is managed by stackit
 		branch := eng.GetBranch(branchName)

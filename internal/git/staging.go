@@ -297,8 +297,8 @@ func (h Hunk) NewFileContent() string {
 			continue
 		}
 		// Include lines that start with + (but not the +++ header)
-		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			lines = append(lines, strings.TrimPrefix(line, "+"))
+		if added, ok := strings.CutPrefix(line, "+"); ok && !strings.HasPrefix(line, "+++") {
+			lines = append(lines, added)
 		}
 	}
 	result := strings.Join(lines, "\n")

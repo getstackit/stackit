@@ -556,11 +556,8 @@ func extractVersion(content string) string {
 				bodyStart = i + 1
 				break
 			}
-			if strings.HasPrefix(lines[i], "version:") {
-				parts := strings.SplitN(lines[i], ":", 2)
-				if len(parts) == 2 {
-					return strings.TrimSpace(parts[1])
-				}
+			if version, ok := strings.CutPrefix(lines[i], "version:"); ok {
+				return strings.TrimSpace(version)
 			}
 		}
 	} else {

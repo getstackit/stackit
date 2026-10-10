@@ -30,13 +30,13 @@ type stashEntry struct {
 func parseStashList(stashList string) []stashEntry {
 	entries := []stashEntry{}
 	for line := range strings.SplitSeq(stashList, "\n") {
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) < 2 {
+		ref, message, found := strings.Cut(line, ":")
+		if !found {
 			continue
 		}
 		entries = append(entries, stashEntry{
-			Ref:     strings.TrimSpace(parts[0]),
-			Message: strings.TrimSpace(parts[1]),
+			Ref:     strings.TrimSpace(ref),
+			Message: strings.TrimSpace(message),
 		})
 	}
 	return entries

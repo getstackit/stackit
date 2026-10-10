@@ -53,11 +53,10 @@ func (r *runner) RefDecorations() (map[string][]RefDecoration, error) {
 			continue
 		}
 
-		switch {
-		case strings.HasPrefix(refname, "refs/tags/"):
-			result[sha] = append(result[sha], RefDecoration{Name: strings.TrimPrefix(refname, "refs/tags/"), IsTag: true})
-		case strings.HasPrefix(refname, "refs/heads/"):
-			result[sha] = append(result[sha], RefDecoration{Name: strings.TrimPrefix(refname, "refs/heads/")})
+		if tag, ok := strings.CutPrefix(refname, "refs/tags/"); ok {
+			result[sha] = append(result[sha], RefDecoration{Name: tag, IsTag: true})
+		} else if branch, ok := strings.CutPrefix(refname, "refs/heads/"); ok {
+			result[sha] = append(result[sha], RefDecoration{Name: branch})
 		}
 	}
 

@@ -26,9 +26,12 @@ type CleanBranchesOptions struct {
 type CleanBranchesResult struct {
 	DeletedBranches        map[string]string // name -> reason
 	BranchesWithNewParents []string
-	SkippedInWorktree      []string // branches that couldn't be deleted from worktree
-	SkippedUnpushed        []string // branches skipped due to unpushed local changes
-	SkippedCheckedOut      []string // branches checked out in the main working tree, which cannot be removed
+	// Reparented lists the parent changes applied because a parent was deleted,
+	// for callers that report how the stack's shape changed.
+	Reparented        []ReparentedBranch
+	SkippedInWorktree []string // branches that couldn't be deleted from worktree
+	SkippedUnpushed   []string // branches skipped due to unpushed local changes
+	SkippedCheckedOut []string // branches checked out in the main working tree, which cannot be removed
 }
 
 // BranchDeletionPlan contains the planned branch deletions before execution
@@ -64,8 +67,16 @@ type deletionPlan struct {
 	branches map[string]*branchDeletionInfo
 }
 
+// ReparentedBranch is one parent change cleanup applied.
+type ReparentedBranch struct {
+	Branch    string
+	OldParent string
+	NewParent string
+}
+
 type plannedReparentMove struct {
 	branchName         string
+	oldParentName      string
 	newParentName      string
 	preserveDivergence bool
 }
@@ -195,6 +206,7 @@ func ExecuteBranchDeletions(ctx *app.Context, plannedDeletion *BranchDeletionPla
 	return &CleanBranchesResult{
 		DeletedBranches:        deletedBranches,
 		BranchesWithNewParents: branchesWithNewParents,
+		Reparented:             reparented(reparentMoves),
 		SkippedInWorktree:      plannedDeletion.SkippedInWorktree,
 		SkippedCheckedOut:      skippedCheckedOut,
 	}, nil
@@ -569,6 +581,7 @@ func planReparentIfNecessary(branch engine.Branch, plan *deletionPlan, eng engin
 		plan.removeBlocker(parentName, branchName)
 		return &plannedReparentMove{
 			branchName:         branchName,
+			oldParentName:      parentName,
 			newParentName:      newParentName,
 			preserveDivergence: shouldPreserveDivergenceOnReparent(plan, parentName),
 		}
@@ -614,12 +627,15 @@ func applyReparentMoves(ctx *app.Context, moves []plannedReparentMove, removed [
 	if err := eng.ApplyParentUpdatesAfterRemovals(ctx.Context, updates, removed); err != nil {
 		return fmt.Errorf("failed to set parent updates: %w", err)
 	}
-	for _, move := range moves {
-		ctx.Output.Info("Set parent of %s to %s.",
-			output.BranchName(move.branchName),
-			output.BranchName(move.newParentName))
-	}
 	return nil
+}
+
+func reparented(moves []plannedReparentMove) []ReparentedBranch {
+	result := make([]ReparentedBranch, len(moves))
+	for i, move := range moves {
+		result[i] = ReparentedBranch{Branch: move.branchName, OldParent: move.oldParentName, NewParent: move.newParentName}
+	}
+	return result
 }
 
 // removeWorktreeIfCheckedOut removes the worktree if the branch is checked out in one.

@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,12 +20,7 @@ func (m remoteMetadata) Get(branch string) *git.Meta { return m[branch] }
 type localBranches []string
 
 func (l localBranches) Contains(name string) bool {
-	for _, b := range l {
-		if b == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(l, name)
 }
 
 func newTestTargets(parents map[string]string, branches []string) *syncTargets {

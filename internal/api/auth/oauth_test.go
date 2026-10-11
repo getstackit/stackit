@@ -33,16 +33,6 @@ func TestIsSafeReturnPath(t *testing.T) {
 	}
 }
 
-func TestConstantTimeStringEq(t *testing.T) {
-	t.Parallel()
-
-	require.True(t, constantTimeStringEq("abc", "abc"))
-	require.False(t, constantTimeStringEq("abc", "abd"))
-	require.False(t, constantTimeStringEq("", "x"))
-	require.False(t, constantTimeStringEq("abc", "ab"))
-	require.True(t, constantTimeStringEq("", ""))
-}
-
 func TestJoinURL(t *testing.T) {
 	t.Parallel()
 

@@ -571,10 +571,14 @@ func extractVersion(content string) string {
 	const suffix = "-->"
 	for _, line := range lines[bodyStart:] {
 		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, prefix) || !strings.HasSuffix(trimmed, suffix) {
+		rest, ok := strings.CutPrefix(trimmed, prefix)
+		if !ok {
 			continue
 		}
-		value := strings.TrimSuffix(strings.TrimPrefix(trimmed, prefix), suffix)
+		value, ok := strings.CutSuffix(rest, suffix)
+		if !ok {
+			continue
+		}
 		return strings.TrimSpace(value)
 	}
 

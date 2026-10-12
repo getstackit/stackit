@@ -33,7 +33,7 @@ type RepoAccess struct {
 // authenticated user can at least read the repo; ErrRepoAccessDenied means the
 // repo is missing or invisible to that token. Other errors are transport-level.
 func CheckRepoAccess(ctx context.Context, token, owner, name string) (*RepoAccess, error) {
-	client, err := createGitHubClient(ctx, "github.com", token)
+	client, err := createGitHubClient(ctx, DefaultHost, token)
 	if err != nil {
 		return nil, err
 	}

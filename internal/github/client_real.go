@@ -15,18 +15,22 @@ type StackitGitHubClient struct {
 	client *github.Client
 	runner GitCommandRunner
 	repo   Repo
+	// host is the forge hostname the client is bound to. `gh` shells out per
+	// host, so it has to be passed through explicitly.
+	host string
 }
 
 // NewGitHubClient creates a new RealGitHubClient
 func NewGitHubClient(ctx context.Context, runner GitCommandRunner) (*StackitGitHubClient, error) {
-	token, err := getGitHubToken(runner)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get GitHub token: %w", err)
-	}
-
 	repo, err := getRemoteRepository(ctx, runner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
+	}
+
+	// Resolve the credential for the remote's host, not for gh's default host.
+	token, err := tokenForHost(ctx, runner, repo.Host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get GitHub token: %w", err)
 	}
 
 	client, err := createGitHubClient(ctx, repo.Host, token)
@@ -38,6 +42,7 @@ func NewGitHubClient(ctx context.Context, runner GitCommandRunner) (*StackitGitH
 		client: client,
 		runner: runner,
 		repo:   Repo{Owner: repo.Owner, Name: repo.Name},
+		host:   repo.Host,
 	}, nil
 }
 
@@ -203,9 +208,16 @@ func (c *StackitGitHubClient) ListPRComments(ctx context.Context, prNumber git.P
 	return allComments, nil
 }
 
-// GetCurrentUser returns the authenticated GitHub username
+// GetCurrentUser returns the authenticated GitHub username. The hostname is
+// passed through because `gh api` otherwise queries gh's default host, which
+// would report the github.com identity for an Enterprise remote.
 func (c *StackitGitHubClient) GetCurrentUser(ctx context.Context) (string, error) {
-	output, err := c.runner.RunGHCommandWithContext(ctx, "api", "user", "-q", ".login")
+	args := []string{"api"}
+	if c.host != "" {
+		args = append(args, "--hostname", c.host)
+	}
+	args = append(args, "user", "-q", ".login")
+	output, err := c.runner.RunGHCommandWithContext(ctx, args...)
 	if err != nil {
 		return "", fmt.Errorf("failed to get current GitHub user: %w", err)
 	}

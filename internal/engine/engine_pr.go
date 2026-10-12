@@ -178,9 +178,15 @@ func (e *engineImpl) BatchGetPRSubmissionStatus(ctx context.Context, branches Br
 		}
 	}
 
+	// One batched local-metadata read for the whole set: the submit-pending
+	// flag below lives in local metadata, and a per-branch read here would be
+	// a git ref read per branch.
+	localMetas := e.batchReadLocalMetadata(branches.Names())
+
 	results := make(map[string]PRSubmissionStatus, len(branches))
 	for _, branch := range branches {
-		results[branch.GetName()] = e.prSubmissionStatus(branch, metas[branch.GetName()], remoteStatuses.ForBranch(branch))
+		name := branch.GetName()
+		results[name] = e.prSubmissionStatus(branch, metas[name], localMetas.Get(name), remoteStatuses.ForBranch(branch))
 	}
 	return results, nil
 }
@@ -206,7 +212,7 @@ func (e *engineImpl) batchReadPrMetas(branches Branches) (MetaMap, error) {
 // prSubmissionStatus computes a branch's submission status from its
 // precomputed metadata and remote status, so batched callers read metadata
 // and the remote once each for the whole set rather than per branch.
-func (e *engineImpl) prSubmissionStatus(branch Branch, meta *git.Meta, remoteStatus BranchRemoteStatus) PRSubmissionStatus {
+func (e *engineImpl) prSubmissionStatus(branch Branch, meta *git.Meta, localMeta *git.LocalMeta, remoteStatus BranchRemoteStatus) PRSubmissionStatus {
 	prInfo := NewPrInfoFromMeta(meta)
 
 	parentBranch := e.GetParent(branch)
@@ -237,7 +243,12 @@ func (e *engineImpl) prSubmissionStatus(branch Branch, meta *git.Meta, remoteSta
 	// changes need no check here: consolidation syncs the PRs itself.
 	lockStatusChanged := meta.GetLockReason() != prInfo.LockReason()
 
-	needsUpdate := baseChanged || !branchMatches || titleNeedsUpdate || lockStatusChanged
+	// A previous submit pushed this branch but failed before its PR write
+	// landed. The push alone makes every signal above read as up to date, so
+	// without this the unfinished PR write is never retried.
+	submitPending := localMeta != nil && localMeta.SubmitPending
+
+	needsUpdate := baseChanged || !branchMatches || titleNeedsUpdate || lockStatusChanged || submitPending
 
 	reason := ""
 	if !needsUpdate {

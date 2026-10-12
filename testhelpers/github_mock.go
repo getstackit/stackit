@@ -30,7 +30,10 @@ type MockGitHubServerConfig struct {
 	// MergedStackPRs lists PR numbers GitHub refuses to unstack because they
 	// are merged, merging, or queued to merge. Such a stack cannot be rebuilt.
 	MergedStackPRs []git.PRNumber
-	// ErrorResponses maps endpoint+method to error responses
+	// ErrorResponses makes the mock fail selected requests, so tests can
+	// exercise partial-failure recovery. Keys are the HTTP method on its own
+	// ("PATCH" fails every PR update) or method and path ("PATCH /repos/owner/
+	// repo/pulls/1"). A match returns 500 with the error's text.
 	ErrorResponses map[string]error
 	// Owner and Repo for the mock server
 	Owner string
@@ -52,6 +55,31 @@ func NewMockGitHubServerConfig() *MockGitHubServerConfig {
 	}
 }
 
+// FailRequests makes the mock reject matching requests with a 500. key is an
+// HTTP method on its own ("PATCH" fails every PR update) or a method and path
+// ("PATCH /repos/owner/repo/pulls/1"). Safe to call while the server is up.
+func (c *MockGitHubServerConfig) FailRequests(key string, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ErrorResponses[key] = err
+}
+
+// StopFailingRequests undoes a FailRequests for one key.
+func (c *MockGitHubServerConfig) StopFailingRequests(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.ErrorResponses, key)
+}
+
+// errorFor returns the configured failure for a request, if any. Callers hold
+// config.mu.
+func (c *MockGitHubServerConfig) errorFor(method, path string) error {
+	if err, ok := c.ErrorResponses[method]; ok {
+		return err
+	}
+	return c.ErrorResponses[method+" "+path]
+}
+
 // NewMockGitHubServer creates an httptest server that mocks GitHub API endpoints
 func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest.Server {
 	if config == nil {
@@ -67,6 +95,11 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		config.mu.Lock()
 		defer config.mu.Unlock()
+
+		if err := config.errorFor(r.Method, r.URL.Path); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		// Use original path for all operations
 		originalPath := r.URL.Path

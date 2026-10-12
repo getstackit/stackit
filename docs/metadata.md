@@ -18,7 +18,7 @@ Stackit uses five ref namespaces:
 | Namespace | Purpose | Synced to Remote |
 |-----------|---------|------------------|
 | `refs/stackit/metadata/{branch}` | Per-branch metadata (parent, PR info, scope, etc.) | Yes |
-| `refs/stackit/local-metadata/{branch}` | Local-only branch state (frozen, cached IDs) | No |
+| `refs/stackit/local-metadata/{branch}` | Local-only branch state (frozen, pending submit, cached IDs) | No |
 | `refs/stackit/stacks/{stack-id}` | Stack-level metadata (title, description) | Yes |
 | `refs/stackit/remote-stacks/{stack-id}` | Fetched remote stack metadata (read-only) | N/A (fetched) |
 | `refs/stackit/undo/{snapshot-id}` | Working-tree captures anchored to an undo snapshot | No |
@@ -199,6 +199,7 @@ Local metadata is never pushed to remote. It stores per-machine state.
 |-------|------|-------------|
 | `frozen` | `bool` | Branch is frozen locally (excluded from restack/submit) |
 | `needsPRBodyUpdate` | `bool` | Flag indicating PR body needs update during sync |
+| `submitPending` | `bool` | A submit pushed this branch but did not finish writing its PR |
 | `navigationCommentId` | `*int64` | Cached GitHub comment ID for navigation commands |
 
 ### Example
@@ -207,6 +208,7 @@ Local metadata is never pushed to remote. It stores per-machine state.
 {
   "frozen": true,
   "needsPRBodyUpdate": false,
+  "submitPending": false,
   "navigationCommentId": 12345678
 }
 ```
@@ -218,6 +220,7 @@ Local metadata is never pushed to remote. It stores per-machine state.
 | `stackit freeze` | Sets `frozen` to `true` |
 | `stackit unfreeze` | Sets `frozen` to `false` |
 | `stackit sync` | May set `needsPRBodyUpdate` for deferred updates |
+| `stackit submit` | Sets `submitPending` before pushing; clears it per branch as each PR write lands |
 | Navigation comment posted | Caches `navigationCommentId` |
 | `stackit delete` | Deletes the local metadata ref |
 

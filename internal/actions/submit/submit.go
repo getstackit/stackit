@@ -442,6 +442,19 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 	remote := nav.GetRemote()
 
+	// Record every branch this submit is about to write before touching the
+	// remote. Pushing succeeds independently of the PR write that follows, and
+	// a successful push makes the branch look in sync — so without this marker
+	// a submit that dies between the two reports "nothing to submit" on the
+	// next run and the PR keeps the stale title, body, and base. The marker is
+	// cleared per branch as its PR write lands.
+	submitted := newSubmittedBranches(len(submissionInfos))
+	if err := eng.MarkBranchesSubmitPending(ctx.Context, infoNames(submissionInfos)); err != nil {
+		// Non-fatal: losing the marker only costs the retry on a later
+		// failure, and refusing to submit over it would be worse.
+		ctx.Output.Debug("Failed to record pending submit: %v", err)
+	}
+
 	// Push every branch that needs it in a single git invocation instead of one
 	// `git push` per branch (N network round trips). The force-with-lease guards
 	// reuse remoteStatuses prefetched above, so no further `git ls-remote` runs.
@@ -453,30 +466,34 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	var submitErr error
 	var errMu sync.Mutex
 
+	runOne := func(info Info) {
+		if err := submitBranch(ctx, info, opts, handler, pushResults); err != nil {
+			errMu.Lock()
+			if submitErr == nil {
+				submitErr = err
+			}
+			errMu.Unlock()
+			return
+		}
+		submitted.add(info.BranchName)
+	}
+
 	if len(submissionInfos) > 0 {
 		if allCreates {
 			// Sequential submission for new stacks - ensures sequential PR numbers
 			for _, info := range submissionInfos {
-				if err := submitBranch(ctx, info, opts, handler, pushResults); err != nil {
-					errMu.Lock()
-					if submitErr == nil {
-						submitErr = err
-					}
-					errMu.Unlock()
-				}
+				runOne(info)
 			}
 		} else {
 			// Parallel submission for updates (faster when PRs already exist)
-			utils.Run(submissionInfos, func(info Info) {
-				if err := submitBranch(ctx, info, opts, handler, pushResults); err != nil {
-					errMu.Lock()
-					if submitErr == nil {
-						submitErr = err
-					}
-					errMu.Unlock()
-				}
-			})
+			utils.Run(submissionInfos, runOne)
 		}
+	}
+
+	// Clear the marker only for branches whose PR write landed. Anything left
+	// marked is retried by the next submit.
+	if err := eng.ClearBranchesSubmitPending(ctx.Context, submitted.names()); err != nil {
+		ctx.Output.Debug("Failed to clear pending submit: %v", err)
 	}
 
 	if submitErr != nil {
@@ -815,6 +832,38 @@ func submitBranch(ctx *app.Context, info Info, opts Options, handler Handler, pu
 	}
 
 	return nil
+}
+
+// infoNames returns the branch names of a submission plan, in plan order.
+func infoNames(infos []Info) []string {
+	names := make([]string, len(infos))
+	for i, info := range infos {
+		names[i] = info.BranchName
+	}
+	return names
+}
+
+// submittedBranches collects the branches whose PR write landed. Updates are
+// submitted in parallel, so recording them needs a lock.
+type submittedBranches struct {
+	mu   sync.Mutex
+	list []string
+}
+
+func newSubmittedBranches(capacity int) *submittedBranches {
+	return &submittedBranches{list: make([]string, 0, capacity)}
+}
+
+func (s *submittedBranches) add(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.list = append(s.list, name)
+}
+
+func (s *submittedBranches) names() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.list)
 }
 
 // getGitHubClient returns the GitHub client from context

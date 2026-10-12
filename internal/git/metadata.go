@@ -95,8 +95,14 @@ type MergedParent struct {
 
 // LocalMeta represents branch metadata that is strictly local and never pushed
 type LocalMeta struct {
-	Frozen              bool   `json:"frozen,omitempty"`
-	NeedsPRBodyUpdate   bool   `json:"needsPRBodyUpdate,omitempty"`
+	Frozen            bool `json:"frozen,omitempty"`
+	NeedsPRBodyUpdate bool `json:"needsPRBodyUpdate,omitempty"`
+	// SubmitPending records that a submit pushed this branch but did not
+	// finish writing its pull request. The push alone makes the branch look
+	// in sync with the remote, which would otherwise hide the unfinished PR
+	// write from the next submit. Local because the interrupted submit
+	// happened on this machine.
+	SubmitPending       bool   `json:"submitPending,omitempty"`
 	NavigationCommentID *int64 `json:"navigationCommentId,omitempty"`
 }
 

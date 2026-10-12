@@ -230,6 +230,14 @@ type BranchTracking interface {
 	// GetBranchesNeedingPRBodyUpdate returns all branches that need PR body updates
 	GetBranchesNeedingPRBodyUpdate() []string
 
+	// MarkBranchesSubmitPending records that a submit is about to push these
+	// branches and write their pull requests, so an interrupted submit is
+	// retried rather than hidden by the successful push.
+	MarkBranchesSubmitPending(ctx context.Context, branchNames []string) error
+	// ClearBranchesSubmitPending clears the submit-pending flag for branches
+	// whose pull request write completed.
+	ClearBranchesSubmitPending(ctx context.Context, branchNames []string) error
+
 	// SetStackDescription sets the stack description in the stack ref for a branch.
 	// Returns an error if the branch is not part of a tracked stack.
 	SetStackDescription(ctx context.Context, branch Branch, desc *git.StackDescription) error

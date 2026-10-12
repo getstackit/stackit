@@ -13,13 +13,12 @@ import (
 	"github.com/getstackit/stackit/internal/utils"
 )
 
-// Open opens the user's preferred editor with the given initial content and
-// returns the edited content, or an error.
+// Resolve returns the user's preferred editor command.
 //
 // Editor precedence: GIT_EDITOR > EDITOR > git config core.editor > vi.
 // When no editor is set in the environment, it first checks that interactive
 // use is allowed (so it doesn't hang in CI / non-interactive contexts).
-func Open(initialContent, filenamePattern string) (string, error) {
+func Resolve() (string, error) {
 	// Get editor from environment first. Precedence: GIT_EDITOR > EDITOR.
 	editor := os.Getenv("GIT_EDITOR")
 	if editor == "" {
@@ -44,6 +43,16 @@ func Open(initialContent, filenamePattern string) (string, error) {
 
 	if editor == "" {
 		editor = "vi" // Default to vi.
+	}
+	return editor, nil
+}
+
+// Open opens the user's preferred editor (see Resolve) with the given initial
+// content and returns the edited content, or an error.
+func Open(initialContent, filenamePattern string) (string, error) {
+	editor, err := Resolve()
+	if err != nil {
+		return "", err
 	}
 
 	// Create temporary file.

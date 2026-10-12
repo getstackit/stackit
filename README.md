@@ -180,6 +180,22 @@ stackit merge ship     # Consolidate into single PR and merge
 - `stackit merge next` merges the bottom-most unmerged PR using GitHub automerge, then restacks remaining branches
 - `stackit merge ship` consolidates all branches into a single PR for atomic merging
 
+### GitHub authentication
+
+Stackit resolves credentials for the host of your `origin` remote, so a GitHub
+Enterprise Server repository uses that server's credentials rather than your
+github.com ones. No `GH_HOST` workaround is needed.
+
+Resolution order, where `<host>` is the host parsed from `origin`:
+
+| Host | Lookup order |
+|------|--------------|
+| `github.com` | `GITHUB_TOKEN`, then `gh auth token --hostname github.com` |
+| Enterprise | `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GITHUB_TOKEN`, then `gh auth token --hostname <host>` |
+
+Log in per host with `gh auth login --hostname <host>`. If the remote is not a
+recognizable GitHub URL, Stackit falls back to `gh`'s own default host.
+
 ---
 
 ## AI Agent Integration

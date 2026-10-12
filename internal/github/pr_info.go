@@ -4,7 +4,6 @@ package github
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/google/go-github/v92/github"
@@ -34,17 +33,17 @@ func syncPrInfo(ctx context.Context, runner GitCommandRunner, branchNames []stri
 		return nil
 	}
 
-	// If no token, skip PR syncing (non-fatal).
-	token, err := getGitHubToken(runner)
-	if err != nil {
-		return nil //nolint:nilerr
-	}
-
-	// Resolve repository info. Even when owner/repo are provided, the hostname is
+	// Resolve repository info first. The hostname selects the credential and is
 	// needed for the REST fallback on GitHub Enterprise.
 	remoteRepo, err := getRemoteRepository(ctx, runner)
 	if err != nil {
 		return nil //nolint:nilerr // Skip if can't determine repo
+	}
+
+	// If no token, skip PR syncing (non-fatal).
+	token, err := tokenForHost(ctx, runner, remoteRepo.Host)
+	if err != nil {
+		return nil //nolint:nilerr
 	}
 	if repo.Owner == "" || repo.Name == "" {
 		repo = Repo{Owner: remoteRepo.Owner, Name: remoteRepo.Name}
@@ -111,7 +110,7 @@ func createGitHubClient(ctx context.Context, hostname, token string) (*github.Cl
 	opts := []github.ClientOptionsFunc{github.WithHTTPClient(tc)}
 
 	// Configure for GitHub Enterprise if not github.com
-	if hostname != "github.com" {
+	if hostname != DefaultHost {
 		opts = append(opts, github.WithEnterpriseURLs(
 			fmt.Sprintf("https://%s/api/v3/", hostname),
 			fmt.Sprintf("https://%s/api/uploads/", hostname),
@@ -123,31 +122,6 @@ func createGitHubClient(ctx context.Context, hostname, token string) (*github.Cl
 		return nil, fmt.Errorf("create github client for %s: %w", hostname, err)
 	}
 	return client, nil
-}
-
-// getGitHubToken gets GitHub token from environment or gh CLI
-func getGitHubToken(runner GitCommandRunner) (string, error) {
-	// Try environment variable first
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		// Trim whitespace to handle cases where secrets might have leading/trailing spaces
-		token = strings.TrimSpace(token)
-		if token != "" {
-			return token, nil
-		}
-	}
-
-	// Try gh CLI
-	output, err := runner.RunGHCommandWithContext(context.Background(), "auth", "token")
-	if err != nil {
-		return "", fmt.Errorf("failed to get GitHub token: %w", err)
-	}
-
-	token := strings.TrimSpace(output)
-	if token == "" {
-		return "", fmt.Errorf("empty GitHub token")
-	}
-
-	return token, nil
 }
 
 // getRemoteRepository gets the hosted repository identity from the default

@@ -277,21 +277,21 @@ func MergePullRequest(ctx context.Context, client *github.Client, repo Repo, bra
 
 // executeGraphQLQuery executes a GraphQL query and returns the response body
 func executeGraphQLQuery(ctx context.Context, runner GitCommandRunner, query string, variables map[string]any) ([]byte, error) {
-	// Get GitHub token
-	token, err := getGitHubToken(runner)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get GitHub token: %w", err)
-	}
-
 	// Get repository info to determine hostname
 	repo, err := getRemoteRepository(ctx, runner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository info: %w", err)
 	}
 
+	// Get the GitHub token for that host
+	token, err := tokenForHost(ctx, runner, repo.Host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get GitHub token: %w", err)
+	}
+
 	// Construct GraphQL endpoint URL
 	var graphqlURL string
-	if repo.Host == "github.com" {
+	if repo.Host == DefaultHost {
 		graphqlURL = "https://api.github.com/graphql"
 	} else {
 		// GitHub Enterprise: https://hostname/api/graphql

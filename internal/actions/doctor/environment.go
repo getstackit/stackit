@@ -5,10 +5,16 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 )
+
+// remoteCheckTimeout bounds doctor's GitHub connectivity probes. Doctor is a
+// diagnostic, so a fast "unreachable" beats blocking for minutes on the git
+// runner's default timeout when the network or `gh` is wedged.
+const remoteCheckTimeout = 10 * time.Second
 
 // gitVersioner reports the installed Git's version.
 type gitVersioner interface {
@@ -66,7 +72,7 @@ func checkEnvironment(versioner gitVersioner, ghRunner github.GitCommandRunner, 
 	// reported quickly rather than hanging this diagnostic.
 	ghCtx, cancel := context.WithTimeout(context.Background(), remoteCheckTimeout)
 	defer cancel()
-	token, err := getGitHubToken(ghCtx, ghRunner)
+	token, err := github.Token(ghCtx, ghRunner)
 	if err != nil {
 		warnings++
 		handler.OnCheck("github_auth", CheckWarning, "GitHub authentication not configured")

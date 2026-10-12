@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -158,7 +159,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	gotState := q.Get("state")
 	wantState := readCookie(r, stateCookieName)
 	h.cfg.Cookies.clearState(w)
-	if wantState == "" || gotState == "" || !constantTimeStringEq(gotState, wantState) {
+	if wantState == "" || gotState == "" || subtle.ConstantTimeCompare([]byte(gotState), []byte(wantState)) != 1 {
 		slog.Warn("auth callback: bad state")
 		http.Error(w, "invalid auth state", http.StatusBadRequest)
 		return
@@ -305,20 +306,6 @@ func randomToken(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
-}
-
-// constantTimeStringEq is hmac.Equal-style comparison for state tokens. We
-// don't need full crypto strength but using a constant-time compare keeps
-// timing-channel concerns off the table.
-func constantTimeStringEq(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	var v byte
-	for i := 0; i < len(a); i++ {
-		v |= a[i] ^ b[i]
-	}
-	return v == 0
 }
 
 // isSafeReturnPath returns true when target is a path on this server

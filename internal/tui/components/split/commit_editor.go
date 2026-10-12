@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/editor"
 	"github.com/getstackit/stackit/internal/tui/style"
 	"github.com/getstackit/stackit/internal/utils"
 )
@@ -167,17 +168,16 @@ func (m *CommitEditorModel) openEditor() tea.Cmd {
 	}
 	_ = tmpFile.Close()
 
-	// Get editor from environment
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = os.Getenv("VISUAL")
-	}
-	if editor == "" {
-		editor = "vim"
+	editorCmd, err := editor.Resolve()
+	if err != nil {
+		_ = os.Remove(m.tempFile)
+		return func() tea.Msg {
+			return editorFinishedMsg{err: err}
+		}
 	}
 
 	// Create the command
-	c, err := utils.BuildEditorCommand(editor, m.tempFile)
+	c, err := utils.BuildEditorCommand(editorCmd, m.tempFile)
 	if err != nil {
 		_ = os.Remove(m.tempFile)
 		return func() tea.Msg {

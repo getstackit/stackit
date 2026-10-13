@@ -2,6 +2,7 @@ package github
 
 import (
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/utils"
 
 	"context"
 	"encoding/json"
@@ -22,15 +23,7 @@ func batchGetPRInfoByBranchGraphQL(ctx context.Context, runner GitCommandRunner,
 	}
 
 	// Deduplicate while keeping a stable order for alias assignment.
-	seen := make(map[string]struct{}, len(branchNames))
-	unique := make([]string, 0, len(branchNames))
-	for _, n := range branchNames {
-		if _, ok := seen[n]; ok {
-			continue
-		}
-		seen[n] = struct{}{}
-		unique = append(unique, n)
-	}
+	unique := utils.Unique(branchNames)
 
 	query, variables := buildPRInfoByBranchQuery(repo, unique)
 	body, err := executeGraphQLQuery(ctx, runner, query, variables)
@@ -93,7 +86,7 @@ func supplementPRInfoByNumberGraphQL(ctx context.Context, runner GitCommandRunne
 		return nil
 	}
 
-	query := buildPRNumberQuery(uniquePRNumbers(prNumbers), pullRequestInfoFields)
+	query := buildPRNumberQuery(utils.Unique(prNumbers), pullRequestInfoFields)
 	variables := map[string]any{
 		graphqlVarOwner: repo.Owner,
 		graphqlVarRepo:  repo.Name,

@@ -9,6 +9,7 @@ import (
 
 	stackiterrors "github.com/getstackit/stackit/internal/errors"
 	"github.com/getstackit/stackit/internal/tui"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 var (
@@ -169,7 +170,7 @@ func parseSelectedFormatLabels(selected []string) ([]agentSkillFormat, error) {
 			return nil, fmt.Errorf("unsupported selected format label %q", label)
 		}
 	}
-	return dedupeFormats(formats), nil
+	return utils.Unique(formats), nil
 }
 
 func parseAgentSkillFormats(rawValues []string) ([]agentSkillFormat, error) {
@@ -191,20 +192,7 @@ func parseAgentSkillFormats(rawValues []string) ([]agentSkillFormat, error) {
 	if len(formats) == 0 {
 		return nil, fmt.Errorf("at least one format must be provided")
 	}
-	return dedupeFormats(formats), nil
-}
-
-func dedupeFormats(formats []agentSkillFormat) []agentSkillFormat {
-	seen := map[agentSkillFormat]bool{}
-	result := make([]agentSkillFormat, 0, len(formats))
-	for _, format := range formats {
-		if seen[format] {
-			continue
-		}
-		seen[format] = true
-		result = append(result, format)
-	}
-	return result
+	return utils.Unique(formats), nil
 }
 
 func parseAgentSkillFormat(raw string) (agentSkillFormat, error) {

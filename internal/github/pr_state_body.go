@@ -2,6 +2,7 @@ package github
 
 import (
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/getstackit/stackit/internal/utils"
 
 	"context"
 )
@@ -21,7 +22,7 @@ func BatchGetPRStateBodyGraphQL(ctx context.Context, runner GitCommandRunner, re
 		return make(map[git.PRNumber]PRStateBody), nil
 	}
 
-	unique := uniquePRNumbers(prNumbers)
+	unique := utils.Unique(prNumbers)
 
 	query := buildPRStateBodyQuery(unique)
 	variables := map[string]any{

@@ -197,7 +197,7 @@ func (c *ConfigStore) stackitSnapshot() (map[string]string, error) {
 	}
 
 	keys := make(map[string]string)
-	for _, record := range strings.Split(out, "\x00") {
+	for record := range strings.SplitSeq(out, "\x00") {
 		if record == "" {
 			continue
 		}

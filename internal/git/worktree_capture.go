@@ -93,7 +93,7 @@ func (r *runner) RestoreUntracked(ctx context.Context, commitSHA string) (int, e
 
 	root := r.getRepoRoot()
 	var missing []string
-	for _, path := range strings.Split(output, "\x00") {
+	for path := range strings.SplitSeq(output, "\x00") {
 		if path == "" {
 			continue
 		}
@@ -151,7 +151,7 @@ func (r *runner) untrackedPaths(ctx context.Context) ([]string, error) {
 	}
 
 	var paths []string
-	for _, path := range strings.Split(output, "\x00") {
+	for path := range strings.SplitSeq(output, "\x00") {
 		if path != "" {
 			paths = append(paths, path)
 		}

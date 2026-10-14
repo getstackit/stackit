@@ -221,7 +221,7 @@ func ensureWarmStartParents(root, relativePath string, mode warmStartParentMode,
 	}
 
 	current := root
-	for _, component := range strings.Split(directory, string(filepath.Separator)) {
+	for component := range strings.SplitSeq(directory, string(filepath.Separator)) {
 		current = filepath.Join(current, component)
 		if verified[current] {
 			continue

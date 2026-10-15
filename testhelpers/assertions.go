@@ -33,11 +33,11 @@ func ExpectBranches(t *testing.T, repo *GitRepo, expected []string) {
 	output, err := cmd.Output()
 	require.NoError(t, err, "Failed to list branches")
 
-	branches := strings.Split(strings.TrimSpace(string(output)), "\n")
+	branches := strings.SplitSeq(strings.TrimSpace(string(output)), "\n")
 
 	// Filter out empty strings and scene-related branches
 	filtered := []string{}
-	for _, b := range branches {
+	for b := range branches {
 		b = strings.TrimSpace(b)
 		if b != "" && b != "prod" && b != "x2" {
 			filtered = append(filtered, b)
@@ -61,11 +61,11 @@ func ExpectBranchesString(t *testing.T, repo *GitRepo, expected string) {
 	output, err := cmd.Output()
 	require.NoError(t, err, "Failed to list branches")
 
-	branches := strings.Split(strings.TrimSpace(string(output)), "\n")
+	branches := strings.SplitSeq(strings.TrimSpace(string(output)), "\n")
 
 	// Filter out empty strings and scene-related branches
 	filtered := []string{}
-	for _, b := range branches {
+	for b := range branches {
 		b = strings.TrimSpace(b)
 		if b != "" && b != "prod" && b != "x2" {
 			filtered = append(filtered, b)
@@ -84,9 +84,8 @@ func ExpectBranchesString(t *testing.T, repo *GitRepo, expected string) {
 // empty lines to make test output comparisons more stable.
 func NormalizeOutput(output string) string {
 	output = ansi.Strip(output)
-	lines := strings.Split(output, "\n")
 	var filtered []string
-	for _, line := range lines {
+	for line := range strings.SplitSeq(output, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed != "" {
 			filtered = append(filtered, line)

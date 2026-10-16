@@ -234,7 +234,7 @@ func findWorktreeAnchor(t *testing.T, sh *TestShell) string {
 	t.Helper()
 
 	sh.Git("for-each-ref --format=%(refname:short) refs/heads/")
-	for _, branch := range strings.Fields(sh.Output()) {
+	for branch := range strings.FieldsSeq(sh.Output()) {
 		if sh.isWorktreeAnchorBranch(branch) {
 			return branch
 		}

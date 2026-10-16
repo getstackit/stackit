@@ -70,7 +70,7 @@ func rebaseLanding(t *testing.T, sh *scenario.Scenario) {
 	t.Helper()
 	out, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-list", "--reverse", "main..a")
 	require.NoError(t, err)
-	for _, commit := range strings.Fields(out) {
+	for commit := range strings.FieldsSeq(out) {
 		require.NoError(t, sh.Scene.Repo.RunGitCommand("cherry-pick", "-x", commit))
 	}
 	landed, err := sh.Scene.Repo.RunGitCommandAndGetOutput("rev-list", "main..a")

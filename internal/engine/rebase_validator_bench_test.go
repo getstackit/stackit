@@ -71,10 +71,8 @@ func BenchmarkWorktreeCreation(b *testing.B) {
 		b.Fatalf("failed to create engine: %v", err)
 	}
 
-	b.ResetTimer()
-
 	// Benchmark worktree creation
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, cleanup, err := eng.CreateTemporaryWorktree(ctx, "HEAD", "stackit-bench-*", engine.WorktreePruneAuto)
 		if err != nil {
 			b.Fatalf("CreateTemporaryWorktree failed: %v", err)
@@ -141,8 +139,7 @@ func benchmarkWideStack(b *testing.B, numBranches int) {
 		}
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		result, err := s.Engine.ValidateRebases(context.Background(), specs)
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)
@@ -193,8 +190,7 @@ func benchmarkLinearStack(b *testing.B, depth int) {
 		}
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		result, err := s.Engine.ValidateRebases(context.Background(), specs)
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)
@@ -247,8 +243,7 @@ func benchmarkMixedStack(b *testing.B) {
 		{Branch: "feature-a1-1", NewParent: featureA1Rev, OldUpstream: featureA1Rev},
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		result, err := s.Engine.ValidateRebases(context.Background(), specs)
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)

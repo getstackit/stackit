@@ -3,6 +3,7 @@ package sync
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -186,6 +187,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Merge trunk summary
 	summary.TrunkUpdated = trunkSummary.TrunkUpdated
 	summary.TrunkRevision = trunkSummary.TrunkRevision
+	summary.HeldBranches = append(summary.HeldBranches, trunkSummary.HeldBranches...)
 
 	// GitHub failure aborts sync (per spec)
 	if githubErr != nil {
@@ -402,13 +404,22 @@ type Summary struct {
 	UpToDate          bool     // Everything was already current
 	WorktreesCleaned  int      // Number of orphaned worktrees cleaned up
 	SkippedStacks     []string // Stacks skipped due to dirty worktrees
+	HeldBranches      []string // Branches (trunk included) a worktree held back
 }
 
-// HasChanges returns true if any operations were performed
+// HasChanges returns true if any operations were performed or anything was
+// held back. A hold is not "up to date": the work is still outstanding.
 func (s *Summary) HasChanges() bool {
 	return s.TrunkUpdated || s.BranchesSynced > 0 || s.BranchesRestacked > 0 ||
 		s.BranchesDeleted > 0 || s.BranchesSkipped > 0 || s.BranchesBlocked > 0 ||
-		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0
+		s.WorktreesCleaned > 0 || len(s.SkippedStacks) > 0 || len(s.HeldBranches) > 0
+}
+
+// recordHold notes a branch a worktree held back, once per branch.
+func (s *Summary) recordHold(branch string) {
+	if !slices.Contains(s.HeldBranches, branch) {
+		s.HeldBranches = append(s.HeldBranches, branch)
+	}
 }
 
 // Handler abstracts TTY vs non-TTY output for sync operations
@@ -502,6 +513,12 @@ func (h *NullHandler) PromptBranchDeletions(branches map[string]string, unpushed
 // This is shared between SimpleSyncHandler and InteractiveSyncHandler
 func FormatSummaryParts(summary Summary) []string {
 	parts := []string{}
+
+	// Holds lead: the remedy lives in another worktree the user is not
+	// looking at, so it must not be buried behind routine counts.
+	if len(summary.HeldBranches) > 0 {
+		parts = append(parts, fmt.Sprintf("held %d (worktree)", len(summary.HeldBranches)))
+	}
 
 	if summary.TrunkUpdated {
 		parts = append(parts, "pulled trunk")

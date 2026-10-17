@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	stdruntime "runtime"
+	"slices"
 	"strings"
 	"sync"
 
@@ -37,6 +38,10 @@ type RestackOptions struct {
 type RestackPlan struct {
 	opts   RestackOptions
 	groups []restackPlannedGroup
+	// held lists branches pruned from the plan because a worktree holds them.
+	// They never reach the engine, so RestackAction reports them in the
+	// summary itself.
+	held []handlers.RestackHeldInfo
 }
 
 type restackConflictPrompter interface {
@@ -62,6 +67,12 @@ func (p *RestackPlan) HasBranches() bool {
 		}
 	}
 	return false
+}
+
+// HasHolds reports whether a worktree held back any branch in the requested
+// scope. A plan with holds but no branches is incomplete, not empty.
+func (p *RestackPlan) HasHolds() bool {
+	return len(p.held) > 0
 }
 
 // HasWork reports whether any resolved branch needs an actual rebase.
@@ -102,11 +113,11 @@ func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 	}
 	// Drop dirty-worktree stacks before the guard so a restack that has nothing
 	// left to move is a no-op rather than a guard error.
-	rawGroups = skipDirtyWorktreeStacks(ctx, rawGroups)
+	rawGroups, held := skipDirtyWorktreeStacks(ctx, rawGroups)
 	if err := guardUnpushedTrunk(ctx, eng, rawGroups); err != nil {
 		return nil, err
 	}
-	plan := &RestackPlan{opts: opts}
+	plan := &RestackPlan{opts: opts, held: held}
 	for _, g := range rawGroups {
 		sorted := eng.SortBranchesTopologically(g.branches)
 		var enginePlan *engine.RestackPlan
@@ -137,9 +148,21 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	opts := plan.opts
 	eng := ctx.Engine
 
+	// If no handler provided, use NullRestackHandler (silent)
+	if handler == nil {
+		handler = &handlers.NullRestackHandler{}
+	}
+
 	branchCount := plan.BranchCount()
 	if branchCount == 0 {
-		out.Info("No branches to restack.")
+		if !plan.HasHolds() {
+			out.Info("No branches to restack.")
+			return nil
+		}
+		// Every branch in scope was held back: report that as an incomplete
+		// restack rather than "nothing to do".
+		handler.OnRestackStart(0)
+		handler.OnRestackComplete(handlers.RestackSummary{Held: plan.held})
 		return nil
 	}
 
@@ -172,11 +195,6 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		TakeBestEffortSnapshot(ctx, snapshotOpts)
 	}
 
-	// If no handler provided, use NullRestackHandler (silent)
-	if handler == nil {
-		handler = &handlers.NullRestackHandler{}
-	}
-
 	_, jsonOutput := handler.(*handlers.JSONRestackHandler)
 	interactiveRererePrompt := ctx.Interactive && !ctx.Quiet && utils.IsTTY() && !jsonOutput
 	pauser, _ := handler.(rerere.Pauser)
@@ -189,6 +207,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 
 	var restacked, skipped int
 	var conflicts, blocked []string
+	held := slices.Clone(plan.held)
 	prompter, promptForConflicts := conflictPrompter(handler, opts)
 
 	// Parallel mode: dispatch independent stack groups to separate worktrees.
@@ -196,13 +215,16 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 	// so each worker computes its own plan inside its worktree.
 	if parallelDispatch {
 		var err error
-		restacked, skipped, conflicts, blocked, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
+		var runtimeHeld []handlers.RestackHeldInfo
+		restacked, skipped, conflicts, blocked, runtimeHeld, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
+		held = append(held, runtimeHeld...)
 		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
 		handler.OnRestackComplete(handlers.RestackSummary{
 			Restacked: restacked,
 			Skipped:   skipped,
 			Conflicts: conflicts,
 			Blocked:   blocked,
+			Held:      held,
 		})
 		if err != nil {
 			return fmt.Errorf("restack failed: %w", err)
@@ -226,7 +248,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		groupRoot := group.rootBranch
 		progress := func(p RestackProgress) {
 			p.StackRoot = groupRoot
-			handleRestackProgress(eng, handler, p, &restacked, &skipped, &conflicts, &blocked)
+			handleRestackProgress(eng, handler, p, &restacked, &skipped, &conflicts, &blocked, &held)
 		}
 
 		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode, nil); err != nil {
@@ -255,6 +277,7 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		Skipped:   skipped,
 		Conflicts: conflicts,
 		Blocked:   blocked,
+		Held:      held,
 	})
 	return nil
 }
@@ -292,6 +315,7 @@ type parallelResultCollector struct {
 	skipped   int
 	conflicts []string
 	blocked   []string
+	held      []handlers.RestackHeldInfo
 	errs      []error
 }
 
@@ -299,7 +323,7 @@ type parallelResultCollector struct {
 func (c *parallelResultCollector) recordProgress(p RestackProgress) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	handleRestackProgress(c.eng, c.handler, p, &c.restacked, &c.skipped, &c.conflicts, &c.blocked)
+	handleRestackProgress(c.eng, c.handler, p, &c.restacked, &c.skipped, &c.conflicts, &c.blocked, &c.held)
 }
 
 // recordGroupFailure attributes every branch in a failed group to the handler
@@ -316,7 +340,7 @@ func (c *parallelResultCollector) recordGroupFailure(group restackPlannedGroup, 
 			Result:    engine.RestackConflict,
 			Conflict:  true,
 			StackRoot: group.rootBranch,
-		}, &c.restacked, &c.skipped, &c.conflicts, &c.blocked)
+		}, &c.restacked, &c.skipped, &c.conflicts, &c.blocked, &c.held)
 	}
 }
 
@@ -351,7 +375,7 @@ func restackGroupsParallel(
 	opts RestackOptions,
 	groups []restackPlannedGroup,
 	handler handlers.RestackHandler,
-) (restacked, skipped int, conflicts, blocked []string, err error) {
+) (restacked, skipped int, conflicts, blocked []string, held []handlers.RestackHeldInfo, err error) {
 	eng := ctx.Engine
 
 	numJobs := opts.Jobs
@@ -421,7 +445,7 @@ func restackGroupsParallel(
 		ctx.Logger.Warn("failed to rebuild engine after parallel restack: %v", err)
 	}
 
-	return collector.restacked, collector.skipped, collector.conflicts, collector.blocked, collector.joinedError()
+	return collector.restacked, collector.skipped, collector.conflicts, collector.blocked, collector.held, collector.joinedError()
 }
 
 // guardUnpushedTrunk refuses to restack when the local trunk has commits that
@@ -503,7 +527,7 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 //     normally run from — holds a single branch, so only that branch is dropped.
 //     Its descendants stay: they are still correctly based on a branch that did
 //     not move, so restacking them is a no-op rather than a hazard.
-func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []restackBranchGroup {
+func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) ([]restackBranchGroup, []handlers.RestackHeldInfo) {
 	eng := ctx.Engine
 	report := collectRestackWorktreeHolds(ctx)
 	for _, hold := range report.Holds {
@@ -513,14 +537,16 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 		ctx.Output.Warn("%s", warning)
 	}
 	if len(report.Holds) == 0 {
-		return groups
+		return groups, nil
 	}
 
+	var held []handlers.RestackHeldInfo
 	kept := make([]restackBranchGroup, 0, len(groups))
 	for _, g := range groups {
 		builder := engine.NewBranchesBuilder(len(g.branches))
 		for _, branch := range g.branches {
-			if report.blocks(branch.GetName(), eng.GetStackRootForBranch(branch)) {
+			if hold, ok := report.holdFor(branch.GetName(), eng.GetStackRootForBranch(branch)); ok {
+				held = append(held, handlers.RestackHeldInfo{Branch: branch.GetName(), Reason: hold.heldBy()})
 				continue
 			}
 			builder.Add(branch)
@@ -529,7 +555,7 @@ func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []re
 			kept = append(kept, restackBranchGroup{rootBranch: g.rootBranch, branches: built})
 		}
 	}
-	return kept
+	return kept, held
 }
 
 func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptions) ([]restackBranchGroup, error) {
@@ -577,6 +603,7 @@ func handleRestackProgress(
 	skipped *int,
 	conflicts *[]string,
 	blocked *[]string,
+	held *[]handlers.RestackHeldInfo,
 ) {
 	res := handlers.RestackDone
 	switch p.Result {
@@ -585,6 +612,9 @@ func handleRestackProgress(
 		res = handlers.RestackDone
 	case engine.RestackUnneeded:
 		res = handlers.RestackUnneeded
+		if p.HeldBy != "" {
+			*held = append(*held, handlers.RestackHeldInfo{Branch: p.Branch, Reason: p.HeldBy})
+		}
 	case engine.RestackConflict:
 		*skipped++
 		*conflicts = append(*conflicts, p.Branch)

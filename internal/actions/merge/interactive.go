@@ -1,6 +1,9 @@
 package merge
 
 import (
+	"maps"
+	"slices"
+
 	"github.com/getstackit/stackit/internal/engine"
 )
 
@@ -105,11 +108,7 @@ func GetAvailableScopes(eng engine.Engine) []string {
 		}
 	}
 
-	result := make([]string, 0, len(scopes))
-	for s := range scopes {
-		result = append(result, s)
-	}
-	return result
+	return slices.Collect(maps.Keys(scopes))
 }
 
 // AnalyzeMidStackScope checks if user is mid-stack in a scope and returns

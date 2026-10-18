@@ -3,6 +3,8 @@ package sync
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -193,9 +195,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	}
 
 	// Populate skipped stacks in summary
-	for anchor := range dirtyAnchors {
-		summary.SkippedStacks = append(summary.SkippedStacks, anchor)
-	}
+	summary.SkippedStacks = slices.AppendSeq(summary.SkippedStacks, maps.Keys(dirtyAnchors))
 
 	// Process GitHub PR info results (sequential - depends on PR info)
 	if githubSyncResult != nil {

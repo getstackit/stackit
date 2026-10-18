@@ -4,6 +4,7 @@ package undo
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/handler"
@@ -55,17 +56,10 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	// If snapshot ID is provided, use it directly
 	if opts.SnapshotID != "" {
 		// Verify the snapshot exists
-		found := false
-		for _, snap := range snapshots {
-			if snap.ID == opts.SnapshotID {
-				found = true
-				selectedSnapshotID = snap.ID
-				break
-			}
-		}
-		if !found {
+		if !slices.ContainsFunc(snapshots, func(snap engine.SnapshotInfo) bool { return snap.ID == opts.SnapshotID }) {
 			return fmt.Errorf("snapshot %s not found", opts.SnapshotID)
 		}
+		selectedSnapshotID = opts.SnapshotID
 	} else {
 		// Interactive selection
 		switch {

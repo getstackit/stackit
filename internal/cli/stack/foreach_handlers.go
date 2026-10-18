@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/actions/foreach"
@@ -232,17 +233,12 @@ func (h *InteractiveForeachHandler) OnEvent(e foreach.Event) {
 				BranchName: branch.Name,
 				Status:     core.StatusPending,
 			}
-			found := false
-			for i, existing := range h.model.Items {
-				if existing.BranchName == branch.Name {
-					h.model.Items[i] = item
-					found = true
-					break
-				}
-			}
-			if !found {
+			i := slices.IndexFunc(h.model.Items, func(existing foreachComponent.Item) bool { return existing.BranchName == branch.Name })
+			if i < 0 {
 				h.model.Items = append(h.model.Items, item)
+				continue
 			}
+			h.model.Items[i] = item
 		}
 
 		h.runner.Send(foreachComponent.GlobalMessageMsg("Executing..."))

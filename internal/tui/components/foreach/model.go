@@ -3,6 +3,7 @@ package foreach
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -82,17 +83,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StartExecutionMsg:
 		// Update status for items that are in msg.Items
 		for _, newItem := range msg.Items {
-			found := false
-			for i, item := range m.Items {
-				if item.BranchName == newItem.BranchName {
-					m.Items[i].Status = newItem.Status
-					found = true
-					break
-				}
-			}
-			if !found {
+			i := slices.IndexFunc(m.Items, func(item Item) bool { return item.BranchName == newItem.BranchName })
+			if i < 0 {
 				m.Items = append(m.Items, newItem)
+				continue
 			}
+			m.Items[i].Status = newItem.Status
 		}
 		return m, nil
 

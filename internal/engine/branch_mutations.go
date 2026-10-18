@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -319,10 +320,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 		}
 	}
 
-	childrenToRestack := make([]string, 0, len(allSurvivingChildren))
-	for child := range allSurvivingChildren {
-		childrenToRestack = append(childrenToRestack, child)
-	}
+	childrenToRestack := slices.Collect(maps.Keys(allSurvivingChildren))
 
 	// Rebuild engine state from disk so callers don't need to track when to
 	// call eng.Rebuild() themselves. One rebuild covers the entire batch.

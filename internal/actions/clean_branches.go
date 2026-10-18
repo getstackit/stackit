@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -90,11 +91,7 @@ func (p *deletionPlan) isDeleting(name string) bool {
 }
 
 func (p *deletionPlan) branchNames() []string {
-	names := make([]string, 0, len(p.branches))
-	for name := range p.branches {
-		names = append(names, name)
-	}
-	return names
+	return slices.Collect(maps.Keys(p.branches))
 }
 
 func (p *deletionPlan) removeBlocker(branchName, blockerName string) {

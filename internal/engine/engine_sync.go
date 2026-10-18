@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -61,11 +63,7 @@ func (e *engineImpl) collectRestackData(branchNames []string) (MetaMap, Revision
 		}
 	}
 	// Also include trunk
-	involvedBranchNames := make([]string, 0, len(allInvolvedBranches)+1)
-	for name := range allInvolvedBranches {
-		involvedBranchNames = append(involvedBranchNames, name)
-	}
-	involvedBranchNames = append(involvedBranchNames, e.trunk)
+	involvedBranchNames := append(slices.Collect(maps.Keys(allInvolvedBranches)), e.trunk)
 	e.mu.RUnlock()
 
 	metaMap, _ := e.batchReadMetadata(involvedBranchNames)

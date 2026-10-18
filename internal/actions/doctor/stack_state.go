@@ -3,6 +3,8 @@ package doctor
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -89,10 +91,7 @@ func checkStackState(ctx context.Context, eng stackStateEngine, handler Handler,
 	}
 
 	// Check for corrupted metadata
-	metadataRefNames := make([]string, 0, len(metadataRefs))
-	for branchName := range metadataRefs {
-		metadataRefNames = append(metadataRefNames, branchName)
-	}
+	metadataRefNames := slices.Collect(maps.Keys(metadataRefs))
 	allMeta, allMetaErrs := eng.BatchReadMetadataRaw(metadataRefNames)
 
 	corruptedCount := 0

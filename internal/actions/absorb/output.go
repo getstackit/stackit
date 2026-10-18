@@ -102,10 +102,7 @@ func groupUnabsorbedByReason(unabsorbed []Unabsorbable) []unabsorbedGroup {
 		byReason[item.Reason] = append(byReason[item.Reason], item.Hunk)
 	}
 
-	reasons := make([]UnabsorbableReason, 0, len(byReason))
-	for reason := range byReason {
-		reasons = append(reasons, reason)
-	}
+	reasons := slices.Collect(maps.Keys(byReason))
 	slices.SortFunc(reasons, func(a, b UnabsorbableReason) int {
 		return cmp.Or(
 			cmp.Compare(reasonSortIndex(a), reasonSortIndex(b)),

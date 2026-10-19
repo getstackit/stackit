@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 )
@@ -198,9 +199,7 @@ func walkCommitRanges[T commitRecord](r *runner, ctx context.Context, codec comm
 			}
 			return result
 		}
-		for sha, commit := range commits {
-			known[sha] = commit
-		}
+		maps.Copy(known, commits)
 		next := make([]walk, 0, len(pending))
 		for _, w := range pending {
 			for {

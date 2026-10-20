@@ -11,7 +11,7 @@ require (
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
-	github.com/google/go-github/v92 v92.0.0
+	github.com/google/go-github/v93 v93.0.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/mattn/go-isatty v0.0.24
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
@@ -25,8 +25,8 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
-	github.com/Azure/go-ansiterm v0.0.0-20261008234032-65faa4be4f89 // indirect
-	github.com/Microsoft/go-winio v0.6.3 // indirect
+	github.com/Azure/go-ansiterm v0.0.0-20261013165250-51075c6ea6bc // indirect
+	github.com/Microsoft/go-winio v0.6.4 // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
@@ -43,10 +43,10 @@ require (
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/dlclark/regexp2/v2 v2.8.4 // indirect
+	github.com/dlclark/regexp2/v2 v2.9.1 // indirect
 	github.com/docker/go-connections v0.8.2 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/ebitengine/purego v0.11.1 // indirect
+	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

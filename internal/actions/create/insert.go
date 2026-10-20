@@ -3,6 +3,7 @@ package create
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
@@ -30,11 +31,8 @@ func handleInsert(ctx context.Context, newBranch, currentBranch string, runtimeC
 	case len(opts.SelectedChildren) > 0:
 		// Use pre-selected children (for tests)
 		for _, selected := range opts.SelectedChildren {
-			for _, sibling := range siblings {
-				if selected == sibling {
-					toMove = append(toMove, sibling)
-					break
-				}
+			if slices.Contains(siblings, selected) {
+				toMove = append(toMove, selected)
 			}
 		}
 	case len(siblings) > 1 && h.IsInteractive():

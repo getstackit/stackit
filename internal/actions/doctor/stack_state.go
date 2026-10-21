@@ -196,13 +196,7 @@ func detectCycles(eng stackStateEngine) [][]string {
 	dfs = func(branch string, path []string) {
 		if recStack[branch] {
 			// Found a cycle - find where the cycle starts in the path
-			cycleStart := -1
-			for i, b := range path {
-				if b == branch {
-					cycleStart = i
-					break
-				}
-			}
+			cycleStart := slices.Index(path, branch)
 			if cycleStart >= 0 {
 				// Extract the cycle: from first occurrence to current
 				cycle := make([]string, len(path)-cycleStart+1)

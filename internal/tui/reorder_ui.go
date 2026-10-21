@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -101,24 +102,7 @@ func (m reorderModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // isBranchMoved checks if a branch has moved from its original position
 func (m reorderModel) isBranchMoved(branch string) bool {
-	currentPos := -1
-	originalPos := -1
-
-	for i, b := range m.branches {
-		if b == branch {
-			currentPos = i
-			break
-		}
-	}
-
-	for i, b := range m.originalOrder {
-		if b == branch {
-			originalPos = i
-			break
-		}
-	}
-
-	return currentPos != originalPos
+	return slices.Index(m.branches, branch) != slices.Index(m.originalOrder, branch)
 }
 
 // branchNeedsRestack checks if a branch should show the restack suggestion style.

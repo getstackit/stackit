@@ -97,6 +97,14 @@ return m, tea.Sequence(
 )
 ```
 
+This applies to `tea.Printf` too: returning one print command per incoming
+message lets rows land in any order, and a `tea.Quit` returned alongside them
+can exit before in-flight prints are processed. A model that streams rows to
+scrollback should queue lines itself, keep one print in flight (chain it with a
+"printed" message via `tea.Sequence` and flush the next coalesced batch when
+that message arrives), and quit only after the queue drains. See
+`internal/tui/components/sync/model.go`.
+
 ## Architecture
 
 ### Handler Pattern

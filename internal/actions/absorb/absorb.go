@@ -439,7 +439,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				case engine.RestackBlocked:
 					blocked = append(blocked, p.Branch)
 				}
-			}, actions.ConflictModeContinue); err != nil {
+			}, actions.ConflictModeContinue, actions.RestackBranchesOpts{}); err != nil {
 				return fmt.Errorf("failed to restack upstack branches: %w", err)
 			}
 			if len(conflicted) > 0 {

@@ -17,6 +17,7 @@ import (
 // It embeds core.BaseModel for standard lifecycle handling.
 type Model struct {
 	core.BaseModel // Embedded for ReadySignaler interface
+	Activity       string
 	Items          []Item
 	Warnings       []string      // formatted warning lines, rendered after the rows and persisted on exit
 	Solo           bool          // single-branch submit — drop the count header and per-row name
@@ -32,6 +33,9 @@ type ProgressUpdateMsg struct {
 	URL        string
 	Err        error
 }
+
+// ActivityMsg labels work shared by the entire submission, such as the push.
+type ActivityMsg struct{ Message string }
 
 // WarningMsg surfaces a non-fatal warning for a branch (e.g. labels could not
 // be applied). Warnings render below the progress rows and persist on exit.
@@ -82,6 +86,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case ActivityMsg:
+		m.Activity = msg.Message
+		return m, nil
+
 	case WarningMsg:
 		m.Warnings = append(m.Warnings, fmt.Sprintf("⚠️  %s: %s", style.DisplayBranchName(msg.BranchName), msg.Warning))
 		return m, nil
@@ -104,31 +112,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ProgressCompleteMsg:
 		m.Done = true
-		var summary string
-		if m.Verbose {
-			summary = m.completionSummary()
-			// The solo summary already names the single result; a count line
-			// would just restate it.
-			if !m.Solo && summary != "" {
-				if closing := FormatClosingSummary(m.Items, msg.Skipped, msg.Elapsed); closing != "" {
-					summary += "\n\n" + closing
-				}
-			}
-		} else {
-			summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
-			if urls := FormatCreatedURLs(m.Items); urls != "" {
-				if summary != "" {
-					summary += "\n"
-				}
-				summary += urls
-			}
-			if failures := FormatFailureSummary(m.Items); failures != "" {
-				if summary != "" {
-					summary += "\n\n"
-				}
-				summary += failures
-			}
-		}
+		summary := m.finalSummary(msg)
 		if summary != "" {
 			return m, tea.Sequence(
 				tea.Printf("\n%s", summary),
@@ -139,6 +123,42 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// finalSummary is the output retained after the live display closes.
+func (m *Model) finalSummary(msg ProgressCompleteMsg) string {
+	var summary string
+	if m.Verbose {
+		summary = m.completionSummary()
+		// The solo summary already names the single result; a count line
+		// would just restate it.
+		if !m.Solo && summary != "" {
+			if closing := FormatClosingSummary(m.Items, msg.Skipped, msg.Elapsed); closing != "" {
+				summary += "\n\n" + closing
+			}
+		}
+	} else {
+		summary = FormatOutcomeSummary(m.Items, msg.Elapsed)
+		if urls := FormatCreatedURLs(m.Items); urls != "" {
+			if summary != "" {
+				summary += "\n"
+			}
+			summary += urls
+		}
+		if failures := FormatFailureSummary(m.Items); failures != "" {
+			if summary != "" {
+				summary += "\n\n"
+			}
+			summary += failures
+		}
+		if len(m.Warnings) > 0 {
+			if summary != "" {
+				summary += "\n\n"
+			}
+			summary += strings.Join(m.Warnings, "\n")
+		}
+	}
+	return summary
 }
 
 // View renders the model as a string.
@@ -187,8 +207,8 @@ func (m *Model) content() string {
 // (including failures); when nothing was submitted (dry run, all up to date) it
 // falls back to the final plan view, which would otherwise be erased with the
 // progress display. Warnings are appended in either case so they survive the
-// screen clear. Compact mode builds its own summary inline in the
-// ProgressCompleteMsg handler and does not call this.
+// screen clear. Compact mode builds its own summary in finalSummary and does
+// not call this.
 func (m *Model) completionSummary() string {
 	var summary string
 	if m.Solo {
@@ -212,6 +232,9 @@ func (m *Model) completionSummary() string {
 }
 
 func (m *Model) header() string {
+	if m.Activity != "" {
+		return m.spinner.View() + " " + m.Activity
+	}
 	// A solo submit is framed by the plan line printed above the TUI; a count
 	// header would just restate it.
 	if m.Solo {

@@ -71,7 +71,7 @@ func (s *Selection) OldParentRev() string {
 func (s *Selection) ValidateOnto(ctx context.Context, onto string) (*engine.RebaseValidation, []string, []engine.RebaseSpec, error) {
 	rebaseSpecs := BuildRebaseSpecs(s.eng, s.out, s.source, onto, s.oldParent, s.oldParentRev, s.descendants)
 
-	validation, err := s.eng.ValidateRebases(ctx, rebaseSpecs)
+	validation, err := s.eng.ValidateRebases(ctx, rebaseSpecs, engine.ValidateRebasesOpts{})
 	if err != nil {
 		return nil, nil, rebaseSpecs, err
 	}

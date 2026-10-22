@@ -97,6 +97,14 @@ return m, tea.Sequence(
 )
 ```
 
+This applies to `tea.Printf` too: returning one print command per incoming
+message lets rows land in any order, and a `tea.Quit` returned alongside them
+can exit before in-flight prints are processed. A model that streams rows to
+scrollback should queue lines itself, keep one print in flight (chain it with a
+"printed" message via `tea.Sequence` and flush the next coalesced batch when
+that message arrives), and quit only after the queue drains. See
+`internal/tui/components/sync/model.go`.
+
 ## Architecture
 
 ### Handler Pattern
@@ -277,6 +285,20 @@ func (h *InteractiveHandler) PromptConfirm(preview Preview) (bool, error) {
 }
 ```
 
+**Handing off to a plain-terminal workflow.** When a prompt answer hands control
+to a workflow that writes to the plain terminal (e.g. "Resolve conflicts now?" →
+the conflict workflow's file list and continue/abort guidance), release the TUI
+permanently instead of resuming it: send `CompleteMsg{}`, `Wait()`, then
+`Cleanup()`. The sync model drains its ordered print queue before quitting, so
+rows already sent still land above the workflow's output. After the release,
+`Send`/`Complete` on the runner are no-ops, so any outcome reported later must
+go to plain output — `InteractiveSyncHandler` records the release and prints its
+final summary through `output.Output` instead (see `promptResolveConflicts` and
+`finish` in `internal/cli/stack/sync_handlers.go`). Actions skip that summary
+when the workflow returns `ErrConflictWorkflow`, so the workflow's instructions
+stay the last thing on screen. On decline, cancel, or error, `Resume()` as
+usual.
+
 ### Error Handling
 
 ```go
@@ -419,7 +441,33 @@ func (m Model) View() string {
 }
 ```
 
+## Branch Names in Command Output
+
+Interactive rows shorten `<user>/<timestamp>/<slug>` branch names to the slug
+with `style.DisplayBranchName`. Route names through a `style.BranchNameResolver`
+seeded with every branch the run may render: when two branches share a slug,
+both print in full. `--verbose` on `sync` and `restack` shows full names and
+revision hashes. Keep full names where the user needs the real ref (diverged
+and deleted rows, `st restack --branch` advice), and in all piped (non-TTY)
+output so scripts can pass names back to `stackit checkout`.
+
 ## Debugging
+
+### Replay Command Output
+
+The TUI lab replays deterministic events through the production command handlers,
+without changing Git branches or making remote requests. Run it in a terminal:
+
+```bash
+mise exec -- go run ./apps/st-tui restack success
+mise exec -- go run ./apps/st-tui restack held
+mise exec -- go run ./apps/st-tui sync diverged
+mise exec -- go run ./apps/st-tui submit success
+```
+
+Run without arguments to list scenarios. Use `--delay 100ms` before the command
+to speed up playback. Review both the live display and the output retained after
+exit: warnings, exceptional skips, and recovery commands must survive completion.
 
 ### Message Inspection
 

@@ -151,6 +151,26 @@ func TestJSONRestackHandler(t *testing.T) {
 	})
 }
 
+func TestJSONRestackHandlerReportsHoldsFromSummary(t *testing.T) {
+	t.Parallel()
+
+	handler := NewJSONRestackHandler()
+	handler.OnRestackStart(2)
+	// A mid-run hold arrives as an unneeded event; a plan-time hold never
+	// produces an event and is known only to the summary.
+	runtime := restackEvent("child", RestackUnneeded, "", nil, "mid")
+	runtime.HeldBy = "ancestor mid is held"
+	handler.OnRestackBranch(runtime)
+	held := []RestackHeldInfo{
+		{Branch: "mid", Reason: "worktree /tmp/mid has uncommitted changes"},
+		{Branch: "child", Reason: "ancestor mid is held"},
+	}
+	handler.OnRestackComplete(RestackSummary{Held: held})
+
+	require.Equal(t, held, handler.Result.Held)
+	require.ElementsMatch(t, []string{"child", "mid"}, handler.Result.Skipped)
+}
+
 func restackEvent(branch string, result RestackResult, revision string, prNumber *git.PRNumber, parent string) RestackBranchEvent {
 	return RestackBranchEvent{
 		Branch:      branch,
@@ -160,4 +180,19 @@ func restackEvent(branch string, result RestackResult, revision string, prNumber
 		LockReason:  engine.LockReasonNone,
 		Parent:      parent,
 	}
+}
+
+func TestJSONRestackHandlerStatusFromFailedSummary(t *testing.T) {
+	t.Parallel()
+
+	failed := NewJSONRestackHandler()
+	failed.OnRestackBranch(restackEvent("branch-a", RestackDone, "abc123", nil, "main"))
+	failed.OnRestackComplete(RestackSummary{Failed: true, Restacked: 1})
+	require.Equal(t, RestackJSONStatusError, failed.Result.Status)
+	require.Equal(t, 1, failed.Result.RestackCount)
+
+	conflicted := NewJSONRestackHandler()
+	conflicted.OnRestackBranch(restackEvent("branch-a", RestackConflict, "", nil, "main"))
+	conflicted.OnRestackComplete(RestackSummary{Failed: true, Conflicts: []string{"branch-a"}})
+	require.Equal(t, RestackJSONStatusConflict, conflicted.Result.Status)
 }

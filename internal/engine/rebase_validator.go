@@ -46,6 +46,50 @@ type RebaseSpec struct {
 	OldUpstream string // Current base to replay commits from
 }
 
+// RebaseProgress reports live validation activity. Finished means the check
+// ended; success or conflict remains part of RebaseValidation.
+type RebaseProgress struct {
+	Branch string
+	// Parent is the rebase target as the spec names it: a branch name or a
+	// revision. Callers that display it map revisions back to branch names.
+	Parent   string
+	Finished bool
+}
+
+// RebaseProgressFunc receives live validation activity. It is a display hook:
+//
+//   - It may be called concurrently from several goroutines (one per sibling
+//     branch being validated), so implementations must be safe for concurrent use.
+//   - It must return quickly and must not block. Finished is reported after the
+//     branch's worktree slot is released, but validation of the level still
+//     waits for every callback to return.
+//   - A panic inside it is recovered and ignored; it never changes a
+//     validation result.
+//
+// Every Started event is followed by exactly one Finished event for the same
+// branch, whatever the outcome (success, conflict, system error, panic).
+// Branches skipped before validation starts — blocked by a failed ancestor, or
+// canceled while queued — produce no events at all.
+type RebaseProgressFunc func(RebaseProgress)
+
+// ValidateRebasesOpts tunes ValidateRebases. The zero value validates without
+// reporting progress.
+type ValidateRebasesOpts struct {
+	// Progress, when non-nil, receives Started/Finished events per branch.
+	Progress RebaseProgressFunc
+}
+
+// safeReport delivers a progress event, isolating validation from the hook:
+// a nil hook is a no-op and a panicking one is swallowed.
+func safeReport(report RebaseProgressFunc, event RebaseProgress) {
+	if report == nil {
+		return
+	}
+	// A display hook must never affect validation; drop its panic.
+	defer func() { _ = recover() }()
+	report(event)
+}
+
 // FailedRebase describes a single spec that failed validation.
 type FailedRebase struct {
 	Branch           string              // Branch whose rebase failed
@@ -185,7 +229,7 @@ type validationResult struct {
 //
 // The function respects a maximum concurrency limit to avoid creating too many worktrees.
 // Results are tracked thread-safely across parallel validations.
-func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*RebaseValidation, error) {
+func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec, opts ValidateRebasesOpts) (*RebaseValidation, error) {
 	if len(specs) == 0 {
 		return &RebaseValidation{Success: true, NewSHAs: RevisionMap{}, RerereResolved: map[string]int{}}, nil
 	}
@@ -255,7 +299,7 @@ func (e *engineImpl) ValidateRebases(ctx context.Context, specs []RebaseSpec) (*
 		if len(runnable) == 0 {
 			continue
 		}
-		failures := e.processValidationLevel(ctx, validationLevel{depth: level.depth, specs: runnable}, maxConcurrency, pool, result, rebasedByName, rebasedBySHA)
+		failures := e.processValidationLevel(ctx, validationLevel{depth: level.depth, specs: runnable}, maxConcurrency, pool, result, rebasedByName, rebasedBySHA, opts.Progress)
 		for _, f := range failures {
 			failedOrBlocked[f.Branch] = true
 		}
@@ -355,6 +399,47 @@ func specAncestorFailed(graph *StackGraph, branchName string, failedOrBlocked ma
 	return false
 }
 
+// runValidationSlot acquires a concurrency slot, reports Started, and runs
+// validate, converting a panic into a system-error result. The slot is released
+// before returning so the caller can report Finished without holding it.
+// started reports whether a Started event was emitted (false when the context
+// was canceled while queued), so the caller keeps Started/Finished balanced.
+func runValidationSlot(
+	ctx context.Context,
+	spec RebaseSpec,
+	semaphore chan struct{},
+	progress RebaseProgressFunc,
+	validate func() validationResult,
+) (res validationResult, started bool) {
+	// Check parent context before acquiring semaphore so an outer cancel
+	// (e.g. user Ctrl+C) short-circuits queued siblings.
+	select {
+	case <-ctx.Done():
+		return validationResult{
+			spec:         spec,
+			success:      false,
+			errorMessage: "validation canceled",
+			errorType:    ValidationErrorSystem,
+		}, false
+	case semaphore <- struct{}{}:
+	}
+	defer func() { <-semaphore }()
+	defer func() {
+		if r := recover(); r != nil {
+			res = validationResult{
+				spec:         spec,
+				success:      false,
+				errorMessage: fmt.Sprintf("panic during validation: %v", r),
+				errorType:    ValidationErrorSystem,
+			}
+		}
+	}()
+
+	started = true
+	safeReport(progress, RebaseProgress{Branch: spec.Branch, Parent: spec.NewParent})
+	return validate(), started
+}
+
 // processValidationLevel processes all specs at a given depth level in parallel.
 // Returns every failed spec at this level (empty if all succeeded).
 //
@@ -372,6 +457,7 @@ func (e *engineImpl) processValidationLevel(
 	result *RebaseValidation,
 	rebasedByName *sync.Map,
 	rebasedBySHA *sync.Map,
+	progress RebaseProgressFunc,
 ) []FailedRebase {
 	// Within each level, validate specs in parallel
 	semaphore := make(chan struct{}, maxConcurrency)
@@ -381,43 +467,19 @@ func (e *engineImpl) processValidationLevel(
 	for _, spec := range level.specs {
 		wg.Add(1)
 		go func(spec RebaseSpec) {
-			// wg.Done must be the FIRST defer registered so it runs LAST
-			// (defers are LIFO): the panic-recovery defer below sends on
-			// results, and the collector closes that channel once wg.Wait
-			// returns. Done firing before the send would let the close race
-			// the send — a panic in the last goroutine of a level would then
-			// crash the process on a closed channel instead of being reported.
 			defer wg.Done()
-			// Panic recovery at outermost level to ensure cleanup always happens
-			defer func() {
-				if r := recover(); r != nil {
-					results <- validationResult{
-						spec:         spec,
-						success:      false,
-						errorMessage: fmt.Sprintf("panic during validation: %v", r),
-						errorType:    ValidationErrorSystem,
-					}
-				}
-			}()
-
-			// Check parent context before acquiring semaphore so an outer cancel
-			// (e.g. user Ctrl+C) short-circuits queued siblings.
-			select {
-			case <-ctx.Done():
-				results <- validationResult{
-					spec:         spec,
-					success:      false,
-					errorMessage: "validation canceled",
-					errorType:    ValidationErrorSystem,
-				}
-				return
-			case semaphore <- struct{}{}:
-				// Acquired semaphore, ensure it's always released
-				defer func() { <-semaphore }()
+			valResult, started := runValidationSlot(ctx, spec, semaphore, progress, func() validationResult {
+				return e.validateSingleSpec(ctx, spec, pool, rebasedByName, rebasedBySHA)
+			})
+			if started {
+				// Reported after the worktree slot is released so a slow
+				// consumer does not hold back queued siblings, but before the
+				// result is sent: ValidateRebases returns once every result
+				// arrives, so no progress event can outlive the call.
+				safeReport(progress, RebaseProgress{Branch: spec.Branch, Parent: spec.NewParent, Finished: true})
 			}
-
-			// Validate this single spec
-			valResult := e.validateSingleSpec(ctx, spec, pool, rebasedByName, rebasedBySHA)
+			// Exactly one result per spec, sent outside any recover so a
+			// misbehaving progress hook cannot produce a second one.
 			results <- valResult
 		}(spec)
 	}

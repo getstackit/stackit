@@ -128,8 +128,10 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 
 				// Skip the TUI when the scope is empty — the runner would set
 				// output to quiet, suppress the message, and only flash
-				// bubbletea startup/teardown escape codes.
-				if !plan.HasBranches() {
+				// bubbletea startup/teardown escape codes. A scope emptied by
+				// worktree holds is incomplete, so the simple handler below
+				// reports it instead.
+				if !plan.HasBranches() && !plan.HasHolds() {
 					ctx.Output.Info("No branches to restack.")
 					return nil
 				}

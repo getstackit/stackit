@@ -108,8 +108,8 @@ func branchDiverged(branch string) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventSkipped, Branch: branch, Conflict: true})
 }
 
-func githubUpdatingPR(branch string) step {
-	return emit(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Branch: branch})
+func githubProgress(msg string) step {
+	return emit(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Message: msg})
 }
 
 func githubMessage(msg string) step {
@@ -130,6 +130,12 @@ func restackUpToDate(branch string, pr *git.PRNumber) step {
 
 func restackConflict(branch string, pr *git.PRNumber) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: branch, PRNumber: pr, Conflict: true})
+}
+
+// restackBlocked mirrors ConflictModeContinue: a conflict anywhere in a stack
+// leaves the rest of that stack untouched, ancestors included.
+func restackBlocked(branch string, pr *git.PRNumber) step {
+	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: branch, PRNumber: pr, Message: reasonBlockedByConflict})
 }
 
 // promptDeletions renders the branch-deletion multi-select with the user's
@@ -252,13 +258,18 @@ func syncGoldenCases() []syncGoldenCase {
 			name: "restack_conflict_declined",
 			steps: []step{
 				phaseStarted(syncAction.PhaseRestack),
-				restacked("feat-api", new(git.PRNumber(201)), "main", "b2c3d4e"),
+				// feat-api -> feat-ui conflicts on the child, so the whole
+				// stack is left untouched; the independent feat-docs stack
+				// still restacks.
+				restackBlocked("feat-api", new(git.PRNumber(201))),
 				restackConflict("feat-ui", new(git.PRNumber(202))),
+				restacked("feat-docs", new(git.PRNumber(203)), "main", "d4e5f6a"),
 				promptResolveConflicts([]string{"feat-ui"}, false),
 			},
 			summary: syncAction.Summary{
 				BranchesRestacked: 1,
 				BranchesSkipped:   1,
+				BranchesBlocked:   1,
 				ConflictBranches:  []string{"feat-ui"},
 			},
 		},
@@ -298,8 +309,9 @@ func syncGoldenCases() []syncGoldenCase {
 				phaseStarted(syncAction.PhaseTrunk),
 				trunkFF("a1b2c3d"),
 				phaseStarted(syncAction.PhaseGitHub),
-				githubUpdatingPR("feat-api"),
-				githubMessage("Updated 1 PR description"),
+				githubMessage("Updated PR info for 1 branches"),
+				githubProgress("Updating PR metadata for 1 branch..."),
+				githubMessage("Updated PR metadata for 1 branch"),
 			},
 			summary: syncAction.Summary{TrunkUpdated: true},
 		},
@@ -340,7 +352,7 @@ func playSyncScenario(c syncGoldenCase) string {
 	buf := &bytes.Buffer{}
 	h := newTranscriptSyncHandler(output.NewConsoleOutput(buf, false))
 
-	h.Start(0)
+	h.Start()
 	for _, s := range c.steps {
 		s(h)
 	}

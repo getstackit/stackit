@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,7 +20,7 @@ func TestValidateRebases(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		result, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{})
+		result, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{}, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		require.Empty(t, result.FailedBranch)
@@ -52,8 +53,18 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		events := make(chan engine.RebaseProgress, 2)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{Progress: func(event engine.RebaseProgress) {
+			events <- event
+		}})
 		require.NoError(t, err)
+		require.Len(t, events, 2)
+		started, finished := <-events, <-events
+		require.Equal(t, "branch1", started.Branch)
+		require.Equal(t, mainRev, started.Parent)
+		require.False(t, started.Finished)
+		require.Equal(t, started.Branch, finished.Branch)
+		require.True(t, finished.Finished)
 		require.True(t, result.Success)
 		require.Empty(t, result.FailedBranch)
 		require.NotEmpty(t, result.NewSHAs["branch1"])
@@ -91,7 +102,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -136,7 +147,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		require.NotEmpty(t, result.NewSHAs["branch1"])
@@ -176,7 +187,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		newTip := result.NewSHAs["branch1"]
@@ -229,7 +240,7 @@ func TestValidateRebases(t *testing.T) {
 			Branch:      "feature",
 			NewParent:   mainRev,
 			OldUpstream: oldBase,
-		}})
+		}}, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		newTip := result.NewSHAs["feature"]
@@ -283,7 +294,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -325,7 +336,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 
@@ -363,7 +374,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 
@@ -405,7 +416,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -439,7 +450,7 @@ func TestValidateRebases(t *testing.T) {
 			},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		require.Equal(t, engine.ValidationErrorNone, result.ErrorType, "should set ValidationErrorNone for successful validation")
@@ -486,7 +497,7 @@ func TestValidateRebasesUsesRerereResolvedConflicts(t *testing.T) {
 			NewParent:   "main",
 			OldUpstream: oldBase,
 		},
-	})
+	}, engine.ValidateRebasesOpts{})
 	require.NoError(t, err)
 	require.True(t, validation.Success)
 	require.NotEmpty(t, validation.NewSHAs["branch2"])
@@ -556,7 +567,7 @@ func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {
 		Branch:      "branch1",
 		NewParent:   "main",
 		OldUpstream: oldBase,
-	}})
+	}}, engine.ValidateRebasesOpts{})
 	require.NoError(t, err)
 	require.True(t, validation.Success)
 	require.NotEmpty(t, validation.NewSHAs["branch1"])
@@ -778,7 +789,7 @@ func TestRestackBranchesWithValidatedPlanReparentsMergedParent(t *testing.T) {
 	require.Equal(t, "branch1", plan.Items["branch2"].OldParent)
 	require.Equal(t, "main", plan.Items["branch2"].NewParent)
 
-	validation, err := s.Engine.ValidateRebases(context.Background(), plan.Specs)
+	validation, err := s.Engine.ValidateRebases(context.Background(), plan.Specs, engine.ValidateRebasesOpts{})
 	require.NoError(t, err)
 	require.True(t, validation.Success)
 
@@ -870,7 +881,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "feature-e", NewParent: mainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -922,7 +933,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "feature-b1", NewParent: featureBRev, OldUpstream: featureBRev},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -966,7 +977,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch2", NewParent: newMainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -999,7 +1010,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch4", NewParent: branch3Rev, OldUpstream: branch3Rev},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -1031,7 +1042,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch3", NewParent: mainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -1042,7 +1053,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-		result, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{})
+		result, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{}, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success)
 		require.Empty(t, result.NewSHAs)
@@ -1064,7 +1075,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
@@ -1108,7 +1119,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch3", NewParent: newMainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
@@ -1139,7 +1150,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		result, err := s.Engine.ValidateRebases(ctx, specs)
+		result, err := s.Engine.ValidateRebases(ctx, specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 		require.Contains(t, result.ErrorMessage, "canceled")
@@ -1160,7 +1171,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase}, // Duplicate!
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.Error(t, err)
 		require.Nil(t, result)
 		require.Contains(t, err.Error(), "duplicate branch")
@@ -1212,7 +1223,7 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 			{Branch: "b2", NewParent: "b1", OldUpstream: b1Rev},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 
@@ -1254,7 +1265,7 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 			{Branch: "b1", NewParent: mainRev, OldUpstream: oldBase},
 		}
 
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{})
 		require.NoError(t, err)
 		require.False(t, result.Success)
 
@@ -1263,4 +1274,79 @@ func TestValidateRebasesIsolatesFailuresPerStack(t *testing.T) {
 		require.Empty(t, result.Blocked)
 		require.NotEmpty(t, result.FailedBranch)
 	})
+}
+
+// siblingConflictScene builds main -> P -> [ok, bad -> badChild] where P has
+// moved on with a change that conflicts with bad but not ok, and returns the
+// planned rebase specs for ok, bad, and badChild.
+func siblingConflictScene(t *testing.T) (*scenario.Scenario, []engine.RebaseSpec) {
+	t.Helper()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.CreateBranch("P").Commit("P change").TrackBranch("P", "main")
+	s.Checkout("P").CreateBranch("ok").Commit("ok change").TrackBranch("ok", "P")
+	s.Checkout("P").CreateBranch("bad")
+	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("bad content", "conflict"))
+	s.TrackBranch("bad", "P")
+	s.CreateBranch("badChild").Commit("child change").TrackBranch("badChild", "bad")
+	s.Checkout("P")
+	require.NoError(t, s.Scene.Repo.CreateChangeAndCommit("P content", "conflict"))
+	require.NoError(t, s.Engine.Rebuild("main"))
+
+	branches := engine.BranchesFromNames(s.Engine, []string{"ok", "bad", "badChild"})
+	plan, err := s.Engine.PlanRestack(context.Background(), branches)
+	require.NoError(t, err)
+	require.Len(t, plan.Specs, 3)
+	return s, plan.Specs
+}
+
+func TestValidateRebasesProgressBalance(t *testing.T) {
+	t.Parallel()
+	s, specs := siblingConflictScene(t)
+
+	var mu sync.Mutex
+	started := map[string]int{}
+	finished := map[string]int{}
+	var outOfOrder []string
+	result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{Progress: func(event engine.RebaseProgress) {
+		mu.Lock()
+		defer mu.Unlock()
+		if event.Finished {
+			if started[event.Branch] == finished[event.Branch] {
+				outOfOrder = append(outOfOrder, event.Branch)
+			}
+			finished[event.Branch]++
+			return
+		}
+		started[event.Branch]++
+	}})
+	require.NoError(t, err)
+	require.False(t, result.Success)
+	require.Contains(t, result.NewSHAs, "ok")
+	require.Len(t, result.Failed, 1)
+	require.Equal(t, "bad", result.Failed[0].Branch)
+	require.Equal(t, []string{"badChild"}, result.Blocked)
+
+	require.Empty(t, outOfOrder, "Finished reported before Started")
+	require.Equal(t, map[string]int{"ok": 1, "bad": 1}, started)
+	require.Equal(t, started, finished, "every Started must be matched by exactly one Finished")
+	require.NotContains(t, started, "badChild", "a blocked branch is never validated, so it never starts")
+}
+
+func TestValidateRebasesPanickingProgressLeavesOneResultPerSpec(t *testing.T) {
+	t.Parallel()
+	s, specs := siblingConflictScene(t)
+
+	result, err := s.Engine.ValidateRebases(context.Background(), specs, engine.ValidateRebasesOpts{Progress: func(engine.RebaseProgress) {
+		panic("display hook exploded")
+	}})
+	require.NoError(t, err)
+
+	// The hook's panic must not turn into a validation failure or a second
+	// result: ok still validates, bad still conflicts, badChild is blocked.
+	require.Len(t, result.NewSHAs, 1)
+	require.Contains(t, result.NewSHAs, "ok")
+	require.Len(t, result.Failed, 1)
+	require.Equal(t, "bad", result.Failed[0].Branch)
+	require.Equal(t, engine.ValidationErrorConflict, result.Failed[0].ErrorType)
+	require.Equal(t, []string{"badChild"}, result.Blocked)
 }

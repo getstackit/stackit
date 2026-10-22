@@ -225,11 +225,11 @@ func UpdatePRBodyFooter(existingBody, footer string) string {
 }
 
 func splitGeneratedFooterBlock(body string) (before, after string, found bool) {
-	if !strings.Contains(body, SectionStart) {
+	startIdx := strings.Index(body, SectionStart)
+	if startIdx < 0 {
 		return "", "", false
 	}
 
-	startIdx := strings.Index(body, SectionStart)
 	if _, after, ok := strings.Cut(body, SectionEnd); ok {
 		blockStart := startIdx
 		for range 3 {

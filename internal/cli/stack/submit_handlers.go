@@ -3,6 +3,8 @@ package stack
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -39,13 +41,11 @@ const (
 	nameStyleDim
 )
 
-// skipReasonNoChanges is the SkipReason emitted for an up-to-date branch.
-const skipReasonNoChanges = "no changes"
-
-// NewSubmitUI creates a runner and handler pair for submit operations.
-// The runner manages terminal state; the handler processes events.
-// Caller must defer runner.Cleanup() to restore terminal on exit.
-func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbosity) (*tui.Runner, submit.Handler) {
+// NewSubmitUI creates the handler for submit operations and the stop function
+// that releases everything it holds: the pending preparation notice and the
+// terminal runner. Caller must defer stop() so every exit path, including
+// validation errors, cancels the notice and restores the terminal.
+func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbosity) (submit.Handler, func()) {
 	if tui.IsTTY() {
 		model := submitComponent.NewModel(nil)
 		model.Verbose = verbosity.verbose()
@@ -54,10 +54,18 @@ func NewSubmitUI(out output.Output, logger output.Logger, verbosity SubmitVerbos
 		// stack and plan print as plain lines, so a submit that turns out to
 		// have nothing to do never flashes the bubbletea startup/teardown
 		// sequence. See InteractiveSubmitHandler.OnEvent.
-		return runner, NewInteractiveSubmitHandler(runner, model, out, verbosity)
+		handler := NewInteractiveSubmitHandler(runner, model, out, verbosity)
+		return handler, func() {
+			handler.StopPreparationNotice()
+			runner.Cleanup()
+		}
 	}
-	return nil, NewSimpleSubmitHandler(out, verbosity)
+	return NewSimpleSubmitHandler(out, verbosity), func() {}
 }
+
+// preparationNoticeDelay keeps quick submits silent: the "checking remote"
+// notice only prints when preparation outlasts it.
+const preparationNoticeDelay = 500 * time.Millisecond
 
 // maxNamedSkipGroup is the largest skipped-branch group that still lists its
 // branch names when there is active work; bigger groups show only the count.
@@ -70,6 +78,8 @@ const maxNamedSkipGroup = 3
 type planPrinter struct {
 	out       output.Output
 	verbose   bool
+	fullNames bool // print full branch names (piped output) instead of short ones
+	names     *style.BranchNameResolver
 	scopes    map[string]string
 	worktrees map[string]engine.WorktreePath
 	parents   map[string]string
@@ -92,6 +102,8 @@ func (p *planPrinter) SetStack(stack submit.StackSnapshot) {
 	p.events = p.events[:0]
 	p.printed = false
 	p.nameWidth = 0
+	p.names = style.NewBranchNameResolver(stack.Branches...)
+	p.names.Observe(stack.TrunkBranch)
 
 	for _, name := range stack.Branches {
 		if w := lipgloss.Width(p.decoratedName(name)); w > p.nameWidth {
@@ -100,9 +112,22 @@ func (p *planPrinter) SetStack(stack submit.StackSnapshot) {
 	}
 }
 
+// name renders a branch name. Piped output keeps the full name so scripts and
+// agents can pass it back to `stackit checkout`; terminals get the short form
+// unless another branch in the stack shares it.
+func (p *planPrinter) name(branchName string) string {
+	if p.fullNames {
+		return branchName
+	}
+	if p.names == nil {
+		p.names = style.NewBranchNameResolver()
+	}
+	return p.names.Short(branchName)
+}
+
 // decoratedName is the display name plus scope and worktree annotations.
 func (p *planPrinter) decoratedName(branchName string) string {
-	name := style.DisplayBranchName(branchName)
+	name := p.name(branchName)
 	if scope := p.scopes[branchName]; scope != "" {
 		name += " [" + scope + "]"
 	}
@@ -129,6 +154,7 @@ func (p *planPrinter) Flush() {
 		if summary := p.compactSummary(); summary != "" {
 			p.out.Info("● %s", summary)
 		}
+		p.printCompactExceptions()
 		return
 	}
 
@@ -161,6 +187,40 @@ func (p *planPrinter) Flush() {
 			p.printSkippedName(ev)
 		}
 	}
+}
+
+// printCompactExceptions keeps the plan rows a compact run must not hide: one
+// line per unexpected skip reason, and active branches with no commits.
+// Unchanged branches are the expected default and stay silent.
+func (p *planPrinter) printCompactExceptions() {
+	active, skipped := p.partition()
+	for _, group := range skipped {
+		if group.reason == engine.ReasonNoChanges {
+			continue
+		}
+		p.out.Info("  ○ %s skipped: %s", p.nameList(group.events), group.reason)
+	}
+	for _, ev := range active {
+		// Planning only marks submittable branches as empty.
+		if ev.Empty {
+			p.out.Info("  ○ %s has no commits", p.name(ev.BranchName))
+		}
+	}
+}
+
+// nameList joins up to maxNamedSkipGroup branch names, summarizing the rest
+// as a count so a large group stays on one short line.
+func (p *planPrinter) nameList(events []submit.BranchPlanEvent) string {
+	shown := min(len(events), maxNamedSkipGroup)
+	names := make([]string, shown)
+	for i, ev := range events[:shown] {
+		names[i] = p.name(ev.BranchName)
+	}
+	list := strings.Join(names, ", ")
+	if rest := len(events) - shown; rest > 0 {
+		list += fmt.Sprintf(" and %d more", rest)
+	}
+	return list
 }
 
 // compactSummary describes only the work that submit will perform. The
@@ -250,7 +310,7 @@ func (p *planPrinter) printSoloLine(ev submit.BranchPlanEvent) {
 // back to the trunk name.
 func (p *planPrinter) soloBase(branchName string) string {
 	if parent := p.parents[branchName]; parent != "" {
-		return style.DisplayBranchName(parent)
+		return p.name(parent)
 	}
 	if p.trunk != "" {
 		return p.trunk
@@ -320,7 +380,7 @@ func sectionHeader(label string, count int, muted bool) string {
 
 func skipGroupTitle(reason string) string {
 	switch reason {
-	case skipReasonNoChanges:
+	case engine.ReasonNoChanges:
 		return "No changes"
 	case "no existing PR":
 		return "No existing PR"
@@ -364,7 +424,7 @@ type branchItem struct {
 func NewSimpleSubmitHandler(out output.Output, verbosity SubmitVerbosity) *SimpleSubmitHandler {
 	return &SimpleSubmitHandler{
 		BaseHandler: common.NewBaseHandler(out),
-		plan:        planPrinter{out: out, verbose: verbosity.verbose()},
+		plan:        planPrinter{out: out, verbose: verbosity.verbose(), fullNames: true},
 		items:       make(map[string]*branchItem),
 	}
 }
@@ -387,6 +447,12 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 
 	case submit.PreparingEvent:
 		// Skip - we'll show progress during actual submission
+
+	case submit.PushEvent:
+		// The batched push is often the slowest step; give CI logs a line.
+		if !ev.Completed {
+			h.Output.Info("Pushing %d %s...", ev.BranchCount, pluralizeBranches(ev.BranchCount))
+		}
 
 	case submit.BranchPlanEvent:
 		h.plan.AddLine(ev)
@@ -461,7 +527,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			if ref := submitComponent.PRRef(item.toSubmitItem()); ref != "" {
 				detail = ref + " " + actionDone
 			}
-			h.Output.Info("  ✓ %s %s", style.DisplayBranchName(ev.BranchName), detail)
+			h.Output.Info("  ✓ %s %s", h.plan.name(ev.BranchName), detail)
 			// A newly created PR is the one the user needs to open; updated
 			// PRs rarely need their URL re-pasted.
 			if item.action == engine.SubmitActionCreate && item.url != "" {
@@ -473,11 +539,11 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				h.Output.Info("  ✗ failed: %v", ev.Error)
 				return
 			}
-			h.Output.Info("  ✗ %s failed: %v", style.DisplayBranchName(ev.BranchName), ev.Error)
+			h.Output.Info("  ✗ %s failed: %v", h.plan.name(ev.BranchName), ev.Error)
 		}
 
 	case submit.BranchWarningEvent:
-		h.Output.Warn("%s: %s", style.DisplayBranchName(ev.BranchName), ev.Warning)
+		h.Output.Warn("%s: %s", h.plan.name(ev.BranchName), ev.Warning)
 
 	case submit.GitHubStackSyncedEvent:
 		h.Output.Success("%s native GitHub Stack #%d from %s.", githubStackActionLabel(ev.Action), ev.Number, formatGitHubStackPRs(ev.PullRequests))
@@ -493,7 +559,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 				if summary := submitComponent.FormatOutcomeSummary(h.submitItems(), ev.Duration); summary != "" {
 					h.Output.Info("%s", summary)
 				}
-				if urls := submitComponent.FormatCreatedURLs(h.submitItems()); urls != "" {
+				if urls := submitComponent.FormatPRResults(h.submitItems(), submitComponent.PRLinksPlain); urls != "" {
 					h.Output.Info("%s", urls)
 				}
 				return
@@ -595,20 +661,42 @@ func (h *SimpleSubmitHandler) Confirm(_ string, defaultYes bool) (bool, error) {
 	return defaultYes, nil
 }
 
+// submitRunner is the slice of *tui.Runner the interactive handler drives;
+// tests substitute a tui.MockRunner.
+type submitRunner interface {
+	tui.Sender
+	Start()
+	IsRunning() bool
+}
+
 // InteractiveSubmitHandler implements submit.Handler with bubbletea for animated progress
 type InteractiveSubmitHandler struct {
-	runner           *tui.Runner
+	runner           submitRunner
+	promptConfirm    func(message string, defaultYes bool) (bool, error)
 	model            *submitComponent.Model
 	out              output.Output
 	plan             planPrinter
 	inSubmitPhase    bool
 	githubStacks     []submit.GitHubStackSyncedEvent
 	githubStackSkips []string
+	preparingMu      sync.Mutex
+	preparingTimer   *time.Timer
+	preparingDelay   time.Duration
 }
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
-func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output, verbosity SubmitVerbosity) *InteractiveSubmitHandler {
-	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out, verbose: verbosity.verbose()}}
+func NewInteractiveSubmitHandler(runner submitRunner, model *submitComponent.Model, out output.Output, verbosity SubmitVerbosity) *InteractiveSubmitHandler {
+	return &InteractiveSubmitHandler{
+		runner: runner,
+		// Late-bound so a stubbed tui.PromptConfirm still takes effect.
+		promptConfirm: func(message string, defaultYes bool) (bool, error) {
+			return tui.PromptConfirm(message, defaultYes)
+		},
+		model:          model,
+		out:            out,
+		plan:           planPrinter{out: out, verbose: verbosity.verbose()},
+		preparingDelay: preparationNoticeDelay,
+	}
 }
 
 // OnEvent handles events from the submit action
@@ -627,7 +715,18 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		// No output for completion
 
 	case submit.PreparingEvent:
-		// Quiet - the plan lines follow immediately
+		if ev.Completed {
+			h.StopPreparationNotice()
+		} else {
+			h.startPreparationNotice()
+		}
+
+	case submit.PushEvent:
+		message := ""
+		if !ev.Completed {
+			message = fmt.Sprintf("Pushing %d %s...", ev.BranchCount, pluralizeBranches(ev.BranchCount))
+		}
+		h.runner.Send(submitComponent.ActivityMsg{Message: message})
 
 	case submit.BranchPlanEvent:
 		h.plan.AddLine(ev)
@@ -642,10 +741,11 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		items := make([]submitComponent.Item, len(ev.Branches))
 		for i, branch := range ev.Branches {
 			items[i] = submitComponent.Item{
-				BranchName: branch.Name,
-				Action:     branch.Action,
-				PRNumber:   branch.PRNumber,
-				Status:     submitComponent.StatusPending,
+				BranchName:  branch.Name,
+				DisplayName: h.plan.name(branch.Name),
+				Action:      branch.Action,
+				PRNumber:    branch.PRNumber,
+				Status:      submitComponent.StatusPending,
 			}
 		}
 		h.model.Items = items
@@ -679,7 +779,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			})
 			return
 		}
-		h.out.Warn("%s: %s", style.DisplayBranchName(ev.BranchName), ev.Warning)
+		h.out.Warn("%s: %s", h.plan.name(ev.BranchName), ev.Warning)
 
 	case submit.GitHubStackSyncedEvent:
 		if h.runner.IsRunning() {
@@ -696,6 +796,7 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		h.out.Warn("Skipped native GitHub Stack sync: %s", ev.Reason)
 
 	case submit.CompletionEvent:
+		h.StopPreparationNotice()
 		h.plan.Flush()
 		// If the submission phase never started (nothing to submit, dry run,
 		// canceled), the TUI isn't running — print the outcome plainly.
@@ -717,6 +818,42 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		})
 		h.runner.Wait()
 		h.printNativeStackEvents()
+	}
+}
+
+// startPreparationNotice leaves quick no-op submissions silent. Preparation
+// uses regular output so validation warnings remain visible before the TUI starts.
+func (h *InteractiveSubmitHandler) startPreparationNotice() {
+	h.preparingMu.Lock()
+	defer h.preparingMu.Unlock()
+	if h.preparingTimer != nil {
+		h.preparingTimer.Stop()
+	}
+	var timer *time.Timer
+	timer = time.AfterFunc(h.preparingDelay, func() {
+		h.preparingMu.Lock()
+		defer h.preparingMu.Unlock()
+		// A stopped or replaced timer can still fire once Stop loses the race;
+		// only the timer that is still current may print.
+		if h.preparingTimer != timer {
+			return
+		}
+		h.out.Info("Checking remote branches and PR status...")
+		h.preparingTimer = nil
+	})
+	h.preparingTimer = timer
+}
+
+// StopPreparationNotice cancels a pending preparation notice. It runs when
+// preparation ends, before any prompt, and from NewSubmitUI's stop function on
+// every exit. The lock also waits out a notice already being printed, so
+// nothing prints over a prompt or the TUI.
+func (h *InteractiveSubmitHandler) StopPreparationNotice() {
+	h.preparingMu.Lock()
+	defer h.preparingMu.Unlock()
+	if h.preparingTimer != nil {
+		h.preparingTimer.Stop()
+		h.preparingTimer = nil
 	}
 }
 
@@ -752,8 +889,9 @@ func githubStackActionLabel(action github.StackSyncAction) string {
 
 // Confirm prompts for user confirmation
 func (h *InteractiveSubmitHandler) Confirm(message string, defaultYes bool) (bool, error) {
+	h.StopPreparationNotice()
 	h.runner.Pause()
-	confirmed, err := tui.PromptConfirm(message, defaultYes)
+	confirmed, err := h.promptConfirm(message, defaultYes)
 	h.runner.Resume()
 	return confirmed, err
 }

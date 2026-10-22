@@ -5,14 +5,179 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
 	submitAction "github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/output"
+	"github.com/getstackit/stackit/internal/tui"
 	submitComponent "github.com/getstackit/stackit/internal/tui/components/submit"
 )
+
+// newTestInteractiveSubmitHandler builds an interactive handler over a mock
+// runner with the given preparation-notice delay.
+func newTestInteractiveSubmitHandler(out output.Output, runner *tui.MockRunner, delay time.Duration) *InteractiveSubmitHandler {
+	h := NewInteractiveSubmitHandler(runner, submitComponent.NewModel(nil), out, SubmitCompact)
+	h.preparingDelay = delay
+	return h
+}
+
+func preparationNoticePending(h *InteractiveSubmitHandler) bool {
+	h.preparingMu.Lock()
+	defer h.preparingMu.Unlock()
+	return h.preparingTimer != nil
+}
+
+func TestPreparationNoticeLifecycle(t *testing.T) {
+	t.Parallel()
+	const notice = "Checking remote branches and PR status"
+
+	t.Run("quick preparation stays silent", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Hour)
+		h.OnEvent(submitAction.PreparingEvent{})
+		require.True(t, preparationNoticePending(h))
+		h.OnEvent(submitAction.PreparingEvent{Completed: true})
+		require.False(t, preparationNoticePending(h))
+		require.Empty(t, out.String())
+	})
+
+	t.Run("slow preparation explains the wait once", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Millisecond)
+		h.OnEvent(submitAction.PreparingEvent{})
+		require.Eventually(t, func() bool {
+			h.preparingMu.Lock()
+			defer h.preparingMu.Unlock()
+			return strings.Contains(out.String(), notice)
+		}, time.Second, time.Millisecond)
+		h.OnEvent(submitAction.PreparingEvent{Completed: true})
+		require.Equal(t, 1, strings.Count(out.String(), notice))
+	})
+
+	t.Run("completion cancels a pending notice", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Hour)
+		h.OnEvent(submitAction.PreparingEvent{})
+		h.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeUpToDate, Message: "All PRs up to date"})
+		require.False(t, preparationNoticePending(h))
+		require.NotContains(t, out.String(), notice)
+	})
+
+	t.Run("confirm stops the notice before prompting", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Hour)
+		pendingAtPrompt := true
+		h.promptConfirm = func(string, bool) (bool, error) {
+			pendingAtPrompt = preparationNoticePending(h)
+			return true, nil
+		}
+		h.OnEvent(submitAction.PreparingEvent{})
+		confirmed, err := h.Confirm("Submit?", true)
+		require.NoError(t, err)
+		require.True(t, confirmed)
+		require.False(t, pendingAtPrompt)
+		require.NotContains(t, out.String(), notice)
+	})
+
+	t.Run("stopping is idempotent", func(t *testing.T) {
+		t.Parallel()
+		out := output.NewTestOutput()
+		h := newTestInteractiveSubmitHandler(out, tui.NewMockRunner(), time.Hour)
+		h.OnEvent(submitAction.PreparingEvent{})
+		h.StopPreparationNotice()
+		h.StopPreparationNotice() // idempotent
+		require.False(t, preparationNoticePending(h))
+	})
+}
+
+func TestInteractiveSubmitHandlerPushActivity(t *testing.T) {
+	t.Parallel()
+	runner := tui.NewMockRunner()
+	h := newTestInteractiveSubmitHandler(output.NewTestOutput(), runner, time.Hour)
+
+	h.OnEvent(submitAction.PushEvent{BranchCount: 2})
+	h.OnEvent(submitAction.PushEvent{BranchCount: 2, Completed: true})
+
+	require.Equal(t, []tea.Msg{
+		submitComponent.ActivityMsg{Message: "Pushing 2 branches..."},
+		submitComponent.ActivityMsg{},
+	}, runner.Messages())
+}
+
+func TestSimpleSubmitHandlerReportsPush(t *testing.T) {
+	t.Parallel()
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+
+	h.OnEvent(submitAction.PushEvent{BranchCount: 1})
+	h.OnEvent(submitAction.PushEvent{BranchCount: 1, Completed: true})
+
+	got := out.String()
+	require.Equal(t, 1, strings.Count(got, "Pushing 1 branch..."))
+	require.Equal(t, got, ansi.Strip(got), "non-TTY output must be plain text")
+}
+
+func TestCompactPlanRetainsExceptionalSkips(t *testing.T) {
+	t.Parallel()
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "feat/current", Skipped: true, SkipReason: "no existing PR", IsCurrent: true})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "feat/parent", Skipped: true, SkipReason: "no changes"})
+	h.OnEvent(submitAction.PlanningCompleteEvent{})
+	require.Contains(t, out.String(), "feat/current skipped: no existing PR")
+	require.NotContains(t, out.String(), "feat/parent")
+}
+
+func TestCompactPlanGroupsSkipsByReason(t *testing.T) {
+	t.Parallel()
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+	for _, name := range []string{"skip-a", "skip-b", "skip-c", "skip-d", "skip-e"} {
+		h.OnEvent(submitAction.BranchPlanEvent{BranchName: name, Skipped: true, SkipReason: "no existing PR"})
+	}
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "locked", Skipped: true, SkipReason: "locked"})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: "empty", Action: "create", Empty: true})
+	h.OnEvent(submitAction.PlanningCompleteEvent{})
+
+	got := out.String()
+	require.Equal(t, 1, strings.Count(got, "no existing PR"), "one line per skip reason")
+	require.Contains(t, got, "○ skip-a, skip-b, skip-c and 2 more skipped: no existing PR")
+	require.NotContains(t, got, "skip-d")
+	require.Contains(t, got, "○ locked skipped: locked")
+	require.Contains(t, got, "○ empty has no commits")
+}
+
+func TestSimpleSubmitHandlerCompactPrintsFullBranchNames(t *testing.T) {
+	t.Parallel()
+	out := output.NewTestOutput()
+	h := NewSimpleSubmitHandler(out, SubmitCompact)
+	skipped := "alice/20260901000000/fix-tests"
+	created := "bob/20260905000000/add-feature"
+	updated := "bob/20260905000001/update-docs"
+
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: skipped, Skipped: true, SkipReason: "no existing PR"})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: created, Action: "create"})
+	h.OnEvent(submitAction.BranchPlanEvent{BranchName: updated, Action: "update", PRNumber: new(git.PRNumber(7))})
+	h.OnEvent(submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+		{Name: created, Action: "create"},
+		{Name: updated, Action: "update", PRNumber: new(git.PRNumber(7))},
+	}})
+	h.OnEvent(submitAction.BranchProgressEvent{BranchName: created, Status: submitAction.StatusDone, URL: "https://github.com/o/r/pull/8"})
+	h.OnEvent(submitAction.BranchProgressEvent{BranchName: updated, Status: submitAction.StatusDone, URL: "https://github.com/o/r/pull/7"})
+	h.OnEvent(submitAction.CompletionEvent{Outcome: submitAction.OutcomeComplete})
+
+	got := out.String()
+	require.Contains(t, got, "○ "+skipped+" skipped: no existing PR")
+	require.Contains(t, got, created+"  #8  https://github.com/o/r/pull/8")
+	require.Contains(t, got, updated+"  #7 updated")
+}
 
 func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 	t.Parallel()
@@ -42,8 +207,10 @@ func TestSimpleSubmitHandlerStreamsOneListWithURLsOnCreates(t *testing.T) {
 
 	got := out.String()
 	require.Contains(t, got, "Submitting 2 branches")
-	require.Contains(t, got, "✓ guard-runner.repoRoot-reads-with-repoMu-to-fix #934 updated")
-	require.Contains(t, got, "✓ add-feature #935 created")
+	// Piped output keeps full branch names so they can be passed back to
+	// `stackit checkout`.
+	require.Contains(t, got, "✓ "+updated+" #934 updated")
+	require.Contains(t, got, "✓ "+created+" #935 created")
 	// Only the newly created PR prints its raw URL; no trailing summary block
 	// repeats the list.
 	require.Contains(t, got, "     https://github.com/getstackit/stackit/pull/935")
@@ -82,7 +249,7 @@ func TestSimpleSubmitHandlerPreservesURLAcrossFooterSync(t *testing.T) {
 	got := out.String()
 	require.Equal(t, 1, strings.Count(got, "https://github.com/getstackit/stackit/pull/934"))
 	require.NotContains(t, got, "syncing")
-	require.Equal(t, 1, strings.Count(got, "✓ guard-runner"), "footer sync must not re-report a finished branch")
+	require.Equal(t, 1, strings.Count(got, "✓ "+branch), "footer sync must not re-report a finished branch")
 }
 
 func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
@@ -114,7 +281,7 @@ func TestSimpleSubmitHandlerMergesPlanIntoStackList(t *testing.T) {
 	got := ansi.Strip(out.String())
 	require.Contains(t, got, "Submit plan → main")
 	require.Contains(t, got, "Will submit (1)")
-	require.Contains(t, got, "● current-branch [CORE] → create")
+	require.Contains(t, got, "● "+current+" [CORE] → create")
 	require.Contains(t, got, "No changes (1)")
 	// Small skip groups list their names even when there is active work.
 	require.Contains(t, got, "skipped-branch")
@@ -179,9 +346,9 @@ func TestInteractiveSubmitHandlerPrintsPlanWithoutStartingTUI(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	// A nil runner stands in for a TUI that was never started; every runner
-	// method is nil-safe. Plan output must not depend on the TUI running.
-	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitVerbose)
+	// A never-started mock runner stands in for a TUI that was never started.
+	// Plan output must not depend on the TUI running.
+	handler := NewInteractiveSubmitHandler(tui.NewMockRunner(), submitComponent.NewModel(nil), out, SubmitVerbose)
 	branch := "jonnii/20260511011552/up-to-date-branch"
 
 	handler.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{
@@ -210,7 +377,7 @@ func TestInteractiveSubmitHandlerPrintsEveryBufferedNativeStackEvent(t *testing.
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	handler := NewInteractiveSubmitHandler(nil, submitComponent.NewModel(nil), out, SubmitVerbose)
+	handler := NewInteractiveSubmitHandler(tui.NewMockRunner(), submitComponent.NewModel(nil), out, SubmitVerbose)
 	handler.githubStacks = []submitAction.GitHubStackSyncedEvent{
 		{Number: 1, PullRequests: []git.PRNumber{10, 11}, Action: "created"},
 		{Number: 2, PullRequests: []git.PRNumber{12, 13}, Action: "extended"},
@@ -407,11 +574,11 @@ func TestSimpleSubmitHandlerCompactReportsOutcomeNotPerBranchRows(t *testing.T) 
 	// Only the created PR's URL is worth pasting; the updated one is not.
 	require.Contains(t, got, "https://github.com/getstackit/stackit/pull/51")
 	require.NotContains(t, got, "https://github.com/getstackit/stackit/pull/42")
-	// The per-branch audit trail belongs to --verbose.
+	// Compact output preserves PR identity without repeating the full plan.
 	require.NotContains(t, got, "Submit plan")
 	require.NotContains(t, got, "Will submit (2)")
-	require.NotContains(t, got, "update-me #42 updated")
-	require.NotContains(t, got, "add-feature #51 created")
+	require.Contains(t, got, "update-me  #42 updated")
+	require.Contains(t, got, "add-feature  #51  https://")
 }
 
 func TestSimpleSubmitHandlerCompactStaysSilentWhenNothingToSubmit(t *testing.T) {
@@ -461,4 +628,23 @@ func TestRegenerateNeedsConfirm(t *testing.T) {
 			require.Equal(t, tt.want, regenerateNeedsConfirm(&tt.flags, tt.interactive))
 		})
 	}
+}
+
+func TestInteractiveSubmitRowsFallBackToFullNamesOnCollision(t *testing.T) {
+	t.Parallel()
+	alice := "alice/20260901000000/fix-tests"
+	bob := "bob/20260905000000/fix-tests"
+	docs := "carol/20260906000000/docs"
+	model := submitComponent.NewModel(nil)
+	h := NewInteractiveSubmitHandler(tui.NewMockRunner(), model, output.NewTestOutput(), SubmitCompact)
+	h.OnEvent(submitAction.StackDisplayEvent{Stack: submitAction.StackSnapshot{Branches: []string{alice, bob, docs}, TrunkBranch: "main"}})
+	h.OnEvent(submitAction.SubmissionStartEvent{Branches: []submitAction.BranchInfo{
+		{Name: bob, Action: "update"},
+		{Name: docs, Action: "create"},
+	}})
+
+	require.Equal(t, bob, model.Items[0].DisplayName, "bob's short name is shared with alice")
+	require.Equal(t, "docs", model.Items[1].DisplayName)
+	row := ansi.Strip(submitComponent.FormatCompactRow(model.Items[0], 120, "*", submitComponent.DefaultStyles()))
+	require.Contains(t, row, bob)
 }

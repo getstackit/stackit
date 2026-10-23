@@ -37,10 +37,10 @@ func Verify(secret string, body []byte, sigHeader string) bool {
 	if secret == "" || sigHeader == "" {
 		return false
 	}
-	if !strings.HasPrefix(sigHeader, signaturePrefix) {
+	want, ok := strings.CutPrefix(sigHeader, signaturePrefix)
+	if !ok {
 		return false
 	}
-	want := sigHeader[len(signaturePrefix):]
 
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
@@ -113,10 +113,11 @@ func ParsePush(body []byte) (repo registry.RepoRef, ok bool) {
 // with "{", so the two never collide.
 func normalizePushBody(body []byte) []byte {
 	const formPrefix = "payload="
-	if !bytes.HasPrefix(body, []byte(formPrefix)) {
+	encoded, ok := bytes.CutPrefix(body, []byte(formPrefix))
+	if !ok {
 		return body
 	}
-	decoded, err := url.QueryUnescape(string(body[len(formPrefix):]))
+	decoded, err := url.QueryUnescape(string(encoded))
 	if err != nil {
 		return body
 	}

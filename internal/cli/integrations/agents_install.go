@@ -528,11 +528,11 @@ func removeEmptyDirs(root string) error {
 
 func splitFrontmatter(content []byte) (frontmatter, body []byte, found bool) {
 	marker := []byte("---\n")
-	if !bytes.HasPrefix(content, marker) {
+	rest, ok := bytes.CutPrefix(content, marker)
+	if !ok {
 		return nil, nil, false
 	}
 
-	rest := content[len(marker):]
 	before, after, ok := bytes.Cut(rest, marker)
 	if !ok {
 		return nil, nil, false

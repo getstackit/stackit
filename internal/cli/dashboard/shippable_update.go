@@ -179,9 +179,10 @@ func (m *shippableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg handles keyboard input.
 func (m *shippableModel) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	// Escape returns to the companion panel, except while a confirmation is
-	// open, where it cancels the confirmation instead.
-	if m.companion != nil && m.state != stateConfirming && msg.String() == core.KeyEsc {
+	// Escape returns to the companion panel only from the idle view: during a
+	// confirmation it cancels instead, and while an operation runs its result
+	// must land here, not in the panel.
+	if m.companion != nil && m.state == stateMain && msg.String() == core.KeyEsc {
 		// The panel missed resizes while hidden, so ask for the size again.
 		return m.companion, tea.Batch(m.companion.requestReload(), tea.RequestWindowSize)
 	}

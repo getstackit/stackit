@@ -5,6 +5,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
 )
 
@@ -55,17 +56,23 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context) (*AnalysisResult, error) {
 		analyzed := a.analyzeStack(stack, statusMap, remoteStatuses)
 		result.Stacks = append(result.Stacks, analyzed)
 
-		// Update counts
-		switch analyzed.Status {
-		case StatusShippable:
-			result.ShippableCount++
-		case StatusPending:
-			result.PendingCount++
-		case StatusBlocked:
-			result.BlockedCount++
-		case StatusIncomplete:
-			result.IncompleteCount++
-		}
+		result.addCount(analyzed.Status)
+	}
+
+	return result, nil
+}
+
+// AnalyzeAllLocal analyzes stacks using only locally cached metadata. It never
+// contacts the forge or lists remote refs, which makes it suitable for views
+// that must remain responsive and useful while offline.
+func (a *Analyzer) AnalyzeAllLocal() (*AnalysisResult, error) {
+	stacks := stackview.DiscoverStacks(a.eng)
+
+	result := &AnalysisResult{Stacks: make([]Stack, 0, len(stacks))}
+	for _, stack := range stacks {
+		analyzed := a.analyzeStackLocal(stack)
+		result.Stacks = append(result.Stacks, analyzed)
+		result.addCount(analyzed.Status)
 	}
 
 	return result, nil
@@ -167,6 +174,57 @@ func (a *Analyzer) analyzeStack(stack stackview.StackInfo, statusMap github.Chec
 	// Determine overall status
 	result.Status = determineStatus(result)
 
+	return result
+}
+
+// analyzeStackLocal reports only the state that local branch metadata can
+// establish: whether every branch has an open, non-draft PR. Without forge data
+// CI and review state are unknown, so a stack that passes every local check is
+// StatusUnverified, never StatusShippable. Forge and remote status are left for
+// callers that explicitly opt into them.
+func (a *Analyzer) analyzeStackLocal(stack stackview.StackInfo) Stack {
+	result := Stack{
+		Stack:       stack,
+		BlockingPRs: make([]BlockingPR, 0),
+	}
+
+	if stack.RootBranch != "" {
+		rootBranch := a.eng.GetBranch(stack.RootBranch)
+		if prInfo, err := rootBranch.GetPrInfo(); err == nil && prInfo != nil && prInfo.Title() != "" {
+			result.PRTitle = prInfo.Title()
+		} else {
+			result.PRTitle = rootBranch.DefaultPRTitle()
+		}
+	}
+
+	for _, branchName := range stack.AllBranches {
+		prInfo, err := a.eng.GetBranch(branchName).GetPrInfo()
+		if err != nil || prInfo == nil || prInfo.Number() == nil {
+			result.BlockingPRs = append(result.BlockingPRs, BlockingPR{Branch: branchName, Reason: ReasonNoPR})
+			continue
+		}
+
+		blocking := BlockingPR{Branch: branchName, PRNumber: *prInfo.Number()}
+		switch {
+		case prInfo.State() == git.PRStateClosed:
+			blocking.Reason = ReasonPRClosed
+		case prInfo.State() == git.PRStateMerged:
+			blocking.Reason = ReasonPRMerged
+		case prInfo.IsDraft():
+			blocking.Reason = ReasonDraft
+		default:
+			continue
+		}
+		result.BlockingPRs = append(result.BlockingPRs, blocking)
+	}
+
+	if len(result.BlockingPRs) == 0 {
+		// Every PR is open and ready for review, but nothing local can say
+		// whether CI passed or a reviewer approved.
+		result.Status = StatusUnverified
+		return result
+	}
+	result.Status = determineStatus(result)
 	return result
 }
 
@@ -294,9 +352,11 @@ func determineStatus(result Stack) Status {
 		}
 	}
 
-	// Check for blocked state (CI failing, changes requested, or not pushed)
+	// Check for blocked state (CI failing, changes requested, not pushed, or a
+	// PR that is no longer open)
 	for _, blocking := range result.BlockingPRs {
-		if blocking.Reason == ReasonCIFailing || blocking.Reason == ReasonChangesRequested || blocking.Reason == ReasonNotPushed {
+		switch blocking.Reason {
+		case ReasonCIFailing, ReasonChangesRequested, ReasonNotPushed, ReasonPRClosed, ReasonPRMerged:
 			return StatusBlocked
 		}
 	}

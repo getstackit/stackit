@@ -138,10 +138,10 @@ func snapshotUntrackedRef(snapshotID string) string {
 // parseSnapshotFilename extracts timestamp and command from a filename
 func parseSnapshotFilename(filename string) (time.Time, string, error) {
 	// Remove .json extension
-	if len(filename) < len(jsonExt)+1 || filename[len(filename)-len(jsonExt):] != jsonExt {
+	base, ok := strings.CutSuffix(filename, jsonExt)
+	if !ok || base == "" {
 		return time.Time{}, "", fmt.Errorf("invalid snapshot filename: %s", filename)
 	}
-	base := filename[:len(filename)-len(jsonExt)]
 
 	// Split on last underscore
 	lastUnderscore := -1
@@ -496,7 +496,7 @@ func (e *engineImpl) GetSnapshots() ([]SnapshotInfo, error) {
 		displayName := formatSnapshotDisplay(command, snapshot.Args, timestamp, headSHA)
 
 		snapshots = append(snapshots, SnapshotInfo{
-			ID:          entry.Name()[:len(entry.Name())-len(jsonExt)], // Remove .json
+			ID:          strings.TrimSuffix(entry.Name(), jsonExt),
 			Command:     command,
 			Args:        snapshot.Args,
 			Timestamp:   timestamp,

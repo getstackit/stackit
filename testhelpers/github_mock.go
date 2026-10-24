@@ -109,7 +109,7 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 		// This must be checked before exact basePath match
 		if strings.HasPrefix(path, basePathWithSlash) {
 			// Check if this is a reviewers endpoint
-			if len(path) >= len("/requested_reviewers") && path[len(path)-len("/requested_reviewers"):] == "/requested_reviewers" {
+			if strings.HasSuffix(path, "/requested_reviewers") {
 				if r.Method == "POST" {
 					// Request reviewers - just return success
 					w.Header().Set("Content-Type", "application/json")

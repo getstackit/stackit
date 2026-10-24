@@ -137,6 +137,20 @@ func cleanBranches(ctx *app.Context, opts *Options, dirtyAnchors dirtyAnchorSet,
 		summary.BranchesDeleted++
 	}
 
+	// Reparenting past a deleted parent changes the shape of the user's stack,
+	// so it is reported alongside the deletions rather than left implicit.
+	for _, move := range result.Reparented {
+		handler.EmitEvent(Event{
+			Phase:      PhaseClean,
+			Type:       EventCompleted,
+			Branch:     move.Branch,
+			Reparented: true,
+			OldParent:  move.OldParent,
+			NewParent:  move.NewParent,
+		})
+		summary.BranchesReparented++
+	}
+
 	// Warn about branches that couldn't be deleted from worktree
 	for _, name := range result.SkippedInWorktree {
 		ctx.Output.Warn("Cannot delete %s from worktree. Run sync from the main repository to clean up.",

@@ -59,10 +59,11 @@ func (r *runner) GetUnmergedFiles(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return []string{}, nil //nolint:nilerr
 	}
+	output = strings.TrimSpace(output)
 	if output == "" {
 		return []string{}, nil
 	}
-	return strings.Split(strings.TrimSpace(output), "\n"), nil
+	return strings.Split(output, "\n"), nil
 }
 
 // IsMerged reports whether branchName's commits have landed in target using

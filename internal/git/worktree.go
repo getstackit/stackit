@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,7 +64,7 @@ func CanonicalWorktreePath(path WorktreePath) (WorktreePath, error) {
 			}
 			return WorktreePath(filepath.Clean(filepath.Join(resolvedPath, remainder))), nil
 		}
-		if !os.IsNotExist(evalErr) {
+		if !errors.Is(evalErr, os.ErrNotExist) {
 			return "", evalErr
 		}
 		if parent := filepath.Dir(existing); parent == existing {

@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -32,7 +33,7 @@ type WorktreeRemover interface {
 // entry according to their own lifecycle policy.
 func RemovePath(ctx context.Context, eng WorktreeRemover, path engine.WorktreePath, policy RemovalPolicy) (removed bool, err error) {
 	if _, err := os.Stat(path.String()); err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
 		return false, fmt.Errorf("inspect worktree path %s: %w", path, err)

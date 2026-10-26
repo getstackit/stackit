@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -129,7 +130,7 @@ func canRestoreUntrackedPath(root, path string) (bool, error) {
 	for i, part := range parts {
 		root = filepath.Join(root, part)
 		info, err := os.Lstat(root)
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return true, nil
 		}
 		if err != nil {

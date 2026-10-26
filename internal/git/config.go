@@ -113,7 +113,7 @@ func configStamp(repoRoot string) string {
 	for _, path := range configFiles(repoRoot) {
 		fi, err := os.Stat(path)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				// Absent is itself a stampable state: the file contributes
 				// nothing now, and creating it later changes the stamp.
 				b.WriteString("-;")

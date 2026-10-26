@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -445,7 +446,7 @@ func (e *engineImpl) IsInManagedWorktree() (bool, *WorktreeInfo, error) {
 	gitPath := filepath.Join(e.repoRoot, ".git")
 	info, err := os.Stat(gitPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return false, nil, nil // Not in a git repo
 		}
 		return false, nil, fmt.Errorf("failed to stat .git: %w", err)

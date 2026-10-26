@@ -4,6 +4,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -458,7 +459,7 @@ func (e *engineImpl) GetSnapshots() ([]SnapshotInfo, error) {
 	dir := getUndoDir(e.repoRoot)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return []SnapshotInfo{}, nil
 		}
 		return nil, fmt.Errorf("failed to read undo directory: %w", err)

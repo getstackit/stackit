@@ -44,7 +44,7 @@ func TestWorktreeBasicOperations(t *testing.T) {
 
 		// Get worktree path and verify it exists
 		worktreePath := sh.GetWorktreePath("feature")
-		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); errors.Is(err, os.ErrNotExist) {
 			t.Errorf("Worktree directory should exist at %s", worktreePath)
 		}
 
@@ -223,7 +223,7 @@ func TestWorktreeBasicOperations(t *testing.T) {
 		}
 
 		// Directory should be cleaned up
-		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("Worktree directory should be removed at %s", worktreePath)
 		}
 	})
@@ -237,7 +237,7 @@ func TestWorktreeBasicOperations(t *testing.T) {
 
 		sh.RunExpectError("worktree remove dirty-stack")
 
-		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); errors.Is(err, os.ErrNotExist) {
 			t.Errorf("dirty worktree should still exist at %s", worktreePath)
 		}
 		sh.Run("worktree list").OutputContains("dirty-stack")
@@ -251,7 +251,7 @@ func TestWorktreeBasicOperations(t *testing.T) {
 
 		sh.Run("worktree remove force-stack --force")
 
-		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("worktree directory should be removed at %s", worktreePath)
 		}
 	})
@@ -702,7 +702,7 @@ func TestWorktreeEdgeCases(t *testing.T) {
 			OutputContains("belongs to worktree")
 
 		dirtyFile := filepath.Join(worktreePath, "uncommitted.txt")
-		if _, err := os.Stat(dirtyFile); os.IsNotExist(err) {
+		if _, err := os.Stat(dirtyFile); errors.Is(err, os.ErrNotExist) {
 			t.Error("uncommitted file should still exist in worktree after restack")
 		}
 	})
@@ -1044,7 +1044,7 @@ func TestWorktreeAnchorBranchCleanup(t *testing.T) {
 		sh.Run("worktree remove mystack")
 
 		// Worktree should be removed
-		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("Worktree directory should be removed at %s", worktreePath)
 		}
 

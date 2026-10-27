@@ -127,13 +127,13 @@ func TestCreateTemporaryWorktree(t *testing.T) {
 
 	// Verify worktree and temp dir are gone
 	_, err = os.Stat(worktreePath)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 
 	// The parent directory of worktreePath (which is the temp dir) should also be gone
 	// worktreePath is filepath.Join(tmpDir, "worktree")
 	tmpDir := worktreePath[:len(worktreePath)-9] // "/worktree" is 9 chars
 	_, err = os.Stat(tmpDir)
-	assert.True(t, os.IsNotExist(err))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestCreateTemporaryWorktree_FastCleanup_AllowsNextCreate(t *testing.T) {

@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -487,7 +488,7 @@ func TestStackTreeRenderer_Golden(t *testing.T) {
 
 			expected, err := os.ReadFile(goldenPath)
 			if err != nil {
-				if os.IsNotExist(err) {
+				if errors.Is(err, os.ErrNotExist) {
 					t.Fatalf("golden file does not exist: %s\nRun with -update to create it.\nActual output:\n%s", goldenPath, cleanOutput)
 				}
 				t.Fatalf("failed to read golden file: %v", err)

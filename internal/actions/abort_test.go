@@ -102,7 +102,7 @@ func TestAbortAction(t *testing.T) {
 
 		// Verify continuation state is gone
 		_, err = os.Stat(continuationPath)
-		require.True(t, os.IsNotExist(err), "continuation state should be gone")
+		require.ErrorIs(t, err, os.ErrNotExist, "continuation state should be gone")
 
 		// Verify state restored
 		s.Engine.Rebuild(s.Engine.Trunk().GetName())
@@ -287,7 +287,7 @@ func TestAbortAction(t *testing.T) {
 
 		// Continuation state should be gone
 		_, err = os.Stat(continuationPath)
-		require.True(t, os.IsNotExist(err), "continuation state should be gone")
+		require.ErrorIs(t, err, os.ErrNotExist, "continuation state should be gone")
 	})
 
 	t.Run("interactive handler with decline cancels abort", func(t *testing.T) {
@@ -350,6 +350,6 @@ func TestAbortAction(t *testing.T) {
 
 		// Continuation state should be gone
 		_, err = os.Stat(continuationPath)
-		require.True(t, os.IsNotExist(err), "continuation state should be gone")
+		require.ErrorIs(t, err, os.ErrNotExist, "continuation state should be gone")
 	})
 }

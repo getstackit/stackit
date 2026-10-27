@@ -45,7 +45,7 @@ type WarmStartSkip struct {
 var errWarmStartSkip = errors.New("warm-start path cannot be used")
 
 func warmStartWorktree(ctx context.Context, eng engine.Engine, sourceRoot, destinationRoot WorktreePath) (WarmStartResult, error) {
-	if _, err := os.Stat(filepath.Join(sourceRoot.String(), WorktreeIncludeFile)); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(sourceRoot.String(), WorktreeIncludeFile)); errors.Is(err, os.ErrNotExist) {
 		return WarmStartResult{}, nil
 	} else if err != nil {
 		return WarmStartResult{}, fmt.Errorf("inspect %s: %w", WorktreeIncludeFile, err)
@@ -69,7 +69,7 @@ func warmStartWorktree(ctx context.Context, eng engine.Engine, sourceRoot, desti
 func CopyIncludedIgnoredFiles(sourceRoot, destinationRoot string, ignoredPaths []string) (WarmStartResult, error) {
 	includePath := filepath.Join(sourceRoot, WorktreeIncludeFile)
 	matcher, err := ignore.CompileIgnoreFile(includePath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return WarmStartResult{}, nil
 	}
 	if err != nil {
@@ -101,7 +101,7 @@ func CopyIncludedIgnoredFiles(sourceRoot, destinationRoot string, ignoredPaths [
 			return WarmStartResult{}, err
 		}
 		info, err := os.Lstat(sourcePath)
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
@@ -126,7 +126,7 @@ func CopyIncludedIgnoredFiles(sourceRoot, destinationRoot string, ignoredPaths [
 		if _, err := os.Lstat(destinationPath); err == nil {
 			result.SkippedExisting = append(result.SkippedExisting, relativePath)
 			continue
-		} else if !os.IsNotExist(err) {
+		} else if !errors.Is(err, os.ErrNotExist) {
 			return WarmStartResult{}, fmt.Errorf("inspect warm-start destination %s: %w", relativePath, err)
 		}
 
@@ -227,8 +227,8 @@ func ensureWarmStartParents(root, relativePath string, mode warmStartParentMode,
 			continue
 		}
 		info, err := os.Lstat(current)
-		if os.IsNotExist(err) && mode == warmStartCreateIfMissing {
-			if mkErr := os.Mkdir(current, 0o750); mkErr != nil && !os.IsExist(mkErr) {
+		if errors.Is(err, os.ErrNotExist) && mode == warmStartCreateIfMissing {
+			if mkErr := os.Mkdir(current, 0o750); mkErr != nil && !errors.Is(mkErr, os.ErrExist) {
 				// Most often a tracked file already occupies this name, which
 				// is a conflict with this one file's path — not a reason to
 				// abandon the worktree.
@@ -236,7 +236,7 @@ func ensureWarmStartParents(root, relativePath string, mode warmStartParentMode,
 			}
 			info, err = os.Lstat(current)
 		}
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		if err != nil {

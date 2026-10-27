@@ -154,7 +154,7 @@ func TestWorktreePostCreateHooks(t *testing.T) {
 		// Verify the hook did NOT create the marker file (since it's unapproved and prompts fail in non-interactive mode)
 		markerPath := filepath.Join(worktreePath, ".unapproved_hook_ran")
 		_, err := os.Stat(markerPath)
-		require.True(t, os.IsNotExist(err), "Unapproved hook should not have run - marker file should not exist at %s", markerPath)
+		require.ErrorIs(t, err, os.ErrNotExist, "Unapproved hook should not have run - marker file should not exist at %s", markerPath)
 	})
 
 	t.Run("no hooks configured does nothing", func(t *testing.T) {

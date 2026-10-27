@@ -9,6 +9,7 @@
 package golden
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ func Assert(t *testing.T, path, actual string) {
 
 	want, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("golden: %s does not exist; run with -update to create it.\n\nActual output:\n%s", path, actual)
 		}
 		t.Fatalf("golden: read %s: %v", path, err)

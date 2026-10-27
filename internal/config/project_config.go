@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -134,7 +135,7 @@ func LoadProjectConfig(repoRoot string) (*ProjectConfig, error) {
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			// File doesn't exist - return empty config
 			return &ProjectConfig{}, nil
 		}

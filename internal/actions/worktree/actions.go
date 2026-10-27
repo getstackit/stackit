@@ -271,7 +271,7 @@ func OpenAction(ctx *app.Context, opts OpenOptions) (WorktreePath, error) {
 	}
 
 	if _, statErr := os.Stat(wtInfo.Path.String()); statErr != nil {
-		if os.IsNotExist(statErr) {
+		if errors.Is(statErr, os.ErrNotExist) {
 			return "", fmt.Errorf("worktree path %s does not exist (worktree may have been manually deleted)", wtInfo.Path)
 		}
 		return "", fmt.Errorf("inspect worktree path %s: %w", wtInfo.Path, statErr)
@@ -437,7 +437,7 @@ func resolveWorktreeTarget(ctx *app.Context, eng engine.Engine, cfg RepoConfig, 
 	path := worktreePathForName(cfg.WorktreeBasePath(), repoRoot, name)
 	if _, err := os.Stat(path.String()); err == nil {
 		return worktreeTarget{}, fmt.Errorf("worktree path %s already exists; remove it first or choose a different name", path)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return worktreeTarget{}, fmt.Errorf("inspect worktree path %s: %w", path, err)
 	}
 

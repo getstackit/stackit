@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -199,7 +200,7 @@ func worktreePathUsable(ctx *app.Context, stackRoot string, path engine.Worktree
 	switch {
 	case err == nil:
 		return true
-	case os.IsNotExist(err):
+	case errors.Is(err, os.ErrNotExist):
 		ctx.Output.Warn("Worktree for stack %s is registered but path does not exist: %s",
 			output.BranchName(stackRoot), path)
 		// detach, not remove: remove refuses for any stack that still has

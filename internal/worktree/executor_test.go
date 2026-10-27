@@ -79,7 +79,7 @@ func TestExecutor_CreateSession(t *testing.T) {
 
 		// Worktree should be removed
 		_, err = os.Stat(worktreePath.String())
-		assert.True(t, os.IsNotExist(err), "worktree should be removed after Close()")
+		assert.ErrorIs(t, err, os.ErrNotExist, "worktree should be removed after Close()")
 	})
 }
 

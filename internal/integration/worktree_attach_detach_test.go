@@ -2,6 +2,7 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -46,7 +47,7 @@ func TestWorktreeAttach(t *testing.T) {
 
 		// Get worktree path and verify it exists
 		worktreePath := sh.GetWorktreePath("feature")
-		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); errors.Is(err, os.ErrNotExist) {
 			t.Errorf("Worktree directory should exist at %s", worktreePath)
 		}
 
@@ -70,7 +71,7 @@ func TestWorktreeAttach(t *testing.T) {
 		// Verify the path uses the custom name (use worktree open to get path)
 		sh.Run("worktree open my-wt")
 		worktreePath := strings.TrimSpace(sh.Output())
-		if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); errors.Is(err, os.ErrNotExist) {
 			t.Errorf("Worktree directory should exist at %s", worktreePath)
 		}
 		// The path should contain "my-wt" as the directory name
@@ -191,7 +192,7 @@ func TestWorktreeDetach(t *testing.T) {
 		sh.Run("worktree detach feature")
 
 		// Worktree should be removed
-		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("Worktree directory should be removed at %s", worktreePath)
 		}
 
@@ -229,7 +230,7 @@ func TestWorktreeDetach(t *testing.T) {
 		sh.Run("worktree detach my-wt")
 
 		// Worktree should be removed
-		if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		if _, err := os.Stat(worktreePath); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("Worktree directory should be removed at %s", worktreePath)
 		}
 
@@ -265,13 +266,13 @@ func TestWorktreeDetach(t *testing.T) {
 
 				if tt.wantGone {
 					sh.Run(tt.cmd)
-					if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+					if _, err := os.Stat(worktreePath); !errors.Is(err, os.ErrNotExist) {
 						t.Errorf("worktree directory should be removed at %s", worktreePath)
 					}
 					sh.HasBranches("main", "feature")
 				} else {
 					sh.RunExpectError(tt.cmd)
-					if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+					if _, err := os.Stat(worktreePath); errors.Is(err, os.ErrNotExist) {
 						t.Errorf("worktree should still exist at %s", worktreePath)
 					}
 				}

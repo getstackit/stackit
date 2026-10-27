@@ -74,7 +74,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	// Handle Unset
 	if opts.Unset {
 		if isOnTrunk {
-			return fmt.Errorf("cannot unset scope on trunk")
+			return errors.New("cannot unset scope on trunk")
 		}
 		if err := eng.SetScopeAndMarkForUpdate(ctx.Context, eng.GetBranch(currentBranch), engine.Empty()); err != nil {
 			return fmt.Errorf("failed to unset scope: %w", err)
@@ -89,12 +89,12 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// If no scope provided and not show/unset, we don't know what to do
 	if opts.Scope == "" {
-		return fmt.Errorf("no scope name provided")
+		return errors.New("no scope name provided")
 	}
 
 	// Cannot set scope on trunk
 	if isOnTrunk {
-		return fmt.Errorf("cannot set scope on trunk")
+		return errors.New("cannot set scope on trunk")
 	}
 
 	// Update the current branch's scope and mark for PR body update in one transaction.

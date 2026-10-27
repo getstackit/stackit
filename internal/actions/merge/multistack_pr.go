@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -114,7 +115,7 @@ func (p *MultiStackPRCreator) EnableAutoMerge(ctx context.Context, pr *github.Pu
 		return err
 	}
 	if pr == nil || pr.NodeID == "" {
-		return fmt.Errorf("missing pull request node id")
+		return errors.New("missing pull request node id")
 	}
 
 	mergeMethod := p.resolveMergeMethod()

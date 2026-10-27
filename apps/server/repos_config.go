@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -60,7 +61,7 @@ func normalizeRepoEntry(r *repoConfig, reposRoot string) error {
 		if r.Owner != "" && r.Name != "" {
 			r.ID = r.Owner + "-" + r.Name
 		} else {
-			return fmt.Errorf("missing id (set id, or owner+name)")
+			return errors.New("missing id (set id, or owner+name)")
 		}
 	}
 

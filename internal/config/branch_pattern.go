@@ -4,7 +4,7 @@ package config
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"regexp"
 	"strings"
 
@@ -30,7 +30,7 @@ func NewBranchPattern(pattern string) (BranchPattern, error) {
 
 	// Validate that pattern contains {message} placeholder
 	if !strings.Contains(pattern, "{message}") {
-		return "", fmt.Errorf("branch name pattern must contain {message} placeholder")
+		return "", errors.New("branch name pattern must contain {message} placeholder")
 	}
 
 	return BranchPattern(pattern), nil
@@ -78,7 +78,7 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 		// If pattern is empty, just use the message (backward compatibility)
 		branchName := utils.GenerateBranchNameFromMessage(commitMessage)
 		if branchName == "" {
-			return "", fmt.Errorf("failed to generate branch name from commit message")
+			return "", errors.New("failed to generate branch name from commit message")
 		}
 		return branchName, nil
 	}
@@ -114,7 +114,7 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 		// Fallback to just the message if pattern doesn't contain {message}
 		branchName := utils.GenerateBranchNameFromMessage(commitMessage)
 		if branchName == "" {
-			return "", fmt.Errorf("failed to generate branch name from commit message")
+			return "", errors.New("failed to generate branch name from commit message")
 		}
 		return branchName, nil
 	}
@@ -136,7 +136,7 @@ func (p BranchPattern) GetBranchName(ctx GitContext, commitMessage string, scope
 	// Sanitize the final result
 	branchName := utils.SanitizeBranchName(result)
 	if branchName == "" {
-		return "", fmt.Errorf("failed to generate branch name from commit message")
+		return "", errors.New("failed to generate branch name from commit message")
 	}
 
 	return branchName, nil

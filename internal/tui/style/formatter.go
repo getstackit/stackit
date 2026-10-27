@@ -173,7 +173,7 @@ func GetScopeColor(scope string) (color.Color, bool) {
 	}
 	// Simple hash to select from StackitColors
 	var hash uint32
-	for i := 0; i < len(scope); i++ {
+	for i := range len(scope) {
 		hash = uint32(scope[i]) + (hash << 6) + (hash << 16) - hash
 	}
 	colorIndex := int(hash) % len(StackitColors)

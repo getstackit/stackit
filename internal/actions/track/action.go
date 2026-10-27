@@ -2,6 +2,7 @@ package track
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -89,11 +90,11 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			revisions := eng.BatchRevisions(engine.BranchesOf(parentBranch, eng.GetBranch(branchName)))
 			parentRev, ok := revisions.Rev(parent)
 			if !ok {
-				return fmt.Errorf("failed to get parent revision")
+				return errors.New("failed to get parent revision")
 			}
 			branchRev, ok := revisions.Rev(branchName)
 			if !ok {
-				return fmt.Errorf("failed to get branch revision")
+				return errors.New("failed to get branch revision")
 			}
 			isAnc, err := eng.IsAncestor(ctx.Context, parentRev, branchRev)
 			if err != nil {
@@ -134,7 +135,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Non-interactive mode requires --parent or --force
 	if !handler.IsInteractive() {
-		return fmt.Errorf("parent branch is required in non-interactive mode; use --parent or --force")
+		return errors.New("parent branch is required in non-interactive mode; use --parent or --force")
 	}
 
 	// Interactive mode: recursively track a stack

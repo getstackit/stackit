@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -167,7 +166,7 @@ func requirePackedRefPresent(t *testing.T, repoDir, refName string) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(repoDir, ".git", "packed-refs"))
 	require.NoError(t, err, "reading packed-refs")
-	require.True(t, strings.Contains(string(data), " "+refName+"\n"),
+	require.Contains(t, string(data), " "+refName+"\n",
 		"expected packed-refs to contain %s; contents:\n%s", refName, data)
 }
 
@@ -178,6 +177,6 @@ func requirePackedRefAbsent(t *testing.T, repoDir, refName string) {
 		return
 	}
 	require.NoError(t, err)
-	require.False(t, strings.Contains(string(data), " "+refName+"\n"),
+	require.NotContains(t, string(data), " "+refName+"\n",
 		"packed-refs still contains %s after delete; contents:\n%s", refName, data)
 }

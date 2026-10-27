@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -46,7 +47,7 @@ func (r *runner) StashPushStaged(ctx context.Context, message string) (string, e
 func (r *runner) StashDrop(ctx context.Context, ref string) error {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return fmt.Errorf("stash drop requires an explicit stash ref")
+		return errors.New("stash drop requires an explicit stash ref")
 	}
 	if _, err := r.RunGitCommandWithContext(ctx, gitCmdStash, "drop", ref); err != nil {
 		return fmt.Errorf("stash drop failed: %w", err)
@@ -68,7 +69,7 @@ func (r *runner) StashPop(ctx context.Context) error {
 func (r *runner) StashPopRef(ctx context.Context, ref string) error {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return fmt.Errorf("stash pop requires an explicit stash ref")
+		return errors.New("stash pop requires an explicit stash ref")
 	}
 	if _, err := r.RunGitCommandWithContext(ctx, gitCmdStash, "pop", ref); err != nil {
 		return fmt.Errorf("stash pop failed: %w", err)
@@ -172,7 +173,7 @@ func (r *runner) RestoreIntentToAdd(ctx context.Context, paths []string) error {
 func (r *runner) StashApplyRef(ctx context.Context, ref string, mode StashApplyMode) error {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return fmt.Errorf("stash apply requires an explicit stash ref")
+		return errors.New("stash apply requires an explicit stash ref")
 	}
 	args := []string{gitCmdStash, "apply"}
 	if mode == StashApplyWithIndex {

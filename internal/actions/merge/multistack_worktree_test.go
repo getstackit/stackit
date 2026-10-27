@@ -156,9 +156,9 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 	// Verify all files are present in the working tree
 	// CreateChangeAndCommit creates files as "{prefix}_test.txt"
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "file1_test.txt"))
-	assert.NoError(t, err, "file1_test.txt should exist")
+	require.NoError(t, err, "file1_test.txt should exist")
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "file2_test.txt"))
-	assert.NoError(t, err, "file2_test.txt should exist")
+	require.NoError(t, err, "file2_test.txt should exist")
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "file3_test.txt"))
 	assert.NoError(t, err, "file3_test.txt should exist")
 }
@@ -246,11 +246,11 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 
 	// Verify all files are present
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s1file1_test.txt"))
-	assert.NoError(t, err, "s1file1_test.txt should exist")
+	require.NoError(t, err, "s1file1_test.txt should exist")
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s1file2_test.txt"))
-	assert.NoError(t, err, "s1file2_test.txt should exist")
+	require.NoError(t, err, "s1file2_test.txt should exist")
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s2file1_test.txt"))
-	assert.NoError(t, err, "s2file1_test.txt should exist")
+	require.NoError(t, err, "s2file1_test.txt should exist")
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s2file2_test.txt"))
 	assert.NoError(t, err, "s2file2_test.txt should exist")
 }
@@ -258,7 +258,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 func splitLines(s string) []string {
 	var lines []string
 	start := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == '\n' {
 			lines = append(lines, s[start:i])
 			start = i + 1

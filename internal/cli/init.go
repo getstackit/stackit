@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -31,7 +32,7 @@ func (h *cliInitHandler) SelectTrunk(_ context.Context, branchNames []string, in
 		if inferredTrunk != "" {
 			return inferredTrunk, nil
 		}
-		return "", fmt.Errorf("could not infer trunk branch, pass in an existing branch name with --trunk or run in interactive mode")
+		return "", errors.New("could not infer trunk branch, pass in an existing branch name with --trunk or run in interactive mode")
 	}
 
 	choices := make([]tui.BranchChoice, len(branchNames))

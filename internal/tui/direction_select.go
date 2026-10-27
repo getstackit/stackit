@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -430,5 +429,5 @@ func PromptDirectionSelect(eng engine.StackView, currentBranch, parentBranch str
 		return finalModel.Direction(), nil
 	}
 
-	return "", fmt.Errorf("unexpected model type")
+	return "", errors.New("unexpected model type")
 }

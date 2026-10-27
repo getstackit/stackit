@@ -2,6 +2,7 @@ package provision
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -30,14 +31,14 @@ func EnsureInitialized(ctx context.Context, repoRoot, trunk string) error {
 		return fmt.Errorf("list branches: %w", err)
 	}
 	if len(branchNames) == 0 {
-		return fmt.Errorf("repository has no branches")
+		return errors.New("repository has no branches")
 	}
 
 	if trunk == "" || !slices.Contains(branchNames, trunk) {
 		trunk = initaction.InferTrunk(ctx, runner, branchNames)
 	}
 	if trunk == "" {
-		return fmt.Errorf("could not determine trunk branch")
+		return errors.New("could not determine trunk branch")
 	}
 
 	if err := cfg.SetTrunk(trunk); err != nil {

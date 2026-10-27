@@ -328,20 +328,6 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	return nil
 }
 
-// Re-export RestackResult constants from handlers package for convenience
-const (
-	RestackDone     = handlers.RestackDone
-	RestackUnneeded = handlers.RestackUnneeded
-	RestackConflict = handlers.RestackConflict
-	RestackBlocked  = handlers.RestackBlocked
-)
-
-// RestackResult is an alias for handlers.RestackResult
-type RestackResult = handlers.RestackResult
-
-// RestackHandler is an alias for handlers.RestackHandler
-type RestackHandler = handlers.RestackHandler
-
 // Phase represents the current phase of the sync operation
 type Phase string
 
@@ -412,7 +398,7 @@ func (s *Summary) HasChanges() bool {
 }
 
 // Handler abstracts TTY vs non-TTY output for sync operations
-// It embeds RestackHandler to provide a unified interface for operations that include restacking
+// It embeds handlers.RestackHandler to provide a unified interface for operations that include restacking
 type Handler interface {
 	// Start is called at the beginning of sync with the total operation count
 	Start(totalOps int)
@@ -453,7 +439,7 @@ type Handler interface {
 
 	// RestackHandler methods are available for restack-specific output
 	// This allows the same handler to be used for standalone restack operations
-	RestackHandler
+	handlers.RestackHandler
 }
 
 // NullHandler is a no-op handler for testing or when output is not needed

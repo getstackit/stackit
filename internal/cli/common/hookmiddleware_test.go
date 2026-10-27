@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCommandPhase(t *testing.T) {
@@ -38,7 +39,7 @@ func TestCommandPhase(t *testing.T) {
 			cmd := root
 			for _, segment := range tt.path {
 				next, _, err := cmd.Find([]string{segment})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				cmd = next
 			}
 			assert.Equal(t, tt.expected, CommandPhase(cmd, tt.phase))

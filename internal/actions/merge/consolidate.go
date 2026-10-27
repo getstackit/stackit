@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -154,7 +155,7 @@ func (c *ConsolidateMergeExecutor) preValidateStack(ctx context.Context, force b
 		return fmt.Errorf("failed to update trunk: %w", err)
 	}
 	if pullResult == engine.PullConflict {
-		return fmt.Errorf("trunk has conflicts with remote")
+		return errors.New("trunk has conflicts with remote")
 	}
 
 	return nil

@@ -20,7 +20,7 @@ func TestReadFromStdin(t *testing.T) {
 
 	expected := "my commit message"
 	go func() {
-		_, _ = w.Write([]byte(expected))
+		_, _ = w.WriteString(expected)
 		_ = w.Close()
 	}()
 

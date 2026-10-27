@@ -1,6 +1,7 @@
 package shippable
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/merge"
@@ -44,7 +45,7 @@ func NewShipper(ctx *app.Context) *Shipper {
 // It uses the existing multi-stack merge functionality.
 func (s *Shipper) Ship(stacks []Stack, opts ShipOptions) (*ShipResult, error) {
 	if len(stacks) == 0 {
-		return nil, fmt.Errorf("no stacks to ship")
+		return nil, errors.New("no stacks to ship")
 	}
 
 	// Verify all stacks are shippable

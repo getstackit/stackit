@@ -61,10 +61,10 @@ func ResolveApproved(req ResolveRequest) ([]string, error) {
 		return nil, nil
 	}
 	if req.Config == nil {
-		return nil, fmt.Errorf("resolve hooks: config is required")
+		return nil, errors.New("resolve hooks: config is required")
 	}
 	if req.Prompter == nil {
-		return nil, fmt.Errorf("resolve hooks: prompter is required")
+		return nil, errors.New("resolve hooks: prompter is required")
 	}
 
 	approved := make([]string, 0, len(filtered))

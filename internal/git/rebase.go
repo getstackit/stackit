@@ -248,7 +248,7 @@ func (r *runner) GetRebaseHead() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("rebase head not found")
+	return "", errors.New("rebase head not found")
 }
 
 func (r *runner) IsRebaseInProgress(ctx context.Context) bool {
@@ -264,7 +264,7 @@ func (r *runner) IsRebaseInProgress(ctx context.Context) bool {
 
 func (r *runner) CheckRebaseInProgress(ctx context.Context) error {
 	if r.IsRebaseInProgress(ctx) {
-		return fmt.Errorf("a rebase is already in progress. Please finish or abort it first")
+		return errors.New("a rebase is already in progress. Please finish or abort it first")
 	}
 	return nil
 }

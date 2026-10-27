@@ -159,7 +159,7 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 	// disagree. The raw-git count against the parent tip is the oracle here.
 	count, err := s.Scene.Repo.GetCommitCount(b.GetParent().GetName(), "b")
 	require.NoError(t, err)
-	require.Equal(t, count, len(commits),
+	require.Len(t, commits, count,
 		"commit messages and count must use the same base when no divergence is stored")
 
 	batched := s.Engine.BatchCommits(engine.BranchesOf(b))["b"]

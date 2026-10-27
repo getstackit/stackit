@@ -276,7 +276,7 @@ func TestCallbackHandler_AllowlistDeniedRedirectsToDeniedPath(t *testing.T) {
 	}
 	// And no session in the store.
 	store.mu.RLock()
-	require.Equal(t, 0, len(store.sessions))
+	require.Empty(t, store.sessions)
 	store.mu.RUnlock()
 }
 

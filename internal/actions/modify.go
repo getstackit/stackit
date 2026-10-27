@@ -50,7 +50,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 	originalBranchName := eng.CurrentBranch().GetName()
 
 	if opts.Into != "" && opts.InteractiveRebase {
-		return fmt.Errorf("--into cannot be combined with --interactive-rebase")
+		return errors.New("--into cannot be combined with --interactive-rebase")
 	}
 
 	targetBranchName := originalBranchName
@@ -174,7 +174,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 
 	if opts.CreateCommit {
 		if !hasStagedChanges {
-			return fmt.Errorf("no staged changes to commit. Use -a to stage all changes, or stage changes manually with 'git add'")
+			return errors.New("no staged changes to commit. Use -a to stage all changes, or stage changes manually with 'git add'")
 		}
 	} else {
 		// When amending, skip if there are no staged changes and no message/edit/author changes
@@ -311,7 +311,7 @@ func interactiveRebaseAction(ctx *app.Context) error {
 	if err := eng.InteractiveRebase(gctx, parentName); err != nil {
 		// Check if rebase is in progress (conflict or user canceled)
 		if eng.IsRebaseInProgress(gctx) {
-			return fmt.Errorf("interactive rebase paused. Resolve conflicts and run 'git rebase --continue' or 'git rebase --abort'")
+			return errors.New("interactive rebase paused. Resolve conflicts and run 'git rebase --continue' or 'git rebase --abort'")
 		}
 		// Rebase might have been aborted by user
 		return nil

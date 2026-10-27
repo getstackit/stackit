@@ -23,7 +23,7 @@ import (
 // the mistake.
 func ReadMessage(message, messageFile string) (string, error) {
 	if message != "" && messageFile != "" {
-		return "", fmt.Errorf("cannot use --message and --message-file together; pass only one (use --message-file - to read from stdin)")
+		return "", errors.New("cannot use --message and --message-file together; pass only one (use --message-file - to read from stdin)")
 	}
 	if messageFile == "" {
 		return message, nil
@@ -40,7 +40,7 @@ func readMessageFrom(path string, stdin *os.File) (string, error) {
 		// Refuse to block on a terminal — the user almost certainly meant to
 		// pipe content and forgot.
 		if stat, statErr := stdin.Stat(); statErr == nil && stat.Mode()&os.ModeCharDevice != 0 {
-			return "", fmt.Errorf("--message-file - requires piped input; got terminal")
+			return "", errors.New("--message-file - requires piped input; got terminal")
 		}
 		data, err = io.ReadAll(stdin)
 	} else {
@@ -56,7 +56,7 @@ func readMessageFrom(path string, stdin *os.File) (string, error) {
 	msg := strings.TrimSpace(string(data))
 	if msg == "" {
 		if path == "-" {
-			return "", fmt.Errorf("--message-file - received empty input")
+			return "", errors.New("--message-file - received empty input")
 		}
 		return "", fmt.Errorf("--message-file %q is empty", path)
 	}

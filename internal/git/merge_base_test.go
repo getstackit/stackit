@@ -2,7 +2,6 @@ package git_test
 
 import (
 	"context"
-	"os"
 	"os/exec"
 	"testing"
 
@@ -105,9 +104,7 @@ func TestIsAncestor_AfterFetch(t *testing.T) {
 		require.NoError(t, err)
 
 		// 2. Setup a "local" repository by cloning
-		localDir, err := os.MkdirTemp("", "stackit-test-ancestor-*")
-		require.NoError(t, err)
-		t.Cleanup(func() { os.RemoveAll(localDir) })
+		localDir := t.TempDir()
 
 		cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
 		err = cmd.Run()

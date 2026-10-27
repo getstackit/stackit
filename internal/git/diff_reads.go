@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -138,7 +139,7 @@ func parseDiffSummaries(out string, pairs []string, mode DiffReadMode) (map[stri
 			var record string
 			record, out, ok = strings.Cut(out, "\x00")
 			if !ok {
-				return nil, fmt.Errorf("unterminated diff-tree record")
+				return nil, errors.New("unterminated diff-tree record")
 			}
 			var path string
 			switch mode {
@@ -173,10 +174,10 @@ func parseDiffSummaries(out string, pairs []string, mode DiffReadMode) (map[stri
 					}
 				}
 			case DiffCheckOnly:
-				return nil, fmt.Errorf("tree-only reads cannot contain diff records")
+				return nil, errors.New("tree-only reads cannot contain diff records")
 			}
 			if !ok || path == "" {
-				return nil, fmt.Errorf("missing diff-tree path")
+				return nil, errors.New("missing diff-tree path")
 			}
 			summary.Files = append(summary.Files, path)
 		}

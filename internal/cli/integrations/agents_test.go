@@ -360,7 +360,7 @@ func TestPromptAndInstallWorkflowBlockBothFilesDefaultsToSkip(t *testing.T) {
 	var called bool
 	promptSelect = func(_ string, options []tui.SelectOption, defaultIndex int) (string, error) {
 		called = true
-		require.Equal(t, 3, len(options))
+		require.Len(t, options, 3)
 		require.Equal(t, "skip", options[0].Value)
 		require.Equal(t, "CLAUDE.md", options[1].Value)
 		require.Equal(t, "AGENTS.md", options[2].Value)

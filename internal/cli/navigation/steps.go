@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 )
@@ -15,7 +16,7 @@ func parsePositiveSteps(args []string, steps int) (int, error) {
 	}
 
 	if steps < 1 {
-		return 0, fmt.Errorf("steps must be at least 1")
+		return 0, errors.New("steps must be at least 1")
 	}
 
 	return steps, nil

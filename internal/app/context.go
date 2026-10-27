@@ -7,6 +7,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -157,7 +158,7 @@ func (c *Context) RequireGitHub() (github.Client, error) {
 	if err := c.GitHubError(); err != nil {
 		return nil, fmt.Errorf("GitHub client not available: %w", err)
 	}
-	return nil, fmt.Errorf("GitHub client not available — check your GITHUB_TOKEN or run 'gh auth login'")
+	return nil, errors.New("GitHub client not available — check your GITHUB_TOKEN or run 'gh auth login'")
 }
 
 // Prompts returns the adapter-supplied prompter, or a non-interactive one
@@ -457,7 +458,7 @@ func GetContextWithWriter(ctx context.Context, opts GlobalOptions, writer io.Wri
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 	if !cfg.IsInitialized() {
-		return nil, fmt.Errorf("stackit not initialized. Run 'stackit init' first")
+		return nil, errors.New("stackit not initialized. Run 'stackit init' first")
 	}
 
 	// Demo mode returned above, so the demo branch in NewContextAutoWithWriter

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -30,12 +31,12 @@ func TestMetaSerialization(t *testing.T) {
 
 	// Marshal
 	data, err := json.Marshal(meta)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Unmarshal
 	var meta2 git.Meta
 	err = json.Unmarshal(data, &meta2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, meta.GetParentBranchName(), meta2.GetParentBranchName())
 	assert.Equal(t, meta.GetScope(), meta2.GetScope())
@@ -54,12 +55,12 @@ func TestLocalMetaSerialization(t *testing.T) {
 
 	// Marshal
 	data, err := json.Marshal(meta)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Unmarshal
 	var meta2 git.LocalMeta
 	err = json.Unmarshal(data, &meta2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, meta.Frozen, meta2.Frozen)
 }
@@ -71,7 +72,7 @@ func TestMetaBackwardCompatibility(t *testing.T) {
 
 	var meta git.Meta
 	err := json.Unmarshal([]byte(jsonData), &meta)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "main", *meta.GetParentBranchName())
 	assert.Equal(t, git.LockReason("locked"), meta.GetLockReason())

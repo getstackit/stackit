@@ -108,7 +108,7 @@ func TestReviewDecisionConstants(t *testing.T) {
 	t.Parallel()
 
 	// Verify constants match GitHub's actual values
-	assert.Equal(t, github.ReviewDecision("APPROVED"), github.ReviewDecisionApproved)
-	assert.Equal(t, github.ReviewDecision("CHANGES_REQUESTED"), github.ReviewDecisionChangesRequested)
-	assert.Equal(t, github.ReviewDecision("REVIEW_REQUIRED"), github.ReviewDecisionReviewRequired)
+	assert.Equal(t, github.ReviewDecisionApproved, github.ReviewDecision("APPROVED"))
+	assert.Equal(t, github.ReviewDecisionChangesRequested, github.ReviewDecision("CHANGES_REQUESTED"))
+	assert.Equal(t, github.ReviewDecisionReviewRequired, github.ReviewDecision("REVIEW_REQUIRED"))
 }

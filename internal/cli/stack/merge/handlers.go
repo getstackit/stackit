@@ -228,7 +228,7 @@ func (h *InteractiveMergeEventHandler) PromptMergeType(canMergeThisBranch bool, 
 
 	// If no options available, return an error
 	if len(options) == 0 {
-		return "", fmt.Errorf("no merge options available: no stacks or scopes found")
+		return "", errors.New("no merge options available: no stacks or scopes found")
 	}
 
 	selected, err := tui.PromptSelect("What would you like to merge?", options, 0)
@@ -254,7 +254,7 @@ func (h *InteractiveMergeEventHandler) PromptScope(availableScopes []string) (st
 	defer h.runner.Resume()
 
 	if len(availableScopes) == 0 {
-		return "", fmt.Errorf("no branches with scopes found")
+		return "", errors.New("no branches with scopes found")
 	}
 
 	options := make([]tui.SelectOption, len(availableScopes))
@@ -271,7 +271,7 @@ func (h *InteractiveMergeEventHandler) PromptStacks(availableStacks []mergeActio
 	defer h.runner.Resume()
 
 	if len(availableStacks) == 0 {
-		return nil, fmt.Errorf("no stacks found rooted at trunk")
+		return nil, errors.New("no stacks found rooted at trunk")
 	}
 
 	// If only one stack, return it directly

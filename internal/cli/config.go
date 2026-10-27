@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -715,7 +716,7 @@ Use with caution - this will clear all personal configuration including:
 					return err
 				}
 				if !confirmed {
-					return fmt.Errorf("reset canceled")
+					return errors.New("reset canceled")
 				}
 			}
 
@@ -763,7 +764,7 @@ If .stackit.yaml already exists, use --force to overwrite it.`,
 			// Check if file already exists
 			if _, err := os.Stat(configPath); err == nil {
 				if !force {
-					return fmt.Errorf(".stackit.yaml already exists; use --force to overwrite")
+					return errors.New(".stackit.yaml already exists; use --force to overwrite")
 				}
 			}
 
@@ -965,11 +966,11 @@ func showConfigWithSources(repoRoot string, w io.Writer) error {
 
 	// ci.timeout
 	ciTimeoutSource := getIntSource(config.KeyCITimeout, projectCfg != nil && projectCfg.HasCITimeout())
-	formatLine("ci.timeout", fmt.Sprintf("%d", cfg.CITimeout()), ciTimeoutSource)
+	formatLine("ci.timeout", strconv.Itoa(cfg.CITimeout()), ciTimeoutSource)
 
 	// undo.depth
 	undoSource := getIntSource(config.KeyUndoDepth, projectCfg != nil && projectCfg.HasUndoDepth())
-	formatLine("undo.depth", fmt.Sprintf("%d", cfg.UndoStackDepth()), undoSource)
+	formatLine("undo.depth", strconv.Itoa(cfg.UndoStackDepth()), undoSource)
 
 	// undo.enabled
 	undoEnabledSource := getBoolSource(config.KeyUndoEnabled, projectCfg != nil && projectCfg.HasUndoEnabled())
@@ -993,7 +994,7 @@ func showConfigWithSources(repoRoot string, w io.Writer) error {
 
 	// maxConcurrency
 	maxConcurrencySource := getIntSource(config.KeyMaxConcurrency, projectCfg != nil && projectCfg.HasMaxConcurrency())
-	formatLine("maxConcurrency", fmt.Sprintf("%d", cfg.MaxConcurrency()), maxConcurrencySource)
+	formatLine("maxConcurrency", strconv.Itoa(cfg.MaxConcurrency()), maxConcurrencySource)
 
 	// navigation.when
 	navWhenSource := getStringSource(config.KeyNavigationWhen, projectCfg != nil && projectCfg.HasNavigationWhen())

@@ -232,7 +232,7 @@ func TestConfigCICommand(t *testing.T) {
 
 		cfg, err := LoadConfig(scene.Dir)
 		require.NoError(t, err)
-		require.Equal(t, "", cfg.CICommand())
+		require.Empty(t, cfg.CICommand())
 	})
 
 	t.Run("returns ci.command when set", func(t *testing.T) {

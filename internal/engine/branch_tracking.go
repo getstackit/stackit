@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -16,7 +17,7 @@ func (e *engineImpl) TrackBranch(ctx context.Context, branchName string, parentB
 		return fmt.Errorf("cannot track trunk branch %s", e.trunk)
 	}
 	if branchName == parentBranchName {
-		return fmt.Errorf("branch cannot be its own parent")
+		return errors.New("branch cannot be its own parent")
 	}
 
 	// Validate branches exist (under lock for consistent reads)
@@ -103,7 +104,7 @@ func (e *engineImpl) TrackBranchPastLandedParent(ctx context.Context, branchName
 		return fmt.Errorf("cannot track trunk branch %s", e.trunk)
 	}
 	if branchName == parentBranchName {
-		return fmt.Errorf("branch cannot be its own parent")
+		return errors.New("branch cannot be its own parent")
 	}
 
 	if prior.Branch != "" && prior.Revision != "" && prior.Branch != branchName {
@@ -697,7 +698,7 @@ func (e *engineImpl) SetLocked(ctx context.Context, branches Branches, reason Lo
 
 		// If all reads failed, return early
 		if len(metas) == 0 {
-			return fmt.Errorf("failed to read metadata for any branches")
+			return errors.New("failed to read metadata for any branches")
 		}
 
 		// Stage all updates - iterate over branchNames for deterministic order
@@ -738,7 +739,7 @@ func (e *engineImpl) SetLocked(ctx context.Context, branches Branches, reason Lo
 		}
 
 		if len(result.Errors) > 0 {
-			return fmt.Errorf("failed to update locked status for some branches")
+			return errors.New("failed to update locked status for some branches")
 		}
 
 		return nil
@@ -803,7 +804,7 @@ func (e *engineImpl) SetFrozen(ctx context.Context, branches Branches, state Fre
 		}
 
 		if len(result.Errors) > 0 {
-			return fmt.Errorf("failed to update frozen status for some branches")
+			return errors.New("failed to update frozen status for some branches")
 		}
 
 		return nil

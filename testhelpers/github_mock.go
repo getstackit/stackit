@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -110,14 +111,14 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 		if strings.HasPrefix(path, basePathWithSlash) {
 			// Check if this is a reviewers endpoint
 			if strings.HasSuffix(path, "/requested_reviewers") {
-				if r.Method == "POST" {
+				if r.Method == http.MethodPost {
 					// Request reviewers - just return success
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusCreated)
 					_ = json.NewEncoder(w).Encode(map[string]any{"message": "Reviewers requested"})
 					return
 				}
-				if r.Method == "DELETE" {
+				if r.Method == http.MethodDelete {
 					// Remove reviewers - just return success
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
@@ -129,7 +130,7 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 			}
 
 			// Handle PATCH /repos/{owner}/{repo}/pulls/{number}
-			if r.Method == "PATCH" {
+			if r.Method == http.MethodPatch {
 				// Extract PR number from original path
 				prNumber := extractPRNumber(originalPath)
 				if prNumber == 0 {
@@ -224,7 +225,7 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 			}
 
 			// Handle GET /repos/{owner}/{repo}/pulls/{number}
-			if r.Method == "GET" {
+			if r.Method == http.MethodGet {
 				prNumber := extractPRNumber(originalPath)
 				if prNumber == 0 {
 					http.Error(w, "Invalid PR number", http.StatusBadRequest)
@@ -283,7 +284,7 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 		// Handle exact basePath matches (list/create)
 		if path == basePath {
 			// Handle POST /repos/{owner}/{repo}/pulls (create PR)
-			if r.Method == "POST" {
+			if r.Method == http.MethodPost {
 				// Parse request body
 				var newPR github.CreatePullRequest
 				if err := json.NewDecoder(r.Body).Decode(&newPR); err != nil {
@@ -300,7 +301,7 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 					Head:    &github.PullRequestBranch{Ref: new(newPR.Head)},
 					Base:    &github.PullRequestBranch{Ref: new(newPR.Base)},
 					Draft:   newPR.Draft,
-					HTMLURL: new("https://github.com/" + config.Owner + "/" + config.Repo + "/pull/" + fmt.Sprintf("%d", prNumber)),
+					HTMLURL: new("https://github.com/" + config.Owner + "/" + config.Repo + "/pull/" + strconv.Itoa(prNumber)),
 				}
 
 				config.CreatedPRs = append(config.CreatedPRs, pr)
@@ -313,7 +314,7 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 			}
 
 			// Handle GET /repos/{owner}/{repo}/pulls (list PRs)
-			if r.Method == "GET" {
+			if r.Method == http.MethodGet {
 				// Parse query parameters for head filter
 				head := r.URL.Query().Get("head")
 				if head != "" {
@@ -388,7 +389,7 @@ func NewMockGitHubClient(t *testing.T, config *MockGitHubServerConfig) (*github.
 func extractPRNumber(path string) int {
 	// Find the last segment after "/pulls/"
 	pullsIdx := -1
-	for i := 0; i < len(path)-6; i++ {
+	for i := range len(path) - 6 {
 		if path[i:i+6] == "/pulls" {
 			pullsIdx = i + 6
 			break

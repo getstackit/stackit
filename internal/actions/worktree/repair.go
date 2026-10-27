@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -153,7 +154,7 @@ func repairRegistration(ctx *app.Context, cfg RepoConfig, entry Entry, wtInfo en
 		}, nil
 	}
 
-	return RepairEntry{}, fmt.Errorf("registration is already healthy")
+	return RepairEntry{}, errors.New("registration is already healthy")
 }
 
 // migrateRegistration transfers a registration after the caller has

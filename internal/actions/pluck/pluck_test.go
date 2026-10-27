@@ -402,7 +402,7 @@ func TestPluckAction(t *testing.T) {
 		branch2CommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"))
 		branch2Commits := branch2CommitsData.Subjects()
 		require.NoError(t, err)
-		require.Equal(t, 1, len(branch2Commits))
+		require.Len(t, branch2Commits, 1)
 		require.Equal(t, "commit in branch2", branch2Commits[0])
 	})
 

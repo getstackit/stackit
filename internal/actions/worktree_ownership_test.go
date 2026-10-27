@@ -26,7 +26,7 @@ func TestEnsureCanModifyHere(t *testing.T) {
 	t.Run("refuses managed stack mutation from main repository", func(t *testing.T) {
 		err := EnsureCanModifyHere(s.Context, s.Engine.GetBranch("feature"))
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "belongs to worktree feature-wt")
+		require.ErrorContains(t, err, "belongs to worktree feature-wt")
 		assert.ErrorContains(t, err, "cd "+worktreePath)
 	})
 
@@ -43,8 +43,8 @@ func TestEnsureCanModifyHere(t *testing.T) {
 
 		err := EnsureCanModifyHere(gone.Context, gone.Engine.GetBranch("feature"))
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "no longer exists")
-		assert.ErrorContains(t, err, "worktree detach feature-wt")
+		require.ErrorContains(t, err, "no longer exists")
+		require.ErrorContains(t, err, "worktree detach feature-wt")
 		assert.NotContains(t, err.Error(), "cd "+missing)
 	})
 

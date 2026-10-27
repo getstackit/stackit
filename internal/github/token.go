@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -59,7 +60,7 @@ func resolveToken(ctx context.Context, runner GitCommandRunner, host string, get
 
 	token := strings.TrimSpace(output)
 	if token == "" {
-		return "", fmt.Errorf("empty GitHub token")
+		return "", errors.New("empty GitHub token")
 	}
 
 	return token, nil

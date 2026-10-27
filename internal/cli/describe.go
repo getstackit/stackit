@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/spf13/cobra"
 
@@ -48,7 +48,7 @@ Examples:
 			// -m/-d so the input source is unambiguous.
 			if messageFile != "" {
 				if message != "" || description != "" {
-					return fmt.Errorf("cannot use --message-file with --title/--description; pass only one")
+					return errors.New("cannot use --message-file with --title/--description; pass only one")
 				}
 				content, err := common.ReadMessage("", messageFile)
 				if err != nil {
@@ -56,7 +56,7 @@ Examples:
 				}
 				parsed := describe.ParseEditorContent(content)
 				if parsed == nil {
-					return fmt.Errorf("--message-file content has no title (first non-empty line)")
+					return errors.New("--message-file content has no title (first non-empty line)")
 				}
 				title, desc = parsed.Title, parsed.Description
 			}

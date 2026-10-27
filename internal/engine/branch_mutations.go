@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -110,7 +111,7 @@ func (e *engineImpl) PushBranches(ctx context.Context, remote string, specs []gi
 func (e *engineImpl) DeleteBranch(ctx context.Context, branch Branch) error {
 	branchName := branch.GetName()
 	if e.IsTrunk(branch) {
-		return fmt.Errorf("cannot delete trunk branch")
+		return errors.New("cannot delete trunk branch")
 	}
 
 	// Refresh the actual HEAD branch before deciding whether deletion needs to
@@ -224,7 +225,7 @@ func (e *engineImpl) DeleteBranches(ctx context.Context, branches Branches) ([]s
 
 	// Validate: no trunk in the batch.
 	if slices.ContainsFunc(branches, func(b Branch) bool { return e.IsTrunk(b) }) {
-		return nil, fmt.Errorf("cannot delete trunk branch")
+		return nil, errors.New("cannot delete trunk branch")
 	}
 
 	// Snapshot in-memory state under one lock acquisition: children and parent

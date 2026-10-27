@@ -1,7 +1,7 @@
 package branch
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/spf13/cobra"
 
@@ -19,7 +19,7 @@ type renameHandler struct{}
 
 func (renameHandler) PromptNewName(currentName string) (string, error) {
 	if !utils.IsInteractive() {
-		return "", fmt.Errorf("branch name is required in non-interactive mode")
+		return "", errors.New("branch name is required in non-interactive mode")
 	}
 	return tui.PromptTextInput("Enter new branch name:", currentName)
 }

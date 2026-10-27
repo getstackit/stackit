@@ -56,7 +56,7 @@ func selectInstallTargets(baseDir string, formats []string) ([]agentInstallTarge
 		if len(fallback) > 0 {
 			return targetsForFormats(fallback), nil
 		}
-		return nil, fmt.Errorf("format selection requires interactive mode; use --format=claude or --format=codex")
+		return nil, errors.New("format selection requires interactive mode; use --format=claude or --format=codex")
 	}
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func confirmOverwriteIfNeeded(baseDir string, targets []agentInstallTarget, forc
 			}
 		}
 		if hasConflict {
-			return fmt.Errorf("existing installation found")
+			return errors.New("existing installation found")
 		}
 		return nil
 	}
@@ -190,7 +190,7 @@ func parseAgentSkillFormats(rawValues []string) ([]agentSkillFormat, error) {
 		}
 	}
 	if len(formats) == 0 {
-		return nil, fmt.Errorf("at least one format must be provided")
+		return nil, errors.New("at least one format must be provided")
 	}
 	return utils.Unique(formats), nil
 }
@@ -227,7 +227,7 @@ func checkExistingInstallation(baseDir string, format agentSkillFormat, version 
 	}
 	_, _ = fmt.Fprintln(out)
 	_, _ = fmt.Fprintln(out, "Run with --force to overwrite")
-	return fmt.Errorf("existing installation found")
+	return errors.New("existing installation found")
 }
 
 // promptAndInstallWorkflowBlock prompts the user and installs the workflow block.

@@ -2,6 +2,7 @@
 package merge
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -271,7 +272,7 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 	}
 
 	if len(availableStacks) == 0 {
-		return fmt.Errorf("no independent stacks found rooted at trunk")
+		return errors.New("no independent stacks found rooted at trunk")
 	}
 
 	if !opts.dryRun {
@@ -302,7 +303,7 @@ func runMultiStackShip(ctx *app.Context, opts shipMultiStackOptions) error {
 		if len(opts.stacks) > 0 {
 			selected = mergeAction.FilterStacks(availableStacks, opts.stacks)
 			if len(selected) == 0 {
-				return fmt.Errorf("none of the specified stacks were found")
+				return errors.New("none of the specified stacks were found")
 			}
 		}
 

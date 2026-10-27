@@ -197,7 +197,7 @@ func handleAutoMergeError(ctx context.Context, handler ProgressHandler, runner g
 	// "not enabled on repo" → fall back to polling + direct merge if --wait
 	if errors.Is(autoMergeErr, github.ErrAutoMergeNotEnabled) {
 		if !opts.Wait {
-			return 0, fmt.Errorf("auto-merge is not enabled for this repository. Use --wait to poll and merge directly, or enable auto-merge in repository settings")
+			return 0, errors.New("auto-merge is not enabled for this repository. Use --wait to poll and merge directly, or enable auto-merge in repository settings")
 		}
 
 		handler.OnProgress(PRWaitingForMergeableEvent{PRNumber: opts.PRNumber})

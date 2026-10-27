@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -18,7 +19,7 @@ func AttachAction(ctx *app.Context, opts AttachOptions) (*WorktreeResult, error)
 	eng := ctx.Engine
 	out := ctx.Output
 	if ctx.InManagedWorktree {
-		return nil, fmt.Errorf("cannot attach from inside a managed worktree")
+		return nil, errors.New("cannot attach from inside a managed worktree")
 	}
 	cfg, err := resolveRepoConfig(ctx, nil)
 	if err != nil {

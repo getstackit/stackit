@@ -2,7 +2,6 @@ package git_test
 
 import (
 	"context"
-	"os"
 	"os/exec"
 	"testing"
 
@@ -26,9 +25,7 @@ func TestPullBranch_Reproduction(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Setup a "local" repository
-	localDir, err := os.MkdirTemp("", "stackit-test-local-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(localDir) })
+	localDir := t.TempDir()
 
 	cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
 	err = cmd.Run()
@@ -163,9 +160,7 @@ func TestFetch_ForceUpdatedRemoteBranch(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Clone locally and prime the remote-tracking ref at commit A
-	localDir, err := os.MkdirTemp("", "stackit-test-local-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(localDir) })
+	localDir := t.TempDir()
 
 	cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
 	err = cmd.Run()
@@ -258,9 +253,7 @@ func TestPullBranch_FetchResolvesNewCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Setup a "local" repository
-	localDir, err := os.MkdirTemp("", "stackit-test-local-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(localDir) })
+	localDir := t.TempDir()
 
 	cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
 	err = cmd.Run()
@@ -332,9 +325,7 @@ func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Clone to local repository (this will be the "main workspace")
-	localDir, err := os.MkdirTemp("", "stackit-test-main-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(localDir) })
+	localDir := t.TempDir()
 
 	cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
 	err = cmd.Run()
@@ -373,9 +364,7 @@ func TestPullBranch_WorktreeCorruptsMainWorkspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// 5. Create a temporary worktree at detached HEAD (simulating merge worktree)
-	worktreeDir, err := os.MkdirTemp("", "stackit-test-worktree-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(worktreeDir) })
+	worktreeDir := t.TempDir()
 
 	_, err = mainRunner.RunGitCommandWithContext(ctx, "worktree", "add", "--detach", worktreeDir, "HEAD")
 	require.NoError(t, err)
@@ -444,9 +433,7 @@ func TestPullBranch_WorkingDirSyncWhenOnBranch(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Clone to local repository
-	localDir, err := os.MkdirTemp("", "stackit-test-local-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(localDir) })
+	localDir := t.TempDir()
 
 	cmd := exec.Command("git", "clone", "--branch", "main", remotePath, localDir)
 	err = cmd.Run()

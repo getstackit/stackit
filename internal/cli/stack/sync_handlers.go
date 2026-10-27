@@ -377,12 +377,12 @@ func (h *SimpleSyncHandler) OnRestackBranch(restack handlers.RestackBranchEvent)
 	}
 
 	switch result {
-	case syncAction.RestackDone, syncAction.RestackUnneeded:
+	case handlers.RestackDone, handlers.RestackUnneeded:
 		event.Type = syncAction.EventCompleted
-	case syncAction.RestackConflict:
+	case handlers.RestackConflict:
 		event.Type = syncAction.EventSkipped
 		event.Conflict = true
-	case syncAction.RestackBlocked:
+	case handlers.RestackBlocked:
 		event.Type = syncAction.EventSkipped
 		event.Message = reasonBlockedByConflict
 	}
@@ -449,7 +449,7 @@ func formatRestackSummaryLine(restacked, skipped, blocked, upToDate int) string 
 // RestackUnneeded status as one that needed no work, so it must be excluded
 // here or "I protected your work" is silently counted as "already current".
 func isPlainUpToDate(event handlers.RestackBranchEvent) bool {
-	return event.Result == syncAction.RestackUnneeded &&
+	return event.Result == handlers.RestackUnneeded &&
 		!event.LockReason.IsLocked() &&
 		!event.Frozen &&
 		event.HeldBy == "" &&
@@ -731,7 +731,7 @@ func (h *InteractiveSyncHandler) formatRestackDetail(event handlers.RestackBranc
 	displayName := style.ColorBranchNameIf(event.Branch, event.IsCurrent)
 
 	switch event.Result {
-	case syncAction.RestackDone:
+	case handlers.RestackDone:
 		msg := fmt.Sprintf("Restacked %s%s", displayName, prInfo)
 		if event.Parent != "" {
 			msg += fmt.Sprintf(" on %s", event.Parent)
@@ -741,7 +741,7 @@ func (h *InteractiveSyncHandler) formatRestackDetail(event handlers.RestackBranc
 			msg += " " + actions.FormatRerereResolved(event.RerereResolvedCount)
 		}
 		return msg, syncComponent.MarkDone
-	case syncAction.RestackUnneeded:
+	case handlers.RestackUnneeded:
 		// A hold reports the same status as "nothing to do", so mark it as a
 		// warning and say why — the remedy lives in another worktree.
 		if event.HeldBy != "" {
@@ -759,9 +759,9 @@ func (h *InteractiveSyncHandler) formatRestackDetail(event handlers.RestackBranc
 			return fmt.Sprintf("%s%s up to date", displayName, prInfo), syncComponent.MarkDone
 		}
 		return fmt.Sprintf("%s%s %s", displayName, prInfo, reason), syncComponent.MarkDone
-	case syncAction.RestackConflict:
+	case handlers.RestackConflict:
 		return fmt.Sprintf("Skipped %s%s (conflict)", displayName, prInfo), syncComponent.MarkWarn
-	case syncAction.RestackBlocked:
+	case handlers.RestackBlocked:
 		return fmt.Sprintf("Skipped %s%s %s", displayName, prInfo, reasonBlockedByConflict), syncComponent.MarkWarn
 	}
 	return "", syncComponent.MarkDone
@@ -933,14 +933,12 @@ func (h *InteractiveSyncHandler) formatRestackSummary(restacked, skipped int, co
 		return "✨ Everything is up to date!"
 	}
 
-	result := ""
+	var result strings.Builder
 	if summary := formatRestackSummaryLine(restacked, skipped, len(blocked), h.restackUpToDate); summary != "" {
-		result = "✅ Summary: " + summary
+		result.WriteString("✅ Summary: " + summary)
 	}
-
 	for _, conflict := range conflicts {
-		result += fmt.Sprintf("\n   Run 'st restack %s' to resolve and continue", conflict)
+		fmt.Fprintf(&result, "\n   Run 'st restack %s' to resolve and continue", conflict)
 	}
-
-	return result
+	return result.String()
 }

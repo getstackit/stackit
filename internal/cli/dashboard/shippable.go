@@ -2,6 +2,7 @@
 package dashboard
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,7 +16,7 @@ import (
 // RunShippable starts the shippable work dashboard.
 func RunShippable(ctx *app.Context, opts ShippableOptions) error {
 	if !tui.IsTTY() {
-		return fmt.Errorf("dashboard requires an interactive terminal")
+		return errors.New("dashboard requires an interactive terminal")
 	}
 
 	// Load config for CI settings

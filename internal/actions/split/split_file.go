@@ -2,6 +2,7 @@ package split
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -347,7 +348,7 @@ func splitByFileAbove(ctx context.Context, branchToSplit engine.Branch, newBranc
 		return nil, fmt.Errorf("failed to read working tree status: %w", err)
 	}
 	if !status.Staged {
-		return nil, fmt.Errorf("no changes staged for extraction")
+		return nil, errors.New("no changes staged for extraction")
 	}
 
 	// Check if there are remaining changes (to keep on branchToSplit)
@@ -518,7 +519,7 @@ func splitByFileSibling(ctx context.Context, branchToSplit engine.Branch, parent
 		return nil, fmt.Errorf("failed to check staged changes: %w", err)
 	}
 	if !hasStaged {
-		return nil, fmt.Errorf("no changes staged")
+		return nil, errors.New("no changes staged")
 	}
 
 	// Commit
@@ -572,7 +573,7 @@ func filterHunksByFiles(hunks []git.Hunk, files []string) []git.Hunk {
 // promptForFiles shows an interactive file selector for split --by-file
 func promptForFiles(ctx context.Context, prompter handlerBase.MultiSelector, branchToSplit engine.Branch, eng splitByFileEngine, splog output.Output, asSibling bool, direction Direction) ([]string, error) {
 	if !utils.IsInteractive() {
-		return nil, fmt.Errorf("file selection must be specified via pathspecs in non-interactive mode")
+		return nil, errors.New("file selection must be specified via pathspecs in non-interactive mode")
 	}
 	// Get the parent branch to compare against
 	parentBranchName := branchToSplit.GetParentOrTrunk()
@@ -594,7 +595,7 @@ func promptForFiles(ctx context.Context, prompter handlerBase.MultiSelector, bra
 	}
 
 	if len(changedFiles) == 1 {
-		return nil, fmt.Errorf("only one file changed in branch - use --by-hunk to split by individual changes")
+		return nil, errors.New("only one file changed in branch - use --by-hunk to split by individual changes")
 	}
 
 	// Show instructions based on mode
@@ -620,7 +621,7 @@ func promptForFiles(ctx context.Context, prompter handlerBase.MultiSelector, bra
 
 	// Validate that not all files were selected (only in default mode where files are removed)
 	if !asSibling && len(selectedFiles) == len(changedFiles) {
-		return nil, fmt.Errorf("cannot extract all files - at least one must remain on the original branch; use --as-sibling to extract without modifying the original branch")
+		return nil, errors.New("cannot extract all files - at least one must remain on the original branch; use --as-sibling to extract without modifying the original branch")
 	}
 
 	return selectedFiles, nil

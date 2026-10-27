@@ -289,7 +289,7 @@ func foreachSequential(ctx *app.Context, opts Options, branches engine.Branches,
 				Message: "Command failed on one or more branches",
 				Results: allResults,
 			})
-			return fmt.Errorf("command failed on one or more branches")
+			return errors.New("command failed on one or more branches")
 		}
 		// With --no-fail-fast, continue and return nil (errors are in results)
 		handler.OnEvent(CompletionEvent{
@@ -326,7 +326,7 @@ func foreachParallel(ctx *app.Context, opts Options, branches engine.Branches, h
 			Message: "Command failed on one or more branches",
 			Results: sortedResults,
 		})
-		return fmt.Errorf("command failed on one or more branches")
+		return errors.New("command failed on one or more branches")
 	}
 
 	handler.OnEvent(CompletionEvent{

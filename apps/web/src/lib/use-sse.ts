@@ -28,14 +28,6 @@ export function useSSE(
     const url = `${API_BASE}/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/events`;
     const eventSource = new EventSource(url);
 
-    eventSource.addEventListener("stacks_updated", () => {
-      handleUpdate();
-    });
-
-    eventSource.addEventListener("branch_changed", () => {
-      handleUpdate();
-    });
-
     eventSource.addEventListener("refresh", () => {
       handleUpdate();
     });

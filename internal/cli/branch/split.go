@@ -2,7 +2,7 @@
 package branch
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/spf13/cobra"
 
@@ -97,7 +97,7 @@ Examples:
 				var direction split.Direction
 				switch {
 				case above && below:
-					return fmt.Errorf("cannot specify both --above and --below")
+					return errors.New("cannot specify both --above and --below")
 				case above:
 					direction = split.DirectionAbove
 				case below:
@@ -112,22 +112,22 @@ Examples:
 				// invocation (e.g. --message-file - --by-commit) fails fast
 				// instead of draining stdin or opening a file first.
 				if patchFile != "" && style != split.StyleHunk {
-					return fmt.Errorf("--patch can only be used with --by-hunk")
+					return errors.New("--patch can only be used with --by-hunk")
 				}
 				if name != "" && style != split.StyleFile && patchFile == "" {
-					return fmt.Errorf("--name can only be used with --by-file or --by-hunk --patch")
+					return errors.New("--name can only be used with --by-file or --by-hunk --patch")
 				}
 				if (message != "" || messageFile != "") && style != split.StyleFile && patchFile == "" {
-					return fmt.Errorf("--message/--message-file can only be used with --by-file or --by-hunk --patch")
+					return errors.New("--message/--message-file can only be used with --by-file or --by-hunk --patch")
 				}
 				if (above || below) && style != "" && style != split.StyleHunk && style != split.StyleFile {
-					return fmt.Errorf("--above/--below can only be used with --by-hunk or --by-file")
+					return errors.New("--above/--below can only be used with --by-hunk or --by-file")
 				}
 				if above && style == split.StyleFile && asSibling {
-					return fmt.Errorf("--above and --as-sibling cannot be used together")
+					return errors.New("--above and --as-sibling cannot be used together")
 				}
 				if messageFile == "-" && patchFile == "-" {
-					return fmt.Errorf("cannot read both --message-file and --patch from stdin")
+					return errors.New("cannot read both --message-file and --patch from stdin")
 				}
 
 				resolvedMessage, err := common.ReadMessage(message, messageFile)

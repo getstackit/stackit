@@ -2,10 +2,12 @@ package integrations
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -301,7 +303,7 @@ func lowercaseFirst(raw string) string {
 func parseFrontmatter(content []byte, name string) (frontmatterLines []string, body []byte, argumentHint string, err error) {
 	frontmatter, bodyBytes, found := splitFrontmatter(content)
 	if !found {
-		return nil, nil, "", fmt.Errorf("missing frontmatter")
+		return nil, nil, "", errors.New("missing frontmatter")
 	}
 
 	lines := strings.Split(string(frontmatter), "\n")
@@ -366,7 +368,7 @@ func renderCodexSkillContent(content []byte, name string) ([]byte, error) {
 	}
 	description, ok := meta["description"].(string)
 	if !ok || strings.TrimSpace(description) == "" {
-		return nil, fmt.Errorf("missing description in frontmatter")
+		return nil, errors.New("missing description in frontmatter")
 	}
 
 	return assembleFrontmatter([]string{
@@ -509,17 +511,17 @@ func removeEmptyDirs(root string) error {
 	// WalkDir yields parents before children, so reversing visits the deepest
 	// directories first; a parent emptied by removing its last child is handled
 	// later in the same pass.
-	for i := len(dirs) - 1; i >= 0; i-- {
-		if dirs[i] == root {
+	for _, dir := range slices.Backward(dirs) {
+		if dir == root {
 			continue
 		}
-		entries, err := os.ReadDir(dirs[i])
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			return fmt.Errorf("failed to read directory %s: %w", dirs[i], err)
+			return fmt.Errorf("failed to read directory %s: %w", dir, err)
 		}
 		if len(entries) == 0 {
-			if err := os.Remove(dirs[i]); err != nil {
-				return fmt.Errorf("failed to remove empty directory %s: %w", dirs[i], err)
+			if err := os.Remove(dir); err != nil {
+				return fmt.Errorf("failed to remove empty directory %s: %w", dir, err)
 			}
 		}
 	}

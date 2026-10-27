@@ -11,22 +11,22 @@ func TestStatus_Constants(t *testing.T) {
 	t.Parallel()
 
 	// Verify status string values are stable (important for any serialization)
-	assert.Equal(t, Status("shippable"), StatusShippable)
-	assert.Equal(t, Status("pending"), StatusPending)
-	assert.Equal(t, Status("blocked"), StatusBlocked)
-	assert.Equal(t, Status("incomplete"), StatusIncomplete)
+	assert.Equal(t, StatusShippable, Status("shippable"))
+	assert.Equal(t, StatusPending, Status("pending"))
+	assert.Equal(t, StatusBlocked, Status("blocked"))
+	assert.Equal(t, StatusIncomplete, Status("incomplete"))
 }
 
 func TestBlockingReason_Constants(t *testing.T) {
 	t.Parallel()
 
 	// Verify reason string values are stable
-	assert.Equal(t, BlockingReason("changes_requested"), ReasonChangesRequested)
-	assert.Equal(t, BlockingReason("ci_failing"), ReasonCIFailing)
-	assert.Equal(t, BlockingReason("ci_pending"), ReasonCIPending)
-	assert.Equal(t, BlockingReason("draft"), ReasonDraft)
-	assert.Equal(t, BlockingReason("no_pr"), ReasonNoPR)
-	assert.Equal(t, BlockingReason("review_required"), ReasonReviewRequired)
+	assert.Equal(t, ReasonChangesRequested, BlockingReason("changes_requested"))
+	assert.Equal(t, ReasonCIFailing, BlockingReason("ci_failing"))
+	assert.Equal(t, ReasonCIPending, BlockingReason("ci_pending"))
+	assert.Equal(t, ReasonDraft, BlockingReason("draft"))
+	assert.Equal(t, ReasonNoPR, BlockingReason("no_pr"))
+	assert.Equal(t, ReasonReviewRequired, BlockingReason("review_required"))
 }
 
 func TestStack_IsShippable(t *testing.T) {

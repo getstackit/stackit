@@ -3,6 +3,7 @@ package flatten
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -471,7 +472,7 @@ func buildFlattenPlan(ctx *app.Context, eng flattenEngine, branches engine.Branc
 	divergence := eng.BatchDivergencePoints(branches)
 
 	if revisions[trunk.GetName()] == "" {
-		return nil, fmt.Errorf("failed to get trunk revision")
+		return nil, errors.New("failed to get trunk revision")
 	}
 
 	// potentialParents tracks branches that can serve as parents for subsequent branches

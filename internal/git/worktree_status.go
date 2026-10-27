@@ -2,7 +2,7 @@ package git
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 )
 
@@ -35,7 +35,7 @@ func parseWorktreeStatus(out string) (WorktreeStatus, error) {
 	for out != "" {
 		record, rest, ok := strings.Cut(out, "\x00")
 		if !ok || len(record) < 4 || record[2] != ' ' {
-			return WorktreeStatus{}, fmt.Errorf("malformed worktree status record")
+			return WorktreeStatus{}, errors.New("malformed worktree status record")
 		}
 		out = rest
 		x, y := record[0], record[1]
@@ -52,7 +52,7 @@ func parseWorktreeStatus(out string) (WorktreeStatus, error) {
 		if x == 'R' || x == 'C' || y == 'R' || y == 'C' {
 			_, out, ok = strings.Cut(out, "\x00")
 			if !ok {
-				return WorktreeStatus{}, fmt.Errorf("missing rename source in worktree status")
+				return WorktreeStatus{}, errors.New("missing rename source in worktree status")
 			}
 		}
 	}

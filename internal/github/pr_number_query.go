@@ -2,6 +2,7 @@ package github
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -36,7 +37,7 @@ func parsePRNumberQueryResponse[T any](body []byte, prNumbers []git.PRNumber, de
 		if len(resp.Errors) > 0 {
 			return nil, fmt.Errorf("graphql error: %s", resp.Errors[0].Message)
 		}
-		return nil, fmt.Errorf("invalid GraphQL response format: missing repository")
+		return nil, errors.New("invalid GraphQL response format: missing repository")
 	}
 
 	results := make(map[git.PRNumber]T, len(prNumbers))

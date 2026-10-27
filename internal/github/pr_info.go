@@ -3,6 +3,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -142,7 +143,7 @@ func getRemoteRepository(_ context.Context, runner GitCommandRunner) (git.Remote
 		return git.RemoteRepository{}, err
 	}
 	if !repo.IsHosted() {
-		return git.RemoteRepository{}, fmt.Errorf("failed to parse hostname, owner, or repo from remote URL")
+		return git.RemoteRepository{}, errors.New("failed to parse hostname, owner, or repo from remote URL")
 	}
 	return repo, nil
 }

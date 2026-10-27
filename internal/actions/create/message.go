@@ -1,7 +1,7 @@
 package create
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/editor"
@@ -52,7 +52,7 @@ func getCommitMessageForBranch(ctx *app.Context, opts *Options, commitMessage st
 
 	// No branch name and no message - need one for branch generation
 	if !utils.IsInteractive() {
-		return "", fmt.Errorf("must specify either a branch name or commit message")
+		return "", errors.New("must specify either a branch name or commit message")
 	}
 
 	// Interactive: get commit message from editor
@@ -61,7 +61,7 @@ func getCommitMessageForBranch(ctx *app.Context, opts *Options, commitMessage st
 		return "", err
 	}
 	if msg == "" {
-		return "", fmt.Errorf("aborting due to empty commit message")
+		return "", errors.New("aborting due to empty commit message")
 	}
 	return msg, nil
 }

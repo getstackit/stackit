@@ -3,6 +3,7 @@ package move
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -133,7 +134,7 @@ func resolveSource(eng moveEngine, source string) (string, error) {
 	if source == "" {
 		currentBranch := eng.CurrentBranch()
 		if currentBranch == nil {
-			return "", fmt.Errorf("not on a branch and no source branch specified")
+			return "", errors.New("not on a branch and no source branch specified")
 		}
 		return currentBranch.GetName(), nil
 	}
@@ -145,7 +146,7 @@ func ensureOnto(ctx *app.Context, opts *Options, h Handler, source string) error
 		return nil
 	}
 	if opts.DryRun {
-		return fmt.Errorf("--onto flag is required when using --dry-run")
+		return errors.New("--onto flag is required when using --dry-run")
 	}
 	if !h.IsInteractive() {
 		return validation.ValidateTargetBranch(ctx.Engine, source, "", "move")

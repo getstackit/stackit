@@ -92,7 +92,7 @@ func TestSyncEntryNilProviderUsesEmptyToken(t *testing.T) {
 	s.refresh = func(*registry.RepoEntry) {}
 
 	s.syncOnce(context.Background())
-	require.Equal(t, "", gotToken, "no provider means an unauthenticated (public) fetch")
+	require.Empty(t, gotToken, "no provider means an unauthenticated (public) fetch")
 }
 
 func TestSyncRepoFetchesMatchingManagedEntry(t *testing.T) {

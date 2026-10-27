@@ -15,7 +15,7 @@ func (r *runner) getMergeBaseByRef(ctx context.Context, ref1Name, ref2Name strin
 	}
 	sha := strings.TrimSpace(out)
 	if sha == "" {
-		return "", fmt.Errorf("no merge base found")
+		return "", errors.New("no merge base found")
 	}
 	return sha, nil
 }

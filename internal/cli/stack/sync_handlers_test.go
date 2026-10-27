@@ -148,7 +148,7 @@ func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 	prNumber := git.PRNumber(42)
 	handler.OnRestackBranch(handlers.RestackBranchEvent{
 		Branch:      "feature-branch",
-		Result:      syncAction.RestackDone,
+		Result:      handlers.RestackDone,
 		NewRevision: "def5678",
 		PRNumber:    &prNumber,
 		LockReason:  engine.LockReasonNone,

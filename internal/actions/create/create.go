@@ -2,6 +2,7 @@
 package create
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -75,7 +76,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// Validate worktree flag - only allowed when creating from trunk
 	if opts.Worktree {
 		if !eng.IsTrunk(eng.GetBranch(currentBranch)) {
-			return Result{}, fmt.Errorf("--worktree/-w flag is only valid when creating a new stack from trunk")
+			return Result{}, errors.New("--worktree/-w flag is only valid when creating a new stack from trunk")
 		}
 	}
 
@@ -84,10 +85,10 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// on that assumption.
 	if opts.Onto != "" {
 		if opts.Worktree {
-			return Result{}, fmt.Errorf("--onto cannot be combined with --worktree/-w")
+			return Result{}, errors.New("--onto cannot be combined with --worktree/-w")
 		}
 		if opts.Insert {
-			return Result{}, fmt.Errorf("--onto cannot be combined with --insert/-i")
+			return Result{}, errors.New("--onto cannot be combined with --insert/-i")
 		}
 		if err := validateOntoTarget(eng, opts.Onto); err != nil {
 			return Result{}, err
@@ -168,7 +169,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 	// intentional empty scaffolding branch.
 	if !hasStaged && !opts.AllowEmpty && !h.IsInteractive() {
 		if status.HasUnstagedChanges() {
-			return Result{}, fmt.Errorf("nothing staged but the working tree has changes; stage them with 'git add' (or pass --all/-a), or pass --allow-empty to create an empty branch")
+			return Result{}, errors.New("nothing staged but the working tree has changes; stage them with 'git add' (or pass --all/-a), or pass --allow-empty to create an empty branch")
 		}
 	}
 
@@ -210,7 +211,7 @@ func Action(ctx *app.Context, opts Options, h Handler) (Result, error) {
 				opts.Scope = promptedScope // Ensure it gets set in metadata
 			}
 		} else {
-			return Result{}, fmt.Errorf("branch pattern contains {scope} but no scope provided; use --scope to set one")
+			return Result{}, errors.New("branch pattern contains {scope} but no scope provided; use --scope to set one")
 		}
 	}
 

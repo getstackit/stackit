@@ -54,7 +54,7 @@ func GetContinuationState(repoRoot string) (*ContinuationState, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("no continuation state found")
+			return nil, errors.New("no continuation state found")
 		}
 		return nil, fmt.Errorf("failed to read continuation state: %w", err)
 	}

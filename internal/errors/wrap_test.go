@@ -38,7 +38,7 @@ func TestFailedTo(t *testing.T) {
 			t.Parallel()
 			result := FailedTo(tt.action, tt.target, tt.err)
 			if tt.err == nil {
-				require.Nil(t, result)
+				require.NoError(t, result)
 			} else {
 				require.Equal(t, tt.expected, result.Error())
 			}

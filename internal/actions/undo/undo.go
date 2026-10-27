@@ -3,6 +3,7 @@ package undo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -91,7 +92,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	}
 
 	if selectedSnapshot == nil {
-		return fmt.Errorf("selected snapshot not found")
+		return errors.New("selected snapshot not found")
 	}
 
 	// Count how many snapshots will be "undone" (all snapshots newer than the selected one)
@@ -161,7 +162,7 @@ func Action(ctx *app.Context, opts Options, h Handler) error {
 	case dirtyErr != nil:
 		return fmt.Errorf("failed to check for uncommitted changes: %w", dirtyErr)
 	case dirty:
-		return fmt.Errorf("you have uncommitted changes; undo would overwrite them.\nCommit them, or run 'git stash' and 'git stash pop' around the undo")
+		return errors.New("you have uncommitted changes; undo would overwrite them.\nCommit them, or run 'git stash' and 'git stash pop' around the undo")
 	}
 
 	// Perform the restoration

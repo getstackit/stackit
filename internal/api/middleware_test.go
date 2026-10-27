@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -232,8 +233,8 @@ func TestMaxBodyMiddlewareAllowsSmallBody(t *testing.T) {
 
 	handler := maxBodyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.Equal(t, []byte("ok"), b)
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("ok"), b)
 		w.WriteHeader(http.StatusOK)
 	}))
 

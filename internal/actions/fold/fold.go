@@ -3,6 +3,7 @@ package fold
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -160,7 +161,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if opts.Keep {
 		// Prevent folding onto trunk with --keep, as that would delete trunk
 		if parentBranch.IsTrunk() {
-			return fmt.Errorf("cannot fold into trunk with --keep because it would delete the trunk branch")
+			return errors.New("cannot fold into trunk with --keep because it would delete the trunk branch")
 		}
 		if err := foldWithKeep(gctx, ctx, currentBranchObj, parentBranch, eng, out, opts); err != nil {
 			return err

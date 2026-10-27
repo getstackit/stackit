@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 
@@ -616,12 +617,12 @@ func (e *engineImpl) tryConflictFreeReplay(
 	// commit immediately before it. Each replayed commit becomes the new base for
 	// the next, so author identity and message are preserved per commit.
 	newBase := resolvedParent
-	for i := len(commits) - 1; i >= 0; i-- {
+	for i, commit := range slices.Backward(commits) {
 		mergeBase := spec.OldUpstream
 		if i+1 < len(commits) {
 			mergeBase = commits[i+1].SHA
 		}
-		newSHA, ok := e.replayCommitConflictFree(ctx, commits[i], mergeBase, newBase)
+		newSHA, ok := e.replayCommitConflictFree(ctx, commit, mergeBase, newBase)
 		if !ok {
 			return "", false
 		}
@@ -635,8 +636,8 @@ func (e *engineImpl) tryConflictFreeReplay(
 // shape to preserve git rebase semantics; merge commits and side-branch commits
 // must fall back to the real worktree rebase.
 func commitRangeIsLinear(commits []git.CommitMetadata, oldUpstream string) bool {
-	for i := len(commits) - 1; i >= 0; i-- {
-		parents := commits[i].Parents
+	for i, commit := range slices.Backward(commits) {
+		parents := commit.Parents
 		if len(parents) != 1 {
 			return false
 		}

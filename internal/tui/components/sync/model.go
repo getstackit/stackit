@@ -3,6 +3,7 @@ package sync
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/progress"
@@ -231,7 +232,7 @@ func (m *Model) View() tea.View {
 
 	// Progress bar with count (single line, like package-manager)
 	n := m.TotalOps
-	w := lipgloss.Width(fmt.Sprintf("%d", n))
+	w := lipgloss.Width(strconv.Itoa(n))
 	pkgCount := fmt.Sprintf(" %*d/%*d", w, m.CompletedOps, w, n)
 
 	spin := m.spinner.View() + " "

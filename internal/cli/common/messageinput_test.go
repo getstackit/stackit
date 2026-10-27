@@ -1,7 +1,6 @@
 package common
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -24,7 +23,7 @@ func TestReadMessage(t *testing.T) {
 		t.Parallel()
 		got, err := ReadMessage("", "")
 		require.NoError(t, err)
-		require.Equal(t, "", got)
+		require.Empty(t, got)
 	})
 
 	t.Run("errors when both given with actionable hint", func(t *testing.T) {
@@ -75,7 +74,7 @@ func TestReadMessage(t *testing.T) {
 		require.Contains(t, err.Error(), `use "-" to read from stdin`)
 		// Caller should still be able to detect the underlying not-found
 		// condition via errors.Is — the wrapped error chain is preserved.
-		require.True(t, errors.Is(err, fs.ErrNotExist), "expected error chain to satisfy fs.ErrNotExist")
+		require.ErrorIs(t, err, fs.ErrNotExist, "expected error chain to satisfy fs.ErrNotExist")
 	})
 
 	t.Run("errors when file is empty", func(t *testing.T) {

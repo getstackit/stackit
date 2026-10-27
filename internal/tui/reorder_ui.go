@@ -202,7 +202,7 @@ var ErrReorderCanceled = errors.New("reorder canceled")
 // trunk is displayed at the bottom but is not selectable or reorderable
 func RunReorderTUI(branches []string, trunk string) ([]string, error) {
 	if !IsTTY() {
-		return nil, fmt.Errorf("RunReorderTUI called in non-interactive mode")
+		return nil, errors.New("RunReorderTUI called in non-interactive mode")
 	}
 	m := newReorderModel(branches, trunk)
 	p := tea.NewProgram(m, tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))

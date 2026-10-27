@@ -1,6 +1,7 @@
 package split
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -11,7 +12,7 @@ import (
 
 func promptBranchName(prompter handlerBase.TextInputPrompter, existingNames []string, originalBranchName string, branchNum int, eng engine.BranchReader) (string, error) {
 	if !utils.IsInteractive() {
-		return "", fmt.Errorf("branch name must be specified in non-interactive mode")
+		return "", errors.New("branch name must be specified in non-interactive mode")
 	}
 	defaultName := originalBranchName
 	if slices.Contains(existingNames, defaultName) {

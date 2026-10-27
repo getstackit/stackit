@@ -501,7 +501,7 @@ func (e *engineImpl) CleanOrphanedMetadata(ctx context.Context, deleteRefs []str
 
 	return e.WithRetry(ctx, func() error {
 		tx := e.BeginTx(fmt.Sprintf("clean orphaned metadata: %d deleted, %d cleared", len(deleteRefs), len(clearLocalHash)))
-		metas, _ := tx.ReadMetadata(ctx, append(append([]string{}, deleteRefs...), clearLocalHash...)...).Split()
+		metas, _ := tx.ReadMetadata(ctx, slices.Concat(deleteRefs, clearLocalHash)...).Split()
 		for _, name := range deleteRefs {
 			if err := tx.DeleteMeta(name); err != nil {
 				tx.Rollback()

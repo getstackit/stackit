@@ -680,5 +680,5 @@ func PromptSelectHunks(hunks []git.Hunk) ([]git.Hunk, error) {
 		return finalModel.SelectedHunks(), nil
 	}
 
-	return nil, fmt.Errorf("unexpected model type")
+	return nil, errors.New("unexpected model type")
 }

@@ -44,7 +44,7 @@ type NullCheckoutHandler struct{}
 
 // SelectBranch returns an error since interactive selection is not available
 func (h *NullCheckoutHandler) SelectBranch(_ *app.Context, _ CheckoutOptions) (string, error) {
-	return "", fmt.Errorf("interactive branch selection is not available; please specify a branch name")
+	return "", errors.New("interactive branch selection is not available; please specify a branch name")
 }
 
 // CheckoutAction performs the checkout operation.

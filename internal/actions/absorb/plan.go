@@ -4,6 +4,8 @@ package absorb
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strconv"
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -117,8 +119,7 @@ func buildStackNodes(eng engine.Engine, currentBranch string) []StackNode {
 	}
 
 	// Add branches in order (oldest to newest)
-	for i := len(branches) - 1; i >= 0; i-- {
-		branch := branches[i]
+	for _, branch := range slices.Backward(branches) {
 		if branch.IsTrunk() {
 			continue // Already added trunk
 		}
@@ -157,7 +158,7 @@ func targetCommitSHAs(targets []git.HunkTarget) []string {
 // formatLines formats line range as "start-end" or just "start" for single lines
 func formatLines(start, count int) string {
 	if count <= 1 {
-		return fmt.Sprintf("%d", start)
+		return strconv.Itoa(start)
 	}
 	return fmt.Sprintf("%d-%d", start, start+count-1)
 }

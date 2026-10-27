@@ -2,7 +2,7 @@ package git
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/url"
 	"strings"
 )
@@ -48,7 +48,7 @@ func ParseRemoteRepository(remoteURL string) (RemoteRepository, error) {
 		}
 		parts := strings.Split(strings.TrimPrefix(parsed.Path, "/"), "/")
 		if len(parts) < 2 {
-			return RemoteRepository{}, fmt.Errorf("invalid remote URL: path must contain owner/repo")
+			return RemoteRepository{}, errors.New("invalid remote URL: path must contain owner/repo")
 		}
 		return RemoteRepository{
 			Host:  parsed.Hostname(),
@@ -62,18 +62,18 @@ func ParseRemoteRepository(remoteURL string) (RemoteRepository, error) {
 	if strings.Contains(remoteURL, "@") {
 		_, hostAndPath, found := strings.Cut(remoteURL, "@")
 		if !found {
-			return RemoteRepository{}, fmt.Errorf("invalid SSH remote URL")
+			return RemoteRepository{}, errors.New("invalid SSH remote URL")
 		}
 		host, path, found := strings.Cut(hostAndPath, ":")
 		if !found {
 			host, path, found = strings.Cut(hostAndPath, "/")
 		}
 		if !found || host == "" {
-			return RemoteRepository{}, fmt.Errorf("invalid SSH remote URL: missing path")
+			return RemoteRepository{}, errors.New("invalid SSH remote URL: missing path")
 		}
 		parts := strings.Split(path, "/")
 		if len(parts) < 2 {
-			return RemoteRepository{}, fmt.Errorf("invalid SSH remote URL: path must contain owner/repo")
+			return RemoteRepository{}, errors.New("invalid SSH remote URL: path must contain owner/repo")
 		}
 		return RemoteRepository{Host: host, Owner: parts[len(parts)-2], Name: parts[len(parts)-1]}, nil
 	}

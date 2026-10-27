@@ -80,7 +80,7 @@ func TestModel_Update_PhaseStartMsg(t *testing.T) {
 	m := newModel.(*Model)
 
 	assert.Equal(t, PhaseTrunk, m.CurrentPhase)
-	assert.Equal(t, "", m.CurrentDetail) // Detail cleared on phase start
+	assert.Empty(t, m.CurrentDetail) // Detail cleared on phase start
 	assert.Nil(t, cmd, "phase start should defer its header until the first detail")
 	assert.False(t, m.headers.Committed(PhaseTrunk), "header should not be committed before any detail")
 }

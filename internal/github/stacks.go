@@ -175,7 +175,7 @@ func IsStackBaseConflict(err error) bool {
 // bounds before a caller performs any irreversible PR writes.
 func ValidateStackPullRequestCount(count int) error {
 	if count < MinStackPullRequests {
-		return fmt.Errorf("a GitHub Stack requires at least two pull requests")
+		return errors.New("a GitHub Stack requires at least two pull requests")
 	}
 	if count > MaxStackPullRequests {
 		return fmt.Errorf("a GitHub Stack supports at most %d pull requests (got %d)", MaxStackPullRequests, count)
@@ -227,7 +227,7 @@ func (c *StackitGitHubClient) FindStackByPullRequest(ctx context.Context, pullRe
 // native Stack. The PRs must be ordered from the current top upward.
 func (c *StackitGitHubClient) AddPullRequestsToStack(ctx context.Context, stackNumber StackNumber, pullRequests []git.PRNumber) (*StackInfo, error) {
 	if len(pullRequests) == 0 {
-		return nil, fmt.Errorf("at least one pull request is required to extend a GitHub Stack")
+		return nil, errors.New("at least one pull request is required to extend a GitHub Stack")
 	}
 
 	path := fmt.Sprintf("repos/%s/%s/stacks/%d/add", c.repo.Owner, c.repo.Name, stackNumber)

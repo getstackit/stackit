@@ -556,7 +556,7 @@ func TestSnapshotFileFormat(t *testing.T) {
 
 		// Verify it's a .json file
 		snapshotFile := filepath.Join(undoDir, entries[0].Name())
-		require.True(t, filepath.Ext(snapshotFile) == ".json")
+		require.Equal(t, ".json", filepath.Ext(snapshotFile))
 
 		// Verify it's valid JSON by loading it
 		snapshots, err := s.Engine.GetSnapshots()

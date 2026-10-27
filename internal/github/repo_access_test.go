@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-github/v93/github"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,7 +30,7 @@ func TestRepoAccessFromClient(t *testing.T) {
 	t.Run("readable repo returns coordinates and push permission", func(t *testing.T) {
 		t.Parallel()
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			require.Equal(t, "/repos/octo/widget", r.URL.Path)
+			assert.Equal(t, "/repos/octo/widget", r.URL.Path)
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{
 				"name": "widget",

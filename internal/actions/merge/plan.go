@@ -245,7 +245,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 		planCurrentBranch = allBranches[len(allBranches)-1]
 	} else {
 		if targetBranch.IsTrunk() {
-			return nil, fmt.Errorf("cannot merge from trunk. You must be on a branch that has a PR")
+			return nil, errors.New("cannot merge from trunk. You must be on a branch that has a PR")
 		}
 
 		// Check if target branch is tracked
@@ -296,7 +296,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 	}
 
 	// 4. Batch fetch metadata for all involved branches
-	involvedBranches := append(append([]string{}, allBranches...), upstackBranches...)
+	involvedBranches := slices.Concat(allBranches, upstackBranches)
 	allMeta, _ := eng.BatchReadMetadataRaw(involvedBranches)
 
 	remoteCtx, cancelRemote := app.WithRemoteOperationTimeout(ctx)
@@ -442,7 +442,7 @@ func CollectMergeBranches(ctx context.Context, eng mergePlanEngine, splog output
 
 	// If no PRs to merge, return early
 	if len(finalBranchesToMerge) == 0 {
-		return nil, fmt.Errorf("no open PRs found to merge")
+		return nil, errors.New("no open PRs found to merge")
 	}
 
 	// 6. Detect branching stacks (siblings)

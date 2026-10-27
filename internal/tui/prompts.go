@@ -268,7 +268,7 @@ var PromptTextInput = func(prompt, defaultValue string) (string, error) {
 		return finalModel.textInput.Value(), nil
 	}
 
-	return "", fmt.Errorf("unexpected model type")
+	return "", errors.New("unexpected model type")
 }
 
 // PromptConfirm prompts the user for yes/no confirmation
@@ -297,7 +297,7 @@ var PromptConfirm = func(prompt string, defaultValue bool) (bool, error) {
 		return finalModel.choice, nil
 	}
 
-	return false, fmt.Errorf("unexpected model type")
+	return false, errors.New("unexpected model type")
 }
 
 // SelectOption represents an option in a selection prompt
@@ -471,7 +471,7 @@ func PromptSelect(title string, options []SelectOption, defaultIndex int) (strin
 	}
 
 	if len(options) == 0 {
-		return "", fmt.Errorf("no options provided")
+		return "", errors.New("no options provided")
 	}
 
 	m := selectionModel{
@@ -496,7 +496,7 @@ func PromptSelect(title string, options []SelectOption, defaultIndex int) (strin
 		}
 	}
 
-	return "", fmt.Errorf("unexpected model type or selection")
+	return "", errors.New("unexpected model type or selection")
 }
 
 // multiSelectKeyMap defines keybindings for multi-select prompt
@@ -627,7 +627,7 @@ func PromptMultiSelectWithDefaults(title string, options []string, preSelected [
 	}
 
 	if len(options) == 0 {
-		return nil, fmt.Errorf("no options provided")
+		return nil, errors.New("no options provided")
 	}
 
 	selected := make(map[int]bool)
@@ -665,7 +665,7 @@ func PromptMultiSelectWithDefaults(title string, options []string, preSelected [
 		return result, nil
 	}
 
-	return nil, fmt.Errorf("unexpected model type")
+	return nil, errors.New("unexpected model type")
 }
 
 // BranchChoice represents a branch option in a selection prompt
@@ -727,5 +727,5 @@ func PromptBranchSelection(message string, choices []BranchChoice, initialIndex 
 		return finalModel.selected, nil
 	}
 
-	return "", fmt.Errorf("unexpected model type")
+	return "", errors.New("unexpected model type")
 }

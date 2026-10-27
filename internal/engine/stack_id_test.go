@@ -2,7 +2,6 @@ package engine_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -29,8 +28,8 @@ func TestGenerateStackID(t *testing.T) {
 		require.NotEqual(t, id1, id2)
 
 		// Both should contain a timestamp (large number prefix)
-		require.True(t, strings.Contains(id1, "-feature"))
-		require.True(t, strings.Contains(id2, "-another"))
+		require.Contains(t, id1, "-feature")
+		require.Contains(t, id2, "-another")
 	})
 
 	t.Run("sanitizes branch name in ID", func(t *testing.T) {

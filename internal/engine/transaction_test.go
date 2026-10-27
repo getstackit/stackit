@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"testing/synctest"
@@ -218,42 +219,42 @@ func TestIsConcurrentModificationError(t *testing.T) {
 		},
 		{
 			name:     "cannot lock ref error",
-			err:      fmt.Errorf("cannot lock ref 'refs/stackit/metadata/branch': is at unexpected sha"),
+			err:      errors.New("cannot lock ref 'refs/stackit/metadata/branch': is at unexpected sha"),
 			expected: true,
 		},
 		{
 			name:     "reference is not expected error",
-			err:      fmt.Errorf("reference is not expected: refs/stackit/metadata/branch"),
+			err:      errors.New("reference is not expected: refs/stackit/metadata/branch"),
 			expected: true,
 		},
 		{
 			name:     "expected old-value error",
-			err:      fmt.Errorf("expected old-value abc123 for ref refs/stackit/metadata/branch"),
+			err:      errors.New("expected old-value abc123 for ref refs/stackit/metadata/branch"),
 			expected: true,
 		},
 		{
 			name:     "wrapped concurrent modification error",
-			err:      fmt.Errorf("commit failed: %w", fmt.Errorf("cannot lock ref 'refs/stackit/metadata/test'")),
+			err:      fmt.Errorf("commit failed: %w", errors.New("cannot lock ref 'refs/stackit/metadata/test'")),
 			expected: true,
 		},
 		{
 			name:     "unrelated lock error",
-			err:      fmt.Errorf("failed to acquire process lock"),
+			err:      errors.New("failed to acquire process lock"),
 			expected: false,
 		},
 		{
 			name:     "stale info error",
-			err:      fmt.Errorf("stale info on ref refs/stackit/metadata/test"),
+			err:      errors.New("stale info on ref refs/stackit/metadata/test"),
 			expected: true,
 		},
 		{
 			name:     "git lock file error",
-			err:      fmt.Errorf("Unable to create '/path/to/repo/.git/refs/stackit/metadata/test.lock': File exists"),
+			err:      errors.New("Unable to create '/path/to/repo/.git/refs/stackit/metadata/test.lock': File exists"),
 			expected: true,
 		},
 		{
 			name:     "unrelated Unable to create error",
-			err:      fmt.Errorf("Unable to create directory"),
+			err:      errors.New("Unable to create directory"),
 			expected: false,
 		},
 	}
@@ -632,7 +633,7 @@ func TestWithRetry_NonRetryableError(t *testing.T) {
 	})
 
 	attemptCount := 0
-	expectedErr := fmt.Errorf("non-retryable error")
+	expectedErr := errors.New("non-retryable error")
 
 	err := eng.WithRetry(context.Background(), func() error {
 		attemptCount++
@@ -662,12 +663,12 @@ func TestTransaction_UpdateAfterRollback(t *testing.T) {
 	// Trying to update after rollback should fail
 	err := tx.UpdateMeta("any-branch", git.NewMeta())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, engine.ErrTransactionRolledBack)
+	require.ErrorIs(t, err, engine.ErrTransactionRolledBack)
 
 	// Trying to update local meta after rollback should also fail
 	err = tx.UpdateLocalMeta("any-branch", &git.LocalMeta{})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, engine.ErrTransactionRolledBack)
+	require.ErrorIs(t, err, engine.ErrTransactionRolledBack)
 
 	// Trying to commit after rollback should fail
 	err = tx.Commit(context.Background())

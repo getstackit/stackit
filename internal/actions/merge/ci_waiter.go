@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -75,7 +76,7 @@ type WaitResult struct {
 // Returns an error if checks fail, timeout, or context is canceled.
 func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumber git.PRNumber, expectChecks bool) (*WaitResult, error) {
 	if w.client == nil {
-		return nil, fmt.Errorf("GitHub client not available")
+		return nil, errors.New("GitHub client not available")
 	}
 
 	startTime := time.Now()

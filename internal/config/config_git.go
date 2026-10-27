@@ -293,7 +293,7 @@ func (c *GitConfig) UndoEnabled() bool {
 // SetUndoStackDepth sets the max undo depth.
 func (c *GitConfig) SetUndoStackDepth(depth int) error {
 	if depth < 1 {
-		return fmt.Errorf("undo depth must be at least 1")
+		return errors.New("undo depth must be at least 1")
 	}
 	return c.store.SetInt(KeyUndoDepth, depth)
 }
@@ -570,7 +570,7 @@ func (c *GitConfig) MaxConcurrency() int {
 // SetMaxConcurrency sets the maximum number of concurrent validation operations.
 func (c *GitConfig) SetMaxConcurrency(n int) error {
 	if n < 0 {
-		return fmt.Errorf("max concurrency must be >= 0")
+		return errors.New("max concurrency must be >= 0")
 	}
 	return c.store.SetInt(KeyMaxConcurrency, n)
 }
@@ -622,14 +622,14 @@ func (c *GitConfig) NavigationMarker() string {
 func (c *GitConfig) SetNavigationMarker(marker string) error {
 	// Check for newlines before trimming (since TrimSpace removes trailing newlines)
 	if strings.ContainsAny(marker, "\n\r") {
-		return fmt.Errorf("navigation.marker cannot contain newlines")
+		return errors.New("navigation.marker cannot contain newlines")
 	}
 	marker = strings.TrimSpace(marker)
 	if marker == "" {
-		return fmt.Errorf("navigation.marker cannot be empty")
+		return errors.New("navigation.marker cannot be empty")
 	}
 	if utf8.RuneCountInString(marker) > 10 {
-		return fmt.Errorf("navigation.marker cannot exceed 10 characters")
+		return errors.New("navigation.marker cannot exceed 10 characters")
 	}
 	return c.store.Set(KeyNavigationMarker, marker)
 }

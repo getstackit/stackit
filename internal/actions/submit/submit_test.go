@@ -3,6 +3,7 @@ package submit_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -94,7 +95,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.NoError(t, err, "Submit should succeed with mocked GitHub client")
 
 		// Verify that PR was created in the mock
-		require.Greater(t, len(config.CreatedPRs), 0, "Should have created at least one PR")
+		require.NotEmpty(t, config.CreatedPRs, "Should have created at least one PR")
 		require.Equal(t, "feature", *config.CreatedPRs[0].Head.Ref, "PR should be for feature branch")
 
 		// Verify that metadata was updated with LastModifiedBy after submit
@@ -155,7 +156,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.NoError(t, err, "Submit should succeed with mocked GitHub client")
 
 		// Verify that PR was updated in the mock
-		require.Greater(t, len(config.UpdatedPRs), 0, "Should have updated at least one PR")
+		require.NotEmpty(t, config.UpdatedPRs, "Should have updated at least one PR")
 		updatedPR, exists := config.UpdatedPRs[int(prNumber)]
 		require.True(t, exists, "PR %d should be in UpdatedPRs", prNumber)
 		require.NotNil(t, updatedPR, "Updated PR should not be nil")
@@ -195,7 +196,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should have created 3 PRs: P, C1, and C2
-		require.Equal(t, 3, len(mockConfig.CreatedPRs), "Should have created PRs for P and its children C1, C2")
+		require.Len(t, mockConfig.CreatedPRs, 3, "Should have created PRs for P and its children C1, C2")
 
 		// Verify branches are correct
 		createdBranches := make(map[string]bool)
@@ -553,7 +554,7 @@ func TestSubmitReadsRemoteStatusOnceForStack(t *testing.T) {
 
 	err = submit.Action(ctx, opts, &noopHandler{})
 	require.NoError(t, err)
-	require.Equal(t, 3, len(config.CreatedPRs), "should create a PR for each of P, C1, C2")
+	require.Len(t, config.CreatedPRs, 3, "should create a PR for each of P, C1, C2")
 
 	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
 		"submit must read remote status once for the whole stack, not once per branch")
@@ -646,7 +647,7 @@ func TestSubmitPushesStackInSingleBatch(t *testing.T) {
 
 	err = submit.Action(ctx, opts, &noopHandler{})
 	require.NoError(t, err)
-	require.Equal(t, 3, len(config.CreatedPRs), "should create a PR for each of P, C1, C2")
+	require.Len(t, config.CreatedPRs, 3, "should create a PR for each of P, C1, C2")
 
 	require.Equal(t, int64(1), counting.pushBranches.Load(),
 		"submit must push the whole stack in a single batched push")
@@ -698,7 +699,7 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 	// subsequent submit with the same options has genuinely nothing to do.
 	firstOpts := submit.Options{StackRange: engine.StackRangeFull(), NoEdit: true}
 	require.NoError(t, submit.Action(ctx, firstOpts, &noopHandler{}))
-	require.Equal(t, 3, len(config.CreatedPRs))
+	require.Len(t, config.CreatedPRs, 3)
 
 	// Second submit: nothing changed, so it should be a no-op.
 	counting.fetchRemoteShas.Store(0)
@@ -707,7 +708,7 @@ func TestSubmitNoOpReadsRemoteOnceAndSkipsPush(t *testing.T) {
 
 	require.NoError(t, submit.Action(ctx, firstOpts, &noopHandler{}))
 
-	require.Equal(t, createdBefore, len(config.CreatedPRs), "no-op submit must not create PRs")
+	require.Len(t, config.CreatedPRs, createdBefore, "no-op submit must not create PRs")
 	require.Equal(t, int64(0), counting.pushBranches.Load(), "no-op submit must not push")
 	require.Equal(t, int64(1), counting.fetchRemoteShas.Load(),
 		"no-op submit must read the remote ref list exactly once")
@@ -901,7 +902,7 @@ func TestSubmitConfiguredGitHubStackWarnsWhenStacksAPIFails(t *testing.T) {
 	require.NoError(t, err)
 
 	mockConfig := testhelpers.NewMockGitHubServerConfig()
-	mockConfig.StackError = fmt.Errorf("stacks API unavailable")
+	mockConfig.StackError = errors.New("stacks API unavailable")
 	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
 	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
 
@@ -931,7 +932,7 @@ func TestSubmitExplicitGitHubStackFailsWhenStacksAPIFails(t *testing.T) {
 	require.NoError(t, err)
 
 	mockConfig := testhelpers.NewMockGitHubServerConfig()
-	mockConfig.StackError = fmt.Errorf("stacks API unavailable")
+	mockConfig.StackError = errors.New("stacks API unavailable")
 	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
 	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
 

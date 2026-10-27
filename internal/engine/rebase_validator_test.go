@@ -533,7 +533,7 @@ func TestRestackBranchesPropagatesRerereResolvedCount(t *testing.T) {
 	batchResult, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branch2), engine.RestackOpts{})
 	require.NoError(t, err)
 	require.Equal(t, engine.RestackDone, batchResult.Results["branch2"].Result)
-	require.Greater(t, batchResult.Results["branch2"].RerereResolvedCount, 0)
+	require.Positive(t, batchResult.Results["branch2"].RerereResolvedCount)
 }
 
 func TestRestackBranchesWithValidatedRebasesUsesValidationSHA(t *testing.T) {

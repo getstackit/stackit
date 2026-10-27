@@ -114,37 +114,17 @@ func TestFlattenWorkflow(t *testing.T) {
 		})
 	})
 
-	t.Run("accepts current branch or positional branch argument", func(t *testing.T) {
+	// Flattening the current branch (no argument) is covered by TestFlattenUndo.
+	t.Run("positional branch argument", func(t *testing.T) {
 		t.Parallel()
-		for _, tt := range []struct {
-			name string
-			prep func(*TestShell)
-			cmd  string
-		}{
-			{
-				"uses current branch when none specified",
-				func(sh *TestShell) { sh.OnBranch("branch-b") },
-				"flatten --yes",
-			},
-			{
-				"positional branch argument",
-				func(sh *TestShell) { sh.Checkout("main") },
-				"flatten branch-b --yes",
-			},
-		} {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-				sh := NewTestShellInProcess(t)
-				sh.Write("file-a", "content a").Run("create branch-a -m 'Add file A'")
-				sh.Write("file-b", "content b").Run("create branch-b -m 'Add file B'")
-				tt.prep(sh)
-				sh.Run(tt.cmd)
-				sh.ExpectStackStructure(map[string]string{
-					"branch-a": "main",
-					"branch-b": "main",
-				})
-			})
-		}
+		sh := NewTestShellInProcess(t)
+		sh.CreateIndependentStack2()
+		sh.Checkout("main")
+		sh.Run("flatten branch-b --yes")
+		sh.ExpectStackStructure(map[string]string{
+			"branch-a": "main",
+			"branch-b": "main",
+		})
 	})
 
 	t.Run("error on untracked branch", func(t *testing.T) {
@@ -165,7 +145,7 @@ func TestFlattenWorkflow(t *testing.T) {
 func TestFlattenUndo(t *testing.T) {
 	t.Parallel()
 
-	t.Run("undo restores original stack structure", func(t *testing.T) {
+	t.Run("flatten of current branch then undo restores original stack structure", func(t *testing.T) {
 		t.Parallel()
 
 		sh := NewTestShellInProcess(t)
@@ -179,7 +159,8 @@ func TestFlattenUndo(t *testing.T) {
 			"branch-b": "branch-a",
 		})
 
-		// Flatten
+		// Flatten with no branch argument uses the current branch
+		sh.OnBranch("branch-b")
 		sh.Run("flatten --yes")
 
 		// Verify flattened structure
@@ -201,33 +182,6 @@ func TestFlattenUndo(t *testing.T) {
 
 func TestFlattenCommitIntegrity(t *testing.T) {
 	t.Parallel()
-
-	t.Run("flattened branch only contains its own commits", func(t *testing.T) {
-		t.Parallel()
-
-		// Scenario: main -> A -> B -> C (independent changes)
-		// After flatten: main -> A, main -> B, main -> C
-		// Each branch should have exactly 1 commit relative to main
-
-		sh := NewTestShellInProcess(t)
-
-		sh.CreateIndependentStack2()
-
-		sh.Write("file-c", "content c").
-			Run("create branch-c -m 'Add file C'")
-
-		// Verify commit counts before flatten
-		sh.CommitCount("main", "branch-a", 1).
-			CommitCount("main", "branch-b", 2). // B has A's commit + B's commit
-			CommitCount("main", "branch-c", 3)  // C has A + B + C
-
-		sh.Run("flatten --yes")
-
-		// After flatten, each branch should have exactly 1 commit relative to main
-		sh.CommitCount("main", "branch-a", 1).
-			CommitCount("main", "branch-b", 1).
-			CommitCount("main", "branch-c", 1)
-	})
 
 	t.Run("flattened branch only contains its own commits when main has advanced", func(t *testing.T) {
 		t.Parallel()
@@ -329,8 +283,9 @@ func TestFlattenCommitIntegrity(t *testing.T) {
 	t.Run("flatten deep stack preserves correct commit counts", func(t *testing.T) {
 		t.Parallel()
 
-		// Scenario: main -> A -> B -> C -> D (all independent)
-		// After flatten: all on main, each with 1 commit
+		// Scenario: main -> A -> B -> C -> D (all independent changes)
+		// After flatten: all on main, each branch should have exactly 1
+		// commit relative to main (only its own commits)
 
 		sh := NewTestShellInProcess(t)
 
@@ -342,8 +297,11 @@ func TestFlattenCommitIntegrity(t *testing.T) {
 		sh.Write("file-d", "content d").
 			Run("create branch-d -m 'Add file D'")
 
-		// Before flatten
-		sh.CommitCount("main", "branch-d", 4)
+		// Before flatten each branch carries every ancestor's commit
+		sh.CommitCount("main", "branch-a", 1).
+			CommitCount("main", "branch-b", 2). // B has A's commit + B's commit
+			CommitCount("main", "branch-c", 3). // C has A + B + C
+			CommitCount("main", "branch-d", 4)
 
 		sh.Run("flatten --yes")
 

@@ -358,7 +358,7 @@ func TestWorktreeSyncOperations(t *testing.T) {
 	}
 
 	run("sync from main or worktree context restacks the stack", func(t *testing.T, sh *TestShell) {
-		for _, tt := range []struct {
+		for i, tt := range []struct {
 			name             string
 			syncFromWorktree bool
 		}{
@@ -367,7 +367,10 @@ func TestWorktreeSyncOperations(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				sh := sh.WithT(t)
-				sh.ResetRepo()
+				// The outer run already reset the repo for the first row.
+				if i > 0 {
+					sh.ResetRepo()
+				}
 
 				sh.WriteFile("feature.txt", "feature").
 					Run("create feature -w -m 'feature branch'")

@@ -15,6 +15,10 @@ import (
 
 func TestReorderCommand(t *testing.T) {
 	t.Parallel()
+	// `reorder` reads its editor from the process environment (GIT_EDITOR /
+	// EDITOR), which is process-global and cannot vary between parallel
+	// in-process runs. Only the editor-driven `reorder` invocations spawn the
+	// binary; all setup and verification commands run in-process.
 	binaryPath := testhelpers.GetSharedBinaryPath()
 	if binaryPath == "" {
 		if err := testhelpers.GetBinaryError(); err != nil {
@@ -23,119 +27,71 @@ func TestReorderCommand(t *testing.T) {
 		t.Fatal("stackit binary not built")
 	}
 
-	t.Run("simple reorder: A -> B to B -> A", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
+	// runReorder spawns `stackit reorder` with a scripted editor that writes
+	// the given order.
+	runReorder := func(t *testing.T, dir, order string) ([]byte, error) {
+		t.Helper()
+		editorScript := createEditorScript(t, order)
+		cmd := exec.Command(binaryPath, "reorder")
+		cmd.Dir = dir
+		// Set both EDITOR and GIT_EDITOR to ensure test editor is used
+		cmd.Env = append(os.Environ(), "EDITOR="+editorScript, "GIT_EDITOR="+editorScript)
+		return cmd.CombinedOutput()
+	}
+
+	// stackSetup initializes stackit and creates a linear stack of the given
+	// branches, each with one commit touching its own file.
+	stackSetup := func(branches ...string) testhelpers.SceneSetup {
+		return func(s *testhelpers.Scene) error {
 			// Create initial commit
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
 			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "init"); err != nil {
 				return err
 			}
-			// Create branch1
-			if err := s.Repo.CreateChange("branch1 change", "file1", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch2 on top of branch1
-			if err := s.Repo.CreateChange("branch2 change", "file2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
+			for _, branch := range branches {
+				if err := s.Repo.CreateChange(branch+" change", "file-"+branch, false); err != nil {
+					return err
+				}
+				if err := runCliCommand(s.Dir, "create", branch, "-m", branch+" change"); err != nil {
+					return err
+				}
 			}
 			return nil
-		})
+		}
+	}
+
+	t.Run("simple reorder: A -> B to B -> A", func(t *testing.T) {
+		t.Parallel()
+		scene := testhelpers.NewSceneParallel(t, stackSetup("branch1", "branch2"))
 
 		// Verify initial state: branch2 should have branch1 as parent
-		cmd := exec.Command(binaryPath, "parent")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "parent")
 		require.NoError(t, err, "parent command failed: %s", string(output))
 		require.Contains(t, string(output), "branch1", "branch2 should initially have branch1 as parent")
 
-		// Create editor script that reorders: branch2, branch1 (reversed)
-		editorScript := createEditorScript(t, "branch2\nbranch1\n")
-
-		// Run reorder command
-		cmd = exec.Command(binaryPath, "reorder")
-		cmd.Dir = scene.Dir
-		// Set both EDITOR and GIT_EDITOR to ensure test editor is used
-		cmd.Env = append(os.Environ(), "EDITOR="+editorScript, "GIT_EDITOR="+editorScript)
-		output, err = cmd.CombinedOutput()
+		// Reorder: branch2, branch1 (reversed)
+		output, err = runReorder(t, scene.Dir, "branch2\nbranch1\n")
 		require.NoError(t, err, "reorder command failed: %s", string(output))
 		require.Contains(t, string(output), "Reordered", "should mention reordering")
 
 		// Verify new parent relationship: branch2 should now have main as parent
-		cmd = exec.Command(binaryPath, "parent")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = runCliCommandOutput(scene.Dir, "parent")
 		require.NoError(t, err, "parent command failed: %s", string(output))
 		require.Contains(t, string(output), "main", "branch2 should now have main as parent")
 
 		// Checkout branch1 and verify it has branch2 as parent
-		cmd = exec.Command("git", "checkout", "branch1")
-		cmd.Dir = scene.Dir
-		require.NoError(t, cmd.Run())
-		cmd = exec.Command(binaryPath, "parent")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		require.NoError(t, scene.Repo.CheckoutBranch("branch1"))
+		output, err = runCliCommandOutput(scene.Dir, "parent")
 		require.NoError(t, err, "parent command failed: %s", string(output))
 		require.Contains(t, string(output), "branch2", "branch1 should now have branch2 as parent")
 	})
 
 	t.Run("reorder preserves commit counts per branch", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch-a with 1 commit
-			if err := s.Repo.CreateChange("a change", "file-a", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch-a", "-m", "branch-a change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch-b with 1 commit on top of branch-a
-			if err := s.Repo.CreateChange("b change", "file-b", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch-b", "-m", "branch-b change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch-c with 1 commit on top of branch-b
-			if err := s.Repo.CreateChange("c change", "file-c", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch-c", "-m", "branch-c change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			return nil
-		})
+		scene := testhelpers.NewSceneParallel(t, stackSetup("branch-a", "branch-b", "branch-c"))
 
 		// Helper to get commit count between two refs
 		commitCount := func(t *testing.T, dir, from, to string) int {
@@ -156,18 +112,11 @@ func TestReorderCommand(t *testing.T) {
 		require.Equal(t, 1, commitCount(t, scene.Dir, "branch-b", "branch-c"), "branch-c should have 1 commit above branch-b")
 
 		// Reorder: branch-b, branch-a, branch-c (swap first two)
-		editorScript := createEditorScript(t, "branch-b\nbranch-a\nbranch-c\n")
-
-		cmd := exec.Command(binaryPath, "reorder")
-		cmd.Dir = scene.Dir
-		cmd.Env = append(os.Environ(), "EDITOR="+editorScript, "GIT_EDITOR="+editorScript)
-		output, err := cmd.CombinedOutput()
+		output, err := runReorder(t, scene.Dir, "branch-b\nbranch-a\nbranch-c\n")
 		require.NoError(t, err, "reorder command failed: %s", string(output))
 
 		// Run restack to rebase branches onto their new parents
-		cmd = exec.Command(binaryPath, "restack")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = runCliCommandOutput(scene.Dir, "restack")
 		require.NoError(t, err, "restack command failed: %s", string(output))
 
 		// After reorder + restack: main -> branch-b -> branch-a -> branch-c
@@ -182,224 +131,58 @@ func TestReorderCommand(t *testing.T) {
 
 	t.Run("reorder with descendants", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch1
-			if err := s.Repo.CreateChange("branch1 change", "file1", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch2 on top of branch1
-			if err := s.Repo.CreateChange("branch2 change", "file2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch3 on top of branch2 (descendant)
-			if err := s.Repo.CreateChange("branch3 change", "file3", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch3", "-m", "branch3 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			return nil
-		})
+		scene := testhelpers.NewSceneParallel(t, stackSetup("branch1", "branch2", "branch3"))
 
 		// Verify initial state: branch3 should have branch2 as parent
-		cmd := exec.Command(binaryPath, "parent")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "parent")
 		require.NoError(t, err, "parent command failed: %s", string(output))
 		require.Contains(t, string(output), "branch2", "branch3 should initially have branch2 as parent")
 
-		// Create editor script that reorders: branch2, branch1, branch3
+		// Reorder: branch2, branch1, branch3
 		// This reorders branch1 and branch2 (reversed), keeping branch3 at the end
 		// After reordering: trunk -> branch2 -> branch1 -> branch3
 		// branch3's parent becomes branch1 (the branch before it in the new order)
-		editorScript := createEditorScript(t, "branch2\nbranch1\nbranch3\n")
-
-		// Run reorder command
-		cmd = exec.Command(binaryPath, "reorder")
-		cmd.Dir = scene.Dir
-		// Set both EDITOR and GIT_EDITOR to ensure test editor is used
-		cmd.Env = append(os.Environ(), "EDITOR="+editorScript, "GIT_EDITOR="+editorScript)
-		output, err = cmd.CombinedOutput()
+		output, err = runReorder(t, scene.Dir, "branch2\nbranch1\nbranch3\n")
 		require.NoError(t, err, "reorder command failed: %s", string(output))
 
 		// Verify branch3 now has branch1 as parent (new order: branch2 -> branch1 -> branch3)
-		cmd = exec.Command(binaryPath, "parent")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = runCliCommandOutput(scene.Dir, "parent")
 		require.NoError(t, err, "parent command failed: %s", string(output))
 		require.Contains(t, string(output), "branch1", "branch3 should now have branch1 as parent after reorder")
 	})
 
-	t.Run("error when branch is removed", func(t *testing.T) {
+	// A rejected edit fails while parsing the editor output, before any
+	// mutation, so the unchanged-order case can reuse the same stack.
+	t.Run("error when branch is removed, then no changes when order unchanged", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch1
-			if err := s.Repo.CreateChange("branch1 change", "file1", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch2 on top of branch1
-			if err := s.Repo.CreateChange("branch2 change", "file2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			return nil
-		})
+		scene := testhelpers.NewSceneParallel(t, stackSetup("branch1", "branch2"))
 
-		// Create editor script that removes branch1
-		editorScript := createEditorScript(t, "branch2\n")
-
-		// Run reorder command - should fail
-		cmd := exec.Command(binaryPath, "reorder")
-		cmd.Dir = scene.Dir
-		// Set both EDITOR and GIT_EDITOR to ensure test editor is used
-		cmd.Env = append(os.Environ(), "EDITOR="+editorScript, "GIT_EDITOR="+editorScript)
-		output, err := cmd.CombinedOutput()
+		// Editor removes branch1 - should fail
+		output, err := runReorder(t, scene.Dir, "branch2\n")
 		require.Error(t, err, "reorder should fail when branch is removed")
 		require.Contains(t, string(output), "was removed", "error should mention branch removal")
 		require.Contains(t, string(output), "stackit delete", "error should suggest using stackit delete")
-	})
 
-	t.Run("no changes when order unchanged", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch1
-			if err := s.Repo.CreateChange("branch1 change", "file1", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch2 on top of branch1
-			if err := s.Repo.CreateChange("branch2 change", "file2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			return nil
-		})
-
-		// Create editor script with original order (branch1, branch2)
-		editorScript := createEditorScript(t, "branch1\nbranch2\n")
-
-		// Run reorder command
-		cmd := exec.Command(binaryPath, "reorder")
-		cmd.Dir = scene.Dir
-		// Set both EDITOR and GIT_EDITOR to ensure test editor is used
-		cmd.Env = append(os.Environ(), "EDITOR="+editorScript, "GIT_EDITOR="+editorScript)
-		output, err := cmd.CombinedOutput()
+		// Editor keeps the original order (branch1, branch2)
+		output, err = runReorder(t, scene.Dir, "branch1\nbranch2\n")
 		require.NoError(t, err, "reorder command failed: %s", string(output))
 		require.Contains(t, string(output), "unchanged", "should mention order unchanged")
 	})
 
-	t.Run("error when less than 2 branches", func(t *testing.T) {
+	// Neither error opens an editor or mutates anything, so both run
+	// in-process against one single-branch stack.
+	t.Run("error when less than 2 branches, then when on trunk", func(t *testing.T) {
 		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create only one branch
-			if err := s.Repo.CreateChange("branch1 change", "file1", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			return nil
-		})
+		scene := testhelpers.NewSceneParallel(t, stackSetup("branch1"))
 
-		// Run reorder command - should fail
-		cmd := exec.Command(binaryPath, "reorder")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		// On branch1 with only one branch in the stack - should fail
+		output, err := runCliCommandOutput(scene.Dir, "reorder")
 		require.Error(t, err, "reorder should fail with less than 2 branches")
 		require.Contains(t, string(output), "at least 2 branches", "error should mention need for 2+ branches")
-	})
 
-	t.Run("error when on trunk", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Initialize stackit
-			cmd := exec.Command(binaryPath, "init")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			return nil
-		})
-
-		// Run reorder command while on trunk - should fail
-		cmd := exec.Command(binaryPath, "reorder")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		// On trunk - should fail
+		require.NoError(t, scene.Repo.CheckoutBranch("main"))
+		output, err = runCliCommandOutput(scene.Dir, "reorder")
 		require.Error(t, err, "reorder should fail when on trunk")
 		require.Contains(t, string(output), "cannot reorder trunk", "error should mention trunk")
 	})

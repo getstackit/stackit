@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"testing"
@@ -32,9 +31,6 @@ var (
 	globalInProcessRunner InProcessRunner
 	globalRunnerMu        sync.RWMutex
 )
-
-// flagNoInteractive is the CLI flag used to suppress interactive prompts in tests.
-const flagNoInteractive = "--no-interactive"
 
 // defaultTrunk is the trunk branch name used by the test scenarios.
 const defaultTrunk = "main"
@@ -75,11 +71,10 @@ type Scenario struct {
 	Git git.Runner
 	// Metadata is the engine's metadata store, for tests that seed or inspect
 	// raw metadata refs.
-	Metadata   *git.MetadataStore
-	Context    *app.Context
-	BinaryPath string
-	InProcess  bool
-	Output     *bytes.Buffer
+	Metadata  *git.MetadataStore
+	Context   *app.Context
+	InProcess bool
+	Output    *bytes.Buffer
 }
 
 // NewScenario creates a new Scenario with an optional setup function.
@@ -384,12 +379,6 @@ func (s *Scenario) ExpectBranchNotFixed(branch string) *Scenario {
 	return s
 }
 
-// WithBinaryPath sets the path to the stackit binary for RunCli methods.
-func (s *Scenario) WithBinaryPath(path string) *Scenario {
-	s.BinaryPath = path
-	return s
-}
-
 // WithInProcess sets whether to use in-process CLI execution for RunCli methods.
 func (s *Scenario) WithInProcess(inProcess bool) *Scenario {
 	s.InProcess = inProcess
@@ -400,31 +389,16 @@ func (s *Scenario) WithInProcess(inProcess bool) *Scenario {
 func (s *Scenario) RunCli(args ...string) *Scenario {
 	s.T.Helper()
 
-	if s.InProcess {
-		runner := GetGlobalInProcessRunner()
-		if runner == nil {
-			s.T.Fatal("GlobalInProcessRunner not set. Import github.com/getstackit/stackit/internal/integration/setup in your test.")
-		}
-		// Use in-process runner if enabled
-		_, err := runner(s.Scene.Dir, args...)
-		require.NoError(s.T, err, "CLI command failed: stackit %v", args)
-
-		if s.Engine != nil {
-			return s.Rebuild()
-		}
-		return s
+	if !s.InProcess {
+		s.T.Fatal("RunCli requires WithInProcess(true).")
 	}
-
-	if s.BinaryPath == "" {
-		s.T.Fatal("BinaryPath not set. Call WithBinaryPath or WithInProcess(true) first.")
+	runner := GetGlobalInProcessRunner()
+	if runner == nil {
+		s.T.Fatal("GlobalInProcessRunner not set. Import github.com/getstackit/stackit/internal/integration/setup in your test.")
 	}
-	// Add --no-interactive to all CLI commands in tests
-	fullArgs := append([]string{flagNoInteractive}, args...)
-	cmd := exec.Command(s.BinaryPath, fullArgs...)
-	cmd.Dir = s.Scene.Dir
-	cmd.Env = os.Environ()
-	output, err := cmd.CombinedOutput()
-	require.NoError(s.T, err, "CLI command failed: stackit %v\nOutput: %s", fullArgs, string(output))
+	_, err := runner(s.Scene.Dir, args...)
+	require.NoError(s.T, err, "CLI command failed: stackit %v", args)
+
 	if s.Engine != nil {
 		return s.Rebuild()
 	}
@@ -435,28 +409,15 @@ func (s *Scenario) RunCli(args ...string) *Scenario {
 // ANSI escape codes are stripped from the output for stable test assertions,
 // since lipgloss v2 always generates ANSI codes regardless of terminal type.
 func (s *Scenario) RunCliAndGetOutput(args ...string) (string, error) {
-	if s.InProcess {
-		runner := GetGlobalInProcessRunner()
-		if runner == nil {
-			return "", errors.New("GlobalInProcessRunner not set")
-		}
-		out, err := runner(s.Scene.Dir, args...)
-		return ansi.Strip(out), err
+	if !s.InProcess {
+		return "", errors.New("RunCliAndGetOutput requires WithInProcess(true)")
 	}
-
-	if s.BinaryPath == "" {
-		return "", errors.New("BinaryPath not set")
+	runner := GetGlobalInProcessRunner()
+	if runner == nil {
+		return "", errors.New("GlobalInProcessRunner not set")
 	}
-	// Add --no-interactive to all CLI commands in tests
-	fullArgs := append([]string{flagNoInteractive}, args...)
-	cmd := exec.Command(s.BinaryPath, fullArgs...)
-	cmd.Dir = s.Scene.Dir
-	cmd.Env = os.Environ()
-	output, err := cmd.CombinedOutput()
-	if s.Engine != nil {
-		s.Rebuild()
-	}
-	return ansi.Strip(string(output)), err
+	out, err := runner(s.Scene.Dir, args...)
+	return ansi.Strip(out), err
 }
 
 // ExpectBranch asserts that the current branch is as expected.

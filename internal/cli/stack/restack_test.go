@@ -2,7 +2,6 @@ package stack_test
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -13,75 +12,6 @@ import (
 
 func TestRestackCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
-	}
-
-	t.Run("restack auto-reparents when parent is merged into trunk", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Create branch1 (parent) using create command
-			if err := s.Repo.CreateChange("branch1 change", "file1", false); err != nil {
-				return err
-			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch2 (child) on top of branch1 using create command
-			if err := s.Repo.CreateChange("branch2 change", "file2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			return nil
-		})
-
-		// Simulate merging branch1 into main by:
-		// 1. Checkout main
-		// 2. Merge branch1 into main (fast-forward or regular merge)
-		err := scene.Repo.CheckoutBranch("main")
-		require.NoError(t, err)
-
-		err = scene.Repo.RunGitCommand("merge", "branch1", "--no-ff", "-m", "Merge branch1")
-		require.NoError(t, err)
-
-		// Now switch to branch2 and run restack
-		err = scene.Repo.CheckoutBranch("branch2")
-		require.NoError(t, err)
-
-		// Run restack --only on branch2
-		// It should detect that branch1 is merged into main and reparent branch2 to main
-		cmd := exec.Command(binaryPath, "restack", "--only")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.NoError(t, err, "restack command failed: %s", string(output))
-		// Should mention reparenting
-		require.Contains(t, string(output), "Reparented", "should mention reparenting")
-		require.Contains(t, string(output), "branch1", "should mention old parent")
-		require.Contains(t, string(output), "main", "should mention new parent (trunk)")
-
-		// Verify branch2's parent is now main
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		infoOutput, err := cmd.CombinedOutput()
-		require.NoError(t, err, "info command failed: %s", string(infoOutput))
-		// The parent should now be main, not branch1
-		require.Contains(t, string(infoOutput), "main", "branch2's parent should now be main")
-	})
 
 	t.Run("restack auto-reparents when parent branch is deleted", func(t *testing.T) {
 		t.Parallel()
@@ -94,21 +24,14 @@ func TestRestackCommand(t *testing.T) {
 			if err := s.Repo.CreateChange("branch1 change", "file1", false); err != nil {
 				return err
 			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "branch1", "-m", "branch1 change"); err != nil {
 				return err
 			}
 			// Create branch2 (child) on top of branch1 using create command
 			if err := s.Repo.CreateChange("branch2 change", "file2", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			return nil
+			return runCliCommand(s.Dir, "create", "branch2", "-m", "branch2 change")
 		})
 
 		// Delete branch1 forcefully (simulating it being deleted after PR merge)
@@ -121,9 +44,7 @@ func TestRestackCommand(t *testing.T) {
 
 		// Run restack --only on branch2
 		// It should detect that branch1 no longer exists and reparent branch2 to main
-		cmd := exec.Command(binaryPath, "restack", "--only")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--only")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		// Should mention reparenting
@@ -132,167 +53,84 @@ func TestRestackCommand(t *testing.T) {
 		require.Contains(t, string(output), "main", "should mention new parent (trunk)")
 	})
 
-	t.Run("restack single branch", func(t *testing.T) {
+	// Every scope of a no-op restack reports the same up-to-date summary. The
+	// four invocations share one main -> branch1 -> branch2 stack because none
+	// of them changes any state.
+	t.Run("restack scopes report up to date when nothing needs restacking", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
 			// Create initial commit
 			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
 				return err
 			}
-			// Create a change and use create command (which automatically tracks)
-			if err := s.Repo.CreateChange("feature change", "test", false); err != nil {
+			// Create branch1 using create command
+			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
 				return err
 			}
-			cmd := exec.Command(binaryPath, "create", "feature", "-m", "feature change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
+			if err := runCliCommand(s.Dir, "create", "branch1", "-m", "branch1 change"); err != nil {
+				return err
+			}
+			// Create branch2 on top of branch1 using create command
+			if err := s.Repo.CreateChange("branch2 change", "test2", false); err != nil {
+				return err
+			}
+			return runCliCommand(s.Dir, "create", "branch2", "-m", "branch2 change")
 		})
 
-		// Run restack --only
-		cmd := exec.Command(binaryPath, "restack", "--only")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.NoError(t, err, "restack command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
 ✨ Everything is up to date!
-		`)
-		require.Equal(t, expected, normalized, "output format should match expected structure")
+`)
+		requireUpToDate := func(t *testing.T, args ...string) {
+			t.Helper()
+			output, err := runCliCommandOutput(scene.Dir, args...)
+			require.NoError(t, err, "restack command failed: %s", string(output))
+			require.Equal(t, expected, testhelpers.NormalizeOutput(string(output)),
+				"output format should match expected structure for %v", args)
+		}
+
+		// Single branch (--only) and --downstack from branch2
+		requireUpToDate(t, "restack", "--only")
+		requireUpToDate(t, "restack", "--downstack")
+
+		// --upstack from branch1
+		require.NoError(t, scene.Repo.CheckoutBranch("branch1"))
+		requireUpToDate(t, "restack", "--upstack")
+
+		// --branch from trunk
+		require.NoError(t, scene.Repo.CheckoutBranch("main"))
+		requireUpToDate(t, "restack", "--branch", "branch1", "--only")
 	})
 
-	t.Run("restack on trunk with no stack reports no branches", func(t *testing.T) {
+	// Trunk-only repo: the no-stack report and every flag-validation error
+	// share one scene. Detaching HEAD comes last since it changes state.
+	t.Run("restack on trunk reports no branches and rejects invalid flags", func(t *testing.T) {
 		t.Parallel()
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
-		cmd := exec.Command(binaryPath, "restack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
+		// On trunk with no stack, trunk should not be treated as a restack target
+		output, err := runCliCommandOutput(scene.Dir, "restack")
 		require.NoError(t, err, "restack command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
 		expected := testhelpers.NormalizeOutput(`
 No branches to restack.
 `)
-		require.Equal(t, expected, normalized, "trunk should not be treated as a restack target")
-	})
+		require.Equal(t, expected, testhelpers.NormalizeOutput(string(output)), "trunk should not be treated as a restack target")
 
-	t.Run("restack with downstack flag", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Create branch1 using create command
-			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
-				return err
-			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch2 on top of branch1 using create command
-			if err := s.Repo.CreateChange("branch2 change", "test2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
-		})
+		// --parallel without --all-stacks errors
+		output, err = runCliCommandOutput(scene.Dir, "restack", "--parallel")
+		require.Error(t, err, "restack --parallel should require --all-stacks or --stacks")
+		require.Contains(t, string(output), "--parallel requires --all-stacks or --stacks")
 
-		// Run restack --downstack
-		cmd := exec.Command(binaryPath, "restack", "--downstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		// Multiple scope flags error
+		output, err = runCliCommandOutput(scene.Dir, "restack", "--downstack", "--upstack")
+		require.Error(t, err, "restack should fail with conflicting flags")
+		require.Contains(t, string(output), "only one of --downstack, --only, or --upstack")
 
-		require.NoError(t, err, "restack command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-		expected := testhelpers.NormalizeOutput(`
-✨ Everything is up to date!
-`)
-		require.Equal(t, expected, normalized, "output format should match expected structure")
-	})
-
-	t.Run("restack with upstack flag", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Create branch1 using create command
-			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
-				return err
-			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create branch2 on top of branch1 using create command
-			if err := s.Repo.CreateChange("branch2 change", "test2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
-		})
-
-		// Switch to branch1
-		err := scene.Repo.CheckoutBranch("branch1")
+		// Not on a branch and --branch not specified
+		err = scene.Repo.RunGitCommand("checkout", "HEAD~0")
 		require.NoError(t, err)
-
-		// Run restack --upstack
-		cmd := exec.Command(binaryPath, "restack", "--upstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.NoError(t, err, "restack command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-		expected := testhelpers.NormalizeOutput(`
-✨ Everything is up to date!
-`)
-		require.Equal(t, expected, normalized, "output format should match expected structure")
-	})
-
-	t.Run("restack with --branch flag", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Create branch1 using create command
-			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
-				return err
-			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Switch back to main
-			return s.Repo.CheckoutBranch("main")
-		})
-
-		// Run restack with --branch flag
-		cmd := exec.Command(binaryPath, "restack", "--branch", "branch1", "--only")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.NoError(t, err, "restack command failed: %s", string(output))
-
-		normalized := testhelpers.NormalizeOutput(string(output))
-		expected := testhelpers.NormalizeOutput(`
-✨ Everything is up to date!
-`)
-		require.Equal(t, expected, normalized, "output format should match expected structure")
+		output, err = runCliCommandOutput(scene.Dir, "restack")
+		require.Error(t, err, "restack should fail when not on a branch")
+		require.Contains(t, string(output), "not on a branch")
 	})
 
 	t.Run("restack output when branches need restacking", func(t *testing.T) {
@@ -306,18 +144,14 @@ No branches to restack.
 			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
 				return err
 			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "branch1", "-m", "branch1 change"); err != nil {
 				return err
 			}
 			// Create branch2 on top of branch1 using create command
 			if err := s.Repo.CreateChange("branch2 change", "test2", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
+			return runCliCommand(s.Dir, "create", "branch2", "-m", "branch2 change")
 		})
 
 		// Make a change to main so branch1 needs restacking
@@ -330,9 +164,7 @@ No branches to restack.
 		err = scene.Repo.CheckoutBranch("branch2")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--downstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--downstack")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 
@@ -353,12 +185,12 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackA change", "stackA", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackA", "stackA change")
+			createStackitBranch(t, s.Dir, "stackA", "stackA change")
 
 			if err := s.Repo.CreateChange("stackA-child change", "stackA-child", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackA-child", "stackA-child change")
+			createStackitBranch(t, s.Dir, "stackA-child", "stackA-child change")
 
 			if err := s.Repo.CheckoutBranch("main"); err != nil {
 				return err
@@ -366,7 +198,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackB change", "stackB", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackB", "stackB change")
+			createStackitBranch(t, s.Dir, "stackB", "stackB change")
 			return nil
 		})
 
@@ -382,9 +214,7 @@ No branches to restack.
 		err = scene.Repo.CreateChangeAndCommit("main update", "main")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--all-stacks")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--all-stacks")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		normalized := testhelpers.NormalizeOutput(string(output))
@@ -413,12 +243,12 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackA change", "stackA", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackA", "stackA change")
+			createStackitBranch(t, s.Dir, "stackA", "stackA change")
 
 			if err := s.Repo.CreateChange("stackA-child change", "stackA-child", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackA-child", "stackA-child change")
+			createStackitBranch(t, s.Dir, "stackA-child", "stackA-child change")
 
 			if err := s.Repo.CheckoutBranch("main"); err != nil {
 				return err
@@ -426,7 +256,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackB change", "stackB", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackB", "stackB change")
+			createStackitBranch(t, s.Dir, "stackB", "stackB change")
 			return nil
 		})
 
@@ -442,9 +272,7 @@ No branches to restack.
 		err = scene.Repo.CreateChangeAndCommit("main update", "main")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--stacks", "stackA")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--stacks", "stackA")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		normalized := testhelpers.NormalizeOutput(string(output))
@@ -473,7 +301,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackA conflicting change", "conflict", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackA", "stackA conflicting change")
+			createStackitBranch(t, s.Dir, "stackA", "stackA conflicting change")
 
 			if err := s.Repo.CheckoutBranch("main"); err != nil {
 				return err
@@ -481,7 +309,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackB change", "stackB", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackB", "stackB change")
+			createStackitBranch(t, s.Dir, "stackB", "stackB change")
 			return nil
 		})
 
@@ -495,9 +323,7 @@ No branches to restack.
 		err = scene.Repo.CreateChangeAndCommit("main conflicting change", "conflict")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--all-stacks", "--continue-on-conflict")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--all-stacks", "--continue-on-conflict")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		normalized := testhelpers.NormalizeOutput(string(output))
@@ -523,12 +349,12 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackA change", "stackA", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackA", "stackA change")
+			createStackitBranch(t, s.Dir, "stackA", "stackA change")
 
 			if err := s.Repo.CreateChange("stackA-child change", "stackA-child", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackA-child", "stackA-child change")
+			createStackitBranch(t, s.Dir, "stackA-child", "stackA-child change")
 
 			if err := s.Repo.CheckoutBranch("main"); err != nil {
 				return err
@@ -536,7 +362,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackB change", "stackB", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackB", "stackB change")
+			createStackitBranch(t, s.Dir, "stackB", "stackB change")
 			return nil
 		})
 
@@ -552,9 +378,7 @@ No branches to restack.
 		err = scene.Repo.CreateChangeAndCommit("main update", "main")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--all-stacks", "--parallel", "--jobs", "2")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--all-stacks", "--parallel", "--jobs", "2")
 
 		require.NoError(t, err, "restack --all-stacks --parallel failed: %s", string(output))
 
@@ -580,7 +404,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackA conflicting change", "conflict", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackA", "stackA conflicting change")
+			createStackitBranch(t, s.Dir, "stackA", "stackA conflicting change")
 
 			if err := s.Repo.CheckoutBranch("main"); err != nil {
 				return err
@@ -588,7 +412,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackB change", "stackB", false); err != nil {
 				return err
 			}
-			createStackitBranch(t, binaryPath, s.Dir, "stackB", "stackB change")
+			createStackitBranch(t, s.Dir, "stackB", "stackB change")
 			return nil
 		})
 
@@ -602,9 +426,7 @@ No branches to restack.
 		err = scene.Repo.CreateChangeAndCommit("main conflicting change", "conflict")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--all-stacks", "--parallel", "--jobs", "2", "--continue-on-conflict")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--all-stacks", "--parallel", "--jobs", "2", "--continue-on-conflict")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 
@@ -615,48 +437,6 @@ No branches to restack.
 		require.NoError(t, err)
 		require.Equal(t, stackABefore, stackAAfter)
 		require.NotEqual(t, stackBBefore, stackBAfter)
-	})
-
-	t.Run("restack --parallel without --all-stacks errors", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-
-		cmd := exec.Command(binaryPath, "restack", "--parallel")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.Error(t, err, "restack --parallel should require --all-stacks or --stacks")
-		require.Contains(t, string(output), "--parallel requires --all-stacks or --stacks")
-	})
-
-	t.Run("restack errors when multiple scope flags specified", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-
-		// Run restack with conflicting flags
-		cmd := exec.Command(binaryPath, "restack", "--downstack", "--upstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.Error(t, err, "restack should fail with conflicting flags")
-		require.Contains(t, string(output), "only one of --downstack, --only, or --upstack")
-	})
-
-	t.Run("restack errors when not on a branch and --branch not specified", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-
-		// Detach HEAD
-		err := scene.Repo.RunGitCommand("checkout", "HEAD~0")
-		require.NoError(t, err)
-
-		// Run restack without --branch flag
-		cmd := exec.Command(binaryPath, "restack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.Error(t, err, "restack should fail when not on a branch")
-		require.Contains(t, string(output), "not on a branch")
 	})
 
 	t.Run("restack handles conflict and persists continuation state", func(t *testing.T) {
@@ -673,9 +453,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("branch1 change", "test1", false); err != nil {
 				return err
 			}
-			cmd := exec.Command(binaryPath, "create", "branch1", "-m", "branch1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "branch1", "-m", "branch1 change"); err != nil {
 				return err
 			}
 			// Create branch2 on top of branch1 using create command
@@ -683,9 +461,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("branch2 change", "test", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "branch2", "-m", "branch2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "branch2", "-m", "branch2 change"); err != nil {
 				return err
 			}
 			// Switch to main and create conflicting change in the same file
@@ -706,9 +482,7 @@ No branches to restack.
 
 		// Run restack (should hit conflict because branch1 needs to be rebased on new main,
 		// and branch2 is based on branch1)
-		cmd := exec.Command(binaryPath, "restack", "--downstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--downstack")
 
 		// Should fail with conflict (branch1 will conflict when rebasing onto new main)
 		if err == nil {
@@ -724,84 +498,6 @@ No branches to restack.
 			_, err = os.Stat(continuationPath)
 			require.NoError(t, err, "continuation state file should exist")
 		}
-	})
-
-	t.Run("restack with branching stack - parent with multiple children", func(t *testing.T) {
-		t.Parallel()
-		scene := testhelpers.NewSceneParallel(t, func(s *testhelpers.Scene) error {
-			// Create initial commit
-			if err := testhelpers.InitialCommitSceneSetup(s); err != nil {
-				return err
-			}
-			// Create parent branch
-			if err := s.Repo.CreateChange("parent change", "parent", false); err != nil {
-				return err
-			}
-			cmd := exec.Command(binaryPath, "create", "parent", "-m", "parent change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Create first child branch
-			if err := s.Repo.CreateChange("child1 change", "child1", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "child1", "-m", "child1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			// Go back to parent and create second child
-			if err := s.Repo.CheckoutBranch("parent"); err != nil {
-				return err
-			}
-			if err := s.Repo.CreateChange("child2 change", "child2", false); err != nil {
-				return err
-			}
-			cmd = exec.Command(binaryPath, "create", "child2", "-m", "child2 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
-		})
-
-		// Make a change to main so parent needs restacking
-		err := scene.Repo.CheckoutBranch("main")
-		require.NoError(t, err)
-		err = scene.Repo.CreateChangeAndCommit("main update", "main")
-		require.NoError(t, err)
-
-		// Switch to parent and restack (should restack parent and both children)
-		err = scene.Repo.CheckoutBranch("parent")
-		require.NoError(t, err)
-
-		cmd := exec.Command(binaryPath, "restack", "--upstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
-
-		require.NoError(t, err, "restack command failed: %s", string(output))
-
-		// Verify both children are still valid and have parent as their parent
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-
-		// Verify child1 is still a child of parent
-		err = scene.Repo.CheckoutBranch("child1")
-		require.NoError(t, err)
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		infoOutput, err := cmd.CombinedOutput()
-		require.NoError(t, err, "info command failed: %s", string(infoOutput))
-		require.Contains(t, string(infoOutput), "parent", "child1 should still have parent as its parent")
-
-		// Verify child2 is still a child of parent
-		err = scene.Repo.CheckoutBranch("child2")
-		require.NoError(t, err)
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		infoOutput, err = cmd.CombinedOutput()
-		require.NoError(t, err, "info command failed: %s", string(infoOutput))
-		require.Contains(t, string(infoOutput), "parent", "child2 should still have parent as its parent")
 	})
 
 	t.Run("restack branching stacks in topological order", func(t *testing.T) {
@@ -824,18 +520,14 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackA change", "sA", false); err != nil {
 				return err
 			}
-			cmd := exec.Command(binaryPath, "create", "stackA", "-m", "stackA change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "stackA", "-m", "stackA change"); err != nil {
 				return err
 			}
 
 			if err := s.Repo.CreateChange("stackA-child1 change", "sAc1", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "stackA-child1", "-m", "stackA-child1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "stackA-child1", "-m", "stackA-child1 change"); err != nil {
 				return err
 			}
 
@@ -846,9 +538,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackA-child2 change", "sAc2", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "stackA-child2", "-m", "stackA-child2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "stackA-child2", "-m", "stackA-child2 change"); err != nil {
 				return err
 			}
 
@@ -859,18 +549,14 @@ No branches to restack.
 			if err := s.Repo.CreateChange("stackB change", "sB", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "stackB", "-m", "stackB change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "stackB", "-m", "stackB change"); err != nil {
 				return err
 			}
 
 			if err := s.Repo.CreateChange("stackB-child1 change", "sBc1", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "stackB-child1", "-m", "stackB-child1 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
+			return runCliCommand(s.Dir, "create", "stackB-child1", "-m", "stackB-child1 change")
 		})
 
 		// Make a change to main so all stacks need restacking
@@ -883,35 +569,22 @@ No branches to restack.
 		err = scene.Repo.CheckoutBranch("stackA")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--upstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--upstack")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 
 		// Verify all stackA branches are properly related
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		_, err = cmd.CombinedOutput()
-		require.NoError(t, err)
+		requireInfoParent(t, scene.Dir, "main")
 
 		// Verify stackA-child1 is still a child of stackA
 		err = scene.Repo.CheckoutBranch("stackA-child1")
 		require.NoError(t, err)
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		infoOutput, err := cmd.CombinedOutput()
-		require.NoError(t, err)
-		require.Contains(t, string(infoOutput), "stackA")
+		requireInfoParent(t, scene.Dir, "stackA")
 
 		// Verify stackA-child2 is still a child of stackA
 		err = scene.Repo.CheckoutBranch("stackA-child2")
 		require.NoError(t, err)
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		infoOutput, err = cmd.CombinedOutput()
-		require.NoError(t, err)
-		require.Contains(t, string(infoOutput), "stackA")
+		requireInfoParent(t, scene.Dir, "stackA")
 	})
 
 	t.Run("restack auto-reparents multiple children when parent is merged", func(t *testing.T) {
@@ -925,18 +598,14 @@ No branches to restack.
 			if err := s.Repo.CreateChange("parent change", "parent", false); err != nil {
 				return err
 			}
-			cmd := exec.Command(binaryPath, "create", "parent", "-m", "parent change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "parent", "-m", "parent change"); err != nil {
 				return err
 			}
 			// Create first child
 			if err := s.Repo.CreateChange("child1 change", "child1", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "child1", "-m", "child1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "child1", "-m", "child1 change"); err != nil {
 				return err
 			}
 			// Go back to parent and create second child
@@ -946,9 +615,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("child2 change", "child2", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "child2", "-m", "child2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "child2", "-m", "child2 change"); err != nil {
 				return err
 			}
 			// Go back to parent and create third child
@@ -958,9 +625,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("child3 change", "child3", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "child3", "-m", "child3 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
+			return runCliCommand(s.Dir, "create", "child3", "-m", "child3 change")
 		})
 
 		// Simulate merging parent into main
@@ -973,44 +638,33 @@ No branches to restack.
 		err = scene.Repo.CheckoutBranch("child1")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--only")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--only")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 		require.Contains(t, string(output), "Reparented", "should mention reparenting")
+		// "parent" alone would match "Reparented"; anchor on the from/to phrase
+		// so both the old parent and the new parent (trunk) are proven.
+		require.Contains(t, testhelpers.NormalizeOutput(string(output)), "from parent to main", "should mention old parent and new parent (trunk)")
 
 		// Verify child1's parent is now main
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		infoOutput, err := cmd.CombinedOutput()
-		require.NoError(t, err)
-		require.Contains(t, string(infoOutput), "main", "child1 should now be parented to main")
+		requireInfoParent(t, scene.Dir, "main")
 
 		// Restack the other children too
 		err = scene.Repo.CheckoutBranch("child2")
 		require.NoError(t, err)
-		cmd = exec.Command(binaryPath, "restack", "--only")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = runCliCommandOutput(scene.Dir, "restack", "--only")
 		require.NoError(t, err, "restack command failed: %s", string(output))
 
 		err = scene.Repo.CheckoutBranch("child3")
 		require.NoError(t, err)
-		cmd = exec.Command(binaryPath, "restack", "--only")
-		cmd.Dir = scene.Dir
-		output, err = cmd.CombinedOutput()
+		output, err = runCliCommandOutput(scene.Dir, "restack", "--only")
 		require.NoError(t, err, "restack command failed: %s", string(output))
 
 		// Verify all children are now parented to main
 		for _, child := range []string{"child2", "child3"} {
 			err = scene.Repo.CheckoutBranch(child)
 			require.NoError(t, err)
-			cmd = exec.Command(binaryPath, "info")
-			cmd.Dir = scene.Dir
-			infoOutput, err = cmd.CombinedOutput()
-			require.NoError(t, err, "info command failed for %s: %s", child, string(infoOutput))
-			require.Contains(t, string(infoOutput), "main", "%s should now be parented to main", child)
+			requireInfoParent(t, scene.Dir, "main")
 		}
 	})
 
@@ -1030,9 +684,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("parent change", "parent", false); err != nil {
 				return err
 			}
-			cmd := exec.Command(binaryPath, "create", "parent", "-m", "parent change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "parent", "-m", "parent change"); err != nil {
 				return err
 			}
 
@@ -1040,9 +692,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("child1 change", "child1", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "child1", "-m", "child1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "child1", "-m", "child1 change"); err != nil {
 				return err
 			}
 
@@ -1053,9 +703,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("child2 change", "child2", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "child2", "-m", "child2 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
+			return runCliCommand(s.Dir, "create", "child2", "-m", "child2 change")
 		})
 
 		// Make a change to main so parent needs restacking
@@ -1068,18 +716,12 @@ No branches to restack.
 		err = scene.Repo.CheckoutBranch("child2")
 		require.NoError(t, err)
 
-		cmd := exec.Command(binaryPath, "restack", "--downstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--downstack")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 
 		// Verify child2 is still a child of parent
-		cmd = exec.Command(binaryPath, "info")
-		cmd.Dir = scene.Dir
-		infoOutput, err := cmd.CombinedOutput()
-		require.NoError(t, err)
-		require.Contains(t, string(infoOutput), "parent")
+		requireInfoParent(t, scene.Dir, "parent")
 	})
 
 	t.Run("restack --upstack from parent restacks all children", func(t *testing.T) {
@@ -1099,9 +741,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("parent change", "parent", false); err != nil {
 				return err
 			}
-			cmd := exec.Command(binaryPath, "create", "parent", "-m", "parent change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "parent", "-m", "parent change"); err != nil {
 				return err
 			}
 
@@ -1109,9 +749,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("child1 change", "child1", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "child1", "-m", "child1 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "child1", "-m", "child1 change"); err != nil {
 				return err
 			}
 
@@ -1122,9 +760,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("child2 change", "child2", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "child2", "-m", "child2 change")
-			cmd.Dir = s.Dir
-			if err := cmd.Run(); err != nil {
+			if err := runCliCommand(s.Dir, "create", "child2", "-m", "child2 change"); err != nil {
 				return err
 			}
 
@@ -1135,9 +771,7 @@ No branches to restack.
 			if err := s.Repo.CreateChange("child3 change", "child3", false); err != nil {
 				return err
 			}
-			cmd = exec.Command(binaryPath, "create", "child3", "-m", "child3 change")
-			cmd.Dir = s.Dir
-			return cmd.Run()
+			return runCliCommand(s.Dir, "create", "child3", "-m", "child3 change")
 		})
 
 		// Amend parent branch (children will need restacking)
@@ -1147,9 +781,7 @@ No branches to restack.
 		require.NoError(t, err)
 
 		// Run restack --upstack from parent (should restack all three children)
-		cmd := exec.Command(binaryPath, "restack", "--upstack")
-		cmd.Dir = scene.Dir
-		output, err := cmd.CombinedOutput()
+		output, err := runCliCommandOutput(scene.Dir, "restack", "--upstack")
 
 		require.NoError(t, err, "restack command failed: %s", string(output))
 
@@ -1157,20 +789,7 @@ No branches to restack.
 		for _, child := range []string{"child1", "child2", "child3"} {
 			err = scene.Repo.CheckoutBranch(child)
 			require.NoError(t, err)
-			cmd = exec.Command(binaryPath, "info")
-			cmd.Dir = scene.Dir
-			infoOutput, err := cmd.CombinedOutput()
-			require.NoError(t, err, "info command failed for %s: %s", child, string(infoOutput))
-			require.Contains(t, string(infoOutput), "parent", "%s should still have parent as its parent", child)
+			requireInfoParent(t, scene.Dir, "parent")
 		}
 	})
-}
-
-func createStackitBranch(t *testing.T, binaryPath, dir, branch, message string) {
-	t.Helper()
-
-	cmd := exec.Command(binaryPath, "create", branch, "-m", message)
-	cmd.Dir = dir
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "create command failed: %s", string(output))
 }

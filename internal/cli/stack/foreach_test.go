@@ -13,17 +13,10 @@ import (
 
 func TestForeachCommand(t *testing.T) {
 	t.Parallel()
-	binaryPath := testhelpers.GetSharedBinaryPath()
-	if binaryPath == "" {
-		if err := testhelpers.GetBinaryError(); err != nil {
-			t.Fatalf("failed to build stackit binary: %v", err)
-		}
-		t.Fatal("stackit binary not built")
-	}
 
 	t.Run("output formatting", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 		s.RunCli("init")
 		s.RunCli("create", "branch1", "-m", "b1")
 		s.RunCli("create", "branch2", "-m", "b2")
@@ -93,7 +86,7 @@ Error: command failed on branch branch1: exit status 1
 
 	t.Run("scope flags", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 		s.RunCli("init")
 		s.RunCli("create", "b1")
 		s.RunCli("create", "b2")
@@ -148,7 +141,7 @@ All branches completed successfully (1 total)
 
 	t.Run("branch flag anchors traversal", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 		s.RunCli("init")
 		s.RunCli("create", "b1")
 		s.RunCli("create", "b2")
@@ -180,9 +173,9 @@ All branches completed successfully (3 total)
 		s.ExpectBranch("b3")
 	})
 
-	t.Run("json output reports branch results", func(t *testing.T) {
+	t.Run("json output reports branch results and command failures", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 		s.RunCli("init")
 		s.RunCli("create", "b1")
 		s.RunCli("create", "b2")
@@ -202,20 +195,13 @@ All branches completed successfully (3 total)
 			{Branch: "b1", Status: foreach.StatusDone, ExitCode: 0, Output: "b1\n"},
 			{Branch: "b2", Status: foreach.StatusDone, ExitCode: 0, Output: "b2\n"},
 		}, result.Results)
-	})
 
-	t.Run("json output reports command failures", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
-		s.RunCli("init")
-		s.RunCli("create", "b1")
-		s.RunCli("create", "b2")
-		s.RunCli("checkout", "b1")
-
-		output, err := s.RunCliAndGetOutput("foreach", "--json", "--no-fail-fast", "false")
+		// Command failures, on the same stack: foreach returns to b1, so the
+		// upstack scope still covers both branches.
+		output, err = s.RunCliAndGetOutput("foreach", "--json", "--no-fail-fast", "false")
 		require.NoError(t, err)
 
-		var result foreach.JSONResult
+		result = foreach.JSONResult{}
 		require.NoError(t, json.Unmarshal([]byte(output), &result))
 		require.Equal(t, foreach.JSONStatusFailure, result.Status)
 		require.Equal(t, 2, result.TotalCount)
@@ -231,7 +217,7 @@ All branches completed successfully (3 total)
 
 	t.Run("find-first-failure json stops before descendants", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 		s.RunCli("init")
 		s.RunCli("create", "root")
 		s.RunCli("create", "child-a")
@@ -254,9 +240,9 @@ All branches completed successfully (3 total)
 		require.Equal(t, []string{"root", "child-a", "child-b"}, jsonBranchNames(result.Results))
 	})
 
-	t.Run("all-stacks runs across every independent stack", func(t *testing.T) {
+	t.Run("all-stacks and --stacks select independent stacks; invalid combinations rejected", func(t *testing.T) {
 		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
+		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithInProcess(true)
 		s.RunCli("init")
 
 		// Stack A: main -> alpha-root -> alpha-child
@@ -275,40 +261,22 @@ All branches completed successfully (3 total)
 		require.NoError(t, json.Unmarshal([]byte(output), &result))
 		require.Equal(t, foreach.JSONStatusSuccess, result.Status)
 		require.ElementsMatch(t, []string{"alpha-root", "alpha-child", "beta-root"}, jsonBranchNames(result.Results))
-	})
 
-	t.Run("stacks filters to the selected independent roots", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
-		s.RunCli("init")
-
-		// Two independent stacks.
-		s.RunCli("create", "alpha-root", "-m", "alpha root")
-		s.RunCli("create", "alpha-child", "-m", "alpha child")
-		s.RunCli("checkout", "main")
-		s.RunCli("create", "beta-root", "-m", "beta root")
-
-		output, err := s.RunCliAndGetOutput("foreach", "--stacks", "alpha-root", "--json", "echo", "$STACKIT_BRANCH")
+		// --stacks filters to the selected independent roots.
+		output, err = s.RunCliAndGetOutput("foreach", "--stacks", "alpha-root", "--json", "echo", "$STACKIT_BRANCH")
 		require.NoError(t, err)
 
-		var result foreach.JSONResult
+		result = foreach.JSONResult{}
 		require.NoError(t, json.Unmarshal([]byte(output), &result))
 		require.Equal(t, foreach.JSONStatusSuccess, result.Status)
 		require.ElementsMatch(t, []string{"alpha-root", "alpha-child"}, jsonBranchNames(result.Results))
-	})
-
-	t.Run("all-stacks rejects --stacks, --branch, and scope flags", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenarioParallel(t, testhelpers.BasicSceneSetup).WithBinaryPath(binaryPath)
-		s.RunCli("init")
-		s.RunCli("create", "root", "-m", "r")
 
 		// --all-stacks and --stacks are mutually exclusive.
-		_, err := s.RunCliAndGetOutput("foreach", "--all-stacks", "--stacks", "root", "echo", "x")
+		_, err = s.RunCliAndGetOutput("foreach", "--all-stacks", "--stacks", "alpha-root", "echo", "x")
 		require.Error(t, err)
 
 		// --branch can't be combined with multi-stack scopes.
-		_, err = s.RunCliAndGetOutput("foreach", "--all-stacks", "--branch", "root", "echo", "x")
+		_, err = s.RunCliAndGetOutput("foreach", "--all-stacks", "--branch", "alpha-root", "echo", "x")
 		require.Error(t, err)
 
 		// Explicit per-branch scope flag conflicts with --all-stacks.

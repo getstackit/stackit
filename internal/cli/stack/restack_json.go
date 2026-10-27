@@ -1,82 +1,12 @@
-// Package handlers provides shared handler interfaces for CLI output.
-package handlers
+package stack
 
 import (
 	"slices"
 	"sync"
 
-	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/git"
 )
-
-// RestackResult represents the outcome of a restack operation for a single branch
-type RestackResult string
-
-const (
-	// RestackDone indicates the branch was successfully restacked
-	RestackDone RestackResult = "done"
-	// RestackUnneeded indicates the branch didn't need restacking
-	RestackUnneeded RestackResult = "unneeded"
-	// RestackConflict indicates the branch had a conflict
-	RestackConflict RestackResult = "conflict"
-	// RestackBlocked indicates the branch was left untouched because another
-	// branch in its stack conflicted
-	RestackBlocked RestackResult = "blocked"
-)
-
-// RestackHandler abstracts TTY vs non-TTY output for restack operations
-// This interface is shared between sync, get, and restack commands
-type RestackHandler interface {
-	// OnRestackStart is called at the beginning of restack with branch count
-	OnRestackStart(branchCount int)
-
-	// OnRestackBranch is called for each branch during restack.
-	OnRestackBranch(event RestackBranchEvent)
-
-	// OnRestackComplete is called when restack finishes. blocked lists
-	// branches left untouched because their stack contained a conflict.
-	OnRestackComplete(summary RestackSummary)
-}
-
-// RestackBranchEvent describes the outcome of restacking one branch.
-// Keeping these facts together makes the shared presentation contract safe to
-// extend without relying on positional arguments.
-type RestackBranchEvent struct {
-	Branch              string
-	Result              RestackResult
-	NewRevision         string
-	PRNumber            *git.PRNumber
-	LockReason          engine.LockReason
-	Frozen              bool
-	HeldBy              string // why a worktree held this branch back (empty if it was not held)
-	IsCurrent           bool
-	Parent              string
-	Reparented          bool
-	OldParent           string
-	NewParent           string
-	RerereResolvedCount int
-	StackRoot           string
-}
-
-// RestackSummary contains aggregate outcomes from a restack operation.
-type RestackSummary struct {
-	Restacked int
-	Skipped   int
-	Conflicts []string
-	Blocked   []string
-}
-
-// NullRestackHandler is a no-op handler for testing or when output is not needed
-type NullRestackHandler struct{}
-
-// OnRestackStart implements RestackHandler.
-func (h *NullRestackHandler) OnRestackStart(_ int) {}
-
-// OnRestackBranch implements RestackHandler.
-func (h *NullRestackHandler) OnRestackBranch(RestackBranchEvent) {}
-
-// OnRestackComplete implements RestackHandler.
-func (h *NullRestackHandler) OnRestackComplete(RestackSummary) {}
 
 // RestackJSONStatus represents the aggregate outcome of a JSON restack operation.
 type RestackJSONStatus string
@@ -154,11 +84,11 @@ func (h *JSONRestackHandler) OnRestackStart(branchCount int) {
 }
 
 // OnRestackBranch implements RestackHandler.
-func (h *JSONRestackHandler) OnRestackBranch(event RestackBranchEvent) {
+func (h *JSONRestackHandler) OnRestackBranch(event actions.RestackBranchEvent) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	switch event.Result {
-	case RestackDone:
+	case actions.RestackDone:
 		h.Result.Restacked = append(h.Result.Restacked, RestackBranchInfo{
 			Name:                event.Branch,
 			Parent:              event.Parent,
@@ -167,18 +97,18 @@ func (h *JSONRestackHandler) OnRestackBranch(event RestackBranchEvent) {
 			PRNumber:            event.PRNumber,
 			RerereResolvedCount: event.RerereResolvedCount,
 		})
-	case RestackUnneeded:
+	case actions.RestackUnneeded:
 		h.Result.Skipped = append(h.Result.Skipped, event.Branch)
 		if event.HeldBy != "" {
 			h.Result.Held = append(h.Result.Held, RestackHeldInfo{Branch: event.Branch, Reason: event.HeldBy})
 		}
-	case RestackConflict:
+	case actions.RestackConflict:
 		h.Result.Conflicts = append(h.Result.Conflicts, RestackConflictInfo{
 			Branch:    event.Branch,
 			Parent:    event.Parent,
 			StackRoot: event.StackRoot,
 		})
-	case RestackBlocked:
+	case actions.RestackBlocked:
 		h.Result.Blocked = append(h.Result.Blocked, event.Branch)
 	}
 
@@ -188,7 +118,7 @@ func (h *JSONRestackHandler) OnRestackBranch(event RestackBranchEvent) {
 }
 
 // OnRestackComplete implements RestackHandler.
-func (h *JSONRestackHandler) OnRestackComplete(summary RestackSummary) {
+func (h *JSONRestackHandler) OnRestackComplete(summary actions.RestackSummary) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.Result.RestackCount = summary.Restacked

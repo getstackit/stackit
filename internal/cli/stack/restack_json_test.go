@@ -1,4 +1,4 @@
-package handlers
+package stack
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -21,12 +22,12 @@ func TestJSONRestackHandler(t *testing.T) {
 
 		// Simulate branch restacking
 		prNum := git.PRNumber(123)
-		branchA := restackEvent("branch-a", RestackDone, "abc123", &prNum, "main")
+		branchA := restackEvent("branch-a", actions.RestackDone, "abc123", &prNum, "main")
 		branchA.RerereResolvedCount = 2
 		handler.OnRestackBranch(branchA)
-		handler.OnRestackBranch(restackEvent("branch-b", RestackDone, "def456", nil, "branch-a"))
+		handler.OnRestackBranch(restackEvent("branch-b", actions.RestackDone, "def456", nil, "branch-a"))
 
-		handler.OnRestackComplete(RestackSummary{Restacked: 2})
+		handler.OnRestackComplete(actions.RestackSummary{Restacked: 2})
 
 		require.Equal(t, RestackJSONStatusSuccess, handler.Result.Status)
 		require.Len(t, handler.Result.Restacked, 2)
@@ -46,10 +47,10 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.OnRestackStart(2)
 
 		// Simulate branches that don't need restacking
-		handler.OnRestackBranch(restackEvent("branch-a", RestackUnneeded, "", nil, "main"))
-		handler.OnRestackBranch(restackEvent("branch-b", RestackUnneeded, "", nil, "branch-a"))
+		handler.OnRestackBranch(restackEvent("branch-a", actions.RestackUnneeded, "", nil, "main"))
+		handler.OnRestackBranch(restackEvent("branch-b", actions.RestackUnneeded, "", nil, "branch-a"))
 
-		handler.OnRestackComplete(RestackSummary{Skipped: 2})
+		handler.OnRestackComplete(actions.RestackSummary{})
 
 		require.Equal(t, RestackJSONStatusSuccess, handler.Result.Status)
 		require.Empty(t, handler.Result.Restacked)
@@ -65,10 +66,10 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.OnRestackStart(2)
 
 		// Simulate a conflict
-		handler.OnRestackBranch(restackEvent("branch-a", RestackDone, "abc123", nil, "main"))
-		handler.OnRestackBranch(restackEvent("branch-b", RestackConflict, "", nil, "branch-a"))
+		handler.OnRestackBranch(restackEvent("branch-a", actions.RestackDone, "abc123", nil, "main"))
+		handler.OnRestackBranch(restackEvent("branch-b", actions.RestackConflict, "", nil, "branch-a"))
 
-		handler.OnRestackComplete(RestackSummary{Restacked: 1, Conflicts: []string{"branch-b"}})
+		handler.OnRestackComplete(actions.RestackSummary{Restacked: 1, Conflicts: []string{"branch-b"}})
 
 		require.Equal(t, RestackJSONStatusConflict, handler.Result.Status)
 		require.Len(t, handler.Result.Restacked, 1)
@@ -96,8 +97,8 @@ func TestJSONRestackHandler(t *testing.T) {
 
 		handler := NewJSONRestackHandler()
 		handler.OnRestackStart(1)
-		handler.OnRestackBranch(restackEvent("branch-a", RestackConflict, "", nil, "main"))
-		handler.OnRestackComplete(RestackSummary{Conflicts: []string{"branch-a"}})
+		handler.OnRestackBranch(restackEvent("branch-a", actions.RestackConflict, "", nil, "main"))
+		handler.OnRestackComplete(actions.RestackSummary{Conflicts: []string{"branch-a"}})
 
 		handler.SetError(errors.New("restack stopped due to conflict on branch-a"))
 
@@ -112,19 +113,19 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler := NewJSONRestackHandler()
 		handler.OnRestackStart(3)
 
-		alpha := restackEvent("alpha", RestackDone, "aaa", nil, "main")
+		alpha := restackEvent("alpha", actions.RestackDone, "aaa", nil, "main")
 		alpha.StackRoot = "alpha"
 		handler.OnRestackBranch(alpha)
 
-		alphaChild := restackEvent("alpha-child", RestackDone, "bbb", nil, "alpha")
+		alphaChild := restackEvent("alpha-child", actions.RestackDone, "bbb", nil, "alpha")
 		alphaChild.StackRoot = "alpha"
 		handler.OnRestackBranch(alphaChild)
 
-		beta := restackEvent("beta", RestackConflict, "", nil, "main")
+		beta := restackEvent("beta", actions.RestackConflict, "", nil, "main")
 		beta.StackRoot = "beta"
 		handler.OnRestackBranch(beta)
 
-		handler.OnRestackComplete(RestackSummary{Restacked: 2, Conflicts: []string{"beta"}})
+		handler.OnRestackComplete(actions.RestackSummary{Restacked: 2, Conflicts: []string{"beta"}})
 
 		// Per-branch annotation
 		require.Equal(t, "alpha", handler.Result.Restacked[0].StackRoot)
@@ -140,7 +141,7 @@ func TestJSONRestackHandler(t *testing.T) {
 
 		handler := NewJSONRestackHandler()
 		handler.OnRestackStart(1)
-		handler.OnRestackComplete(RestackSummary{Skipped: 1})
+		handler.OnRestackComplete(actions.RestackSummary{})
 
 		// Call SetError with nil
 		handler.SetError(nil)
@@ -151,8 +152,8 @@ func TestJSONRestackHandler(t *testing.T) {
 	})
 }
 
-func restackEvent(branch string, result RestackResult, revision string, prNumber *git.PRNumber, parent string) RestackBranchEvent {
-	return RestackBranchEvent{
+func restackEvent(branch string, result actions.RestackResult, revision string, prNumber *git.PRNumber, parent string) actions.RestackBranchEvent {
+	return actions.RestackBranchEvent{
 		Branch:      branch,
 		Result:      result,
 		NewRevision: revision,

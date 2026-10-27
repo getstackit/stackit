@@ -59,6 +59,23 @@ its result or implement an action-defined interface such as
 `actions.OrderEditor`. The `depguard` rule `actions-no-tui` in
 `.golangci.yml` rejects `internal/tui` imports from `internal/actions`.
 
+#### Shared restack pipeline
+
+Commands that report restack progress (`restack`, `sync`, `get`, `submit`)
+choose their branches, then hand them to `actions.RunRestack`
+(`internal/actions/restack_run.go`). It enables rerere, runs the groups
+sequentially or in parallel worktrees, applies a `RestackConflictPolicy`
+(enter the conflict workflow, report, or prompt then resolve), and reports every
+branch to an `actions.RestackHandler` as one `RestackBranchEvent` type. Adapters
+render that one type regardless of which command produced it, through
+`common.FormatRestackRow` and `common.FormatRestackSummary`
+(`internal/cli/common/restack.go`). A command that brackets the restack in its
+own phase (sync, submit) passes `actions.RestackBranchFunc` to receive only the
+per-branch events. Pre-run worktree holds and snapshots stay
+with the caller, because their scope differs per command. Mutating commands that
+restack as a side effect (`modify`, `move`, `fold`, …) still call
+`RestackBranches` directly.
+
 ### Adapters
 
 Adapters translate between delivery mechanisms and actions.

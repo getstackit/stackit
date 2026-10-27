@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getstackit/stackit/internal/actions"
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -120,16 +121,22 @@ func deleted(branch string, pr *git.PRNumber, reason string) step {
 	return emit(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: branch, PRNumber: pr, Message: reason})
 }
 
+// emitRestack renders one restack branch event, as the shared restack
+// pipeline reports it during sync's restack phase.
+func emitRestack(e actions.RestackBranchEvent) step {
+	return func(h *transcriptSyncHandler) { h.OnRestackBranch(e) }
+}
+
 func restacked(branch string, pr *git.PRNumber, parent, rev string) step {
-	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: branch, PRNumber: pr, Parent: parent, NewRevision: rev})
+	return emitRestack(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: branch, PRNumber: pr, Parent: parent, NewRevision: rev})
 }
 
 func restackUpToDate(branch string, pr *git.PRNumber) step {
-	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: branch, PRNumber: pr})
+	return emitRestack(actions.RestackBranchEvent{Result: actions.RestackUnneeded, Branch: branch, PRNumber: pr})
 }
 
 func restackConflict(branch string, pr *git.PRNumber) step {
-	return emit(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: branch, PRNumber: pr, Conflict: true})
+	return emitRestack(actions.RestackBranchEvent{Result: actions.RestackConflict, Branch: branch, PRNumber: pr})
 }
 
 // promptDeletions renders the branch-deletion multi-select with the user's

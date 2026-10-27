@@ -8,7 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/handlers"
+
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/style"
@@ -275,88 +275,24 @@ func (h *SimpleGetHandler) OnRestackStart(_ int) {
 }
 
 // OnRestackBranch implements RestackHandler for restack phase
-func (h *SimpleGetHandler) OnRestackBranch(event handlers.RestackBranchEvent) {
+func (h *SimpleGetHandler) OnRestackBranch(event actions.RestackBranchEvent) {
 	h.Lock()
 	defer h.Unlock()
-
-	if event.Reparented {
-		h.Output.Info("  Reparented %s from %s to %s",
-			style.ColorBranchNameIf(event.Branch, event.IsCurrent),
-			style.ColorBranchName(event.OldParent),
-			style.ColorBranchName(event.NewParent))
-	}
-
-	prInfo := common.FormatPRInfo(event.PRNumber)
-
-	switch event.Result {
-	case handlers.RestackDone:
-		msg := fmt.Sprintf("Restacked %s%s", style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo)
-		if event.Parent != "" {
-			msg += fmt.Sprintf(" on %s", style.ColorBranchName(event.Parent))
-		}
-		msg += fmt.Sprintf(" -> %s", style.ColorDim(event.NewRevision))
-		h.Output.Info("  %s", msg)
-		if event.RerereResolvedCount > 0 {
-			h.Output.Info("%s", actions.FormatRerereResolved(event.RerereResolvedCount))
-		}
-	case handlers.RestackUnneeded:
-		// A held branch reports the same status as one that needed no work, so
-		// warn instead of quietly claiming it is up to date.
-		if event.HeldBy != "" {
-			h.Output.Warn("  Held %s%s back: %s",
-				style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo, event.HeldBy)
-			return
-		}
-
-		reason := common.ReasonNoRestackNeeded
-		if event.LockReason.IsLocked() {
-			reason = fmt.Sprintf("%s: %s", common.ReasonLocked, event.LockReason)
-		} else if event.Frozen {
-			reason = common.ReasonFrozen
-		}
-
-		msg := fmt.Sprintf("%s%s %s", style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo, reason)
-		if reason == common.ReasonNoRestackNeeded {
-			msg = fmt.Sprintf("%s%s up to date", style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo)
-		}
-		h.Output.Info("  %s", msg)
-	case handlers.RestackConflict:
-		h.Output.Warn("  Skipped %s%s (conflict)",
-			style.ColorBranchNameIf(event.Branch, event.IsCurrent),
-			prInfo)
-	case handlers.RestackBlocked:
-		h.Output.Warn("  Skipped %s%s (blocked by conflict in stack)",
-			style.ColorBranchNameIf(event.Branch, event.IsCurrent),
-			prInfo)
+	for _, line := range common.FormatRestackLines(event) {
+		h.Output.Info("%s", line)
 	}
 }
 
 // OnRestackComplete implements RestackHandler for restack phase
-func (h *SimpleGetHandler) OnRestackComplete(summary handlers.RestackSummary) {
+func (h *SimpleGetHandler) OnRestackComplete(summary actions.RestackSummary) {
 	h.Lock()
 	defer h.Unlock()
 
-	if summary.Restacked == 0 && summary.Skipped == 0 && len(summary.Blocked) == 0 {
+	if !common.RestackChanged(summary) {
 		return // No restack summary needed if nothing happened
 	}
-
-	parts := []string{}
-	if summary.Restacked > 0 {
-		parts = append(parts, fmt.Sprintf("restacked %d", summary.Restacked))
-	}
-	if summary.Skipped > 0 {
-		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", summary.Skipped))
-	}
-	if len(summary.Blocked) > 0 {
-		parts = append(parts, fmt.Sprintf("blocked %d", len(summary.Blocked)))
-	}
-
-	if len(parts) > 0 {
-		h.Output.Info("  %s", strings.Join(parts, ", "))
-	}
-
+	h.Output.Info("  %s", common.FormatRestackSummary(summary, 0))
 	for _, conflict := range summary.Conflicts {
-		h.Output.Info("  Run %s to resolve and continue",
-			style.ColorCyan(fmt.Sprintf("st restack %s", conflict)))
+		h.Output.Info("  %s", common.FormatRestackResolveHint(conflict))
 	}
 }

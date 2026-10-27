@@ -8,7 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/handlers"
+
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
@@ -37,7 +37,7 @@ func restackMineOntoTrunk(t *testing.T, sh *scenario.Scenario) {
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, plan, &handlers.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 	sh.Rebuild()
 }
 

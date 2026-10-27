@@ -3,6 +3,7 @@ package submit
 import (
 	"time"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
@@ -35,13 +36,22 @@ type StackDisplayEvent struct {
 
 func (StackDisplayEvent) submitEvent() {}
 
-// RestackEvent indicates restack phase status.
+// RestackEvent indicates restack phase status. Summary is set on completion.
 type RestackEvent struct {
 	Started   bool
 	Completed bool
+	Summary   actions.RestackSummary
 }
 
 func (RestackEvent) submitEvent() {}
+
+// RestackBranchEvent reports the outcome of restacking one branch before
+// submit. It carries the same event every restacking command reports.
+type RestackBranchEvent struct {
+	actions.RestackBranchEvent
+}
+
+func (RestackBranchEvent) submitEvent() {}
 
 // PreparingEvent indicates the preparation/validation phase has started.
 type PreparingEvent struct{}

@@ -1,10 +1,6 @@
 package sync
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -12,37 +8,6 @@ import (
 	"github.com/getstackit/stackit/internal/git"
 	worktreeutil "github.com/getstackit/stackit/internal/worktree"
 )
-
-// WorktreeInspector is the narrow dependency SkipReasonForWorktree needs.
-type WorktreeInspector interface {
-	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath engine.WorktreePath) (bool, error)
-}
-
-// SkipReasonForWorktree returns why a managed worktree's stack must be left
-// alone this pass, or "" when it is safe to touch. Both sync and its --dry-run
-// preview call this, so the preview cannot promise work the run then skips.
-//
-// A failed inspection counts as unsafe. The probe fails when git cannot read
-// the worktree — an index.lock held by another process, unreadable permissions
-// — and reading that as clean would move refs under a checkout whose contents
-// are unknown, which is exactly what the skip exists to prevent.
-//
-// A missing directory is the one exception: there is no working tree left to
-// protect, and treating it as unsafe would block the orphan cleanup that exists
-// to retire its registration.
-func SkipReasonForWorktree(ctx context.Context, eng WorktreeInspector, worktreePath engine.WorktreePath) string {
-	if _, err := os.Stat(worktreePath.String()); errors.Is(err, os.ErrNotExist) {
-		return ""
-	}
-	hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx, worktreePath)
-	switch {
-	case inspectErr != nil:
-		return fmt.Sprintf("cannot inspect worktree at %s: %v", worktreePath, inspectErr)
-	case hasChanges:
-		return "worktree has uncommitted changes"
-	}
-	return ""
-}
 
 // WorktreeCleanupResult contains the results of worktree cleanup
 type WorktreeCleanupResult struct {

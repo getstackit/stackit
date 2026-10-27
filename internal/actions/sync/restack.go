@@ -1,18 +1,20 @@
 package sync
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/rerere"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
-// restackBranches handles restacking branches after sync operations.
+// restackBranches restacks branches after sync operations through the shared
+// restack pipeline, folding its outcome into the sync summary.
 // When restackScope is non-nil, only those branches are restacked (skipping current-branch expansion).
 // When expandScope is true, expands to the full current stack (used when --restack is explicitly passed).
-func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope []string, expandScope bool, dirtyAnchors dirtyAnchorSet, handler Handler, summary *Summary) error {
+func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope []string, expandScope bool, dirtyAnchors dirtyAnchorSet, handler Handler, summary *Summary) (actions.RestackOutcome, error) {
 	nav := ctx.Navigator()
 
 	if restackScope != nil {
@@ -50,120 +52,41 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	// branches already in branchesToRestack (reparented branches from sync)
 
 	// Remove duplicates and filter out non-existent/untracked branches and dirty stacks
-	seen := make(map[string]bool)
 	uniqueBranches := engine.NewBranchesBuilder(len(branchesToRestack))
-	for _, branchName := range branchesToRestack {
-		if !seen[branchName] && !dirtyAnchors.includes(ctx, branchName) {
-			seen[branchName] = true
-			branch := nav.GetBranch(branchName)
-			// Only include branches that exist, are tracked, and are not trunks
-			if branch.IsTracked() && !branch.IsTrunk() {
-				uniqueBranches.Add(branch)
-			}
+	for _, branchName := range utils.Unique(branchesToRestack) {
+		if dirtyAnchors.includes(ctx, branchName) {
+			continue
+		}
+		// Only include branches that exist, are tracked, and are not trunks
+		if branch := nav.GetBranch(branchName); branch.IsTracked() && !branch.IsTrunk() {
+			uniqueBranches.Add(branch)
 		}
 	}
 
 	// Sort branches topologically (parents before children) for correct restack order
 	sortedBranches := nav.SortBranchesTopologically(uniqueBranches.Build())
 
-	// Restack branches with handler for progress
-	if len(sortedBranches) > 0 {
-		restackStart := time.Now()
-		if err := actions.RestackBranchesWithHandler(ctx, sortedBranches, func(p actions.RestackProgress) {
-			prNumber := actions.PRNumberForBranch(ctx.Engine, p.Branch)
-
-			parentName := ""
-			br := nav.GetBranch(p.Branch)
-			if br.GetName() != "" {
-				if parent := br.GetParent(); parent != nil {
-					parentName = parent.GetName()
-				} else {
-					parentName = ctx.Engine.Trunk().GetName()
-				}
-			}
-
-			switch p.Result {
-			case engine.RestackDone:
-				summary.BranchesRestacked++
-				handler.EmitEvent(Event{
-					Phase:               PhaseRestack,
-					Type:                EventCompleted,
-					Branch:              p.Branch,
-					PRNumber:            prNumber,
-					NewRevision:         p.NewRev,
-					LockReason:          p.LockReason,
-					Frozen:              p.Frozen,
-					IsCurrent:           p.IsCurrent,
-					Parent:              parentName,
-					RerereResolvedCount: p.RerereResolvedCount,
-				})
-			case engine.RestackUnneeded:
-				handler.EmitEvent(Event{
-					Phase:      PhaseRestack,
-					Type:       EventCompleted,
-					Branch:     p.Branch,
-					PRNumber:   prNumber,
-					LockReason: p.LockReason,
-					Frozen:     p.Frozen,
-					HeldBy:     p.HeldBy,
-					IsCurrent:  p.IsCurrent,
-					Parent:     parentName,
-				})
-			case engine.RestackConflict:
-				summary.BranchesSkipped++
-				summary.ConflictBranches = append(summary.ConflictBranches, p.Branch)
-				handler.EmitEvent(Event{
-					Phase:      PhaseRestack,
-					Type:       EventSkipped,
-					Branch:     p.Branch,
-					PRNumber:   prNumber,
-					Conflict:   true,
-					LockReason: p.LockReason,
-					Frozen:     p.Frozen,
-					IsCurrent:  p.IsCurrent,
-					Parent:     parentName,
-				})
-			case engine.RestackBlocked:
-				summary.BranchesBlocked++
-				handler.EmitEvent(Event{
-					Phase:      PhaseRestack,
-					Type:       EventSkipped,
-					Branch:     p.Branch,
-					PRNumber:   prNumber,
-					Message:    "(blocked by conflict in stack)",
-					LockReason: p.LockReason,
-					Frozen:     p.Frozen,
-					IsCurrent:  p.IsCurrent,
-					Parent:     parentName,
-				})
-			}
-		}, actions.ConflictModeContinue); err != nil {
-			return fmt.Errorf("failed to restack branches: %w", err)
-		}
-		ctx.Logger.Info("restack branches completed durationMs=%d branchCount=%d", time.Since(restackStart).Milliseconds(), len(sortedBranches))
+	if len(sortedBranches) == 0 {
+		return actions.RestackOutcome{}, nil
 	}
 
-	return nil
-}
+	// Sync opens the restack phase and reports its own summary, so only the
+	// per-branch events reach the handler.
+	pauser, _ := handler.(rerere.Pauser)
+	restackStart := time.Now()
+	outcome, err := actions.RunRestack(ctx, actions.RestackRequest{
+		Branches:       sortedBranches,
+		ConflictPolicy: actions.RestackConflictPrompt,
+		Prompter:       handler,
+		PromptRerere:   ctx.Interactive && !ctx.Quiet && handler.IsInteractive(),
+		Pauser:         pauser,
+	}, actions.RestackBranchFunc(handler.OnRestackBranch))
 
-// conflictStackBranches returns the full stack containing branchName (ancestors
-// and descendants, trunk excluded) in topological order — the branch set
-// ResolveConflictWorkflow needs to apply the held-back ancestors before
-// entering the conflict.
-func conflictStackBranches(ctx *app.Context, branchName string) engine.Branches {
-	nav := ctx.Navigator()
-	branch := nav.GetBranch(branchName)
-	graph := ctx.Engine.Graph(engine.SortStrategyAlphabetical)
-	stack := graph.Range(branch, engine.StackRange{
-		RecursiveParents:  true,
-		IncludeCurrent:    true,
-		RecursiveChildren: true,
-	})
-	builder := engine.NewBranchesBuilder(len(stack))
-	for _, b := range stack {
-		if b.IsTracked() && !b.IsTrunk() {
-			builder.Add(b)
-		}
-	}
-	return nav.SortBranchesTopologically(builder.Build())
+	summary.BranchesRestacked += outcome.Summary.Restacked
+	summary.BranchesSkipped += len(outcome.Summary.Conflicts)
+	summary.ConflictBranches = append(summary.ConflictBranches, outcome.Summary.Conflicts...)
+	summary.BranchesBlocked += len(outcome.Summary.Blocked)
+	ctx.Logger.Info("restack branches completed durationMs=%d branchCount=%d", time.Since(restackStart).Milliseconds(), len(sortedBranches))
+
+	return outcome, err
 }

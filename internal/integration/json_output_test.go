@@ -8,7 +8,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/sync"
-	"github.com/getstackit/stackit/internal/handlers"
+	"github.com/getstackit/stackit/internal/cli/stack"
 )
 
 // =============================================================================
@@ -151,10 +151,10 @@ func TestJSONOutput(t *testing.T) {
 				sh.Run("restack --json")
 				output := sh.Output()
 
-				var result handlers.RestackJSONResult
+				var result stack.RestackJSONResult
 				err := json.Unmarshal([]byte(output), &result)
 				require.NoError(t, err, "restack --json should produce valid JSON")
-				require.Equal(t, handlers.RestackJSONStatusSuccess, result.Status)
+				require.Equal(t, stack.RestackJSONStatusSuccess, result.Status)
 				require.Empty(t, result.Conflicts)
 				require.GreaterOrEqual(t, result.TotalCount, tt.minTotal)
 			})

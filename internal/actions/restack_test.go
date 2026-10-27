@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,13 +11,12 @@ import (
 	"github.com/getstackit/stackit/internal/config"
 	"github.com/getstackit/stackit/internal/engine"
 	stackiterrors "github.com/getstackit/stackit/internal/errors"
-	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
 type promptRestackHandler struct {
-	handlers.NullRestackHandler
+	NullRestackHandler
 	prompted         bool
 	resolveConflicts bool
 	conflicts        []string
@@ -28,6 +28,34 @@ func (h *promptRestackHandler) PromptResolveConflicts(conflictBranches []string)
 	h.prompted = true
 	h.conflicts = append([]string(nil), conflictBranches...)
 	return h.resolveConflicts, nil
+}
+
+// recordingRestackHandler keeps every event and the final summary.
+type recordingRestackHandler struct {
+	NullRestackHandler
+	mu      sync.Mutex
+	events  []RestackBranchEvent
+	summary *RestackSummary
+}
+
+func (h *recordingRestackHandler) OnRestackBranch(event RestackBranchEvent) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.events = append(h.events, event)
+}
+
+func (h *recordingRestackHandler) OnRestackComplete(summary RestackSummary) {
+	h.summary = &summary
+}
+
+func (h *recordingRestackHandler) branchesWith(result RestackResult) []string {
+	var names []string
+	for _, e := range h.events {
+		if e.Result == result {
+			names = append(names, e.Branch)
+		}
+	}
+	return names
 }
 
 func TestRestackAction(t *testing.T) {
@@ -88,14 +116,14 @@ func TestRestackAction(t *testing.T) {
 			newWorktreeEngine = originalNewWorktreeEngine
 		})
 
-		jsonHandler := handlers.NewJSONRestackHandler()
+		recorder := &recordingRestackHandler{}
 		plan, err := PlanRestack(s.Context, RestackOptions{
 			AllStacks: true,
 			Parallel:  true,
 			Jobs:      2,
 		})
 		require.NoError(t, err)
-		err = RestackAction(s.Context, plan, jsonHandler)
+		err = RestackAction(s.Context, plan, recorder)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "restack failed")
 		require.ErrorContains(t, err, "alpha-root")
@@ -104,15 +132,13 @@ func TestRestackAction(t *testing.T) {
 
 		// Every branch in a failed group must appear in the summary so users
 		// don't see "skipped=0" while entire stacks silently failed to start.
-		conflictBranches := make([]string, 0, len(jsonHandler.Result.Conflicts))
-		for _, c := range jsonHandler.Result.Conflicts {
-			conflictBranches = append(conflictBranches, c.Branch)
-		}
+		conflictBranches := recorder.branchesWith(RestackConflict)
 		require.ElementsMatch(t,
 			[]string{"alpha-root", "alpha-child", "beta-root"},
 			conflictBranches,
 		)
-		require.Equal(t, len(conflictBranches), jsonHandler.Result.ConflictCount)
+		require.NotNil(t, recorder.summary)
+		require.ElementsMatch(t, conflictBranches, recorder.summary.Conflicts)
 	})
 
 	t.Run("planning errors on a nonexistent branch", func(t *testing.T) {
@@ -126,7 +152,7 @@ func TestRestackAction(t *testing.T) {
 		require.ErrorContains(t, err, "branch does-not-exist does not exist")
 	})
 
-	t.Run("JSON restack reports conflicts without entering the workflow", func(t *testing.T) {
+	t.Run("non-interactive restack reports conflicts without entering the workflow", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
@@ -140,22 +166,23 @@ func TestRestackAction(t *testing.T) {
 		s.Checkout("feature")
 
 		plan, err := PlanRestack(s.Context, RestackOptions{
-			BranchName: "feature",
-			Scope:      engine.StackRange{IncludeCurrent: true},
+			BranchName:     "feature",
+			Scope:          engine.StackRange{IncludeCurrent: true},
+			NonInteractive: true,
 		})
 		require.NoError(t, err)
 		require.True(t, plan.HasWork())
 
-		jsonHandler := handlers.NewJSONRestackHandler()
-		err = RestackAction(s.Context, plan, jsonHandler)
+		recorder := &recordingRestackHandler{}
+		err = RestackAction(s.Context, plan, recorder)
 
 		// A routine conflict is data, not an error: status "conflict" with
 		// the branch listed, and the repo left clean — never mid-rebase with
 		// human conflict guidance printed into the JSON stream.
 		require.NoError(t, err)
-		require.Equal(t, handlers.RestackJSONStatusConflict, jsonHandler.Result.Status)
-		require.Equal(t, 1, jsonHandler.Result.ConflictCount)
-		require.Equal(t, "feature", jsonHandler.Result.Conflicts[0].Branch)
+		require.Equal(t, []string{"feature"}, recorder.branchesWith(RestackConflict))
+		require.NotNil(t, recorder.summary)
+		require.Equal(t, []string{"feature"}, recorder.summary.Conflicts)
 		require.False(t, s.Git.IsRebaseInProgress(context.Background()))
 	})
 
@@ -246,4 +273,27 @@ func TestRestackAction(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, featureBefore, featureRev)
 	})
+}
+
+// TestConflictedStack pins the branch set the prompt hands to the conflict
+// workflow. Sync restacks every reparented branch as one group, so the group can
+// span stacks; re-running an unrelated stack in EnterWorkflow mode could stop on
+// its conflict instead of the one the user chose to resolve.
+func TestConflictedStack(t *testing.T) {
+	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
+		WithStack(map[string]string{
+			"a":       "main",
+			"a-child": "a",
+			"b":       "main",
+		})
+
+	eng := s.Context.Engine
+	group := restackPlannedGroup{sortedBranches: eng.SortBranchesTopologically(
+		engine.BranchesFromNames(eng, []string{"a", "a-child", "b"}),
+	)}
+
+	stack := conflictedStack(eng, []restackPlannedGroup{group}, "a-child")
+	require.Equal(t, []string{"a", "a-child"}, stack.Names())
+	require.Empty(t, conflictedStack(eng, []restackPlannedGroup{group}, "missing"))
 }

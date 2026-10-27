@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/getstackit/stackit/internal/actions"
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -16,17 +17,32 @@ type SyncScenario struct {
 	Name        string
 	Description string
 	TotalOps    int
-	Events      []syncAction.Event
+	Steps       []SyncStep
 	Summary     syncAction.Summary
 }
+
+// SyncStep is one event sync emits: a phase event, or a per-branch restack
+// event from the shared restack pipeline. Exactly one field is set.
+type SyncStep struct {
+	Event   *syncAction.Event
+	Restack *actions.RestackBranchEvent
+}
+
+func syncEvent(e syncAction.Event) SyncStep { return SyncStep{Event: &e} }
+
+func restackEvent(e actions.RestackBranchEvent) SyncStep { return SyncStep{Restack: &e} }
 
 // Replay sends this scenario through a sync handler. delay makes individual
 // command states visible in the terminal; zero is useful for automated checks.
 func (s SyncScenario) Replay(handler syncAction.Handler, delay time.Duration) {
 	handler.Start(s.TotalOps)
 	pause(delay)
-	for _, event := range s.Events {
-		handler.EmitEvent(event)
+	for _, step := range s.Steps {
+		if step.Restack != nil {
+			handler.OnRestackBranch(*step.Restack)
+		} else {
+			handler.EmitEvent(*step.Event)
+		}
 		pause(delay)
 	}
 	handler.Complete(s.Summary)
@@ -38,18 +54,18 @@ var SyncScenarios = []SyncScenario{
 		Name:        "success",
 		Description: "Trunk update, PR refresh, cleanup, and restack.",
 		TotalOps:    6,
-		Events: []syncAction.Event{
-			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main", NewRevision: "a1b2c3d"},
-			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Branch: "feat/api"},
-			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR #42 for feat/api"},
-			{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseBranches, Type: syncAction.EventCompleted, Branch: "feat/api"},
-			{Phase: syncAction.PhaseClean, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "fix/merged", PRNumber: new(git.PRNumber(39)), Message: "after merge"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "feat/web", PRNumber: new(git.PRNumber(43)), Parent: "feat/api", NewRevision: "d4e5f6a"},
+		Steps: []SyncStep{
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main", NewRevision: "a1b2c3d"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventProgress, Branch: "feat/api"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR #42 for feat/api"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventCompleted, Branch: "feat/api"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "fix/merged", PRNumber: new(git.PRNumber(39)), Message: "after merge"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "feat/web", PRNumber: new(git.PRNumber(43)), Parent: "feat/api", NewRevision: "d4e5f6a"}),
 		},
 		Summary: syncAction.Summary{
 			TrunkUpdated:      true,
@@ -62,22 +78,22 @@ var SyncScenarios = []SyncScenario{
 		Name:        "large-stack",
 		Description: "A multi-branch sync with merged cleanup and one restack conflict.",
 		TotalOps:    11,
-		Events: []syncAction.Event{
-			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main"},
-			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR info for 6 branches"},
-			{Phase: syncAction.PhaseClean, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "stack-merge-stack-1784862381", Message: "merged into main"},
-			{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "jonnii/20260724022739/make-restack-output-terse-and-outcome-focused", Message: "merged into main"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "info-query-cli-rendering", PRNumber: prNumberPointer(936), Parent: "main", NewRevision: "9e49378"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260529015605/add-user-menu-to-header-and-extend-it-to-repo", PRNumber: prNumberPointer(1070), Parent: "main", NewRevision: "15d7955"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", PRNumber: prNumberPointer(1164), Parent: "main", NewRevision: "b0d42a4"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", PRNumber: prNumberPointer(1242), Parent: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", NewRevision: "e1d9f30"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260605033020/route-insert-s-child-select-prompt-through-the", PRNumber: prNumberPointer(1241), Parent: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", NewRevision: "4cb45e0"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventCompleted, Branch: "jonnii/20260219034124/prompt-notes-wt"},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits", PRNumber: prNumberPointer(754), Conflict: true},
+		Steps: []SyncStep{
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventCompleted, Message: "Updated PR info for 6 branches"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "stack-merge-stack-1784862381", Message: "merged into main"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseClean, Type: syncAction.EventCompleted, Branch: "jonnii/20260724022739/make-restack-output-terse-and-outcome-focused", Message: "merged into main"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "info-query-cli-rendering", PRNumber: prNumberPointer(936), Parent: "main", NewRevision: "9e49378"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260529015605/add-user-menu-to-header-and-extend-it-to-repo", PRNumber: prNumberPointer(1070), Parent: "main", NewRevision: "15d7955"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", PRNumber: prNumberPointer(1164), Parent: "main", NewRevision: "b0d42a4"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", PRNumber: prNumberPointer(1242), Parent: "jonnii/20260605031052/take-rename-s-prompt-off-the-TUI-drop-tui-from", NewRevision: "e1d9f30"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackDone, Branch: "jonnii/20260605033020/route-insert-s-child-select-prompt-through-the", PRNumber: prNumberPointer(1241), Parent: "jonnii/20260605032227/extract-OpenEditor-into-internal/editor-out-of", NewRevision: "4cb45e0"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackUnneeded, Branch: "jonnii/20260219034124/prompt-notes-wt"}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackConflict, Branch: "jonnii/20260220125253/add-prompt-notes-to-track-LLM-context-on-commits", PRNumber: prNumberPointer(754)}),
 		},
 		Summary: syncAction.Summary{
 			BranchesDeleted:   2,
@@ -90,14 +106,14 @@ var SyncScenarios = []SyncScenario{
 		Name:        "diverged",
 		Description: "A remote branch diverges and an affected restack conflicts.",
 		TotalOps:    3,
-		Events: []syncAction.Event{
-			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main"},
-			{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseBranches, Type: syncAction.EventSkipped, Branch: "feat/api", Conflict: true},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseRestack, Type: syncAction.EventSkipped, Branch: "feat/web", PRNumber: new(git.PRNumber(43)), Conflict: true},
+		Steps: []SyncStep{
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main"}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseBranches, Type: syncAction.EventSkipped, Branch: "feat/api", Conflict: true}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseRestack, Type: syncAction.EventStarted}),
+			restackEvent(actions.RestackBranchEvent{Result: actions.RestackConflict, Branch: "feat/web", PRNumber: new(git.PRNumber(43))}),
 		},
 		Summary: syncAction.Summary{
 			BranchesSkipped:  2,
@@ -108,10 +124,10 @@ var SyncScenarios = []SyncScenario{
 		Name:        "current",
 		Description: "The lightweight no-op path where trunk is already current.",
 		TotalOps:    1,
-		Events: []syncAction.Event{
-			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted},
-			{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main"},
+		Steps: []SyncStep{
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseGitHub, Type: syncAction.EventStarted}),
+			syncEvent(syncAction.Event{Phase: syncAction.PhaseTrunk, Type: syncAction.EventCompleted, Branch: "main"}),
 		},
 		Summary: syncAction.Summary{UpToDate: true},
 	},

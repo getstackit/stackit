@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
@@ -385,6 +386,9 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		}
 		// No output for completion
 
+	case submit.RestackBranchEvent:
+		printRestackRow(h.Output, ev.RestackBranchEvent)
+
 	case submit.PreparingEvent:
 		// Skip - we'll show progress during actual submission
 
@@ -626,6 +630,11 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 		}
 		// No output for completion
 
+	case submit.RestackBranchEvent:
+		// The TUI has not started yet (it waits for branches to submit), so
+		// restack rows print as plain lines.
+		printRestackRow(h.out, ev.RestackBranchEvent)
+
 	case submit.PreparingEvent:
 		// Quiet - the plan lines follow immediately
 
@@ -776,5 +785,16 @@ func (p *planPrinter) printRegenerated(ev submit.BranchPlanEvent) {
 	}
 	for line := range strings.SplitSeq(ev.Regenerated.Body, "\n") {
 		p.out.Info("      %s", line)
+	}
+}
+
+// printRestackRow prints a pre-submit restack row the way standalone restack
+// does: movement and problems only, never a plain "up to date".
+func printRestackRow(out output.Output, event actions.RestackBranchEvent) {
+	if event.IsPlainUpToDate() {
+		return
+	}
+	for _, line := range common.FormatRestackLines(event) {
+		out.Info("%s", line)
 	}
 }

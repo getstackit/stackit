@@ -10,174 +10,85 @@ import (
 	"testing"
 )
 
+// Template repos are built once per test process and cloned by each scene.
 var (
-	minimalTemplateDir  string
-	minimalTemplateErr  error
-	minimalTemplateOnce sync.Once
-	minimalTemplateMu   sync.RWMutex
-
-	basicTemplateDir  string
-	basicTemplateErr  error
-	basicTemplateOnce sync.Once
-	basicTemplateMu   sync.RWMutex
-
-	initialCommitTemplateDir  string
-	initialCommitTemplateErr  error
-	initialCommitTemplateOnce sync.Once
-	initialCommitTemplateMu   sync.RWMutex
-
-	remoteRepoTemplateDir string
-	remoteBareTemplateDir string
-	remoteTemplateErr     error
-	remoteTemplateOnce    sync.Once
-	remoteTemplateMu      sync.RWMutex
-)
-
-func getMinimalTemplate(t *testing.T) string {
-	minimalTemplateOnce.Do(func() {
+	minimalTemplate = sync.OnceValues(func() (string, error) {
 		dir, err := os.MkdirTemp("", "stackit-test-minimal-template-*")
 		if err != nil {
-			minimalTemplateMu.Lock()
-			minimalTemplateErr = fmt.Errorf("failed to create minimal template dir: %w", err)
-			minimalTemplateMu.Unlock()
-			return
+			return "", fmt.Errorf("failed to create minimal template dir: %w", err)
 		}
 
 		// Initialize the minimal repo
-		_, err = NewGitRepo(dir)
-		if err != nil {
-			minimalTemplateMu.Lock()
-			minimalTemplateErr = fmt.Errorf("failed to init minimal template repo: %w", err)
-			minimalTemplateMu.Unlock()
-			return
+		if _, err := NewGitRepo(dir); err != nil {
+			return "", fmt.Errorf("failed to init minimal template repo: %w", err)
 		}
 
 		// Pre-bake stackit config files into the template
 		// This avoids writing them for every test repo clone
 		if err := writeStackitConfigs(dir); err != nil {
-			minimalTemplateMu.Lock()
-			minimalTemplateErr = fmt.Errorf("failed to write config files to template: %w", err)
-			minimalTemplateMu.Unlock()
-			return
+			return "", fmt.Errorf("failed to write config files to template: %w", err)
 		}
 
-		minimalTemplateMu.Lock()
-		minimalTemplateDir = dir
-		minimalTemplateMu.Unlock()
+		return dir, nil
 	})
 
-	minimalTemplateMu.RLock()
-	err := minimalTemplateErr
-	dir := minimalTemplateDir
-	minimalTemplateMu.RUnlock()
-
-	if err != nil {
-		t.Fatalf("Minimal template initialization failed: %v", err)
-	}
-
-	return dir
-}
-
-func getBasicTemplate(t *testing.T) string {
-	basicTemplateOnce.Do(func() {
-		minimalDir := getMinimalTemplate(t)
+	basicTemplate = sync.OnceValues(func() (string, error) {
+		minimalDir, err := minimalTemplate()
+		if err != nil {
+			return "", err
+		}
 
 		dir, err := os.MkdirTemp("", "stackit-test-basic-template-*")
 		if err != nil {
-			basicTemplateMu.Lock()
-			basicTemplateErr = fmt.Errorf("failed to create basic template dir: %w", err)
-			basicTemplateMu.Unlock()
-			return
+			return "", fmt.Errorf("failed to create basic template dir: %w", err)
 		}
 
 		// Clone from minimal
 		repo, err := NewGitRepoFromTemplate(dir, minimalDir)
 		if err != nil {
-			basicTemplateMu.Lock()
-			basicTemplateErr = fmt.Errorf("failed to init basic template repo: %w", err)
-			basicTemplateMu.Unlock()
-			return
+			return "", fmt.Errorf("failed to init basic template repo: %w", err)
 		}
 
 		// Apply BasicSceneSetup
 		if err := BasicSceneSetup(&Scene{Repo: repo, Dir: dir}); err != nil {
-			basicTemplateMu.Lock()
-			basicTemplateErr = fmt.Errorf("failed to run basic setup on template: %w", err)
-			basicTemplateMu.Unlock()
-			return
+			return "", fmt.Errorf("failed to run basic setup on template: %w", err)
 		}
 
-		basicTemplateMu.Lock()
-		basicTemplateDir = dir
-		basicTemplateMu.Unlock()
+		return dir, nil
 	})
 
-	basicTemplateMu.RLock()
-	err := basicTemplateErr
-	dir := basicTemplateDir
-	basicTemplateMu.RUnlock()
-
-	if err != nil {
-		t.Fatalf("Basic template initialization failed: %v", err)
-	}
-
-	return dir
-}
-
-func getInitialCommitTemplate(t *testing.T) string {
-	initialCommitTemplateOnce.Do(func() {
-		minimalDir := getMinimalTemplate(t)
+	initialCommitTemplate = sync.OnceValues(func() (string, error) {
+		minimalDir, err := minimalTemplate()
+		if err != nil {
+			return "", err
+		}
 
 		dir, err := os.MkdirTemp("", "stackit-test-initial-template-*")
 		if err != nil {
-			initialCommitTemplateMu.Lock()
-			initialCommitTemplateErr = fmt.Errorf("failed to create initial commit template dir: %w", err)
-			initialCommitTemplateMu.Unlock()
-			return
+			return "", fmt.Errorf("failed to create initial commit template dir: %w", err)
 		}
 
 		repo, err := NewGitRepoFromTemplate(dir, minimalDir)
 		if err != nil {
-			initialCommitTemplateMu.Lock()
-			initialCommitTemplateErr = fmt.Errorf("failed to init initial commit template repo: %w", err)
-			initialCommitTemplateMu.Unlock()
-			return
+			return "", fmt.Errorf("failed to init initial commit template repo: %w", err)
 		}
 
 		if err := InitialCommitSceneSetup(&Scene{Repo: repo, Dir: dir}); err != nil {
-			initialCommitTemplateMu.Lock()
-			initialCommitTemplateErr = fmt.Errorf("failed to run initial commit setup on template: %w", err)
-			initialCommitTemplateMu.Unlock()
-			return
+			return "", fmt.Errorf("failed to run initial commit setup on template: %w", err)
 		}
 
-		initialCommitTemplateMu.Lock()
-		initialCommitTemplateDir = dir
-		initialCommitTemplateMu.Unlock()
+		return dir, nil
 	})
 
-	initialCommitTemplateMu.RLock()
-	err := initialCommitTemplateErr
-	dir := initialCommitTemplateDir
-	initialCommitTemplateMu.RUnlock()
-
-	if err != nil {
-		t.Fatalf("Initial commit template initialization failed: %v", err)
-	}
-
-	return dir
-}
-
-func getRemoteTemplates(t *testing.T) (string, string) {
-	remoteTemplateOnce.Do(func() {
-		initialDir := getInitialCommitTemplate(t)
+	remoteTemplates = sync.OnceValues(func() (remoteTemplateDirs, error) {
+		initialDir, err := initialCommitTemplate()
+		if err != nil {
+			return remoteTemplateDirs{}, err
+		}
 
 		bundleDir, err := os.MkdirTemp("", "stackit-test-remote-template-*")
 		if err != nil {
-			remoteTemplateMu.Lock()
-			remoteTemplateErr = fmt.Errorf("failed to create remote template dir: %w", err)
-			remoteTemplateMu.Unlock()
-			return
+			return remoteTemplateDirs{}, fmt.Errorf("failed to create remote template dir: %w", err)
 		}
 
 		repoDir := filepath.Join(bundleDir, "repo")
@@ -185,51 +96,61 @@ func getRemoteTemplates(t *testing.T) (string, string) {
 
 		repo, err := NewGitRepoFromTemplate(repoDir, initialDir)
 		if err != nil {
-			remoteTemplateMu.Lock()
-			remoteTemplateErr = fmt.Errorf("failed to init remote template repo: %w", err)
-			remoteTemplateMu.Unlock()
-			return
+			return remoteTemplateDirs{}, fmt.Errorf("failed to init remote template repo: %w", err)
 		}
 
 		cmd := exec.Command("git", "init", "--bare", bareDir)
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null")
 		if err := cmd.Run(); err != nil {
-			remoteTemplateMu.Lock()
-			remoteTemplateErr = fmt.Errorf("failed to init remote template bare repo: %w", err)
-			remoteTemplateMu.Unlock()
-			return
+			return remoteTemplateDirs{}, fmt.Errorf("failed to init remote template bare repo: %w", err)
 		}
 
 		if err := repo.RunGitCommand("remote", "add", "origin", bareDir); err != nil {
-			remoteTemplateMu.Lock()
-			remoteTemplateErr = fmt.Errorf("failed to add remote to template repo: %w", err)
-			remoteTemplateMu.Unlock()
-			return
+			return remoteTemplateDirs{}, fmt.Errorf("failed to add remote to template repo: %w", err)
 		}
 		if err := repo.RunGitCommand("push", "-u", "origin", "main"); err != nil {
-			remoteTemplateMu.Lock()
-			remoteTemplateErr = fmt.Errorf("failed to push template repo to origin: %w", err)
-			remoteTemplateMu.Unlock()
-			return
+			return remoteTemplateDirs{}, fmt.Errorf("failed to push template repo to origin: %w", err)
 		}
 
-		remoteTemplateMu.Lock()
-		remoteRepoTemplateDir = repoDir
-		remoteBareTemplateDir = bareDir
-		remoteTemplateMu.Unlock()
+		return remoteTemplateDirs{repo: repoDir, bare: bareDir}, nil
 	})
+)
 
-	remoteTemplateMu.RLock()
-	err := remoteTemplateErr
-	repoDir := remoteRepoTemplateDir
-	bareDir := remoteBareTemplateDir
-	remoteTemplateMu.RUnlock()
+type remoteTemplateDirs struct {
+	repo string
+	bare string
+}
 
+func getMinimalTemplate(t *testing.T) string {
+	dir, err := minimalTemplate()
+	if err != nil {
+		t.Fatalf("Minimal template initialization failed: %v", err)
+	}
+	return dir
+}
+
+func getBasicTemplate(t *testing.T) string {
+	dir, err := basicTemplate()
+	if err != nil {
+		t.Fatalf("Basic template initialization failed: %v", err)
+	}
+	return dir
+}
+
+func getInitialCommitTemplate(t *testing.T) string {
+	dir, err := initialCommitTemplate()
+	if err != nil {
+		t.Fatalf("Initial commit template initialization failed: %v", err)
+	}
+	return dir
+}
+
+func getRemoteTemplates(t *testing.T) (string, string) {
+	dirs, err := remoteTemplates()
 	if err != nil {
 		t.Fatalf("Remote template initialization failed: %v", err)
 	}
-
-	return repoDir, bareDir
+	return dirs.repo, dirs.bare
 }
 
 func setupMatches(setup SceneSetup, target SceneSetup) bool {

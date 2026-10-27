@@ -62,8 +62,7 @@ func IsLocalChangesError(err error) bool {
 	if err == nil {
 		return false
 	}
-	var ce *CommandError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*CommandError](err); ok {
 		return strings.Contains(ce.Stderr, "Your local changes to the following files would be overwritten by checkout") ||
 			strings.Contains(ce.Stderr, "Your local changes to the following files would be overwritten by merge")
 	}

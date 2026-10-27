@@ -137,8 +137,8 @@ func TestWorktreeBasicOperations(t *testing.T) {
 			t.Fatalf("expected child process failure")
 		}
 
-		var exitErr *common.ExitCodeError
-		if !errors.As(result.Err, &exitErr) {
+		exitErr, ok := errors.AsType[*common.ExitCodeError](result.Err)
+		if !ok {
 			t.Fatalf("expected ExitCodeError, got %T: %v", result.Err, result.Err)
 		}
 		if exitErr.ExitCode() != 7 {

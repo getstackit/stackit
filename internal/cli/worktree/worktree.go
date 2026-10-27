@@ -115,8 +115,7 @@ Examples:
 				runCmd.Stderr = cmd.ErrOrStderr()
 
 				if err := runCmd.Run(); err != nil {
-					var exitErr *exec.ExitError
-					if errors.As(err, &exitErr) {
+					if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 						cmd.SilenceErrors = true
 						return common.NewExitCodeError(exitErr.ExitCode(), err)
 					}

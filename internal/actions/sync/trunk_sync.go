@@ -23,8 +23,8 @@ func syncFetchedTrunk(ctx *app.Context, opts *Options, handler Handler, summary 
 		// the rest of the sync run: cleanup and restack do not depend on trunk
 		// having moved, and aborting here strands the user in a directory whose
 		// state they cannot see from the one they are standing in.
-		var held *git.WorktreeHeldError
-		if !errors.As(err, &held) {
+		held, ok := errors.AsType[*git.WorktreeHeldError](err)
+		if !ok {
 			return fmt.Errorf("failed to update trunk from remote: %w", err)
 		}
 		handler.EmitEvent(Event{

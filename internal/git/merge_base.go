@@ -27,8 +27,7 @@ func (r *runner) isAncestor(ctx context.Context, ancestor, descendant string) (b
 	}
 	// `git merge-base --is-ancestor` exits 1 when the answer is "no". Any
 	// other non-zero exit is a real error (bad SHA, repo missing, etc.).
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
 		return false, nil
 	}
 	return false, fmt.Errorf("failed to check ancestry of %s..%s: %w", ancestor, descendant, err)

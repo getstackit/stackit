@@ -580,8 +580,7 @@ func exitCodeFromError(err error) int {
 	if err == nil {
 		return 0
 	}
-	var exitErr *exec.ExitError
-	if stderrors.As(err, &exitErr) {
+	if exitErr, ok := stderrors.AsType[*exec.ExitError](err); ok {
 		return exitErr.ExitCode()
 	}
 	return -1

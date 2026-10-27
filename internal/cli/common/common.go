@@ -107,8 +107,7 @@ func HandleCommandError(err error) error {
 	if errors.Is(err, errors.ErrCanceled) {
 		return nil
 	}
-	var modErr *errors.BranchModificationError
-	if errors.As(err, &modErr) {
+	if modErr, ok := errors.AsType[*errors.BranchModificationError](err); ok {
 		return fmt.Errorf("%s", style.FormatBranchModificationError(modErr))
 	}
 	return err

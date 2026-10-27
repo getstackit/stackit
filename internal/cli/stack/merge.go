@@ -49,8 +49,7 @@ func handlePostMergeAction(ctx *app.Context, action mergeAction.PostMergeAction)
 			return handler
 		})
 
-		var checkoutErr *mergeAction.PostMergeCheckoutError
-		if errors.As(err, &checkoutErr) {
+		if checkoutErr, ok := errors.AsType[*mergeAction.PostMergeCheckoutError](err); ok {
 			out.Newline()
 			out.Error("%v", checkoutErr.Err)
 			out.Newline()

@@ -1,5 +1,5 @@
 // Package errors provides sentinel errors and custom error types for the stackit application.
-// Use errors.Is() and errors.As() to check for specific error types.
+// Use errors.Is() and errors.AsType() to check for specific error types.
 package errors
 
 import (
@@ -12,10 +12,15 @@ import (
 // Standard library error functions wrapped for convenience
 var (
 	Is     = errors.Is
-	As     = errors.As
 	New    = errors.New
 	Unwrap = errors.Unwrap
 )
+
+// AsType wraps the standard library's errors.AsType; generic functions cannot
+// be aliased through a var like the helpers above.
+func AsType[E error](err error) (E, bool) {
+	return errors.AsType[E](err)
+}
 
 // Sentinel errors for common conditions
 var (

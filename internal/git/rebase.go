@@ -178,8 +178,7 @@ func applyRerereToUnmerged(ctx context.Context, r Runner) ([]string, error) {
 }
 
 func isRebaseContinueStagedChangesError(err error) bool {
-	var commandErr *CommandError
-	if errors.As(err, &commandErr) {
+	if commandErr, ok := errors.AsType[*CommandError](err); ok {
 		return strings.Contains(commandErr.Stderr, "you have staged changes in your working tree")
 	}
 	return strings.Contains(err.Error(), "you have staged changes in your working tree")

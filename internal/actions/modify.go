@@ -124,8 +124,7 @@ func ModifyAction(ctx *app.Context, opts ModifyOptions) (err error) {
 			// recovery from that state instead — so hand them the branch to
 			// return to, or --into's "without checking it out, then returns"
 			// contract quietly stops holding the moment a restack conflicts.
-			var conflictErr *errors.ConflictWorkflowError
-			if errors.As(err, &conflictErr) {
+			if _, ok := errors.AsType[*errors.ConflictWorkflowError](err); ok {
 				recordConflictReturnBranch(ctx, originalBranchName)
 				return
 			}

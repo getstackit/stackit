@@ -14,44 +14,25 @@ import (
 func TestMessageFile(t *testing.T) {
 	t.Parallel()
 
-	t.Run("create reads commit message from file", func(t *testing.T) {
+	t.Run("create reads single-line and multi-line messages from file", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
 		msgPath := writeMessageFile(t, "feat: from file\n")
-
 		sh.Write("feature", "content").
 			Run("create feature -F " + msgPath).
 			OnBranch("feature").
 			Git("log -1 --format=%s").
 			OutputContains("feat: from file")
-	})
 
-	t.Run("create preserves multi-line subject and body", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		msgPath := writeMessageFile(t, "feat: subject line\n\nbody paragraph one\n\nbody paragraph two\n")
-
-		sh.Write("feature", "content").
-			Run("create feature -F " + msgPath).
+		// Preserves multi-line subject and body.
+		msgPath = writeMessageFile(t, "feat: subject line\n\nbody paragraph one\n\nbody paragraph two\n")
+		sh.Write("feature_multi", "content").
+			Run("create feature-multi -F " + msgPath).
 			Git("log -1 --format=%B").
 			OutputContains("feat: subject line").
 			OutputContains("body paragraph one").
 			OutputContains("body paragraph two")
-	})
-
-	t.Run("modify updates commit message from file", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		sh.Write("feature", "content").
-			Run("create feature -m 'Original'")
-
-		msgPath := writeMessageFile(t, "feat: updated from file\n")
-		sh.Run("modify -F " + msgPath).
-			Git("log -1 --format=%s").
-			OutputContains("feat: updated from file")
 	})
 
 	t.Run("squash reads commit message from file", func(t *testing.T) {
@@ -86,108 +67,81 @@ func TestMessageFile(t *testing.T) {
 			OutputContains("feat: extracted from file")
 	})
 
-	t.Run("describe reads title and body from file", func(t *testing.T) {
+	// Flag validation fails before any command mutates the repo, so every
+	// error case shares one shell. The create errors run before "feature"
+	// exists (they prove create propagates the message-file errors); the
+	// successful modify/describe runs come last.
+	t.Run("validation errors, then modify and describe from file", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
-		sh.Write("feature", "content").
-			Run("create feature -m 'feat: x'")
+		t.Run("create errors", func(t *testing.T) {
+			sh := sh.WithT(t)
+			sh.Write("feature", "content")
+			requireReadOnly(sh, func() {
+				sh.RunExpectError("create feature -m 'inline' -F " + writeMessageFile(t, "from file")).
+					OutputContains("cannot use --message and --message-file together")
 
-		msgPath := writeMessageFile(t, "Auth Feature\n\nOAuth2 implementation\n")
-		sh.Run("describe -F " + msgPath).
-			Run("describe --show").
-			OutputContains("Auth Feature").
-			OutputContains("OAuth2 implementation")
-	})
+				sh.RunExpectError("create feature -F /tmp/stackit-nonexistent-msg").
+					OutputContains("file not found").
+					OutputContains(`use "-" to read from stdin`)
 
-	t.Run("describe errors with no input in non-interactive mode", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-		sh.Write("feature", "content").
-			Run("create feature -m 'feat: x'")
-		sh.RunExpectError("describe").
-			OutputContains("nothing to set")
-	})
+				sh.RunExpectError("create feature -F " + writeMessageFile(t, "")).
+					OutputContains("is empty")
+			})
+		})
 
-	t.Run("describe errors when both --title and --message-file are given", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-		sh.Write("feature", "content").Run("create feature -m 'feat: x'")
-		msgPath := writeMessageFile(t, "Title\n\nBody")
-		sh.RunExpectError("describe -m 'inline' -F " + msgPath).
-			OutputContains("cannot use --message-file with --title")
-	})
-
-	t.Run("create errors when both --message and --message-file are given", func(t *testing.T) {
-		t.Parallel()
-		runMutexTest(t, "create feature -m 'inline' -F ")
-	})
-
-	t.Run("modify errors when both --message and --message-file are given", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-		sh.Write("feature", "content").Run("create feature -m 'Original'")
-		msgPath := writeMessageFile(t, "from file")
-		sh.RunExpectError("modify -m 'inline' -F " + msgPath).
-			OutputContains("cannot use --message and --message-file together")
-	})
-
-	t.Run("squash errors when both --message and --message-file are given", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-		sh.Write("feature", "content").Run("create feature -m 'Original'")
-		msgPath := writeMessageFile(t, "from file")
-		sh.RunExpectError("squash -m 'inline' -F " + msgPath).
-			OutputContains("cannot use --message and --message-file together")
-	})
-
-	t.Run("create errors when message file does not exist", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-		sh.Write("feature", "content").
-			RunExpectError("create feature -F /tmp/stackit-nonexistent-msg").
-			OutputContains("file not found").
-			OutputContains(`use "-" to read from stdin`)
-	})
-
-	t.Run("create errors when message file is empty", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-		msgPath := writeMessageFile(t, "")
-		sh.Write("feature", "content").
-			RunExpectError("create feature -F " + msgPath).
-			OutputContains("is empty")
-	})
-
-	t.Run("split rejects --message-file - and --patch - together", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
+		// sh.Write("file", ...) creates a file named "file_test.txt"
+		// (helper concatenates "_test.txt"); --by-file references that path.
 		sh.Write("file", "content").
-			Run("create feature -m 'init'").
-			RunExpectError("split --by-hunk --patch - --message-file -").
-			OutputContains("cannot read both --message-file and --patch from stdin")
-	})
+			Run("create feature -m 'Original'")
 
-	t.Run("split rejects --message-file before reading any input", func(t *testing.T) {
-		// Regression: previously --by-commit --message-file - drained stdin
-		// (or read the file) before the mode-compat check fired. Now flag
-		// validation runs first.
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-		msgPath := writeMessageFile(t, "feat: should not be read")
-		sh.Write("file", "content").
-			Run("create feature -m 'init'").
-			RunExpectError("split --by-commit --message-file " + msgPath).
-			OutputContains("--message/--message-file can only be used with --by-file")
-	})
+		t.Run("modify, squash, split, and describe errors", func(t *testing.T) {
+			sh := sh.WithT(t)
+			requireReadOnly(sh, func() {
+				sh.RunExpectError("describe").
+					OutputContains("nothing to set")
 
-	t.Run("split errors when both --message and --message-file are given", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-		sh.Write("file", "content").Run("create feature -m 'init'")
-		msgPath := writeMessageFile(t, "from file")
-		sh.RunExpectError("split --by-file file_test.txt --as-sibling -m 'inline' --message-file " + msgPath).
-			OutputContains("cannot use --message and --message-file together")
+				sh.RunExpectError("describe -m 'inline' -F " + writeMessageFile(t, "Title\n\nBody")).
+					OutputContains("cannot use --message-file with --title")
+
+				msgPath := writeMessageFile(t, "from file")
+				sh.RunExpectError("modify -m 'inline' -F " + msgPath).
+					OutputContains("cannot use --message and --message-file together")
+
+				sh.RunExpectError("squash -m 'inline' -F " + msgPath).
+					OutputContains("cannot use --message and --message-file together")
+
+				sh.RunExpectError("split --by-hunk --patch - --message-file -").
+					OutputContains("cannot read both --message-file and --patch from stdin")
+
+				// Regression: previously --by-commit --message-file - drained stdin
+				// (or read the file) before the mode-compat check fired. Now flag
+				// validation runs first.
+				sh.RunExpectError("split --by-commit --message-file " + writeMessageFile(t, "feat: should not be read")).
+					OutputContains("--message/--message-file can only be used with --by-file")
+
+				sh.RunExpectError("split --by-file file_test.txt --as-sibling -m 'inline' --message-file " + msgPath).
+					OutputContains("cannot use --message and --message-file together")
+			})
+		})
+
+		t.Run("modify updates commit message from file", func(t *testing.T) {
+			sh := sh.WithT(t)
+			msgPath := writeMessageFile(t, "feat: updated from file\n")
+			sh.Run("modify -F " + msgPath).
+				Git("log -1 --format=%s").
+				OutputContains("feat: updated from file")
+		})
+
+		t.Run("describe reads title and body from file", func(t *testing.T) {
+			sh := sh.WithT(t)
+			msgPath := writeMessageFile(t, "Auth Feature\n\nOAuth2 implementation\n")
+			sh.Run("describe -F " + msgPath).
+				Run("describe --show").
+				OutputContains("Auth Feature").
+				OutputContains("OAuth2 implementation")
+		})
 	})
 }
 
@@ -198,16 +152,4 @@ func writeMessageFile(t *testing.T, content string) string {
 	path := filepath.Join(t.TempDir(), "msg")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 	return path
-}
-
-// runMutexTest covers the --message + --message-file mutex error for the
-// create command. modify/squash variants need their own setup so they live
-// inline above.
-func runMutexTest(t *testing.T, cmd string) {
-	t.Helper()
-	sh := NewTestShellInProcess(t)
-	msgPath := writeMessageFile(t, "from file")
-	sh.Write("feature", "content").
-		RunExpectError(cmd + msgPath).
-		OutputContains("cannot use --message and --message-file together")
 }

@@ -1,3 +1,11 @@
+# Keep stacks linear so they map onto GitHub's native Stacked PRs, and sync
+# that native Stack metadata on every submit.
+stack:
+  shape: linear
+
+github:
+  stack: true
+
 hooks:
   post-worktree-create:
     - "mise trust"

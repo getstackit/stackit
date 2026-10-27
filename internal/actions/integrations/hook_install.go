@@ -2,6 +2,7 @@
 package integrations
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -57,7 +58,7 @@ func uninstallHook(out output.Output, repoRoot, hookName, marker, displayName st
 	hooksDir := filepath.Join(repoRoot, ".git", "hooks")
 	hookPath := filepath.Join(hooksDir, hookName)
 
-	if _, err := os.Stat(hookPath); os.IsNotExist(err) {
+	if _, err := os.Stat(hookPath); errors.Is(err, os.ErrNotExist) {
 		out.Info(fmt.Sprintf("%s hook is not installed.", displayName))
 		return nil
 	}

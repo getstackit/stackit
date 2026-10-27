@@ -58,7 +58,7 @@ func needsMigration(repoRoot string) bool {
 	jsonPath := filepath.Join(gitDir, jsonConfigFile)
 
 	// Check if JSON exists
-	if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
+	if _, err := os.Stat(jsonPath); errors.Is(err, os.ErrNotExist) {
 		return false
 	}
 

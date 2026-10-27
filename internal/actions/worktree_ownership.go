@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -56,7 +57,7 @@ func EnsureCanModifyHere(ctx *app.Context, branches ...engine.Branch) error {
 		// user cannot go to, and the way out is detaching the registration —
 		// not a cd that will fail.
 		if _, statErr := os.Stat(owner.Path.String()); statErr != nil {
-			if os.IsNotExist(statErr) {
+			if errors.Is(statErr, os.ErrNotExist) {
 				return fmt.Errorf("branch %s belongs to worktree %s, whose directory no longer exists (%s); run 'stackit worktree detach %s' to release it, or 'stackit worktree list' to review",
 					branchName, owner.DisplayName(), owner.Path, owner.DisplayName())
 			}

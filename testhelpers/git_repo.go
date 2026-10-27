@@ -1,6 +1,7 @@
 package testhelpers
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,7 +22,7 @@ func copyDir(src, dst string) error {
 			// while we walk it. A file that vanished between readdir and lstat
 			// is nothing we need to copy, and failing the whole clone over it
 			// makes every template-backed test flaky.
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				return nil
 			}
 			return err
@@ -43,7 +44,7 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			// Same race as above: the file survived lstat but was removed
 			// before we opened it.
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				return nil
 			}
 			return err

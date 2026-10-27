@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -30,7 +31,7 @@ type WorktreeInspector interface {
 // protect, and treating it as unsafe would block the orphan cleanup that exists
 // to retire its registration.
 func SkipReasonForWorktree(ctx context.Context, eng WorktreeInspector, worktreePath engine.WorktreePath) string {
-	if _, err := os.Stat(worktreePath.String()); os.IsNotExist(err) {
+	if _, err := os.Stat(worktreePath.String()); errors.Is(err, os.ErrNotExist) {
 		return ""
 	}
 	hasChanges, inspectErr := eng.WorktreeHasUncommittedChanges(ctx, worktreePath)

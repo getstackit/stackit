@@ -43,8 +43,8 @@ var (
 	// conventionalCommitPrefixRegex matches conventional commit prefixes like "feat:", "fix(scope):", etc.
 	conventionalCommitPrefixRegex = regexp.MustCompile(`^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?:\s*`)
 
-	// interactiveMode is accessed atomically to avoid data races
-	interactiveMode int32 = 1 // 1 = true, 0 = false
+	// nonInteractive is inverted so the zero value means interactive
+	nonInteractive atomic.Bool
 )
 
 // SanitizeBranchName sanitizes a branch name by replacing invalid characters
@@ -186,16 +186,12 @@ func CleanCommitMessage(message string) string {
 
 // SetInteractive sets whether the TUI should be interactive
 func SetInteractive(interactive bool) {
-	if interactive {
-		atomic.StoreInt32(&interactiveMode, 1)
-	} else {
-		atomic.StoreInt32(&interactiveMode, 0)
-	}
+	nonInteractive.Store(!interactive)
 }
 
 // IsTTY returns true if we can use a TTY for interactive TUI
 func IsTTY() bool {
-	if atomic.LoadInt32(&interactiveMode) == 0 {
+	if nonInteractive.Load() {
 		return false
 	}
 	return TerminalDetected()

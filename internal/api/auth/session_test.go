@@ -89,15 +89,13 @@ func TestMemoryStore_ConcurrentAccess(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for i := range 100 {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+		wg.Go(func() {
 			s, err := store.Create("user", int64(i), "tok")
 			require.NoError(t, err)
 			_, ok := store.Get(s.ID)
 			require.True(t, ok)
 			store.Delete(s.ID)
-		}(i)
+		})
 	}
 	wg.Wait()
 }

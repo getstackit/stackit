@@ -645,6 +645,10 @@ No branches to restack.
 		// "parent" alone would match "Reparented"; anchor on the from/to phrase
 		// so both the old parent and the new parent (trunk) are proven.
 		require.Contains(t, testhelpers.NormalizeOutput(string(output)), "from parent to main", "should mention old parent and new parent (trunk)")
+		// The restack row must name the parent the branch now sits on, not the
+		// landed one it was reparented away from.
+		require.Contains(t, testhelpers.NormalizeOutput(string(output)), "Restacked child1 (current) on main")
+		require.NotContains(t, testhelpers.NormalizeOutput(string(output)), "on parent")
 
 		// Verify child1's parent is now main
 		requireInfoParent(t, scene.Dir, "main")

@@ -43,7 +43,9 @@ func singleBranchFilesChanged(t *testing.T, s *scenario.Scenario, name string) i
 }
 
 func TestQueryBranchInfo(t *testing.T) {
+	t.Parallel()
 	t.Run("multi-commit diff and patch include the whole branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
 		s.CreateBranch("feature").CommitChange("first.txt", "first").CommitChange("second.txt", "second").TrackBranch("feature", "main")
 		for _, patch := range []bool{false, true} {
@@ -58,6 +60,7 @@ func TestQueryBranchInfo(t *testing.T) {
 		}
 	})
 	t.Run("returns structured branch info for a tracked branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
 
 		require.NoError(t, s.Scene.Repo.CreateAndCheckoutBranch("feature"))
@@ -95,6 +98,7 @@ func TestQueryBranchInfo(t *testing.T) {
 	})
 
 	t.Run("includes diff and patch output when requested", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
 
 		require.NoError(t, s.Scene.Repo.CreateAndCheckoutBranch("feature"))
@@ -117,6 +121,7 @@ func TestQueryBranchInfo(t *testing.T) {
 	// empty scope, so the sentinel never reaches a consumer as a scope name.
 	// This is why the renderer can gate purely on Scope being non-empty.
 	t.Run("resolves the inheritance-breaking scope sentinel to empty", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
 
 		require.NoError(t, s.Scene.Repo.CreateAndCheckoutBranch("feature"))
@@ -136,6 +141,7 @@ func TestQueryBranchInfo(t *testing.T) {
 	})
 
 	t.Run("errors for a missing branch", func(t *testing.T) {
+		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
 
 		_, err := QueryBranchInfo(context.Background(), s.Engine, BranchInfoQueryOptions{

@@ -262,6 +262,20 @@ If the pass touched several unrelated subsystems, split into stacked branches pe
 | Needless `WithRemote()` | Drop it | Remote setup the test never uses |
 | Hand-rolled stack setup | `CreateLinearStack3()` etc. | Optimized shared fixture |
 | Per-case expensive setup | Hoist read-only setup above the loop | Setup isn't the thing under test |
+| `exec.Command(binaryPath, …)` per command | Run the CLI in-process | Same args and output, no process spawn |
+
+> **Know what setup costs before sharing it.** Measured in `internal/integration`
+> (2026-10): a fresh `NewTestShellInProcess(t)` is ~0.8ms and with `WithRemote()`
+> ~3.7ms, because both copy a cached template. `sh.ResetRepo()` on a shared shell
+> is 15–18ms and forces its subtests to run serially. So **never introduce a
+> shared shell + `ResetRepo` to save setup** — it is slower. What *is* worth
+> sharing is the expensive part after the shell: the `create`/submit/sync
+> commands that build the fixture. Share those only across read-only or
+> fails-before-mutating cases, run sequentially inside one parallel parent.
+>
+> **Check for real sleeps first.** A single fixed delay in production code
+> (e.g. a CI-registration wait) can dominate a package's wall time; no amount of
+> consolidation fixes it. Make the delay injectable, outside the test pass.
 
 ### Tier B — Consolidation (low risk + guard)
 | Pattern | Fix | Guard |

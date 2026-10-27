@@ -3,6 +3,7 @@ package integrations
 import (
 	"bytes"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1044,11 +1045,11 @@ func TestCodexInstallHasNoClaudeIsms(t *testing.T) {
 	}
 
 	codexRoot := filepath.Join(tmpDir, ".codex")
-	err := filepath.Walk(codexRoot, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(codexRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
+		if d.IsDir() {
 			return nil
 		}
 		content, err := os.ReadFile(path)
@@ -1084,11 +1085,11 @@ func TestCodexInstallHasNoClaudeIsms(t *testing.T) {
 func TestCodexSourceTemplatesAreNative(t *testing.T) {
 	t.Parallel()
 
-	err := filepath.Walk(filepath.Join("agents", "templates", "codex"), func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(filepath.Join("agents", "templates", "codex"), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || !strings.HasSuffix(path, ".md") {
+		if d.IsDir() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 		isRootSkill := strings.HasSuffix(path, filepath.Join("skill", "SKILL.md"))

@@ -183,17 +183,3 @@ type BranchInfo struct {
 	Action   engine.SubmitAction
 	PRNumber *git.PRNumber
 }
-
-// restackEvents forwards the shared restack pipeline's per-branch events into
-// submit's event stream. Submit brackets the phase with RestackEvent itself.
-type restackEvents struct {
-	handler Handler
-}
-
-func (r restackEvents) OnRestackStart(int) {}
-
-func (r restackEvents) OnRestackBranch(event actions.RestackBranchEvent) {
-	r.handler.OnEvent(RestackBranchEvent{RestackBranchEvent: event})
-}
-
-func (r restackEvents) OnRestackComplete(actions.RestackSummary) {}

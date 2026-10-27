@@ -71,6 +71,6 @@ func TestRestackWorktreeHoldReportBlocks(t *testing.T) {
 	require.True(t, report.blocks("stack-a-child", "stack-a"))
 	require.True(t, report.blocks("branch-b", "stack-b"))
 	require.False(t, report.blocks("branch-c", "stack-b"))
-	require.True(t, report.BlocksStack("stack-a"))
-	require.False(t, report.BlocksStack("stack-b"))
+	require.True(t, report.blocksStack("stack-a"))
+	require.False(t, report.blocksStack("stack-b"))
 }

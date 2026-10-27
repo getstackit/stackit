@@ -50,6 +50,9 @@ type RestackRequest struct {
 
 	// PromptRerere allows asking the user before enabling git rerere.
 	PromptRerere bool
+	// Pauser releases the terminal around the rerere prompt. nil uses the
+	// handler when it implements rerere.Pauser.
+	Pauser rerere.Pauser
 
 	// Parallel runs independent groups in separate worktrees. It only applies
 	// when there is more than one group, and always reports conflicts.
@@ -93,7 +96,10 @@ func RunRestack(ctx *app.Context, req RestackRequest, handler RestackHandler) (R
 		return RestackOutcome{}, nil
 	}
 
-	pauser, _ := handler.(rerere.Pauser)
+	pauser := req.Pauser
+	if pauser == nil {
+		pauser, _ = handler.(rerere.Pauser)
+	}
 	if _, err := rerere.EnsureEnabled(ctx.Engine, req.PromptRerere, pauser); err != nil {
 		ctx.Output.Warn("Failed to enable git rerere: %v", err)
 	}
@@ -104,7 +110,7 @@ func RunRestack(ctx *app.Context, req RestackRequest, handler RestackHandler) (R
 	if req.Parallel && len(groups) > 1 {
 		err := restackGroupsParallel(ctx, req.Jobs, groups, tally)
 		summary := tally.result()
-		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", summary.Restacked, summary.Skipped, len(summary.Conflicts), len(summary.Blocked))
+		ctx.Logger.Info("restack completed (parallel) restacked=%v conflicts=%v blocked=%v", summary.Restacked, len(summary.Conflicts), len(summary.Blocked))
 		handler.OnRestackComplete(summary)
 		return RestackOutcome{Summary: summary}, err
 	}
@@ -125,7 +131,7 @@ func RunRestack(ctx *app.Context, req RestackRequest, handler RestackHandler) (R
 	}
 
 	summary := tally.result()
-	ctx.Logger.Info("restack completed restacked=%v skipped=%v conflicts=%v blocked=%v", summary.Restacked, summary.Skipped, len(summary.Conflicts), len(summary.Blocked))
+	ctx.Logger.Info("restack completed restacked=%v conflicts=%v blocked=%v", summary.Restacked, len(summary.Conflicts), len(summary.Blocked))
 
 	if req.ConflictPolicy == RestackConflictPrompt && len(summary.Conflicts) > 0 &&
 		req.Prompter != nil && req.Prompter.IsInteractive() {

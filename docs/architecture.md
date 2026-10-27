@@ -67,9 +67,11 @@ choose their branches, then hand them to `actions.RunRestack`
 sequentially or in parallel worktrees, applies a `RestackConflictPolicy`
 (enter the conflict workflow, report, or prompt then resolve), and reports every
 branch to an `actions.RestackHandler` as one `RestackBranchEvent` type. Adapters
-render that one type regardless of which command produced it; a command that
-brackets the restack in its own phase (sync, submit) wraps the handler and drops
-the start and completion callbacks. Pre-run worktree holds and snapshots stay
+render that one type regardless of which command produced it, through
+`common.FormatRestackRow` and `common.FormatRestackSummary`
+(`internal/cli/common/restack.go`). A command that brackets the restack in its
+own phase (sync, submit) passes `actions.RestackBranchFunc` to receive only the
+per-branch events. Pre-run worktree holds and snapshots stay
 with the caller, because their scope differs per command. Mutating commands that
 restack as a side effect (`modify`, `move`, `fold`, …) still call
 `RestackBranches` directly.

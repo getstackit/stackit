@@ -457,55 +457,6 @@ func (h *NullHandler) PromptBranchDeletions(branches map[string]string, unpushed
 	return confirmed, nil
 }
 
-// FormatSummaryParts returns the summary parts as a slice of strings
-// This is shared between SimpleSyncHandler and InteractiveSyncHandler
-func FormatSummaryParts(summary Summary) []string {
-	parts := []string{}
-
-	if summary.TrunkUpdated {
-		parts = append(parts, "pulled trunk")
-	}
-	if summary.BranchesSynced > 0 {
-		parts = append(parts, fmt.Sprintf("synced %d branch%s", summary.BranchesSynced, pluralES(summary.BranchesSynced)))
-	}
-	if summary.BranchesRestacked > 0 {
-		parts = append(parts, fmt.Sprintf("restacked %d", summary.BranchesRestacked))
-	}
-	if summary.BranchesDeleted > 0 {
-		parts = append(parts, fmt.Sprintf("deleted %d", summary.BranchesDeleted))
-	}
-	if summary.WorktreesCleaned > 0 {
-		parts = append(parts, fmt.Sprintf("cleaned %d worktree%s", summary.WorktreesCleaned, plural(summary.WorktreesCleaned)))
-	}
-	if summary.BranchesSkipped > 0 {
-		parts = append(parts, fmt.Sprintf("skipped %d (conflict)", summary.BranchesSkipped))
-	}
-	if summary.BranchesBlocked > 0 {
-		parts = append(parts, fmt.Sprintf("blocked %d", summary.BranchesBlocked))
-	}
-	if len(summary.SkippedStacks) > 0 {
-		parts = append(parts, fmt.Sprintf("skipped %d stack%s (dirty worktree)", len(summary.SkippedStacks), plural(len(summary.SkippedStacks))))
-	}
-
-	return parts
-}
-
-// plural returns "s" if count != 1, otherwise empty string
-func plural(count int) string {
-	if count == 1 {
-		return ""
-	}
-	return "s"
-}
-
-// pluralES returns "es" if count != 1, otherwise empty string (for "branch" -> "branches")
-func pluralES(count int) string {
-	if count == 1 {
-		return ""
-	}
-	return "es"
-}
-
 // dirtyAnchorSet is the set of stack-anchor branches whose worktrees have
 // uncommitted changes; sync skips every branch in those stacks.
 type dirtyAnchorSet map[string]bool

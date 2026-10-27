@@ -71,7 +71,7 @@ func CollectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 	trunk := eng.Trunk().GetName()
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
-			if wt.Branch == "" || report.BlocksStack(wt.Branch) || wt.Branch == trunk {
+			if wt.Branch == "" || report.blocksStack(wt.Branch) || wt.Branch == trunk {
 				continue
 			}
 			if reason := branchWorktreeHoldReason(ctx, wt.Branch, wt.Path); reason != "" {
@@ -114,23 +114,6 @@ func ManagedWorktreeHolds(ctx context.Context, eng ManagedWorktreeSource) ([]Res
 	return holds, nil
 }
 
-// Blocks reports whether a hold covers branch, either directly or through its
-// stack.
-func (r RestackWorktreeHoldReport) Blocks(branch, stackRoot string) bool {
-	return r.blocks(branch, stackRoot)
-}
-
-// StackRoots returns the roots of every stack-scoped hold, in report order.
-func (r RestackWorktreeHoldReport) StackRoots() []string {
-	var roots []string
-	for _, hold := range r.Holds {
-		if hold.Scope == RestackWorktreeHoldStack {
-			roots = append(roots, hold.StackRoot)
-		}
-	}
-	return roots
-}
-
 // Messages returns one human-readable line per hold and per inspection
 // warning, for adapters to print before the restack runs.
 func (r RestackWorktreeHoldReport) Messages() []string {
@@ -146,13 +129,9 @@ func (r RestackWorktreeHoldReport) Filter(eng engine.Engine, branches engine.Bra
 	if len(r.Holds) == 0 {
 		return branches
 	}
-	kept := engine.NewBranchesBuilder(len(branches))
-	for _, branch := range branches {
-		if !r.blocks(branch.GetName(), eng.GetStackRootForBranch(branch)) {
-			kept.Add(branch)
-		}
-	}
-	return kept.Build()
+	return branches.Filter(func(branch engine.Branch) bool {
+		return !r.blocks(branch.GetName(), eng.GetStackRootForBranch(branch))
+	})
 }
 
 func (r RestackWorktreeHoldReport) blocks(branch, stackRoot string) bool {
@@ -167,7 +146,7 @@ func (r RestackWorktreeHoldReport) blocks(branch, stackRoot string) bool {
 	return false
 }
 
-func (r RestackWorktreeHoldReport) BlocksStack(stackRoot string) bool {
+func (r RestackWorktreeHoldReport) blocksStack(stackRoot string) bool {
 	return slices.ContainsFunc(r.Holds, func(hold RestackWorktreeHold) bool {
 		return hold.Scope == RestackWorktreeHoldStack && hold.StackRoot == stackRoot
 	})

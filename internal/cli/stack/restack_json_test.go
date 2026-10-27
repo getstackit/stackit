@@ -50,7 +50,7 @@ func TestJSONRestackHandler(t *testing.T) {
 		handler.OnRestackBranch(restackEvent("branch-a", actions.RestackUnneeded, "", nil, "main"))
 		handler.OnRestackBranch(restackEvent("branch-b", actions.RestackUnneeded, "", nil, "branch-a"))
 
-		handler.OnRestackComplete(actions.RestackSummary{Skipped: 2})
+		handler.OnRestackComplete(actions.RestackSummary{})
 
 		require.Equal(t, RestackJSONStatusSuccess, handler.Result.Status)
 		require.Empty(t, handler.Result.Restacked)
@@ -141,7 +141,7 @@ func TestJSONRestackHandler(t *testing.T) {
 
 		handler := NewJSONRestackHandler()
 		handler.OnRestackStart(1)
-		handler.OnRestackComplete(actions.RestackSummary{Skipped: 1})
+		handler.OnRestackComplete(actions.RestackSummary{})
 
 		// Call SetError with nil
 		handler.SetError(nil)

@@ -272,7 +272,9 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		restack, err := actions.RunRestack(ctx, actions.RestackRequest{
 			Branches:       branchObjs,
 			ConflictPolicy: actions.RestackConflictEnterWorkflow,
-		}, restackEvents{handler: handler})
+		}, actions.RestackBranchFunc(func(event actions.RestackBranchEvent) {
+			handler.OnEvent(RestackBranchEvent{RestackBranchEvent: event})
+		}))
 		if err != nil {
 			return fmt.Errorf("failed to restack branches: %w", err)
 		}

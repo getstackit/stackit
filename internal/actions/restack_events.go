@@ -37,6 +37,20 @@ type RestackHandler interface {
 	OnRestackComplete(summary RestackSummary)
 }
 
+// RestackBranchFunc adapts a function to RestackHandler for callers that
+// bracket the restack in a phase of their own (sync, submit) and only want the
+// per-branch events.
+type RestackBranchFunc func(RestackBranchEvent)
+
+// OnRestackStart implements RestackHandler.
+func (f RestackBranchFunc) OnRestackStart(int) {}
+
+// OnRestackBranch implements RestackHandler.
+func (f RestackBranchFunc) OnRestackBranch(event RestackBranchEvent) { f(event) }
+
+// OnRestackComplete implements RestackHandler.
+func (f RestackBranchFunc) OnRestackComplete(RestackSummary) {}
+
 // RestackConflictPrompter asks whether to resolve restack conflicts now. It is
 // consulted only under RestackConflictPrompt.
 type RestackConflictPrompter interface {
@@ -80,8 +94,7 @@ func (e RestackBranchEvent) IsPlainUpToDate() bool {
 // RestackSummary contains aggregate outcomes from a restack operation.
 type RestackSummary struct {
 	Restacked int
-	Skipped   int
-	Conflicts []string
+	Conflicts []string // branches skipped because they conflicted
 	Blocked   []string
 }
 
@@ -143,7 +156,6 @@ func (t *restackTally) record(p RestackProgress) {
 	case engine.RestackUnneeded:
 		event.Result = RestackUnneeded
 	case engine.RestackConflict:
-		t.summary.Skipped++
 		t.summary.Conflicts = append(t.summary.Conflicts, p.Branch)
 		event.Result = RestackConflict
 	case engine.RestackBlocked:
@@ -159,10 +171,7 @@ func (t *restackTally) parentName(branchName string) string {
 	if br.GetName() == "" {
 		return ""
 	}
-	if parent := br.GetParent(); parent != nil {
-		return parent.GetName()
-	}
-	return t.eng.Trunk().GetName()
+	return br.GetParentOrTrunk()
 }
 
 func (t *restackTally) result() RestackSummary {

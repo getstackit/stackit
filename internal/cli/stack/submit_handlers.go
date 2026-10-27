@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/actions/submit"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
@@ -345,10 +346,9 @@ func colorAction(action engine.SubmitAction, text string) string {
 // SimpleSubmitHandler implements submit.Handler with line-by-line output
 type SimpleSubmitHandler struct {
 	common.BaseHandler
-	plan    planPrinter
-	restack *SimpleSyncHandler
-	items   map[string]*branchItem
-	order   []string
+	plan  planPrinter
+	items map[string]*branchItem
+	order []string
 }
 
 type branchItem struct {
@@ -366,7 +366,6 @@ func NewSimpleSubmitHandler(out output.Output, verbosity SubmitVerbosity) *Simpl
 	return &SimpleSubmitHandler{
 		BaseHandler: common.NewBaseHandler(out),
 		plan:        planPrinter{out: out, verbose: verbosity.verbose()},
-		restack:     NewSimpleSyncHandler(out),
 		items:       make(map[string]*branchItem),
 	}
 }
@@ -388,8 +387,7 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 		// No output for completion
 
 	case submit.RestackBranchEvent:
-		// Same rows standalone restack prints: movement and problems only.
-		h.restack.OnRestackBranch(ev.RestackBranchEvent)
+		printRestackRow(h.Output, ev.RestackBranchEvent)
 
 	case submit.PreparingEvent:
 		// Skip - we'll show progress during actual submission
@@ -607,7 +605,6 @@ type InteractiveSubmitHandler struct {
 	model            *submitComponent.Model
 	out              output.Output
 	plan             planPrinter
-	restack          *SimpleSyncHandler
 	inSubmitPhase    bool
 	githubStacks     []submit.GitHubStackSyncedEvent
 	githubStackSkips []string
@@ -615,13 +612,7 @@ type InteractiveSubmitHandler struct {
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
 func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output, verbosity SubmitVerbosity) *InteractiveSubmitHandler {
-	return &InteractiveSubmitHandler{
-		runner:  runner,
-		model:   model,
-		out:     out,
-		plan:    planPrinter{out: out, verbose: verbosity.verbose()},
-		restack: NewSimpleSyncHandler(out),
-	}
+	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out, verbose: verbosity.verbose()}}
 }
 
 // OnEvent handles events from the submit action
@@ -641,8 +632,8 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 
 	case submit.RestackBranchEvent:
 		// The TUI has not started yet (it waits for branches to submit), so
-		// restack rows print as plain lines, matching standalone restack.
-		h.restack.OnRestackBranch(ev.RestackBranchEvent)
+		// restack rows print as plain lines.
+		printRestackRow(h.out, ev.RestackBranchEvent)
 
 	case submit.PreparingEvent:
 		// Quiet - the plan lines follow immediately
@@ -794,5 +785,16 @@ func (p *planPrinter) printRegenerated(ev submit.BranchPlanEvent) {
 	}
 	for line := range strings.SplitSeq(ev.Regenerated.Body, "\n") {
 		p.out.Info("      %s", line)
+	}
+}
+
+// printRestackRow prints a pre-submit restack row the way standalone restack
+// does: movement and problems only, never a plain "up to date".
+func printRestackRow(out output.Output, event actions.RestackBranchEvent) {
+	if event.IsPlainUpToDate() {
+		return
+	}
+	for _, line := range common.FormatRestackLines(event) {
+		out.Info("%s", line)
 	}
 }

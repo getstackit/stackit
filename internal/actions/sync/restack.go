@@ -7,6 +7,7 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/rerere"
+	"github.com/getstackit/stackit/internal/utils"
 )
 
 // restackBranches restacks branches after sync operations through the shared
@@ -51,16 +52,14 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 	// branches already in branchesToRestack (reparented branches from sync)
 
 	// Remove duplicates and filter out non-existent/untracked branches and dirty stacks
-	seen := make(map[string]bool)
 	uniqueBranches := engine.NewBranchesBuilder(len(branchesToRestack))
-	for _, branchName := range branchesToRestack {
-		if !seen[branchName] && !dirtyAnchors.includes(ctx, branchName) {
-			seen[branchName] = true
-			branch := nav.GetBranch(branchName)
-			// Only include branches that exist, are tracked, and are not trunks
-			if branch.IsTracked() && !branch.IsTrunk() {
-				uniqueBranches.Add(branch)
-			}
+	for _, branchName := range utils.Unique(branchesToRestack) {
+		if dirtyAnchors.includes(ctx, branchName) {
+			continue
+		}
+		// Only include branches that exist, are tracked, and are not trunks
+		if branch := nav.GetBranch(branchName); branch.IsTracked() && !branch.IsTrunk() {
+			uniqueBranches.Add(branch)
 		}
 	}
 
@@ -71,49 +70,23 @@ func restackBranches(ctx *app.Context, branchesToRestack []string, restackScope 
 		return actions.RestackOutcome{}, nil
 	}
 
+	// Sync opens the restack phase and reports its own summary, so only the
+	// per-branch events reach the handler.
+	pauser, _ := handler.(rerere.Pauser)
 	restackStart := time.Now()
 	outcome, err := actions.RunRestack(ctx, actions.RestackRequest{
 		Branches:       sortedBranches,
 		ConflictPolicy: actions.RestackConflictPrompt,
 		Prompter:       handler,
 		PromptRerere:   ctx.Interactive && !ctx.Quiet && handler.IsInteractive(),
-	}, phaseRestackHandler{handler: handler})
+		Pauser:         pauser,
+	}, actions.RestackBranchFunc(handler.OnRestackBranch))
 
 	summary.BranchesRestacked += outcome.Summary.Restacked
-	summary.BranchesSkipped += outcome.Summary.Skipped
+	summary.BranchesSkipped += len(outcome.Summary.Conflicts)
 	summary.ConflictBranches = append(summary.ConflictBranches, outcome.Summary.Conflicts...)
 	summary.BranchesBlocked += len(outcome.Summary.Blocked)
 	ctx.Logger.Info("restack branches completed durationMs=%d branchCount=%d", time.Since(restackStart).Milliseconds(), len(sortedBranches))
 
 	return outcome, err
-}
-
-// phaseRestackHandler routes the shared pipeline's per-branch events into
-// sync's restack phase. Sync opens the phase and reports its own summary, so
-// the pipeline's start and completion callbacks are dropped here.
-type phaseRestackHandler struct {
-	handler Handler
-}
-
-func (h phaseRestackHandler) OnRestackStart(int) {}
-
-func (h phaseRestackHandler) OnRestackBranch(event actions.RestackBranchEvent) {
-	h.handler.OnRestackBranch(event)
-}
-
-func (h phaseRestackHandler) OnRestackComplete(actions.RestackSummary) {}
-
-// Pause implements rerere.Pauser by forwarding to the sync handler when it
-// owns a terminal UI, so the rerere prompt does not fight it for the screen.
-func (h phaseRestackHandler) Pause() {
-	if pauser, ok := h.handler.(rerere.Pauser); ok {
-		pauser.Pause()
-	}
-}
-
-// Resume implements rerere.Pauser.
-func (h phaseRestackHandler) Resume() {
-	if pauser, ok := h.handler.(rerere.Pauser); ok {
-		pauser.Resume()
-	}
 }

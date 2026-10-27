@@ -3,6 +3,7 @@ package merge_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -223,6 +224,8 @@ func TestAction(t *testing.T) {
 		err = merge.Execute(s.Context, s.Engine, merge.ExecuteOptions{
 			Plan:  plan,
 			Force: true,
+			// The mock reports a CI check; skip the real registration wait.
+			CIRegistrationDelay: time.Millisecond,
 		})
 		require.NoError(t, err)
 

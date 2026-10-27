@@ -22,10 +22,11 @@ type CIWaiterClient interface {
 // CIWaiter handles waiting for CI checks to pass on GitHub PRs.
 // It extracts the common CI polling logic used by both consolidation and step execution.
 type CIWaiter struct {
-	client       CIWaiterClient
-	output       output.Output
-	timeout      time.Duration
-	pollInterval time.Duration
+	client            CIWaiterClient
+	output            output.Output
+	timeout           time.Duration
+	pollInterval      time.Duration
+	registrationDelay time.Duration
 
 	// Optional progress reporting
 	handler   EventHandler
@@ -34,10 +35,11 @@ type CIWaiter struct {
 
 // CIWaiterOptions configures a CIWaiter
 type CIWaiterOptions struct {
-	Client       CIWaiterClient
-	Output       output.Output
-	Timeout      time.Duration // Default: 10 minutes
-	PollInterval time.Duration // Default: 15 seconds
+	Client            CIWaiterClient
+	Output            output.Output
+	Timeout           time.Duration // Default: 10 minutes
+	PollInterval      time.Duration // Default: 15 seconds
+	RegistrationDelay time.Duration // Default: CIRegistrationDelay
 }
 
 // NewCIWaiter creates a new CIWaiter with the given options
@@ -52,11 +54,17 @@ func NewCIWaiter(opts CIWaiterOptions) *CIWaiter {
 		pollInterval = DefaultCIPollInterval
 	}
 
+	registrationDelay := opts.RegistrationDelay
+	if registrationDelay == 0 {
+		registrationDelay = CIRegistrationDelay
+	}
+
 	return &CIWaiter{
-		client:       opts.Client,
-		output:       opts.Output,
-		timeout:      timeout,
-		pollInterval: pollInterval,
+		client:            opts.Client,
+		output:            opts.Output,
+		timeout:           timeout,
+		pollInterval:      pollInterval,
+		registrationDelay: registrationDelay,
 	}
 }
 
@@ -96,7 +104,7 @@ func (w *CIWaiter) WaitForChecks(ctx context.Context, branchName string, prNumbe
 	if w.output != nil {
 		w.output.Info("   Waiting for CI checks to register...")
 	}
-	if err := utils.SleepContext(ctx, CIRegistrationDelay); err != nil {
+	if err := utils.SleepContext(ctx, w.registrationDelay); err != nil {
 		return nil, err
 	}
 

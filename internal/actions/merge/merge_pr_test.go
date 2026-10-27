@@ -2,7 +2,7 @@ package merge
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -318,7 +318,7 @@ func TestOrchestrateMerge(t *testing.T) {
 				Mergeable:      true,
 				MergeStateText: "BLOCKED",
 			},
-			enableAutoMergeErr: fmt.Errorf("unexpected GraphQL error"),
+			enableAutoMergeErr: errors.New("unexpected GraphQL error"),
 		}
 		events := &recordingProgress{}
 
@@ -337,7 +337,7 @@ func TestOrchestrateMerge(t *testing.T) {
 				Mergeable:      true,
 				MergeStateText: "CLEAN",
 			},
-			mergePRErr: fmt.Errorf("merge conflict detected"),
+			mergePRErr: errors.New("merge conflict detected"),
 		}
 		events := &recordingProgress{}
 
@@ -351,7 +351,7 @@ func TestOrchestrateMerge(t *testing.T) {
 	t.Run("getMergeableState error returns wrapped error", func(t *testing.T) {
 		t.Parallel()
 		api := &mockPRMergeAPI{
-			mergeableStateErr: fmt.Errorf("network timeout"),
+			mergeableStateErr: errors.New("network timeout"),
 		}
 		events := &recordingProgress{}
 

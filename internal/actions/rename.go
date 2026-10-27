@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/validation"
@@ -47,7 +48,7 @@ func RenameAction(ctx *app.Context, opts RenameOptions, handler RenameHandler) e
 
 	newName = utils.SanitizeBranchName(newName)
 	if newName == "" {
-		return fmt.Errorf("invalid branch name")
+		return errors.New("invalid branch name")
 	}
 
 	if newName == currentBranch {

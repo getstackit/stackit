@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -232,8 +233,7 @@ func defaultPRBody(commitsData git.Commits, err error) string {
 	// Format as a bulleted list of subjects in chronological order
 	var sb strings.Builder
 	// GetAllCommits returns newest to oldest, so iterate in reverse
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
+	for _, msg := range slices.Backward(messages) {
 		firstLine, _, _ := strings.Cut(msg, "\n")
 		subject := strings.TrimSpace(firstLine)
 		if subject != "" {

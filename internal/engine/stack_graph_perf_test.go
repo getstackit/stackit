@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -93,7 +94,7 @@ func TestStackGraphDeepGroups(t *testing.T) {
 
 func BenchmarkStackGraphSmartSort(b *testing.B) {
 	for _, depth := range []int{100, 1000} {
-		b.Run(fmt.Sprint(depth), func(b *testing.B) {
+		b.Run(strconv.Itoa(depth), func(b *testing.B) {
 			f := newGraphFixture(depth, true)
 			b.ReportAllocs()
 			for b.Loop() {
@@ -105,7 +106,7 @@ func BenchmarkStackGraphSmartSort(b *testing.B) {
 
 func BenchmarkStackGraphDepthGroups(b *testing.B) {
 	for _, depth := range []int{100, 1000} {
-		b.Run(fmt.Sprint(depth), func(b *testing.B) {
+		b.Run(strconv.Itoa(depth), func(b *testing.B) {
 			f := newGraphFixture(depth, false)
 			g := BuildStackGraph(f, SortStrategyAlphabetical, nil)
 			b.ReportAllocs()

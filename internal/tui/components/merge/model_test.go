@@ -1,7 +1,6 @@
 package merge
 
 import (
-	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -168,7 +167,7 @@ func TestModel_View_StepStatuses(t *testing.T) {
 
 		view := viewString(model.View())
 		// Check that the group label is shown (bold styling stripped)
-		assert.True(t, strings.Contains(view, "Merge PR #1"))
+		assert.Contains(t, view, "Merge PR #1")
 	})
 
 	t.Run("shows completed step with checkmark", func(t *testing.T) {

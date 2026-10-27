@@ -21,7 +21,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 
 	// Check if branch is trunk (check directly since we hold the lock)
 	if branchName == e.trunk {
-		return fmt.Errorf("cannot squash trunk branch")
+		return errors.New("cannot squash trunk branch")
 	}
 
 	// Read metadata to get parent branch revision
@@ -31,7 +31,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 	}
 
 	if meta.GetParentBranchRevision() == nil {
-		return fmt.Errorf("branch has no parent revision")
+		return errors.New("branch has no parent revision")
 	}
 
 	parentBranchRevision := *meta.GetParentBranchRevision()
@@ -51,7 +51,7 @@ func (e *engineImpl) SquashCurrentBranch(ctx context.Context, opts SquashOptions
 
 	// Check if there are commits to squash
 	if len(commitSHAs) == 0 {
-		return fmt.Errorf("no commits to squash")
+		return errors.New("no commits to squash")
 	}
 
 	// Get the last (oldest) commit SHA from the range

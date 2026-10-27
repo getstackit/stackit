@@ -74,6 +74,6 @@ func TestRemoveWorktreeForBranch(t *testing.T) {
 		t.Parallel()
 		// The caller treats only the sentinel as "not a problem"; anything else
 		// still warns.
-		require.False(t, errors.Is(errors.New("failed to remove worktree"), errBranchInMainWorktree))
+		require.NotErrorIs(t, errors.New("failed to remove worktree"), errBranchInMainWorktree)
 	})
 }

@@ -2,9 +2,10 @@
 package submit
 
 import (
+	"errors"
+
 	"github.com/getstackit/stackit/internal/git"
 
-	"fmt"
 	"sync"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -168,7 +169,7 @@ func validateBaseRevisions(branches []string, eng engine.BranchReader, ctx *app.
 	}
 
 	if len(kept) == 0 {
-		return nil, fmt.Errorf("no submittable branches: every branch in scope needs a restack first. Run 'stackit restack', then submit again")
+		return nil, errors.New("no submittable branches: every branch in scope needs a restack first. Run 'stackit restack', then submit again")
 	}
 	return kept, nil
 }

@@ -131,7 +131,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	start := time.Now()
 	// Validate flags
 	if opts.Draft && opts.Publish {
-		return fmt.Errorf("can't use both --publish and --draft flags in one command")
+		return errors.New("can't use both --publish and --draft flags in one command")
 	}
 	nav := ctx.Navigator()
 	eng := ctx.Engine
@@ -335,7 +335,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				}
 			}
 			if nativeStackMode.IsExplicit() && !nativeStackPlan.HasEligibleChains() {
-				return fmt.Errorf("a GitHub Stack requires at least two pull requests")
+				return errors.New("a GitHub Stack requires at least two pull requests")
 			}
 		}
 	}
@@ -575,7 +575,7 @@ func publishGitHubStackMetadata(ctx *app.Context, chains []nativeStackChain, han
 // least two pull requests for a native Stack.
 func planNativeStackSync(ctx *app.Context, eng engine.Engine, branches engine.Branches) (nativeStackSyncPlan, error) {
 	if ctx.Config == nil || !ctx.Config.LinearStacks() {
-		return nativeStackSyncPlan{}, fmt.Errorf("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
+		return nativeStackSyncPlan{}, errors.New("native GitHub Stack creation requires stack.shape=linear; run 'stackit config set stack.shape linear'")
 	}
 
 	chains := partitionGitHubStackChains(eng, branches)
@@ -676,7 +676,7 @@ func createGitHubStackMetadata(ctx *app.Context, branches engine.Branches) (*git
 	}
 	stackClient, ok := client.(github.StackClient)
 	if !ok {
-		return nil, nil, "", fmt.Errorf("GitHub Stack API is unavailable for this client")
+		return nil, nil, "", errors.New("GitHub Stack API is unavailable for this client")
 	}
 
 	remoteCtx, cancel := ctx.RemoteOperationContext()
@@ -698,7 +698,7 @@ func dissolveGitHubStack(ctx *app.Context, pullRequest git.PRNumber) error {
 	}
 	stackClient, ok := client.(github.StackClient)
 	if !ok {
-		return fmt.Errorf("GitHub Stack API is unavailable for this client")
+		return errors.New("GitHub Stack API is unavailable for this client")
 	}
 
 	remoteCtx, cancel := ctx.RemoteOperationContext()
@@ -874,7 +874,7 @@ func getGitHubClient(ctx *app.Context) (github.Client, error) {
 	if err := ctx.GitHubError(); err != nil {
 		return nil, fmt.Errorf("GitHub client initialization failed: %w", err)
 	}
-	return nil, fmt.Errorf("no GitHub client available - check your GITHUB_TOKEN")
+	return nil, errors.New("no GitHub client available - check your GITHUB_TOKEN")
 }
 
 // pushSubmittedBranches pushes every branch that needs it in a single git

@@ -593,9 +593,9 @@ func (e *engineImpl) RestoreSnapshot(ctx context.Context, snapshotID string) err
 		}
 		switch collides, known := e.git.TreeContainsAnyPath(ctx, target, untracked); {
 		case !known:
-			return fmt.Errorf("could not compare untracked files against the snapshot; repository state was not restored")
+			return errors.New("could not compare untracked files against the snapshot; repository state was not restored")
 		case collides:
-			return fmt.Errorf("restoring the snapshot would overwrite untracked files; move them aside or stash them with 'git stash -u' first")
+			return errors.New("restoring the snapshot would overwrite untracked files; move them aside or stash them with 'git stash -u' first")
 		}
 	}
 

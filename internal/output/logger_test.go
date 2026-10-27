@@ -2,7 +2,6 @@ package output
 
 import (
 	"log/slog"
-	"os"
 	"testing"
 )
 
@@ -71,11 +70,7 @@ func TestGetLogLevel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore original env value
-			original := os.Getenv("STACKIT_LOG_LEVEL")
-			defer os.Setenv("STACKIT_LOG_LEVEL", original)
-
-			os.Setenv("STACKIT_LOG_LEVEL", tt.envValue)
+			t.Setenv("STACKIT_LOG_LEVEL", tt.envValue)
 
 			got := getLogLevel()
 			if got != tt.expected {

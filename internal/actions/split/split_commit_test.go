@@ -1,6 +1,7 @@
 package split
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,8 +37,8 @@ func TestBuildSplitResult(t *testing.T) {
 		branchPoints := make([]int, 0, 1+len(groups))
 
 		// Add group names in reverse order (oldest branches first)
-		for i := len(groups) - 1; i >= 0; i-- {
-			branchNames = append(branchNames, groups[i].name)
+		for _, group := range slices.Backward(groups) {
+			branchNames = append(branchNames, group.name)
 		}
 		// Add current branch name last (newest branch, has index 0)
 		branchNames = append(branchNames, currentBranch)
@@ -85,8 +86,8 @@ func TestBuildSplitResult(t *testing.T) {
 		branchPoints := make([]int, 0, 1+len(groups))
 
 		// Add group names in reverse order (oldest branches first)
-		for i := len(groups) - 1; i >= 0; i-- {
-			branchNames = append(branchNames, groups[i].name)
+		for _, group := range slices.Backward(groups) {
+			branchNames = append(branchNames, group.name)
 		}
 		branchNames = append(branchNames, currentBranch)
 
@@ -127,8 +128,8 @@ func TestBuildSplitResult(t *testing.T) {
 
 		// Simulate the buggy result
 		buggyBranchPoints := []int{}
-		for i := len(groups) - 1; i >= 0; i-- {
-			buggyBranchPoints = append(buggyBranchPoints, splitPoint+groups[i].startIdx)
+		for _, group := range slices.Backward(groups) {
+			buggyBranchPoints = append(buggyBranchPoints, splitPoint+group.startIdx)
 		}
 		buggyBranchPoints = append(buggyBranchPoints, 0)
 
@@ -138,8 +139,8 @@ func TestBuildSplitResult(t *testing.T) {
 
 		// The fix produces sorted branchPoints
 		fixedBranchPoints := []int{0}
-		for i := len(groups) - 1; i >= 0; i-- {
-			fixedBranchPoints = append(fixedBranchPoints, splitPoint+groups[i].startIdx)
+		for _, group := range slices.Backward(groups) {
+			fixedBranchPoints = append(fixedBranchPoints, splitPoint+group.startIdx)
 		}
 
 		require.Equal(t, []int{0, 1}, fixedBranchPoints,

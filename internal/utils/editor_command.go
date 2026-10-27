@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -12,7 +13,7 @@ import (
 func BuildEditorCommand(editor, filePath string) (*exec.Cmd, error) {
 	editor = strings.TrimSpace(editor)
 	if editor == "" {
-		return nil, fmt.Errorf("editor command is empty")
+		return nil, errors.New("editor command is empty")
 	}
 
 	parts, err := shlex.Split(editor, true)
@@ -20,7 +21,7 @@ func BuildEditorCommand(editor, filePath string) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("parse editor command: %w", err)
 	}
 	if len(parts) == 0 {
-		return nil, fmt.Errorf("editor command is empty")
+		return nil, errors.New("editor command is empty")
 	}
 
 	args := make([]string, 0, len(parts))

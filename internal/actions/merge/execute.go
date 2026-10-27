@@ -63,7 +63,7 @@ func GetMergeMethod(ctx *app.Context, cfg MergeMethodConfig, githubClient github
 	}
 
 	if len(options) == 0 {
-		return "", fmt.Errorf("no merge methods are allowed for this repository")
+		return "", errors.New("no merge methods are allowed for this repository")
 	}
 
 	// If only one option, use it automatically
@@ -298,7 +298,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 	switch step.StepType {
 	case StepMergePR:
 		if githubClient == nil {
-			return fmt.Errorf("GitHub client not available")
+			return errors.New("GitHub client not available")
 		}
 		out.Debug("Executing StepMergePR for branch %s", step.BranchName)
 
@@ -333,7 +333,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 		case engine.PullUnneeded:
 			out.Debug("Trunk is up to date")
 		case engine.PullConflict:
-			return fmt.Errorf("trunk could not be fast-forwarded (conflict). This usually means your local trunk branch has diverged from the remote. Please sync your trunk branch manually")
+			return errors.New("trunk could not be fast-forwarded (conflict). This usually means your local trunk branch has diverged from the remote. Please sync your trunk branch manually")
 		}
 
 	case StepRestack:
@@ -467,7 +467,7 @@ func executeStep(ctx *app.Context, step PlanStep, stepIndex int, eng mergeExecut
 	case StepWaitCI:
 		// StepWaitCI should be handled by executeStepWithProgress, not executeStep.
 		// If we reach here, it's a programming error.
-		return fmt.Errorf("internal error: StepWaitCI should be handled by executeStepWithProgress, not executeStep")
+		return errors.New("internal error: StepWaitCI should be handled by executeStepWithProgress, not executeStep")
 
 	default:
 		return fmt.Errorf("unknown step type: %s", step.StepType)

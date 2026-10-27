@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -403,7 +404,7 @@ func registerSubmitStories() {
 		CreateModel: func() tea.Model {
 			m := submit.NewModel([]submit.Item{
 				{BranchName: "feature-1", Action: "update", Status: submit.StatusDone, URL: "https://github.com/owner/repo/pull/101"},
-				{BranchName: "feature-2", Action: "update", Status: submit.StatusError, Error: fmt.Errorf("failed to push branch: remote rejected")},
+				{BranchName: "feature-2", Action: "update", Status: submit.StatusError, Error: errors.New("failed to push branch: remote rejected")},
 				{BranchName: "feature-3", Action: "create", Status: submit.StatusPending},
 			})
 			return m
@@ -483,7 +484,7 @@ func (m *submitSimulationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *submitSimulationModel) View() tea.View {
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
-	return tea.NewView(fmt.Sprint(m.submitModel.View().Content) + "\n" +
+	return tea.NewView(m.submitModel.View().Content + "\n" +
 		helpStyle.Render(fmt.Sprintf("Simulation step: %d/3", m.step)) + "\n" +
 		helpStyle.Render("q: back"))
 }

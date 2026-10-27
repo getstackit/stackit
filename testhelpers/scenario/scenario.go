@@ -5,7 +5,7 @@ package scenario
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -438,14 +438,14 @@ func (s *Scenario) RunCliAndGetOutput(args ...string) (string, error) {
 	if s.InProcess {
 		runner := GetGlobalInProcessRunner()
 		if runner == nil {
-			return "", fmt.Errorf("GlobalInProcessRunner not set")
+			return "", errors.New("GlobalInProcessRunner not set")
 		}
 		out, err := runner(s.Scene.Dir, args...)
 		return ansi.Strip(out), err
 	}
 
 	if s.BinaryPath == "" {
-		return "", fmt.Errorf("BinaryPath not set")
+		return "", errors.New("BinaryPath not set")
 	}
 	// Add --no-interactive to all CLI commands in tests
 	fullArgs := append([]string{flagNoInteractive}, args...)

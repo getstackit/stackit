@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -291,7 +292,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	if branchOrPR == "" {
 		current := eng.CurrentBranch()
 		if current == nil {
-			return fmt.Errorf("not on a branch and no branch/PR specified")
+			return errors.New("not on a branch and no branch/PR specified")
 		}
 		targetBranch = current.GetName()
 	} else {

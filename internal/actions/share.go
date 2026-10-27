@@ -75,7 +75,7 @@ func ShareAction(ctx *app.Context, opts ShareOptions) error {
 
 	output := strings.TrimRight(sb.String(), "\n")
 	if output == "" {
-		return fmt.Errorf("no branches to share in the current stack")
+		return errors.New("no branches to share in the current stack")
 	}
 
 	ctx.Output.Info("%s", output)

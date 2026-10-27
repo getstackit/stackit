@@ -93,8 +93,8 @@ func TestCombinationResult_GetConflictingRoots(t *testing.T) {
 
 func TestExclusionReason_Constants(t *testing.T) {
 	// Verify exclusion reason constants are defined correctly
-	assert.Equal(t, ExclusionReason("merge_conflict"), ReasonMergeConflict)
-	assert.Equal(t, ExclusionReason("local_ci_failed"), ReasonLocalCIFailed)
+	assert.Equal(t, ReasonMergeConflict, ExclusionReason("merge_conflict"))
+	assert.Equal(t, ReasonLocalCIFailed, ExclusionReason("local_ci_failed"))
 }
 
 func TestCombinationResult_EmptyStacks(t *testing.T) {

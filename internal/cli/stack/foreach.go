@@ -2,6 +2,7 @@ package stack
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -51,15 +52,15 @@ Examples:
 			// Validate multi-stack flags up-front so errors don't surface deep in the action.
 			multiStack := allStacks || len(stacks) > 0
 			if allStacks && len(stacks) > 0 {
-				return fmt.Errorf("only one of --all-stacks or --stacks can be specified")
+				return errors.New("only one of --all-stacks or --stacks can be specified")
 			}
 			if multiStack {
 				if branch != "" {
-					return fmt.Errorf("--branch cannot be used with --all-stacks or --stacks")
+					return errors.New("--branch cannot be used with --all-stacks or --stacks")
 				}
 				// --upstack defaults to true, so only reject when a scope flag was explicitly set.
 				if cmd.Flags().Changed("upstack") || cmd.Flags().Changed("downstack") || cmd.Flags().Changed("stack") {
-					return fmt.Errorf("--upstack, --downstack, and --stack cannot be used with --all-stacks or --stacks")
+					return errors.New("--upstack, --downstack, and --stack cannot be used with --all-stacks or --stacks")
 				}
 			}
 			if jobs > 0 && !parallel && !firstFail {

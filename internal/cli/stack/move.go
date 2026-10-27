@@ -2,7 +2,7 @@
 package stack
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/spf13/cobra"
 
@@ -46,7 +46,7 @@ If no --onto is specified, opens an interactive selector to choose the target.`,
 				if sourceBranch == "" {
 					currentBranch := ctx.Engine.CurrentBranch()
 					if currentBranch == nil {
-						return fmt.Errorf("not on a branch and no source branch specified")
+						return errors.New("not on a branch and no source branch specified")
 					}
 					sourceBranch = currentBranch.GetName()
 				}

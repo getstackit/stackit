@@ -82,7 +82,7 @@ func sanitizeIncomingRequestID(s string) string {
 	if s == "" || len(s) > 64 {
 		return ""
 	}
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if c < 0x20 || c > 0x7e {
 			return ""

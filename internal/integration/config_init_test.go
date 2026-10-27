@@ -3,7 +3,6 @@ package integration
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -91,9 +90,7 @@ func TestConfigInit(t *testing.T) {
 		t.Parallel()
 
 		// Create a non-git directory
-		tmpDir, err := os.MkdirTemp("", "stackit-test-*")
-		require.NoError(t, err)
-		t.Cleanup(func() { os.RemoveAll(tmpDir) })
+		tmpDir := t.TempDir()
 
 		// Run config init
 		cli := inprocess.NewInProcessCLI()
@@ -131,7 +128,7 @@ func TestConfigInit(t *testing.T) {
 		}
 
 		for _, section := range expectedSections {
-			require.True(t, strings.Contains(contentStr, section),
+			require.Contains(t, contentStr, section,
 				"Template should contain section: %s", section)
 		}
 

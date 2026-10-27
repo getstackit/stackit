@@ -3,6 +3,7 @@ package pluck
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions"
@@ -58,7 +59,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 	if source == "" {
 		currentBranch := eng.CurrentBranch()
 		if currentBranch == nil {
-			return fmt.Errorf("not on a branch and no source branch specified")
+			return errors.New("not on a branch and no source branch specified")
 		}
 		source = currentBranch.GetName()
 	}

@@ -2,7 +2,7 @@ package submit
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -103,7 +103,7 @@ func TestPlanningBatchesMissingPRContent(t *testing.T) {
 		},
 		{
 			name:       "failed batch falls back for every branch",
-			err:        fmt.Errorf("batch unavailable"),
+			err:        errors.New("batch unavailable"),
 			wantReads:  []git.PRNumber{1, 2},
 			wantBodies: []string{"remote body", "remote body"},
 		},

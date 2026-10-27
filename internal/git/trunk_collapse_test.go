@@ -116,7 +116,7 @@ func TestRecentCommitDisplayMessage(t *testing.T) {
 	require.Equal(t, "feat: hundred (#100)",
 		reg(100, "feat: hundred (#100)").DisplayMessage(titles))
 	// Empty subject stays empty.
-	require.Equal(t, "", reg(0, "").DisplayMessage(nil))
+	require.Empty(t, reg(0, "").DisplayMessage(nil))
 }
 
 func TestRecentCommitConstituentPRTitles(t *testing.T) {

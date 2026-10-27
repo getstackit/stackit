@@ -58,7 +58,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 		return fmt.Errorf("failed to check unstaged changes: %w", err)
 	}
 	if hasUnstaged {
-		return fmt.Errorf("cannot split: you have uncommitted tracked changes")
+		return errors.New("cannot split: you have uncommitted tracked changes")
 	}
 
 	// Ensure branch is tracked
@@ -172,7 +172,7 @@ func RunWizard(ctx *app.Context, handler InteractiveHandler, opts WizardOptions)
 			return err
 		}
 		if len(pathspecs) == 0 {
-			return fmt.Errorf("no files selected")
+			return errors.New("no files selected")
 		}
 
 		// Get the original commit message from the first commit on this branch

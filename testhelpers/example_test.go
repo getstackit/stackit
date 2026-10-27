@@ -41,7 +41,7 @@ func TestGitRepoBasicOperations(t *testing.T) {
 	// Test listing commits
 	messages, err := scene.Repo.ListCurrentBranchCommitMessages()
 	require.NoError(t, err)
-	require.Greater(t, len(messages), 0)
+	require.NotEmpty(t, messages)
 }
 
 // TestSceneWithSetup demonstrates using a custom setup function.

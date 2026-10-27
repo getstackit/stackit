@@ -31,7 +31,7 @@ func TestCreateAction_Stdin(t *testing.T) {
 
 		expectedMessage := "feat: commit message from stdin"
 		go func() {
-			_, _ = w.Write([]byte(expectedMessage))
+			_, _ = w.WriteString(expectedMessage)
 			_ = w.Close()
 		}()
 

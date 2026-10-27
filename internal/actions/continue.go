@@ -25,7 +25,7 @@ func ContinueAction(ctx *app.Context, opts ContinueOptions) error {
 	if !eng.IsRebaseInProgress(ctx.Context) {
 		// Clear any stale continuation state
 		_ = config.ClearContinuationState(ctx.RepoRoot)
-		return fmt.Errorf("no rebase in progress. Nothing to continue")
+		return errors.New("no rebase in progress. Nothing to continue")
 	}
 
 	// Load continuation state

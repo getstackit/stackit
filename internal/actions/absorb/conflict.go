@@ -2,7 +2,9 @@ package absorb
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -117,7 +119,7 @@ func ShowConflict(ctx *app.Context) error {
 	// Get current branch info
 	currentBranchObj := eng.CurrentBranch()
 	if currentBranchObj == nil {
-		return fmt.Errorf("not on a tracked branch")
+		return errors.New("not on a tracked branch")
 	}
 
 	// Build StackGraph for efficient traversals
@@ -128,8 +130,7 @@ func ShowConflict(ctx *app.Context) error {
 	downstackBranches = engine.BranchesOf(*currentBranchObj).Concat(downstackBranches)
 
 	out.Info("Stack (bottom to top):")
-	for i := len(downstackBranches) - 1; i >= 0; i-- {
-		branch := downstackBranches[i]
+	for _, branch := range slices.Backward(downstackBranches) {
 		marker := "  "
 		if branch.GetName() == currentBranchObj.GetName() {
 			marker = "* "

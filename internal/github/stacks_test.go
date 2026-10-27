@@ -11,6 +11,7 @@ import (
 
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/google/go-github/v93/github"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,12 +19,12 @@ func TestCreateStack(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/repos/acme/widget/stacks", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/repos/acme/widget/stacks", r.URL.Path)
 
 		var body createStackRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		require.Equal(t, []git.PRNumber{12, 34}, body.PullRequests)
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, []git.PRNumber{12, 34}, body.PullRequests)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -66,16 +67,17 @@ func TestEnsureStackExtendsExistingStack(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/repos/acme/widget/stacks":
-			require.Equal(t, "12", r.URL.Query().Get("pull_request"))
+			assert.Equal(t, "12", r.URL.Query().Get("pull_request"))
 			_, _ = w.Write([]byte(`[{"number": 7, "pull_requests": [{"number": 12}, {"number": 34}]}]`))
 		case r.Method == http.MethodPost && r.URL.Path == "/repos/acme/widget/stacks/7/add":
 			addRequests++
 			var body createStackRequest
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			require.Equal(t, []git.PRNumber{56}, body.PullRequests)
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, []git.PRNumber{56}, body.PullRequests)
 			_, _ = w.Write([]byte(`{"number": 7, "pull_requests": [{"number": 12}, {"number": 34}, {"number": 56}]}`))
 		default:
-			t.Fatalf("unexpected %s %s", r.Method, r.URL)
+			t.Errorf("unexpected %s %s", r.Method, r.URL)
+			http.NotFound(w, r)
 		}
 	}))
 	defer server.Close()
@@ -96,8 +98,8 @@ func TestEnsureStackSkipsMatchingExistingStack(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		require.Equal(t, "/repos/acme/widget/stacks", r.URL.Path)
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/repos/acme/widget/stacks", r.URL.Path)
 		_, _ = w.Write([]byte(`[{"number": 7, "pull_requests": [{"number": 12}, {"number": 34}]}]`))
 	}))
 	defer server.Close()
@@ -131,12 +133,13 @@ func TestEnsureStackRebuildsDivergedStack(t *testing.T) {
 		case r.Method == http.MethodPost && r.URL.Path == "/repos/acme/widget/stacks":
 			created++
 			var body createStackRequest
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			require.Equal(t, []git.PRNumber{12, 78, 90}, body.PullRequests)
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, []git.PRNumber{12, 78, 90}, body.PullRequests)
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"number": 8, "pull_requests": [{"number": 12}, {"number": 78}, {"number": 90}]}`))
 		default:
-			t.Fatalf("unexpected %s %s", r.Method, r.URL)
+			t.Errorf("unexpected %s %s", r.Method, r.URL)
+			http.NotFound(w, r)
 		}
 	}))
 	defer server.Close()
@@ -168,7 +171,8 @@ func TestEnsureStackRefusesRebuildWhenMergedPRsRemain(t *testing.T) {
 		case r.Method == http.MethodPost && r.URL.Path == "/repos/acme/widget/stacks/7/unstack":
 			_, _ = w.Write([]byte(`{"number": 7, "pull_requests": [{"number": 12}]}`))
 		default:
-			t.Fatalf("unexpected %s %s", r.Method, r.URL)
+			t.Errorf("unexpected %s %s", r.Method, r.URL)
+			http.NotFound(w, r)
 		}
 	}))
 	defer server.Close()

@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/handler"
@@ -82,7 +83,7 @@ func (h *SimpleMoveHandler) PromptConfirmMove(_ move.Preview) (bool, error) {
 
 // PromptSelectOnto returns error for simple handler (non-interactive).
 func (h *SimpleMoveHandler) PromptSelectOnto(_ *app.Context, _ string) (string, []engine.RebaseSpec, error) {
-	return "", nil, fmt.Errorf("target branch must be specified for move")
+	return "", nil, errors.New("target branch must be specified for move")
 }
 
 // InteractiveMoveHandler provides interactive prompts for move operations

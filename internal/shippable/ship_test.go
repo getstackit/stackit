@@ -22,8 +22,8 @@ func TestShipResult_Fields(t *testing.T) {
 		BranchName: "consolidation-123",
 	}
 
-	assert.Equal(t, 2, len(result.IncludedStacks))
-	assert.Equal(t, 1, len(result.ExcludedStacks))
+	assert.Len(t, result.IncludedStacks, 2)
+	assert.Len(t, result.ExcludedStacks, 1)
 	assert.Equal(t, git.PRNumber(123), result.PRNumber)
 	assert.Equal(t, "https://github.com/org/repo/pull/123", result.PRURL)
 	assert.Equal(t, "consolidation-123", result.BranchName)

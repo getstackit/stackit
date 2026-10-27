@@ -23,11 +23,7 @@ func branchName(i int) string {
 // BenchmarkWorktreeCreation specifically benchmarks worktree creation
 func BenchmarkWorktreeCreation(b *testing.B) {
 	// Setup: Create a test repo
-	tmpDir, err := os.MkdirTemp("", "stackit-bench-worktree-*")
-	if err != nil {
-		b.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := b.TempDir()
 
 	repoPath := filepath.Join(tmpDir, "repo")
 	if err := os.Mkdir(repoPath, 0o755); err != nil {

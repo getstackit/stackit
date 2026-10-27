@@ -3,7 +3,6 @@ package merge
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -69,7 +68,7 @@ Examples:
 				// Other strategies stay explicit via the subcommands.
 				if !ctx.Interactive {
 					if !yes && !dryRun {
-						return fmt.Errorf("merge wizard requires a TTY. For non-interactive use pass --yes to merge the next (bottom-most) PR, or use 'merge next'/'merge drain'/'merge ship' (each accepts --yes)")
+						return errors.New("merge wizard requires a TTY. For non-interactive use pass --yes to merge the next (bottom-most) PR, or use 'merge next'/'merge drain'/'merge ship' (each accepts --yes)")
 					}
 					return runMergeNext(ctx, mergeNextOptions{
 						dryRun: dryRun,
@@ -89,7 +88,7 @@ Examples:
 				// (which we've verified above), so this cast should always succeed
 				interactiveHandler, ok := handler.(mergeAction.InteractiveHandler)
 				if !ok {
-					return fmt.Errorf("failed to initialize interactive handler")
+					return errors.New("failed to initialize interactive handler")
 				}
 
 				wizardOpts := mergeAction.WizardOptions{

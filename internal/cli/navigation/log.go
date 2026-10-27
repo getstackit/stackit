@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -109,7 +110,7 @@ field changes as breaking.`,
 func buildLogRequest(args []string, since string, count int) (trunklog.Request, error) {
 	switch {
 	case len(args) == 1 && since != "":
-		return trunklog.Request{}, fmt.Errorf("cannot combine a range argument with --since")
+		return trunklog.Request{}, errors.New("cannot combine a range argument with --since")
 	case len(args) == 1:
 		from, to, ok := strings.Cut(args[0], "..")
 		if !ok {

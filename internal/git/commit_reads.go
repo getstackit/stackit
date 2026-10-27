@@ -3,6 +3,7 @@ package git
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -84,5 +85,5 @@ func parseCommitInfo(content string) (CommitInfo, error) {
 		}
 		return CommitInfo{Author: author[:nameEnd], Date: time.Unix(seconds, 0).In(zone.Location())}, nil
 	}
-	return CommitInfo{}, fmt.Errorf("commit has no valid author header")
+	return CommitInfo{}, errors.New("commit has no valid author header")
 }

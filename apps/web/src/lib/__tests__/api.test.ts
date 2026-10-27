@@ -1,11 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   fetchView,
-  fetchRepo,
   fetchRepos,
-  fetchStacks,
-  fetchStack,
-  fetchBranch,
   fetchBranchDiff,
   fetchConfig,
   onboardRepo,
@@ -110,56 +106,6 @@ describe("fetchView", () => {
   });
 });
 
-describe("fetchRepo", () => {
-  it("scopes to owner/repo", async () => {
-    const data = { owner: "test", repo: "repo", trunk: "main", currentBranch: "main", remote: "origin" };
-    mockOk(data);
-
-    const result = await fetchRepo(REF);
-    expect(result).toEqual(data);
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/acme/web/repo",
-      { credentials: "include" }
-    );
-  });
-});
-
-describe("fetchStacks", () => {
-  it("scopes to owner/repo", async () => {
-    mockOk([]);
-    const result = await fetchStacks(REF);
-    expect(result).toEqual([]);
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/acme/web/stacks",
-      { credentials: "include" }
-    );
-  });
-});
-
-describe("fetchStack", () => {
-  it("encodes the branch name in URL", async () => {
-    mockOk({ rootBranch: "feat/foo", branches: [] });
-
-    await fetchStack(REF, "feat/foo");
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/acme/web/stacks/feat%2Ffoo",
-      { credentials: "include" }
-    );
-  });
-});
-
-describe("fetchBranch", () => {
-  it("encodes branch name in URL", async () => {
-    mockOk({ name: "feat/bar" });
-
-    await fetchBranch(REF, "feat/bar");
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/v1/repos/acme/web/branches/feat%2Fbar",
-      { credentials: "include" }
-    );
-  });
-});
-
 describe("fetchBranchDiff", () => {
   it("sends the encoded branch name as a path segment", async () => {
     mockOk({ branch: "feat/bar", baseRevision: "abc", headRevision: "def", patch: "" });
@@ -189,7 +135,7 @@ describe("error handling", () => {
   it("throws on non-ok response", async () => {
     mockError(404, "Not Found");
 
-    await expect(fetchRepo(REF)).rejects.toThrow("API error: 404 Not Found");
+    await expect(fetchView(REF)).rejects.toThrow("API error: 404 Not Found");
   });
 
   it("throws on 500 response", async () => {

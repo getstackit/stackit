@@ -159,7 +159,7 @@ func (h *TUISplitHandler) PromptSplitType(availableTypes []split.TypeChoice) (sp
 		return split.Style(result.Style), nil
 	}
 
-	return "", fmt.Errorf("unexpected model type")
+	return "", errors.New("unexpected model type")
 }
 
 // PromptDirection asks the user where to place the new branch using an interactive tree view.
@@ -240,12 +240,12 @@ func (h *TUISplitHandler) PromptCommitMessageWithContext(ctx split.CommitMessage
 		}
 		msg := m.Message()
 		if msg == "" {
-			return "", fmt.Errorf("commit message cannot be empty")
+			return "", errors.New("commit message cannot be empty")
 		}
 		return msg, nil
 	}
 
-	return "", fmt.Errorf("unexpected model type")
+	return "", errors.New("unexpected model type")
 }
 
 // PromptBranchName asks the user to enter a branch name
@@ -274,7 +274,7 @@ func (h *TUISplitHandler) PromptBranchName(defaultName string, sessionNames []st
 
 	// Validate: empty names not allowed
 	if strings.TrimSpace(branchName) == "" {
-		return "", fmt.Errorf("branch name cannot be empty")
+		return "", errors.New("branch name cannot be empty")
 	}
 
 	// Validate: check for invalid characters and Git branch name rules

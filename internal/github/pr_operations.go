@@ -316,7 +316,7 @@ func executeGraphQLQuery(ctx context.Context, runner GitCommandRunner, query str
 	}
 
 	// Make GraphQL request
-	req, err := http.NewRequestWithContext(ctx, "POST", graphqlURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, graphqlURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GraphQL request: %w", err)
 	}
@@ -441,7 +441,7 @@ func EnableAutoMerge(ctx context.Context, runner GitCommandRunner, prNodeID stri
 			return fmt.Errorf("PR is ready for direct merge: %w", ErrPRCleanStatus)
 		}
 		if strings.Contains(errMsg, "Pull request is not in a mergeable state") {
-			return fmt.Errorf("PR has merge conflicts. Please resolve conflicts before enabling auto-merge")
+			return errors.New("PR has merge conflicts. Please resolve conflicts before enabling auto-merge")
 		}
 		return fmt.Errorf("failed to enable auto-merge: %w", err)
 	}
@@ -664,7 +664,7 @@ func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID strin
 		}
 
 		if state.State == git.PRStateClosed {
-			return fmt.Errorf("PR was closed without merging")
+			return errors.New("PR was closed without merging")
 		}
 
 		// Check if auto-merge was disabled (might indicate conflicts or other issues)
@@ -678,9 +678,9 @@ func WaitForPRMerge(ctx context.Context, runner GitCommandRunner, prNodeID strin
 
 			// Auto-merge was disabled and PR is not merged
 			if freshErr == nil && !freshState.Mergeable {
-				return fmt.Errorf("auto-merge was disabled due to merge conflicts. Please resolve conflicts and try again")
+				return errors.New("auto-merge was disabled due to merge conflicts. Please resolve conflicts and try again")
 			}
-			return fmt.Errorf("auto-merge was disabled. This may indicate a problem with the PR")
+			return errors.New("auto-merge was disabled. This may indicate a problem with the PR")
 		}
 
 		if err := utils.SleepContext(ctx, pollInterval); err != nil {
@@ -714,14 +714,14 @@ func WaitForMergeable(ctx context.Context, runner GitCommandRunner, prNodeID str
 		case git.PRStateMerged:
 			return state, fmt.Errorf("PR was merged while waiting: %w", ErrPRAlreadyMerged)
 		case git.PRStateClosed:
-			return state, fmt.Errorf("PR was closed without merging")
+			return state, errors.New("PR was closed without merging")
 		}
 
 		switch state.MergeStateText {
 		case prMergeStateClean, "HAS_HOOKS":
 			return state, nil
 		case prMergeStateDirty:
-			return state, fmt.Errorf("PR has merge conflicts (DIRTY). Please resolve conflicts and try again")
+			return state, errors.New("PR has merge conflicts (DIRTY). Please resolve conflicts and try again")
 		}
 
 		// BLOCKED, BEHIND, UNKNOWN, or empty — keep polling

@@ -198,7 +198,7 @@ func (r *GitRepo) RunGitCommandAndGetOutput(args ...string) (string, error) {
 func (r *GitRepo) RunCliCommand(command []string) error {
 	cliPath := GetSharedBinaryPath()
 	if cliPath == "" {
-		return fmt.Errorf("failed to get shared binary path")
+		return errors.New("failed to get shared binary path")
 	}
 
 	cmd := exec.Command(cliPath, command...)
@@ -224,7 +224,7 @@ func (r *GitRepo) RunCliCommand(command []string) error {
 func (r *GitRepo) RunCliCommandAndGetOutput(command []string) (string, error) {
 	cliPath := GetSharedBinaryPath()
 	if cliPath == "" {
-		return "", fmt.Errorf("failed to get shared binary path")
+		return "", errors.New("failed to get shared binary path")
 	}
 
 	cmd := exec.Command(cliPath, command...)

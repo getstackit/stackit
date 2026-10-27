@@ -32,7 +32,7 @@ func TestModifyAction_Stdin(t *testing.T) {
 
 		expectedMessage := "feat: modified message from stdin"
 		go func() {
-			_, _ = w.Write([]byte(expectedMessage))
+			_, _ = w.WriteString(expectedMessage)
 			_ = w.Close()
 		}()
 

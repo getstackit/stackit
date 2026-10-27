@@ -166,8 +166,8 @@ func (e *RepoEntry) AddCloser(fn func() error) {
 
 func (e *RepoEntry) close() error {
 	var errs []error
-	for i := len(e.closers) - 1; i >= 0; i-- {
-		if err := e.closers[i](); err != nil {
+	for _, v := range slices.Backward(e.closers) {
+		if err := v(); err != nil {
 			errs = append(errs, err)
 		}
 	}

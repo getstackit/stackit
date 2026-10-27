@@ -155,8 +155,8 @@ func (b Branches) Last(n int) Branches {
 // Reverse returns a branch set with the branch order reversed.
 func (b Branches) Reverse() Branches {
 	reversed := make([]Branch, 0, len(b))
-	for i := len(b) - 1; i >= 0; i-- {
-		reversed = append(reversed, b[i])
+	for _, v := range slices.Backward(b) {
+		reversed = append(reversed, v)
 	}
 	return NewBranches(reversed)
 }

@@ -98,7 +98,7 @@ func TestReadPatchFile(t *testing.T) {
 
 		result, err := readPatchFile(patchFile)
 		require.NoError(t, err)
-		require.Equal(t, "", result)
+		require.Empty(t, result)
 	})
 
 	t.Run("stdin dash with terminal returns error", func(t *testing.T) {

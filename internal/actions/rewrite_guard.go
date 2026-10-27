@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/getstackit/stackit/internal/engine"
 )
@@ -86,8 +87,8 @@ func (g *RewriteGuard) Release() {
 func (g *RewriteGuard) Restore(ctx context.Context, opErr error) error {
 	g.released = true
 
-	for i := len(g.hooks) - 1; i >= 0; i-- {
-		g.hooks[i]()
+	for _, v := range slices.Backward(g.hooks) {
+		v()
 	}
 
 	name := g.branch.GetName()

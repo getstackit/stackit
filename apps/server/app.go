@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -30,7 +31,7 @@ func buildAppProvider() (*github.AppTokenProvider, error) {
 	if len(keyPEM) == 0 {
 		path := strings.TrimSpace(os.Getenv("STACKIT_GITHUB_APP_PRIVATE_KEY_FILE"))
 		if path == "" {
-			return nil, fmt.Errorf("STACKIT_GITHUB_APP_ID is set but no private key (set STACKIT_GITHUB_APP_PRIVATE_KEY or STACKIT_GITHUB_APP_PRIVATE_KEY_FILE)")
+			return nil, errors.New("STACKIT_GITHUB_APP_ID is set but no private key (set STACKIT_GITHUB_APP_PRIVATE_KEY or STACKIT_GITHUB_APP_PRIVATE_KEY_FILE)")
 		}
 		keyPEM, err = os.ReadFile(path)
 		if err != nil {

@@ -1,6 +1,8 @@
 package github
 
 import (
+	"errors"
+
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/utils"
 
@@ -144,7 +146,7 @@ func parsePRInfoByBranchResponse(body []byte, branches []string) (map[string]*Pu
 		if len(resp.Errors) > 0 {
 			return nil, fmt.Errorf("graphql error: %s", resp.Errors[0].Message)
 		}
-		return nil, fmt.Errorf("invalid GraphQL response format: missing repository")
+		return nil, errors.New("invalid GraphQL response format: missing repository")
 	}
 
 	results := make(map[string]*PullRequestInfo, len(branches))

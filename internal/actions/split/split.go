@@ -119,7 +119,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return fmt.Errorf("failed to check unstaged changes: %w", err)
 	}
 	if hasUnstaged {
-		return fmt.Errorf("cannot split: you have uncommitted tracked changes")
+		return errors.New("cannot split: you have uncommitted tracked changes")
 	}
 
 	// Ensure branch is tracked
@@ -145,7 +145,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 			// Need interactive prompt to choose split type
 			interactiveHandler, isInteractive := handler.(InteractiveHandler)
 			if !isInteractive || !interactiveHandler.IsInteractive() {
-				return fmt.Errorf("split style must be specified in non-interactive mode (use --by-commit, --by-hunk, or --by-file)")
+				return errors.New("split style must be specified in non-interactive mode (use --by-commit, --by-hunk, or --by-file)")
 			}
 
 			// Build type choices based on commit count
@@ -209,7 +209,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		// Interactive hunk split requires an interactive handler
 		interactiveHandler, isInteractive := handler.(InteractiveHandler)
 		if !isInteractive || !interactiveHandler.IsInteractive() {
-			return fmt.Errorf("hunk split requires interactive mode")
+			return errors.New("hunk split requires interactive mode")
 		}
 		return splitByHunkWithHandler(ctx, *currentBranch, eng, out, interactiveHandler, direction, hunkOpts)
 	case StyleFile:
@@ -221,7 +221,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				return err
 			}
 			if len(pathspecs) == 0 {
-				return fmt.Errorf("no files selected")
+				return errors.New("no files selected")
 			}
 		}
 		// splitByFile handles everything internally (creating branches, tracking, etc.)

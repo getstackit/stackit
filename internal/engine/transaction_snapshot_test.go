@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -40,7 +41,7 @@ func (r *metadataCountingRunner) UpdateRefs(ctx context.Context, updates []git.R
 func TestMetadataTransactionBatchesBothTiers(t *testing.T) {
 	t.Parallel()
 	for _, count := range []int{1, 30} {
-		t.Run(fmt.Sprint(count), func(t *testing.T) {
+		t.Run(strconv.Itoa(count), func(t *testing.T) {
 			t.Parallel()
 			scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 			r := &metadataCountingRunner{Runner: git.NewRunnerWithPath(scene.Dir, nil)}
@@ -207,7 +208,7 @@ func writeTier(store *git.MetadataStore, tier metadataTier, marker int64) error 
 	if tier == localTier {
 		return store.WriteLocalMetadata(tierBranch, &git.LocalMeta{NavigationCommentID: &marker})
 	}
-	scope := fmt.Sprint(marker)
+	scope := strconv.FormatInt(marker, 10)
 	return store.WriteMetadata(tierBranch, git.NewMeta().WithScope(&scope))
 }
 
@@ -219,7 +220,7 @@ func readTierMarker(t *testing.T, r git.Runner, tier metadataTier) string {
 		meta, err := fresh.ReadLocalMetadata(t.Context(), tierBranch).One()
 		require.NoError(t, err)
 		require.NotNil(t, meta.NavigationCommentID)
-		return fmt.Sprint(*meta.NavigationCommentID)
+		return strconv.FormatInt(*meta.NavigationCommentID, 10)
 	}
 	meta, err := fresh.ReadMetadata(t.Context(), tierBranch).One()
 	require.NoError(t, err)

@@ -1,6 +1,7 @@
 package split
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -546,7 +547,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 	hunks = append(hunks, untrackedHunks...)
 
 	if len(hunks) == 0 {
-		return fmt.Errorf("no changes to extract")
+		return errors.New("no changes to extract")
 	}
 
 	// Stage hunks using: patch file, git add -p, or the TUI selector
@@ -599,7 +600,7 @@ func splitByHunkAbove(ctx *app.Context, branchToSplit engine.Branch, eng splitBy
 		return fmt.Errorf("failed to read working tree status: %w", err)
 	}
 	if !status.Staged {
-		return fmt.Errorf("no changes staged to extract")
+		return errors.New("no changes staged to extract")
 	}
 
 	// Check if there are unstaged changes or untracked files (to keep on current)
@@ -797,7 +798,7 @@ func readPatchFile(path string) (string, error) {
 			return "", fmt.Errorf("failed to stat stdin: %w", err)
 		}
 		if (fi.Mode() & os.ModeCharDevice) != 0 {
-			return "", fmt.Errorf("stdin is a terminal; pipe a patch file or use a file path instead of \"-\"")
+			return "", errors.New("stdin is a terminal; pipe a patch file or use a file path instead of \"-\"")
 		}
 
 		content, err := io.ReadAll(os.Stdin)

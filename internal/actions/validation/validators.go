@@ -77,7 +77,7 @@ func MustBeOnBranch(eng BranchValidationEngine) Validator {
 func MustNotHaveRebaseInProgress(ctx context.Context, g GitStateReader) Validator {
 	return ValidatorFunc(func() error {
 		if g.IsRebaseInProgress(ctx) {
-			return fmt.Errorf("a rebase is already in progress. Please finish or abort it first")
+			return errors.New("a rebase is already in progress. Please finish or abort it first")
 		}
 		return nil
 	})
@@ -87,7 +87,7 @@ func MustNotHaveRebaseInProgress(ctx context.Context, g GitStateReader) Validato
 func MustNotHaveUncommittedChanges(ctx context.Context, g GitStateReader) Validator {
 	return ValidatorFunc(func() error {
 		if g.HasUncommittedChanges(ctx) {
-			return fmt.Errorf("cannot perform operation with uncommitted changes; please commit or stash them first")
+			return errors.New("cannot perform operation with uncommitted changes; please commit or stash them first")
 		}
 		return nil
 	})
@@ -117,7 +117,7 @@ func BranchMustNotBeTrunk(eng BranchValidationEngine, branchName string) Validat
 	return ValidatorFunc(func() error {
 		branch := eng.GetBranch(branchName)
 		if branch.IsTrunk() {
-			return fmt.Errorf("cannot perform operation on trunk branch")
+			return errors.New("cannot perform operation on trunk branch")
 		}
 		return nil
 	})

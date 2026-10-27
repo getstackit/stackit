@@ -40,7 +40,7 @@ type Store struct {
 func Open(ctx context.Context, connString string) (*Store, error) {
 	connString = strings.TrimSpace(connString)
 	if connString == "" {
-		return nil, fmt.Errorf("postgres connection string is required")
+		return nil, errors.New("postgres connection string is required")
 	}
 
 	db, err := sql.Open(pgDriverName, connString)

@@ -55,7 +55,7 @@ func TestGetRecentCommits_WithoutTrailers(t *testing.T) {
 	require.Equal(t, "Regular commit without trailers", commits[0].Subject)
 	require.Equal(t, 0, commits[0].StackSize)
 	require.Empty(t, commits[0].StackPRNumbers)
-	require.Equal(t, "", commits[0].StackScope)
+	require.Empty(t, commits[0].StackScope)
 	require.Equal(t, git.RecentCommitKindRegular, commits[0].Kind)
 }
 

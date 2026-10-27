@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -109,9 +110,9 @@ func formatDocExampleValue(opt *Option) string {
 		switch v := opt.Default.(type) {
 		case bool:
 			// Show opposite of default as example
-			return fmt.Sprintf("%v", !v)
+			return strconv.FormatBool(!v)
 		case int:
-			return fmt.Sprintf("%d", v)
+			return strconv.Itoa(v)
 		case string:
 			if v != "" {
 				return v

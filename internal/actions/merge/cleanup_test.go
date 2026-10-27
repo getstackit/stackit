@@ -21,7 +21,7 @@ func TestPRCleanupResult(t *testing.T) {
 
 		require.Equal(t, 3, result.ClosedCount())
 		require.Equal(t, 2, result.FailedCount())
-		require.Equal(t, 1, len(result.SkippedPRs))
+		require.Len(t, result.SkippedPRs, 1)
 	})
 
 	t.Run("empty result has zero counts", func(t *testing.T) {
@@ -31,7 +31,7 @@ func TestPRCleanupResult(t *testing.T) {
 
 		require.Equal(t, 0, result.ClosedCount())
 		require.Equal(t, 0, result.FailedCount())
-		require.Equal(t, 0, len(result.SkippedPRs))
+		require.Empty(t, result.SkippedPRs)
 	})
 }
 

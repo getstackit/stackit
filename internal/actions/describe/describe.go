@@ -55,7 +55,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Check if on trunk
 	if eng.IsTrunk(*currentBranch) {
-		return fmt.Errorf("cannot set stack description on trunk")
+		return errors.New("cannot set stack description on trunk")
 	}
 
 	// Check if branch is tracked
@@ -105,7 +105,7 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 				return applyStackDescription(ctx, eng, *currentBranch, stackRoot, desc, TruncateDescription(desc.Description, 60))
 			}
 		}
-		return fmt.Errorf("nothing to set: pass --title/-m, --message-file/-F, pipe a description via stdin, or run in interactive mode")
+		return errors.New("nothing to set: pass --title/-m, --message-file/-F, pipe a description via stdin, or run in interactive mode")
 	}
 
 	existingDesc := eng.GetStackDescription(*currentBranch)

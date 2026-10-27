@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -408,7 +407,7 @@ func verifyFilesExist(t *testing.T, sh *TestShell, filenames []string) {
 	require.NoError(t, err)
 	outputStr := string(output)
 	for _, filename := range filenames {
-		require.True(t, strings.Contains(outputStr, filename),
+		require.Contains(t, outputStr, filename,
 			"expected file %s to exist on current branch", filename)
 	}
 }
@@ -426,7 +425,7 @@ func verifyFilesNotExist(t *testing.T, sh *TestShell, filenames []string) {
 	require.NoError(t, err)
 	outputStr := string(output)
 	for _, filename := range filenames {
-		require.False(t, strings.Contains(outputStr, filename),
+		require.NotContains(t, outputStr, filename,
 			"expected file %s to NOT exist on current branch", filename)
 	}
 }

@@ -120,7 +120,7 @@ their stacks, and branch cards prefer PR titles with a two-line preview.
 1. **RepoProvider** calls `fetchView(repoRef)` on mount → GET `/api/v1/repos/{owner}/{repo}/view`
 2. Response contains: repo metadata, all stack details, recently merged commits
 3. **SSE hook** (`useSSE`) connects to `/api/v1/repos/{owner}/{repo}/events` for real-time updates
-4. On SSE event (`stacks_updated`, `branch_changed`, `refresh`, `branch_switched`), RepoProvider refetches
+4. On SSE event (`refresh`, `branch_switched`), RepoProvider refetches
 5. **View diffing** (`diff-views.ts`) compares old and new snapshots to generate `FeedEvent` objects
 6. Events are displayed in the **EventFeed** component (capped at 100 events)
 
@@ -138,10 +138,6 @@ holds a memoized `repoRef` and exposes it through `useRepo()`.
 | `fetchRepos()` | GET | `/api/v1/repos` | Repos the caller may see (picker) |
 | `onboardRepo(owner, name)` | POST | `/api/v1/repos` | Clone & serve a GitHub repo |
 | `fetchView(ref)` | GET | `/api/v1/repos/{owner}/{repo}/view` | Combined dashboard payload |
-| `fetchRepo(ref)` | GET | `/api/v1/repos/{owner}/{repo}/repo` | Repository metadata |
-| `fetchStacks(ref)` | GET | `/api/v1/repos/{owner}/{repo}/stacks` | All stack summaries |
-| `fetchStack(ref, root)` | GET | `/api/v1/repos/{owner}/{repo}/stacks/{root}` | Single stack detail |
-| `fetchBranch(ref, name)` | GET | `/api/v1/repos/{owner}/{repo}/branches/{name}` | Single branch detail |
 | `fetchBranchDiff(ref, name)` | GET | `/api/v1/repos/{owner}/{repo}/branch-diff/{name}` | Raw branch patch |
 | `submitStack(ref, root)` | POST | `/api/v1/repos/{owner}/{repo}/stacks/{root}/submit` | Trigger stack submission |
 
@@ -175,10 +171,8 @@ The SSE hook in `src/lib/use-sse.ts` takes a `RepoRef` and subscribes to
 
 | Event Type | Trigger |
 |------------|---------|
-| `stacks_updated` | Stack structure changed |
-| `branch_changed` | Branch metadata updated |
-| `refresh` | General refresh signal |
-| `branch_switched` | User changed branches in CLI |
+| `refresh` | Engine rebuilt from current refs (any repo change) |
+| `branch_switched` | Served checkout's HEAD changed branches |
 
 ## Styling
 

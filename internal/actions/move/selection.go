@@ -2,7 +2,7 @@ package move
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
@@ -23,7 +23,7 @@ type Selection struct {
 // PrepareSelection builds the data needed for interactive onto validation.
 func PrepareSelection(ctx *app.Context, source string) (*Selection, error) {
 	if source == "" {
-		return nil, fmt.Errorf("source branch is required")
+		return nil, errors.New("source branch is required")
 	}
 
 	var eng moveEngine = ctx.Engine

@@ -3,6 +3,7 @@ package tree
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -1055,8 +1056,7 @@ func (r *StackTreeRenderer) getInfoLines(args treeRenderArgs) []string {
 	// Show merged downstack history (most recent first)
 	if !args.singleLine && !args.hideSummary && len(annotation.MergedDownstack) > 0 {
 		branchPipe := styleObj.Render("│")
-		for i := len(annotation.MergedDownstack) - 1; i >= 0; i-- {
-			merged := annotation.MergedDownstack[i]
+		for _, merged := range slices.Backward(annotation.MergedDownstack) {
 			historyLine := r.formatMergedParentLine(merged, prefix, branchPipe, selectionPadding)
 			result = append(result, historyLine)
 		}

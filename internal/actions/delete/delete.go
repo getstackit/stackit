@@ -3,6 +3,7 @@ package delete
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -55,13 +56,13 @@ func Action(ctx *app.Context, opts Options, handler Handler) (Result, error) {
 	if branchName == "" {
 		currentBranch := eng.CurrentBranch()
 		if currentBranch == nil {
-			return Result{}, fmt.Errorf("no branch specified and not on a branch")
+			return Result{}, errors.New("no branch specified and not on a branch")
 		}
 		branchName = currentBranch.GetName()
 	}
 
 	if branchName == "" {
-		return Result{}, fmt.Errorf("no branch specified and not on a branch")
+		return Result{}, errors.New("no branch specified and not on a branch")
 	}
 
 	// Validate branch can be deleted

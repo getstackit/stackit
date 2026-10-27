@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -46,7 +47,7 @@ would occur, the pluck will abort without making any changes.`,
 				if sourceBranch == "" {
 					currentBranch := ctx.Engine.CurrentBranch()
 					if currentBranch == nil {
-						return fmt.Errorf("not on a branch and no source branch specified")
+						return errors.New("not on a branch and no source branch specified")
 					}
 					sourceBranch = currentBranch.GetName()
 				}

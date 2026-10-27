@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/base64"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -81,5 +80,5 @@ func TestCipher_OpenRejectsShortBlob(t *testing.T) {
 
 	_, err := c.Open([]byte("x"))
 	require.Error(t, err)
-	require.True(t, strings.Contains(err.Error(), "too short"))
+	require.Contains(t, err.Error(), "too short")
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
@@ -183,9 +184,9 @@ func TestPRContentGenerator_GenerateMultiStackPR(t *testing.T) {
 		})
 
 		err := s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature-a"), engine.NewScope("PROJ-1"))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature-b"), engine.NewScope("PROJ-2"))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		gen := NewPRContentGenerator(s.Engine)
 		content := gen.GenerateMultiStackPR(
@@ -206,7 +207,7 @@ func TestResolveUnifiedScope(t *testing.T) {
 
 	t.Run("returns empty when all scopes are empty", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "", pr.ResolveUnifiedScope([]string{"", ""}))
+		assert.Empty(t, pr.ResolveUnifiedScope([]string{"", ""}))
 	})
 
 	t.Run("returns the shared scope", func(t *testing.T) {
@@ -216,6 +217,6 @@ func TestResolveUnifiedScope(t *testing.T) {
 
 	t.Run("returns empty when scopes differ", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "", pr.ResolveUnifiedScope([]string{"PROJ-1", "PROJ-2"}))
+		assert.Empty(t, pr.ResolveUnifiedScope([]string{"PROJ-1", "PROJ-2"}))
 	})
 }

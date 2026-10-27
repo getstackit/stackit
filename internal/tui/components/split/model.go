@@ -1,6 +1,7 @@
 package split
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -414,7 +415,7 @@ func (m *Model) updateRetryPrompt(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // validateBranchName validates a branch name
 func (m *Model) validateBranchName(name string) error {
 	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("branch name cannot be empty")
+		return errors.New("branch name cannot be empty")
 	}
 	// Check if name is already used in this session
 	if slices.Contains(m.sessionNames, name) {

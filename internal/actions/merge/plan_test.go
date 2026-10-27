@@ -48,7 +48,7 @@ func TestCreateMergePlan(t *testing.T) {
 		require.Len(t, plan.BranchesToMerge, 2)
 		require.Equal(t, "branch1", plan.BranchesToMerge[0].BranchName)
 		require.Equal(t, "branch2", plan.BranchesToMerge[1].BranchName)
-		require.Greater(t, len(plan.Steps), 0)
+		require.NotEmpty(t, plan.Steps)
 	})
 
 	t.Run("validates draft PRs", func(t *testing.T) {

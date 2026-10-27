@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -83,8 +84,7 @@ func (e *engineImpl) ApplyHunksToBranch(ctx context.Context, branch Branch, hunk
 	}
 
 	// Recreate branch commit by commit (oldest to newest)
-	for i := len(commitSHAs) - 1; i >= 0; i-- {
-		commitSHA := commitSHAs[i]
+	for _, commitSHA := range slices.Backward(commitSHAs) {
 		hunks, hasHunks := hunksByCommit[commitSHA]
 
 		// 1. Cherry-pick the original commit

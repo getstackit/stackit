@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -182,11 +183,11 @@ func NewEngine(opts Options) (Engine, error) {
 	}
 
 	if opts.RepoRoot == "" {
-		return nil, fmt.Errorf("repo root must be specified in Options")
+		return nil, errors.New("repo root must be specified in Options")
 	}
 
 	if opts.Trunk == "" {
-		return nil, fmt.Errorf("trunk must be specified in Options")
+		return nil, errors.New("trunk must be specified in Options")
 	}
 
 	maxDepth := opts.MaxUndoStackDepth

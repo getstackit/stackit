@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"time"
@@ -47,7 +48,7 @@ func (v *LocalCIValidator) IsConfigured() bool {
 // Validate runs the CI command in the specified directory
 func (v *LocalCIValidator) Validate(ctx context.Context, workdir engine.WorktreePath) error {
 	if !v.IsConfigured() {
-		return fmt.Errorf("CI command not configured. Set it with: stackit config set ci.command \"your-command\"")
+		return errors.New("CI command not configured. Set it with: stackit config set ci.command \"your-command\"")
 	}
 
 	v.output.Info("Running local CI validation: %s", v.Command)

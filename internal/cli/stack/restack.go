@@ -3,6 +3,7 @@ package stack
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -49,24 +50,24 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 					scopeFlags++
 				}
 				if scopeFlags > 1 {
-					return fmt.Errorf("only one of --downstack, --only, or --upstack can be specified")
+					return errors.New("only one of --downstack, --only, or --upstack can be specified")
 				}
 				multiStack := allStacks || len(stacks) > 0
 				if allStacks && len(stacks) > 0 {
-					return fmt.Errorf("only one of --all-stacks or --stacks can be specified")
+					return errors.New("only one of --all-stacks or --stacks can be specified")
 				}
 				if multiStack && branch != "" {
-					return fmt.Errorf("--branch cannot be used with --all-stacks or --stacks")
+					return errors.New("--branch cannot be used with --all-stacks or --stacks")
 				}
 				if multiStack && scopeFlags > 0 {
-					return fmt.Errorf("--downstack, --only, and --upstack cannot be used with --all-stacks or --stacks")
+					return errors.New("--downstack, --only, and --upstack cannot be used with --all-stacks or --stacks")
 				}
 				// --jobs implies --parallel
 				if jobs > 0 {
 					parallel = true
 				}
 				if parallel && !multiStack {
-					return fmt.Errorf("--parallel requires --all-stacks or --stacks")
+					return errors.New("--parallel requires --all-stacks or --stacks")
 				}
 
 				// Determine target branch
@@ -74,7 +75,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 				if targetBranch == "" && !multiStack {
 					currentBranch := ctx.Engine.CurrentBranch()
 					if currentBranch == nil {
-						return fmt.Errorf("not on a branch and --branch not specified")
+						return errors.New("not on a branch and --branch not specified")
 					}
 					targetBranch = currentBranch.GetName()
 				}

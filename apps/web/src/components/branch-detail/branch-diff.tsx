@@ -12,6 +12,7 @@ import { fetchBranchDiff, type BranchDiffResponse, type CommitResponse } from "@
 import { useRepo } from "@/components/providers/repo-provider";
 import { useTheme } from "@/components/providers/theme-provider";
 import { commitUrl } from "@/lib/github";
+import { formatTimeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 type TreeGitStatus = "added" | "deleted" | "modified" | "renamed";
@@ -169,20 +170,6 @@ function getChangeTypeIcon(file: FileDiffMetadata) {
       )}
     </svg>
   );
-}
-
-function relativeTime(iso: string): string {
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return "now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo`;
-  return `${Math.floor(months / 12)}y`;
 }
 
 const CONVENTIONAL_COMMIT_RE = /^(\w+)(?:\(([^)]+)\))?(!)?:\s*(.+)$/;
@@ -597,7 +584,7 @@ export function BranchDiff({ branchName, revision, commits, onExit }: BranchDiff
                         )}
                         {commit.date && (
                           <span className="ml-auto shrink-0 text-muted-foreground/60 tabular-nums">
-                            {relativeTime(commit.date)}
+                            {formatTimeAgo(commit.date)}
                           </span>
                         )}
                       </div>

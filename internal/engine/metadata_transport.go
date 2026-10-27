@@ -2,7 +2,7 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/getstackit/stackit/internal/git"
 )
@@ -18,10 +18,10 @@ import (
 // perform network I/O.
 func (e *engineImpl) EnsureRemoteMetadata(ctx context.Context) error {
 	if ctx == nil {
-		return fmt.Errorf("ensure remote metadata requires a context with a deadline")
+		return errors.New("ensure remote metadata requires a context with a deadline")
 	}
 	if _, ok := ctx.Deadline(); !ok {
-		return fmt.Errorf("ensure remote metadata requires a context with a deadline")
+		return errors.New("ensure remote metadata requires a context with a deadline")
 	}
 
 	if err := e.FetchRemote(ctx, RemoteFetchRequest{IncludeMetadata: true}); err != nil {

@@ -2,6 +2,7 @@ package pr
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/config"
@@ -198,8 +199,7 @@ func renderNavigationContent(branch string, eng engine.BranchReader, opts Naviga
 			mergedHistory := branchObj.GetMergedDownstack()
 			if len(mergedHistory) > 0 {
 				content.WriteString("\n\n**Previously based on:**")
-				for i := len(mergedHistory) - 1; i >= 0; i-- {
-					mp := mergedHistory[i]
+				for _, mp := range slices.Backward(mergedHistory) {
 					if mp.PRNumber != nil {
 						fmt.Fprintf(&content, "\n* ~~PR #%d~~ (merged)", *mp.PRNumber)
 					}

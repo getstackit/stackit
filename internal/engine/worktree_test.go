@@ -89,7 +89,7 @@ func TestWorktreeRegistry_RejectsDuplicatePathAndAnchor(t *testing.T) {
 
 	err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-b", Path: "/tmp/shared-worktree", Name: "feature-b"})
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "already registered to anchor feature-a")
+	require.ErrorContains(t, err, "already registered to anchor feature-a")
 
 	err = s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-a", Path: "/tmp/other-worktree", Name: "feature-a"})
 	require.Error(t, err)
@@ -127,7 +127,7 @@ func TestCreateTemporaryWorktree(t *testing.T) {
 
 	// Verify worktree and temp dir are gone
 	_, err = os.Stat(worktreePath)
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 
 	// The parent directory of worktreePath (which is the temp dir) should also be gone
 	// worktreePath is filepath.Join(tmpDir, "worktree")

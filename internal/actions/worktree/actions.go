@@ -418,10 +418,10 @@ type worktreeTarget struct {
 
 func resolveWorktreeTarget(ctx *app.Context, eng engine.Engine, cfg RepoConfig, repoRoot, name, scope string) (worktreeTarget, error) {
 	if name == "" {
-		return worktreeTarget{}, fmt.Errorf("worktree name is required")
+		return worktreeTarget{}, errors.New("worktree name is required")
 	}
 	if strings.ContainsAny(name, "/\\:*?\"<>|") {
-		return worktreeTarget{}, fmt.Errorf("worktree name cannot contain path separators or special characters: /\\:*?\"<>|")
+		return worktreeTarget{}, errors.New("worktree name cannot contain path separators or special characters: /\\:*?\"<>|")
 	}
 
 	existingWorktrees, err := eng.ListManagedWorktrees()

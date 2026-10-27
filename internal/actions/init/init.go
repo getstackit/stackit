@@ -3,6 +3,7 @@ package init
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -55,7 +56,7 @@ func Action(ctx context.Context, repoRoot string, cfg Config, opts Options, hand
 	}
 
 	if len(branchNames) == 0 {
-		return fmt.Errorf("no branches found in current repo; cannot initialize Stackit.\nPlease create your first commit and then re-run stackit init")
+		return errors.New("no branches found in current repo; cannot initialize Stackit.\nPlease create your first commit and then re-run stackit init")
 	}
 
 	trunkName := opts.Trunk

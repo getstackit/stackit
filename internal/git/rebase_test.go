@@ -132,7 +132,7 @@ func TestRebase(t *testing.T) {
 		result, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch2", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, result.Result)
-		require.Greater(t, result.RerereResolvedCount, 0)
+		require.Positive(t, result.RerereResolvedCount)
 		require.False(t, runner.IsRebaseInProgress(context.Background()))
 	})
 

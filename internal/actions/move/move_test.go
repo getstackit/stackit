@@ -378,7 +378,7 @@ func TestMoveAction(t *testing.T) {
 		require.NoError(t, err)
 
 		// branch2 should only have 1 commit (the one we added to it)
-		require.Equal(t, 1, len(branch2Commits), "branch2 should only have 1 commit after move")
+		require.Len(t, branch2Commits, 1, "branch2 should only have 1 commit after move")
 		require.NotEqual(t, branch1Commit, branch2Commits[0], "branch1's commit should not be in branch2")
 
 		// Verify the commit message matches
@@ -441,7 +441,7 @@ func TestMoveAction(t *testing.T) {
 		branch2CommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branch2"))
 		branch2Commits := branch2CommitsData.Subjects()
 		require.NoError(t, err)
-		require.Equal(t, 1, len(branch2Commits))
+		require.Len(t, branch2Commits, 1)
 		require.Equal(t, "amended commit", branch2Commits[0])
 	})
 
@@ -473,7 +473,7 @@ func TestMoveAction(t *testing.T) {
 		branchA2Commits, err := s.Engine.GetCommitIDs(s.Engine.GetBranch("branchA2"))
 		require.NoError(t, err)
 
-		require.Equal(t, 1, len(branchA2Commits), "branchA2 should only have 1 commit after move")
+		require.Len(t, branchA2Commits, 1, "branchA2 should only have 1 commit after move")
 		require.NotEqual(t, branchA1Commit, branchA2Commits[0], "branchA1's commit should not be in branchA2")
 
 		// Verify the commit message matches
@@ -508,7 +508,7 @@ func TestMoveAction(t *testing.T) {
 		branchBCommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchB"))
 		branchBCommits := branchBCommitsData.Subjects()
 		require.NoError(t, err)
-		require.Equal(t, 1, len(branchBCommits), "branchB should only have 1 commit after move")
+		require.Len(t, branchBCommits, 1, "branchB should only have 1 commit after move")
 		require.Equal(t, "commit B", branchBCommits[0])
 
 		// CRITICAL: Verify branchA is NOT merged into main
@@ -521,7 +521,7 @@ func TestMoveAction(t *testing.T) {
 		branchACommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchA"))
 		branchACommits := branchACommitsData.Subjects()
 		require.NoError(t, err)
-		require.Equal(t, 1, len(branchACommits), "branchA should still have 1 commit")
+		require.Len(t, branchACommits, 1, "branchA should still have 1 commit")
 		require.Equal(t, "commit A", branchACommits[0])
 
 		// Verify branchC still has branchB as parent and its own commit
@@ -532,7 +532,7 @@ func TestMoveAction(t *testing.T) {
 		branchCCommitsData, err := s.Engine.GetAllCommits(s.Engine.GetBranch("branchC"))
 		branchCCommits := branchCCommitsData.Subjects()
 		require.NoError(t, err)
-		require.Equal(t, 1, len(branchCCommits), "branchC should have 1 commit")
+		require.Len(t, branchCCommits, 1, "branchC should have 1 commit")
 		require.Equal(t, "commit C", branchCCommits[0])
 	})
 

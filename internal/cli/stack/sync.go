@@ -3,6 +3,7 @@ package stack
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -37,7 +38,7 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Validate --json requires --dry-run
 			if jsonOutput && !dryRun {
-				return fmt.Errorf("--json requires --dry-run")
+				return errors.New("--json requires --dry-run")
 			}
 
 			return common.Run(cmd, func(ctx *app.Context) error {
@@ -67,7 +68,7 @@ If trunk cannot be fast-forwarded to match remote, overwrites trunk with the rem
 				// Check for uncommitted changes BEFORE starting TUI to avoid
 				// terminal control codes leaking on early error exit
 				if ctx.Reader().HasUncommittedChanges(ctx.Context) && !ctx.InManagedWorktree {
-					return fmt.Errorf("you have uncommitted changes. Please commit or stash them before syncing")
+					return errors.New("you have uncommitted changes. Please commit or stash them before syncing")
 				}
 
 				// Create runner (manages terminal state) and handler (processes events)

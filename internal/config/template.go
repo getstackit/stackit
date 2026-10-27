@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -226,9 +227,9 @@ func formatDefaultValue(v any) string {
 	case string:
 		return formatValue(val)
 	case bool:
-		return fmt.Sprintf("%v", val)
+		return strconv.FormatBool(val)
 	case int:
-		return fmt.Sprintf("%d", val)
+		return strconv.Itoa(val)
 	default:
 		return fmt.Sprintf("%v", val)
 	}

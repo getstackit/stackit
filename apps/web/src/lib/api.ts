@@ -261,26 +261,6 @@ export function fetchView(ref: RepoRef): Promise<ViewResponse> {
   return fetchAPI<ViewResponse>(repoPath(ref, "view"));
 }
 
-export function fetchRepo(ref: RepoRef): Promise<RepoResponse> {
-  return fetchAPI<RepoResponse>(repoPath(ref, "repo"));
-}
-
-export function fetchStacks(ref: RepoRef): Promise<StackSummary[]> {
-  return fetchAPI<StackSummary[]>(repoPath(ref, "stacks"));
-}
-
-export function fetchStack(ref: RepoRef, rootBranch: string): Promise<StackDetail> {
-  return fetchAPI<StackDetail>(repoPath(ref, `stacks/${encodeURIComponent(rootBranch)}`));
-}
-
-export function fetchBranches(ref: RepoRef): Promise<BranchResponse[]> {
-  return fetchAPI<BranchResponse[]>(repoPath(ref, "branches"));
-}
-
-export function fetchBranch(ref: RepoRef, name: string): Promise<BranchResponse> {
-  return fetchAPI<BranchResponse>(repoPath(ref, `branches/${encodeURIComponent(name)}`));
-}
-
 export function fetchBranchDiff(ref: RepoRef, name: string): Promise<BranchDiffResponse> {
   return fetchAPI<BranchDiffResponse>(repoPath(ref, `branch-diff/${encodeURIComponent(name)}`));
 }

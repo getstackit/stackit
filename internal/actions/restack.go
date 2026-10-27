@@ -131,7 +131,7 @@ func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 // keeps the two phases consistent.
 func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.RestackHandler) error {
 	if plan == nil {
-		return fmt.Errorf("restack plan is required")
+		return errors.New("restack plan is required")
 	}
 	out := ctx.Output
 	opts := plan.opts

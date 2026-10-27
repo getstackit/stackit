@@ -115,7 +115,7 @@ func TestSanitizeBranchName_MaxLength(t *testing.T) {
 	result := SanitizeBranchName(longName)
 
 	require.LessOrEqual(t, len(result), MaxBranchNameByteLength)
-	require.Equal(t, MaxBranchNameByteLength, len(result))
+	require.Len(t, result, MaxBranchNameByteLength)
 }
 
 func TestSanitizeBranchName_MaxLengthTrimsTrailingHyphen(t *testing.T) {

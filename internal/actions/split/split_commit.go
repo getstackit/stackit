@@ -2,8 +2,10 @@ package split
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	handlerBase "github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
@@ -54,11 +56,11 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 	}
 
 	if len(readableCommits) == 0 {
-		return nil, fmt.Errorf("no commits to split")
+		return nil, errors.New("no commits to split")
 	}
 
 	if len(readableCommits) == 1 {
-		return nil, fmt.Errorf("cannot split a branch with only one commit (use --by-hunk instead)")
+		return nil, errors.New("cannot split a branch with only one commit (use --by-hunk instead)")
 	}
 
 	// Show initial info
@@ -79,7 +81,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 
 	// If user chose to keep all commits, no split needed
 	if splitPoint == len(readableCommits) {
-		return nil, fmt.Errorf("no commits selected for split (all commits kept in current branch)")
+		return nil, errors.New("no commits selected for split (all commits kept in current branch)")
 	}
 
 	// Step 2: Group remaining commits into new branches
@@ -104,8 +106,8 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 
 	// Add group names in reverse order (oldest branches first)
 	// Groups are ordered by startIdx ascending, so reverse gives us oldest first
-	for i := len(groups) - 1; i >= 0; i-- {
-		branchNames = append(branchNames, groups[i].name)
+	for _, group := range slices.Backward(groups) {
+		branchNames = append(branchNames, group.name)
 	}
 	// Add current branch name last (newest branch, has index 0)
 	branchNames = append(branchNames, branchToSplit)
@@ -132,7 +134,7 @@ func splitByCommit(ctx *app.Context, branchToSplit string, eng splitByCommitEngi
 // Returns len(commits) if user wants to keep all commits (no split).
 func selectSplitPoint(prompter handlerBase.Selector, readableCommits []string, branchToSplit string) (int, error) {
 	if !utils.IsInteractive() {
-		return 0, fmt.Errorf("split point must be specified in non-interactive mode")
+		return 0, errors.New("split point must be specified in non-interactive mode")
 	}
 
 	// Build choices: commits interleaved with split lines
@@ -168,7 +170,7 @@ func selectSplitPoint(prompter handlerBase.Selector, readableCommits []string, b
 			// This is a split line - selectable
 			options = append(options, handlerBase.SelectOption{
 				Label: choice,
-				Value: fmt.Sprintf("%d", splitPoint),
+				Value: strconv.Itoa(splitPoint),
 			})
 		}
 		// Skip commit lines - they're not selectable options
@@ -183,7 +185,7 @@ func selectSplitPoint(prompter handlerBase.Selector, readableCommits []string, b
 	// Parse the split point from the selected value
 	var splitPoint int
 	if _, err := fmt.Sscanf(selected, "%d", &splitPoint); err != nil {
-		return 0, fmt.Errorf("invalid selection")
+		return 0, errors.New("invalid selection")
 	}
 
 	return splitPoint, nil
@@ -313,7 +315,7 @@ func selectGroupSize(prompter handlerBase.Selector, readableCommits []string) (i
 			// This is a split line - selectable
 			options = append(options, handlerBase.SelectOption{
 				Label: choice,
-				Value: fmt.Sprintf("%d", size),
+				Value: strconv.Itoa(size),
 			})
 		}
 		// Skip commit lines - they're not selectable options
@@ -327,7 +329,7 @@ func selectGroupSize(prompter handlerBase.Selector, readableCommits []string) (i
 	// Parse the group size from the selected value
 	var size int
 	if _, err := fmt.Sscanf(selected, "%d", &size); err != nil {
-		return 0, fmt.Errorf("invalid selection")
+		return 0, errors.New("invalid selection")
 	}
 
 	return size, nil

@@ -2,6 +2,7 @@ package stack
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/getstackit/stackit/internal/actions/track"
@@ -39,7 +40,7 @@ func NewSimpleTrackHandler(out output.Output) *SimpleTrackHandler {
 
 // PromptSelectParent returns empty string for simple handler (non-interactive)
 func (h *SimpleTrackHandler) PromptSelectParent(_ context.Context, _ engine.Engine, _ github.Client, _ output.Logger, _ string) (string, error) {
-	return "", fmt.Errorf("parent selection requires interactive mode; use --parent or --force")
+	return "", errors.New("parent selection requires interactive mode; use --parent or --force")
 }
 
 // PromptTrackChild returns false for simple handler (auto-skip)

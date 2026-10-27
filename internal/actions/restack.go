@@ -3,15 +3,10 @@ package actions
 import (
 	"errors"
 	"fmt"
-	stdruntime "runtime"
 	"strings"
-	"sync"
 
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/handlers"
-	"github.com/getstackit/stackit/internal/rerere"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -26,6 +21,10 @@ type RestackOptions struct {
 	ContinueOnConflict bool
 	Parallel           bool // Run independent stack groups in parallel worktrees
 	Jobs               int  // Number of parallel workers (0 = NumCPU)
+	// NonInteractive suppresses every prompt and reports conflicts instead of
+	// entering the conflict workflow. Set it for machine-readable output: the
+	// workflow prints human guidance and leaves the repository mid-rebase.
+	NonInteractive bool
 }
 
 // RestackPlan is the precomputed work for a restack operation. Build it via
@@ -37,11 +36,6 @@ type RestackOptions struct {
 type RestackPlan struct {
 	opts   RestackOptions
 	groups []restackPlannedGroup
-}
-
-type restackConflictPrompter interface {
-	IsInteractive() bool
-	PromptResolveConflicts(conflictBranches []string) (bool, error)
 }
 
 // restackPlannedGroup pairs an independent stack with the engine plan that
@@ -129,13 +123,12 @@ func PlanRestack(ctx *app.Context, opts RestackOptions) (*RestackPlan, error) {
 // Build the plan via PlanRestack — callers are expected to use the plan to
 // gate UX decisions (e.g. whether to start a TUI), so requiring it here
 // keeps the two phases consistent.
-func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.RestackHandler) error {
+func RestackAction(ctx *app.Context, plan *RestackPlan, handler RestackHandler) error {
 	if plan == nil {
 		return errors.New("restack plan is required")
 	}
 	out := ctx.Output
 	opts := plan.opts
-	eng := ctx.Engine
 
 	branchCount := plan.BranchCount()
 	if branchCount == 0 {
@@ -172,256 +165,29 @@ func RestackAction(ctx *app.Context, plan *RestackPlan, handler handlers.Restack
 		TakeBestEffortSnapshot(ctx, snapshotOpts)
 	}
 
-	// If no handler provided, use NullRestackHandler (silent)
-	if handler == nil {
-		handler = &handlers.NullRestackHandler{}
+	// A routine conflict under NonInteractive is data, not an error: report it
+	// like --continue-on-conflict rather than entering the workflow.
+	policy := RestackConflictEnterWorkflow
+	prompter, _ := handler.(RestackConflictPrompter)
+	switch {
+	case opts.ContinueOnConflict || opts.NonInteractive:
+		policy = RestackConflictReport
+	case prompter != nil && prompter.IsInteractive():
+		policy = RestackConflictPrompt
 	}
 
-	_, jsonOutput := handler.(*handlers.JSONRestackHandler)
-	interactiveRererePrompt := ctx.Interactive && !ctx.Quiet && utils.IsTTY() && !jsonOutput
-	pauser, _ := handler.(rerere.Pauser)
-	if _, err := rerere.EnsureEnabled(ctx.Engine, interactiveRererePrompt, pauser); err != nil {
-		out.Warn("Failed to enable git rerere: %v", err)
-	}
-
-	// Use RestackHandler for consistent output
-	handler.OnRestackStart(branchCount)
-
-	var restacked, skipped int
-	var conflicts, blocked []string
-	prompter, promptForConflicts := conflictPrompter(handler, opts)
-
-	// Parallel mode: dispatch independent stack groups to separate worktrees.
-	// The pre-computed engine plans are not portable across worktree engines,
-	// so each worker computes its own plan inside its worktree.
-	if parallelDispatch {
-		var err error
-		restacked, skipped, conflicts, blocked, err = restackGroupsParallel(ctx, opts, plan.groups, handler)
-		ctx.Logger.Info("restack completed (parallel) restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
-		handler.OnRestackComplete(handlers.RestackSummary{
-			Restacked: restacked,
-			Skipped:   skipped,
-			Conflicts: conflicts,
-			Blocked:   blocked,
-		})
-		if err != nil {
-			return fmt.Errorf("restack failed: %w", err)
-		}
-		return nil
-	}
-
-	// JSON output never enters the conflict workflow: EnterConflictWorkflow
-	// prints human conflict guidance into the stream that must stay parseable
-	// JSON, leaves the repo mid-rebase, and its error skipped OnRestackComplete
-	// — so the documented "conflict" status was unreachable and a routine
-	// conflict surfaced as status "error" with conflict_count 0. Report
-	// conflicts like --continue-on-conflict instead.
-	conflictMode := ConflictModeEnterWorkflow
-	if opts.ContinueOnConflict || promptForConflicts || jsonOutput {
-		conflictMode = ConflictModeContinue
-	}
-
-	for _, group := range plan.groups {
-		// Wrap the progress callback to inject the stack root for this group.
-		groupRoot := group.rootBranch
-		progress := func(p RestackProgress) {
-			p.StackRoot = groupRoot
-			handleRestackProgress(eng, handler, p, &restacked, &skipped, &conflicts, &blocked)
-		}
-
-		if err := restackBranchesWithPlan(ctx, group.sortedBranches, group.enginePlan, progress, conflictMode, nil); err != nil {
-			return fmt.Errorf("restack failed: %w", err)
-		}
-	}
-
-	ctx.Logger.Info("restack completed restacked=%v skipped=%v conflicts=%v blocked=%v", restacked, skipped, len(conflicts), len(blocked))
-
-	if promptForConflicts && len(conflicts) > 0 {
-		resolve, err := prompter.PromptResolveConflicts(conflicts)
-		if err != nil {
-			return fmt.Errorf("failed to prompt for conflict resolution: %w", err)
-		}
-		if resolve {
-			// The prompt run used ConflictModeContinue, which held back the
-			// whole conflicted stack — ancestors included. Re-run that stack
-			// in EnterWorkflow mode so ancestors are applied before entering
-			// the conflict; see ResolveConflictWorkflow.
-			return ResolveConflictWorkflow(ctx, branchesForConflict(plan, conflicts[0]))
-		}
-	}
-
-	handler.OnRestackComplete(handlers.RestackSummary{
-		Restacked: restacked,
-		Skipped:   skipped,
-		Conflicts: conflicts,
-		Blocked:   blocked,
-	})
-	return nil
-}
-
-func conflictPrompter(handler handlers.RestackHandler, opts RestackOptions) (restackConflictPrompter, bool) {
-	if opts.ContinueOnConflict {
-		return nil, false
-	}
-	prompter, ok := handler.(restackConflictPrompter)
-	if !ok || !prompter.IsInteractive() {
-		return nil, false
-	}
-	return prompter, true
-}
-
-func branchesForConflict(plan *RestackPlan, conflictBranch string) engine.Branches {
-	for _, group := range plan.groups {
-		for _, branch := range group.sortedBranches {
-			if branch.GetName() == conflictBranch {
-				return group.sortedBranches
-			}
-		}
+	_, err := RunRestack(ctx, RestackRequest{
+		groups:         plan.groups,
+		ConflictPolicy: policy,
+		Prompter:       prompter,
+		PromptRerere:   ctx.Interactive && !ctx.Quiet && utils.IsTTY() && !opts.NonInteractive,
+		Parallel:       parallelDispatch,
+		Jobs:           opts.Jobs,
+	}, handler)
+	if err != nil {
+		return fmt.Errorf("restack failed: %w", err)
 	}
 	return nil
-}
-
-// parallelResultCollector serializes progress updates, error accumulation, and
-// counter bookkeeping across parallel restack workers. All methods take the
-// mutex internally; callers must not hold it.
-type parallelResultCollector struct {
-	mu        sync.Mutex
-	eng       engine.BranchReader
-	handler   handlers.RestackHandler
-	restacked int
-	skipped   int
-	conflicts []string
-	blocked   []string
-	errs      []error
-}
-
-// recordProgress routes a progress event from a worker through handleRestackProgress.
-func (c *parallelResultCollector) recordProgress(p RestackProgress) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	handleRestackProgress(c.eng, c.handler, p, &c.restacked, &c.skipped, &c.conflicts, &c.blocked)
-}
-
-// recordGroupFailure attributes every branch in a failed group to the handler
-// as a conflict so the final summary reflects what the worker did not process.
-// Without this a worktree/engine setup failure silently shows "skipped=0" while
-// an entire stack failed to start.
-func (c *parallelResultCollector) recordGroupFailure(group restackPlannedGroup, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.errs = append(c.errs, err)
-	for _, b := range group.sortedBranches {
-		handleRestackProgress(c.eng, c.handler, RestackProgress{
-			Branch:    b.GetName(),
-			Result:    engine.RestackConflict,
-			Conflict:  true,
-			StackRoot: group.rootBranch,
-		}, &c.restacked, &c.skipped, &c.conflicts, &c.blocked)
-	}
-}
-
-// recordRebaseError records an unexpected error returned from
-// RestackBranchesWithHandler. Per-branch outcomes were already routed through
-// recordProgress by the progress callback before the error surfaced, so only
-// the error itself needs to be captured.
-func (c *parallelResultCollector) recordRebaseError(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.errs = append(c.errs, err)
-}
-
-// joinedError returns the accumulated errors as a single joined error, or nil.
-func (c *parallelResultCollector) joinedError() error {
-	if len(c.errs) == 0 {
-		return nil
-	}
-	return errors.Join(c.errs...)
-}
-
-// restackGroupsParallel runs each independent stack group in its own temporary
-// worktree. The groups have no shared branches, so rebases + ref updates are
-// safe to interleave. Progress callbacks and handler calls are serialized
-// through parallelResultCollector to prevent data races on shared counters.
-//
-// Each worker calls RestackBranchesWithHandler which computes its own engine
-// plan against the worktree-local engine; the parent's pre-computed plan in
-// restackPlannedGroup.enginePlan is not portable across engines.
-func restackGroupsParallel(
-	ctx *app.Context,
-	opts RestackOptions,
-	groups []restackPlannedGroup,
-	handler handlers.RestackHandler,
-) (restacked, skipped int, conflicts, blocked []string, err error) {
-	eng := ctx.Engine
-
-	numJobs := opts.Jobs
-	if numJobs <= 0 {
-		numJobs = stdruntime.NumCPU()
-	}
-	if numJobs > len(groups) {
-		numJobs = len(groups)
-	}
-
-	// Prune stale worktrees once before creating new ones.
-	_ = eng.PruneWorktrees(ctx.Context)
-
-	// Snapshot the parent engine state once — each worktree engine gets a copy.
-	snapshot := eng.SnapshotForWorktree()
-
-	collector := &parallelResultCollector{eng: eng, handler: handler}
-
-	utils.RunWithWorkers(groups, numJobs, func(group restackPlannedGroup) {
-		// Create a temporary worktree for this group. PruneSkip because we
-		// pruned once above and don't want N workers racing on prune.
-		wtPath, cleanup, err := eng.CreateTemporaryWorktree(ctx.Context, eng.Trunk().GetName(), "stackit-restack-*", engine.WorktreePruneSkip)
-		if err != nil {
-			wrappedErr := fmt.Errorf("stack %s: create worktree: %w", group.rootBranch, err)
-			ctx.Logger.Warn("failed to create worktree for parallel restack: %v", wrappedErr)
-			collector.recordGroupFailure(group, wrappedErr)
-			return
-		}
-		defer cleanup()
-
-		// Build a per-worktree engine from the snapshot.
-		wtEngine, err := newWorktreeEngine(engine.WorktreeEngineOptions{
-			WorktreePath: wtPath,
-			Snapshot:     snapshot,
-		})
-		if err != nil {
-			wrappedErr := fmt.Errorf("stack %s: create worktree engine: %w", group.rootBranch, err)
-			ctx.Logger.Warn("failed to create worktree engine: %v", wrappedErr)
-			collector.recordGroupFailure(group, wrappedErr)
-			return
-		}
-
-		// Shallow-copy the app context, swapping in the worktree engine.
-		wtCtx := *ctx
-		wtCtx.Engine = wtEngine
-		wtCtx.RepoRoot = wtPath.String()
-
-		groupRoot := group.rootBranch
-		progress := func(p RestackProgress) {
-			p.StackRoot = groupRoot
-			collector.recordProgress(p)
-		}
-
-		// Parallel mode always reports conflicts via callback: the interactive conflict
-		// workflow writes rebase state into the worktree, which defer cleanup() tears
-		// down, so entering it would silently destroy what the user needs to resolve.
-		if err := RestackBranchesWithHandler(&wtCtx, group.sortedBranches, progress, ConflictModeContinue); err != nil {
-			wrappedErr := fmt.Errorf("stack %s: %w", group.rootBranch, err)
-			ctx.Logger.Warn("parallel restack group failed: %v", wrappedErr)
-			collector.recordRebaseError(wrappedErr)
-		}
-	})
-
-	// Rebuild the main engine's cache so it sees the ref changes made by the
-	// worktree engines (they share the same .git directory).
-	if err := eng.Rebuild(eng.Trunk().GetName()); err != nil {
-		ctx.Logger.Warn("failed to rebuild engine after parallel restack: %v", err)
-	}
-
-	return collector.restacked, collector.skipped, collector.conflicts, collector.blocked, collector.joinedError()
 }
 
 // guardUnpushedTrunk refuses to restack when the local trunk has commits that
@@ -504,28 +270,14 @@ func planRestackBranchGroups(eng engine.BranchReader, opts RestackOptions) ([]re
 //     Its descendants stay: they are still correctly based on a branch that did
 //     not move, so restacking them is a no-op rather than a hazard.
 func skipDirtyWorktreeStacks(ctx *app.Context, groups []restackBranchGroup) []restackBranchGroup {
-	eng := ctx.Engine
-	report := collectRestackWorktreeHolds(ctx)
-	for _, hold := range report.Holds {
-		ctx.Output.Warn("%s", hold.warning())
-	}
-	for _, warning := range report.Warnings {
-		ctx.Output.Warn("%s", warning)
-	}
-	if len(report.Holds) == 0 {
-		return groups
+	report := CollectRestackWorktreeHolds(ctx)
+	for _, message := range report.Messages() {
+		ctx.Output.Warn("%s", message)
 	}
 
 	kept := make([]restackBranchGroup, 0, len(groups))
 	for _, g := range groups {
-		builder := engine.NewBranchesBuilder(len(g.branches))
-		for _, branch := range g.branches {
-			if report.blocks(branch.GetName(), eng.GetStackRootForBranch(branch)) {
-				continue
-			}
-			builder.Add(branch)
-		}
-		if built := builder.Build(); len(built) > 0 {
+		if built := report.Filter(ctx.Engine, g.branches); len(built) > 0 {
 			kept = append(kept, restackBranchGroup{rootBranch: g.rootBranch, branches: built})
 		}
 	}
@@ -567,69 +319,6 @@ func branchGroupsForIndependentStacks(eng engine.BranchReader, opts RestackOptio
 		}
 	}
 	return groups, nil
-}
-
-func handleRestackProgress(
-	eng engine.BranchReader,
-	handler handlers.RestackHandler,
-	p RestackProgress,
-	restacked *int,
-	skipped *int,
-	conflicts *[]string,
-	blocked *[]string,
-) {
-	res := handlers.RestackDone
-	switch p.Result {
-	case engine.RestackDone:
-		*restacked++
-		res = handlers.RestackDone
-	case engine.RestackUnneeded:
-		res = handlers.RestackUnneeded
-	case engine.RestackConflict:
-		*skipped++
-		*conflicts = append(*conflicts, p.Branch)
-		res = handlers.RestackConflict
-	case engine.RestackBlocked:
-		*blocked = append(*blocked, p.Branch)
-		res = handlers.RestackBlocked
-	}
-
-	// Determine parent name for consistent output
-	parentName := ""
-	br := eng.GetBranch(p.Branch)
-	if br.GetName() != "" {
-		if parent := br.GetParent(); parent != nil {
-			parentName = parent.GetName()
-		} else {
-			parentName = eng.Trunk().GetName()
-		}
-	}
-
-	// PR number is not always available without extra fetching, but we can try
-	var prNumber *git.PRNumber
-	if br.GetName() != "" {
-		if pr, err := eng.GetPrInfo(br); err == nil && pr != nil {
-			num := pr.Number()
-			prNumber = num
-		}
-	}
-
-	handler.OnRestackBranch(handlers.RestackBranchEvent{
-		Branch:              p.Branch,
-		Result:              res,
-		NewRevision:         p.NewRev,
-		PRNumber:            prNumber,
-		LockReason:          p.LockReason,
-		Frozen:              p.Frozen,
-		HeldBy:              p.HeldBy,
-		IsCurrent:           p.IsCurrent,
-		Parent:              parentName,
-		Reparented:          p.Reparented,
-		OldParent:           p.OldParent,
-		NewParent:           p.NewParent,
-		RerereResolvedCount: p.RerereResolvedCount,
-		StackRoot:           p.StackRoot,
-	})
 }
 
 // heldWorktreeReason returns why branchName's own checkout blocks a restack, or

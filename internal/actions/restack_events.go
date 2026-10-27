@@ -1,0 +1,172 @@
+package actions
+
+import (
+	"sync"
+
+	"github.com/getstackit/stackit/internal/engine"
+	"github.com/getstackit/stackit/internal/git"
+)
+
+// RestackResult represents the outcome of a restack operation for a single branch
+type RestackResult string
+
+const (
+	// RestackDone indicates the branch was successfully restacked
+	RestackDone RestackResult = "done"
+	// RestackUnneeded indicates the branch didn't need restacking
+	RestackUnneeded RestackResult = "unneeded"
+	// RestackConflict indicates the branch had a conflict
+	RestackConflict RestackResult = "conflict"
+	// RestackBlocked indicates the branch was left untouched because another
+	// branch in its stack conflicted
+	RestackBlocked RestackResult = "blocked"
+)
+
+// RestackHandler receives restack progress. Every command that restacks
+// (restack, sync, get, submit) reports through it via RunRestack, so adapters
+// render one event shape regardless of which command produced it.
+type RestackHandler interface {
+	// OnRestackStart is called at the beginning of restack with branch count
+	OnRestackStart(branchCount int)
+
+	// OnRestackBranch is called for each branch during restack.
+	OnRestackBranch(event RestackBranchEvent)
+
+	// OnRestackComplete is called when restack finishes. blocked lists
+	// branches left untouched because their stack contained a conflict.
+	OnRestackComplete(summary RestackSummary)
+}
+
+// RestackConflictPrompter asks whether to resolve restack conflicts now. It is
+// consulted only under RestackConflictPrompt.
+type RestackConflictPrompter interface {
+	IsInteractive() bool
+	PromptResolveConflicts(conflictBranches []string) (bool, error)
+}
+
+// RestackBranchEvent describes the outcome of restacking one branch.
+// Keeping these facts together makes the shared presentation contract safe to
+// extend without relying on positional arguments.
+type RestackBranchEvent struct {
+	Branch              string
+	Result              RestackResult
+	NewRevision         string
+	PRNumber            *git.PRNumber
+	LockReason          engine.LockReason
+	Frozen              bool
+	HeldBy              string // why a worktree held this branch back (empty if it was not held)
+	IsCurrent           bool
+	Parent              string
+	Reparented          bool
+	OldParent           string
+	NewParent           string
+	RerereResolvedCount int
+	StackRoot           string
+}
+
+// IsPlainUpToDate reports whether the event is a no-op with nothing worth
+// showing: the branch was already current, and not locked, frozen, held back
+// by a worktree, or reparented. A held branch reports the same RestackUnneeded
+// status as one that needed no work, so it must be excluded here or "I
+// protected your work" is silently counted as "already current".
+func (e RestackBranchEvent) IsPlainUpToDate() bool {
+	return e.Result == RestackUnneeded &&
+		!e.LockReason.IsLocked() &&
+		!e.Frozen &&
+		e.HeldBy == "" &&
+		!e.Reparented
+}
+
+// RestackSummary contains aggregate outcomes from a restack operation.
+type RestackSummary struct {
+	Restacked int
+	Skipped   int
+	Conflicts []string
+	Blocked   []string
+}
+
+// NullRestackHandler is a no-op handler for testing or when output is not needed
+type NullRestackHandler struct{}
+
+// OnRestackStart implements RestackHandler.
+func (h *NullRestackHandler) OnRestackStart(_ int) {}
+
+// OnRestackBranch implements RestackHandler.
+func (h *NullRestackHandler) OnRestackBranch(RestackBranchEvent) {}
+
+// OnRestackComplete implements RestackHandler.
+func (h *NullRestackHandler) OnRestackComplete(RestackSummary) {}
+
+// restackTally converts engine progress into RestackBranchEvents and keeps the
+// running summary. It is the single place that mapping happens, so every
+// command reports the same fields. Safe for the parallel path's concurrent
+// workers.
+type restackTally struct {
+	mu       sync.Mutex
+	eng      engine.BranchReader
+	handler  RestackHandler
+	prNumber func(branch string) *git.PRNumber
+	summary  RestackSummary
+}
+
+func newRestackTally(eng engine.BranchReader, handler RestackHandler, prNumber func(string) *git.PRNumber) *restackTally {
+	if prNumber == nil {
+		prNumber = func(branch string) *git.PRNumber { return PRNumberForBranch(eng, branch) }
+	}
+	return &restackTally{eng: eng, handler: handler, prNumber: prNumber}
+}
+
+func (t *restackTally) record(p RestackProgress) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	event := RestackBranchEvent{
+		Branch:              p.Branch,
+		NewRevision:         p.NewRev,
+		PRNumber:            t.prNumber(p.Branch),
+		LockReason:          p.LockReason,
+		Frozen:              p.Frozen,
+		HeldBy:              p.HeldBy,
+		IsCurrent:           p.IsCurrent,
+		Parent:              t.parentName(p.Branch),
+		Reparented:          p.Reparented,
+		OldParent:           p.OldParent,
+		NewParent:           p.NewParent,
+		RerereResolvedCount: p.RerereResolvedCount,
+		StackRoot:           p.StackRoot,
+	}
+
+	switch p.Result {
+	case engine.RestackDone:
+		t.summary.Restacked++
+		event.Result = RestackDone
+	case engine.RestackUnneeded:
+		event.Result = RestackUnneeded
+	case engine.RestackConflict:
+		t.summary.Skipped++
+		t.summary.Conflicts = append(t.summary.Conflicts, p.Branch)
+		event.Result = RestackConflict
+	case engine.RestackBlocked:
+		t.summary.Blocked = append(t.summary.Blocked, p.Branch)
+		event.Result = RestackBlocked
+	}
+
+	t.handler.OnRestackBranch(event)
+}
+
+func (t *restackTally) parentName(branchName string) string {
+	br := t.eng.GetBranch(branchName)
+	if br.GetName() == "" {
+		return ""
+	}
+	if parent := br.GetParent(); parent != nil {
+		return parent.GetName()
+	}
+	return t.eng.Trunk().GetName()
+}
+
+func (t *restackTally) result() RestackSummary {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.summary
+}

@@ -12,7 +12,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/handlers"
 )
 
 // NewRestackCmd creates the restack command
@@ -95,6 +94,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 					ContinueOnConflict: continueOnConflict,
 					Parallel:           parallel,
 					Jobs:               jobs,
+					NonInteractive:     jsonOutput,
 				}
 
 				// Build the plan once. RestackAction reuses it so we don't
@@ -107,7 +107,7 @@ If conflicts are encountered, you will be prompted to resolve them via an intera
 				// JSON output mode
 				if jsonOutput {
 					cmd.SilenceErrors = true
-					jsonHandler := handlers.NewJSONRestackHandler()
+					jsonHandler := NewJSONRestackHandler()
 					err := actions.RestackAction(ctx, plan, jsonHandler)
 
 					// Set error status if there was an error

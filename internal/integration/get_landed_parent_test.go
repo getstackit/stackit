@@ -10,7 +10,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/submit"
 	syncaction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/engine"
-	"github.com/getstackit/stackit/internal/handlers"
+
 	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -159,7 +159,7 @@ func restackBranchOntoStack(t *testing.T, sh *scenario.Scenario, branch string) 
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, plan, &handlers.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 	sh.Rebuild()
 }
 

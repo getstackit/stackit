@@ -1,7 +1,10 @@
 package actions
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os"
 	"slices"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -43,29 +46,18 @@ type RestackWorktreeHoldReport struct {
 	Warnings []string
 }
 
-func collectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
+// CollectRestackWorktreeHolds inspects every physical checkout and reports
+// the branches and stacks a restack must leave alone. sync and restack both
+// read this one report, so they hold back exactly the same work.
+func CollectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 	eng := ctx.Engine
 	report := RestackWorktreeHoldReport{}
 
-	addAnchorHold := func(anchor string, path engine.WorktreePath, reason string) {
-		report.Holds = append(report.Holds, RestackWorktreeHold{
-			Scope:        RestackWorktreeHoldStack,
-			Branch:       anchor,
-			StackRoot:    anchor,
-			WorktreePath: path,
-			Reason:       reason,
-		})
-	}
-	if managed, err := eng.ListManagedWorktrees(); err == nil {
-		for _, wt := range managed {
-			path := wt.Path
-			if reason := managedWorktreeHoldReason(ctx, path); reason != "" {
-				addAnchorHold(wt.AnchorBranch, path, reason)
-			}
-		}
-	} else {
+	stackHolds, err := ManagedWorktreeHolds(ctx.Context, eng)
+	if err != nil {
 		report.Warnings = append(report.Warnings, fmt.Sprintf("Could not inspect managed worktrees; holding no known stacks: %v", err))
 	}
+	report.Holds = append(report.Holds, stackHolds...)
 
 	addBranchHold := func(branch string, path engine.WorktreePath, reason string) {
 		report.Holds = append(report.Holds, RestackWorktreeHold{
@@ -79,7 +71,7 @@ func collectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 	trunk := eng.Trunk().GetName()
 	if worktrees, err := eng.ListWorktrees(ctx.Context); err == nil {
 		for _, wt := range worktrees {
-			if wt.Branch == "" || report.blocksStack(wt.Branch) || wt.Branch == trunk {
+			if wt.Branch == "" || report.BlocksStack(wt.Branch) || wt.Branch == trunk {
 				continue
 			}
 			if reason := branchWorktreeHoldReason(ctx, wt.Branch, wt.Path); reason != "" {
@@ -91,6 +83,76 @@ func collectRestackWorktreeHolds(ctx *app.Context) RestackWorktreeHoldReport {
 	}
 
 	return report
+}
+
+// ManagedWorktreeSource is the engine surface ManagedWorktreeHolds needs.
+type ManagedWorktreeSource interface {
+	ManagedWorktreeInspector
+	ListManagedWorktrees() ([]engine.WorktreeInfo, error)
+}
+
+// ManagedWorktreeHolds returns a stack-scoped hold for every managed worktree
+// whose checkout cannot be safely reset, in registry order. sync's --dry-run
+// preview calls it directly so the preview cannot promise work the run skips.
+func ManagedWorktreeHolds(ctx context.Context, eng ManagedWorktreeSource) ([]RestackWorktreeHold, error) {
+	managed, err := eng.ListManagedWorktrees()
+	if err != nil {
+		return nil, err
+	}
+	var holds []RestackWorktreeHold
+	for _, wt := range managed {
+		if reason := ManagedWorktreeHoldReason(ctx, eng, wt.Path); reason != "" {
+			holds = append(holds, RestackWorktreeHold{
+				Scope:        RestackWorktreeHoldStack,
+				Branch:       wt.AnchorBranch,
+				StackRoot:    wt.AnchorBranch,
+				WorktreePath: wt.Path,
+				Reason:       reason,
+			})
+		}
+	}
+	return holds, nil
+}
+
+// Blocks reports whether a hold covers branch, either directly or through its
+// stack.
+func (r RestackWorktreeHoldReport) Blocks(branch, stackRoot string) bool {
+	return r.blocks(branch, stackRoot)
+}
+
+// StackRoots returns the roots of every stack-scoped hold, in report order.
+func (r RestackWorktreeHoldReport) StackRoots() []string {
+	var roots []string
+	for _, hold := range r.Holds {
+		if hold.Scope == RestackWorktreeHoldStack {
+			roots = append(roots, hold.StackRoot)
+		}
+	}
+	return roots
+}
+
+// Messages returns one human-readable line per hold and per inspection
+// warning, for adapters to print before the restack runs.
+func (r RestackWorktreeHoldReport) Messages() []string {
+	messages := make([]string, 0, len(r.Holds)+len(r.Warnings))
+	for _, hold := range r.Holds {
+		messages = append(messages, hold.Warning())
+	}
+	return append(messages, r.Warnings...)
+}
+
+// Filter drops every branch a hold covers, preserving order.
+func (r RestackWorktreeHoldReport) Filter(eng engine.Engine, branches engine.Branches) engine.Branches {
+	if len(r.Holds) == 0 {
+		return branches
+	}
+	kept := engine.NewBranchesBuilder(len(branches))
+	for _, branch := range branches {
+		if !r.blocks(branch.GetName(), eng.GetStackRootForBranch(branch)) {
+			kept.Add(branch)
+		}
+	}
+	return kept.Build()
 }
 
 func (r RestackWorktreeHoldReport) blocks(branch, stackRoot string) bool {
@@ -105,13 +167,14 @@ func (r RestackWorktreeHoldReport) blocks(branch, stackRoot string) bool {
 	return false
 }
 
-func (r RestackWorktreeHoldReport) blocksStack(stackRoot string) bool {
+func (r RestackWorktreeHoldReport) BlocksStack(stackRoot string) bool {
 	return slices.ContainsFunc(r.Holds, func(hold RestackWorktreeHold) bool {
 		return hold.Scope == RestackWorktreeHoldStack && hold.StackRoot == stackRoot
 	})
 }
 
-func (h RestackWorktreeHold) warning() string {
+// Warning renders the hold as the line printed before a restack runs.
+func (h RestackWorktreeHold) Warning() string {
 	if h.Scope == RestackWorktreeHoldStack {
 		switch h.Reason {
 		case restackWorktreeHoldReasonRebase:
@@ -137,12 +200,32 @@ func (h RestackWorktreeHold) warning() string {
 	}
 }
 
-func managedWorktreeHoldReason(ctx *app.Context, path engine.WorktreePath) string {
-	eng := ctx.Engine
-	if eng.WorktreeRebaseInProgress(ctx.Context, path) {
+// ManagedWorktreeInspector is the narrow dependency ManagedWorktreeHoldReason
+// needs.
+type ManagedWorktreeInspector interface {
+	WorktreeRebaseInProgress(ctx context.Context, worktreePath engine.WorktreePath) bool
+	WorktreeHasUncommittedChanges(ctx context.Context, worktreePath engine.WorktreePath) (bool, error)
+}
+
+// ManagedWorktreeHoldReason returns why a managed worktree's stack must be left
+// alone this pass, or "" when it is safe to touch.
+//
+// A failed inspection counts as unsafe. The probe fails when git cannot read
+// the worktree — an index.lock held by another process, unreadable permissions
+// — and reading that as clean would move refs under a checkout whose contents
+// are unknown, which is exactly what the hold exists to prevent.
+//
+// A missing directory is the one exception: there is no working tree left to
+// protect, and holding it would block sync's orphan cleanup, which exists to
+// retire its registration.
+func ManagedWorktreeHoldReason(ctx context.Context, eng ManagedWorktreeInspector, path engine.WorktreePath) string {
+	if _, err := os.Stat(path.String()); errors.Is(err, os.ErrNotExist) {
+		return ""
+	}
+	if eng.WorktreeRebaseInProgress(ctx, path) {
 		return restackWorktreeHoldReasonRebase
 	}
-	hasChanges, err := eng.WorktreeHasUncommittedChanges(ctx.Context, path)
+	hasChanges, err := eng.WorktreeHasUncommittedChanges(ctx, path)
 	if err != nil {
 		return fmt.Sprintf("could not be inspected: %v", err)
 	}

@@ -13,8 +13,6 @@ import (
 	"github.com/getstackit/stackit/internal/app"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/handlers"
-	"github.com/getstackit/stackit/internal/rerere"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -65,14 +63,19 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 
 	// Collect dirty worktree anchors (stacks to skip entirely)
 	// Rather than failing on dirty worktrees, we skip their entire stack to allow
-	// parallel work in other worktrees while preserving consistency.
+	// parallel work in other worktrees while preserving consistency. restack
+	// holds the same stacks for the same reasons: both read ManagedWorktreeHolds.
+	stackHolds, err := actions.ManagedWorktreeHolds(gctx, eng)
+	if err != nil {
+		ctx.Logger.Warn("could not inspect managed worktrees: %v", err)
+	}
 	var dirtyAnchors dirtyAnchorSet
-	for _, stack := range dirtyWorktreeStacks(gctx, eng) {
+	for _, hold := range stackHolds {
 		if dirtyAnchors == nil {
 			dirtyAnchors = make(dirtyAnchorSet)
 		}
-		dirtyAnchors[stack.anchor] = true
-		out.Warn("Skipping stack rooted at %s (%s)", stack.anchor, stack.reason)
+		dirtyAnchors[hold.StackRoot] = true
+		out.Warn("%s", hold.Warning())
 	}
 
 	// Report branches checked out somewhere other than the worktree owning
@@ -283,38 +286,18 @@ func Action(ctx *app.Context, opts Options, handler Handler) error {
 		return nil
 	}
 
-	pauser, _ := handler.(rerere.Pauser)
-	if _, err := rerere.EnsureEnabled(ctx.Engine, ctx.Interactive && !ctx.Quiet && handler.IsInteractive(), pauser); err != nil {
-		out.Warn("Failed to enable git rerere: %v", err)
-	}
-
 	handler.EmitEvent(Event{Phase: PhaseRestack, Type: EventStarted})
 
-	if err := restackBranches(ctx, branchesToRestack, opts.RestackScope, expandScope, dirtyAnchors, handler, summary); err != nil {
-		// Even on error, complete with summary
-		handler.Complete(*summary)
+	outcome, err := restackBranches(ctx, branchesToRestack, opts.RestackScope, expandScope, dirtyAnchors, handler, summary)
+	if outcome.EnteredConflictWorkflow {
+		// The user chose to resolve a conflict now; sync hands off to the
+		// conflict workflow and does not report a finished summary.
 		return err
 	}
-
-	// Check for conflicts and prompt user if interactive
-	if len(summary.ConflictBranches) > 0 && handler.IsInteractive() {
-		resolve, err := handler.PromptResolveConflicts(summary.ConflictBranches)
-		if err != nil {
-			handler.Complete(*summary)
-			return fmt.Errorf("failed to prompt for conflict resolution: %w", err)
-		}
-
-		if resolve {
-			// User wants to resolve conflicts. The restack above ran in
-			// ConflictModeContinue, which held back the whole conflicted stack
-			// — ancestors included — so re-run that stack in EnterWorkflow
-			// mode (applies ancestors, then enters the conflict) rather than
-			// jumping straight to the conflict branch; see
-			// actions.ResolveConflictWorkflow.
-			firstConflict := summary.ConflictBranches[0]
-			return actions.ResolveConflictWorkflow(ctx, conflictStackBranches(ctx, firstConflict))
-		}
-		// User chose to skip conflicts - continue with summary
+	if err != nil {
+		// Even on error, complete with summary
+		handler.Complete(*summary)
+		return fmt.Errorf("failed to restack branches: %w", err)
 	}
 
 	// Check if everything was up to date
@@ -353,26 +336,16 @@ const (
 
 // Event represents a progress update during sync
 type Event struct {
-	Phase               Phase             // Current phase
-	Type                EventType         // Event type
-	Branch              string            // Branch name (if applicable)
-	PRNumber            *git.PRNumber     // PR number (if applicable)
-	Message             string            // Human-readable description
-	OldRevision         string            // For position changes
-	NewRevision         string            // For position changes
-	Conflict            bool              // Is this a conflict?
-	LockReason          engine.LockReason // Why the branch is locked (empty if not locked)
-	Frozen              bool              // Is the branch frozen?
-	HeldBy              string            // Why a worktree held this branch back (empty if it was not held)
-	IsCurrent           bool              // Is this the current branch?
-	Parent              string            // Parent branch name (if applicable)
-	RerereResolvedCount int               // Number of rebase continuations handled by git rerere
-	Error               error             // If non-nil, this step had an error
-}
-
-// IsLocked returns true if the event associated branch is locked
-func (e Event) IsLocked() bool {
-	return e.LockReason.IsLocked()
+	Phase       Phase         // Current phase
+	Type        EventType     // Event type
+	Branch      string        // Branch name (if applicable)
+	PRNumber    *git.PRNumber // PR number (if applicable)
+	Message     string        // Human-readable description
+	OldRevision string        // For position changes
+	NewRevision string        // For position changes
+	Conflict    bool          // Is this a conflict?
+	HeldBy      string        // Why a worktree held this branch back (empty if it was not held)
+	Error       error         // If non-nil, this step had an error
 }
 
 // Summary holds aggregate results from a sync operation
@@ -398,7 +371,7 @@ func (s *Summary) HasChanges() bool {
 }
 
 // Handler abstracts TTY vs non-TTY output for sync operations
-// It embeds handlers.RestackHandler to provide a unified interface for operations that include restacking
+// It embeds actions.RestackHandler to provide a unified interface for operations that include restacking
 type Handler interface {
 	// Start is called at the beginning of sync with the total operation count
 	Start(totalOps int)
@@ -439,16 +412,16 @@ type Handler interface {
 
 	// RestackHandler methods are available for restack-specific output
 	// This allows the same handler to be used for standalone restack operations
-	handlers.RestackHandler
+	actions.RestackHandler
 }
 
 // NullHandler is a no-op handler for testing or when output is not needed
 // NullHandler is a no-op handler for when nil is passed.
 // It embeds handler.NullBase for Cleanup() and IsInteractive(), and
-// handlers.NullRestackHandler for the restack-specific no-op methods.
+// actions.NullRestackHandler for the restack-specific no-op methods.
 type NullHandler struct {
 	handler.NullBase
-	handlers.NullRestackHandler
+	actions.NullRestackHandler
 }
 
 // Start implements Handler.

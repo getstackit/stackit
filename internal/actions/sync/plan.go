@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/utils"
 )
@@ -18,14 +19,13 @@ type PlanRequest struct {
 
 // PlanEngine is the read-only engine surface PlanDryRun needs.
 type PlanEngine interface {
-	WorktreeInspector
+	actions.ManagedWorktreeSource
 	Trunk() engine.Branch
 	AllBranches() engine.Branches
 	ReadBranchRemoteStatuses(ctx context.Context, branches engine.Branches) engine.BranchRemoteStatuses
 	ReadBranchStatuses(branches engine.Branches) engine.BranchStatuses
 	GetDeletionStatuses(ctx context.Context, branchNames []string) (engine.DeletionStatuses, error)
 	GetStackRootForBranch(branch engine.Branch) string
-	ListManagedWorktrees() ([]engine.WorktreeInfo, error)
 }
 
 // DryRunPlan is the read-only snapshot of what a sync WOULD do, built from the
@@ -83,7 +83,8 @@ func (p DryRunPlan) Result() DryRunResult {
 // reads PR/deletion state, but performs no fetch-and-merge, deletion, restack,
 // or GitHub write. It is a query rather than a simulation of Action with a
 // special handler; the dirty-worktree skip decision is shared with Action via
-// dirtyWorktreeStacks so the preview cannot promise work the run then skips.
+// actions.ManagedWorktreeHolds so the preview cannot promise work the run then
+// skips.
 //
 // ctx should be the bounded remote-operation context so every remote-status and
 // deletion read shares one deadline.
@@ -154,39 +155,11 @@ func PlanDryRun(ctx context.Context, eng PlanEngine, req PlanRequest) DryRunPlan
 		}
 	}
 
-	for _, stack := range dirtyWorktreeStacks(ctx, eng) {
-		plan.SkippedStacks = append(plan.SkippedStacks, stack.anchor)
+	// A failure to list worktrees yields no skips, matching the run.
+	stackHolds, _ := actions.ManagedWorktreeHolds(ctx, eng)
+	for _, hold := range stackHolds {
+		plan.SkippedStacks = append(plan.SkippedStacks, hold.StackRoot)
 	}
 
 	return plan
-}
-
-// dirtyWorktreeSource is the engine surface dirtyWorktreeStacks needs.
-type dirtyWorktreeSource interface {
-	WorktreeInspector
-	ListManagedWorktrees() ([]engine.WorktreeInfo, error)
-}
-
-// dirtyWorktreeStack is a managed worktree whose stack sync must leave alone.
-type dirtyWorktreeStack struct {
-	anchor string
-	reason string
-}
-
-// dirtyWorktreeStacks returns the managed worktrees whose stacks sync skips
-// this pass, in registry order. Both Action and PlanDryRun use it so the
-// preview and the live run make the same skip decision. A failure to list
-// worktrees yields no skips, matching sync's best-effort behavior.
-func dirtyWorktreeStacks(ctx context.Context, eng dirtyWorktreeSource) []dirtyWorktreeStack {
-	managedWorktrees, err := eng.ListManagedWorktrees()
-	if err != nil {
-		return nil
-	}
-	var stacks []dirtyWorktreeStack
-	for _, wt := range managedWorktrees {
-		if reason := SkipReasonForWorktree(ctx, eng, wt.Path); reason != "" {
-			stacks = append(stacks, dirtyWorktreeStack{anchor: wt.AnchorBranch, reason: reason})
-		}
-	}
-	return stacks
 }

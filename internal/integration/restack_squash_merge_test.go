@@ -10,7 +10,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/handlers"
+
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
@@ -114,7 +114,7 @@ func TestRestackAfterMultiCommitSquashParentDeleted(t *testing.T) {
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, plan, &handlers.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName())
@@ -164,7 +164,7 @@ func TestRestackDetectsSquashMergeWithStalePRState(t *testing.T) {
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, plan, &handlers.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName(),
@@ -341,7 +341,7 @@ func TestRestackAfterMultiCommitSquashWithoutSync(t *testing.T) {
 		Scope:      engine.StackRangeFull(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, actions.RestackAction(sh.Context, plan, &handlers.NullRestackHandler{}))
+	require.NoError(t, actions.RestackAction(sh.Context, plan, &actions.NullRestackHandler{}))
 
 	sh.Rebuild()
 	require.Equal(t, mainName, sh.Engine.GetBranch("child").GetParent().GetName(),

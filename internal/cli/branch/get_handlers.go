@@ -8,7 +8,7 @@ import (
 	"github.com/getstackit/stackit/internal/actions"
 	"github.com/getstackit/stackit/internal/cli/common"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/handlers"
+
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	"github.com/getstackit/stackit/internal/tui/style"
@@ -275,7 +275,7 @@ func (h *SimpleGetHandler) OnRestackStart(_ int) {
 }
 
 // OnRestackBranch implements RestackHandler for restack phase
-func (h *SimpleGetHandler) OnRestackBranch(event handlers.RestackBranchEvent) {
+func (h *SimpleGetHandler) OnRestackBranch(event actions.RestackBranchEvent) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -289,7 +289,7 @@ func (h *SimpleGetHandler) OnRestackBranch(event handlers.RestackBranchEvent) {
 	prInfo := common.FormatPRInfo(event.PRNumber)
 
 	switch event.Result {
-	case handlers.RestackDone:
+	case actions.RestackDone:
 		msg := fmt.Sprintf("Restacked %s%s", style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo)
 		if event.Parent != "" {
 			msg += fmt.Sprintf(" on %s", style.ColorBranchName(event.Parent))
@@ -299,7 +299,7 @@ func (h *SimpleGetHandler) OnRestackBranch(event handlers.RestackBranchEvent) {
 		if event.RerereResolvedCount > 0 {
 			h.Output.Info("%s", actions.FormatRerereResolved(event.RerereResolvedCount))
 		}
-	case handlers.RestackUnneeded:
+	case actions.RestackUnneeded:
 		// A held branch reports the same status as one that needed no work, so
 		// warn instead of quietly claiming it is up to date.
 		if event.HeldBy != "" {
@@ -320,11 +320,11 @@ func (h *SimpleGetHandler) OnRestackBranch(event handlers.RestackBranchEvent) {
 			msg = fmt.Sprintf("%s%s up to date", style.ColorBranchNameIf(event.Branch, event.IsCurrent), prInfo)
 		}
 		h.Output.Info("  %s", msg)
-	case handlers.RestackConflict:
+	case actions.RestackConflict:
 		h.Output.Warn("  Skipped %s%s (conflict)",
 			style.ColorBranchNameIf(event.Branch, event.IsCurrent),
 			prInfo)
-	case handlers.RestackBlocked:
+	case actions.RestackBlocked:
 		h.Output.Warn("  Skipped %s%s (blocked by conflict in stack)",
 			style.ColorBranchNameIf(event.Branch, event.IsCurrent),
 			prInfo)
@@ -332,7 +332,7 @@ func (h *SimpleGetHandler) OnRestackBranch(event handlers.RestackBranchEvent) {
 }
 
 // OnRestackComplete implements RestackHandler for restack phase
-func (h *SimpleGetHandler) OnRestackComplete(summary handlers.RestackSummary) {
+func (h *SimpleGetHandler) OnRestackComplete(summary actions.RestackSummary) {
 	h.Lock()
 	defer h.Unlock()
 

@@ -14,7 +14,6 @@ import (
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
 	"github.com/getstackit/stackit/internal/github"
-	"github.com/getstackit/stackit/internal/handlers"
 	"github.com/getstackit/stackit/internal/utils"
 )
 
@@ -168,12 +167,12 @@ type GetHandler interface {
 
 	// RestackHandler methods are available for restack phase output
 	// This ensures consistent restack output between get, sync, and restack commands
-	handlers.RestackHandler
+	RestackHandler
 }
 
 // GetNullHandler is a no-op handler for testing or when output is not needed
 type GetNullHandler struct {
-	handlers.NullRestackHandler
+	NullRestackHandler
 }
 
 // Start implements GetHandler.
@@ -643,8 +642,7 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 	}
 
 	// Restack if requested
-	var restacked, skipped int
-	var conflicts, blocked []string
+	var restacked int
 	if opts.Restack {
 		uniqueBranches := engine.NewBranchesBuilder(len(targets.branches))
 		seen := make(map[string]bool)
@@ -661,65 +659,26 @@ func GetAction(ctx *app.Context, branchOrPR string, opts GetOptions, handler Get
 			}
 		}
 		sorted := eng.SortBranchesTopologically(uniqueBranches.Build())
-		if len(sorted) > 0 {
-			// Use RestackHandler for consistent output
-			handler.OnRestackStart(len(sorted))
-
-			if err := RestackBranchesWithHandler(ctx, sorted, func(p RestackProgress) {
-				// Prefer the PR number discovered during sync (which may have come
-				// from remote metadata not copied into local metadata); fall back to
-				// local metadata otherwise.
-				prNumber := targets.prByBranch[p.Branch]
-				if prNumber == nil {
-					prNumber = PRNumberForBranch(eng, p.Branch)
-				}
-
-				parentName := ""
-				br := eng.GetBranch(p.Branch)
-				if br.GetName() != "" {
-					if parent := br.GetParent(); parent != nil {
-						parentName = parent.GetName()
-					} else {
-						parentName = eng.Trunk().GetName()
-					}
-				}
-
-				event := handlers.RestackBranchEvent{
-					Branch:              p.Branch,
-					NewRevision:         p.NewRev,
-					PRNumber:            prNumber,
-					LockReason:          p.LockReason,
-					Frozen:              p.Frozen,
-					HeldBy:              p.HeldBy,
-					IsCurrent:           p.IsCurrent,
-					Parent:              parentName,
-					Reparented:          p.Reparented,
-					OldParent:           p.OldParent,
-					NewParent:           p.NewParent,
-					RerereResolvedCount: p.RerereResolvedCount,
-				}
-
-				switch p.Result {
-				case engine.RestackDone:
-					restacked++
-					event.Result = handlers.RestackDone
-				case engine.RestackUnneeded:
-					event.Result = handlers.RestackUnneeded
-				case engine.RestackConflict:
-					skipped++
-					conflicts = append(conflicts, p.Branch)
-					event.Result = handlers.RestackConflict
-				case engine.RestackBlocked:
-					blocked = append(blocked, p.Branch)
-					event.Result = handlers.RestackBlocked
-				}
-				handler.OnRestackBranch(event)
-			}, ConflictModeEnterWorkflow); err != nil {
-				handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked})
-				return fmt.Errorf("restack failed: %w", err)
+		// Prefer the PR number discovered during sync (which may have come
+		// from remote metadata not copied into local metadata); fall back to
+		// local metadata otherwise.
+		prNumber := func(branch string) *git.PRNumber {
+			if pr := targets.prByBranch[branch]; pr != nil {
+				return pr
 			}
-
-			handler.OnRestackComplete(handlers.RestackSummary{Restacked: restacked, Skipped: skipped, Conflicts: conflicts, Blocked: blocked})
+			return PRNumberForBranch(eng, branch)
+		}
+		outcome, err := RunRestack(ctx, RestackRequest{
+			Branches:       sorted,
+			ConflictPolicy: RestackConflictEnterWorkflow,
+			PRNumber:       prNumber,
+		}, handler)
+		restacked = outcome.Summary.Restacked
+		if err != nil {
+			// RunRestack leaves completion to the caller on error; get still
+			// reports what it restacked before the conflict stopped it.
+			handler.OnRestackComplete(outcome.Summary)
+			return fmt.Errorf("restack failed: %w", err)
 		}
 	}
 

@@ -6,10 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getstackit/stackit/internal/actions"
 	syncAction "github.com/getstackit/stackit/internal/actions/sync"
 	"github.com/getstackit/stackit/internal/engine"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/getstackit/stackit/internal/handlers"
+
 	"github.com/getstackit/stackit/internal/output"
 	"github.com/getstackit/stackit/internal/tui"
 	syncComponent "github.com/getstackit/stackit/internal/tui/components/sync"
@@ -146,9 +147,9 @@ func TestInteractiveSyncHandler_OnRestackBranch(t *testing.T) {
 
 	// Simulate restacking a branch
 	prNumber := git.PRNumber(42)
-	handler.OnRestackBranch(handlers.RestackBranchEvent{
+	handler.OnRestackBranch(actions.RestackBranchEvent{
 		Branch:      "feature-branch",
-		Result:      handlers.RestackDone,
+		Result:      actions.RestackDone,
 		NewRevision: "def5678",
 		PRNumber:    &prNumber,
 		LockReason:  engine.LockReasonNone,
@@ -178,7 +179,7 @@ func TestInteractiveSyncHandler_OnRestackComplete(t *testing.T) {
 	model := syncComponent.NewModel(0)
 	handler := NewInteractiveSyncHandler(mockRunner, model, output.NewNullOutput(), output.NewNullLogger())
 
-	handler.OnRestackComplete(handlers.RestackSummary{Restacked: 5, Skipped: 2})
+	handler.OnRestackComplete(actions.RestackSummary{Restacked: 5, Skipped: 2})
 
 	// Verify that OnRestackComplete sends a CompleteMsg
 	messages := mockRunner.Messages()

@@ -345,9 +345,10 @@ func colorAction(action engine.SubmitAction, text string) string {
 // SimpleSubmitHandler implements submit.Handler with line-by-line output
 type SimpleSubmitHandler struct {
 	common.BaseHandler
-	plan  planPrinter
-	items map[string]*branchItem
-	order []string
+	plan    planPrinter
+	restack *SimpleSyncHandler
+	items   map[string]*branchItem
+	order   []string
 }
 
 type branchItem struct {
@@ -365,6 +366,7 @@ func NewSimpleSubmitHandler(out output.Output, verbosity SubmitVerbosity) *Simpl
 	return &SimpleSubmitHandler{
 		BaseHandler: common.NewBaseHandler(out),
 		plan:        planPrinter{out: out, verbose: verbosity.verbose()},
+		restack:     NewSimpleSyncHandler(out),
 		items:       make(map[string]*branchItem),
 	}
 }
@@ -384,6 +386,10 @@ func (h *SimpleSubmitHandler) OnEvent(e submit.Event) {
 			h.Output.Info("Restacking branches before submitting...")
 		}
 		// No output for completion
+
+	case submit.RestackBranchEvent:
+		// Same rows standalone restack prints: movement and problems only.
+		h.restack.OnRestackBranch(ev.RestackBranchEvent)
 
 	case submit.PreparingEvent:
 		// Skip - we'll show progress during actual submission
@@ -601,6 +607,7 @@ type InteractiveSubmitHandler struct {
 	model            *submitComponent.Model
 	out              output.Output
 	plan             planPrinter
+	restack          *SimpleSyncHandler
 	inSubmitPhase    bool
 	githubStacks     []submit.GitHubStackSyncedEvent
 	githubStackSkips []string
@@ -608,7 +615,13 @@ type InteractiveSubmitHandler struct {
 
 // NewInteractiveSubmitHandler creates a new interactive submit handler
 func NewInteractiveSubmitHandler(runner *tui.Runner, model *submitComponent.Model, out output.Output, verbosity SubmitVerbosity) *InteractiveSubmitHandler {
-	return &InteractiveSubmitHandler{runner: runner, model: model, out: out, plan: planPrinter{out: out, verbose: verbosity.verbose()}}
+	return &InteractiveSubmitHandler{
+		runner:  runner,
+		model:   model,
+		out:     out,
+		plan:    planPrinter{out: out, verbose: verbosity.verbose()},
+		restack: NewSimpleSyncHandler(out),
+	}
 }
 
 // OnEvent handles events from the submit action
@@ -625,6 +638,11 @@ func (h *InteractiveSubmitHandler) OnEvent(e submit.Event) {
 			h.out.Info("Restacking branches before submitting...")
 		}
 		// No output for completion
+
+	case submit.RestackBranchEvent:
+		// The TUI has not started yet (it waits for branches to submit), so
+		// restack rows print as plain lines, matching standalone restack.
+		h.restack.OnRestackBranch(ev.RestackBranchEvent)
 
 	case submit.PreparingEvent:
 		// Quiet - the plan lines follow immediately

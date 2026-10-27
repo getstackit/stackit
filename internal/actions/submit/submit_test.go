@@ -420,7 +420,10 @@ func TestSubmitConfiguredGitHubStackSkipsSinglePullRequest(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestSubmitConfiguredGitHubStackSkipsOversizedSubmission(t *testing.T) {
+// TestSubmitGitHubStackOversizedChain shares one 101-branch chain between the
+// explicit flag (strict rejection before any PR write) and the configured key
+// (best-effort skip that still submits normally).
+func TestSubmitGitHubStackOversizedChain(t *testing.T) {
 	t.Parallel()
 	branches := make(map[string]string, github.MaxStackPullRequests+1)
 	parent := "main"
@@ -432,35 +435,25 @@ func TestSubmitConfiguredGitHubStackSkipsOversizedSubmission(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithStack(branches)
 	s.Checkout(parent)
 
-	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
-	require.NoError(t, err)
-	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
-	require.NoError(t, cfg.SetGitHubStack(true))
-	s.Context.Config = cfg
-
-	err = submit.Action(s.Context, submit.Options{DryRun: true}, &noopHandler{})
-	require.NoError(t, err, "an oversized submission is ineligible for native Stack sync but should still submit normally")
-}
-
-func TestSubmitGitHubStackRejectsMoreThanOneHundredBranchesBeforeSubmit(t *testing.T) {
-	t.Parallel()
-	branches := make(map[string]string, github.MaxStackPullRequests+1)
-	parent := "main"
-	for i := range github.MaxStackPullRequests + 1 {
-		branch := fmt.Sprintf("branch-%03d", i)
-		branches[branch] = parent
-		parent = branch
-	}
-	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).WithStack(branches)
-	s.Checkout(parent)
+	mockConfig := testhelpers.NewMockGitHubServerConfig()
+	rawClient, owner, repo := testhelpers.NewMockGitHubClient(t, mockConfig)
+	s.Context.GitHubClient = testhelpers.NewMockGitHubClientInterface(rawClient, owner, repo, mockConfig)
 
 	cfg, err := stackitconfig.LoadConfig(s.Scene.Dir)
 	require.NoError(t, err)
 	require.NoError(t, cfg.SetStackShape(stackitconfig.StackShapeLinear))
 	s.Context.Config = cfg
 
+	// Explicit flag with github.stack unset: rejected before submitting anything.
 	err = submit.Action(s.Context, submit.Options{CreateGitHubStack: true}, &noopHandler{})
 	require.EqualError(t, err, "a GitHub Stack supports at most 100 pull requests (got 101)")
+	require.Empty(t, mockConfig.CreatedPRs, "the oversized rejection must fail before any PR is created")
+	require.Empty(t, mockConfig.CreatedStacks, "the oversized rejection must not create native Stack metadata")
+
+	// Configured key: the oversized chain is skipped, not fatal.
+	require.NoError(t, cfg.SetGitHubStack(true))
+	err = submit.Action(s.Context, submit.Options{DryRun: true}, &noopHandler{})
+	require.NoError(t, err, "an oversized submission is ineligible for native Stack sync but should still submit normally")
 }
 
 func TestSubmitNativeGitHubStackRejectsPrunedSinglePullRequestBeforeSubmit(t *testing.T) {

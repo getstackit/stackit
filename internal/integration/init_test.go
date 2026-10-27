@@ -50,7 +50,7 @@ func TestInitIntegration(t *testing.T) {
 		require.NoError(t, err, "backup file should exist after migration")
 
 		_, err = os.Stat(configPath)
-		require.True(t, os.IsNotExist(err), "original JSON config should be removed after migration")
+		require.ErrorIs(t, err, os.ErrNotExist, "original JSON config should be removed after migration")
 
 		result = cli.Run(scene.Dir, "config", "get", "submit.footer")
 		require.NoError(t, result.Err)

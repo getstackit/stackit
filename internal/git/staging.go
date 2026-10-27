@@ -64,8 +64,7 @@ func diffHasChanges(r *runner, ctx context.Context, args ...string) (bool, error
 	if err == nil {
 		return false, nil
 	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
 		return true, nil
 	}
 	return false, fmt.Errorf("failed to check %v: %w", args, err)
@@ -273,8 +272,7 @@ func (r *runner) fileExistsInIndex(ctx context.Context, file string) (bool, erro
 	if err == nil {
 		return true, nil
 	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
 		return false, nil
 	}
 	return false, fmt.Errorf("failed to read index for %s: %w", file, err)

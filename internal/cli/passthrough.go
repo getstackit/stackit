@@ -172,8 +172,7 @@ func HandlePassthroughWithResult(args []string, exitMode PassthroughExitMode, ou
 			err := gitCmd.Run()
 			if err != nil {
 				if exit {
-					var exitError *exec.ExitError
-					if errors.As(err, &exitError) {
+					if exitError, ok := errors.AsType[*exec.ExitError](err); ok {
 						os.Exit(exitError.ExitCode())
 					}
 					os.Exit(1)

@@ -90,8 +90,7 @@ func (r *runner) PushBranches(ctx context.Context, remote string, specs []PushSp
 	if err != nil {
 		// `--porcelain` writes its per-ref status to stdout even when the push
 		// exits non-zero (some refs rejected); recover it from the error.
-		var ce *CommandError
-		if errors.As(err, &ce) {
+		if ce, ok := errors.AsType[*CommandError](err); ok {
 			out = ce.Stdout
 		}
 	}

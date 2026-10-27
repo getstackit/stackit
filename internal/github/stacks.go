@@ -162,8 +162,8 @@ func (c *StackitGitHubClient) UnstackStack(ctx context.Context, stackNumber Stac
 // the PR base, and GitHub rejects that outright while the PR sits in a Stack.
 // Callers treat this as "the recorded Stack is stale", not as a user error.
 func IsStackBaseConflict(err error) bool {
-	var resp *github.ErrorResponse
-	if !errors.As(err, &resp) || resp.Response == nil || resp.Response.StatusCode != http.StatusUnprocessableEntity {
+	resp, ok := errors.AsType[*github.ErrorResponse](err)
+	if !ok || resp.Response == nil || resp.Response.StatusCode != http.StatusUnprocessableEntity {
 		return false
 	}
 	return slices.ContainsFunc(resp.Errors, func(e github.Error) bool {

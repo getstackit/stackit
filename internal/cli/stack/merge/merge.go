@@ -106,8 +106,7 @@ Examples:
 				err := mergeAction.RunWizard(ctx, interactiveHandler, wizardOpts)
 
 				// Handle post-merge follow-up action
-				var postMerge *mergeAction.PostMergeActionRequired
-				if errors.As(err, &postMerge) {
+				if postMerge, ok := errors.AsType[*mergeAction.PostMergeActionRequired](err); ok {
 					if postMergeHandler != nil {
 						return postMergeHandler(ctx, postMerge.Action)
 					}

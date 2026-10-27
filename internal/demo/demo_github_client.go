@@ -19,8 +19,8 @@ const (
 	checkConclusionSuccess = github.CheckConclusionSuccess
 )
 
-// prCounter is used to generate unique PR numbers
-var prCounter int32 = 100
+// prCounter is used to generate unique PR numbers, starting after #100
+var prCounter atomic.Int32
 
 func init() {
 	// Register the demo GitHub client factory with runtime package
@@ -55,7 +55,7 @@ func (c *GitHubClient) Repo() github.Repo {
 func (c *GitHubClient) CreatePullRequest(_ context.Context, opts github.CreatePROptions) (*github.PullRequestInfo, error) {
 	simulateDelay(delayMedium)
 
-	prNum := git.PRNumber(atomic.AddInt32(&prCounter, 1))
+	prNum := git.PRNumber(100 + prCounter.Add(1))
 	pr := &github.PullRequestInfo{
 		Number:  prNum,
 		NodeID:  fmt.Sprintf("PR_%d", prNum),

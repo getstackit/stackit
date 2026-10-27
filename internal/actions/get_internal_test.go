@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"maps"
 	"slices"
 	"testing"
 
@@ -26,9 +27,7 @@ func (l localBranches) Contains(name string) bool {
 func newTestTargets(parents map[string]string, branches []string) *syncTargets {
 	targets := newSyncTargets(branches[len(branches)-1])
 	targets.branches = branches
-	for branch, parent := range parents {
-		targets.parentByBranch[branch] = parent
-	}
+	maps.Copy(targets.parentByBranch, parents)
 	return targets
 }
 
@@ -155,7 +154,7 @@ func TestHarvestAnchors(t *testing.T) {
 		targets := newTestTargets(map[string]string{"b": "a"}, []string{"a", "b"})
 
 		targets.harvestAnchors(remoteMetadata{
-			"b": git.NewMeta().WithParentBranchRevision(strPtr("cafe1234")),
+			"b": git.NewMeta().WithParentBranchRevision(new("cafe1234")),
 		})
 
 		require.Equal(t, "cafe1234", targets.anchorByBranch["b"])
@@ -167,7 +166,7 @@ func TestHarvestAnchors(t *testing.T) {
 		targets.anchorByBranch["b"] = "fromcrawl"
 
 		targets.harvestAnchors(remoteMetadata{
-			"b": git.NewMeta().WithParentBranchRevision(strPtr("fromcache")),
+			"b": git.NewMeta().WithParentBranchRevision(new("fromcache")),
 		})
 
 		require.Equal(t, "fromcrawl", targets.anchorByBranch["b"])
@@ -203,5 +202,3 @@ func TestLandedAncestorReportViews(t *testing.T) {
 		"an already-thawed branch needs no offer, and an unanchored one must not get it")
 	require.Equal(t, []string{"frozen-unanchored"}, report.Unanchored())
 }
-
-func strPtr(s string) *string { return &s }

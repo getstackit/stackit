@@ -2,6 +2,7 @@ package git_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -159,7 +160,7 @@ func requireRefPresent(t *testing.T, runner git.Runner, refName string) {
 func requireLooseRefAbsent(t *testing.T, repoDir, refName string) {
 	t.Helper()
 	_, err := os.Stat(filepath.Join(repoDir, ".git", refName))
-	require.True(t, os.IsNotExist(err), "expected no loose ref file for %s, got err=%v", refName, err)
+	require.ErrorIs(t, err, os.ErrNotExist, "expected no loose ref file for %s, got err=%v", refName, err)
 }
 
 func requirePackedRefPresent(t *testing.T, repoDir, refName string) {
@@ -173,7 +174,7 @@ func requirePackedRefPresent(t *testing.T, repoDir, refName string) {
 func requirePackedRefAbsent(t *testing.T, repoDir, refName string) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(repoDir, ".git", "packed-refs"))
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return
 	}
 	require.NoError(t, err)

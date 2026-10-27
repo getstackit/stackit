@@ -52,23 +52,14 @@ const (
 	ColorMerged = "5"
 )
 
-var (
-	detectedTheme Theme
-	themeOnce     sync.Once
-)
-
 // DetectTheme returns whether the terminal has a dark or light background.
 // The result is cached after the first call.
-func DetectTheme() Theme {
-	themeOnce.Do(func() {
-		if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
-			detectedTheme = ThemeDark
-		} else {
-			detectedTheme = ThemeLight
-		}
-	})
-	return detectedTheme
-}
+var DetectTheme = sync.OnceValue(func() Theme {
+	if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
+		return ThemeDark
+	}
+	return ThemeLight
+})
 
 // IsDarkBackground returns true if the terminal has a dark background
 func IsDarkBackground() bool {
@@ -154,31 +145,17 @@ const (
 	SelectionPadding = "  " // Same width as cursor for unselected items
 )
 
-// Cached styles for selection (created once, reused)
-var (
-	selectionStyle       lipgloss.Style
-	selectionStyleOnce   sync.Once
-	selectionCursorStyle lipgloss.Style
-	selectionCursorOnce  sync.Once
-)
+// Selection returns a style for selected items (created once, reused)
+var Selection = sync.OnceValue(func() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color(ColorAccent)).
+		Foreground(lipgloss.Color("0")).
+		Bold(true)
+})
 
-// Selection returns a style for selected items
-func Selection() lipgloss.Style {
-	selectionStyleOnce.Do(func() {
-		selectionStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color(ColorAccent)).
-			Foreground(lipgloss.Color("0")).
-			Bold(true)
-	})
-	return selectionStyle
-}
-
-// SelectionCursorStyle returns the style for the selection cursor
-func SelectionCursorStyle() lipgloss.Style {
-	selectionCursorOnce.Do(func() {
-		selectionCursorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorAccent)).
-			Bold(true)
-	})
-	return selectionCursorStyle
-}
+// SelectionCursorStyle returns the style for the selection cursor (created once, reused)
+var SelectionCursorStyle = sync.OnceValue(func() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorAccent)).
+		Bold(true)
+})

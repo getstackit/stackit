@@ -124,8 +124,7 @@ func syncAfterDrainMerge(ctx *app.Context, mergedPR git.PRNumber, remaining []Br
 		return &sync.NullHandler{}
 	})
 	if err != nil {
-		var checkoutErr *PostMergeCheckoutError
-		if errors.As(err, &checkoutErr) {
+		if checkoutErr, ok := errors.AsType[*PostMergeCheckoutError](err); ok {
 			return fmt.Errorf("post-merge checkout trunk failed after PR #%d: %w", mergedPR, checkoutErr.Err)
 		}
 		return fmt.Errorf("post-merge sync failed after PR #%d: %w", mergedPR, err)

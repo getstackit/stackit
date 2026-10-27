@@ -69,8 +69,7 @@ func (r *runner) fetchRemoteShas(ctx context.Context, remote string) (RemoteBran
 		// Empty remote / no refs is not an error for callers; treat exit
 		// code 2 (no matching refs) as an empty result. Network errors
 		// surface unchanged.
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 2 {
 			return RemoteBranchSHAs{}, nil
 		}
 		return nil, fmt.Errorf("failed to list remote refs for %s: %w", remote, err)

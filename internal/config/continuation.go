@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ func GetContinuationState(repoRoot string) (*ContinuationState, error) {
 	configPath := filepath.Join(gitDir, ".stackit_continue")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("no continuation state found")
 		}
 		return nil, fmt.Errorf("failed to read continuation state: %w", err)
@@ -81,7 +82,7 @@ func ClearContinuationState(repoRoot string) error {
 	gitDir := git.GetGitDir(repoRoot)
 	configPath := filepath.Join(gitDir, ".stackit_continue")
 	err := os.Remove(configPath)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("failed to clear continuation state: %w", err)
 	}
 	return nil

@@ -284,7 +284,7 @@ func TestContinueCommand(t *testing.T) {
 			continuationPath := filepath.Join(s.Scene.Dir, ".git", ".stackit_continue")
 			_, err = os.Stat(continuationPath)
 			require.Error(t, err, "continuation state file should be deleted")
-			require.True(t, os.IsNotExist(err))
+			require.ErrorIs(t, err, os.ErrNotExist)
 
 			// Verify we're on the branch, not in detached HEAD
 			currentBranch, err := s.Scene.Repo.CurrentBranchName()

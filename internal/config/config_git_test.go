@@ -440,7 +440,7 @@ func TestMigrationFromJSON(t *testing.T) {
 
 		// Verify original file is gone
 		_, err = os.Stat(configPath)
-		require.True(t, os.IsNotExist(err))
+		require.ErrorIs(t, err, os.ErrNotExist)
 	})
 
 	t.Run("migrates legacy CI config", func(t *testing.T) {

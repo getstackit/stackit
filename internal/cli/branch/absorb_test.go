@@ -362,7 +362,7 @@ func TestAbsorbComplex(t *testing.T) {
 		// The repo must be clean: no rebase in progress, nothing staged.
 		for _, dir := range []string{"/.git/rebase-merge", "/.git/rebase-apply"} {
 			_, statErr := os.Stat(scene.Dir + dir)
-			require.True(t, os.IsNotExist(statErr), "must not be mid-rebase (%s exists)", dir)
+			require.ErrorIs(t, statErr, os.ErrNotExist, "must not be mid-rebase (%s exists)", dir)
 		}
 		staged := exec.Command("git", "diff", "--cached", "--quiet")
 		staged.Dir = scene.Dir

@@ -56,11 +56,9 @@ func TestMockRunner(t *testing.T) {
 
 		var wg sync.WaitGroup
 		for i := range 100 {
-			wg.Add(1)
-			go func(n int) {
-				defer wg.Done()
-				runner.Send(tea.KeyPressMsg{Code: rune('a' + n%26), Text: string(rune('a' + n%26))})
-			}(i)
+			wg.Go(func() {
+				runner.Send(tea.KeyPressMsg{Code: rune('a' + i%26), Text: string(rune('a' + i%26))})
+			})
 		}
 		wg.Wait()
 
@@ -121,11 +119,9 @@ func TestMessageRecorder(t *testing.T) {
 
 		var wg sync.WaitGroup
 		for i := range 100 {
-			wg.Add(1)
-			go func(n int) {
-				defer wg.Done()
-				recorder.Record(tea.KeyPressMsg{Code: rune('a' + n%26), Text: string(rune('a' + n%26))})
-			}(i)
+			wg.Go(func() {
+				recorder.Record(tea.KeyPressMsg{Code: rune('a' + i%26), Text: string(rune('a' + i%26))})
+			})
 		}
 		wg.Wait()
 

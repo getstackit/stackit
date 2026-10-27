@@ -48,14 +48,4 @@ var (
 // escape codes on every CLI invocation — even ones like `stackit tree` or
 // `stackit version` that don't render adaptive styles at all — because the
 // dashboard package is transitively imported by the root command.
-var (
-	commonStylesOnce sync.Once
-	commonStylesV    style.CommonStyles
-)
-
-func commonStyles() style.CommonStyles {
-	commonStylesOnce.Do(func() {
-		commonStylesV = style.DefaultCommonStyles()
-	})
-	return commonStylesV
-}
+var commonStyles = sync.OnceValue(style.DefaultCommonStyles)

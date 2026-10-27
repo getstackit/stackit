@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -221,7 +222,7 @@ func inspectWorktreeEntry(ctx *app.Context, wt engine.WorktreeInfo, graph *engin
 		entry.Lifecycle.Checkout = WorktreeCheckoutCurrent
 	}
 
-	if _, statErr := os.Stat(wt.Path.String()); os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(wt.Path.String()); errors.Is(statErr, os.ErrNotExist) {
 		entry.Lifecycle.Presence = WorktreeMissing
 	}
 

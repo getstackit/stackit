@@ -46,8 +46,7 @@ func run() int {
 
 	rootCmd := cli.NewRootCmd(version, commit, date)
 	if err := rootCmd.Execute(); err != nil {
-		var exitCodeErr *common.ExitCodeError
-		if errors.As(err, &exitCodeErr) {
+		if exitCodeErr, ok := errors.AsType[*common.ExitCodeError](err); ok {
 			return exitCodeErr.ExitCode()
 		}
 		return 1

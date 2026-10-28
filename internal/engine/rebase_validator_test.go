@@ -24,9 +24,10 @@ func TestValidateRebases(t *testing.T) {
 		require.True(t, result.Success)
 		require.Empty(t, result.FailedBranch)
 		require.Empty(t, result.ErrorMessage)
+		require.Empty(t, result.NewSHAs)
 	})
 
-	t.Run("validates single successful rebase", func(t *testing.T) {
+	t.Run("validates single successful rebase and sets ValidationErrorNone", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
@@ -54,48 +55,20 @@ func TestValidateRebases(t *testing.T) {
 
 		result, err := s.Engine.ValidateRebases(context.Background(), specs)
 		require.NoError(t, err)
-		require.True(t, result.Success)
+		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
+			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
 		require.Empty(t, result.FailedBranch)
-		require.NotEmpty(t, result.NewSHAs["branch1"])
-	})
+		require.NotEmpty(t, result.NewSHAs["branch1"], "branch1 should have new SHA")
+		require.Equal(t, engine.ValidationErrorNone, result.ErrorType, "should set ValidationErrorNone for successful validation")
 
-	t.Run("detects conflict during rebase", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-
-		// Create a file on main first
-		s.Checkout("main").
-			CommitChange("conflicting-file.txt", "original version")
-
-		// Save this as the old base
-		oldBase, err := s.Engine.GetRevision(s.Engine.Trunk())
+		// Validation moves no refs, so the same spec must also pass while the
+		// branch under validation is not the one checked out.
+		s.Checkout("main")
+		result, err = s.Engine.ValidateRebases(context.Background(), specs)
 		require.NoError(t, err)
-
-		// Create branch1 from main and modify the file
-		s.CreateBranch("branch1").
-			CommitChange("conflicting-file.txt", "branch1 version").
-			TrackBranch("branch1", "main")
-
-		// Now update main with a DIFFERENT conflicting change
-		s.Checkout("main").
-			CommitChange("conflicting-file.txt", "main conflicting version")
-
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
-		require.NoError(t, err)
-
-		specs := []engine.RebaseSpec{
-			{
-				Branch:      "branch1",
-				NewParent:   mainRev,
-				OldUpstream: oldBase,
-			},
-		}
-
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
-		require.NoError(t, err)
-		require.False(t, result.Success)
-		require.Equal(t, "branch1", result.FailedBranch)
-		require.Contains(t, result.ErrorMessage, "conflict")
+		require.True(t, result.Success, "validation from trunk failed for branch %q: %s",
+			result.FailedBranch, result.ErrorMessage)
+		require.NotEmpty(t, result.NewSHAs["branch1"], "branch1 should have new SHA when validated from trunk")
 	})
 
 	t.Run("validates chained rebases in sequence", func(t *testing.T) {
@@ -373,7 +346,7 @@ func TestValidateRebases(t *testing.T) {
 		require.Equal(t, originalSHA, currentSHA, "branch ref should not be modified by validation")
 	})
 
-	t.Run("sets ValidationErrorConflict for merge conflicts", func(t *testing.T) {
+	t.Run("detects conflict during rebase and sets ValidationErrorConflict", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
@@ -411,38 +384,6 @@ func TestValidateRebases(t *testing.T) {
 		require.Equal(t, "branch1", result.FailedBranch)
 		require.Equal(t, engine.ValidationErrorConflict, result.ErrorType, "should set ValidationErrorConflict for merge conflicts")
 		require.Contains(t, result.ErrorMessage, "conflict")
-	})
-
-	t.Run("sets ValidationErrorNone for successful validation", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
-			WithStack(map[string]string{
-				"branch1": "main",
-			})
-
-		// Add a commit to main so rebase actually does something
-		s.Checkout("main").
-			Commit("main update").
-			Checkout("branch1")
-
-		// Get revisions
-		mainRev, err := s.Engine.GetRevision(s.Engine.Trunk())
-		require.NoError(t, err)
-		branch1OldBase, err := s.Git.GetMergeBase(context.Background(), "main", "branch1")
-		require.NoError(t, err)
-
-		specs := []engine.RebaseSpec{
-			{
-				Branch:      "branch1",
-				NewParent:   mainRev,
-				OldUpstream: branch1OldBase,
-			},
-		}
-
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
-		require.NoError(t, err)
-		require.True(t, result.Success)
-		require.Equal(t, engine.ValidationErrorNone, result.ErrorType, "should set ValidationErrorNone for successful validation")
 	})
 }
 
@@ -1011,7 +952,7 @@ func TestValidateRebasesParallel(t *testing.T) {
 		}
 	})
 
-	t.Run("validates multiple sibling branches", func(t *testing.T) {
+	t.Run("validates multiple sibling branches and respects context cancellation", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
 			WithStack(map[string]string{
@@ -1036,39 +977,17 @@ func TestValidateRebasesParallel(t *testing.T) {
 		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
 			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
 		require.Len(t, result.NewSHAs, 3)
-	})
 
-	t.Run("handles empty specs", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+		// ValidateRebases never moves refs, so the same scenario can be reused to
+		// check that a canceled context aborts validation. The successful call
+		// runs first so the cancellation cannot influence it.
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
 
-		result, err := s.Engine.ValidateRebases(context.Background(), []engine.RebaseSpec{})
+		canceled, err := s.Engine.ValidateRebases(ctx, specs)
 		require.NoError(t, err)
-		require.True(t, result.Success)
-		require.Empty(t, result.NewSHAs)
-	})
-
-	t.Run("handles single spec efficiently", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
-			WithStack(map[string]string{
-				"branch1": "main",
-			})
-
-		s.Checkout("main").Commit("main update")
-
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "branch1")
-
-		specs := []engine.RebaseSpec{
-			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
-		}
-
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
-		require.NoError(t, err)
-		require.True(t, result.Success, "validation failed for branch %q: %s (error type: %d, conflicting files: %v)",
-			result.FailedBranch, result.ErrorMessage, result.ErrorType, result.ConflictingFiles)
-		require.NotEmpty(t, result.NewSHAs["branch1"], "branch1 should have new SHA")
+		require.False(t, canceled.Success)
+		require.Contains(t, canceled.ErrorMessage, "canceled")
 	})
 
 	t.Run("stops on first conflict in level", func(t *testing.T) {
@@ -1113,36 +1032,6 @@ func TestValidateRebasesParallel(t *testing.T) {
 		require.False(t, result.Success)
 		require.Equal(t, "branch1", result.FailedBranch)
 		require.Contains(t, result.ErrorMessage, "conflict")
-	})
-
-	t.Run("respects context cancellation", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup).
-			WithStack(map[string]string{
-				"branch1": "main",
-				"branch2": "main",
-				"branch3": "main",
-			})
-
-		s.Checkout("main").Commit("main update")
-
-		mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-		oldBase, _ := s.Git.GetMergeBase(context.Background(), "main", "branch1")
-
-		specs := []engine.RebaseSpec{
-			{Branch: "branch1", NewParent: mainRev, OldUpstream: oldBase},
-			{Branch: "branch2", NewParent: mainRev, OldUpstream: oldBase},
-			{Branch: "branch3", NewParent: mainRev, OldUpstream: oldBase},
-		}
-
-		// Create a canceled context
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel immediately
-
-		result, err := s.Engine.ValidateRebases(ctx, specs)
-		require.NoError(t, err)
-		require.False(t, result.Success)
-		require.Contains(t, result.ErrorMessage, "canceled")
 	})
 
 	t.Run("rejects duplicate branches in specs", func(t *testing.T) {

@@ -298,52 +298,6 @@ func TestSyncCleanupDiamond(t *testing.T) {
 	require.Equal(t, "main", eng.GetBranch("c").GetParent().GetName())
 }
 
-func TestSyncStaleDraftCleanup(t *testing.T) {
-	t.Parallel()
-	// Tests the fix for the "stale draft" bug where empty branches
-	// weren't being cleaned up if they were ancestors of other branches.
-	sh := scenario.NewRemoteScenario(t)
-
-	// Create: main -> a -> b
-	sh.CreateBranch("a").CommitChange("a", "a").TrackBranch("a", "main")
-	sh.CreateBranch("b").CommitChange("b", "b").TrackBranch("b", "a")
-
-	// Now 'a' is merged into main (e.g. via squash and merge)
-	// and 'b' is NOT merged yet.
-	sh.Checkout("main")
-	sh.CommitChange("a", "a") // Simulate squash-merge of 'a'
-
-	eng := sh.Engine
-	mainBranchName := eng.Trunk().GetName()
-
-	// Mark 'a' as merged in metadata
-	metaA, _ := sh.Metadata.ReadMetadata(context.Background(), "a").One()
-	prNum := git.PRNumber(1)
-	state := prStateMerged
-	base := mainBranchName
-	metaA = metaA.WithPrInfo(&git.PrInfoPersistence{
-		Number: &prNum,
-		State:  &state,
-		Base:   &base,
-	})
-	_ = sh.Metadata.WriteMetadata("a", metaA)
-
-	// 'a' is now empty relative to main
-	isEmpty, _ := eng.IsBranchEmpty(sh.Context.Context, "a")
-	require.True(t, isEmpty)
-
-	// Run sync
-	err := sync.Action(sh.Context, sync.Options{}, nil)
-	require.NoError(t, err)
-
-	// 'a' should be deleted because it's merged and empty
-	allLocalBranches, _ := sh.Scene.Repo.GetLocalBranches()
-	require.NotContains(t, allLocalBranches, "a")
-
-	// 'b' should be reparented to main
-	require.Equal(t, "main", eng.GetBranch("b").GetParent().GetName())
-}
-
 func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	t.Parallel()
 	sh := scenario.NewRemoteScenario(t)
@@ -410,63 +364,6 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 // would retain stale state after multiple rebase operations during RestackBranches.
 func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 	t.Parallel()
-	t.Run("sync from main does not leave staged changes after cleanup and restack", func(t *testing.T) {
-		t.Parallel()
-		sh := scenario.NewRemoteScenario(t)
-
-		// 1. Create a chain: main -> branch-a -> branch-b
-		sh.CreateBranch("branch-a").
-			CommitChange("file-a", "content-a").
-			TrackBranch("branch-a", "main")
-
-		sh.CreateBranch("branch-b").
-			CommitChange("file-b", "content-b").
-			TrackBranch("branch-b", "branch-a")
-
-		eng := sh.Engine
-		mainBranchName := eng.Trunk().GetName()
-
-		// 2. Simulate squash-merge: advance main with the same content as branch-a
-		// This is what happens when a PR is squash-merged on GitHub
-		sh.Checkout("main").
-			CommitChange("file-a", "content-a")
-
-		// 3. Mark branch-a as merged
-		metaA, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
-		require.NoError(t, err)
-		prNum := git.PRNumber(1)
-		state := prStateMerged
-		base := mainBranchName
-		metaA = metaA.WithPrInfo(&git.PrInfoPersistence{
-			Number: &prNum,
-			State:  &state,
-			Base:   &base,
-		})
-		err = sh.Metadata.WriteMetadata("branch-a", metaA)
-		require.NoError(t, err)
-
-		// 4. Stay on main (user's exact scenario)
-		sh.Checkout("main")
-
-		// 5. Run sync with restack (this will delete branch-a and restack branch-b onto new main)
-		err = sync.Action(sh.Context, sync.Options{Restack: true}, nil)
-		require.NoError(t, err)
-
-		// 6. CRITICAL: Verify main has no staged or unstaged changes after sync
-		// This is the core assertion that catches the bug
-		requireCleanWorkingTree(t, sh)
-
-		// 7. Verify branch-a was deleted (cleanup occurred)
-		allLocalBranches, err := sh.Scene.Repo.GetLocalBranches()
-		require.NoError(t, err)
-		require.NotContains(t, allLocalBranches, "branch-a", "branch-a should have been deleted")
-
-		// 8. Verify branch-b was reparented to main
-		branchB := eng.GetBranch("branch-b")
-		require.NotNil(t, branchB.GetParent())
-		require.Equal(t, mainBranchName, branchB.GetParent().GetName(), "branch-b should be reparented to main")
-	})
-
 	t.Run("sync from detached HEAD does not leave staged changes", func(t *testing.T) {
 		t.Parallel()
 		sh := scenario.NewRemoteScenario(t)
@@ -1103,6 +1000,10 @@ func TestMergeCommitNotSquash(t *testing.T) {
 // equivalent) and trunk locally is already at the post-squash state when
 // sync runs. The MERGED metadata + already-current trunk shouldn't cause
 // double-application or restack churn on the surviving child.
+//
+// Running sync from main here is also the regression test for the bug where
+// the Git index retained stale state (staged changes on main) after the
+// multiple rebase operations of cleanup + RestackBranches.
 func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 	t.Parallel()
 	sh := scenario.NewRemoteScenario(t)
@@ -1153,13 +1054,21 @@ func TestUserLocallyAdvancedTrunkBeforeSync(t *testing.T) {
 func TestSyncSnapshotPrecedesBranchCleanup(t *testing.T) {
 	t.Parallel()
 	sh := scenario.NewRemoteScenario(t)
-	setupTwoBranchSquashScenario(t, sh)
+	mainName := setupTwoBranchSquashScenario(t, sh)
+
+	// Also covers the "stale draft" bug: an empty merged branch must be
+	// cleaned up even when it is the ancestor of another branch.
+	isEmpty, err := sh.Engine.IsBranchEmpty(sh.Context.Context, "branch-a")
+	require.NoError(t, err)
+	require.True(t, isEmpty, "branch-a should be empty relative to main after its squash landed")
 
 	require.NoError(t, sync.Action(sh.Context, sync.Options{}, nil))
 
 	branches, err := sh.Scene.Repo.GetLocalBranches()
 	require.NoError(t, err)
 	require.NotContains(t, branches, "branch-a", "sync should have deleted the merged branch")
+	require.Equal(t, mainName, sh.Engine.GetBranch("branch-b").GetParent().GetName(),
+		"the merged branch's child should be reparented to main")
 
 	require.NoError(t, undo.Action(sh.Context, undo.Options{Force: true}, nil))
 

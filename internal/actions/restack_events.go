@@ -141,7 +141,7 @@ func (t *restackTally) record(p RestackProgress) {
 		Frozen:              p.Frozen,
 		HeldBy:              p.HeldBy,
 		IsCurrent:           p.IsCurrent,
-		Parent:              t.parentName(p.Branch),
+		Parent:              t.parentName(p),
 		Reparented:          p.Reparented,
 		OldParent:           p.OldParent,
 		NewParent:           p.NewParent,
@@ -166,8 +166,13 @@ func (t *restackTally) record(p RestackProgress) {
 	t.handler.OnRestackBranch(event)
 }
 
-func (t *restackTally) parentName(branchName string) string {
-	br := t.eng.GetBranch(branchName)
+// parentName is the parent the branch now sits on. A reparented branch reports
+// its new parent directly: the engine's view can still name the landed one.
+func (t *restackTally) parentName(p RestackProgress) string {
+	if p.Reparented && p.NewParent != "" {
+		return p.NewParent
+	}
+	br := t.eng.GetBranch(p.Branch)
 	if br.GetName() == "" {
 		return ""
 	}

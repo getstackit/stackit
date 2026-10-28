@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -70,6 +71,8 @@ func TestExecuteInWorktree(t *testing.T) {
 		err = merge.ExecuteInWorktree(s.Context, s.Engine, merge.ExecuteOptions{
 			Plan:  plan,
 			Force: true,
+			// The mock reports a CI check; skip the real registration wait.
+			CIRegistrationDelay: time.Millisecond,
 		}, "", "")
 		require.NoError(t, err)
 
@@ -154,6 +157,8 @@ func TestExecuteInWorktree(t *testing.T) {
 		err = merge.ExecuteInWorktree(s.Context, s.Engine, merge.ExecuteOptions{
 			Plan:  plan,
 			Force: true,
+			// The mock reports a CI check; skip the real registration wait.
+			CIRegistrationDelay: time.Millisecond,
 		}, "", "")
 		require.NoError(t, err)
 

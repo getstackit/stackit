@@ -216,9 +216,10 @@ func executeWaitCIWithProgress(ctx *app.Context, step PlanStep, stepIndex int, e
 	}
 
 	waiter := NewCIWaiter(CIWaiterOptions{
-		Client:  ctx.GitHub(),
-		Output:  ctx.Output,
-		Timeout: timeout,
+		Client:            ctx.GitHub(),
+		Output:            ctx.Output,
+		Timeout:           timeout,
+		RegistrationDelay: opts.CIRegistrationDelay,
 	})
 	waiter.SetProgressHandler(opts.Handler, stepIndex)
 

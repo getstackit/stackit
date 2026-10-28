@@ -15,6 +15,7 @@ import (
 )
 
 func TestBuildTreeJSONHidesAnchorParents(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.CreateBranch("anchor").Commit("anchor")
 	s.TrackBranch("anchor", "main")

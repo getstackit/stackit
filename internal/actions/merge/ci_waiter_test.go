@@ -97,3 +97,41 @@ func TestWaitForChecks(t *testing.T) {
 		})
 	})
 }
+
+func TestCIWaiterRegistrationDelay(t *testing.T) {
+	t.Parallel()
+
+	passing := &github.CheckStatus{
+		Passing: true,
+		Checks:  []github.CheckDetail{{Name: "ci", Status: "COMPLETED", Conclusion: "SUCCESS"}},
+	}
+
+	tests := []struct {
+		name     string
+		delay    time.Duration
+		expected time.Duration
+	}{
+		{name: "defaults to CIRegistrationDelay", delay: 0, expected: CIRegistrationDelay},
+		{name: "honors an explicit delay", delay: 2 * time.Second, expected: 2 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				waiter := NewCIWaiter(CIWaiterOptions{
+					Client:            &mockGitHubClient{checkStatus: passing},
+					RegistrationDelay: tt.delay,
+				})
+
+				start := time.Now()
+				result, err := waiter.WaitForChecks(context.Background(), "branch", 1, true)
+				require.NoError(t, err)
+				require.True(t, result.Passed)
+				// Checks pass on the first poll, so the elapsed fake time is
+				// exactly the registration wait.
+				require.Equal(t, tt.expected, time.Since(start))
+			})
+		})
+	}
+}

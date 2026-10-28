@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/getstackit/stackit/internal/actions/handler"
 	"github.com/getstackit/stackit/internal/app"
@@ -167,6 +168,7 @@ type ExecuteOptions struct {
 	LinearStacks            bool                       // stack.shape == linear (from config)
 	ConsolidationResultFunc func(*ConsolidationResult) // Callback for consolidation results
 	MergeMethod             github.MergeMethod         // Optional: override merge method (empty = auto-detect/prompt)
+	CIRegistrationDelay     time.Duration              // Optional: override CIRegistrationDelay (0 = default)
 }
 
 // Execute executes a validated merge plan step by step

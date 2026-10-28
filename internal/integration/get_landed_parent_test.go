@@ -206,7 +206,11 @@ func TestGetPastLandedParent(t *testing.T) {
 func TestGetPastLandedParentReport(t *testing.T) {
 	t.Parallel()
 
-	t.Run("names the landed parent, its PR, and the branch left frozen", func(t *testing.T) {
+	// Declining is get's contract, not a failure: the branch keeps mirroring
+	// the remote. It is still tracked against a parent that exists, so the
+	// stack renders, and the divergence point recorded for it is the landed
+	// tip — so a later unfreeze + restack still replays only b's commit.
+	t.Run("declining reports the landed parent and its PR and leaves the branch frozen and unrebased", func(t *testing.T) {
 		t.Parallel()
 		sh := stackWithLandedParent(t, squashLanding, keepAllMetadata)
 
@@ -226,18 +230,7 @@ func TestGetPastLandedParentReport(t *testing.T) {
 		require.Equal(t, "main", report.Reanchored[0].NewParent)
 		require.NotNil(t, report.Reanchored[0].LandedPR,
 			"a's PR number is in the metadata it was pushed with")
-	})
 
-	// Declining is get's contract, not a failure: the branch keeps mirroring
-	// the remote. It is still tracked against a parent that exists, so the
-	// stack renders, and the divergence point recorded for it is the landed
-	// tip — so a later unfreeze + restack still replays only b's commit.
-	t.Run("declining leaves the branch frozen and unrebased", func(t *testing.T) {
-		t.Parallel()
-		sh := stackWithLandedParent(t, squashLanding, keepAllMetadata)
-
-		handler := &landedParentHandler{decision: actions.LeaveFrozen}
-		require.NoError(t, actions.GetAction(sh.Context, "b", actions.GetOptions{Restack: true}, handler))
 		sh.Rebuild()
 
 		sh.ExpectStackStructure(map[string]string{"b": "main"})

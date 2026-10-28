@@ -446,6 +446,9 @@ func reportRestackResult(ctx *app.Context, branch engine.Branch, result engine.R
 	switch result.Result {
 	case engine.RestackDone:
 		parentName := branch.GetParentOrTrunk()
+		if result.Reparented && result.NewParent != "" {
+			parentName = result.NewParent
+		}
 		isCurrent := branchName == currentBranchName
 		ctx.Output.Info("Restacked %s on %s.",
 			output.Branch(branchName, isCurrent),

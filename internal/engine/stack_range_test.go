@@ -59,50 +59,32 @@ func TestStackRangeFull(t *testing.T) {
 	require.True(t, rng.RecursiveChildren)
 }
 
-func TestStackGraphUpstack(t *testing.T) {
+// TestStackGraphTraversal covers Upstack, Downstack, and FullStack on one
+// linear stack (main -> a -> b -> c). The traversals only read the graph, so
+// every case shares a single scenario and runs sequentially.
+func TestStackGraphTraversal(t *testing.T) { //nolint:tparallel // subtests share one fixture and run in order
 	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithLinearStack3()
 
-	t.Run("returns children with include current", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithLinearStack3()
+	graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
 
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.Upstack(s.Engine.GetBranch("a"), engine.IncludeCurrentBranch)
-
-		names := branches.Names()
+	t.Run("Upstack returns children with include current", func(t *testing.T) {
+		names := graph.Upstack(s.Engine.GetBranch("a"), engine.IncludeCurrentBranch).Names()
 		require.Contains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.Contains(t, names, "c")
 	})
 
-	t.Run("returns children without current", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithLinearStack3()
-
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.Upstack(s.Engine.GetBranch("a"), engine.ExcludeCurrentBranch)
-
-		names := branches.Names()
+	t.Run("Upstack returns children without current", func(t *testing.T) {
+		names := graph.Upstack(s.Engine.GetBranch("a"), engine.ExcludeCurrentBranch).Names()
 		require.NotContains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.Contains(t, names, "c")
 	})
-}
 
-func TestStackGraphDownstack(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns parents with include current", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithLinearStack3()
-
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.Downstack(s.Engine.GetBranch("c"), engine.IncludeCurrentBranch)
-
-		names := branches.Names()
+	t.Run("Downstack returns parents with include current", func(t *testing.T) {
+		names := graph.Downstack(s.Engine.GetBranch("c"), engine.IncludeCurrentBranch).Names()
 		require.Contains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.Contains(t, names, "c")
@@ -110,33 +92,15 @@ func TestStackGraphDownstack(t *testing.T) {
 		require.NotContains(t, names, "main")
 	})
 
-	t.Run("returns parents without current", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithLinearStack3()
-
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.Downstack(s.Engine.GetBranch("c"), engine.ExcludeCurrentBranch)
-
-		names := branches.Names()
+	t.Run("Downstack returns parents without current", func(t *testing.T) {
+		names := graph.Downstack(s.Engine.GetBranch("c"), engine.ExcludeCurrentBranch).Names()
 		require.Contains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.NotContains(t, names, "c")
 	})
-}
 
-func TestStackGraphFullStack(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns all branches in stack", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithLinearStack3()
-
-		graph := engine.BuildStackGraph(s.Engine, engine.SortStrategyAlphabetical, nil)
-		branches := graph.FullStack(s.Engine.GetBranch("b"))
-
-		names := branches.Names()
+	t.Run("FullStack returns all branches in stack", func(t *testing.T) {
+		names := graph.FullStack(s.Engine.GetBranch("b")).Names()
 		require.Contains(t, names, "a")
 		require.Contains(t, names, "b")
 		require.Contains(t, names, "c")

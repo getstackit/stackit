@@ -48,59 +48,49 @@ func TestGenerateStackID(t *testing.T) {
 func TestGetStackID(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns empty for trunk", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
-
-		trunk := s.Engine.Trunk()
-		stackID := s.Engine.GetStackID(trunk)
-		require.Empty(t, stackID)
-	})
-
-	t.Run("returns empty for untracked branch", func(t *testing.T) {
+	// The read-only lookups and the EnsureStackID write share one scene. They
+	// run sequentially, with EnsureStackID last, because it mutates "feature".
+	t.Run("shared scene", func(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit().
 			CreateBranch("untracked").
-			Commit("untracked commit")
-
-		branch := s.Engine.GetBranch("untracked")
-		stackID := s.Engine.GetStackID(branch)
-		require.Empty(t, stackID)
-	})
-
-	t.Run("returns empty for tracked branch without explicit stack ID", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit().
+			Commit("untracked commit").
+			Checkout("main").
 			CreateBranch("feature").
 			Commit("feature commit").
 			TrackBranch("feature", "main")
 
-		branch := s.Engine.GetBranch("feature")
-		// Stack IDs are not auto-created during TrackBranch
-		stackID := s.Engine.GetStackID(branch)
-		require.Empty(t, stackID)
-	})
+		t.Run("returns empty for trunk", func(t *testing.T) {
+			trunk := s.Engine.Trunk()
+			stackID := s.Engine.GetStackID(trunk)
+			require.Empty(t, stackID)
+		})
 
-	t.Run("returns stack ID after EnsureStackID", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit().
-			CreateBranch("feature").
-			Commit("feature commit").
-			TrackBranch("feature", "main")
+		t.Run("returns empty for untracked branch", func(t *testing.T) {
+			branch := s.Engine.GetBranch("untracked")
+			stackID := s.Engine.GetStackID(branch)
+			require.Empty(t, stackID)
+		})
 
-		branch := s.Engine.GetBranch("feature")
-		stackID, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), branch)
-		require.NoError(t, err)
-		require.NotEmpty(t, stackID)
-		require.Contains(t, stackID, "feature")
+		t.Run("returns empty for tracked branch without explicit stack ID", func(t *testing.T) {
+			branch := s.Engine.GetBranch("feature")
+			// Stack IDs are not auto-created during TrackBranch
+			stackID := s.Engine.GetStackID(branch)
+			require.Empty(t, stackID)
+		})
 
-		// GetStackID should now return the same ID
-		readID := s.Engine.GetStackID(branch)
-		require.Equal(t, stackID, readID)
+		t.Run("returns stack ID after EnsureStackID", func(t *testing.T) {
+			branch := s.Engine.GetBranch("feature")
+			stackID, err := engine.Impl(s.Engine).EnsureStackID(context.Background(), branch)
+			require.NoError(t, err)
+			require.NotEmpty(t, stackID)
+			require.Contains(t, stackID, "feature")
+
+			// GetStackID should now return the same ID
+			readID := s.Engine.GetStackID(branch)
+			require.Equal(t, stackID, readID)
+		})
 	})
 
 	t.Run("child inherits parent stack ID after EnsureStackID", func(t *testing.T) {
@@ -271,14 +261,21 @@ func TestStackIDInheritance(t *testing.T) {
 	})
 }
 
-func TestCreateStackRef(t *testing.T) {
+// TestStackRefMeta covers CreateStackRef and GetStackMeta on one shared scene.
+// Every case uses a distinct stack ID, so they run sequentially without
+// interfering; the missing-ID read runs first.
+func TestStackRefMeta(t *testing.T) { //nolint:tparallel // subtests share one fixture and run in order
 	t.Parallel()
+	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
+	s.WithInitialCommit()
 
-	t.Run("creates stack ref with provided metadata", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
+	t.Run("GetStackMeta returns nil for non-existent stack ID", func(t *testing.T) {
+		meta, err := engine.Impl(s.Engine).GetStackMeta("non-existent-stack-id")
+		require.NoError(t, err)
+		require.Nil(t, meta)
+	})
 
+	t.Run("CreateStackRef creates stack ref with provided metadata", func(t *testing.T) {
 		stackID := "test-stack-id"
 		createdAt := time.Now().Truncate(time.Second)
 		meta := &git.StackMeta{
@@ -303,11 +300,7 @@ func TestCreateStackRef(t *testing.T) {
 		require.Equal(t, "test-user", retrieved.CreatedBy)
 	})
 
-	t.Run("creates stack ref with nil metadata using defaults", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
-
+	t.Run("CreateStackRef creates stack ref with nil metadata using defaults", func(t *testing.T) {
 		stackID := "default-meta-stack"
 
 		err := engine.Impl(s.Engine).CreateStackRef(stackID, nil)
@@ -320,55 +313,8 @@ func TestCreateStackRef(t *testing.T) {
 		require.Equal(t, stackID, retrieved.ID)
 		require.False(t, retrieved.CreatedAt.IsZero())
 	})
-}
 
-func TestGetStackMeta(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns nil for non-existent stack ID", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
-
-		meta, err := engine.Impl(s.Engine).GetStackMeta("non-existent-stack-id")
-		require.NoError(t, err)
-		require.Nil(t, meta)
-	})
-
-	t.Run("returns correct metadata for existing stack", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
-
-		stackID := "existing-stack"
-		createdAt := time.Now().Truncate(time.Second)
-		meta := &git.StackMeta{
-			ID:          stackID,
-			Title:       "Existing Stack",
-			Description: "This stack exists",
-			CreatedAt:   createdAt,
-			CreatedBy:   "author",
-		}
-
-		err := engine.Impl(s.Engine).CreateStackRef(stackID, meta)
-		require.NoError(t, err)
-
-		// Retrieve and verify
-		retrieved, err := engine.Impl(s.Engine).GetStackMeta(stackID)
-		require.NoError(t, err)
-		require.NotNil(t, retrieved)
-		require.Equal(t, stackID, retrieved.ID)
-		require.Equal(t, "Existing Stack", retrieved.Title)
-		require.Equal(t, "This stack exists", retrieved.Description)
-		require.WithinDuration(t, createdAt, retrieved.CreatedAt, time.Second)
-		require.Equal(t, "author", retrieved.CreatedBy)
-	})
-
-	t.Run("returns different metadata for different stacks", func(t *testing.T) {
-		t.Parallel()
-		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
-		s.WithInitialCommit()
-
+	t.Run("GetStackMeta returns different metadata for different stacks", func(t *testing.T) {
 		stack1ID := "stack-1"
 		stack2ID := "stack-2"
 

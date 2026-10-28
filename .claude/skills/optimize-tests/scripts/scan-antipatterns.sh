@@ -15,6 +15,14 @@ hr() { printf '\n== %s ==\n' "$1"; }
 hr "Process-spawning shells — prefer NewTestShellInProcess (~8ms/cmd cheaper)"
 rg -n 'NewTestShell\(' -g '*_test.go' | rg -v 'func |//' || echo "  none (good — all in-process)"
 
+hr "Tests spawning the stackit binary directly — prefer an in-process run"
+rg -c 'exec\.Command\(binaryPath|WithBinaryPath\(' -g '*_test.go' \
+  | awk -F: '{printf "  %s (%d spawns)\n", $1, $2}' || echo "  none"
+
+hr "Sleeps in non-test code that tests may hit — make the delay injectable"
+rg -n '(Sleep|SleepContext)\([^)]*[0-9]+ \* time\.Second|\w*(Delay|Wait)\w*\s*=\s*[0-9]+ \* time\.Second' \
+  -g '*.go' -g '!*_test.go' internal/ || echo "  none"
+
 hr "WithRemote() call sites — drop where the test has no push/pull/sync"
 rg -n '\bWithRemote\(\)' -g '*_test.go' | rg -v 'func |//' || echo "  none"
 

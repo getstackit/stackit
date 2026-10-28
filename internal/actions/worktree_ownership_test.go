@@ -14,7 +14,8 @@ import (
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
 
-func TestEnsureCanModifyHere(t *testing.T) {
+func TestEnsureCanModifyHere(t *testing.T) { //nolint:tparallel // subtests share one fixture and run in order
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 	s.CreateBranch("feature").Commit("feature change")

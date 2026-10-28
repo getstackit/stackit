@@ -10,7 +10,7 @@ import (
 func TestCreateOnto(t *testing.T) {
 	t.Parallel()
 
-	t.Run("branches onto an unrelated tracked branch, not the current branch", func(t *testing.T) {
+	t.Run("branches onto an unrelated tracked branch, then onto trunk", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 
@@ -27,14 +27,8 @@ func TestCreateOnto(t *testing.T) {
 		// Exactly the one new commit sits on top of branch-b — none of
 		// branch-a's own history leaked in via a wide merge-base.
 		sh.CommitCount("branch-b", "branch-c", 1)
-	})
 
-	t.Run("branches onto trunk directly", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		sh.Write("a", "content a").Run("create branch-a -m 'feat: a'")
-
+		// From a stacked branch, --onto trunk branches directly off main.
 		sh.Write("d", "content d").Run("create branch-d --onto main -m 'feat: d'")
 
 		sh.OnBranch("branch-d")
@@ -82,66 +76,55 @@ func TestCreateOnto(t *testing.T) {
 		sh.ExpectBranchParent("JIRA-2/child-feature", "branch-b")
 	})
 
-	t.Run("errors for a nonexistent target", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		sh.RunExpectError("create branch-x --onto does-not-exist -m 'feat: x' --allow-empty").
-			OutputContains("does not exist")
-	})
-
-	t.Run("errors for an untracked target", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		sh.Git("branch plain-branch")
-
-		sh.RunExpectError("create branch-x --onto plain-branch -m 'feat: x' --allow-empty").
-			OutputContains("not tracked by stackit")
-	})
-
-	t.Run("errors for a locked target", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
-
-		sh.Write("a", "content a").Run("create branch-a -m 'feat: a'")
-		sh.Run("lock branch-a")
-
-		sh.RunExpectError("create branch-x --onto branch-a -m 'feat: x' --allow-empty").
-			OutputContains("locked")
-	})
-
-	t.Run("errors for a worktree anchor target", func(t *testing.T) {
+	// Every validation error fires before create mutates anything, so the
+	// error cases share one shell. The worktree anchor case runs last because
+	// creating the worktree adds an anchor branch.
+	t.Run("rejects invalid targets", func(t *testing.T) {
 		t.Parallel()
 		sh := NewTestShellInProcess(t)
 		sh.SetWorktreeBasePath(t.TempDir())
+		sh.Git("branch plain-branch")
 
-		sh.Run("worktree create my-wt")
-		anchorBranch := findWorktreeAnchor(t, sh)
+		t.Run("nonexistent and untracked targets", func(t *testing.T) {
+			sh := sh.WithT(t)
+			requireReadOnly(sh, func() {
+				sh.RunExpectError("create branch-x --onto does-not-exist -m 'feat: x' --allow-empty").
+					OutputContains("does not exist")
 
-		sh.RunExpectError("create branch-x --onto " + anchorBranch + " -m 'feat: x' --allow-empty").
-			OutputContains("cannot create a branch onto worktree anchor")
-	})
+				sh.RunExpectError("create branch-x --onto plain-branch -m 'feat: x' --allow-empty").
+					OutputContains("not tracked by stackit")
+			})
+		})
 
-	t.Run("errors when combined with --worktree", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
+		t.Run("flag combinations and locked target", func(t *testing.T) {
+			sh := sh.WithT(t)
+			sh.Write("a", "content a").Run("create branch-a -m 'feat: a'")
+			sh.Checkout("main")
 
-		sh.Write("a", "content a").Run("create branch-a -m 'feat: a'")
-		sh.Checkout("main")
+			requireReadOnly(sh, func() {
+				sh.RunExpectError("create branch-x --onto branch-a -w -m 'feat: x' --allow-empty").
+					OutputContains("cannot be combined")
 
-		sh.RunExpectError("create branch-x --onto branch-a -w -m 'feat: x' --allow-empty").
-			OutputContains("cannot be combined")
-	})
+				sh.RunExpectError("create branch-x --onto branch-a -i -m 'feat: x' --allow-empty").
+					OutputContains("cannot be combined")
+			})
 
-	t.Run("errors when combined with --insert", func(t *testing.T) {
-		t.Parallel()
-		sh := NewTestShellInProcess(t)
+			sh.Run("lock branch-a")
+			requireReadOnly(sh, func() {
+				sh.RunExpectError("create branch-x --onto branch-a -m 'feat: x' --allow-empty").
+					OutputContains("locked")
+			})
+		})
 
-		sh.Write("a", "content a").Run("create branch-a -m 'feat: a'")
-		sh.Checkout("main")
+		t.Run("worktree anchor target", func(t *testing.T) {
+			sh := sh.WithT(t)
+			sh.Run("worktree create my-wt")
+			anchorBranch := findWorktreeAnchor(t, sh)
 
-		sh.RunExpectError("create branch-x --onto branch-a -i -m 'feat: x' --allow-empty").
-			OutputContains("cannot be combined")
+			requireReadOnly(sh, func() {
+				sh.RunExpectError("create branch-x --onto " + anchorBranch + " -m 'feat: x' --allow-empty").
+					OutputContains("cannot create a branch onto worktree anchor")
+			})
+		})
 	})
 }

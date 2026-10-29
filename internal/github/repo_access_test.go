@@ -1,7 +1,6 @@
 package github
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -43,7 +42,7 @@ func TestRepoAccessFromClient(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		access, err := repoAccessFromClient(context.Background(), clientForStub(t, srv), "octo", "widget")
+		access, err := repoAccessFromClient(t.Context(), clientForStub(t, srv), "octo", "widget")
 		require.NoError(t, err)
 		require.Equal(t, "octo", access.Owner)
 		require.Equal(t, "widget", access.Name)
@@ -60,7 +59,7 @@ func TestRepoAccessFromClient(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		access, err := repoAccessFromClient(context.Background(), clientForStub(t, srv), "octo", "widget")
+		access, err := repoAccessFromClient(t.Context(), clientForStub(t, srv), "octo", "widget")
 		require.NoError(t, err)
 		require.False(t, access.CanPush)
 	})
@@ -72,7 +71,7 @@ func TestRepoAccessFromClient(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		_, err := repoAccessFromClient(context.Background(), clientForStub(t, srv), "octo", "ghost")
+		_, err := repoAccessFromClient(t.Context(), clientForStub(t, srv), "octo", "ghost")
 		require.ErrorIs(t, err, ErrRepoAccessDenied)
 	})
 
@@ -83,7 +82,7 @@ func TestRepoAccessFromClient(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		_, err := repoAccessFromClient(context.Background(), clientForStub(t, srv), "octo", "secret")
+		_, err := repoAccessFromClient(t.Context(), clientForStub(t, srv), "octo", "secret")
 		require.ErrorIs(t, err, ErrRepoAccessDenied)
 	})
 }

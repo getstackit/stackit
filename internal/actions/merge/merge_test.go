@@ -1,7 +1,6 @@
 package merge_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -107,7 +106,7 @@ func TestAction(t *testing.T) {
 		prInfo := testhelpers.NewTestPrInfo(prNumber).
 			WithURL("https://github.com/owner/repo/pull/123")
 		branch1 := s.Engine.GetBranch("branch1")
-		err := s.Engine.UpsertPrInfo(context.Background(), branch1, prInfo)
+		err := s.Engine.UpsertPrInfo(t.Context(), branch1, prInfo)
 		require.NoError(t, err)
 
 		// Switch to branch1
@@ -171,19 +170,19 @@ func TestAction(t *testing.T) {
 		branchA := s.Engine.GetBranch("branch-a")
 		branchB := s.Engine.GetBranch("branch-b")
 		branchC := s.Engine.GetBranch("branch-c")
-		err := s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfo(prA).
+		err := s.Engine.UpsertPrInfo(t.Context(), branchA, testhelpers.NewTestPrInfo(prA).
 			WithBase("main").
 			WithURL("https://github.com/owner/repo/pull/101"))
 		require.NoError(t, err)
 
 		prB := git.PRNumber(102)
-		err = s.Engine.UpsertPrInfo(context.Background(), branchB, testhelpers.NewTestPrInfo(prB).
+		err = s.Engine.UpsertPrInfo(t.Context(), branchB, testhelpers.NewTestPrInfo(prB).
 			WithBase("branch-a").
 			WithURL("https://github.com/owner/repo/pull/102"))
 		require.NoError(t, err)
 
 		prC := git.PRNumber(103)
-		err = s.Engine.UpsertPrInfo(context.Background(), branchC, testhelpers.NewTestPrInfo(prC).
+		err = s.Engine.UpsertPrInfo(t.Context(), branchC, testhelpers.NewTestPrInfo(prC).
 			WithBase("branch-b").
 			WithURL("https://github.com/owner/repo/pull/103"))
 		require.NoError(t, err)

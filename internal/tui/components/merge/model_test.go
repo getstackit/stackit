@@ -26,12 +26,12 @@ func TestModel_EmptyPlan(t *testing.T) {
 		view := viewString(model.View())
 
 		// Should show "Merge Progress" header
-		assert.Contains(t, view, "Merge Progress")
+		require.Contains(t, view, "Merge Progress")
 
 		// Should show initializing state, not "Step 1 of 0"
-		assert.NotContains(t, view, "Step 1 of 0")
-		assert.NotContains(t, view, "Step 0 of 0")
-		assert.Contains(t, view, "Initializing...")
+		require.NotContains(t, view, "Step 1 of 0")
+		require.NotContains(t, view, "Step 0 of 0")
+		require.Contains(t, view, "Initializing...")
 	})
 
 	t.Run("empty plan with done shows complete", func(t *testing.T) {
@@ -41,10 +41,10 @@ func TestModel_EmptyPlan(t *testing.T) {
 
 		view := viewString(model.View())
 
-		assert.Contains(t, view, "Merge Progress")
-		assert.Contains(t, view, "Complete")
-		assert.NotContains(t, view, "Step 1 of 0")
-		assert.NotContains(t, view, "Initializing")
+		require.Contains(t, view, "Merge Progress")
+		require.Contains(t, view, "Complete")
+		require.NotContains(t, view, "Step 1 of 0")
+		require.NotContains(t, view, "Initializing")
 	})
 
 	t.Run("empty plan with summary shows summary", func(t *testing.T) {
@@ -55,7 +55,7 @@ func TestModel_EmptyPlan(t *testing.T) {
 
 		view := viewString(model.View())
 
-		assert.Contains(t, view, "Created PR #123")
+		require.Contains(t, view, "Created PR #123")
 	})
 }
 
@@ -78,8 +78,8 @@ func TestModel_PlanLoadedMsg(t *testing.T) {
 
 		require.Len(t, model.Groups, 2)
 		require.Len(t, model.Steps, 3)
-		assert.Equal(t, "Group 1", model.Groups[0].Label)
-		assert.Equal(t, "Group 2", model.Groups[1].Label)
+		require.Equal(t, "Group 1", model.Groups[0].Label)
+		require.Equal(t, "Group 2", model.Groups[1].Label)
 	})
 
 	t.Run("creates default groups when none provided", func(t *testing.T) {
@@ -96,10 +96,10 @@ func TestModel_PlanLoadedMsg(t *testing.T) {
 
 		// Should create one group per step
 		require.Len(t, model.Groups, 2)
-		assert.Equal(t, "Step A", model.Groups[0].Label)
-		assert.Equal(t, "Step B", model.Groups[1].Label)
-		assert.Equal(t, []int{0}, model.Groups[0].StepIndices)
-		assert.Equal(t, []int{1}, model.Groups[1].StepIndices)
+		require.Equal(t, "Step A", model.Groups[0].Label)
+		require.Equal(t, "Step B", model.Groups[1].Label)
+		require.Equal(t, []int{0}, model.Groups[0].StepIndices)
+		require.Equal(t, []int{1}, model.Groups[1].StepIndices)
 	})
 }
 
@@ -122,26 +122,26 @@ func TestModel_View_ProgressIndicator(t *testing.T) {
 		model = updated.(*Model)
 
 		view := viewString(model.View())
-		assert.Contains(t, view, "Step 1 of 3")
+		require.Contains(t, view, "Step 1 of 3")
 
 		// Complete first step
 		model.Steps[0].Status = StatusDone
 
 		view = viewString(model.View())
-		assert.Contains(t, view, "Step 2 of 3")
+		require.Contains(t, view, "Step 2 of 3")
 
 		// Complete second step
 		model.Steps[1].Status = StatusDone
 
 		view = viewString(model.View())
-		assert.Contains(t, view, "Step 3 of 3")
+		require.Contains(t, view, "Step 3 of 3")
 
 		// Complete all steps and mark done
 		model.Steps[2].Status = StatusDone
 		model.Done = true
 
 		view = viewString(model.View())
-		assert.Contains(t, view, "3 of 3 complete")
+		require.Contains(t, view, "3 of 3 complete")
 	})
 }
 
@@ -167,7 +167,7 @@ func TestModel_View_StepStatuses(t *testing.T) {
 
 		view := viewString(model.View())
 		// Check that the group label is shown (bold styling stripped)
-		assert.Contains(t, view, "Merge PR #1")
+		require.Contains(t, view, "Merge PR #1")
 	})
 
 	t.Run("shows completed step with checkmark", func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestModel_View_StepStatuses(t *testing.T) {
 		model = updated.(*Model)
 
 		view := viewString(model.View())
-		assert.Contains(t, view, "✓")
+		require.Contains(t, view, "✓")
 	})
 
 	t.Run("shows failed step with error mark", func(t *testing.T) {
@@ -211,7 +211,7 @@ func TestModel_View_StepStatuses(t *testing.T) {
 		model = updated.(*Model)
 
 		view := viewString(model.View())
-		assert.Contains(t, view, "✗")
+		require.Contains(t, view, "✗")
 	})
 }
 
@@ -223,6 +223,6 @@ func TestModel_Quitting(t *testing.T) {
 		model.Quitting = true
 
 		view := viewString(model.View())
-		assert.Empty(t, view)
+		require.Empty(t, view)
 	})
 }

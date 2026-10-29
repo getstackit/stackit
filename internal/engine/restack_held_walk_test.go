@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -96,7 +95,7 @@ func TestBranchHeldBackCyclicMetadata(t *testing.T) {
 			"the reason must name the ancestor, not just report the child as up to date")
 		require.Contains(t, held, "worktree /wt has uncommitted changes",
 			"the reason must carry the originating worktree so the remedy is findable")
-		require.Empty(t, e.holdBranchInOwnWorktree(context.Background(), NewBranch("child", nil), snap),
+		require.Empty(t, e.holdBranchInOwnWorktree(t.Context(), NewBranch("child", nil), snap),
 			"ordinary rebases use the parent's current ref, so a held parent does not make its clean child unsafe")
 	})
 }

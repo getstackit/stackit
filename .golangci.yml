@@ -41,6 +41,7 @@ linters:
     - tparallel
     - forbidigo
     - depguard
+    - usetesting
   settings:
     depguard:
       rules:

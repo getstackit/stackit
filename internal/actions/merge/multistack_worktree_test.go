@@ -1,12 +1,10 @@
 package merge
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/testhelpers"
@@ -32,7 +30,7 @@ func TestMultiStackWorktreeExecutor_ConflictingStackResetsState(t *testing.T) {
 		Checkout(s.Engine.Trunk().GetName())
 
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)
-	result, err := executor.ExecuteInWorktree(context.Background(), []MultiStackInfo{
+	result, err := executor.ExecuteInWorktree(t.Context(), []MultiStackInfo{
 		{RootBranch: "stack1", AllBranches: []string{"stack1"}},
 		{RootBranch: "stack2", AllBranches: []string{"stack2"}},
 	})
@@ -40,15 +38,15 @@ func TestMultiStackWorktreeExecutor_ConflictingStackResetsState(t *testing.T) {
 	defer result.Cleanup()
 
 	require.Len(t, result.MergedStacks, 1)
-	assert.Equal(t, "stack1", result.MergedStacks[0].RootBranch)
+	require.Equal(t, "stack1", result.MergedStacks[0].RootBranch)
 
 	require.Len(t, result.ConflictStacks, 1)
-	assert.Equal(t, "stack2", result.ConflictStacks[0].Stack.RootBranch)
+	require.Equal(t, "stack2", result.ConflictStacks[0].Stack.RootBranch)
 
 	// Verify the worktree does not contain partial changes from the conflicting stack
 	content, readErr := os.ReadFile(filepath.Join(result.WorktreePath.String(), "test.txt"))
 	require.NoError(t, readErr)
-	assert.Equal(t, "stack1", string(content))
+	require.Equal(t, "stack1", string(content))
 }
 
 func TestMultiStackWorktreeExecutor_PullsTrunkBeforeMerge(t *testing.T) {
@@ -72,7 +70,7 @@ func TestMultiStackWorktreeExecutor_PullsTrunkBeforeMerge(t *testing.T) {
 	s.Rebuild()
 
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)
-	result, err := executor.ExecuteInWorktree(context.Background(), nil)
+	result, err := executor.ExecuteInWorktree(t.Context(), nil)
 	require.NoError(t, err)
 	defer result.Cleanup()
 
@@ -80,8 +78,8 @@ func TestMultiStackWorktreeExecutor_PullsTrunkBeforeMerge(t *testing.T) {
 	worktreeHead, err := worktreeRepo.GetRevision("HEAD")
 	require.NoError(t, err)
 
-	assert.Equal(t, latestRemoteSHA, worktreeHead)
-	assert.Contains(t, remotePath, "origin")
+	require.Equal(t, latestRemoteSHA, worktreeHead)
+	require.Contains(t, remotePath, "origin")
 }
 
 func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T) {
@@ -114,14 +112,14 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 
 	// Execute octopus merge
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)
-	result, err := executor.ExecuteInWorktree(context.Background(), []MultiStackInfo{
+	result, err := executor.ExecuteInWorktree(t.Context(), []MultiStackInfo{
 		{RootBranch: "branch1", AllBranches: []string{"branch1", "branch2", "branch3"}},
 	})
 	require.NoError(t, err)
 	defer result.Cleanup()
 
 	require.Len(t, result.MergedStacks, 1)
-	assert.Equal(t, "branch1", result.MergedStacks[0].RootBranch)
+	require.Equal(t, "branch1", result.MergedStacks[0].RootBranch)
 
 	// Verify we have a merge commit (Git optimizes stacked branches to 2 parents: trunk + top branch)
 	worktreeRepo := testhelpers.NewGitRepoFromExisting(t, result.WorktreePath.String())
@@ -140,7 +138,7 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 
 	// For stacked branches, Git optimizes to 2 parents (trunk + top branch)
 	// since the top branch already contains all commits from lower branches
-	assert.Equal(t, 2, parentCount, "merge should have 2 parents (trunk + top branch)")
+	require.Equal(t, 2, parentCount, "merge should have 2 parents (trunk + top branch)")
 
 	// Verify all original branch commits are ancestors of HEAD (this is the critical check)
 	// GitHub will auto-close PRs because their commits are reachable from the merged commit
@@ -149,9 +147,9 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 		return err == nil
 	}
 
-	assert.True(t, isAncestor(branch1SHA), "branch1 commit should be ancestor of HEAD")
-	assert.True(t, isAncestor(branch2SHA), "branch2 commit should be ancestor of HEAD")
-	assert.True(t, isAncestor(branch3SHA), "branch3 commit should be ancestor of HEAD")
+	require.True(t, isAncestor(branch1SHA), "branch1 commit should be ancestor of HEAD")
+	require.True(t, isAncestor(branch2SHA), "branch2 commit should be ancestor of HEAD")
+	require.True(t, isAncestor(branch3SHA), "branch3 commit should be ancestor of HEAD")
 
 	// Verify all files are present in the working tree
 	// CreateChangeAndCommit creates files as "{prefix}_test.txt"
@@ -160,7 +158,7 @@ func TestMultiStackWorktreeExecutor_OctopusMergeCreatesSingleCommit(t *testing.T
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "file2_test.txt"))
 	require.NoError(t, err, "file2_test.txt should exist")
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "file3_test.txt"))
-	assert.NoError(t, err, "file3_test.txt should exist")
+	require.NoError(t, err, "file3_test.txt should exist")
 }
 
 func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T) {
@@ -201,7 +199,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 
 	// Execute multi-stack merge
 	executor := NewMultiStackWorktreeExecutor(s.Engine, s.Context.Output)
-	result, err := executor.ExecuteInWorktree(context.Background(), []MultiStackInfo{
+	result, err := executor.ExecuteInWorktree(t.Context(), []MultiStackInfo{
 		{RootBranch: "stack1-branch1", AllBranches: []string{"stack1-branch1", "stack1-branch2"}},
 		{RootBranch: "stack2-branch1", AllBranches: []string{"stack2-branch1", "stack2-branch2"}},
 	})
@@ -210,7 +208,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 
 	// Both stacks should be merged
 	require.Len(t, result.MergedStacks, 2)
-	assert.Empty(t, result.ConflictStacks)
+	require.Empty(t, result.ConflictStacks)
 
 	worktreeRepo := testhelpers.NewGitRepoFromExisting(t, result.WorktreePath.String())
 
@@ -218,7 +216,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 	// First-parent traversal shows just the merge commits on the mainline
 	logOutput, err := worktreeRepo.RunGitCommandAndGetOutput("rev-list", "--count", "--first-parent", s.Engine.Trunk().GetName()+"..HEAD")
 	require.NoError(t, err)
-	assert.Equal(t, "1", logOutput, "should have exactly 1 merge commit on first-parent path (global octopus)")
+	require.Equal(t, "1", logOutput, "should have exactly 1 merge commit on first-parent path (global octopus)")
 
 	// Verify HEAD has multiple parents (octopus merge)
 	parentOutput, err := worktreeRepo.RunGitCommandAndGetOutput("cat-file", "-p", "HEAD")
@@ -231,7 +229,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 	}
 	// Git optimizes stacked branches, so we expect at least 3 parents:
 	// trunk + top of stack1 + top of stack2
-	assert.GreaterOrEqual(t, parentCount, 3, "octopus merge should have at least 3 parents")
+	require.GreaterOrEqual(t, parentCount, 3, "octopus merge should have at least 3 parents")
 
 	// Verify all branch commits are ancestors
 	isAncestor := func(sha string) bool {
@@ -239,10 +237,10 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 		return err == nil
 	}
 
-	assert.True(t, isAncestor(stack1Branch1SHA), "stack1-branch1 should be ancestor of HEAD")
-	assert.True(t, isAncestor(stack1Branch2SHA), "stack1-branch2 should be ancestor of HEAD")
-	assert.True(t, isAncestor(stack2Branch1SHA), "stack2-branch1 should be ancestor of HEAD")
-	assert.True(t, isAncestor(stack2Branch2SHA), "stack2-branch2 should be ancestor of HEAD")
+	require.True(t, isAncestor(stack1Branch1SHA), "stack1-branch1 should be ancestor of HEAD")
+	require.True(t, isAncestor(stack1Branch2SHA), "stack1-branch2 should be ancestor of HEAD")
+	require.True(t, isAncestor(stack2Branch1SHA), "stack2-branch1 should be ancestor of HEAD")
+	require.True(t, isAncestor(stack2Branch2SHA), "stack2-branch2 should be ancestor of HEAD")
 
 	// Verify all files are present
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s1file1_test.txt"))
@@ -252,7 +250,7 @@ func TestMultiStackWorktreeExecutor_GlobalOctopusMergeAcrossStacks(t *testing.T)
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s2file1_test.txt"))
 	require.NoError(t, err, "s2file1_test.txt should exist")
 	_, err = os.Stat(filepath.Join(result.WorktreePath.String(), "s2file2_test.txt"))
-	assert.NoError(t, err, "s2file2_test.txt should exist")
+	require.NoError(t, err, "s2file2_test.txt should exist")
 }
 
 func splitLines(s string) []string {

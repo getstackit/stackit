@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +20,7 @@ func TestCaptureUntracked_RoundTripsNestedAndAwkwardPaths(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, os.MkdirAll(filepath.Join(scene.Dir, "nested", "deep"), 0o750))
 	files := map[string]string{
@@ -68,7 +67,7 @@ func TestRestoreUntracked_LeavesExistingFilesAlone(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	path := filepath.Join(scene.Dir, "scratch.txt")
 	require.NoError(t, os.WriteFile(path, []byte("captured\n"), 0o600))
@@ -134,7 +133,7 @@ func TestCaptureUntracked_CleanTree(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
 
-	sha, err := runner.CaptureUntracked(context.Background(), "capture")
+	sha, err := runner.CaptureUntracked(t.Context(), "capture")
 	require.NoError(t, err)
 	require.Empty(t, sha)
 }
@@ -147,7 +146,7 @@ func TestCaptureUntracked_SkipsIgnoredFiles(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, os.WriteFile(filepath.Join(scene.Dir, ".gitignore"), []byte("build/\n"), 0o600))
 	require.NoError(t, os.MkdirAll(filepath.Join(scene.Dir, "build"), 0o750))

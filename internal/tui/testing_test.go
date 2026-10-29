@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMockRunner(t *testing.T) {
@@ -13,13 +13,13 @@ func TestMockRunner(t *testing.T) {
 	t.Run("tracks started and stopped state", func(t *testing.T) {
 		t.Parallel()
 		runner := NewMockRunner()
-		assert.False(t, runner.IsHealthy())
+		require.False(t, runner.IsHealthy())
 
 		runner.Start()
-		assert.True(t, runner.IsHealthy())
+		require.True(t, runner.IsHealthy())
 
 		runner.Cleanup()
-		assert.False(t, runner.IsHealthy())
+		require.False(t, runner.IsHealthy())
 	})
 
 	t.Run("records messages", func(t *testing.T) {
@@ -32,9 +32,9 @@ func TestMockRunner(t *testing.T) {
 		runner.Send(testMsg{value: 2})
 
 		messages := runner.Messages()
-		assert.Len(t, messages, 2)
-		assert.Equal(t, testMsg{value: 1}, messages[0])
-		assert.Equal(t, testMsg{value: 2}, messages[1])
+		require.Len(t, messages, 2)
+		require.Equal(t, testMsg{value: 1}, messages[0])
+		require.Equal(t, testMsg{value: 2}, messages[1])
 	})
 
 	t.Run("reset clears state", func(t *testing.T) {
@@ -44,9 +44,9 @@ func TestMockRunner(t *testing.T) {
 		runner.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 		runner.Reset()
-		assert.False(t, runner.started)
-		assert.False(t, runner.stopped)
-		assert.Equal(t, 0, runner.MessageCount())
+		require.False(t, runner.started)
+		require.False(t, runner.stopped)
+		require.Equal(t, 0, runner.MessageCount())
 	})
 
 	t.Run("is thread-safe", func(t *testing.T) {
@@ -62,7 +62,7 @@ func TestMockRunner(t *testing.T) {
 		}
 		wg.Wait()
 
-		assert.Equal(t, 100, runner.MessageCount())
+		require.Equal(t, 100, runner.MessageCount())
 	})
 }
 
@@ -76,7 +76,7 @@ func TestMessageRecorder(t *testing.T) {
 		recorder.Record(testMsg{id: "first"})
 		recorder.Record(testMsg{id: "second"})
 
-		assert.Equal(t, 2, recorder.Count())
+		require.Equal(t, 2, recorder.Count())
 	})
 
 	t.Run("HasMessage finds matching messages", func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestMessageRecorder(t *testing.T) {
 			}
 			return false
 		})
-		assert.True(t, found)
+		require.True(t, found)
 
 		notFound := recorder.HasMessage(func(msg tea.Msg) bool {
 			if m, ok := msg.(testMsg); ok {
@@ -101,7 +101,7 @@ func TestMessageRecorder(t *testing.T) {
 			}
 			return false
 		})
-		assert.False(t, notFound)
+		require.False(t, notFound)
 	})
 
 	t.Run("reset clears messages", func(t *testing.T) {
@@ -110,7 +110,7 @@ func TestMessageRecorder(t *testing.T) {
 		recorder.Record(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 		recorder.Reset()
-		assert.Equal(t, 0, recorder.Count())
+		require.Equal(t, 0, recorder.Count())
 	})
 
 	t.Run("is thread-safe", func(t *testing.T) {
@@ -125,6 +125,6 @@ func TestMessageRecorder(t *testing.T) {
 		}
 		wg.Wait()
 
-		assert.Equal(t, 100, recorder.Count())
+		require.Equal(t, 100, recorder.Count())
 	})
 }

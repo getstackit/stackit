@@ -12,14 +12,14 @@ func TestSleepContext(t *testing.T) {
 
 	t.Run("returns nil after the duration elapses", func(t *testing.T) {
 		t.Parallel()
-		if err := SleepContext(context.Background(), time.Millisecond); err != nil {
+		if err := SleepContext(t.Context(), time.Millisecond); err != nil {
 			t.Fatalf("SleepContext() = %v, want nil", err)
 		}
 	})
 
 	t.Run("returns promptly when the context is already canceled", func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
 		done := make(chan error, 1)

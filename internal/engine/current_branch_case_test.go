@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,7 +55,7 @@ func TestCurrentBranchResolvesRefCasing(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "claude/feature", name)
 
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), name, "main"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), name, "main"))
 		parent := s.Engine.GetBranch(name).GetParent()
 		require.NotNil(t, parent)
 		require.Equal(t, "main", parent.GetName())
@@ -69,7 +68,7 @@ func TestTrackBranchReportsCaseMismatch(t *testing.T) {
 	s.CreateBranch("claude/feature").Commit("feature change")
 	s.Checkout("main")
 
-	err := s.Engine.TrackBranch(context.Background(), "Claude/feature", "main")
+	err := s.Engine.TrackBranch(t.Context(), "Claude/feature", "main")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "claude/feature")
 	require.Contains(t, err.Error(), "differ only in case")

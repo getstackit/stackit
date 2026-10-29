@@ -3,9 +3,8 @@ package github_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/getstackit/stackit/internal/github"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCheckStatus_IsApproved(t *testing.T) {
@@ -26,7 +25,7 @@ func TestCheckStatus_IsApproved(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			status := &github.CheckStatus{ReviewDecision: tt.reviewDecision}
-			assert.Equal(t, tt.want, status.IsApproved())
+			require.Equal(t, tt.want, status.IsApproved())
 		})
 	}
 }
@@ -47,7 +46,7 @@ func TestCheckStatus_HasFailingChecks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			status := &github.CheckStatus{Passing: tt.passing}
-			assert.Equal(t, tt.want, status.HasFailingChecks())
+			require.Equal(t, tt.want, status.HasFailingChecks())
 		})
 	}
 }
@@ -68,7 +67,7 @@ func TestCheckStatus_HasPendingChecks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			status := &github.CheckStatus{Pending: tt.pending}
-			assert.Equal(t, tt.want, status.HasPendingChecks())
+			require.Equal(t, tt.want, status.HasPendingChecks())
 		})
 	}
 }
@@ -99,7 +98,7 @@ func TestCheckStatus_IsReady(t *testing.T) {
 				Pending:        tt.pending,
 				ReviewDecision: tt.reviewDecision,
 			}
-			assert.Equal(t, tt.want, status.IsReady())
+			require.Equal(t, tt.want, status.IsReady())
 		})
 	}
 }
@@ -108,7 +107,7 @@ func TestReviewDecisionConstants(t *testing.T) {
 	t.Parallel()
 
 	// Verify constants match GitHub's actual values
-	assert.Equal(t, github.ReviewDecisionApproved, github.ReviewDecision("APPROVED"))
-	assert.Equal(t, github.ReviewDecisionChangesRequested, github.ReviewDecision("CHANGES_REQUESTED"))
-	assert.Equal(t, github.ReviewDecisionReviewRequired, github.ReviewDecision("REVIEW_REQUIRED"))
+	require.Equal(t, github.ReviewDecisionApproved, github.ReviewDecision("APPROVED"))
+	require.Equal(t, github.ReviewDecisionChangesRequested, github.ReviewDecision("CHANGES_REQUESTED"))
+	require.Equal(t, github.ReviewDecisionReviewRequired, github.ReviewDecision("REVIEW_REQUIRED"))
 }

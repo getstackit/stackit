@@ -5,7 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestModel_Update_KeyMsg_Quit_MarksCanceled(t *testing.T) {
@@ -27,9 +27,9 @@ func TestModel_Update_KeyMsg_Quit_MarksCanceled(t *testing.T) {
 			newModel, cmd := model.Update(tt.msg)
 			m := newModel.(*Model)
 
-			assert.NotNil(t, cmd, "should return quit command")
-			assert.True(t, m.GetResult().Canceled, "result should be marked canceled")
-			assert.Equal(t, StateCanceled, m.state)
+			require.NotNil(t, cmd, "should return quit command")
+			require.True(t, m.GetResult().Canceled, "result should be marked canceled")
+			require.Equal(t, StateCanceled, m.state)
 		})
 	}
 }
@@ -42,7 +42,7 @@ func TestModel_Update_SpinnerTickMsg_DoesNotCancel(t *testing.T) {
 	newModel, cmd := model.Update(spinner.TickMsg{})
 	m := newModel.(*Model)
 
-	assert.NotNil(t, cmd, "should return spinner tick command")
-	assert.False(t, m.GetResult().Canceled, "spinner tick should not cancel the wizard")
-	assert.Equal(t, StateSelectingType, m.state)
+	require.NotNil(t, cmd, "should return spinner tick command")
+	require.False(t, m.GetResult().Canceled, "spinner tick should not cancel the wizard")
+	require.Equal(t, StateSelectingType, m.state)
 }

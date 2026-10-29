@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +32,7 @@ func TestPushBranchesWithExplicitForceWithLease(t *testing.T) {
 	require.NoError(t, remoteScene.Repo.ForcePushBranch("origin", "feature"))
 
 	runner := git.NewRunnerWithPath(localDir, nil)
-	remoteShas, err := runner.FetchRemoteShas(context.Background(), "origin")
+	remoteShas, err := runner.FetchRemoteShas(t.Context(), "origin")
 	require.NoError(t, err)
 	observedRemoteSHA := remoteShas["feature"]
 	require.NotEmpty(t, observedRemoteSHA)
@@ -58,7 +57,7 @@ func TestPushBranchesWithExplicitForceWithLease(t *testing.T) {
 
 	localSHA, err := localRepo.RunGitCommandAndGetOutput("rev-parse", "feature")
 	require.NoError(t, err)
-	remoteAfterPush, err := runner.FetchRemoteShas(context.Background(), "origin")
+	remoteAfterPush, err := runner.FetchRemoteShas(t.Context(), "origin")
 	require.NoError(t, err)
 	require.Equal(t, localSHA, remoteAfterPush["feature"])
 }
@@ -81,7 +80,7 @@ func TestPushBranchesCreatesMultipleBranchesInOnePush(t *testing.T) {
 	require.Empty(t, runner.PushBranches(t.Context(), "origin", nil, git.PushOptions{}))
 	require.Zero(t, logger.calls)
 	// Empty ExpectedRemoteSHA means "expect absent" — the create case.
-	results := runner.PushBranches(context.Background(), "origin", []git.PushSpec{
+	results := runner.PushBranches(t.Context(), "origin", []git.PushSpec{
 		{BranchName: "f1"},
 		{BranchName: "f2"},
 	}, git.PushOptions{})
@@ -90,7 +89,7 @@ func TestPushBranchesCreatesMultipleBranchesInOnePush(t *testing.T) {
 	require.NoError(t, results["f2"])
 	require.Equal(t, 1, logger.calls)
 
-	remote, err := runner.FetchRemoteShas(context.Background(), "origin")
+	remote, err := runner.FetchRemoteShas(t.Context(), "origin")
 	require.NoError(t, err)
 	require.Contains(t, remote, "f1")
 	require.Contains(t, remote, "f2")
@@ -114,7 +113,7 @@ func TestPushBranchesPartialSuccessOnStaleLease(t *testing.T) {
 	require.NoError(t, scene.Repo.PushBranch("origin", "f2"))
 
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	before, err := runner.FetchRemoteShas(context.Background(), "origin")
+	before, err := runner.FetchRemoteShas(t.Context(), "origin")
 	require.NoError(t, err)
 
 	// Advance f1 on the remote out-of-band so the recorded lease goes stale.
@@ -131,7 +130,7 @@ func TestPushBranchesPartialSuccessOnStaleLease(t *testing.T) {
 	require.NoError(t, scene.Repo.CheckoutBranch("f2"))
 	require.NoError(t, scene.Repo.CreateChangeAndCommit("f2 v2", "f2local"))
 
-	results := runner.PushBranches(context.Background(), "origin", []git.PushSpec{
+	results := runner.PushBranches(t.Context(), "origin", []git.PushSpec{
 		{BranchName: "f1", ExpectedRemoteSHA: before["f1"]}, // stale: remote moved
 		{BranchName: "f2", ExpectedRemoteSHA: before["f2"]}, // current
 	}, git.PushOptions{})
@@ -140,7 +139,7 @@ func TestPushBranchesPartialSuccessOnStaleLease(t *testing.T) {
 	require.NoError(t, results["f2"], "the in-sync branch must still push despite f1's rejection")
 
 	// f2 advanced on the remote, f1 did not.
-	after, err := runner.FetchRemoteShas(context.Background(), "origin")
+	after, err := runner.FetchRemoteShas(t.Context(), "origin")
 	require.NoError(t, err)
 	f2SHA, err := scene.Repo.RunGitCommandAndGetOutput("rev-parse", "f2")
 	require.NoError(t, err)

@@ -1,7 +1,6 @@
 package merge_test
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -40,7 +39,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		// Add PR info to engine
 		prA := git.PRNumber(101)
 		branchA := s.Engine.GetBranch("branch-a")
-		err := s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfo(prA).
+		err := s.Engine.UpsertPrInfo(t.Context(), branchA, testhelpers.NewTestPrInfo(prA).
 			WithBase("main").
 			WithURL("https://github.com/owner/repo/pull/101"))
 		require.NoError(t, err)
@@ -116,7 +115,7 @@ func TestExecuteInWorktree(t *testing.T) {
 		// Add PR info to engine
 		prA := git.PRNumber(101)
 		branchA := s.Engine.GetBranch("branch-a")
-		err := s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfo(prA).
+		err := s.Engine.UpsertPrInfo(t.Context(), branchA, testhelpers.NewTestPrInfo(prA).
 			WithBase("main").
 			WithURL("https://github.com/owner/repo/pull/101"))
 		require.NoError(t, err)

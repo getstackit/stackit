@@ -1,7 +1,6 @@
 package doctor
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -38,7 +37,7 @@ func TestCheckStackStatePrunesOrphanedMetadataInOneBatch(t *testing.T) {
 		RunGit("branch", "-D", "orphan2")
 
 	h := &recordingHandler{}
-	warnings, errors := checkStackState(context.Background(), s.Engine, h, 0, 0, true)
+	warnings, errors := checkStackState(t.Context(), s.Engine, h, 0, 0, true)
 
 	require.Equal(t, 0, errors)
 	require.Equal(t, 0, warnings)

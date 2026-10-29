@@ -99,7 +99,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 		require.Equal(t, "feature", *config.CreatedPRs[0].Head.Ref, "PR should be for feature branch")
 
 		// Verify that metadata was updated with LastModifiedBy after submit
-		meta, err := s.Metadata.ReadMetadata(context.Background(), "feature").One()
+		meta, err := s.Metadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err, "Should be able to read metadata ref after submit")
 		require.NotNil(t, meta.GetLastModifiedBy(), "LastModifiedBy should be set after submit")
 		require.NotEmpty(t, meta.GetLastModifiedBy().GitName, "LastModifiedBy.GitName should not be empty")
@@ -139,7 +139,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Store PR info in engine
 		branch := s.Engine.GetBranch(branchName)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, prData.Title).
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, prData.Title).
 			WithBody(prData.Body).
 			WithIsDraft(prData.Draft))
 		require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Verify that metadata was updated for all submitted branches
 		for _, branchName := range []string{"P", "C1", "C2"} {
-			meta, err := s.Metadata.ReadMetadata(context.Background(), branchName).One()
+			meta, err := s.Metadata.ReadMetadata(t.Context(), branchName).One()
 			require.NoError(t, err, "Should be able to read metadata for %s", branchName)
 			require.NotNil(t, meta.GetLastModifiedBy(), "LastModifiedBy should be set for %s", branchName)
 		}
@@ -258,13 +258,13 @@ func TestActionWithMockedGitHub(t *testing.T) {
 
 		// Store PR info in engine with A as the base (simulating after reorder)
 		branchB := s.Engine.GetBranch("B")
-		err = s.Engine.UpsertPrInfo(context.Background(), branchB, testhelpers.NewTestPrInfoWithTitle(prNumberB, prDataB.Title).
+		err = s.Engine.UpsertPrInfo(t.Context(), branchB, testhelpers.NewTestPrInfoWithTitle(prNumberB, prDataB.Title).
 			WithBody(prDataB.Body).
 			WithBase("main")) // Will be changed to "A" in prepareBranchesForSubmit
 		require.NoError(t, err)
 
 		// Update parent relationship: B's parent is now A
-		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("B"), s.Engine.GetBranch("A"), engine.DivergenceRecompute)
+		err = s.Engine.SetParent(t.Context(), s.Engine.GetBranch("B"), s.Engine.GetBranch("A"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// Verify that B and A have the same SHA (no commits between them)
@@ -725,7 +725,7 @@ func TestSubmitPreservesLockStatus(t *testing.T) {
 
 	// Lock the branch
 	branch := s.Engine.GetBranch("feature")
-	_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+	_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 	require.True(t, branch.IsLocked())
 
@@ -744,7 +744,7 @@ func TestSubmitPreservesLockStatus(t *testing.T) {
 	branch = s.Engine.GetBranch("feature")
 	require.True(t, branch.IsLocked(), "Branch should still be locked after submission")
 
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "feature").One()
 	require.NoError(t, err)
 	require.Equal(t, git.LockReasonUser, meta.GetLockReason(), "Metadata LockReason field should be set")
 }

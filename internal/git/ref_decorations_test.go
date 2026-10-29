@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -42,7 +41,7 @@ func TestRefDecorations(t *testing.T) {
 	decos, err := runner.RefDecorations()
 	require.NoError(t, err)
 
-	headSHA, err := runner.ReadRevisions(context.Background(), "refs/heads/main").One()
+	headSHA, err := runner.ReadRevisions(t.Context(), "refs/heads/main").One()
 	require.NoError(t, err)
 
 	// main and feature both point at the tip commit, as branch decorations.

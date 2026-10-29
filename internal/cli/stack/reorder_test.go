@@ -191,6 +191,8 @@ func TestReorderCommand(t *testing.T) {
 // createEditorScript creates a shell script in a temp directory that writes the given content to the file
 // passed as the first argument, simulating an editor
 func createEditorScript(t *testing.T, content string) string {
+	t.Helper()
+
 	// Create temp directory outside the repo to avoid git seeing it as uncommitted changes
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "editor.sh")

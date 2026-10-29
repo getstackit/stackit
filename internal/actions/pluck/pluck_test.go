@@ -1,7 +1,6 @@
 package pluck
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -418,7 +417,7 @@ func TestPluckAction(t *testing.T) {
 		branch2 := s.Engine.GetBranch("branch2")
 		prNumber := git.PRNumber(456)
 		prInfo := engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "Test Pluck PR", Body: "Test Body", State: "OPEN", Base: "branch1", URL: "https://github.com/owner/repo/pull/456"})
-		err := s.Engine.UpsertPrInfo(context.Background(), branch2, prInfo)
+		err := s.Engine.UpsertPrInfo(t.Context(), branch2, prInfo)
 		require.NoError(t, err)
 
 		// Pluck branch2 to main

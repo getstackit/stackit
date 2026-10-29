@@ -33,7 +33,7 @@ func TestWaitForChecks(t *testing.T) {
 			})
 
 			start := time.Now()
-			result, err := waiter.WaitForChecks(context.Background(), "branch", 1, false)
+			result, err := waiter.WaitForChecks(t.Context(), "branch", 1, false)
 			elapsed := time.Since(start)
 
 			require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestWaitForChecks(t *testing.T) {
 				PollInterval: 100 * time.Millisecond,
 			})
 
-			result, err := waiter.WaitForChecks(context.Background(), "branch", 1, true)
+			result, err := waiter.WaitForChecks(t.Context(), "branch", 1, true)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.True(t, result.Passed)
@@ -89,7 +89,7 @@ func TestWaitForChecks(t *testing.T) {
 				PollInterval: 100 * time.Millisecond,
 			})
 
-			result, err := waiter.WaitForChecks(context.Background(), "branch", 1, true)
+			result, err := waiter.WaitForChecks(t.Context(), "branch", 1, true)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "CI checks failed")
 			require.NotNil(t, result)
@@ -125,7 +125,7 @@ func TestCIWaiterRegistrationDelay(t *testing.T) {
 				})
 
 				start := time.Now()
-				result, err := waiter.WaitForChecks(context.Background(), "branch", 1, true)
+				result, err := waiter.WaitForChecks(t.Context(), "branch", 1, true)
 				require.NoError(t, err)
 				require.True(t, result.Passed)
 				// Checks pass on the first poll, so the elapsed fake time is

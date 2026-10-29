@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"slices"
 	"testing"
 
@@ -46,7 +45,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Track feature branch
-		err = eng.TrackBranch(context.Background(), "feature", "main")
+		err = eng.TrackBranch(t.Context(), "feature", "main")
 		require.NoError(t, err)
 
 		// Detach before split to avoid "used by worktree" error
@@ -62,7 +61,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			BranchPoints:  []int{0, 1, 2}, // Will be reversed to [2, 1, 0]
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.NoError(t, err)
 
 		// Verify branches
@@ -125,7 +124,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		// Original feature branch
 		err = repo.CreateBranch("feature")
 		require.NoError(t, err)
-		err = eng.TrackBranch(context.Background(), "feature", "main")
+		err = eng.TrackBranch(t.Context(), "feature", "main")
 		require.NoError(t, err)
 
 		// Detach and create new commits (simulating splitByHunk)
@@ -143,7 +142,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		c2SHA, _ := repo.GetCurrentSHA()
 
 		// Update feature ref to point to the new tip (the fix!)
-		err = git.NewRunnerWithPath(scene.Dir, nil).UpdateBranchRef(context.Background(), "feature", c2SHA)
+		err = git.NewRunnerWithPath(scene.Dir, nil).UpdateBranchRef(t.Context(), "feature", c2SHA)
 		require.NoError(t, err)
 
 		// Apply split
@@ -153,7 +152,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			BranchPoints:  []int{0, 1}, // Will be reversed to [1, 0]
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.NoError(t, err)
 
 		// Verify branch1 points to c1 and feature points to c2
@@ -181,7 +180,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			BranchPoints:  []int{0, 1},         // 2 points
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid number of branch names")
 	})
@@ -227,7 +226,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Track feature branch
-		err = eng.TrackBranch(context.Background(), "feature", "main")
+		err = eng.TrackBranch(t.Context(), "feature", "main")
 		require.NoError(t, err)
 
 		// Detach before split to avoid "used by worktree" error
@@ -244,7 +243,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			AsSibling:     true, // All branches should be siblings (same parent)
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.NoError(t, err)
 
 		// Verify branches exist
@@ -287,14 +286,14 @@ func TestApplySplitToCommits(t *testing.T) {
 			LinearStacks: true,
 		})
 		require.NoError(t, err)
-		require.NoError(t, eng.TrackBranch(context.Background(), "base", "main"))
-		require.NoError(t, eng.TrackBranch(context.Background(), "feature", "base"))
+		require.NoError(t, eng.TrackBranch(t.Context(), "base", "main"))
+		require.NoError(t, eng.TrackBranch(t.Context(), "feature", "base"))
 
 		featureSHA, err := repo.GetBranchSHA("feature")
 		require.NoError(t, err)
 		require.NoError(t, repo.CheckoutDetached(featureSHA))
 
-		err = eng.ApplySplitToCommits(context.Background(), engine.ApplySplitOptions{
+		err = eng.ApplySplitToCommits(t.Context(), engine.ApplySplitOptions{
 			BranchToSplit: "feature",
 			BranchNames:   []string{"first", "feature"},
 			BranchPoints:  []int{0, 1},
@@ -334,7 +333,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		require.NoError(t, err)
 
 		// Track feature
-		err = eng.TrackBranch(context.Background(), "feature", "main")
+		err = eng.TrackBranch(t.Context(), "feature", "main")
 		require.NoError(t, err)
 
 		// Create a child branch of feature
@@ -345,7 +344,7 @@ func TestApplySplitToCommits(t *testing.T) {
 		err = repo.CreateChangeAndCommit("child content", "childfile")
 		require.NoError(t, err)
 
-		err = eng.TrackBranch(context.Background(), "child", "feature")
+		err = eng.TrackBranch(t.Context(), "child", "feature")
 		require.NoError(t, err)
 
 		// Detach before split
@@ -362,7 +361,7 @@ func TestApplySplitToCommits(t *testing.T) {
 			AsSibling:     true,
 		}
 
-		err = eng.ApplySplitToCommits(context.Background(), opts)
+		err = eng.ApplySplitToCommits(t.Context(), opts)
 		require.NoError(t, err)
 
 		// Verify branches are siblings (both have main as parent)

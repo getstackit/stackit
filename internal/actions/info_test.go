@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -35,7 +34,7 @@ func TestSingleBranchInfoFilesChangedUsesDivergenceBase(t *testing.T) {
 
 func singleBranchFilesChanged(t *testing.T, s *scenario.Scenario, name string) int {
 	t.Helper()
-	info, err := QueryBranchInfo(context.Background(), s.Engine, BranchInfoQueryOptions{
+	info, err := QueryBranchInfo(t.Context(), s.Engine, BranchInfoQueryOptions{
 		BranchName: name,
 	}, nil)
 	require.NoError(t, err)
@@ -73,12 +72,12 @@ func TestQueryBranchInfo(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.RunGitCommand("commit", "-m", "child change"))
 		s.Rebuild()
 
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "child", "feature"))
-		require.NoError(t, s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature"), engine.NewScope("PROJ-123")))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature", "main"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "child", "feature"))
+		require.NoError(t, s.Engine.SetScope(t.Context(), s.Engine.GetBranch("feature"), engine.NewScope("PROJ-123")))
 		s.Checkout("feature")
 
-		info, err := QueryBranchInfo(context.Background(), s.Engine, BranchInfoQueryOptions{
+		info, err := QueryBranchInfo(t.Context(), s.Engine, BranchInfoQueryOptions{
 			BranchName: "feature",
 		}, nil)
 		require.NoError(t, err)
@@ -106,9 +105,9 @@ func TestQueryBranchInfo(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.RunGitCommand("add", "."))
 		require.NoError(t, s.Scene.Repo.RunGitCommand("commit", "-m", "feature change"))
 		s.Rebuild()
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature", "main"))
 
-		info, err := QueryBranchInfo(context.Background(), s.Engine, BranchInfoQueryOptions{
+		info, err := QueryBranchInfo(t.Context(), s.Engine, BranchInfoQueryOptions{
 			BranchName: "feature",
 			Patch:      true,
 		}, nil)
@@ -129,10 +128,10 @@ func TestQueryBranchInfo(t *testing.T) {
 		require.NoError(t, s.Scene.Repo.RunGitCommand("add", "."))
 		require.NoError(t, s.Scene.Repo.RunGitCommand("commit", "-m", "feature change"))
 		s.Rebuild()
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
-		require.NoError(t, s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature"), engine.NewScope("none")))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature", "main"))
+		require.NoError(t, s.Engine.SetScope(t.Context(), s.Engine.GetBranch("feature"), engine.NewScope("none")))
 
-		info, err := QueryBranchInfo(context.Background(), s.Engine, BranchInfoQueryOptions{
+		info, err := QueryBranchInfo(t.Context(), s.Engine, BranchInfoQueryOptions{
 			BranchName: "feature",
 		}, nil)
 		require.NoError(t, err)
@@ -144,7 +143,7 @@ func TestQueryBranchInfo(t *testing.T) {
 		t.Parallel()
 		s := scenario.NewScenario(t, testhelpers.InitialCommitSceneSetup)
 
-		_, err := QueryBranchInfo(context.Background(), s.Engine, BranchInfoQueryOptions{
+		_, err := QueryBranchInfo(t.Context(), s.Engine, BranchInfoQueryOptions{
 			BranchName: "missing",
 		}, nil)
 		require.Error(t, err)

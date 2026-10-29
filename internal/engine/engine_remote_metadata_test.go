@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -29,9 +28,9 @@ func TestRemoteMetadataSync(t *testing.T) {
 		eng := sh.Engine
 
 		branch := eng.GetBranch("feature-a")
-		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
+		_, err := eng.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonNone)
 		require.NoError(t, err)
-		require.NoError(t, eng.SetScope(context.Background(), branch, engine.NewScope("local-scope")))
+		require.NoError(t, eng.SetScope(t.Context(), branch, engine.NewScope("local-scope")))
 
 		require.False(t, eng.IsLocked(branch))
 		require.Equal(t, "local-scope", eng.GetScope(branch).String())
@@ -80,9 +79,9 @@ func TestRemoteMetadataSync(t *testing.T) {
 		eng := sh.Engine
 
 		branch := eng.GetBranch("feature-b")
-		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+		_, err := eng.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
-		require.NoError(t, eng.SetScope(context.Background(), branch, engine.NewScope("same-scope")))
+		require.NoError(t, eng.SetScope(t.Context(), branch, engine.NewScope("same-scope")))
 
 		remoteMeta := git.NewMetaFrom(git.MetaFields{
 			LockReason: git.LockReasonUser,
@@ -111,7 +110,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		eng := sh.Engine
 
 		branch := eng.GetBranch("feature-c")
-		_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+		_, err := eng.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		err = eng.BatchSetLastModifiedBy(t.Context(), []string{"feature-c"})
@@ -144,7 +143,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 
 		require.False(t, engine.Impl(eng).HasLocalModifications("feature-d"))
 
-		_, err = eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+		_, err = eng.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		require.True(t, engine.Impl(eng).HasLocalModifications("feature-d"))
@@ -184,7 +183,7 @@ func TestRemoteMetadataSync(t *testing.T) {
 		})
 		createRemoteMetadataRef(t, sh, "feature-e", remoteMeta)
 
-		require.NoError(t, eng.ApplyRemoteMetadataForBranches(context.Background(), []string{"main", "feature-e", "feature-e"}))
+		require.NoError(t, eng.ApplyRemoteMetadataForBranches(t.Context(), []string{"main", "feature-e", "feature-e"}))
 
 		branch := eng.GetBranch("feature-e")
 		require.True(t, eng.IsLocked(branch))

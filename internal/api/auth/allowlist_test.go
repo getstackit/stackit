@@ -36,9 +36,9 @@ func TestAllowlist_UserExactMatchCaseInsensitive(t *testing.T) {
 	require.NoError(t, err)
 	a.SetOrgChecker(&fakeOrgChecker{}) // no network
 
-	require.NoError(t, a.Check(context.Background(), "jonnii", ""))
-	require.NoError(t, a.Check(context.Background(), "SOMEONE", ""))
-	require.ErrorIs(t, a.Check(context.Background(), "stranger", ""), ErrDenied)
+	require.NoError(t, a.Check(t.Context(), "jonnii", ""))
+	require.NoError(t, a.Check(t.Context(), "SOMEONE", ""))
+	require.ErrorIs(t, a.Check(t.Context(), "stranger", ""), ErrDenied)
 }
 
 func TestAllowlist_OrgMembershipPath(t *testing.T) {
@@ -49,10 +49,10 @@ func TestAllowlist_OrgMembershipPath(t *testing.T) {
 	require.NoError(t, err)
 	a.SetOrgChecker(checker)
 
-	require.NoError(t, a.Check(context.Background(), "jonnii", "tok"))
+	require.NoError(t, a.Check(t.Context(), "jonnii", "tok"))
 	require.Equal(t, 1, checker.calls)
 
-	require.ErrorIs(t, a.Check(context.Background(), "stranger", "tok"), ErrDenied)
+	require.ErrorIs(t, a.Check(t.Context(), "stranger", "tok"), ErrDenied)
 }
 
 func TestAllowlist_UserMatchSkipsOrgCheck(t *testing.T) {
@@ -63,7 +63,7 @@ func TestAllowlist_UserMatchSkipsOrgCheck(t *testing.T) {
 	require.NoError(t, err)
 	a.SetOrgChecker(checker)
 
-	require.NoError(t, a.Check(context.Background(), "jonnii", "tok"))
+	require.NoError(t, a.Check(t.Context(), "jonnii", "tok"))
 	require.Equal(t, 0, checker.calls, "user-list hit must not consume an API call")
 }
 
@@ -75,7 +75,7 @@ func TestAllowlist_OrgCheckerError(t *testing.T) {
 	require.NoError(t, err)
 	a.SetOrgChecker(checker)
 
-	err = a.Check(context.Background(), "jonnii", "tok")
+	err = a.Check(t.Context(), "jonnii", "tok")
 	require.Error(t, err)
 	require.NotErrorIs(t, err, ErrDenied, "infrastructure error must surface, not silently deny")
 }
@@ -86,5 +86,5 @@ func TestAllowlist_EmptyLoginDenied(t *testing.T) {
 	a, _ := NewAllowlist(AllowlistConfig{Users: []string{"jonnii"}})
 	a.SetOrgChecker(&fakeOrgChecker{})
 
-	require.ErrorIs(t, a.Check(context.Background(), "", "tok"), ErrDenied)
+	require.ErrorIs(t, a.Check(t.Context(), "", "tok"), ErrDenied)
 }

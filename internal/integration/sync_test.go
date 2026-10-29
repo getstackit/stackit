@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -43,7 +42,7 @@ func TestSync(t *testing.T) {
 		// 2. Simulate GitHub PR metadata for feature-b pointing to main instead of feature-a
 		// This simulates someone manually changing the PR base on GitHub
 		t.Log("Simulating changed PR base on GitHub...")
-		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature-b").One()
+		meta, err := sh.Metadata.ReadMetadata(t.Context(), "feature-b").One()
 		require.NoError(t, err)
 
 		prInfo := meta.GetPrInfo()
@@ -87,7 +86,7 @@ func TestSync(t *testing.T) {
 		mainBranchName := eng.Trunk().GetName()
 
 		// Batch read metadata for all individual branches at once
-		metas, readErrs := sh.Metadata.ReadMetadata(context.Background(), branchNames...).Split()
+		metas, readErrs := sh.Metadata.ReadMetadata(t.Context(), branchNames...).Split()
 		for branch, readErr := range readErrs {
 			require.NoError(t, readErr, "failed to read metadata for %s", branch)
 		}
@@ -121,7 +120,7 @@ func TestSync(t *testing.T) {
 			CommitChange("merge-file", "merged content")
 
 		// Mark merge branch as merged
-		meta, err := sh.Metadata.ReadMetadata(context.Background(), mergeBranch).One()
+		meta, err := sh.Metadata.ReadMetadata(t.Context(), mergeBranch).One()
 		require.NoError(t, err)
 		prNum := git.PRNumber(100)
 		state := git.PRStateMerged
@@ -162,7 +161,7 @@ func TestSync(t *testing.T) {
 		mainBranchName := eng.Trunk().GetName()
 
 		// a: MERGED into main
-		metaA, _ := sh.Metadata.ReadMetadata(context.Background(), "a").One()
+		metaA, _ := sh.Metadata.ReadMetadata(t.Context(), "a").One()
 		prNumA := git.PRNumber(1)
 		stateA := prStateMerged
 		baseA := mainBranchName
@@ -174,7 +173,7 @@ func TestSync(t *testing.T) {
 		_ = sh.Metadata.WriteMetadata("a", metaA)
 
 		// b: OPEN pointing to main
-		metaB, _ := sh.Metadata.ReadMetadata(context.Background(), "b").One()
+		metaB, _ := sh.Metadata.ReadMetadata(t.Context(), "b").One()
 		prNumB := git.PRNumber(2)
 		stateB := git.PRStateOpen
 		baseB := mainBranchName
@@ -215,7 +214,7 @@ func TestSyncDraftPRs(t *testing.T) {
 
 	// 1. Simulate GitHub PR metadata for branch-a being a DRAFT
 	t.Log("Simulating DRAFT PR on GitHub...")
-	meta, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
+	meta, err := sh.Metadata.ReadMetadata(t.Context(), "branch-a").One()
 	require.NoError(t, err)
 
 	prNum := git.PRNumber(1)
@@ -261,7 +260,7 @@ func TestSyncCleanupDiamond(t *testing.T) {
 	mainBranchName := eng.Trunk().GetName()
 
 	// Mark 'a' as merged
-	metaA, _ := sh.Metadata.ReadMetadata(context.Background(), "a").One()
+	metaA, _ := sh.Metadata.ReadMetadata(t.Context(), "a").One()
 	prNum := git.PRNumber(1)
 	state := prStateMerged
 	base := mainBranchName
@@ -273,7 +272,7 @@ func TestSyncCleanupDiamond(t *testing.T) {
 	_ = sh.Metadata.WriteMetadata("a", metaA)
 
 	// Mark 'b' as merged
-	metaB, _ := sh.Metadata.ReadMetadata(context.Background(), "b").One()
+	metaB, _ := sh.Metadata.ReadMetadata(t.Context(), "b").One()
 	prNumB := git.PRNumber(2)
 	stateB := git.PRStateMerged
 	baseB := mainBranchName
@@ -324,7 +323,7 @@ func TestSyncSquashMergedRootPreservesChildCommitBoundaries(t *testing.T) {
 	sh.CommitChange("shared.txt", "a-v2")
 
 	// Mark branch-a PR as merged so sync cleanup deletes it.
-	metaA, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
+	metaA, err := sh.Metadata.ReadMetadata(t.Context(), "branch-a").One()
 	require.NoError(t, err)
 	prNum := git.PRNumber(1)
 	state := prStateMerged
@@ -377,7 +376,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		mainBranchName := eng.Trunk().GetName()
 
 		// Mark feature as merged
-		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
+		meta, err := sh.Metadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		prNum := git.PRNumber(1)
 		state := prStateMerged
@@ -430,7 +429,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		// Also simulate main having the feature's content
 		sh.CommitChange("feature.txt", "feature v1")
 
-		metaF, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
+		metaF, err := sh.Metadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		prNum := git.PRNumber(1)
 		state := prStateMerged
@@ -486,7 +485,7 @@ func TestSyncDoesNotLeaveIndexState(t *testing.T) {
 		sh.CommitChange("extra.txt", "unpushed work")
 
 		// Mark feature as merged via PR metadata
-		meta, err := sh.Metadata.ReadMetadata(context.Background(), "feature").One()
+		meta, err := sh.Metadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		prNum := git.PRNumber(1)
 		state := prStateMerged
@@ -558,7 +557,7 @@ func requireCleanWorkingTree(t *testing.T, sh *scenario.Scenario) {
 // Mirrors the inline pattern used elsewhere in sync_test.go.
 func markPrMerged(t *testing.T, sh *scenario.Scenario, branch string, prNumber git.PRNumber, base string) {
 	t.Helper()
-	meta, err := sh.Metadata.ReadMetadata(context.Background(), branch).One()
+	meta, err := sh.Metadata.ReadMetadata(t.Context(), branch).One()
 	require.NoError(t, err)
 	num := prNumber
 	state := prStateMerged
@@ -908,7 +907,7 @@ func TestUserDeletedMergedBranchBeforeSync(t *testing.T) {
 
 	// Stale metadata for the ghost should be cleaned up too — otherwise
 	// the next sync would re-detect it and churn pointlessly.
-	meta, err := sh.Metadata.ReadMetadata(context.Background(), "branch-a").One()
+	meta, err := sh.Metadata.ReadMetadata(t.Context(), "branch-a").One()
 	require.NoError(t, err)
 	require.True(t, meta == nil || meta.GetParentBranchName() == nil,
 		"A's stale metadata should be cleared after sync")

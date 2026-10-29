@@ -1,7 +1,6 @@
 package worktree
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -19,7 +18,7 @@ func TestRunResolvedHooksWarnsWhenSkipped(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	RunResolvedHooks(context.Background(), []string{"echo hi"}, "", out)
+	RunResolvedHooks(t.Context(), []string{"echo hi"}, "", out)
 
 	require.Contains(t, out.String(), "Skipped post-worktree-create hooks")
 }
@@ -29,7 +28,7 @@ func TestRunResolvedHooksSilentWithNoHooks(t *testing.T) {
 	t.Parallel()
 
 	out := output.NewTestOutput()
-	RunResolvedHooks(context.Background(), nil, "", out)
+	RunResolvedHooks(t.Context(), nil, "", out)
 
 	require.NotContains(t, out.String(), "Skipped post-worktree-create hooks")
 }
@@ -40,7 +39,7 @@ func TestRunResolvedHooksRunsInWorktree(t *testing.T) {
 
 	dir := t.TempDir()
 	out := output.NewTestOutput()
-	RunResolvedHooks(context.Background(), []string{"touch ran.txt"}, WorktreePath(dir), out)
+	RunResolvedHooks(t.Context(), []string{"touch ran.txt"}, WorktreePath(dir), out)
 
 	require.FileExists(t, filepath.Join(dir, "ran.txt"))
 }

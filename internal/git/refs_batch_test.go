@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,24 +17,24 @@ func TestUpdateRefs(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Create initial blobs for refs (using non-branch refs since they can be any object)
-		sha1, err := git.One(runner.CreateBlobs(context.Background(), "content1"))
+		sha1, err := git.One(runner.CreateBlobs(t.Context(), "content1"))
 		require.NoError(t, err)
-		sha2, err := git.One(runner.CreateBlobs(context.Background(), "content2"))
+		sha2, err := git.One(runner.CreateBlobs(t.Context(), "content2"))
 		require.NoError(t, err)
 
 		// Create initial refs
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/test/ref1", NewSHA: sha1}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/test/ref1", NewSHA: sha1}}, "")
 		require.NoError(t, err)
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/test/ref2", NewSHA: sha2}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/test/ref2", NewSHA: sha2}}, "")
 		require.NoError(t, err)
 
 		// Create new blobs
-		newSha1, err := git.One(runner.CreateBlobs(context.Background(), "new-content1"))
+		newSha1, err := git.One(runner.CreateBlobs(t.Context(), "new-content1"))
 		require.NoError(t, err)
-		newSha2, err := git.One(runner.CreateBlobs(context.Background(), "new-content2"))
+		newSha2, err := git.One(runner.CreateBlobs(t.Context(), "new-content2"))
 		require.NoError(t, err)
 
 		// Update both refs atomically
@@ -47,11 +46,11 @@ func TestUpdateRefs(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify both refs are updated
-		ref1, err := runner.ReadRevisions(context.Background(), "refs/test/ref1").One()
+		ref1, err := runner.ReadRevisions(t.Context(), "refs/test/ref1").One()
 		require.NoError(t, err)
 		require.Equal(t, newSha1, ref1)
 
-		ref2, err := runner.ReadRevisions(context.Background(), "refs/test/ref2").One()
+		ref2, err := runner.ReadRevisions(t.Context(), "refs/test/ref2").One()
 		require.NoError(t, err)
 		require.Equal(t, newSha2, ref2)
 	})
@@ -61,23 +60,23 @@ func TestUpdateRefs(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Create initial blobs and refs
-		sha1, err := git.One(runner.CreateBlobs(context.Background(), "content1"))
+		sha1, err := git.One(runner.CreateBlobs(t.Context(), "content1"))
 		require.NoError(t, err)
-		sha2, err := git.One(runner.CreateBlobs(context.Background(), "content2"))
+		sha2, err := git.One(runner.CreateBlobs(t.Context(), "content2"))
 		require.NoError(t, err)
 
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/test/ref1", NewSHA: sha1}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/test/ref1", NewSHA: sha1}}, "")
 		require.NoError(t, err)
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/test/ref2", NewSHA: sha2}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/test/ref2", NewSHA: sha2}}, "")
 		require.NoError(t, err)
 
 		// Create new blobs
-		newSha1, err := git.One(runner.CreateBlobs(context.Background(), "new-content1"))
+		newSha1, err := git.One(runner.CreateBlobs(t.Context(), "new-content1"))
 		require.NoError(t, err)
-		newSha2, err := git.One(runner.CreateBlobs(context.Background(), "new-content2"))
+		newSha2, err := git.One(runner.CreateBlobs(t.Context(), "new-content2"))
 		require.NoError(t, err)
 
 		// Try to update with wrong OldSHA - should fail atomically
@@ -90,11 +89,11 @@ func TestUpdateRefs(t *testing.T) {
 		require.Error(t, err)
 
 		// Verify neither ref was updated (atomic rollback)
-		ref1, err := runner.ReadRevisions(context.Background(), "refs/test/ref1").One()
+		ref1, err := runner.ReadRevisions(t.Context(), "refs/test/ref1").One()
 		require.NoError(t, err)
 		require.Equal(t, sha1, ref1, "ref1 should not have been updated")
 
-		ref2, err := runner.ReadRevisions(context.Background(), "refs/test/ref2").One()
+		ref2, err := runner.ReadRevisions(t.Context(), "refs/test/ref2").One()
 		require.NoError(t, err)
 		require.Equal(t, sha2, ref2, "ref2 should not have been updated")
 	})
@@ -104,7 +103,7 @@ func TestUpdateRefs(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		err := runner.UpdateRefs(ctx, []git.RefUpdate{}, "")
 		require.NoError(t, err)
@@ -115,9 +114,9 @@ func TestUpdateRefs(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
-		sha, err := git.One(runner.CreateBlobs(context.Background(), "content"))
+		sha, err := git.One(runner.CreateBlobs(t.Context(), "content"))
 		require.NoError(t, err)
 
 		// Update without OldSHA - creates new ref
@@ -127,7 +126,7 @@ func TestUpdateRefs(t *testing.T) {
 		err = runner.UpdateRefs(ctx, updates, "")
 		require.NoError(t, err)
 
-		ref, err := runner.ReadRevisions(context.Background(), "refs/test/newref").One()
+		ref, err := runner.ReadRevisions(t.Context(), "refs/test/newref").One()
 		require.NoError(t, err)
 		require.Equal(t, sha, ref)
 	})
@@ -141,9 +140,9 @@ func TestUpdateRefsWithLog(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
-		sha, err := git.One(runner.CreateBlobs(context.Background(), `{"parent":"main"}`))
+		sha, err := git.One(runner.CreateBlobs(t.Context(), `{"parent":"main"}`))
 		require.NoError(t, err)
 
 		// Use metadata ref (not branch ref) since blobs can be stored there
@@ -154,7 +153,7 @@ func TestUpdateRefsWithLog(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify ref was updated
-		ref, err := runner.ReadRevisions(context.Background(), "refs/stackit/metadata/testbranch").One()
+		ref, err := runner.ReadRevisions(t.Context(), "refs/stackit/metadata/testbranch").One()
 		require.NoError(t, err)
 		require.Equal(t, sha, ref)
 	})
@@ -164,7 +163,7 @@ func TestUpdateRefsWithLog(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Get current commit SHA
 		commitSha, err := runner.ReadRevisions(ctx, "HEAD").One()
@@ -178,7 +177,7 @@ func TestUpdateRefsWithLog(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify ref was updated
-		ref, err := runner.ReadRevisions(context.Background(), "refs/heads/testbranch").One()
+		ref, err := runner.ReadRevisions(t.Context(), "refs/heads/testbranch").One()
 		require.NoError(t, err)
 		require.Equal(t, commitSha, ref)
 
@@ -197,17 +196,17 @@ func TestDeleteRefs(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Create refs to delete
-		sha1, err := git.One(runner.CreateBlobs(context.Background(), "content1"))
+		sha1, err := git.One(runner.CreateBlobs(t.Context(), "content1"))
 		require.NoError(t, err)
-		sha2, err := git.One(runner.CreateBlobs(context.Background(), "content2"))
+		sha2, err := git.One(runner.CreateBlobs(t.Context(), "content2"))
 		require.NoError(t, err)
 
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/branch1", NewSHA: sha1}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/stackit/metadata/branch1", NewSHA: sha1}}, "")
 		require.NoError(t, err)
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/branch2", NewSHA: sha2}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/stackit/metadata/branch2", NewSHA: sha2}}, "")
 		require.NoError(t, err)
 
 		// Delete both refs atomically
@@ -218,10 +217,10 @@ func TestDeleteRefs(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify both refs are deleted
-		_, err = runner.ReadRevisions(context.Background(), "refs/stackit/metadata/branch1").One()
+		_, err = runner.ReadRevisions(t.Context(), "refs/stackit/metadata/branch1").One()
 		require.Error(t, err)
 
-		_, err = runner.ReadRevisions(context.Background(), "refs/stackit/metadata/branch2").One()
+		_, err = runner.ReadRevisions(t.Context(), "refs/stackit/metadata/branch2").One()
 		require.Error(t, err)
 	})
 
@@ -230,7 +229,7 @@ func TestDeleteRefs(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		err := runner.DeleteRefs(ctx, []string{}...)
 		require.NoError(t, err)
@@ -243,12 +242,12 @@ func TestDeleteRefs(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Create one ref
-		sha, err := git.One(runner.CreateBlobs(context.Background(), "content"))
+		sha, err := git.One(runner.CreateBlobs(t.Context(), "content"))
 		require.NoError(t, err)
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/test/exists", NewSHA: sha}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/test/exists", NewSHA: sha}}, "")
 		require.NoError(t, err)
 
 		// Try to delete one that exists and one that doesn't
@@ -260,7 +259,7 @@ func TestDeleteRefs(t *testing.T) {
 		require.NoError(t, err)
 
 		// The existing ref should have been deleted
-		_, err = runner.ReadRevisions(context.Background(), "refs/test/exists").One()
+		_, err = runner.ReadRevisions(t.Context(), "refs/test/exists").One()
 		require.Error(t, err)
 	})
 }
@@ -273,7 +272,7 @@ func TestRefUpdateIntegration(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Get initial commit for branch ref
 		initialCommit, err := runner.ReadRevisions(ctx, "HEAD").One()
@@ -290,13 +289,13 @@ func TestRefUpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create metadata ref
-		metaSha, err := git.One(runner.CreateBlobs(context.Background(), `{"parent":"main"}`))
+		metaSha, err := git.One(runner.CreateBlobs(t.Context(), `{"parent":"main"}`))
 		require.NoError(t, err)
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/feature", NewSHA: metaSha}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/stackit/metadata/feature", NewSHA: metaSha}}, "")
 		require.NoError(t, err)
 
 		// Prepare new metadata
-		newMetaSha, err := git.One(runner.CreateBlobs(context.Background(), `{"parent":"main","parentRev":"abc123"}`))
+		newMetaSha, err := git.One(runner.CreateBlobs(t.Context(), `{"parent":"main","parentRev":"abc123"}`))
 		require.NoError(t, err)
 
 		// Simulate restack: atomically update branch ref (to rebased commit) and metadata ref
@@ -308,11 +307,11 @@ func TestRefUpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify both are updated
-		branchRef, err := runner.ReadRevisions(context.Background(), "refs/heads/feature").One()
+		branchRef, err := runner.ReadRevisions(t.Context(), "refs/heads/feature").One()
 		require.NoError(t, err)
 		require.Equal(t, rebasedCommit, branchRef)
 
-		metaRef, err := runner.ReadRevisions(context.Background(), "refs/stackit/metadata/feature").One()
+		metaRef, err := runner.ReadRevisions(t.Context(), "refs/stackit/metadata/feature").One()
 		require.NoError(t, err)
 		require.Equal(t, newMetaSha, metaRef)
 	})
@@ -322,7 +321,7 @@ func TestRefUpdateIntegration(t *testing.T) {
 		scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Get initial commit
 		commit1, err := runner.ReadRevisions(ctx, "HEAD").One()
@@ -341,13 +340,13 @@ func TestRefUpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create current metadata refs
-		currentMeta, _ := git.One(runner.CreateBlobs(context.Background(), `{"parent":"current"}`))
-		_ = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/branch1", NewSHA: currentMeta}}, "")
-		_ = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: "refs/stackit/metadata/branch2", NewSHA: currentMeta}}, "")
+		currentMeta, _ := git.One(runner.CreateBlobs(t.Context(), `{"parent":"current"}`))
+		_ = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/stackit/metadata/branch1", NewSHA: currentMeta}}, "")
+		_ = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: "refs/stackit/metadata/branch2", NewSHA: currentMeta}}, "")
 
 		// Snapshot state (what we want to restore to) - using commit1 for branches
-		snapshotMeta1, _ := git.One(runner.CreateBlobs(context.Background(), `{"parent":"main"}`))
-		snapshotMeta2, _ := git.One(runner.CreateBlobs(context.Background(), `{"parent":"branch1"}`))
+		snapshotMeta1, _ := git.One(runner.CreateBlobs(t.Context(), `{"parent":"main"}`))
+		snapshotMeta2, _ := git.One(runner.CreateBlobs(t.Context(), `{"parent":"branch1"}`))
 
 		// Restore all refs atomically
 		updates := []git.RefUpdate{
@@ -360,16 +359,16 @@ func TestRefUpdateIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify all refs are restored
-		ref1, _ := runner.ReadRevisions(context.Background(), "refs/heads/branch1").One()
+		ref1, _ := runner.ReadRevisions(t.Context(), "refs/heads/branch1").One()
 		require.Equal(t, commit1, ref1)
 
-		ref2, _ := runner.ReadRevisions(context.Background(), "refs/heads/branch2").One()
+		ref2, _ := runner.ReadRevisions(t.Context(), "refs/heads/branch2").One()
 		require.Equal(t, commit1, ref2)
 
-		meta1, _ := runner.ReadRevisions(context.Background(), "refs/stackit/metadata/branch1").One()
+		meta1, _ := runner.ReadRevisions(t.Context(), "refs/stackit/metadata/branch1").One()
 		require.Equal(t, snapshotMeta1, meta1)
 
-		meta2, _ := runner.ReadRevisions(context.Background(), "refs/stackit/metadata/branch2").One()
+		meta2, _ := runner.ReadRevisions(t.Context(), "refs/stackit/metadata/branch2").One()
 		require.Equal(t, snapshotMeta2, meta2)
 	})
 }

@@ -1,11 +1,9 @@
 package merge
 
 import (
-	"context"
 	"slices"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -52,7 +50,7 @@ func TestDetermineRecommendedStrategy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := DetermineRecommendedStrategy(tt.branchCount)
-			assert.Equal(t, tt.want, got)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -85,7 +83,7 @@ func TestGetAvailableScopes(t *testing.T) {
 		s.WithLinearStack3()
 
 		branchA := s.Engine.GetBranch("a")
-		require.NoError(t, s.Engine.SetScope(context.Background(), branchA, engine.NewScope("PROJ-100")))
+		require.NoError(t, s.Engine.SetScope(t.Context(), branchA, engine.NewScope("PROJ-100")))
 
 		scopes := GetAvailableScopes(s.Engine)
 
@@ -98,7 +96,7 @@ func TestGetAvailableScopes(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3()
 
-		ctx := context.Background()
+		ctx := t.Context()
 		branchA := s.Engine.GetBranch("a")
 		branchB := s.Engine.GetBranch("b")
 		require.NoError(t, s.Engine.SetScope(ctx, branchA, engine.NewScope("PROJ-100")))
@@ -115,7 +113,7 @@ func TestGetAvailableScopes(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3()
 
-		ctx := context.Background()
+		ctx := t.Context()
 		branchA := s.Engine.GetBranch("a")
 		branchB := s.Engine.GetBranch("b")
 		branchC := s.Engine.GetBranch("c")
@@ -153,7 +151,7 @@ func TestAnalyzeMidStackScope(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3()
 
-		ctx := context.Background()
+		ctx := t.Context()
 		branchB := s.Engine.GetBranch("b")
 		branchC := s.Engine.GetBranch("c")
 		require.NoError(t, s.Engine.SetScope(ctx, branchB, engine.NewScope("PROJ-100")))
@@ -170,7 +168,7 @@ func TestAnalyzeMidStackScope(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3()
 
-		ctx := context.Background()
+		ctx := t.Context()
 		branchB := s.Engine.GetBranch("b")
 		branchC := s.Engine.GetBranch("c")
 		require.NoError(t, s.Engine.SetScope(ctx, branchB, engine.NewScope("PROJ-200")))
@@ -187,7 +185,7 @@ func TestAnalyzeMidStackScope(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithLinearStack3()
 
-		ctx := context.Background()
+		ctx := t.Context()
 		branchB := s.Engine.GetBranch("b")
 		branchC := s.Engine.GetBranch("c")
 		require.NoError(t, s.Engine.SetScope(ctx, branchB, engine.NewScope("PROJ-100")))
@@ -204,8 +202,8 @@ func TestPostMergeActionRequired_Error(t *testing.T) {
 	t.Parallel()
 
 	err := &PostMergeActionRequired{Action: PostMergeSyncTrunk}
-	assert.Equal(t, "post-merge action required: sync-trunk", err.Error())
+	require.Equal(t, "post-merge action required: sync-trunk", err.Error())
 
 	err2 := &PostMergeActionRequired{Action: PostMergeDone}
-	assert.Equal(t, "post-merge action required: done", err2.Error())
+	require.Equal(t, "post-merge action required: done", err2.Error())
 }

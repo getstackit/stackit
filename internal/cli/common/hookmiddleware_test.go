@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,7 +41,7 @@ func TestCommandPhase(t *testing.T) {
 				require.NoError(t, err)
 				cmd = next
 			}
-			assert.Equal(t, tt.expected, CommandPhase(cmd, tt.phase))
+			require.Equal(t, tt.expected, CommandPhase(cmd, tt.phase))
 		})
 	}
 }

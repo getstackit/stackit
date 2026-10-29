@@ -34,7 +34,7 @@ func TestRestackFailsLoudlyWhenWorktreesCannotBeInspected(t *testing.T) {
 	t.Parallel()
 
 	dir, realGit := newOptimisticLockTestRepo(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	trackingEngine, err := NewEngine(Options{RepoRoot: dir, Trunk: "main", Git: realGit})
 	require.NoError(t, err)

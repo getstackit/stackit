@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 
@@ -30,10 +29,11 @@ func (l *traceCaptureLogger) Trace(op string, _ int64, success bool, _ error, at
 }
 
 func TestRunnerTracesGitSubprocesses(t *testing.T) {
+	t.Parallel()
 	logger := &traceCaptureLogger{}
 	runner := git.NewRunnerWithPath(t.TempDir(), logger)
 
-	if _, err := runner.RunGitCommandWithContext(context.Background(), "version"); err != nil {
+	if _, err := runner.RunGitCommandWithContext(t.Context(), "version"); err != nil {
 		t.Fatalf("git version: %v", err)
 	}
 

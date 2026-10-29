@@ -3,7 +3,7 @@ package utils
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLazyHeaders_CommitsOnceOnFirstItem(t *testing.T) {
@@ -11,20 +11,20 @@ func TestLazyHeaders_CommitsOnceOnFirstItem(t *testing.T) {
 	h := NewLazyHeaders[string]()
 	h.Start("trunk")
 
-	assert.False(t, h.Committed("trunk"))
-	assert.False(t, h.Any())
+	require.False(t, h.Committed("trunk"))
+	require.False(t, h.Any())
 
 	// First item commits the header, with no separator (nothing before it).
 	emit, separate := h.CommitOnItem("trunk")
-	assert.True(t, emit, "first item should commit the header")
-	assert.False(t, separate, "first header needs no separator")
-	assert.True(t, h.Committed("trunk"))
-	assert.True(t, h.Any())
+	require.True(t, emit, "first item should commit the header")
+	require.False(t, separate, "first header needs no separator")
+	require.True(t, h.Committed("trunk"))
+	require.True(t, h.Any())
 
 	// Subsequent items for the same section never re-emit the header.
 	emit, separate = h.CommitOnItem("trunk")
-	assert.False(t, emit)
-	assert.False(t, separate)
+	require.False(t, emit)
+	require.False(t, separate)
 }
 
 func TestLazyHeaders_SeparatesSuccessiveSections(t *testing.T) {
@@ -34,13 +34,13 @@ func TestLazyHeaders_SeparatesSuccessiveSections(t *testing.T) {
 	h.Start("github")
 
 	emit, separate := h.CommitOnItem("trunk")
-	assert.True(t, emit)
-	assert.False(t, separate, "first committed header has no separator")
+	require.True(t, emit)
+	require.False(t, separate, "first committed header has no separator")
 
 	// The second section's header is separated from the first by a blank line.
 	emit, separate = h.CommitOnItem("github")
-	assert.True(t, emit)
-	assert.True(t, separate, "later headers are separated from the previous group")
+	require.True(t, emit)
+	require.True(t, separate, "later headers are separated from the previous group")
 }
 
 func TestLazyHeaders_UnstartedSectionStaysSilent(t *testing.T) {
@@ -50,10 +50,10 @@ func TestLazyHeaders_UnstartedSectionStaysSilent(t *testing.T) {
 	// An item for a section that never started (e.g. standalone restack drives
 	// items without starting a phase) must not emit a header.
 	emit, separate := h.CommitOnItem("restack")
-	assert.False(t, emit)
-	assert.False(t, separate)
-	assert.False(t, h.Committed("restack"))
-	assert.False(t, h.Any())
+	require.False(t, emit)
+	require.False(t, separate)
+	require.False(t, h.Committed("restack"))
+	require.False(t, h.Any())
 }
 
 func TestLazyHeaders_StartedButNoItemStaysSilent(t *testing.T) {
@@ -63,7 +63,7 @@ func TestLazyHeaders_StartedButNoItemStaysSilent(t *testing.T) {
 	h.Start("clean")
 
 	// Phases that start but never produce an item commit nothing.
-	assert.False(t, h.Committed("branches"))
-	assert.False(t, h.Committed("clean"))
-	assert.False(t, h.Any())
+	require.False(t, h.Committed("branches"))
+	require.False(t, h.Committed("clean"))
+	require.False(t, h.Any())
 }

@@ -1,7 +1,6 @@
 package submit_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -69,7 +68,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 
 		// Create existing PR info with draft status
 		branch := s.Engine.GetBranch(branchName)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoEmpty().
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoEmpty().
 			WithTitle("Existing PR").
 			WithBody("PR body").
 			WithIsDraft(true))
@@ -86,7 +85,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 
 		// Test with non-draft existing PR
 		branch = s.Engine.GetBranch(branchName)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoEmpty().
+		err = s.Engine.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoEmpty().
 			WithTitle("Existing PR").
 			WithBody("PR body").
 			WithIsDraft(false))
@@ -104,7 +103,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 
 		// Create existing PR info with non-draft status
 		branch := s.Engine.GetBranch(branchName)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoEmpty().
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoEmpty().
 			WithTitle("Existing PR").
 			WithBody("PR body").
 			WithIsDraft(false))
@@ -127,7 +126,7 @@ func TestPreparePRMetadata_DraftStatus(t *testing.T) {
 
 		// Create existing PR info with draft status
 		branch := s.Engine.GetBranch(branchName)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoEmpty().
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoEmpty().
 			WithTitle("Existing PR").
 			WithBody("PR body").
 			WithIsDraft(true))
@@ -153,7 +152,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 
 		// Set parent PR as draft
 		parentBranch := s.Engine.GetBranch("parent")
-		err := s.Engine.UpsertPrInfo(context.Background(), parentBranch, testhelpers.NewTestPrInfoDraft(100))
+		err := s.Engine.UpsertPrInfo(t.Context(), parentBranch, testhelpers.NewTestPrInfoDraft(100))
 		require.NoError(t, err)
 
 		// Child has no PR yet
@@ -169,7 +168,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 
 		// Set parent PR as non-draft
 		parentBranch := s.Engine.GetBranch("parent")
-		err := s.Engine.UpsertPrInfo(context.Background(), parentBranch, testhelpers.NewTestPrInfo(100))
+		err := s.Engine.UpsertPrInfo(t.Context(), parentBranch, testhelpers.NewTestPrInfo(100))
 		require.NoError(t, err)
 
 		childBranch := s.Engine.GetBranch("child")
@@ -184,7 +183,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 
 		// Set parent PR as draft
 		parentBranch := s.Engine.GetBranch("parent")
-		err := s.Engine.UpsertPrInfo(context.Background(), parentBranch, testhelpers.NewTestPrInfoDraft(100))
+		err := s.Engine.UpsertPrInfo(t.Context(), parentBranch, testhelpers.NewTestPrInfoDraft(100))
 		require.NoError(t, err)
 
 		childBranch := s.Engine.GetBranch("child")
@@ -210,7 +209,7 @@ func TestPreparePRMetadata_InheritParentDraft(t *testing.T) {
 
 		// Parent PR is not draft, but ConfigDraft is true
 		parentBranch := s.Engine.GetBranch("parent")
-		err := s.Engine.UpsertPrInfo(context.Background(), parentBranch, testhelpers.NewTestPrInfo(100))
+		err := s.Engine.UpsertPrInfo(t.Context(), parentBranch, testhelpers.NewTestPrInfo(100))
 		require.NoError(t, err)
 
 		childBranch := s.Engine.GetBranch("child")
@@ -243,7 +242,7 @@ func TestPreparePRMetadata_NoEdit(t *testing.T) {
 			CommitChange("change", "feat: test feature")
 
 		// Track the branch so GetCommitSubject knows the range
-		err := s.Engine.TrackBranch(context.Background(), branchName, "main")
+		err := s.Engine.TrackBranch(t.Context(), branchName, "main")
 		require.NoError(t, err)
 
 		opts := submit.MetadataOptions{}
@@ -267,7 +266,7 @@ func TestPreparePRMetadata_DefaultsFromCommits(t *testing.T) {
 			CommitChange("change1", "feat: commit 1").
 			CommitChange("change2", "feat: commit 2")
 
-		err := s.Engine.TrackBranch(context.Background(), branchName, "main")
+		err := s.Engine.TrackBranch(t.Context(), branchName, "main")
 		require.NoError(t, err)
 
 		branch := s.Engine.GetBranch(branchName)
@@ -291,7 +290,7 @@ func TestGetPRBody_MultipleCommits(t *testing.T) {
 			CommitChange("change2", "feat: commit 2\n\nwith body")
 
 		// Track the branch
-		err := s.Engine.TrackBranch(context.Background(), branchName, "main")
+		err := s.Engine.TrackBranch(t.Context(), branchName, "main")
 		require.NoError(t, err)
 
 		// Get PR body

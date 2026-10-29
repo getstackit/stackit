@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,7 +31,7 @@ func BenchmarkWorktreeCreation(b *testing.B) {
 
 	// Initialize git repo
 	g := git.NewRunnerWithPath(repoPath, nil)
-	ctx := context.Background()
+	ctx := b.Context()
 
 	if _, err := g.RunGitCommandWithContext(ctx, "init"); err != nil {
 		b.Fatalf("failed to init repo: %v", err)
@@ -123,7 +122,7 @@ func benchmarkWideStack(b *testing.B, numBranches int) {
 	setupBenchmark()
 
 	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-	oldBase, _ := s.Git.GetMergeBase(context.Background(), mainBranch, branchName(0))
+	oldBase, _ := s.Git.GetMergeBase(b.Context(), mainBranch, branchName(0))
 
 	// Build specs
 	specs := make([]engine.RebaseSpec, numBranches)
@@ -136,7 +135,7 @@ func benchmarkWideStack(b *testing.B, numBranches int) {
 	}
 
 	for b.Loop() {
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(b.Context(), specs)
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)
 		}
@@ -167,7 +166,7 @@ func benchmarkLinearStack(b *testing.B, depth int) {
 	setupBenchmark()
 
 	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-	oldBase, _ := s.Git.GetMergeBase(context.Background(), mainBranch, branchName(0))
+	oldBase, _ := s.Git.GetMergeBase(b.Context(), mainBranch, branchName(0))
 
 	// Build specs for chained rebases
 	specs := make([]engine.RebaseSpec, depth)
@@ -187,7 +186,7 @@ func benchmarkLinearStack(b *testing.B, depth int) {
 	}
 
 	for b.Loop() {
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(b.Context(), specs)
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)
 		}
@@ -219,7 +218,7 @@ func benchmarkMixedStack(b *testing.B) {
 	setupBenchmark()
 
 	mainRev, _ := s.Engine.GetRevision(s.Engine.Trunk())
-	oldBase, _ := s.Git.GetMergeBase(context.Background(), mainBranch, "feature-a")
+	oldBase, _ := s.Git.GetMergeBase(b.Context(), mainBranch, "feature-a")
 
 	// Get revisions for chaining
 	featureARev, _ := s.Engine.GetRevision(s.Engine.GetBranch("feature-a"))
@@ -240,7 +239,7 @@ func benchmarkMixedStack(b *testing.B) {
 	}
 
 	for b.Loop() {
-		result, err := s.Engine.ValidateRebases(context.Background(), specs)
+		result, err := s.Engine.ValidateRebases(b.Context(), specs)
 		if err != nil || !result.Success {
 			b.Fatalf("validation failed: %v, result: %+v", err, result)
 		}

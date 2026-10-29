@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +23,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	branch := eng.GetBranch("feature")
 
 	// 1. Lock the branch
-	_, err := eng.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+	_, err := eng.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 	require.True(t, branch.IsLocked())
 	require.Equal(t, string(engine.LockReasonUser), string(branch.GetLockReason()))
@@ -32,7 +31,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	// 2. Upsert PR info with lockReason="user"
 	prNumber := git.PRNumber(123)
 	prInfo := engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://url"}).WithLockReason(engine.LockReasonUser)
-	err = eng.UpsertPrInfo(context.Background(), branch, prInfo)
+	err = eng.UpsertPrInfo(t.Context(), branch, prInfo)
 	require.NoError(t, err)
 
 	// Simulate push by updating the local remote-tracking ref.
@@ -58,7 +57,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 	require.True(t, gotPrInfo.IsLocked(), "Locked status should be persisted in PR info")
 
 	// 5. Check submission status - should NOT need update if nothing changed
-	statuses, err := eng.BatchGetPRSubmissionStatus(context.Background(), engine.BranchesOf(branch), nil)
+	statuses, err := eng.BatchGetPRSubmissionStatus(t.Context(), engine.BranchesOf(branch), nil)
 	require.NoError(t, err)
 	status := statuses[branch.GetName()]
 	if status.NeedsUpdate {
@@ -67,7 +66,7 @@ func TestPrInfoLockedPersistence(t *testing.T) {
 		prInfo, _ := branch.GetPrInfo()
 		parentBranch := eng.Trunk().GetName()
 		baseChanged := prInfo.Base() != parentBranch
-		remoteStatus := eng.ReadBranchRemoteStatuses(context.Background(), engine.BranchesOf(branch)).ForBranch(branch)
+		remoteStatus := eng.ReadBranchRemoteStatuses(t.Context(), engine.BranchesOf(branch)).ForBranch(branch)
 		branchChanged := !remoteStatus.Matches()
 		t.Logf("baseChanged: %v, branchChanged: %v, prInfo.IsLocked: %v, branch.IsLocked: %v", baseChanged, branchChanged, prInfo.IsLocked(), branch.IsLocked())
 	}

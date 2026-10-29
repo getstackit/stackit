@@ -1,10 +1,8 @@
 package merge
 
 import (
-	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -28,8 +26,8 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 			{BranchName: "feature-a", PRNumber: 0},
 		})
 
-		assert.Equal(t, "Merging 1 PRs", content.Title)
-		assert.NotContains(t, content.Body, "#0")
+		require.Equal(t, "Merging 1 PRs", content.Title)
+		require.NotContains(t, content.Body, "#0")
 	})
 
 	t.Run("multiple_branches_with_prs", func(t *testing.T) {
@@ -46,9 +44,9 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 			{BranchName: "feature-a-1", PRNumber: 2},
 		})
 
-		assert.Equal(t, "Merging 2 PRs", content.Title)
-		assert.Contains(t, content.Body, "#1")
-		assert.Contains(t, content.Body, "#2")
+		require.Equal(t, "Merging 2 PRs", content.Title)
+		require.Contains(t, content.Body, "#1")
+		require.Contains(t, content.Body, "#2")
 	})
 
 	t.Run("branches_with_scope", func(t *testing.T) {
@@ -57,15 +55,15 @@ func TestPRContentGenerator_GenerateConsolidationPR(t *testing.T) {
 		s.WithStack(map[string]string{
 			"feature-a": "main",
 		})
-		_ = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature-a"), engine.NewScope("PROJ-123"))
+		_ = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("feature-a"), engine.NewScope("PROJ-123"))
 
 		gen := NewPRContentGenerator(s.Engine)
 		content := gen.GenerateConsolidationPR([]BranchMergeInfo{
 			{BranchName: "feature-a", PRNumber: 1},
 		})
 
-		assert.Equal(t, "Merging PROJ-123", content.Title)
-		assert.Contains(t, content.Body, "#1")
+		require.Equal(t, "Merging PROJ-123", content.Title)
+		require.Contains(t, content.Body, "#1")
 	})
 }
 
@@ -79,7 +77,7 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 		})
 
 		// Set stack description
-		_ = s.Engine.SetStackDescription(context.Background(), s.Engine.GetBranch("feature-a"), &git.StackDescription{
+		_ = s.Engine.SetStackDescription(t.Context(), s.Engine.GetBranch("feature-a"), &git.StackDescription{
 			Title:       "Auth Feature",
 			Description: "Implements authentication",
 		})
@@ -89,9 +87,9 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 			{BranchName: "feature-a", PRNumber: 1},
 		})
 
-		assert.Equal(t, "Auth Feature", content.Title)
-		assert.Contains(t, content.Body, "**Auth Feature**")
-		assert.Contains(t, content.Body, "Implements authentication")
+		require.Equal(t, "Auth Feature", content.Title)
+		require.Contains(t, content.Body, "**Auth Feature**")
+		require.Contains(t, content.Body, "Implements authentication")
 	})
 
 	t.Run("with_stack_description_title_only", func(t *testing.T) {
@@ -103,7 +101,7 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 		})
 
 		// Set stack description with title only
-		_ = s.Engine.SetStackDescription(context.Background(), s.Engine.GetBranch("feature-a"), &git.StackDescription{
+		_ = s.Engine.SetStackDescription(t.Context(), s.Engine.GetBranch("feature-a"), &git.StackDescription{
 			Title: "My Feature Stack",
 		})
 
@@ -113,8 +111,8 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 			{BranchName: "feature-a-1", PRNumber: 2},
 		})
 
-		assert.Equal(t, "My Feature Stack", content.Title)
-		assert.Contains(t, content.Body, "**My Feature Stack**")
+		require.Equal(t, "My Feature Stack", content.Title)
+		require.Contains(t, content.Body, "**My Feature Stack**")
 	})
 
 	t.Run("no_description_fallback", func(t *testing.T) {
@@ -132,9 +130,9 @@ func TestPRContentGenerator_GenerateConsolidationPR_WithStackDescription(t *test
 		})
 
 		// Should fall back to default title
-		assert.Equal(t, "Merging 1 PRs", content.Title)
+		require.Equal(t, "Merging 1 PRs", content.Title)
 		// Body should not contain description formatting
-		assert.NotContains(t, content.Body, "**Auth")
+		require.NotContains(t, content.Body, "**Auth")
 	})
 }
 
@@ -153,8 +151,8 @@ func TestPRContentGenerator_GenerateMultiStackPR(t *testing.T) {
 			nil,
 		)
 
-		assert.Equal(t, "Merging 1 PRs", content.Title)
-		assert.Contains(t, content.Body, "feature-a")
+		require.Equal(t, "Merging 1 PRs", content.Title)
+		require.Contains(t, content.Body, "feature-a")
 	})
 
 	t.Run("with_excluded_stacks", func(t *testing.T) {
@@ -170,9 +168,9 @@ func TestPRContentGenerator_GenerateMultiStackPR(t *testing.T) {
 			[]MultiStackExcluded{{Stack: MultiStackInfo{RootBranch: "feature-b"}, Reason: "conflict"}},
 		)
 
-		assert.Contains(t, content.Body, "### Excluded")
-		assert.Contains(t, content.Body, "feature-b")
-		assert.Contains(t, content.Body, "conflict")
+		require.Contains(t, content.Body, "### Excluded")
+		require.Contains(t, content.Body, "feature-b")
+		require.Contains(t, content.Body, "conflict")
 	})
 
 	t.Run("mixed_scopes_omits_scope_trailer", func(t *testing.T) {
@@ -183,9 +181,9 @@ func TestPRContentGenerator_GenerateMultiStackPR(t *testing.T) {
 			"feature-b": "main",
 		})
 
-		err := s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature-a"), engine.NewScope("PROJ-1"))
+		err := s.Engine.SetScope(t.Context(), s.Engine.GetBranch("feature-a"), engine.NewScope("PROJ-1"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("feature-b"), engine.NewScope("PROJ-2"))
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("feature-b"), engine.NewScope("PROJ-2"))
 		require.NoError(t, err)
 
 		gen := NewPRContentGenerator(s.Engine)
@@ -197,8 +195,8 @@ func TestPRContentGenerator_GenerateMultiStackPR(t *testing.T) {
 			nil,
 		)
 
-		assert.Equal(t, "Merging PROJ-1, PROJ-2", content.Title)
-		assert.NotContains(t, content.Body, "Stackit-Scope:")
+		require.Equal(t, "Merging PROJ-1, PROJ-2", content.Title)
+		require.NotContains(t, content.Body, "Stackit-Scope:")
 	})
 }
 
@@ -207,16 +205,16 @@ func TestResolveUnifiedScope(t *testing.T) {
 
 	t.Run("returns empty when all scopes are empty", func(t *testing.T) {
 		t.Parallel()
-		assert.Empty(t, pr.ResolveUnifiedScope([]string{"", ""}))
+		require.Empty(t, pr.ResolveUnifiedScope([]string{"", ""}))
 	})
 
 	t.Run("returns the shared scope", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "PROJ-1", pr.ResolveUnifiedScope([]string{"", "PROJ-1", "PROJ-1"}))
+		require.Equal(t, "PROJ-1", pr.ResolveUnifiedScope([]string{"", "PROJ-1", "PROJ-1"}))
 	})
 
 	t.Run("returns empty when scopes differ", func(t *testing.T) {
 		t.Parallel()
-		assert.Empty(t, pr.ResolveUnifiedScope([]string{"PROJ-1", "PROJ-2"}))
+		require.Empty(t, pr.ResolveUnifiedScope([]string{"PROJ-1", "PROJ-2"}))
 	})
 }

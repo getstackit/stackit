@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,7 @@ func TestConfigureRemoteMetadataSyncResolvesNonOriginRemote(t *testing.T) {
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("remote", "add", "upstream", "https://example.com/repo.git"))
 	require.NoError(t, sh.Scene.Repo.RunGitCommand("config", "branch.main.remote", "upstream"))
 
-	require.NoError(t, sh.Engine.ConfigureRemoteMetadataSync(context.Background()))
+	require.NoError(t, sh.Engine.ConfigureRemoteMetadataSync(t.Context()))
 
 	upstreamRefspecs, _ := sh.Git.GetConfigAll("remote.upstream.fetch")
 	require.Contains(t, upstreamRefspecs, metadataFetchRefspec,
@@ -42,7 +41,7 @@ func TestConfigureRemoteMetadataSyncSkipsRemoteless(t *testing.T) {
 	t.Parallel()
 	sh := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
-	require.NoError(t, sh.Engine.ConfigureRemoteMetadataSync(context.Background()))
+	require.NoError(t, sh.Engine.ConfigureRemoteMetadataSync(t.Context()))
 
 	refspecs, _ := sh.Git.GetConfigAll("remote.origin.fetch")
 	require.NotContains(t, refspecs, metadataFetchRefspec)

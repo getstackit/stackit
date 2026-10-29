@@ -1,10 +1,8 @@
 package delete
 
 import (
-	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/engine"
@@ -172,7 +170,7 @@ func TestDelete(t *testing.T) {
 		s.CommitChange("shared.txt", "branch1-v2")
 
 		// Mark branch1 as merged so delete uses merged deletion semantics.
-		err := s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main"))
+		err := s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main"))
 		require.NoError(t, err)
 
 		_, err = Action(s.Context, Options{
@@ -198,7 +196,7 @@ func TestDeleteRespectsManagedWorktreeOwnership(t *testing.T) {
 	s.TrackBranch("feature", "main")
 	s.CreateBranch("feature-child").Commit("child change")
 	s.TrackBranch("feature-child", "feature")
-	require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature-wt"}))
+	require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: "/tmp/feature-worktree", Name: "feature-wt"}))
 	t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 	_, err := Action(s.Context, Options{BranchName: "feature", Force: true}, nil)
@@ -222,7 +220,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		s.TrackBranch("feature-branch", "main")
 
 		// Register a fake worktree for this stack root
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-branch", Path: "/tmp/fake-worktree-path"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-branch", Path: "/tmp/fake-worktree-path"})
 		require.NoError(t, err)
 
 		// Verify worktree is registered
@@ -241,7 +239,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		// Verify worktree registration was cleaned up
 		wt, err = s.Engine.GetWorktreeForStack("feature-branch")
 		require.NoError(t, err)
-		assert.Nil(t, wt, "worktree registration should be removed when stack root is deleted")
+		require.Nil(t, wt, "worktree registration should be removed when stack root is deleted")
 	})
 
 	t.Run("does not clean worktree when non-root branch is deleted", func(t *testing.T) {
@@ -255,7 +253,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		s.TrackBranch("child-branch", "stack-root")
 
 		// Register a worktree for the stack root
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "stack-root", Path: "/tmp/fake-worktree-path"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "stack-root", Path: "/tmp/fake-worktree-path"})
 		require.NoError(t, err)
 
 		// Verify worktree is registered
@@ -274,7 +272,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		// Verify worktree registration is preserved
 		wt, err = s.Engine.GetWorktreeForStack("stack-root")
 		require.NoError(t, err)
-		assert.NotNil(t, wt, "worktree registration should be preserved when non-root branch is deleted")
+		require.NotNil(t, wt, "worktree registration should be preserved when non-root branch is deleted")
 	})
 
 	t.Run("cleans worktree when upstack deletes entire stack including root", func(t *testing.T) {
@@ -288,7 +286,7 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		s.TrackBranch("child-branch", "stack-root")
 
 		// Register a worktree for the stack root
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "stack-root", Path: "/tmp/fake-worktree-path"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "stack-root", Path: "/tmp/fake-worktree-path"})
 		require.NoError(t, err)
 
 		// Verify worktree is registered
@@ -308,6 +306,6 @@ func TestDeleteCleansUpWorktrees(t *testing.T) {
 		// Verify worktree registration was cleaned up
 		wt, err = s.Engine.GetWorktreeForStack("stack-root")
 		require.NoError(t, err)
-		assert.Nil(t, wt, "worktree registration should be removed when entire stack is deleted with --upstack")
+		require.Nil(t, wt, "worktree registration should be removed when entire stack is deleted with --upstack")
 	})
 }

@@ -315,7 +315,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		// Restore snapshot
 		snapshots, err := s.Engine.GetSnapshots()
 		require.NoError(t, err)
-		err = s.Engine.RestoreSnapshot(context.Background(), snapshots[0].ID)
+		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
 
 		// Verify SHAs restored
@@ -357,7 +357,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		// Restore snapshot
 		snapshots, err := s.Engine.GetSnapshots()
 		require.NoError(t, err)
-		err = s.Engine.RestoreSnapshot(context.Background(), snapshots[0].ID)
+		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
 
 		// Verify new branch was deleted
@@ -390,13 +390,13 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Modify metadata by changing parent
-		err = s.Engine.SetParent(context.Background(), s.Engine.GetBranch("feature"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
+		err = s.Engine.SetParent(t.Context(), s.Engine.GetBranch("feature"), s.Engine.GetBranch("main"), engine.DivergenceRecompute)
 		require.NoError(t, err)
 
 		// Restore snapshot
 		snapshots, err := s.Engine.GetSnapshots()
 		require.NoError(t, err)
-		err = s.Engine.RestoreSnapshot(context.Background(), snapshots[0].ID)
+		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
 
 		// Verify metadata restored
@@ -426,7 +426,7 @@ func TestRestoreSnapshot(t *testing.T) {
 		// Restore snapshot
 		snapshots, err := s.Engine.GetSnapshots()
 		require.NoError(t, err)
-		err = s.Engine.RestoreSnapshot(context.Background(), snapshots[0].ID)
+		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
 
 		// Verify we're back on main
@@ -450,13 +450,13 @@ func TestRestoreSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete feature branch manually
-		err = s.Engine.DeleteBranch(context.Background(), s.Engine.GetBranch("feature"))
+		err = s.Engine.DeleteBranch(t.Context(), s.Engine.GetBranch("feature"))
 		require.NoError(t, err)
 
 		// Restore snapshot - should recreate the branch
 		snapshots, err := s.Engine.GetSnapshots()
 		require.NoError(t, err)
-		err = s.Engine.RestoreSnapshot(context.Background(), snapshots[0].ID)
+		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
 
 		// Verify branch was restored
@@ -482,13 +482,13 @@ func TestRestoreSnapshot(t *testing.T) {
 
 		// Delete feature branch
 		s.Checkout("main")
-		err = s.Engine.DeleteBranch(context.Background(), s.Engine.GetBranch("feature"))
+		err = s.Engine.DeleteBranch(t.Context(), s.Engine.GetBranch("feature"))
 		require.NoError(t, err)
 
 		// Restore snapshot - this will recreate the feature branch
 		snapshots, err := s.Engine.GetSnapshots()
 		require.NoError(t, err)
-		err = s.Engine.RestoreSnapshot(context.Background(), snapshots[0].ID)
+		err = s.Engine.RestoreSnapshot(t.Context(), snapshots[0].ID)
 		require.NoError(t, err)
 
 		// After restore, the branch is recreated, so we should be on feature

@@ -1,7 +1,6 @@
 package flatten_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -270,7 +269,7 @@ func TestFlattenAction(t *testing.T) {
 		require.Equal(t, "1", bCommitsBefore, "B should have 1 commit on top of A")
 
 		// Clear B's ParentBranchRevision metadata to trigger the fallback path
-		meta, err := s.Metadata.ReadMetadata(context.Background(), "B").One()
+		meta, err := s.Metadata.ReadMetadata(t.Context(), "B").One()
 		require.NoError(t, err)
 		meta = meta.WithParentBranchRevision(nil)
 		err = s.Metadata.WriteMetadata("B", meta)
@@ -279,7 +278,7 @@ func TestFlattenAction(t *testing.T) {
 		s.Rebuild()
 
 		// Verify metadata was cleared
-		meta, err = s.Metadata.ReadMetadata(context.Background(), "B").One()
+		meta, err = s.Metadata.ReadMetadata(t.Context(), "B").One()
 		require.NoError(t, err)
 		require.Nil(t, meta.GetParentBranchRevision())
 

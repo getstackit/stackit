@@ -246,6 +246,7 @@ func TestUndoAfterMove(t *testing.T) {
 }
 
 func TestUndoWarnsWhenLinearModeRestoresFork(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit().
 		CreateBranch("base").

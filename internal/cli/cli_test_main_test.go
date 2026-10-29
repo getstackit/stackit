@@ -1,9 +1,9 @@
 package cli_test
 
 import (
+	"os"
 	"testing"
 
-	"github.com/getstackit/stackit/testhelpers"
 	"github.com/getstackit/stackit/testhelpers/inprocess"
 	"github.com/getstackit/stackit/testhelpers/scenario"
 )
@@ -14,5 +14,5 @@ func TestMain(m *testing.M) {
 		res := runner.Run(workDir, args...)
 		return res.Output, res.Err
 	})
-	testhelpers.TestMain(m, nil)
+	os.Exit(m.Run())
 }

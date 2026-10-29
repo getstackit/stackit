@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,9 +34,9 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		require.NoError(t, firstMetadata.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
 
 		// Both read the same starting point.
-		fromFirst, err := firstMetadata.ReadMetadata(context.Background(), "feature").One()
+		fromFirst, err := firstMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
-		fromSecond, err := secondMetadata.ReadMetadata(context.Background(), "feature").One()
+		fromSecond, err := secondMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "main", *fromSecond.GetParentBranchName())
 
@@ -52,7 +51,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		require.Contains(t, err.Error(), "another process changed it")
 
 		// The first write survives.
-		latest, err := firstMetadata.ReadMetadata(context.Background(), "feature").One()
+		latest, err := firstMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "first-parent", *latest.GetParentBranchName())
 	})
@@ -75,9 +74,9 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		main := "main"
 		require.NoError(t, firstMetadata.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
 
-		firstBatch, errs := firstMetadata.ReadMetadata(context.Background(), []string{"feature"}...).Split()
+		firstBatch, errs := firstMetadata.ReadMetadata(t.Context(), []string{"feature"}...).Split()
 		require.Empty(t, errs)
-		secondBatch, errs := secondMetadata.ReadMetadata(context.Background(), []string{"feature"}...).Split()
+		secondBatch, errs := secondMetadata.ReadMetadata(t.Context(), []string{"feature"}...).Split()
 		require.Empty(t, errs)
 
 		firstParent := "first-parent"
@@ -88,7 +87,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		require.Error(t, err, "a write based on superseded state must not silently win")
 		require.Contains(t, err.Error(), "another process changed it")
 
-		latest, err := firstMetadata.ReadMetadata(context.Background(), "feature").One()
+		latest, err := firstMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "first-parent", *latest.GetParentBranchName())
 	})
@@ -109,10 +108,10 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		main := "main"
 		require.NoError(t, firstMetadata.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
 
-		fromSecond, err := secondMetadata.ReadMetadata(context.Background(), "feature").One()
+		fromSecond, err := secondMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 
-		fromFirst, err := firstMetadata.ReadMetadata(context.Background(), "feature").One()
+		fromFirst, err := firstMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		firstParent := "first-parent"
 		require.NoError(t, firstMetadata.WriteMetadata("feature", fromFirst.WithParentBranchName(&firstParent)))
@@ -122,7 +121,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 
 		// Re-reading in the same process must see the winner, not the stale
 		// cached copy, and the retry must then be allowed through.
-		fresh, err := secondMetadata.ReadMetadata(context.Background(), "feature").One()
+		fresh, err := secondMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "first-parent", *fresh.GetParentBranchName())
 		require.NoError(t, secondMetadata.WriteMetadata("feature", fresh.WithParentBranchName(&secondParent)))
@@ -132,7 +131,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		// what this case is about.
 		third := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 		thirdMetadata := git.NewMetadataStore(third)
-		latest, err := thirdMetadata.ReadMetadata(context.Background(), "feature").One()
+		latest, err := thirdMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "second-parent", *latest.GetParentBranchName())
 	})
@@ -148,20 +147,20 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		main := "main"
 		require.NoError(t, firstMetadata.WriteMetadata("feature", git.NewMeta().WithParentBranchName(&main)))
 
-		fromFirst, err := firstMetadata.ReadMetadata(context.Background(), "feature").One()
+		fromFirst, err := firstMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		firstParent := "first-parent"
 		require.NoError(t, firstMetadata.WriteMetadata("feature", fromFirst.WithParentBranchName(&firstParent)))
 
 		// Re-reading picks up the new blob, so the follow-up write is based on
 		// current state and is allowed.
-		fresh, err := secondMetadata.ReadMetadata(context.Background(), "feature").One()
+		fresh, err := secondMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "first-parent", *fresh.GetParentBranchName())
 		secondParent := "second-parent"
 		require.NoError(t, secondMetadata.WriteMetadata("feature", fresh.WithParentBranchName(&secondParent)))
 
-		latest, err := secondMetadata.ReadMetadata(context.Background(), "feature").One()
+		latest, err := secondMetadata.ReadMetadata(t.Context(), "feature").One()
 		require.NoError(t, err)
 		require.Equal(t, "second-parent", *latest.GetParentBranchName())
 	})
@@ -176,7 +175,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 		main := "main"
 		require.NoError(t, runnerMetadata.WriteMetadata("brand-new", git.NewMeta().WithParentBranchName(&main)))
 
-		stored, err := runnerMetadata.ReadMetadata(context.Background(), "brand-new").One()
+		stored, err := runnerMetadata.ReadMetadata(t.Context(), "brand-new").One()
 		require.NoError(t, err)
 		require.Equal(t, "main", *stored.GetParentBranchName())
 	})
@@ -188,7 +187,7 @@ func TestMetadataWriteCompareAndSwap(t *testing.T) {
 func TestMetadataWriteAfterInProcessRefUpdate(t *testing.T) {
 	t.Parallel()
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
-	ctx := context.Background()
+	ctx := t.Context()
 	runner := git.NewRunnerWithPath(scene.Repo.Dir, nil)
 	store := git.NewMetadataStore(runner)
 

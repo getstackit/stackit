@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -183,7 +182,7 @@ func TestRestackAction(t *testing.T) {
 		require.Equal(t, []string{"feature"}, recorder.branchesWith(RestackConflict))
 		require.NotNil(t, recorder.summary)
 		require.Equal(t, []string{"feature"}, recorder.summary.Conflicts)
-		require.False(t, s.Git.IsRebaseInProgress(context.Background()))
+		require.False(t, s.Git.IsRebaseInProgress(t.Context()))
 	})
 
 	t.Run("resolving mid-stack conflict applies ancestors before entering workflow", func(t *testing.T) {
@@ -225,7 +224,7 @@ func TestRestackAction(t *testing.T) {
 		// conflict state. Before the fix this errored with "expected conflict
 		// on b but rebase completed successfully" and left HEAD detached.
 		require.ErrorIs(t, err, stackiterrors.ErrConflictWorkflow)
-		require.True(t, s.Git.IsRebaseInProgress(context.Background()))
+		require.True(t, s.Git.IsRebaseInProgress(t.Context()))
 
 		continuation, err := config.GetContinuationState(s.Scene.Dir)
 		require.NoError(t, err)
@@ -233,7 +232,7 @@ func TestRestackAction(t *testing.T) {
 
 		mainRev, err := s.Engine.GetRevision(engine.NewBranch("main", nil))
 		require.NoError(t, err)
-		isAncestor, err := s.Git.IsAncestor(context.Background(), mainRev, "a")
+		isAncestor, err := s.Git.IsAncestor(t.Context(), mainRev, "a")
 		require.NoError(t, err)
 		require.True(t, isAncestor, "ancestor a must be restacked onto the new trunk before entering the conflict workflow")
 	})
@@ -267,7 +266,7 @@ func TestRestackAction(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, handler.prompted)
 		require.Equal(t, []string{"feature"}, handler.conflicts)
-		require.False(t, s.Git.IsRebaseInProgress(context.Background()))
+		require.False(t, s.Git.IsRebaseInProgress(t.Context()))
 
 		featureRev, err := s.Engine.GetRevision(engine.NewBranch("feature", nil))
 		require.NoError(t, err)

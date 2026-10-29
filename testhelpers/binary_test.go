@@ -13,7 +13,7 @@ func TestBuildBinaryUsesCallerOwnedBinary(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755))
 	t.Setenv("STACKIT_TEST_BINARY", path)
 
-	got, cleanup, err := buildBinaryOnce()
+	got, cleanup, err := buildBinaryWithCleanup()
 	require.NoError(t, err)
 	require.Equal(t, path, got)
 	cleanup()
@@ -40,7 +40,7 @@ func TestBuildBinaryRejectsInvalidOverride(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("STACKIT_TEST_BINARY", tc.path)
-			path, cleanup, err := buildBinaryOnce()
+			path, cleanup, err := buildBinaryWithCleanup()
 			require.ErrorContains(t, err, "STACKIT_TEST_BINARY")
 			require.Empty(t, path)
 			require.Nil(t, cleanup)

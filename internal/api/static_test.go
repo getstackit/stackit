@@ -10,6 +10,7 @@ import (
 )
 
 func TestStaticHandler(t *testing.T) {
+	t.Parallel()
 	staticFS := fstest.MapFS{
 		"index.html":                    {Data: []byte("<html>index</html>")},
 		"assets/app.js":                 {Data: []byte("console.log('ok')")},
@@ -24,6 +25,7 @@ func TestStaticHandler(t *testing.T) {
 	}
 
 	t.Run("serves index", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -37,6 +39,7 @@ func TestStaticHandler(t *testing.T) {
 	})
 
 	t.Run("serves known asset", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -50,6 +53,7 @@ func TestStaticHandler(t *testing.T) {
 	})
 
 	t.Run("serves underscore-prefixed next assets", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/_next/static/chunks/app.js", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -63,6 +67,7 @@ func TestStaticHandler(t *testing.T) {
 	})
 
 	t.Run("falls back to index for client route", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/stacks/main", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -76,6 +81,7 @@ func TestStaticHandler(t *testing.T) {
 	})
 
 	t.Run("returns 404 for missing file with extension", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/assets/missing.js", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -90,6 +96,7 @@ func TestStaticHandler(t *testing.T) {
 	// were a missing asset — that would break deep links to dotted branches,
 	// which is the whole point of the path-URL scheme.
 	t.Run("falls back to index for dotted branch routes", func(t *testing.T) {
+		t.Parallel()
 		for _, p := range []string{
 			"/octo/widget/tree/release/v1.2.0",
 			"/octo/widget/tree/2026.01",
@@ -109,6 +116,7 @@ func TestStaticHandler(t *testing.T) {
 	})
 
 	t.Run("nil fs serves fallback placeholder", func(t *testing.T) {
+		t.Parallel()
 		var nilFS fs.FS
 		handler := newStaticHandler(nilFS)
 		if handler == nil {

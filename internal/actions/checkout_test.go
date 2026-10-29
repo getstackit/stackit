@@ -1,7 +1,6 @@
 package actions_test
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -21,7 +20,7 @@ func TestCheckoutActionWorktreeSwitchIncludesTargetBranch(t *testing.T) {
 			"feature": "main",
 		})
 
-	err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(s.Context.RepoRoot)})
+	err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(s.Context.RepoRoot)})
 	require.NoError(t, err)
 	defer func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") }()
 

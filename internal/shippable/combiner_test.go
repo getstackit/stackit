@@ -5,28 +5,32 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCombinationResult_IncludedCount(t *testing.T) {
+	t.Parallel()
 	result := &CombinationResult{
 		WorkingStacks: []Stack{
 			{Stack: stackview.StackInfo{RootBranch: "a"}},
 			{Stack: stackview.StackInfo{RootBranch: "b"}},
 		},
 	}
-	assert.Equal(t, 2, result.IncludedCount())
+	require.Equal(t, 2, result.IncludedCount())
 }
 
 func TestCombinationResult_ExcludedCount(t *testing.T) {
+	t.Parallel()
 	result := &CombinationResult{
 		ConflictingStacks: []ExcludedStack{
 			{Stack: Stack{Stack: stackview.StackInfo{RootBranch: "c"}}},
 		},
 	}
-	assert.Equal(t, 1, result.ExcludedCount())
+	require.Equal(t, 1, result.ExcludedCount())
 }
 
 func TestCombinationResult_AllCombined(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		result   *CombinationResult
@@ -62,12 +66,14 @@ func TestCombinationResult_AllCombined(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.result.AllCombined())
+			t.Parallel()
+			require.Equal(t, tt.expected, tt.result.AllCombined())
 		})
 	}
 }
 
 func TestCombinationResult_GetWorkingRoots(t *testing.T) {
+	t.Parallel()
 	result := &CombinationResult{
 		WorkingStacks: []Stack{
 			{Stack: stackview.StackInfo{RootBranch: "stack-a"}},
@@ -76,10 +82,11 @@ func TestCombinationResult_GetWorkingRoots(t *testing.T) {
 	}
 
 	roots := result.GetWorkingRoots()
-	assert.Equal(t, []string{"stack-a", "stack-b"}, roots)
+	require.Equal(t, []string{"stack-a", "stack-b"}, roots)
 }
 
 func TestCombinationResult_GetConflictingRoots(t *testing.T) {
+	t.Parallel()
 	result := &CombinationResult{
 		ConflictingStacks: []ExcludedStack{
 			{Stack: Stack{Stack: stackview.StackInfo{RootBranch: "stack-c"}}},
@@ -88,30 +95,33 @@ func TestCombinationResult_GetConflictingRoots(t *testing.T) {
 	}
 
 	roots := result.GetConflictingRoots()
-	assert.Equal(t, []string{"stack-c", "stack-d"}, roots)
+	require.Equal(t, []string{"stack-c", "stack-d"}, roots)
 }
 
 func TestExclusionReason_Constants(t *testing.T) {
+	t.Parallel()
 	// Verify exclusion reason constants are defined correctly
-	assert.Equal(t, ReasonMergeConflict, ExclusionReason("merge_conflict"))
-	assert.Equal(t, ReasonLocalCIFailed, ExclusionReason("local_ci_failed"))
+	require.Equal(t, ReasonMergeConflict, ExclusionReason("merge_conflict"))
+	require.Equal(t, ReasonLocalCIFailed, ExclusionReason("local_ci_failed"))
 }
 
 func TestCombinationResult_EmptyStacks(t *testing.T) {
+	t.Parallel()
 	result := &CombinationResult{
 		Combinable:        true,
 		WorkingStacks:     nil,
 		ConflictingStacks: nil,
 	}
 
-	assert.Equal(t, 0, result.IncludedCount())
-	assert.Equal(t, 0, result.ExcludedCount())
-	assert.True(t, result.AllCombined())
-	assert.Empty(t, result.GetWorkingRoots())
-	assert.Empty(t, result.GetConflictingRoots())
+	require.Equal(t, 0, result.IncludedCount())
+	require.Equal(t, 0, result.ExcludedCount())
+	require.True(t, result.AllCombined())
+	require.Empty(t, result.GetWorkingRoots())
+	require.Empty(t, result.GetConflictingRoots())
 }
 
 func TestCombinationResult_LocalCIFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		localCIPassed *bool
@@ -140,12 +150,13 @@ func TestCombinationResult_LocalCIFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := &CombinationResult{
 				LocalCIPassed: tt.localCIPassed,
 				LocalCIError:  tt.localCIError,
 			}
 
-			assert.Equal(t, tt.expectPassed, result.LocalCIPassed)
+			require.Equal(t, tt.expectPassed, result.LocalCIPassed)
 		})
 	}
 }

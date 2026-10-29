@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,7 @@ func TestSubmitPendingFlag(t *testing.T) {
 
 	pending := func(t *testing.T, s *scenario.Scenario, branch string) bool {
 		t.Helper()
-		meta, err := s.Metadata.ReadLocalMetadata(context.Background(), branch).One()
+		meta, err := s.Metadata.ReadLocalMetadata(t.Context(), branch).One()
 		require.NoError(t, err)
 		return meta != nil && meta.SubmitPending
 	}
@@ -35,22 +34,22 @@ func TestSubmitPendingFlag(t *testing.T) {
 		s := newScenario(t)
 		require.False(t, pending(t, s, "feature"))
 
-		require.NoError(t, s.Engine.MarkBranchesSubmitPending(context.Background(), []string{"feature"}))
+		require.NoError(t, s.Engine.MarkBranchesSubmitPending(t.Context(), []string{"feature"}))
 		require.True(t, pending(t, s, "feature"))
 
-		require.NoError(t, s.Engine.ClearBranchesSubmitPending(context.Background(), []string{"feature"}))
+		require.NoError(t, s.Engine.ClearBranchesSubmitPending(t.Context(), []string{"feature"}))
 		require.False(t, pending(t, s, "feature"))
 	})
 
 	t.Run("empty and repeated calls are no-ops", func(t *testing.T) {
 		t.Parallel()
 		s := newScenario(t)
-		require.NoError(t, s.Engine.MarkBranchesSubmitPending(context.Background(), nil))
-		require.NoError(t, s.Engine.ClearBranchesSubmitPending(context.Background(), []string{"feature"}))
+		require.NoError(t, s.Engine.MarkBranchesSubmitPending(t.Context(), nil))
+		require.NoError(t, s.Engine.ClearBranchesSubmitPending(t.Context(), []string{"feature"}))
 		require.False(t, pending(t, s, "feature"))
 
-		require.NoError(t, s.Engine.MarkBranchesSubmitPending(context.Background(), []string{"feature"}))
-		require.NoError(t, s.Engine.MarkBranchesSubmitPending(context.Background(), []string{"feature"}))
+		require.NoError(t, s.Engine.MarkBranchesSubmitPending(t.Context(), []string{"feature"}))
+		require.NoError(t, s.Engine.MarkBranchesSubmitPending(t.Context(), []string{"feature"}))
 		require.True(t, pending(t, s, "feature"))
 	})
 
@@ -59,12 +58,12 @@ func TestSubmitPendingFlag(t *testing.T) {
 	t.Run("does not disturb the PR body update flag", func(t *testing.T) {
 		t.Parallel()
 		s := newScenario(t)
-		require.NoError(t, s.Engine.MarkBranchesForPRBodyUpdate(context.Background(), []string{"feature"}))
+		require.NoError(t, s.Engine.MarkBranchesForPRBodyUpdate(t.Context(), []string{"feature"}))
 
-		require.NoError(t, s.Engine.MarkBranchesSubmitPending(context.Background(), []string{"feature"}))
+		require.NoError(t, s.Engine.MarkBranchesSubmitPending(t.Context(), []string{"feature"}))
 		require.Contains(t, s.Engine.GetBranchesNeedingPRBodyUpdate(), "feature")
 
-		require.NoError(t, s.Engine.ClearBranchesSubmitPending(context.Background(), []string{"feature"}))
+		require.NoError(t, s.Engine.ClearBranchesSubmitPending(t.Context(), []string{"feature"}))
 		require.Contains(t, s.Engine.GetBranchesNeedingPRBodyUpdate(), "feature")
 		require.False(t, pending(t, s, "feature"))
 	})

@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -72,7 +71,7 @@ func TestStackMetaOperations(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete
-		err = runner.DeleteRefs(context.Background(), git.StackMetaRefName(stackID))
+		err = runner.DeleteRefs(t.Context(), git.StackMetaRefName(stackID))
 		require.NoError(t, err)
 
 		// Verify deleted
@@ -224,7 +223,7 @@ func TestWriteStackMetaBlob(t *testing.T) {
 
 		// Use UpdateRef to create the stack meta ref
 		refName := git.StackMetaRefName(stackID)
-		err = runner.UpdateRefs(context.Background(), []git.RefUpdate{{RefName: refName, NewSHA: sha}}, "")
+		err = runner.UpdateRefs(t.Context(), []git.RefUpdate{{RefName: refName, NewSHA: sha}}, "")
 		require.NoError(t, err)
 
 		// Verify we can read the metadata back

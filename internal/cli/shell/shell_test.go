@@ -7,6 +7,7 @@ import (
 )
 
 func TestShellZshOutput(t *testing.T) {
+	t.Parallel()
 	cmd := newShellZshCmd()
 	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
@@ -40,6 +41,7 @@ func TestShellZshOutput(t *testing.T) {
 }
 
 func TestShellBashOutput(t *testing.T) {
+	t.Parallel()
 	cmd := newShellBashCmd()
 	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
@@ -67,6 +69,7 @@ func TestShellBashOutput(t *testing.T) {
 }
 
 func TestShellFishOutput(t *testing.T) {
+	t.Parallel()
 	cmd := newShellFishCmd()
 	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)

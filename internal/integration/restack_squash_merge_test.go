@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,7 +18,7 @@ import (
 // branch whose PR was merged on GitHub before its local state synced to MERGED.
 func markPrWithState(t *testing.T, sh *scenario.Scenario, branch string, prNumber git.PRNumber, state git.PRState, base string) {
 	t.Helper()
-	meta, err := sh.Metadata.ReadMetadata(context.Background(), branch).One()
+	meta, err := sh.Metadata.ReadMetadata(t.Context(), branch).One()
 	require.NoError(t, err)
 	num := prNumber
 	s := state

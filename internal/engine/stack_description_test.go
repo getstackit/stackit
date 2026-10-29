@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -48,7 +47,7 @@ func TestGetStackDescription(t *testing.T) {
 			TrackBranch("root", "main")
 
 		// Set description on root
-		err := s.Engine.SetStackDescription(context.Background(), s.Engine.GetBranch("root"), &git.StackDescription{
+		err := s.Engine.SetStackDescription(t.Context(), s.Engine.GetBranch("root"), &git.StackDescription{
 			Title:       "Feature Stack",
 			Description: "Details here",
 		})
@@ -73,7 +72,7 @@ func TestGetStackDescription(t *testing.T) {
 			TrackBranch("child", "root")
 
 		// Set description on root
-		err := s.Engine.SetStackDescription(context.Background(), s.Engine.GetBranch("root"), &git.StackDescription{
+		err := s.Engine.SetStackDescription(t.Context(), s.Engine.GetBranch("root"), &git.StackDescription{
 			Title: "Feature Stack",
 		})
 		require.NoError(t, err)
@@ -96,7 +95,7 @@ func TestSetStackDescription(t *testing.T) {
 			Commit("feature commit").
 			TrackBranch("feature", "main")
 
-		err := s.Engine.SetStackDescription(context.Background(), s.Engine.GetBranch("feature"), &git.StackDescription{
+		err := s.Engine.SetStackDescription(t.Context(), s.Engine.GetBranch("feature"), &git.StackDescription{
 			Title:       "Test Title",
 			Description: "Test Description",
 		})
@@ -120,7 +119,7 @@ func TestSetStackDescription(t *testing.T) {
 			TrackBranch("child", "root")
 
 		// Set description from child
-		err := s.Engine.SetStackDescription(context.Background(), s.Engine.GetBranch("child"), &git.StackDescription{
+		err := s.Engine.SetStackDescription(t.Context(), s.Engine.GetBranch("child"), &git.StackDescription{
 			Title: "Stack Title",
 		})
 		require.NoError(t, err)
@@ -143,7 +142,7 @@ func TestSetStackDescription(t *testing.T) {
 			CreateBranch("feature").
 			Commit("feature commit")
 
-		err := s.Engine.SetStackDescription(context.Background(), s.Engine.GetBranch("feature"), &git.StackDescription{
+		err := s.Engine.SetStackDescription(t.Context(), s.Engine.GetBranch("feature"), &git.StackDescription{
 			Title: "Test",
 		})
 		require.Error(t, err)
@@ -163,13 +162,13 @@ func TestClearStackDescription(t *testing.T) {
 			TrackBranch("feature", "main")
 
 		// Set description
-		err := s.Engine.SetStackDescription(context.Background(), s.Engine.GetBranch("feature"), &git.StackDescription{
+		err := s.Engine.SetStackDescription(t.Context(), s.Engine.GetBranch("feature"), &git.StackDescription{
 			Title: "Test",
 		})
 		require.NoError(t, err)
 
 		// Clear it
-		err = s.Engine.ClearStackDescription(context.Background(), s.Engine.GetBranch("feature"))
+		err = s.Engine.ClearStackDescription(t.Context(), s.Engine.GetBranch("feature"))
 		require.NoError(t, err)
 
 		// Verify it's cleared

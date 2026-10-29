@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,22 +13,22 @@ func TestGenerateConfigDocs(t *testing.T) {
 	docs := GenerateConfigDocs()
 
 	// Should have markdown headers
-	assert.Contains(t, docs, "## Branch naming")
-	assert.Contains(t, docs, "## Stack topology")
-	assert.Contains(t, docs, "## PR submission")
-	assert.Contains(t, docs, "## GitHub integration")
-	assert.Contains(t, docs, "## PR navigation")
+	require.Contains(t, docs, "## Branch naming")
+	require.Contains(t, docs, "## Stack topology")
+	require.Contains(t, docs, "## PR submission")
+	require.Contains(t, docs, "## GitHub integration")
+	require.Contains(t, docs, "## PR navigation")
 
 	// Should have option documentation
-	assert.Contains(t, docs, "### branch.pattern")
-	assert.Contains(t, docs, "### stack.shape")
-	assert.Contains(t, docs, "### submit.footer")
-	assert.Contains(t, docs, "### github.stack")
-	assert.Contains(t, docs, "### navigation.when")
+	require.Contains(t, docs, "### branch.pattern")
+	require.Contains(t, docs, "### stack.shape")
+	require.Contains(t, docs, "### submit.footer")
+	require.Contains(t, docs, "### github.stack")
+	require.Contains(t, docs, "### navigation.when")
 
 	// Should have examples
-	assert.Contains(t, docs, "```bash")
-	assert.Contains(t, docs, "stackit config set")
+	require.Contains(t, docs, "```bash")
+	require.Contains(t, docs, "stackit config set")
 }
 
 func TestGenerateConfigDocs_AllOptionsIncluded(t *testing.T) {
@@ -44,7 +43,7 @@ func TestGenerateConfigDocs_AllOptionsIncluded(t *testing.T) {
 			continue
 		}
 
-		assert.Contains(t, docs, "### "+opt.YAMLPath,
+		require.Contains(t, docs, "### "+opt.YAMLPath,
 			"Docs should include option: %s", opt.YAMLPath)
 	}
 }
@@ -55,8 +54,8 @@ func TestGenerateConfigDocs_ContainsDefaults(t *testing.T) {
 	docs := GenerateConfigDocs()
 
 	// Check some key defaults are documented
-	assert.Contains(t, docs, "**Default**: `true`", "Should document boolean default")
-	assert.Contains(t, docs, "**Default**: `10`", "Should document integer default")
+	require.Contains(t, docs, "**Default**: `true`", "Should document boolean default")
+	require.Contains(t, docs, "**Default**: `10`", "Should document integer default")
 }
 
 func TestGenerateConfigDocs_ContainsValidValues(t *testing.T) {
@@ -65,9 +64,9 @@ func TestGenerateConfigDocs_ContainsValidValues(t *testing.T) {
 	docs := GenerateConfigDocs()
 
 	// Check that enum options have their valid values listed
-	assert.Contains(t, docs, "`squash`", "Should list merge method options")
-	assert.Contains(t, docs, "`always`", "Should list navigation.when options")
-	assert.Contains(t, docs, "`body`", "Should list navigation.location options")
+	require.Contains(t, docs, "`squash`", "Should list merge method options")
+	require.Contains(t, docs, "`always`", "Should list navigation.when options")
+	require.Contains(t, docs, "`body`", "Should list navigation.location options")
 }
 
 func TestGenerateConfigDocs_Deterministic(t *testing.T) {
@@ -103,5 +102,5 @@ func TestGenerateConfigDocs_ValidMarkdown(t *testing.T) {
 	}
 
 	// Code blocks should be balanced
-	assert.False(t, inCodeBlock, "Unbalanced code blocks in generated docs")
+	require.False(t, inCodeBlock, "Unbalanced code blocks in generated docs")
 }

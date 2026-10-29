@@ -1,7 +1,6 @@
 package github
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,7 +36,7 @@ func TestCreateStack(t *testing.T) {
 	require.NoError(t, err)
 	stackClient := &StackitGitHubClient{client: client, repo: Repo{Owner: "acme", Name: "widget"}}
 
-	stack, err := stackClient.CreateStack(context.Background(), []git.PRNumber{12, 34})
+	stack, err := stackClient.CreateStack(t.Context(), []git.PRNumber{12, 34})
 	require.NoError(t, err)
 	require.Equal(t, StackNumber(7), stack.Number)
 	require.Equal(t, "main", stack.Base.Ref)
@@ -48,7 +47,7 @@ func TestCreateStackRequiresTwoPullRequests(t *testing.T) {
 	t.Parallel()
 
 	stackClient := &StackitGitHubClient{}
-	_, err := stackClient.CreateStack(context.Background(), []git.PRNumber{12})
+	_, err := stackClient.CreateStack(t.Context(), []git.PRNumber{12})
 	require.EqualError(t, err, "a GitHub Stack requires at least two pull requests")
 }
 
@@ -56,7 +55,7 @@ func TestCreateStackRejectsMoreThanOneHundredPullRequests(t *testing.T) {
 	t.Parallel()
 
 	stackClient := &StackitGitHubClient{}
-	_, err := stackClient.CreateStack(context.Background(), make([]git.PRNumber, MaxStackPullRequests+1))
+	_, err := stackClient.CreateStack(t.Context(), make([]git.PRNumber, MaxStackPullRequests+1))
 	require.EqualError(t, err, "a GitHub Stack supports at most 100 pull requests (got 101)")
 }
 
@@ -87,7 +86,7 @@ func TestEnsureStackExtendsExistingStack(t *testing.T) {
 	require.NoError(t, err)
 	stackClient := &StackitGitHubClient{client: client, repo: Repo{Owner: "acme", Name: "widget"}}
 
-	stack, action, err := EnsureStack(context.Background(), stackClient, []git.PRNumber{12, 34, 56})
+	stack, action, err := EnsureStack(t.Context(), stackClient, []git.PRNumber{12, 34, 56})
 	require.NoError(t, err)
 	require.Equal(t, StackSyncExtended, action)
 	require.Equal(t, StackNumber(7), stack.Number)
@@ -109,7 +108,7 @@ func TestEnsureStackSkipsMatchingExistingStack(t *testing.T) {
 	require.NoError(t, err)
 	stackClient := &StackitGitHubClient{client: client, repo: Repo{Owner: "acme", Name: "widget"}}
 
-	stack, action, err := EnsureStack(context.Background(), stackClient, []git.PRNumber{12, 34})
+	stack, action, err := EnsureStack(t.Context(), stackClient, []git.PRNumber{12, 34})
 	require.NoError(t, err)
 	require.Equal(t, StackSyncUnchanged, action)
 	require.Equal(t, StackNumber(7), stack.Number)
@@ -149,7 +148,7 @@ func TestEnsureStackRebuildsDivergedStack(t *testing.T) {
 	require.NoError(t, err)
 	stackClient := &StackitGitHubClient{client: client, repo: Repo{Owner: "acme", Name: "widget"}}
 
-	stack, action, err := EnsureStack(context.Background(), stackClient, []git.PRNumber{12, 78, 90})
+	stack, action, err := EnsureStack(t.Context(), stackClient, []git.PRNumber{12, 78, 90})
 	require.NoError(t, err)
 	require.Equal(t, StackSyncRebuilt, action)
 	require.Equal(t, StackNumber(8), stack.Number)
@@ -182,7 +181,7 @@ func TestEnsureStackRefusesRebuildWhenMergedPRsRemain(t *testing.T) {
 	require.NoError(t, err)
 	stackClient := &StackitGitHubClient{client: client, repo: Repo{Owner: "acme", Name: "widget"}}
 
-	_, _, err = EnsureStack(context.Background(), stackClient, []git.PRNumber{12, 78})
+	_, _, err = EnsureStack(t.Context(), stackClient, []git.PRNumber{12, 78})
 	require.ErrorContains(t, err, "merged or queued to merge and cannot be unstacked")
 }
 

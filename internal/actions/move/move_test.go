@@ -1,7 +1,6 @@
 package move
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -400,7 +399,7 @@ func TestMoveAction(t *testing.T) {
 		branch2 := s.Engine.GetBranch("branch2")
 		prNumber := git.PRNumber(123)
 		prInfo := engine.NewPrInfo(engine.PrInfoFields{Number: &prNumber, Title: "Test PR", Body: "Test Body", State: "OPEN", Base: "branch1", URL: "https://github.com/owner/repo/pull/123"})
-		err := s.Engine.UpsertPrInfo(context.Background(), branch2, prInfo)
+		err := s.Engine.UpsertPrInfo(t.Context(), branch2, prInfo)
 		require.NoError(t, err)
 
 		// Move branch2 to main
@@ -628,7 +627,7 @@ func TestMoveMarksBranchesForPRBodyUpdate(t *testing.T) {
 
 	needsPRUpdate := func(t *testing.T, s *scenario.Scenario, branch string) bool {
 		t.Helper()
-		meta, err := s.Metadata.ReadLocalMetadata(context.Background(), branch).One()
+		meta, err := s.Metadata.ReadLocalMetadata(t.Context(), branch).One()
 		require.NoError(t, err)
 		return meta != nil && meta.NeedsPRBodyUpdate
 	}

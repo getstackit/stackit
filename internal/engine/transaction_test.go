@@ -25,24 +25,24 @@ func TestSetLocked_SingleBranch(t *testing.T) {
 		Commit("feature 1 change")
 
 	// Track the branch so it has metadata
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
 
 	branch := s.Engine.GetBranch("feature-1")
 
 	// Lock the branch
-	result, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+	result, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
-	assert.Len(t, result.AffectedBranches, 1)
-	assert.Contains(t, result.AffectedBranches, "feature-1")
+	require.Len(t, result.AffectedBranches, 1)
+	require.Contains(t, result.AffectedBranches, "feature-1")
 
 	// Verify the change persisted
-	readMeta, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	readMeta, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Equal(t, git.LockReasonUser, readMeta.GetLockReason())
+	require.Equal(t, git.LockReasonUser, readMeta.GetLockReason())
 
 	// Verify in-memory cache is updated
-	assert.True(t, branch.IsLocked())
+	require.True(t, branch.IsLocked())
 }
 
 func TestSetLocked_UsesTransaction(t *testing.T) {
@@ -56,29 +56,29 @@ func TestSetLocked_UsesTransaction(t *testing.T) {
 		Commit("feature 2 change")
 
 	// Track branches
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
-	err = s.Engine.TrackBranch(context.Background(), "feature-2", "feature-1")
+	err = s.Engine.TrackBranch(t.Context(), "feature-2", "feature-1")
 	require.NoError(t, err)
 
 	// Lock multiple branches
-	result, err := s.Engine.SetLocked(context.Background(), []engine.Branch{
+	result, err := s.Engine.SetLocked(t.Context(), []engine.Branch{
 		s.Engine.GetBranch("feature-1"),
 		s.Engine.GetBranch("feature-2"),
 	}, engine.LockReasonUser)
 	require.NoError(t, err)
 
 	// Both should be affected
-	assert.Len(t, result.AffectedBranches, 2)
-	assert.Empty(t, result.Errors)
+	require.Len(t, result.AffectedBranches, 2)
+	require.Empty(t, result.Errors)
 
-	meta1, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	meta1, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Equal(t, git.LockReasonUser, meta1.GetLockReason())
+	require.Equal(t, git.LockReasonUser, meta1.GetLockReason())
 
-	meta2, err := s.Metadata.ReadMetadata(context.Background(), "feature-2").One()
+	meta2, err := s.Metadata.ReadMetadata(t.Context(), "feature-2").One()
 	require.NoError(t, err)
-	assert.Equal(t, git.LockReasonUser, meta2.GetLockReason())
+	require.Equal(t, git.LockReasonUser, meta2.GetLockReason())
 }
 
 func TestSetFrozen_UsesTransaction(t *testing.T) {
@@ -92,29 +92,29 @@ func TestSetFrozen_UsesTransaction(t *testing.T) {
 		Commit("feature 2 change")
 
 	// Track branches
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
-	err = s.Engine.TrackBranch(context.Background(), "feature-2", "feature-1")
+	err = s.Engine.TrackBranch(t.Context(), "feature-2", "feature-1")
 	require.NoError(t, err)
 
 	// Freeze multiple branches
-	result, err := s.Engine.SetFrozen(context.Background(), []engine.Branch{
+	result, err := s.Engine.SetFrozen(t.Context(), []engine.Branch{
 		s.Engine.GetBranch("feature-1"),
 		s.Engine.GetBranch("feature-2"),
 	}, engine.BranchFrozen)
 	require.NoError(t, err)
 
 	// Both should be affected
-	assert.Len(t, result.AffectedBranches, 2)
-	assert.Empty(t, result.Errors)
+	require.Len(t, result.AffectedBranches, 2)
+	require.Empty(t, result.Errors)
 
-	localMeta1, err := s.Metadata.ReadLocalMetadata(context.Background(), "feature-1").One()
+	localMeta1, err := s.Metadata.ReadLocalMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.True(t, localMeta1.Frozen)
+	require.True(t, localMeta1.Frozen)
 
-	localMeta2, err := s.Metadata.ReadLocalMetadata(context.Background(), "feature-2").One()
+	localMeta2, err := s.Metadata.ReadLocalMetadata(t.Context(), "feature-2").One()
 	require.NoError(t, err)
-	assert.True(t, localMeta2.Frozen)
+	require.True(t, localMeta2.Frozen)
 }
 
 func TestSetLocked_EmptyBranchList(t *testing.T) {
@@ -122,10 +122,10 @@ func TestSetLocked_EmptyBranchList(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Empty branch list should succeed
-	result, err := s.Engine.SetLocked(context.Background(), engine.Branches{}, engine.LockReasonUser)
+	result, err := s.Engine.SetLocked(t.Context(), engine.Branches{}, engine.LockReasonUser)
 	require.NoError(t, err)
-	assert.Empty(t, result.AffectedBranches)
-	assert.Empty(t, result.Errors)
+	require.Empty(t, result.AffectedBranches)
+	require.Empty(t, result.Errors)
 }
 
 func TestSetFrozen_EmptyBranchList(t *testing.T) {
@@ -133,10 +133,10 @@ func TestSetFrozen_EmptyBranchList(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Empty branch list should succeed
-	result, err := s.Engine.SetFrozen(context.Background(), engine.Branches{}, engine.BranchFrozen)
+	result, err := s.Engine.SetFrozen(t.Context(), engine.Branches{}, engine.BranchFrozen)
 	require.NoError(t, err)
-	assert.Empty(t, result.AffectedBranches)
-	assert.Empty(t, result.Errors)
+	require.Empty(t, result.AffectedBranches)
+	require.Empty(t, result.Errors)
 }
 
 func TestSetLocked_UnlockBranches(t *testing.T) {
@@ -146,27 +146,27 @@ func TestSetLocked_UnlockBranches(t *testing.T) {
 	// Create and track a branch
 	s.CreateBranch("feature-1").
 		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
 
 	branch := s.Engine.GetBranch("feature-1")
 
 	// Lock the branch
-	_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+	_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 	require.NoError(t, err)
 
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Equal(t, git.LockReasonUser, meta.GetLockReason())
+	require.Equal(t, git.LockReasonUser, meta.GetLockReason())
 
 	// Unlock the branch
-	_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonNone)
+	_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonNone)
 	require.NoError(t, err)
 
 	// Verify unlocked
-	meta, err = s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	meta, err = s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Equal(t, git.LockReasonNone, meta.GetLockReason())
+	require.Equal(t, git.LockReasonNone, meta.GetLockReason())
 }
 
 func TestSetFrozen_UnfreezeBranches(t *testing.T) {
@@ -176,27 +176,27 @@ func TestSetFrozen_UnfreezeBranches(t *testing.T) {
 	// Create and track a branch
 	s.CreateBranch("feature-1").
 		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
 
 	branch := s.Engine.GetBranch("feature-1")
 
 	// Freeze the branch
-	_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
+	_, err = s.Engine.SetFrozen(t.Context(), engine.BranchesOf(branch), engine.BranchFrozen)
 	require.NoError(t, err)
 
-	localMeta, err := s.Metadata.ReadLocalMetadata(context.Background(), "feature-1").One()
+	localMeta, err := s.Metadata.ReadLocalMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.True(t, localMeta.Frozen)
+	require.True(t, localMeta.Frozen)
 
 	// Unfreeze the branch
-	_, err = s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchThawed)
+	_, err = s.Engine.SetFrozen(t.Context(), engine.BranchesOf(branch), engine.BranchThawed)
 	require.NoError(t, err)
 
 	// Verify unfrozen
-	localMeta, err = s.Metadata.ReadLocalMetadata(context.Background(), "feature-1").One()
+	localMeta, err = s.Metadata.ReadLocalMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.False(t, localMeta.Frozen)
+	require.False(t, localMeta.Frozen)
 }
 
 func TestIsConcurrentModificationError(t *testing.T) {
@@ -263,7 +263,7 @@ func TestIsConcurrentModificationError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result := engine.IsConcurrentModificationError(tt.err)
-			assert.Equal(t, tt.expected, result)
+			require.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -273,13 +273,13 @@ func TestWithRetry_ContextCancellation(t *testing.T) {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	// Create a context that's already canceled
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	// Create and track a branch
 	s.CreateBranch("feature-1").
 		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
 
 	branch := s.Engine.GetBranch("feature-1")
@@ -301,7 +301,7 @@ func TestTransaction_RollbackOnCommitFailure(t *testing.T) {
 	// Create and track a branch
 	s.CreateBranch("feature-1").
 		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
 
 	// Get the engine implementation to access BeginTx
@@ -310,7 +310,7 @@ func TestTransaction_RollbackOnCommitFailure(t *testing.T) {
 	})
 
 	// Get original metadata state
-	originalMeta, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	originalMeta, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
 
 	// Begin transaction and stage an update
@@ -326,9 +326,9 @@ func TestTransaction_RollbackOnCommitFailure(t *testing.T) {
 	tx.Rollback()
 
 	// Verify original metadata is unchanged (rollback is a no-op for uncommitted transactions)
-	currentMeta, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	currentMeta, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Equal(t, originalMeta.GetLockReason(), currentMeta.GetLockReason())
+	require.Equal(t, originalMeta.GetLockReason(), currentMeta.GetLockReason())
 }
 
 func TestTransaction_DoubleCommitFails(t *testing.T) {
@@ -338,7 +338,7 @@ func TestTransaction_DoubleCommitFails(t *testing.T) {
 	// Create and track a branch
 	s.CreateBranch("feature-1").
 		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
 
 	// Get the engine implementation
@@ -354,13 +354,13 @@ func TestTransaction_DoubleCommitFails(t *testing.T) {
 	require.NoError(t, err)
 
 	// First commit should succeed
-	err = tx.Commit(context.Background())
+	err = tx.Commit(t.Context())
 	require.NoError(t, err)
 
 	// Second commit should fail
-	err = tx.Commit(context.Background())
+	err = tx.Commit(t.Context())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, engine.ErrTransactionCommitted)
+	require.ErrorIs(t, err, engine.ErrTransactionCommitted)
 }
 
 func TestTransaction_EmptyTransactionSucceeds(t *testing.T) {
@@ -376,7 +376,7 @@ func TestTransaction_EmptyTransactionSucceeds(t *testing.T) {
 	tx := eng.BeginTx("empty transaction")
 
 	// Empty transaction should succeed
-	err := tx.Commit(context.Background())
+	err := tx.Commit(t.Context())
 	require.NoError(t, err)
 }
 
@@ -390,9 +390,9 @@ func TestSetLocked_DeterministicOrder(t *testing.T) {
 	s.CreateBranch("mmm").Commit("m change")
 
 	// Track all branches
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "aaa", "main"))
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "zzz", "aaa"))
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "mmm", "zzz"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "aaa", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "zzz", "aaa"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "mmm", "zzz"))
 
 	// Lock in specific order
 	branches := []engine.Branch{
@@ -401,14 +401,14 @@ func TestSetLocked_DeterministicOrder(t *testing.T) {
 		s.Engine.GetBranch("mmm"),
 	}
 
-	result, err := s.Engine.SetLocked(context.Background(), branches, engine.LockReasonUser)
+	result, err := s.Engine.SetLocked(t.Context(), branches, engine.LockReasonUser)
 	require.NoError(t, err)
 
 	// Verify order matches input order (deterministic)
 	require.Len(t, result.AffectedBranches, 3)
-	assert.Equal(t, "zzz", result.AffectedBranches[0])
-	assert.Equal(t, "aaa", result.AffectedBranches[1])
-	assert.Equal(t, "mmm", result.AffectedBranches[2])
+	require.Equal(t, "zzz", result.AffectedBranches[0])
+	require.Equal(t, "aaa", result.AffectedBranches[1])
+	require.Equal(t, "mmm", result.AffectedBranches[2])
 }
 
 func TestTransaction_ConcurrentModification(t *testing.T) {
@@ -418,7 +418,7 @@ func TestTransaction_ConcurrentModification(t *testing.T) {
 	// Create and track a branch
 	s.CreateBranch("feature-1").
 		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
 
 	// Get the engine implementation
@@ -442,11 +442,11 @@ func TestTransaction_ConcurrentModification(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now try to commit - should fail due to CAS mismatch
-	err = tx.Commit(context.Background())
+	err = tx.Commit(t.Context())
 	require.Error(t, err)
 
 	// Verify it's detected as a concurrent modification error
-	assert.True(t, engine.IsConcurrentModificationError(err),
+	require.True(t, engine.IsConcurrentModificationError(err),
 		"expected concurrent modification error, got: %v", err)
 }
 
@@ -457,7 +457,7 @@ func TestTransaction_ConcurrentModificationLocalMeta(t *testing.T) {
 	// Create and track a branch
 	s.CreateBranch("feature-1").
 		Commit("feature 1 change")
-	err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+	err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 	require.NoError(t, err)
 
 	// Get the engine implementation
@@ -483,11 +483,11 @@ func TestTransaction_ConcurrentModificationLocalMeta(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now try to commit - should fail due to CAS mismatch
-	err = tx.Commit(context.Background())
+	err = tx.Commit(t.Context())
 	require.Error(t, err)
 
 	// Verify it's detected as a concurrent modification error
-	assert.True(t, engine.IsConcurrentModificationError(err),
+	require.True(t, engine.IsConcurrentModificationError(err),
 		"expected concurrent modification error, got: %v", err)
 }
 
@@ -504,15 +504,15 @@ func TestRestackKeepsMetadataWritesCompareAndSwap(t *testing.T) {
 			t.Parallel()
 			s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 			s.CreateBranch("feature").Commit("feature change")
-			require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+			require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature", "main"))
 			s.Checkout("main").Commit("trunk moves on").Rebuild()
 
-			_, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
+			_, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature")), engine.RestackOpts{})
 			require.NoError(t, err)
 			// Inspect through a separate store: a read through the engine's
 			// store would refresh its expectation and hide what is under test.
 			other := git.NewMetadataStore(git.NewRunnerWithPath(s.Scene.Dir, nil))
-			restacked, err := other.ReadMetadata(context.Background(), "feature").One()
+			restacked, err := other.ReadMetadata(t.Context(), "feature").One()
 			require.NoError(t, err)
 			require.NotNil(t, restacked.GetParentBranchRevision(), "restack must record the new parent revision")
 
@@ -537,7 +537,7 @@ func TestWithRetry_RetriesOnConcurrentModification(t *testing.T) {
 		// Create and track a branch
 		s.CreateBranch("feature-1").
 			Commit("feature 1 change")
-		err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+		err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 		require.NoError(t, err)
 
 		// Get the engine implementation
@@ -549,7 +549,7 @@ func TestWithRetry_RetriesOnConcurrentModification(t *testing.T) {
 		attemptCount := 0
 		maxFailures := 2 // Fail first 2 attempts, succeed on 3rd
 
-		err = eng.WithRetry(context.Background(), func() error {
+		err = eng.WithRetry(t.Context(), func() error {
 			attemptCount++
 
 			tx := eng.BeginTx("retry test")
@@ -569,11 +569,11 @@ func TestWithRetry_RetriesOnConcurrentModification(t *testing.T) {
 				}
 			}
 
-			return tx.Commit(context.Background())
+			return tx.Commit(t.Context())
 		})
 
 		require.NoError(t, err)
-		assert.Equal(t, maxFailures+1, attemptCount, "expected %d attempts", maxFailures+1)
+		require.Equal(t, maxFailures+1, attemptCount, "expected %d attempts", maxFailures+1)
 	})
 }
 
@@ -585,7 +585,7 @@ func TestWithRetry_ExhaustsRetries(t *testing.T) {
 		// Create and track a branch
 		s.CreateBranch("feature-1").
 			Commit("feature 1 change")
-		err := s.Engine.TrackBranch(context.Background(), "feature-1", "main")
+		err := s.Engine.TrackBranch(t.Context(), "feature-1", "main")
 		require.NoError(t, err)
 
 		// Get the engine implementation
@@ -596,7 +596,7 @@ func TestWithRetry_ExhaustsRetries(t *testing.T) {
 
 		attemptCount := 0
 
-		err = eng.WithRetry(context.Background(), func() error {
+		err = eng.WithRetry(t.Context(), func() error {
 			attemptCount++
 
 			tx := eng.BeginTx("exhaustion test")
@@ -613,13 +613,13 @@ func TestWithRetry_ExhaustsRetries(t *testing.T) {
 				return writeErr
 			}
 
-			return tx.Commit(context.Background())
+			return tx.Commit(t.Context())
 		})
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed after")
-		assert.Contains(t, err.Error(), "retries")
-		assert.Equal(t, engine.MaxRetries, attemptCount, "expected exactly %d attempts", engine.MaxRetries)
+		require.Contains(t, err.Error(), "failed after")
+		require.Contains(t, err.Error(), "retries")
+		require.Equal(t, engine.MaxRetries, attemptCount, "expected exactly %d attempts", engine.MaxRetries)
 	})
 }
 
@@ -635,14 +635,14 @@ func TestWithRetry_NonRetryableError(t *testing.T) {
 	attemptCount := 0
 	expectedErr := errors.New("non-retryable error")
 
-	err := eng.WithRetry(context.Background(), func() error {
+	err := eng.WithRetry(t.Context(), func() error {
 		attemptCount++
 		return expectedErr
 	})
 
 	require.Error(t, err)
-	assert.Equal(t, expectedErr, err)
-	assert.Equal(t, 1, attemptCount, "should not retry non-retryable errors")
+	require.Equal(t, expectedErr, err)
+	require.Equal(t, 1, attemptCount, "should not retry non-retryable errors")
 }
 
 func TestTransaction_UpdateAfterRollback(t *testing.T) {
@@ -671,9 +671,9 @@ func TestTransaction_UpdateAfterRollback(t *testing.T) {
 	require.ErrorIs(t, err, engine.ErrTransactionRolledBack)
 
 	// Trying to commit after rollback should fail
-	err = tx.Commit(context.Background())
+	err = tx.Commit(t.Context())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, engine.ErrTransactionRolledBack)
+	require.ErrorIs(t, err, engine.ErrTransactionRolledBack)
 }
 
 func TestSetLocked_LargeBatch(t *testing.T) {
@@ -695,7 +695,7 @@ func TestSetLocked_LargeBatch(t *testing.T) {
 		if i > 0 {
 			parent = branchNames[i-1]
 		}
-		err := s.Engine.TrackBranch(context.Background(), branchName, parent)
+		err := s.Engine.TrackBranch(t.Context(), branchName, parent)
 		require.NoError(t, err)
 	}
 
@@ -706,15 +706,15 @@ func TestSetLocked_LargeBatch(t *testing.T) {
 	}
 
 	// Lock all branches atomically
-	result, err := s.Engine.SetLocked(context.Background(), branches, engine.LockReasonUser)
+	result, err := s.Engine.SetLocked(t.Context(), branches, engine.LockReasonUser)
 	require.NoError(t, err)
-	assert.Len(t, result.AffectedBranches, numBranches)
-	assert.Empty(t, result.Errors)
+	require.Len(t, result.AffectedBranches, numBranches)
+	require.Empty(t, result.Errors)
 
 	for _, name := range branchNames {
-		meta, err := s.Metadata.ReadMetadata(context.Background(), name).One()
+		meta, err := s.Metadata.ReadMetadata(t.Context(), name).One()
 		require.NoError(t, err)
-		assert.Equal(t, git.LockReasonUser, meta.GetLockReason(), "branch %s should be locked", name)
+		require.Equal(t, git.LockReasonUser, meta.GetLockReason(), "branch %s should be locked", name)
 	}
 }
 
@@ -726,8 +726,8 @@ func TestTransaction_MixedMetaAndLocalMeta(t *testing.T) {
 	s.CreateBranch("feature-1").Commit("change 1")
 	s.CreateBranch("feature-2").Commit("change 2")
 
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-1", "main"))
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-2", "feature-1"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-1", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-2", "feature-1"))
 
 	// Get the engine implementation
 	eng := s.Engine.(interface {
@@ -748,17 +748,17 @@ func TestTransaction_MixedMetaAndLocalMeta(t *testing.T) {
 	require.NoError(t, tx.UpdateLocalMeta("feature-2", localMeta2))
 
 	// Commit should succeed
-	err := tx.Commit(context.Background())
+	err := tx.Commit(t.Context())
 	require.NoError(t, err)
 
 	// Verify both updates persisted
-	readMeta1, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	readMeta1, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Equal(t, git.LockReasonUser, readMeta1.GetLockReason())
+	require.Equal(t, git.LockReasonUser, readMeta1.GetLockReason())
 
-	readLocalMeta2, err := s.Metadata.ReadLocalMetadata(context.Background(), "feature-2").One()
+	readLocalMeta2, err := s.Metadata.ReadLocalMetadata(t.Context(), "feature-2").One()
 	require.NoError(t, err)
-	assert.True(t, readLocalMeta2.Frozen)
+	require.True(t, readLocalMeta2.Frozen)
 }
 
 func TestTransaction_DeleteMeta(t *testing.T) {
@@ -767,27 +767,27 @@ func TestTransaction_DeleteMeta(t *testing.T) {
 
 	// Create and track a branch
 	s.CreateBranch("feature-1").Commit("change 1")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-1", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-1", "main"))
 
 	eng := s.Engine.(interface {
 		BeginTx(message string) *engine.MetadataTx
 	})
 
 	// Verify metadata exists
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.NotNil(t, meta.GetParentBranchName())
+	require.NotNil(t, meta.GetParentBranchName())
 
 	// Delete metadata via transaction
 	tx := eng.BeginTx("delete metadata")
 	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteMeta("feature-1"))
-	require.NoError(t, tx.Commit(context.Background()))
+	require.NoError(t, tx.Commit(t.Context()))
 
 	// Verify metadata is gone (ReadMetadata returns empty Meta for missing refs)
-	meta, err = s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	meta, err = s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Nil(t, meta.GetParentBranchName()) // Empty meta has nil parent
+	require.Nil(t, meta.GetParentBranchName()) // Empty meta has nil parent
 }
 
 func TestTransaction_DeleteLocalMeta(t *testing.T) {
@@ -796,7 +796,7 @@ func TestTransaction_DeleteLocalMeta(t *testing.T) {
 
 	// Create and track a branch
 	s.CreateBranch("feature-1").Commit("change 1")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-1", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-1", "main"))
 
 	eng := s.Engine.(interface {
 		BeginTx(message string) *engine.MetadataTx
@@ -807,20 +807,20 @@ func TestTransaction_DeleteLocalMeta(t *testing.T) {
 	require.NoError(t, s.Metadata.WriteLocalMetadata("feature-1", localMeta))
 
 	// Verify it exists
-	readMeta, err := s.Metadata.ReadLocalMetadata(context.Background(), "feature-1").One()
+	readMeta, err := s.Metadata.ReadLocalMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.True(t, readMeta.Frozen)
+	require.True(t, readMeta.Frozen)
 
 	// Delete via transaction
 	tx := eng.BeginTx("delete local metadata")
 	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteLocalMeta("feature-1"))
-	require.NoError(t, tx.Commit(context.Background()))
+	require.NoError(t, tx.Commit(t.Context()))
 
 	// Verify local metadata is gone
-	readMeta, err = s.Metadata.ReadLocalMetadata(context.Background(), "feature-1").One()
+	readMeta, err = s.Metadata.ReadLocalMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.False(t, readMeta.Frozen) // Empty LocalMeta has Frozen=false
+	require.False(t, readMeta.Frozen) // Empty LocalMeta has Frozen=false
 }
 
 func TestTransaction_DeleteNonExistentMeta(t *testing.T) {
@@ -838,7 +838,7 @@ func TestTransaction_DeleteNonExistentMeta(t *testing.T) {
 	tx := eng.BeginTx("delete non-existent")
 	require.Empty(t, tx.ReadMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteMeta("feature-1"))
-	require.NoError(t, tx.Commit(context.Background()))
+	require.NoError(t, tx.Commit(t.Context()))
 }
 
 func TestTransaction_UpdateAfterDelete(t *testing.T) {
@@ -847,7 +847,7 @@ func TestTransaction_UpdateAfterDelete(t *testing.T) {
 
 	// Create and track a branch
 	s.CreateBranch("feature-1").Commit("change 1")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-1", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-1", "main"))
 
 	eng := s.Engine.(interface {
 		BeginTx(message string) *engine.MetadataTx
@@ -859,12 +859,12 @@ func TestTransaction_UpdateAfterDelete(t *testing.T) {
 	require.NoError(t, tx.DeleteMeta("feature-1"))
 	newMeta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
 	require.NoError(t, tx.UpdateMeta("feature-1", newMeta))
-	require.NoError(t, tx.Commit(context.Background()))
+	require.NoError(t, tx.Commit(t.Context()))
 
 	// Verify update won (not deleted)
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Equal(t, git.LockReasonUser, meta.GetLockReason())
+	require.Equal(t, git.LockReasonUser, meta.GetLockReason())
 }
 
 func TestTransaction_DeleteAfterUpdate(t *testing.T) {
@@ -873,7 +873,7 @@ func TestTransaction_DeleteAfterUpdate(t *testing.T) {
 
 	// Create and track a branch
 	s.CreateBranch("feature-1").Commit("change 1")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-1", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-1", "main"))
 
 	eng := s.Engine.(interface {
 		BeginTx(message string) *engine.MetadataTx
@@ -885,12 +885,12 @@ func TestTransaction_DeleteAfterUpdate(t *testing.T) {
 	newMeta := git.NewMetaFrom(git.MetaFields{LockReason: git.LockReasonUser})
 	require.NoError(t, tx.UpdateMeta("feature-1", newMeta))
 	require.NoError(t, tx.DeleteMeta("feature-1"))
-	require.NoError(t, tx.Commit(context.Background()))
+	require.NoError(t, tx.Commit(t.Context()))
 
 	// Verify delete won (metadata gone)
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Nil(t, meta.GetParentBranchName()) // Empty meta
+	require.Nil(t, meta.GetParentBranchName()) // Empty meta
 }
 
 func TestTransaction_MixedUpdatesAndDeletes(t *testing.T) {
@@ -903,9 +903,9 @@ func TestTransaction_MixedUpdatesAndDeletes(t *testing.T) {
 	s.CreateBranch("feature-3").Commit("change 3")
 
 	// Track all
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-1", "main"))
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-2", "feature-1"))
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-3", "feature-2"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-1", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-2", "feature-1"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-3", "feature-2"))
 
 	eng := s.Engine.(interface {
 		BeginTx(message string) *engine.MetadataTx
@@ -918,21 +918,21 @@ func TestTransaction_MixedUpdatesAndDeletes(t *testing.T) {
 	require.NoError(t, tx.DeleteMeta("feature-2"))
 	scope := "test-scope"
 	require.NoError(t, tx.UpdateMeta("feature-3", git.NewMetaFrom(git.MetaFields{Scope: &scope})))
-	require.NoError(t, tx.Commit(context.Background()))
+	require.NoError(t, tx.Commit(t.Context()))
 
 	// Verify results
-	meta1, err := s.Metadata.ReadMetadata(context.Background(), "feature-1").One()
+	meta1, err := s.Metadata.ReadMetadata(t.Context(), "feature-1").One()
 	require.NoError(t, err)
-	assert.Equal(t, git.LockReasonUser, meta1.GetLockReason())
+	require.Equal(t, git.LockReasonUser, meta1.GetLockReason())
 
-	meta2, err := s.Metadata.ReadMetadata(context.Background(), "feature-2").One()
+	meta2, err := s.Metadata.ReadMetadata(t.Context(), "feature-2").One()
 	require.NoError(t, err)
-	assert.Nil(t, meta2.GetParentBranchName()) // Deleted
+	require.Nil(t, meta2.GetParentBranchName()) // Deleted
 
-	meta3, err := s.Metadata.ReadMetadata(context.Background(), "feature-3").One()
+	meta3, err := s.Metadata.ReadMetadata(t.Context(), "feature-3").One()
 	require.NoError(t, err)
 	require.NotNil(t, meta3.GetScope())
-	assert.Equal(t, "test-scope", *meta3.GetScope())
+	require.Equal(t, "test-scope", *meta3.GetScope())
 }
 
 func TestTransaction_DeleteLocalMetaClearsFrozenState(t *testing.T) {
@@ -941,15 +941,15 @@ func TestTransaction_DeleteLocalMetaClearsFrozenState(t *testing.T) {
 
 	// Create and track a branch
 	s.CreateBranch("feature-1").Commit("change 1")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature-1", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature-1", "main"))
 
 	// Freeze the branch
 	branch := s.Engine.GetBranch("feature-1")
-	_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(branch), engine.BranchFrozen)
+	_, err := s.Engine.SetFrozen(t.Context(), engine.BranchesOf(branch), engine.BranchFrozen)
 	require.NoError(t, err)
 
 	// Verify frozen in cache
-	assert.True(t, branch.IsFrozen())
+	require.True(t, branch.IsFrozen())
 
 	eng := s.Engine.(interface {
 		BeginTx(message string) *engine.MetadataTx
@@ -959,8 +959,8 @@ func TestTransaction_DeleteLocalMetaClearsFrozenState(t *testing.T) {
 	tx := eng.BeginTx("delete local metadata")
 	require.Empty(t, tx.ReadLocalMetadata(t.Context(), "feature-1").Failures())
 	require.NoError(t, tx.DeleteLocalMeta("feature-1"))
-	require.NoError(t, tx.Commit(context.Background()))
+	require.NoError(t, tx.Commit(t.Context()))
 
 	// Verify frozen state is cleared in cache
-	assert.False(t, branch.IsFrozen())
+	require.False(t, branch.IsFrozen())
 }

@@ -4,29 +4,29 @@ import (
 	"testing"
 
 	"github.com/getstackit/stackit/internal/actions/stackview"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStatus_Constants(t *testing.T) {
 	t.Parallel()
 
 	// Verify status string values are stable (important for any serialization)
-	assert.Equal(t, StatusShippable, Status("shippable"))
-	assert.Equal(t, StatusPending, Status("pending"))
-	assert.Equal(t, StatusBlocked, Status("blocked"))
-	assert.Equal(t, StatusIncomplete, Status("incomplete"))
+	require.Equal(t, StatusShippable, Status("shippable"))
+	require.Equal(t, StatusPending, Status("pending"))
+	require.Equal(t, StatusBlocked, Status("blocked"))
+	require.Equal(t, StatusIncomplete, Status("incomplete"))
 }
 
 func TestBlockingReason_Constants(t *testing.T) {
 	t.Parallel()
 
 	// Verify reason string values are stable
-	assert.Equal(t, ReasonChangesRequested, BlockingReason("changes_requested"))
-	assert.Equal(t, ReasonCIFailing, BlockingReason("ci_failing"))
-	assert.Equal(t, ReasonCIPending, BlockingReason("ci_pending"))
-	assert.Equal(t, ReasonDraft, BlockingReason("draft"))
-	assert.Equal(t, ReasonNoPR, BlockingReason("no_pr"))
-	assert.Equal(t, ReasonReviewRequired, BlockingReason("review_required"))
+	require.Equal(t, ReasonChangesRequested, BlockingReason("changes_requested"))
+	require.Equal(t, ReasonCIFailing, BlockingReason("ci_failing"))
+	require.Equal(t, ReasonCIPending, BlockingReason("ci_pending"))
+	require.Equal(t, ReasonDraft, BlockingReason("draft"))
+	require.Equal(t, ReasonNoPR, BlockingReason("no_pr"))
+	require.Equal(t, ReasonReviewRequired, BlockingReason("review_required"))
 }
 
 func TestStack_IsShippable(t *testing.T) {
@@ -47,7 +47,7 @@ func TestStack_IsShippable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			s := &Stack{Status: tt.status}
-			assert.Equal(t, tt.want, s.IsShippable())
+			require.Equal(t, tt.want, s.IsShippable())
 		})
 	}
 }
@@ -70,7 +70,7 @@ func TestStack_IsPending(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			s := &Stack{Status: tt.status}
-			assert.Equal(t, tt.want, s.IsPending())
+			require.Equal(t, tt.want, s.IsPending())
 		})
 	}
 }
@@ -93,7 +93,7 @@ func TestStack_IsBlocked(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			s := &Stack{Status: tt.status}
-			assert.Equal(t, tt.want, s.IsBlocked())
+			require.Equal(t, tt.want, s.IsBlocked())
 		})
 	}
 }
@@ -116,7 +116,7 @@ func TestStack_IsIncomplete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			s := &Stack{Status: tt.status}
-			assert.Equal(t, tt.want, s.IsIncomplete())
+			require.Equal(t, tt.want, s.IsIncomplete())
 		})
 	}
 }
@@ -129,7 +129,7 @@ func TestStack_BranchCount(t *testing.T) {
 			AllBranches: []string{"branch1", "branch2", "branch3"},
 		},
 	}
-	assert.Equal(t, 3, s.BranchCount())
+	require.Equal(t, 3, s.BranchCount())
 }
 
 func TestStack_RootBranch(t *testing.T) {
@@ -140,7 +140,7 @@ func TestStack_RootBranch(t *testing.T) {
 			RootBranch: "feature/my-stack",
 		},
 	}
-	assert.Equal(t, "feature/my-stack", s.RootBranch())
+	require.Equal(t, "feature/my-stack", s.RootBranch())
 }
 
 func TestStack_DisplayTitle(t *testing.T) {
@@ -154,7 +154,7 @@ func TestStack_DisplayTitle(t *testing.T) {
 			},
 			PRTitle: "feat: add user authentication",
 		}
-		assert.Equal(t, "feat: add user authentication", s.DisplayTitle())
+		require.Equal(t, "feat: add user authentication", s.DisplayTitle())
 	})
 
 	t.Run("falls back to branch name when no PR title", func(t *testing.T) {
@@ -165,7 +165,7 @@ func TestStack_DisplayTitle(t *testing.T) {
 			},
 			PRTitle: "",
 		}
-		assert.Equal(t, "jonnii/20260131/feature", s.DisplayTitle())
+		require.Equal(t, "jonnii/20260131/feature", s.DisplayTitle())
 	})
 }
 
@@ -182,9 +182,9 @@ func TestAnalysisResult_GetShippable(t *testing.T) {
 	}
 
 	shippable := result.GetShippable()
-	assert.Len(t, shippable, 2)
-	assert.Equal(t, "a", shippable[0].RootBranch())
-	assert.Equal(t, "c", shippable[1].RootBranch())
+	require.Len(t, shippable, 2)
+	require.Equal(t, "a", shippable[0].RootBranch())
+	require.Equal(t, "c", shippable[1].RootBranch())
 }
 
 func TestAnalysisResult_GetPending(t *testing.T) {
@@ -199,9 +199,9 @@ func TestAnalysisResult_GetPending(t *testing.T) {
 	}
 
 	pending := result.GetPending()
-	assert.Len(t, pending, 2)
-	assert.Equal(t, "b", pending[0].RootBranch())
-	assert.Equal(t, "c", pending[1].RootBranch())
+	require.Len(t, pending, 2)
+	require.Equal(t, "b", pending[0].RootBranch())
+	require.Equal(t, "c", pending[1].RootBranch())
 }
 
 func TestAnalysisResult_GetBlocked(t *testing.T) {
@@ -215,8 +215,8 @@ func TestAnalysisResult_GetBlocked(t *testing.T) {
 	}
 
 	blocked := result.GetBlocked()
-	assert.Len(t, blocked, 1)
-	assert.Equal(t, "a", blocked[0].RootBranch())
+	require.Len(t, blocked, 1)
+	require.Equal(t, "a", blocked[0].RootBranch())
 }
 
 func TestAnalysisResult_GetIncomplete(t *testing.T) {
@@ -230,8 +230,8 @@ func TestAnalysisResult_GetIncomplete(t *testing.T) {
 	}
 
 	incomplete := result.GetIncomplete()
-	assert.Len(t, incomplete, 1)
-	assert.Equal(t, "a", incomplete[0].RootBranch())
+	require.Len(t, incomplete, 1)
+	require.Equal(t, "a", incomplete[0].RootBranch())
 }
 
 func TestAnalysisResult_HasShippable(t *testing.T) {
@@ -240,13 +240,13 @@ func TestAnalysisResult_HasShippable(t *testing.T) {
 	t.Run("has shippable", func(t *testing.T) {
 		t.Parallel()
 		result := &AnalysisResult{ShippableCount: 2}
-		assert.True(t, result.HasShippable())
+		require.True(t, result.HasShippable())
 	})
 
 	t.Run("no shippable", func(t *testing.T) {
 		t.Parallel()
 		result := &AnalysisResult{ShippableCount: 0}
-		assert.False(t, result.HasShippable())
+		require.False(t, result.HasShippable())
 	})
 }
 
@@ -260,5 +260,5 @@ func TestAnalysisResult_TotalStacks(t *testing.T) {
 			{Stack: stackview.StackInfo{RootBranch: "c"}},
 		},
 	}
-	assert.Equal(t, 3, result.TotalStacks())
+	require.Equal(t, 3, result.TotalStacks())
 }

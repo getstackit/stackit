@@ -42,7 +42,7 @@ func TestRebase(t *testing.T) {
 
 		// Rebase branch1 onto new main
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		result, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: branch1Rev})
+		result, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: branch1Rev})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, result.Result)
 
@@ -84,12 +84,12 @@ func TestRebase(t *testing.T) {
 
 		// Rebase should result in conflict (using fork point, not branch tip)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		result, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		result, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, result.Result)
 
 		// Verify rebase is in progress
-		require.True(t, runner.IsRebaseInProgress(context.Background()))
+		require.True(t, runner.IsRebaseInProgress(t.Context()))
 	})
 
 	t.Run("auto-continues when rerere resolved conflict", func(t *testing.T) {
@@ -112,28 +112,28 @@ func TestRebase(t *testing.T) {
 		require.NoError(t, scene.Repo.CreateChange("main modification", "conflict", false))
 		require.NoError(t, scene.Repo.RunGitCommand("commit", "-m", "main change"))
 
-		result, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		result, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, result.Result)
-		require.True(t, runner.IsRebaseInProgress(context.Background()))
+		require.True(t, runner.IsRebaseInProgress(t.Context()))
 
 		require.NoError(t, scene.Repo.ResolveMergeConflicts())
 		require.NoError(t, scene.Repo.MarkMergeConflictsAsResolved())
-		result, err = runner.RebaseContinue(context.Background())
+		result, err = runner.RebaseContinue(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, result.Result)
-		require.False(t, runner.IsRebaseInProgress(context.Background()))
+		require.False(t, runner.IsRebaseInProgress(t.Context()))
 
 		require.NoError(t, scene.Repo.CheckoutBranch("main"))
 		require.NoError(t, scene.Repo.RunGitCommand("checkout", "-b", "branch2", forkPoint))
 		require.NoError(t, scene.Repo.CreateChange("branch modification", "conflict", false))
 		require.NoError(t, scene.Repo.RunGitCommand("commit", "-m", "branch change again"))
 
-		result, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch2", Onto: "main", OldBase: forkPoint})
+		result, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch2", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, result.Result)
 		require.Positive(t, result.RerereResolvedCount)
-		require.False(t, runner.IsRebaseInProgress(context.Background()))
+		require.False(t, runner.IsRebaseInProgress(t.Context()))
 	})
 
 	// Without rerere.autoupdate, rerere applies resolutions to the working
@@ -161,12 +161,12 @@ func TestRebase(t *testing.T) {
 		require.NoError(t, scene.Repo.RunGitCommand("commit", "-m", "main change"))
 
 		// Resolve once so rerere records the resolution.
-		result, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		result, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, result.Result)
 		require.NoError(t, scene.Repo.ResolveMergeConflicts())
 		require.NoError(t, scene.Repo.MarkMergeConflictsAsResolved())
-		result, err = runner.RebaseContinue(context.Background())
+		result, err = runner.RebaseContinue(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, result.Result)
 
@@ -177,11 +177,11 @@ func TestRebase(t *testing.T) {
 		require.NoError(t, scene.Repo.CreateChange("branch modification", "conflict", false))
 		require.NoError(t, scene.Repo.RunGitCommand("commit", "-m", "branch change again"))
 
-		result, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch2", Onto: "main", OldBase: forkPoint})
+		result, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch2", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, result.Result)
 		require.Equal(t, 0, result.RerereResolvedCount)
-		require.True(t, runner.IsRebaseInProgress(context.Background()))
+		require.True(t, runner.IsRebaseInProgress(t.Context()))
 	})
 
 	t.Run("reports next conflict after rerere auto-continues", func(t *testing.T) {
@@ -204,12 +204,12 @@ func TestRebase(t *testing.T) {
 
 		require.NoError(t, scene.Repo.RunGitCommand("checkout", "-b", "seed", forkPoint))
 		require.NoError(t, scene.Repo.CreateChangeAndCommit("branch A", "fileA"))
-		seedResult, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "seed", Onto: "main", OldBase: forkPoint})
+		seedResult, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "seed", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, seedResult.Result)
 		require.NoError(t, scene.Repo.RunGitCommand("checkout", "--theirs", "fileA_test.txt"))
 		require.NoError(t, scene.Repo.RunGitCommand("add", "fileA_test.txt"))
-		seedResult, err = runner.RebaseContinue(context.Background())
+		seedResult, err = runner.RebaseContinue(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, seedResult.Result)
 
@@ -218,12 +218,12 @@ func TestRebase(t *testing.T) {
 		require.NoError(t, scene.Repo.CreateChangeAndCommit("branch A", "fileA"))
 		require.NoError(t, scene.Repo.CreateChangeAndCommit("branch B", "fileB"))
 
-		result, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		result, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, result.Result)
-		require.True(t, runner.IsRebaseInProgress(context.Background()))
+		require.True(t, runner.IsRebaseInProgress(t.Context()))
 
-		unmerged, err := runner.GetUnmergedFiles(context.Background())
+		unmerged, err := runner.GetUnmergedFiles(t.Context())
 		require.NoError(t, err)
 		require.Contains(t, unmerged, "fileB_test.txt")
 	})
@@ -248,24 +248,24 @@ func TestRebase(t *testing.T) {
 
 		require.NoError(t, scene.Repo.RunGitCommand("checkout", "-b", "seed-a", forkPoint))
 		require.NoError(t, scene.Repo.CreateChangeAndCommit("branch A", "fileA"))
-		seedResult, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "seed-a", Onto: "main", OldBase: forkPoint})
+		seedResult, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "seed-a", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, seedResult.Result)
 		require.NoError(t, scene.Repo.RunGitCommand("checkout", "--theirs", "fileA_test.txt"))
 		require.NoError(t, scene.Repo.RunGitCommand("add", "fileA_test.txt"))
-		seedResult, err = runner.RebaseContinue(context.Background())
+		seedResult, err = runner.RebaseContinue(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, seedResult.Result)
 
 		require.NoError(t, scene.Repo.CheckoutBranch("main"))
 		require.NoError(t, scene.Repo.RunGitCommand("checkout", "-b", "seed-b", forkPoint))
 		require.NoError(t, scene.Repo.CreateChangeAndCommit("branch B", "fileB"))
-		seedResult, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "seed-b", Onto: "main", OldBase: forkPoint})
+		seedResult, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "seed-b", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseConflict, seedResult.Result)
 		require.NoError(t, scene.Repo.RunGitCommand("checkout", "--theirs", "fileB_test.txt"))
 		require.NoError(t, scene.Repo.RunGitCommand("add", "fileB_test.txt"))
-		seedResult, err = runner.RebaseContinue(context.Background())
+		seedResult, err = runner.RebaseContinue(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, seedResult.Result)
 
@@ -274,11 +274,11 @@ func TestRebase(t *testing.T) {
 		require.NoError(t, scene.Repo.CreateChangeAndCommit("branch A", "fileA"))
 		require.NoError(t, scene.Repo.CreateChangeAndCommit("branch B", "fileB"))
 
-		result, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		result, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, result.Result)
 		require.GreaterOrEqual(t, result.RerereResolvedCount, 2)
-		require.False(t, runner.IsRebaseInProgress(context.Background()))
+		require.False(t, runner.IsRebaseInProgress(t.Context()))
 	})
 }
 
@@ -291,7 +291,7 @@ func TestIsRebaseInProgress(t *testing.T) {
 
 		runner := git.NewRunner(nil)
 		require.True(t, runner.IsInsideRepo(), "a pathless runner must resolve the repo from the working directory")
-		require.False(t, runner.IsRebaseInProgress(context.Background()))
+		require.False(t, runner.IsRebaseInProgress(t.Context()))
 	})
 
 	t.Run("returns true when rebase in progress", func(t *testing.T) {
@@ -321,11 +321,11 @@ func TestIsRebaseInProgress(t *testing.T) {
 
 		// Start rebase (will conflict)
 		runner := git.NewRunner(nil)
-		_, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		_, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 
 		// Rebase should be in progress
-		require.True(t, runner.IsRebaseInProgress(context.Background()))
+		require.True(t, runner.IsRebaseInProgress(t.Context()))
 	})
 }
 
@@ -359,9 +359,9 @@ func TestRebaseContinue(t *testing.T) {
 
 		// Start rebase (will conflict)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		_, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		_, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
-		require.True(t, runner.IsRebaseInProgress(context.Background()))
+		require.True(t, runner.IsRebaseInProgress(t.Context()))
 
 		// Resolve conflict
 		err = scene.Repo.ResolveMergeConflicts()
@@ -370,12 +370,12 @@ func TestRebaseContinue(t *testing.T) {
 		require.NoError(t, err)
 
 		// Continue rebase
-		result, err := runner.RebaseContinue(context.Background())
+		result, err := runner.RebaseContinue(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, git.RebaseDone, result.Result)
 
 		// Rebase should be complete
-		require.False(t, runner.IsRebaseInProgress(context.Background()))
+		require.False(t, runner.IsRebaseInProgress(t.Context()))
 	})
 }
 
@@ -410,13 +410,13 @@ func TestRebaseContinueAutoContinuesThroughRerereResolvedCommit(t *testing.T) {
 	// the same conflict through a throwaway branch and resolving by hand.
 	require.NoError(t, scene.Repo.RunGitCommand("checkout", "-b", "seed", mainAfterM1))
 	require.NoError(t, scene.Repo.CreateChangeAndCommit("branchB", "fileB.txt"))
-	seedResult, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "seed", Onto: "main", OldBase: mainAfterM1})
+	seedResult, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "seed", Onto: "main", OldBase: mainAfterM1})
 	require.NoError(t, err)
 	require.Equal(t, git.RebaseConflict, seedResult.Result)
 	require.NoError(t, scene.Repo.RunGitCommand("checkout", "--theirs", "fileB.txt_test.txt"))
 	require.NoError(t, scene.Repo.RunGitCommand("add", "fileB.txt_test.txt"))
 	require.NoError(t, scene.Repo.RunGitCommand("rerere"))
-	seedResult, err = runner.RebaseContinue(context.Background())
+	seedResult, err = runner.RebaseContinue(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, git.RebaseDone, seedResult.Result)
 
@@ -428,10 +428,10 @@ func TestRebaseContinueAutoContinuesThroughRerereResolvedCommit(t *testing.T) {
 	require.NoError(t, scene.Repo.CreateChangeAndCommit("bA", "fileA.txt"))
 	require.NoError(t, scene.Repo.CreateChangeAndCommit("branchB", "fileB.txt"))
 
-	result, err := runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: fork0})
+	result, err := runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: fork0})
 	require.NoError(t, err)
 	require.Equal(t, git.RebaseConflict, result.Result)
-	require.True(t, runner.IsRebaseInProgress(context.Background()))
+	require.True(t, runner.IsRebaseInProgress(t.Context()))
 
 	// User resolves the B1/fileA conflict manually.
 	require.NoError(t, scene.Repo.RunGitCommand("checkout", "--theirs", "fileA.txt_test.txt"))
@@ -439,10 +439,10 @@ func TestRebaseContinueAutoContinuesThroughRerereResolvedCommit(t *testing.T) {
 
 	// RebaseContinue should drive the remaining B2 cherry-pick through
 	// rerere and finish the rebase cleanly.
-	contResult, err := runner.RebaseContinue(context.Background())
+	contResult, err := runner.RebaseContinue(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, git.RebaseDone, contResult.Result)
-	require.False(t, runner.IsRebaseInProgress(context.Background()))
+	require.False(t, runner.IsRebaseInProgress(t.Context()))
 }
 
 func TestGetRebaseHead(t *testing.T) {
@@ -475,11 +475,11 @@ func TestGetRebaseHead(t *testing.T) {
 
 		// Start rebase (will conflict)
 		runner := git.NewRunnerWithPath(scene.Dir, nil)
-		_, err = runner.Rebase(context.Background(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
+		_, err = runner.Rebase(t.Context(), git.RebaseSpec{Branch: "branch1", Onto: "main", OldBase: forkPoint})
 		require.NoError(t, err)
 
 		// Verify we're in a conflict state
-		require.True(t, runner.IsRebaseInProgress(context.Background()))
+		require.True(t, runner.IsRebaseInProgress(t.Context()))
 
 		// Get rebase head
 		rebaseHead, err := runner.GetRebaseHead()
@@ -550,7 +550,7 @@ func TestAutoContinueRerereRebaseRecoversFromAutoupdateLag(t *testing.T) {
 	t.Parallel()
 
 	r := &rerereLagRunner{inProgress: true}
-	outcome, unmerged, err := git.AutoContinueRerereRebase(context.Background(), r, nil)
+	outcome, unmerged, err := git.AutoContinueRerereRebase(t.Context(), r, nil)
 
 	require.NoError(t, err)
 	require.Empty(t, unmerged)

@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,12 +23,12 @@ func TestRestackFrozenBranch(t *testing.T) {
 			Commit("child change")
 
 		// 2. Track them
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "parent", "main"))
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "child", "parent"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "parent", "main"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "child", "parent"))
 
 		// 3. Freeze the child
 		childBranch := s.Engine.GetBranch("child")
-		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(childBranch), engine.BranchFrozen)
+		_, err := s.Engine.SetFrozen(t.Context(), engine.BranchesOf(childBranch), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		// 4. Simulate remote state: child has a different SHA on remote
@@ -43,7 +42,7 @@ func TestRestackFrozenBranch(t *testing.T) {
 		s.RunGit("update-ref", "refs/heads/origin/child", remoteSha)
 
 		// 5. Restack the branch
-		batchRes, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(childBranch), engine.RestackOpts{})
+		batchRes, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(childBranch), engine.RestackOpts{})
 		require.NoError(t, err)
 		require.Equal(t, engine.RestackDone, batchRes.Results["child"].Result)
 
@@ -65,17 +64,17 @@ func TestRestackFrozenBranch(t *testing.T) {
 			CreateBranch("child").
 			Commit("child change")
 
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "parent", "main"))
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "child", "parent"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "parent", "main"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "child", "parent"))
 
 		childBranch := s.Engine.GetBranch("child")
-		_, err := s.Engine.SetFrozen(context.Background(), engine.BranchesOf(childBranch), engine.BranchFrozen)
+		_, err := s.Engine.SetFrozen(t.Context(), engine.BranchesOf(childBranch), engine.BranchFrozen)
 		require.NoError(t, err)
 
 		localSha, _ := childBranch.GetRevision()
 		s.RunGit("update-ref", "refs/remotes/origin/child", localSha)
 
-		batchRes, err := s.Engine.RestackBranches(context.Background(), engine.BranchesOf(childBranch), engine.RestackOpts{})
+		batchRes, err := s.Engine.RestackBranches(t.Context(), engine.BranchesOf(childBranch), engine.RestackOpts{})
 		require.NoError(t, err)
 		require.Equal(t, engine.RestackUnneeded, batchRes.Results["child"].Result)
 	})

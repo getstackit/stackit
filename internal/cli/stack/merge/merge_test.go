@@ -1,7 +1,6 @@
 package merge
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -255,15 +254,15 @@ func TestMergeNextUsesCreateMergePlan(t *testing.T) {
 		branchB := s.Engine.GetBranch("branch-b")
 		branchC := s.Engine.GetBranch("branch-c")
 
-		err := s.Engine.UpsertPrInfo(context.Background(), branchA, testhelpers.NewTestPrInfo(101).
+		err := s.Engine.UpsertPrInfo(t.Context(), branchA, testhelpers.NewTestPrInfo(101).
 			WithURL("https://github.com/owner/repo/pull/101"))
 		require.NoError(t, err)
 
-		err = s.Engine.UpsertPrInfo(context.Background(), branchB, testhelpers.NewTestPrInfo(102).
+		err = s.Engine.UpsertPrInfo(t.Context(), branchB, testhelpers.NewTestPrInfo(102).
 			WithURL("https://github.com/owner/repo/pull/102"))
 		require.NoError(t, err)
 
-		err = s.Engine.UpsertPrInfo(context.Background(), branchC, testhelpers.NewTestPrInfo(103).
+		err = s.Engine.UpsertPrInfo(t.Context(), branchC, testhelpers.NewTestPrInfo(103).
 			WithURL("https://github.com/owner/repo/pull/103"))
 		require.NoError(t, err)
 
@@ -329,7 +328,7 @@ func TestPromptForShipDescription(t *testing.T) {
 
 	t.Run("skips silently when a description is already set", func(t *testing.T) {
 		s := newStack(t)
-		require.NoError(t, s.Engine.SetStackDescription(context.Background(),
+		require.NoError(t, s.Engine.SetStackDescription(t.Context(),
 			s.Engine.GetBranch("branch-a"),
 			&git.StackDescription{Title: "Existing title"}))
 

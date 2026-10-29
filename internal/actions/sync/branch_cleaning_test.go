@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"maps"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestCleanBranchesNonInteractiveRespectsDirtyStackFilter(t *testing.T) {
 	s.Checkout("main").RunGit("merge", "branch1")
 	err := s.Engine.Rebuild("main")
 	require.NoError(t, err)
-	err = s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main"))
+	err = s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("branch1"), testhelpers.NewTestPrInfoMerged(1, "main"))
 	require.NoError(t, err)
 
 	// Non-interactive path uses NullHandler. Dirty stack filter should prevent deletion.
@@ -81,7 +80,7 @@ func TestCleanBranchesInteractiveDoesNotAutoDeleteUnpushedUtilityBranch(t *testi
 	// Mark branch as utility and deletable (merged PR).
 	err = s.Engine.SetBranchType(s.Engine.GetBranch("util-branch"), git.BranchTypeUtility)
 	require.NoError(t, err)
-	err = s.Engine.UpsertPrInfo(context.Background(), s.Engine.GetBranch("util-branch"), testhelpers.NewTestPrInfoMerged(1, "main"))
+	err = s.Engine.UpsertPrInfo(t.Context(), s.Engine.GetBranch("util-branch"), testhelpers.NewTestPrInfoMerged(1, "main"))
 	require.NoError(t, err)
 
 	s.Checkout("main")

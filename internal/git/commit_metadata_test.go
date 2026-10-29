@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,8 +18,8 @@ func TestGetCommitRangeMetadata(t *testing.T) {
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	logger := &traceCaptureLogger{}
 	runner := git.NewRunnerWithPath(scene.Dir, logger)
-	ctx := context.Background()
-	base, err := runner.ReadRevisions(context.Background(), "HEAD").One()
+	ctx := t.Context()
+	base, err := runner.ReadRevisions(t.Context(), "HEAD").One()
 	require.NoError(t, err)
 
 	// Distinct authors, time zones, multiline and empty messages must survive
@@ -70,7 +69,7 @@ func TestCommitReadsIgnoreShowSignature(t *testing.T) {
 	}
 	scene := testhelpers.NewSceneParallel(t, testhelpers.InitialCommitSceneSetup)
 	runner := git.NewRunnerWithPath(scene.Dir, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 	base, err := runner.ReadRevisions(ctx, "HEAD").One()
 	require.NoError(t, err)
 

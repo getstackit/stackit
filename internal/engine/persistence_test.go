@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/git"
@@ -38,13 +37,13 @@ func TestMetaSerialization(t *testing.T) {
 	err = json.Unmarshal(data, &meta2)
 	require.NoError(t, err)
 
-	assert.Equal(t, meta.GetParentBranchName(), meta2.GetParentBranchName())
-	assert.Equal(t, meta.GetScope(), meta2.GetScope())
-	assert.Equal(t, meta.GetLockReason(), meta2.GetLockReason())
-	assert.Equal(t, meta.GetBranchType(), meta2.GetBranchType())
-	assert.Equal(t, meta.GetLastModifiedBy().GitName, meta2.GetLastModifiedBy().GitName)
-	assert.Equal(t, meta.GetLastModifiedBy().GitEmail, meta2.GetLastModifiedBy().GitEmail)
-	assert.True(t, meta.GetLastModifiedAt().Equal(*meta2.GetLastModifiedAt()))
+	require.Equal(t, meta.GetParentBranchName(), meta2.GetParentBranchName())
+	require.Equal(t, meta.GetScope(), meta2.GetScope())
+	require.Equal(t, meta.GetLockReason(), meta2.GetLockReason())
+	require.Equal(t, meta.GetBranchType(), meta2.GetBranchType())
+	require.Equal(t, meta.GetLastModifiedBy().GitName, meta2.GetLastModifiedBy().GitName)
+	require.Equal(t, meta.GetLastModifiedBy().GitEmail, meta2.GetLastModifiedBy().GitEmail)
+	require.True(t, meta.GetLastModifiedAt().Equal(*meta2.GetLastModifiedAt()))
 }
 
 func TestLocalMetaSerialization(t *testing.T) {
@@ -62,7 +61,7 @@ func TestLocalMetaSerialization(t *testing.T) {
 	err = json.Unmarshal(data, &meta2)
 	require.NoError(t, err)
 
-	assert.Equal(t, meta.Frozen, meta2.Frozen)
+	require.Equal(t, meta.Frozen, meta2.Frozen)
 }
 
 func TestMetaBackwardCompatibility(t *testing.T) {
@@ -74,9 +73,9 @@ func TestMetaBackwardCompatibility(t *testing.T) {
 	err := json.Unmarshal([]byte(jsonData), &meta)
 	require.NoError(t, err)
 
-	assert.Equal(t, "main", *meta.GetParentBranchName())
-	assert.Equal(t, git.LockReason("locked"), meta.GetLockReason())
-	assert.Equal(t, git.BranchType(""), meta.GetBranchType()) // Should be empty/default
-	assert.Nil(t, meta.GetLastModifiedBy())
-	assert.Nil(t, meta.GetLastModifiedAt())
+	require.Equal(t, "main", *meta.GetParentBranchName())
+	require.Equal(t, git.LockReason("locked"), meta.GetLockReason())
+	require.Equal(t, git.BranchType(""), meta.GetBranchType()) // Should be empty/default
+	require.Nil(t, meta.GetLastModifiedBy())
+	require.Nil(t, meta.GetLastModifiedAt())
 }

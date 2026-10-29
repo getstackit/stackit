@@ -1,7 +1,6 @@
 package submit_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -49,11 +48,11 @@ func TestSubmitRetriesAfterPartialFailure(t *testing.T) {
 	// signal reads as up to date.
 	branch := s.Engine.GetBranch("feature")
 	branches := engine.BranchesOf(branch)
-	remoteStatuses := s.Engine.ReadBranchRemoteStatuses(context.Background(), branches)
+	remoteStatuses := s.Engine.ReadBranchRemoteStatuses(t.Context(), branches)
 	require.True(t, remoteStatuses.ForBranch(branch).Matches(),
 		"the failed submit should still have pushed the branch")
 
-	statuses, err := s.Engine.BatchGetPRSubmissionStatus(context.Background(), branches, remoteStatuses)
+	statuses, err := s.Engine.BatchGetPRSubmissionStatus(t.Context(), branches, remoteStatuses)
 	require.NoError(t, err)
 	require.True(t, statuses["feature"].NeedsUpdate,
 		"a submit whose PR write failed must still be pending")
@@ -63,8 +62,8 @@ func TestSubmitRetriesAfterPartialFailure(t *testing.T) {
 	require.NoError(t, submit.Action(s.Context, opts, &noopHandler{}))
 	require.NotEmpty(t, config.UpdatedPRs, "the retry should have updated the PR")
 
-	remoteStatuses = s.Engine.ReadBranchRemoteStatuses(context.Background(), branches)
-	statuses, err = s.Engine.BatchGetPRSubmissionStatus(context.Background(), branches, remoteStatuses)
+	remoteStatuses = s.Engine.ReadBranchRemoteStatuses(t.Context(), branches)
+	statuses, err = s.Engine.BatchGetPRSubmissionStatus(t.Context(), branches, remoteStatuses)
 	require.NoError(t, err)
 	require.False(t, statuses["feature"].NeedsUpdate,
 		"a completed submit should leave nothing pending")
@@ -106,7 +105,7 @@ func TestSubmitPendingIsClearedPerBranch(t *testing.T) {
 
 	pending := func(branch string) bool {
 		t.Helper()
-		meta, err := s.Metadata.ReadLocalMetadata(context.Background(), branch).One()
+		meta, err := s.Metadata.ReadLocalMetadata(t.Context(), branch).One()
 		require.NoError(t, err)
 		return meta != nil && meta.SubmitPending
 	}

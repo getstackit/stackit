@@ -83,6 +83,8 @@ func (c *MockGitHubServerConfig) errorFor(method, path string) error {
 
 // NewMockGitHubServer creates an httptest server that mocks GitHub API endpoints
 func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest.Server {
+	t.Helper()
+
 	if config == nil {
 		config = NewMockGitHubServerConfig()
 	}
@@ -366,6 +368,8 @@ func NewMockGitHubServer(t *testing.T, config *MockGitHubServerConfig) *httptest
 
 // NewMockGitHubClient creates a GitHub client configured to use a mock server
 func NewMockGitHubClient(t *testing.T, config *MockGitHubServerConfig) (*github.Client, string, string) {
+	t.Helper()
+
 	server := NewMockGitHubServer(t, config)
 	baseURL := server.URL + "/"
 	client, err := github.NewClient(github.WithURLs(&baseURL, &baseURL))

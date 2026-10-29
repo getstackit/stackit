@@ -1,7 +1,6 @@
 package absorb
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,13 +59,13 @@ func TestSelectRestackBranches(t *testing.T) {
 	})
 
 	t.Run("scope mode filters branches outside current scope", func(t *testing.T) {
-		err := s.Engine.SetScope(context.Background(), s.Engine.GetBranch("a"), engine.NewScope("proj"))
+		err := s.Engine.SetScope(t.Context(), s.Engine.GetBranch("a"), engine.NewScope("proj"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("b"), engine.NewScope("proj"))
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("b"), engine.NewScope("proj"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("c"), engine.NewScope("proj"))
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("c"), engine.NewScope("proj"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("d"), engine.NewScope("other"))
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("d"), engine.NewScope("other"))
 		require.NoError(t, err)
 		s.Rebuild()
 

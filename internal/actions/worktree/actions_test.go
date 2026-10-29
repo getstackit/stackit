@@ -1,11 +1,9 @@
 package worktree_test
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/actions/worktree"
@@ -33,7 +31,7 @@ func TestListAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/fake-worktree"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/fake-worktree"})
 		require.NoError(t, err)
 
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
@@ -54,8 +52,8 @@ func TestListAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "first-anchor", Path: engine.WorktreePath(t.TempDir()), Name: "first"}))
-		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "second-anchor", Path: engine.WorktreePath(t.TempDir()), Name: "second"}))
+		require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "first-anchor", Path: engine.WorktreePath(t.TempDir()), Name: "first"}))
+		require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "second-anchor", Path: engine.WorktreePath(t.TempDir()), Name: "second"}))
 		t.Cleanup(func() {
 			_ = s.Engine.UnregisterWorktree(s.Context, "first-anchor")
 			_ = s.Engine.UnregisterWorktree(s.Context, "second-anchor")
@@ -64,12 +62,12 @@ func TestListAction(t *testing.T) {
 		byName, err := worktree.ListAction(s.Context, worktree.ListOptions{Selector: "second"})
 		require.NoError(t, err)
 		require.Len(t, byName.Worktrees, 1)
-		assert.Equal(t, "second-anchor", byName.Worktrees[0].AnchorBranch)
+		require.Equal(t, "second-anchor", byName.Worktrees[0].AnchorBranch)
 
 		byAnchor, err := worktree.ListAction(s.Context, worktree.ListOptions{Selector: "first-anchor"})
 		require.NoError(t, err)
 		require.Len(t, byAnchor.Worktrees, 1)
-		assert.Equal(t, "first", byAnchor.Worktrees[0].Name.String())
+		require.Equal(t, "first", byAnchor.Worktrees[0].Name.String())
 	})
 
 	t.Run("marks legacy registrations", func(t *testing.T) {
@@ -78,10 +76,10 @@ func TestListAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		s.RunGit("checkout", "-b", "feature")
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature", "main"))
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "feature"}))
+		require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "feature"}))
 
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
 		require.NoError(t, err)
@@ -102,7 +100,7 @@ func TestListAction(t *testing.T) {
 		s.Checkout("main")
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "feature-wt"}))
+		require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "feature-wt"}))
 		t.Cleanup(func() { _ = s.Engine.UnregisterWorktree(s.Context, "feature") })
 
 		// Simulate raw `git checkout feature` from the main repository, bypassing
@@ -112,8 +110,8 @@ func TestListAction(t *testing.T) {
 		result, err := worktree.ListAction(s.Context, worktree.ListOptions{})
 		require.NoError(t, err)
 		require.Len(t, result.OwnershipWarnings, 1)
-		assert.Contains(t, result.OwnershipWarnings[0], "branch feature belongs to managed worktree feature-wt")
-		assert.Contains(t, result.OwnershipWarnings[0], "but is checked out at")
+		require.Contains(t, result.OwnershipWarnings[0], "branch feature belongs to managed worktree feature-wt")
+		require.Contains(t, result.OwnershipWarnings[0], "but is checked out at")
 	})
 }
 
@@ -138,7 +136,7 @@ func TestRemoveAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree (path doesn't exist)
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-worktree"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-worktree"})
 		require.NoError(t, err)
 
 		// Verify it's registered
@@ -163,7 +161,7 @@ func TestRemoveAction(t *testing.T) {
 		s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 		s.WithInitialCommit()
 
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-worktree"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-worktree"})
 		require.NoError(t, err)
 
 		err = worktree.RemoveAction(s.Context, worktree.RemoveOptions{
@@ -198,7 +196,7 @@ func TestOpenAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		// Register a fake worktree with non-existent path
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-path-12345"})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: "/tmp/nonexistent-path-12345"})
 		require.NoError(t, err)
 
 		_, err = worktree.OpenAction(s.Context, worktree.OpenOptions{
@@ -218,7 +216,7 @@ func TestOpenAction(t *testing.T) {
 
 		// Use a path that exists (the repo root)
 		repoRoot := s.Context.RepoRoot
-		err := s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: engine.WorktreePath(repoRoot)})
+		err := s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature-stack", Path: engine.WorktreePath(repoRoot)})
 		require.NoError(t, err)
 
 		path, err := worktree.OpenAction(s.Context, worktree.OpenOptions{
@@ -375,10 +373,10 @@ func TestRepairAction(t *testing.T) {
 		s.WithInitialCommit()
 
 		s.RunGit("checkout", "-b", "feature")
-		require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+		require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature", "main"))
 
 		worktreeDir := t.TempDir()
-		require.NoError(t, s.Engine.RegisterWorktree(context.Background(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "legacy-wt"}))
+		require.NoError(t, s.Engine.RegisterWorktree(t.Context(), engine.WorktreeRegistration{AnchorBranch: "feature", Path: engine.WorktreePath(worktreeDir), Name: "legacy-wt"}))
 
 		result, err := worktree.RepairAction(s.Context, worktree.RepairOptions{Selector: "legacy-wt"})
 		require.NoError(t, err)

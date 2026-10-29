@@ -1,7 +1,6 @@
 package absorb
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -27,9 +26,9 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 			})
 
 		// Set scopes: scoped-a and scoped-b have PROJ-123, unscoped-c has no scope
-		err := s.Engine.SetScope(context.Background(), s.Engine.GetBranch("scoped-a"), engine.NewScope("PROJ-123"))
+		err := s.Engine.SetScope(t.Context(), s.Engine.GetBranch("scoped-a"), engine.NewScope("PROJ-123"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("scoped-b"), engine.NewScope("PROJ-123"))
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("scoped-b"), engine.NewScope("PROJ-123"))
 		require.NoError(t, err)
 		// unscoped-c has no scope
 
@@ -147,13 +146,13 @@ func TestAbsorbScopeBoundaries(t *testing.T) {
 			})
 
 		// Set mixed scopes: PROJ-123 for a/b, PROJ-456 for c/d
-		err := s.Engine.SetScope(context.Background(), s.Engine.GetBranch("scoped-a"), engine.NewScope("PROJ-123"))
+		err := s.Engine.SetScope(t.Context(), s.Engine.GetBranch("scoped-a"), engine.NewScope("PROJ-123"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("scoped-b"), engine.NewScope("PROJ-123"))
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("scoped-b"), engine.NewScope("PROJ-123"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("different-c"), engine.NewScope("PROJ-456"))
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("different-c"), engine.NewScope("PROJ-456"))
 		require.NoError(t, err)
-		err = s.Engine.SetScope(context.Background(), s.Engine.GetBranch("scoped-d"), engine.NewScope("PROJ-456"))
+		err = s.Engine.SetScope(t.Context(), s.Engine.GetBranch("scoped-d"), engine.NewScope("PROJ-456"))
 		require.NoError(t, err)
 
 		// Switch to scoped-b (PROJ-123)
@@ -907,7 +906,7 @@ func TestAbsorbRestackConflictKeepsCleanWorktree(t *testing.T) {
 	// The repo is clean: no rebase in progress, nothing staged (the absorbed
 	// hunk must NOT have been re-staged by the restore path), and no leftover
 	// absorb stashes.
-	require.False(t, s.Git.IsRebaseInProgress(context.Background()))
+	require.False(t, s.Git.IsRebaseInProgress(t.Context()))
 	staged, err := s.Scene.Repo.RunGitCommandAndGetOutput("diff", "--cached")
 	require.NoError(t, err)
 	require.Empty(t, strings.TrimSpace(staged))

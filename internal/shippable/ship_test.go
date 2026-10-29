@@ -5,10 +5,11 @@ import (
 
 	"github.com/getstackit/stackit/internal/actions/stackview"
 	"github.com/getstackit/stackit/internal/git"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestShipResult_Fields(t *testing.T) {
+	t.Parallel()
 	result := &ShipResult{
 		IncludedStacks: []Stack{
 			{Stack: stackview.StackInfo{RootBranch: "a"}},
@@ -22,24 +23,26 @@ func TestShipResult_Fields(t *testing.T) {
 		BranchName: "consolidation-123",
 	}
 
-	assert.Len(t, result.IncludedStacks, 2)
-	assert.Len(t, result.ExcludedStacks, 1)
-	assert.Equal(t, git.PRNumber(123), result.PRNumber)
-	assert.Equal(t, "https://github.com/org/repo/pull/123", result.PRURL)
-	assert.Equal(t, "consolidation-123", result.BranchName)
+	require.Len(t, result.IncludedStacks, 2)
+	require.Len(t, result.ExcludedStacks, 1)
+	require.Equal(t, git.PRNumber(123), result.PRNumber)
+	require.Equal(t, "https://github.com/org/repo/pull/123", result.PRURL)
+	require.Equal(t, "consolidation-123", result.BranchName)
 }
 
 func TestShipOptions_Defaults(t *testing.T) {
+	t.Parallel()
 	opts := ShipOptions{}
-	assert.False(t, opts.SkipLocalCI)
-	assert.False(t, opts.Wait)
+	require.False(t, opts.SkipLocalCI)
+	require.False(t, opts.Wait)
 }
 
 func TestShipOptions_WithValues(t *testing.T) {
+	t.Parallel()
 	opts := ShipOptions{
 		SkipLocalCI: true,
 		Wait:        true,
 	}
-	assert.True(t, opts.SkipLocalCI)
-	assert.True(t, opts.Wait)
+	require.True(t, opts.SkipLocalCI)
+	require.True(t, opts.Wait)
 }

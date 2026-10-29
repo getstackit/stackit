@@ -1,11 +1,9 @@
 package pr
 
 import (
-	"context"
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getstackit/stackit/internal/config"
@@ -25,14 +23,14 @@ func TestUpdatePRBodyFooter(t *testing.T) {
 	t.Run("appends to empty body", func(t *testing.T) {
 		t.Parallel()
 		result := UpdatePRBodyFooter("", footer)
-		assert.Equal(t, footer, result)
+		require.Equal(t, footer, result)
 	})
 
 	t.Run("appends to existing body", func(t *testing.T) {
 		t.Parallel()
 		body := "Original description"
 		result := UpdatePRBodyFooter(body, footer)
-		assert.Equal(t, body+footer, result)
+		require.Equal(t, body+footer, result)
 	})
 
 	t.Run("replaces existing stackit section with markers", func(t *testing.T) {
@@ -41,10 +39,10 @@ func TestUpdatePRBodyFooter(t *testing.T) {
 		newFooter := "\n\n\n" + SectionStart + "\nNew Content\n" + SectionEnd
 		result := UpdatePRBodyFooter(body, newFooter)
 
-		assert.Contains(t, result, "Description")
-		assert.Contains(t, result, "New Content")
-		assert.NotContains(t, result, "Old Content")
-		assert.Contains(t, result, "Footer stuff")
+		require.Contains(t, result, "Description")
+		require.Contains(t, result, "New Content")
+		require.NotContains(t, result, "Old Content")
+		require.Contains(t, result, "Footer stuff")
 	})
 
 	t.Run("idempotency - multiple updates", func(t *testing.T) {
@@ -53,8 +51,8 @@ func TestUpdatePRBodyFooter(t *testing.T) {
 		first := UpdatePRBodyFooter(body, footer)
 		second := UpdatePRBodyFooter(first, footer)
 
-		assert.Equal(t, first, second)
-		assert.Equal(t, 1, strings.Count(second, SectionStart))
+		require.Equal(t, first, second)
+		require.Equal(t, 1, strings.Count(second, SectionStart))
 	})
 
 	t.Run("preserves leading newlines when replacing", func(t *testing.T) {
@@ -65,7 +63,7 @@ func TestUpdatePRBodyFooter(t *testing.T) {
 
 		// The footer constant already has 3 newlines.
 		// UpdatePRBodyFooter should find the block start and replace it.
-		assert.Equal(t, "Description"+footer, result)
+		require.Equal(t, "Description"+footer, result)
 	})
 
 	t.Run("appends footer to external PR body without markers", func(t *testing.T) {
@@ -75,14 +73,14 @@ func TestUpdatePRBodyFooter(t *testing.T) {
 		result := UpdatePRBodyFooter(body, footer)
 
 		// Original content should be preserved
-		assert.Contains(t, result, "## Summary")
-		assert.Contains(t, result, "This PR adds a new feature.")
-		assert.Contains(t, result, "## Testing")
+		require.Contains(t, result, "## Summary")
+		require.Contains(t, result, "This PR adds a new feature.")
+		require.Contains(t, result, "## Testing")
 		// Footer should be appended
-		assert.Contains(t, result, SectionStart)
-		assert.Contains(t, result, SectionEnd)
+		require.Contains(t, result, SectionStart)
+		require.Contains(t, result, SectionEnd)
 		// Should only have one footer
-		assert.Equal(t, 1, strings.Count(result, SectionStart))
+		require.Equal(t, 1, strings.Count(result, SectionStart))
 	})
 
 	t.Run("handles body with trailing whitespace", func(t *testing.T) {
@@ -91,8 +89,8 @@ func TestUpdatePRBodyFooter(t *testing.T) {
 		result := UpdatePRBodyFooter(body, footer)
 
 		// Trailing newlines should be trimmed before appending footer
-		assert.True(t, strings.HasPrefix(result, "Description"))
-		assert.Contains(t, result, SectionStart)
+		require.True(t, strings.HasPrefix(result, "Description"))
+		require.Contains(t, result, SectionStart)
 	})
 
 	t.Run("handles body with only whitespace", func(t *testing.T) {
@@ -101,7 +99,7 @@ func TestUpdatePRBodyFooter(t *testing.T) {
 		result := UpdatePRBodyFooter(body, footer)
 
 		// Whitespace-only body should still get footer appended
-		assert.Contains(t, result, SectionStart)
+		require.Contains(t, result, SectionStart)
 	})
 }
 
@@ -117,14 +115,14 @@ func TestCreatePRBodyFooter(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		// Lock the branch
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Use When: "always" to ensure footer is generated for single-branch stack
 		opts := NavigationOptions{When: "always", Marker: "👈"}
 		footer := CreatePRBodyFooterWithOptions("feature-a", s.Engine, opts)
 		// Lock is now handled separately via CreateLockSection, NOT in footer
-		assert.NotContains(t, footer, "🔒 This PR has been locked")
+		require.NotContains(t, footer, "🔒 This PR has been locked")
 	})
 }
 
@@ -142,11 +140,11 @@ func TestShouldShowNavigation(t *testing.T) {
 		// Mock a PR for the branch
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always"}
-		assert.True(t, ShouldShowNavigation(opts, "feature-a", s.Engine))
+		require.True(t, ShouldShowNavigation(opts, "feature-a", s.Engine))
 	})
 
 	t.Run("when=never hides navigation", func(t *testing.T) {
@@ -159,11 +157,11 @@ func TestShouldShowNavigation(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "never"}
-		assert.False(t, ShouldShowNavigation(opts, "feature-a", s.Engine))
+		require.False(t, ShouldShowNavigation(opts, "feature-a", s.Engine))
 	})
 
 	t.Run("when=multiple hides navigation for single branch", func(t *testing.T) {
@@ -176,11 +174,11 @@ func TestShouldShowNavigation(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "multiple"}
-		assert.False(t, ShouldShowNavigation(opts, "feature-a", s.Engine))
+		require.False(t, ShouldShowNavigation(opts, "feature-a", s.Engine))
 	})
 
 	t.Run("when=multiple shows navigation for multiple branches", func(t *testing.T) {
@@ -197,16 +195,16 @@ func TestShouldShowNavigation(t *testing.T) {
 		// Add PRs to both branches
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title A", Body: "Body A", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title A", Body: "Body A", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		branch2 := s.Engine.GetBranch("feature-b")
 		prNum2 := git.PRNumber(2)
-		err = s.Engine.UpsertPrInfo(context.Background(), branch2, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum2, Title: "Title B", Body: "Body B", State: "OPEN", Base: "feature-a", URL: "http://pr/2"}))
+		err = s.Engine.UpsertPrInfo(t.Context(), branch2, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum2, Title: "Title B", Body: "Body B", State: "OPEN", Base: "feature-a", URL: "http://pr/2"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "multiple"}
-		assert.True(t, ShouldShowNavigation(opts, "feature-a", s.Engine))
+		require.True(t, ShouldShowNavigation(opts, "feature-a", s.Engine))
 	})
 }
 
@@ -223,11 +221,11 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Set stack description
-		err = s.Engine.SetStackDescription(context.Background(), branch, &git.StackDescription{
+		err = s.Engine.SetStackDescription(t.Context(), branch, &git.StackDescription{
 			Title:       "Auth Feature",
 			Description: "OAuth2 implementation with JWT tokens",
 		})
@@ -236,10 +234,10 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 		opts := NavigationOptions{When: "always", Marker: "👈"}
 		footer := CreatePRBodyFooterWithOptions("feature-a", s.Engine, opts)
 		// Description should be included in the combined footer
-		assert.Contains(t, footer, "**Auth Feature**")
-		assert.Contains(t, footer, "OAuth2 implementation with JWT tokens")
-		assert.Contains(t, footer, "#### Stack")
-		assert.Contains(t, footer, "<hr/>")
+		require.Contains(t, footer, "**Auth Feature**")
+		require.Contains(t, footer, "OAuth2 implementation with JWT tokens")
+		require.Contains(t, footer, "#### Stack")
+		require.Contains(t, footer, "<hr/>")
 	})
 
 	t.Run("uses custom marker", func(t *testing.T) {
@@ -252,13 +250,13 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "<--"}
 		footer := CreatePRBodyFooterWithOptions("feature-a", s.Engine, opts)
-		assert.Contains(t, footer, "<--")
-		assert.NotContains(t, footer, "👈") // Default marker should not appear
+		require.Contains(t, footer, "<--")
+		require.NotContains(t, footer, "👈") // Default marker should not appear
 	})
 
 	t.Run("returns empty string when when=never and no description", func(t *testing.T) {
@@ -271,7 +269,7 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 
 		opts := NavigationOptions{When: "never"}
 		footer := CreatePRBodyFooterWithOptions("feature-a", s.Engine, opts)
-		assert.Empty(t, footer)
+		require.Empty(t, footer)
 	})
 
 	t.Run("returns description-only when nav hidden but description exists", func(t *testing.T) {
@@ -284,11 +282,11 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Set stack description
-		err = s.Engine.SetStackDescription(context.Background(), branch, &git.StackDescription{
+		err = s.Engine.SetStackDescription(t.Context(), branch, &git.StackDescription{
 			Title: "Auth Feature",
 		})
 		require.NoError(t, err)
@@ -296,11 +294,11 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 		// With when=never, navigation should NOT show, but description should
 		opts := NavigationOptions{When: "never", Marker: "👈"}
 		footer := CreatePRBodyFooterWithOptions("feature-a", s.Engine, opts)
-		assert.NotEmpty(t, footer)
-		assert.Contains(t, footer, "**Auth Feature**")
-		assert.NotContains(t, footer, "#### Stack") // No navigation header
-		assert.Contains(t, footer, "<hr/>")
-		assert.Contains(t, footer, SectionStart)
+		require.NotEmpty(t, footer)
+		require.Contains(t, footer, "**Auth Feature**")
+		require.NotContains(t, footer, "#### Stack") // No navigation header
+		require.Contains(t, footer, "<hr/>")
+		require.Contains(t, footer, SectionStart)
 	})
 
 	t.Run("uses sub tag for attribution", func(t *testing.T) {
@@ -313,12 +311,12 @@ func TestCreatePRBodyFooterWithOptions(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "👈"}
 		footer := CreatePRBodyFooterWithOptions("feature-a", s.Engine, opts)
-		assert.Contains(t, footer, "<sub>Auto-generated by")
+		require.Contains(t, footer, "<sub>Auto-generated by")
 	})
 }
 
@@ -329,41 +327,41 @@ func TestStripFooter(t *testing.T) {
 		t.Parallel()
 		body := "Description\n\n\n" + SectionStart + "\n#### Stack\n\nContent\n" + SectionEnd
 		result := StripFooter(body)
-		assert.Equal(t, "Description", result)
-		assert.NotContains(t, result, SectionStart)
-		assert.NotContains(t, result, SectionEnd)
+		require.Equal(t, "Description", result)
+		require.NotContains(t, result, SectionStart)
+		require.NotContains(t, result, SectionEnd)
 	})
 
 	t.Run("removes hr separator with footer", func(t *testing.T) {
 		t.Parallel()
 		body := "Description\n\n<hr/>\n\n" + SectionStart + "\n#### Stack\n\nContent\n" + SectionEnd
 		result := StripFooter(body)
-		assert.Equal(t, "Description", result)
-		assert.NotContains(t, result, "<hr/>")
-		assert.NotContains(t, result, SectionStart)
-		assert.NotContains(t, result, SectionEnd)
+		require.Equal(t, "Description", result)
+		require.NotContains(t, result, "<hr/>")
+		require.NotContains(t, result, SectionStart)
+		require.NotContains(t, result, SectionEnd)
 	})
 
 	t.Run("returns unchanged body without footer", func(t *testing.T) {
 		t.Parallel()
 		body := "Just a description\nwith multiple lines"
 		result := StripFooter(body)
-		assert.Equal(t, body, result)
+		require.Equal(t, body, result)
 	})
 
 	t.Run("returns empty string for empty body", func(t *testing.T) {
 		t.Parallel()
 		result := StripFooter("")
-		assert.Empty(t, result)
+		require.Empty(t, result)
 	})
 
 	t.Run("preserves content after footer", func(t *testing.T) {
 		t.Parallel()
 		body := "Before\n\n\n" + SectionStart + "\nStack\n" + SectionEnd + "\nAfter"
 		result := StripFooter(body)
-		assert.Contains(t, result, "Before")
-		assert.Contains(t, result, "After")
-		assert.NotContains(t, result, SectionStart)
+		require.Contains(t, result, "Before")
+		require.Contains(t, result, "After")
+		require.NotContains(t, result, SectionStart)
 	})
 }
 
@@ -373,18 +371,18 @@ func TestIsStackitComment(t *testing.T) {
 	t.Run("identifies stackit navigation comment", func(t *testing.T) {
 		t.Parallel()
 		body := CommentMarker + "\n#### Stack\n\n* **PR #1** 👈"
-		assert.True(t, IsStackitComment(body))
+		require.True(t, IsStackitComment(body))
 	})
 
 	t.Run("returns false for regular comment", func(t *testing.T) {
 		t.Parallel()
 		body := "This is a regular comment without markers"
-		assert.False(t, IsStackitComment(body))
+		require.False(t, IsStackitComment(body))
 	})
 
 	t.Run("returns false for empty comment", func(t *testing.T) {
 		t.Parallel()
-		assert.False(t, IsStackitComment(""))
+		require.False(t, IsStackitComment(""))
 	})
 }
 
@@ -401,11 +399,11 @@ func TestCreateNavigationComment(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Set stack description
-		err = s.Engine.SetStackDescription(context.Background(), branch, &git.StackDescription{
+		err = s.Engine.SetStackDescription(t.Context(), branch, &git.StackDescription{
 			Title:       "Auth Feature",
 			Description: "OAuth2 implementation with JWT tokens",
 		})
@@ -414,9 +412,9 @@ func TestCreateNavigationComment(t *testing.T) {
 		opts := NavigationOptions{When: "always", Marker: "👈"}
 		comment := CreateNavigationComment("feature-a", s.Engine, opts)
 		// Description should be included in the combined comment
-		assert.Contains(t, comment, "**Auth Feature**")
-		assert.Contains(t, comment, "OAuth2 implementation with JWT tokens")
-		assert.Contains(t, comment, "#### Stack")
+		require.Contains(t, comment, "**Auth Feature**")
+		require.Contains(t, comment, "OAuth2 implementation with JWT tokens")
+		require.Contains(t, comment, "#### Stack")
 	})
 
 	t.Run("includes comment marker", func(t *testing.T) {
@@ -429,14 +427,14 @@ func TestCreateNavigationComment(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "👈"}
 		comment := CreateNavigationComment("feature-a", s.Engine, opts)
-		assert.Contains(t, comment, CommentMarker)
-		assert.Contains(t, comment, "#### Stack")
-		assert.Contains(t, comment, "Auto-generated by")
+		require.Contains(t, comment, CommentMarker)
+		require.Contains(t, comment, "#### Stack")
+		require.Contains(t, comment, "Auto-generated by")
 	})
 
 	t.Run("uses custom marker in comment", func(t *testing.T) {
@@ -449,12 +447,12 @@ func TestCreateNavigationComment(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "<--"}
 		comment := CreateNavigationComment("feature-a", s.Engine, opts)
-		assert.Contains(t, comment, "<--")
+		require.Contains(t, comment, "<--")
 	})
 
 	t.Run("returns empty when when=never and no description", func(t *testing.T) {
@@ -467,7 +465,7 @@ func TestCreateNavigationComment(t *testing.T) {
 
 		opts := NavigationOptions{When: "never"}
 		comment := CreateNavigationComment("feature-a", s.Engine, opts)
-		assert.Empty(t, comment)
+		require.Empty(t, comment)
 	})
 
 	t.Run("returns description-only when nav hidden but description exists", func(t *testing.T) {
@@ -480,11 +478,11 @@ func TestCreateNavigationComment(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Set stack description
-		err = s.Engine.SetStackDescription(context.Background(), branch, &git.StackDescription{
+		err = s.Engine.SetStackDescription(t.Context(), branch, &git.StackDescription{
 			Title: "Auth Feature",
 		})
 		require.NoError(t, err)
@@ -492,10 +490,10 @@ func TestCreateNavigationComment(t *testing.T) {
 		// With when=never, navigation should NOT show, but description should
 		opts := NavigationOptions{When: "never", Marker: "👈"}
 		comment := CreateNavigationComment("feature-a", s.Engine, opts)
-		assert.NotEmpty(t, comment)
-		assert.Contains(t, comment, "**Auth Feature**")
-		assert.NotContains(t, comment, "#### Stack") // No navigation header
-		assert.Contains(t, comment, CommentMarker)
+		require.NotEmpty(t, comment)
+		require.Contains(t, comment, "**Auth Feature**")
+		require.NotContains(t, comment, "#### Stack") // No navigation header
+		require.Contains(t, comment, CommentMarker)
 	})
 
 	t.Run("does NOT include lock banner (now handled independently)", func(t *testing.T) {
@@ -508,18 +506,18 @@ func TestCreateNavigationComment(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Lock the branch
-		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// Navigation comment should NOT contain lock message anymore
 		// Lock is now handled independently via CreateLockSection
 		opts := NavigationOptions{When: "always", Marker: "👈"}
 		comment := CreateNavigationComment("feature-a", s.Engine, opts)
-		assert.NotContains(t, comment, "🔒 This PR has been locked")
+		require.NotContains(t, comment, "🔒 This PR has been locked")
 	})
 
 	t.Run("uses sub tag for attribution", func(t *testing.T) {
@@ -532,12 +530,12 @@ func TestCreateNavigationComment(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		opts := NavigationOptions{When: "always", Marker: "👈"}
 		comment := CreateNavigationComment("feature-a", s.Engine, opts)
-		assert.Contains(t, comment, "<sub>Auto-generated by")
+		require.Contains(t, comment, "<sub>Auto-generated by")
 	})
 }
 
@@ -553,13 +551,13 @@ func TestCreateLockSection(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		// Lock the branch
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		section := CreateLockSection("feature-a", s.Engine)
-		assert.Contains(t, section, LockSectionStart)
-		assert.Contains(t, section, LockSectionEnd)
-		assert.Contains(t, section, "🔒 This PR has been locked. To unlock it, run `st unlock`.")
+		require.Contains(t, section, LockSectionStart)
+		require.Contains(t, section, LockSectionEnd)
+		require.Contains(t, section, "🔒 This PR has been locked. To unlock it, run `st unlock`.")
 	})
 
 	t.Run("returns empty string when branch is not locked", func(t *testing.T) {
@@ -571,7 +569,7 @@ func TestCreateLockSection(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		section := CreateLockSection("feature-a", s.Engine)
-		assert.Empty(t, section)
+		require.Empty(t, section)
 	})
 
 	t.Run("includes lock reason when not user-locked", func(t *testing.T) {
@@ -583,11 +581,11 @@ func TestCreateLockSection(t *testing.T) {
 			TrackBranch("feature-a", "main")
 
 		// Lock the branch with consolidating reason
-		_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonConsolidating)
+		_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonConsolidating)
 		require.NoError(t, err)
 
 		section := CreateLockSection("feature-a", s.Engine)
-		assert.Contains(t, section, "consolidating")
+		require.Contains(t, section, "consolidating")
 	})
 }
 
@@ -599,14 +597,14 @@ func TestUpdatePRBodyLockSection(t *testing.T) {
 	t.Run("adds lock section to empty body", func(t *testing.T) {
 		t.Parallel()
 		result := UpdatePRBodyLockSection("", lockSection)
-		assert.Equal(t, lockSection, result)
+		require.Equal(t, lockSection, result)
 	})
 
 	t.Run("adds lock section at TOP of existing body", func(t *testing.T) {
 		t.Parallel()
 		result := UpdatePRBodyLockSection(testPRBody, lockSection)
-		assert.True(t, strings.HasPrefix(result, lockSection))
-		assert.Contains(t, result, "## Description")
+		require.True(t, strings.HasPrefix(result, lockSection))
+		require.Contains(t, result, "## Description")
 	})
 
 	t.Run("replaces existing lock section", func(t *testing.T) {
@@ -616,12 +614,12 @@ func TestUpdatePRBodyLockSection(t *testing.T) {
 		result := UpdatePRBodyLockSection(body, lockSection)
 
 		// Should have new lock section at top
-		assert.True(t, strings.HasPrefix(result, lockSection))
-		assert.Contains(t, result, "## Description")
+		require.True(t, strings.HasPrefix(result, lockSection))
+		require.Contains(t, result, "## Description")
 		// Should not contain old message
-		assert.NotContains(t, result, "Old lock message")
+		require.NotContains(t, result, "Old lock message")
 		// Should only have one lock section
-		assert.Equal(t, 1, strings.Count(result, LockSectionStart))
+		require.Equal(t, 1, strings.Count(result, LockSectionStart))
 	})
 
 	t.Run("removes lock section when empty lockSection provided", func(t *testing.T) {
@@ -630,8 +628,8 @@ func TestUpdatePRBodyLockSection(t *testing.T) {
 		body := existingLock + "\n\n## Description\nThis is my PR."
 		result := UpdatePRBodyLockSection(body, "")
 
-		assert.NotContains(t, result, LockSectionStart)
-		assert.Contains(t, result, "## Description")
+		require.NotContains(t, result, LockSectionStart)
+		require.Contains(t, result, "## Description")
 	})
 
 	t.Run("preserves navigation footer at bottom", func(t *testing.T) {
@@ -640,10 +638,10 @@ func TestUpdatePRBodyLockSection(t *testing.T) {
 		result := UpdatePRBodyLockSection(body, lockSection)
 
 		// Lock section at top
-		assert.True(t, strings.HasPrefix(result, lockSection))
+		require.True(t, strings.HasPrefix(result, lockSection))
 		// Navigation footer preserved
-		assert.Contains(t, result, SectionStart)
-		assert.Contains(t, result, "PR #1")
+		require.Contains(t, result, SectionStart)
+		require.Contains(t, result, "PR #1")
 	})
 }
 
@@ -656,35 +654,35 @@ func TestStripLockSection(t *testing.T) {
 		t.Parallel()
 		body := lockSection + "\n\n## Description\nThis is my PR."
 		result := StripLockSection(body)
-		assert.NotContains(t, result, LockSectionStart)
-		assert.NotContains(t, result, LockSectionEnd)
-		assert.Contains(t, result, "## Description")
+		require.NotContains(t, result, LockSectionStart)
+		require.NotContains(t, result, LockSectionEnd)
+		require.Contains(t, result, "## Description")
 	})
 
 	t.Run("returns unchanged body without lock section", func(t *testing.T) {
 		t.Parallel()
 		result := StripLockSection(testPRBody)
-		assert.Equal(t, testPRBody, result)
+		require.Equal(t, testPRBody, result)
 	})
 
 	t.Run("returns empty string for empty body", func(t *testing.T) {
 		t.Parallel()
 		result := StripLockSection("")
-		assert.Empty(t, result)
+		require.Empty(t, result)
 	})
 
 	t.Run("handles body with only lock section", func(t *testing.T) {
 		t.Parallel()
 		result := StripLockSection(lockSection)
-		assert.Empty(t, result)
+		require.Empty(t, result)
 	})
 
 	t.Run("preserves navigation footer", func(t *testing.T) {
 		t.Parallel()
 		body := lockSection + "\n\n## Description\n\n\n" + SectionStart + "\n#### Stack\n" + SectionEnd
 		result := StripLockSection(body)
-		assert.NotContains(t, result, LockSectionStart)
-		assert.Contains(t, result, SectionStart)
+		require.NotContains(t, result, LockSectionStart)
+		require.Contains(t, result, SectionStart)
 	})
 }
 
@@ -701,21 +699,21 @@ func TestLockSectionIndependentFromNavigation(t *testing.T) {
 
 		branch := s.Engine.GetBranch("feature-a")
 		prNum := git.PRNumber(1)
-		err := s.Engine.UpsertPrInfo(context.Background(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
+		err := s.Engine.UpsertPrInfo(t.Context(), branch, engine.NewPrInfo(engine.PrInfoFields{Number: &prNum, Title: "Title", Body: "Body", State: "OPEN", Base: "main", URL: "http://pr/1"}))
 		require.NoError(t, err)
 
 		// Lock the branch
-		_, err = s.Engine.SetLocked(context.Background(), engine.BranchesOf(branch), engine.LockReasonUser)
+		_, err = s.Engine.SetLocked(t.Context(), engine.BranchesOf(branch), engine.LockReasonUser)
 		require.NoError(t, err)
 
 		// With when=multiple and only 1 branch, navigation should NOT show
 		navOpts := NavigationOptions{When: "multiple", Marker: "👈"}
-		assert.False(t, ShouldShowNavigation(navOpts, "feature-a", s.Engine))
+		require.False(t, ShouldShowNavigation(navOpts, "feature-a", s.Engine))
 
 		// But lock section should STILL be created
 		lockSection := CreateLockSection("feature-a", s.Engine)
-		assert.NotEmpty(t, lockSection)
-		assert.Contains(t, lockSection, "🔒 This PR has been locked")
+		require.NotEmpty(t, lockSection)
+		require.Contains(t, lockSection, "🔒 This PR has been locked")
 	})
 }
 
@@ -726,7 +724,7 @@ func TestComposeBody(t *testing.T) {
 		CreateBranch("feature-a").
 		Commit("a1").
 		TrackBranch("feature-a", "main")
-	_, err := s.Engine.SetLocked(context.Background(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
+	_, err := s.Engine.SetLocked(t.Context(), engine.BranchesOf(s.Engine.GetBranch("feature-a")), engine.LockReasonUser)
 	require.NoError(t, err)
 	inBody := NavigationOptions{When: "always", Marker: "👈", Location: config.NavigationLocationBody}
 

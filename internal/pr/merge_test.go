@@ -3,9 +3,8 @@ package pr
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/getstackit/stackit/internal/git"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFormatMergeTitleWithDescription(t *testing.T) {
@@ -15,20 +14,20 @@ func TestFormatMergeTitleWithDescription(t *testing.T) {
 		t.Parallel()
 		desc := &git.StackDescription{Title: "Add user authentication"}
 		result := FormatMergeTitleWithDescription(desc, []string{"PROJ-123"}, 2)
-		assert.Equal(t, "Add user authentication", result)
+		require.Equal(t, "Add user authentication", result)
 	})
 
 	t.Run("falls back when description is nil", func(t *testing.T) {
 		t.Parallel()
 		result := FormatMergeTitleWithDescription(nil, []string{"PROJ-123"}, 1)
-		assert.Equal(t, "Merging PROJ-123", result)
+		require.Equal(t, "Merging PROJ-123", result)
 	})
 
 	t.Run("falls back when description title is empty", func(t *testing.T) {
 		t.Parallel()
 		desc := &git.StackDescription{Title: "", Description: "Some description"}
 		result := FormatMergeTitleWithDescription(desc, []string{}, 3)
-		assert.Equal(t, "Merging 3 PRs", result)
+		require.Equal(t, "Merging 3 PRs", result)
 	})
 }
 
@@ -95,7 +94,7 @@ func TestFormatMergeTitle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result := FormatMergeTitle(tt.scopes, tt.totalCount)
-			assert.Equal(t, tt.expected, result)
+			require.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -126,7 +125,7 @@ main
 Stackit-Stack-Size: 1
 Stackit-PRs: 123
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("multiple branches with PRs", func(t *testing.T) {
@@ -155,7 +154,7 @@ main
 Stackit-Stack-Size: 2
 Stackit-PRs: 1,2
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("branch without PR", func(t *testing.T) {
@@ -180,7 +179,7 @@ main
 
 Stackit-Stack-Size: 1
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("with excluded branches", func(t *testing.T) {
@@ -215,7 +214,7 @@ main
 Stackit-Stack-Size: 1
 Stackit-PRs: 1
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("no stack tree", func(t *testing.T) {
@@ -233,7 +232,7 @@ Stackit-PRs: 1
 Stackit-Stack-Size: 1
 Stackit-PRs: 1
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("with stack description", func(t *testing.T) {
@@ -269,7 +268,7 @@ Stackit-Stack-Size: 1
 Stackit-PRs: 1
 Stackit-Scope: PROJ-123
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("with stack description title only", func(t *testing.T) {
@@ -302,7 +301,7 @@ Stackit-Stack-Size: 1
 Stackit-PRs: 1
 Stackit-Scope: PROJ-456
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("with empty stack description", func(t *testing.T) {
@@ -330,7 +329,7 @@ main
 Stackit-Stack-Size: 1
 Stackit-PRs: 1
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 }
 
@@ -349,7 +348,7 @@ func TestFormatStackTree(t *testing.T) {
 		expected := `main
   └─ feature-a (#123)
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("nested branches", func(t *testing.T) {
@@ -368,7 +367,7 @@ func TestFormatStackTree(t *testing.T) {
     └─ feature-a-1 (#2)
       └─ feature-a-1-1 (#3)
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("branch without PR", func(t *testing.T) {
@@ -383,6 +382,6 @@ func TestFormatStackTree(t *testing.T) {
 		expected := `main
   └─ feature-a
 `
-		assert.Equal(t, expected, result)
+		require.Equal(t, expected, result)
 	})
 }

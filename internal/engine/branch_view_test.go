@@ -1,7 +1,6 @@
 package engine_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,14 +59,14 @@ func TestBatchChangedFileCountsUsesDivergenceBase(t *testing.T) {
 
 	b := engine.BranchesOf(s.Engine.GetBranch("b"))
 
-	before := s.Engine.BatchChangedFileCounts(context.Background(), b)["b"]
+	before := s.Engine.BatchChangedFileCounts(t.Context(), b)["b"]
 	require.GreaterOrEqual(t, before, 1)
 
 	// Advance b's parent (a) with a new commit touching a different file, without
 	// restacking b, so a's current tip moves past b's divergence point.
 	s.Checkout("a").CommitChange("a-advanced.txt", "advance a past b's divergence")
 
-	after := s.Engine.BatchChangedFileCounts(context.Background(), b)["b"]
+	after := s.Engine.BatchChangedFileCounts(t.Context(), b)["b"]
 	require.Equal(t, before, after,
 		"files-changed must use the divergence base, not the parent's current tip")
 }
@@ -143,7 +142,7 @@ func TestCommitsFallBackToParentTipWithoutStoredDivergence(t *testing.T) {
 
 	// Clear b's stored divergence point but keep its parent (a), so the commit
 	// base must fall back to the parent tip rather than an empty base.
-	meta, err := s.Metadata.ReadMetadata(context.Background(), "b").One()
+	meta, err := s.Metadata.ReadMetadata(t.Context(), "b").One()
 	require.NoError(t, err)
 	require.NoError(t, s.Metadata.WriteMetadata("b", meta.WithParentBranchRevision(nil)))
 	require.NoError(t, s.Engine.Rebuild("main"))

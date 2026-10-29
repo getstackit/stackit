@@ -54,6 +54,7 @@ func TestCreateAction_Stdin(t *testing.T) {
 }
 
 func TestCreateAction_RefusesTrunkInManagedWorktree(t *testing.T) {
+	t.Parallel()
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 	s.WithInitialCommit()
 	s.Context.InManagedWorktree = true

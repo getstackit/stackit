@@ -36,7 +36,7 @@ func TestCommandContextWaitDelayUnblocksPipeHoldingChild(t *testing.T) {
 
 	run := func(t *testing.T, waitDelay time.Duration) (chan error, time.Time) {
 		t.Helper()
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 		t.Cleanup(cancel)
 
 		cmd := exec.CommandContext(ctx, "/bin/sh", "-c", shim)

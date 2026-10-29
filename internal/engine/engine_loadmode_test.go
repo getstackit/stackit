@@ -24,13 +24,13 @@ func makeStackForLoadModeTest(t *testing.T) *scenario.Scenario {
 	s := scenario.NewScenario(t, testhelpers.BasicSceneSetup)
 
 	s.CreateBranch("a").Commit("a")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "a", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "a", "main"))
 
 	s.CreateBranch("b").Commit("b")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "b", "a"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "b", "a"))
 
 	s.CreateBranch("c").Commit("c")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "c", "b"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "c", "b"))
 
 	return s
 }
@@ -51,7 +51,7 @@ func TestNewEngineDoesNotFetchRemoteMetadata(t *testing.T) {
 	s := scenario.NewRemoteScenario(t)
 
 	s.CreateBranch("feature").Commit("feature")
-	require.NoError(t, s.Engine.TrackBranch(context.Background(), "feature", "main"))
+	require.NoError(t, s.Engine.TrackBranch(t.Context(), "feature", "main"))
 	require.NoError(t, s.Scene.Repo.PushBranch("origin", "feature"))
 	require.NoError(t, s.Scene.Repo.RunGitCommand("push", "origin", "refs/stackit/metadata/feature"))
 	require.NoError(t, s.Scene.Repo.RunGitCommand("update-ref", "-d", "refs/stackit/remote-metadata/feature"))
@@ -71,7 +71,7 @@ func TestNewEngineDoesNotFetchRemoteMetadata(t *testing.T) {
 	_, err = s.Scene.Repo.RunGitCommandAndGetOutput("rev-parse", "--verify", "refs/stackit/remote-metadata/feature")
 	require.Error(t, err, "engine construction must not fetch remote metadata")
 
-	deadlineCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	deadlineCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	require.NoError(t, eng.EnsureRemoteMetadata(deadlineCtx))
 
@@ -90,7 +90,7 @@ func TestEnsureRemoteMetadataRequiresDeadline(t *testing.T) {
 	s := scenario.NewRemoteScenario(t)
 
 	eng := newEngineWithMode(t, s.Scene.Dir, engine.LoadModeShared)
-	require.ErrorContains(t, eng.EnsureRemoteMetadata(context.Background()), "requires a context with a deadline")
+	require.ErrorContains(t, eng.EnsureRemoteMetadata(t.Context()), "requires a context with a deadline")
 }
 
 // TestLoadMode_FullParity asserts that under LoadModeFull every accessor
@@ -239,7 +239,7 @@ func TestLoadMode_BranchesOnly_LazilyLoadsBranchChain(t *testing.T) {
 func TestLoadMode_BranchesOnly_GetScopeLazilyLoadsParentChain(t *testing.T) {
 	t.Parallel()
 	s := makeStackForLoadModeTest(t)
-	require.NoError(t, s.Engine.SetScope(context.Background(), s.Engine.GetBranch("b"), engine.NewScope("topic")))
+	require.NoError(t, s.Engine.SetScope(t.Context(), s.Engine.GetBranch("b"), engine.NewScope("topic")))
 
 	gitRunner := git.NewRunnerWithPath(s.Scene.Dir, nil)
 	gitRunnerMetadata := git.NewMetadataStore(gitRunner)

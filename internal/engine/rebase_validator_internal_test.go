@@ -96,7 +96,7 @@ func TestTryConflictFreeReplaySingleCommitUsesMergeTreeWithExplicitMergeBase(t *
 	}
 	eng := &engineImpl{git: fakeGit}
 
-	newSHA, ok := eng.tryConflictFreeReplay(context.Background(), RebaseSpec{
+	newSHA, ok := eng.tryConflictFreeReplay(t.Context(), RebaseSpec{
 		Branch:      "feature",
 		NewParent:   "new-parent",
 		OldUpstream: "old-base",
@@ -138,7 +138,7 @@ func TestTryConflictFreeReplayUsesFastPathWhenParentChangedNoFiles(t *testing.T)
 	}
 	eng := &engineImpl{git: fakeGit}
 
-	newSHA, ok := eng.tryConflictFreeReplay(context.Background(), RebaseSpec{
+	newSHA, ok := eng.tryConflictFreeReplay(t.Context(), RebaseSpec{
 		Branch:      "feature",
 		NewParent:   "new-parent",
 		OldUpstream: "old-base",
@@ -167,7 +167,7 @@ func TestTryConflictFreeReplayMultiCommitChainsEachCommit(t *testing.T) {
 	}
 	eng := &engineImpl{git: fakeGit}
 
-	newSHA, ok := eng.tryConflictFreeReplay(context.Background(), RebaseSpec{
+	newSHA, ok := eng.tryConflictFreeReplay(t.Context(), RebaseSpec{
 		Branch:      "feature",
 		NewParent:   "new-parent",
 		OldUpstream: "old-base",

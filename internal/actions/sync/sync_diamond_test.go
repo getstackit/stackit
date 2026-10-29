@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-github/v93/github"
@@ -200,9 +199,9 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 		// Manually restack children (simulating what modify would do)
 		branchB := s.Engine.GetBranch("branch-b")
 		branchC := s.Engine.GetBranch("branch-c")
-		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branchB), engine.RestackOpts{})
+		_, err = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branchB), engine.RestackOpts{})
 		require.NoError(t, err)
-		_, err = s.Engine.RestackBranches(context.Background(), engine.BranchesOf(branchC), engine.RestackOpts{})
+		_, err = s.Engine.RestackBranches(t.Context(), engine.BranchesOf(branchC), engine.RestackOpts{})
 		require.NoError(t, err)
 
 		// Now setup mock GitHub with potentially stale info
@@ -351,7 +350,7 @@ func TestSyncDiamondStackParentPreservation(t *testing.T) {
 func storeLocalPRInfo(t *testing.T, eng engine.Engine, branchName string, prNumber git.PRNumber, baseBranch string) {
 	t.Helper()
 	branch := eng.GetBranch(branchName)
-	err := eng.UpsertPrInfo(context.Background(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, branchName+" PR").
+	err := eng.UpsertPrInfo(t.Context(), branch, testhelpers.NewTestPrInfoWithTitle(prNumber, branchName+" PR").
 		WithBase(baseBranch).
 		WithURL("https://github.com/owner/repo/pull/"+string(rune('0'+prNumber))))
 	require.NoError(t, err)

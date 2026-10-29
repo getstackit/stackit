@@ -1,7 +1,6 @@
 package git
 
 import (
-	"context"
 	"os/exec"
 	"testing"
 
@@ -45,7 +44,7 @@ func TestGetCurrentRevision(t *testing.T) {
 		dir := newRepo(t)
 		run(t, dir, "checkout", "--detach")
 
-		rev, err := NewRunnerWithPath(dir, nil).ReadRevisions(context.Background(), "HEAD").One()
+		rev, err := NewRunnerWithPath(dir, nil).ReadRevisions(t.Context(), "HEAD").One()
 		require.NoError(t, err)
 		require.Equal(t, revParse(t, dir), rev)
 	})
@@ -55,7 +54,7 @@ func TestGetCurrentRevision(t *testing.T) {
 		dir := newRepo(t)
 		run(t, dir, "checkout", "-b", "feature")
 
-		rev, err := NewRunnerWithPath(dir, nil).ReadRevisions(context.Background(), "HEAD").One()
+		rev, err := NewRunnerWithPath(dir, nil).ReadRevisions(t.Context(), "HEAD").One()
 		require.NoError(t, err)
 		require.Equal(t, revParse(t, dir), rev)
 	})

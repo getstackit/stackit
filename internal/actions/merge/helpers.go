@@ -41,15 +41,7 @@ func calculateBaselineEstimate(ctx context.Context, plan *Plan, client github.Cl
 		}
 
 		// Found a passing PR, calculate the max duration of its checks
-		var maxDuration time.Duration
-		for _, check := range status.Checks {
-			if !check.FinishedAt.IsZero() && !check.StartedAt.IsZero() {
-				duration := check.FinishedAt.Sub(check.StartedAt)
-				if duration > maxDuration {
-					maxDuration = duration
-				}
-			}
-		}
+		maxDuration := maxCheckDuration(status.Checks)
 
 		if maxDuration > 0 {
 			splog.Debug("Using PR #%d (%s) as timing baseline: %v", branchInfo.PRNumber, branchInfo.BranchName, maxDuration.Round(time.Second))
@@ -74,4 +66,17 @@ func isCIFailure(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "CI checks failed") || strings.Contains(msg, "failing CI checks") || strings.Contains(msg, "pending CI checks")
+}
+
+// maxCheckDuration returns the longest run time among checks that have both a
+// start and finish time, or zero when none do.
+func maxCheckDuration(checks []github.CheckDetail) time.Duration {
+	var longest time.Duration
+	for _, check := range checks {
+		if check.FinishedAt.IsZero() || check.StartedAt.IsZero() {
+			continue
+		}
+		longest = max(longest, check.FinishedAt.Sub(check.StartedAt))
+	}
+	return longest
 }

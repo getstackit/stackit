@@ -2,10 +2,15 @@
 package testhelpers
 
 import (
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -28,8 +33,73 @@ func GetBinaryError() error {
 
 // buildBinary builds the stackit binary and returns its path.
 func buildBinary() (string, error) {
-	path, _, err := buildBinaryWithCleanup()
-	return path, err
+	path, cleanup, err := buildBinaryWithCleanup()
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+	if os.Getenv("STACKIT_TEST_BINARY") != "" {
+		return path, nil
+	}
+	cache, err := exec.Command("go", "env", "GOCACHE").Output()
+	if err != nil {
+		return "", fmt.Errorf("find test binary cache: %w", err)
+	}
+	cacheRoot := strings.TrimSpace(string(cache))
+	if !filepath.IsAbs(cacheRoot) {
+		return "", fmt.Errorf("GOCACHE must be an absolute directory: %s", cacheRoot)
+	}
+	return cacheBinary(path, filepath.Join(cacheRoot, "stackit-test-binaries", "fallback"))
+}
+
+// cacheBinary publishes immutable, content-addressed binaries. Parallel test
+// packages reuse one copy; temporary build directories are always cleaned.
+// The existing clean task owns this subtree along with suite-owned binaries.
+func cacheBinary(source, cacheRoot string) (string, error) {
+	input, err := os.Open(source)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = input.Close() }()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, input); err != nil {
+		return "", err
+	}
+	directory := filepath.Join(cacheRoot, fmt.Sprintf("%x", hash.Sum(nil)))
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(directory, "stackit")
+	if info, err := os.Stat(path); err == nil {
+		if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+			return "", fmt.Errorf("invalid cached test binary: %s", path)
+		}
+		return path, nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	if _, err := input.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	output, err := os.CreateTemp(directory, ".publish-*")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = output.Close(); _ = os.Remove(output.Name()) }()
+	if _, err := io.Copy(output, input); err != nil {
+		return "", err
+	}
+	if err := output.Chmod(0o755); err != nil {
+		return "", err
+	}
+	if err := output.Close(); err != nil {
+		return "", err
+	}
+	// Linking publishes without overwriting an executable another suite uses.
+	if err := os.Link(output.Name(), path); err != nil && !errors.Is(err, fs.ErrExist) {
+		return "", err
+	}
+	return path, nil
 }
 
 // findModuleRoot walks up the directory tree from startDir to find the module root

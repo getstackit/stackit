@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -1078,12 +1079,9 @@ func (m *mergeProgressSimulation) View() tea.View {
 }
 
 func allStepsDone(steps []mergeStep) bool {
-	for _, s := range steps {
-		if s.status != stepStatusDone {
-			return false
-		}
-	}
-	return true
+	return !slices.ContainsFunc(steps, func(s mergeStep) bool {
+		return s.status != stepStatusDone
+	})
 }
 
 func init() {

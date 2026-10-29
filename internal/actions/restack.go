@@ -3,6 +3,7 @@ package actions
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/getstackit/stackit/internal/app"
@@ -50,12 +51,9 @@ type restackPlannedGroup struct {
 // HasBranches reports whether any branch was resolved from the requested
 // scope. False means the scope is empty (e.g. on trunk with no children).
 func (p *RestackPlan) HasBranches() bool {
-	for _, g := range p.groups {
-		if len(g.sortedBranches) > 0 {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(p.groups, func(g restackPlannedGroup) bool {
+		return len(g.sortedBranches) > 0
+	})
 }
 
 // HasWork reports whether any resolved branch needs an actual rebase.

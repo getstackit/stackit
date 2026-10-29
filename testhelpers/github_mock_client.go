@@ -168,12 +168,9 @@ func (c *MockGitHubClient) isStacked(prNumber git.PRNumber) bool {
 	c.config.mu.Lock()
 	defer c.config.mu.Unlock()
 
-	for _, stack := range c.config.CreatedStacks {
-		if slices.Contains(stack, prNumber) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(c.config.CreatedStacks, func(stack []git.PRNumber) bool {
+		return slices.Contains(stack, prNumber)
+	})
 }
 
 // GetPullRequestByBranch gets a pull request for a branch
